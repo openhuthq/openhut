@@ -12,7 +12,7 @@ import { Page } from '@/components/page'
 import { StatusBadge } from '@/components/status-badge'
 import { useAdmin, useStartUpdate, useDeleteOAuthGrant, useOAuthGrants, useUpdateAdmin } from '@/features/admin/api'
 import { GoogleClientSetup } from '@/features/connections/google-client-setup'
-import { ago, plural, shortDate } from '@/lib/format'
+import { ago, shortDate } from '@/lib/format'
 import { formValues } from '@/lib/form'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
@@ -121,7 +121,7 @@ function VersionRow({ server, canEdit }: { server: Admin['server']; canEdit: boo
     if (server.build !== loadedBuild.current) location.reload()
   }, [server.build])
   return <>
-    <Row icon="update" title={`Version ${server.build}`} subtitle={`${versionLine(server)} · ${server.running} of ${plural(server.total, 'agent')} running`}
+    <Row icon="update" title={`Version ${server.build}`} subtitle={versionLine(server)}
       status={versionStatus(server)}
       action={server.updateAvailable && !updating && <Locked reason={canEdit ? undefined : 'Only an owner or admin updates Fast Monkey'}>
         <button type="button" className="btn primary sm" disabled={!canEdit || startUpdate.isPending} onClick={() => startUpdate.mutate(undefined, { onError: toastError })}>{server.update ? 'Try again' : 'Update now'}</button>
