@@ -1,12 +1,13 @@
-import type { ReactNode } from 'react'
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
+import { AlertCircleIcon, CheckmarkBadge01Icon, CheckmarkCircle02Icon, DashedLineCircleIcon, PauseCircleIcon, UnavailableIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@fastmonkey/common/agents/agent.ts'
 
-const CHECK_CIRCLE = badge(<><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></>)
-const BADGE_CHECK = badge(<><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z" /><path d="m9 12 2 2 4-4" /></>)
-const DASHED = badge(<circle cx="12" cy="12" r="10" strokeDasharray="4 3.5" />)
-const BAN = badge(<><circle cx="12" cy="12" r="10" /><path d="m4.9 4.9 14.2 14.2" /></>)
-const ALERT = badge(<><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></>)
-const PAUSE = badge(<><circle cx="12" cy="12" r="10" /><line x1="10" x2="10" y1="15" y2="9" /><line x1="14" x2="14" y1="15" y2="9" /></>)
+const CHECK_CIRCLE = badge(CheckmarkCircle02Icon)
+const BADGE_CHECK = badge(CheckmarkBadge01Icon)
+const DASHED = badge(DashedLineCircleIcon)
+const BAN = badge(UnavailableIcon)
+const ALERT = badge(AlertCircleIcon)
+const PAUSE = badge(PauseCircleIcon)
 const STATUS = {
   running: { word: 'Ready', tip: 'Running and answering', variant: 'success', icon: CHECK_CIRCLE },
   starting: { word: 'Starting', tip: 'Hermes is starting', variant: 'warning', icon: DASHED },
@@ -27,8 +28,8 @@ export function StatusBadge({ status, tip = STATUS[status].tip, word = STATUS[st
   return <span className={`status ${STATUS[status].variant}`} data-slot="badge" title={tip}>{STATUS[status].icon}{word}</span>
 }
 
-function badge(body: ReactNode) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{body}</svg>
+function badge(svg: IconSvgElement) {
+  return <HugeiconsIcon icon={svg} strokeWidth={2} aria-hidden="true" />
 }
 
 export function AgentBadge({ agent }: { agent: Agent }) {
