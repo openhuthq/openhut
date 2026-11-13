@@ -98,6 +98,10 @@ Classes that go: `.btn.ghost` (the base becomes the ghost), `.btn.stop`, `.btn.g
 .menuitem.danger,.menuitem.danger svg{color:var(--fail)}
 ```
 
+### Dropdowns
+
+Shipped 2026-11-13. A dropdown trigger (Model, Computer) follows the secondary button: soft fill, no border, darker fill on hover and while open. Triggers stacked in one card share a minimum width (136px) so their edges line up, with the icon and label on the left and the chevron on the right. Every option has an icon in the same column, then its name and a one-line description, then the tick; the trigger shows the chosen option's icon.
+
 ### Known trade-off
 
 A ghost button at rest is bare text. In a row ("Set up", "Remove") that is the convention and the hover fill confirms it, but it is the weakest affordance in the system. If rows test badly, promote row actions to secondary `sm` rather than bringing the border back.

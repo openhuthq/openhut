@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { MODELS, SIZES, type Agent } from '@fastmonkey/common/agents/agent.ts'
+import { MODELS, SIZES, type Agent, type AgentSize } from '@fastmonkey/common/agents/agent.ts'
 import { Glyph } from '@/components/glyph'
 import { ICONS } from '@/components/icons'
 import { Locked } from '@/components/locked'
@@ -8,21 +8,29 @@ import { toastError } from '@/lib/toast'
 
 export function ModelPicker({ agent, lockReason }: { agent: Agent; lockReason: string | undefined }) {
   const updateAgent = useUpdateAgent(agent.id)
-  return <Picker name="Model" options={MODELS} value={agent.model} icon={<Glyph name="claude" size={14} />} disabled={!agent.canEdit} lockReason={lockReason}
+  return <Picker name="Model" options={MODELS} value={agent.model} iconOf={(_, size) => <Glyph name="claude" size={size} />} disabled={!agent.canEdit} lockReason={lockReason}
     onChoose={(model) => updateAgent.mutate({ model }, { onError: toastError })} />
 }
 
 export function SizePicker({ agent, lockReason }: { agent: Agent; lockReason: string | undefined }) {
   const updateAgent = useUpdateAgent(agent.id)
-  return <Picker name="Computer" options={SIZES} value={agent.size} disabled={!agent.canEdit || updateAgent.isPending} lockReason={lockReason}
+  return <Picker name="Computer" options={SIZES} value={agent.size} iconOf={(id, size) => <SizeBars id={id} size={size} />} disabled={!agent.canEdit || updateAgent.isPending} lockReason={lockReason}
     note={`How much room ${agent.name} has to work. Changing it restarts ${agent.name}.`} onChoose={(size) => updateAgent.mutate({ size }, { onError: toastError })} />
 }
 
-function Picker<Id extends string>({ name, options, value, icon, note, disabled, lockReason, onChoose }: {
+const BARS: Record<AgentSize, number> = { standard: 1, large: 2, xlarge: 3 }
+
+function SizeBars({ id, size }: { id: AgentSize; size: number }) {
+  return <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+    {[0, 1, 2].map((bar) => <rect key={bar} x={2 + bar * 4.5} y={10 - bar * 3.5} width="3" height={4 + bar * 3.5} rx="1" fill="currentColor" opacity={bar < BARS[id] ? 1 : 0.2} />)}
+  </svg>
+}
+
+function Picker<Id extends string>({ name, options, value, iconOf, note, disabled, lockReason, onChoose }: {
   name: string
   options: readonly { id: Id; label: string; blurb: string; spec?: string }[]
   value: Id
-  icon?: ReactNode
+  iconOf: (id: Id, size: number) => ReactNode
   note?: string
   disabled: boolean
   lockReason: string | undefined
@@ -74,13 +82,13 @@ function Picker<Id extends string>({ name, options, value, icon, note, disabled,
     <div ref={box} className="msel">
       <button ref={trigger} type="button" aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} aria-label={`${name}: ${current}. Change it`} disabled={disabled}
         onClick={() => open ? setOpen(false) : show()} onKeyDown={(event) => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); show() } }}>
-        {icon}<span>{current}</span>{ICONS.chevd}
+        {iconOf(value, 14)}<span>{current}</span>{ICONS.chevd}
       </button>
       {open && <div ref={list} id={listId} className="mmenu" role="listbox" tabIndex={-1} aria-label={name} aria-activedescendant={`${listId}-${options[active].id}`} onKeyDown={onListKey}>
         {options.map((option, index) =>
           <div key={option.id} id={`${listId}-${option.id}`} role="option" aria-selected={option.id === value} className="mitem" data-active={index === active ? '' : undefined}
             onMouseEnter={() => setActive(index)} onClick={() => choose(option.id)}>
-            {icon && <Glyph name="claude" size={16} />}<span className="t"><span className="mname">{option.label}{option.spec && <span className="mspec">{option.spec}</span>}</span><span className="mute">{option.blurb}</span></span><span className="mcheck">{option.id === value && ICONS.check}</span>
+            {iconOf(option.id, 16)}<span className="t"><span className="mname">{option.label}{option.spec && <span className="mspec">{option.spec}</span>}</span><span className="mute">{option.blurb}</span></span><span className="mcheck">{option.id === value && ICONS.check}</span>
           </div>)}
         {note && <p className="mnote">{note}</p>}
       </div>}
