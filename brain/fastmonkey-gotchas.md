@@ -112,6 +112,7 @@ the installer, agentd and the e2e run live here. `fastmonkey-server.md` covers t
 - A `claude setup-token` seat has only the `user:inference` scope, so `/api/oauth/usage` refuses it (`user:profile` required) and Claude Code's `get_usage` answers `rate_limits: null`. The plan % comes from the `anthropic-ratelimit-unified-{5h,7d}-utilization` and `-reset` headers of a 1-token Haiku message instead (`count_tokens` carries none). The app sends one per 5 minutes at most, only while someone has Admin open.
 - Only windows Claude is tracking come back: often `7d` alone, no `5h`.
 - The seat's % also counts anyone else signed in to that Claude account, so per agent we show shares of what agents used, not shares of the seat: agentd sums `estimated_cost_usd` (API list price) from each agent's Hermes `state.db` `sessions`, for sessions active since the weekly window opened. A long session counts in full, including what it spent before the window.
+- Admin shows both in one Usage section (the last one), with the explanations in info-icon tooltips (native `title`). It only renders with a set seat in Claude mode, so `npm run dev` (test mode) never shows it. To look at it, serve `packages/web/dist` from a small stub server that answers `/api/me`, `/api/admin` (`seat: { set: true, mode: "claude" }`) and `/api/admin/seat-usage` with sample JSON, and an empty list for every other `/api/` path.
 
 ## GitHub bot (`integrations/github/github.ts`)
 
