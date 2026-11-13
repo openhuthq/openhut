@@ -43,8 +43,8 @@ export function SignedIn({ me, route }: { me: Me; route: Route }) {
           <NavLink section="admin" label="Admin" current={current} />
         </div>
         <div className="me">
-          <Initial id={me.user.id} username={me.user.username} />
-          <div className="who"><div className="ellip">{me.user.username}</div><div className="mute">{ROLE_LABEL[me.user.role]}</div></div>
+          <Initial id={me.user.id} email={me.user.email} />
+          <div className="who"><div className="ellip">{me.user.email}</div><div className="mute">{ROLE_LABEL[me.user.role]}</div></div>
           <button type="button" className="btn ghost sm tight" aria-label="Sign out" title="Sign out" disabled={deleteSession.isPending} onClick={() => deleteSession.mutate(undefined, { onError: toastError })}>{ICONS.out}</button>
         </div>
       </aside>

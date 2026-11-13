@@ -25,14 +25,14 @@ const SlackSecrets = z.object({ botToken: z.string(), appToken: z.string() })
 export const agentService = {
   async list({ actor }: { actor: Caller }): Promise<Agent[]> {
     const [rows, states] = await Promise.all([db.selectFrom('agent').selectAll().orderBy('created_at').execute(), containerStates()])
-    const owners = new Map((await db.selectFrom('person').select(['id', 'username']).execute()).map((person) => [person.id, person.username]))
+    const owners = new Map((await db.selectFrom('person').select(['id', 'email']).execute()).map((person) => [person.id, person.email]))
     return Promise.all(rows.map(async (row) => agentOf({ row, ownerName: owners.get(row.owner_id), state: states?.[row.id], editable: await canEdit({ actor, agent: row }) })))
   },
 
   async get({ actor, id }: { actor: Caller; id: string }): Promise<Agent> {
     const row = await rowOf(id)
-    const owner = await db.selectFrom('person').select('username').where('id', '=', row.owner_id).executeTakeFirst()
-    return agentOf({ row, ownerName: owner?.username, state: (await containerStates())?.[id], editable: await canEdit({ actor, agent: row }) })
+    const owner = await db.selectFrom('person').select('email').where('id', '=', row.owner_id).executeTakeFirst()
+    return agentOf({ row, ownerName: owner?.email, state: (await containerStates())?.[id], editable: await canEdit({ actor, agent: row }) })
   },
 
   async requireEditable({ actor, id }: { actor: Caller; id: string }): Promise<AgentRow> {
@@ -159,10 +159,10 @@ async function canEdit({ actor, agent }: { actor: Caller; agent: AgentRow }): Pr
 }
 
 async function filesOf(row: AgentRow): Promise<AgentFiles> {
-  const owner = await db.selectFrom('person').select('username').where('id', '=', row.owner_id).executeTakeFirstOrThrow()
+  const owner = await db.selectFrom('person').select('email').where('id', '=', row.owner_id).executeTakeFirstOrThrow()
   const channels = await db.selectFrom('channel').selectAll().where('agent_id', '=', row.id).orderBy('kind').execute()
   return renderFiles({
-    agent: row, ownerName: owner.username, token: agentToken(row.id), channelKey: unseal(row.channel_key),
+    agent: row, ownerName: owner.email, token: agentToken(row.id), channelKey: unseal(row.channel_key),
     seat: settings.seatToken(), channels: channels.map(renderedChannel),
   })
 }

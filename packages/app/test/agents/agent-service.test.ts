@@ -5,7 +5,7 @@ import { agentToken, seal } from '../../src/platform/secrets.ts'
 import { agentService } from '../../src/agents/agent-service.ts'
 
 await migrate()
-await db.insertInto('person').values({ id: 'usr_tokenown', username: 'tokenowner', pass: 'x', role: 'owner', removed_at: null }).execute()
+await db.insertInto('person').values({ id: 'usr_tokenown', email: 'tokenowner@example.com', pass: 'x', role: 'owner', removed_at: null }).execute()
 await db.insertInto('agent').values({ id: 'ag_tokentst', name: 'Dev', owner_id: 'usr_tokenown', instructions: '# Dev', model: 'sonnet', net: 7, channel_key: seal('k'.repeat(32)) }).execute()
 const token = agentToken('ag_tokentst')
 

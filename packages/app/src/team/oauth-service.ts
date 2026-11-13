@@ -44,7 +44,7 @@ export const oauthService = {
     return { id: row.id, object: 'oauth_client', name: row.name, redirectUris: RedirectUris.parse(JSON.parse(row.redirect_uris)) }
   },
 
-  async decide({ person, clientId, redirectUri, codeChallenge, codeChallengeMethod, state, allow }: CreateOAuthCode & { person: { id: string; username: string } }): Promise<OAuthCode> {
+  async decide({ person, clientId, redirectUri, codeChallenge, codeChallengeMethod, state, allow }: CreateOAuthCode & { person: { id: string; email: string } }): Promise<OAuthCode> {
     const client = await oauthService.client(clientId)
     if (!client.redirectUris.includes(redirectUri)) throw new HttpError(400, 'That redirect address isn\'t registered for this app. Start the connection again from the app.')
     if (!allow) return { object: 'oauth_code', redirect: withParams(redirectUri, { error: 'access_denied', ...(state && { state }) }) }
@@ -80,7 +80,7 @@ export const oauthService = {
     return rows.map((row) => ({ id: row.id, object: 'oauth_grant', client: row.name, createdAt: new Date(row.created_at).toISOString(), usedAt: row.used_at ? new Date(row.used_at).toISOString() : null }))
   },
 
-  async revoke({ person, id }: { person: { id: string; username: string }; id: string }): Promise<Deleted<'oauth_grant'>> {
+  async revoke({ person, id }: { person: { id: string; email: string }; id: string }): Promise<Deleted<'oauth_grant'>> {
     const gone = await db.deleteFrom('oauth_grant').where('id', '=', id).where('person_id', '=', person.id).executeTakeFirst()
     if (!Number(gone.numDeletedRows)) throw new HttpError(404, 'That app is already disconnected.')
     record({ action: 'oauth.app_disconnected', actor: person, target: { type: 'oauth_grant', id } })

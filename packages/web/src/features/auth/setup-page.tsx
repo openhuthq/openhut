@@ -12,10 +12,10 @@ export function SetupPage() {
   const code = new URLSearchParams(location.search).get('code') ?? ''
   if (setup.data?.open === false) return <Redirect to="/login" />
   return <AuthForm title="Create your account" heading="Create your account" lead="You're first here, so this is the owner account." error={createPerson.error}
-    fields={code ? ['username', 'password'] : ['setupCode', 'username', 'password']} busy={createPerson.isPending} button="Create account" foot="After this, people join by invite."
+    fields={code ? ['email', 'password'] : ['setupCode', 'email', 'password']} busy={createPerson.isPending} button="Create account" foot="After this, people join by invite."
     onSubmit={(event) => {
       const field = formValues(event)
-      createPerson.mutate({ setupCode: field('setupCode'), username: field('username'), password: field('password') })
+      createPerson.mutate({ setupCode: field('setupCode'), email: field('email'), password: field('password') })
     }}>
     {code && <input type="hidden" name="setupCode" value={code} />}
     {!code && <Field label="Setup code" error={fieldError(createPerson.error, 'setupCode')}>{(control) => <input {...control} name="setupCode" required autoComplete="one-time-code" placeholder="Printed at the end of the install" />}</Field>}

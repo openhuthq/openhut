@@ -23,8 +23,9 @@ export const isUniqueViolation = (err: unknown): boolean => typeof err === 'obje
 
 export async function migrate(): Promise<void> {
   await sql`create table if not exists person (
-    id text primary key, username text unique not null, pass text not null, role text not null check (role in ('owner', 'admin', 'member')),
+    id text primary key, email text unique not null, pass text not null, role text not null check (role in ('owner', 'admin', 'member')),
     created_at timestamptz not null default now(), removed_at timestamptz)`.execute(db)
+  await sql`do $$ begin if exists (select from information_schema.columns where table_name = 'person' and column_name = 'username') then alter table person rename column username to email; end if; end $$`.execute(db)
   await sql`create unique index if not exists one_owner on person (role) where role = 'owner'`.execute(db)
   await sql`create table if not exists session (hash text primary key, person_id text not null references person(id) on delete cascade, expires_at timestamptz not null)`.execute(db)
   await sql`create table if not exists invite (

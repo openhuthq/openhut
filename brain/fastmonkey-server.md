@@ -69,7 +69,7 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 - WhatsApp: each agent gets its own number in bot mode. The bridge drops anyone not allowed before Hermes sees them.
   agentd runs the bridge's pairing mode inside the agent's container and keeps the latest QR payload; only people who
   can edit the agent see it. Approvers are compared as `<digits>@s.whatsapp.net`.
-- An agent anyone can message uses Hermes's `smart` approvals; approvals go to the owner (username, Slack ID, WhatsApp).
+- An agent anyone can message uses Hermes's `smart` approvals; approvals go to the owner (email, Slack ID, WhatsApp).
 
 ## Conventions the code relies on
 - Every agentd reply is validated with a Zod schema per command (`platform/agentd.ts`); a reply that doesn't match is a

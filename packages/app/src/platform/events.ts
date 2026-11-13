@@ -4,6 +4,6 @@ initLogger({ env: { service: 'fastmonkey' }, pretty: process.stdout.isTTY === tr
 
 export { log }
 
-export function record({ action, actor, target }: { action: string; actor: { id: string; username: string }; target: { type: string; id: string; [field: string]: unknown } }): void {
-  log.info({ event: action, actor: actor.id, actorName: actor.username, target })
+export function record({ action, actor, target }: { action: string; actor: { id: string; email: string }; target: { type: string; id: string; [field: string]: unknown } }): void {
+  log.info({ event: action, actor: actor.id, actorName: actor.email, target })
 }

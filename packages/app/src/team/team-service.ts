@@ -25,9 +25,9 @@ export const teamService = {
     return { person, token: (await openSession(person)).token }
   },
 
-  async createSession({ username, password }: CreateSession): Promise<{ session: Session; token: string }> {
-    const row = await db.selectFrom('person').selectAll().where('username', '=', username).where('removed_at', 'is', null).executeTakeFirst()
-    if (!(await checkPassword({ password, stored: row?.pass })) || !row) throw new HttpError(401, 'That username and password don\'t match. Try again.')
+  async createSession({ email, password }: CreateSession): Promise<{ session: Session; token: string }> {
+    const row = await db.selectFrom('person').selectAll().where('email', '=', email).where('removed_at', 'is', null).executeTakeFirst()
+    if (!(await checkPassword({ password, stored: row?.pass })) || !row) throw new HttpError(401, 'That email and password don\'t match. Try again.')
     return openSession(personOf(row))
   },
 
@@ -47,7 +47,7 @@ export const teamService = {
       .values({ id: newId('inv'), hash: sha(token), role, created_by: actor.id, expires_at: new Date(Date.now() + INVITE_DAYS * 864e5), used_at: null })
       .returningAll().executeTakeFirstOrThrow()
     record({ action: 'invite.created', actor, target: { type: 'invite', id: row.id, role } })
-    return { ...inviteOf({ ...row, created_by_name: actor.username }), link: `${publicUrl()}/invite/${token}` }
+    return { ...inviteOf({ ...row, created_by_name: actor.email }), link: `${publicUrl()}/invite/${token}` }
   },
 
   async inviteLink({ token }: { token: string }): Promise<InviteLink> {
@@ -59,7 +59,7 @@ export const teamService = {
 
   async listInvites({ actor }: { actor: Caller }): Promise<Invite[]> {
     if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can see pending invites.')
-    const rows = await db.selectFrom('invite as i').innerJoin('person as p', 'p.id', 'i.created_by').selectAll('i').select('p.username as created_by_name')
+    const rows = await db.selectFrom('invite as i').innerJoin('person as p', 'p.id', 'i.created_by').selectAll('i').select('p.email as created_by_name')
       .where('i.used_at', 'is', null).where('i.expires_at', '>', new Date()).orderBy('i.expires_at').execute()
     return rows.map(inviteOf)
   },
@@ -100,33 +100,33 @@ async function openSession(person: Person): Promise<{ session: Session; token: s
   return { session: { id: sha(token).slice(0, 16), object: 'session', person, expiresAt: expiresAt.toISOString() }, token }
 }
 
-async function createOwner({ setupCode, username, password, origin }: { setupCode: string; username: string; password: string; origin: string }): Promise<Person> {
+async function createOwner({ setupCode, email, password, origin }: { setupCode: string; email: string; password: string; origin: string }): Promise<Person> {
   if (!config.setupCode || !sameSecret({ given: setupCode, expected: config.setupCode })) {
     throw new HttpError(403, 'That setup code is wrong. Use the link the installer printed; the code is also in /etc/fastmonkey/env.', { param: 'setupCode' })
   }
   const pass = await hashPassword(password)
   const owner = await db.transaction().execute(async (trx) => {
     if (await trx.selectFrom('person').select('id').limit(1).executeTakeFirst()) throw new HttpError(403, 'Fast Monkey already has an owner. Ask them for an invite.')
-    return trx.insertInto('person').values({ id: newId('usr'), username, pass, role: 'owner', removed_at: null }).returningAll().executeTakeFirstOrThrow()
+    return trx.insertInto('person').values({ id: newId('usr'), email, pass, role: 'owner', removed_at: null }).returningAll().executeTakeFirstOrThrow()
   }).catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(403, 'Fast Monkey already has an owner. Ask them for an invite.') : err })
   if (!settings.storedPublicUrl()) await settings.setPublicUrl(origin)
   return personOf(owner)
 }
 
-async function acceptInvite({ inviteToken, username, password }: { inviteToken: string; username: string; password: string }): Promise<Person> {
+async function acceptInvite({ inviteToken, email, password }: { inviteToken: string; email: string; password: string }): Promise<Person> {
   const pass = await hashPassword(password)
   return db.transaction().execute(async (trx) => {
     const invite = await trx.updateTable('invite').set({ used_at: new Date() }).where('hash', '=', sha(inviteToken)).where('used_at', 'is', null)
       .where('expires_at', '>', new Date()).returning('role').executeTakeFirst()
     if (!invite) throw new HttpError(410, 'This invite link was already used or has expired. Ask for a new one.')
-    const person = await trx.insertInto('person').values({ id: newId('usr'), username, pass, role: invite.role, removed_at: null }).returningAll().executeTakeFirstOrThrow()
-      .catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'That username is taken. Pick another one.', { param: 'username' }) : err })
+    const person = await trx.insertInto('person').values({ id: newId('usr'), email, pass, role: invite.role, removed_at: null }).returningAll().executeTakeFirstOrThrow()
+      .catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'That email already has an account. Use another one.', { param: 'email' }) : err })
     return personOf(person)
   })
 }
 
-function personOf(person: Pick<Selectable<Database['person']>, 'id' | 'username' | 'role' | 'created_at'>): Person {
-  return { id: person.id, object: 'person', username: person.username, role: person.role, joinedAt: new Date(person.created_at).toISOString() }
+function personOf(person: Pick<Selectable<Database['person']>, 'id' | 'email' | 'role' | 'created_at'>): Person {
+  return { id: person.id, object: 'person', email: person.email, role: person.role, joinedAt: new Date(person.created_at).toISOString() }
 }
 
 function inviteOf(row: Pick<Selectable<Database['invite']>, 'id' | 'role' | 'expires_at'> & { created_by_name: string }): Invite {

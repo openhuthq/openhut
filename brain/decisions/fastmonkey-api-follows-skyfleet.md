@@ -22,8 +22,8 @@ structure before going further.
 - Grants, channels and invite links as objects replace verb routes (`/agents/:id/grant`, `/invite/:token` posts).
 
 ## Consequences
-- Kept from the slice, deliberately: our own sessions and scrypt passwords instead of better-auth (no email, invite
-  only, usernames); the agents' gateway on plain `node:http` for explicit per-agent limits; the dashboard's approved
+- Kept from the slice, deliberately: our own sessions and scrypt passwords instead of better-auth (no mail sent,
+  invite only, an email as the sign-in name); the agents' gateway on plain `node:http` for explicit per-agent limits; the dashboard's approved
   CSS instead of Tailwind and shadcn.
 - New people come from `POST /api/people` with either the installer's `setupCode` (the owner) or an invite's `inviteToken`.
 - Lists page forward only, with `startingAfter`; there is no `endingBefore`.

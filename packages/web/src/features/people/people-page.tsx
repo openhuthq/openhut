@@ -50,10 +50,10 @@ function PeopleTable({ people, canManage }: { people: Person[]; canManage: boole
   return <table className={canManage ? 'ptable acts' : 'ptable'} aria-label="People">
     <thead><tr className="prow phead"><th scope="col">Name</th><th scope="col" className="pc-role">Role</th><th scope="col" className="pc-joined">Joined</th>{canManage && <th scope="col"><span className="sr-only">Actions</span></th>}</tr></thead>
     <tbody>{people.map((person) => <tr className="prow" key={person.id}>
-      <td className="pname"><Initial id={person.id} username={person.username} /><span className="ellip">{person.username}</span></td>
+      <td className="pname"><Initial id={person.id} email={person.email} /><span className="ellip">{person.email}</span></td>
       <td className="pc-role">{ROLE_LABEL[person.role]}</td>
       <td className="pc-joined">{shortDate.format(new Date(person.joinedAt))}</td>
-      {canManage && <td className="pact">{person.role !== 'owner' && <ConfirmButton className="btn ghost sm" disabled={deletePerson.isPending} question={`Remove ${person.username}?`}
+      {canManage && <td className="pact">{person.role !== 'owner' && <ConfirmButton className="btn ghost sm" disabled={deletePerson.isPending} question={`Remove ${person.email}?`}
         detail="They can't sign in anymore, their tokens stop working, and their agents stop." action="Remove" onConfirm={() => deletePerson.mutate(person.id, { onError: toastError })}>Remove</ConfirmButton>}</td>}
     </tr>)}</tbody>
   </table>
