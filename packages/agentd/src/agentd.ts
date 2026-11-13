@@ -40,6 +40,8 @@ const FIREWALL_FRESH_MS = 5_000
 const WATCHDOG_MS = 30_000
 const PAIR_MS = 5 * 60_000
 const MAX_REQUEST = 1 << 20
+const TAILSCALE_KEY = /^tskey-auth-[\w-]{10,200}$/
+const TAILSCALE_INSTALL_MS = 170_000
 
 const pairings = new Map<string, Pairing>()
 const queues = new Map<string, Promise<unknown>>()
@@ -121,6 +123,13 @@ async function handle(req: AgentdRequest): Promise<Reply> {
       return unlink(req.id)
     case 'update':
       return update()
+    case 'ts-up':
+      return tailscaleUp(req.authKey)
+    case 'ts-status':
+      return tailscaleStatus()
+    case 'ts-down':
+      await run('tailscale', ['logout'], EXEC)
+      return tailscaleStatus()
   }
 }
 
@@ -131,7 +140,12 @@ function parseRequest(value: unknown): AgentdRequest {
     case 'health':
     case 'ps':
     case 'update':
+    case 'ts-status':
+    case 'ts-down':
       return { cmd }
+    case 'ts-up':
+      if (typeof value.authKey !== 'string' || !TAILSCALE_KEY.test(value.authKey)) throw new Error('bad tailscale auth key')
+      return { cmd, authKey: value.authKey }
     case 'create':
       return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files) }
     case 'apply':
@@ -406,6 +420,38 @@ function jsonOrUndefined(line: string): unknown {
   }
 }
 
+async function tailscaleUp(authKey: string): Promise<Tailnet & { joined: boolean }> {
+  if (!(await hasTailscale())) await run('sh', ['-c', 'curl -fsSL https://tailscale.com/install.sh | sh'], { ...EXEC, timeout: TAILSCALE_INSTALL_MS })
+  const before = await tailscaleStatus()
+  if (before.state === 'Running') return { ...before, joined: false }
+  const keyFile = `${dirname(SOCK)}/tailscale.key`
+  writeFileSync(keyFile, authKey, { mode: 0o600 })
+  try {
+    await run('tailscale', ['up', `--auth-key=file:${keyFile}`, '--hostname=fastmonkey'], { ...EXEC, timeout: 120_000 })
+  } finally {
+    rmSync(keyFile, { force: true })
+  }
+  return { ...(await tailscaleStatus()), joined: true }
+}
+
+async function tailscaleStatus(): Promise<Tailnet> {
+  if (!(await hasTailscale())) return { state: 'NotInstalled', tailnet: '', name: '', address: '' }
+  const { stdout } = await run('tailscale', ['status', '--json'], EXEC).catch((e: unknown) => ({ stdout: isRecord(e) && typeof e.stdout === 'string' ? e.stdout : '{}' }))
+  const status: unknown = JSON.parse(stdout || '{}')
+  const field = (value: unknown, key: string) => isRecord(value) ? value[key] : undefined
+  const ips = field(field(status, 'Self'), 'TailscaleIPs')
+  return {
+    state: String(field(status, 'BackendState') ?? 'Stopped'),
+    tailnet: String(field(field(status, 'CurrentTailnet'), 'Name') ?? ''),
+    name: String(field(field(status, 'Self'), 'DNSName') ?? '').replace(/\.$/, ''),
+    address: Array.isArray(ips) ? String(ips[0] ?? '') : '',
+  }
+}
+
+function hasTailscale(): Promise<boolean> {
+  return run('sh', ['-c', 'command -v tailscale'], EXEC).then(() => true, () => false)
+}
+
 function ignoreMissing(e: unknown) {
   if (!/No such (container|network)|not found/i.test(errorText(e))) throw e
   return ''
@@ -442,6 +488,8 @@ export type AgentdRequest =
   | { cmd: 'create'; id: string; net: number; files: AgentFiles }
   | { cmd: 'apply'; id: string; files: AgentFiles; restart: boolean; force?: boolean }
   | { cmd: 'start' | 'stop' | 'rm' | 'wa-pair' | 'wa-unlink'; id: string }
+  | { cmd: 'ts-up'; authKey: string }
+  | { cmd: 'ts-status' | 'ts-down' }
 
 export type AgentdReplies = {
   health: { firewall: boolean; image: string; updating: boolean }
@@ -454,7 +502,12 @@ export type AgentdReplies = {
   'wa-pair': Pairing
   'wa-unlink': { unlinked: string }
   update: { updating: boolean }
+  'ts-up': Tailnet & { joined: boolean }
+  'ts-status': Tailnet
+  'ts-down': Tailnet
 }
+
+export type Tailnet = { state: string; tailnet: string; name: string; address: string }
 
 export type Pairing = { status: 'starting' | 'qr' | 'linked' | 'error'; qr?: string; phone?: string; error?: string }
 

@@ -32,6 +32,7 @@ export const adminService = {
         running: agents.filter((agent) => states?.[agent.id] === 'running').length, total: agents.length,
       },
       publicUrl: publicUrl(),
+      google: { clientId: settings.googleClient()?.clientId ?? null, redirectUri: `${publicUrl()}/api/connection-authorizations/callback` },
     }
   },
 
@@ -64,6 +65,7 @@ export const adminService = {
     if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can change Admin settings.')
     if (patch.publicUrl !== undefined) await setPublicUrl(patch.publicUrl)
     if (patch.seatToken !== undefined) await setSeat(patch.seatToken)
+    if (patch.googleClientId !== undefined || patch.googleClientSecret !== undefined) await setGoogleClient(patch)
     record({ action: 'admin.updated', actor, target: { type: 'admin', id: 'install', fields: Object.keys(patch) } })
     return adminService.status()
   },
@@ -108,6 +110,11 @@ async function setSeat(token: string): Promise<void> {
   await settings.setSeatToken(token)
   const failed = await agentService.reapplyAll({ force: false })
   if (failed.length) log.warn({ event: 'seat.reapply_failed', error: failed.join('; ') })
+}
+
+async function setGoogleClient({ googleClientId, googleClientSecret }: UpdateAdmin): Promise<void> {
+  if (!googleClientId || !googleClientSecret) throw new HttpError(400, 'Paste both the client ID and the client secret.', { param: googleClientId ? 'googleClientSecret' : 'googleClientId' })
+  await settings.setGoogleClient({ clientId: googleClientId.trim(), clientSecret: googleClientSecret.trim() })
 }
 
 async function setPublicUrl(url: string): Promise<void> {

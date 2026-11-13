@@ -1,8 +1,9 @@
 import type { AdminForm } from '@/features/admin/admin-page'
 import type { AgentDialog } from '@/features/agents/agent-page'
+import { integration } from '@/features/connections/catalog'
 
 const AGENT_DIALOGS: AgentDialog[] = ['name', 'instructions', 'slack', 'whatsapp']
-const ADMIN_FORMS: AdminForm[] = ['seat', 'public-url']
+const ADMIN_FORMS: AdminForm[] = ['seat', 'public-url', 'google']
 const MISSING: Route = { page: 'missing' }
 
 export function routeOf(path: string): Route {
@@ -30,9 +31,10 @@ function agentRoute(id: string, detail: string): Route {
 }
 
 function connectionRoute(id: string, detail: string): Route {
+  if (id === 'new') return integration(detail || 'postgres') ? { page: 'connections', adding: detail || 'postgres' } : MISSING
   if (detail) return MISSING
-  if (!id) return { page: 'connections' }
-  if (id === 'new') return { page: 'new-connection' }
+  if (!id) return { page: 'connections', adding: undefined }
+  if (id === 'tailscale') return { page: 'tailscale' }
   return { page: 'connection', connectionId: decodeURIComponent(id) }
 }
 
@@ -56,8 +58,8 @@ export type Route =
   | { page: 'mcp-authorize' }
   | { page: 'agents' }
   | { page: 'agent'; agentId: string; dialog: AgentDialog | undefined }
-  | { page: 'connections' }
-  | { page: 'new-connection' }
+  | { page: 'connections'; adding: string | undefined }
+  | { page: 'tailscale' }
   | { page: 'connection'; connectionId: string }
   | { page: 'people'; inviting: boolean }
   | { page: 'admin'; form: AdminForm | undefined }

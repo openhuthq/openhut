@@ -7,12 +7,14 @@ import { ErrorNote } from '@/components/error-note'
 import { ICONS } from '@/components/icons'
 import { Loaded } from '@/components/loaded'
 import { Locked } from '@/components/locked'
+import { Mark } from '@/components/mark'
 import { OwnerChip } from '@/components/owner-chip'
 import { Page } from '@/components/page'
 import { SectionHead } from '@/components/section-head'
 import { StatusBadge } from '@/components/status-badge'
 import { useAgents, useDeleteGrant, useGrants } from '@/features/agents/api'
-import { useConnection, useConnectionEvents, useDeleteConnection, useUpdateConnection } from '@/features/connections/api'
+import { useAuthorizeConnection, useConnection, useConnectionEvents, useConnectionTools, useDeleteConnection, useUpdateConnection } from '@/features/connections/api'
+import { titleOf } from '@/features/connections/catalog'
 import { ConnectionHealth } from '@/features/connections/connection-health'
 import { ago, shortDate } from '@/lib/format'
 import { toastError } from '@/lib/toast'
@@ -29,17 +31,32 @@ function ConnectionView({ me, connection }: { me: Me; connection: Connection }) 
   const agents = useAgents()
   const updateConnection = useUpdateConnection(connection.id)
   const deleteConnection = useDeleteConnection(connection.id)
+  const authorize = useAuthorizeConnection()
   const owned = connection.ownerId === me.user.id
-  const actions = <Locked reason={connection.canDelete ? undefined : `Only ${connection.ownerName} or an admin can delete it`}>
-    <ConfirmButton className="btn danger" disabled={!connection.canDelete} question={`Delete ${connection.name}?`} detail="Every agent loses it on its next call." action="Delete" onConfirm={() => deleteConnection.mutate(undefined, { onError: toastError })}>
-      {ICONS.trash}<span className="lbl">Delete</span>
-    </ConfirmButton>
-  </Locked>
+  const returned = new URLSearchParams(location.search).get('error') ?? undefined
+  const actions = <>
+    {connection.signIn && <Locked reason={owned ? undefined : `Only ${connection.ownerName} can reconnect it`}>
+      <button type="button" className="btn sec" disabled={!owned || authorize.isPending} onClick={() => authorize.mutate({ connectionId: connection.id }, { onError: toastError })}>
+        {ICONS.ext}<span className="lbl">{authorize.isPending ? 'Opening…' : 'Reconnect'}</span>
+      </button>
+    </Locked>}
+    <Locked reason={connection.canDelete ? undefined : `Only ${connection.ownerName} or an admin can delete it`}>
+      <ConfirmButton className="btn danger" disabled={!connection.canDelete} question={`Delete ${connection.name}?`} detail="Every agent loses it on its next call." action="Delete" onConfirm={() => deleteConnection.mutate(undefined, { onError: toastError })}>
+        {ICONS.trash}<span className="lbl">Delete</span>
+      </ConfirmButton>
+    </Locked>
+  </>
   return <Page title={connection.name} parents={PARENTS} actions={actions}>
     <div className="detail wide">
-      <div className="left"><Activity connectionId={connection.id} agents={agents.data ?? []} /></div>
+      <div className="left">
+        <ErrorNote message={returned} />
+        {connection.usable && <Tools connectionId={connection.id} />}
+        <Activity connectionId={connection.id} agents={agents.data ?? []} />
+      </div>
       <aside className="rail">
         <div className="box facts">
+          <div><span>Service</span><span className="kind"><Mark name={connection.kind} size={20} />{titleOf(connection.kind)}</span></div>
+          {connection.account && <div><span>Account</span><span className="ellip" title={connection.account}>{connection.account}</span></div>}
           <div><span>Added</span><span>{shortDate.format(new Date(connection.createdAt))}</span></div>
           <div><span>Owner</span><OwnerChip id={connection.ownerId} name={connection.ownerName} /></div>
           <div><span>Status</span><ConnectionHealth connection={connection} /></div>
@@ -58,6 +75,21 @@ function ConnectionView({ me, connection }: { me: Me; connection: Connection }) 
       </aside>
     </div>
   </Page>
+}
+
+function Tools({ connectionId }: { connectionId: string }) {
+  const tools = useConnectionTools(connectionId)
+  return <section>
+    <SectionHead title={tools.data ? `What agents can call · ${tools.data.length}` : 'What agents can call'} />
+    <Loaded query={tools}>{(loaded) => loaded.length
+      ? <details className="tools" open={loaded.length <= 6}>
+        <summary className="mute">{loaded.length <= 6 ? 'Tools' : `Show all ${loaded.length} tools`}</summary>
+        <div className="box rows">{loaded.map((tool) => <div className="row" key={tool.name}>
+          <div className="t"><div className="mono">{tool.name}</div>{tool.description && <div className="mute clamp">{tool.description}</div>}</div>
+        </div>)}</div>
+      </details>
+      : <p className="note">It lists no tools.</p>}</Loaded>
+  </section>
 }
 
 function Activity({ connectionId, agents }: { connectionId: string; agents: Agent[] }) {

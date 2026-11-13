@@ -1,12 +1,14 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@fastmonkey/common/api.ts'
-import { Connection, ConnectionEvent, type CreateConnection, type UpdateConnection } from '@fastmonkey/common/connections/connection.ts'
+import { Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, Tailscale, type ConnectTailscale, type CreateConnection, type CreateConnectionAuthorization, type UpdateConnection } from '@fastmonkey/common/connections/connection.ts'
 import { request } from '@/lib/api-client'
 import { CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
 
 const CONNECTION_LIST = List(Connection)
 const EVENT_LIST = List(ConnectionEvent)
+const TOOL_LIST = List(ConnectionTool)
+const TAILSCALE_KEY = ['tailscale']
 const DELETED_CONNECTION = Deleted('connection')
 const EVENTS_PER_PAGE = '25'
 
@@ -38,6 +40,48 @@ export function useCreateConnection() {
     mutationFn: (body: CreateConnection) => request({ schema: Connection, path: '/api/connections', method: 'POST', body }),
     onSuccess: (connection) => {
       client.setQueryData<Connection[]>(CONNECTIONS_KEY, (connections) => connections && [...connections, connection])
+      client.setQueryData([...CONNECTIONS_KEY, connection.id], connection)
+      navigate(`/connections/${connection.id}`, true)
+    },
+  })
+}
+
+export function useAuthorizeConnection() {
+  return useMutation({
+    mutationFn: (body: CreateConnectionAuthorization) => request({ schema: ConnectionAuthorization, path: '/api/connection-authorizations', method: 'POST', body }),
+    onSuccess: (authorization) => location.assign(authorization.authorizationUrl),
+  })
+}
+
+export function useConnectionTools(connectionId: string) {
+  return useQuery({
+    queryKey: ['connection-tools', connectionId],
+    queryFn: () => request({ schema: TOOL_LIST, path: `/api/connection-tools?${new URLSearchParams({ connectionId })}` }).then((page) => page.data),
+    retry: false,
+  })
+}
+
+export function useTailscale() {
+  return useQuery({ queryKey: TAILSCALE_KEY, queryFn: () => request({ schema: Tailscale, path: '/api/tailscale' }) })
+}
+
+export function useConnectTailscale() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: ConnectTailscale) => request({ schema: Tailscale, path: '/api/tailscale', method: 'PUT', body }),
+    onSuccess: (tailscale) => {
+      client.setQueryData(TAILSCALE_KEY, tailscale)
+      navigate('/connections/tailscale', true)
+    },
+  })
+}
+
+export function useDisconnectTailscale() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => request({ schema: Tailscale, path: '/api/tailscale', method: 'DELETE' }),
+    onSuccess: (tailscale) => {
+      client.setQueryData(TAILSCALE_KEY, tailscale)
       navigate('/connections')
     },
   })

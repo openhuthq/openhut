@@ -20,7 +20,7 @@ export function AgentConnections({ agent, lockReason }: { agent: Agent; lockReas
 function ConnectionList({ agent, connections, grants, lockReason }: { agent: Agent; connections: Connection[]; grants: Grant[]; lockReason: string | undefined }) {
   const createGrant = useCreateGrant()
   const deleteGrant = useDeleteGrant()
-  if (!connections.length) return <p className="note">No connections yet. <a href="/connections/new">Add Postgres</a> first.</p>
+  if (!connections.length) return <p className="note">No connections yet. <a href="/connections">Add one</a> first.</p>
   return <div className="box rows">{connections.map((connection) => {
     const grant = grants.find((each) => each.connectionId === connection.id)
     const blocked = blockedReason(agent, connection)

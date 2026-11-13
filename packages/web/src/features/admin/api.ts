@@ -21,14 +21,14 @@ export function useAdmin() {
   })
 }
 
-export function useUpdateAdmin() {
+export function useUpdateAdmin(back = '/admin') {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (body: UpdateAdmin) => request({ schema: Admin, path: '/api/admin', method: 'PATCH', body }),
     onSuccess: (admin) => {
       client.setQueryData(ADMIN_KEY, admin)
       client.setQueryData<Me | null>(ME_KEY, (me) => me && { ...me, publicUrl: admin.publicUrl })
-      navigate('/admin')
+      navigate(back, true)
     },
   })
 }

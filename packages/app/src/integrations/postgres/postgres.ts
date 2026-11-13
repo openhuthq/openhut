@@ -1,9 +1,9 @@
-import { lookup } from 'node:dns/promises'
-import { BlockList, isIP } from 'node:net'
+import { isIP } from 'node:net'
 import pg from 'pg'
 import * as z from 'zod/mini'
 import { HttpError } from '../../platform/http-error.ts'
-import { AGENTS_RANGE } from '../../platform/network.ts'
+import { checkedAddress } from '../../platform/network.ts'
+import { nativeConnector, nativeTool } from '../connector.ts'
 
 const MAX_BYTES = 8 << 20
 const ENCRYPTED = { rejectUnauthorized: false }
@@ -15,22 +15,28 @@ const SSL_MODES = {
   'verify-ca': [{ rejectUnauthorized: true, checkServerIdentity: () => undefined }],
   'verify-full': [{ rejectUnauthorized: true }],
 } as const
-const BLOCKED = blockList()
 
 export const postgres = {
   parseDsn,
   query: runQuery,
-  tools: {
-    tables: connectorTool({
-      description: 'List tables and their columns.',
-      input: z.strictObject({}),
-      run: ({ dsn }) => runQuery({ dsn, sql: 'select table_schema, table_name, string_agg(column_name, \', \' order by ordinal_position) as columns from information_schema.columns where table_schema not in (\'pg_catalog\', \'information_schema\') group by 1, 2 order by 1, 2' }),
-    }),
-    query: connectorTool({
-      description: 'Run one read-only SELECT. 15 s timeout, at most 1000 rows.',
-      input: z.strictObject({ sql: z.string().check(z.minLength(1, 'Pass the SELECT to run.')) }),
-      run: ({ dsn, args }) => runQuery({ dsn, sql: args.sql }),
-    }),
+  connector: nativeConnector({
+    config: z.object({ dsn: z.string() }),
+    tools: {
+      tables: nativeTool({
+        description: 'List tables and their columns.',
+        input: z.strictObject({}),
+        run: ({ config }: { config: { dsn: string } }) => runQuery({ dsn: config.dsn, sql: 'select table_schema, table_name, string_agg(column_name, \', \' order by ordinal_position) as columns from information_schema.columns where table_schema not in (\'pg_catalog\', \'information_schema\') group by 1, 2 order by 1, 2' }),
+      }),
+      query: nativeTool({
+        description: 'Run one read-only SELECT. 15 s timeout, at most 1000 rows.',
+        input: z.strictObject({ sql: z.string().check(z.minLength(1, 'Pass the SELECT to run.')) }),
+        run: ({ config, args }: { config: { dsn: string }; args: { sql: string } }) => runQuery({ dsn: config.dsn, sql: args.sql }),
+      }),
+    },
+  }),
+  account(dsn: string): string {
+    const target = parseDsn(dsn)
+    return `${target.host}/${target.database}`
   },
 }
 
@@ -100,23 +106,4 @@ async function connectFirst({ attempts }: { attempts: pg.ClientConfig[] }): Prom
   throw lastError
 }
 
-async function checkedAddress(host: string): Promise<string> {
-  const ip = isIP(host) ? host : (await lookup(host)).address
-  if (BLOCKED.check(ip, isIP(ip) === 6 ? 'ipv6' : 'ipv4')) throw new Error(`Refused address ${ip}: Fast Monkey never connects to this server, its agents or link-local addresses. Use the database's own address.`)
-  return ip
-}
-
-function blockList(): BlockList {
-  const list = new BlockList()
-  for (const [net, bits] of [['127.0.0.0', 8], ['0.0.0.0', 8], ['169.254.0.0', 16], [AGENTS_RANGE, 16]] as const) list.addSubnet(net, bits, 'ipv4')
-  for (const [net, bits] of [['::1', 128], ['::', 128], ['fe80::', 10]] as const) list.addSubnet(net, bits, 'ipv6')
-  return list
-}
-
 const isSslMode = (mode: string): mode is keyof typeof SSL_MODES => mode in SSL_MODES
-
-function connectorTool<S extends z.ZodMiniObject>({ description, input, run }: { description: string; input: S; run: (call: { dsn: string; args: z.infer<S> }) => Promise<unknown> }): ConnectorTool {
-  return { description, input, schema: z.toJSONSchema(input), run: ({ dsn, args }) => run({ dsn, args: z.parse(input, args) }) }
-}
-
-export type ConnectorTool = { description: string; input: z.ZodMiniObject; schema: Record<string, unknown>; run: (call: { dsn: string; args: unknown }) => Promise<unknown> }

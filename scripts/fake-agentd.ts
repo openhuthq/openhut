@@ -8,6 +8,9 @@ const FAKE_PHONE = '15550001111'
 const states: Record<string, string> = {}
 const rendered: Record<string, string> = {}
 const pairReads: Record<string, number> = {}
+const OFF_TAILNET = { state: 'NeedsLogin', tailnet: '', name: '', address: '' }
+const ON_TAILNET = { state: 'Running', tailnet: 'example.ts.net', name: 'fastmonkey.example.ts.net', address: '100.101.102.103' }
+let tailnet = OFF_TAILNET
 
 rmSync(SOCK, { force: true })
 createServer({ allowHalfOpen: true }, (sock) => {
@@ -68,6 +71,15 @@ function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
       return { unlinked: req.id }
     case 'update':
       return { updating: true }
+    case 'ts-up':
+      if (req.authKey.includes('bad')) throw new Error('backend error: invalid key: unable to validate API key')
+      tailnet = ON_TAILNET
+      return { ...tailnet, joined: true }
+    case 'ts-status':
+      return tailnet
+    case 'ts-down':
+      tailnet = OFF_TAILNET
+      return tailnet
     default:
       throw new Error('unknown command')
   }

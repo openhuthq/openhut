@@ -11,8 +11,9 @@ import { adminController, healthController, updateController } from './admin/adm
 import { agentController, grantController } from './agents/agent-controller.ts'
 import { agentService } from './agents/agent-service.ts'
 import { channelController } from './channels/channel-controller.ts'
-import { connectionController, connectionEventController } from './connections/connection-controller.ts'
+import { connectionAuthorizationController, connectionController, connectionEventController, connectionToolController } from './connections/connection-controller.ts'
 import { gatewayServer } from './gateway/gateway-server.ts'
+import { tailscaleController } from './integrations/tailscale/tailscale-controller.ts'
 import { mcpController } from './mcp/mcp-controller.ts'
 import { oauthController, oauthMetadataController } from './team/oauth-controller.ts'
 import { inviteController, inviteLinkController, meController, peopleController, sessionController, setupController } from './team/team-controller.ts'
@@ -40,6 +41,9 @@ await app.register(grantController, { prefix: '/api/grants' })
 await app.register(channelController, { prefix: '/api/channels' })
 await app.register(connectionController, { prefix: '/api/connections' })
 await app.register(connectionEventController, { prefix: '/api/connection-events' })
+await app.register(connectionToolController, { prefix: '/api/connection-tools' })
+await app.register(connectionAuthorizationController, { prefix: '/api/connection-authorizations' })
+await app.register(tailscaleController, { prefix: '/api/tailscale' })
 await app.register(adminController, { prefix: '/api/admin' })
 await app.register(updateController, { prefix: '/api/updates' })
 await app.register(mcpController, { prefix: '/mcp' })
