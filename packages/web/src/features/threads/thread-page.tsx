@@ -82,12 +82,13 @@ function Composer({ me, agent, busy, onSend, onStop }: { me: Me; agent: Agent; b
   return <div className="chat-foot">
     {!ready && !busy && <NotReady agent={agent} />}
     <form className="composer" onSubmit={submit}>
-      <Initial id={me.user.id} email={me.user.email} size={22} />
-      <textarea name="text" rows={1} aria-label="Message" placeholder={ready ? `Message ${agent.name}` : `${agent.name} isn't ready yet`} disabled={!ready} autoFocus
-        onKeyDown={enter} onInput={(event) => { const box = event.currentTarget; box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 160)}px` }} />
-      <button type="submit" className={busy ? 'send stop' : 'send'} aria-label={busy ? 'Stop' : 'Send'} disabled={!busy && !ready}>{busy ? <span className="sq" /> : ICONS.up}</button>
+      <textarea name="text" rows={3} aria-label="Message" placeholder={ready ? `Message ${agent.name}…` : `${agent.name} isn't ready yet`} disabled={!ready} autoFocus
+        onKeyDown={enter} onInput={(event) => { const box = event.currentTarget; box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 240)}px` }} />
+      <div className="composer-bar">
+        <span className="chat-hint">Enter to send · Shift+Enter for a new line</span>
+        <button type="submit" className={busy ? 'send stop' : 'send'} aria-label={busy ? 'Stop' : 'Send'} disabled={!busy && !ready}>{busy ? <span className="sq" /> : ICONS.up}</button>
+      </div>
     </form>
-    <div className="chat-hint">Enter sends · Shift+Enter adds a line · only you see this chat</div>
   </div>
 }
 
@@ -147,7 +148,7 @@ function ChatEmpty({ agent, onTry }: { agent: Agent; onTry: (text: string) => vo
   const start = <button type="button" className="btn primary" disabled={!agent.canEdit || updateAgent.isPending} onClick={() => updateAgent.mutate({ wanted: 'running' }, { onError: toastError })}>{ICONS.play}Start {agent.name}</button>
   const state = agentState(agent)
   const copy = {
-    running: [`Ask ${agent.name} anything`, 'Messages go to the running agent, with its real model, instructions and connections.'],
+    running: [`Ask ${agent.name} anything`, ''],
     starting: [`Starting ${agent.name}`, 'Hermes takes about a minute to start. You can type as soon as it answers.'],
     no_seat: [`${agent.name} isn't ready`, agent.healthDetail],
     not_answering: [`${agent.name} isn't answering`, agent.healthDetail || 'The container is running, but Hermes isn\'t answering.'],
@@ -157,7 +158,7 @@ function ChatEmpty({ agent, onTry }: { agent: Agent; onTry: (text: string) => vo
   return <div className="chat-empty">
     <Avatar id={agent.id} about={agent.instructions} size={72} />
     <h3>{copy[0]}</h3>
-    <p>{copy[1]}</p>
+    {copy[1] && <p>{copy[1]}</p>}
     {state === 'running' && <div className="tries">{TRIES.map((text) => <button type="button" key={text} onClick={() => onTry(text)}>{text}</button>)}</div>}
     {state === 'stopped' && start}
     {agent.wanted === 'stopped' && state === 'missing' && start}
