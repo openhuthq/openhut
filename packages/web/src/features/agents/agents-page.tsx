@@ -1,29 +1,26 @@
 import type { Agent } from '@fastmonkey/common/agents/agent.ts'
 import type { Me } from '@fastmonkey/common/team/team.ts'
 import { Avatar } from '@/components/avatar'
-import { Field } from '@/components/field'
 import { Glyph } from '@/components/glyph'
 import { ICONS } from '@/components/icons'
 import { Loaded } from '@/components/loaded'
 import { Page } from '@/components/page'
-import { Popover } from '@/components/popover'
 import { StatusBadge } from '@/components/status-badge'
 import { useAgents, useCreateAgent } from '@/features/agents/api'
 import { modelLabel } from '@/features/agents/model-label'
 import { copyText } from '@/lib/clipboard'
-import { formValues } from '@/lib/form'
+import { toastError } from '@/lib/toast'
 
 const AI_LOGOS = [['claude', 'Claude'], ['cursor', 'Cursor'], ['copilot', 'GitHub Copilot'], ['gemini', 'Gemini'], ['windsurf', 'Windsurf'], ['zed', 'Zed'], ['mcp', 'Any MCP client']] as const
 
-export function AgentsPage({ me, creating }: { me: Me; creating: boolean }) {
+const NEW_NAME = 'New agent'
+
+export function AgentsPage({ me }: { me: Me }) {
   const agents = useAgents()
   const createAgent = useCreateAgent()
-  const actions = <Popover open={creating} href="/agents/new" back="/agents" buttonClass="btn sec" button={<>{ICONS.plus}<span className="lbl">New agent</span></>}>
-    <form onSubmit={(event) => createAgent.mutate({ name: formValues(event)('name') })}>
-      <Field label="Name" error={createAgent.error?.message}>{(control) => <input {...control} name="name" placeholder="Sales" required maxLength={40} />}</Field>
-      <button className="btn primary" disabled={createAgent.isPending}>Create agent</button>
-    </form>
-  </Popover>
+  const actions = <button type="button" className="btn primary" disabled={createAgent.isPending} onClick={() => createAgent.mutate({ name: NEW_NAME }, { onError: toastError })}>
+    {ICONS.plus}<span className="lbl">New agent</span>
+  </button>
   return <Page title="Agents" actions={actions}>
     <div className="wrap">
       <section className="aihero" aria-labelledby="ya-h">

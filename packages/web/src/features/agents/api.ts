@@ -32,7 +32,7 @@ export function useCreateAgent() {
     onSuccess: (agent) => {
       client.setQueryData([...AGENTS_KEY, agent.id], agent)
       client.setQueryData<Agent[]>(AGENTS_KEY, (agents) => agents && [...agents, agent])
-      navigate(`/agents/${agent.id}`)
+      navigate(`/agents/${agent.id}/name`)
     },
   })
 }

@@ -33,13 +33,16 @@ export const Agent = z.object({
 })
 export type Agent = z.infer<typeof Agent>
 
+const AgentName = z.string().check(z.minLength(1), z.maxLength(40))
+
 export const CreateAgent = z.object({
-  name: z.string().check(z.minLength(1), z.maxLength(40)),
+  name: AgentName,
   instructions: z.optional(z.string().check(z.maxLength(20_000))),
 })
 export type CreateAgent = z.infer<typeof CreateAgent>
 
 export const UpdateAgentFields = {
+  name: z.optional(AgentName),
   instructions: z.optional(z.string().check(z.maxLength(20_000))),
   model: z.optional(ModelId),
   wanted: z.optional(Wanted),

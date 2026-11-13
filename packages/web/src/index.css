@@ -102,6 +102,12 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .btn.go{color:oklch(47% .15 145)}
 .btn.danger{color:var(--fail)}
 .aname{font-size:20px;font-weight:500;margin:0;min-width:0}
+.anamebox{display:flex;align-items:center;gap:6px;min-width:0}
+.aname.editing{outline:none;border-radius:0;cursor:text;white-space:nowrap;overflow:hidden;min-width:1ch;box-shadow:0 2px 0 var(--ink)}
+.aname::selection{background:oklch(0% 0 0 / .14)}
+.rename{flex:none;display:grid;place-items:center;width:26px;height:26px;border:0;border-radius:6px;background:transparent;color:var(--mute);opacity:0;transition:opacity .15s}
+.anamebox:hover .rename,.rename:focus-visible{opacity:1}
+.rename:hover{background:var(--soft);color:var(--ink)}
 /* signed out: the form on white, and a night scene where agents ask the monkey (the gateway) for data */
 .auth{min-height:100vh;min-height:100dvh;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);background:var(--card)}
 .authside{display:flex;flex-direction:column;padding:28px 40px}
@@ -115,6 +121,14 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .authform input:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px oklch(0% 0 0 / .08)}
 .authform .btn{height:44px;border-radius:10px;justify-content:center;font-size:14.5px}
 .authform .err{margin:0}
+.strength{--tone:var(--mid);display:flex;flex-direction:column;gap:6px;margin-top:8px;font-family:var(--copy);font-size:12px;color:var(--mute)}
+.strength .bars{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.strength i{height:4px;border-radius:999px;background:var(--soft);transition:background .25s}
+.strength[data-score="1"]{--tone:var(--fail)}
+.strength[data-score="2"]{--tone:oklch(75% .16 70)}
+.strength[data-score="3"]{--tone:oklch(70% .17 125)}
+.strength[data-score="4"]{--tone:var(--pass)}
+.strength[data-score="1"] i:nth-child(-n+1),.strength[data-score="2"] i:nth-child(-n+2),.strength[data-score="3"] i:nth-child(-n+3),.strength[data-score="4"] i{background:var(--tone)}
 .authfoot{margin:0;font-family:var(--copy);font-size:12px;color:var(--mute)}
 .authart{--r:200px;--core:170px;position:relative;isolation:isolate;overflow:hidden;margin:8px;border-radius:20px;background:var(--night);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:64px;padding:48px 32px}
 .authart::before{content:"";position:absolute;inset:0;z-index:-2;background:radial-gradient(55% 42% at 50% 40%,oklch(100% 0 0 / .12),transparent 70%),radial-gradient(oklch(100% 0 0 / .08) 1px,transparent 1.2px) 0 0/18px 18px}

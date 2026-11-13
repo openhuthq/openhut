@@ -42,3 +42,9 @@
   monkey (the gateway) for data, one at a time: a packet travels the beam, the monkey looks at the agent and stamps
   the grant ✓, or ✕ for payroll. Typing makes everyone look at the field; the password field makes the monkey cover
   its eyes; a failed sign-in makes it shake its head. Rejected: idle hopping and an expanding ring ("cheap CSS trick").
+- Owner, 2026-11-13: no native validation bubbles on the auth forms (`noValidate`); the server's message shows under the
+  field. Under the new-password field a four-segment strength meter counts down to 12 characters, then rates by length
+  and variety. It is a rough heuristic with no dictionary check; swap in zxcvbn if weak-but-long passwords matter.
+- Owner, 2026-11-13: **New agent** is a black button that creates "New agent" at once and opens its page at
+  `/agents/<id>/name`, where the title is selected to type over. The name is edited in place (a `contenteditable`
+  heading, no text box): double-click it or use the pencil shown on hover, Enter or click away saves, Escape cancels.

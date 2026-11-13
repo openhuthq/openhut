@@ -15,7 +15,7 @@ export const MCP_TOOLS = [
   tool({ name: 'create_agent', description: 'Create an agent (stopped). You own it.', input: CreateAgent, call: ({ api, input }) => api({ method: 'POST', url: '/api/agents', payload: input }) }),
   tool({
     name: 'update_agent',
-    description: 'Change an agent\'s instructions or model (it restarts if running), or start or stop it with wanted.',
+    description: 'Rename an agent, change its instructions or model (it restarts if running), or start or stop it with wanted.',
     input: z.object({ id: z.string(), ...UpdateAgentFields }),
     call: ({ api, input: { id, ...patch } }) => api({ method: 'PATCH', url: `/api/agents/${id}`, payload: patch }),
   }),

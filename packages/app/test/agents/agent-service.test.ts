@@ -18,3 +18,9 @@ test('a forged token is refused', async () => {
   const forged = `${token.slice(0, -1)}${token.endsWith('0') ? '1' : '0'}`
   assert.equal(await agentService.byToken({ token: forged, address: '10.200.7.2' }), undefined)
 })
+
+test('renaming an agent cleans the name and refuses an empty one', async () => {
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
+  assert.equal((await agentService.update({ actor, id: 'ag_tokentst', patch: { name: '  Sales <b>bot</b> ' } })).name, 'Sales bbotb')
+  await assert.rejects(agentService.update({ actor, id: 'ag_tokentst', patch: { name: '<>' } }), { status: 400 })
+})
