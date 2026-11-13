@@ -1,6 +1,7 @@
 import type { Agent } from '@fastmonkey/common/agents/agent.ts'
 import type { Me } from '@fastmonkey/common/team/team.ts'
 import { Avatar } from '@/components/avatar'
+import { CopyButton } from '@/components/copy-button'
 import { Glyph } from '@/components/glyph'
 import { ICONS } from '@/components/icons'
 import { Loaded } from '@/components/loaded'
@@ -8,7 +9,6 @@ import { Page } from '@/components/page'
 import { AgentBadge } from '@/components/status-badge'
 import { useAgents, useCreateAgent } from '@/features/agents/api'
 import { modelLabel } from '@/features/agents/model-label'
-import { copyText } from '@/lib/clipboard'
 import { toastError } from '@/lib/toast'
 
 const AI_LOGOS = [['claude', 'Claude'], ['cursor', 'Cursor'], ['copilot', 'GitHub Copilot'], ['gemini', 'Gemini'], ['windsurf', 'Windsurf'], ['zed', 'Zed'], ['mcp', 'Any MCP client']] as const
@@ -25,7 +25,7 @@ export function AgentsPage({ me }: { me: Me }) {
     <div className="wrap">
       <section className="aihero" aria-labelledby="ya-h">
         <div className="aicopy"><h3 id="ya-h">Set up Fast Monkey from your agent</h3><p>Copy one prompt into the agent you already use. It connects here and sets things up with you.</p>
-          <button type="button" className="btn sec" onClick={() => copyText(setupPrompt(me.publicUrl))}>{ICONS.copy}Copy prompt</button></div>
+          <CopyButton className="btn sec" text={setupPrompt(me.publicUrl)} label="Copy prompt" /></div>
         <div className="ailogos" aria-hidden="true">{AI_LOGOS.map(([name, label]) => <span className="ailogo" title={label} key={name}><Glyph name={name} size={22} /></span>)}</div>
       </section>
       <Loaded query={agents}>{(list) => <AgentGrid agents={list} />}</Loaded>
