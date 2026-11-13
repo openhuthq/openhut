@@ -1,25 +1,15 @@
 ---
-title: Teach it
-description: Correct an agent once, in the chat where it got it wrong. It remembers.
-icon: learn
+title: Teaching
+description: Correct an agent once, in chat. It remembers.
+icon: hermes
 ---
 
-<Flow steps={[['chat', 'It gets something wrong'], ['team', 'You correct it in chat'], ['learn', 'It writes a skill'], ['agent', 'Next time it gets it right']]} />
+Tell it what to do differently, in the same thread:
 
-You teach an agent the way you'd teach a teammate. Tell it what to do differently, in plain words, in the same
-thread:
-
-```txt title="Say to your agent"
+```txt
 Next time an order is late, tell the customer too.
 ```
 
-The agent saves that as a skill, a short note to itself, and follows it from then on. Skills live in the agent's own
-folder on your server, so they survive restarts and upgrades.
+The agent saves that as a skill and follows it from then on. Skills survive restarts and upgrades.
 
-## Skills or instructions?
-
-- **Instructions** are the job. You write them once, on the [agent's page](/agents).
-- **Skills** are what the agent picks up while doing the job. It writes them itself.
-
-If an agent keeps getting the same thing wrong, say it once more in chat, more plainly. If its whole job changed,
-edit its instructions.
+**Instructions** are the job, and you write them. **Skills** are what it picks up on the job, and it writes them.

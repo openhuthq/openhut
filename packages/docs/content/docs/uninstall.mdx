@@ -1,10 +1,10 @@
 ---
 title: Uninstall
 description: Remove Fast Monkey, its agents, its data and its firewall from your server.
-icon: remove
+icon: monkey
 ---
 
-<Callout type="warn">These commands delete every agent and all of Fast Monkey's data. They can't be undone. Run them as root.</Callout>
+Run these as root. They delete every agent and all of Fast Monkey's data, and can't be undone.
 
 <Steps>
 <Step>
@@ -39,8 +39,6 @@ docker network ls -q --filter label=fastmonkey.agent | xargs -r docker network r
 docker rmi "$(cat /opt/fastmonkey/install/agent-image)"
 ```
 
-The last line frees the agent image, about 3 GB. If you set `AGENT_IMAGE`, remove that image instead.
-
 </Step>
 <Step>
 
@@ -65,8 +63,6 @@ rm -rf /etc/agentd /var/lib/fastmonkey /var/cache/fastmonkey /var/log/fastmonkey
 rmdir /data
 ```
 
-`rmdir` removes `/data` only if nothing else is in it.
-
 </Step>
 <Step>
 
@@ -77,7 +73,4 @@ On Debian or Ubuntu, `userdel fastmonkey`. On Alpine, `deluser fastmonkey`.
 </Step>
 </Steps>
 
-## What stays
-
-Docker, gVisor and Node stay installed, because other programs may use them. Remove them yourself if nothing else
-does.
+Docker, gVisor and Node stay installed.

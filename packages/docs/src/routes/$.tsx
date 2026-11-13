@@ -27,8 +27,10 @@ function Page() {
   return (
     <DocsLayout {...baseOptions()} tree={source.getPageTree()}>
       <DocsPage toc={toc}>
-        {icon && <PageIcon icon={icon} big />}
-        <DocsTitle>{page.title}</DocsTitle>
+        <div className="title">
+          {icon && <PageIcon icon={icon} size={52} />}
+          <DocsTitle>{page.title}</DocsTitle>
+        </div>
         <DocsDescription>{page.description}</DocsDescription>
         <DocsBody>
           <MDX components={useMDXComponents()} />
