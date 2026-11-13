@@ -1,5 +1,5 @@
 import * as z from 'zod/mini'
-import type { Admin, AgentContainer, Health, SeatSignIn, Update, UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
+import type { Admin, AgentContainer, Health, SeatSignIn, SeatUsage, Update, UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
 import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
 import { HttpError } from '../platform/http-error.ts'
@@ -9,6 +9,7 @@ import { log, record } from '../platform/events.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { isAdmin, type Caller } from '../team/identity.ts'
 import { seatSignIn } from './seat-sign-in.ts'
+import { seatLimits } from './seat-limits.ts'
 
 const LATEST_TTL_MS = 60_000
 const LATEST_TIMEOUT_MS = 4_000
@@ -16,6 +17,7 @@ const BUILD_LINE = /^FASTMONKEY_BUILD="([\w.-]+)"$/m
 const SEMVER = /^\d+\.\d+\.\d+$/
 const UPDATE_GRACE_MS = 20_000
 const UPDATE_LIMIT_MS = 45 * 60_000
+const WEEK_MS = 7 * 24 * 60 * 60_000
 const StoredUpdate = z.object({ from: z.string(), to: z.string(), startedAt: z.string() })
 let latest: { build: string | null; at: number } = { build: null, at: 0 }
 
@@ -51,6 +53,19 @@ export const adminService = {
       },
       publicUrl: publicUrl(),
       google: { clientId: settings.googleClient()?.clientId ?? null, redirectUri: `${publicUrl()}/api/connection-authorizations/callback` },
+    }
+  },
+
+  async seatUsage(): Promise<SeatUsage> {
+    const token = settings.seatToken()
+    if (config.modelMode !== 'claude' || !token) throw new HttpError(409, 'No Claude seat is connected, so there\'s no usage to show.')
+    const windows = await seatLimits.read(token)
+    const resetsAt = windows.find((window) => window.kind === 'seven_day')?.resetsAt
+    const since = (resetsAt ? Date.parse(resetsAt) : Date.now()) - WEEK_MS
+    const [{ usage }, agents] = await Promise.all([agentd.usage({ since: since / 1000 }), db.selectFrom('agent').select(['id', 'name']).orderBy('created_at').execute()])
+    return {
+      object: 'seat_usage', windows, since: new Date(since).toISOString(),
+      agents: agents.map((agent) => ({ agentId: agent.id, agentName: agent.name, costUsd: usage[agent.id] ?? 0 })).sort((a, b) => b.costUsd - a.costUsd),
     }
   },
 

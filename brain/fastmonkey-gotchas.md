@@ -104,3 +104,9 @@ the installer, agentd and the e2e run live here. `fastmonkey-server.md` covers t
 - `npm run dev` builds the dashboard, then `scripts/dev.ts` starts `scripts/fake-agentd.ts` and the app with `FASTMONKEY_DATA=.data`, `SETUP_CODE=dev` and `FASTMONKEY_MODEL=test`. The fake agentd answers from memory without Docker, so agents never really run on a laptop. It mirrors agentd's reply shapes because the app validates every reply.
 - Open `http://localhost:8787/setup?code=dev`. On a fresh `.data`, `node scripts/seed-ui.ts` adds sample people, agents and connections; sign in as `mo` with the password it prints.
 - `scripts/release.sh` runs on macOS (BSD tar) and in CI (GNU tar). Their flags for a root-owned archive differ (`--uid 0 --uname root` vs `--owner=0 --numeric-owner`), so the script picks by `tar --version`; the first CI deploy failed on `--uid`.
+
+## Seat usage (Admin)
+
+- A `claude setup-token` seat has only the `user:inference` scope, so `/api/oauth/usage` refuses it (`user:profile` required) and Claude Code's `get_usage` answers `rate_limits: null`. The plan % comes from the `anthropic-ratelimit-unified-{5h,7d}-utilization` and `-reset` headers of a 1-token Haiku message instead (`count_tokens` carries none). The app sends one per 5 minutes at most, only while someone has Admin open.
+- Only windows Claude is tracking come back: often `7d` alone, no `5h`.
+- The seat's % also counts anyone else signed in to that Claude account, so per agent we show shares of what agents used, not shares of the seat: agentd sums `estimated_cost_usd` (API list price) from each agent's Hermes `state.db` `sessions`, for sessions active since the weekly window opened. A long session counts in full, including what it spent before the window.

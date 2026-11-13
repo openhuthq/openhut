@@ -73,3 +73,18 @@ export type SeatSignIn = z.infer<typeof SeatSignIn>
 
 export const CompleteSeatSignIn = z.object({ code: z.string().check(z.minLength(10), z.maxLength(2000)) })
 export type CompleteSeatSignIn = z.infer<typeof CompleteSeatSignIn>
+
+export const SeatWindow = z.object({
+  kind: z.enum(['five_hour', 'seven_day']),
+  percent: z.number(),
+  resetsAt: z.nullable(Timestamp),
+})
+export type SeatWindow = z.infer<typeof SeatWindow>
+
+export const SeatUsage = z.object({
+  object: z.literal('seat_usage'),
+  windows: z.array(SeatWindow),
+  since: Timestamp,
+  agents: z.array(z.object({ agentId: z.string(), agentName: z.string(), costUsd: z.number() })),
+})
+export type SeatUsage = z.infer<typeof SeatUsage>
