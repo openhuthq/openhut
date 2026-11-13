@@ -124,13 +124,13 @@ async function connectionsOf({ actor, rows }: { actor: Caller; rows: Row[] }): P
   if (!rows.length) return []
   const ids = rows.map((row) => row.id)
   const [owners, counts, usable, successes, failures] = await Promise.all([
-    db.selectFrom('person').select(['id', 'username']).where('id', 'in', rows.map((row) => row.owner_id)).execute(),
+    db.selectFrom('person').select(['id', 'email']).where('id', 'in', rows.map((row) => row.owner_id)).execute(),
     db.selectFrom('connection_grant').select((eb) => ['connection_id', eb.fn.countAll<string>().as('n')]).where('connection_id', 'in', ids).groupBy('connection_id').execute(),
     usableBy(actor.id).select('c.id').where('c.id', 'in', ids).execute(),
     db.selectFrom('connection_event').select((eb) => ['connection_id', eb.fn.max('at').as('at')]).where('connection_id', 'in', ids).where('outcome', '=', 'allowed').groupBy('connection_id').execute(),
     db.selectFrom('connection_event').select('connection_id').distinct().where('connection_id', 'in', ids).where('outcome', '=', 'failed').execute(),
   ])
-  const ownerName = new Map(owners.map((owner) => [owner.id, owner.username]))
+  const ownerName = new Map(owners.map((owner) => [owner.id, owner.email]))
   const agents = new Map(counts.map((count) => [count.connection_id, Number(count.n)]))
   const canUse = new Set(usable.map((connection) => connection.id))
   const lastSuccess = new Map(successes.map((success) => [success.connection_id, success.at]))

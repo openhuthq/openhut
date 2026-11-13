@@ -6,7 +6,7 @@ import { oauthService } from '../../src/team/oauth-service.ts'
 import { teamService } from '../../src/team/team-service.ts'
 
 await migrate()
-const { person: owner } = await teamService.createPerson({ setupCode: 'test-setup-code', username: 'oauthowner', password: 'owner-password-1', origin: 'http://jb.test' })
+const { person: owner } = await teamService.createPerson({ setupCode: 'test-setup-code', email: 'oauthowner@example.com', password: 'owner-password-1', origin: 'http://jb.test' })
 const redirectUri = 'http://localhost:4321/callback'
 const verifier = randomBytes(32).toString('base64url')
 const codeChallenge = createHash('sha256').update(verifier).digest('base64url')

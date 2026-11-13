@@ -157,8 +157,8 @@ after(() => {
 function main() {
   const dbPassword = randomBytes(12).toString('hex')
   const agentPassword = randomBytes(12).toString('hex')
-  const owner = { username: 'owner', password: randomBytes(12).toString('base64url') }
-  const mia = { username: 'mia', password: randomBytes(12).toString('base64url') }
+  const owner = { email: 'owner@example.com', password: randomBytes(12).toString('base64url') }
+  const mia = { email: 'mia@example.com', password: randomBytes(12).toString('base64url') }
   const seatToken = `sk-ant-oat01-${randomBytes(24).toString('hex')}`
   const extras: string[] = []
   let setupCode = ''
@@ -226,7 +226,7 @@ function main() {
 
   check('A1', 'Setup needs the code the installer printed', 'open before; a wrong code: 403 on setupCode; still open, no owner', async () => {
     const open = (await api<Setup>('GET', '/api/setup')).json.open
-    const wrongCode = await api('POST', '/api/people', { setupCode: '0'.repeat(18), username: 'mallory', password: 'mallory-password-1' })
+    const wrongCode = await api('POST', '/api/people', { setupCode: '0'.repeat(18), email: 'mallory@example.com', password: 'mallory-password-1' })
     const stillOpen = (await api<Setup>('GET', '/api/setup')).json.open
     return {
       actual: `open ${open} | wrong code ${wrongCode.status} ${wrongCode.json.error?.param} | open after ${stillOpen}`,
@@ -237,7 +237,7 @@ function main() {
   check(
     'A2',
     "The installer's link signs up the owner in one step",
-    'the install prints the /setup?code= link; posting the code with a username and password makes the owner and a session cookie, HttpOnly and SameSite=Strict',
+    'the install prints the /setup?code= link; posting the code with an email and password makes the owner and a session cookie, HttpOnly and SameSite=Strict',
     async () => {
       setupCode = readFileSync('/etc/fastmonkey/env', 'utf8').match(/SETUP_CODE=(\S+)/)?.[1] ?? ''
       writeFileSync(`${RESULTS}/.test-credentials.json`, JSON.stringify(owner))
@@ -258,15 +258,15 @@ function main() {
     'Setup closes after the owner exists; sign-in checks the password, taking as long for unknown names',
     'setup again: 403 and closed; wrong password 401; unknown user 401; right password 200 with a session; unknown/wrong time 0.5-2×',
     async () => {
-      const again = await api('POST', '/api/people', { setupCode, username: 'second', password: 'second-password-1' })
+      const again = await api('POST', '/api/people', { setupCode, email: 'second@example.com', password: 'second-password-1' })
       const open = (await api<Setup>('GET', '/api/setup')).json.open
-      const bad = await api('POST', '/api/sessions', { username: 'owner', password: 'wrong-password-123' })
-      const nobody = await api('POST', '/api/sessions', { username: 'nobody', password: 'wrong-password-123' })
+      const bad = await api('POST', '/api/sessions', { email: 'owner@example.com', password: 'wrong-password-123' })
+      const nobody = await api('POST', '/api/sessions', { email: 'nobody@example.com', password: 'wrong-password-123' })
       const good = await api<Session>('POST', '/api/sessions', owner)
       const ms: { wrong: number[]; unknown: number[] } = { wrong: [], unknown: [] }
       for (let i = 0; i < 5; i++) {
-        ms.wrong.push(await timedSignIn('owner'))
-        ms.unknown.push(await timedSignIn(`nobody${i}`))
+        ms.wrong.push(await timedSignIn('owner@example.com'))
+        ms.unknown.push(await timedSignIn(`nobody${i}@example.com`))
       }
       const ratio = average(ms.unknown) / average(ms.wrong)
       return {
@@ -686,11 +686,11 @@ function main() {
       const linkInfo = await api<InviteLink>('GET', `/api/invite-links/${inviteToken}`)
       const join = await api<Person>('POST', '/api/people', { inviteToken, ...mia })
       miaCookie = join.cookie
-      const reuse = await api('POST', '/api/people', { inviteToken, username: 'mallory', password: 'mallory-password-1' })
+      const reuse = await api('POST', '/api/people', { inviteToken, email: 'mallory@example.com', password: 'mallory-password-1' })
       const unknown = await api('GET', '/api/invite-links/not-a-real-invite')
       const adminInvite = await call<Invite>('create_invite', { role: 'admin' })
       const revoked = await call<Deleted<'invite'>>('delete_invite', { id: adminInvite.id })
-      const revokedUse = await api('POST', '/api/people', { inviteToken: inviteTokenOf(adminInvite), username: 'mallory', password: 'mallory-password-1' })
+      const revokedUse = await api('POST', '/api/people', { inviteToken: inviteTokenOf(adminInvite), email: 'mallory@example.com', password: 'mallory-password-1' })
       return {
         actual: {
           link: String(invite.link).replace(inviteToken, '<token>'),
@@ -771,7 +771,7 @@ function main() {
     "their session 401, their OAuth app 401, sign-in 401; their agent stopped; they're off the People list",
     async () => {
       const miaToken = (await oauthSignIn(miaCookie, "mia's assistant")).access
-      const miaId = (await call<List<Person>>('list_people')).data.find((p) => p.username === 'mia')?.id
+      const miaId = (await call<List<Person>>('list_people')).data.find((p) => p.email === 'mia@example.com')?.id
       await call('delete_person', { id: miaId })
       const afterRemoval = {
         session: (await api('GET', '/api/me', undefined, miaCookie)).status,
@@ -784,7 +784,7 @@ function main() {
         ).status,
         signIn: (await api('POST', '/api/sessions', mia)).status,
         agent: await statusOf(helper.id),
-        listed: (await call<List<Person>>('list_people')).data.some((p) => p.username === 'mia'),
+        listed: (await call<List<Person>>('list_people')).data.some((p) => p.email === 'mia@example.com'),
       }
       await call('delete_agent', { id: helper.id })
       return {
@@ -1706,9 +1706,9 @@ async function tlsProbe(dataDir: string, dsn: string, trustCa: boolean) {
   return stdout.trim().split('\n').at(-1) ?? ''
 }
 
-async function timedSignIn(username: string) {
+async function timedSignIn(email: string) {
   const t = Date.now()
-  await api('POST', '/api/sessions', { username, password: 'wrong-password-123' })
+  await api('POST', '/api/sessions', { email, password: 'wrong-password-123' })
   return Date.now() - t
 }
 

@@ -12,13 +12,13 @@ const AGENTS = [
 ]
 const password = randomBytes(9).toString('base64url')
 
-const owner = (await api('POST', '/api/people', { setupCode: process.env.SETUP_CODE ?? 'dev', username: 'mo', password })).cookie
-for (const [username, role] of [
-  ['sara', 'admin'],
-  ['omar', 'member'],
+const owner = (await api('POST', '/api/people', { setupCode: process.env.SETUP_CODE ?? 'dev', email: 'mo@example.com', password })).cookie
+for (const [email, role] of [
+  ['sara@example.com', 'admin'],
+  ['omar@example.com', 'member'],
 ]) {
   const { link } = (await api<Invite>('POST', '/api/invites', { role }, owner)).json
-  await api('POST', '/api/people', { inviteToken: link?.split('/invite/')[1], username, password: randomBytes(9).toString('base64url') })
+  await api('POST', '/api/people', { inviteToken: link?.split('/invite/')[1], email, password: randomBytes(9).toString('base64url') })
 }
 const orders = (
   await api<Connection>('POST', '/api/connections', { name: 'Orders DB', dsn: 'postgres://reader:sample@db.internal.example:5432/orders' }, owner)
@@ -31,7 +31,7 @@ for (const [name, about, model, wanted] of AGENTS) {
   await api('PATCH', `/api/agents/${agent.id}`, { model, wanted }, owner)
 }
 for (const agentId of [ids.Dev, ids.Support]) await api('POST', '/api/grants', { agentId, connectionId: orders.id }, owner)
-console.log(JSON.stringify({ signIn: { username: 'mo', password }, agents: ids, connection: orders.id }))
+console.log(JSON.stringify({ signIn: { email: 'mo@example.com', password }, agents: ids, connection: orders.id }))
 
 async function api<T>(method: string, path: string, body?: unknown, cookie = '') {
   const r = await fetch(APP + path, {

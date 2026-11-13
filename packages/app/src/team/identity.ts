@@ -26,7 +26,7 @@ export async function callerOf(req: FastifyRequest): Promise<Caller | undefined>
   if (access) return activePerson(await oauthService.owner(access))
   const session = sessionToken(req)
   if (!session) return undefined
-  return db.selectFrom('session as s').innerJoin('person as p', 'p.id', 's.person_id').select(['p.id', 'p.username', 'p.role'])
+  return db.selectFrom('session as s').innerJoin('person as p', 'p.id', 's.person_id').select(['p.id', 'p.email', 'p.role'])
     .where('s.hash', '=', sha(session)).where('s.expires_at', '>', new Date()).where('p.removed_at', 'is', null).executeTakeFirst()
 }
 
@@ -43,7 +43,7 @@ export function clearSessionCookie(reply: FastifyReply): void {
 
 async function activePerson(id: string | undefined): Promise<Caller | undefined> {
   if (!id) return undefined
-  return db.selectFrom('person').select(['id', 'username', 'role']).where('id', '=', id).where('removed_at', 'is', null).executeTakeFirst()
+  return db.selectFrom('person').select(['id', 'email', 'role']).where('id', '=', id).where('removed_at', 'is', null).executeTakeFirst()
 }
 
-export type Caller = { id: string; username: string; role: TeamRole }
+export type Caller = { id: string; email: string; role: TeamRole }

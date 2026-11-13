@@ -4,7 +4,7 @@ type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>
 
 export interface Database {
   install_setting: { name: string; value: string }
-  person: { id: string; username: string; pass: string; role: 'owner' | 'admin' | 'member'; created_at: Timestamp; removed_at: Timestamp | null }
+  person: { id: string; email: string; pass: string; role: 'owner' | 'admin' | 'member'; created_at: Timestamp; removed_at: Timestamp | null }
   session: { hash: string; person_id: string; expires_at: Timestamp }
   invite: { id: string; hash: string; role: 'admin' | 'member'; created_by: string; expires_at: Timestamp; used_at: Timestamp | null }
   oauth_client: { id: string; name: string; redirect_uris: string; created_at: Timestamp }
