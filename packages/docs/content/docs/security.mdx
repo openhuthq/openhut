@@ -1,44 +1,21 @@
 ---
-title: Security
-description: Agents read messages from strangers, so Fast Monkey assumes any agent can be tricked. Each one is boxed in, off your network and away from your keys.
-icon: shield
+title: Sandbox
+description: Any agent can be tricked by a message. So each one is boxed in, and none holds your keys.
+icon: finance
 ---
 
-<Flow steps={[['agent', 'Every agent in its own sandbox'], ['shield', 'A firewall around each one'], ['key', 'Fast Monkey holds the keys'], ['data', 'Every call is logged']]} />
+## Its own sandbox
 
-## Every agent in its own sandbox
+Each agent runs in its own gVisor container with a read-only system and its own network. It can't reach another agent, your server or your LAN.
 
-- Each agent runs in its own gVisor container, as an unprivileged user, with a read-only system and limits on
-  memory, CPU and processes.
-- Each one has its own network. An agent can't reach another agent, your server or your LAN.
-- The dashboard never touches Docker. A small root helper does, with a fixed set of commands, and it refuses to
-  start an agent unless the firewall is in place.
+## A firewall
 
-## The firewall
-
-- Out: agents can make DNS lookups and HTTPS calls on port 443, nothing else. Private ranges, Tailscale and the
-  cloud metadata address are blocked.
-- In: agents reach only Fast Monkey's gateway, and nobody else reaches that port.
-- Every 30 seconds the helper applies the firewall again. If it can't, it stops every agent.
+Agents can make HTTPS calls out, and nothing else. Private ranges and the cloud metadata address are blocked. If the firewall can't be applied, every agent stops.
 
 ## Fast Monkey holds the keys
 
-- Agents reach your data only through the gateway. It keeps every password, sealed with AES-256-GCM.
-- On every call it checks that the agent may use the connection and that its owner still can. Take a connection
-  away and access stops at once.
-- Every call is logged, refused ones too.
-- Postgres calls run one `SELECT` each, in a read-only transaction, for at most 15 seconds and 1000 rows. Database
-  logins that are superusers, or can run programs or read files on the database server, are refused.
-
-## People
-
-- The first person with the installer's link becomes the owner. Then sign-up closes and people join only by invite.
-- Passwords are hashed with scrypt.
-- AI assistants sign in with OAuth, never with your browser session, so another website can't drive Fast Monkey
-  through your browser.
+Agents reach your data only through Fast Monkey's gateway. It keeps every password encrypted, checks each call against what you allowed, and logs it.
 
 ## What it doesn't cover
 
-- A tricked agent can still leak what it holds itself: its own Slack or WhatsApp credentials, its own memories and
-  the shared Claude token.
-- The dashboard is plain HTTP on port 8787. Keep it private or put HTTPS in front of it.
+A tricked agent can still leak what it holds itself: its Slack or WhatsApp credentials, its memories and the shared Claude token.

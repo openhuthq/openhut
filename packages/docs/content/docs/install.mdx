@@ -1,80 +1,42 @@
 ---
 title: Install
-description: One command on your Linux server, then a few clicks. It takes about ten minutes.
-icon: install
+description: One command on a Linux server. About ten minutes.
+icon: sales
 ---
 
-<Flow steps={[['terminal', 'Run one command'], ['team', 'Open the sign-up link'], ['claude', 'Connect Claude'], ['agent', 'Create an agent']]} />
+You need a Linux server (Debian, Ubuntu or Alpine), root, and 3 GB of disk.
 
 <Steps>
 <Step>
 
-### Run the command
-
-On your server, as root:
+### Run it
 
 ```sh
 curl -fsSL https://fastmonkey.dev | sh
 ```
 
-Not root? Use `curl -fsSL https://fastmonkey.dev | sudo sh`.
+</Step>
+<Step>
+
+### Open the link it prints
+
+Pick a username and password. The first person in is the owner.
 
 </Step>
 <Step>
 
-### Open the sign-up link
+### Add your Claude plan
 
-When it finishes, the installer prints a link like `http://IP:8787/setup?code=…`. Open it and pick a username and
-password. The first person to open it becomes the owner. After that, people join only by [invite](/team).
-
-</Step>
-<Step>
-
-### Connect your Claude plan
-
-Open **Admin**, press **Set up** next to **Claude seat** and paste a token. [Your Claude plan](/claude) shows where
-the token comes from.
+**Admin**, then **Claude seat**. See [Claude plan](/claude).
 
 </Step>
 <Step>
 
-### Create your first agent
+### Create an agent
 
-Open **Agents**, press **New agent** and give it a name. [Create an agent](/agents) takes it from there.
+**Agents**, then **New agent**. See [Agents](/agents).
 
 </Step>
 </Steps>
 
-## What you need
-
-- A Linux server, x86_64 or arm64, and root on it.
-- apt (Debian, Ubuntu) or apk (Alpine).
-- About 3 GB of disk for the agent image, which the first start pulls.
-
-With systemd, Fast Monkey starts again after a reboot. Without it, run `/opt/fastmonkey/install/host-start.sh` after
-a reboot. Agents stay stopped until you do.
-
-## Keep it private
-
-The dashboard is on port 8787 over plain HTTP. Keep that port behind Tailscale or an SSH tunnel, or put HTTPS in
-front of it.
-
-## What the installer does
-
-<Accordions>
-<Accordion title="Show every step">
-
-1. Installs what's missing: Docker, gVisor `20261109.0` and Node 22. With apk, Node is Alpine's `nodejs` package.
-   With apt, it's Node 22.23.5 from nodejs.org.
-2. Downloads Fast Monkey and Claude Code 2.1.311.
-3. Checks every download against a checksum written into the installer itself, so a tampered mirror can't swap a file.
-4. Unpacks the release into a clean `/opt/fastmonkey.new`, owned by root, and swaps it in whole.
-5. Writes its settings to `/etc/fastmonkey/env` (mode 0600). On a re-run it keeps what's there and only adds missing keys.
-6. Starts Fast Monkey: the firewall first, then the helper that runs Docker, then the app.
-7. Waits until the new app answers `/health`, then prints the owner sign-up link.
-
-Before the first start, the server pulls the agent image and prepares the WhatsApp bridge. If the bridge fails,
-WhatsApp stays off and Fast Monkey still starts.
-
-</Accordion>
-</Accordions>
+The dashboard is plain HTTP on port 8787. Keep it behind Tailscale, an SSH tunnel or HTTPS.

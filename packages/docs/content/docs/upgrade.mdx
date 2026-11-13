@@ -1,18 +1,11 @@
 ---
 title: Upgrade
-description: Run the install command again. It upgrades in place and keeps everything.
-icon: upgrade
+description: Run the install command again. It keeps everything.
+icon: support
 ---
 
 ```sh
 curl -fsSL https://fastmonkey.dev | sh
 ```
 
-It keeps your people, agents, connections and settings, and everything your agents have learned.
-
-## What happens to agents
-
-Each running agent restarts once, so it gets the new release. The installer finishes only when the new version
-answers, so a finished command means a working server.
-
-The agent image follows each release, unless you set `AGENT_IMAGE` in `/etc/fastmonkey/env`.
+People, agents, connections and skills stay. Each running agent restarts once.

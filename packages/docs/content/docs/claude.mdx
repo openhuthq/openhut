@@ -1,17 +1,17 @@
 ---
-title: Your Claude plan
-description: Agents run on the Claude subscription you already pay for. One token covers every agent.
+title: Claude plan
+description: Agents run on the Claude subscription you already pay for.
 icon: logo:claude
 ---
 
-<Shot src="claude-seat" alt="The Admin page with the Claude seat field open, waiting for a token" />
+<Shot src="claude-seat" alt="The Admin page with the Claude seat field open" />
 
 <Steps>
 <Step>
 
 ### Make a token
 
-On any computer signed in to the Claude seat you want agents to use, run:
+On a computer signed in to the seat:
 
 ```sh
 claude setup-token
@@ -22,10 +22,9 @@ claude setup-token
 
 ### Paste it
 
-Open **Admin**, press **Set up** next to **Claude seat**, paste the token and press **Save**. Fast Monkey stores it on
-your server and restarts every agent with it.
+**Admin**, **Claude seat**, **Save**. Every agent restarts with it.
 
 </Step>
 </Steps>
 
-Use a seat you set aside for agents, not your own. Everything the agents do counts against that seat's limits.
+Use a seat set aside for agents. Their work counts against its limits.

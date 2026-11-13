@@ -1,49 +1,39 @@
 ---
-title: From your AI assistant
-description: Set up and manage Fast Monkey from Claude Code, Cursor, Codex or any assistant that speaks MCP.
-icon: terminal
+title: AI assistant
+description: Run Fast Monkey from Claude Code, Cursor, Codex or anything that speaks MCP.
+icon: growth
 ---
 
-<Flow steps={[['terminal', 'Copy one prompt'], ['claude', 'Paste it into your assistant'], ['team', 'Sign in in the browser'], ['agent', 'It builds the agent with you']]} />
-
-Everything the dashboard does, your assistant can do too: create agents, write their instructions, hand them
-connections and invite people.
+<Shot src="agents" alt="The Agents page with the Copy prompt button" />
 
 <Steps>
 <Step>
 
 ### Copy the prompt
 
-Open **Agents** and press **Copy prompt**.
-
-</Step>
-<Step>
-
-### Paste it into your assistant
-
-It adds Fast Monkey as an MCP server. In Claude Code that's one command:
-
-```sh
-claude mcp add --transport http fastmonkey https://YOUR-SERVER/mcp
-```
+**Agents**, then **Copy prompt**. Paste it into your assistant.
 
 </Step>
 <Step>
 
 ### Sign in
 
-Your assistant opens Fast Monkey in the browser. Sign in and approve it. There's no token to copy.
+Your assistant opens Fast Monkey in the browser. Approve it. There's no token to copy.
 
 </Step>
 <Step>
 
-### Ask for what you want
+### Ask
 
-```txt title="Say to your agent"
+```txt
 Make a Support agent that answers in #support and can read the Orders DB.
 ```
 
 </Step>
 </Steps>
 
-Connected assistants are listed under **Admin**. An assistant can do what you can do, and no more.
+In Claude Code you can also add it by hand:
+
+```sh
+claude mcp add --transport http fastmonkey https://YOUR-SERVER/mcp
+```

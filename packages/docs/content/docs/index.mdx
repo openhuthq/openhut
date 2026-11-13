@@ -1,33 +1,22 @@
 ---
-title: Welcome to Fast Monkey
-description: Fast Monkey runs AI agents for your team on your own server. People talk to them in Slack and WhatsApp, and the agents get better every time someone corrects them.
-icon: welcome
+title: Docs
+description: Agents for your team, on your own server. Install it, then pick a feature.
+icon: monkey
 ---
 
-<Shot src="agents" alt="The Agents page with three agents: Dev, Sales and Support" />
-
-You build one agent per job: one for support, one for sales, one for engineering questions. Each agent lives in its
-own sandbox on your server, answers in its own Slack app or WhatsApp number, and reads only the data you hand it.
-
-<Cards>
-  <Card ico="install" title="Install" href="/install">One command on your Linux server.</Card>
-  <Card ico="basics" title="The basics" href="/basics">How it works, in two minutes.</Card>
-</Cards>
-
-## Build your first agent
+```sh
+curl -fsSL https://fastmonkey.dev | sh
+```
 
 <Cards>
-  <Card ico="agent" title="Create an agent" href="/agents">Give it a name and tell it its job.</Card>
-  <Card ico="learn" title="Teach it" href="/teach">Correct it once in chat. It remembers.</Card>
-  <Card logo="slack" title="Slack" href="/slack">Its own Slack app, in your workspace.</Card>
-  <Card logo="whatsapp" title="WhatsApp" href="/whatsapp">Its own number, linked by QR code.</Card>
-  <Card logo="postgres" title="Your data" href="/data">Read-only Postgres. The agent never sees the password.</Card>
-  <Card logo="claude" title="Your Claude plan" href="/claude">Agents run on the Claude subscription you already pay for.</Card>
-</Cards>
-
-## Run it your way
-
-<Cards>
-  <Card ico="terminal" title="From your AI assistant" href="/assistant">Set agents up from Claude Code, Cursor or Codex.</Card>
-  <Card ico="shield" title="Security" href="/security">How agents are kept apart and away from your keys.</Card>
+  <Card icon="sales" title="Install" href="/install">One command, about ten minutes.</Card>
+  <Card icon="ops" title="Agents" href="/agents">One agent per job.</Card>
+  <Card icon="hermes" title="Teaching" href="/teach">Correct it once. It remembers.</Card>
+  <Card icon="logo:slack" title="Slack" href="/slack">Its own Slack app.</Card>
+  <Card icon="logo:whatsapp" title="WhatsApp" href="/whatsapp">Its own number.</Card>
+  <Card icon="logo:postgres" title="Data" href="/data">Read-only Postgres.</Card>
+  <Card icon="logo:claude" title="Claude plan" href="/claude">Bring your own subscription.</Card>
+  <Card icon="growth" title="AI assistant" href="/assistant">Run it from Claude Code or Cursor.</Card>
+  <Card icon="recruiter" title="Team" href="/team">Invite people.</Card>
+  <Card icon="finance" title="Sandbox" href="/security">Every agent boxed in.</Card>
 </Cards>
