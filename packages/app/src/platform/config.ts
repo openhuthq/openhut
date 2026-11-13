@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import * as z from 'zod/mini'
 
 const PackageJson = z.object({ version: z.string() })
@@ -14,6 +15,7 @@ export const config = {
   agentdSocket: process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock',
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))).version,
   build: fileOr(new URL('../../../../BUILD', import.meta.url), 'dev'),
+  claudeBin: process.env.FASTMONKEY_CLAUDE ?? fileURLToPath(new URL('../../../../bin/claude', import.meta.url)),
   started: Math.floor(Date.now() / 1000),
   webDist: new URL('../../../web/dist/', import.meta.url),
 }

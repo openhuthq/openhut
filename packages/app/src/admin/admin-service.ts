@@ -1,5 +1,5 @@
 import * as z from 'zod/mini'
-import type { Admin, AgentContainer, Health, Update, UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
+import type { Admin, AgentContainer, Health, SeatSignIn, Update, UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
 import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
 import { HttpError } from '../platform/http-error.ts'
@@ -8,6 +8,7 @@ import { publicUrl, settings } from '../platform/settings.ts'
 import { log, record } from '../platform/events.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { isAdmin, type Caller } from '../team/identity.ts'
+import { seatSignIn } from './seat-sign-in.ts'
 
 const LATEST_TTL_MS = 60_000
 const LATEST_TIMEOUT_MS = 4_000
@@ -76,6 +77,20 @@ export const adminService = {
     })
     record({ action: 'admin.update_started', actor, target: { type: 'admin', id: 'install', from: stored.from, to } })
     return { object: 'update', status: 'running', ...stored }
+  },
+
+  async startSeatSignIn({ actor }: { actor: Caller }): Promise<SeatSignIn> {
+    if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can connect the Claude seat.')
+    if (config.modelMode !== 'claude') throw new HttpError(409, 'This server runs the test model, so it has no Claude seat.')
+    return seatSignIn.start()
+  },
+
+  async completeSeatSignIn({ actor, id, code }: { actor: Caller; id: string; code: string }): Promise<SeatSignIn> {
+    if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can connect the Claude seat.')
+    const token = await seatSignIn.complete({ id, code })
+    await adminService.update({ actor, patch: { seatToken: token } })
+    record({ action: 'admin.seat_signed_in', actor, target: { type: 'admin', id: 'install' } })
+    return { id, object: 'seat_sign_in', status: 'complete', url: null }
   },
 
   async update({ actor, patch }: { actor: Caller; patch: UpdateAdmin }): Promise<Admin> {

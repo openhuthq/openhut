@@ -62,3 +62,14 @@ export const AgentContainer = z.object({
   network: z.string(),
 })
 export type AgentContainer = z.infer<typeof AgentContainer>
+
+export const SeatSignIn = z.object({
+  id: z.string(),
+  object: z.literal('seat_sign_in'),
+  status: z.enum(['open', 'complete']),
+  url: z.nullable(z.string()),
+})
+export type SeatSignIn = z.infer<typeof SeatSignIn>
+
+export const CompleteSeatSignIn = z.object({ code: z.string().check(z.minLength(10), z.maxLength(2000)) })
+export type CompleteSeatSignIn = z.infer<typeof CompleteSeatSignIn>

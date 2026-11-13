@@ -10,7 +10,7 @@ import { Locked } from '@/components/locked'
 import { Mark } from '@/components/mark'
 import { Page } from '@/components/page'
 import { StatusBadge } from '@/components/status-badge'
-import { useAdmin, useContainers, useStartUpdate, useDeleteOAuthGrant, useOAuthGrants, useUpdateAdmin } from '@/features/admin/api'
+import { useAdmin, useCompleteSeatSignIn, useContainers, useStartSeatSignIn, useStartUpdate, useDeleteOAuthGrant, useOAuthGrants, useUpdateAdmin } from '@/features/admin/api'
 import { GoogleClientSetup } from '@/features/connections/google-client-setup'
 import { ago, shortDate } from '@/lib/format'
 import { formValues } from '@/lib/form'
@@ -63,15 +63,42 @@ function ToggleButton({ label, form, open, canEdit, reason }: { label: string; f
 }
 
 function SeatForm() {
-  const updateAdmin = useUpdateAdmin()
-  return <form className="aform" id="seat" onSubmit={(event) => updateAdmin.mutate({ seatToken: formValues(event)('seatToken') })}>
-    <span className="mute">Run <code>claude setup-token</code> on any computer signed in to the seat, then paste the token. It's stored on this server and every agent restarts with it.</span>
-    <div className="inline-form">
-      <input name="seatToken" type="password" required minLength={20} autoComplete="off" aria-label="Claude seat token" aria-describedby="seat-error" placeholder="sk-ant-oat01-…" autoFocus />
-      <button className="btn primary sm" disabled={updateAdmin.isPending}>Save</button>
+  const start = useStartSeatSignIn()
+  const complete = useCompleteSeatSignIn()
+  const signIn = start.data
+  if (!signIn?.url) {
+    return <div className="aform" id="seat">
+      <span className="mute">Sign in with the Claude account whose plan the agents should use. Fast Monkey runs Claude Code's own sign-in on this server and keeps the 1-year token it gives; every agent restarts with it.</span>
+      <div className="inline-form">
+        <button type="button" className="btn primary sm" disabled={start.isPending} onClick={() => start.mutate()}>{start.isPending ? 'Starting…' : 'Sign in with Claude'}</button>
+      </div>
+      {start.error && <span className="ferr" role="alert">{start.error.message}</span>}
+      <TokenForm />
     </div>
-    {updateAdmin.error && <span id="seat-error" className="ferr" role="alert">{updateAdmin.error.message}</span>}
+  }
+  return <form className="aform" id="seat" onSubmit={(event) => complete.mutate({ id: signIn.id, code: formValues(event)('code') })}>
+    <ol className="seat-steps">
+      <li><a href={signIn.url} target="_blank" rel="noreferrer">Open claude.ai and press Authorize</a>. Use a full-size window: claude.ai hides the button in small ones.</li>
+      <li>Copy the code claude.ai shows, paste it here and press Connect.</li>
+    </ol>
+    <div className="inline-form">
+      <input name="code" required minLength={10} autoComplete="off" spellCheck={false} aria-label="Code from claude.ai" aria-describedby="seat-error" placeholder="Paste the code from claude.ai" className="mono" autoFocus />
+      <button className="btn primary sm" disabled={complete.isPending}>{complete.isPending ? 'Connecting…' : 'Connect'}</button>
+    </div>
+    {complete.error && <span id="seat-error" className="ferr" role="alert">{complete.error.message}</span>}
   </form>
+}
+
+function TokenForm() {
+  const updateAdmin = useUpdateAdmin()
+  return <details className="seat-token">
+    <summary>Paste a token from <code>claude setup-token</code> instead</summary>
+    <form className="inline-form" onSubmit={(event) => updateAdmin.mutate({ seatToken: formValues(event)('seatToken') })}>
+      <input name="seatToken" type="password" required minLength={20} autoComplete="off" aria-label="Claude seat token" placeholder="sk-ant-oat01-…" />
+      <button className="btn sec sm" disabled={updateAdmin.isPending}>Save</button>
+    </form>
+    {updateAdmin.error && <span className="ferr" role="alert">{updateAdmin.error.message}</span>}
+  </details>
 }
 
 function PublicUrlForm({ publicUrl }: { publicUrl: string }) {

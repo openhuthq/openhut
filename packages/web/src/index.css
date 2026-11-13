@@ -502,3 +502,7 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .containers tr.off td{background:oklch(97% .02 27)}
 .chat-notice{max-width:720px;margin:0 auto 8px;padding:8px 12px;border-radius:9px;background:#fff7e6;color:#7a4500;font-size:13px;line-height:1.45}
 .chat-notice a{color:inherit;font-weight:500;text-decoration:underline;text-underline-offset:2px}
+.seat-steps{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;color:var(--body)}
+.seat-steps a{font-weight:500}
+.seat-token summary{cursor:pointer;color:var(--mute);font-size:12.5px}
+.seat-token .inline-form{margin-top:8px}

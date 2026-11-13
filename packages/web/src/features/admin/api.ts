@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Admin, AgentContainer, Update, type UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
+import { Admin, AgentContainer, SeatSignIn, Update, type UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
 import { Deleted, List } from '@fastmonkey/common/api.ts'
 import { OAuthGrant } from '@fastmonkey/common/team/oauth.ts'
 import type { Me } from '@fastmonkey/common/team/team.ts'
@@ -31,6 +31,22 @@ export function useUpdateAdmin(back = '/admin') {
       client.setQueryData(ADMIN_KEY, admin)
       client.setQueryData<Me | null>(ME_KEY, (me) => me && { ...me, publicUrl: admin.publicUrl })
       navigate(back, true)
+    },
+  })
+}
+
+export function useStartSeatSignIn() {
+  return useMutation({ mutationFn: () => request({ schema: SeatSignIn, path: '/api/admin/seat-sign-ins', method: 'POST' }) })
+}
+
+export function useCompleteSeatSignIn() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, code }: { id: string; code: string }) => request({ schema: SeatSignIn, path: `/api/admin/seat-sign-ins/${encodeURIComponent(id)}`, method: 'PATCH', body: { code } }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ADMIN_KEY })
+      void client.invalidateQueries({ queryKey: ['agents'] })
+      navigate('/admin', true)
     },
   })
 }
