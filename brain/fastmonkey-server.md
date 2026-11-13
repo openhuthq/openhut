@@ -36,6 +36,8 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
   open invites, and stops their agents. Every access check treats a removed person as absent, so their agents lose
   every connection on the next call.
 - Pages never send a Referer and can't be framed: setup and invite links carry secrets in the URL.
+- The app trusts `X-Forwarded-Proto`/`-Host` only from 127.0.0.1 and ::1, so a TLS proxy on the same server (Caddy on
+  monkey.activepieces.dev) makes the owner's first visit record an `https://` Public URL. Nobody else can spoof them.
 - The control MCP takes only OAuth access tokens, never the session cookie, so another site can't drive it through a
   browser. Its 401 points MCP clients at the OAuth metadata. Its tools call the HTTP API in-process (`app.inject`), so
   they get the same validation, permissions and response shapes as the dashboard.

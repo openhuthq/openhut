@@ -19,7 +19,7 @@ import { inviteController, inviteLinkController, meController, peopleController,
 
 await migrate()
 
-const app = Fastify({ logger: false, bodyLimit: 1 << 20 })
+const app = Fastify({ logger: false, bodyLimit: 1 << 20, trustProxy: ['127.0.0.1', '::1'] })
 answerErrors(app)
 app.setValidatorCompiler(validateWithZod)
 app.addHook('onSend', async (_req, reply) => {
