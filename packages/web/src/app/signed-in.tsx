@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Menu } from '@base-ui/react/menu'
 import type { Me } from '@fastmonkey/common/team/team.ts'
 import { Avatar } from '@/components/avatar'
 import { ICONS, NAV_ICONS } from '@/components/icons'
@@ -46,11 +47,27 @@ export function SignedIn({ me, route }: { me: Me; route: Route }) {
           <NavLink section="people" label="People" current={current} />
           <NavLink section="admin" label="Admin" current={current} />
         </div>
-        <div className="me">
-          <Initial id={me.user.id} email={me.user.email} />
-          <div className="who"><div className="ellip">{me.user.email}</div><div className="mute">{ROLE_LABEL[me.user.role]}</div></div>
-          <button type="button" className="btn ghost sm tight" aria-label="Sign out" title="Sign out" disabled={deleteSession.isPending} onClick={() => deleteSession.mutate(undefined, { onError: toastError })}>{ICONS.out}</button>
-        </div>
+        <Menu.Root>
+          <Menu.Trigger className="me">
+            <Initial id={me.user.id} email={me.user.email} />
+            <span className="who"><span className="ellip">{me.user.email}</span><span className="ellip mute">{ROLE_LABEL[me.user.role]}</span></span>
+            <span className="mute">{ICONS.updown}</span>
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Positioner className="menupos" side="top" align="start" sideOffset={4}>
+              <Menu.Popup className="menu">
+                <Menu.Group>
+                  <Menu.GroupLabel className="menuhead">
+                    <Initial id={me.user.id} email={me.user.email} size={32} />
+                    <span className="who"><span className="ellip">{me.user.email}</span><span className="ellip mute">{ROLE_LABEL[me.user.role]}</span></span>
+                  </Menu.GroupLabel>
+                </Menu.Group>
+                <Menu.Separator className="menusep" />
+                <Menu.Item className="menuitem" disabled={deleteSession.isPending} onClick={() => deleteSession.mutate(undefined, { onError: toastError })}>{ICONS.out}Log out</Menu.Item>
+              </Menu.Popup>
+            </Menu.Positioner>
+          </Menu.Portal>
+        </Menu.Root>
       </aside>
       <main className="panel"><RoutePage me={me} route={route} /></main>
     </div>
