@@ -109,7 +109,7 @@ button:disabled{cursor:not-allowed;opacity:.5}
 .av{flex:none;display:block}
 .empty{display:grid;place-items:center;gap:12px;padding:64px 0;color:var(--mute);text-align:center}
 
-.detail{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;max-width:1152px;margin:0 auto}
+.detail{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;width:100%;max-width:1152px;margin:0 auto}
 .hero{display:flex;gap:16px;align-items:center}
 textarea,input,select{width:100%;background:var(--card);border:1px solid var(--hair);border-radius:8px;color:var(--ink);font:inherit;padding:8px 12px}
 input,select{height:32px;padding-block:0}
@@ -206,10 +206,11 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .mnote{margin:6px -6px -6px;padding:8px 14px;border-top:1px solid var(--hair);font-size:12px;color:var(--mute)}
 .mcheck{width:14px;display:inline-flex;justify-content:center;color:var(--primary)}
 /* instructions: a preview card that grows into an editor dialog */
-.soul{display:flex;flex-direction:column;justify-content:flex-start;width:100%;text-align:left;font:inherit;color:inherit;border:1px solid var(--hair);border-radius:8px;background:var(--card);padding:16px 16px 56px;position:relative;cursor:zoom-in;min-height:200px;max-height:300px;overflow:hidden;transition:border-color .15s,box-shadow .15s}
+.grow{flex:1;display:flex;flex-direction:column}
+.soul{display:block;flex:1;width:100%;text-align:left;font:inherit;color:inherit;border:1px solid var(--hair);border-radius:8px;background:var(--card);padding:0;position:relative;cursor:zoom-in;min-height:200px;overflow:hidden;transition:border-color .15s,box-shadow .15s}
 .soul:hover{border-color:var(--mid);box-shadow:0 4px 16px oklch(0% 0 0 / .06)}
 .soul:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
-.soul pre{margin:0;font:12px/1.7 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.soul pre{position:absolute;inset:16px 16px 56px;overflow:hidden;margin:0;font:12px/1.7 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
 .soul::after{content:"";position:absolute;inset:auto 0 0 0;height:76px;background:linear-gradient(to bottom,transparent,var(--card) 62%);pointer-events:none}
 .soulfoot{position:absolute;right:12px;bottom:12px;z-index:1;display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:500;color:var(--body);background:var(--canvas);border-radius:8px;padding:5px 10px}
 .dlg{border:0;padding:0;border-radius:12px;width:min(880px,calc(100vw - 32px));max-width:none;max-height:none;background:var(--card);color:var(--ink);box-shadow:0 24px 80px oklch(0% 0 0 / .22)}
@@ -543,9 +544,16 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .setup-line.warn>svg{color:#a15c00}
 .setup-more summary{cursor:pointer;color:var(--mute);font-size:12px;text-decoration:underline;text-underline-offset:2px;list-style:none}
 .setup-more summary::-webkit-details-marker{display:none}
-.skills{max-height:420px;overflow-y:auto;overscroll-behavior:contain}
-.skills .mark{width:28px;height:28px;color:var(--body)}
-.skills-group{padding:8px 16px;font-size:12px;color:var(--mute);background:var(--canvas)}
+.card.skill{text-align:left}
+.card.skill .mark{width:32px;height:32px;color:var(--body)}
+.card.skill .mark.learned{background:var(--ink);box-shadow:none;color:#fff}
+.skill-more{display:flex;justify-content:center;margin-top:12px}
+.skill-more [aria-expanded="true"] svg{transform:rotate(180deg)}
+.segs{display:inline-flex;gap:2px;padding:2px;border-radius:8px;background:var(--soft)}
+.seg{height:24px;padding:0 8px;border:0;border-radius:6px;background:transparent;display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:500;color:var(--mute)}
+.seg:hover{color:var(--ink)}
+.seg[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px oklch(0% 0 0 / .08)}
+.seg .n{font-family:var(--mono);font-size:12px;color:var(--mute)}
 .setup-more[open]{flex-basis:100%}
 .setup-more ul{margin:8px 0 0 23px;padding:0;display:flex;flex-direction:column;gap:4px;color:var(--mute)}
 .setup-err{margin:0;padding:10px 20px;color:var(--fail);font-size:14px;border-top:1px solid var(--hair)}

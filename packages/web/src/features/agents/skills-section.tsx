@@ -1,39 +1,63 @@
+import { useState } from 'react'
 import type { Agent } from '@fastmonkey/common/agents/agent.ts'
 import { SKILL_MAX_LENGTH, type Skill } from '@fastmonkey/common/agents/skill.ts'
+import { BRAND_ICONS, type BrandName } from '@/components/brand-icons'
 import { Dialog } from '@/components/dialog'
 import { DialogFoot } from '@/components/dialog-foot'
 import { DialogHead } from '@/components/dialog-head'
 import { ErrorNote } from '@/components/error-note'
-import { SETUP_ICONS } from '@/components/icons'
+import { ICONS, LEARNED_SKILL_ICON, skillIcon } from '@/components/icons'
 import { Locked } from '@/components/locked'
+import { Mark } from '@/components/mark'
 import { SectionHead } from '@/components/section-head'
 import { useSkill, useSkills, useUpdateSkill } from '@/features/agents/api'
 import { formValues } from '@/lib/form'
 import { navigate } from '@/lib/router'
 
+type Filter = 'all' | 'learned' | 'builtIn'
+
+const FILTERS: { filter: Filter; label: string }[] = [{ filter: 'all', label: 'All' }, { filter: 'learned', label: 'Learned' }, { filter: 'builtIn', label: 'Built in' }]
+const FOLDED = 12
+
 export function SkillsSection({ agent, lockReason, open }: { agent: Agent; lockReason: string | undefined; open: string | undefined }) {
   const skills = useSkills(agent.id)
-  const learned = skills.data?.filter((skill) => !skill.builtIn) ?? []
-  const builtIn = skills.data?.filter((skill) => skill.builtIn) ?? []
+  const [filter, setFilter] = useState<Filter>('builtIn')
+  const [unfolded, setUnfolded] = useState(false)
+  const all = skills.data ?? []
+  const counts: Record<Filter, number> = { all: all.length, learned: all.filter((skill) => !skill.builtIn).length, builtIn: all.filter((skill) => skill.builtIn).length }
+  const shown = all.filter((skill) => filter === 'all' || skill.builtIn === (filter === 'builtIn'))
+  const pick = (next: Filter) => { setFilter(next); setUnfolded(false) }
+  const filters = skills.data && <div className="segs" role="group" aria-label="Which skills">
+    {FILTERS.map((each) => <button type="button" key={each.filter} className="seg" aria-pressed={filter === each.filter} onClick={() => pick(each.filter)}>{each.label}<span className="n">{counts[each.filter]}</span></button>)}
+  </div>
   return <section>
-    <SectionHead title="Skills" />
+    <SectionHead title="Skills" action={filters} />
     <ErrorNote message={skills.error?.message} />
-    {skills.data && <div className="box rows skills">
-      {learned.map((skill) => <SkillRow key={skill.id} agent={agent} skill={skill} />)}
-      {!learned.length && <div className="row"><div className="t mute">{agent.name} hasn't learned a skill yet.</div></div>}
-      {!!builtIn.length && <div className="skills-group">{builtIn.length} built in</div>}
-      {builtIn.map((skill) => <SkillRow key={skill.id} agent={agent} skill={skill} />)}
+    {skills.data && !shown.length && <p className="note">{filter === 'builtIn' ? `${agent.name} has no built-in skills.` : `${agent.name} hasn't learned a skill yet.`}</p>}
+    {!!shown.length && <div className="grid">{(unfolded ? shown : shown.slice(0, FOLDED)).map((skill) => <SkillCard key={skill.id} agent={agent} skill={skill} />)}</div>}
+    {shown.length > FOLDED && <div className="skill-more">
+      <button type="button" className="btn sm" aria-expanded={unfolded} onClick={() => setUnfolded(!unfolded)}>{unfolded ? 'Show fewer' : `Show all ${shown.length}`}{ICONS.chevd}</button>
     </div>}
     {open && <SkillDialog key={open} agent={agent} skillId={`${agent.id}~${open}`} lockReason={lockReason} />}
   </section>
 }
 
-function SkillRow({ agent, skill }: { agent: Agent; skill: Skill }) {
-  return <div className="row">
-    <span className="mark">{SETUP_ICONS.bolt}</span>
-    <div className="t"><div className="ellip">{skill.name}</div><div className="mute ellip">{skill.description || skill.path}</div></div>
-    <button type="button" className="btn sm" aria-haspopup="dialog" aria-label={`${agent.canEdit ? 'Edit' : 'View'} the ${skill.name} skill`} onClick={() => navigate(`/agents/${agent.id}/skills/${skill.id.slice(agent.id.length + 1)}`)}>{agent.canEdit ? 'Edit' : 'View'}</button>
-  </div>
+function SkillCard({ agent, skill }: { agent: Agent; skill: Skill }) {
+  return <button type="button" className="card skill" aria-haspopup="dialog" aria-label={`${agent.canEdit ? 'Edit' : 'View'} the ${skill.name} skill`} onClick={() => navigate(`/agents/${agent.id}/skills/${skill.id.slice(agent.id.length + 1)}`)}>
+    <span className="top"><SkillMark skill={skill} /><span className="who name ellip">{skill.name}</span>{!skill.builtIn && <span className="status secondary">Learned</span>}</span>
+    <span className="role">{skill.description || skill.path}</span>
+  </button>
+}
+
+function SkillMark({ skill }: { skill: Skill }) {
+  if (!skill.builtIn) return <span className="mark learned">{LEARNED_SKILL_ICON}</span>
+  const brand = skill.name.split('-')[0]
+  if (isBrand(brand)) return <Mark name={brand} size={32} />
+  return <span className="mark">{skillIcon(skill.path.split('/').at(-2) ?? '')}</span>
+}
+
+function isBrand(name: string): name is BrandName {
+  return Object.hasOwn(BRAND_ICONS, name)
 }
 
 function SkillDialog({ agent, skillId, lockReason }: { agent: Agent; skillId: string; lockReason: string | undefined }) {

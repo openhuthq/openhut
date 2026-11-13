@@ -18,6 +18,22 @@ const skills: Record<string, string> = {
   'late-invoices': '---\nname: late-invoices\ndescription: Chase invoices more than 30 days late.\n---\n\n# Late invoices\n\n1. Query invoices past due.\n2. Draft a reminder per customer.\n',
   'research/arxiv': '---\nname: arxiv\ndescription: "Search and summarise arXiv papers."\n---\n\n# arXiv\n',
   'productivity/pdf': '---\nname: pdf\ndescription: Read and fill PDF files.\n---\n\n# PDF\n',
+  ...Object.fromEntries([
+    ['apple/apple-notes', 'Manage Apple Notes via memo CLI: create, search, edit.'],
+    ['autonomous-ai-agents/claude-code', 'Delegate coding to Claude Code CLI (features, PRs).'],
+    ['autonomous-ai-agents/codex', 'Delegate coding to OpenAI Codex CLI (features, PRs).'],
+    ['creative/manim-video', 'Manim CE animations: 3Blue1Brown math/algo videos.'],
+    ['creative/p5js', 'p5.js sketches: gen art, shaders, interactive, 3D.'],
+    ['devops/sdlc-review', 'Review Kanban handoffs and route verified outcomes.'],
+    ['email/himalaya', 'Himalaya CLI: IMAP/SMTP email from terminal.'],
+    ['media/youtube-content', 'YouTube transcripts to summaries, threads, blogs.'],
+    ['note-taking/obsidian', 'Read, search, create, and edit notes in the Obsidian vault.'],
+    ['productivity/google-workspace', 'Gmail, Calendar, Drive, Docs, Sheets via gws CLI or Python.'],
+    ['social-media/xurl', 'X/Twitter via xurl CLI: raw post search, posting, DM, media.'],
+    ['software-development/github', 'GitHub via gh CLI: PRs, issues, reviews, repos, auth.'],
+    ['software-development/systematic-debugging', '4-phase root cause debugging: understand bugs before fixing.'],
+    ['web/blocked-page-recovery', 'Use when a fetch fails: 403/429, paywall, WAF, bot wall.'],
+  ].map(([path, description]) => [path, `---\nname: ${path.split('/')[1]}\ndescription: ${description}\n---\n\n# ${path.split('/')[1]}\n`])),
 }
 
 rmSync(SOCK, { force: true })
@@ -106,7 +122,7 @@ function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
     case 'update':
       return { updating: true }
     case 'skills':
-      return { skills: Object.entries(skills).map(([path, body]) => ({ path, head: body })), bundled: 'arxiv:abc\npdf:def\n' }
+      return { skills: Object.entries(skills).map(([path, body]) => ({ path, head: body })), bundled: Object.keys(skills).filter((path) => path.includes('/')).map((path) => `${path.split('/')[1]}:abc\n`).join('') }
     case 'skill-read':
       if (!skills[req.path]) throw new Error('that skill is gone')
       return { body: skills[req.path] }
