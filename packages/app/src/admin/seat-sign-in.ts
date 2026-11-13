@@ -11,6 +11,7 @@ import { newToken } from '../platform/secrets.ts'
 const OPEN_MS = 10 * 60_000
 const PROMPT_MS = 30_000
 const TOKEN_MS = 120_000
+const ENTER_AFTER_MS = 500
 const LINK = /\x1b\]8;[^;]*;(https:\/\/claude\.(?:com|ai)\/[^\x1b\x07\s]*oauth\/authorize\?[^\x1b\x07\s]+)/
 const TOKEN = /sk-ant-oat01-[\w-]{20,}/
 const FAILED = /OAuth error[^\n]*|wasn't accepted[^\n]*/i
@@ -44,7 +45,9 @@ export const seatSignIn = {
     const signIn = signInFor({ id, code })
     if (!signIn) throw new HttpError(404, 'That sign-in is over (each one lasts 10 minutes and takes one code). Press Set up again for a new one.')
     const before = signIn.out.length
-    signIn.proc.stdin.write(`${code.trim()}\r`)
+    signIn.proc.stdin.write(code.trim())
+    await new Promise((resolve) => setTimeout(resolve, ENTER_AFTER_MS))
+    signIn.proc.stdin.write('\r')
     const token = await waitFor({ signIn, ms: TOKEN_MS, find: (out) => seatToken(out.slice(before)) ?? (FAILED.test(plain(out.slice(before))) ? 'failed' : undefined) })
     const said = plain(signIn.out.slice(before)).replace(TOKEN, '[token]').replace(/\*{6,}/g, '[code]')
     close(signIn.id)
