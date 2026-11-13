@@ -9,7 +9,8 @@ if [ -n "${PIN:-}" ]; then cp install/agent-image install/agent-image.keep; prin
 rm -rf dist && mkdir dist
 npm -w @fastmonkey/web run build >/dev/null
 printf '%s\n' "$BUILD" > BUILD
-COPYFILE_DISABLE=1 tar --uid 0 --gid 0 --uname root --gname root --no-xattrs --no-mac-metadata \
+if tar --version 2>/dev/null | grep -q 'GNU tar'; then ROOT='--owner=0 --group=0 --numeric-owner'; else ROOT='--uid 0 --gid 0 --uname root --gname root --no-mac-metadata'; fi
+COPYFILE_DISABLE=1 tar $ROOT --no-xattrs \
   --exclude node_modules --exclude .turbo --exclude agent-image.keep \
   -czf dist/fastmonkey.tgz BUILD package.json package-lock.json install vendor \
   packages/app/package.json packages/app/src packages/common packages/agentd \
