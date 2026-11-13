@@ -63,7 +63,7 @@ function NavLink({ section, label, current, count }: { section: Section; label: 
 function RoutePage({ me, route }: { me: Me; route: Route }) {
   switch (route.page) {
     case 'home': return <Redirect to="/agents" />
-    case 'agents': return <AgentsPage me={me} creating={route.creating} />
+    case 'agents': return <AgentsPage me={me} />
     case 'agent': return <AgentPage key={route.agentId} agentId={route.agentId} dialog={route.dialog} />
     case 'connections': return <ConnectionsPage me={me} />
     case 'new-connection': return <NewConnectionPage />

@@ -1,7 +1,7 @@
 import type { AdminForm } from '@/features/admin/admin-page'
 import type { AgentDialog } from '@/features/agents/agent-page'
 
-const AGENT_DIALOGS: AgentDialog[] = ['instructions', 'slack', 'whatsapp']
+const AGENT_DIALOGS: AgentDialog[] = ['name', 'instructions', 'slack', 'whatsapp']
 const ADMIN_FORMS: AdminForm[] = ['seat', 'public-url']
 const MISSING: Route = { page: 'missing' }
 
@@ -23,8 +23,7 @@ export function routeOf(path: string): Route {
 }
 
 function agentRoute(id: string, detail: string): Route {
-  if (!id) return { page: 'agents', creating: false }
-  if (id === 'new') return detail ? MISSING : { page: 'agents', creating: true }
+  if (!id) return { page: 'agents' }
   if (!detail) return { page: 'agent', agentId: decodeURIComponent(id), dialog: undefined }
   const dialog = AGENT_DIALOGS.find((name) => name === detail)
   return dialog ? { page: 'agent', agentId: decodeURIComponent(id), dialog } : MISSING
@@ -55,7 +54,7 @@ export type Route =
   | { page: 'setup' }
   | { page: 'invite'; token: string }
   | { page: 'mcp-authorize' }
-  | { page: 'agents'; creating: boolean }
+  | { page: 'agents' }
   | { page: 'agent'; agentId: string; dialog: AgentDialog | undefined }
   | { page: 'connections' }
   | { page: 'new-connection' }

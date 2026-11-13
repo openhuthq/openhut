@@ -16,7 +16,7 @@ export function AuthForm({ title, heading, lead, error, fields, busy, button, fo
 }) {
   const message = formError(error, fields)
   return <AuthLayout title={title}>
-    <form className="authform" onSubmit={onSubmit}>
+    <form className="authform" noValidate onSubmit={onSubmit}>
       <div><h1>{heading}</h1><p className="lead">{lead}</p></div>
       {message && <p className="err" role="alert">{message}</p>}
       {children}

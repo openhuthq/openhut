@@ -42,8 +42,7 @@ export const agentService = {
   },
 
   async create({ actor, name, instructions }: { actor: Caller; name: string; instructions?: string }): Promise<Agent> {
-    const clean = name.trim().replace(/[^\w .-]/g, '').slice(0, 40)
-    if (!clean) throw new HttpError(400, 'Give the agent a name with letters or digits.', { param: 'name' })
+    const clean = cleanName(name)
     const used = new Set((await db.selectFrom('agent').select('net').execute()).map((row) => row.net))
     const net = Array.from({ length: MAX_AGENTS }, (_, i) => i + 1).find((n) => !used.has(n))
     if (!net) throw new HttpError(409, `This server already runs ${MAX_AGENTS} agents. Delete one first.`)
@@ -64,7 +63,7 @@ export const agentService = {
 
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateAgent }): Promise<Agent> {
     await agentService.requireEditable({ actor, id })
-    await db.updateTable('agent').set(patch).where('id', '=', id).execute()
+    await db.updateTable('agent').set(patch.name === undefined ? patch : { ...patch, name: cleanName(patch.name) }).where('id', '=', id).execute()
     if (patch.instructions !== undefined || patch.model) await agentService.reapply({ id })
     if (patch.wanted) await (patch.wanted === 'running' ? agentd.start({ id }) : agentd.stop({ id }))
     return agentService.get({ actor, id })
@@ -221,3 +220,9 @@ function grantOf(row: Selectable<Database['connection_grant']>): Grant {
 
 type AgentRow = Selectable<Database['agent']>
 export type GatewayAgent = { id: string; owner_id: string; net: number }
+
+function cleanName(name: string): string {
+  const clean = name.trim().replace(/[^\w .-]/g, '').slice(0, 40)
+  if (!clean) throw new HttpError(400, 'Give the agent a name with letters or digits.', { param: 'name' })
+  return clean
+}

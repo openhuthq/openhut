@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { Agent } from '@fastmonkey/common/agents/agent.ts'
 import { Avatar } from '@/components/avatar'
 import { ConfirmButton } from '@/components/confirm-button'
@@ -12,9 +13,10 @@ import { useAgent, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { ChannelsSection } from '@/features/agents/channels-section'
 import { InstructionsSection } from '@/features/agents/instructions-section'
 import { ModelPicker } from '@/features/agents/model-picker'
+import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 
-export type AgentDialog = 'instructions' | 'slack' | 'whatsapp'
+export type AgentDialog = 'name' | 'instructions' | 'slack' | 'whatsapp'
 
 const PARENTS = [{ label: 'Agents', href: '/agents' }]
 
@@ -47,7 +49,7 @@ function AgentView({ agent, dialog }: { agent: Agent; dialog: AgentDialog | unde
       <div className="left">
         <div className="hero">
           <Avatar id={agent.id} about={agent.instructions} size={64} />
-          <h2 className="aname ellip">{agent.name}</h2>
+          <AgentName agent={agent} editing={dialog === 'name' && agent.canEdit} />
         </div>
         <InstructionsSection agent={agent} editing={dialog === 'instructions'} lockReason={lockReason} />
       </div>
@@ -62,4 +64,36 @@ function AgentView({ agent, dialog }: { agent: Agent; dialog: AgentDialog | unde
       </aside>
     </div>
   </Page>
+}
+
+function AgentName({ agent, editing }: { agent: Agent; editing: boolean }) {
+  const updateAgent = useUpdateAgent(agent.id)
+  const ref = useRef<HTMLHeadingElement>(null)
+  const home = `/agents/${agent.id}`
+  const edit = () => navigate(`${home}/name`, true)
+  useEffect(() => {
+    if (!editing || !ref.current) return
+    ref.current.focus()
+    getSelection()?.selectAllChildren(ref.current)
+  }, [editing])
+  if (!editing) {
+    return <div className="anamebox">
+      <h2 className="aname ellip" title={agent.canEdit ? 'Double-click to rename' : undefined} onDoubleClick={agent.canEdit ? edit : undefined}>{updateAgent.isPending ? updateAgent.variables.name ?? agent.name : agent.name}</h2>
+      {agent.canEdit && <button type="button" className="rename" aria-label={`Rename ${agent.name}`} onClick={edit}>{ICONS.pencil}</button>}
+    </div>
+  }
+  return <div className="anamebox">
+    <h2 ref={ref} className="aname editing" contentEditable="plaintext-only" suppressContentEditableWarning role="textbox" aria-label="Agent name" spellCheck={false}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') event.currentTarget.textContent = agent.name
+        if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); event.currentTarget.blur() }
+      }}
+      onBlur={(event) => {
+        const name = (event.currentTarget.textContent ?? '').trim()
+        const heading = event.currentTarget
+        if (name && name !== agent.name) updateAgent.mutate({ name }, { onError: (error) => { heading.textContent = agent.name; toastError(error) } })
+        else heading.textContent = agent.name
+        navigate(home, true)
+      }}>{agent.name}</h2>
+  </div>
 }
