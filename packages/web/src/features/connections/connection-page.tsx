@@ -132,7 +132,7 @@ function GrantList({ grants, agents }: { grants: Grant[]; agents: Agent[] }) {
     return <div className="row" key={grant.id}>
       <Avatar id={grant.agentId} about={agent?.instructions} size={28} />
       <div className="t">{agent?.name ?? "An agent you can't see"}</div>
-      <button type="button" className="btn ghost sm" disabled={deleteGrant.isPending} onClick={() => deleteGrant.mutate(grant, { onError: toastError })}>Remove</button>
+      <button type="button" className="btn icon sm" title="Remove" aria-label={`Remove ${agent?.name ?? 'the agent'}`} disabled={deleteGrant.isPending} onClick={() => deleteGrant.mutate(grant, { onError: toastError })}>{ICONS.x}</button>
     </div>
   })}</div>
 }

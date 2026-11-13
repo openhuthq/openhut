@@ -25,7 +25,7 @@ export function AgentsPage({ me }: { me: Me }) {
     <div className="wrap">
       <section className="aihero" aria-labelledby="ya-h">
         <div className="aicopy"><h3 id="ya-h">Set up Fast Monkey from your agent</h3><p>Copy one prompt into the agent you already use. It connects here and sets things up with you.</p>
-          <button type="button" className="btn primary" onClick={() => copyText(setupPrompt(me.publicUrl))}>{ICONS.copy}Copy prompt</button></div>
+          <button type="button" className="btn sec" onClick={() => copyText(setupPrompt(me.publicUrl))}>{ICONS.copy}Copy prompt</button></div>
         <div className="ailogos" aria-hidden="true">{AI_LOGOS.map(([name, label]) => <span className="ailogo" title={label} key={name}><Glyph name={name} size={22} /></span>)}</div>
       </section>
       <Loaded query={agents}>{(list) => <AgentGrid agents={list} />}</Loaded>

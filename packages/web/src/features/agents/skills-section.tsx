@@ -32,7 +32,7 @@ export function SkillsSection({ agent, lockReason, open }: { agent: Agent; lockR
 function SkillRow({ agent, skill }: { agent: Agent; skill: Skill }) {
   return <div className="row">
     <div className="t"><div className="ellip">{skill.name}</div><div className="mute ellip">{skill.description || skill.path}</div></div>
-    <button type="button" className="btn sec sm" aria-haspopup="dialog" aria-label={`${agent.canEdit ? 'Edit' : 'View'} the ${skill.name} skill`} onClick={() => navigate(`/agents/${agent.id}/skills/${skill.id.slice(agent.id.length + 1)}`)}>{agent.canEdit ? 'Edit' : 'View'}</button>
+    <button type="button" className="btn sm" aria-haspopup="dialog" aria-label={`${agent.canEdit ? 'Edit' : 'View'} the ${skill.name} skill`} onClick={() => navigate(`/agents/${agent.id}/skills/${skill.id.slice(agent.id.length + 1)}`)}>{agent.canEdit ? 'Edit' : 'View'}</button>
   </div>
 }
 

@@ -39,7 +39,7 @@ function InviteButton({ canManage, open, createInvite }: { canManage: boolean; o
         <div className="pophead"><h3>Invite a person</h3><p className="mute">They join with a link. It works once, for 7 days.</p></div>
         <fieldset className="roles">
           <legend className="sr-only">Role</legend>
-          {MEMBER_ROLES.map((role, index) => <label className="role" key={role.value}>
+          {MEMBER_ROLES.map((role, index) => <label className="rolecard" key={role.value}>
             <input type="radio" name="role" value={role.value} defaultChecked={index === 0} />
             <span className="rname">{ROLE_LABEL[role.value]}</span>
             <span className="mute">{role.about}</span>

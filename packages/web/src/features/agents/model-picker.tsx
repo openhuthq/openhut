@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { MODELS, SIZES, type Agent, type AgentSize } from '@fastmonkey/common/agents/agent.ts'
+import { MODELS, SIZES, type Agent } from '@fastmonkey/common/agents/agent.ts'
 import { Glyph } from '@/components/glyph'
-import { ICONS } from '@/components/icons'
+import { ICONS, SIZE_ICONS } from '@/components/icons'
 import { Locked } from '@/components/locked'
 import { useUpdateAgent } from '@/features/agents/api'
 import { toastError } from '@/lib/toast'
@@ -14,16 +14,8 @@ export function ModelPicker({ agent, lockReason }: { agent: Agent; lockReason: s
 
 export function SizePicker({ agent, lockReason }: { agent: Agent; lockReason: string | undefined }) {
   const updateAgent = useUpdateAgent(agent.id)
-  return <Picker name="Computer" options={SIZES} value={agent.size} iconOf={(id, size) => <SizeBars id={id} size={size} />} disabled={!agent.canEdit || updateAgent.isPending} lockReason={lockReason}
+  return <Picker name="Computer" options={SIZES} value={agent.size} iconOf={(id) => SIZE_ICONS[id]} disabled={!agent.canEdit || updateAgent.isPending} lockReason={lockReason}
     note={`How much room ${agent.name} has to work. Changing it restarts ${agent.name}.`} onChoose={(size) => updateAgent.mutate({ size }, { onError: toastError })} />
-}
-
-const BARS: Record<AgentSize, number> = { standard: 1, large: 2, xlarge: 3 }
-
-function SizeBars({ id, size }: { id: AgentSize; size: number }) {
-  return <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
-    {[0, 1, 2].map((bar) => <rect key={bar} x={2 + bar * 4.5} y={10 - bar * 3.5} width="3" height={4 + bar * 3.5} rx="1" fill="currentColor" opacity={bar < BARS[id] ? 1 : 0.2} />)}
-  </svg>
 }
 
 function Picker<Id extends string>({ name, options, value, iconOf, note, disabled, lockReason, onChoose }: {

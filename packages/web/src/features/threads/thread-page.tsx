@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import * as z from 'zod/mini'
+import { Menu } from '@base-ui/react/menu'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, type UIMessage } from 'ai'
 import Markdown from 'react-markdown'
@@ -13,9 +14,9 @@ import { ICONS } from '@/components/icons'
 import { Initial } from '@/components/initial'
 import { Page } from '@/components/page'
 import { AgentBadge, agentState } from '@/components/status-badge'
-import { useAgent, useUpdateAgent } from '@/features/agents/api'
+import { useAgent, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { threadPath, useAgentThread, useClearChat } from '@/features/threads/api'
-import { ConfirmButton } from '@/components/confirm-button'
+import { ConfirmDialog } from '@/components/confirm-button'
 import { toastError } from '@/lib/toast'
 
 type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[] }>
@@ -38,8 +39,8 @@ function ThreadView({ me, thread, agent }: { me: Me; thread: ThreadWithMessages;
   const busy = chat.status === 'submitted' || chat.status === 'streaming'
   const send = (text: string) => void chat.sendMessage({ text })
   const last = chat.messages.at(-1)
-  const clear = <ClearChat agent={agent} threadId={thread.id} disabled={busy || !chat.messages.length} />
-  return <ChatLayout me={me} agent={agent} busy={busy} onSend={send} onStop={() => void chat.stop()} extra={clear}>
+  const menu = <ChatMenu agent={agent} threadId={thread.id} canClear={!busy && chat.messages.length > 0} />
+  return <ChatLayout me={me} agent={agent} busy={busy} onSend={send} onStop={() => void chat.stop()} extra={menu}>
     {chat.messages.length ? chat.messages.map((message) => <Message key={message.id} me={me} agent={agent} message={message} live={busy && message === last} />) : <ChatEmpty agent={agent} onTry={send} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message me={me} agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     {chat.error && <div className="chat-err" role="alert"><span>{chat.error.message}</span><button type="button" className="btn sec sm" onClick={() => void chat.regenerate()}>Retry</button></div>}
@@ -53,7 +54,7 @@ function ChatLayout({ me, agent, busy, onSend, onStop, extra, children }: { me: 
     const el = log.current
     if (el && pinned.current) el.scrollTop = el.scrollHeight
   })
-  const actions = <><AgentBadge agent={agent} />{extra}<a className="btn ghost sm" href={`/agents/${agent.id}`}>{ICONS.gear}<span className="lbl">Settings</span></a></>
+  const actions = <><AgentBadge agent={agent} /><a className="btn" href={`/agents/${agent.id}`}>{ICONS.gear}<span className="lbl">Settings</span></a>{extra}</>
   return <Page title={agent.name} actions={actions} fill>
     <div className="chat-log" ref={log} aria-live="polite" onScroll={(event) => { const el = event.currentTarget; pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
       <div className="chat-col">{children}</div>
@@ -134,11 +135,27 @@ function Part({ part }: { part: AgentPart }) {
   }
 }
 
-function ClearChat({ agent, threadId, disabled }: { agent: Agent; threadId: string; disabled: boolean }) {
+function ChatMenu({ agent, threadId, canClear }: { agent: Agent; threadId: string; canClear: boolean }) {
   const clearChat = useClearChat(agent.id)
-  return <span title="Clear chat"><ConfirmButton className="btn ghost sm" disabled={disabled || clearChat.isPending} question="Clear this chat?" detail={`${agent.name} starts a fresh conversation. It keeps what it saved to memory.`} action="Clear" onConfirm={() => clearChat.mutate(threadId, { onError: toastError })}>
-    {ICONS.eraser}<span className="lbl">Clear</span>
-  </ConfirmButton></span>
+  const deleteAgent = useDeleteAgent(agent.id)
+  const clearing = useRef<HTMLDialogElement>(null)
+  const deleting = useRef<HTMLDialogElement>(null)
+  return <>
+    <Menu.Root>
+      <Menu.Trigger className="btn icon" aria-label="More actions" title="More">{ICONS.more}</Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner className="menupos" side="bottom" align="end" sideOffset={4}>
+          <Menu.Popup className="menu">
+            <Menu.Item className="menuitem" disabled={!canClear || clearChat.isPending} onClick={() => clearing.current?.showModal()}>{ICONS.eraser}Clear chat</Menu.Item>
+            <Menu.Separator className="menusep" />
+            <Menu.Item className="menuitem danger" disabled={!agent.canEdit || deleteAgent.isPending} onClick={() => deleting.current?.showModal()}>{ICONS.trash}Delete agent</Menu.Item>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+    <ConfirmDialog dialogRef={clearing} question="Clear this chat?" detail={`${agent.name} starts a fresh conversation. It keeps what it saved to memory.`} action="Clear" onConfirm={() => clearChat.mutate(threadId, { onError: toastError })} />
+    <ConfirmDialog dialogRef={deleting} question={`Delete ${agent.name}?`} detail="This can't be undone." action="Delete" onConfirm={() => deleteAgent.mutate(undefined, { onError: toastError })} />
+  </>
 }
 
 function ChatEmpty({ agent, onTry }: { agent: Agent; onTry: (text: string) => void }) {
@@ -159,7 +176,7 @@ function ChatEmpty({ agent, onTry }: { agent: Agent; onTry: (text: string) => vo
     {copy[1] && <p>{copy[1]}</p>}
     {state === 'stopped' && start}
     {agent.wanted === 'stopped' && state === 'missing' && start}
-    {state === 'not_answering' && <a className="btn sec" href={`/agents/${agent.id}`}>Open agent settings</a>}
+    {state === 'not_answering' && <a className="btn primary" href={`/agents/${agent.id}`}>Settings</a>}
     {state === 'no_seat' && <a className="btn primary" href="/admin/seat">Connect the Claude seat</a>}
   </div>
 }

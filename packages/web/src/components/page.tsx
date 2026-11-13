@@ -8,7 +8,7 @@ export function Page({ title, parents = [], actions, fill = false, children }: {
   return <>
     <title>{`${title} · Fast Monkey`}</title>
     <div className="ph">
-      <button type="button" className="btn ghost sm tight" aria-label="Toggle sidebar" onClick={toggleSidebar}>{ICONS.side}</button><span className="vsep"></span>
+      <button type="button" className="btn icon sm" aria-label="Toggle sidebar" title="Toggle sidebar" onClick={toggleSidebar}>{ICONS.side}</button><span className="vsep"></span>
       <nav className="crumb" aria-label="Breadcrumb">
         {parents.map((parent) => <Fragment key={parent.href}><a href={parent.href}>{parent.label}</a><span className="mute" aria-hidden="true">/</span></Fragment>)}
         <h1 className="ellip">{title}</h1>

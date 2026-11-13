@@ -26,7 +26,7 @@ function InviteGone() {
   return <AuthLayout title="Invite expired">
     <div className="authform">
       <div><h1>This invite doesn't work anymore</h1><p className="lead">It was already used, or it's older than 7 days. Ask whoever sent it for a new one.</p></div>
-      <a className="btn sec" href="/login">Sign in instead</a>
+      <a className="btn primary" href="/login">Sign in instead</a>
     </div>
   </AuthLayout>
 }

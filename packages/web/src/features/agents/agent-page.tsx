@@ -35,7 +35,7 @@ function AgentView({ agent, dialog, skill }: { agent: Agent; dialog: AgentDialog
   const actions = <>
     <a className="btn sec" href={`/agents/${agent.id}/chat`}>{ICONS.chat}<span className="lbl">Chat</span></a>
     <Locked reason={lockReason}>
-      <button className={running ? 'btn stop' : 'btn go'} disabled={!agent.canEdit || updateAgent.isPending} onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}>
+      <button className="btn sec" disabled={!agent.canEdit || updateAgent.isPending} onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}>
         {running ? ICONS.stop : ICONS.play}<span className="lbl">{running ? 'Stop' : 'Start'}</span>
       </button>
     </Locked>
@@ -92,7 +92,7 @@ function AgentName({ agent, editing }: { agent: Agent; editing: boolean }) {
   if (!editing) {
     return <div className="anamebox">
       <h2 className="aname ellip" title={agent.canEdit ? 'Double-click to rename' : undefined} onDoubleClick={agent.canEdit ? edit : undefined}>{updateAgent.isPending ? updateAgent.variables.name ?? agent.name : agent.name}</h2>
-      {agent.canEdit && <button type="button" className="rename" aria-label={`Rename ${agent.name}`} onClick={edit}>{ICONS.pencil}</button>}
+      {agent.canEdit && <button type="button" className="rename" aria-label={`Rename ${agent.name}`} title="Rename" onClick={edit}>{ICONS.pencil}</button>}
     </div>
   }
   return <div className="anamebox">
