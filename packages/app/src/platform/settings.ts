@@ -1,0 +1,30 @@
+import type { FastifyRequest } from 'fastify'
+import { db } from './db.ts'
+import { config } from './config.ts'
+import { seal, unseal } from './secrets.ts'
+
+const loaded = await db.selectFrom('install_setting').select(['name', 'value']).execute()
+const rows = new Map(loaded.map((row) => [row.name, row.value]))
+
+export const settings = {
+  publicUrl: (): string => rows.get('public_url') ?? '',
+  setPublicUrl: (url: string) => write('public_url', url.replace(/\/+$/, '')),
+  seatToken: (): string => {
+    const sealed = rows.get('seat_token')
+    return sealed ? unseal(sealed) : ''
+  },
+  setSeatToken: (token: string) => write('seat_token', seal(token)),
+  appliedBuild: (): string | undefined => rows.get('build'),
+  setAppliedBuild: (build: string) => write('build', build),
+}
+
+export function publicUrl(req?: FastifyRequest): string {
+  if (settings.publicUrl()) return settings.publicUrl()
+  return req ? `${req.protocol}://${req.host}` : `http://localhost:${config.port}`
+}
+
+async function write(name: string, value: string): Promise<void> {
+  await db.insertInto('install_setting').values({ name, value })
+    .onConflict((oc) => oc.column('name').doUpdateSet({ value, updated_at: new Date() })).execute()
+  rows.set(name, value)
+}

@@ -1,0 +1,20 @@
+import { createContext, Fragment, use, type ReactNode } from 'react'
+import { ICONS } from '@/components/icons'
+
+export const SidebarToggle = createContext(() => {})
+
+export function Page({ title, parents = [], actions, children }: { title: string; parents?: { label: string; href: string }[]; actions?: ReactNode; children?: ReactNode }) {
+  const toggleSidebar = use(SidebarToggle)
+  return <>
+    <title>{`${title} · JakeBox`}</title>
+    <div className="ph">
+      <button type="button" className="btn ghost sm tight" aria-label="Toggle sidebar" onClick={toggleSidebar}>{ICONS.side}</button><span className="vsep"></span>
+      <nav className="crumb" aria-label="Breadcrumb">
+        {parents.map((parent) => <Fragment key={parent.href}><a href={parent.href}>{parent.label}</a><span className="mute" aria-hidden="true">/</span></Fragment>)}
+        <h1 className="ellip">{title}</h1>
+      </nav>
+      <div className="actions">{actions}</div>
+    </div>
+    <div className="pb">{children}</div>
+  </>
+}

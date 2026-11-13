@@ -1,0 +1,22 @@
+{
+  "name": "jakebox-monorepo",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@10.9.3",
+  "engines": { "node": ">=22.18" },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run build --filter=@jakebox/web && node --env-file-if-exists=.env packages/app/src/app.ts",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "e2e": "packages/e2e/e2e.sh",
+    "release": "scripts/release.sh"
+  },
+  "devDependencies": {
+    "turbo": "2.5.4",
+    "typescript": "7.0.2"
+  }
+}

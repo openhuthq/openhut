@@ -1,0 +1,63 @@
+import type { Audience, ChannelKind } from '@jakebox/common/channels/channel.ts'
+import type { AgentFiles } from '../platform/agentd.ts'
+import { config } from '../platform/config.ts'
+import { agentSubnet } from '../platform/network.ts'
+import { slack } from '../integrations/slack/slack.ts'
+import { whatsapp } from '../integrations/whatsapp/whatsapp.ts'
+
+const AUXILIARY_TASKS = ['approval', 'compression', 'title_generation', 'background_review']
+
+export function renderFiles({ agent, ownerName, token, channelKey, seat, channels }: {
+  agent: { id: string; name: string; instructions: string; model: string; net: number }
+  ownerName: string
+  token: string
+  channelKey: string
+  seat: string
+  channels: RenderedChannel[]
+}): AgentFiles {
+  const gateway = `http://${agentSubnet(agent.net)}.1:${config.gatewayPort}`
+  const approvers = [ownerName, ...channels.map(approverOf)]
+  const approvalsMode = channels.some((channel) => channel.audience.open) ? 'smart' : 'manual'
+  const yaml = [
+    modelYaml({ gateway, token, model: agent.model }),
+    'terminal:\n  backend: local',
+    'agent:\n  api_max_retries: 30\n  disabled_toolsets: [browser, code_execution, delegation, cronjob]',
+    `approvals:\n  mode: ${approvalsMode}\n  approvers: ${JSON.stringify(approvers)}`,
+    'platform_toolsets:\n  api_server: [hermes-api-server, jakebox]',
+    'tools:\n  tool_search:\n    enabled: "off"',
+    `mcp_servers:\n  jakebox:\n    url: ${gateway}/api/v1/mcp\n    headers:\n      Authorization: "Agent ${token}"`,
+    ...channels.filter((channel) => channel.kind === 'slack').map(() => slack.yaml.trimEnd()),
+  ].join('\n') + '\n'
+  const env = [
+    `API_SERVER_KEY=${channelKey}`, 'API_SERVER_HOST=0.0.0.0', 'API_SERVER_PORT=8642',
+    ...(config.modelMode === 'claude' && seat ? [`CLAUDE_CODE_OAUTH_TOKEN=${seat}`] : []),
+    ...channels.flatMap(envOf),
+  ].join('\n') + '\n'
+  return { 'config.yaml': yaml, '.env': env, 'SOUL.md': `${agent.instructions}\n` }
+}
+
+function modelYaml({ gateway, token, model }: { gateway: string; token: string; model: string }): string {
+  if (config.modelMode === 'test') {
+    return `model:\n  default: jakebox-test-${model}\n  provider: custom\n  base_url: ${gateway}/test-llm/v1\n  api_key: "${token}"\n  context_length: 200000`
+  }
+  const auxiliary = AUXILIARY_TASKS.map((task) => `  ${task}: { provider: claude-subscription-directsdk-experimental, model: haiku }`).join('\n')
+  return `model:\n  default: ${model}\n  provider: claude-subscription-directsdk-experimental\nauxiliary:\n${auxiliary}`
+}
+
+function envOf(channel: RenderedChannel): string[] {
+  switch (channel.kind) {
+    case 'slack': return slack.env({ botToken: channel.botToken, appToken: channel.appToken, audience: channel.audience })
+    case 'whatsapp': return whatsapp.env(channel.audience)
+  }
+}
+
+function approverOf(channel: RenderedChannel): string {
+  switch (channel.kind) {
+    case 'slack': return slack.approver(channel.audience)
+    case 'whatsapp': return whatsapp.approver(channel.audience)
+  }
+}
+
+export type RenderedChannel =
+  | { kind: Extract<ChannelKind, 'slack'>; audience: Audience; botToken: string; appToken: string }
+  | { kind: Extract<ChannelKind, 'whatsapp'>; audience: Audience }

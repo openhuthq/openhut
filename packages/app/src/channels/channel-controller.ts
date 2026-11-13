@@ -1,0 +1,29 @@
+import type { FastifyPluginAsync } from 'fastify'
+import { CreateChannel, ListChannels, UpdateChannel } from '@jakebox/common/channels/channel.ts'
+import { deleted, listOf } from '../platform/responses.ts'
+import { who } from '../team/identity.ts'
+import { channelService } from './channel-service.ts'
+
+type Id = { Params: { id: string } }
+
+export const channelController: FastifyPluginAsync = async (app) => {
+  app.get<{ Querystring: ListChannels }>('/', ListRequest, async (req) => {
+    await who(req)
+    return listOf({ req, data: await channelService.list(req.query) })
+  })
+
+  app.post<{ Body: CreateChannel }>('/', CreateRequest, async (req) => channelService.create({ actor: await who(req), body: req.body }))
+
+  app.get<Id>('/:id', async (req) => channelService.get({ actor: await who(req), id: req.params.id }))
+
+  app.patch<Id & { Body: UpdateChannel }>('/:id', UpdateRequest, async (req) => channelService.update({ actor: await who(req), id: req.params.id, patch: req.body }))
+
+  app.delete<Id>('/:id', async (req) => {
+    await channelService.delete({ actor: await who(req), id: req.params.id })
+    return deleted({ id: req.params.id, object: 'channel' })
+  })
+}
+
+const ListRequest = { schema: { querystring: ListChannels } }
+const CreateRequest = { schema: { body: CreateChannel } }
+const UpdateRequest = { schema: { body: UpdateChannel } }

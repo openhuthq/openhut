@@ -1,0 +1,34 @@
+import * as z from 'zod/mini'
+import { atLeastOneField } from '../api.ts'
+
+export const Admin = z.object({
+  object: z.literal('admin'),
+  seat: z.object({ set: z.boolean(), mode: z.enum(['claude', 'test']) }),
+  server: z.object({
+    version: z.string(),
+    build: z.string(),
+    healthy: z.boolean(),
+    agentd: z.boolean(),
+    firewall: z.boolean(),
+    running: z.number(),
+    total: z.number(),
+  }),
+  publicUrl: z.string(),
+})
+export type Admin = z.infer<typeof Admin>
+
+export const Health = z.object({
+  ok: z.boolean(),
+  version: z.string(),
+  build: z.string(),
+  agentd: z.boolean(),
+  firewall: z.boolean(),
+  started: z.number(),
+})
+export type Health = z.infer<typeof Health>
+
+export const UpdateAdmin = z.object({
+  seatToken: z.optional(z.string().check(z.regex(/^\S{20,}$/, 'Paste the token that `claude setup-token` printed.'), z.maxLength(2000))),
+  publicUrl: z.optional(z.url({ protocol: /^https?$/ }).check(z.maxLength(200))),
+}).check(atLeastOneField)
+export type UpdateAdmin = z.infer<typeof UpdateAdmin>

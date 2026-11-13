@@ -1,0 +1,12 @@
+{
+  "name": "@jakebox/agentd",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/agentd.ts",
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2"
+  }
+}
