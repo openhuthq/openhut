@@ -9,6 +9,16 @@ the installer, agentd and the e2e run live here. `fastmonkey-server.md` covers t
 - **A read-only transaction doesn't contain a superuser**: `COPY … TO PROGRAM` and server-file functions still work. Refuse superuser and `pg_execute_server_program` / `pg_*_server_files` roles.
 - **pg connection strings let `?host=` override the URL's host** and `?sslrootcert=` read local files. Parse into explicit fields; allow only `sslmode`.
 - **`net.BlockList` matches IPv4-mapped IPv6** (`::ffff:127.0.0.1`) against IPv4 rules; `new URL` rewrites that to `::ffff:7f00:1`.
+- **A `lookup` hook never runs for IP-literal URLs.** Checking addresses in undici's `connect.lookup` alone let
+  `http://127.0.0.1/` through; `guardedFetch` also checks literal hostnames in its connector (`platform/network.ts`).
+- **The MCP SDK's refused-code error has an empty message** (`invalid_grant` with no description); the sign-in wraps it.
+
+## Local dev
+
+- `@fastify/static` is registered with `wildcard: false`, so it only serves files present at start. After rebuilding
+  the dashboard, restart the app or new asset names fall through to `index.html` and the page stays blank.
+- macOS caps Unix socket paths at 104 bytes; a long `AGENTD_SOCK` is cut short and fails with `EADDRINUSE`.
+- `config.port` is fixed at 8787; when an e2e run holds it, start the app from a script that sets `config.port` first.
 
 ## The installer (`install/`)
 

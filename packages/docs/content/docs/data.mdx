@@ -1,17 +1,24 @@
 ---
-title: Postgres
-description: Agents read your Postgres database. They can't change it and never see the password.
+title: Connections
+description: Hand agents Postgres, Convex, PostHog, Linear, Gmail, Drive, Google Workspace or any MCP server. They never see a key.
 icon: logo:postgres
 ---
 
-<Shot src="connections" alt="The Connections page with two Postgres databases" />
+<Shot src="connect" alt="The Connect Google Workspace guide: what agents get on the left, the steps on the right" />
 
 <Steps>
 <Step>
 
-### Add the database
+### Pick one
 
-**Connections**, then **Postgres**. Paste the connection string of a read-only login.
+**Connections**, then the service. A short guide opens with what agents get and the steps.
+
+</Step>
+<Step>
+
+### Paste a key or sign in
+
+Postgres, Convex and a custom MCP server take a key. PostHog, Linear and Google open their sign-in. Google needs an OAuth client once, in **Admin**.
 
 </Step>
 <Step>
@@ -23,11 +30,11 @@ Tick it under **Connections** on the agent's page.
 </Step>
 <Step>
 
-### See what it ran
+### See what it can do and did
 
-Open the connection. Every call is listed, refused ones too.
+Open the connection: its tools, and every call, refused ones too.
 
 </Step>
 </Steps>
 
-Each query is one `SELECT`, at most 15 seconds and 1000 rows. Turn on **Everyone on the team** to share a connection.
+Postgres queries are one `SELECT`, at most 15 seconds and 1000 rows. **Tailscale** joins this server to your tailnet so connections reach private hosts; agents stay off it. Turn on **Everyone on the team** to share a connection.

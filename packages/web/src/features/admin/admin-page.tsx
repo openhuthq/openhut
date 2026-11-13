@@ -11,12 +11,13 @@ import { Mark } from '@/components/mark'
 import { Page } from '@/components/page'
 import { StatusBadge } from '@/components/status-badge'
 import { useAdmin, useStartUpdate, useDeleteOAuthGrant, useOAuthGrants, useUpdateAdmin } from '@/features/admin/api'
+import { GoogleClientSetup } from '@/features/connections/google-client-setup'
 import { ago, plural, shortDate } from '@/lib/format'
 import { formValues } from '@/lib/form'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 
-export type AdminForm = 'seat' | 'public-url'
+export type AdminForm = 'seat' | 'public-url' | 'google'
 
 const APP_MARKS: BrandName[] = ['claude', 'cursor', 'copilot', 'gemini', 'windsurf', 'zed']
 
@@ -41,7 +42,13 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
         {form === 'public-url' && canEdit && <PublicUrlForm publicUrl={admin.publicUrl} />}
         <VersionRow server={server} canEdit={canEdit} />
       </Section>
-      <Section number={3} title="AI assistant"><ConnectedApps /></Section>
+      <Section number={3} title="Google">
+        <Row icon="google" title="Google OAuth client" mono={!!admin.google.clientId} subtitle={admin.google.clientId ?? 'Needed before anyone connects Gmail, Google Drive or Google Workspace'}
+          status={admin.google.clientId ? <Ready word="Ready" /> : <StatusBadge status="not_set_up" />}
+          action={<ToggleButton label={admin.google.clientId ? 'Replace' : 'Set up'} form="google" open={form === 'google'} canEdit={canEdit} reason="Only an owner or admin sets it" />} />
+        {form === 'google' && canEdit && <div className="aform" id="google"><GoogleClientSetup admin={admin} back="/admin" /></div>}
+      </Section>
+      <Section number={4} title="AI assistant"><ConnectedApps /></Section>
     </div>
   </Page>
 }

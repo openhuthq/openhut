@@ -1,31 +1,48 @@
 import type { Selectable } from 'kysely'
-import * as z from 'zod/mini'
 import type { Deleted } from '@fastmonkey/common/api.ts'
-import type { Connection, ConnectionStatus } from '@fastmonkey/common/connections/connection.ts'
+import { SIGN_IN_KINDS, type Connection, type ConnectionKind, type ConnectionStatus, type ConnectionTool, type CreateConnection } from '@fastmonkey/common/connections/connection.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
-import { record } from '../platform/events.ts'
+import { log, record } from '../platform/events.ts'
 import { deleted } from '../platform/responses.ts'
-import { describeIssues } from '../platform/validation.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { newId, seal, unseal } from '../platform/secrets.ts'
-import { postgres, type ConnectorTool } from '../integrations/postgres/postgres.ts'
+import { publicUrl } from '../platform/settings.ts'
+import type { Connector, ToolSpec } from '../integrations/connector.ts'
+import { convex } from '../integrations/convex/convex.ts'
+import { google } from '../integrations/google/google.ts'
+import { MCP_SERVERS, mcp } from '../integrations/mcp/mcp.ts'
+import { postgres } from '../integrations/postgres/postgres.ts'
 import { isAdmin, type Caller } from '../team/identity.ts'
 
-const CONNECTORS: Record<Connection['kind'], Record<string, ConnectorTool>> = { postgres: postgres.tools }
-const COLUMNS = ['id', 'kind', 'name', 'owner_id', 'everyone', 'created_at'] as const
+const COLUMNS = ['id', 'kind', 'name', 'account', 'sign_in', 'owner_id', 'everyone', 'created_at'] as const
 const MAX_REPLY = 64_000
 const PER_AGENT_CONNECTION = 2
+const TOOLS_FRESH_MS = 5 * 60_000
 const running = new Map<string, number>()
-const ConnectionConfig = z.object({ dsn: z.string() })
+const queues = new Map<string, Promise<unknown>>()
+const toolCache = new Map<string, { at: number; tools: ToolSpec[] }>()
+const redirectUrl = () => `${publicUrl()}/api/connection-authorizations/callback`
+const CONNECTORS: Record<ConnectionKind, Connector> = {
+  postgres: postgres.connector,
+  convex: convex.connector,
+  posthog: mcp.connector({ url: MCP_SERVERS.posthog, redirectUrl }),
+  linear: mcp.connector({ url: MCP_SERVERS.linear, redirectUrl }),
+  mcp: mcp.connector({ redirectUrl }),
+  gmail: google.connector('gmail'),
+  drive: google.connector('drive'),
+  google: google.connector('google'),
+}
 
 export const connectionService = {
+  redirectUrl,
+
   async canUse({ personId, connectionId }: { personId: string; connectionId: string }): Promise<boolean> {
     return !!(await usableBy(personId).select('c.id').where('c.id', '=', connectionId).executeTakeFirst())
   },
 
   async reachable({ agent }: { agent: { id: string; owner_id: string } }): Promise<ReachableConnection[]> {
-    return usableBy(agent.owner_id).innerJoin('connection_grant as g', 'g.connection_id', 'c.id').select(['c.id', 'c.kind', 'c.name', 'c.config'])
+    return usableBy(agent.owner_id).innerJoin('connection_grant as g', 'g.connection_id', 'c.id').select(['c.id', 'c.kind', 'c.name'])
       .where('g.agent_id', '=', agent.id).orderBy('c.created_at').execute()
   },
 
@@ -39,13 +56,35 @@ export const connectionService = {
     return connection
   },
 
-  async create({ actor, name, dsn }: { actor: Caller; name: string; dsn: string }): Promise<Connection> {
-    postgres.parseDsn(dsn)
+  async create({ actor, kind = 'postgres', name, dsn, deployKey, url, header }: { actor: Caller } & CreateConnection): Promise<Connection> {
+    const { config, account } = await keyedConfig({ kind, dsn, deployKey, url, header })
+    return connectionService.save({ actor, kind, name, config, account, signIn: false })
+  },
+
+  async save({ actor, kind, name, config, account, signIn, id }: { actor: Caller; kind: ConnectionKind; name: string; config: unknown; account: string; signIn: boolean; id?: string }): Promise<Connection> {
+    const sealed = seal(JSON.stringify(config))
+    if (id) {
+      await db.updateTable('connection').set({ config: sealed, account }).where('id', '=', id).execute()
+      toolCache.delete(id)
+      record({ action: 'connection.reconnected', actor, target: { type: 'connection', id, kind } })
+      return connectionService.get({ actor, id })
+    }
     const row = await db.insertInto('connection')
-      .values({ id: newId('cn'), kind: 'postgres', name: name.trim().slice(0, 60) || 'postgres', owner_id: actor.id, config: seal(JSON.stringify({ dsn })) })
-      .returning(COLUMNS).executeTakeFirstOrThrow()
-    record({ action: 'connection.created', actor, target: { type: 'connection', id: row.id, name: row.name } })
+      .values({ id: newId('cn'), kind, name: name.trim().slice(0, 60) || kind, account, sign_in: signIn, owner_id: actor.id, config: sealed })
+      .returning('id').executeTakeFirstOrThrow()
+    record({ action: 'connection.created', actor, target: { type: 'connection', id: row.id, kind } })
     return connectionService.get({ actor, id: row.id })
+  },
+
+  unsealed: (sealed: string): Record<string, unknown> => {
+    const config: unknown = JSON.parse(unseal(sealed))
+    return typeof config === 'object' && config !== null ? { ...config } : {}
+  },
+
+  async owned({ actor, id }: { actor: Caller; id: string }): Promise<Row & { config: string }> {
+    const row = await db.selectFrom('connection').select([...COLUMNS, 'config']).where('id', '=', (await rowOf(id)).id).executeTakeFirstOrThrow()
+    if (row.owner_id !== actor.id) throw new HttpError(403, 'Only the person who connected it can reconnect it.')
+    return row
   },
 
   async update({ actor, id, everyone }: { actor: Caller; id: string; everyone: boolean }): Promise<Connection> {
@@ -60,13 +99,30 @@ export const connectionService = {
     const row = await rowOf(id)
     if (row.owner_id !== actor.id && !isAdmin(actor)) throw new HttpError(403, 'Only its owner or an admin can delete a connection.')
     await db.deleteFrom('connection').where('id', '=', id).execute()
+    toolCache.delete(id)
     record({ action: 'connection.deleted', actor, target: { type: 'connection', id, name: row.name } })
     return deleted({ id, object: 'connection' })
   },
 
+  async listTools({ actor, connectionId }: { actor: Caller; connectionId: string }): Promise<ConnectionTool[]> {
+    const connection = await connectionService.get({ actor, id: connectionId })
+    if (!connection.usable) throw new HttpError(403, `Only people who can use ${connection.name} see its tools. Ask ${connection.ownerName} to share it.`)
+    const tools = await toolsOf({ id: connection.id, kind: connection.kind }).catch((err: unknown) => {
+      throw new HttpError(502, `${connection.name} didn't list its tools: ${messageOf(err)}`)
+    })
+    return tools.map((tool) => ({ object: 'connection_tool', name: `${connection.kind}_${tool.name}`, description: tool.description }))
+  },
+
   async tools({ agent }: { agent: { id: string; owner_id: string } }): Promise<AgentTool[]> {
     const connections = await connectionService.reachable({ agent })
-    return connections.flatMap((connection) => Object.entries(CONNECTORS[connection.kind]).map(([tool, spec]) => ({ name: `${connection.kind}_${tool}`, connection, spec })))
+    const lists = await Promise.all(connections.map(async (connection) => {
+      const tools = await toolsOf(connection).catch((err: unknown) => {
+        log.warn({ event: 'connection.tools_failed', connection: connection.id, error: messageOf(err) })
+        return []
+      })
+      return tools.map((spec) => ({ name: `${connection.kind}_${spec.name}`, connection, spec }))
+    }))
+    return lists.flat()
   },
 
   async call({ agent, name, args, connectionId, reason }: { agent: { id: string; owner_id: string }; name: string; args: Record<string, unknown>; connectionId?: string; reason: string }): Promise<{ text: string; isError: boolean }> {
@@ -83,11 +139,6 @@ export const connectionService = {
       return { text: `More than one connection has ${name}; pass connectionId (${matches.map((m) => m.connection.id).join(', ')}).`, isError: true }
     }
     const [{ connection, spec }] = matches
-    const parsed = z.safeParse(spec.input, args)
-    if (!parsed.success) {
-      await recordCall('failed', connection.id)
-      return { text: `${argumentProblem(parsed.error.issues)}. Call describe_tool to see what ${name} takes.`, isError: true }
-    }
     const key = `${agent.id}:${connection.id}`
     const inFlight = running.get(key) ?? 0
     if (inFlight >= PER_AGENT_CONNECTION) {
@@ -96,10 +147,10 @@ export const connectionService = {
     }
     running.set(key, inFlight + 1)
     try {
-      const out = JSON.stringify(await spec.run({ dsn: ConnectionConfig.parse(JSON.parse(unseal(connection.config))).dsn, args }))
-      if (out.length > MAX_REPLY) throw new Error(`Result too large for the agent (${Math.round(out.length / 1024)} KB, the limit is 64 KB). Select fewer rows or columns.`)
-      await recordCall('allowed', connection.id)
-      return { text: out, isError: false }
+      const result = await withConnector(connection, (ctx) => CONNECTORS[connection.kind].call({ ...ctx, tool: spec.name, args }))
+      if (result.text.length > MAX_REPLY) throw new Error(`Result too large for the agent (${Math.round(result.text.length / 1024)} KB, the limit is 64 KB). Ask for less.`)
+      await recordCall(result.isError ? 'failed' : 'allowed', connection.id)
+      return { text: result.text, isError: result.isError }
     } catch (err) {
       await recordCall('failed', connection.id)
       return { text: `Failed: ${messageOf(err)}`.slice(0, 2000), isError: true }
@@ -107,6 +158,42 @@ export const connectionService = {
       running.set(key, (running.get(key) ?? 1) - 1)
     }
   },
+}
+
+async function keyedConfig({ kind, dsn, deployKey, url, header }: Omit<CreateConnection, 'name'>): Promise<{ config: unknown; account: string }> {
+  if (kind === 'convex') {
+    if (!deployKey) throw new HttpError(400, 'Paste the deploy key.', { param: 'deployKey' })
+    return { config: { deployKey: deployKey.trim() }, account: await convex.probe(deployKey.trim()) }
+  }
+  if (kind === 'mcp') {
+    if (!url) throw new HttpError(400, 'Paste the MCP server URL.', { param: 'url' })
+    const headers = mcp.parseHeader(header)
+    const tools = await mcp.probe({ url, headers }).catch((err: unknown) => {
+      throw new HttpError(400, `${new URL(url).host} didn't answer as an MCP server: ${messageOf(err)}. If it needs a sign-in, choose Sign in instead.`, { param: 'url' })
+    })
+    return { config: { url, headers }, account: `${new URL(url).host} · ${tools} tools` }
+  }
+  if (!dsn) throw new HttpError(400, 'Paste a postgres:// connection string.', { param: 'dsn' })
+  return { config: { dsn }, account: postgres.account(dsn) }
+}
+
+async function toolsOf(connection: { id: string; kind: ConnectionKind }): Promise<ToolSpec[]> {
+  const cached = toolCache.get(connection.id)
+  if (cached && Date.now() - cached.at < TOOLS_FRESH_MS) return cached.tools
+  const tools = await withConnector(connection, (ctx) => CONNECTORS[connection.kind].tools(ctx))
+  toolCache.set(connection.id, { at: Date.now(), tools })
+  return tools
+}
+
+function withConnector<T>(connection: { id: string; kind: ConnectionKind }, fn: (ctx: { config: unknown; save: (config: unknown) => Promise<void> }) => Promise<T>): Promise<T> {
+  const work = async () => {
+    const row = await db.selectFrom('connection').select('config').where('id', '=', connection.id).executeTakeFirstOrThrow()
+    return fn({ config: JSON.parse(unseal(row.config)), save: async (config) => { await db.updateTable('connection').set({ config: seal(JSON.stringify(config)) }).where('id', '=', connection.id).execute() } })
+  }
+  if (!isSignIn(connection.kind)) return work()
+  const next = (queues.get(connection.id) ?? Promise.resolve()).catch(() => undefined).then(work)
+  queues.set(connection.id, next)
+  return next.finally(() => { if (queues.get(connection.id) === next) queues.delete(connection.id) })
 }
 
 function usableBy(personId: string) {
@@ -138,7 +225,8 @@ async function connectionsOf({ actor, rows }: { actor: Caller; rows: Row[] }): P
   return rows.map((row) => {
     const success = lastSuccess.get(row.id)
     return {
-      id: row.id, object: 'connection', kind: row.kind, name: row.name, ownerId: row.owner_id, ownerName: ownerName.get(row.owner_id) ?? 'someone',
+      id: row.id, object: 'connection', kind: row.kind, name: row.name, account: row.account, signIn: row.sign_in,
+      ownerId: row.owner_id, ownerName: ownerName.get(row.owner_id) ?? 'someone',
       everyone: row.everyone, usable: canUse.has(row.id), canDelete: row.owner_id === actor.id || isAdmin(actor), agents: agents.get(row.id) ?? 0,
       status: statusOf({ succeeded: !!success, failed: failing.has(row.id) }), lastSuccessAt: success ? new Date(success).toISOString() : null,
       createdAt: new Date(row.created_at).toISOString(),
@@ -152,12 +240,9 @@ function statusOf({ succeeded, failed }: { succeeded: boolean; failed: boolean }
   return 'no_calls'
 }
 
-function argumentProblem(issues: z.core.$ZodIssue[]): string {
-  const unknown = issues.flatMap((issue) => issue.code === 'unrecognized_keys' ? issue.keys : [])
-  return unknown.length ? `Unknown arguments: ${unknown.join(', ')}` : `Invalid arguments: ${describeIssues(issues)}`
-}
+const isSignIn = (kind: ConnectionKind): boolean => (SIGN_IN_KINDS as readonly string[]).includes(kind)
 
-export type ReachableConnection = { id: string; kind: Connection['kind']; name: string; config: string }
-export type AgentTool = { name: string; connection: ReachableConnection; spec: ConnectorTool }
+export type ReachableConnection = { id: string; kind: ConnectionKind; name: string }
+export type AgentTool = { name: string; connection: ReachableConnection; spec: ToolSpec }
 
 type Row = Pick<Selectable<Database['connection']>, (typeof COLUMNS)[number]>

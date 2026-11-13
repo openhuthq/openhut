@@ -26,6 +26,7 @@ export const Admin = z.object({
     total: z.number(),
   }),
   publicUrl: z.string(),
+  google: z.object({ clientId: z.nullable(z.string()), redirectUri: z.string() }),
 })
 export type Admin = z.infer<typeof Admin>
 
@@ -42,6 +43,8 @@ export type Health = z.infer<typeof Health>
 export const UpdateAdminFields = {
   seatToken: z.optional(z.string().check(z.regex(/^\S{20,}$/, 'Paste the token that `claude setup-token` printed.'), z.maxLength(2000))),
   publicUrl: z.optional(z.url({ protocol: /^https?$/ }).check(z.maxLength(200))),
+  googleClientId: z.optional(z.string().check(z.regex(/^[\w.-]+\.apps\.googleusercontent\.com$/, 'Paste the client ID. It ends in .apps.googleusercontent.com.'))),
+  googleClientSecret: z.optional(z.string().check(z.regex(/^\S{10,200}$/, 'Paste the client secret from the same OAuth client.'))),
 }
 export const UpdateAdmin = z.object(UpdateAdminFields).check(atLeastOneField)
 export type UpdateAdmin = z.infer<typeof UpdateAdmin>
