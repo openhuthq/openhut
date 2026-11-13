@@ -111,7 +111,7 @@ function openSeatTab() {
 function PublicUrlForm({ publicUrl }: { publicUrl: string }) {
   const updateAdmin = useUpdateAdmin()
   return <form className="aform" id="public-url" onSubmit={(event) => updateAdmin.mutate({ publicUrl: formValues(event)('publicUrl') })}>
-    <span className="mute">The address people open Fast Monkey on. Invite links and the MCP URL use it.</span>
+    <span className="mute">The address people open this dashboard on. Invite links and the MCP URL use it.</span>
     <div className="inline-form">
       <input name="publicUrl" type="url" required pattern="https?://.+" maxLength={200} defaultValue={publicUrl} aria-label="Public URL" aria-describedby="public-url-error" className="mono" autoFocus />
       <button type="button" className="btn sec sm" onClick={() => navigate('/admin')}>Cancel</button>
@@ -128,7 +128,7 @@ function ConnectedApps() {
 
 function AppRows({ grants }: { grants: OAuthGrant[] }) {
   const deleteGrant = useDeleteOAuthGrant()
-  if (!grants.length) return <Row icon="mcp" title="Connected apps" subtitle="No apps yet. Add Fast Monkey to your AI assistant with the prompt on the Agents page." />
+  if (!grants.length) return <Row icon="mcp" title="Connected apps" subtitle="No apps yet. Add your AI assistant with the prompt on the Agents page." />
   return grants.map((grant) => <Row key={grant.id} icon={appMark(grant.client)} title={grant.client} subtitle={appLine(grant)}
     action={<ConfirmButton className="btn row danger" disabled={deleteGrant.isPending} question={`Disconnect ${grant.client}?`} detail="It can't act as you anymore until you connect it again." action="Disconnect"
       onConfirm={() => deleteGrant.mutate(grant.id, { onError: toastError })}>Disconnect</ConfirmButton>} />)
@@ -160,12 +160,12 @@ function VersionRow({ server, canEdit }: { server: Admin['server']; canEdit: boo
   return <>
     <Row icon="update" title={`Version ${server.build}`} subtitle={versionLine(server)}
       status={versionStatus(server)}
-      action={server.updateAvailable && !updating && <Locked reason={canEdit ? undefined : 'Only an owner or admin updates Fast Monkey'}>
+      action={server.updateAvailable && !updating && <Locked reason={canEdit ? undefined : 'Only an owner or admin can update'}>
         <button type="button" className="btn primary sm" disabled={!canEdit || startUpdate.isPending} onClick={() => startUpdate.mutate(undefined, { onError: toastError })}>{server.update ? 'Try again' : 'Update now'}</button>
       </Locked>} />
     {updating && <div className="aform updating" role="status"><span className="spin" aria-hidden="true"></span>
-      <span>Updating to version <span className="mono">{server.update?.to}</span>. Fast Monkey and its agents restart once. You can leave or refresh; this page follows along.</span></div>}
-    {server.update?.status === 'failed' && <div className="aform"><span className="mute" role="status">The last update didn't finish, so Fast Monkey went back to version <span className="mono">{server.build}</span>. Nothing was lost. Details: <code>journalctl -u fastmonkey-update</code> on the server.</span></div>}
+      <span>Updating to version <span className="mono">{server.update?.to}</span>. The app and its agents restart once. You can leave or refresh; this page follows along.</span></div>}
+    {server.update?.status === 'failed' && <div className="aform"><span className="mute" role="status">The last update didn't finish, so it went back to version <span className="mono">{server.build}</span>. Nothing was lost. Details: <code>journalctl -u fastmonkey-update</code> on the server.</span></div>}
   </>
 }
 
@@ -183,7 +183,7 @@ function versionLine(server: Admin['server']) {
 }
 
 function seatLine(admin: Admin) {
-  if (admin.seat.mode === 'test') return "Test mode: agents use Fast Monkey's test model, not a seat"
+  if (admin.seat.mode === 'test') return "Test mode: agents use the built-in test model, not a seat"
   if (admin.seat.set) return 'Saved on this server'
   return 'Claude mode, but no seat token is stored'
 }
@@ -226,6 +226,6 @@ function ContainerCard({ row, about }: { row: AgentContainer; about: string | un
       <div><span>Image</span><span className="mono ellip" title={row.image}>{row.image ? row.image.split('@')[0].split('/').pop() : '—'}</span></div>
       <div><span>Created</span><span className="mono">{row.createdAt ? row.createdAt.slice(0, 16) : '—'}</span></div>
     </div>
-    {disagree && <p className="ccard-warn">Docker and Fast Monkey disagree. Reconcile fixes this within 30 seconds while the agent should run.</p>}
+    {disagree && <p className="ccard-warn">Docker and the app disagree. Reconcile fixes this within 30 seconds while the agent should run.</p>}
   </div>
 }

@@ -90,6 +90,7 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 - `setup-token` prints nothing without a terminal, so it runs under `script -qfec` (util-linux) with `stty cols 4000` so the token stays on one line. The link comes from the OSC 8 hyperlink, not the wrapped text. The code and Enter go in two writes 0.5 s apart: in one write, a full-length code plus `\r` is taken as a paste and the Enter never submits (a 48-character fake code didn't show it; the real ~87 did). A code is matched to its sign-in by the `#state` it ends with. An open sign-in lives in memory for 10 minutes in a temp `CLAUDE_CONFIG_DIR`.
 
 ## Conventions the code relies on
+- Wording (owner, 2026-11-13): status text, notes and error messages don't repeat "Fast Monkey"; they say "the app", "this server" or "it". The name stays on the logo, page titles, sign-in and invite, and in text an outside app or assistant reads (the setup prompt, MCP and OAuth messages, the Slack manifest).
 - Every agentd reply is validated with a Zod schema per command (`platform/agentd.ts`); a reply that doesn't match is a
   502 that says agentd and the app may be different releases. Keep the fake agentd's replies in step. agentd's own
   follow-up work (the restart after WhatsApp pairing) goes through the same per-agent queue as a closure, not a

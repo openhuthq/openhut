@@ -80,7 +80,7 @@ export const teamService = {
     if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can remove people.')
     const person = await db.selectFrom('person').select(['id', 'role']).where('id', '=', id).where('removed_at', 'is', null).executeTakeFirst()
     if (!person) throw new HttpError(404, 'That person isn\'t on the team.')
-    if (person.role === 'owner') throw new HttpError(403, 'Fast Monkey always keeps its owner. Remove someone else.')
+    if (person.role === 'owner') throw new HttpError(403, 'The team always keeps its owner. Remove someone else.')
     await db.transaction().execute(async (trx) => {
       await trx.updateTable('person').set({ removed_at: new Date() }).where('id', '=', id).execute()
       await trx.deleteFrom('session').where('person_id', '=', id).execute()
@@ -106,9 +106,9 @@ async function createOwner({ setupCode, email, password, origin }: { setupCode: 
   }
   const pass = await hashPassword(password)
   const owner = await db.transaction().execute(async (trx) => {
-    if (await trx.selectFrom('person').select('id').limit(1).executeTakeFirst()) throw new HttpError(403, 'Fast Monkey already has an owner. Ask them for an invite.')
+    if (await trx.selectFrom('person').select('id').limit(1).executeTakeFirst()) throw new HttpError(403, 'This server already has an owner. Ask them for an invite.')
     return trx.insertInto('person').values({ id: newId('usr'), email, pass, role: 'owner', removed_at: null }).returningAll().executeTakeFirstOrThrow()
-  }).catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(403, 'Fast Monkey already has an owner. Ask them for an invite.') : err })
+  }).catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(403, 'This server already has an owner. Ask them for an invite.') : err })
   if (!settings.storedPublicUrl()) await settings.setPublicUrl(origin)
   return personOf(owner)
 }

@@ -37,7 +37,7 @@ async function ask<S extends z.ZodMiniType>({ request, doing, schema }: { reques
   const failure = z.safeParse(Failure, reply)
   if (failure.success) throw new HttpError(502, `The agent runner couldn't ${doing}: ${failure.data.error}. Details are in /var/log/fastmonkey/agentd.log.`)
   const parsed = z.safeParse(schema, reply)
-  if (!parsed.success) throw new HttpError(502, `The agent runner sent a reply Fast Monkey doesn't understand while trying to ${doing}. Check that agentd and the app are the same release.`)
+  if (!parsed.success) throw new HttpError(502, `The agent runner sent a reply the app doesn't understand while trying to ${doing}. Check that agentd and the app are the same release.`)
   return parsed.data
 }
 

@@ -97,7 +97,7 @@ function NotReady({ agent }: { agent: Agent }) {
     no_seat: agent.healthDetail,
     not_answering: agent.healthDetail || 'Hermes isn\'t answering.',
     stopped: 'It\'s stopped. Start it from Settings.',
-    missing: 'Its container is gone. Fast Monkey recreates it within 30 seconds while it should be running.',
+    missing: 'Its container is gone. It is recreated within 30 seconds while it should be running.',
     running: '',
   }[state]
   const action = state === 'no_seat' ? <a href="/admin/seat">Connect the seat</a> : state !== 'starting' && <a href={`/agents/${agent.id}`}>Settings</a>
@@ -151,7 +151,7 @@ function ChatEmpty({ agent, onTry }: { agent: Agent; onTry: (text: string) => vo
     no_seat: [`${agent.name} isn't ready`, agent.healthDetail],
     not_answering: [`${agent.name} isn't answering`, agent.healthDetail || 'The container is running, but Hermes isn\'t answering.'],
     stopped: [`${agent.name} is stopped`, 'Start it to chat with it.'],
-    missing: [`${agent.name} has an error`, 'Its container is gone. Fast Monkey recreates it within 30 seconds while it should be running.'],
+    missing: [`${agent.name} has an error`, 'Its container is gone. It is recreated within 30 seconds while it should be running.'],
   }[state]
   return <div className="chat-empty">
     <Avatar id={agent.id} about={agent.instructions} size={72} />

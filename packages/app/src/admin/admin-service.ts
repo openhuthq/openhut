@@ -63,10 +63,10 @@ export const adminService = {
   },
 
   async startUpdate({ actor }: { actor: Caller }): Promise<Update> {
-    if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can update Fast Monkey.')
+    if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can update the app.')
     latest.at = 0
     const to = await adminService.latestBuild()
-    if (!to || !isNewer({ latest: to, current: config.build })) throw new HttpError(409, 'Fast Monkey is already on the latest release.')
+    if (!to || !isNewer({ latest: to, current: config.build })) throw new HttpError(409, 'This is already the latest release.')
     const running = await currentUpdate({ installing: (await probe()).installing })
     if (running?.status === 'running') throw new HttpError(409, 'An update is already running. This page shows when it finishes.')
     const stored = { from: config.build, to, startedAt: new Date().toISOString() }
