@@ -1,5 +1,6 @@
 import { MemberRole, type Invite, type Me, type Person } from '@fastmonkey/common/team/team.ts'
 import { ConfirmButton } from '@/components/confirm-button'
+import { CopyButton } from '@/components/copy-button'
 import { ErrorNote } from '@/components/error-note'
 import { ICONS } from '@/components/icons'
 import { Initial } from '@/components/initial'
@@ -8,7 +9,6 @@ import { Locked } from '@/components/locked'
 import { Page } from '@/components/page'
 import { Popover } from '@/components/popover'
 import { useCreateInvite, useDeleteInvite, useDeletePerson, useInvites, usePeople } from '@/features/people/api'
-import { copyText } from '@/lib/clipboard'
 import { shortDate } from '@/lib/format'
 import { formValues } from '@/lib/form'
 import { MEMBER_ROLES, ROLE_LABEL, ROLE_WITH_ARTICLE } from '@/lib/roles'
@@ -56,7 +56,7 @@ function InviteLink({ role, link, onAgain }: { role: MemberRole; link: string; o
     <div className="pophead"><h3>Invite link for {ROLE_WITH_ARTICLE[role]}</h3><p className="mute">Send it to them. It works once, for 7 days, and isn't shown again.</p></div>
     <div className="linkrow">
       <input readOnly className="mono" aria-label="Invite link" value={link} onFocus={(event) => event.target.select()} />
-      <button type="button" className="btn primary" onClick={() => copyText(link)}>{ICONS.copy}Copy link</button>
+      <CopyButton className="btn primary" text={link} label="Copy link" />
     </div>
     <button type="button" className="linkbtn mute" onClick={onAgain}>Create another link</button>
   </section>
