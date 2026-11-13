@@ -1270,6 +1270,10 @@ footer .toplinks a{color:var(--night-ink)}
   .d-panel{height:404px}
   .d-panel .d-sec:last-child{display:none}
 }
+.hero-frame{padding-top:40px}
+@media (max-width:720px){
+  .hero-frame{padding-top:12px}
+}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -1361,7 +1365,6 @@ footer .toplinks a{color:var(--night-ink)}
         </aside>
       </div>
       <div class="share" id="share"><div class="sh-h"><b>Shared with your team</b><span>this week</span></div><div class="sh-p" id="shP"></div></div>
-      <button type="button" class="replay" id="replay">↻ Replay</button>
     </div>
   </div>
 </header>
@@ -1952,7 +1955,6 @@ description: Answer "where is my order?"
   }
   const play = async () => { const my = ++run; answer = null; playing = true; await session(my); if (my === run) playing = false; demo.classList.remove('fade') }
   dNeed.addEventListener('click', e => { const b = e.target.closest('button'); if (b) answer = b.dataset.ok === '1' })
-  $('#replay').addEventListener('click', () => { if (playing) run++; else play() })
   if (reduce) dFinal(); else dReset()
   whenVisible(demo, play, .35)
 
