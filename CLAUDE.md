@@ -44,6 +44,10 @@ builds what `fastmonkey.dev` serves; `vendor/` is the pinned Hermes plugin.
   no `any`, only `HttpError` throws with sentences for messages, tests mirror source paths, logging through evlog.
 - Single quotes, no semicolons, `.ts` imports; Node 22.18+ runs the TypeScript directly.
 
+## Shipping
+
+When a change is done and checked, merge it to `main` without asking (owner, 2026-11-13). Merging deploys fastmonkey.dev.
+
 ## Local dev
 
 ```
