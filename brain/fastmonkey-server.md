@@ -80,6 +80,7 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 - `POST /api/threads/:id/chat` takes only the new user message (`trigger: submit-message`) or a retry (`regenerate-message`, which drops the last answer); the stored thread is the history, so nobody can forge the agent's earlier replies. The whole thread goes to Hermes each turn (`/v1/chat/completions`, `stream: true`, no session header).
 - The reply is relayed as the AI SDK UI message stream: text parts, `data-tool` for each `hermes.tool.progress` event, then `data-calls` with the `connection_event` rows the agent wrote during the turn (allowed, denied, failed). The answer is saved in `onEnd`, also when the person stops it.
 - `health` comes from `GET /v1/models` on the agent (3 s timeout, cached 5 s, re-probed by reconcile every 30 s). Starting until it has failed for 3 minutes in a row, then not answering. `status` stays the container state, which the e2e run checks.
+- Admin › View containers shows `docker ps -a` for agent containers (agentd's read-only `containers` command) next to each agent's wanted state; rows that disagree are tinted. Agents with no container show as `none`, and reconcile recreates the container for one that should run. In Claude mode with no seat, health is not answering: Hermes is up but its model can't sign in.
 - `FASTMONKEY_AGENT_API` points every agent at one URL; dev (`scripts/fake-agentd.ts` serves a fake Hermes on :18642) and the unit tests use it. `PORT` moves the app off 8787.
 
 ## Conventions the code relies on

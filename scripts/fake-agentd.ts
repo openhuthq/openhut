@@ -63,6 +63,8 @@ function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
       return { firewall: true, image: IMAGE, updating: false }
     case 'ps':
       return { states }
+    case 'containers':
+      return { containers: Object.entries(states).map(([id, state]) => ({ name: `ag-${id}`, agentId: id, state, status: state === 'running' ? 'Up 2 minutes' : 'Exited (0) 1 minute ago', image: IMAGE, createdAt: new Date().toISOString(), networks: `ag-${id}` })) }
     case 'create':
       states[req.id] = 'created'
       rendered[req.id] = JSON.stringify(req.files)

@@ -494,3 +494,9 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
   .cbody{overflow:visible;padding:4px 16px 20px}
   .choices,.hdr,.cform:has(input[name=auth][value=header]:checked) .hdr{grid-template-columns:minmax(0,1fr)}
 }
+.containers .ctable{overflow-x:auto;border:1px solid var(--hair);border-radius:8px;background:var(--card)}
+.containers table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:760px}
+.containers th{text-align:left;font-weight:500;color:var(--mute);padding:8px 10px;border-bottom:1px solid var(--hair);white-space:nowrap}
+.containers td{padding:8px 10px;border-bottom:1px solid var(--hair);vertical-align:top;max-width:220px}
+.containers tr:last-child td{border-bottom:0}
+.containers tr.off td{background:oklch(97% .02 27)}

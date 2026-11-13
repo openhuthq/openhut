@@ -100,6 +100,8 @@ async function handle(req: AgentdRequest): Promise<Reply> {
       return { firewall: await firewallRecent(), image: IMAGE, updating: await installing() }
     case 'ps':
       return { states: await containerStates() }
+    case 'containers':
+      return { containers: await containerList() }
     case 'create':
       return create(req.id, req.net, req.files)
     case 'apply': {
@@ -139,6 +141,7 @@ function parseRequest(value: unknown): AgentdRequest {
   switch (cmd) {
     case 'health':
     case 'ps':
+    case 'containers':
     case 'update':
     case 'ts-status':
     case 'ts-down':
@@ -335,6 +338,18 @@ async function mustHaveFirewall() {
   if (!(await firewallOn())) throw new Error('firewall is off; refusing to run agents')
 }
 
+async function containerList(): Promise<Container[]> {
+  const out = await docker('ps', '-a', '--no-trunc', '--filter', 'label=fastmonkey.agent', '--format', '{{json .}}')
+  return out.split('\n').filter(Boolean).map((line) => {
+    const row: unknown = JSON.parse(line)
+    const field = (name: string) => isRecord(row) && typeof row[name] === 'string' ? row[name] : ''
+    return {
+      name: field('Names'), agentId: /(?:^|,)fastmonkey\.agent=([^,]+)/.exec(field('Labels'))?.[1] ?? '', state: field('State'), status: field('Status'),
+      image: field('Image'), createdAt: field('CreatedAt'), networks: field('Networks'),
+    }
+  })
+}
+
 async function containerStates() {
   const out = await docker('ps', '-a', '--filter', 'label=fastmonkey.agent', '--format', '{{.Label "fastmonkey.agent"}} {{.State}}')
   return Object.fromEntries(
@@ -484,7 +499,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export type AgentdRequest =
   | { cmd: 'health' }
-  | { cmd: 'ps' }
+  | { cmd: 'ps' | 'containers' }
   | { cmd: 'update' }
   | { cmd: 'create'; id: string; net: number; files: AgentFiles }
   | { cmd: 'apply'; id: string; files: AgentFiles; restart: boolean; force?: boolean }
@@ -495,6 +510,7 @@ export type AgentdRequest =
 export type AgentdReplies = {
   health: { firewall: boolean; image: string; updating: boolean }
   ps: { states: Record<string, string> }
+  containers: { containers: Container[] }
   create: { container: string }
   apply: { applied: string; restarted: boolean }
   start: { started: string }
@@ -507,6 +523,8 @@ export type AgentdReplies = {
   'ts-status': Tailnet
   'ts-down': Tailnet
 }
+
+export type Container = { name: string; agentId: string; state: string; status: string; image: string; createdAt: string; networks: string }
 
 export type Tailnet = { state: string; tailnet: string; name: string; address: string }
 

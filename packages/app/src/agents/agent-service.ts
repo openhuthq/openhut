@@ -231,6 +231,7 @@ async function healthOf({ row, state }: { row: AgentRow; state: string | undefin
     return { health: null, detail: '' }
   }
   const last = await probe({ row, fresh: false })
+  if (!last.detail && config.modelMode === 'claude' && !settings.seatToken()) return { health: 'not_answering', detail: 'No Claude seat is set up, so its model can\'t answer. An owner or admin adds one in Admin.' }
   if (!last.detail) return { health: 'answering', detail: '' }
   return { health: Date.now() - last.failingSince > STARTING_MS ? 'not_answering' : 'starting', detail: last.detail }
 }
