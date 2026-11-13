@@ -1,11 +1,15 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
+import { CompleteSeatSignIn, UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
 import { listOf } from '../platform/responses.ts'
 import { requireSignIn, who } from '../team/identity.ts'
 import { adminService } from './admin-service.ts'
 
 export const adminController: FastifyPluginAsync = async (app) => {
   app.get('/', SignedIn, async () => adminService.status())
+
+  app.post('/seat-sign-ins', async (req) => adminService.startSeatSignIn({ actor: await who(req) }))
+
+  app.patch<{ Params: { id: string }; Body: CompleteSeatSignIn }>('/seat-sign-ins/:id', CompleteSeatRequest, async (req) => adminService.completeSeatSignIn({ actor: await who(req), id: req.params.id, code: req.body.code }))
 
   app.get('/containers', async (req) => listOf({ req, data: await adminService.containers({ actor: await who(req) }) }))
 
@@ -25,3 +29,4 @@ export const healthController: FastifyPluginAsync = async (app) => {
 
 const SignedIn = { onRequest: requireSignIn }
 const UpdateRequest = { schema: { body: UpdateAdmin } }
+const CompleteSeatRequest = { schema: { body: CompleteSeatSignIn } }
