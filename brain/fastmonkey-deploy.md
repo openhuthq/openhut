@@ -14,6 +14,12 @@
   `hermes-tailnet-only`, allows inbound ICMP and nothing else, so everything, SSH included, goes over Tailscale
   (activepieces.com tailnet, machine `hermes-agents`, 100.104.248.107). SSH takes keys only.
 - `monkey.activepieces.dev` is a DNS-only A record (Ash's Cloudflare account) to the tailnet address, so the name only
-  works on the tailnet. The dashboard is http://monkey.activepieces.dev:8787; WireGuard encrypts it, there's no TLS.
+  works on the tailnet. Browsers force HTTPS on every `.dev` name (HSTS preload), so plain :8787 can't be used there.
+- HTTPS: Caddy (apt) listens only on the tailnet address :443 and proxies to 127.0.0.1:8787; the app trusts its
+  `X-Forwarded-*`. The certificate is Let's Encrypt over DNS-01 (certbot + python3-certbot-dns-cloudflare, no email),
+  renewed by `certbot.timer`; `/etc/letsencrypt/renewal-hooks/deploy/caddy.sh` copies it to `/etc/caddy/tls` and
+  reloads Caddy. The token in `/root/.secrets/cloudflare.ini` (0600) is the account token "hermes-agents certbot":
+  DNS write on activepieces.dev only, and only from the server's IPs (2.29.192.61, 2a01:4f9:c012:c2a4::/64), so it's
+  useless anywhere else. A systemd drop-in starts Caddy after tailscaled.
 - Installed with the public command (`curl -fsSL https://fastmonkey.dev | sh` as root over Tailscale SSH); upgrading is
   the same command.
