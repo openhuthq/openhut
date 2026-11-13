@@ -16,7 +16,6 @@ export function routeOf(path: string): Route {
     case 'invite': return id && !detail ? { page: 'invite', token: decodeURIComponent(id) } : MISSING
     case 'mcp': return id === 'authorize' && !detail ? { page: 'mcp-authorize' } : MISSING
     case 'agents': return agentRoute(id, detail)
-    case 'threads': return id && !detail ? { page: 'thread', threadId: decodeURIComponent(id) } : MISSING
     case 'connections': return connectionRoute(id, detail)
     case 'people': return peopleRoute(id, detail)
     case 'admin': return adminRoute(id, detail)
@@ -27,7 +26,7 @@ export function routeOf(path: string): Route {
 function agentRoute(id: string, detail: string): Route {
   if (!id) return { page: 'agents' }
   if (!detail) return { page: 'agent', agentId: decodeURIComponent(id), dialog: undefined }
-  if (detail === 'chat') return { page: 'new-thread', agentId: decodeURIComponent(id) }
+  if (detail === 'chat') return { page: 'chat', agentId: decodeURIComponent(id) }
   const dialog = AGENT_DIALOGS.find((name) => name === detail)
   return dialog ? { page: 'agent', agentId: decodeURIComponent(id), dialog } : MISSING
 }
@@ -60,8 +59,7 @@ export type Route =
   | { page: 'mcp-authorize' }
   | { page: 'agents' }
   | { page: 'agent'; agentId: string; dialog: AgentDialog | undefined }
-  | { page: 'new-thread'; agentId: string }
-  | { page: 'thread'; threadId: string }
+  | { page: 'chat'; agentId: string }
   | { page: 'connections'; adding: string | undefined }
   | { page: 'tailscale' }
   | { page: 'connection'; connectionId: string }

@@ -22,12 +22,13 @@ await db.insertInto('session').values([
   { hash: sha('other-session'), person_id: 'usr_chatothr', expires_at: new Date(Date.now() + 3_600_000) },
 ]).execute()
 
-const seen: { auth?: string; body?: { stream: boolean; messages: { role: string; content: string }[] } } = {}
+const seen: { auth?: string; session?: string; body?: { stream: boolean; messages: { role: string; content: string }[] } } = {}
 const hermes = createServer((req, res) => {
   let raw = ''
   req.on('data', (chunk) => { raw += chunk })
   req.on('end', async () => {
     seen.auth = req.headers.authorization
+    seen.session = String(req.headers['x-hermes-session-id'])
     seen.body = JSON.parse(raw)
     await db.insertInto('connection_event').values({ agent_id: 'ag_chatrunn', connection_id: null, tool: 'postgres_query', reason: 'count orders', outcome: 'allowed', ms: 12 }).execute()
     res.writeHead(200, { 'content-type': 'text/event-stream' })
@@ -43,7 +44,7 @@ answerErrors(app)
 app.setValidatorCompiler(validateWithZod)
 await app.register(threadController, { prefix: '/api/threads' })
 const as = (who: 'owner' | 'other') => ({ cookie: `fm_session=${who}-session` })
-const newThread = async (agentId: string) => (await app.inject({ method: 'POST', url: '/api/threads', headers: as('owner'), payload: { agentId, title: '  How many   orders? ' } })).json()
+const newThread = async (agentId: string) => (await app.inject({ method: 'POST', url: '/api/threads', headers: as('owner'), payload: { agentId } })).json()
 const say = (threadId: string, text: string, who: 'owner' | 'other' = 'owner') => app.inject({
   method: 'POST', url: `/api/threads/${threadId}/chat`, headers: as(who),
   payload: { trigger: 'submit-message', message: { id: `m${Date.now()}`, role: 'user', parts: [{ type: 'text', text }] } },
@@ -53,10 +54,11 @@ test.after(() => { hermes.close(); return app.close() })
 
 test('a turn streams the agent\'s reply in order, with its tool use and gateway calls, and is saved', async () => {
   const thread = await newThread('ag_chatrunn')
-  assert.equal(thread.title, 'How many orders?')
+  assert.equal(thread.title, 'Runner')
   const res = await say(thread.id, 'How many orders?')
   assert.equal(res.statusCode, 200)
   assert.equal(seen.auth, `Bearer ${'k'.repeat(48)}`)
+  assert.equal(seen.session, `fastmonkey-${thread.id}`)
   assert.deepEqual(seen.body?.messages, [{ role: 'user', content: 'How many orders?' }])
   assert.equal(seen.body?.stream, true)
   const types = res.body.split('\n\n').filter((line) => line.startsWith('data: {')).map((line) => JSON.parse(line.slice(6)).type)
@@ -68,15 +70,16 @@ test('a turn streams the agent\'s reply in order, with its tool use and gateway 
   assert.deepEqual(answer.find((part: { type: string }) => part.type === 'data-calls').data, [{ tool: 'postgres_query', connectionName: null, outcome: 'allowed', reason: 'count orders', ms: 12 }])
 })
 
-test('the next turn sends the whole conversation, and a retry replaces the last answer', async () => {
+test('each person has one thread per agent, and Hermes keeps its history: a turn sends only the new message', async () => {
   const thread = await newThread('ag_chatrunn')
-  await say(thread.id, 'First')
+  assert.equal((await newThread('ag_chatrunn')).id, thread.id)
   await say(thread.id, 'Second')
-  assert.deepEqual(seen.body?.messages.map((message) => message.role), ['user', 'assistant', 'user'])
+  assert.deepEqual(seen.body?.messages, [{ role: 'user', content: 'Second' }])
+  assert.equal(seen.session, `fastmonkey-${thread.id}`)
   await app.inject({ method: 'POST', url: `/api/threads/${thread.id}/chat`, headers: as('owner'), payload: { trigger: 'regenerate-message' } })
-  assert.deepEqual(seen.body?.messages.map((message) => message.content), ['First', 'Let me check.214 orders.', 'Second'])
+  assert.deepEqual(seen.body?.messages, [{ role: 'user', content: 'Second' }])
   const saved = (await app.inject({ method: 'GET', url: `/api/threads/${thread.id}`, headers: as('owner') })).json()
-  assert.equal(saved.messages.length, 4)
+  assert.deepEqual(saved.messages.map((message: { role: string }) => message.role), ['user', 'assistant', 'user', 'assistant'])
 })
 
 test('threads are private, and a stopped agent says so before anything is sent', async () => {
