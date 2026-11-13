@@ -121,14 +121,14 @@ function VersionRow({ server, canEdit }: { server: Admin['server']; canEdit: boo
     if (server.build !== loadedBuild.current) location.reload()
   }, [server.build])
   return <>
-    <Row icon="update" title={`Version ${server.version}`} subtitle={`Build ${server.build} · ${versionLine(server)} · ${server.running} of ${plural(server.total, 'agent')} running`}
+    <Row icon="update" title={`Version ${server.build}`} subtitle={`${versionLine(server)} · ${server.running} of ${plural(server.total, 'agent')} running`}
       status={versionStatus(server)}
       action={server.updateAvailable && !updating && <Locked reason={canEdit ? undefined : 'Only an owner or admin updates Fast Monkey'}>
         <button type="button" className="btn primary sm" disabled={!canEdit || startUpdate.isPending} onClick={() => startUpdate.mutate(undefined, { onError: toastError })}>{server.update ? 'Try again' : 'Update now'}</button>
       </Locked>} />
     {updating && <div className="aform updating" role="status"><span className="spin" aria-hidden="true"></span>
-      <span>Updating to build <span className="mono">{server.update?.to}</span>. Fast Monkey and its agents restart once. You can leave or refresh; this page follows along.</span></div>}
-    {server.update?.status === 'failed' && <div className="aform"><span className="mute" role="status">The last update didn't finish, so Fast Monkey went back to build <span className="mono">{server.build}</span>. Nothing was lost. Details: <code>journalctl -u fastmonkey-update</code> on the server.</span></div>}
+      <span>Updating to version <span className="mono">{server.update?.to}</span>. Fast Monkey and its agents restart once. You can leave or refresh; this page follows along.</span></div>}
+    {server.update?.status === 'failed' && <div className="aform"><span className="mute" role="status">The last update didn't finish, so Fast Monkey went back to version <span className="mono">{server.build}</span>. Nothing was lost. Details: <code>journalctl -u fastmonkey-update</code> on the server.</span></div>}
   </>
 }
 
@@ -139,10 +139,10 @@ function versionStatus(server: Admin['server']) {
 }
 
 function versionLine(server: Admin['server']) {
-  if (server.update?.status === 'running') return `updating to build ${server.update.to}`
-  if (server.updateAvailable) return `build ${server.latestBuild} is available`
-  if (server.latestBuild === null) return "couldn't check for a newer release"
-  return 'up to date'
+  if (server.update?.status === 'running') return `Updating to version ${server.update.to}`
+  if (server.updateAvailable) return `Version ${server.latestBuild} is available`
+  if (server.latestBuild === null) return "Couldn't check for a newer release"
+  return 'Up to date'
 }
 
 function seatLine(admin: Admin) {

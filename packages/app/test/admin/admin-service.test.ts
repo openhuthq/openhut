@@ -5,13 +5,15 @@ import { isNewer, updateStatus } from '../../src/admin/admin-service.ts'
 const startedAt = '2026-11-13T12:00:00.000Z'
 const at = (seconds: number) => Date.parse(startedAt) + seconds * 1000
 
-test('a different build is an update, unless it is older or this is a dev build', () => {
-  assert.equal(isNewer({ latest: '20261113140000', current: '20261113130239' }), true)
-  assert.equal(isNewer({ latest: '20261113130239', current: '20261113140000' }), false)
-  assert.equal(isNewer({ latest: '20261113130239', current: '20261113130239' }), false)
+test('a higher version is an update, and so is any other release that is not a version; never for a dev build', () => {
+  assert.equal(isNewer({ latest: '0.1.10', current: '0.1.9' }), true)
+  assert.equal(isNewer({ latest: '0.2.0', current: '0.1.40' }), true)
+  assert.equal(isNewer({ latest: '0.1.9', current: '0.1.10' }), false)
+  assert.equal(isNewer({ latest: '0.1.9', current: '0.1.9' }), false)
+  assert.equal(isNewer({ latest: '0.1.40', current: '20261113130239' }), true)
   assert.equal(isNewer({ latest: 'e2e-2', current: 'e2e-1' }), true)
-  assert.equal(isNewer({ latest: '20261113130239', current: 'dev' }), false)
-  assert.equal(isNewer({ latest: null, current: '20261113130239' }), false)
+  assert.equal(isNewer({ latest: '0.1.40', current: 'dev' }), false)
+  assert.equal(isNewer({ latest: null, current: '0.1.40' }), false)
 })
 
 test('an update is running while the installer holds the lock, done on a new build, failed otherwise', () => {

@@ -12,6 +12,7 @@ import { isAdmin, type Caller } from '../team/identity.ts'
 const LATEST_TTL_MS = 60_000
 const LATEST_TIMEOUT_MS = 4_000
 const BUILD_LINE = /^FASTMONKEY_BUILD="([\w.-]+)"$/m
+const SEMVER = /^\d+\.\d+\.\d+$/
 const UPDATE_GRACE_MS = 20_000
 const UPDATE_LIMIT_MS = 45 * 60_000
 const StoredUpdate = z.object({ from: z.string(), to: z.string(), startedAt: z.string() })
@@ -73,8 +74,8 @@ export const adminService = {
 
 export function isNewer({ latest, current }: { latest: string | null; current: string }): boolean {
   if (latest === null || latest === current || current === 'dev') return false
-  const dated = /^\d+$/.test(latest) && /^\d+$/.test(current)
-  return !dated || latest > current
+  if (!SEMVER.test(latest) || !SEMVER.test(current)) return true
+  return latest.localeCompare(current, 'en', { numeric: true }) > 0
 }
 
 export function updateStatus({ stored, build, installing, now }: { stored: { from: string; startedAt: string }; build: string; installing: boolean; now: number }): 'running' | 'failed' | 'done' {
