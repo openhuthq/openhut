@@ -30,7 +30,7 @@ createServer({ allowHalfOpen: true }, (sock) => {
 function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
   switch (req.cmd) {
     case 'health':
-      return { firewall: true, image: IMAGE }
+      return { firewall: true, image: IMAGE, updating: false }
     case 'ps':
       return { states }
     case 'create':

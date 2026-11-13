@@ -27,7 +27,7 @@ iptables -F AGENT 2>/dev/null && iptables -X AGENT
 iptables -F AGENT-IN 2>/dev/null && iptables -X AGENT-IN
 ip rule del to 10.200.0.0/16 lookup main priority 5200 2>/dev/null
 
-rm -rf /opt/fastmonkey /opt/fastmonkey.new /opt/fastmonkey.old /etc/fastmonkey /data/app /data/agents /data/agent-conf \
+rm -rf /opt/fastmonkey /opt/fastmonkey.new /opt/fastmonkey.old /opt/fastmonkey.failed /run/fastmonkey-install.lock /etc/fastmonkey /data/app /data/agents /data/agent-conf \
   /etc/agentd /var/lib/fastmonkey /var/cache/fastmonkey /var/log/fastmonkey /var/log/fastmonkey-boot.log /run/fastmonkey /run/agentd
 rmdir /data 2>/dev/null
 if command -v userdel >/dev/null 2>&1; then userdel fastmonkey 2>/dev/null; else deluser fastmonkey 2>/dev/null; delgroup fastmonkey 2>/dev/null; fi

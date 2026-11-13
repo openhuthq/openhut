@@ -8,7 +8,7 @@ const Failure = z.object({ ok: z.literal(false), error: z.string() })
 const Pairing = z.object({ status: z.enum(['starting', 'qr', 'linked', 'error']), qr: z.optional(z.string()), phone: z.optional(z.string()), error: z.optional(z.string()) })
 
 export const agentd = {
-  health: () => ask({ request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean() }) }),
+  health: () => ask({ request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), updating: z.optional(z.boolean()) }) }),
   ps: () => ask({ request: { cmd: 'ps' }, doing: 'list the agents', schema: z.object({ states: z.record(z.string(), z.string()) }) }),
   create: ({ id, net, files }: { id: string; net: number; files: AgentFiles }) =>
     ask({ request: { cmd: 'create', id, net, files }, doing: 'create the agent', schema: z.object({ container: z.string() }) }),
