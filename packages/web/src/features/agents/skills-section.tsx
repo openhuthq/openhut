@@ -4,6 +4,7 @@ import { Dialog } from '@/components/dialog'
 import { DialogFoot } from '@/components/dialog-foot'
 import { DialogHead } from '@/components/dialog-head'
 import { ErrorNote } from '@/components/error-note'
+import { SETUP_ICONS } from '@/components/icons'
 import { Locked } from '@/components/locked'
 import { SectionHead } from '@/components/section-head'
 import { useSkill, useSkills, useUpdateSkill } from '@/features/agents/api'
@@ -17,13 +18,11 @@ export function SkillsSection({ agent, lockReason, open }: { agent: Agent; lockR
   return <section>
     <SectionHead title="Skills" />
     <ErrorNote message={skills.error?.message} />
-    {skills.data && <div className="box rows">
+    {skills.data && <div className="box rows skills">
       {learned.map((skill) => <SkillRow key={skill.id} agent={agent} skill={skill} />)}
       {!learned.length && <div className="row"><div className="t mute">{agent.name} hasn't learned a skill yet.</div></div>}
-      {!!builtIn.length && <details className="skills-more">
-        <summary>{builtIn.length} built in</summary>
-        {builtIn.map((skill) => <SkillRow key={skill.id} agent={agent} skill={skill} />)}
-      </details>}
+      {!!builtIn.length && <div className="skills-group">{builtIn.length} built in</div>}
+      {builtIn.map((skill) => <SkillRow key={skill.id} agent={agent} skill={skill} />)}
     </div>}
     {open && <SkillDialog key={open} agent={agent} skillId={`${agent.id}~${open}`} lockReason={lockReason} />}
   </section>
@@ -31,6 +30,7 @@ export function SkillsSection({ agent, lockReason, open }: { agent: Agent; lockR
 
 function SkillRow({ agent, skill }: { agent: Agent; skill: Skill }) {
   return <div className="row">
+    <span className="mark">{SETUP_ICONS.bolt}</span>
     <div className="t"><div className="ellip">{skill.name}</div><div className="mute ellip">{skill.description || skill.path}</div></div>
     <button type="button" className="btn sm" aria-haspopup="dialog" aria-label={`${agent.canEdit ? 'Edit' : 'View'} the ${skill.name} skill`} onClick={() => navigate(`/agents/${agent.id}/skills/${skill.id.slice(agent.id.length + 1)}`)}>{agent.canEdit ? 'Edit' : 'View'}</button>
   </div>
