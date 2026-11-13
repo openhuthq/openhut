@@ -91,6 +91,8 @@ test('threads are private, and a stopped agent says so before anything is sent',
   const res = await say(stopped.id, 'hi')
   assert.equal(res.statusCode, 409)
   assert.equal(res.json().error.message, 'Sleeper is stopped. Start it and try again.')
+  const kept = (await app.inject({ method: 'GET', url: `/api/threads/${stopped.id}`, headers: as('owner') })).json()
+  assert.deepEqual(kept.messages.map((message: { role: string }) => message.role), ['user'])
 })
 
 test('a model that can\'t sign in ends the turn with a plain sentence, not the provider\'s dump', async () => {

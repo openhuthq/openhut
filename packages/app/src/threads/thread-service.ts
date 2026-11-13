@@ -50,9 +50,9 @@ export const threadService = {
   async chat({ actor, id, body, reply }: { actor: Caller; id: string; body: SendChat; reply: FastifyReply }): Promise<void> {
     const row = await ownRow({ actor, id })
     const agent = await agentService.requireEditable({ actor, id: row.agent_id })
-    if (agent.wanted !== 'running') throw new HttpError(409, `${agent.name} is stopped. Start it and try again.`)
     const messages = nextMessages({ stored: messagesOf(row), body })
     await save({ id, messages })
+    if (agent.wanted !== 'running') throw new HttpError(409, `${agent.name} is stopped. Start it and try again.`)
     const lastCall = await db.selectFrom('connection_event').select((eb) => eb.fn.max('id').as('id')).where('agent_id', '=', agent.id).executeTakeFirst()
     const abort = new AbortController()
     reply.raw.on('close', () => abort.abort())
