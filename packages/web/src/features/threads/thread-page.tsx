@@ -112,6 +112,7 @@ function Composer({ me, agent, busy, onSend, onStop }: { me: Me; agent: Agent; b
     event.currentTarget.form?.requestSubmit()
   }
   return <div className="chat-foot">
+    {!ready && !busy && <NotReady agent={agent} />}
     <form className="composer" onSubmit={submit}>
       <Initial id={me.user.id} email={me.user.email} size={22} />
       <textarea name="text" rows={1} aria-label="Message" placeholder={ready ? `Message ${agent.name}` : `${agent.name} isn't ready yet`} disabled={!ready} autoFocus
@@ -120,6 +121,20 @@ function Composer({ me, agent, busy, onSend, onStop }: { me: Me; agent: Agent; b
     </form>
     <div className="chat-hint">Enter sends · Shift+Enter adds a line · only you see this thread</div>
   </div>
+}
+
+function NotReady({ agent }: { agent: Agent }) {
+  const state = agentState(agent)
+  const reason = {
+    starting: 'Hermes is still starting. You can type as soon as it answers.',
+    no_seat: agent.healthDetail,
+    not_answering: agent.healthDetail || 'Hermes isn\'t answering.',
+    stopped: 'It\'s stopped. Start it from Agent settings.',
+    missing: 'Its container is gone. Fast Monkey recreates it within 30 seconds while it should be running.',
+    running: '',
+  }[state]
+  const action = state === 'no_seat' ? <a href="/admin/seat">Connect the seat</a> : state !== 'starting' && <a href={`/agents/${agent.id}`}>Agent settings</a>
+  return <div className="chat-notice" role="status"><b>{agent.name} isn't ready.</b> {reason} {action}</div>
 }
 
 function Message({ me, agent, message, live }: { me: Me; agent: Agent; message: AgentMessage; live: boolean }) {
@@ -159,6 +174,7 @@ function ChatEmpty({ agent, onTry }: { agent: Agent; onTry: (text: string) => vo
   const copy = {
     running: [`Ask ${agent.name} anything`, 'Messages go to the running agent, with its real model, instructions and connections.'],
     starting: [`Starting ${agent.name}`, 'Hermes takes about a minute to start. You can type as soon as it answers.'],
+    no_seat: [`${agent.name} isn't ready`, agent.healthDetail],
     not_answering: [`${agent.name} isn't answering`, agent.healthDetail || 'The container is running, but Hermes isn\'t answering.'],
     stopped: [`${agent.name} is stopped`, 'Start it to chat with it.'],
     missing: [`${agent.name} has an error`, 'Its container is gone. Fast Monkey recreates it within 30 seconds while it should be running.'],
@@ -171,6 +187,7 @@ function ChatEmpty({ agent, onTry }: { agent: Agent; onTry: (text: string) => vo
     {state === 'stopped' && start}
     {agent.wanted === 'stopped' && state === 'missing' && start}
     {state === 'not_answering' && <a className="btn sec" href={`/agents/${agent.id}`}>Open agent settings</a>}
+    {state === 'no_seat' && <a className="btn primary" href="/admin/seat">Connect the Claude seat</a>}
   </div>
 }
 
