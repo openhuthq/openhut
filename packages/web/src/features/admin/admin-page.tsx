@@ -57,6 +57,7 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
         {form === 'google' && canEdit && <div className="aform" id="google"><GoogleClientSetup admin={admin} back="/admin" /></div>}
       </Section>
       <Section number={4} title="AI assistant"><ConnectedApps /></Section>
+      {admin.seat.set && admin.seat.mode === 'claude' && <Section number={5} title="Usage by agent"><AgentUsagePanel /></Section>}
     </div>
     {form === 'containers' && canEdit && <ContainersDialog />}
   </Page>
@@ -68,24 +69,37 @@ function ToggleButton({ label, form, open, canEdit, reason, onOpen }: { label: s
   </Locked>
 }
 
-const WINDOW_NAMES: Record<SeatWindow['kind'], string> = { five_hour: 'This session', seven_day: 'This week' }
+const WINDOWS: { kind: SeatWindow['kind']; name: string; idle: string }[] = [
+  { kind: 'five_hour', name: '5-hour limit', idle: 'No session open' },
+  { kind: 'seven_day', name: 'Weekly limit', idle: 'Not started' },
+]
 const resetTime = new Intl.DateTimeFormat('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
 
 function SeatUsagePanel() {
-  const usage = useSeatUsage()
-  if (usage.error) return <div className="aform"><span className="mute">{usage.error.message}</span></div>
-  if (!usage.data) return <div className="aform updating" role="status"><span className="spin" aria-hidden="true"></span><span>Asking Claude how much of the seat is used…</span></div>
-  return <SeatUsageView usage={usage.data} />
+  return <SeatUsageLoaded>{(usage) => <div className="aform usage">
+    {WINDOWS.map(({ kind, name, idle }) => {
+      const window = usage.windows.find((each) => each.kind === kind)
+      return <Meter key={kind} label={name} percent={window?.percent ?? 0} note={window?.resetsAt ? `Resets ${resetTime.format(new Date(window.resetsAt))}` : idle} />
+    })}
+  </div>}</SeatUsageLoaded>
 }
 
-function SeatUsageView({ usage }: { usage: SeatUsage }) {
+function AgentUsagePanel() {
+  return <SeatUsageLoaded>{(usage) => <AgentUsageView usage={usage} />}</SeatUsageLoaded>
+}
+
+function SeatUsageLoaded({ children }: { children: (usage: SeatUsage) => ReactNode }) {
+  const usage = useSeatUsage()
+  if (usage.error) return <div className="aform usage"><span className="mute">{usage.error.message}</span></div>
+  if (!usage.data) return <div className="aform usage updating" role="status"><span className="spin" aria-hidden="true"></span><span>Asking Claude how much of the seat is used…</span></div>
+  return children(usage.data)
+}
+
+function AgentUsageView({ usage }: { usage: SeatUsage }) {
   const total = usage.agents.reduce((sum, agent) => sum + agent.costUsd, 0)
   const used = usage.agents.filter((agent) => agent.costUsd > 0)
   return <div className="aform usage">
-    {usage.windows.length
-      ? usage.windows.map((window) => <Meter key={window.kind} label={WINDOW_NAMES[window.kind]} percent={window.percent} note={window.resetsAt ? `Resets ${resetTime.format(new Date(window.resetsAt))}` : ''} />)
-      : <span className="mute">Claude didn't report this seat's limits.</span>}
-    <span className="usage-head">By agent since {shortDate.format(new Date(usage.since))} <span className="mute">· share of what agents used, at API prices</span></span>
+    <span className="mute">Since {shortDate.format(new Date(usage.since))}, when this week's limit started. Each agent's share of what agents used, at API prices.</span>
     {used.length
       ? used.map((agent) => <Meter key={agent.agentId} label={agent.agentName} avatar={agent.agentId} percent={Math.round((agent.costUsd / total) * 100)} note={`$${agent.costUsd.toFixed(2)}`} />)
       : <span className="mute">No agent has used the seat this week.</span>}
