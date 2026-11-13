@@ -40,9 +40,9 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
       safe: ['No tool sends mail: agents leave drafts for you', ...SIGNED_IN('Google')],
     },
     {
-      name: 'drive', short: 'Search, read and create files.', chips: [['search', 'Search files'], ['file', 'Read content'], ['plus', 'Create files']], safeLine: 'Agents can change only files Fast Monkey created.', eta: 'One approval', title: 'Google Drive', blurb: "Search, read and create files through Google's Drive MCP, as the person who connects.",
+      name: 'drive', short: 'Search, read and create files.', chips: [['search', 'Search files'], ['file', 'Read content'], ['plus', 'Create files']], safeLine: 'Agents can change only files they created.', eta: 'One approval', title: 'Google Drive', blurb: "Search, read and create files through Google's Drive MCP, as the person who connects.",
       gets: ['search_files and list_recent_files', 'read_file_content and download_file_content', 'create_file and copy_file', 'File metadata and permissions'],
-      safe: ['Agents can only change files Fast Monkey created', ...SIGNED_IN('Google')],
+      safe: ['Agents can only change files they created', ...SIGNED_IN('Google')],
     },
     {
       name: 'google', short: 'Docs, Sheets, Slides and Calendar.', chips: [['doc', 'Docs'], ['sheet', 'Sheets'], ['slides', 'Slides'], ['calendar', 'Calendar']], safeLine: 'Agents act as you. Only you can use it until you share it.', eta: 'One approval', title: 'Google Workspace', blurb: "Docs, Sheets, Slides and Calendar through Google's own MCP servers.",

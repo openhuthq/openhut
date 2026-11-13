@@ -23,7 +23,7 @@ export function TailscalePage({ me }: { me: Me }) {
     {tailscale.data && <div className="empty"><Mark name="tailscale" size={56} /><div>This server isn't on a tailnet.</div><a className="btn primary" href="/connections/new/tailscale">Connect Tailscale</a></div>}
   </Page>
   const admin = me.user.role !== 'member'
-  const detail = joined.joined ? 'This server logs out of the tailnet. Connections to tailnet hosts stop working.' : 'Fast Monkey forgets it. The server was on this tailnet before, so it stays on it.'
+  const detail = joined.joined ? 'This server logs out of the tailnet. Connections to tailnet hosts stop working.' : 'Only the record here is removed. The server was on this tailnet before, so it stays on it.'
   const actions = <Locked reason={admin ? undefined : 'Only an owner or admin can disconnect it'}>
     <ConfirmButton className="btn danger" disabled={!admin || disconnect.isPending} question="Disconnect Tailscale?" detail={detail} action="Disconnect" onConfirm={() => disconnect.mutate(undefined, { onError: toastError })}>
       {ICONS.trash}<span className="lbl">Disconnect</span>
@@ -36,7 +36,7 @@ export function TailscalePage({ me }: { me: Me }) {
           <SectionHead title="What it does" />
           <ul className="clist box pad">{integration('tailscale')?.gets.map((line) => <li key={line}>{ICONS.check}<span>{line}</span></li>)}</ul>
         </section>
-        {!joined.joined && <p className="note">This server was already on a tailnet when it was connected, so Fast Monkey left Tailscale as it was.</p>}
+        {!joined.joined && <p className="note">This server was already on a tailnet when it was connected, so Tailscale was left as it was.</p>}
       </div>
       <aside className="rail">
         <div className="box facts">

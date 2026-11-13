@@ -13,7 +13,7 @@ const STATUS = {
   no_seat: { word: 'Not ready', tip: 'No Claude seat is connected', variant: 'warning', icon: ALERT },
   not_answering: { word: 'Not answering', tip: 'Running, but Hermes isn\'t answering', variant: 'destructive', icon: ALERT },
   stopped: { word: 'Stopped', tip: 'Container stopped', variant: 'secondary', icon: PAUSE },
-  missing: { word: 'Error', tip: 'Its container is gone. Fast Monkey recreates it within 30 seconds while it should be running.', variant: 'destructive', icon: ALERT },
+  missing: { word: 'Error', tip: 'Its container is gone. It is recreated within 30 seconds while it should be running.', variant: 'destructive', icon: ALERT },
   connected: { word: 'Connected', tip: 'Last call succeeded', variant: 'success', icon: BADGE_CHECK },
   failing: { word: 'Failing', tip: 'Last call failed', variant: 'outline', icon: ALERT },
   no_calls: { word: 'No calls yet', tip: 'No agent has called it yet', variant: 'outline', icon: DASHED },
