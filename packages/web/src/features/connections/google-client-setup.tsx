@@ -17,18 +17,18 @@ export function GoogleClientSetup({ admin, back }: { admin: Admin; back: string 
     const field = formValues(event)
     updateAdmin.mutate({ googleClientId: field('googleClientId'), googleClientSecret: field('googleClientSecret') })
   }}>
-    <ol className="substeps">
-      <li>In Google Cloud, create an OAuth client of type <b>Web application</b>. On the consent screen, pick <b>Internal</b> so only your Workspace can sign in.
-        <div><a className="btn sec sm" href={CLIENT_URL} target="_blank" rel="noreferrer">{ICONS.ext}Create the client</a></div></li>
-      <li>Add this as its authorized redirect URI:<div><CopyButton text={admin.google.redirectUri} /></div></li>
-      <li>Turn on the Workspace APIs and Google's MCP servers for them in the same project.
-        <div><a className="btn sec sm" href={ENABLE_URL} target="_blank" rel="noreferrer">{ICONS.ext}Enable the APIs</a></div></li>
-    </ol>
-    <Field label="Client ID" error={fieldError(updateAdmin.error, 'googleClientId')}>{(control) =>
-      <input {...control} name="googleClientId" className="mono" required placeholder="1234-abc.apps.googleusercontent.com" autoComplete="off" />}</Field>
-    <Field label="Client secret" error={fieldError(updateAdmin.error, 'googleClientSecret')}>{(control) =>
-      <input {...control} name="googleClientSecret" type="password" className="mono" required minLength={10} placeholder="GOCSPX-…" autoComplete="off" />}</Field>
+    <div className="setup-acts">
+      <a className="btn sec sm" href={CLIENT_URL} target="_blank" rel="noreferrer" title="Type Web application; consent screen Internal">{ICONS.ext}Create a web client</a>
+      <CopyButton text={admin.google.redirectUri} label="Copy redirect URL" />
+      <a className="btn sec sm" href={ENABLE_URL} target="_blank" rel="noreferrer">{ICONS.ext}Enable the APIs</a>
+    </div>
+    <div className="setup-two">
+      <Field label="Client ID" error={fieldError(updateAdmin.error, 'googleClientId')}>{(control) =>
+        <input {...control} name="googleClientId" className="mono" required placeholder="1234-abc.apps.googleusercontent.com" autoComplete="off" />}</Field>
+      <Field label="Client secret" error={fieldError(updateAdmin.error, 'googleClientSecret')}>{(control) =>
+        <input {...control} name="googleClientSecret" type="password" className="mono" required minLength={10} placeholder="GOCSPX-…" autoComplete="off" />}</Field>
+    </div>
     {formError(updateAdmin.error, FIELDS) && <span className="ferr" role="alert">{formError(updateAdmin.error, FIELDS)}</span>}
-    <div><button className="btn sec" disabled={updateAdmin.isPending}>Save the client</button></div>
+    <div><button className="btn sec sm" disabled={updateAdmin.isPending}>Save the client</button></div>
   </form>
 }

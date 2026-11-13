@@ -41,7 +41,7 @@ export function useCreateConnection() {
     onSuccess: (connection) => {
       client.setQueryData<Connection[]>(CONNECTIONS_KEY, (connections) => connections && [...connections, connection])
       client.setQueryData([...CONNECTIONS_KEY, connection.id], connection)
-      navigate(`/connections/${connection.id}`, true)
+      navigate(`/connections/${connection.id}?connected=1`, true)
     },
   })
 }

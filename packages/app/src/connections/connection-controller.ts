@@ -27,7 +27,7 @@ export const connectionAuthorizationController: FastifyPluginAsync = async (app)
 
   app.get<{ Querystring: { state?: string; code?: string; error?: string } }>('/callback', async (req, reply) => {
     const { kind, connectionId, error } = await connectionAuthorizationService.finish(req.query)
-    if (!error) return reply.redirect(`/connections/${connectionId}`)
+    if (!error) return reply.redirect(`/connections/${connectionId}?connected=1`)
     return reply.redirect(`${backTo({ kind, connectionId })}?error=${encodeURIComponent(error)}`)
   })
 }
