@@ -14,7 +14,8 @@ import { Initial } from '@/components/initial'
 import { Page } from '@/components/page'
 import { AgentBadge, agentState } from '@/components/status-badge'
 import { useAgent, useUpdateAgent } from '@/features/agents/api'
-import { threadPath, useAgentThread } from '@/features/threads/api'
+import { threadPath, useAgentThread, useClearChat } from '@/features/threads/api'
+import { ConfirmButton } from '@/components/confirm-button'
 import { toastError } from '@/lib/toast'
 
 type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[] }>
@@ -38,21 +39,22 @@ function ThreadView({ me, thread, agent }: { me: Me; thread: ThreadWithMessages;
   const busy = chat.status === 'submitted' || chat.status === 'streaming'
   const send = (text: string) => void chat.sendMessage({ text })
   const last = chat.messages.at(-1)
-  return <ChatLayout me={me} agent={agent} busy={busy} onSend={send} onStop={() => void chat.stop()}>
+  const clear = <ClearChat agent={agent} threadId={thread.id} disabled={busy || !chat.messages.length} />
+  return <ChatLayout me={me} agent={agent} busy={busy} onSend={send} onStop={() => void chat.stop()} extra={clear}>
     {chat.messages.length ? chat.messages.map((message) => <Message key={message.id} me={me} agent={agent} message={message} live={busy && message === last} />) : <ChatEmpty agent={agent} onTry={send} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message me={me} agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     {chat.error && <div className="chat-err" role="alert"><span>{chat.error.message}</span><button type="button" className="btn sec sm" onClick={() => void chat.regenerate()}>Retry</button></div>}
   </ChatLayout>
 }
 
-function ChatLayout({ me, agent, busy, onSend, onStop, children }: { me: Me; agent: Agent; busy: boolean; onSend: (text: string) => void; onStop: () => void; children: ReactNode }) {
+function ChatLayout({ me, agent, busy, onSend, onStop, extra, children }: { me: Me; agent: Agent; busy: boolean; extra?: ReactNode; onSend: (text: string) => void; onStop: () => void; children: ReactNode }) {
   const log = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
   useEffect(() => {
     const el = log.current
     if (el && pinned.current) el.scrollTop = el.scrollHeight
   })
-  const actions = <><AgentBadge agent={agent} /><a className="btn sec sm" href={`/agents/${agent.id}`}>{ICONS.gear}<span className="lbl">Agent settings</span></a></>
+  const actions = <><AgentBadge agent={agent} />{extra}<a className="btn sec sm" href={`/agents/${agent.id}`}>{ICONS.gear}<span className="lbl">Agent settings</span></a></>
   return <Page title={agent.name} actions={actions} fill>
     <div className="chat-log" ref={log} aria-live="polite" onScroll={(event) => { const el = event.currentTarget; pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
       <div className="chat-col">{children}</div>
@@ -80,12 +82,13 @@ function Composer({ me, agent, busy, onSend, onStop }: { me: Me; agent: Agent; b
   return <div className="chat-foot">
     {!ready && !busy && <NotReady agent={agent} />}
     <form className="composer" onSubmit={submit}>
-      <Initial id={me.user.id} email={me.user.email} size={22} />
-      <textarea name="text" rows={1} aria-label="Message" placeholder={ready ? `Message ${agent.name}` : `${agent.name} isn't ready yet`} disabled={!ready} autoFocus
-        onKeyDown={enter} onInput={(event) => { const box = event.currentTarget; box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 160)}px` }} />
-      <button type="submit" className={busy ? 'send stop' : 'send'} aria-label={busy ? 'Stop' : 'Send'} disabled={!busy && !ready}>{busy ? <span className="sq" /> : ICONS.up}</button>
+      <textarea name="text" rows={3} aria-label="Message" placeholder={ready ? `Message ${agent.name}…` : `${agent.name} isn't ready yet`} disabled={!ready} autoFocus
+        onKeyDown={enter} onInput={(event) => { const box = event.currentTarget; box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 240)}px` }} />
+      <div className="composer-bar">
+        <span className="chat-hint">Enter to send · Shift+Enter for a new line</span>
+        <button type="submit" className={busy ? 'send stop' : 'send'} aria-label={busy ? 'Stop' : 'Send'} disabled={!busy && !ready}>{busy ? <span className="sq" /> : ICONS.up}</button>
+      </div>
     </form>
-    <div className="chat-hint">Enter sends · Shift+Enter adds a line · only you see this chat</div>
   </div>
 }
 
@@ -133,12 +136,19 @@ function Part({ part }: { part: AgentPart }) {
   }
 }
 
+function ClearChat({ agent, threadId, disabled }: { agent: Agent; threadId: string; disabled: boolean }) {
+  const clearChat = useClearChat(agent.id)
+  return <ConfirmButton className="btn sec sm" disabled={disabled || clearChat.isPending} question="Clear this chat?" detail={`${agent.name} starts a fresh conversation. It keeps what it saved to memory.`} action="Clear" onConfirm={() => clearChat.mutate(threadId, { onError: toastError })}>
+    {ICONS.trash}<span className="lbl">Clear chat</span>
+  </ConfirmButton>
+}
+
 function ChatEmpty({ agent, onTry }: { agent: Agent; onTry: (text: string) => void }) {
   const updateAgent = useUpdateAgent(agent.id)
   const start = <button type="button" className="btn primary" disabled={!agent.canEdit || updateAgent.isPending} onClick={() => updateAgent.mutate({ wanted: 'running' }, { onError: toastError })}>{ICONS.play}Start {agent.name}</button>
   const state = agentState(agent)
   const copy = {
-    running: [`Ask ${agent.name} anything`, 'Messages go to the running agent, with its real model, instructions and connections.'],
+    running: [`Ask ${agent.name} anything`, ''],
     starting: [`Starting ${agent.name}`, 'Hermes takes about a minute to start. You can type as soon as it answers.'],
     no_seat: [`${agent.name} isn't ready`, agent.healthDetail],
     not_answering: [`${agent.name} isn't answering`, agent.healthDetail || 'The container is running, but Hermes isn\'t answering.'],
@@ -148,7 +158,7 @@ function ChatEmpty({ agent, onTry }: { agent: Agent; onTry: (text: string) => vo
   return <div className="chat-empty">
     <Avatar id={agent.id} about={agent.instructions} size={72} />
     <h3>{copy[0]}</h3>
-    <p>{copy[1]}</p>
+    {copy[1] && <p>{copy[1]}</p>}
     {state === 'running' && <div className="tries">{TRIES.map((text) => <button type="button" key={text} onClick={() => onTry(text)}>{text}</button>)}</div>}
     {state === 'stopped' && start}
     {agent.wanted === 'stopped' && state === 'missing' && start}

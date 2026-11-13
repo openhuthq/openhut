@@ -87,7 +87,7 @@ function SeatForm() {
       ? <span className="ferr" role="alert">{start.error.message} <button type="button" className="linkbtn" onClick={() => { started.current = false; start.reset(); navigate('/admin', true) }}>Close</button></span>
       : <span className="mute">{signIn?.url
         ? <>claude.ai opened in a new tab. Press Authorize there (in a full-size window), then paste the code it shows. <a href={signIn.url} target="_blank" rel="noreferrer">Open claude.ai again</a></>
-        : 'Opening claude.ai…'}</span>}
+        : <span className="seat-wait"><span className="spin" aria-hidden="true"></span>Starting the Claude sign-in. This takes about 10 seconds.</span>}</span>}
     <div className="inline-form">
       <input name="code" required minLength={10} autoComplete="off" spellCheck={false} aria-label="Code from claude.ai" aria-describedby="seat-error" placeholder="Paste the code from claude.ai" className="mono" disabled={!signIn} autoFocus />
       <button type="button" className="btn sec sm" onClick={() => navigate('/admin', true)}>Cancel</button>
@@ -101,7 +101,11 @@ let seatTab: Window | null = null
 
 function openSeatTab() {
   seatTab = window.open('about:blank', '_blank')
-  if (seatTab) seatTab.opener = null
+  if (!seatTab) return
+  seatTab.opener = null
+  seatTab.document.title = 'Opening claude.ai…'
+  seatTab.document.body.style.cssText = 'font:15px system-ui;display:grid;place-items:center;height:100vh;margin:0;color:#555'
+  seatTab.document.body.textContent = 'Opening claude.ai… this takes about 10 seconds.'
 }
 
 function PublicUrlForm({ publicUrl }: { publicUrl: string }) {

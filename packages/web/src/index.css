@@ -442,15 +442,16 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .tries button:hover{border-color:var(--ink)}
 .tries button::after{content:"↑";margin-left:auto;color:var(--mute-2);font-size:12px}
 .chat-foot{flex:none;padding:0 24px 12px}
-.composer{max-width:720px;margin:0 auto;border:1.5px solid var(--mid);border-radius:12px;min-height:50px;padding:8px 8px 8px 12px;display:flex;align-items:flex-end;gap:10px;background:var(--card)}
-.composer:focus-within{border-color:var(--ink)}
-.composer .initial{margin-bottom:5px}
-.composer textarea{flex:1;min-width:0;min-height:0;width:auto;border:0;border-radius:0;outline:none;resize:none;background:transparent;font:inherit;font-size:14.5px;line-height:1.45;padding:5px 0;max-height:160px;color:var(--ink)}
+.composer{max-width:760px;margin:0 auto;border:1px solid var(--mid);border-radius:16px;padding:12px 12px 10px 16px;display:flex;flex-direction:column;gap:6px;background:var(--card);box-shadow:0 1px 2px oklch(0% 0 0 / .04),0 8px 24px -12px oklch(0% 0 0 / .12);transition:border-color .15s,box-shadow .15s}
+.composer:focus-within{border-color:var(--ink);box-shadow:0 0 0 3px oklch(0% 0 0 / .06),0 8px 24px -12px oklch(0% 0 0 / .16)}
+.composer textarea{width:100%;min-height:72px;max-height:240px;border:0;border-radius:0;outline:none;resize:none;background:transparent;font:inherit;font-size:15px;line-height:1.5;padding:4px 0;color:var(--ink)}
+.composer-bar{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.composer-bar .chat-hint{margin:0}
 .composer textarea:disabled{cursor:not-allowed}
-.send{width:32px;height:32px;border-radius:8px;border:0;background:var(--primary);color:#fff;display:grid;place-items:center;flex:none}
+.send{width:34px;height:34px;border-radius:10px;border:0;background:var(--primary);color:#fff;display:grid;place-items:center;flex:none}
 .send.stop{background:var(--card);box-shadow:inset 0 0 0 1.5px var(--ink)}
 .send .sq{width:10px;height:10px;border-radius:2px;background:var(--ink)}
-.chat-hint{max-width:720px;margin:6px auto 0;font-family:var(--copy);font-size:11.5px;color:var(--mute-2)}
+.chat-hint{font-family:var(--copy);font-size:11.5px;color:var(--mute-2)}
 @media (prefers-reduced-motion:reduce){.msg,.talking .c-mouth,.typing i,.chat-agent .dot.wait{animation:none}}
 /* Connect dialog: a wide two-pane guide, the integration on the left and its steps on the right */
 .box.pad{padding:16px}
@@ -547,3 +548,4 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .clist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:13px;line-height:1.45}
 .clist li{display:flex;gap:10px;align-items:flex-start}
 .clist svg{flex:none;width:10px;height:10px;margin-top:4px;color:var(--pass)}
+.seat-wait{display:inline-flex;align-items:center;gap:8px}.seat-wait .spin{margin-top:0}

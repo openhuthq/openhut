@@ -87,7 +87,7 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 
 ## Claude seat from the browser
 - Admin › Claude seat › Set up opens a blank tab on the click (so the popup isn't blocked), then runs the bundled Claude Code's `setup-token` on the server (`admin/seat-sign-in.ts`), the way Skyfleet runs `claude auth login` (`skyfleet brain/decisions/sign-in-to-claude-from-the-web.md`). The dashboard opens its claude.ai link; the pasted code is typed into it and the 1-year token it prints becomes the seat, as if pasted.
-- `setup-token` prints nothing without a terminal, so it runs under `script -qfec` (util-linux) with `stty cols 4000` so the token stays on one line. The link comes from the OSC 8 hyperlink, not the wrapped text. An open sign-in lives in memory for 10 minutes in a temp `CLAUDE_CONFIG_DIR`.
+- `setup-token` prints nothing without a terminal, so it runs under `script -qfec` (util-linux) with `stty cols 4000` so the token stays on one line. The link comes from the OSC 8 hyperlink, not the wrapped text. The code and Enter go in two writes 0.5 s apart: in one write, a full-length code plus `\r` is taken as a paste and the Enter never submits (a 48-character fake code didn't show it; the real ~87 did). A code is matched to its sign-in by the `#state` it ends with. An open sign-in lives in memory for 10 minutes in a temp `CLAUDE_CONFIG_DIR`.
 
 ## Conventions the code relies on
 - Every agentd reply is validated with a Zod schema per command (`platform/agentd.ts`); a reply that doesn't match is a
