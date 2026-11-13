@@ -77,7 +77,7 @@ The approved mock is the **Mock** tab of the Fast Monkey blueprint artifact (htt
 - **An agent can write its own cron jobs** (`cron/jobs.json`, though the cronjob toolset is off). They run as that agent with its own grants: persistence, not escalation. Scheduling is a later feature, and its UI will own this file.
 - **No per-agent disk quota.** One agent can fill `/data`. Quotas (XFS project quota or a loop image) come later.
 - **An agent writes its own skills** (`skills/` in its home). Instructions planted by a message can persist there, as they can in its memories. They run with that agent's grants only.
-- **Browser and code execution are on by default**, with a switch per agent. The sandbox and firewall still hold; what the agent itself holds can leave over HTTPS.
+- **Code execution is on by default**, with a switch per agent. It runs in the same sandbox as the shell, which every agent already has.
 - **Private database CAs.** `verify-ca`/`verify-full` work with publicly trusted certificates only; a private CA can't be configured in v1 (use `require`, which encrypts without checking).
 - **Root on the server can read everything.** `auth_secret` sits next to the sealed DSNs in `/data/app`, which is mode 0700.
 

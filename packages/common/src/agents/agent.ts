@@ -33,7 +33,6 @@ export const Agent = z.object({
   summary: z.string(),
   net: z.number(),
   instructions: z.string(),
-  browser: z.boolean(),
   codeExecution: z.boolean(),
   canEdit: z.boolean(),
   createdAt: Timestamp,
@@ -53,7 +52,6 @@ export const UpdateAgentFields = {
   instructions: z.optional(z.string().check(z.maxLength(20_000))),
   model: z.optional(ModelId),
   wanted: z.optional(Wanted),
-  browser: z.optional(z.boolean()),
   codeExecution: z.optional(z.boolean()),
 }
 export const UpdateAgent = z.object(UpdateAgentFields).check(atLeastOneField)

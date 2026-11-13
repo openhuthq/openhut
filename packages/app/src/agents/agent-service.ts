@@ -23,7 +23,7 @@ const RECONCILE_MS = 30_000
 const PROBE_MS = 3_000
 const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
-const RENDERED = ['instructions', 'model', 'browser', 'codeExecution'] as const
+const RENDERED = ['instructions', 'model', 'codeExecution'] as const
 const SlackSecrets = z.object({ botToken: z.string(), appToken: z.string() })
 
 export const agentService = {
@@ -212,7 +212,7 @@ async function applyRelease(): Promise<void> {
 function agentOf({ row, ownerName, state, health, editable }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean }): Agent {
   return {
     id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, wanted: row.wanted,
-    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, browser: row.browser, codeExecution: row.code_execution, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
+    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
   }
 }
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { renderFiles, type RenderedChannel } from '../../src/agents/hermes-files.ts'
 import { config } from '../../src/platform/config.ts'
 
-const agent = { id: 'ag_chantest', name: 'Dev', instructions: '# Dev', model: 'sonnet', net: 3, browser: true, code_execution: true }
+const agent = { id: 'ag_chantest', name: 'Dev', instructions: '# Dev', model: 'sonnet', net: 3, code_execution: true }
 const render = (channels: RenderedChannel[]) => renderFiles({ agent, ownerName: 'owner', token: 'ag_chantest.token', channelKey: 'k'.repeat(32), seat: '', channels })
 
 test('no channels: manual approvals by the owner, no Slack or WhatsApp settings', () => {
@@ -41,8 +41,8 @@ test('Claude mode: the seat plugin is the model, haiku does side tasks, and the 
   assert.match(files['.env'], /^CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-seat$/m)
 })
 
-test('browser and code execution are on unless the agent switches them off', () => {
-  assert.match(render([])['config.yaml'], /disabled_toolsets: \[delegation, cronjob\]/)
-  const off = renderFiles({ agent: { ...agent, browser: false, code_execution: false }, ownerName: 'owner', token: 't', channelKey: 'k'.repeat(32), seat: '', channels: [] })
-  assert.match(off['config.yaml'], /disabled_toolsets: \[delegation, cronjob, browser, code_execution\]/)
+test('code execution is on unless the agent switches it off; the browser stays off', () => {
+  assert.match(render([])['config.yaml'], /disabled_toolsets: \[browser, delegation, cronjob\]/)
+  const off = renderFiles({ agent: { ...agent, code_execution: false }, ownerName: 'owner', token: 't', channelKey: 'k'.repeat(32), seat: '', channels: [] })
+  assert.match(off['config.yaml'], /disabled_toolsets: \[browser, delegation, cronjob, code_execution\]/)
 })
