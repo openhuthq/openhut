@@ -1,14 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { CheckIn, ListConsoleObjects } from '@jakebox/common/console/console.ts'
+import { ListQuery } from '@jakebox/common/api.ts'
 import { requirePublishKey } from '../platform/publish-key.ts'
 import { listOf } from '../platform/responses.ts'
 import { installService } from './install-service.ts'
 
 export const installController: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: ListConsoleObjects }>('/', ListRequest, async (req) => listOf({ req, ...await installService.list(req.query) }))
-
-  app.post<{ Body: CheckIn }>('/', CheckInRequest, async (req) => installService.checkIn(req.body))
+  app.get<{ Querystring: ListQuery }>('/', ListRequest, async (req) => listOf({ req, ...await installService.list(req.query) }))
 }
 
-const ListRequest = { onRequest: requirePublishKey, schema: { querystring: ListConsoleObjects } }
-const CheckInRequest = { schema: { body: CheckIn } }
+const ListRequest = { onRequest: requirePublishKey, schema: { querystring: ListQuery } }

@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { CallToolRequestSchema, ListToolsRequestSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { config } from '../platform/config.ts'
+import { messageOf } from '../platform/http-error.ts'
 import { MCP_TOOLS, type Api } from './mcp-tools.ts'
 
 export const mcpService = {
@@ -15,7 +16,7 @@ export const mcpService = {
       try {
         return { content: [{ type: 'text', text: JSON.stringify(await found.run({ api, args: req.params.arguments ?? {} }), null, 2) }] }
       } catch (err) {
-        return failure(err instanceof Error ? err.message : String(err))
+        return failure(messageOf(err))
       }
     })
     return server

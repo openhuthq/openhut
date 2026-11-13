@@ -6,10 +6,10 @@ const KEY = { authorization: 'Bearer test-publish-key' }
 const register = ({ build, version = '0.1.0', headers = KEY }: { build: string; version?: string; headers?: Record<string, string> }) =>
   app.inject({ method: 'POST', url: '/api/releases', headers, payload: { build, version, sha256: 'a'.repeat(64), url: 'https://get.jakebox.dev/jakebox.tgz', notes: 'First one' } })
 
-test('latest is a 404 with a sentence before any release is registered', async () => {
-  const res = await app.inject({ url: '/api/releases/latest' })
-  assert.equal(res.statusCode, 404)
-  assert.match(res.json().error.message, /^No release is registered yet\./)
+test('the list is empty before any release is registered', async () => {
+  const res = await app.inject({ url: '/api/releases?limit=1' })
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(res.json(), { object: 'list', url: '/api/releases', hasMore: false, data: [] })
 })
 
 test('registering a release needs the publish key', async () => {
@@ -32,16 +32,16 @@ test('a build registered twice is a 409', async () => {
 })
 
 test('a malformed release is a 400 that names the field', async () => {
-  const res = await app.inject({ method: 'POST', url: '/api/releases', headers: KEY, payload: { build: 'b', version: 'one', sha256: 'x', url: 'https://x.test' } })
+  const res = await app.inject({ method: 'POST', url: '/api/releases', headers: KEY, payload: { build: '20261113000009', version: 'one', sha256: 'x', url: 'https://x.test' } })
   assert.equal(res.statusCode, 400)
   assert.equal(res.json().error.param, 'version')
 })
 
-test('latest is public and is the newest release', async () => {
+test('the list is public and newest first, so limit=1 is the latest release', async () => {
   await register({ build: '20261113000002', version: '0.2.0' })
-  const res = await app.inject({ url: '/api/releases/latest' })
+  const res = await app.inject({ url: '/api/releases?limit=1' })
   assert.equal(res.statusCode, 200)
-  assert.deepEqual([res.json().build, res.json().version], ['20261113000002', '0.2.0'])
+  assert.deepEqual(res.json().data.map((release: { build: string; version: string }) => [release.build, release.version]), [['20261113000002', '0.2.0']])
 })
 
 test('the list is newest first and pages with startingAfter', async () => {
@@ -54,4 +54,19 @@ test('the list is newest first and pages with startingAfter', async () => {
   const next = (await app.inject({ url: `/api/releases?limit=2&startingAfter=${first.data[1].id}` })).json()
   assert.equal(next.hasMore, false)
   assert.deepEqual(next.data.map((release: { build: string }) => release.build), ['20261113000001'])
+  const back = (await app.inject({ url: `/api/releases?limit=2&endingBefore=${next.data[0].id}` })).json()
+  assert.deepEqual(back.data.map((release: { build: string }) => release.build), ['20261113000003', '20261113000002'])
+})
+
+test('an unknown cursor is a 400 that names it', async () => {
+  const res = await app.inject({ url: '/api/releases?startingAfter=rel_missing' })
+  assert.equal(res.statusCode, 400)
+  assert.equal(res.json().error.param, 'startingAfter')
+})
+
+test('the list shows 10 releases unless a limit is given', async () => {
+  for (let n = 4; n <= 12; n += 1) await register({ build: `202611130000${String(n).padStart(2, '0')}` })
+  const res = (await app.inject({ url: '/api/releases' })).json()
+  assert.equal(res.data.length, 10)
+  assert.equal(res.hasMore, true)
 })

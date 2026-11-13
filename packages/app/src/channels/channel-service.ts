@@ -3,7 +3,7 @@ import { ADDRESS, type Channel, type CreateChannel, type UpdateChannel } from '@
 import { db, isUniqueViolation } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { log, record } from '../platform/events.ts'
-import { HttpError } from '../platform/http-error.ts'
+import { HttpError, messageOf } from '../platform/http-error.ts'
 import { newId, seal } from '../platform/secrets.ts'
 import { agentd, containerStates } from '../platform/agentd.ts'
 import { slack } from '../integrations/slack/slack.ts'
@@ -92,7 +92,7 @@ async function disconnect(row: Row): Promise<void> {
 }
 
 async function reapplyOrLog(agentId: string): Promise<void> {
-  await agentService.reapply({ id: agentId }).catch((err: Error) => log.warn({ event: 'channel.reapply_failed', agent: agentId, error: err.message }))
+  await agentService.reapply({ id: agentId }).catch((err: unknown) => log.warn({ event: 'channel.reapply_failed', agent: agentId, error: messageOf(err) }))
 }
 
 async function rowOf(id: string): Promise<Row> {

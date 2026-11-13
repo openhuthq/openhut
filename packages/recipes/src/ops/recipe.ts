@@ -11,6 +11,4 @@ You help the team run the business day to day. When someone asks how things look
 - For each item, give the number, what it usually is, and the query that found it.
 - Never fix anything yourself. Tell your owner what you found and what you would check next.`,
   model: 'sonnet',
-  connections: ['postgres'],
-  channels: ['slack'],
 }

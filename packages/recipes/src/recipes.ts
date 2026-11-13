@@ -13,6 +13,4 @@ export type Recipe = {
   pitch: string
   instructions: string
   model: 'opus' | 'sonnet' | 'haiku'
-  connections: 'postgres'[]
-  channels: ('slack' | 'whatsapp')[]
 }

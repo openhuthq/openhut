@@ -27,6 +27,10 @@ export function errorBody({ status, message, param }: { status: number; message:
   return { error: { type: status >= 500 ? 'api_error' : 'invalid_request_error', message, ...(param && { param }) } }
 }
 
+export function messageOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
 export function answerErrors(app: FastifyInstance): void {
   app.setErrorHandler((err: FastifyError, _req, reply) => {
     if (err instanceof OAuthError) return reply.status(err.status).send({ error: err.code, error_description: err.message })

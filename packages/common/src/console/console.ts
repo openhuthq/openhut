@@ -1,5 +1,5 @@
 import * as z from 'zod/mini'
-import { ListQuery, Timestamp } from '../api.ts'
+import { Timestamp } from '../api.ts'
 
 export const Release = z.object({
   id: z.string(),
@@ -14,7 +14,7 @@ export const Release = z.object({
 export type Release = z.infer<typeof Release>
 
 export const CreateRelease = z.object({
-  build: z.string().check(z.regex(/^[\w.-]{1,40}$/, 'Give the build as up to 40 letters, digits, dots or dashes, like 20261113120000.')),
+  build: z.string().check(z.regex(/^\d{14}$/, 'Give the build as the release timestamp YYYYMMDDHHMMSS, like 20261113120000.')),
   version: z.string().check(z.regex(/^\d+\.\d+\.\d+$/, 'Give the version as major.minor.patch, like 0.1.0.')),
   sha256: z.string().check(z.regex(/^[a-f0-9]{64}$/, 'Give the sha256 as the 64 hex characters that `shasum -a 256` prints.')),
   url: z.url({ protocol: /^https?$/ }).check(z.maxLength(500)),
@@ -33,11 +33,17 @@ export const Install = z.object({
 export type Install = z.infer<typeof Install>
 
 export const CheckIn = z.object({
+  object: z.literal('check_in'),
+  installId: z.string(),
+  build: z.string(),
+  version: z.string(),
+  createdAt: Timestamp,
+})
+export type CheckIn = z.infer<typeof CheckIn>
+
+export const CreateCheckIn = z.object({
   installId: z.string().check(z.regex(/^[\w-]{32,128}$/, 'Send a random installId of 32 to 128 letters, digits, dashes or underscores.')),
   build: z.string().check(z.minLength(1), z.maxLength(40)),
   version: z.string().check(z.minLength(1), z.maxLength(40)),
 })
-export type CheckIn = z.infer<typeof CheckIn>
-
-export const ListConsoleObjects = z.pick(ListQuery, { limit: true, startingAfter: true })
-export type ListConsoleObjects = z.infer<typeof ListConsoleObjects>
+export type CreateCheckIn = z.infer<typeof CreateCheckIn>

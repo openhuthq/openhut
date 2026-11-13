@@ -8,6 +8,7 @@ import { log } from './platform/events.ts'
 import { answerErrors, errorBody } from './platform/http-error.ts'
 import { validateWithZod } from './platform/validation.ts'
 import { adminController, healthController } from './admin/admin-controller.ts'
+import { adminService } from './admin/admin-service.ts'
 import { agentController, grantController } from './agents/agent-controller.ts'
 import { agentService } from './agents/agent-service.ts'
 import { channelController } from './channels/channel-controller.ts'
@@ -54,3 +55,4 @@ await app.listen({ port: config.port, host: '0.0.0.0' })
 log.info({ event: 'app.listening', port: config.port, build: config.build })
 gatewayServer.start()
 await agentService.boot()
+adminService.boot()

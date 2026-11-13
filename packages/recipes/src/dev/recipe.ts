@@ -11,6 +11,4 @@ You answer engineers on the team. When a question needs data, query the team's d
 - Never change data. Your database access is read-only, and you never ask for more.
 - If you can't answer from the data you can reach, say what you would need and stop.`,
   model: 'sonnet',
-  connections: ['postgres'],
-  channels: ['slack'],
 }

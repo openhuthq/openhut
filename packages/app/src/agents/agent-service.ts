@@ -5,7 +5,7 @@ import type { Agent, AgentStatus, Grant, UpdateAgent } from '@jakebox/common/age
 import { db, isUniqueViolation } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { config } from '../platform/config.ts'
-import { HttpError } from '../platform/http-error.ts'
+import { HttpError, messageOf } from '../platform/http-error.ts'
 import { agentToken, newId, sameSecret, seal, unseal } from '../platform/secrets.ts'
 import { settings } from '../platform/settings.ts'
 import { agentd, containerStates, type AgentFiles } from '../platform/agentd.ts'
@@ -93,7 +93,7 @@ export const agentService = {
 
   async stopOwnedBy({ ownerId }: { ownerId: string }): Promise<void> {
     const stopped = await db.updateTable('agent').set({ wanted: 'stopped' }).where('owner_id', '=', ownerId).returning('id').execute()
-    for (const { id } of stopped) await agentd.stop({ id }).catch((err: Error) => log.warn({ event: 'agent.stop_failed', agent: id, error: err.message }))
+    for (const { id } of stopped) await agentd.stop({ id }).catch((err: unknown) => log.warn({ event: 'agent.stop_failed', agent: id, error: messageOf(err) }))
   },
 
   async byToken({ token, address }: { token: string; address: string }): Promise<GatewayAgent | undefined> {
@@ -132,25 +132,25 @@ export const agentService = {
     const failed: string[] = []
     for (const row of await db.selectFrom('agent').selectAll().execute()) {
       await agentd.apply({ id: row.id, files: await filesOf(row), restart: row.wanted === 'running', force })
-        .catch((err: Error) => failed.push(`${row.name}: ${err.message}`))
+        .catch((err: unknown) => failed.push(`${row.name}: ${messageOf(err)}`))
     }
     return failed
   },
 
   async boot(): Promise<void> {
-    await applyRelease().catch((err: Error) => log.error({ event: 'build.apply_failed', error: err.message }))
+    await applyRelease().catch((err: unknown) => log.error({ event: 'build.apply_failed', error: messageOf(err) }))
     await reconcileSafely()
     setInterval(() => void reconcileSafely(), RECONCILE_MS)
   },
 }
 
-const reconcileSafely = () => reconcile().catch((err: Error) => log.error({ event: 'reconcile.failed', error: err.message }))
+const reconcileSafely = () => reconcile().catch((err: unknown) => log.error({ event: 'reconcile.failed', error: messageOf(err) }))
 
 async function reconcile(): Promise<void> {
   const states = await containerStates()
   if (!states) return
   for (const row of await db.selectFrom('agent').selectAll().where('wanted', '=', 'running').execute()) {
-    await keepRunning({ row, state: states[row.id] }).catch((err: Error) => log.error({ event: 'reconcile.failed', agent: row.id, error: err.message }))
+    await keepRunning({ row, state: states[row.id] }).catch((err: unknown) => log.error({ event: 'reconcile.failed', agent: row.id, error: messageOf(err) }))
   }
 }
 

@@ -18,8 +18,5 @@ COPYFILE_DISABLE=1 tar --uid 0 --gid 0 --uname root --gname root --no-xattrs --n
 SUM=$(shasum -a 256 dist/jakebox.tgz | cut -d' ' -f1)
 sed -e "s|https://get.jakebox.dev|$BASE|g" -e "s|@JAKEBOX_SHA256@|$SUM|" install/install.sh > dist/install.sh
 echo "dist/: build $BUILD, install.sh (JAKEBOX_URL=$BASE), jakebox.tgz $(du -h dist/jakebox.tgz | cut -f1) sha256 $SUM"
-if [ -n "${CONSOLE_URL:-}" ] && [ -n "${CONSOLE_PUBLISH_KEY:-}" ]; then
-  VERSION=$(node -p "require('./packages/app/package.json').version")
-  printf 'authorization: Bearer %s\n' "$CONSOLE_PUBLISH_KEY" | curl -sS --fail-with-body -w '\n' -H @- -H 'content-type: application/json' \
-    --data-binary "{\"build\":\"$BUILD\",\"version\":\"$VERSION\",\"sha256\":\"$SUM\",\"url\":\"$BASE/jakebox.tgz\"}" "${CONSOLE_URL%/}/api/releases"
-fi
+VERSION=$(node -p "require('./packages/app/package.json').version")
+printf '{"build":"%s","version":"%s","sha256":"%s","url":"%s"}\n' "$BUILD" "$VERSION" "$SUM" "$BASE/jakebox.tgz" > dist/release.json

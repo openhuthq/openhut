@@ -31,3 +31,4 @@ input{flex:1;height:32px;background:var(--card);border:1px solid var(--hair);bor
 .btn{height:32px;padding:0 12px;border-radius:6px;border:0;background:var(--primary);color:#fff;font-weight:500;white-space:nowrap}
 .btn:hover{background:var(--primary-hover)}
 .err{color:var(--fail);margin:0 0 12px}
+.more{margin-top:12px;align-self:flex-start}

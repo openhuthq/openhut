@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: JakeBox, self-hosted. One EC2 host runs JakeBox, installed with its one-line installer, behind Caddy for HTTPS. No SSH; use Session Manager.
+Description: JakeBox, self-hosted. One EC2 host (Ubuntu 24.04, which ships the SSM agent) runs JakeBox, installed with its one-line installer, behind Caddy for HTTPS. No SSH; use Session Manager.
 
 Parameters:
   Address:
@@ -90,23 +90,24 @@ Resources:
   Host:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: '{{resolve:ssm:/aws/service/debian/release/13/latest/arm64}}'
+      ImageId: '{{resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id}}'
       InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref HostProfile
       SubnetId: !Ref Subnet
       SecurityGroupIds: [!Ref WebOnly]
       MetadataOptions: { HttpTokens: required, HttpPutResponseHopLimit: 1 }
-      BlockDeviceMappings: [{ DeviceName: /dev/xvda, Ebs: { VolumeSize: 30, VolumeType: gp3, Encrypted: true } }]
+      BlockDeviceMappings: [{ DeviceName: /dev/sda1, Ebs: { VolumeSize: 30, VolumeType: gp3, Encrypted: true } }]
       Volumes: [{ Device: /dev/sdf, VolumeId: !Ref Data }]
       Tags: [{ Key: Name, Value: !Ref AWS::StackName }]
       UserData:
         Fn::Base64: !Sub
           - |
             #!/bin/bash
-            set -euxo pipefail
+            set -euo pipefail
             host=${Host}
-            while [ ! -e /dev/sdf ] && [ ! -e /dev/nvme1n1 ]; do sleep 2; done
-            disk=$([ -e /dev/nvme1n1 ] && echo /dev/nvme1n1 || echo /dev/sdf)
+            vol=${Data}
+            disk=/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${!vol//-/}
+            while [ ! -e "$disk" ]; do sleep 2; done
             blkid "$disk" || mkfs.ext4 -L jakebox-data "$disk"
             mkdir -p /data
             grep -q jakebox-data /etc/fstab || echo 'LABEL=jakebox-data /data ext4 defaults,nofail 0 2' >> /etc/fstab
@@ -115,16 +116,16 @@ Resources:
             [ -f /etc/docker/daemon.json ] || echo '{"data-root":"/data/docker"}' > /etc/docker/daemon.json
             apt-get update
             apt-get install -y curl caddy
-            curl -fsSL ${InstallUrl} | sh
+            install -m 600 /dev/null /root/jakebox-install.log
+            curl -fsSL ${InstallUrl} | sh >> /root/jakebox-install.log 2>&1
             cat > /etc/caddy/Caddyfile <<CADDY
             $host {
               reverse_proxy 127.0.0.1:8787
             }
             CADDY
             systemctl restart caddy
-            . /etc/jakebox/env
-            printf 'Create the owner account: https://%s/setup?code=%s\n' "$host" "$SETUP_CODE" > /root/jakebox-owner-link
-            chmod 600 /root/jakebox-owner-link
+            code=$(sed -n 's/^SETUP_CODE=//p' /etc/jakebox/env)
+            (umask 077 && printf 'Create the owner account: https://%s/setup?code=%s\n' "$host" "$code" > /root/jakebox-owner-link)
           - Host: !If [OwnAddress, !Ref Address, !Join ['', [!Join ['-', !Split ['.', !Ref PublicAddress]], '.sslip.io']]]
   HostAddress:
     Type: AWS::EC2::EIPAssociation

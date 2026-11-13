@@ -5,7 +5,7 @@ import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { record } from '../platform/events.ts'
 import { describeIssues } from '../platform/validation.ts'
-import { HttpError } from '../platform/http-error.ts'
+import { HttpError, messageOf } from '../platform/http-error.ts'
 import { newId, seal, unseal } from '../platform/secrets.ts'
 import { postgres, type ConnectorTool } from '../integrations/postgres/postgres.ts'
 import { isAdmin, type Caller } from '../team/identity.ts'
@@ -99,7 +99,7 @@ export const connectionService = {
       return { text: out, isError: false }
     } catch (err) {
       await recordCall('failed', connection.id)
-      return { text: `Failed: ${err instanceof Error ? err.message : String(err)}`.slice(0, 2000), isError: true }
+      return { text: `Failed: ${messageOf(err)}`.slice(0, 2000), isError: true }
     } finally {
       running.set(key, (running.get(key) ?? 1) - 1)
     }

@@ -30,7 +30,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   one-line installer and Caddy for HTTPS, no SSH (Session Manager). Check it with `uvx cfn-lint packages/infra/aws/jakebox.yaml`.
 
 `install/` is the installer and what it runs on the server (firewall, systemd units, boot script); `scripts/release.sh`
-builds what `get.jakebox.dev` serves; `vendor/` is the pinned Hermes plugin.
+builds what `get.jakebox.dev` serves and `scripts/publish-release.sh` then tells the console about it; `vendor/` is the pinned Hermes plugin.
 
 ## Conventions (Skyfleet's)
 

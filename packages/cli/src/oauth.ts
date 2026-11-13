@@ -8,7 +8,8 @@ import type { Credentials } from './credentials.ts'
 
 const CLIENT_NAME = 'JakeBox CLI'
 const TEXT = { 'content-type': 'text/plain; charset=utf-8', connection: 'close' }
-const Metadata = z.object({ authorization_endpoint: z.url(), token_endpoint: z.url(), registration_endpoint: z.url() })
+const Endpoint = z.url({ protocol: /^https?$/ })
+const Metadata = z.object({ authorization_endpoint: Endpoint, token_endpoint: Endpoint, registration_endpoint: Endpoint })
 const Registration = z.object({ client_id: z.string() })
 const Tokens = z.object({ access_token: z.string(), refresh_token: z.string(), expires_in: z.number() })
 const Failure = z.object({ error: z.string(), error_description: z.optional(z.string()) })
@@ -32,8 +33,7 @@ export async function signIn(url: string): Promise<Credentials> {
     assert.ok(address && typeof address === 'object')
     const redirectUri = `http://127.0.0.1:${address.port}/callback`
     const registration = JSON.stringify({ client_name: CLIENT_NAME, redirect_uris: [redirectUri] })
-    const registered = await oauth(url, endpoints.registration_endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: registration })
-    const { client_id: clientId } = Registration.parse(registered)
+    const { client_id: clientId } = await oauth({ url, endpoint: endpoints.registration_endpoint, schema: Registration, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: registration } })
     const { verifier, challenge } = pkce()
     const state = randomBytes(16).toString('base64url')
     const authorize = new URL(endpoints.authorization_endpoint)
@@ -42,7 +42,7 @@ export async function signIn(url: string): Promise<Credentials> {
     console.log(`Open this page to sign in to JakeBox:\n\n  ${authorize}\n\nWaiting for you to allow the JakeBox CLI there. Press Ctrl-C to cancel.`)
     if (process.stdout.isTTY) spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [authorize.href], { stdio: 'ignore', detached: true }).on('error', () => undefined).unref()
     const form = new URLSearchParams({ grant_type: 'authorization_code', code: await approved, code_verifier: verifier, client_id: clientId, redirect_uri: redirectUri })
-    return credentialsOf(url, clientId, Tokens.parse(await oauth(url, endpoints.token_endpoint, { method: 'POST', body: form })))
+    return credentialsOf(url, clientId, await oauth({ url, endpoint: endpoints.token_endpoint, schema: Tokens, init: { method: 'POST', body: form } }))
   } finally {
     server.close()
   }
@@ -51,21 +51,26 @@ export async function signIn(url: string): Promise<Credentials> {
 export async function refresh({ url, clientId, refreshToken }: Credentials): Promise<Credentials> {
   const { token_endpoint } = await endpointsOf(url)
   const form = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId })
-  return credentialsOf(url, clientId, Tokens.parse(await oauth(url, token_endpoint, { method: 'POST', body: form })))
+  return credentialsOf(url, clientId, await oauth({ url, endpoint: token_endpoint, schema: Tokens, init: { method: 'POST', body: form } }))
 }
 
 async function endpointsOf(url: string): Promise<z.infer<typeof Metadata>> {
-  const metadata = Metadata.safeParse(await oauth(url, new URL('/.well-known/oauth-authorization-server', url), {}))
-  if (!metadata.success) throw new Error(`${url} doesn't look like a JakeBox server. Check the address.`)
-  return metadata.data
+  const endpoints = await oauth({ url, endpoint: new URL('/.well-known/oauth-authorization-server', url), schema: Metadata, init: {} })
+  const elsewhere = Object.values(endpoints).map((endpoint) => new URL(endpoint).origin).find((origin) => origin !== url)
+  if (elsewhere) throw new Error(`${url} says its address is ${elsewhere}. Run jakebox login ${elsewhere} instead.`)
+  return endpoints
 }
 
-async function oauth(url: string, endpoint: string | URL, init: RequestInit): Promise<unknown> {
+async function oauth<S extends z.ZodMiniType>({ url, endpoint, schema, init }: { url: string; endpoint: string | URL; schema: S; init: RequestInit }): Promise<z.infer<S>> {
   const res = await fetch(endpoint, init).catch(() => {
     throw new Error(`Can't reach ${url}. Check the address and that JakeBox is running there.`)
   })
   const body: unknown = await res.json().catch(() => undefined)
-  if (res.ok) return body
+  if (res.ok) {
+    const parsed = z.safeParse(schema, body)
+    if (!parsed.success) throw new Error(`${url} doesn't answer sign-ins like a JakeBox server. Check the address.`)
+    return parsed.data
+  }
   const failure = Failure.safeParse(body).data
   if (failure?.error === 'invalid_grant') throw new Error(signInAgain(url))
   throw new Error(failure?.error_description ?? `${url} answered ${res.status}. Check that the address is a JakeBox server.`)
@@ -76,7 +81,8 @@ function approval(server: Server, state: string, url: string): Promise<string> {
     server.on('request', (req, res) => {
       const callback = new URL(req.url ?? '/', 'http://127.0.0.1')
       if (callback.pathname !== '/callback') return res.writeHead(404, TEXT).end()
-      const code = callback.searchParams.get('state') === state ? callback.searchParams.get('code') : null
+      if (callback.searchParams.get('state') !== state) return res.writeHead(400, TEXT).end('This isn\'t the sign-in the terminal is waiting for. Use the link the terminal printed.')
+      const code = callback.searchParams.get('code')
       if (code) {
         res.writeHead(200, TEXT).end('Signed in to JakeBox. Close this tab and go back to the terminal.')
         return resolve(code)

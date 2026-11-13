@@ -9,10 +9,16 @@ const REFRESH_EARLY_MS = 60_000
 const Stored = z.object({ url: z.string(), clientId: z.string(), accessToken: z.string(), refreshToken: z.string(), expiresAt: z.iso.datetime() })
 
 export function load(): Credentials {
+  const credentials = stored()
+  if (!credentials) throw new Error('Sign in first with jakebox login <url>, like jakebox login https://jakebox.example.com.')
+  return credentials
+}
+
+export function stored(): Credentials | undefined {
   try {
-    return Stored.parse(JSON.parse(readFileSync(CREDENTIALS_FILE, 'utf8')))
+    return Stored.safeParse(JSON.parse(readFileSync(CREDENTIALS_FILE, 'utf8'))).data
   } catch {
-    throw new Error('Sign in first with jakebox login <url>, like jakebox login https://jakebox.example.com.')
+    return undefined
   }
 }
 

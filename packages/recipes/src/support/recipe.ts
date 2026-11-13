@@ -12,6 +12,4 @@ You answer customers who message the team. Before you reply, look the customer u
 - Never share another customer's data, and never read data out word for word when a summary will do.
 - Never change data. Your database access is read-only, and you never ask for more.`,
   model: 'sonnet',
-  connections: ['postgres'],
-  channels: ['whatsapp', 'slack'],
 }

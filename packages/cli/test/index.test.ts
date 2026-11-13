@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { statSync } from 'node:fs'
+import { existsSync, statSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { CREDENTIALS_FILE, load, save } from '../src/credentials.ts'
 import { challengeOf } from '../src/oauth.ts'
@@ -36,6 +36,8 @@ test('login signs in through the browser redirect and saves the tokens for you a
   }))
   challenge = link.searchParams.get('code_challenge') ?? ''
   const back = new URL(link.searchParams.get('redirect_uri') ?? '')
+  back.search = new URLSearchParams({ code: 'jba_other', state: 'not-the-state' }).toString()
+  assert.equal((await fetch(back)).status, 400)
   back.search = new URLSearchParams({ code: 'jba_code', state: link.searchParams.get('state') ?? '' }).toString()
   assert.equal((await fetch(back)).status, 200)
   const { code, stdout } = await login.done
@@ -71,3 +73,20 @@ function cli(args: string[]) {
   const done = once(child, 'close').then(([code]) => ({ code, ...output }))
   return { child, output, done }
 }
+
+test('login refuses a server whose sign-in endpoints are on another address', async () => {
+  const elsewhere = { authorization_endpoint: 'https://elsewhere.test/mcp/authorize', token_endpoint: 'https://elsewhere.test/api/oauth/token', registration_endpoint: 'https://elsewhere.test/api/oauth/clients' }
+  const jakebox = await fakeJakebox({ 'GET /.well-known/oauth-authorization-server': () => [200, elsewhere] })
+  const login = await cli(['login', jakebox.url]).done
+  assert.equal(login.code, 1)
+  assert.equal(login.stderr.trim(), `${jakebox.url} says its address is https://elsewhere.test. Run jakebox login https://elsewhere.test instead.`)
+  jakebox.close()
+})
+
+test('logout forgets an unreadable sign-in and says to disconnect it on Admin', async () => {
+  writeFileSync(CREDENTIALS_FILE, '{not json')
+  const out = await cli(['logout']).done
+  assert.equal(out.code, 0)
+  assert.match(out.stdout, /disconnect the app on Admin too\.$/m)
+  assert.equal(existsSync(CREDENTIALS_FILE), false)
+})

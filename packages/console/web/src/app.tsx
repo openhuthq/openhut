@@ -31,8 +31,11 @@ function Releases() {
   const releases = useReleases()
   if (releases.error) return <p className="err" role="alert">{releases.error.message}</p>
   if (!releases.data) return <p className="mute">Loading…</p>
-  return <Table head={['Version', 'Build', 'Released', 'SHA-256', 'Download']} empty="No releases yet. scripts/release.sh registers one when CONSOLE_URL is set."
-    rows={releases.data.data.map((release, index) => <ReleaseRow key={release.id} release={release} latest={index === 0} />)} />
+  return <>
+    <Table head={['Version', 'Build', 'Released', 'SHA-256', 'Download']} empty="No releases yet. After deploying one, run scripts/publish-release.sh with CONSOLE_URL and CONSOLE_PUBLISH_KEY set."
+      rows={releases.data.pages.flatMap((page) => page.data).map((release, index) => <ReleaseRow key={release.id} release={release} latest={index === 0} />)} />
+    <More query={releases} />
+  </>
 }
 
 function ReleaseRow({ release, latest }: { release: Release; latest: boolean }) {
@@ -49,8 +52,11 @@ function Installs({ publishKey }: { publishKey: string }) {
   const installs = useInstalls(publishKey)
   if (installs.error) return <p className="err" role="alert">{installs.error.message}</p>
   if (!installs.data) return <p className="mute">Loading…</p>
-  return <Table head={['Install', 'Version', 'Build', 'Last check-in', 'First seen']} empty="No install has checked in yet."
-    rows={installs.data.data.map((install) => <InstallRow key={install.id} install={install} />)} />
+  return <>
+    <Table head={['Install', 'Version', 'Build', 'Last check-in', 'First seen']} empty="No install has checked in yet."
+      rows={installs.data.pages.flatMap((page) => page.data).map((install) => <InstallRow key={install.id} install={install} />)} />
+    <More query={installs} />
+  </>
 }
 
 function InstallRow({ install }: { install: Install }) {
@@ -61,6 +67,11 @@ function InstallRow({ install }: { install: Install }) {
     <td>{when.format(new Date(install.lastCheckInAt))}</td>
     <td>{when.format(new Date(install.createdAt))}</td>
   </tr>
+}
+
+function More({ query }: { query: { hasNextPage: boolean; isFetchingNextPage: boolean; fetchNextPage: () => unknown } }) {
+  if (!query.hasNextPage) return null
+  return <button type="button" className="btn more" disabled={query.isFetchingNextPage} onClick={() => query.fetchNextPage()}>{query.isFetchingNextPage ? 'Loading…' : 'Show more'}</button>
 }
 
 function Table({ head, rows, empty }: { head: string[]; rows: ReactNode[]; empty: string }) {

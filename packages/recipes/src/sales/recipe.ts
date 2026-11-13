@@ -12,6 +12,4 @@ You keep the sales team up to date. When someone asks about the pipeline or a de
 - If a deal or customer isn't in the data, say so; never guess.
 - Never change data. Your database access is read-only, and you never ask for more.`,
   model: 'haiku',
-  connections: ['postgres'],
-  channels: ['slack'],
 }

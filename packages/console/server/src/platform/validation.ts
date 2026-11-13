@@ -22,8 +22,9 @@ export const validateWithZod: FastifySchemaCompiler<z.ZodMiniType> = ({ schema, 
   return { error: new InvalidRequest(`${PARTS[httpPart ?? ''] ?? 'The request'} is not valid. ${describeIssues(result.error.issues)}`, first && paramOf(first)) }
 }
 
-export const describeIssues = (issues: z.core.$ZodIssue[]): string =>
-  issues.map((issue) => issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message).join('; ')
+function describeIssues(issues: z.core.$ZodIssue[]): string {
+  return issues.map((issue) => issue.path.length ? `${issue.path.join('.')}: ${issue.message}` : issue.message).join('; ')
+}
 
 function paramOf(issue: z.core.$ZodIssue): string | undefined {
   if (issue.code === 'unrecognized_keys') return [...issue.path, issue.keys[0]].join('.')

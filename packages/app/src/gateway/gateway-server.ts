@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import * as z from 'zod'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { config } from '../platform/config.ts'
-import { errorBody, HttpError } from '../platform/http-error.ts'
+import { errorBody, HttpError, messageOf } from '../platform/http-error.ts'
 import { log } from '../platform/events.ts'
 import { serveMcp } from '../platform/mcp-transport.ts'
 import { agentService, type GatewayAgent } from '../agents/agent-service.ts'
@@ -72,7 +72,7 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
 
 function fail(res: ServerResponse, err: unknown): void {
   const status = err instanceof HttpError ? err.status : 500
-  if (status === 500) log.error({ event: 'gateway.error', error: err instanceof Error ? err.message : String(err) })
+  if (status === 500) log.error({ event: 'gateway.error', error: messageOf(err) })
   if (!res.headersSent) json(res, status, errorBody({ status, message: err instanceof HttpError ? err.message : 'The gateway failed. Try again.' }), true)
 }
 

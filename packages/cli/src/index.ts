@@ -6,7 +6,7 @@ import { Agent, type Wanted } from '@jakebox/common/agents/agent.ts'
 import { List } from '@jakebox/common/api.ts'
 import { Invite, Me } from '@jakebox/common/team/team.ts'
 import { api } from './api.ts'
-import { CREDENTIALS_FILE, load, save } from './credentials.ts'
+import { CREDENTIALS_FILE, save, stored, type Credentials } from './credentials.ts'
 import { signIn } from './oauth.ts'
 
 const HELP = `Manage a JakeBox server from your terminal.
@@ -99,14 +99,14 @@ async function invite(asAdmin: boolean): Promise<void> {
 }
 
 async function logout(): Promise<void> {
-  const revoked = await revokeSignIn()
+  if (!existsSync(CREDENTIALS_FILE)) return console.log('You\'re not signed in on this computer.')
+  const credentials = stored()
+  const revoked = credentials ? await revoke(credentials) : false
   rmSync(CREDENTIALS_FILE, { force: true })
-  console.log(revoked ? 'Signed out: JakeBox disconnected this sign-in and this computer forgot it.' : 'Signed out on this computer. JakeBox wasn\'t reachable, so disconnect the app on Admin too.')
+  console.log(revoked ? 'Signed out: JakeBox disconnected this sign-in and this computer forgot it.' : 'Signed out on this computer. JakeBox couldn\'t disconnect this sign-in, so disconnect the app on Admin too.')
 }
 
-async function revokeSignIn(): Promise<boolean> {
-  if (!existsSync(CREDENTIALS_FILE)) return true
-  const { url, refreshToken } = load()
+async function revoke({ url, refreshToken }: Credentials): Promise<boolean> {
   const res = await fetch(`${url}/api/oauth/revocations`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ token: refreshToken }) })
     .catch(() => undefined)
   return res?.ok === true

@@ -89,6 +89,7 @@ umask 077
   echo "RESOLVER=${RESOLVER:-1.1.1.1}"
   [ -z "$IMAGE_OVERRIDE" ] || echo "AGENT_IMAGE=$IMAGE_OVERRIDE"
   echo "JAKEBOX_MODEL=${JAKEBOX_MODEL:-claude}"
+  [ -z "${CONSOLE_URL:-}" ] || echo "CONSOLE_URL=$CONSOLE_URL"
   echo "SETUP_CODE=${SETUP_CODE:-$(od -An -N9 -tx1 /dev/urandom | tr -d ' \n')}"
 } > /etc/jakebox/env.new
 mv /etc/jakebox/env.new /etc/jakebox/env

@@ -7,6 +7,7 @@ import { migrate } from './platform/db.ts'
 import { log } from './platform/events.ts'
 import { answerErrors, errorBody } from './platform/http-error.ts'
 import { validateWithZod } from './platform/validation.ts'
+import { checkInController } from './installs/check-in-controller.ts'
 import { installController } from './installs/install-controller.ts'
 import { releaseController } from './releases/release-controller.ts'
 
@@ -18,6 +19,7 @@ app.setValidatorCompiler(validateWithZod)
 
 await app.register(releaseController, { prefix: '/api/releases' })
 await app.register(installController, { prefix: '/api/installs' })
+await app.register(checkInController, { prefix: '/api/check-ins' })
 
 const web = fileURLToPath(config.webDist)
 if (existsSync(web)) await app.register(fastifyStatic, { root: web })
