@@ -37,3 +37,34 @@ export const NAV_ICONS = {
 function line(body: ReactNode, className?: string) {
   return <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{body}</svg>
 }
+
+export const SETUP_ICONS = {
+  search: line(<><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>),
+  pencil: line(<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />),
+  table: line(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18M9 4v16" /></>),
+  play: line(<path d="M7 4v16l13-8z" />),
+  file: line(<path d="M6 3h8l4 4v14H6zM14 3v4h4" />),
+  doc: line(<path d="M6 3h8l4 4v14H6zM9 12h6M9 16h6" />),
+  chart: line(<path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />),
+  flag: line(<path d="M5 21V4h11l-2 4 2 4H5" />),
+  tag: line(<><path d="M20 12 12 20 3 11V3h8z" /><circle cx="7.5" cy="7.5" r="1.5" /></>),
+  draft: line(<path d="M4 20h16M6 16l9-9 3 3-9 9H6z" />),
+  plus: line(<path d="M12 5v14M5 12h14" />),
+  calendar: line(<><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></>),
+  sheet: line(<><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M4 9h16M4 15h16M10 3v18" /></>),
+  slides: line(<><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M12 16v4M8 20h8" /></>),
+  network: line(<><circle cx="12" cy="5" r="2" /><circle cx="5" cy="19" r="2" /><circle cx="19" cy="19" r="2" /><path d="M12 7v5M12 12l-6 5M12 12l6 5" /></>),
+  globe: line(<><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.6 2.8 3.9 5.8 3.9 9s-1.3 6.2-3.9 9c-2.6-2.8-3.9-5.8-3.9-9S9.4 5.8 12 3z" /></>),
+  tools: line(<path d="M14 7a4 4 0 0 0 5 5l2 2-7 7-2-2a4 4 0 0 0-5-5L3 10l7-7z" />),
+  message: line(<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />),
+  at: line(<><circle cx="12" cy="12" r="4" /><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1" /></>),
+  users: line(<><circle cx="9" cy="8" r="3.5" /><path d="M3 20a6 6 0 0 1 12 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3 6" /></>),
+  user: line(<><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>),
+  key: line(<><circle cx="8" cy="15" r="4" /><path d="M11 12l9-9M16 7l3 3" /></>),
+  shield: line(<><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /><path d="m9 12 2 2 4-4" /></>),
+  bolt: line(<path d="M13 2 4 14h7l-1 8 9-12h-7z" />),
+  clock: line(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>),
+  check: line(<path d="m5 12.5 4.5 4.5L19 7.5" />),
+  lock: line(<><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>),
+}
+export type SetupIcon = keyof typeof SETUP_ICONS

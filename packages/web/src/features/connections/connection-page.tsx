@@ -34,6 +34,7 @@ function ConnectionView({ me, connection }: { me: Me; connection: Connection }) 
   const authorize = useAuthorizeConnection()
   const owned = connection.ownerId === me.user.id
   const returned = new URLSearchParams(location.search).get('error') ?? undefined
+  const connected = new URLSearchParams(location.search).has('connected')
   const actions = <>
     {connection.signIn && <Locked reason={owned ? undefined : `Only ${connection.ownerName} can reconnect it`}>
       <button type="button" className="btn sec" disabled={!owned || authorize.isPending} onClick={() => authorize.mutate({ connectionId: connection.id }, { onError: toastError })}>
@@ -50,6 +51,11 @@ function ConnectionView({ me, connection }: { me: Me; connection: Connection }) 
     <div className="detail wide">
       <div className="left">
         <ErrorNote message={returned} />
+        {connected && <div className="connected" role="status">
+          <span className="connected-mark"><Mark name={connection.kind} size={48} /><span className="tick">{ICONS.check}</span></span>
+          <div className="t"><h3>{titleOf(connection.kind)} is connected</h3><p>Next, grant it to an agent from the agent's page.</p></div>
+          <a className="btn primary" href="/agents">Go to agents</a>
+        </div>}
         {connection.usable && <Tools connectionId={connection.id} />}
         <Activity connectionId={connection.id} agents={agents.data ?? []} />
       </div>
