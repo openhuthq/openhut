@@ -38,6 +38,7 @@ Two sizes. 32px (default) in page headers, dialog and popover footers, empty sta
 5. Icon-only is for Close, Toggle sidebar, Rename, More, Send/Stop, and a table row's single repeated action (trash to remove a person, × to revoke an invite or take a connection off an agent), so a long table isn't a column of the same word. Each has `aria-label` and `title`.
 6. An action is red if and only if it opens a confirm, and it gets a confirm if and only if one click cannot undo it.
 7. The trigger is red text; the button inside the confirm is red fill. Red fill appears nowhere else.
+8. A copy button confirms in place: `CopyButton` swaps its icon for a checkmark for 1.5s, no toast. Only a failed copy toasts.
 8. On the page that manages an object (agent, connection), Delete is visible in the header, last, after a separator.
 9. On a page that is not for managing the object (chat), destructive actions live in the ⋯ menu, last, after a separator, in red.
 10. A header shows at most three buttons. A fourth sends everything but the primary and one secondary into ⋯. A ⋯ menu holds at least two items.
