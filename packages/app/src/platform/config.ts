@@ -7,6 +7,7 @@ export const config = {
   dataDir: process.env.FASTMONKEY_DATA ?? '/data/app',
   port: 8787,
   gatewayPort: 8081,
+  releaseUrl: process.env.FASTMONKEY_URL ?? 'https://fastmonkey.dev',
   setupCode: process.env.SETUP_CODE ?? '',
   modelMode: process.env.FASTMONKEY_MODEL === 'test' ? 'test' as const : 'claude' as const,
   agentdSocket: process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock',

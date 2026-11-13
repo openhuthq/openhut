@@ -7,7 +7,7 @@ import { migrate } from './platform/db.ts'
 import { log } from './platform/events.ts'
 import { answerErrors, errorBody } from './platform/http-error.ts'
 import { validateWithZod } from './platform/validation.ts'
-import { adminController, healthController } from './admin/admin-controller.ts'
+import { adminController, healthController, updateController } from './admin/admin-controller.ts'
 import { agentController, grantController } from './agents/agent-controller.ts'
 import { agentService } from './agents/agent-service.ts'
 import { channelController } from './channels/channel-controller.ts'
@@ -41,6 +41,7 @@ await app.register(channelController, { prefix: '/api/channels' })
 await app.register(connectionController, { prefix: '/api/connections' })
 await app.register(connectionEventController, { prefix: '/api/connection-events' })
 await app.register(adminController, { prefix: '/api/admin' })
+await app.register(updateController, { prefix: '/api/updates' })
 await app.register(mcpController, { prefix: '/mcp' })
 
 const web = fileURLToPath(config.webDist)

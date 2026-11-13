@@ -10,6 +10,7 @@ import { Locked } from '@/components/locked'
 import { Mark } from '@/components/mark'
 import { Page } from '@/components/page'
 import { StatusBadge } from '@/components/status-badge'
+import { UpdateButton } from '@/features/admin/update-button'
 import { useAdmin, useDeleteOAuthGrant, useOAuthGrants, useUpdateAdmin } from '@/features/admin/api'
 import { ago, plural, shortDate } from '@/lib/format'
 import { formValues } from '@/lib/form'
@@ -39,8 +40,9 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
         <Row icon="globe" title="Public URL" mono subtitle={admin.publicUrl}
           action={<ToggleButton label="Edit" form="public-url" open={form === 'public-url'} canEdit={canEdit} reason="Only an owner or admin changes it" />} />
         {form === 'public-url' && canEdit && <PublicUrlForm publicUrl={admin.publicUrl} />}
-        <Row icon="update" title={`Version ${server.version}`} subtitle={`${server.running} of ${plural(server.total, 'agent')} running`}
-          status={server.healthy ? <Ready word="Healthy" /> : <StatusBadge status="missing" tip="Agents can't start until this is fixed. See /health." word="Not responding" />} />
+        <Row icon="update" title={`Version ${server.version}`} subtitle={`Build ${server.build} · ${versionLine(server)} · ${server.running} of ${plural(server.total, 'agent')} running`}
+          status={server.healthy ? <Ready word="Healthy" /> : <StatusBadge status="missing" tip="Agents can't start until this is fixed. See /health." word="Not responding" />}
+          action={canEdit ? <UpdateButton server={server} /> : server.updateAvailable && <Locked reason="Only an owner or admin updates Fast Monkey"><button type="button" className="btn primary sm" disabled>Update now</button></Locked>} />
       </Section>
       <Section number={3} title="AI assistant"><ConnectedApps /></Section>
     </div>
@@ -105,6 +107,12 @@ function Row({ icon, title, subtitle, mono = false, status, action }: { icon: Br
 
 function Ready({ word }: { word: string }) {
   return <StatusBadge status="ready" tip={word} word={word} />
+}
+
+function versionLine(server: Admin['server']) {
+  if (server.updateAvailable) return `build ${server.latestBuild} is available`
+  if (server.latestBuild === null) return "couldn't check for a newer release"
+  return 'up to date'
 }
 
 function seatLine(admin: Admin) {

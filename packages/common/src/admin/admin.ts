@@ -7,6 +7,8 @@ export const Admin = z.object({
   server: z.object({
     version: z.string(),
     build: z.string(),
+    latestBuild: z.nullable(z.string()),
+    updateAvailable: z.boolean(),
     healthy: z.boolean(),
     agentd: z.boolean(),
     firewall: z.boolean(),
@@ -26,6 +28,13 @@ export const Health = z.object({
   started: z.number(),
 })
 export type Health = z.infer<typeof Health>
+
+export const Update = z.object({
+  object: z.literal('update'),
+  from: z.string(),
+  to: z.string(),
+})
+export type Update = z.infer<typeof Update>
 
 export const UpdateAdminFields = {
   seatToken: z.optional(z.string().check(z.regex(/^\S{20,}$/, 'Paste the token that `claude setup-token` printed.'), z.maxLength(2000))),
