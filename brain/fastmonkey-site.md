@@ -25,5 +25,10 @@
   concepts pages, no flow strips, no coloured icon tiles.
 - Screenshots in `public/screenshots/` are the real dashboard with `node scripts/seed-ui.ts` data, taken at 1512x806.
   Port 8787 is hardcoded, so stop any local Fast Monkey container first, or change the port for the session.
-- The home page hero is one window that mocks the real product (sidebar, chat, agent panel). A two-window version
-  (the team's Slack beside a Fast Monkey panel) was tried and rejected the same day.
+- The home page hero follows Gumloop's (owner, 2026-11-13): a row of mascots, the headline "Build, manage & share
+  agents with your team", then one window that mocks the real product (agent list, chat, the agent's instructions and
+  skills) with a "Shared with your team" card over its corner. The point is build an agent and share it with your
+  team; deploying is a detail. A two-window version (Slack beside a Fast Monkey panel) was rejected the same day.
+- Docs sidebar groups (owner, 2026-11-13): Install (Install, Setup from your AI assistant), Features (Multiple
+  agents, Self-improvement, Team), Integrations (Slack, WhatsApp, Postgres, Claude plan), Server (Security, Upgrade,
+  Uninstall).

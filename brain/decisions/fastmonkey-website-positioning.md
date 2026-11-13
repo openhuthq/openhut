@@ -5,7 +5,7 @@ status: accepted
 
 ## Decision
 Owner, 2026-11-13, while reviewing the marketing mock (https://claude.ai/artifact/33jiDuCi5RNsCLtJXsca21):
-- The page leads with self-improving agents, then: collaboration ("Meet your team where they work"), "Correct it once. It remembers.", one agent per job, every agent in its own sandbox, adoption and spend ("Keep an eye on them"), bring your own Claude plan, and the install command.
+- The headline is "Build, manage & share agents with your team" (what the person building agents gets; from the Erich call, where he was already hacking several agents onto one machine). Then: collaboration ("Meet your team where they work"), "Correct it once. It remembers.", one agent per job, every agent in its own sandbox, adoption and spend ("Keep an eye on them"), bring your own Claude plan, and the install command.
 - The three pillars (access, compute, data) are not the page structure. Compute is just "your machine" and is not sold on its own.
 - Self-improving is the headline benefit. Hermes is an implementation detail, named only far down the page.
 - Layout follows gumloop.com, type and hero follow capy.ai (Bebas Neue headings, IBM Plex Mono copy, a real product interaction in the hero): a headline and one rich, interactive component per section. No header, FAQ or "book a call". The collaboration section copies Gumloop's pinned-heading scroll through channels. No enterprise section or wording.
