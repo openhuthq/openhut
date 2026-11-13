@@ -2,7 +2,7 @@ import type { AdminForm } from '@/features/admin/admin-page'
 import type { AgentDialog } from '@/features/agents/agent-page'
 import { integration } from '@/features/connections/catalog'
 
-const AGENT_DIALOGS: AgentDialog[] = ['name', 'instructions', 'slack', 'whatsapp']
+const AGENT_DIALOGS: AgentDialog[] = ['name', 'instructions', 'slack', 'whatsapp', 'telegram']
 const ADMIN_FORMS: AdminForm[] = ['seat', 'public-url', 'google', 'containers']
 const MISSING: Route = { page: 'missing' }
 

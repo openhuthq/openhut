@@ -16,7 +16,7 @@ import { ModelPicker } from '@/features/agents/model-picker'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 
-export type AgentDialog = 'name' | 'instructions' | 'slack' | 'whatsapp'
+export type AgentDialog = 'name' | 'instructions' | 'slack' | 'whatsapp' | 'telegram'
 
 const PARENTS = [{ label: 'Agents', href: '/agents' }]
 

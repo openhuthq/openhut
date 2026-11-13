@@ -46,3 +46,20 @@ test('code execution is on unless the agent switches it off; the browser stays o
   const off = renderFiles({ agent: { ...agent, code_execution: false }, ownerName: 'owner', token: 't', channelKey: 'k'.repeat(32), seat: '', channels: [] })
   assert.match(off['config.yaml'], /disabled_toolsets: \[browser, delegation, cronjob, code_execution\]/)
 })
+
+test('Telegram for listed people: the bot token, numeric IDs with the owner, strangers ignored, the owner approves', () => {
+  const files = render([{ kind: 'telegram', botToken: '123456789:AAEtoken', audience: { ownerAddress: '111222333', open: false, allowed: ['444555666'] } }])
+  assert.match(files['.env'], /^TELEGRAM_BOT_TOKEN=123456789:AAEtoken$/m)
+  assert.match(files['.env'], /^TELEGRAM_ALLOWED_USERS=111222333,444555666$/m)
+  assert.doesNotMatch(files['.env'], /TELEGRAM_ALLOW_ALL_USERS/)
+  assert.match(files['config.yaml'], /telegram:\n {2}require_mention: true\n {2}unauthorized_dm_behavior: ignore/)
+  assert.match(files['config.yaml'], /mode: manual/)
+  assert.match(files['config.yaml'], /"111222333"/)
+})
+
+test('Telegram open to anyone: everyone allowed, smart approvals', () => {
+  const files = render([{ kind: 'telegram', botToken: '123456789:AAEtoken', audience: { ownerAddress: '111222333', open: true, allowed: [] } }])
+  assert.match(files['.env'], /^TELEGRAM_ALLOW_ALL_USERS=true$/m)
+  assert.doesNotMatch(files['.env'], /TELEGRAM_ALLOWED_USERS/)
+  assert.match(files['config.yaml'], /mode: smart/)
+})

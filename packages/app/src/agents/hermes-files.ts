@@ -3,6 +3,7 @@ import type { AgentFiles } from '../platform/agentd.ts'
 import { config } from '../platform/config.ts'
 import { agentSubnet } from '../platform/network.ts'
 import { slack } from '../integrations/slack/slack.ts'
+import { telegram } from '../integrations/telegram/telegram.ts'
 import { whatsapp } from '../integrations/whatsapp/whatsapp.ts'
 
 const AUXILIARY_TASKS = ['approval', 'compression', 'title_generation', 'background_review']
@@ -48,6 +49,7 @@ function modelYaml({ gateway, token, model }: { gateway: string; token: string; 
 function yamlOf(channel: RenderedChannel): string[] {
   switch (channel.kind) {
     case 'slack': return [slack.yaml.trimEnd()]
+    case 'telegram': return [telegram.yaml.trimEnd()]
     case 'whatsapp': return []
   }
 }
@@ -55,6 +57,7 @@ function yamlOf(channel: RenderedChannel): string[] {
 function envOf(channel: RenderedChannel): string[] {
   switch (channel.kind) {
     case 'slack': return slack.env({ botToken: channel.botToken, appToken: channel.appToken, audience: channel.audience })
+    case 'telegram': return telegram.env({ botToken: channel.botToken, audience: channel.audience })
     case 'whatsapp': return whatsapp.env(channel.audience)
   }
 }
@@ -62,10 +65,12 @@ function envOf(channel: RenderedChannel): string[] {
 function approverOf(channel: RenderedChannel): string {
   switch (channel.kind) {
     case 'slack': return slack.approver(channel.audience)
+    case 'telegram': return telegram.approver(channel.audience)
     case 'whatsapp': return whatsapp.approver(channel.audience)
   }
 }
 
 export type RenderedChannel =
   | { kind: Extract<ChannelKind, 'slack'>; audience: Audience; botToken: string; appToken: string }
+  | { kind: Extract<ChannelKind, 'telegram'>; audience: Audience; botToken: string }
   | { kind: Extract<ChannelKind, 'whatsapp'>; audience: Audience }

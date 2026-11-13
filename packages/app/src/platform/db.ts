@@ -3,6 +3,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { Kysely, PGliteDialect, sql, type Selectable } from 'kysely'
 import { config } from './config.ts'
 import type { Database } from './db-schema.ts'
+import { ChannelKind } from '@fastmonkey/common/channels/channel.ts'
 import { ConnectionKind } from '@fastmonkey/common/connections/connection.ts'
 import { HttpError } from './http-error.ts'
 
@@ -42,6 +43,8 @@ export async function migrate(): Promise<void> {
     id text primary key, agent_id text not null references agent(id) on delete cascade, kind text not null check (kind in ('slack', 'whatsapp')),
     status text not null check (status in ('connected', 'linking')), account text, owner_address text not null, secrets text not null default '',
     open boolean not null default false, allowed text not null default '', created_at timestamptz not null default now(), unique (agent_id, kind))`.execute(db)
+  await sql`alter table channel drop constraint if exists channel_kind_check`.execute(db)
+  await sql`alter table channel add constraint channel_kind_check check (kind in (${sql.join(ChannelKind.options.map((kind) => sql.lit(kind)))}))`.execute(db)
   await sql`create table if not exists connection (
     id text primary key, kind text not null, name text not null, owner_id text not null references person(id),
     config text not null, everyone boolean not null default false, created_at timestamptz not null default now())`.execute(db)

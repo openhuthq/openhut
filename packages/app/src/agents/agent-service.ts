@@ -25,6 +25,7 @@ const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
 const RENDERED = ['instructions', 'model', 'codeExecution'] as const
 const SlackSecrets = z.object({ botToken: z.string(), appToken: z.string() })
+const TelegramSecrets = z.object({ botToken: z.string() })
 
 export const agentService = {
   async list({ actor }: { actor: Caller }): Promise<Agent[]> {
@@ -178,6 +179,7 @@ function renderedChannel(channel: Selectable<Database['channel']>): RenderedChan
   switch (channel.kind) {
     case 'whatsapp': return { kind: 'whatsapp', audience }
     case 'slack': return { kind: 'slack', audience, ...SlackSecrets.parse(JSON.parse(unseal(channel.secrets))) }
+    case 'telegram': return { kind: 'telegram', audience, ...TelegramSecrets.parse(JSON.parse(unseal(channel.secrets))) }
   }
 }
 

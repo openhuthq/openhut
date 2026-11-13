@@ -9,11 +9,12 @@ import { newId, seal } from '../platform/secrets.ts'
 import { deleted } from '../platform/responses.ts'
 import { agentd, containerStates } from '../platform/agentd.ts'
 import { slack } from '../integrations/slack/slack.ts'
+import { telegram } from '../integrations/telegram/telegram.ts'
 import { agentService } from '../agents/agent-service.ts'
 import type { Caller } from '../team/identity.ts'
 import { audienceOf } from './audience.ts'
 
-const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp' } as const
+const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram' } as const
 
 export const channelService = {
   async list({ agentId }: { agentId?: string }): Promise<Channel[]> {
@@ -73,6 +74,10 @@ async function setupOf({ body, agentName, agentId }: { body: CreateChannel; agen
       const account = await slack.verify({ botToken: body.botToken, appToken: body.appToken })
       return { status: 'connected', account, secrets: seal(JSON.stringify({ botToken: body.botToken, appToken: body.appToken })) }
     }
+    case 'telegram': {
+      const account = await telegram.verify({ botToken: body.botToken })
+      return { status: 'connected', account, secrets: seal(JSON.stringify({ botToken: body.botToken })) }
+    }
     case 'whatsapp': {
       if ((await containerStates())?.[agentId] !== 'running') throw new HttpError(409, `Start ${agentName} first: WhatsApp links from inside its container.`)
       return { status: 'linking', account: null, secrets: '' }
@@ -84,6 +89,7 @@ async function disconnect(row: Row): Promise<void> {
   switch (row.kind) {
     case 'whatsapp': await agentd.unlinkWhatsapp({ id: row.agent_id }); return
     case 'slack': return
+    case 'telegram': return
   }
 }
 
