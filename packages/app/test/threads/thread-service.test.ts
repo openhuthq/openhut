@@ -107,3 +107,11 @@ test('an agent that isn\'t answering ends the turn with a sentence, not a hang',
   const error = res.body.split('\n\n').filter((line) => line.startsWith('data: {')).map((line) => JSON.parse(line.slice(6))).find((chunk) => chunk.type === 'error')
   assert.match(error.errorText, /^Runner isn't reachable\. Hermes isn't answering on port 8642 \(ECONNREFUSED\)\.$/)
 })
+
+test('clearing a chat deletes it, and the next one is a new thread with a new Hermes session', async () => {
+  const thread = await newThread('ag_chatrunn')
+  assert.equal((await app.inject({ method: 'DELETE', url: `/api/threads/${thread.id}`, headers: as('owner') })).statusCode, 200)
+  const fresh = await newThread('ag_chatrunn')
+  assert.notEqual(fresh.id, thread.id)
+  assert.equal((await app.inject({ method: 'GET', url: `/api/threads/${fresh.id}`, headers: as('owner') })).json().messages.length, 0)
+})

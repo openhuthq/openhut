@@ -14,6 +14,7 @@ const TOKEN_MS = 120_000
 const LINK = /\x1b\]8;[^;]*;(https:\/\/claude\.(?:com|ai)\/[^\x1b\x07\s]*oauth\/authorize\?[^\x1b\x07\s]+)/
 const TOKEN = /sk-ant-oat01-[\w-]{20,}/
 const FAILED = /OAuth error[^\n]*|wasn't accepted[^\n]*/i
+const MAX_OPEN = 3
 const open = new Map<string, OpenSignIn>()
 
 export const seatSignIn = {
@@ -22,7 +23,8 @@ export const seatSignIn = {
     const proc = spawn('script', ['-qfec', `stty cols 4000 rows 60; exec ${config.claudeBin} setup-token`, '/dev/null'], {
       cwd: dir, env: { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: dir, CLAUDE_CONFIG_DIR: dir, BROWSER: '/bin/true', TERM: 'xterm-256color', DISABLE_AUTOUPDATER: '1' },
     })
-    const signIn: OpenSignIn = { id: newToken('seat'), proc, dir, out: '' }
+    for (const id of [...open.keys()].slice(0, Math.max(0, open.size - MAX_OPEN + 1))) close(id)
+    const signIn: OpenSignIn = { id: newToken('seat'), proc, dir, out: '', state: '' }
     proc.stdout.on('data', (chunk: Buffer) => { signIn.out += chunk.toString('utf8') })
     proc.stderr.on('data', (chunk: Buffer) => { signIn.out += chunk.toString('utf8') })
     proc.on('exit', () => close(signIn.id))
@@ -34,17 +36,18 @@ export const seatSignIn = {
       close(signIn.id)
       throw new HttpError(503, 'Claude Code didn\'t give a sign-in link. Try again in a minute.')
     }
+    signIn.state = stateOf(url)
     return { id: signIn.id, object: 'seat_sign_in', status: 'open', url }
   },
 
   async complete({ id, code }: { id: string; code: string }): Promise<string> {
-    const signIn = open.get(id)
+    const signIn = signInFor({ id, code })
     if (!signIn) throw new HttpError(404, 'That sign-in is over (each one lasts 10 minutes and takes one code). Press Set up again for a new one.')
     const before = signIn.out.length
     signIn.proc.stdin.write(`${code.trim()}\r`)
     const token = await waitFor({ signIn, ms: TOKEN_MS, find: (out) => seatToken(out.slice(before)) ?? (FAILED.test(plain(out.slice(before))) ? 'failed' : undefined) })
     const said = plain(signIn.out.slice(before)).replace(TOKEN, '[token]').replace(/\*{6,}/g, '[code]')
-    close(id)
+    close(signIn.id)
     if (token && token !== 'failed') {
       log.info({ event: 'seat.signed_in' })
       return token
@@ -54,6 +57,13 @@ export const seatSignIn = {
     throw new HttpError(400, reason ? `Claude said: ${reason} Press Set up again for a new code.` : 'Claude didn\'t answer within 2 minutes. Press Set up again for a new code.', { param: 'code' })
   },
 }
+
+function signInFor({ id, code }: { id: string; code: string }): OpenSignIn | undefined {
+  const state = code.trim().split('#')[1]
+  return [...open.values()].find((signIn) => state && signIn.state === state) ?? open.get(id)
+}
+
+export const stateOf = (url: string): string => new URL(url).searchParams.get('state') ?? ''
 
 export const signInLink = (out: string): string | undefined => LINK.exec(out)?.[1]
 
@@ -89,4 +99,4 @@ function close(id: string): void {
   rmSync(signIn.dir, { recursive: true, force: true })
 }
 
-type OpenSignIn = { id: string; proc: ChildProcessWithoutNullStreams; dir: string; out: string }
+type OpenSignIn = { id: string; proc: ChildProcessWithoutNullStreams; dir: string; out: string; state: string }

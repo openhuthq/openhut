@@ -14,7 +14,8 @@ import { Initial } from '@/components/initial'
 import { Page } from '@/components/page'
 import { AgentBadge, agentState } from '@/components/status-badge'
 import { useAgent, useUpdateAgent } from '@/features/agents/api'
-import { threadPath, useAgentThread } from '@/features/threads/api'
+import { threadPath, useAgentThread, useClearChat } from '@/features/threads/api'
+import { ConfirmButton } from '@/components/confirm-button'
 import { toastError } from '@/lib/toast'
 
 type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[] }>
@@ -38,21 +39,22 @@ function ThreadView({ me, thread, agent }: { me: Me; thread: ThreadWithMessages;
   const busy = chat.status === 'submitted' || chat.status === 'streaming'
   const send = (text: string) => void chat.sendMessage({ text })
   const last = chat.messages.at(-1)
-  return <ChatLayout me={me} agent={agent} busy={busy} onSend={send} onStop={() => void chat.stop()}>
+  const clear = <ClearChat agent={agent} threadId={thread.id} disabled={busy || !chat.messages.length} />
+  return <ChatLayout me={me} agent={agent} busy={busy} onSend={send} onStop={() => void chat.stop()} extra={clear}>
     {chat.messages.length ? chat.messages.map((message) => <Message key={message.id} me={me} agent={agent} message={message} live={busy && message === last} />) : <ChatEmpty agent={agent} onTry={send} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message me={me} agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     {chat.error && <div className="chat-err" role="alert"><span>{chat.error.message}</span><button type="button" className="btn sec sm" onClick={() => void chat.regenerate()}>Retry</button></div>}
   </ChatLayout>
 }
 
-function ChatLayout({ me, agent, busy, onSend, onStop, children }: { me: Me; agent: Agent; busy: boolean; onSend: (text: string) => void; onStop: () => void; children: ReactNode }) {
+function ChatLayout({ me, agent, busy, onSend, onStop, extra, children }: { me: Me; agent: Agent; busy: boolean; extra?: ReactNode; onSend: (text: string) => void; onStop: () => void; children: ReactNode }) {
   const log = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
   useEffect(() => {
     const el = log.current
     if (el && pinned.current) el.scrollTop = el.scrollHeight
   })
-  const actions = <><AgentBadge agent={agent} /><a className="btn sec sm" href={`/agents/${agent.id}`}>{ICONS.gear}<span className="lbl">Agent settings</span></a></>
+  const actions = <><AgentBadge agent={agent} />{extra}<a className="btn sec sm" href={`/agents/${agent.id}`}>{ICONS.gear}<span className="lbl">Agent settings</span></a></>
   return <Page title={agent.name} actions={actions} fill>
     <div className="chat-log" ref={log} aria-live="polite" onScroll={(event) => { const el = event.currentTarget; pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
       <div className="chat-col">{children}</div>
@@ -131,6 +133,13 @@ function Part({ part }: { part: AgentPart }) {
     </details>)}</div>
     default: return null
   }
+}
+
+function ClearChat({ agent, threadId, disabled }: { agent: Agent; threadId: string; disabled: boolean }) {
+  const clearChat = useClearChat(agent.id)
+  return <ConfirmButton className="btn sec sm" disabled={disabled || clearChat.isPending} question="Clear this chat?" detail={`${agent.name} starts a fresh conversation. It keeps what it saved to memory.`} action="Clear" onConfirm={() => clearChat.mutate(threadId, { onError: toastError })}>
+    {ICONS.trash}<span className="lbl">Clear chat</span>
+  </ConfirmButton>
 }
 
 function ChatEmpty({ agent, onTry }: { agent: Agent; onTry: (text: string) => void }) {
