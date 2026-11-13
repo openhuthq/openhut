@@ -48,9 +48,10 @@ p{margin:0}
 .cr.dizzy .c-face{animation:dizzy .9s linear infinite}
 @keyframes dizzy{0%{translate:3px 0}25%{translate:0 2.500px}50%{translate:-3px 0}75%{translate:0 -2.500px}100%{translate:3px 0}}
 
-.wrap{max-width:1180px;margin:0 auto;padding:0 max(24px,env(safe-area-inset-left,0px))}
-.top{display:flex;justify-content:space-between;align-items:center;padding-block:24px}
-.top a.l{font-family:var(--copy);font-size:13.5px;text-decoration:none;margin-left:22px}
+.wrap{max-width:1280px;margin:0 auto;padding:0 max(24px,env(safe-area-inset-left,0px))}
+.top{display:flex;justify-content:space-between;align-items:center;height:40px;margin:24px 0 26px}
+@media (max-width:720px){.top{margin-top:20px}}
+.top a.l{font-family:var(--copy);font-size:14px;text-decoration:none;margin-left:24px}
 .top a.l:hover{text-decoration:underline}
 header.b{padding-block:56px 44px}
 header.b h1{font-size:clamp(72px,13vw,168px);line-height:.9;display:flex;align-items:center;gap:.12em}
@@ -86,6 +87,7 @@ footer{padding-block:40px 56px;font-family:var(--copy);font-size:13px;color:var(
 
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
+<style>html{scrollbar-width:none}html::-webkit-scrollbar{display:none}</style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -133,7 +135,7 @@ footer{padding-block:40px 56px;font-family:var(--copy);font-size:13px;color:var(
 </defs></svg>
 
 <div class="wrap">
-  <div class="top"><a class="logo" href="/"><svg class="cr" data-cr="monkey" width="36" height="36"></svg>Fast Monkey</a><span><a class="l" href="/">Site</a><a class="l" href="/docs/">Docs</a></span></div>
+  <div class="top"><a class="logo" href="/"><svg class="cr" data-cr="monkey" width="40" height="40"></svg>Fast Monkey</a><span><a class="l" href="/docs/">Docs</a><a class="l" href="/brand">Brand</a></span></div>
   <header class="b">
     <h1><svg class="cr" data-cr="monkey"></svg>Fast Monkey</h1>
     <p>Logo, mascots, colors and type. Tap anything to copy it.</p>
@@ -219,7 +221,7 @@ footer{padding-block:40px 56px;font-family:var(--copy);font-size:13px;color:var(
   const LOOK = {
     ops: { c: 2, k: 'beanie', e: 'dot' }, support: { c: 0, k: 'headset', e: 'happy' }, growth: { c: 6, k: 'glasses', e: 'dot' },
     sales: { c: 8, k: 'shades', e: 'dot' }, finance: { c: 4, k: 'tophat', e: 'sleepy' }, recruiter: { c: 9, k: 'bow', e: 'wink' },
-    hermes: { c: 1, k: 'wings', e: 'happy' }, monkey: { monkey: true },
+    hermes: { c: 1, k: 'wings', e: 'happy' }, monkey: { monkey: true, e: 'wide' },
   }
   function creature(id, about = '', o = LOOK[id] || {}) {
     const r = rnd(id)
