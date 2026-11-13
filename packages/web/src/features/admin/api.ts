@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Admin, Update, type UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
+import { Admin, AgentContainer, Update, type UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
 import { Deleted, List } from '@fastmonkey/common/api.ts'
 import { OAuthGrant } from '@fastmonkey/common/team/oauth.ts'
 import type { Me } from '@fastmonkey/common/team/team.ts'
@@ -11,6 +11,8 @@ const ADMIN_KEY = ['admin']
 const UPDATE_POLL_MS = 2_000
 const APPS_KEY = ['oauth-grants']
 const APP_LIST = List(OAuthGrant)
+const CONTAINER_LIST = List(AgentContainer)
+const CONTAINERS_POLL_MS = 5_000
 const DELETED_APP = Deleted('oauth_grant')
 
 export function useAdmin() {
@@ -51,4 +53,8 @@ export function useDeleteOAuthGrant() {
     mutationFn: (grantId: string) => request({ schema: DELETED_APP, path: `/api/oauth/grants/${encodeURIComponent(grantId)}`, method: 'DELETE' }),
     onSuccess: (deleted) => client.setQueryData<OAuthGrant[]>(APPS_KEY, (grants) => grants?.filter((grant) => grant.id !== deleted.id)),
   })
+}
+
+export function useContainers() {
+  return useQuery({ queryKey: ['containers'], queryFn: () => request({ schema: CONTAINER_LIST, path: '/api/admin/containers' }).then((page) => page.data), refetchInterval: CONTAINERS_POLL_MS })
 }

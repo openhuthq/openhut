@@ -3,7 +3,7 @@ import type { AgentDialog } from '@/features/agents/agent-page'
 import { integration } from '@/features/connections/catalog'
 
 const AGENT_DIALOGS: AgentDialog[] = ['name', 'instructions', 'slack', 'whatsapp']
-const ADMIN_FORMS: AdminForm[] = ['seat', 'public-url', 'google']
+const ADMIN_FORMS: AdminForm[] = ['seat', 'public-url', 'google', 'containers']
 const MISSING: Route = { page: 'missing' }
 
 export function routeOf(path: string): Route {

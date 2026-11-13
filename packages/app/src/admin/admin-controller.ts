@@ -1,10 +1,13 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
+import { listOf } from '../platform/responses.ts'
 import { requireSignIn, who } from '../team/identity.ts'
 import { adminService } from './admin-service.ts'
 
 export const adminController: FastifyPluginAsync = async (app) => {
   app.get('/', SignedIn, async () => adminService.status())
+
+  app.get('/containers', async (req) => listOf({ req, data: await adminService.containers({ actor: await who(req) }) }))
 
   app.patch<{ Body: UpdateAdmin }>('/', UpdateRequest, async (req) => adminService.update({ actor: await who(req), patch: req.body }))
 }

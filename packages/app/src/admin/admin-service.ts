@@ -1,5 +1,5 @@
 import * as z from 'zod/mini'
-import type { Admin, Health, Update, UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
+import type { Admin, AgentContainer, Health, Update, UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
 import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
 import { HttpError } from '../platform/http-error.ts'
@@ -21,6 +21,22 @@ let latest: { build: string | null; at: number } = { build: null, at: 0 }
 export const adminService = {
   async health(): Promise<Health> {
     return (await probe()).health
+  },
+
+  async containers({ actor }: { actor: Caller }): Promise<AgentContainer[]> {
+    if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can see the containers.')
+    const [{ containers }, agents] = await Promise.all([agentd.containers(), db.selectFrom('agent').select(['id', 'name', 'wanted']).orderBy('created_at').execute()])
+    const known = new Set(containers.map((container) => container.agentId))
+    const byId = new Map(agents.map((agent) => [agent.id, agent]))
+    return [
+      ...containers.map((container) => ({
+        object: 'container' as const, agentId: container.agentId, agentName: byId.get(container.agentId)?.name ?? null, wanted: byId.get(container.agentId)?.wanted ?? null,
+        name: container.name, state: container.state, status: container.status, image: container.image, createdAt: container.createdAt, network: container.networks,
+      })),
+      ...agents.filter((agent) => !known.has(agent.id)).map((agent) => ({
+        object: 'container' as const, agentId: agent.id, agentName: agent.name, wanted: agent.wanted, name: null, state: 'none', status: 'No container', image: '', createdAt: '', network: '',
+      })),
+    ]
   },
 
   async status(): Promise<Admin> {

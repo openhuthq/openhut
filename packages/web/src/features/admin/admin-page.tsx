@@ -10,14 +10,14 @@ import { Locked } from '@/components/locked'
 import { Mark } from '@/components/mark'
 import { Page } from '@/components/page'
 import { StatusBadge } from '@/components/status-badge'
-import { useAdmin, useStartUpdate, useDeleteOAuthGrant, useOAuthGrants, useUpdateAdmin } from '@/features/admin/api'
+import { useAdmin, useContainers, useStartUpdate, useDeleteOAuthGrant, useOAuthGrants, useUpdateAdmin } from '@/features/admin/api'
 import { GoogleClientSetup } from '@/features/connections/google-client-setup'
 import { ago, shortDate } from '@/lib/format'
 import { formValues } from '@/lib/form'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 
-export type AdminForm = 'seat' | 'public-url' | 'google'
+export type AdminForm = 'seat' | 'public-url' | 'google' | 'containers'
 
 const APP_MARKS: BrandName[] = ['claude', 'cursor', 'copilot', 'gemini', 'windsurf', 'zed']
 
@@ -41,6 +41,9 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
           action={<ToggleButton label="Edit" form="public-url" open={form === 'public-url'} canEdit={canEdit} reason="Only an owner or admin changes it" />} />
         {form === 'public-url' && canEdit && <PublicUrlForm publicUrl={admin.publicUrl} />}
         <VersionRow server={server} canEdit={canEdit} />
+        <Row icon="box" title="Containers" subtitle={`${server.running} of ${server.total} agents running, as Docker reports them`}
+          action={<ToggleButton label={form === 'containers' ? 'Hide containers' : 'View containers'} form="containers" open={form === 'containers'} canEdit={canEdit} reason="Only an owner or admin sees the containers" />} />
+        {form === 'containers' && canEdit && <Containers />}
       </Section>
       <Section number={3} title="Google">
         <Row icon="google" title="Google OAuth client" mono={!!admin.google.clientId} subtitle={admin.google.clientId ?? 'Needed before anyone connects Gmail, Google Drive or Google Workspace'}
@@ -158,4 +161,27 @@ function appMark(client: string) {
 function appLine(grant: OAuthGrant) {
   const used = grant.usedAt ? `last used ${ago(grant.usedAt)} ago` : 'not used yet'
   return `Connected ${shortDate.format(new Date(grant.createdAt))} · ${used}`
+}
+
+function Containers() {
+  const containers = useContainers()
+  return <div className="aform containers" id="containers">
+    <span className="mute">Straight from <code>docker ps -a</code> on this server, next to what each agent should be doing. Refreshes every 5 seconds.</span>
+    <Loaded query={containers}>{(list) => list.length ? <div className="ctable"><table>
+      <thead><tr><th>Agent</th><th>Should be</th><th>Container</th><th>State</th><th>Docker status</th><th>Image</th><th>Created</th></tr></thead>
+      <tbody>{list.map((row) => <tr key={`${row.agentId}-${row.name ?? 'none'}`} className={mismatch(row) ? 'off' : undefined}>
+        <td>{row.agentName ?? <span className="mute">Deleted agent</span>}<div className="mono mute">{row.agentId}</div></td>
+        <td>{row.wanted ?? '—'}</td>
+        <td className="mono">{row.name ?? '—'}</td>
+        <td><span className={`status ${row.state === 'running' ? 'success' : row.state === 'none' ? 'destructive' : 'secondary'}`}>{row.state}</span></td>
+        <td>{row.status}</td>
+        <td className="mono ellip" title={row.image}>{row.image.split('@')[0].split('/').pop()}</td>
+        <td className="mono">{row.createdAt.slice(0, 19)}</td>
+      </tr>)}</tbody>
+    </table></div> : <span>No agent containers on this server.</span>}</Loaded>
+  </div>
+}
+
+function mismatch(row: { wanted: string | null; state: string }) {
+  return row.wanted === null || (row.wanted === 'running') !== (row.state === 'running')
 }

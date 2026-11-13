@@ -48,3 +48,17 @@ export const UpdateAdminFields = {
 }
 export const UpdateAdmin = z.object(UpdateAdminFields).check(atLeastOneField)
 export type UpdateAdmin = z.infer<typeof UpdateAdmin>
+
+export const AgentContainer = z.object({
+  object: z.literal('container'),
+  agentId: z.string(),
+  agentName: z.nullable(z.string()),
+  wanted: z.nullable(z.enum(['running', 'stopped'])),
+  name: z.nullable(z.string()),
+  state: z.string(),
+  status: z.string(),
+  image: z.string(),
+  createdAt: z.string(),
+  network: z.string(),
+})
+export type AgentContainer = z.infer<typeof AgentContainer>
