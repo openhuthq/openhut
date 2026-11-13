@@ -1,15 +1,15 @@
-const COMMAND = '<pre class="cmd"><code>curl -fsSL https://get.jakebox.dev | sh</code></pre>'
+const COMMAND = '<pre class="cmd"><code>curl -fsSL https://fastmonkey.dev | sh</code></pre>'
 
 export const PAGES: Page[] = [
   {
     path: '/',
     nav: 'Overview',
-    title: 'JakeBox: self-hosted agents for your team',
+    title: 'Fast Monkey: self-hosted agents for your team',
     description: 'One command on your Linux server runs your team\'s Hermes agents, each in its own gVisor container, with one gateway holding every key.',
     body: `
 <p class="eyebrow">Self-hosted agents for your team</p>
 <h1>Your team's AI agents, on your own server</h1>
-<p class="lead">JakeBox runs many Hermes agents on one Linux server. Each agent lives in its own gVisor container, with its own Slack app and WhatsApp number. Agents reach your team's data only through JakeBox's gateway, which holds every key and checks each agent's grants on every call.</p>
+<p class="lead">Fast Monkey runs many Hermes agents on one Linux server. Each agent lives in its own gVisor container, with its own Slack app and WhatsApp number. Agents reach your team's data only through Fast Monkey's gateway, which holds every key and checks each agent's grants on every call.</p>
 ${COMMAND}
 <p class="mute">Run it as root on a Linux server. It prints a sign-up link, and the first person to open it becomes the owner. <a href="/docs/install">What the installer does</a></p>
 <div class="grid">
@@ -23,19 +23,19 @@ ${COMMAND}
   <li><a href="/docs/install">Install</a>: what you need and what the command does.</li>
   <li><a href="/docs/upgrade">Upgrade</a>: run the same command again.</li>
   <li><a href="/docs/security">Security</a>: how agents are kept apart and away from your keys.</li>
-  <li><a href="/docs/uninstall">Uninstall</a>: remove everything JakeBox put on the server.</li>
+  <li><a href="/docs/uninstall">Uninstall</a>: remove everything Fast Monkey put on the server.</li>
 </ul>`,
   },
   {
     path: '/docs/install',
     nav: 'Install',
-    title: 'Install JakeBox',
-    description: 'What JakeBox needs and what the one-line installer does.',
+    title: 'Install Fast Monkey',
+    description: 'What Fast Monkey needs and what the one-line installer does.',
     body: `
 <h1>Install</h1>
 <p class="lead">Run one command as root on your server:</p>
 ${COMMAND}
-<p>Not root? Use <code>curl -fsSL https://get.jakebox.dev | sudo sh</code>.</p>
+<p>Not root? Use <code>curl -fsSL https://fastmonkey.dev | sudo sh</code>.</p>
 <h2>What you need</h2>
 <ul>
   <li>A Linux server, x86_64 or arm64.</li>
@@ -44,8 +44,8 @@ ${COMMAND}
   <li>Disk for the agent image: the first start pulls about 3 GB.</li>
   <li>systemd, or not:
     <ul>
-      <li>With systemd, JakeBox runs as units and starts again after a reboot.</li>
-      <li>Without systemd, the installer starts it with <code>/opt/jakebox/install/host-start.sh</code>. After a reboot, run that script again. Agents stay stopped until you do.</li>
+      <li>With systemd, Fast Monkey runs as units and starts again after a reboot.</li>
+      <li>Without systemd, the installer starts it with <code>/opt/fastmonkey/install/host-start.sh</code>. After a reboot, run that script again. Agents stay stopped until you do.</li>
     </ul>
   </li>
 </ul>
@@ -57,23 +57,23 @@ ${COMMAND}
       <li>If Docker is already running, it reloads Docker and checks that Docker knows the <code>runsc</code> runtime.</li>
     </ul>
   </li>
-  <li>Downloads JakeBox and Claude Code 2.1.311.</li>
-  <li>Checks every download against a checksum written into the installer itself: gVisor's sha512, and the sha256 of Node, Claude Code and the JakeBox release. A tampered mirror can't swap a file.</li>
-  <li>Unpacks the release into a clean <code>/opt/jakebox.new</code>, owned by root and writable by nobody else, and swaps it in whole. Nothing from an earlier release lingers.</li>
-  <li>Writes its settings to <code>/etc/jakebox/env</code> (mode 0600). On a re-run it keeps what's there and only adds missing keys.</li>
-  <li>Starts JakeBox. On a systemd server, with units: <code>jakebox-firewall</code> before <code>docker.service</code>, then agentd, then the app. Otherwise with <code>install/host-start.sh</code>, in the same order.</li>
+  <li>Downloads Fast Monkey and Claude Code 2.1.311.</li>
+  <li>Checks every download against a checksum written into the installer itself: gVisor's sha512, and the sha256 of Node, Claude Code and the Fast Monkey release. A tampered mirror can't swap a file.</li>
+  <li>Unpacks the release into a clean <code>/opt/fastmonkey.new</code>, owned by root and writable by nobody else, and swaps it in whole. Nothing from an earlier release lingers.</li>
+  <li>Writes its settings to <code>/etc/fastmonkey/env</code> (mode 0600). On a re-run it keeps what's there and only adds missing keys.</li>
+  <li>Starts Fast Monkey. On a systemd server, with units: <code>fastmonkey-firewall</code> before <code>docker.service</code>, then agentd, then the app. Otherwise with <code>install/host-start.sh</code>, in the same order.</li>
   <li>Waits until the new app answers <code>/health</code>.</li>
   <li>Prints the owner sign-up link, <code>http://IP:8787/setup?code=…</code>. The first person to open it becomes the owner. After that, people join only by invite.</li>
 </ol>
-<p>Before agentd starts, the server pulls the pinned Hermes image and prepares the WhatsApp bridge, once per image. If the bridge fails, WhatsApp stays off and JakeBox still starts.</p>
+<p>Before agentd starts, the server pulls the pinned Hermes image and prepares the WhatsApp bridge, once per image. If the bridge fails, WhatsApp stays off and Fast Monkey still starts.</p>
 <h2>After the install</h2>
 <p>Keep port 8787 private, behind Tailscale or an SSH tunnel, or put TLS in front of it: sign-in travels over plain HTTP.</p>`,
   },
   {
     path: '/docs/upgrade',
     nav: 'Upgrade',
-    title: 'Upgrade JakeBox',
-    description: 'Upgrade JakeBox by running the install command again.',
+    title: 'Upgrade Fast Monkey',
+    description: 'Upgrade Fast Monkey by running the install command again.',
     body: `
 <h1>Upgrade</h1>
 <p class="lead">Run the install command again:</p>
@@ -81,12 +81,12 @@ ${COMMAND}
 <p>It upgrades in place and keeps:</p>
 <ul>
   <li>your data in <code>/data</code>;</li>
-  <li>the settings in <code>/etc/jakebox/env</code>;</li>
+  <li>the settings in <code>/etc/fastmonkey/env</code>;</li>
   <li>people, tokens, connections and agents.</li>
 </ul>
 <h2>What happens to agents</h2>
 <ul>
-  <li>The Hermes image follows each release's pin, unless you set <code>AGENT_IMAGE</code> in <code>/etc/jakebox/env</code>.</li>
+  <li>The Hermes image follows each release's pin, unless you set <code>AGENT_IMAGE</code> in <code>/etc/fastmonkey/env</code>.</li>
   <li>The new app restarts every running agent once, so each one gets the new release's plugin and CLI.</li>
   <li>After that, every 30 seconds it restarts any running agent whose files changed since it started.</li>
 </ul>
@@ -95,11 +95,11 @@ ${COMMAND}
   {
     path: '/docs/security',
     nav: 'Security',
-    title: 'JakeBox security',
-    description: 'How JakeBox keeps agents apart, off your network and away from your keys.',
+    title: 'Fast Monkey security',
+    description: 'How Fast Monkey keeps agents apart, off your network and away from your keys.',
     body: `
 <h1>Security</h1>
-<p class="lead">Agents read untrusted input from Slack and WhatsApp, so JakeBox assumes any agent can be talked into anything. It keeps each one in its own box, off your network and away from your keys.</p>
+<p class="lead">Agents read untrusted input from Slack and WhatsApp, so Fast Monkey assumes any agent can be talked into anything. It keeps each one in its own box, off your network and away from your keys.</p>
 <h2>Isolation</h2>
 <ul>
   <li>Each agent runs in its own container on gVisor: user 10000, a read-only root, every capability dropped, no new privileges, limits on processes, memory and CPU, and its own <code>/24</code> network.</li>
@@ -138,25 +138,25 @@ ${COMMAND}
   {
     path: '/docs/uninstall',
     nav: 'Uninstall',
-    title: 'Uninstall JakeBox',
-    description: 'Remove JakeBox, its agents, its data and its firewall from your server.',
+    title: 'Uninstall Fast Monkey',
+    description: 'Remove Fast Monkey, its agents, its data and its firewall from your server.',
     body: `
 <h1>Uninstall</h1>
-<p class="lead">Run these as root. They delete every agent and all of JakeBox's data, and can't be undone.</p>
-<h2>1. Stop JakeBox</h2>
+<p class="lead">Run these as root. They delete every agent and all of Fast Monkey's data, and can't be undone.</p>
+<h2>1. Stop Fast Monkey</h2>
 <p>On a systemd server:</p>
-<pre><code>systemctl disable --now jakebox.service jakebox-agentd.service
-systemctl disable jakebox-firewall.service
-rm /etc/systemd/system/jakebox*.service
+<pre><code>systemctl disable --now fastmonkey.service fastmonkey-agentd.service
+systemctl disable fastmonkey-firewall.service
+rm /etc/systemd/system/fastmonkey*.service
 systemctl daemon-reload</code></pre>
 <p>Without systemd:</p>
-<pre><code>pkill -f /opt/jakebox/install/supervise.sh
-pkill -f '^node /opt/jakebox/packages/agentd/src/agentd.ts'
-pkill -f '^node /opt/jakebox/packages/app/src/app.ts'</code></pre>
+<pre><code>pkill -f /opt/fastmonkey/install/supervise.sh
+pkill -f '^node /opt/fastmonkey/packages/agentd/src/agentd.ts'
+pkill -f '^node /opt/fastmonkey/packages/app/src/app.ts'</code></pre>
 <h2>2. Remove the agents</h2>
-<pre><code>docker ps -aq --filter label=jakebox.agent | xargs -r docker rm -f
-docker network ls -q --filter label=jakebox.agent | xargs -r docker network rm
-docker rmi "$(cat /opt/jakebox/install/agent-image)"</code></pre>
+<pre><code>docker ps -aq --filter label=fastmonkey.agent | xargs -r docker rm -f
+docker network ls -q --filter label=fastmonkey.agent | xargs -r docker network rm
+docker rmi "$(cat /opt/fastmonkey/install/agent-image)"</code></pre>
 <p>The last line frees the agent image, about 3 GB. If you set <code>AGENT_IMAGE</code>, remove that image instead.</p>
 <h2>3. Remove the firewall</h2>
 <pre><code>iptables -D DOCKER-USER -s 10.200.0.0/16 -j AGENT
@@ -165,12 +165,12 @@ iptables -F AGENT &amp;&amp; iptables -X AGENT
 iptables -F AGENT-IN &amp;&amp; iptables -X AGENT-IN
 ip rule del to 10.200.0.0/16 lookup main priority 5200</code></pre>
 <h2>4. Remove the files</h2>
-<pre><code>rm -rf /opt/jakebox /etc/jakebox /data/app /data/agents /data/agent-conf
-rm -rf /etc/agentd /var/lib/jakebox /var/cache/jakebox /var/log/jakebox /var/log/jakebox-boot.log /run/jakebox /run/agentd
+<pre><code>rm -rf /opt/fastmonkey /etc/fastmonkey /data/app /data/agents /data/agent-conf
+rm -rf /etc/agentd /var/lib/fastmonkey /var/cache/fastmonkey /var/log/fastmonkey /var/log/fastmonkey-boot.log /run/fastmonkey /run/agentd
 rmdir /data</code></pre>
-<p>JakeBox keeps everything in <code>/data/app</code>, <code>/data/agents</code> and <code>/data/agent-conf</code>. <code>rmdir</code> removes <code>/data</code> only if nothing else is in it.</p>
+<p>Fast Monkey keeps everything in <code>/data/app</code>, <code>/data/agents</code> and <code>/data/agent-conf</code>. <code>rmdir</code> removes <code>/data</code> only if nothing else is in it.</p>
 <h2>5. Remove the user</h2>
-<p>On Debian or Ubuntu, <code>userdel jakebox</code>. On Alpine, <code>deluser jakebox</code>.</p>
+<p>On Debian or Ubuntu, <code>userdel fastmonkey</code>. On Alpine, <code>deluser fastmonkey</code>.</p>
 <h2>What stays</h2>
 <p>Docker, gVisor (<code>runsc</code> in <code>/usr/local/bin</code> and its entry in <code>/etc/docker/daemon.json</code>) and Node stay installed, because other programs may use them. Remove them yourself if nothing else does.</p>`,
   },

@@ -1,6 +1,6 @@
 import type { Selectable } from 'kysely'
-import type { Deleted } from '@jakebox/common/api.ts'
-import { ADDRESS, type Channel, type CreateChannel, type UpdateChannel } from '@jakebox/common/channels/channel.ts'
+import type { Deleted } from '@fastmonkey/common/api.ts'
+import { ADDRESS, type Channel, type CreateChannel, type UpdateChannel } from '@fastmonkey/common/channels/channel.ts'
 import { db, findRow, isUniqueViolation } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { log, record } from '../platform/events.ts'

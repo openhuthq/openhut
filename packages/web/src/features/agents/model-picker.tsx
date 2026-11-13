@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
-import { MODELS, type Agent, type ModelId } from '@jakebox/common/agents/agent.ts'
+import { MODELS, type Agent, type ModelId } from '@fastmonkey/common/agents/agent.ts'
 import { Glyph } from '@/components/glyph'
 import { ICONS } from '@/components/icons'
 import { Locked } from '@/components/locked'

@@ -1,5 +1,5 @@
 import type { FastifyError, FastifyInstance } from 'fastify'
-import type { ApiError } from '@jakebox/common/api.ts'
+import type { ApiError } from '@fastmonkey/common/api.ts'
 import { log } from './events.ts'
 
 export class HttpError extends Error {

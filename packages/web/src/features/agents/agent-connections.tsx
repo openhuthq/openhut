@@ -1,5 +1,5 @@
-import type { Agent, Grant } from '@jakebox/common/agents/agent.ts'
-import type { Connection } from '@jakebox/common/connections/connection.ts'
+import type { Agent, Grant } from '@fastmonkey/common/agents/agent.ts'
+import type { Connection } from '@fastmonkey/common/connections/connection.ts'
 import { ErrorNote } from '@/components/error-note'
 import { Mark } from '@/components/mark'
 import { SectionHead } from '@/components/section-head'

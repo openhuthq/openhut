@@ -24,7 +24,7 @@ for (const phase of ['main', 'after-upgrade', 'after-restart']) {
 }
 const sources = sameTree ? 'the tree matches what the run tested' : '**the tree changed during the run**'
 console.log(
-  `# JakeBox e2e report\n\n${pass}/${total} checks passed\n\nSources: ${sources}\n\n| ID | Check | Expected | Actual | Result |\n|---|---|---|---|---|\n${rows.join('\n')}`,
+  `# Fast Monkey e2e report\n\n${pass}/${total} checks passed\n\nSources: ${sources}\n\n| ID | Check | Expected | Actual | Result |\n|---|---|---|---|---|\n${rows.join('\n')}`,
 )
 process.exit(pass === total && sameTree ? 0 : 1)
 

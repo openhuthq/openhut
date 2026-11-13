@@ -1,4 +1,4 @@
-import { ApiError } from '@jakebox/common/api.ts'
+import { ApiError } from '@fastmonkey/common/api.ts'
 
 type Schema<T> = { safeParse: (data: unknown) => { success: true; data: T } | { success: false } }
 

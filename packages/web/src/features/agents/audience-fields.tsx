@@ -1,4 +1,4 @@
-import { ADDRESS, type Channel, type ChannelKind } from '@jakebox/common/channels/channel.ts'
+import { ADDRESS, type Channel, type ChannelKind } from '@fastmonkey/common/channels/channel.ts'
 import { Field } from '@/components/field'
 import { fieldError } from '@/lib/api-client'
 

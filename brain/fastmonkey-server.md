@@ -1,4 +1,4 @@
-# How the JakeBox server works
+# How the Fast Monkey server works
 
 The code carries no comments (Skyfleet's coding style), so the reasons live here.
 
@@ -16,7 +16,7 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
   from the one it replaced.
 
 ## Data and secrets
-- PGlite (Postgres in WASM) in `JAKEBOX_DATA`, through Kysely's own PGlite dialect, which runs one query or
+- PGlite (Postgres in WASM) in `FASTMONKEY_DATA`, through Kysely's own PGlite dialect, which runs one query or
   transaction at a time (PGlite is single-user). `install_setting` is created at import time because settings and the
   auth secret load then.
 - `auth_secret` is created once; it keys every seal (AES-256-GCM) and every agent token.
@@ -57,7 +57,7 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
   members of one, or hold `pg_execute_server_program` / `pg_*_server_files` are refused. Each query runs through a
   cursor in the extended protocol: one SELECT/VALUES statement, at most 1001 rows in memory, 8 MB on the wire, and a
   reply over 64 KB is an error rather than a silently cut one.
-- `JAKEBOX_MODEL=test` serves a deterministic OpenAI-compatible model on the gateway port: `sql: <query>` makes it call
+- `FASTMONKEY_MODEL=test` serves a deterministic OpenAI-compatible model on the gateway port: `sql: <query>` makes it call
   `call_tool` with `postgres_query`, a tool result is echoed back, anything else is echoed. Runs are free and repeatable.
 
 ## Channels

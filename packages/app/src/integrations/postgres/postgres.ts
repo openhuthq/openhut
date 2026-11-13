@@ -102,7 +102,7 @@ async function connectFirst({ attempts }: { attempts: pg.ClientConfig[] }): Prom
 
 async function checkedAddress(host: string): Promise<string> {
   const ip = isIP(host) ? host : (await lookup(host)).address
-  if (BLOCKED.check(ip, isIP(ip) === 6 ? 'ipv6' : 'ipv4')) throw new Error(`Refused address ${ip}: JakeBox never connects to this server, its agents or link-local addresses. Use the database's own address.`)
+  if (BLOCKED.check(ip, isIP(ip) === 6 ? 'ipv6' : 'ipv4')) throw new Error(`Refused address ${ip}: Fast Monkey never connects to this server, its agents or link-local addresses. Use the database's own address.`)
   return ip
 }
 

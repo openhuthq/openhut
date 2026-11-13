@@ -1,4 +1,4 @@
-import type { Agent } from '@jakebox/common/agents/agent.ts'
+import type { Agent } from '@fastmonkey/common/agents/agent.ts'
 import { Avatar } from '@/components/avatar'
 import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'

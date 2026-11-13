@@ -1,6 +1,6 @@
 import { initLogger, log } from 'evlog'
 
-initLogger({ env: { service: 'jakebox' }, pretty: process.stdout.isTTY === true, redact: true })
+initLogger({ env: { service: 'fastmonkey' }, pretty: process.stdout.isTTY === true, redact: true })
 
 export { log }
 

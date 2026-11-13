@@ -1,4 +1,4 @@
-import type { Connection } from '@jakebox/common/connections/connection.ts'
+import type { Connection } from '@fastmonkey/common/connections/connection.ts'
 import { StatusBadge } from '@/components/status-badge'
 import { ago } from '@/lib/format'
 

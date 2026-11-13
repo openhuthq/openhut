@@ -2,4 +2,4 @@
 !packages/site
 packages/site/dist
 !dist/install.sh
-!dist/jakebox.tgz
+!dist/fastmonkey.tgz

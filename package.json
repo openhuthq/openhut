@@ -1,5 +1,5 @@
 {
-  "name": "jakebox-monorepo",
+  "name": "fastmonkey-monorepo",
   "private": true,
   "type": "module",
   "packageManager": "npm@10.9.3",
@@ -8,11 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run build --filter=@jakebox/web && node scripts/dev.ts",
+    "dev": "turbo run build --filter=@fastmonkey/web && node scripts/dev.ts",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck && tsc -p scripts",
     "test": "turbo run test",
-    "e2e": "npm -w @jakebox/e2e run e2e",
+    "e2e": "npm -w @fastmonkey/e2e run e2e",
     "release": "scripts/release.sh"
   },
   "devDependencies": {

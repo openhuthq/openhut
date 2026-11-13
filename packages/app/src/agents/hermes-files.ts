@@ -1,4 +1,4 @@
-import type { Audience, ChannelKind } from '@jakebox/common/channels/channel.ts'
+import type { Audience, ChannelKind } from '@fastmonkey/common/channels/channel.ts'
 import type { AgentFiles } from '../platform/agentd.ts'
 import { config } from '../platform/config.ts'
 import { agentSubnet } from '../platform/network.ts'
@@ -23,9 +23,9 @@ export function renderFiles({ agent, ownerName, token, channelKey, seat, channel
     'terminal:\n  backend: local',
     'agent:\n  api_max_retries: 30\n  disabled_toolsets: [browser, code_execution, delegation, cronjob]',
     `approvals:\n  mode: ${approvalsMode}\n  approvers: ${JSON.stringify(approvers)}`,
-    'platform_toolsets:\n  api_server: [hermes-api-server, jakebox]',
+    'platform_toolsets:\n  api_server: [hermes-api-server, fastmonkey]',
     'tools:\n  tool_search:\n    enabled: "off"',
-    `mcp_servers:\n  jakebox:\n    url: ${gateway}/api/v1/mcp\n    headers:\n      Authorization: "Agent ${token}"`,
+    `mcp_servers:\n  fastmonkey:\n    url: ${gateway}/api/v1/mcp\n    headers:\n      Authorization: "Agent ${token}"`,
     ...channels.flatMap(yamlOf),
   ].join('\n') + '\n'
   const env = [
@@ -38,7 +38,7 @@ export function renderFiles({ agent, ownerName, token, channelKey, seat, channel
 
 function modelYaml({ gateway, token, model }: { gateway: string; token: string; model: string }): string {
   if (config.modelMode === 'test') {
-    return `model:\n  default: jakebox-test-${model}\n  provider: custom\n  base_url: ${gateway}/test-llm/v1\n  api_key: "${token}"\n  context_length: 200000`
+    return `model:\n  default: fastmonkey-test-${model}\n  provider: custom\n  base_url: ${gateway}/test-llm/v1\n  api_key: "${token}"\n  context_length: 200000`
   }
   const auxiliary = AUXILIARY_TASKS.map((task) => `  ${task}: { provider: claude-subscription-directsdk-experimental, model: haiku }`).join('\n')
   return `model:\n  default: ${model}\n  provider: claude-subscription-directsdk-experimental\nauxiliary:\n${auxiliary}`

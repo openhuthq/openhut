@@ -1,4 +1,4 @@
-import type { MemberRole, TeamRole } from '@jakebox/common/team/team.ts'
+import type { MemberRole, TeamRole } from '@fastmonkey/common/team/team.ts'
 
 export const ROLE_LABEL: Record<TeamRole, string> = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 

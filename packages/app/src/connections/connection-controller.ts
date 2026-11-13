@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { CreateConnection, ListConnectionEvents, UpdateConnection } from '@jakebox/common/connections/connection.ts'
+import { CreateConnection, ListConnectionEvents, UpdateConnection } from '@fastmonkey/common/connections/connection.ts'
 import { listOf } from '../platform/responses.ts'
 import { who } from '../team/identity.ts'
 import { connectionEventService } from './connection-event-service.ts'

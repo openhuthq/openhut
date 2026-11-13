@@ -74,7 +74,7 @@ function render(page: Page) {
 <body>
 <div class="app">
 <nav class="side" aria-label="Site">
-<a class="team" href="/"><span class="logo">${LOGO}</span>JakeBox</a>
+<a class="team" href="/"><span class="logo">${LOGO}</span>Fast Monkey</a>
 ${nav(page)}
 </nav>
 <main class="panel">

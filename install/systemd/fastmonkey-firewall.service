@@ -1,5 +1,5 @@
 [Unit]
-Description=JakeBox agent firewall (before Docker, so no agent ever runs unprotected)
+Description=Fast Monkey agent firewall (before Docker, so no agent ever runs unprotected)
 Before=docker.service
 DefaultDependencies=no
 After=network-pre.target
@@ -7,8 +7,8 @@ After=network-pre.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-EnvironmentFile=/etc/jakebox/env
-ExecStart=/opt/jakebox/install/agents-firewall.sh
+EnvironmentFile=/etc/fastmonkey/env
+ExecStart=/opt/fastmonkey/install/agents-firewall.sh
 
 [Install]
 WantedBy=multi-user.target

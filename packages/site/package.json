@@ -1,5 +1,5 @@
 {
-  "name": "@jakebox/site",
+  "name": "@fastmonkey/site",
   "private": true,
   "type": "module",
   "scripts": {

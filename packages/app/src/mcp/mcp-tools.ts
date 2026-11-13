@@ -1,16 +1,16 @@
 import * as z from 'zod/mini'
-import { CreateAgent, CreateGrant, ListGrants, UpdateAgentFields } from '@jakebox/common/agents/agent.ts'
-import { UpdateAdminFields } from '@jakebox/common/admin/admin.ts'
-import { ListChannels } from '@jakebox/common/channels/channel.ts'
-import { CreateConnection, ListConnectionEvents, UpdateConnection } from '@jakebox/common/connections/connection.ts'
-import { CreateInvite } from '@jakebox/common/team/team.ts'
+import { CreateAgent, CreateGrant, ListGrants, UpdateAgentFields } from '@fastmonkey/common/agents/agent.ts'
+import { UpdateAdminFields } from '@fastmonkey/common/admin/admin.ts'
+import { ListChannels } from '@fastmonkey/common/channels/channel.ts'
+import { CreateConnection, ListConnectionEvents, UpdateConnection } from '@fastmonkey/common/connections/connection.ts'
+import { CreateInvite } from '@fastmonkey/common/team/team.ts'
 import { describeIssues } from '../platform/validation.ts'
 
 const Id = z.object({ id: z.string().check(z.maxLength(60)) })
 const Nothing = z.object({})
 
 export const MCP_TOOLS = [
-  tool({ name: 'list_agents', description: 'Every agent on this JakeBox, with its status.', input: Nothing, call: ({ api }) => api({ method: 'GET', url: '/api/agents' }) }),
+  tool({ name: 'list_agents', description: 'Every agent on this Fast Monkey, with its status.', input: Nothing, call: ({ api }) => api({ method: 'GET', url: '/api/agents' }) }),
   tool({ name: 'get_agent', description: 'One agent: its instructions, model and status.', input: Id, call: ({ api, input }) => api({ method: 'GET', url: `/api/agents/${input.id}` }) }),
   tool({ name: 'create_agent', description: 'Create an agent (stopped). You own it.', input: CreateAgent, call: ({ api, input }) => api({ method: 'POST', url: '/api/agents', payload: input }) }),
   tool({

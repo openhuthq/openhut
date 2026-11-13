@@ -1,0 +1,15 @@
+[Unit]
+Description=Fast Monkey control plane (dashboard :8787, agent gateway :8081)
+After=fastmonkey-agentd.service
+Wants=fastmonkey-agentd.service
+
+[Service]
+User=fastmonkey
+EnvironmentFile=/etc/fastmonkey/env
+WorkingDirectory=/opt/fastmonkey
+ExecStart=/usr/bin/env node /opt/fastmonkey/packages/app/src/app.ts
+UMask=0077
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

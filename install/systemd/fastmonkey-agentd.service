@@ -1,0 +1,16 @@
+[Unit]
+Description=Fast Monkey agentd (the only process that runs Docker commands for agents)
+After=docker.service fastmonkey-firewall.service
+Requires=docker.service fastmonkey-firewall.service
+
+[Service]
+EnvironmentFile=/etc/fastmonkey/env
+ExecStartPre=/opt/fastmonkey/install/prepare.sh
+ExecStartPre=/opt/fastmonkey/install/agents-firewall.sh
+ExecStartPre=/opt/fastmonkey/install/pull-image.sh
+ExecStart=/bin/sh -c 'APP_GID=$(id -g fastmonkey) exec node /opt/fastmonkey/packages/agentd/src/agentd.ts'
+TimeoutStartSec=infinity
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

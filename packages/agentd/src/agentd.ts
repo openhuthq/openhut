@@ -13,7 +13,7 @@ const APP_GID = Number(process.env.APP_GID ?? 0)
 const FIREWALL = fileURLToPath(new URL('../../../install/agents-firewall.sh', import.meta.url))
 const PLUGINS = fileURLToPath(new URL('../../../vendor/hermes-plugins', import.meta.url))
 const CLAUDE_BIN = fileURLToPath(new URL('../../../bin/claude', import.meta.url))
-const BRIDGE = '/var/lib/jakebox/whatsapp-bridge'
+const BRIDGE = '/var/lib/fastmonkey/whatsapp-bridge'
 const AGENT_UID = 10000
 const ID = /^ag_[a-z0-9]{8}$/
 const FILES = ['config.yaml', '.env', 'SOUL.md'] as const
@@ -166,12 +166,12 @@ async function create(id: string, net: number, files: AgentFiles) {
   await mustHaveFirewall()
   makeHome(id)
   writeConf(id, files)
-  await docker('network', 'create', '--subnet', `10.200.${net}.0/24`, '--gateway', `10.200.${net}.1`, '--label', `jakebox.agent=${id}`, `ag-${id}`)
+  await docker('network', 'create', '--subnet', `10.200.${net}.0/24`, '--gateway', `10.200.${net}.1`, '--label', `fastmonkey.agent=${id}`, `ag-${id}`)
   const digest = await docker('image', 'inspect', '--format', '{{index .RepoDigests 0}}', IMAGE).catch(() => IMAGE)
   await docker(
     'create',
     ...['--name', `ag-${id}`, '--hostname', id, '--restart', 'no'],
-    ...['--label', `jakebox.agent=${id}`, '--label', `agent.digest=${digest}`],
+    ...['--label', `fastmonkey.agent=${id}`, '--label', `agent.digest=${digest}`],
     ...['--runtime', 'runsc', '--user', `${AGENT_UID}:${AGENT_UID}`, '--init', '--entrypoint', '/opt/hermes/bin/hermes'],
     ...['--read-only', '--tmpfs', '/tmp:rw,nosuid,size=256m', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'],
     ...['--pids-limit', '512', '--memory', '1g', '--cpus', '1', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'],
@@ -284,7 +284,7 @@ async function watchFirewall() {
     console.log(`watchdog: re-applied the firewall at ${new Date().toISOString()}`)
     return
   }
-  const ids = (await docker('ps', '-q', '--filter', 'label=jakebox.agent').catch(() => '')).split('\n').filter(Boolean)
+  const ids = (await docker('ps', '-q', '--filter', 'label=fastmonkey.agent').catch(() => '')).split('\n').filter(Boolean)
   if (ids.length) await docker('stop', '-t', '5', ...ids).catch((e) => console.error(`watchdog: stop failed: ${errorText(e)}`))
   console.error(`watchdog: firewall missing; stopped ${ids.length} agents at ${new Date().toISOString()}`)
 }
@@ -315,7 +315,7 @@ async function mustHaveFirewall() {
 }
 
 async function containerStates() {
-  const out = await docker('ps', '-a', '--filter', 'label=jakebox.agent', '--format', '{{.Label "jakebox.agent"}} {{.State}}')
+  const out = await docker('ps', '-a', '--filter', 'label=fastmonkey.agent', '--format', '{{.Label "fastmonkey.agent"}} {{.State}}')
   return Object.fromEntries(
     out
       .split('\n')

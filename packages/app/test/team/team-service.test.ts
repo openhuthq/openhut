@@ -29,7 +29,7 @@ test('an admin invite makes an admin, who can invite in turn', async () => {
   const admin = await join({ link: (await teamService.createInvite({ actor, role: 'admin' })).link, username: 'sara' })
   assert.equal(admin.role, 'admin')
   const next = await teamService.createInvite({ actor: { id: admin.id, username: admin.username, role: admin.role }, role: 'member' })
-  assert.match(next.link ?? '', /\/invite\/jbi_[\w-]{20,}$/)
+  assert.match(next.link ?? '', /\/invite\/fmi_[\w-]{20,}$/)
 })
 
 test('a taken username leaves the invite unused', async () => {

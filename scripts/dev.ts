@@ -5,7 +5,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 const DATA = '.data'
 const SOCK = `${DATA}/agentd.sock`
 const SOCKET_WAIT_MS = 10_000
-const env = { ...process.env, AGENTD_SOCK: SOCK, JAKEBOX_DATA: DATA, SETUP_CODE: 'dev', JAKEBOX_MODEL: 'test' }
+const env = { ...process.env, AGENTD_SOCK: SOCK, FASTMONKEY_DATA: DATA, SETUP_CODE: 'dev', FASTMONKEY_MODEL: 'test' }
 
 mkdirSync(DATA, { recursive: true })
 rmSync(SOCK, { force: true })

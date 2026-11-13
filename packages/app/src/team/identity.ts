@@ -1,11 +1,11 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import type { TeamRole } from '@jakebox/common/team/team.ts'
+import type { TeamRole } from '@fastmonkey/common/team/team.ts'
 import { db } from '../platform/db.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { sha } from '../platform/secrets.ts'
 import { ACCESS_TOKEN, oauthService } from './oauth-service.ts'
 
-const COOKIE = 'jb_session'
+const COOKIE = 'fm_session'
 export const SESSION_DAYS = 7
 
 export const isAdmin = (caller: Caller): boolean => caller.role === 'owner' || caller.role === 'admin'
@@ -13,7 +13,7 @@ export const isAdmin = (caller: Caller): boolean => caller.role === 'owner' || c
 export async function who(req: FastifyRequest): Promise<Caller> {
   const caller = await callerOf(req)
   if (caller) return caller
-  if (ACCESS_TOKEN.test(req.headers.authorization ?? '')) throw new HttpError(401, 'This sign-in expired or the app was disconnected. Connect the app to JakeBox again.')
+  if (ACCESS_TOKEN.test(req.headers.authorization ?? '')) throw new HttpError(401, 'This sign-in expired or the app was disconnected. Connect the app to Fast Monkey again.')
   throw new HttpError(401, 'Sign in first.')
 }
 

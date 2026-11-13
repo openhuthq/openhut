@@ -29,9 +29,9 @@ export async function containerStates(): Promise<Record<string, string> | undefi
 async function ask<S extends z.ZodMiniType>({ request, doing, schema }: { request: Record<string, unknown>; doing: string; schema: S }): Promise<z.output<S>> {
   const reply = await send({ request, doing })
   const failure = z.safeParse(Failure, reply)
-  if (failure.success) throw new HttpError(502, `The agent runner couldn't ${doing}: ${failure.data.error}. Details are in /var/log/jakebox/agentd.log.`)
+  if (failure.success) throw new HttpError(502, `The agent runner couldn't ${doing}: ${failure.data.error}. Details are in /var/log/fastmonkey/agentd.log.`)
   const parsed = z.safeParse(schema, reply)
-  if (!parsed.success) throw new HttpError(502, `The agent runner sent a reply JakeBox doesn't understand while trying to ${doing}. Check that agentd and the app are the same release.`)
+  if (!parsed.success) throw new HttpError(502, `The agent runner sent a reply Fast Monkey doesn't understand while trying to ${doing}. Check that agentd and the app are the same release.`)
   return parsed.data
 }
 

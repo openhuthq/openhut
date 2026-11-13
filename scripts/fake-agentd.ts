@@ -2,7 +2,7 @@ import { readFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import type { AgentdReplies, AgentdRequest } from '../packages/agentd/src/agentd.ts'
 
-const SOCK = process.env.AGENTD_SOCK ?? '/tmp/jb-agentd.sock'
+const SOCK = process.env.AGENTD_SOCK ?? '/tmp/fm-agentd.sock'
 const IMAGE = readFileSync(new URL('../install/agent-image', import.meta.url), 'utf8').trim()
 const FAKE_PHONE = '15550001111'
 const states: Record<string, string> = {}

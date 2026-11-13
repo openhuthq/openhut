@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Deleted, List } from '@jakebox/common/api.ts'
-import { Connection, ConnectionEvent, type CreateConnection, type UpdateConnection } from '@jakebox/common/connections/connection.ts'
+import { Deleted, List } from '@fastmonkey/common/api.ts'
+import { Connection, ConnectionEvent, type CreateConnection, type UpdateConnection } from '@fastmonkey/common/connections/connection.ts'
 import { request } from '@/lib/api-client'
 import { CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'

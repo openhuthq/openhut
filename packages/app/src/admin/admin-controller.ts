@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { UpdateAdmin } from '@jakebox/common/admin/admin.ts'
+import { UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
 import { requireSignIn, who } from '../team/identity.ts'
 import { adminService } from './admin-service.ts'
 

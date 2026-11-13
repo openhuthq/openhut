@@ -1,4 +1,4 @@
-import type { Admin, Health, UpdateAdmin } from '@jakebox/common/admin/admin.ts'
+import type { Admin, Health, UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
 import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
 import { HttpError } from '../platform/http-error.ts'
@@ -46,7 +46,7 @@ async function setSeat(token: string): Promise<void> {
 async function setPublicUrl(url: string): Promise<void> {
   const parsed = new URL(url)
   if (parsed.pathname !== '/' || parsed.search || parsed.hash || parsed.username) {
-    throw new HttpError(400, 'Use just the address, like https://jakebox.example.com, with no path.', { param: 'publicUrl' })
+    throw new HttpError(400, 'Use just the address, like https://fastmonkey.example.com, with no path.', { param: 'publicUrl' })
   }
   await settings.setPublicUrl(parsed.origin)
 }

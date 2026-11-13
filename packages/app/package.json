@@ -1,5 +1,5 @@
 {
-  "name": "@jakebox/app",
+  "name": "@fastmonkey/app",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
   "dependencies": {
     "@electric-sql/pglite": "0.5.8",
     "@fastify/static": "10.1.4",
-    "@jakebox/common": "*",
+    "@fastmonkey/common": "*",
     "@modelcontextprotocol/sdk": "1.30.1",
     "evlog": "^2.29.0",
     "fastify": "5.12.5",

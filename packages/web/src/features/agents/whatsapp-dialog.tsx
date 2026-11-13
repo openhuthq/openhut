@@ -1,5 +1,5 @@
-import type { Agent } from '@jakebox/common/agents/agent.ts'
-import { ADDRESS, type Channel } from '@jakebox/common/channels/channel.ts'
+import type { Agent } from '@fastmonkey/common/agents/agent.ts'
+import { ADDRESS, type Channel } from '@fastmonkey/common/channels/channel.ts'
 import { Dialog } from '@/components/dialog'
 import { DialogFoot } from '@/components/dialog-foot'
 import { DialogHead } from '@/components/dialog-head'

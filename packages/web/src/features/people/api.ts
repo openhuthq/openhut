@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Deleted, List } from '@jakebox/common/api.ts'
-import { Invite, Person, type MemberRole } from '@jakebox/common/team/team.ts'
+import { Deleted, List } from '@fastmonkey/common/api.ts'
+import { Invite, Person, type MemberRole } from '@fastmonkey/common/team/team.ts'
 import { request } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'

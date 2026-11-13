@@ -1,5 +1,5 @@
-import type { Deleted } from '@jakebox/common/api.ts'
-import type { CreatePerson, CreateSession, Invite, InviteLink, Me, MemberRole, Person, Session, Setup } from '@jakebox/common/team/team.ts'
+import type { Deleted } from '@fastmonkey/common/api.ts'
+import type { CreatePerson, CreateSession, Invite, InviteLink, Me, MemberRole, Person, Session, Setup } from '@fastmonkey/common/team/team.ts'
 import type { Selectable } from 'kysely'
 import type { Database } from '../platform/db-schema.ts'
 import { db, isUniqueViolation } from '../platform/db.ts'
@@ -42,7 +42,7 @@ export const teamService = {
 
   async createInvite({ actor, role }: { actor: Caller; role: MemberRole }): Promise<Invite> {
     if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can invite people.')
-    const token = newToken('jbi')
+    const token = newToken('fmi')
     const row = await db.insertInto('invite')
       .values({ id: newId('inv'), hash: sha(token), role, created_by: actor.id, expires_at: new Date(Date.now() + INVITE_DAYS * 864e5), used_at: null })
       .returningAll().executeTakeFirstOrThrow()
@@ -80,7 +80,7 @@ export const teamService = {
     if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can remove people.')
     const person = await db.selectFrom('person').select(['id', 'role']).where('id', '=', id).where('removed_at', 'is', null).executeTakeFirst()
     if (!person) throw new HttpError(404, 'That person isn\'t on the team.')
-    if (person.role === 'owner') throw new HttpError(403, 'JakeBox always keeps its owner. Remove someone else.')
+    if (person.role === 'owner') throw new HttpError(403, 'Fast Monkey always keeps its owner. Remove someone else.')
     await db.transaction().execute(async (trx) => {
       await trx.updateTable('person').set({ removed_at: new Date() }).where('id', '=', id).execute()
       await trx.deleteFrom('session').where('person_id', '=', id).execute()
@@ -94,7 +94,7 @@ export const teamService = {
 }
 
 async function openSession(person: Person): Promise<{ session: Session; token: string }> {
-  const token = newToken('jbs')
+  const token = newToken('fms')
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 864e5)
   await db.insertInto('session').values({ hash: sha(token), person_id: person.id, expires_at: expiresAt }).execute()
   return { session: { id: sha(token).slice(0, 16), object: 'session', person, expiresAt: expiresAt.toISOString() }, token }
@@ -102,13 +102,13 @@ async function openSession(person: Person): Promise<{ session: Session; token: s
 
 async function createOwner({ setupCode, username, password, origin }: { setupCode: string; username: string; password: string; origin: string }): Promise<Person> {
   if (!config.setupCode || !sameSecret({ given: setupCode, expected: config.setupCode })) {
-    throw new HttpError(403, 'That setup code is wrong. Use the link the installer printed; the code is also in /etc/jakebox/env.', { param: 'setupCode' })
+    throw new HttpError(403, 'That setup code is wrong. Use the link the installer printed; the code is also in /etc/fastmonkey/env.', { param: 'setupCode' })
   }
   const pass = await hashPassword(password)
   const owner = await db.transaction().execute(async (trx) => {
-    if (await trx.selectFrom('person').select('id').limit(1).executeTakeFirst()) throw new HttpError(403, 'JakeBox already has an owner. Ask them for an invite.')
+    if (await trx.selectFrom('person').select('id').limit(1).executeTakeFirst()) throw new HttpError(403, 'Fast Monkey already has an owner. Ask them for an invite.')
     return trx.insertInto('person').values({ id: newId('usr'), username, pass, role: 'owner', removed_at: null }).returningAll().executeTakeFirstOrThrow()
-  }).catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(403, 'JakeBox already has an owner. Ask them for an invite.') : err })
+  }).catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(403, 'Fast Monkey already has an owner. Ask them for an invite.') : err })
   if (!settings.storedPublicUrl()) await settings.setPublicUrl(origin)
   return personOf(owner)
 }

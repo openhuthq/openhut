@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Me } from '@jakebox/common/team/team.ts'
+import type { Me } from '@fastmonkey/common/team/team.ts'
 import { Avatar } from '@/components/avatar'
 import { ICONS, NAV_ICONS } from '@/components/icons'
 import { Initial } from '@/components/initial'
@@ -35,7 +35,7 @@ export function SignedIn({ me, route }: { me: Me; route: Route }) {
   return <SidebarToggle value={() => setCollapsed(!collapsed)}>
     <div className={collapsed ? 'app collapsed' : 'app'}>
       <aside className="side" aria-label="Sidebar">
-        <div className="team"><div className="logo" aria-hidden="true">{ICONS.logo}</div><div className="teamname">JakeBox</div></div>
+        <div className="team"><div className="logo" aria-hidden="true">{ICONS.logo}</div><div className="teamname">Fast Monkey</div></div>
         <NavLink section="agents" label="Agents" current={current} count={agents.data?.length} />
         <NavLink section="connections" label="Connections" current={current} />
         <div className="sidefoot">

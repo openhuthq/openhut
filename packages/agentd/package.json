@@ -1,5 +1,5 @@
 {
-  "name": "@jakebox/agentd",
+  "name": "@fastmonkey/agentd",
   "private": true,
   "type": "module",
   "scripts": {

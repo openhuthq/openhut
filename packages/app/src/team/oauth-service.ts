@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import * as z from 'zod/mini'
-import type { Deleted } from '@jakebox/common/api.ts'
-import type { CreateOAuthCode, OAuthClient, OAuthCode, OAuthGrant } from '@jakebox/common/team/oauth.ts'
+import type { Deleted } from '@fastmonkey/common/api.ts'
+import type { CreateOAuthCode, OAuthClient, OAuthCode, OAuthGrant } from '@fastmonkey/common/team/oauth.ts'
 import { db } from '../platform/db.ts'
 import { HttpError, OAuthError } from '../platform/http-error.ts'
 import { publicUrl } from '../platform/settings.ts'
@@ -9,7 +9,7 @@ import { newToken, sha } from '../platform/secrets.ts'
 import { record } from '../platform/events.ts'
 import { deleted } from '../platform/responses.ts'
 
-export const ACCESS_TOKEN = /^Bearer (jbo_[\w-]+)$/
+export const ACCESS_TOKEN = /^Bearer (fmo_[\w-]+)$/
 const CODE_TTL_MS = 10 * 60_000
 const ACCESS_TTL_MS = 60 * 60_000
 const RedirectUris = z.array(z.string())
@@ -32,7 +32,7 @@ export const oauthService = {
   async register({ name, redirectUris }: { name: unknown; redirectUris: unknown }): Promise<RegisteredClient> {
     const uris = Array.isArray(redirectUris) ? redirectUris.map(String) : []
     if (!uris.length || !uris.every(redirectable)) throw new OAuthError('invalid_redirect_uri', 'Register at least one https redirect URI, or http on localhost.')
-    const id = newToken('jbc')
+    const id = newToken('fmc')
     const label = (typeof name === 'string' && name.trim() ? name.trim() : 'MCP client').slice(0, 80)
     await db.insertInto('oauth_client').values({ id, name: label, redirect_uris: JSON.stringify(uris) }).execute()
     return { client_id: id, client_name: label, redirect_uris: uris, token_endpoint_auth_method: 'none', grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'] }
@@ -40,7 +40,7 @@ export const oauthService = {
 
   async client(id: string): Promise<OAuthClient> {
     const row = await db.selectFrom('oauth_client').select(['id', 'name', 'redirect_uris']).where('id', '=', id).executeTakeFirst()
-    if (!row) throw new HttpError(404, 'This app isn\'t registered with JakeBox. Start the connection again from the app.')
+    if (!row) throw new HttpError(404, 'This app isn\'t registered with Fast Monkey. Start the connection again from the app.')
     return { id: row.id, object: 'oauth_client', name: row.name, redirectUris: RedirectUris.parse(JSON.parse(row.redirect_uris)) }
   },
 
@@ -49,7 +49,7 @@ export const oauthService = {
     if (!client.redirectUris.includes(redirectUri)) throw new HttpError(400, 'That redirect address isn\'t registered for this app. Start the connection again from the app.')
     if (!allow) return { object: 'oauth_code', redirect: withParams(redirectUri, { error: 'access_denied', ...(state && { state }) }) }
     if (codeChallengeMethod !== 'S256' || !/^[\w-]{43,128}$/.test(codeChallenge)) throw new HttpError(400, 'The app has to send a PKCE S256 code challenge. Update the app and connect again.')
-    const code = newToken('jba')
+    const code = newToken('fma')
     await db.insertInto('oauth_code').values({ code_hash: sha(code), client_id: clientId, person_id: person.id, redirect_uri: redirectUri, challenge: codeChallenge, expires_at: new Date(Date.now() + CODE_TTL_MS) }).execute()
     record({ action: 'oauth.app_connected', actor: person, target: { type: 'oauth_client', id: clientId, name: client.name } })
     return { object: 'oauth_code', redirect: withParams(redirectUri, { code, ...(state && { state }) }) }
@@ -94,7 +94,7 @@ async function exchangeCode({ code, verifier, clientId, redirectUri }: { code: s
     && createHash('sha256').update(verifier).digest('base64url') === row.challenge
   if (!valid) throw new OAuthError('invalid_grant', 'That code is used, expired, or doesn\'t match this app. Sign in again.')
   const tokens = fresh()
-  await db.insertInto('oauth_grant').values({ id: newToken('jbg'), client_id: row.client_id, person_id: row.person_id, ...hashes(tokens) }).execute()
+  await db.insertInto('oauth_grant').values({ id: newToken('fmg'), client_id: row.client_id, person_id: row.person_id, ...hashes(tokens) }).execute()
   return tokens
 }
 
@@ -106,7 +106,7 @@ async function refresh({ refreshToken, clientId }: { refreshToken: string; clien
   return tokens
 }
 
-const fresh = (): Tokens => ({ access_token: newToken('jbo'), token_type: 'Bearer', expires_in: ACCESS_TTL_MS / 1000, refresh_token: newToken('jbr'), scope: 'mcp' })
+const fresh = (): Tokens => ({ access_token: newToken('fmo'), token_type: 'Bearer', expires_in: ACCESS_TTL_MS / 1000, refresh_token: newToken('fmr'), scope: 'mcp' })
 const hashes = (tokens: Tokens) => ({ access_hash: sha(tokens.access_token), refresh_hash: sha(tokens.refresh_token), access_expires_at: new Date(Date.now() + ACCESS_TTL_MS) })
 
 function redirectable(uri: string): boolean {

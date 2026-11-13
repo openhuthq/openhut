@@ -12,7 +12,7 @@ const USAGE = { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 }
 
 export function testModel({ path, body, res }: { path: string; body: unknown; res: ServerResponse }): void {
   if (path.endsWith('/models')) {
-    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ object: 'list', data: [{ id: 'jakebox-test', object: 'model', context_length: 200000 }] }))
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ object: 'list', data: [{ id: 'fastmonkey-test', object: 'model', context_length: 200000 }] }))
     return
   }
   const request = z.safeParse(ChatRequest, body).data ?? {}
@@ -22,7 +22,7 @@ export function testModel({ path, body, res }: { path: string; body: unknown; re
   const callTool = toolNames.find((name) => name.endsWith('call_tool'))
   log.info({ event: 'test_llm.request', messages: messages.length, lastRole: last.role, tools: toolNames.length, callTool })
   const reply = replyTo({ last, callTool })
-  const base = { id: `cmpl-${Date.now()}`, created: Math.floor(Date.now() / 1000), model: request.model ?? 'jakebox-test' }
+  const base = { id: `cmpl-${Date.now()}`, created: Math.floor(Date.now() / 1000), model: request.model ?? 'fastmonkey-test' }
   const toolCalls = reply.tool ? [{ id: `call_${Date.now()}`, type: 'function', function: { name: reply.tool.name, arguments: reply.tool.args } }] : undefined
   const finish = reply.tool ? 'tool_calls' : 'stop'
   if (request.stream) {

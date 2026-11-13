@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type * as z from 'zod/mini'
-import { UpdateAgent } from '@jakebox/common/agents/agent.ts'
-import { UpdateChannel } from '@jakebox/common/channels/channel.ts'
+import { UpdateAgent } from '@fastmonkey/common/agents/agent.ts'
+import { UpdateChannel } from '@fastmonkey/common/channels/channel.ts'
 import { HttpError } from '../../src/platform/http-error.ts'
 import { validateWithZod } from '../../src/platform/validation.ts'
 

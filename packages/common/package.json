@@ -1,5 +1,5 @@
 {
-  "name": "@jakebox/common",
+  "name": "@fastmonkey/common",
   "private": true,
   "type": "module",
   "sideEffects": false,

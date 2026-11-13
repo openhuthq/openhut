@@ -1,5 +1,5 @@
-import type { Connection } from '@jakebox/common/connections/connection.ts'
-import type { Me } from '@jakebox/common/team/team.ts'
+import type { Connection } from '@fastmonkey/common/connections/connection.ts'
+import type { Me } from '@fastmonkey/common/team/team.ts'
 import type { BrandName } from '@/components/brand-icons'
 import { ICONS } from '@/components/icons'
 import { Loaded } from '@/components/loaded'
