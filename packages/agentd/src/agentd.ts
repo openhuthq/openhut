@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 
 const run = promisify(execFile)
 const RELEASE_URL = process.env.FASTMONKEY_URL ?? 'https://fastmonkey.dev'
+const INSTALL_LOCK = '/run/fastmonkey-install.lock'
 const UPDATE_SCRIPT = 'curl -fsSL "$FASTMONKEY_URL" | sh'
 const SOCK = process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock'
 const IMAGE = process.env.AGENT_IMAGE || readFileSync(new URL('../../../install/agent-image', import.meta.url), 'utf8').trim()
@@ -94,7 +95,7 @@ function enqueue<T>(id: string, work: () => Promise<T>): Promise<T> {
 async function handle(req: AgentdRequest): Promise<Reply> {
   switch (req.cmd) {
     case 'health':
-      return { firewall: await firewallRecent(), image: IMAGE }
+      return { firewall: await firewallRecent(), image: IMAGE, updating: await installing() }
     case 'ps':
       return { states: await containerStates() }
     case 'create':
@@ -410,7 +411,12 @@ function ignoreMissing(e: unknown) {
   return ''
 }
 
+async function installing(): Promise<boolean> {
+  return run('flock', ['-n', INSTALL_LOCK, 'true']).then(() => false, (e: unknown) => isRecord(e) && e.code === 1)
+}
+
 async function update(): Promise<AgentdReplies['update']> {
+  if (await installing()) throw new Error('an install or update is already running')
   if (existsSync('/run/systemd/system')) {
     await run('systemd-run', ['--unit=fastmonkey-update', '--collect', '--quiet', `--setenv=FASTMONKEY_URL=${RELEASE_URL}`, '/bin/sh', '-c', UPDATE_SCRIPT])
   } else {
@@ -438,7 +444,7 @@ export type AgentdRequest =
   | { cmd: 'start' | 'stop' | 'rm' | 'wa-pair' | 'wa-unlink'; id: string }
 
 export type AgentdReplies = {
-  health: { firewall: boolean; image: string }
+  health: { firewall: boolean; image: string; updating: boolean }
   ps: { states: Record<string, string> }
   create: { container: string }
   apply: { applied: string; restarted: boolean }

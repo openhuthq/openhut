@@ -1,3 +1,4 @@
+import * as z from 'zod/mini'
 import type { Admin, Health, Update, UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
 import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
@@ -11,22 +12,23 @@ import { isAdmin, type Caller } from '../team/identity.ts'
 const LATEST_TTL_MS = 60_000
 const LATEST_TIMEOUT_MS = 4_000
 const BUILD_LINE = /^FASTMONKEY_BUILD="([\w.-]+)"$/m
+const UPDATE_GRACE_MS = 20_000
+const UPDATE_LIMIT_MS = 45 * 60_000
+const StoredUpdate = z.object({ from: z.string(), to: z.string(), startedAt: z.string() })
 let latest: { build: string | null; at: number } = { build: null, at: 0 }
 
 export const adminService = {
   async health(): Promise<Health> {
-    const reply = await agentd.health().catch(() => undefined)
-    const firewall = reply?.firewall ?? false
-    return { ok: !!reply && firewall, version: config.version, build: config.build, agentd: !!reply, firewall, started: config.started }
+    return (await probe()).health
   },
 
   async status(): Promise<Admin> {
-    const [health, states, agents, latestBuild] = await Promise.all([adminService.health(), containerStates(), db.selectFrom('agent').select('id').execute(), adminService.latestBuild()])
+    const [{ health, installing }, states, agents, latestBuild] = await Promise.all([probe(), containerStates(), db.selectFrom('agent').select('id').execute(), adminService.latestBuild()])
     return {
       object: 'admin',
       seat: { set: !!settings.seatToken(), mode: config.modelMode },
       server: {
-        version: health.version, build: health.build, latestBuild, updateAvailable: isNewer({ latest: latestBuild, current: health.build }), healthy: health.ok, agentd: health.agentd, firewall: health.firewall,
+        version: health.version, build: health.build, latestBuild, updateAvailable: isNewer({ latest: latestBuild, current: health.build }), update: await currentUpdate({ installing }), healthy: health.ok, agentd: health.agentd, firewall: health.firewall,
         running: agents.filter((agent) => states?.[agent.id] === 'running').length, total: agents.length,
       },
       publicUrl: publicUrl(),
@@ -46,9 +48,16 @@ export const adminService = {
     latest.at = 0
     const to = await adminService.latestBuild()
     if (!to || !isNewer({ latest: to, current: config.build })) throw new HttpError(409, 'Fast Monkey is already on the latest release.')
-    await agentd.update()
-    record({ action: 'admin.update_started', actor, target: { type: 'admin', id: 'install', from: config.build, to } })
-    return { object: 'update', from: config.build, to }
+    const running = await currentUpdate({ installing: (await probe()).installing })
+    if (running?.status === 'running') throw new HttpError(409, 'An update is already running. This page shows when it finishes.')
+    const stored = { from: config.build, to, startedAt: new Date().toISOString() }
+    await settings.setUpdate(JSON.stringify(stored))
+    await agentd.update().catch(async (err: unknown) => {
+      await settings.setUpdate('')
+      throw err
+    })
+    record({ action: 'admin.update_started', actor, target: { type: 'admin', id: 'install', from: stored.from, to } })
+    return { object: 'update', status: 'running', ...stored }
   },
 
   async update({ actor, patch }: { actor: Caller; patch: UpdateAdmin }): Promise<Admin> {
@@ -61,7 +70,38 @@ export const adminService = {
 }
 
 export function isNewer({ latest, current }: { latest: string | null; current: string }): boolean {
-  return latest !== null && /^\d+$/.test(latest) && /^\d+$/.test(current) && latest > current
+  if (latest === null || latest === current || current === 'dev') return false
+  const dated = /^\d+$/.test(latest) && /^\d+$/.test(current)
+  return !dated || latest > current
+}
+
+export function updateStatus({ stored, build, installing, now }: { stored: { from: string; startedAt: string }; build: string; installing: boolean; now: number }): 'running' | 'failed' | 'done' {
+  const age = now - Date.parse(stored.startedAt)
+  if (build !== stored.from) return 'done'
+  if (age > UPDATE_LIMIT_MS) return 'failed'
+  return installing || age < UPDATE_GRACE_MS ? 'running' : 'failed'
+}
+
+async function probe(): Promise<{ health: Health; installing: boolean }> {
+  const reply = await agentd.health().catch(() => undefined)
+  const firewall = reply?.firewall ?? false
+  return {
+    health: { ok: !!reply && firewall, version: config.version, build: config.build, agentd: !!reply, firewall, started: config.started },
+    installing: reply ? reply.updating ?? false : true,
+  }
+}
+
+async function currentUpdate({ installing }: { installing: boolean }): Promise<Update | null> {
+  const stored = z.safeParse(StoredUpdate, parseJson(settings.update()))
+  if (!stored.success) return null
+  const status = updateStatus({ stored: stored.data, build: config.build, installing, now: Date.now() })
+  if (status !== 'done') return { object: 'update', status, ...stored.data }
+  await settings.setUpdate('')
+  return null
+}
+
+function parseJson(text: string | undefined): unknown {
+  try { return JSON.parse(text ?? '') } catch { return undefined }
 }
 
 async function setSeat(token: string): Promise<void> {

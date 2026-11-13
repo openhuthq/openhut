@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { Admin } from '@fastmonkey/common/admin/admin.ts'
 import type { OAuthGrant } from '@fastmonkey/common/team/oauth.ts'
 import type { Me } from '@fastmonkey/common/team/team.ts'
@@ -10,8 +10,7 @@ import { Locked } from '@/components/locked'
 import { Mark } from '@/components/mark'
 import { Page } from '@/components/page'
 import { StatusBadge } from '@/components/status-badge'
-import { UpdateButton } from '@/features/admin/update-button'
-import { useAdmin, useDeleteOAuthGrant, useOAuthGrants, useUpdateAdmin } from '@/features/admin/api'
+import { useAdmin, useStartUpdate, useDeleteOAuthGrant, useOAuthGrants, useUpdateAdmin } from '@/features/admin/api'
 import { ago, plural, shortDate } from '@/lib/format'
 import { formValues } from '@/lib/form'
 import { navigate } from '@/lib/router'
@@ -40,9 +39,7 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
         <Row icon="globe" title="Public URL" mono subtitle={admin.publicUrl}
           action={<ToggleButton label="Edit" form="public-url" open={form === 'public-url'} canEdit={canEdit} reason="Only an owner or admin changes it" />} />
         {form === 'public-url' && canEdit && <PublicUrlForm publicUrl={admin.publicUrl} />}
-        <Row icon="update" title={`Version ${server.version}`} subtitle={`Build ${server.build} · ${versionLine(server)} · ${server.running} of ${plural(server.total, 'agent')} running`}
-          status={server.healthy ? <Ready word="Healthy" /> : <StatusBadge status="missing" tip="Agents can't start until this is fixed. See /health." word="Not responding" />}
-          action={canEdit ? <UpdateButton server={server} /> : server.updateAvailable && <Locked reason="Only an owner or admin updates Fast Monkey"><button type="button" className="btn primary sm" disabled>Update now</button></Locked>} />
+        <VersionRow server={server} canEdit={canEdit} />
       </Section>
       <Section number={3} title="AI assistant"><ConnectedApps /></Section>
     </div>
@@ -109,7 +106,33 @@ function Ready({ word }: { word: string }) {
   return <StatusBadge status="ready" tip={word} word={word} />
 }
 
+function VersionRow({ server, canEdit }: { server: Admin['server']; canEdit: boolean }) {
+  const startUpdate = useStartUpdate()
+  const loadedBuild = useRef(server.build)
+  const updating = server.update?.status === 'running'
+  useEffect(() => {
+    if (server.build !== loadedBuild.current) location.reload()
+  }, [server.build])
+  return <>
+    <Row icon="update" title={`Version ${server.version}`} subtitle={`Build ${server.build} · ${versionLine(server)} · ${server.running} of ${plural(server.total, 'agent')} running`}
+      status={versionStatus(server)}
+      action={server.updateAvailable && !updating && <Locked reason={canEdit ? undefined : 'Only an owner or admin updates Fast Monkey'}>
+        <button type="button" className="btn primary sm" disabled={!canEdit || startUpdate.isPending} onClick={() => startUpdate.mutate(undefined, { onError: toastError })}>{server.update ? 'Try again' : 'Update now'}</button>
+      </Locked>} />
+    {updating && <div className="aform updating" role="status"><span className="spin" aria-hidden="true"></span>
+      <span>Updating to build <span className="mono">{server.update?.to}</span>. Fast Monkey and its agents restart once. You can leave or refresh; this page follows along.</span></div>}
+    {server.update?.status === 'failed' && <div className="aform"><span className="mute" role="status">The last update didn't finish, so Fast Monkey went back to build <span className="mono">{server.build}</span>. Nothing was lost. Details: <code>journalctl -u fastmonkey-update</code> on the server.</span></div>}
+  </>
+}
+
+function versionStatus(server: Admin['server']) {
+  if (server.update?.status === 'running') return <StatusBadge status="no_calls" tip="An update is being installed" word="Updating" />
+  if (server.healthy) return <Ready word="Healthy" />
+  return <StatusBadge status="missing" tip="Agents can't start until this is fixed. See /health." word="Not responding" />
+}
+
 function versionLine(server: Admin['server']) {
+  if (server.update?.status === 'running') return `updating to build ${server.update.to}`
   if (server.updateAvailable) return `build ${server.latestBuild} is available`
   if (server.latestBuild === null) return "couldn't check for a newer release"
   return 'up to date'

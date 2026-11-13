@@ -16,6 +16,10 @@ node_ok() { node -e 'const [a,b]=process.versions.node.split(".").map(Number);pr
 
 [ "$(id -u)" = 0 ] || die "run as root:  curl -fsSL $FASTMONKEY_URL | sudo sh"
 [ "$(uname -s)" = Linux ] || die "Fast Monkey runs on Linux"
+if command -v flock >/dev/null 2>&1; then
+  exec 9>/run/fastmonkey-install.lock
+  flock -n 9 || die "another install or update is already running"
+fi
 case "$(uname -m)" in
   x86_64)  ARCH=x86_64 NARCH=x64
            CLAUDE_SHA256=86dc1fcc69498159eaf15f446613e847010f9036bfbbdffd4c49350be8489ada
@@ -78,11 +82,12 @@ if ! printf '%s  %s\n' "$CLAUDE_SHA256" "$CACHED" | sha256sum -c - >/dev/null 2>
 fi
 cp "$CACHED" "$PREFIX.new/bin/claude" && chmod 0755 "$PREFIX.new/bin/claude"
 chown -R root:root "$PREFIX.new" && chmod -R go-w "$PREFIX.new"
-rm -rf "$PREFIX.old"; [ ! -d "$PREFIX" ] || mv "$PREFIX" "$PREFIX.old"; mv "$PREFIX.new" "$PREFIX"; rm -rf "$PREFIX.old"
+rm -rf "$PREFIX.old"; [ ! -d "$PREFIX" ] || mv "$PREFIX" "$PREFIX.old"; mv "$PREFIX.new" "$PREFIX"
 id fastmonkey >/dev/null 2>&1 || { addgroup -S fastmonkey >/dev/null 2>&1 && adduser -S -D -G fastmonkey fastmonkey >/dev/null 2>&1; } || useradd --system --user-group --no-create-home fastmonkey
 
 mkdir -p /etc/fastmonkey && touch /etc/fastmonkey/env && chmod 0600 /etc/fastmonkey/env
 IMAGE_OVERRIDE="${AGENT_IMAGE:-}"
+SOURCE_URL="$FASTMONKEY_URL"
 . /etc/fastmonkey/env
 IMAGE_OVERRIDE="${IMAGE_OVERRIDE:-${AGENT_IMAGE:-}}"
 umask 077
@@ -91,28 +96,45 @@ umask 077
   [ -z "$IMAGE_OVERRIDE" ] || echo "AGENT_IMAGE=$IMAGE_OVERRIDE"
   echo "FASTMONKEY_MODEL=${FASTMONKEY_MODEL:-claude}"
   echo "SETUP_CODE=${SETUP_CODE:-$(od -An -N9 -tx1 /dev/urandom | tr -d ' \n')}"
+  echo "FASTMONKEY_URL=$SOURCE_URL"
 } > /etc/fastmonkey/env.new
 mv /etc/fastmonkey/env.new /etc/fastmonkey/env
 . /etc/fastmonkey/env
 umask 022
 
-say "Starting"
-STARTED_AFTER=$(date +%s)
-if [ -d /run/systemd/system ]; then
-  cp "$PREFIX"/install/systemd/*.service /etc/systemd/system/
-  systemctl daemon-reload
-  systemctl enable -q fastmonkey-firewall.service docker.service fastmonkey-agentd.service fastmonkey.service
-  systemctl restart fastmonkey-firewall.service docker.service fastmonkey-agentd.service fastmonkey.service
-else
-  nohup "$PREFIX/install/host-start.sh" >> /var/log/fastmonkey-boot.log 2>&1 &
-  echo "  No systemd here. After a reboot, run $PREFIX/install/host-start.sh (agents stay stopped until then)."
-fi
-
-printf 'Waiting for Fast Monkey (the first start pulls the ~3 GB agent image)'
+start() {
+  STARTED_AFTER=$(date +%s)
+  if [ -d /run/systemd/system ]; then
+    cp "$PREFIX"/install/systemd/*.service /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl enable -q fastmonkey-firewall.service docker.service fastmonkey-agentd.service fastmonkey.service
+    systemctl restart fastmonkey-firewall.service docker.service fastmonkey-agentd.service fastmonkey.service
+  else
+    nohup "$PREFIX/install/host-start.sh" >> /var/log/fastmonkey-boot.log 2>&1 9>&- &
+  fi
+}
 fresh() { h=$(curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$h" | grep -q '"ok":true' &&
   [ "$(echo "$h" | sed -n 's/.*"started":\([0-9]*\).*/\1/p')" -ge "$STARTED_AFTER" ]; }
-i=0; until fresh; do
-  i=$((i+1)); [ $i -gt 600 ] && die "not up after 30 min; see /var/log/fastmonkey"; printf .; sleep 3; done
+up() { i=0; until fresh; do i=$((i+1)); [ $i -gt "$1" ] && return 1; printf .; sleep 3; done; }
+
+say "Starting"
+start
+[ -d /run/systemd/system ] || echo "  No systemd here. After a reboot, run $PREFIX/install/host-start.sh (agents stay stopped until then)."
+TRIES=600
+[ -d "$PREFIX.old" ] && cmp -s "$PREFIX.old/install/agent-image" "$PREFIX/install/agent-image" && TRIES=100
+printf 'Waiting for Fast Monkey (the first start pulls the ~3 GB agent image)'
+if ! up "$TRIES"; then
+  printf '\n'
+  [ -d "$PREFIX.old" ] || die "not up after 30 min; see /var/log/fastmonkey"
+  say "The new release didn't come up. Going back to the previous one"
+  rm -rf "$PREFIX.failed"; mv "$PREFIX" "$PREFIX.failed"; mv "$PREFIX.old" "$PREFIX"
+  start
+  rm -rf "$PREFIX.failed"
+  up 600 || die "the new release didn't come up, and the previous one didn't come back either; see /var/log/fastmonkey"
+  printf '\n'
+  die "the new release didn't come up, so the previous one is running again"
+fi
+rm -rf "$PREFIX.old"
 IP=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
 printf '\nFast Monkey is running. Create your account (the first one is the owner; after that people join by invite):\n  http://%s:8787/setup?code=%s\n' "${IP:-this-server}" "$SETUP_CODE"
 echo "Keep port 8787 private (Tailscale or an SSH tunnel) or put TLS in front of it: sign-in travels over plain HTTP."

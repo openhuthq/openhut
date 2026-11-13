@@ -15,6 +15,8 @@ export const settings = {
   setSeatToken: (token: string) => write('seat_token', seal(token)),
   appliedBuild: (): string | undefined => rows.get('build'),
   setAppliedBuild: (build: string) => write('build', build),
+  update: (): string | undefined => rows.get('update') || undefined,
+  setUpdate: (record: string) => write('update', record),
 }
 
 export function publicUrl(): string {
