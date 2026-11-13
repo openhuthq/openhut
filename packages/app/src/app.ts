@@ -15,6 +15,7 @@ import { connectionAuthorizationController, connectionController, connectionEven
 import { gatewayServer } from './gateway/gateway-server.ts'
 import { tailscaleController } from './integrations/tailscale/tailscale-controller.ts'
 import { mcpController } from './mcp/mcp-controller.ts'
+import { threadController } from './threads/thread-controller.ts'
 import { oauthController, oauthMetadataController } from './team/oauth-controller.ts'
 import { inviteController, inviteLinkController, meController, peopleController, sessionController, setupController } from './team/team-controller.ts'
 
@@ -38,6 +39,7 @@ await app.register(oauthController, { prefix: '/api/oauth' })
 await app.register(oauthMetadataController)
 await app.register(agentController, { prefix: '/api/agents' })
 await app.register(grantController, { prefix: '/api/grants' })
+await app.register(threadController, { prefix: '/api/threads' })
 await app.register(channelController, { prefix: '/api/channels' })
 await app.register(connectionController, { prefix: '/api/connections' })
 await app.register(connectionEventController, { prefix: '/api/connection-events' })

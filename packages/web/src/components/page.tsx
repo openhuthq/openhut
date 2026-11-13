@@ -3,7 +3,7 @@ import { ICONS } from '@/components/icons'
 
 export const SidebarToggle = createContext(() => {})
 
-export function Page({ title, parents = [], actions, children }: { title: string; parents?: { label: string; href: string }[]; actions?: ReactNode; children?: ReactNode }) {
+export function Page({ title, parents = [], actions, fill = false, children }: { title: string; parents?: { label: string; href: string }[]; actions?: ReactNode; fill?: boolean; children?: ReactNode }) {
   const toggleSidebar = use(SidebarToggle)
   return <>
     <title>{`${title} · Fast Monkey`}</title>
@@ -15,6 +15,6 @@ export function Page({ title, parents = [], actions, children }: { title: string
       </nav>
       <div className="actions">{actions}</div>
     </div>
-    <div className="pb">{children}</div>
+    <div className={fill ? 'pfill' : 'pb'}>{children}</div>
   </>
 }

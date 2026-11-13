@@ -7,7 +7,7 @@ import { FACT_ICONS, ICONS } from '@/components/icons'
 import { Locked } from '@/components/locked'
 import { OwnerChip } from '@/components/owner-chip'
 import { Page } from '@/components/page'
-import { StatusBadge } from '@/components/status-badge'
+import { AgentBadge } from '@/components/status-badge'
 import { AgentConnections } from '@/features/agents/agent-connections'
 import { useAgent, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { ChannelsSection } from '@/features/agents/channels-section'
@@ -32,6 +32,7 @@ function AgentView({ agent, dialog }: { agent: Agent; dialog: AgentDialog | unde
   const lockReason = agent.canEdit ? undefined : `Only ${agent.ownerName} or an admin can change ${agent.name}`
   const running = agent.status === 'running'
   const actions = <>
+    <a className="btn sec" href={`/agents/${agent.id}/chat`}>{ICONS.chat}<span className="lbl">Chat</span></a>
     <Locked reason={lockReason}>
       <button className={running ? 'btn stop' : 'btn go'} disabled={!agent.canEdit || updateAgent.isPending} onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}>
         {running ? ICONS.stop : ICONS.play}<span className="lbl">{running ? 'Stop' : 'Start'}</span>
@@ -55,7 +56,7 @@ function AgentView({ agent, dialog }: { agent: Agent; dialog: AgentDialog | unde
       </div>
       <aside className="rail">
         <div className="box facts">
-          <div><span>{FACT_ICONS.status}Status</span><StatusBadge status={agent.status} /></div>
+          <div><span>{FACT_ICONS.status}Status</span><AgentBadge agent={agent} /></div>
           <div><span>{FACT_ICONS.model}Model</span><ModelPicker agent={agent} lockReason={lockReason} /></div>
           <div><span>{FACT_ICONS.owner}Owner</span><OwnerChip id={agent.ownerId} name={agent.ownerName} /></div>
         </div>

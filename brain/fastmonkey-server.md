@@ -76,6 +76,12 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
   can edit the agent see it. Approvers are compared as `<digits>@s.whatsapp.net`.
 - An agent anyone can message uses Hermes's `smart` approvals; approvals go to the owner (email, Slack ID, WhatsApp).
 
+## Chat (threads)
+- `POST /api/threads/:id/chat` takes only the new user message (`trigger: submit-message`) or a retry (`regenerate-message`, which drops the last answer); the stored thread is the history, so nobody can forge the agent's earlier replies. The whole thread goes to Hermes each turn (`/v1/chat/completions`, `stream: true`, no session header).
+- The reply is relayed as the AI SDK UI message stream: text parts, `data-tool` for each `hermes.tool.progress` event, then `data-calls` with the `connection_event` rows the agent wrote during the turn (allowed, denied, failed). The answer is saved in `onEnd`, also when the person stops it.
+- `health` comes from `GET /v1/models` on the agent (3 s timeout, cached 5 s, re-probed by reconcile every 30 s). Starting until it has failed for 3 minutes in a row, then not answering. `status` stays the container state, which the e2e run checks.
+- `FASTMONKEY_AGENT_API` points every agent at one URL; dev (`scripts/fake-agentd.ts` serves a fake Hermes on :18642) and the unit tests use it. `PORT` moves the app off 8787.
+
 ## Conventions the code relies on
 - Every agentd reply is validated with a Zod schema per command (`platform/agentd.ts`); a reply that doesn't match is a
   502 that says agentd and the app may be different releases. Keep the fake agentd's replies in step. agentd's own

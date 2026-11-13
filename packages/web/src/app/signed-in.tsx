@@ -10,6 +10,9 @@ import { AdminPage } from '@/features/admin/admin-page'
 import { AgentPage } from '@/features/agents/agent-page'
 import { AgentsPage } from '@/features/agents/agents-page'
 import { useAgents } from '@/features/agents/api'
+import { ChatTree } from '@/features/threads/chat-tree'
+import { useThreads } from '@/features/threads/api'
+import { NewThreadPage, ThreadPage } from '@/features/threads/thread-page'
 import { useDeleteSession } from '@/features/auth/api'
 import { ConnectionPage } from '@/features/connections/connection-page'
 import { ConnectionsPage } from '@/features/connections/connections-page'
@@ -39,6 +42,7 @@ export function SignedIn({ me, route }: { me: Me; route: Route }) {
         <div className="team"><Monkey className="monkey logo" /><div className="teamname">Fast Monkey</div></div>
         <NavLink section="agents" label="Agents" current={current} count={agents.data?.length} />
         <NavLink section="connections" label="Connections" current={current} />
+        <ChatTree route={route} />
         <div className="sidefoot">
           <NavLink section="people" label="People" current={current} />
           <NavLink section="admin" label="Admin" current={current} />
@@ -62,7 +66,9 @@ function NavLink({ section, label, current, count }: { section: Section; label: 
 
 function RoutePage({ me, route }: { me: Me; route: Route }) {
   switch (route.page) {
-    case 'home': return <Redirect to="/agents" />
+    case 'home': return <Home />
+    case 'new-thread': return <NewThreadPage key={route.agentId} me={me} agentId={route.agentId} />
+    case 'thread': return <ThreadPage key={route.threadId} me={me} threadId={route.threadId} />
     case 'agents': return <AgentsPage me={me} />
     case 'agent': return <AgentPage key={route.agentId} agentId={route.agentId} dialog={route.dialog} />
     case 'connections': return <ConnectionsPage me={me} adding={route.adding} />
@@ -72,4 +78,14 @@ function RoutePage({ me, route }: { me: Me; route: Route }) {
     case 'admin': return <AdminPage me={me} form={route.form} />
     default: return <Page title="Not found"><div className="empty"><Avatar id="lost" size={96} /><div>Nothing here</div></div></Page>
   }
+}
+
+function Home() {
+  const threads = useThreads()
+  const agents = useAgents()
+  if (!threads.data || !agents.data) return null
+  const [latest] = threads.data
+  if (latest) return <Redirect to={`/threads/${latest.id}`} />
+  const [first] = agents.data
+  return <Redirect to={first ? `/agents/${first.id}/chat` : '/agents'} />
 }

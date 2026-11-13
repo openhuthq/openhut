@@ -130,7 +130,7 @@ function channelsKey(agentId: string) {
 }
 
 function settling(agent: Agent | undefined) {
-  return !!agent && (agent.wanted === 'running') !== (agent.status === 'running')
+  return !!agent && ((agent.wanted === 'running') !== (agent.status === 'running') || agent.health === 'starting')
 }
 
 function writeGrant(client: QueryClient, grant: Grant, change: (grants: Grant[]) => Grant[]) {

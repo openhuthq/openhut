@@ -13,6 +13,9 @@ export const MODELS = [
 export const AgentStatus = z.enum(['running', 'stopped', 'missing'])
 export type AgentStatus = z.infer<typeof AgentStatus>
 
+export const AgentHealth = z.enum(['answering', 'starting', 'not_answering'])
+export type AgentHealth = z.infer<typeof AgentHealth>
+
 export const Wanted = z.enum(['running', 'stopped'])
 export type Wanted = z.infer<typeof Wanted>
 
@@ -25,6 +28,8 @@ export const Agent = z.object({
   model: ModelId,
   wanted: Wanted,
   status: AgentStatus,
+  health: z.nullable(AgentHealth),
+  healthDetail: z.string(),
   summary: z.string(),
   net: z.number(),
   instructions: z.string(),

@@ -2,9 +2,11 @@ import { lookup as lookupAll, type LookupAddress, type LookupOptions } from 'nod
 import { lookup } from 'node:dns/promises'
 import { BlockList, isIP } from 'node:net'
 import { Agent, buildConnector } from 'undici'
+import { config } from './config.ts'
 
 export const AGENTS_RANGE = '10.200.0.0'
 export const agentSubnet = (net: number): string => `10.200.${net}`
+export const agentApiUrl = (net: number): string => config.agentApi ?? `http://${agentSubnet(net)}.2:8642`
 
 const BLOCKED = blockList()
 const connector = buildConnector({ lookup: guardedLookup, timeout: 10_000 })
