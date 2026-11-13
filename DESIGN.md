@@ -4,7 +4,7 @@ How the dashboard (`packages/web`) looks and why. The stylesheet is `packages/we
 
 ## Buttons
 
-Status: proposed 2026-11-13, not yet in the code. The audit that produced it is at the end.
+Status: in the code since 2026-11-13.
 
 ### Why the bordered white button goes
 
@@ -35,7 +35,7 @@ Two sizes. 32px (default) in page headers, dialog and popover footers, empty sta
 2. A row never holds a primary. Row actions are ghost `sm`.
 3. Every button in one toolbar has the same anatomy: all icon + label, or all label only.
 4. Header buttons are icon + label. Row, footer and inline-form buttons are label only, except the external-link and copy icons.
-5. Icon-only is for Close, Toggle sidebar, Rename, More, Send/Stop, and a table row's single repeated action (trash to remove a person, × to revoke an invite), so a long table isn't a column of the same word. Each has `aria-label` and `title`.
+5. Icon-only is for Close, Toggle sidebar, Rename, More, Send/Stop, and a table row's single repeated action (trash to remove a person, × to revoke an invite or take a connection off an agent), so a long table isn't a column of the same word. Each has `aria-label` and `title`.
 6. An action is red if and only if it opens a confirm, and it gets a confirm if and only if one click cannot undo it.
 7. The trigger is red text; the button inside the confirm is red fill. Red fill appears nowhere else.
 8. On the page that manages an object (agent, connection), Delete is visible in the header, last, after a separator.
@@ -67,11 +67,12 @@ Two sizes. 32px (default) in page headers, dialog and popover footers, empty sta
 | Chat | composer Stop | white with ink border | ink fill, white square |
 | Chat | "Open agent settings" (empty state) | secondary | primary, labelled "Settings" |
 | Connection | Delete | white bordered, red text | red text, no border |
-| Connection | Remove (grant) | black, no confirm, no hover | unchanged colour (re-ticking undoes it), gains hover |
 | Tailscale | Disconnect | trash icon | label only |
-| People | Remove (person) | black word, though it confirms | trash icon, red on hover (shipped) |
-| People | Revoke (invite) | black word | × icon (shipped) |
-| People | Invite popover | role select, link shown in a page banner | role cards, then the link and Copy link inside the popover (shipped) |
+| People | Remove (person) | black word, though it confirms | trash icon, red on hover |
+| People | Revoke (invite) | black word | × icon |
+| People | Invite popover | role select, link shown in a page banner | role cards, then the link and Copy link inside the popover |
+| Agent | Connections | a checkbox per connection | only the agent's connections, × to remove, an Add menu for the rest |
+| Connection | Remove (grant) | black word | × icon |
 | Admin | row Set up / Edit / View | `btn row` 30px | ghost `sm` 28px |
 | Admin | inline Cancel | white bordered beside a white bordered input | soft fill |
 | Admin | Update now | primary `sm` (a second primary when a form is open) | secondary `sm` |
@@ -100,7 +101,7 @@ Classes that go: `.btn.ghost` (the base becomes the ghost), `.btn.stop`, `.btn.g
 
 ### Dropdowns
 
-Shipped 2026-11-13. A dropdown trigger (Model, Computer) follows the secondary button: soft fill, no border, darker fill on hover and while open. Triggers stacked in one card share a minimum width (136px) so their edges line up, with the icon and label on the left and the chevron on the right. Every option has an icon in the same column, then its name and a one-line description, then the tick; the trigger shows the chosen option's icon.
+A dropdown trigger (Model, Computer) follows the secondary button: soft fill, no border, darker fill on hover and while open. Triggers stacked in one card share a minimum width (136px) so their edges line up, with the icon and label on the left and the chevron on the right. Every option has an icon in the same column, then its name and a one-line description, then the tick; the trigger shows the chosen option's icon. A menu of things to add (connections on an agent) follows the same shape: icon, name, and a greyed-out reason when an option can't be chosen.
 
 ### Known trade-off
 
