@@ -53,7 +53,7 @@ function ChatLayout({ me, agent, busy, onSend, onStop, extra, children }: { me: 
     const el = log.current
     if (el && pinned.current) el.scrollTop = el.scrollHeight
   })
-  const actions = <><AgentBadge agent={agent} />{extra}<a className="btn ghost sm" href={`/agents/${agent.id}`}>{ICONS.gear}<span className="lbl">Agent settings</span></a></>
+  const actions = <><AgentBadge agent={agent} />{extra}<a className="btn ghost sm" href={`/agents/${agent.id}`}>{ICONS.gear}<span className="lbl">Settings</span></a></>
   return <Page title={agent.name} actions={actions} fill>
     <div className="chat-log" ref={log} aria-live="polite" onScroll={(event) => { const el = event.currentTarget; pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
       <div className="chat-col">{children}</div>
@@ -96,11 +96,11 @@ function NotReady({ agent }: { agent: Agent }) {
     starting: 'Hermes is still starting. You can type as soon as it answers.',
     no_seat: agent.healthDetail,
     not_answering: agent.healthDetail || 'Hermes isn\'t answering.',
-    stopped: 'It\'s stopped. Start it from Agent settings.',
+    stopped: 'It\'s stopped. Start it from Settings.',
     missing: 'Its container is gone. Fast Monkey recreates it within 30 seconds while it should be running.',
     running: '',
   }[state]
-  const action = state === 'no_seat' ? <a href="/admin/seat">Connect the seat</a> : state !== 'starting' && <a href={`/agents/${agent.id}`}>Agent settings</a>
+  const action = state === 'no_seat' ? <a href="/admin/seat">Connect the seat</a> : state !== 'starting' && <a href={`/agents/${agent.id}`}>Settings</a>
   return <div className="chat-notice" role="status"><b>{agent.name} isn't ready.</b> {reason} {action}</div>
 }
 
@@ -136,8 +136,8 @@ function Part({ part }: { part: AgentPart }) {
 
 function ClearChat({ agent, threadId, disabled }: { agent: Agent; threadId: string; disabled: boolean }) {
   const clearChat = useClearChat(agent.id)
-  return <span title="Clear chat"><ConfirmButton className="btn ghost sm tight" disabled={disabled || clearChat.isPending} question="Clear this chat?" detail={`${agent.name} starts a fresh conversation. It keeps what it saved to memory.`} action="Clear" onConfirm={() => clearChat.mutate(threadId, { onError: toastError })}>
-    {ICONS.eraser}<span className="sr">Clear chat</span>
+  return <span title="Clear chat"><ConfirmButton className="btn ghost sm" disabled={disabled || clearChat.isPending} question="Clear this chat?" detail={`${agent.name} starts a fresh conversation. It keeps what it saved to memory.`} action="Clear" onConfirm={() => clearChat.mutate(threadId, { onError: toastError })}>
+    {ICONS.eraser}<span className="lbl">Clear</span>
   </ConfirmButton></span>
 }
 
