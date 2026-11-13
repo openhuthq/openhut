@@ -1,8 +1,12 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import type { Admin } from '@fastmonkey/common/admin/admin.ts'
+import type { Admin, AgentContainer } from '@fastmonkey/common/admin/admin.ts'
 import type { OAuthGrant } from '@fastmonkey/common/team/oauth.ts'
 import type { Me } from '@fastmonkey/common/team/team.ts'
 import type { BrandName } from '@/components/brand-icons'
+import { Avatar } from '@/components/avatar'
+import { Dialog } from '@/components/dialog'
+import { DialogFoot } from '@/components/dialog-foot'
+import { DialogHead } from '@/components/dialog-head'
 import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
 import { Loaded } from '@/components/loaded'
@@ -11,6 +15,7 @@ import { Mark } from '@/components/mark'
 import { Page } from '@/components/page'
 import { StatusBadge } from '@/components/status-badge'
 import { useAdmin, useCompleteSeatSignIn, useContainers, useStartSeatSignIn, useStartUpdate, useDeleteOAuthGrant, useOAuthGrants, useUpdateAdmin } from '@/features/admin/api'
+import { useAgents } from '@/features/agents/api'
 import { GoogleClientSetup } from '@/features/connections/google-client-setup'
 import { ago, shortDate } from '@/lib/format'
 import { formValues } from '@/lib/form'
@@ -33,7 +38,7 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
     <div className="admin">
       <Section number={1} title="Claude seat">
         <Row icon="claude" title="Claude seat" subtitle={seatLine(admin)} status={admin.seat.set ? <Ready word="Connected" /> : <StatusBadge status="not_set_up" />}
-          action={<ToggleButton label={admin.seat.set ? 'Replace' : 'Set up'} form="seat" open={form === 'seat'} canEdit={canEdit} reason="Only an owner or admin sets the seat" />} />
+          action={<ToggleButton label={admin.seat.set ? 'Replace' : 'Set up'} form="seat" open={form === 'seat'} canEdit={canEdit} reason="Only an owner or admin sets the seat" onOpen={openSeatTab} />} />
         {form === 'seat' && canEdit && <SeatForm />}
       </Section>
       <Section number={2} title="Server">
@@ -42,8 +47,7 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
         {form === 'public-url' && canEdit && <PublicUrlForm publicUrl={admin.publicUrl} />}
         <VersionRow server={server} canEdit={canEdit} />
         <Row icon="box" title="Containers" subtitle={`${server.running} of ${server.total} agents running, as Docker reports them`}
-          action={<ToggleButton label={form === 'containers' ? 'Hide containers' : 'View containers'} form="containers" open={form === 'containers'} canEdit={canEdit} reason="Only an owner or admin sees the containers" />} />
-        {form === 'containers' && canEdit && <Containers />}
+          action={<ToggleButton label="View" form="containers" open={form === 'containers'} canEdit={canEdit} reason="Only an owner or admin sees the containers" />} />
       </Section>
       <Section number={3} title="Google">
         <Row icon="google" title="Google OAuth client" mono={!!admin.google.clientId} subtitle={admin.google.clientId ?? 'Needed before anyone connects Gmail, Google Drive or Google Workspace'}
@@ -53,52 +57,51 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
       </Section>
       <Section number={4} title="AI assistant"><ConnectedApps /></Section>
     </div>
+    {form === 'containers' && canEdit && <ContainersDialog />}
   </Page>
 }
 
-function ToggleButton({ label, form, open, canEdit, reason }: { label: string; form: AdminForm; open: boolean; canEdit: boolean; reason: string }) {
+function ToggleButton({ label, form, open, canEdit, reason, onOpen }: { label: string; form: AdminForm; open: boolean; canEdit: boolean; reason: string; onOpen?: () => void }) {
   return <Locked reason={canEdit ? undefined : reason}>
-    <button type="button" className="btn sec sm aw" disabled={!canEdit} aria-expanded={open} aria-controls={form} onClick={() => navigate(open ? '/admin' : `/admin/${form}`)}>{label}</button>
+    <button type="button" className="btn sec sm aw" disabled={!canEdit} aria-expanded={open} aria-controls={form} onClick={() => { if (!open) onOpen?.(); navigate(open ? '/admin' : `/admin/${form}`) }}>{label}</button>
   </Locked>
 }
 
 function SeatForm() {
   const start = useStartSeatSignIn()
   const complete = useCompleteSeatSignIn()
+  const started = useRef(false)
+  const { mutate } = start
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
+    mutate(undefined, {
+      onSuccess: (signIn) => { if (seatTab && !seatTab.closed && signIn.url) seatTab.location.href = signIn.url },
+      onError: () => seatTab?.close(),
+      onSettled: () => { seatTab = null },
+    })
+  }, [mutate])
   const signIn = start.data
-  if (!signIn?.url) {
-    return <div className="aform" id="seat">
-      <span className="mute">Sign in with the Claude account whose plan the agents should use. Fast Monkey runs Claude Code's own sign-in on this server and keeps the 1-year token it gives; every agent restarts with it.</span>
-      <div className="inline-form">
-        <button type="button" className="btn primary sm" disabled={start.isPending} onClick={() => start.mutate()}>{start.isPending ? 'Starting…' : 'Sign in with Claude'}</button>
-      </div>
-      {start.error && <span className="ferr" role="alert">{start.error.message}</span>}
-      <TokenForm />
-    </div>
-  }
-  return <form className="aform" id="seat" onSubmit={(event) => complete.mutate({ id: signIn.id, code: formValues(event)('code') })}>
-    <ol className="seat-steps">
-      <li><a href={signIn.url} target="_blank" rel="noreferrer">Open claude.ai and press Authorize</a>. Use a full-size window: claude.ai hides the button in small ones.</li>
-      <li>Copy the code claude.ai shows, paste it here and press Connect.</li>
-    </ol>
+  return <form className="aform" id="seat" onSubmit={(event) => signIn && complete.mutate({ id: signIn.id, code: formValues(event)('code') })}>
+    {start.error
+      ? <span className="ferr" role="alert">{start.error.message} <button type="button" className="linkbtn" onClick={() => { started.current = false; start.reset(); navigate('/admin', true) }}>Close</button></span>
+      : <span className="mute">{signIn?.url
+        ? <>claude.ai opened in a new tab. Press Authorize there (in a full-size window), then paste the code it shows. <a href={signIn.url} target="_blank" rel="noreferrer">Open claude.ai again</a></>
+        : 'Opening claude.ai…'}</span>}
     <div className="inline-form">
-      <input name="code" required minLength={10} autoComplete="off" spellCheck={false} aria-label="Code from claude.ai" aria-describedby="seat-error" placeholder="Paste the code from claude.ai" className="mono" autoFocus />
-      <button className="btn primary sm" disabled={complete.isPending}>{complete.isPending ? 'Connecting…' : 'Connect'}</button>
+      <input name="code" required minLength={10} autoComplete="off" spellCheck={false} aria-label="Code from claude.ai" aria-describedby="seat-error" placeholder="Paste the code from claude.ai" className="mono" disabled={!signIn} autoFocus />
+      <button type="button" className="btn sec sm" onClick={() => navigate('/admin', true)}>Cancel</button>
+      <button className="btn primary sm" disabled={!signIn || complete.isPending}>{complete.isPending ? 'Connecting…' : 'Connect'}</button>
     </div>
     {complete.error && <span id="seat-error" className="ferr" role="alert">{complete.error.message}</span>}
   </form>
 }
 
-function TokenForm() {
-  const updateAdmin = useUpdateAdmin()
-  return <details className="seat-token">
-    <summary>Paste a token from <code>claude setup-token</code> instead</summary>
-    <form className="inline-form" onSubmit={(event) => updateAdmin.mutate({ seatToken: formValues(event)('seatToken') })}>
-      <input name="seatToken" type="password" required minLength={20} autoComplete="off" aria-label="Claude seat token" placeholder="sk-ant-oat01-…" />
-      <button className="btn sec sm" disabled={updateAdmin.isPending}>Save</button>
-    </form>
-    {updateAdmin.error && <span className="ferr" role="alert">{updateAdmin.error.message}</span>}
-  </details>
+let seatTab: Window | null = null
+
+function openSeatTab() {
+  seatTab = window.open('about:blank', '_blank')
+  if (seatTab) seatTab.opener = null
 }
 
 function PublicUrlForm({ publicUrl }: { publicUrl: string }) {
@@ -190,25 +193,35 @@ function appLine(grant: OAuthGrant) {
   return `Connected ${shortDate.format(new Date(grant.createdAt))} · ${used}`
 }
 
-function Containers() {
+function ContainersDialog() {
   const containers = useContainers()
-  return <div className="aform containers" id="containers">
-    <span className="mute">Straight from <code>docker ps -a</code> on this server, next to what each agent should be doing. Refreshes every 5 seconds.</span>
-    <Loaded query={containers}>{(list) => list.length ? <div className="ctable"><table>
-      <thead><tr><th>Agent</th><th>Should be</th><th>Container</th><th>State</th><th>Docker status</th><th>Image</th><th>Created</th></tr></thead>
-      <tbody>{list.map((row) => <tr key={`${row.agentId}-${row.name ?? 'none'}`} className={mismatch(row) ? 'off' : undefined}>
-        <td>{row.agentName ?? <span className="mute">Deleted agent</span>}<div className="mono mute">{row.agentId}</div></td>
-        <td>{row.wanted ?? '—'}</td>
-        <td className="mono">{row.name ?? '—'}</td>
-        <td><span className={`status ${row.state === 'running' ? 'success' : row.state === 'none' ? 'destructive' : 'secondary'}`}>{row.state}</span></td>
-        <td>{row.status}</td>
-        <td className="mono ellip" title={row.image}>{row.image.split('@')[0].split('/').pop()}</td>
-        <td className="mono">{row.createdAt.slice(0, 19)}</td>
-      </tr>)}</tbody>
-    </table></div> : <span>No agent containers on this server.</span>}</Loaded>
-  </div>
+  const agents = useAgents()
+  const about = (agentId: string) => agents.data?.find((agent) => agent.id === agentId)?.instructions
+  return <Dialog labelledBy="containers-h" onClosed={() => navigate('/admin', true)}>{(close) => <div className="dlgform auto">
+    <DialogHead id="containers-h" title="Containers" subtitle={<>Straight from <code>docker ps -a</code> on this server, next to what each agent should be doing. Refreshes every 5 seconds.</>} onClose={close} />
+    <div className="dlgbody">
+      <Loaded query={containers}>{(list) => list.length
+        ? <div className="ccards">{list.map((row) => <ContainerCard key={`${row.agentId}-${row.name ?? 'none'}`} row={row} about={about(row.agentId)} />)}</div>
+        : <div className="empty">No agent containers on this server.</div>}</Loaded>
+    </div>
+    <DialogFoot><button type="button" className="btn sec" onClick={close}>Close</button></DialogFoot>
+  </div>}</Dialog>
 }
 
-function mismatch(row: { wanted: string | null; state: string }) {
-  return row.wanted === null || (row.wanted === 'running') !== (row.state === 'running')
+function ContainerCard({ row, about }: { row: AgentContainer; about: string | undefined }) {
+  const disagree = row.wanted === null || (row.wanted === 'running') !== (row.state === 'running')
+  return <div className="box ccard">
+    <div className="ccard-top">
+      <Avatar id={row.agentId} about={about} size={36} />
+      <div className="t"><div className="ellip">{row.agentName ?? 'Deleted agent'}</div><div className="mono mute ellip">{row.name ?? row.agentId}</div></div>
+      <span className={`status ${row.state === 'running' ? 'success' : row.state === 'none' ? 'destructive' : 'secondary'}`}>{row.state === 'none' ? 'No container' : row.state}</span>
+    </div>
+    <div className="facts">
+      <div><span>Should be</span><span>{row.wanted ?? 'Agent deleted'}</span></div>
+      <div><span>Docker</span><span className="ellip">{row.status}</span></div>
+      <div><span>Image</span><span className="mono ellip" title={row.image}>{row.image ? row.image.split('@')[0].split('/').pop() : '—'}</span></div>
+      <div><span>Created</span><span className="mono">{row.createdAt ? row.createdAt.slice(0, 16) : '—'}</span></div>
+    </div>
+    {disagree && <p className="ccard-warn">Docker and Fast Monkey disagree. Reconcile fixes this within 30 seconds while the agent should run.</p>}
+  </div>
 }
