@@ -171,6 +171,7 @@ async function create(id: string, net: number, files: AgentFiles) {
   await mustHaveFirewall()
   makeHome(id)
   writeConf(id, files)
+  await docker('network', 'rm', `ag-${id}`).catch(() => undefined)
   await docker('network', 'create', '--subnet', `10.200.${net}.0/24`, '--gateway', `10.200.${net}.1`, '--label', `fastmonkey.agent=${id}`, `ag-${id}`)
   const digest = await docker('image', 'inspect', '--format', '{{index .RepoDigests 0}}', IMAGE).catch(() => IMAGE)
   await docker(

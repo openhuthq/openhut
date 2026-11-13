@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { Selectable } from 'kysely'
 import * as z from 'zod/mini'
-import type { Agent, AgentStatus, Grant, UpdateAgent } from '@fastmonkey/common/agents/agent.ts'
+import type { Agent, AgentHealth, AgentStatus, Grant, UpdateAgent } from '@fastmonkey/common/agents/agent.ts'
 import type { Deleted } from '@fastmonkey/common/api.ts'
 import { db, findRow, isUniqueViolation } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
@@ -10,7 +10,7 @@ import { HttpError, messageOf } from '../platform/http-error.ts'
 import { agentToken, newId, sameSecret, seal, unseal } from '../platform/secrets.ts'
 import { settings } from '../platform/settings.ts'
 import { agentd, containerStates, type AgentFiles } from '../platform/agentd.ts'
-import { agentSubnet } from '../platform/network.ts'
+import { agentApiUrl, agentSubnet } from '../platform/network.ts'
 import { log, record } from '../platform/events.ts'
 import { deleted } from '../platform/responses.ts'
 import { connectionService } from '../connections/connection-service.ts'
@@ -20,19 +20,23 @@ import { renderFiles, type RenderedChannel } from './hermes-files.ts'
 
 const MAX_AGENTS = 250
 const RECONCILE_MS = 30_000
+const PROBE_MS = 3_000
+const PROBE_FRESH_MS = 5_000
+const STARTING_MS = 180_000
 const SlackSecrets = z.object({ botToken: z.string(), appToken: z.string() })
 
 export const agentService = {
   async list({ actor }: { actor: Caller }): Promise<Agent[]> {
     const [rows, states] = await Promise.all([db.selectFrom('agent').selectAll().orderBy('created_at').execute(), containerStates()])
     const owners = new Map((await db.selectFrom('person').select(['id', 'email']).execute()).map((person) => [person.id, person.email]))
-    return Promise.all(rows.map(async (row) => agentOf({ row, ownerName: owners.get(row.owner_id), state: states?.[row.id], editable: await canEdit({ actor, agent: row }) })))
+    return Promise.all(rows.map(async (row) => agentOf({ row, ownerName: owners.get(row.owner_id), state: states?.[row.id], health: await healthOf({ row, state: states?.[row.id] }), editable: await canEdit({ actor, agent: row }) })))
   },
 
   async get({ actor, id }: { actor: Caller; id: string }): Promise<Agent> {
     const row = await rowOf(id)
     const owner = await db.selectFrom('person').select('email').where('id', '=', row.owner_id).executeTakeFirst()
-    return agentOf({ row, ownerName: owner?.email, state: (await containerStates())?.[id], editable: await canEdit({ actor, agent: row }) })
+    const state = (await containerStates())?.[id]
+    return agentOf({ row, ownerName: owner?.email, state, health: await healthOf({ row, state }), editable: await canEdit({ actor, agent: row }) })
   },
 
   async requireEditable({ actor, id }: { actor: Caller; id: string }): Promise<AgentRow> {
@@ -142,6 +146,7 @@ async function reconcile(): Promise<void> {
   const states = await containerStates()
   if (!states) return
   for (const row of await db.selectFrom('agent').selectAll().where('wanted', '=', 'running').execute()) {
+    if (states[row.id] === 'running') await probe({ row, fresh: true })
     await keepRunning({ row, state: states[row.id] }).catch((err: unknown) => log.error({ event: 'reconcile.failed', agent: row.id, error: messageOf(err) }))
   }
 }
@@ -175,6 +180,12 @@ function renderedChannel(channel: Selectable<Database['channel']>): RenderedChan
 }
 
 async function keepRunning({ row, state }: { row: AgentRow; state: string | undefined }): Promise<void> {
+  if (state === undefined) {
+    await agentd.create({ id: row.id, net: row.net, files: await filesOf(row) })
+    await agentd.start({ id: row.id })
+    log.info({ event: 'reconcile.recreated', agent: row.id })
+    return
+  }
   if (state !== 'running') {
     await agentd.start({ id: row.id })
     log.info({ event: 'reconcile.started', agent: row.id })
@@ -196,10 +207,10 @@ async function applyRelease(): Promise<void> {
   if (force) log.info({ event: 'build.applied', from: previous, to: config.build })
 }
 
-function agentOf({ row, ownerName, state, editable }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; editable: boolean }): Agent {
+function agentOf({ row, ownerName, state, health, editable }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean }): Agent {
   return {
     id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, wanted: row.wanted,
-    status: statusOf(state), summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
+    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
   }
 }
 
@@ -211,6 +222,38 @@ function statusOf(state: string | undefined): AgentStatus {
     default: return 'missing'
   }
 }
+
+const probes = new Map<string, Probe>()
+
+async function healthOf({ row, state }: { row: AgentRow; state: string | undefined }): Promise<Health> {
+  if (state !== 'running') {
+    probes.delete(row.id)
+    return { health: null, detail: '' }
+  }
+  const last = await probe({ row, fresh: false })
+  if (!last.detail) return { health: 'answering', detail: '' }
+  return { health: Date.now() - last.failingSince > STARTING_MS ? 'not_answering' : 'starting', detail: last.detail }
+}
+
+async function probe({ row, fresh }: { row: AgentRow; fresh: boolean }): Promise<Probe> {
+  const last = probes.get(row.id)
+  if (last && !fresh && Date.now() - last.at < PROBE_FRESH_MS) return last
+  const detail = await fetch(`${agentApiUrl(row.net)}/v1/models`, { headers: { authorization: `Bearer ${unseal(row.channel_key)}` }, signal: AbortSignal.timeout(PROBE_MS) })
+    .then((res) => res.ok ? '' : `Hermes answered ${res.status}.`)
+    .catch((err: unknown) => unreachable(err))
+  const next = { at: Date.now(), detail, failingSince: detail && last?.detail ? last.failingSince : Date.now() }
+  probes.set(row.id, next)
+  return next
+}
+
+export function unreachable(err: unknown): string {
+  if (err instanceof Error && err.name === 'TimeoutError') return `Hermes didn't answer within ${PROBE_MS / 1000} seconds.`
+  const code = err instanceof Error && typeof err.cause === 'object' && err.cause !== null && 'code' in err.cause ? String(err.cause.code) : messageOf(err)
+  return `Hermes isn't answering on port 8642 (${code}).`
+}
+
+type Probe = { at: number; detail: string; failingSince: number }
+type Health = { health: AgentHealth | null; detail: string }
 
 const summaryOf = (instructions: string): string => instructions.split('\n').map((line) => line.trim()).find((line) => line && !line.startsWith('#')) ?? ''
 

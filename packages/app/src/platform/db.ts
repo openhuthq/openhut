@@ -13,7 +13,7 @@ export const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite: aw
 
 await sql`create table if not exists install_setting (name text primary key, value text not null)`.execute(db)
 
-export async function findRow<T extends 'agent' | 'channel' | 'connection_grant'>({ table, id, missing }: { table: T; id: string; missing: string }): Promise<Selectable<Database[T]>> {
+export async function findRow<T extends 'agent' | 'channel' | 'connection_grant' | 'thread'>({ table, id, missing }: { table: T; id: string; missing: string }): Promise<Selectable<Database[T]>> {
   const [row] = ID.test(id) ? (await sql<Selectable<Database[T]>>`select * from ${sql.table(table)} where id = ${id}`.execute(db)).rows : []
   if (!row) throw new HttpError(404, missing)
   return row
@@ -57,4 +57,8 @@ export async function migrate(): Promise<void> {
     reason text not null, outcome text not null check (outcome in ('allowed', 'denied', 'failed')), ms integer not null)`.execute(db)
   await sql`create index if not exists connection_event_by_connection on connection_event (connection_id, id desc)`.execute(db)
   await sql`create index if not exists connection_event_by_agent on connection_event (agent_id, id desc)`.execute(db)
+  await sql`create table if not exists thread (
+    id text primary key, agent_id text not null references agent(id) on delete cascade, person_id text not null references person(id) on delete cascade,
+    title text not null, messages text not null default '[]', created_at timestamptz not null default now(), updated_at timestamptz not null default now())`.execute(db)
+  await sql`create index if not exists thread_by_person on thread (person_id, updated_at desc)`.execute(db)
 }

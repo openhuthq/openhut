@@ -1,16 +1,16 @@
 ---
 status: accepted
 ---
-# We deploy agents, we are not the chat interface
+# Chat with agents is the dashboard's home; Slack and WhatsApp stay the team's channels
 
 ## Decision
-The product creates, configures and supervises Hermes agents. People talk to them in Slack, email or WhatsApp. The dashboard has no chat screen and no message passes through our server.
+The dashboard opens on chat (owner, 2026-11-13). The sidebar lists every agent under Chats with your threads beneath the open one; clicking an agent starts a thread. Threads are saved per person, private to their author, and go to the agent's own Hermes API server through the app. Setup stays one click away (Agent settings, or Agents at the top). Before this, the rule was "no chat screen and no message passes through our server" (2026-11-12).
 
 ## Context
-Owner, 2026-11-12. Hermes already runs its own gateway per profile (Slack Socket Mode, IMAP/SMTP, WhatsApp bridge).
+After creating an agent nobody could tell whether it worked: the status only said the container existed, and the only way to try it was to set up Slack or WhatsApp first.
 
 ## Why
-Building a chat surface or a message router duplicates what Hermes does and puts us in the path of every conversation.
+Every agent already serves an OpenAI-compatible API on :8642 with its own key, so a real conversation costs a proxy, not a second agent runtime. Talking to the agent is the fastest proof it works, and a thread shows which gateway calls it made.
 
 ## Consequences
-Channel setup is credentials only: stored sealed, written into the profile's `.env`. Skyfleet's `chat/` service, Slack bot and `/api/v1/signals` inbound are not carried over.
+Messages now pass through and are stored in the app's database (`thread` table), only for people who can edit the agent. Slack and WhatsApp are still how the team reaches agents; the dashboard chat isn't a channel. Agents report `health` (answering, starting, not answering) from a probe of `/v1/models`, alongside the container `status`.

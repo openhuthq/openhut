@@ -17,6 +17,7 @@ export interface Database {
   channel: { id: string; agent_id: string; kind: 'slack' | 'whatsapp'; status: 'connected' | 'linking'; account: string | null; owner_address: string; secrets: string; open: boolean; allowed: string; created_at: Timestamp }
   connection: { id: string; kind: 'postgres'; name: string; owner_id: string; config: string; everyone: Generated<boolean>; created_at: Timestamp }
   connection_grant: { id: string; connection_id: string; agent_id: string; created_at: Timestamp }
+  thread: { id: string; agent_id: string; person_id: string; title: string; messages: Generated<string>; created_at: Timestamp; updated_at: Timestamp }
   connection_event: {
     id: Generated<string>; at: Timestamp; agent_id: string; connection_id: string | null; tool: string; reason: string
     outcome: 'allowed' | 'denied' | 'failed'; ms: number

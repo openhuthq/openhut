@@ -1,10 +1,13 @@
 import { readFileSync, rmSync } from 'node:fs'
+import { createServer as createHttpServer } from 'node:http'
 import { createServer } from 'node:net'
+import { setTimeout as sleep } from 'node:timers/promises'
 import type { AgentdReplies, AgentdRequest } from '../packages/agentd/src/agentd.ts'
 
 const SOCK = process.env.AGENTD_SOCK ?? '/tmp/fm-agentd.sock'
 const IMAGE = readFileSync(new URL('../install/agent-image', import.meta.url), 'utf8').trim()
 const FAKE_PHONE = '15550001111'
+const HERMES_PORT = 18642
 const states: Record<string, string> = {}
 const rendered: Record<string, string> = {}
 const pairReads: Record<string, number> = {}
@@ -26,6 +29,30 @@ createServer({ allowHalfOpen: true }, (sock) => {
   sock.setEncoding('utf8')
   sock.on('data', read)
 }).listen(SOCK, () => console.log(`fake agentd on ${SOCK}`))
+
+createHttpServer((req, res) => {
+  let raw = ''
+  req.on('data', (chunk) => { raw += chunk })
+  req.on('end', async () => {
+    if (req.url?.endsWith('/models')) return res.writeHead(200, { 'content-type': 'application/json' }).end('{"object":"list","data":[{"id":"hermes-agent"}]}')
+    const messages: { content: string }[] = JSON.parse(raw || '{}').messages ?? []
+    const last = messages.at(-1)?.content ?? ''
+    res.writeHead(200, { 'content-type': 'text/event-stream' })
+    const say = async (text: string) => {
+      for (const word of text.split(/(?<= )/)) {
+        res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: word } }] })}\n\n`)
+        await sleep(40)
+      }
+    }
+    if (/^sql:/i.test(last)) {
+      await say('Running that query. ')
+      res.write('event: hermes.tool.progress\ndata: {"tool":"call_tool","label":"postgres_query"}\n\n')
+      await sleep(600)
+    }
+    await say(`Fake Hermes heard: **${last}** (message ${messages.length} in this thread).`)
+    res.end('data: [DONE]\n\n')
+  })
+}).listen(HERMES_PORT, '127.0.0.1', () => console.log(`fake Hermes API on :${HERMES_PORT}`))
 
 function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
   switch (req.cmd) {
