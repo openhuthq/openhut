@@ -18,6 +18,7 @@ the installer, agentd and the e2e run live here. `fastmonkey-server.md` covers t
 - `@fastify/static` is registered with `wildcard: false`, so it only serves files present at start. After rebuilding
   the dashboard, restart the app or new asset names fall through to `index.html` and the page stays blank.
 - macOS caps Unix socket paths at 104 bytes; a long `AGENTD_SOCK` is cut short and fails with `EADDRINUSE`.
+- Two worktrees can't run `npm run dev` at once: the gateway (8081, `config.ts`) and the fake Hermes (18642, `fake-agentd.ts` and `dev.ts`) are fixed, and `PORT` only moves 8787 (`seed-ui.ts` also assumes 8787). To check the UI from a second worktree, change those locally, run with `PORT`, and revert before committing. Don't point Vite at another worktree's app: it may be on a different API and the pages fail to parse.
 - `config.port` is 8787 unless `PORT` is set; when an e2e run holds 8787, start the app with `PORT=8799`.
 - `scripts/seed-ui.ts` hardcodes `127.0.0.1:8787`, so on another `PORT` seed from a copy with the port swapped. In the dashboard, "New agent" creates the agent on click (no form), so clicking it for a screenshot adds one.
 - The button and dropdown rules (which variant for which action) are in `DESIGN.md` at the repo root and in `index.css` since 2026-11-13. `index.css` is one global namespace with short class names: a new `.role` for the invite popover restyled `.card .role` on the agent cards. Grep the stylesheet for a class name before adding it.
@@ -112,5 +113,4 @@ the installer, agentd and the e2e run live here. `fastmonkey-server.md` covers t
 - A personal-account app can only be installed on that account. For an organization's repositories the app must be created under the organization (the dialog's Organization field), which needs an org owner.
 - The bot's permissions are fixed in the manifest (contents, pull requests and issues write; actions and checks read). Pushing changes to `.github/workflows` needs the Workflows permission, added on the app's page on GitHub.
 - GitHub connections are saved with `sign_in` false, so there's no Reconnect: a new bot means delete and connect again.
-- Local dev: the gateway port (8081) is fixed, so two worktrees can't run `npm run dev` at once.
 
