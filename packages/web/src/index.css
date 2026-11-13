@@ -202,7 +202,7 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .soul:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 .soul pre{margin:0;font:12px/1.7 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
 .soul::after{content:"";position:absolute;inset:auto 0 0 0;height:76px;background:linear-gradient(to bottom,transparent,var(--card) 62%);pointer-events:none}
-.soulfoot{position:absolute;right:12px;bottom:12px;z-index:1;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--ink);background:var(--card);box-shadow:inset 0 0 0 1px var(--mid);border-radius:999px;padding:5px 11px}
+.soulfoot{position:absolute;right:12px;bottom:12px;z-index:1;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--body);background:var(--canvas);border-radius:8px;padding:5px 10px}
 .dlg{border:0;padding:0;border-radius:12px;width:min(880px,calc(100vw - 32px));max-width:none;max-height:none;background:var(--card);color:var(--ink);box-shadow:0 24px 80px oklch(0% 0 0 / .22)}
 .dlg[open]{animation:grow .18s cubic-bezier(.2,.8,.2,1)}
 @keyframes grow{from{opacity:0;transform:scale(.94) translateY(8px)}}
@@ -550,3 +550,7 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .clist svg{flex:none;width:10px;height:10px;margin-top:4px;color:var(--pass)}
 .seat-wait{display:inline-flex;align-items:center;gap:8px}.seat-wait .spin{margin-top:0}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.btn.row{height:30px;padding:0 10px;font-size:13px;font-weight:500;background:transparent;box-shadow:none;color:var(--ink);border-radius:8px}
+.btn.row:hover:not(:disabled){background:var(--soft)}
+.btn.row.danger{color:var(--fail)}
+.btn.row.danger:hover:not(:disabled){background:oklch(55% .185 27 / .08)}
