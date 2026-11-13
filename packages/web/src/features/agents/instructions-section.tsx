@@ -12,7 +12,7 @@ import { navigate } from '@/lib/router'
 export function InstructionsSection({ agent, editing, lockReason }: { agent: Agent; editing: boolean; lockReason: string | undefined }) {
   const updateAgent = useUpdateAgent(agent.id)
   const preview = agent.instructions.split('\n').slice(0, 16).join('\n')
-  return <section>
+  return <section className="grow">
     <SectionHead title="Instructions" />
     <button type="button" className="soul" onClick={() => navigate(`/agents/${agent.id}/instructions`)} aria-haspopup="dialog" aria-label={`Edit ${agent.name}'s instructions`}>
       <pre>{preview || <span className="mute">No instructions yet. What does {agent.name} do, who does it answer, and what must it never do?</span>}</pre>

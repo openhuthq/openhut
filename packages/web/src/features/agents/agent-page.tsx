@@ -47,26 +47,28 @@ function AgentView({ agent, dialog, skill }: { agent: Agent; dialog: AgentDialog
     </Locked>
   </>
   return <Page title={agent.name} parents={PARENTS} actions={actions}>
-    <div className="detail wide">
-      <div className="left">
-        <div className="hero">
-          <Avatar id={agent.id} about={agent.instructions} size={64} />
-          <AgentName agent={agent} editing={dialog === 'name' && agent.canEdit} />
+    <div className="wrap">
+      <div className="detail wide">
+        <div className="left">
+          <div className="hero">
+            <Avatar id={agent.id} about={agent.instructions} size={64} />
+            <AgentName agent={agent} editing={dialog === 'name' && agent.canEdit} />
+          </div>
+          <InstructionsSection agent={agent} editing={dialog === 'instructions'} lockReason={lockReason} />
         </div>
-        <InstructionsSection agent={agent} editing={dialog === 'instructions'} lockReason={lockReason} />
-        <SkillsSection agent={agent} lockReason={lockReason} open={skill} />
+        <aside className="rail">
+          <div className="box facts">
+            <div><span>{FACT_ICONS.status}Status</span><AgentBadge agent={agent} /></div>
+            <div><span>{FACT_ICONS.model}Model</span><ModelPicker agent={agent} lockReason={lockReason} /></div>
+            <div><span>{FACT_ICONS.computer}Computer</span><SizePicker agent={agent} lockReason={lockReason} /></div>
+            <div><span>{FACT_ICONS.owner}Owner</span><OwnerChip id={agent.ownerId} name={agent.ownerName} /></div>
+            <div><span>{FACT_ICONS.code}Code execution</span><CodeSwitch agent={agent} lockReason={lockReason} /></div>
+          </div>
+          <ChannelsSection agent={agent} lockReason={lockReason} dialog={dialog} />
+          <AgentConnections agent={agent} lockReason={lockReason} />
+        </aside>
       </div>
-      <aside className="rail">
-        <div className="box facts">
-          <div><span>{FACT_ICONS.status}Status</span><AgentBadge agent={agent} /></div>
-          <div><span>{FACT_ICONS.model}Model</span><ModelPicker agent={agent} lockReason={lockReason} /></div>
-          <div><span>{FACT_ICONS.computer}Computer</span><SizePicker agent={agent} lockReason={lockReason} /></div>
-          <div><span>{FACT_ICONS.owner}Owner</span><OwnerChip id={agent.ownerId} name={agent.ownerName} /></div>
-          <div><span>{FACT_ICONS.code}Code execution</span><CodeSwitch agent={agent} lockReason={lockReason} /></div>
-        </div>
-        <ChannelsSection agent={agent} lockReason={lockReason} dialog={dialog} />
-        <AgentConnections agent={agent} lockReason={lockReason} />
-      </aside>
+      <SkillsSection agent={agent} lockReason={lockReason} open={skill} />
     </div>
   </Page>
 }

@@ -78,7 +78,7 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 - An agent anyone can message uses Hermes's `smart` approvals; approvals go to the owner (email, Slack ID, WhatsApp, Telegram ID).
 
 ## Skills
-- The agent page lists an agent's skills (`GET /api/skills?agentId=`): the ones it learned first, the bundled ones folded under "N built in". A skill opens in the same dialog as the instructions and saves with `PATCH /api/skills/:id`; ids are `<agentId>~<folder>~<folder>`. Anyone who can see the agent can read a skill; saving needs the right to change the agent. Skills can't be created or deleted from the dashboard.
+- The agent page shows an agent's skills (`GET /api/skills?agentId=`, learned first) as a full-width grid of cards under the two columns, filtered to Built in by default. Icons come from each skill's Hermes category folder; the rules are in `DESIGN.md`, Agent page. A skill opens in the same dialog as the instructions and saves with `PATCH /api/skills/:id`; ids are `<agentId>~<folder>~<folder>`. Anyone who can see the agent can read a skill; saving needs the right to change the agent. Skills can't be created or deleted from the dashboard.
 - The files are the agent's own, so agentd (root) treats them as hostile (`packages/agentd/src/skills.ts`): it opens with `O_NOFOLLOW`, then checks through `/proc/self/fd` that the open file is a plain, singly-linked file at exactly that path under `/data/agents/<id>/skills`, and only then reads or rewrites it in place (never creates). A symlinked file or folder, a hard link, or a swapped `skills` folder reads as "gone". The tests need Linux, so they are skipped on a Mac and run in CI.
 
 ## Chat (threads)

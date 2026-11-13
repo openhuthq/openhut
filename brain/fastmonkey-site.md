@@ -23,7 +23,7 @@
   headings, IBM Plex Mono copy, black code bars, screenshots on a grey stage in a black-outlined window), and brief:
   one page per feature, a real dashboard screenshot, three or four one-line steps, nothing else. No overview or
   concepts pages, no flow strips, no coloured icon tiles.
-- Screenshots in `public/screenshots/` are the real dashboard with `node scripts/seed-ui.ts` data, retaken 2026-11-13 at 1456x830
+- Screenshots in `public/screenshots/` are the real dashboard with `node scripts/seed-ui.ts` data, retaken 2026-11-13 at 1456x830 (`agent.jpg` on 2026-11-14 at 1456x822)
   (the Chrome tool's full-viewport `zoom` with `save_to_disk`, which leaves the cursor out more often than `screenshot`; a `scale` below 1 saves a small file). `seed-ui.ts` hardcodes port 8787; on another `PORT`, seed from a copy with the port swapped.
 - The home page hero follows Gumloop's (owner, 2026-11-13): a row of mascots, the headline "Build, manage & share
   agents with your team", then one window that mocks the real product (agent list, chat, the agent's instructions and

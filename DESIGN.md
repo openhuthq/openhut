@@ -60,7 +60,7 @@ Two sizes. 32px (default) in page headers, dialog and popover footers, empty sta
 | Agent | Chat | white bordered | secondary |
 | Agent | Stop / Start | white bordered, amber or green text | secondary, no colour |
 | Agent | Delete | white bordered, red text | red text, no border |
-| Agent | skill Edit / View | bordered `sm` | ghost `sm`, same as the channel rows |
+| Agent | skill Edit / View | bordered `sm` | none: the whole skill card opens it (2026-11-14) |
 | Agent | channel Set up / Edit, Disconnect | `btn row` 30px | ghost `sm` 28px, Disconnect red |
 | Chat | Clear | visible ghost button | "Clear chat" in the ⋯ menu |
 | Chat | Delete agent | not on this page | red item in the ⋯ menu, same confirm as the agent page |
@@ -112,3 +112,12 @@ A ghost button at rest is bare text. In a row ("Set up", "Remove") that is the c
 
 - Every UI icon is Hugeicons (`@hugeicons/react` + `@hugeicons/core-free-icons`, free stroke set) through `components/icons.tsx` and `status-badge.tsx`; brand marks for other apps stay in `brand-icons.ts`. Don't hand-draw an SVG icon (owner, 2026-11-14).
 - Text is 14px across the app, sidebar included. Only small labels and counts (12px), code and tool-call chips (12.5px) and headings differ.
+
+## Agent page
+
+Status: in the code since 2026-11-14.
+
+- Two columns on top that end on the same line: Instructions stretches to the rail's height (the preview text is absolutely placed, so long instructions never make the row taller). Skills sit below, full width.
+- No scroll box inside the page. A nested scroller ended below the fold, trapped the wheel and, with classic scrollbars, put a 15px track inside the box's border. If a list is too long, fold it, don't scroll it.
+- Skills are the Agents page's `.grid` of `.card`s, so every card has the same width and a two-line description. A segmented filter (All / Learned / Built in, Built in selected) sits in the section head, and 12 cards show until "Show all" (12 fills 1, 2, 3 or 4 columns evenly).
+- A skill's icon: a learned skill gets the ink sparkle tile; a built-in one gets the brand mark when its name starts with a brand in `brand-icons.ts` (github, google, claude), else the Hugeicon for its Hermes category, the folder in `skill.path` (`skillIcon` in `icons.tsx`), else the bolt.
