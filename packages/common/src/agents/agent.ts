@@ -10,6 +10,15 @@ export const MODELS = [
   { id: 'haiku', label: 'Haiku 5.5', blurb: 'Fastest, for quick replies' },
 ] as const satisfies readonly { id: ModelId; label: string; blurb: string }[]
 
+export const AgentSize = z.enum(['standard', 'large', 'xlarge'])
+export type AgentSize = z.infer<typeof AgentSize>
+
+export const SIZES = [
+  { id: 'standard', label: 'Standard', blurb: 'Chat, lookups and short tasks', spec: '1 GB memory, 1 CPU' },
+  { id: 'large', label: 'Large', blurb: 'Bigger files and longer tasks', spec: '2 GB memory, 2 CPUs' },
+  { id: 'xlarge', label: 'Extra large', blurb: 'Heavy data work and big code runs', spec: '4 GB memory, 2 CPUs' },
+] as const satisfies readonly { id: AgentSize; label: string; blurb: string; spec: string }[]
+
 export const AgentStatus = z.enum(['running', 'stopped', 'missing'])
 export type AgentStatus = z.infer<typeof AgentStatus>
 
@@ -34,6 +43,7 @@ export const Agent = z.object({
   net: z.number(),
   instructions: z.string(),
   codeExecution: z.boolean(),
+  size: AgentSize,
   canEdit: z.boolean(),
   createdAt: Timestamp,
 })
@@ -53,6 +63,7 @@ export const UpdateAgentFields = {
   model: z.optional(ModelId),
   wanted: z.optional(Wanted),
   codeExecution: z.optional(z.boolean()),
+  size: z.optional(AgentSize),
 }
 export const UpdateAgent = z.object(UpdateAgentFields).check(atLeastOneField)
 export type UpdateAgent = z.infer<typeof UpdateAgent>

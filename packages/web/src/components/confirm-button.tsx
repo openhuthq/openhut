@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom'
 import { DialogFoot } from '@/components/dialog-foot'
 import { DialogHead } from '@/components/dialog-head'
 
-export function ConfirmButton({ className, disabled, question, detail, action, onConfirm, children }: {
+export function ConfirmButton({ className, label, disabled, question, detail, action, onConfirm, children }: {
   className: string
+  label?: string
   disabled?: boolean
   question: string
   detail: string
@@ -16,7 +17,7 @@ export function ConfirmButton({ className, disabled, question, detail, action, o
   const headingId = useId()
   const close = () => ref.current?.close()
   return <>
-    <button type="button" className={className} disabled={disabled} onClick={() => ref.current?.showModal()}>{children}</button>
+    <button type="button" className={className} title={label} aria-label={label} disabled={disabled} onClick={() => ref.current?.showModal()}>{children}</button>
     {createPortal(<dialog ref={ref} className="dlg confirm" aria-labelledby={headingId} onClick={(event) => { if (event.target === event.currentTarget) close() }}>
       <DialogHead id={headingId} title={question} subtitle={detail} />
       <DialogFoot>

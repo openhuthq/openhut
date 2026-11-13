@@ -20,6 +20,7 @@ const CLAUDE_BIN = fileURLToPath(new URL('../../../bin/claude', import.meta.url)
 const BRIDGE = '/var/lib/fastmonkey/whatsapp-bridge'
 const AGENT_UID = 10000
 const SPEC = '2'
+const SIZES = { standard: { memory: '1g', cpus: '1' }, large: { memory: '2g', cpus: '2' }, xlarge: { memory: '4g', cpus: '2' } } as const
 const ID = /^ag_[a-z0-9]{8}$/
 const FILES = ['config.yaml', '.env', 'SOUL.md'] as const
 const MAX_FILE = 200_000
@@ -105,13 +106,13 @@ async function handle(req: AgentdRequest): Promise<Reply> {
     case 'containers':
       return { containers: await containerList() }
     case 'create':
-      return create(req.id, req.net, req.files)
+      return create(req)
     case 'apply': {
       writeConf(req.id, req.files)
-      if (await outdated(req.id)) {
+      if (await outdated(req.id, req.size)) {
         pairings.delete(req.id)
         await docker('rm', '-f', `ag-${req.id}`)
-        await create(req.id, req.net, req.files)
+        await create(req)
         if (req.restart) await start(req.id)
         return { applied: req.id, restarted: req.restart }
       }
@@ -166,9 +167,9 @@ function parseRequest(value: unknown): AgentdRequest {
       if (typeof value.authKey !== 'string' || !TAILSCALE_KEY.test(value.authKey)) throw new Error('bad tailscale auth key')
       return { cmd, authKey: value.authKey }
     case 'create':
-      return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files) }
+      return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files), size: sizeOf(value.size) }
     case 'apply':
-      return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files), restart: value.restart === true, force: value.force === true }
+      return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files), size: sizeOf(value.size), restart: value.restart === true, force: value.force === true }
     case 'start':
     case 'stop':
     case 'rm':
@@ -201,6 +202,12 @@ function netOf(value: unknown) {
   return value
 }
 
+function sizeOf(value: unknown): AgentSize {
+  if (value === undefined) return 'standard'
+  if (value !== 'standard' && value !== 'large' && value !== 'xlarge') throw new Error('bad size')
+  return value
+}
+
 function filesOf(value: unknown): AgentFiles {
   if (!isRecord(value)) throw new Error('missing files')
   const files: AgentFiles = {}
@@ -212,7 +219,7 @@ function filesOf(value: unknown): AgentFiles {
   return files
 }
 
-async function create(id: string, net: number, files: AgentFiles) {
+async function create({ id, net, files, size }: { id: string; net: number; files: AgentFiles; size: AgentSize }) {
   await mustHaveFirewall()
   makeHome(id)
   writeConf(id, files)
@@ -222,10 +229,10 @@ async function create(id: string, net: number, files: AgentFiles) {
   await docker(
     'create',
     ...['--name', `ag-${id}`, '--hostname', id, '--restart', 'no'],
-    ...['--label', `fastmonkey.agent=${id}`, '--label', `agent.digest=${digest}`, '--label', `fastmonkey.spec=${SPEC}`],
+    ...['--label', `fastmonkey.agent=${id}`, '--label', `agent.digest=${digest}`, '--label', `fastmonkey.spec=${SPEC}`, '--label', `fastmonkey.size=${size}`],
     ...['--runtime', 'runsc', '--user', `${AGENT_UID}:${AGENT_UID}`, '--init', '--entrypoint', '/opt/hermes/bin/hermes'],
     ...['--read-only', '--tmpfs', '/tmp:rw,nosuid,size=256m', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'],
-    ...['--pids-limit', '512', '--memory', '1g', '--cpus', '1', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'],
+    ...['--pids-limit', '512', '--memory', SIZES[size].memory, '--cpus', SIZES[size].cpus, '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'],
     ...['--network', `ag-${id}`, '--ip', `10.200.${net}.2`],
     ...Object.entries(AGENT_ENV).flatMap(([name, value]) => ['-e', `${name}=${value}`]),
     ...['--mount', 'type=bind,src=/etc/agentd/resolv.conf,dst=/etc/resolv.conf,readonly'],
@@ -393,9 +400,9 @@ async function isRunning(id: string) {
   return (await docker('inspect', '-f', '{{.State.Running}}', `ag-${id}`).catch(ignoreMissing)) === 'true'
 }
 
-async function outdated(id: string) {
-  const spec = await docker('inspect', '-f', 'spec={{index .Config.Labels "fastmonkey.spec"}}', `ag-${id}`).catch(ignoreMissing)
-  return spec !== '' && spec !== `spec=${SPEC}`
+async function outdated(id: string, size: AgentSize) {
+  const made = await docker('inspect', '-f', 'spec={{index .Config.Labels "fastmonkey.spec"}} size={{index .Config.Labels "fastmonkey.size"}}', `ag-${id}`).catch(ignoreMissing)
+  return made !== '' && made.replace(/size=$/, 'size=standard') !== `spec=${SPEC} size=${size}`
 }
 
 async function stale(id: string) {
@@ -530,12 +537,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+export type AgentSize = keyof typeof SIZES
+
 export type AgentdRequest =
   | { cmd: 'health' }
   | { cmd: 'ps' | 'containers' }
   | { cmd: 'update' }
-  | { cmd: 'create'; id: string; net: number; files: AgentFiles }
-  | { cmd: 'apply'; id: string; net: number; files: AgentFiles; restart: boolean; force?: boolean }
+  | { cmd: 'create'; id: string; net: number; files: AgentFiles; size: AgentSize }
+  | { cmd: 'apply'; id: string; net: number; files: AgentFiles; size: AgentSize; restart: boolean; force?: boolean }
   | { cmd: 'start' | 'stop' | 'rm' | 'wa-pair' | 'wa-unlink' | 'skills'; id: string }
   | { cmd: 'skill-read'; id: string; path: string }
   | { cmd: 'skill-write'; id: string; path: string; body: string }

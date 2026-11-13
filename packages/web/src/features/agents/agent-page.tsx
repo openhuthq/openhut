@@ -12,7 +12,7 @@ import { AgentConnections } from '@/features/agents/agent-connections'
 import { useAgent, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { ChannelsSection } from '@/features/agents/channels-section'
 import { InstructionsSection } from '@/features/agents/instructions-section'
-import { ModelPicker } from '@/features/agents/model-picker'
+import { ModelPicker, SizePicker } from '@/features/agents/model-picker'
 import { SkillsSection } from '@/features/agents/skills-section'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
@@ -59,6 +59,7 @@ function AgentView({ agent, dialog, skill }: { agent: Agent; dialog: AgentDialog
         <div className="box facts">
           <div><span>{FACT_ICONS.status}Status</span><AgentBadge agent={agent} /></div>
           <div><span>{FACT_ICONS.model}Model</span><ModelPicker agent={agent} lockReason={lockReason} /></div>
+          <div><span>{FACT_ICONS.computer}Computer</span><SizePicker agent={agent} lockReason={lockReason} /></div>
           <div><span>{FACT_ICONS.owner}Owner</span><OwnerChip id={agent.ownerId} name={agent.ownerName} /></div>
           <div><span>{FACT_ICONS.code}Code execution</span><CodeSwitch agent={agent} lockReason={lockReason} /></div>
         </div>

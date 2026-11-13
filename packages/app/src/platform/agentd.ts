@@ -1,5 +1,6 @@
 import { connect } from 'node:net'
 import * as z from 'zod/mini'
+import type { AgentSize } from '@fastmonkey/common/agents/agent.ts'
 import { config } from './config.ts'
 import { HttpError } from './http-error.ts'
 
@@ -12,10 +13,10 @@ export const agentd = {
   health: () => ask({ request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), updating: z.optional(z.boolean()) }) }),
   containers: () => ask({ request: { cmd: 'containers' }, doing: 'list the containers', schema: z.object({ containers: z.array(z.object({ name: z.string(), agentId: z.string(), state: z.string(), status: z.string(), image: z.string(), createdAt: z.string(), networks: z.string() })) }) }),
   ps: () => ask({ request: { cmd: 'ps' }, doing: 'list the agents', schema: z.object({ states: z.record(z.string(), z.string()) }) }),
-  create: ({ id, net, files }: { id: string; net: number; files: AgentFiles }) =>
-    ask({ request: { cmd: 'create', id, net, files }, doing: 'create the agent', schema: z.object({ container: z.string() }) }),
-  apply: ({ id, net, files, restart, force = false }: { id: string; net: number; files: AgentFiles; restart: boolean; force?: boolean }) =>
-    ask({ request: { cmd: 'apply', id, net, files, restart, force }, doing: 'update the agent\'s files', schema: z.object({ applied: z.string(), restarted: z.boolean() }) }),
+  create: ({ id, net, files, size }: { id: string; net: number; files: AgentFiles; size: AgentSize }) =>
+    ask({ request: { cmd: 'create', id, net, files, size }, doing: 'create the agent', schema: z.object({ container: z.string() }) }),
+  apply: ({ id, net, files, size, restart, force = false }: { id: string; net: number; files: AgentFiles; size: AgentSize; restart: boolean; force?: boolean }) =>
+    ask({ request: { cmd: 'apply', id, net, files, size, restart, force }, doing: 'update the agent\'s files', schema: z.object({ applied: z.string(), restarted: z.boolean() }) }),
   start: ({ id }: { id: string }) => ask({ request: { cmd: 'start', id }, doing: 'start the agent', schema: z.object({ started: z.string() }) }),
   stop: ({ id }: { id: string }) => ask({ request: { cmd: 'stop', id }, doing: 'stop the agent', schema: z.object({ stopped: z.string() }) }),
   remove: ({ id }: { id: string }) => ask({ request: { cmd: 'rm', id }, doing: 'delete the agent', schema: z.object({ removed: z.string() }) }),

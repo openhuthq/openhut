@@ -13,7 +13,7 @@ export interface Database {
   oauth_grant: { id: string; client_id: string; person_id: string; access_hash: string; refresh_hash: string; access_expires_at: Timestamp; created_at: Timestamp; used_at: Timestamp | null }
   agent: {
     id: string; name: string; owner_id: string; instructions: string; model: 'opus' | 'sonnet' | 'haiku'; net: number
-    wanted: Generated<'running' | 'stopped'>; code_execution: Generated<boolean>; channel_key: string; created_at: Timestamp
+    wanted: Generated<'running' | 'stopped'>; code_execution: Generated<boolean>; size: Generated<'standard' | 'large' | 'xlarge'>; channel_key: string; created_at: Timestamp
   }
   channel: { id: string; agent_id: string; kind: 'slack' | 'whatsapp' | 'telegram'; status: 'connected' | 'linking'; account: string | null; owner_address: string; secrets: string; open: boolean; allowed: string; created_at: Timestamp }
   connection: {

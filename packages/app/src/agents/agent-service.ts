@@ -23,7 +23,7 @@ const RECONCILE_MS = 30_000
 const PROBE_MS = 3_000
 const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
-const RENDERED = ['instructions', 'model', 'codeExecution'] as const
+const RENDERED = ['instructions', 'model', 'codeExecution', 'size'] as const
 const SlackSecrets = z.object({ botToken: z.string(), appToken: z.string() })
 const TelegramSecrets = z.object({ botToken: z.string() })
 
@@ -57,7 +57,7 @@ export const agentService = {
       instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000),
     }).returningAll().executeTakeFirstOrThrow().catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'Someone created an agent at the same moment. Try again.') : err })
     try {
-      await agentd.create({ id: row.id, net, files: await filesOf(row) })
+      await agentd.create({ id: row.id, net, files: await filesOf(row), size: row.size })
     } catch (err) {
       await agentd.remove({ id: row.id }).catch(() => undefined)
       await db.deleteFrom('agent').where('id', '=', row.id).execute()
@@ -87,7 +87,7 @@ export const agentService = {
 
   async reapply({ id }: { id: string }): Promise<void> {
     const row = await rowOf(id)
-    await agentd.apply({ id, net: row.net, files: await filesOf(row), restart: row.wanted === 'running' })
+    await agentd.apply({ id, net: row.net, files: await filesOf(row), size: row.size, restart: row.wanted === 'running' })
   },
 
   async stopOwnedBy({ ownerId }: { ownerId: string }): Promise<void> {
@@ -130,7 +130,7 @@ export const agentService = {
   async reapplyAll({ force }: { force: boolean }): Promise<string[]> {
     const failed: string[] = []
     for (const row of await db.selectFrom('agent').selectAll().execute()) {
-      await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), restart: row.wanted === 'running', force })
+      await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), size: row.size, restart: row.wanted === 'running', force })
         .catch((err: unknown) => failed.push(`${row.name}: ${messageOf(err)}`))
     }
     return failed
@@ -185,7 +185,7 @@ function renderedChannel(channel: Selectable<Database['channel']>): RenderedChan
 
 async function keepRunning({ row, state }: { row: AgentRow; state: string | undefined }): Promise<void> {
   if (state === undefined) {
-    await agentd.create({ id: row.id, net: row.net, files: await filesOf(row) })
+    await agentd.create({ id: row.id, net: row.net, files: await filesOf(row), size: row.size })
     await agentd.start({ id: row.id })
     log.info({ event: 'reconcile.recreated', agent: row.id })
     return
@@ -195,7 +195,7 @@ async function keepRunning({ row, state }: { row: AgentRow; state: string | unde
     log.info({ event: 'reconcile.started', agent: row.id })
     return
   }
-  const { restarted } = await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), restart: true })
+  const { restarted } = await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), size: row.size, restart: true })
   if (restarted) log.info({ event: 'reconcile.restarted', agent: row.id })
 }
 
@@ -214,7 +214,7 @@ async function applyRelease(): Promise<void> {
 function agentOf({ row, ownerName, state, health, editable }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean }): Agent {
   return {
     id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, wanted: row.wanted,
-    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
+    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, size: row.size, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
   }
 }
 

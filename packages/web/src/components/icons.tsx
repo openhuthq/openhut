@@ -28,6 +28,7 @@ export const FACT_ICONS = {
   model: line(<><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" /></>, 'fi'),
   owner: line(<><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>, 'fi'),
   code: line(<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14" />, 'fi'),
+  computer: line(<><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></>, 'fi'),
 }
 
 export const NAV_ICONS = {
