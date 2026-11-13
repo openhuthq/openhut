@@ -49,12 +49,12 @@ function ChannelRow({ kind, agent, channel, lockReason }: { kind: ChannelKind; a
 function ChannelActions({ kind, agent, channel, lockReason }: { kind: ChannelKind; agent: Agent; channel: Channel | undefined; lockReason: string | undefined }) {
   const deleteChannel = useDeleteChannel()
   const disabled = !agent.canEdit || deleteChannel.isPending
-  const open = <Locked reason={lockReason}><button type="button" className="btn row" disabled={disabled} onClick={() => navigate(`/agents/${agent.id}/${kind}`)}>{actionLabel(channel)}</button></Locked>
+  const open = <Locked reason={lockReason}><button type="button" className="btn sm" disabled={disabled} onClick={() => navigate(`/agents/${agent.id}/${kind}`)}>{actionLabel(channel)}</button></Locked>
   if (!channel) return open
-  if (channel.status === 'linking') return <>{open}<Locked reason={lockReason}><button type="button" className="btn row" disabled={disabled} onClick={() => deleteChannel.mutate(channel, { onError: toastError })}>Cancel</button></Locked></>
+  if (channel.status === 'linking') return <>{open}<Locked reason={lockReason}><button type="button" className="btn sm" disabled={disabled} onClick={() => deleteChannel.mutate(channel, { onError: toastError })}>Cancel</button></Locked></>
   const { label, remove } = KINDS[kind]
   return <>{open}<Locked reason={lockReason}>
-    <ConfirmButton className="btn row danger" disabled={disabled} question={`${remove} ${label}?`} detail={removalDetail(kind, agent, channel)} action={remove} onConfirm={() => deleteChannel.mutate(channel, { onError: toastError })}>{remove}</ConfirmButton>
+    <ConfirmButton className="btn sm danger" disabled={disabled} question={`${remove} ${label}?`} detail={removalDetail(kind, agent, channel)} action={remove} onConfirm={() => deleteChannel.mutate(channel, { onError: toastError })}>{remove}</ConfirmButton>
   </Locked></>
 }
 

@@ -12,7 +12,7 @@ export function SetupDialog({ info, onClosed, children }: { info: SetupInfo; onC
     <div className="setup-hd">
       <Mark name={info.brand} size={48} />
       <div className="t"><h2 id="setup-h">{info.title}</h2><p>{info.blurb}</p></div>
-      <button type="button" className="btn ghost sm" onClick={close} aria-label="Close">{ICONS.x}</button>
+      <button type="button" className="btn icon sm" onClick={close} aria-label="Close" title="Close">{ICONS.x}</button>
     </div>
     <div className="setup-chips">{info.chips.map(([icon, label]) => <span className="setup-chip" key={label}>{SETUP_ICONS[icon]}{label}</span>)}</div>
     {children(close)}

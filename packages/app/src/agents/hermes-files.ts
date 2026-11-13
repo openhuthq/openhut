@@ -17,14 +17,12 @@ export function renderFiles({ agent, ownerName, token, channelKey, seat, channel
   channels: RenderedChannel[]
 }): AgentFiles {
   const gateway = `http://${agentSubnet(agent.net)}.1:${config.gatewayPort}`
-  const approvers = [ownerName, ...channels.map(approverOf)]
-  const approvalsMode = channels.some((channel) => channel.audience.open) ? 'smart' : 'manual'
   const disabled = ['browser', 'delegation', 'cronjob', ...(agent.code_execution ? [] : ['code_execution'])]
   const yaml = [
     modelYaml({ gateway, token, model: agent.model }),
     'terminal:\n  backend: local',
     `agent:\n  api_max_retries: 30\n  disabled_toolsets: [${disabled.join(', ')}]`,
-    `approvals:\n  mode: ${approvalsMode}\n  approvers: ${JSON.stringify(approvers)}`,
+    'approvals:\n  mode: "off"',
     'platform_toolsets:\n  api_server: [hermes-api-server, fastmonkey]',
     'tools:\n  tool_search:\n    enabled: "off"',
     `mcp_servers:\n  fastmonkey:\n    url: ${gateway}/api/v1/mcp\n    headers:\n      Authorization: "Agent ${token}"`,
@@ -59,14 +57,6 @@ function envOf(channel: RenderedChannel): string[] {
     case 'slack': return slack.env({ botToken: channel.botToken, appToken: channel.appToken, audience: channel.audience })
     case 'telegram': return telegram.env({ botToken: channel.botToken, audience: channel.audience })
     case 'whatsapp': return whatsapp.env(channel.audience)
-  }
-}
-
-function approverOf(channel: RenderedChannel): string {
-  switch (channel.kind) {
-    case 'slack': return slack.approver(channel.audience)
-    case 'telegram': return telegram.approver(channel.audience)
-    case 'whatsapp': return whatsapp.approver(channel.audience)
   }
 }
 

@@ -19,6 +19,9 @@ the installer, agentd and the e2e run live here. `fastmonkey-server.md` covers t
   the dashboard, restart the app or new asset names fall through to `index.html` and the page stays blank.
 - macOS caps Unix socket paths at 104 bytes; a long `AGENTD_SOCK` is cut short and fails with `EADDRINUSE`.
 - `config.port` is 8787 unless `PORT` is set; when an e2e run holds 8787, start the app with `PORT=8799`.
+- `scripts/seed-ui.ts` hardcodes `127.0.0.1:8787`, so on another `PORT` seed from a copy with the port swapped. In the dashboard, "New agent" creates the agent on click (no form), so clicking it for a screenshot adds one.
+- The button and dropdown rules (which variant for which action) are in `DESIGN.md` at the repo root and in `index.css` since 2026-11-13. `index.css` is one global namespace with short class names: a new `.role` for the invite popover restyled `.card .role` on the agent cards. Grep the stylesheet for a class name before adding it.
+- Rebuilding `packages/web` while `npm run dev` is running leaves the app serving a blank page (the hashed asset names change); restart it.
 
 ## The installer (`install/`)
 

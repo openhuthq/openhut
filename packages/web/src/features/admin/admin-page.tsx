@@ -63,7 +63,7 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
 
 function ToggleButton({ label, form, open, canEdit, reason, onOpen }: { label: string; form: AdminForm; open: boolean; canEdit: boolean; reason: string; onOpen?: () => void }) {
   return <Locked reason={canEdit ? undefined : reason}>
-    <button type="button" className="btn row" disabled={!canEdit} aria-expanded={open} aria-controls={form} onClick={() => { if (!open) onOpen?.(); navigate(open ? '/admin' : `/admin/${form}`) }}>{label}</button>
+    <button type="button" className="btn sm" disabled={!canEdit} aria-expanded={open} aria-controls={form} onClick={() => { if (!open) onOpen?.(); navigate(open ? '/admin' : `/admin/${form}`) }}>{label}</button>
   </Locked>
 }
 
@@ -130,7 +130,7 @@ function AppRows({ grants }: { grants: OAuthGrant[] }) {
   const deleteGrant = useDeleteOAuthGrant()
   if (!grants.length) return <Row icon="mcp" title="Connected apps" subtitle="No apps yet. Add your AI assistant with the prompt on the Agents page." />
   return grants.map((grant) => <Row key={grant.id} icon={appMark(grant.client)} title={grant.client} subtitle={appLine(grant)}
-    action={<ConfirmButton className="btn row danger" disabled={deleteGrant.isPending} question={`Disconnect ${grant.client}?`} detail="It can't act as you anymore until you connect it again." action="Disconnect"
+    action={<ConfirmButton className="btn sm danger" disabled={deleteGrant.isPending} question={`Disconnect ${grant.client}?`} detail="It can't act as you anymore until you connect it again." action="Disconnect"
       onConfirm={() => deleteGrant.mutate(grant.id, { onError: toastError })}>Disconnect</ConfirmButton>} />)
 }
 
@@ -161,7 +161,7 @@ function VersionRow({ server, canEdit }: { server: Admin['server']; canEdit: boo
     <Row icon="update" title={`Version ${server.build}`} subtitle={versionLine(server)}
       status={versionStatus(server)}
       action={server.updateAvailable && !updating && <Locked reason={canEdit ? undefined : 'Only an owner or admin can update'}>
-        <button type="button" className="btn primary sm" disabled={!canEdit || startUpdate.isPending} onClick={() => startUpdate.mutate(undefined, { onError: toastError })}>{server.update ? 'Try again' : 'Update now'}</button>
+        <button type="button" className="btn sec sm" disabled={!canEdit || startUpdate.isPending} onClick={() => startUpdate.mutate(undefined, { onError: toastError })}>{server.update ? 'Try again' : 'Update now'}</button>
       </Locked>} />
     {updating && <div className="aform updating" role="status"><span className="spin" aria-hidden="true"></span>
       <span>Updating to version <span className="mono">{server.update?.to}</span>. The app and its agents restart once. You can leave or refresh; this page follows along.</span></div>}

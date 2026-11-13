@@ -28,6 +28,7 @@ const CONNECTORS: Record<ConnectionKind, Connector> = {
   convex: convex.connector,
   posthog: mcp.connector({ url: MCP_SERVERS.posthog, redirectUrl }),
   linear: mcp.connector({ url: MCP_SERVERS.linear, redirectUrl }),
+  github: mcp.connector({ url: MCP_SERVERS.github, redirectUrl }),
   mcp: mcp.connector({ redirectUrl }),
   gmail: google.connector('gmail'),
   drive: google.connector('drive'),
@@ -160,10 +161,18 @@ export const connectionService = {
   },
 }
 
-async function keyedConfig({ kind, dsn, deployKey, url, header }: Omit<CreateConnection, 'name'>): Promise<{ config: unknown; account: string }> {
+async function keyedConfig({ kind, dsn, deployKey, token, url, header }: Omit<CreateConnection, 'name'>): Promise<{ config: unknown; account: string }> {
   if (kind === 'convex') {
     if (!deployKey) throw new HttpError(400, 'Paste the deploy key.', { param: 'deployKey' })
     return { config: { deployKey: deployKey.trim() }, account: await convex.probe(deployKey.trim()) }
+  }
+  if (kind === 'github') {
+    if (!token) throw new HttpError(400, 'Paste the access token.', { param: 'token' })
+    const headers = { Authorization: `Bearer ${token.trim()}` }
+    const tools = await mcp.probe({ url: MCP_SERVERS.github, headers }).catch((err: unknown) => {
+      throw new HttpError(400, `GitHub didn't accept the token: ${messageOf(err)}. Check that it hasn't expired and that it can read the repositories.`, { param: 'token' })
+    })
+    return { config: { headers }, account: `github.com · ${tools} tools` }
   }
   if (kind === 'mcp') {
     if (!url) throw new HttpError(400, 'Paste the MCP server URL.', { param: 'url' })

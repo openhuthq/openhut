@@ -3,7 +3,6 @@ import { Deleted, List } from '@fastmonkey/common/api.ts'
 import { Invite, Person, type MemberRole } from '@fastmonkey/common/team/team.ts'
 import { request } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
-import { navigate } from '@/lib/router'
 
 const PEOPLE_KEY = ['people']
 const INVITES_KEY = ['invites']
@@ -38,7 +37,6 @@ export function useCreateInvite() {
     mutationFn: (role: MemberRole) => request({ schema: Invite, path: '/api/invites', method: 'POST', body: { role } }),
     onSuccess: (invite) => {
       client.setQueryData<Invite[]>(INVITES_KEY, (invites) => invites && [...invites, invite])
-      navigate('/people')
     },
   })
 }

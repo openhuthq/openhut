@@ -15,6 +15,25 @@ import { navigate } from '@/lib/router'
 const ROLE_SQL = `create role fastmonkey_reader login password 'choose-a-password';
 grant pg_read_all_data to fastmonkey_reader;`
 
+function GithubFlow({ item, info, close, returned }: FlowProps) {
+  const createConnection = useCreateConnection()
+  return <form id="connect-main" onSubmit={(event) => createConnection.mutate({ kind: 'github', name: item.title, token: formValues(event)('token') })}>
+    <SetupSteps>
+      <SetupStep n={1} title="Create a fine-grained token" state="now" tag="pick the repositories">
+        <div><a className="btn sec sm" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">{ICONS.ext}Open GitHub tokens</a></div>
+        <p className="hint">Contents and Pull requests: Read and write to let agents commit. Read-only to let them look.</p>
+      </SetupStep>
+      <SetupStep n={2} title="Paste it">
+        <Field label="Access token" error={fieldError(createConnection.error, 'token')}>{(control) =>
+          <input {...control} name="token" type="password" className="mono" placeholder="github_pat_…" required autoComplete="off" />}</Field>
+      </SetupStep>
+    </SetupSteps>
+    <SetupFoot info={info} cancel={close} error={formError(createConnection.error, ['token']) ?? returned}>
+      <SetupSubmit pending={createConnection.isPending} label="Test and connect" busy="Testing…" />
+    </SetupFoot>
+  </form>
+}
+
 export function ConnectDialog({ me, item }: { me: Me; item: Integration }) {
   const returned = new URLSearchParams(location.search).get('error') ?? undefined
   const info: SetupInfo = { brand: item.name, title: `Connect ${item.title}`, blurb: item.short, chips: item.chips, safe: item.safeLine, warn: item.warn, eta: item.eta, details: item.safe }
@@ -25,6 +44,7 @@ function Flow(props: FlowProps & { me: Me }) {
   switch (props.item.name) {
     case 'postgres': return <PostgresFlow {...props} />
     case 'convex': return <ConvexFlow {...props} />
+    case 'github': return <GithubFlow {...props} />
     case 'posthog':
     case 'linear': return <SignInFlow {...props} />
     case 'gmail':

@@ -26,7 +26,7 @@ export function TailscalePage({ me }: { me: Me }) {
   const detail = joined.joined ? 'This server logs out of the tailnet. Connections to tailnet hosts stop working.' : 'Only the record here is removed. The server was on this tailnet before, so it stays on it.'
   const actions = <Locked reason={admin ? undefined : 'Only an owner or admin can disconnect it'}>
     <ConfirmButton className="btn danger" disabled={!admin || disconnect.isPending} question="Disconnect Tailscale?" detail={detail} action="Disconnect" onConfirm={() => disconnect.mutate(undefined, { onError: toastError })}>
-      {ICONS.trash}<span className="lbl">Disconnect</span>
+      Disconnect
     </ConfirmButton>
   </Locked>
   return <Page title="Tailscale" parents={PARENTS} actions={actions}>

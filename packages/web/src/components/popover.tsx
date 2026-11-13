@@ -7,7 +7,7 @@ export function Popover({ open, href, back, buttonClass, button, children }: { o
     if (!open) return
     ref.current?.querySelector<HTMLElement>('input,select')?.focus()
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') navigate(back) }
-    const closeOutside = (event: MouseEvent) => { if (event.target instanceof Node && !ref.current?.contains(event.target)) navigate(back) }
+    const closeOutside = (event: MouseEvent) => { if (ref.current && !event.composedPath().includes(ref.current)) navigate(back) }
     addEventListener('keydown', closeOnEscape)
     addEventListener('click', closeOutside)
     return () => {
