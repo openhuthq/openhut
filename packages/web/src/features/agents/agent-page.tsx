@@ -54,6 +54,7 @@ function AgentView({ agent, dialog, skill }: { agent: Agent; dialog: AgentDialog
           <AgentName agent={agent} editing={dialog === 'name' && agent.canEdit} />
         </div>
         <InstructionsSection agent={agent} editing={dialog === 'instructions'} lockReason={lockReason} />
+        <SkillsSection agent={agent} lockReason={lockReason} open={skill} />
       </div>
       <aside className="rail">
         <div className="box facts">
@@ -65,7 +66,6 @@ function AgentView({ agent, dialog, skill }: { agent: Agent; dialog: AgentDialog
         </div>
         <ChannelsSection agent={agent} lockReason={lockReason} dialog={dialog} />
         <AgentConnections agent={agent} lockReason={lockReason} />
-        <SkillsSection agent={agent} lockReason={lockReason} open={skill} />
       </aside>
     </div>
   </Page>

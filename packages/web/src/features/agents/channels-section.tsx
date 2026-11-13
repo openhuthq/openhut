@@ -13,10 +13,10 @@ import { WhatsappDialog } from '@/features/agents/whatsapp-dialog'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 
-const KINDS: Record<ChannelKind, { label: string; idle: string; remove: string }> = {
-  slack: { label: 'Slack', idle: 'Its own Slack app, from our manifest', remove: 'Disconnect' },
-  whatsapp: { label: 'WhatsApp', idle: 'Its own number, linked by QR code', remove: 'Unlink' },
-  telegram: { label: 'Telegram', idle: 'Its own bot, from BotFather', remove: 'Disconnect' },
+const KINDS: Record<ChannelKind, { label: string; remove: string }> = {
+  slack: { label: 'Slack', remove: 'Disconnect' },
+  whatsapp: { label: 'WhatsApp', remove: 'Unlink' },
+  telegram: { label: 'Telegram', remove: 'Disconnect' },
 }
 
 export function ChannelsSection({ agent, lockReason, dialog }: { agent: Agent; lockReason: string | undefined; dialog: AgentDialog | undefined }) {
@@ -41,7 +41,7 @@ export function ChannelsSection({ agent, lockReason, dialog }: { agent: Agent; l
 function ChannelRow({ kind, agent, channel, lockReason }: { kind: ChannelKind; agent: Agent; channel: Channel | undefined; lockReason: string | undefined }) {
   return <div className="row">
     <Mark name={kind} size={24} />
-    <div className="t"><div>{KINDS[kind].label}</div><div className="mute ellip">{channelLine(kind, channel)}</div></div>
+    <div className="t ellip">{KINDS[kind].label} <span className="mute">{channelLine(channel)}</span></div>
     <ChannelActions kind={kind} agent={agent} channel={channel} lockReason={lockReason} />
   </div>
 }
@@ -58,8 +58,8 @@ function ChannelActions({ kind, agent, channel, lockReason }: { kind: ChannelKin
   </Locked></>
 }
 
-function channelLine(kind: ChannelKind, channel: Channel | undefined) {
-  if (!channel) return KINDS[kind].idle
+function channelLine(channel: Channel | undefined) {
+  if (!channel) return ''
   if (channel.status === 'linking') return 'Waiting for the QR code scan'
   return channel.account ?? 'Connected'
 }
