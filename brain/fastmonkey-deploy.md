@@ -12,7 +12,8 @@
 ## monkey.activepieces.dev (the internal instance)
 - Hetzner server `hermes-agents` (project MISC, Helsinki, CPX42, Ubuntu 26.04). Its only firewall,
   `hermes-tailnet-only`, allows inbound ICMP and nothing else, so everything, SSH included, goes over Tailscale
-  (activepieces.com tailnet, machine `hermes-agents`, 100.104.248.107). SSH takes keys only.
+  (activepieces.com tailnet, machine `hermes-agents`, 100.104.248.107, key expiry disabled so it never drops off). SSH
+  takes keys only.
 - `monkey.activepieces.dev` is a DNS-only A record (Ash's Cloudflare account) to the tailnet address, so the name only
   works on the tailnet. Browsers force HTTPS on every `.dev` name (HSTS preload), so plain :8787 can't be used there.
 - HTTPS: Caddy (apt) listens only on the tailnet address :443 and proxies to 127.0.0.1:8787; the app trusts its
