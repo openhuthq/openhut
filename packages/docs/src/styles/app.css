@@ -36,8 +36,12 @@
 }
 
 html {
-  scrollbar-gutter: stable;
+  scrollbar-width: none;
   font-size: 15px;
+}
+
+html::-webkit-scrollbar {
+  display: none;
 }
 
 html > body[data-scroll-locked] {
