@@ -2,7 +2,7 @@ import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import {
   Activity01Icon, Add01Icon, AiMagicIcon, ArrowDown01Icon, ArrowExpand01Icon, ArrowRight01Icon, ArrowTurnBackwardIcon, ArrowUp02Icon, AtIcon, Calendar03Icon,
   Cancel01Icon, ChartColumnIcon, Clock01Icon, ComputerIcon, Copy01Icon, Delete02Icon, EraserIcon, File01Icon, File02Icon, Flag01Icon, FlashIcon, Globe02Icon,
-  GridTableIcon, HierarchyIcon, Key01Icon, LaptopIcon, Link01Icon, LinkSquare02Icon, Logout03Icon, Message01Icon, MoreHorizontalIcon, NoteEditIcon,
+  GridTableIcon, HierarchyIcon, InformationCircleIcon, Key01Icon, LaptopIcon, Link01Icon, LinkSquare02Icon, Logout03Icon, Message01Icon, MoreHorizontalIcon, NoteEditIcon,
   PencilEdit01Icon, PencilEdit02Icon, PlayIcon, Presentation01Icon, Robot01Icon, Search01Icon, SecurityCheckIcon, ServerStack01Icon, Settings01Icon,
   SidebarLeftIcon, SourceCodeIcon, SquareLock02Icon, StopIcon, Table01Icon, Tag01Icon, Tick02Icon, UnfoldMoreIcon, UserIcon, UserMultipleIcon, Wrench01Icon,
 } from '@hugeicons/core-free-icons'
@@ -33,6 +33,7 @@ export const ICONS = {
   updown: icon(UnfoldMoreIcon, 14),
   out: icon(Logout03Icon, 16),
   ext: icon(LinkSquare02Icon, 14),
+  info: icon(InformationCircleIcon, 14),
 }
 
 export const FACT_ICONS = {

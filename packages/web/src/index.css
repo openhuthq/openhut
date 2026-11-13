@@ -365,7 +365,9 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .dlg.confirm{width:min(440px,calc(100vw - 32px))}
 .dlg.confirm .dlghead{border-bottom:0;padding-bottom:6px}
 .dlg.confirm .dlgfoot{border-top:0}
-.usage{gap:8px}
+.usage{gap:6px;padding:12px 0}
+.usage-head{display:flex;align-items:center;gap:4px;margin-top:6px;font-size:12px;color:var(--mute)}
+.info{display:inline-flex;color:var(--mute);cursor:help}
 .abox>.usage:first-child{border-top:0}
 .meter-row{display:grid;grid-template-columns:minmax(0,160px) minmax(0,1fr) 40px minmax(0,120px);align-items:center;gap:12px;font-size:14px}
 .meter-label{display:flex;align-items:center;gap:8px;min-width:0}
