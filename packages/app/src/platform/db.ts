@@ -3,6 +3,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { Kysely, PGliteDialect, sql, type Selectable } from 'kysely'
 import { config } from './config.ts'
 import type { Database } from './db-schema.ts'
+import { ConnectionKind } from '@fastmonkey/common/connections/connection.ts'
 import { HttpError } from './http-error.ts'
 
 const ID = /^[a-z]+_[a-z0-9]{8}$/
@@ -41,8 +42,12 @@ export async function migrate(): Promise<void> {
     status text not null check (status in ('connected', 'linking')), account text, owner_address text not null, secrets text not null default '',
     open boolean not null default false, allowed text not null default '', created_at timestamptz not null default now(), unique (agent_id, kind))`.execute(db)
   await sql`create table if not exists connection (
-    id text primary key, kind text not null check (kind in ('postgres')), name text not null, owner_id text not null references person(id),
+    id text primary key, kind text not null, name text not null, owner_id text not null references person(id),
     config text not null, everyone boolean not null default false, created_at timestamptz not null default now())`.execute(db)
+  await sql`alter table connection add column if not exists account text not null default ''`.execute(db)
+  await sql`alter table connection add column if not exists sign_in boolean not null default false`.execute(db)
+  await sql`alter table connection drop constraint if exists connection_kind_check`.execute(db)
+  await sql`alter table connection add constraint connection_kind_check check (kind in (${sql.join(ConnectionKind.options.map((kind) => sql.lit(kind)))}))`.execute(db)
   await sql`create table if not exists connection_grant (
     id text primary key, connection_id text not null references connection(id) on delete cascade, agent_id text not null references agent(id) on delete cascade,
     created_at timestamptz not null default now(), unique (connection_id, agent_id))`.execute(db)

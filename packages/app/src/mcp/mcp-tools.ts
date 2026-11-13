@@ -2,7 +2,7 @@ import * as z from 'zod/mini'
 import { CreateAgent, CreateGrant, ListGrants, UpdateAgentFields } from '@fastmonkey/common/agents/agent.ts'
 import { UpdateAdminFields } from '@fastmonkey/common/admin/admin.ts'
 import { ListChannels } from '@fastmonkey/common/channels/channel.ts'
-import { CreateConnection, ListConnectionEvents, UpdateConnection } from '@fastmonkey/common/connections/connection.ts'
+import { CreateConnection, CreateConnectionAuthorization, ListConnectionEvents, ListConnectionTools, UpdateConnection } from '@fastmonkey/common/connections/connection.ts'
 import { CreateInvite } from '@fastmonkey/common/team/team.ts'
 import { describeIssues } from '../platform/validation.ts'
 
@@ -25,7 +25,19 @@ export const MCP_TOOLS = [
   tool({ name: 'delete_grant', description: 'Take a connection away from an agent. It takes effect on its next call.', input: Id, call: ({ api, input }) => api({ method: 'DELETE', url: `/api/grants/${input.id}` }) }),
   tool({ name: 'list_connections', description: 'Connections, and whether you can use each.', input: Nothing, call: ({ api }) => api({ method: 'GET', url: '/api/connections' }) }),
   tool({ name: 'get_connection', description: 'One connection.', input: Id, call: ({ api, input }) => api({ method: 'GET', url: `/api/connections/${input.id}` }) }),
-  tool({ name: 'create_connection', description: 'Add a Postgres connection. The DSN is sealed and never returned.', input: CreateConnection, call: ({ api, input }) => api({ method: 'POST', url: '/api/connections', payload: input }) }),
+  tool({
+    name: 'create_connection',
+    description: 'Add a connection that takes a key: Postgres (dsn), Convex (deployKey) or a custom MCP server (url, and an optional header like "Authorization: Bearer …"). Keys are sealed and never returned.',
+    input: CreateConnection,
+    call: ({ api, input }) => api({ method: 'POST', url: '/api/connections', payload: input }),
+  }),
+  tool({
+    name: 'create_connection_authorization',
+    description: 'Start a sign-in for PostHog, Linear, Gmail, Google Drive, Google Workspace or a custom MCP server (url), or reconnect one (connectionId). Give the person the authorizationUrl to open in their browser.',
+    input: CreateConnectionAuthorization,
+    call: ({ api, input }) => api({ method: 'POST', url: '/api/connection-authorizations', payload: input }),
+  }),
+  tool({ name: 'list_connection_tools', description: 'The tools a connection gives agents.', input: ListConnectionTools, call: ({ api, input }) => api({ method: 'GET', url: `/api/connection-tools${query(input)}` }) }),
   tool({
     name: 'update_connection',
     description: 'Share a connection you own with everyone on the team, or stop sharing it.',

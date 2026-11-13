@@ -73,8 +73,20 @@ echo "--- restarting the server"; docker restart fastmonkey-host >/dev/null
 wait_healthy 600 || echo "e2e: not healthy 10 min after the restart"
 run_phase after-restart; after=$?
 
+PIN="docker.io/$(cat install/agent-image)" BUILD=e2e-3 BASE=http://host.docker.internal:8099 ./scripts/release.sh || fail "release 3"
+echo "--- Update now with a broken release: its app can't start, so the installer must put e2e-2 back"
+mkdir -p dist/broken/tree && tar -xzf dist/fastmonkey.tgz -C dist/broken/tree &&
+  echo "throw new Error('this release is broken on purpose')" > dist/broken/tree/packages/app/src/app.ts && echo e2e-broken > dist/broken/tree/BUILD &&
+  COPYFILE_DISABLE=1 tar -czf dist/broken/fastmonkey.tgz -C dist/broken/tree . && rm -rf dist/broken/tree &&
+  sed -e "s|^FASTMONKEY_SHA256=.*|FASTMONKEY_SHA256=\"$(shasum -a 256 dist/broken/fastmonkey.tgz | cut -d' ' -f1)\"|" -e 's|^FASTMONKEY_BUILD=.*|FASTMONKEY_BUILD="e2e-broken"|' dist/install.sh > dist/broken/install.sh || fail "broken release"
+mirror dist/broken
+run_phase update-broken; broken=$?
+mirror dist
+echo "--- Update now: e2e-3, installed from Admin's API"
+run_phase update; update=$?
+
 for f in boot agentd app; do in_host sh -c "grep -v -e ExperimentalWarning -e trace-warnings /var/log/fastmonkey/$f.log" > "$R/$f.log" 2>&1; done
 [ "$(tree_sha)" = "$(cat "$R/tree.sha256")" ] && tree=same || tree=changed
 node packages/e2e/src/report.ts "$tree" > "$R/e2e-report.md"; report=$?
-echo "main=$main after-upgrade=$upgrade after-restart=$after report=$report -> $R/e2e-report.md"
-[ $main -eq 0 ] && [ $upgrade -eq 0 ] && [ $after -eq 0 ] && [ $report -eq 0 ]
+echo "main=$main after-upgrade=$upgrade after-restart=$after update-broken=$broken update=$update report=$report -> $R/e2e-report.md"
+[ $main -eq 0 ] && [ $upgrade -eq 0 ] && [ $after -eq 0 ] && [ $broken -eq 0 ] && [ $update -eq 0 ] && [ $report -eq 0 ]

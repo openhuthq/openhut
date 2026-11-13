@@ -16,7 +16,7 @@ import { NewThreadPage, ThreadPage } from '@/features/threads/thread-page'
 import { useDeleteSession } from '@/features/auth/api'
 import { ConnectionPage } from '@/features/connections/connection-page'
 import { ConnectionsPage } from '@/features/connections/connections-page'
-import { NewConnectionPage } from '@/features/connections/new-connection-page'
+import { TailscalePage } from '@/features/connections/tailscale-page'
 import { PeoplePage } from '@/features/people/people-page'
 import { ROLE_LABEL } from '@/lib/roles'
 import { Redirect } from '@/lib/router'
@@ -26,7 +26,7 @@ type Section = keyof typeof NAV_ICONS
 
 const SECTION_OF: Partial<Record<Route['page'], Section>> = {
   agents: 'agents', agent: 'agents',
-  connections: 'connections', 'new-connection': 'connections', connection: 'connections',
+  connections: 'connections', tailscale: 'connections', connection: 'connections',
   people: 'people',
   admin: 'admin',
 }
@@ -71,8 +71,8 @@ function RoutePage({ me, route }: { me: Me; route: Route }) {
     case 'thread': return <ThreadPage key={route.threadId} me={me} threadId={route.threadId} />
     case 'agents': return <AgentsPage me={me} />
     case 'agent': return <AgentPage key={route.agentId} agentId={route.agentId} dialog={route.dialog} />
-    case 'connections': return <ConnectionsPage me={me} />
-    case 'new-connection': return <NewConnectionPage />
+    case 'connections': return <ConnectionsPage me={me} adding={route.adding} />
+    case 'tailscale': return <TailscalePage me={me} />
     case 'connection': return <ConnectionPage key={route.connectionId} me={me} connectionId={route.connectionId} />
     case 'people': return <PeoplePage me={me} inviting={route.inviting} />
     case 'admin': return <AdminPage me={me} form={route.form} />

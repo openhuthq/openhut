@@ -10,7 +10,7 @@ import { isDeepStrictEqual, promisify, stripVTControlCharacters } from 'node:uti
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js'
-import type { Admin, Health } from '@fastmonkey/common/admin/admin.ts'
+import type { Admin, Health, Update } from '@fastmonkey/common/admin/admin.ts'
 import type { Agent, Grant } from '@fastmonkey/common/agents/agent.ts'
 import type { ApiError, Deleted, List } from '@fastmonkey/common/api.ts'
 import type { Channel } from '@fastmonkey/common/channels/channel.ts'
@@ -143,8 +143,14 @@ switch (phase) {
   case 'after-restart':
     afterRestart()
     break
+  case 'update-broken':
+    updateBroken()
+    break
+  case 'update':
+    update()
+    break
   default:
-    throw new Error(`Unknown phase ${phase}: use main, after-upgrade or after-restart`)
+    throw new Error(`Unknown phase ${phase}: use main, after-upgrade, after-restart, update-broken or update`)
 }
 after(() => {
   const file = `${RESULTS}/e2e-${phase}.json`
@@ -1290,6 +1296,60 @@ function afterRestart() {
     writeFileSync(`${RESULTS}/isolation-probe-dev-after-restart.json`, JSON.stringify({ probe: iso.probe, matrix: iso.rows }, null, 2))
     return { actual: iso.rows.map((x) => `${x.target}: ${x.agent}/${x.from_server}${x.ok ? '' : ' ✗'}`), pass: iso.pass }
   })
+}
+
+function updateBroken() {
+  check(
+    'UD1',
+    "Update now with a release whose app can't start: the previous release comes back and Admin says the update failed",
+    'POST /api/updates 200 running, to e2e-broken; a second POST 409; then the same build as before, /health ok, Admin update failed, the install lock free, no /opt/fastmonkey.* left, Dev running',
+    async () => {
+      const st = savedState()
+      const token = await refreshed(st)
+      const before = await health()
+      const started = await asOwner<Update>('POST', '/api/updates', token)
+      const twice = await asOwner('POST', '/api/updates', token)
+      await until(async () => (await asOwner<Admin>('GET', '/api/admin', token)).json.server.update?.status === 'failed', 20 * 60_000, 'Admin to report the failed update')
+      await until(async () => (await statusOf(st.dev.id)) === 'running', 180_000, 'Dev to run again')
+      const admin = (await asOwner<Admin>('GET', '/api/admin', token)).json
+      const now = await health()
+      const lock = await shell('flock -n /run/fastmonkey-install.lock true && echo free || echo held')
+      const leftovers = await shell('ls -d /opt/fastmonkey.* 2>/dev/null || true')
+      return {
+        actual: { started: [started.status, started.json.status, started.json.to], twice: twice.status, build: `${before.build} -> ${now.build}`, ok: now.ok, update: admin.server.update?.status, lock, leftovers },
+        pass:
+          started.status === 200 && started.json.status === 'running' && started.json.to === 'e2e-broken' && twice.status === 409 &&
+          now.build === before.build && now.ok === true && admin.server.update?.status === 'failed' && lock === 'free' && leftovers === '',
+      }
+    },
+  )
+}
+
+function update() {
+  check(
+    'UD2',
+    'Update now installs the new release; the status is kept on the server while it restarts, and everything is still there after',
+    'POST /api/updates 200 to e2e-3; Admin says running right after; then build e2e-3, /health ok, no update left in Admin, nothing newer offered, Dev still there and running',
+    async () => {
+      const st = savedState()
+      const token = await refreshed(st)
+      const started = await asOwner<Update>('POST', '/api/updates', token)
+      const during = (await asOwner<Admin>('GET', '/api/admin', token)).json.server.update?.status
+      await until(async () => { const h = await health(); return h.build === 'e2e-3' && h.ok }, 15 * 60_000, 'build e2e-3 to be healthy')
+      await until(async () => (await statusOf(st.dev.id)) === 'running', 180_000, 'Dev to run again')
+      const admin = (await asOwner<Admin>('GET', '/api/admin', token)).json
+      const dev = await asOwner<Agent>('GET', `/api/agents/${st.dev.id}`, token)
+      return {
+        actual: { started: [started.status, started.json.to], during, build: admin.server.build, update: admin.server.update, updateAvailable: admin.server.updateAvailable, dev: dev.status },
+        pass: started.status === 200 && started.json.to === 'e2e-3' && during === 'running' && admin.server.build === 'e2e-3' && admin.server.update === null && !admin.server.updateAvailable && dev.status === 200,
+      }
+    },
+  )
+}
+
+async function asOwner<T = unknown>(method: string, path: string, token: string): Promise<{ status: number; json: T }> {
+  const r = await fetch(APP + path, { method, headers: { authorization: `Bearer ${token}` } })
+  return { status: r.status, json: JSON.parse(await r.text()) }
 }
 
 function check(id: string, what: string, expected: string, run: () => Promise<Outcome>) {

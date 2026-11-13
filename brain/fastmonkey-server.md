@@ -54,7 +54,12 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
   override the host (`?host=`) or read local files (`?sslrootcert=`). `sslmode` keeps libpq's meanings, `prefer` by
   default: `pg` has no prefer/allow, so the connector tries TLS without verification, then plain (`allow` the other way).
 - The address guard (`BlockList`, IPv4-mapped forms too) refuses loopback, "this host", link-local and agent networks.
-  The gateway connects to the address it checked, but checks TLS against the DSN's name.
+  The gateway connects to the address it checked, but checks TLS against the DSN's name. Every HTTP integration
+  (Convex, MCP servers, Google, OAuth discovery) goes through `guardedFetch`, an undici connector that checks the
+  address of every socket it opens, so redirects and IP-literal URLs are covered too.
+- Each kind is a `Connector` (`integrations/connector.ts`): `tools` and `call`. Tool lists are cached per connection
+  for 5 minutes. Calls to signed-in connections run one at a time per connection, so a rotated refresh token is never
+  used twice. Connection decisions: `decisions/fastmonkey-connections.md`.
 - A read-only transaction doesn't stop `COPY … TO PROGRAM` or server-file access, so roles that are superusers,
   members of one, or hold `pg_execute_server_program` / `pg_*_server_files` are refused. Each query runs through a
   cursor in the extended protocol: one SELECT/VALUES statement, at most 1001 rows in memory, 8 MB on the wire, and a

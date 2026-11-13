@@ -27,6 +27,7 @@ export function errorBody({ status, message, param }: { status: number; message:
 }
 
 export function messageOf(err: unknown): string {
+  if (err instanceof Error && err.message === 'fetch failed' && err.cause instanceof Error) return err.cause.message
   return err instanceof Error ? err.message : String(err)
 }
 

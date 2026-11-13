@@ -35,7 +35,7 @@ const hermes = createServer((req, res) => {
     res.end(`: keepalive\n\n${chunk('Let me ')}${chunk('check.')}event: hermes.tool.progress\ndata: {"tool":"call_tool","label":"postgres_query"}\n\n${chunk('214 orders.')}data: [DONE]\n\n`)
   })
 })
-await new Promise<void>((resolve) => hermes.listen(18642, '127.0.0.1', resolve))
+await new Promise<void>((resolve) => hermes.listen(18649, '127.0.0.1', resolve))
 
 const app = Fastify()
 answerErrors(app)

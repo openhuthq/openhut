@@ -1,4 +1,5 @@
 import type { ColumnType, Generated } from 'kysely'
+import type { ConnectionKind } from '@fastmonkey/common/connections/connection.ts'
 
 type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>
 
@@ -15,7 +16,10 @@ export interface Database {
     wanted: Generated<'running' | 'stopped'>; channel_key: string; created_at: Timestamp
   }
   channel: { id: string; agent_id: string; kind: 'slack' | 'whatsapp'; status: 'connected' | 'linking'; account: string | null; owner_address: string; secrets: string; open: boolean; allowed: string; created_at: Timestamp }
-  connection: { id: string; kind: 'postgres'; name: string; owner_id: string; config: string; everyone: Generated<boolean>; created_at: Timestamp }
+  connection: {
+    id: string; kind: ConnectionKind; name: string; account: Generated<string>; sign_in: Generated<boolean>; owner_id: string; config: string
+    everyone: Generated<boolean>; created_at: Timestamp
+  }
   connection_grant: { id: string; connection_id: string; agent_id: string; created_at: Timestamp }
   thread: { id: string; agent_id: string; person_id: string; title: string; messages: Generated<string>; created_at: Timestamp; updated_at: Timestamp }
   connection_event: {

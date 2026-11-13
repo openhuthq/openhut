@@ -8,28 +8,37 @@ import { ME_KEY } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
 
 const ADMIN_KEY = ['admin']
+const UPDATE_POLL_MS = 2_000
 const APPS_KEY = ['oauth-grants']
 const APP_LIST = List(OAuthGrant)
 const DELETED_APP = Deleted('oauth_grant')
 
 export function useAdmin() {
-  return useQuery({ queryKey: ADMIN_KEY, queryFn: () => request({ schema: Admin, path: '/api/admin' }) })
+  return useQuery({
+    queryKey: ADMIN_KEY,
+    queryFn: () => request({ schema: Admin, path: '/api/admin' }),
+    refetchInterval: (query) => query.state.data?.server.update?.status === 'running' ? UPDATE_POLL_MS : false,
+  })
 }
 
-export function useUpdateAdmin() {
+export function useUpdateAdmin(back = '/admin') {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (body: UpdateAdmin) => request({ schema: Admin, path: '/api/admin', method: 'PATCH', body }),
     onSuccess: (admin) => {
       client.setQueryData(ADMIN_KEY, admin)
       client.setQueryData<Me | null>(ME_KEY, (me) => me && { ...me, publicUrl: admin.publicUrl })
-      navigate('/admin')
+      navigate(back, true)
     },
   })
 }
 
 export function useStartUpdate() {
-  return useMutation({ mutationFn: () => request({ schema: Update, path: '/api/updates', method: 'POST' }) })
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => request({ schema: Update, path: '/api/updates', method: 'POST' }),
+    onSuccess: (update) => client.setQueryData<Admin>(ADMIN_KEY, (admin) => admin && { ...admin, server: { ...admin.server, update } }),
+  })
 }
 
 export function useOAuthGrants() {
