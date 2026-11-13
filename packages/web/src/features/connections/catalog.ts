@@ -35,6 +35,11 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
       safe: SIGNED_IN('Linear'),
     },
     {
+      name: 'github', short: 'Read code, open branches and pull requests.', chips: [['file', 'Read code'], ['pencil', 'Commit to branches'], ['flag', 'Issues & pull requests']], safeLine: 'The token decides which repositories. It is sealed on this server.', warn: 'With write permissions, agents can push commits and open pull requests. Use a token limited to the repositories you mean.', eta: '2 minutes', title: 'GitHub', blurb: "Read code, commit to branches and open pull requests through GitHub's own MCP, with an access token.",
+      gets: ['Read files, commits and branches in the repositories the token allows', 'Create branches, commit files and open pull requests, if the token can write', 'Search code, read and file issues, review pull requests', "Whatever else GitHub adds to its MCP server"],
+      safe: ['A fine-grained token limits it to the repositories and permissions you pick', 'Calls leave from this server: agents never see the token and have no git access of their own', 'The token is sealed on this server and never shown again'],
+    },
+    {
       name: 'gmail', short: 'Search, label and draft, never send.', chips: [['search', 'Search threads'], ['tag', 'Label'], ['draft', 'Write drafts']], safeLine: 'No tool sends mail. Agents leave drafts for you.', eta: 'One approval', title: 'Gmail', blurb: "Search, read, label and draft through Google's Gmail MCP.",
       gets: ['search_threads, get_thread and get_message', 'Labels: list, create, apply and remove', 'Drafts: create and read', 'Trash and spam, never a permanent delete'],
       safe: ['No tool sends mail: agents leave drafts for you', ...SIGNED_IN('Google')],

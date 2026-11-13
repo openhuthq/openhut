@@ -830,7 +830,7 @@ function main() {
   check(
     'CH2',
     "WhatsApp: linking shows a real pairing code from WhatsApp, fetched through the agent's own firewall",
-    "channel linking; .env has bot mode with the owner and the allowed number; approvals go to the owner's WhatsApp; a WhatsApp pairing payload (2@… or a https://wa.me/… link) within 2 min",
+    "channel linking; .env has bot mode with the owner and the allowed number; approvals are off; a WhatsApp pairing payload (2@… or a https://wa.me/… link) within 2 min",
     async () => {
       const created = await api<Channel>(
         'POST',
@@ -843,7 +843,7 @@ function main() {
       const env = readFileSync(`/data/agent-conf/${dev.id}/.env`, 'utf8')
         .split('\n')
         .filter((l) => l.startsWith('WHATSAPP_'))
-      const approvers = readFileSync(`/data/agent-conf/${dev.id}/config.yaml`, 'utf8').match(/approvers: (.*)/)?.[1]
+      const approvals = readFileSync(`/data/agent-conf/${dev.id}/config.yaml`, 'utf8').match(/approvals:\n {2}mode: (.*)/)?.[1]
       let qr = ''
       let error = ''
       await until(
@@ -857,12 +857,12 @@ function main() {
         'a WhatsApp pairing code',
       )
       return {
-        actual: { status: created.json.status, env, approvers, qr: qr ? `${qr.slice(0, 12)}…` : error },
+        actual: { status: created.json.status, env, approvals, qr: qr ? `${qr.slice(0, 12)}…` : error },
         pass:
           created.json.status === 'linking' &&
           env.includes('WHATSAPP_MODE=bot') &&
           env.includes('WHATSAPP_ALLOWED_USERS=15551234567,15557654321') &&
-          !!approvers?.includes('15551234567@s.whatsapp.net') &&
+          approvals === '"off"' &&
           WHATSAPP_PAIRING.test(qr),
       }
     },

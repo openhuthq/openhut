@@ -8,7 +8,7 @@ import { HttpError, messageOf } from '../../platform/http-error.ts'
 import { guardedFetch } from '../../platform/network.ts'
 import type { Connector, ConnectorContext, ToolResult, ToolSpec } from '../connector.ts'
 
-export const MCP_SERVERS = { posthog: 'https://mcp.posthog.com/mcp', linear: 'https://mcp.linear.app/mcp' }
+export const MCP_SERVERS = { posthog: 'https://mcp.posthog.com/mcp', linear: 'https://mcp.linear.app/mcp', github: 'https://api.githubcopilot.com/mcp/' }
 const MAX_PAGES = 10
 const HEADER = /^([A-Za-z0-9][A-Za-z0-9-]{0,63}):\s*(\S.{0,3900})$/
 const FORBIDDEN_HEADERS = /^(host|content-length|content-type|transfer-encoding|connection|accept|mcp-session-id|mcp-protocol-version)$/i

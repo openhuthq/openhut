@@ -24,6 +24,4 @@ export const telegram = {
   },
 
   yaml: 'telegram:\n  require_mention: true\n  unauthorized_dm_behavior: ignore\n',
-
-  approver: (audience: Audience): string => audience.ownerAddress,
 }

@@ -22,8 +22,6 @@ export const slack = {
   },
 
   yaml: 'slack:\n  require_mention: true\n  unauthorized_dm_behavior: ignore\n',
-
-  approver: (audience: Audience): string => audience.ownerAddress,
 }
 
 async function call({ method, token }: { method: string; token: string }): Promise<z.infer<typeof SlackOk> | z.infer<typeof SlackFailure>> {
