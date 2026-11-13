@@ -49,7 +49,13 @@ export function useCreateConnection() {
 export function useAuthorizeConnection() {
   return useMutation({
     mutationFn: (body: CreateConnectionAuthorization) => request({ schema: ConnectionAuthorization, path: '/api/connection-authorizations', method: 'POST', body }),
-    onSuccess: (authorization) => location.assign(authorization.authorizationUrl),
+    onSuccess: (authorization) => {
+      if (!authorization.manifest) return location.assign(authorization.authorizationUrl)
+      const form = Object.assign(document.createElement('form'), { method: 'post', action: authorization.authorizationUrl })
+      form.append(Object.assign(document.createElement('input'), { type: 'hidden', name: 'manifest', value: authorization.manifest }))
+      document.body.append(form)
+      form.submit()
+    },
   })
 }
 

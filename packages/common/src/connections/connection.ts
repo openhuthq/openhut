@@ -1,8 +1,8 @@
 import * as z from 'zod/mini'
 import { ListQuery, Timestamp } from '../api.ts'
 
-export const KEYED_KINDS = ['postgres', 'convex', 'github', 'mcp'] as const
-export const SIGN_IN_KINDS = ['posthog', 'linear', 'gmail', 'drive', 'google', 'mcp'] as const
+export const KEYED_KINDS = ['postgres', 'convex', 'mcp'] as const
+export const SIGN_IN_KINDS = ['posthog', 'linear', 'github', 'gmail', 'drive', 'google', 'mcp'] as const
 export const GOOGLE_KINDS = ['gmail', 'drive', 'google'] as const
 export const ConnectionKind = z.enum(['postgres', 'convex', 'posthog', 'linear', 'github', 'gmail', 'drive', 'google', 'mcp'])
 export type ConnectionKind = z.infer<typeof ConnectionKind>
@@ -71,7 +71,6 @@ export const CreateConnection = z.object({
   name: Name,
   dsn: z.optional(z.string().check(z.minLength(1), z.maxLength(2000))),
   deployKey: z.optional(z.string().check(z.minLength(1), z.maxLength(2000))),
-  token: z.optional(z.string().check(z.minLength(1), z.maxLength(500))),
   url: z.optional(McpUrl),
   header: z.optional(z.string().check(z.maxLength(4000))),
 })
@@ -84,6 +83,7 @@ export const CreateConnectionAuthorization = z.object({
   kind: z.optional(z.enum(SIGN_IN_KINDS)),
   name: z.optional(Name),
   url: z.optional(McpUrl),
+  organization: z.optional(z.string().check(z.regex(/^[A-Za-z0-9-]{1,39}$/, 'Write the organization as it appears in its GitHub URL.'))),
   connectionId: z.optional(z.string().check(z.maxLength(40))),
 })
 export type CreateConnectionAuthorization = z.infer<typeof CreateConnectionAuthorization>
@@ -92,6 +92,7 @@ export const ConnectionAuthorization = z.object({
   object: z.literal('connection_authorization'),
   kind: z.enum(SIGN_IN_KINDS),
   authorizationUrl: z.string(),
+  manifest: z.optional(z.string()),
 })
 export type ConnectionAuthorization = z.infer<typeof ConnectionAuthorization>
 

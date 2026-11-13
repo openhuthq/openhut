@@ -1,17 +1,19 @@
 import { randomBytes } from 'node:crypto'
 import { GOOGLE_KINDS, type ConnectionAuthorization, type CreateConnectionAuthorization, type SIGN_IN_KINDS } from '@fastmonkey/common/connections/connection.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
+import { publicUrl } from '../platform/settings.ts'
+import { github, type GithubApp } from '../integrations/github/github.ts'
 import { google, type GoogleKind } from '../integrations/google/google.ts'
 import { MCP_SERVERS, mcp, type SignIn } from '../integrations/mcp/mcp.ts'
 import type { Caller } from '../team/identity.ts'
 import { connectionService } from './connection-service.ts'
 
 const SIGN_IN_MS = 15 * 60_000
-const TITLES: Record<SignInKind, string> = { posthog: 'PostHog', linear: 'Linear', gmail: 'Gmail', drive: 'Google Drive', google: 'Google Workspace', mcp: 'MCP server' }
+const TITLES: Record<SignInKind, string> = { posthog: 'PostHog', linear: 'Linear', github: 'GitHub', gmail: 'Gmail', drive: 'Google Drive', google: 'Google Workspace', mcp: 'MCP server' }
 const pending = new Map<string, Pending>()
 
 export const connectionAuthorizationService = {
-  async create({ actor, kind: chosen, name, url: given, connectionId }: { actor: Caller } & CreateConnectionAuthorization): Promise<ConnectionAuthorization> {
+  async create({ actor, kind: chosen, name, url: given, organization, connectionId }: { actor: Caller } & CreateConnectionAuthorization): Promise<ConnectionAuthorization> {
     const existing = connectionId ? await connectionService.owned({ actor, id: connectionId }) : undefined
     const kind = existing ? signInKind(existing.kind) : chosen
     if (!kind) throw new HttpError(400, 'Pass the kind to sign in to, or the connectionId to reconnect.', { param: 'kind' })
@@ -19,6 +21,10 @@ export const connectionAuthorizationService = {
     if (kind === 'mcp' && !url) throw new HttpError(400, 'Paste the MCP server URL.', { param: 'url' })
     const state = randomBytes(24).toString('base64url')
     const base = { kind, name: existing?.name ?? name ?? TITLES[kind], actor, connectionId: existing?.id, expires: Date.now() + SIGN_IN_MS }
+    if (kind === 'github') {
+      remember(state, base)
+      return { object: 'connection_authorization', kind, ...github.registration({ name: base.name, organization, homeUrl: publicUrl(), redirectUrl: connectionService.redirectUrl(), state }) }
+    }
     if (isGoogle(kind)) {
       const { authorizationUrl, verifier } = google.beginSignIn({ kind, redirectUri: connectionService.redirectUrl(), state })
       remember(state, { ...base, verifier })
@@ -29,15 +35,21 @@ export const connectionAuthorizationService = {
     return { object: 'connection_authorization', kind, authorizationUrl }
   },
 
-  async finish({ state, code, error }: { state?: string; code?: string; error?: string }): Promise<{ kind?: SignInKind; connectionId?: string; error?: string }> {
+  async finish({ state, code, error, installation_id: installationId }: { state?: string; code?: string; error?: string; installation_id?: string }): Promise<{ kind?: SignInKind; connectionId?: string; error?: string; redirect?: string }> {
     const sign = state ? pending.get(state) : undefined
     if (state) pending.delete(state)
     if (!sign || sign.expires < Date.now()) return { error: 'This sign-in expired or was already used. Start it again.' }
-    if (error || !code) return { kind: sign.kind, error: `${TITLES[sign.kind]} didn't approve Fast Monkey (${error ?? 'no code'}).` }
+    const grant = sign.app ? installationId : code
+    if (error || !grant) return { kind: sign.kind, error: `${TITLES[sign.kind]} didn't approve Fast Monkey (${error ?? 'no code'}).` }
     let connectionId = sign.connectionId
     try {
-      const { config, account } = await signedIn({ sign, code })
-      connectionId = (await connectionService.save({ actor: sign.actor, kind: sign.kind, name: sign.name, config, account, signIn: true, id: sign.connectionId })).id
+      if (state && sign.kind === 'github' && !sign.app) {
+        const app = await github.register(grant)
+        remember(state, { ...sign, name: app.name, app, expires: Date.now() + SIGN_IN_MS })
+        return { redirect: github.installUrl({ slug: app.slug, state }) }
+      }
+      const { config, account } = await signedIn({ sign, code: grant })
+      connectionId = (await connectionService.save({ actor: sign.actor, kind: sign.kind, name: sign.name, config, account, signIn: sign.kind !== 'github', id: sign.connectionId })).id
       await connectionService.listTools({ actor: sign.actor, connectionId })
       return { kind: sign.kind, connectionId }
     } catch (err) {
@@ -47,6 +59,7 @@ export const connectionAuthorizationService = {
 }
 
 async function signedIn({ sign, code }: { sign: Pending; code: string }): Promise<{ config: unknown; account: string }> {
+  if (sign.app) return github.installed({ app: sign.app, installationId: Number(code) })
   const redirectUri = connectionService.redirectUrl()
   if (isGoogle(sign.kind)) {
     const config = await google.finishSignIn({ code, verifier: sign.verifier ?? '', redirectUri })
@@ -82,4 +95,4 @@ const isSignInKind = (kind: string): kind is SignInKind => Object.hasOwn(TITLES,
 const isGoogle = (kind: SignInKind): kind is GoogleKind => (GOOGLE_KINDS as readonly string[]).includes(kind)
 
 type SignInKind = (typeof SIGN_IN_KINDS)[number]
-type Pending = { kind: SignInKind; name: string; actor: Caller; connectionId?: string; expires: number; url?: string; flow?: SignIn; verifier?: string }
+type Pending = { kind: SignInKind; name: string; actor: Caller; connectionId?: string; expires: number; url?: string; flow?: SignIn; verifier?: string; app?: GithubApp }
