@@ -32,3 +32,13 @@
 - Docs sidebar groups (owner, 2026-11-13): Install (Install, Setup from your AI assistant), Features (Multiple
   agents, Self-improvement, Team), Integrations (Slack, WhatsApp, Postgres, Claude plan), Server (Security, Upgrade,
   Uninstall).
+
+## The brand in the dashboard (`packages/web`)
+
+- Owner, 2026-11-13: the dashboard uses the site's brand. Black primary (`--primary` is ink), the monkey (`src/monkey.svg`,
+  the site's file) as logo and favicon, Bebas Neue for the wordmark and auth headings, IBM Plex Mono for auth copy,
+  Inter everywhere else. `components/avatar.tsx` is the site's creature generator; creatures breathe and blink.
+- The sign-in, setup and invite pages share `AuthLayout`: the form on white, and a night scene where agents ask the
+  monkey (the gateway) for data, one at a time: a packet travels the beam, the monkey looks at the agent and stamps
+  the grant ✓, or ✕ for payroll. Typing makes everyone look at the field; the password field makes the monkey cover
+  its eyes; a failed sign-in makes it shake its head. Rejected: idle hopping and an expanding ring ("cheap CSS trick").

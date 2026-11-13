@@ -4,73 +4,14 @@ description: Remove Fast Monkey, its agents, its data and its firewall from your
 icon: monkey
 ---
 
-Run these as root. They delete every agent and all of Fast Monkey's data, and can't be undone.
-
-<Steps>
-<Step>
-
-### Stop Fast Monkey
-
-On a systemd server:
+Run this as root:
 
 ```sh
-systemctl disable --now fastmonkey.service fastmonkey-agentd.service
-systemctl disable fastmonkey-firewall.service
-rm /etc/systemd/system/fastmonkey*.service
-systemctl daemon-reload
+sh /opt/fastmonkey/install/uninstall.sh
 ```
 
-Without systemd:
-
-```sh
-pkill -f /opt/fastmonkey/install/supervise.sh
-pkill -f '^node /opt/fastmonkey/packages/agentd/src/agentd.ts'
-pkill -f '^node /opt/fastmonkey/packages/app/src/app.ts'
-```
-
-</Step>
-<Step>
-
-### Remove the agents
-
-```sh
-docker ps -aq --filter label=fastmonkey.agent | xargs -r docker rm -f
-docker network ls -q --filter label=fastmonkey.agent | xargs -r docker network rm
-docker rmi "$(cat /opt/fastmonkey/install/agent-image)"
-```
-
-</Step>
-<Step>
-
-### Remove the firewall
-
-```sh
-iptables -D DOCKER-USER -s 10.200.0.0/16 -j AGENT
-iptables -D INPUT -j AGENT-IN
-iptables -F AGENT && iptables -X AGENT
-iptables -F AGENT-IN && iptables -X AGENT-IN
-ip rule del to 10.200.0.0/16 lookup main priority 5200
-```
-
-</Step>
-<Step>
-
-### Remove the files
-
-```sh
-rm -rf /opt/fastmonkey /etc/fastmonkey /data/app /data/agents /data/agent-conf
-rm -rf /etc/agentd /var/lib/fastmonkey /var/cache/fastmonkey /var/log/fastmonkey /var/log/fastmonkey-boot.log /run/fastmonkey /run/agentd
-rmdir /data
-```
-
-</Step>
-<Step>
-
-### Remove the user
-
-On Debian or Ubuntu, `userdel fastmonkey`. On Alpine, `deluser fastmonkey`.
-
-</Step>
-</Steps>
+It asks you to type `uninstall`, then removes Fast Monkey, every agent, all its data, its firewall rules and the `fastmonkey` user. This can't be undone.
 
 Docker, gVisor and Node stay installed.
+
+No `uninstall.sh` there? Your install is older than the script. Run the install command once to upgrade, then run this.
