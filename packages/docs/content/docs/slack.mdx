@@ -1,0 +1,45 @@
+---
+title: Slack
+description: Each agent is its own Slack app in your workspace. People DM it or mention it in a channel.
+icon: logo:slack
+---
+
+<Shot src="slack" alt="The Connect to Slack dialog with its two steps: create the Slack app, then paste the tokens" />
+
+<Steps>
+<Step>
+
+### Create the Slack app
+
+On the agent's page, press **Set up** next to **Slack**, then **Create the Slack app**. Slack opens with everything
+filled in. Pick your workspace, create the app and install it.
+
+</Step>
+<Step>
+
+### Paste the tokens
+
+Copy two tokens from Slack into the dialog:
+
+- **Bot token**, from **OAuth & Permissions**. It starts with `xoxb-`.
+- **App-level token**, from **Basic Information**, with the `connections:write` scope. It starts with `xapp-`.
+
+</Step>
+<Step>
+
+### Say who can message it
+
+Add your own Slack member ID (your profile, then **Copy member ID**). Then choose **Only people I list** or **Anyone
+in the workspace**.
+
+</Step>
+<Step>
+
+### Connect
+
+Press **Connect**. In Slack, DM the agent or mention it in a channel.
+
+</Step>
+</Steps>
+
+Messages from people who aren't allowed are dropped. The agent doesn't reply to them.
