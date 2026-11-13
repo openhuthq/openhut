@@ -23,8 +23,8 @@
   headings, IBM Plex Mono copy, black code bars, screenshots on a grey stage in a black-outlined window), and brief:
   one page per feature, a real dashboard screenshot, three or four one-line steps, nothing else. No overview or
   concepts pages, no flow strips, no coloured icon tiles.
-- Screenshots in `public/screenshots/` are the real dashboard with `node scripts/seed-ui.ts` data, taken at 1512x806.
-  Port 8787 is hardcoded, so stop any local Fast Monkey container first, or change the port for the session.
+- Screenshots in `public/screenshots/` are the real dashboard with `node scripts/seed-ui.ts` data, retaken 2026-11-13 at 1456x830
+  (the Chrome tool's full-viewport `zoom` with `save_to_disk`, which leaves the cursor out more often than `screenshot`; a `scale` below 1 saves a small file). `seed-ui.ts` hardcodes port 8787; on another `PORT`, seed from a copy with the port swapped.
 - The home page hero follows Gumloop's (owner, 2026-11-13): a row of mascots, the headline "Build, manage & share
   agents with your team", then one window that mocks the real product (agent list, chat, the agent's instructions and
   skills) with a "Shared with your team" card over its corner. The point is build an agent and share it with your
