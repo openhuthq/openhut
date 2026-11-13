@@ -2,7 +2,10 @@
 set -eu
 cd "$(dirname "$0")/.."
 BASE="${BASE:-https://fastmonkey.dev}"
-BUILD="${BUILD:-$(date -u +%Y%m%d%H%M%S)}"
+if [ -z "${BUILD:-}" ]; then
+  [ "$(git rev-parse --is-shallow-repository)" = false ] || { echo "release.sh needs the full git history to number the release (fetch-depth: 0)." >&2; exit 1; }
+  BUILD="$(sed -n 's/^  "version": "\([0-9]*\.[0-9]*\)\..*/\1/p' packages/app/package.json).$(git rev-list --count HEAD)"
+fi
 cleanup() { rm -f BUILD; [ ! -f install/agent-image.keep ] || mv install/agent-image.keep install/agent-image; }
 trap cleanup EXIT
 if [ -n "${PIN:-}" ]; then cp install/agent-image install/agent-image.keep; printf '%s\n' "$PIN" > install/agent-image; fi
