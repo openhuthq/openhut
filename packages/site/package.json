@@ -4,9 +4,12 @@
   "type": "module",
   "scripts": {
     "build": "node src/build.ts",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "deploy": "node src/build.ts && cp ../../dist/install.sh ../../dist/fastmonkey.tgz dist/ && wrangler deploy"
   },
   "devDependencies": {
-    "@types/node": "26.6.2"
+    "@types/node": "26.6.2",
+    "wrangler": "^4.156.2"
   }
 }

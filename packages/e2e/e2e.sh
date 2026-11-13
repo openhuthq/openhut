@@ -9,17 +9,19 @@ redact() { sed -E 's/(code=)[0-9a-f]+/\1<redacted>/'; }
 in_host() { docker exec fastmonkey-host "$@"; }
 run_phase() { in_host node --test-force-exit --test-reporter=spec /opt/fastmonkey/packages/e2e/src/e2e.ts "$1"; }
 tree_sha() { { git rev-parse HEAD; git diff HEAD --binary; git ls-files -o --exclude-standard -z | xargs -0 shasum -a 256; } | shasum -a 256 | cut -d' ' -f1; }
+stop_mirror() { [ -z "${MIRROR:-}" ] && return; kill -INT "$MIRROR" 2>/dev/null; i=0; while curl -fs -o /dev/null http://127.0.0.1:8099/ && [ $i -lt 50 ]; do i=$((i+1)); sleep 0.2; done; MIRROR=; }
 mirror() {
-  docker rm -f fastmonkey-mirror >/dev/null 2>&1
-  docker run -d --name fastmonkey-mirror -p 127.0.0.1:8099:80 -v "$PWD/$1:/srv/release:ro" fastmonkey-site >/dev/null || fail "mirror of $1"
-  i=0; until curl -fs -o /dev/null http://127.0.0.1:8099/; do i=$((i+1)); [ $i -gt 50 ] && fail "mirror of $1 on :8099"; sleep 0.2; done
+  stop_mirror
+  (cd packages/site && WRANGLER_SEND_METRICS=false exec ../../node_modules/.bin/wrangler dev --ip 0.0.0.0 --port 8099 --inspector-port 0 \
+    --assets "../../$1" --show-interactive-dev-session=false --log-level warn) >>"$R/mirror.log" 2>&1 &
+  MIRROR=$!
+  i=0; until curl -fs -o /dev/null http://127.0.0.1:8099/; do i=$((i+1)); [ $i -gt 150 ] && fail "mirror of $1 on :8099"; sleep 0.2; done
 }
 
 rm -rf "$R" && mkdir -p "$R"
 tree_sha > "$R/tree.sha256"
 BUILD=e2e-1 BASE=http://host.docker.internal:8099 ./scripts/release.sh || fail "release"
-docker build -q -f packages/site/Dockerfile -t fastmonkey-site . >/dev/null || fail "site image"
-trap 'docker rm -f fastmonkey-mirror >/dev/null 2>&1' EXIT
+trap stop_mirror EXIT
 mirror dist
 
 docker rm -f fastmonkey-host fastmonkey-lan >/dev/null 2>&1

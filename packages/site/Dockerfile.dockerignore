@@ -1,5 +1,0 @@
-*
-!packages/site
-packages/site/dist
-!dist/install.sh
-!dist/fastmonkey.tgz

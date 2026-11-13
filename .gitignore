@@ -6,3 +6,4 @@ dist/
 .env
 /BUILD
 packages/e2e/results/
+.wrangler/

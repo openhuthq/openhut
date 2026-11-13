@@ -1,0 +1,54 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Release files
+        run: scripts/release.sh
+      - name: Deploy fastmonkey.dev
+        run: npm -w @fastmonkey/site run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Check that fastmonkey.dev serves this release
+        run: |
+          want=$(sed -n 's/^FASTMONKEY_SHA256="\([0-9a-f]*\)"$/\1/p' dist/install.sh)
+          for i in 1 2 3 4 5 6; do
+            got=$(curl -fsS https://fastmonkey.dev/fastmonkey.tgz | sha256sum | cut -d' ' -f1)
+            served=$(curl -fsS https://fastmonkey.dev/ | sed -n 's/^FASTMONKEY_SHA256="\([0-9a-f]*\)"$/\1/p')
+            [ "$got" = "$want" ] && [ "$served" = "$want" ] && break
+            [ "$i" = 6 ] && { echo "fastmonkey.dev doesn't serve this release yet." >&2; exit 1; }
+            sleep 10
+          done
+          curl -fsS -H 'accept: text/html' https://fastmonkey.dev/ | grep -q '<html'

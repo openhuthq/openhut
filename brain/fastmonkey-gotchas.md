@@ -63,7 +63,7 @@ the installer, agentd and the e2e run live here. `fastmonkey-server.md` covers t
   5. the report.
 
   It takes about 25 minutes and needs Node 22.18+ on the Mac and 127.0.0.1:8099 and :8787 free. The script is named `e2e`, not `test`, so turbo's test task never starts it.
-- Releases are served by the site's own Caddy image (`fastmonkey-mirror` on 127.0.0.1:8099, a release folder mounted at `/srv/release`). `release.sh` deletes and recreates `dist/`, which leaves a running container's mount pointing at the old folder, so the mirror is started afresh for each release, and the tampered copy gets its own folder, `dist/tampered`.
+- Releases are served by the site's Worker under `wrangler dev` on :8099, with one release folder as its assets. It listens on 0.0.0.0 so the Docker server reaches it through `host.docker.internal`. `release.sh` deletes and recreates `dist/`, so the mirror is restarted for each release, and the tampered copy gets its own folder, `dist/tampered`.
 - The tampered build is `e2e-2`, not the running `e2e-1`, so an install that went through would show up as a changed `BUILD`.
 - Named volumes cache Docker images (`fastmonkey-docker`), Alpine packages (`fastmonkey-apkcache`) and the Claude CLI (`fastmonkey-dlcache`). Everything else starts empty. On Docker Desktop, a reused `/var/lib/docker` volume brings back old containers, so `e2e.sh` prunes it to images only.
 - Traffic between two Docker networks is dropped by Docker itself, so firewall targets live outside the server: `fastmonkey-lan` listens at an address in each private range and at the metadata address. Every target an agent must not reach is checked from the server too, where it must be open, so "blocked" can only come from the agent firewall.

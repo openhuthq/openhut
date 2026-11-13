@@ -20,7 +20,9 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
 - **`packages/e2e`** — `@fastmonkey/e2e`, the end-to-end run: a bare Linux server in Docker, the curl install, a
   tampered upgrade, the upgrade and a restart. Results go to `packages/e2e/results/` (gitignored).
 - **`packages/site`** — `@fastmonkey/site`, fastmonkey.dev: `install.sh` for curl, the release tarball, the home page and
-  the docs, served by Caddy (`Dockerfile`, `Caddyfile`). The e2e run serves its releases with the same image.
+  the docs, served by a Cloudflare Worker with static assets (`wrangler.jsonc`, `src/worker.ts`) that
+  `.github/workflows/deploy.yml` deploys on every push to `main`. The e2e run serves its releases with the same Worker
+  under `wrangler dev`. Deploys and the internal instance: `brain/fastmonkey-deploy.md`.
 
 `install/` is the installer and what it runs on the server (firewall, systemd units, boot script); `scripts/release.sh`
 builds what `fastmonkey.dev` serves; `vendor/` is the pinned Hermes plugin.

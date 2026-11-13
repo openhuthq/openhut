@@ -78,7 +78,7 @@ fi
 cp "$CACHED" "$PREFIX.new/bin/claude" && chmod 0755 "$PREFIX.new/bin/claude"
 chown -R root:root "$PREFIX.new" && chmod -R go-w "$PREFIX.new"
 rm -rf "$PREFIX.old"; [ ! -d "$PREFIX" ] || mv "$PREFIX" "$PREFIX.old"; mv "$PREFIX.new" "$PREFIX"; rm -rf "$PREFIX.old"
-id fastmonkey >/dev/null 2>&1 || { addgroup -S fastmonkey 2>/dev/null && adduser -S -D -G fastmonkey fastmonkey 2>/dev/null; } || useradd --system --user-group --no-create-home fastmonkey
+id fastmonkey >/dev/null 2>&1 || { addgroup -S fastmonkey >/dev/null 2>&1 && adduser -S -D -G fastmonkey fastmonkey >/dev/null 2>&1; } || useradd --system --user-group --no-create-home fastmonkey
 
 mkdir -p /etc/fastmonkey && touch /etc/fastmonkey/env && chmod 0600 /etc/fastmonkey/env
 IMAGE_OVERRIDE="${AGENT_IMAGE:-}"
