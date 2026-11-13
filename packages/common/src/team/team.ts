@@ -19,6 +19,14 @@ export const Person = z.object({
 })
 export type Person = z.infer<typeof Person>
 
+export const Session = z.object({
+  id: z.string(),
+  object: z.literal('session'),
+  person: Person,
+  expiresAt: Timestamp,
+})
+export type Session = z.infer<typeof Session>
+
 export const Me = z.object({
   object: z.literal('me'),
   user: Person,
@@ -43,6 +51,7 @@ export const Invite = z.object({
 export type Invite = z.infer<typeof Invite>
 
 export const InviteLink = z.object({
+  id: z.string(),
   object: z.literal('invite_link'),
   role: MemberRole,
   expiresAt: Timestamp,

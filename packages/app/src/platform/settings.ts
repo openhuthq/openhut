@@ -1,4 +1,3 @@
-import type { FastifyRequest } from 'fastify'
 import { db } from './db.ts'
 import { config } from './config.ts'
 import { seal, unseal } from './secrets.ts'
@@ -7,7 +6,7 @@ const loaded = await db.selectFrom('install_setting').select(['name', 'value']).
 const rows = new Map(loaded.map((row) => [row.name, row.value]))
 
 export const settings = {
-  publicUrl: (): string => rows.get('public_url') ?? '',
+  storedPublicUrl: (): string => rows.get('public_url') ?? '',
   setPublicUrl: (url: string) => write('public_url', url.replace(/\/+$/, '')),
   seatToken: (): string => {
     const sealed = rows.get('seat_token')
@@ -18,9 +17,8 @@ export const settings = {
   setAppliedBuild: (build: string) => write('build', build),
 }
 
-export function publicUrl(req?: FastifyRequest): string {
-  if (settings.publicUrl()) return settings.publicUrl()
-  return req ? `${req.protocol}://${req.host}` : `http://localhost:${config.port}`
+export function publicUrl(): string {
+  return settings.storedPublicUrl() || `http://localhost:${config.port}`
 }
 
 async function write(name: string, value: string): Promise<void> {

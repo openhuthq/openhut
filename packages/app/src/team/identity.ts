@@ -12,8 +12,9 @@ export const isAdmin = (caller: Caller): boolean => caller.role === 'owner' || c
 
 export async function who(req: FastifyRequest): Promise<Caller> {
   const caller = await callerOf(req)
-  if (!caller) throw new HttpError(401, 'Sign in first.')
-  return caller
+  if (caller) return caller
+  if (ACCESS_TOKEN.test(req.headers.authorization ?? '')) throw new HttpError(401, 'This sign-in expired or the app was disconnected. Connect the app to JakeBox again.')
+  throw new HttpError(401, 'Sign in first.')
 }
 
 export async function callerOf(req: FastifyRequest): Promise<Caller | undefined> {

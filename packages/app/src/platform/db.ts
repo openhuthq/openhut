@@ -24,11 +24,7 @@ export const db = new Kysely<Database>({
 
 await sql`create table if not exists install_setting (name text primary key, value text not null, updated_at timestamptz not null default now())`.execute(db)
 
-export async function closeDb(): Promise<void> {
-  await db.destroy()
-  await socketServer.stop()
-  await pglite.close()
-}
+export const isUniqueViolation = (err: unknown): boolean => typeof err === 'object' && err !== null && 'code' in err && err.code === '23505'
 
 export async function migrate(): Promise<void> {
   await sql`create table if not exists person (

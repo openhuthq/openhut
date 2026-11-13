@@ -1,15 +1,19 @@
 import { createHash } from 'node:crypto'
+import * as z from 'zod/mini'
+import type { CreateOAuthCode, OAuthClient, OAuthCode, OAuthGrant } from '@jakebox/common/team/oauth.ts'
 import { db } from '../platform/db.ts'
-import { HttpError } from '../platform/http-error.ts'
+import { HttpError, OAuthError } from '../platform/http-error.ts'
 import { publicUrl } from '../platform/settings.ts'
 import { newToken, sha } from '../platform/secrets.ts'
-import type { OAuthClient, OAuthGrant } from '@jakebox/common/team/oauth.ts'
+import { record } from '../platform/events.ts'
 
+export const ACCESS_TOKEN = /^Bearer (jbo_[\w-]+)$/
 const CODE_TTL_MS = 10 * 60_000
 const ACCESS_TTL_MS = 60 * 60_000
+const RedirectUris = z.array(z.string())
 
 export const oauthService = {
-  resourceMetadata: () => ({ resource: resourceUrl(), authorization_servers: [publicUrl()], bearer_methods_supported: ['header'] }),
+  resourceMetadata: () => ({ resource: `${publicUrl()}/mcp`, authorization_servers: [publicUrl()], bearer_methods_supported: ['header'] }),
 
   serverMetadata: () => ({
     issuer: publicUrl(),
@@ -26,7 +30,7 @@ export const oauthService = {
 
   async register({ name, redirectUris }: { name: unknown; redirectUris: unknown }): Promise<RegisteredClient> {
     const uris = Array.isArray(redirectUris) ? redirectUris.map(String) : []
-    if (!uris.length || !uris.every(redirectable)) throw new HttpError(400, 'invalid_redirect_uri')
+    if (!uris.length || !uris.every(redirectable)) throw new OAuthError('invalid_redirect_uri', 'Register at least one https redirect URI, or http on localhost.')
     const id = newToken('jbc')
     const label = (typeof name === 'string' && name.trim() ? name.trim() : 'MCP client').slice(0, 80)
     await db.insertInto('oauth_client').values({ id, name: label, redirect_uris: JSON.stringify(uris) }).execute()
@@ -35,54 +39,50 @@ export const oauthService = {
 
   async client(id: string): Promise<OAuthClient> {
     const row = await db.selectFrom('oauth_client').select(['id', 'name', 'redirect_uris']).where('id', '=', id).executeTakeFirst()
-    if (!row) throw new HttpError(404, 'This app is not registered. Start the connection again from the app.')
-    return { id: row.id, object: 'oauth_client', name: row.name, redirectUris: JSON.parse(row.redirect_uris) }
+    if (!row) throw new HttpError(404, 'This app isn\'t registered with JakeBox. Start the connection again from the app.')
+    return { id: row.id, object: 'oauth_client', name: row.name, redirectUris: RedirectUris.parse(JSON.parse(row.redirect_uris)) }
   },
 
-  async approve({ userId, clientId, redirectUri, challenge, method, state }: { userId: string; clientId: string; redirectUri: string; challenge: string; method: string; state?: string }): Promise<{ redirect: string }> {
-    const client = await this.client(clientId)
-    if (!client.redirectUris.includes(redirectUri)) throw new HttpError(400, 'That redirect address is not registered for this app.')
-    if (method !== 'S256' || !/^[\w-]{43,128}$/.test(challenge)) throw new HttpError(400, 'The app must send a PKCE S256 code challenge.')
+  async decide({ person, clientId, redirectUri, codeChallenge, codeChallengeMethod, state, allow }: CreateOAuthCode & { person: { id: string; username: string } }): Promise<OAuthCode> {
+    const client = await oauthService.client(clientId)
+    if (!client.redirectUris.includes(redirectUri)) throw new HttpError(400, 'That redirect address isn\'t registered for this app. Start the connection again from the app.')
+    if (!allow) return { object: 'oauth_code', redirect: withParams(redirectUri, { error: 'access_denied', ...(state && { state }) }) }
+    if (codeChallengeMethod !== 'S256' || !/^[\w-]{43,128}$/.test(codeChallenge)) throw new HttpError(400, 'The app has to send a PKCE S256 code challenge. Update the app and connect again.')
     const code = newToken('jba')
-    await db.insertInto('oauth_code').values({ code_hash: sha(code), client_id: clientId, person_id: userId, redirect_uri: redirectUri, challenge, expires_at: new Date(Date.now() + CODE_TTL_MS) }).execute()
-    return { redirect: withParams(redirectUri, { code, ...(state && { state }) }) }
-  },
-
-  denied({ redirectUri, state }: { redirectUri: string; state?: string }) {
-    return withParams(redirectUri, { error: 'access_denied', ...(state && { state }) })
+    await db.insertInto('oauth_code').values({ code_hash: sha(code), client_id: clientId, person_id: person.id, redirect_uri: redirectUri, challenge: codeChallenge, expires_at: new Date(Date.now() + CODE_TTL_MS) }).execute()
+    record({ action: 'oauth.app_connected', actor: person, target: { type: 'oauth_client', id: clientId, name: client.name } })
+    return { object: 'oauth_code', redirect: withParams(redirectUri, { code, ...(state && { state }) }) }
   },
 
   async token(body: Record<string, unknown>): Promise<Tokens> {
-    const field = (k: string) => typeof body[k] === 'string' ? body[k] : ''
-    if (field('grant_type') === 'authorization_code') {
-      const row = await db.deleteFrom('oauth_code').where('code_hash', '=', sha(field('code'))).returningAll().executeTakeFirst()
-      const verifier = field('code_verifier')
-      if (!row || new Date(row.expires_at).getTime() < Date.now() || row.client_id !== field('client_id') || row.redirect_uri !== field('redirect_uri')) throw new HttpError(400, 'invalid_grant')
-      if (createHash('sha256').update(verifier).digest('base64url') !== row.challenge) throw new HttpError(400, 'invalid_grant')
-      return issue({ clientId: row.client_id, userId: row.person_id })
+    const field = (key: string) => {
+      const value = body[key]
+      return typeof value === 'string' ? value : ''
     }
-    if (field('grant_type') === 'refresh_token') {
-      const grant = await db.selectFrom('oauth_grant').select(['id', 'client_id']).where('refresh_hash', '=', sha(field('refresh_token'))).executeTakeFirst()
-      if (!grant || (field('client_id') && field('client_id') !== grant.client_id)) throw new HttpError(400, 'invalid_grant')
-      return rotate(grant.id)
+    switch (field('grant_type')) {
+      case 'authorization_code': return exchangeCode({ code: field('code'), verifier: field('code_verifier'), clientId: field('client_id'), redirectUri: field('redirect_uri') })
+      case 'refresh_token': return refresh({ refreshToken: field('refresh_token'), clientId: field('client_id') })
+      default: throw new OAuthError('unsupported_grant_type', 'Use authorization_code or refresh_token.')
     }
-    throw new HttpError(400, 'unsupported_grant_type')
   },
 
   async owner(access: string): Promise<string | undefined> {
-    const row = await db.updateTable('oauth_grant').set({ used_at: new Date() }).where('access_hash', '=', sha(access)).where('access_expires_at', '>', new Date()).returning('person_id').executeTakeFirst()
+    const row = await db.updateTable('oauth_grant').set({ used_at: new Date() }).where('access_hash', '=', sha(access)).where('access_expires_at', '>', new Date())
+      .returning('person_id').executeTakeFirst()
     return row?.person_id
   },
 
-  async grants(userId: string): Promise<OAuthGrant[]> {
+  async grants(personId: string): Promise<OAuthGrant[]> {
     const rows = await db.selectFrom('oauth_grant').innerJoin('oauth_client', 'oauth_client.id', 'oauth_grant.client_id')
-      .select(['oauth_grant.id', 'oauth_client.name', 'oauth_grant.created_at', 'oauth_grant.used_at']).where('oauth_grant.person_id', '=', userId).orderBy('oauth_grant.created_at', 'desc').execute()
-    return rows.map((r) => ({ id: r.id, object: 'oauth_grant', client: r.name, createdAt: new Date(r.created_at).toISOString(), usedAt: r.used_at ? new Date(r.used_at).toISOString() : null }))
+      .select(['oauth_grant.id', 'oauth_client.name', 'oauth_grant.created_at', 'oauth_grant.used_at']).where('oauth_grant.person_id', '=', personId)
+      .orderBy('oauth_grant.created_at', 'desc').execute()
+    return rows.map((row) => ({ id: row.id, object: 'oauth_grant', client: row.name, createdAt: new Date(row.created_at).toISOString(), usedAt: row.used_at ? new Date(row.used_at).toISOString() : null }))
   },
 
-  async revoke({ userId, id }: { userId: string; id: string }): Promise<void> {
-    const gone = await db.deleteFrom('oauth_grant').where('id', '=', id).where('person_id', '=', userId).executeTakeFirst()
+  async revoke({ person, id }: { person: { id: string; username: string }; id: string }): Promise<void> {
+    const gone = await db.deleteFrom('oauth_grant').where('id', '=', id).where('person_id', '=', person.id).executeTakeFirst()
     if (!Number(gone.numDeletedRows)) throw new HttpError(404, 'That app is already disconnected.')
+    record({ action: 'oauth.app_disconnected', actor: person, target: { type: 'oauth_grant', id } })
   },
 
   async revokeToken(value: string): Promise<void> {
@@ -90,37 +90,38 @@ export const oauthService = {
   },
 }
 
-export const ACCESS_TOKEN = /^Bearer (jbo_[\w-]+)$/
-const resourceUrl = () => `${publicUrl()}/mcp`
-
-async function issue({ clientId, userId }: { clientId: string; userId: string }): Promise<Tokens> {
+async function exchangeCode({ code, verifier, clientId, redirectUri }: { code: string; verifier: string; clientId: string; redirectUri: string }): Promise<Tokens> {
+  const row = await db.deleteFrom('oauth_code').where('code_hash', '=', sha(code)).returningAll().executeTakeFirst()
+  const valid = row && new Date(row.expires_at).getTime() >= Date.now() && row.client_id === clientId && row.redirect_uri === redirectUri
+    && createHash('sha256').update(verifier).digest('base64url') === row.challenge
+  if (!valid) throw new OAuthError('invalid_grant', 'That code is used, expired, or doesn\'t match this app. Sign in again.')
   const tokens = fresh()
-  await db.insertInto('oauth_grant').values({ id: newToken('jbg'), client_id: clientId, person_id: userId, ...hashes(tokens) }).execute()
+  await db.insertInto('oauth_grant').values({ id: newToken('jbg'), client_id: row.client_id, person_id: row.person_id, ...hashes(tokens) }).execute()
   return tokens
 }
 
-async function rotate(id: string): Promise<Tokens> {
+async function refresh({ refreshToken, clientId }: { refreshToken: string; clientId: string }): Promise<Tokens> {
+  const grant = await db.selectFrom('oauth_grant').select(['id', 'client_id']).where('refresh_hash', '=', sha(refreshToken)).executeTakeFirst()
+  if (!grant || (clientId && clientId !== grant.client_id)) throw new OAuthError('invalid_grant', 'That refresh token was already used or revoked. Sign in again.')
   const tokens = fresh()
-  await db.updateTable('oauth_grant').set(hashes(tokens)).where('id', '=', id).execute()
+  await db.updateTable('oauth_grant').set(hashes(tokens)).where('id', '=', grant.id).execute()
   return tokens
 }
 
 const fresh = (): Tokens => ({ access_token: newToken('jbo'), token_type: 'Bearer', expires_in: ACCESS_TTL_MS / 1000, refresh_token: newToken('jbr'), scope: 'mcp' })
-const hashes = (t: Tokens) => ({ access_hash: sha(t.access_token), refresh_hash: sha(t.refresh_token), access_expires_at: new Date(Date.now() + ACCESS_TTL_MS) })
+const hashes = (tokens: Tokens) => ({ access_hash: sha(tokens.access_token), refresh_hash: sha(tokens.refresh_token), access_expires_at: new Date(Date.now() + ACCESS_TTL_MS) })
 
-function redirectable(uri: string) {
-  try {
-    const url = new URL(uri)
-    return !url.hash && !['javascript:', 'data:', 'file:'].includes(url.protocol) && (url.protocol !== 'http:' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))
-  } catch { return false }
+function redirectable(uri: string): boolean {
+  if (!URL.canParse(uri)) return false
+  const url = new URL(uri)
+  return !url.hash && !['javascript:', 'data:', 'file:'].includes(url.protocol) && (url.protocol !== 'http:' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))
 }
 
-function withParams(uri: string, params: Record<string, string>) {
+function withParams(uri: string, params: Record<string, string>): string {
   const url = new URL(uri)
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
   return url.toString()
 }
 
-
-export type Tokens = { access_token: string; token_type: 'Bearer'; expires_in: number; refresh_token: string; scope: string }
-export type RegisteredClient = { client_id: string; client_name: string; redirect_uris: string[]; token_endpoint_auth_method: 'none'; grant_types: string[]; response_types: string[] }
+type Tokens = { access_token: string; token_type: 'Bearer'; expires_in: number; refresh_token: string; scope: string }
+type RegisteredClient = { client_id: string; client_name: string; redirect_uris: string[]; token_endpoint_auth_method: 'none'; grant_types: string[]; response_types: string[] }

@@ -22,6 +22,17 @@ const MAX_FILE = 200_000
 const CLAUDE_SETTINGS_FILE = 'claude-settings.json'
 const CLAUDE_SETTINGS = JSON.stringify({ disableAllHooks: true, cleanupPeriodDays: 1 }) + '\n'
 const HERMES_RUNTIME_FILES = ['gateway.pid', 'gateway.lock', 'gateway_state.json']
+const AGENT_ENV = {
+  HERMES_HOME: '/opt/data',
+  TERMINAL_HOME_MODE: 'profile',
+  PYTHONNOUSERSITE: '1',
+  CLAUDE_CONFIG_DIR: '/opt/data/.claude',
+  USER: 'hermes',
+  HOME: '/opt/data/home',
+  DISABLE_AUTOUPDATER: '1',
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+  HERMES_GATEWAY_LOCK_DIR: '/tmp/hermes-locks',
+}
 const EXEC = { maxBuffer: 16 << 20, timeout: 60_000 }
 const FIREWALL_FRESH_MS = 5_000
 const WATCHDOG_MS = 30_000
@@ -69,9 +80,7 @@ function serve(sock: Socket) {
 function enqueue(req: AgentdRequest): Promise<Reply> {
   if (!('id' in req)) return handle(req)
   const { id } = req
-  const next = (queues.get(id) ?? Promise.resolve())
-    .catch(() => {})
-    .then(() => handle(req))
+  const next = (queues.get(id) ?? Promise.resolve()).catch(() => {}).then(() => handle(req))
   queues.set(id, next)
   next
     .finally(() => {
@@ -170,24 +179,25 @@ async function create(id: string, net: number, files: AgentFiles) {
   const digest = await docker('image', 'inspect', '--format', '{{index .RepoDigests 0}}', IMAGE).catch(() => IMAGE)
   await docker(
     'create',
-    '--name', `ag-${id}`, '--hostname', id, '--restart', 'no',
-    '--label', `jakebox.agent=${id}`, '--label', `agent.digest=${digest}`,
-    '--runtime', RUNTIME, '--user', `${AGENT_UID}:${AGENT_UID}`, '--init', '--entrypoint', '/opt/hermes/bin/hermes',
-    '--read-only', '--tmpfs', '/tmp:rw,nosuid,size=256m', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
-    '--pids-limit', '512', '--memory', '1g', '--cpus', '1', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3',
-    '--network', `ag-${id}`, '--ip', `10.200.${net}.2`, '--mount', 'type=bind,src=/etc/agentd/resolv.conf,dst=/etc/resolv.conf,readonly',
-    '-e', 'HERMES_HOME=/opt/data', '-e', 'TERMINAL_HOME_MODE=profile', '-e', 'PYTHONNOUSERSITE=1',
-    '-e', 'CLAUDE_CONFIG_DIR=/opt/data/.claude', '-e', 'USER=hermes', '-e', 'HOME=/opt/data/home',
-    '-e', 'DISABLE_AUTOUPDATER=1', '-e', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1', '-e', 'HERMES_GATEWAY_LOCK_DIR=/tmp/hermes-locks',
-    '--mount', `type=bind,src=${home(id)},dst=/opt/data`, '--mount', `type=bind,src=${home(id)}/platforms,dst=/opt/data/platforms`,
-    '--mount', `type=bind,src=${home(id)}/.claude,dst=/opt/data/.claude`,
+    ...['--name', `ag-${id}`, '--hostname', id, '--restart', 'no'],
+    ...['--label', `jakebox.agent=${id}`, '--label', `agent.digest=${digest}`],
+    ...['--runtime', RUNTIME, '--user', `${AGENT_UID}:${AGENT_UID}`, '--init', '--entrypoint', '/opt/hermes/bin/hermes'],
+    ...['--read-only', '--tmpfs', '/tmp:rw,nosuid,size=256m', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'],
+    ...['--pids-limit', '512', '--memory', '1g', '--cpus', '1', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'],
+    ...['--network', `ag-${id}`, '--ip', `10.200.${net}.2`],
+    ...Object.entries(AGENT_ENV).flatMap(([name, value]) => ['-e', `${name}=${value}`]),
+    ...['--mount', 'type=bind,src=/etc/agentd/resolv.conf,dst=/etc/resolv.conf,readonly'],
+    ...['--mount', `type=bind,src=${home(id)},dst=/opt/data`],
+    ...['--mount', `type=bind,src=${home(id)}/platforms,dst=/opt/data/platforms`],
+    ...['--mount', `type=bind,src=${home(id)}/.claude,dst=/opt/data/.claude`],
     ...FILES.flatMap((name) => readOnly(id, name, name)),
     ...readOnly(id, 'skills', 'skills'),
     ...readOnly(id, CLAUDE_SETTINGS_FILE, '.claude/settings.json'),
-    '--mount', `type=bind,src=${PLUGINS},dst=/opt/data/plugins,readonly`, '--mount', `type=bind,src=${CLAUDE_BIN},dst=/usr/local/bin/claude,readonly`,
+    ...['--mount', `type=bind,src=${PLUGINS},dst=/opt/data/plugins,readonly`],
+    ...['--mount', `type=bind,src=${CLAUDE_BIN},dst=/usr/local/bin/claude,readonly`],
     ...(existsSync(`${BRIDGE}/node_modules`) ? ['--mount', `type=bind,src=${BRIDGE},dst=/opt/data/scripts/whatsapp-bridge,readonly`] : []),
-    '--tmpfs', '/opt/data/hooks:ro,size=4k', '--tmpfs', '/opt/data/pairing:ro,size=4k', '--tmpfs', '/opt/data/platforms/pairing:ro,size=4k',
-    digest, 'gateway', 'run',
+    ...['--tmpfs', '/opt/data/hooks:ro,size=4k', '--tmpfs', '/opt/data/pairing:ro,size=4k', '--tmpfs', '/opt/data/platforms/pairing:ro,size=4k'],
+    ...[digest, 'gateway', 'run'],
   )
   return { container: `ag-${id}` }
 }
@@ -223,7 +233,16 @@ async function pair(id: string): Promise<Pairing> {
   pairings.set(id, p)
   const proc = spawn(
     'docker',
-    ['exec', `ag-${id}`, 'node', '/opt/data/scripts/whatsapp-bridge/bridge.js', '--pair-only', '--pair-json', '--session', '/opt/data/platforms/whatsapp/session'],
+    [
+      'exec',
+      `ag-${id}`,
+      'node',
+      '/opt/data/scripts/whatsapp-bridge/bridge.js',
+      '--pair-only',
+      '--pair-json',
+      '--session',
+      '/opt/data/platforms/whatsapp/session',
+    ],
     { stdio: ['ignore', 'pipe', 'ignore'] },
   )
   const timer = setTimeout(() => {

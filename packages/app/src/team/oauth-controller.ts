@@ -21,13 +21,7 @@ export const oauthController: FastifyPluginAsync = async (app) => {
     return oauthService.client(req.params.id)
   })
 
-  app.post<{ Body: CreateOAuthCode }>('/codes', CodeRequest, async (req): Promise<OAuthCode> => {
-    const u = await who(req)
-    const { clientId, redirectUri, codeChallenge, codeChallengeMethod, state, allow } = req.body
-    const client = await oauthService.client(clientId)
-    if (!allow) return { object: 'oauth_code', redirect: client.redirectUris.includes(redirectUri) ? oauthService.denied({ redirectUri, state }) : null }
-    return { object: 'oauth_code', ...await oauthService.approve({ userId: u.id, clientId, redirectUri, challenge: codeChallenge, method: codeChallengeMethod, state }) }
-  })
+  app.post<{ Body: CreateOAuthCode }>('/codes', CodeRequest, async (req): Promise<OAuthCode> => oauthService.decide({ person: await who(req), ...req.body }))
 
   app.post<{ Body: Record<string, unknown> }>('/token', async (req, reply) => reply.header('cache-control', 'no-store').send(await oauthService.token(req.body ?? {})))
 
@@ -39,7 +33,7 @@ export const oauthController: FastifyPluginAsync = async (app) => {
   app.get('/grants', async (req) => listOf({ req, data: await oauthService.grants((await who(req)).id) }))
 
   app.delete<{ Params: { id: string } }>('/grants/:id', async (req) => {
-    await oauthService.revoke({ userId: (await who(req)).id, id: req.params.id })
+    await oauthService.revoke({ person: await who(req), id: req.params.id })
     return deleted({ id: req.params.id, object: 'oauth_grant' })
   })
 }

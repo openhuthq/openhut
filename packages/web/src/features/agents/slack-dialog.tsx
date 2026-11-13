@@ -1,5 +1,6 @@
 import type { Agent } from '@jakebox/common/agents/agent.ts'
-import { ADDRESS, slackCreateUrl, slackManifest, type Channel } from '@jakebox/common/channels/channel.ts'
+import { ADDRESS, type Channel } from '@jakebox/common/channels/channel.ts'
+import { slackCreateUrl, slackManifest } from './slack-manifest'
 import { CopyButton } from '@/components/copy-button'
 import { Dialog } from '@/components/dialog'
 import { DialogFoot } from '@/components/dialog-foot'

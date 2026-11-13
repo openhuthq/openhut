@@ -1,7 +1,6 @@
 import * as z from 'zod/mini'
 
-export const ErrorType = z.enum(['invalid_request_error', 'api_error'])
-export type ErrorType = z.infer<typeof ErrorType>
+const ErrorType = z.enum(['invalid_request_error', 'api_error'])
 
 export const ApiError = z.object({
   error: z.object({
@@ -18,6 +17,7 @@ export const Timestamp = z.iso.datetime()
 export const ListQuery = z.object({
   limit: z.optional(z.coerce.number().check(z.int(), z.minimum(1), z.maximum(100))),
   startingAfter: z.optional(z.string()),
+  endingBefore: z.optional(z.string()),
 })
 export type ListQuery = z.infer<typeof ListQuery>
 

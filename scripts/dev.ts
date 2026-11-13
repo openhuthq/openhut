@@ -20,8 +20,8 @@ const app = spawn(process.execPath, ['--env-file-if-exists=.env', 'packages/app/
 console.log('Open http://localhost:8787/setup?code=dev. On a fresh .data, `node scripts/seed-ui.ts` adds sample people, agents and connections.')
 for (const child of [agentd, app]) {
   child.on('exit', (code) => {
+    process.exitCode ??= code ?? 0
     agentd.kill()
     app.kill()
-    process.exitCode = code ?? 0
   })
 }

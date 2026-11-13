@@ -4,21 +4,19 @@ import { deleted, listOf } from '../platform/responses.ts'
 import { who } from '../team/identity.ts'
 import { channelService } from './channel-service.ts'
 
-type Id = { Params: { id: string } }
-
 export const channelController: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: ListChannels }>('/', ListRequest, async (req) => {
     await who(req)
     return listOf({ req, data: await channelService.list(req.query) })
   })
 
-  app.post<{ Body: CreateChannel }>('/', CreateRequest, async (req) => channelService.create({ actor: await who(req), body: req.body }))
+  app.post<{ Body: CreateChannel }>('/', CreateRequest, async (req) => channelService.create({ actor: await who(req), ...req.body }))
 
-  app.get<Id>('/:id', async (req) => channelService.get({ actor: await who(req), id: req.params.id }))
+  app.get<{ Params: { id: string } }>('/:id', async (req) => channelService.get({ actor: await who(req), id: req.params.id }))
 
-  app.patch<Id & { Body: UpdateChannel }>('/:id', UpdateRequest, async (req) => channelService.update({ actor: await who(req), id: req.params.id, patch: req.body }))
+  app.patch<{ Params: { id: string }; Body: UpdateChannel }>('/:id', UpdateRequest, async (req) => channelService.update({ actor: await who(req), id: req.params.id, patch: req.body }))
 
-  app.delete<Id>('/:id', async (req) => {
+  app.delete<{ Params: { id: string } }>('/:id', async (req) => {
     await channelService.delete({ actor: await who(req), id: req.params.id })
     return deleted({ id: req.params.id, object: 'channel' })
   })

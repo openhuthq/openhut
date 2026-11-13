@@ -20,7 +20,9 @@ for (const [username, role] of [
   const { link } = (await api<Invite>('POST', '/api/invites', { role }, owner)).json
   await api('POST', '/api/people', { inviteToken: link?.split('/invite/')[1], username, password: randomBytes(9).toString('base64url') })
 }
-const orders = (await api<Connection>('POST', '/api/connections', { name: 'Orders DB', dsn: 'postgres://reader:sample@db.internal.example:5432/orders' }, owner)).json
+const orders = (
+  await api<Connection>('POST', '/api/connections', { name: 'Orders DB', dsn: 'postgres://reader:sample@db.internal.example:5432/orders' }, owner)
+).json
 await api('POST', '/api/connections', { name: 'Analytics warehouse', dsn: 'postgres://reader:sample@warehouse.example:5432/analytics' }, owner)
 const ids: Record<string, string> = {}
 for (const [name, about, model, wanted] of AGENTS) {

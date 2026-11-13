@@ -1,8 +1,10 @@
 import * as z from 'zod/mini'
-import { CreateAgent, CreateGrant, ListGrants, ModelId, Wanted } from '@jakebox/common/agents/agent.ts'
+import { CreateAgent, CreateGrant, ListGrants, UpdateAgentFields } from '@jakebox/common/agents/agent.ts'
+import { UpdateAdminFields } from '@jakebox/common/admin/admin.ts'
 import { ListChannels } from '@jakebox/common/channels/channel.ts'
-import { CreateConnection, ListConnectionEvents } from '@jakebox/common/connections/connection.ts'
+import { CreateConnection, ListConnectionEvents, UpdateConnection } from '@jakebox/common/connections/connection.ts'
 import { CreateInvite } from '@jakebox/common/team/team.ts'
+import { describeIssues } from '../platform/validation.ts'
 
 const Id = z.object({ id: z.string().check(z.maxLength(60)) })
 const Nothing = z.object({})
@@ -14,7 +16,7 @@ export const MCP_TOOLS = [
   tool({
     name: 'update_agent',
     description: 'Change an agent\'s instructions or model (it restarts if running), or start or stop it with wanted.',
-    input: z.object({ id: z.string(), instructions: z.optional(z.string()), model: z.optional(ModelId), wanted: z.optional(Wanted) }),
+    input: z.object({ id: z.string(), ...UpdateAgentFields }),
     call: ({ api, input: { id, ...patch } }) => api({ method: 'PATCH', url: `/api/agents/${id}`, payload: patch }),
   }),
   tool({ name: 'delete_agent', description: 'Delete an agent and its container.', input: Id, call: ({ api, input }) => api({ method: 'DELETE', url: `/api/agents/${input.id}` }) }),
@@ -27,7 +29,7 @@ export const MCP_TOOLS = [
   tool({
     name: 'update_connection',
     description: 'Share a connection you own with everyone on the team, or stop sharing it.',
-    input: z.object({ id: z.string(), everyone: z.boolean() }),
+    input: z.extend(UpdateConnection, { id: z.string() }),
     call: ({ api, input: { id, everyone } }) => api({ method: 'PATCH', url: `/api/connections/${id}`, payload: { everyone } }),
   }),
   tool({ name: 'delete_connection', description: 'Delete a connection. Every agent loses it on its next call.', input: Id, call: ({ api, input }) => api({ method: 'DELETE', url: `/api/connections/${input.id}` }) }),
@@ -47,7 +49,7 @@ export const MCP_TOOLS = [
   tool({
     name: 'update_admin',
     description: 'Set the Claude seat token from `claude setup-token` (every agent restarts with it) or the public URL. Owner or admin.',
-    input: z.object({ seatToken: z.optional(z.string()), publicUrl: z.optional(z.string()) }),
+    input: z.object(UpdateAdminFields),
     call: ({ api, input }) => api({ method: 'PATCH', url: '/api/admin', payload: input }),
   }),
 ]
@@ -59,7 +61,7 @@ function tool<S extends z.ZodMiniObject>(spec: { name: string; description: stri
     inputSchema: z.toJSONSchema(spec.input, { io: 'input' }),
     run: ({ api, args }) => {
       const parsed = z.safeParse(spec.input, args)
-      if (!parsed.success) throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.') || 'input'}: ${issue.message}`).join('; '))
+      if (!parsed.success) throw new Error(`The input for ${spec.name} is not valid. ${describeIssues(parsed.error.issues)}`)
       return spec.call({ api, input: parsed.data })
     },
   }
@@ -71,4 +73,4 @@ function query(input: Record<string, unknown>): string {
 }
 
 export type Api = (request: { method: 'GET' | 'POST' | 'PATCH' | 'DELETE'; url: string; payload?: unknown }) => Promise<unknown>
-export type McpTool = { name: string; description: string; inputSchema: Record<string, unknown>; run: (ctx: { api: Api; args: unknown }) => Promise<unknown> }
+type McpTool = { name: string; description: string; inputSchema: Record<string, unknown>; run: (ctx: { api: Api; args: unknown }) => Promise<unknown> }

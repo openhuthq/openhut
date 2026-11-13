@@ -36,11 +36,12 @@ export type Agent = z.infer<typeof Agent>
 export const CreateAgent = z.object({ name: z.string().check(z.minLength(1), z.maxLength(40)), instructions: z.optional(z.string().check(z.maxLength(20_000))) })
 export type CreateAgent = z.infer<typeof CreateAgent>
 
-export const UpdateAgent = z.object({
+export const UpdateAgentFields = {
   instructions: z.optional(z.string().check(z.maxLength(20_000))),
   model: z.optional(ModelId),
   wanted: z.optional(Wanted),
-}).check(atLeastOneField)
+}
+export const UpdateAgent = z.object(UpdateAgentFields).check(atLeastOneField)
 export type UpdateAgent = z.infer<typeof UpdateAgent>
 
 export const Grant = z.object({

@@ -42,15 +42,14 @@ builds what `get.jakebox.dev` serves; `vendor/` is the pinned Hermes plugin.
 
 ```
 npm install
-npx turbo run build typecheck test
-AGENTD_SOCK=a.sock node packages/e2e/src/fake-agentd.ts &
-AGENTD_SOCK=a.sock JAKEBOX_DATA=.data SETUP_CODE=dev JAKEBOX_MODEL=test node packages/app/src/app.ts
+npm run dev
 ```
 
-Open `http://localhost:8787/setup?code=dev`. `node packages/e2e/src/seed-ui.ts` (on a fresh `.data`) fills in sample
+`npm run dev` builds the dashboard, then starts the fake agentd and the app with `.data`, setup code `dev` and the test
+model. Open `http://localhost:8787/setup?code=dev`. `node scripts/seed-ui.ts` (on a fresh `.data`) fills in sample
 people, agents and connections. The fake agentd answers without Docker, so agents never really run on a laptop.
 
 ## Test
 
-`npx turbo run test` runs the unit tests. `npm run e2e` runs the whole thing on Docker Desktop (about 25 minutes):
+`npx turbo run build typecheck test` builds, typechecks and runs the unit tests. `npm run e2e` runs the whole thing on Docker Desktop (about 25 minutes):
 a tampered download, the install, every check, an upgrade, a restart. Plan: `docs/verification-plan.md`.

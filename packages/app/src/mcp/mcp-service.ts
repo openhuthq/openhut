@@ -11,7 +11,7 @@ export const mcpService = {
     }))
     server.server.setRequestHandler(CallToolRequestSchema, async (req): Promise<CallToolResult> => {
       const found = MCP_TOOLS.find((candidate) => candidate.name === req.params.name)
-      if (!found) return failure(`There's no tool called ${req.params.name}.`)
+      if (!found) return failure(`There's no tool called ${req.params.name}. List the tools to see what JakeBox offers.`)
       try {
         return { content: [{ type: 'text', text: JSON.stringify(await found.run({ api, args: req.params.arguments ?? {} }), null, 2) }] }
       } catch (err) {

@@ -29,8 +29,8 @@ function ConnectionView({ me, connection }: { me: Me; connection: Connection }) 
   const updateConnection = useUpdateConnection(connection.id)
   const deleteConnection = useDeleteConnection(connection.id)
   const owned = connection.ownerId === me.user.id
-  const actions = <Locked reason={connection.canEdit ? undefined : `Only ${connection.ownerName} or an admin can delete it`}>
-    <ConfirmButton className="btn danger" disabled={!connection.canEdit} question={`Delete ${connection.name}?`} detail="Every agent loses it on its next call." action="Delete" onConfirm={() => deleteConnection.mutate(undefined, { onError: toastError })}>
+  const actions = <Locked reason={connection.canDelete ? undefined : `Only ${connection.ownerName} or an admin can delete it`}>
+    <ConfirmButton className="btn danger" disabled={!connection.canDelete} question={`Delete ${connection.name}?`} detail="Every agent loses it on its next call." action="Delete" onConfirm={() => deleteConnection.mutate(undefined, { onError: toastError })}>
       {ICONS.trash}<span className="lbl">Delete</span>
     </ConfirmButton>
   </Locked>

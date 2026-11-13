@@ -1,10 +1,10 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import * as z from 'zod'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { config } from '../platform/config.ts'
 import { errorBody, HttpError } from '../platform/http-error.ts'
 import { log } from '../platform/events.ts'
+import { serveMcp } from '../platform/mcp-transport.ts'
 import { agentService, type GatewayAgent } from '../agents/agent-service.ts'
 import { connectionService } from '../connections/connection-service.ts'
 import { testModel } from './test-model.ts'
@@ -30,32 +30,20 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   inFlight.set(agent.id, open + 1)
   res.on('close', () => inFlight.set(agent.id, (inFlight.get(agent.id) ?? 1) - 1))
   const path = new URL(req.url ?? '/', 'http://gateway').pathname
-  if (path === '/api/v1/mcp') return serveMcp({ agent, req, res })
+  if (path === '/api/v1/mcp') return serveMcp({ server: agentMcp(agent), req, res, body: req.method === 'POST' ? await readBody(req) : undefined })
   if (path.startsWith('/test-llm/') && config.modelMode === 'test') return testModel({ path, body: await readBody(req), res })
   json(res, 404, errorBody({ status: 404, message: `No route ${path}.` }))
-}
-
-async function serveMcp({ agent, req, res }: { agent: GatewayAgent; req: IncomingMessage; res: ServerResponse }): Promise<void> {
-  const body = req.method === 'POST' ? await readBody(req) : undefined
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
-  const server = agentMcp(agent)
-  res.on('close', () => {
-    void transport.close()
-    void server.close()
-  })
-  await server.connect(transport)
-  await transport.handleRequest(req, res, body)
 }
 
 function agentMcp(agent: GatewayAgent): McpServer {
   const server = new McpServer({ name: 'jakebox', version: config.version })
   const reason = z.string().min(1).max(500).describe('Why you need this, in a few words. Shown in the audit.')
-  server.registerTool('list_tools', { description: 'List the tools you may call, one line each.', inputSchema: { reason, app: z.string().max(40).optional() } }, async ({ app }) => {
+  server.registerTool('list_tools', { description: 'List the tools you may call, one line each.', inputSchema: { app: z.string().max(40).optional() } }, async ({ app }) => {
     const tools = (await connectionService.tools({ agent })).filter((tool) => !app || tool.connection.kind === app)
     const lines = tools.map((tool) => `${tool.name} [${tool.connection.name}, ${tool.connection.id}]: ${tool.spec.description}`.slice(0, 140))
     return text(lines.length ? lines.slice(0, 100).join('\n') : 'No tools: nobody has granted this agent a connection yet.')
   })
-  server.registerTool('describe_tool', { description: 'Show the input schema of one or more tools.', inputSchema: { reason, names: z.array(z.string().max(100)).min(1).max(20) } }, async ({ names }) => {
+  server.registerTool('describe_tool', { description: 'Show the input schema of one or more tools.', inputSchema: { names: z.array(z.string().max(100)).min(1).max(20) } }, async ({ names }) => {
     const byName = new Map((await connectionService.tools({ agent })).map((tool) => [tool.name, tool.spec]))
     return text(JSON.stringify(names.map((name) => ({ name, schema: byName.get(name)?.schema ?? null, description: byName.get(name)?.description ?? 'Not available to this agent' }))))
   })
@@ -78,7 +66,8 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
     chunks.push(chunk)
   }
   const raw = Buffer.concat(chunks).toString('utf8')
-  return raw ? JSON.parse(raw) : undefined
+  if (!raw) return undefined
+  try { return JSON.parse(raw) } catch { throw new HttpError(400, 'The request body isn\'t valid JSON.') }
 }
 
 function fail(res: ServerResponse, err: unknown): void {

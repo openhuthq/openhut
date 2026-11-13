@@ -1,6 +1,10 @@
+import * as z from 'zod/mini'
 import type { Audience } from '@jakebox/common/channels/channel.ts'
 import { config } from '../../platform/config.ts'
 import { HttpError } from '../../platform/http-error.ts'
+
+const SlackOk = z.object({ ok: z.literal(true), team: z.optional(z.string()), user: z.optional(z.string()) })
+const SlackFailure = z.object({ ok: z.literal(false), error: z.string() })
 
 export const slack = {
   async verify({ botToken, appToken }: { botToken: string; appToken: string }): Promise<string> {
@@ -8,6 +12,7 @@ export const slack = {
     if (!bot.ok) throw new HttpError(400, `Slack didn't accept the bot token (${bot.error}). Copy it again from OAuth & Permissions.`, { param: 'botToken' })
     const app = await call({ method: 'apps.connections.open', token: appToken })
     if (!app.ok) throw new HttpError(400, `Slack didn't accept the app-level token (${app.error}). Make one with the connections:write scope.`, { param: 'appToken' })
+    if (!bot.team || !bot.user) throw new HttpError(502, 'Slack accepted the bot token but didn\'t name the workspace and bot. Try again.')
     return `${bot.team} · @${bot.user}`
   },
 
@@ -21,14 +26,12 @@ export const slack = {
   approver: (audience: Audience): string => audience.ownerAddress,
 }
 
-async function call({ method, token }: { method: string; token: string }): Promise<SlackReply> {
+async function call({ method, token }: { method: string; token: string }): Promise<z.infer<typeof SlackOk> | z.infer<typeof SlackFailure>> {
   const res = await fetch(`${config.slackApi}/${method}`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) })
     .catch((err: Error) => { throw new HttpError(502, `Slack didn't answer (${err.message}). Try again.`) })
   const body: unknown = await res.json().catch(() => undefined)
-  if (!isSlackReply(body)) return { ok: false, error: `HTTP ${res.status}` }
-  return body
+  const ok = z.safeParse(SlackOk, body)
+  if (ok.success) return ok.data
+  const failure = z.safeParse(SlackFailure, body)
+  return failure.success ? failure.data : { ok: false, error: `HTTP ${res.status}` }
 }
-
-const isSlackReply = (body: unknown): body is SlackReply => typeof body === 'object' && body !== null && 'ok' in body
-
-type SlackReply = { ok: boolean; error?: string; team?: string; user?: string }

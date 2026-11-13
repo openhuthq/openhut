@@ -8,11 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run build --filter=@jakebox/web && node --env-file-if-exists=.env packages/app/src/app.ts",
+    "dev": "turbo run build --filter=@jakebox/web && node scripts/dev.ts",
     "build": "turbo run build",
-    "typecheck": "turbo run typecheck",
+    "typecheck": "turbo run typecheck && tsc -p scripts",
     "test": "turbo run test",
-    "e2e": "packages/e2e/e2e.sh",
+    "e2e": "npm -w @jakebox/e2e run e2e",
     "release": "scripts/release.sh"
   },
   "devDependencies": {

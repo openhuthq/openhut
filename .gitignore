@@ -3,4 +3,6 @@ node_modules/
 .turbo/
 dist/
 .old/
+.env
+/BUILD
 packages/e2e/results/

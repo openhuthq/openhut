@@ -1,44 +1,41 @@
-import type { CreatePerson, Invite, InviteLink, Me, MemberRole, Person, Setup, TeamRole } from '@jakebox/common/team/team.ts'
-import { db } from '../platform/db.ts'
+import type { CreatePerson, CreateSession, Invite, InviteLink, Me, MemberRole, Person, Session, Setup } from '@jakebox/common/team/team.ts'
+import type { Selectable } from 'kysely'
+import type { Database } from '../platform/db-schema.ts'
+import { db, isUniqueViolation } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { checkPassword, hashPassword, newId, newToken, sameSecret, sha } from '../platform/secrets.ts'
 import { publicUrl, settings } from '../platform/settings.ts'
+import { record } from '../platform/events.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { isAdmin, SESSION_DAYS, type Caller } from './identity.ts'
 
 const INVITE_DAYS = 7
-const UNIQUE_VIOLATION = '23505'
 
 export const teamService = {
   async setup(): Promise<Setup> {
     return { object: 'setup', open: !(await db.selectFrom('person').select('id').limit(1).executeTakeFirst()) }
   },
 
-  async createPerson({ body, origin }: { body: CreatePerson; origin: string }): Promise<Person> {
-    if ('setupCode' in body) return createOwner({ ...body, origin })
-    return acceptInvite(body)
+  async createPerson(input: CreatePerson & { origin: string }): Promise<{ person: Person; token: string }> {
+    const person = 'setupCode' in input ? await createOwner(input) : await acceptInvite(input)
+    record({ action: 'person.joined', actor: person, target: { type: 'person', id: person.id, role: person.role } })
+    return { person, token: (await openSession(person)).token }
   },
 
-  async signIn({ username, password }: { username: string; password: string }): Promise<Person> {
-    const person = await db.selectFrom('person').selectAll().where('username', '=', username).where('removed_at', 'is', null).executeTakeFirst()
-    if (!(await checkPassword({ password, stored: person?.pass })) || !person) throw new HttpError(401, 'That username and password don\'t match. Try again.')
-    return personOf(person)
-  },
-
-  async createSession({ personId }: { personId: string }): Promise<string> {
-    const token = newToken('jbs')
-    await db.insertInto('session').values({ hash: sha(token), person_id: personId, expires_at: new Date(Date.now() + SESSION_DAYS * 864e5) }).execute()
-    return token
+  async createSession({ username, password }: CreateSession): Promise<{ session: Session; token: string }> {
+    const row = await db.selectFrom('person').selectAll().where('username', '=', username).where('removed_at', 'is', null).executeTakeFirst()
+    if (!(await checkPassword({ password, stored: row?.pass })) || !row) throw new HttpError(401, 'That username and password don\'t match. Try again.')
+    return openSession(personOf(row))
   },
 
   async endSession({ token }: { token: string | undefined }): Promise<void> {
     if (token) await db.deleteFrom('session').where('hash', '=', sha(token)).execute()
   },
 
-  async me({ personId, url }: { personId: string; url: string }): Promise<Me> {
+  async me({ personId }: { personId: string }): Promise<Me> {
     const person = await db.selectFrom('person').selectAll().where('id', '=', personId).executeTakeFirstOrThrow()
-    return { object: 'me', user: personOf(person), publicUrl: url }
+    return { object: 'me', user: personOf(person), publicUrl: publicUrl() }
   },
 
   async createInvite({ actor, role }: { actor: Caller; role: MemberRole }): Promise<Invite> {
@@ -47,18 +44,19 @@ export const teamService = {
     const row = await db.insertInto('invite')
       .values({ id: newId('inv'), hash: sha(token), role, created_by: actor.id, expires_at: new Date(Date.now() + INVITE_DAYS * 864e5), used_at: null })
       .returningAll().executeTakeFirstOrThrow()
+    record({ action: 'invite.created', actor, target: { type: 'invite', id: row.id, role } })
     return { ...inviteOf({ ...row, created_by_name: actor.username }), link: `${publicUrl()}/invite/${token}` }
   },
 
   async inviteLink({ token }: { token: string }): Promise<InviteLink> {
-    const invite = await db.selectFrom('invite').select(['role', 'expires_at']).where('hash', '=', sha(token)).where('used_at', 'is', null)
+    const invite = await db.selectFrom('invite').select(['id', 'role', 'expires_at']).where('hash', '=', sha(token)).where('used_at', 'is', null)
       .where('expires_at', '>', new Date()).executeTakeFirst()
     if (!invite) throw new HttpError(410, 'This invite link was already used or has expired. Ask for a new one.')
-    return { object: 'invite_link', role: invite.role, expiresAt: new Date(invite.expires_at).toISOString() }
+    return { id: invite.id, object: 'invite_link', role: invite.role, expiresAt: new Date(invite.expires_at).toISOString() }
   },
 
   async listInvites({ actor }: { actor: Caller }): Promise<Invite[]> {
-    if (!isAdmin(actor)) return []
+    if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can see pending invites.')
     const rows = await db.selectFrom('invite as i').innerJoin('person as p', 'p.id', 'i.created_by').selectAll('i').select('p.username as created_by_name')
       .where('i.used_at', 'is', null).where('i.expires_at', '>', new Date()).orderBy('i.expires_at').execute()
     return rows.map(inviteOf)
@@ -68,6 +66,7 @@ export const teamService = {
     if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can revoke invites.')
     const result = await db.deleteFrom('invite').where('id', '=', id).where('used_at', 'is', null).executeTakeFirst()
     if (!result.numDeletedRows) throw new HttpError(404, 'That invite was already used or revoked.')
+    record({ action: 'invite.revoked', actor, target: { type: 'invite', id } })
   },
 
   async listPeople(): Promise<Person[]> {
@@ -78,7 +77,7 @@ export const teamService = {
     if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can remove people.')
     const person = await db.selectFrom('person').select(['id', 'role']).where('id', '=', id).where('removed_at', 'is', null).executeTakeFirst()
     if (!person) throw new HttpError(404, 'That person isn\'t on the team.')
-    if (person.role === 'owner') throw new HttpError(403, 'The owner can\'t be removed.')
+    if (person.role === 'owner') throw new HttpError(403, 'JakeBox always keeps its owner. Remove someone else.')
     await db.transaction().execute(async (trx) => {
       await trx.updateTable('person').set({ removed_at: new Date() }).where('id', '=', id).execute()
       await trx.deleteFrom('session').where('person_id', '=', id).execute()
@@ -86,7 +85,15 @@ export const teamService = {
       await trx.deleteFrom('invite').where('created_by', '=', id).where('used_at', 'is', null).execute()
     })
     await agentService.stopOwnedBy({ ownerId: id })
+    record({ action: 'person.removed', actor, target: { type: 'person', id } })
   },
+}
+
+async function openSession(person: Person): Promise<{ session: Session; token: string }> {
+  const token = newToken('jbs')
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 864e5)
+  await db.insertInto('session').values({ hash: sha(token), person_id: person.id, expires_at: expiresAt }).execute()
+  return { session: { id: sha(token).slice(0, 16), object: 'session', person, expiresAt: expiresAt.toISOString() }, token }
 }
 
 async function createOwner({ setupCode, username, password, origin }: { setupCode: string; username: string; password: string; origin: string }): Promise<Person> {
@@ -101,7 +108,7 @@ async function createOwner({ setupCode, username, password, origin }: { setupCod
     if (isUniqueViolation(err)) throw new HttpError(403, 'JakeBox already has an owner. Ask them for an invite.')
     throw err
   })
-  if (!settings.publicUrl()) await settings.setPublicUrl(origin)
+  if (!settings.storedPublicUrl()) await settings.setPublicUrl(origin)
   return personOf(owner)
 }
 
@@ -120,12 +127,10 @@ async function acceptInvite({ inviteToken, username, password }: { inviteToken: 
   })
 }
 
-const isUniqueViolation = (err: unknown): boolean => typeof err === 'object' && err !== null && 'code' in err && err.code === UNIQUE_VIOLATION
-
-function personOf(person: { id: string; username: string; role: TeamRole; created_at: Date }): Person {
+function personOf(person: Pick<Selectable<Database['person']>, 'id' | 'username' | 'role' | 'created_at'>): Person {
   return { id: person.id, object: 'person', username: person.username, role: person.role, joinedAt: new Date(person.created_at).toISOString() }
 }
 
-function inviteOf(row: { id: string; role: MemberRole; expires_at: Date; created_by_name: string }): Invite {
+function inviteOf(row: Pick<Selectable<Database['invite']>, 'id' | 'role' | 'expires_at'> & { created_by_name: string }): Invite {
   return { id: row.id, object: 'invite', role: row.role, createdBy: row.created_by_name, expiresAt: new Date(row.expires_at).toISOString() }
 }

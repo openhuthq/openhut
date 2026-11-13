@@ -49,7 +49,8 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 - The gateway is plain `node:http`, so its limits are explicit: 8 requests in flight per agent, 1 MB bodies, headers
   within 10 s, 60 s per request; at most 2 calls per agent per connection at once.
 - Postgres DSNs are parsed into explicit fields; any query parameter but `sslmode` is refused, because `pg` lets them
-  override the host (`?host=`) or read local files (`?sslrootcert=`). `sslmode` keeps libpq's meanings.
+  override the host (`?host=`) or read local files (`?sslrootcert=`). `sslmode` keeps libpq's meanings, `prefer` by
+  default: `pg` has no prefer/allow, so the connector tries TLS without verification, then plain (`allow` the other way).
 - The address guard (`BlockList`, IPv4-mapped forms too) refuses loopback, "this host", link-local and agent networks.
   The gateway connects to the address it checked, but checks TLS against the DSN's name.
 - A read-only transaction doesn't stop `COPY … TO PROGRAM` or server-file access, so roles that are superusers,
@@ -67,3 +68,13 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
   agentd runs the bridge's pairing mode inside the agent's container and keeps the latest QR payload; only people who
   can edit the agent see it. Approvers are compared as `<digits>@s.whatsapp.net`.
 - An agent anyone can message uses Hermes's `smart` approvals; approvals go to the owner (username, Slack ID, WhatsApp).
+
+## Conventions the code relies on
+- Every agentd reply is validated with a Zod schema per command (`platform/agentd.ts`); a reply that doesn't match is a
+  502 that says agentd and the app may be different releases. Keep the fake agentd's replies in step.
+- Audit events go through `record({ action, actor, target })` (evlog), e.g. `person.removed`, `agent.created`,
+  `connection.shared`, `oauth.app_connected`. Background work logs structured fields (`build.applied {from, to}`,
+  `reconcile.started {agent}`), never free text; tests match on those fields.
+- OAuth endpoints answer RFC 6749 errors (`{ error: 'invalid_grant', error_description }`); everything else uses the
+  Stripe error shape.
+

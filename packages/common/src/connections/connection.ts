@@ -13,7 +13,7 @@ export const Connection = z.object({
   ownerName: z.string(),
   everyone: z.boolean(),
   usable: z.boolean(),
-  canEdit: z.boolean(),
+  canDelete: z.boolean(),
   agents: z.number(),
   status: ConnectionStatus,
   lastSuccessAt: z.nullable(Timestamp),
@@ -21,8 +21,8 @@ export const Connection = z.object({
 })
 export type Connection = z.infer<typeof Connection>
 
-export const Outcome = z.enum(['allowed', 'denied', 'failed'])
-export type Outcome = z.infer<typeof Outcome>
+const Outcome = z.enum(['allowed', 'denied', 'failed'])
+const EventCursor = z.string().check(z.regex(/^\d{1,18}$/, 'Pass the id of an event from the list as the cursor.'))
 
 export const ConnectionEvent = z.object({
   id: z.string(),
@@ -41,6 +41,8 @@ export type ConnectionEvent = z.infer<typeof ConnectionEvent>
 export const ListConnectionEvents = z.extend(ListQuery, {
   connectionId: z.optional(z.string().check(z.maxLength(40))),
   agentId: z.optional(z.string().check(z.maxLength(40))),
+  startingAfter: z.optional(EventCursor),
+  endingBefore: z.optional(EventCursor),
 })
 export type ListConnectionEvents = z.infer<typeof ListConnectionEvents>
 

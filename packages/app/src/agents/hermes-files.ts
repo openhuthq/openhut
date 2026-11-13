@@ -26,7 +26,7 @@ export function renderFiles({ agent, ownerName, token, channelKey, seat, channel
     'platform_toolsets:\n  api_server: [hermes-api-server, jakebox]',
     'tools:\n  tool_search:\n    enabled: "off"',
     `mcp_servers:\n  jakebox:\n    url: ${gateway}/api/v1/mcp\n    headers:\n      Authorization: "Agent ${token}"`,
-    ...channels.filter((channel) => channel.kind === 'slack').map(() => slack.yaml.trimEnd()),
+    ...channels.flatMap(yamlOf),
   ].join('\n') + '\n'
   const env = [
     `API_SERVER_KEY=${channelKey}`, 'API_SERVER_HOST=0.0.0.0', 'API_SERVER_PORT=8642',
@@ -42,6 +42,13 @@ function modelYaml({ gateway, token, model }: { gateway: string; token: string; 
   }
   const auxiliary = AUXILIARY_TASKS.map((task) => `  ${task}: { provider: claude-subscription-directsdk-experimental, model: haiku }`).join('\n')
   return `model:\n  default: ${model}\n  provider: claude-subscription-directsdk-experimental\nauxiliary:\n${auxiliary}`
+}
+
+function yamlOf(channel: RenderedChannel): string[] {
+  switch (channel.kind) {
+    case 'slack': return [slack.yaml.trimEnd()]
+    case 'whatsapp': return []
+  }
 }
 
 function envOf(channel: RenderedChannel): string[] {

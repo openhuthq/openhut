@@ -20,7 +20,7 @@ export function testModel({ path, body, res }: { path: string; body: unknown; re
   const last = messages.at(-1) ?? {}
   const toolNames = (request.tools ?? []).map((tool) => tool.function?.name ?? tool.name).filter((name) => name !== undefined)
   const callTool = toolNames.find((name) => name.endsWith('call_tool'))
-  log.info({ event: 'test_llm.request', message: `test-llm: ${messages.length} msgs, last=${last.role}, ${toolNames.length} tools${callTool ? ` incl ${callTool}` : ''}` })
+  log.info({ event: 'test_llm.request', messages: messages.length, lastRole: last.role, tools: toolNames.length, callTool })
   const reply = replyTo({ last, callTool })
   const base = { id: `cmpl-${Date.now()}`, created: Math.floor(Date.now() / 1000), model: request.model ?? 'jakebox-test' }
   const toolCalls = reply.tool ? [{ id: `call_${Date.now()}`, type: 'function', function: { name: reply.tool.name, arguments: reply.tool.args } }] : undefined

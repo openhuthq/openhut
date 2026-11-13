@@ -9,7 +9,6 @@ ExecStartPre=/opt/jakebox/install/prepare.sh
 ExecStartPre=/opt/jakebox/install/agents-firewall.sh
 ExecStartPre=/opt/jakebox/install/pull-image.sh
 ExecStart=/bin/sh -c 'APP_GID=$(id -g jakebox) exec node /opt/jakebox/packages/agentd/src/agentd.ts'
-# The first start pulls the ~3 GB agent image.
 TimeoutStartSec=infinity
 Restart=always
 

@@ -1,9 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, scrypt, timingSafeEqual } from 'node:crypto'
-import { promisify } from 'node:util'
 import { db } from './db.ts'
 
 const DUMMY_HASH = `${'0'.repeat(32)}:${'0'.repeat(64)}`
-const scryptAsync = promisify(scrypt) as (password: string, salt: Buffer, length: number) => Promise<Buffer>
 
 await db.insertInto('install_setting').values({ name: 'auth_secret', value: randomBytes(32).toString('hex') })
   .onConflict((oc) => oc.column('name').doNothing()).execute()
@@ -30,12 +28,12 @@ export const newToken = (prefix: string): string => `${prefix}_${randomBytes(24)
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16)
-  return `${salt.toString('hex')}:${(await scryptAsync(password, salt, 32)).toString('hex')}`
+  return `${salt.toString('hex')}:${(await derive(password, salt)).toString('hex')}`
 }
 
 export async function checkPassword({ password, stored }: { password: string; stored: string | undefined }): Promise<boolean> {
   const [salt, hash] = (stored ?? DUMMY_HASH).split(':')
-  const got = await scryptAsync(password, Buffer.from(salt, 'hex'), 32)
+  const got = await derive(password, Buffer.from(salt, 'hex'))
   return stored !== undefined && timingSafeEqual(got, Buffer.from(hash, 'hex'))
 }
 
@@ -44,3 +42,7 @@ export const sameSecret = ({ given, expected }: { given: string; expected: strin
 
 export const agentToken = ({ agentId, version }: { agentId: string; version: number }): string =>
   `${agentId}.${createHmac('sha256', secret).update(`${agentId}:${version}`).digest('hex')}`
+
+function derive(password: string, salt: Buffer): Promise<Buffer> {
+  return new Promise((resolve, reject) => scrypt(password, salt, 32, (err, key) => (err ? reject(err) : resolve(key))))
+}

@@ -11,7 +11,7 @@ export type OAuthClient = z.infer<typeof OAuthClient>
 
 export const OAuthCode = z.object({
   object: z.literal('oauth_code'),
-  redirect: z.nullable(z.string()),
+  redirect: z.string(),
 })
 export type OAuthCode = z.infer<typeof OAuthCode>
 

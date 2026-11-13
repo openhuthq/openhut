@@ -9,7 +9,6 @@ EnvironmentFile=/etc/jakebox/env
 Environment=JAKEBOX_DATA=/data/app
 WorkingDirectory=/opt/jakebox
 ExecStart=/usr/bin/env node /opt/jakebox/packages/app/src/app.ts
-# The database holds auth_secret: nobody else reads what the app writes.
 UMask=0077
 Restart=always
 

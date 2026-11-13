@@ -5,11 +5,11 @@ import { db, migrate } from '../../src/platform/db.ts'
 import { teamService } from '../../src/team/team-service.ts'
 
 await migrate()
-const owner = await teamService.createPerson({ body: { setupCode: 'test-setup-code', username: 'owner', password: 'owner-password-1' }, origin: 'http://jb.test' })
+const { person: owner } = await teamService.createPerson({ setupCode: 'test-setup-code', username: 'owner', password: 'owner-password-1', origin: 'http://jb.test' })
 const actor = { id: owner.id, username: owner.username, role: owner.role }
 const tokenOf = (link: string | undefined) => (link ?? '').split('/invite/')[1]
-const join = ({ link, username }: { link: string | undefined; username: string }) =>
-  teamService.createPerson({ body: { inviteToken: tokenOf(link), username, password: `${username}-password-12` }, origin: '' })
+const join = async ({ link, username }: { link: string | undefined; username: string }) =>
+  (await teamService.createPerson({ inviteToken: tokenOf(link), username, password: `${username}-password-12`, origin: '' })).person
 
 test('an invite stores only the hash of its token', async () => {
   const invite = await teamService.createInvite({ actor, role: 'member' })
@@ -48,5 +48,5 @@ test('the owner can\'t be removed; a removed person can\'t sign in', async () =>
   await assert.rejects(teamService.deletePerson({ actor, id: owner.id }), { status: 403 })
   const mia = await join({ link: (await teamService.createInvite({ actor, role: 'member' })).link, username: 'mia' })
   await teamService.deletePerson({ actor, id: mia.id })
-  await assert.rejects(teamService.signIn({ username: 'mia', password: 'mia-password-12' }), { status: 401 })
+  await assert.rejects(teamService.createSession({ username: 'mia', password: 'mia-password-12' }), { status: 401 })
 })

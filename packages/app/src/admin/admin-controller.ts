@@ -1,19 +1,15 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { UpdateAdmin } from '@jakebox/common/admin/admin.ts'
-import { publicUrl } from '../platform/settings.ts'
 import { who } from '../team/identity.ts'
 import { adminService } from './admin-service.ts'
 
 export const adminController: FastifyPluginAsync = async (app) => {
   app.get('/', async (req) => {
     await who(req)
-    return adminService.status({ url: publicUrl(req) })
+    return adminService.status()
   })
 
-  app.patch<{ Body: UpdateAdmin }>('/', UpdateRequest, async (req) => {
-    await adminService.update({ actor: await who(req), patch: req.body })
-    return adminService.status({ url: publicUrl(req) })
-  })
+  app.patch<{ Body: UpdateAdmin }>('/', UpdateRequest, async (req) => adminService.update({ actor: await who(req), patch: req.body }))
 }
 
 export const healthController: FastifyPluginAsync = async (app) => {

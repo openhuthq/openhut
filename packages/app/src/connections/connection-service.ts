@@ -1,5 +1,10 @@
+import type { Selectable } from 'kysely'
+import * as z from 'zod/mini'
 import type { Connection, ConnectionStatus } from '@jakebox/common/connections/connection.ts'
 import { db } from '../platform/db.ts'
+import type { Database } from '../platform/db-schema.ts'
+import { record } from '../platform/events.ts'
+import { describeIssues } from '../platform/validation.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { newId, seal, unseal } from '../platform/secrets.ts'
 import { postgres, type ConnectorTool } from '../integrations/postgres/postgres.ts'
@@ -10,13 +15,14 @@ const COLUMNS = ['id', 'kind', 'name', 'owner_id', 'everyone', 'created_at'] as 
 const MAX_REPLY = 64_000
 const PER_AGENT_CONNECTION = 2
 const running = new Map<string, number>()
+const ConnectionConfig = z.object({ dsn: z.string() })
 
 export const connectionService = {
   async canUse({ personId, connectionId }: { personId: string; connectionId: string }): Promise<boolean> {
     return !!(await usableBy(personId).select('c.id').where('c.id', '=', connectionId).executeTakeFirst())
   },
 
-  async reachable({ agent }: { agent: { id: string; owner_id: string } }) {
+  async reachable({ agent }: { agent: { id: string; owner_id: string } }): Promise<ReachableConnection[]> {
     return usableBy(agent.owner_id).innerJoin('connection_grant as g', 'g.connection_id', 'c.id').select(['c.id', 'c.kind', 'c.name', 'c.config'])
       .where('g.agent_id', '=', agent.id).orderBy('c.created_at').execute()
   },
@@ -36,6 +42,7 @@ export const connectionService = {
     const row = await db.insertInto('connection')
       .values({ id: newId('cn'), kind: 'postgres', name: name.trim().slice(0, 60) || 'postgres', owner_id: actor.id, config: seal(JSON.stringify({ dsn })) })
       .returning(COLUMNS).executeTakeFirstOrThrow()
+    record({ action: 'connection.created', actor, target: { type: 'connection', id: row.id, name: row.name } })
     return connectionService.get({ actor, id: row.id })
   },
 
@@ -43,6 +50,7 @@ export const connectionService = {
     const row = await rowOf(id)
     if (row.owner_id !== actor.id) throw new HttpError(403, 'Only its owner can share a connection.')
     await db.updateTable('connection').set({ everyone }).where('id', '=', id).execute()
+    record({ action: 'connection.shared', actor, target: { type: 'connection', id, everyone } })
     return connectionService.get({ actor, id })
   },
 
@@ -50,46 +58,47 @@ export const connectionService = {
     const row = await rowOf(id)
     if (row.owner_id !== actor.id && !isAdmin(actor)) throw new HttpError(403, 'Only its owner or an admin can delete a connection.')
     await db.deleteFrom('connection').where('id', '=', id).execute()
+    record({ action: 'connection.deleted', actor, target: { type: 'connection', id, name: row.name } })
   },
 
-  async tools({ agent }: { agent: { id: string; owner_id: string } }) {
+  async tools({ agent }: { agent: { id: string; owner_id: string } }): Promise<AgentTool[]> {
     const connections = await connectionService.reachable({ agent })
     return connections.flatMap((connection) => Object.entries(CONNECTORS[connection.kind]).map(([tool, spec]) => ({ name: `${connection.kind}_${tool}`, connection, spec })))
   },
 
   async call({ agent, name, args, connectionId, reason }: { agent: { id: string; owner_id: string }; name: string; args: Record<string, unknown>; connectionId?: string; reason: string }): Promise<{ text: string; isError: boolean }> {
     const started = Date.now()
-    const record = (outcome: 'allowed' | 'denied' | 'failed', id: string | null) =>
+    const recordCall = (outcome: 'allowed' | 'denied' | 'failed', id: string | null) =>
       db.insertInto('connection_event').values({ agent_id: agent.id, connection_id: id, tool: name, reason: reason.slice(0, 500), outcome, ms: Date.now() - started }).execute()
     const matches = (await connectionService.tools({ agent })).filter((tool) => tool.name === name && (!connectionId || tool.connection.id === connectionId))
     if (!matches.length) {
-      await record('denied', connectionId ?? null)
-      return { text: deniedText(name), isError: true }
+      await recordCall('denied', connectionId ?? null)
+      return { text: `Denied: no connection grants ${name} to this agent.`, isError: true }
     }
     if (matches.length > 1) {
-      await record('failed', null)
+      await recordCall('failed', null)
       return { text: `More than one connection has ${name}; pass connectionId (${matches.map((m) => m.connection.id).join(', ')}).`, isError: true }
     }
     const [{ connection, spec }] = matches
-    const unknown = Object.keys(args).filter((key) => !(key in spec.schema.properties))
-    if (unknown.length) {
-      await record('failed', connection.id)
-      return { text: `Unknown arguments: ${unknown.join(', ')}`, isError: true }
+    const parsed = z.safeParse(spec.input, args)
+    if (!parsed.success) {
+      await recordCall('failed', connection.id)
+      return { text: `${argumentProblem(parsed.error.issues)}. Call describe_tool to see what ${name} takes.`, isError: true }
     }
     const key = `${agent.id}:${connection.id}`
     const inFlight = running.get(key) ?? 0
     if (inFlight >= PER_AGENT_CONNECTION) {
-      await record('failed', connection.id)
+      await recordCall('failed', connection.id)
       return { text: `Busy: ${inFlight} calls to this connection are already running for this agent. Wait for them to finish.`, isError: true }
     }
     running.set(key, inFlight + 1)
     try {
-      const out = JSON.stringify(await spec.run({ dsn: connectionConfig(connection.config).dsn, args }))
+      const out = JSON.stringify(await spec.run({ dsn: ConnectionConfig.parse(JSON.parse(unseal(connection.config))).dsn, args }))
       if (out.length > MAX_REPLY) throw new Error(`Result too large for the agent (${Math.round(out.length / 1024)} KB, the limit is 64 KB). Select fewer rows or columns.`)
-      await record('allowed', connection.id)
+      await recordCall('allowed', connection.id)
       return { text: out, isError: false }
     } catch (err) {
-      await record('failed', connection.id)
+      await recordCall('failed', connection.id)
       return { text: `Failed: ${err instanceof Error ? err.message : String(err)}`.slice(0, 2000), isError: true }
     } finally {
       running.set(key, (running.get(key) ?? 1) - 1)
@@ -127,7 +136,7 @@ async function connectionsOf({ actor, rows }: { actor: Caller; rows: Row[] }): P
     const success = lastSuccess.get(row.id)
     return {
       id: row.id, object: 'connection', kind: row.kind, name: row.name, ownerId: row.owner_id, ownerName: ownerName.get(row.owner_id) ?? 'someone',
-      everyone: row.everyone, usable: canUse.has(row.id), canEdit: row.owner_id === actor.id || isAdmin(actor), agents: agents.get(row.id) ?? 0,
+      everyone: row.everyone, usable: canUse.has(row.id), canDelete: row.owner_id === actor.id || isAdmin(actor), agents: agents.get(row.id) ?? 0,
       status: statusOf({ succeeded: !!success, failed: failing.has(row.id) }), lastSuccessAt: success ? new Date(success).toISOString() : null,
       createdAt: new Date(row.created_at).toISOString(),
     }
@@ -140,8 +149,12 @@ function statusOf({ succeeded, failed }: { succeeded: boolean; failed: boolean }
   return 'no_calls'
 }
 
-const connectionConfig = (sealed: string): { dsn: string } => JSON.parse(unseal(sealed))
+function argumentProblem(issues: z.core.$ZodIssue[]): string {
+  const unknown = issues.flatMap((issue) => issue.code === 'unrecognized_keys' ? issue.keys : [])
+  return unknown.length ? `Unknown arguments: ${unknown.join(', ')}` : `Invalid arguments: ${describeIssues(issues)}`
+}
 
-const deniedText = (tool: string): string => `Denied: no connection grants ${tool} to this agent.`
+export type ReachableConnection = { id: string; kind: Connection['kind']; name: string; config: string }
+export type AgentTool = { name: string; connection: ReachableConnection; spec: ConnectorTool }
 
-type Row = { id: string; kind: 'postgres'; name: string; owner_id: string; everyone: boolean; created_at: Date }
+type Row = Pick<Selectable<Database['connection']>, (typeof COLUMNS)[number]>

@@ -27,8 +27,9 @@ export const Health = z.object({
 })
 export type Health = z.infer<typeof Health>
 
-export const UpdateAdmin = z.object({
+export const UpdateAdminFields = {
   seatToken: z.optional(z.string().check(z.regex(/^\S{20,}$/, 'Paste the token that `claude setup-token` printed.'), z.maxLength(2000))),
   publicUrl: z.optional(z.url({ protocol: /^https?$/ }).check(z.maxLength(200))),
-}).check(atLeastOneField)
+}
+export const UpdateAdmin = z.object(UpdateAdminFields).check(atLeastOneField)
 export type UpdateAdmin = z.infer<typeof UpdateAdmin>
