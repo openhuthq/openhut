@@ -8,6 +8,7 @@ const MISSING: Route = { page: 'missing' }
 
 export function routeOf(path: string): Route {
   const [section = '', id = '', detail = '', ...rest] = path.split('/').slice(1)
+  if (section === 'agents' && detail === 'skills' && rest.length === 1) return { page: 'agent', agentId: decodeURIComponent(id), dialog: undefined, skill: decodeURIComponent(rest[0]) }
   if (rest.length) return MISSING
   switch (section) {
     case '': return { page: 'home' }
@@ -58,7 +59,7 @@ export type Route =
   | { page: 'invite'; token: string }
   | { page: 'mcp-authorize' }
   | { page: 'agents' }
-  | { page: 'agent'; agentId: string; dialog: AgentDialog | undefined }
+  | { page: 'agent'; agentId: string; dialog: AgentDialog | undefined; skill?: string }
   | { page: 'chat'; agentId: string }
   | { page: 'connections'; adding: string | undefined }
   | { page: 'tailscale' }

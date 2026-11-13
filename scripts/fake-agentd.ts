@@ -14,6 +14,11 @@ const pairReads: Record<string, number> = {}
 const OFF_TAILNET = { state: 'NeedsLogin', tailnet: '', name: '', address: '' }
 const ON_TAILNET = { state: 'Running', tailnet: 'example.ts.net', name: 'fastmonkey.example.ts.net', address: '100.101.102.103' }
 let tailnet = OFF_TAILNET
+const skills: Record<string, string> = {
+  'late-invoices': '---\nname: late-invoices\ndescription: Chase invoices more than 30 days late.\n---\n\n# Late invoices\n\n1. Query invoices past due.\n2. Draft a reminder per customer.\n',
+  'research/arxiv': '---\nname: arxiv\ndescription: "Search and summarise arXiv papers."\n---\n\n# arXiv\n',
+  'productivity/pdf': '---\nname: pdf\ndescription: Read and fill PDF files.\n---\n\n# PDF\n',
+}
 
 rmSync(SOCK, { force: true })
 createServer({ allowHalfOpen: true }, (sock) => {
@@ -100,6 +105,15 @@ function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
       return { unlinked: req.id }
     case 'update':
       return { updating: true }
+    case 'skills':
+      return { skills: Object.entries(skills).map(([path, body]) => ({ path, head: body })), bundled: 'arxiv:abc\npdf:def\n' }
+    case 'skill-read':
+      if (!skills[req.path]) throw new Error('that skill is gone')
+      return { body: skills[req.path] }
+    case 'skill-write':
+      if (!skills[req.path]) throw new Error('that skill is gone')
+      skills[req.path] = req.body
+      return { written: req.path }
     case 'ts-up':
       if (req.authKey.includes('bad')) throw new Error('backend error: invalid key: unable to validate API key')
       tailnet = ON_TAILNET

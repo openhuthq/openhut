@@ -77,6 +77,10 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 - Telegram: each agent is its own BotFather bot, run by Hermes's Telegram gateway (no relay of ours). The app checks the token with `getMe` before sealing it; people are numeric user IDs. Groups need an @mention.
 - An agent anyone can message uses Hermes's `smart` approvals; approvals go to the owner (email, Slack ID, WhatsApp, Telegram ID).
 
+## Skills
+- The agent page lists an agent's skills (`GET /api/skills?agentId=`): the ones it learned first, the bundled ones folded under "N built in". A skill opens in the same dialog as the instructions and saves with `PATCH /api/skills/:id`; ids are `<agentId>~<folder>~<folder>`. Anyone who can see the agent can read a skill; saving needs the right to change the agent. Skills can't be created or deleted from the dashboard.
+- The files are the agent's own, so agentd (root) treats them as hostile (`packages/agentd/src/skills.ts`): it opens with `O_NOFOLLOW`, then checks through `/proc/self/fd` that the open file is a plain, singly-linked file at exactly that path under `/data/agents/<id>/skills`, and only then reads or rewrites it in place (never creates). A symlinked file or folder, a hard link, or a swapped `skills` folder reads as "gone". The tests need Linux, so they are skipped on a Mac and run in CI.
+
 ## Chat (threads)
 - One chat per person per agent: `POST /api/threads {agentId}` returns that person's thread, creating it the first time. `POST /api/threads/:id/chat` takes only the new user message (or a retry, which drops our stored last answer and resends the message).
 - Hermes keeps the history: each turn sends `X-Hermes-Session-Id: fastmonkey-<thread id>` and only the new message, so Hermes loads the session from its own `state.db` and its compression sticks (sending the whole thread made it summarize again every turn, and sessions derived from the first message collided). Our `thread.messages` is only what the dashboard shows. Research: https://claude.ai/artifact/SVAPXrNB9c78UUspB3M7KG
