@@ -52,7 +52,7 @@ function SlackSetupDialog({ agent, onClosed }: { agent: Agent; onClosed: () => v
         <SetupStep n={3} title="Who can message it">
           <Field label="Your member ID" error={fieldError(createChannel.error, 'ownerAddress')} hint="Your Slack profile › ⋮ › Copy member ID">{(control) =>
             <input {...control} name="ownerAddress" className="mono" required pattern={addressPattern('slack')} title={ADDRESS.slack.message} placeholder="U012AB3CD" autoComplete="off" />}</Field>
-          <AudienceFields kind="slack" channel={undefined} error={createChannel.error} />
+          <AudienceFields kind="slack" channel={undefined} error={createChannel.error} labelled={false} />
         </SetupStep>
       </SetupSteps>
       <SetupFoot info={info} cancel={close} error={formError(createChannel.error, FIELDS)}>

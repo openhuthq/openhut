@@ -39,7 +39,7 @@ function WhatsappSetupDialog({ agent, onClosed }: { agent: Agent; onClosed: () =
           <Field label="Phone" error={fieldError(createChannel.error, 'ownerAddress')}>{(control) =>
             <input {...control} name="ownerAddress" type="tel" className="mono" required pattern={addressPattern('whatsapp')} title={ADDRESS.whatsapp.message} placeholder="+15551234567" autoComplete="tel" autoFocus />}</Field>
         </SetupStep>
-        <SetupStep n={2} title="Who can message it"><AudienceFields kind="whatsapp" channel={undefined} error={createChannel.error} /></SetupStep>
+        <SetupStep n={2} title="Who can message it"><AudienceFields kind="whatsapp" channel={undefined} error={createChannel.error} labelled={false} /></SetupStep>
         <SetupStep n={3} title="Scan the code with the agent's phone" />
       </SetupSteps>
       <SetupFoot info={info} cancel={close} error={formError(createChannel.error, FIELDS)}>

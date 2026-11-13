@@ -8,11 +8,11 @@ const WORDING: Record<ChannelKind, { only: string; anyone: string; list: string;
   whatsapp: { only: 'Numbers I list', anyone: 'Anyone', list: 'Phone numbers', placeholder: '+15551234567, +447700900123', hint: 'Besides yours, with country code. Separate them with commas.' },
 }
 
-export function AudienceFields({ kind, channel, error }: { kind: ChannelKind; channel: Channel | undefined; error: Error | null }) {
+export function AudienceFields({ kind, channel, error, labelled = true }: { kind: ChannelKind; channel: Channel | undefined; error: Error | null; labelled?: boolean }) {
   const wording = WORDING[kind]
   const address = addressPattern(kind)
   return <>
-    <div className="f"><span className="flabel">Who can message</span>
+    <div className="f">{labelled && <span className="flabel">Who can message</span>}
       <Choices name="open" value={channel?.open ? '1' : ''} options={[['', 'users', wording.only], ['1', 'globe', wording.anyone]]} />
       {fieldError(error, 'open') && <span className="ferr" role="alert">{fieldError(error, 'open')}</span>}
     </div>
