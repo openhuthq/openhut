@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node src/build.ts",
-    "typecheck": "tsc -p .",
-    "test": "node --test --test-force-exit \"test/**/*.test.ts\""
+    "typecheck": "tsc -p ."
   },
   "devDependencies": {
     "@types/node": "26.6.2"

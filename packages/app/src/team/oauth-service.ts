@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto'
 import * as z from 'zod/mini'
+import type { Deleted } from '@jakebox/common/api.ts'
 import type { CreateOAuthCode, OAuthClient, OAuthCode, OAuthGrant } from '@jakebox/common/team/oauth.ts'
 import { db } from '../platform/db.ts'
 import { HttpError, OAuthError } from '../platform/http-error.ts'
 import { publicUrl } from '../platform/settings.ts'
 import { newToken, sha } from '../platform/secrets.ts'
 import { record } from '../platform/events.ts'
+import { deleted } from '../platform/responses.ts'
 
 export const ACCESS_TOKEN = /^Bearer (jbo_[\w-]+)$/
 const CODE_TTL_MS = 10 * 60_000
@@ -20,7 +22,6 @@ export const oauthService = {
     authorization_endpoint: `${publicUrl()}/mcp/authorize`,
     token_endpoint: `${publicUrl()}/api/oauth/token`,
     registration_endpoint: `${publicUrl()}/api/oauth/clients`,
-    revocation_endpoint: `${publicUrl()}/api/oauth/revocations`,
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code', 'refresh_token'],
     code_challenge_methods_supported: ['S256'],
@@ -79,14 +80,11 @@ export const oauthService = {
     return rows.map((row) => ({ id: row.id, object: 'oauth_grant', client: row.name, createdAt: new Date(row.created_at).toISOString(), usedAt: row.used_at ? new Date(row.used_at).toISOString() : null }))
   },
 
-  async revoke({ person, id }: { person: { id: string; username: string }; id: string }): Promise<void> {
+  async revoke({ person, id }: { person: { id: string; username: string }; id: string }): Promise<Deleted<'oauth_grant'>> {
     const gone = await db.deleteFrom('oauth_grant').where('id', '=', id).where('person_id', '=', person.id).executeTakeFirst()
     if (!Number(gone.numDeletedRows)) throw new HttpError(404, 'That app is already disconnected.')
     record({ action: 'oauth.app_disconnected', actor: person, target: { type: 'oauth_grant', id } })
-  },
-
-  async revokeToken(value: string): Promise<void> {
-    await db.deleteFrom('oauth_grant').where((eb) => eb.or([eb('access_hash', '=', sha(value)), eb('refresh_hash', '=', sha(value))])).execute()
+    return deleted({ id, object: 'oauth_grant' })
   },
 }
 

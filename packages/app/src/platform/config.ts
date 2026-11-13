@@ -1,18 +1,15 @@
-import env from 'env-var'
 import { readFileSync } from 'node:fs'
 import * as z from 'zod/mini'
 
 const PackageJson = z.object({ version: z.string() })
 
 export const config = {
-  dataDir: env.get('JAKEBOX_DATA').default('/data/app').asString(),
+  dataDir: process.env.JAKEBOX_DATA ?? '/data/app',
   port: 8787,
   gatewayPort: 8081,
-  setupCode: env.get('SETUP_CODE').default('').asString(),
-  modelMode: env.get('JAKEBOX_MODEL').asString() === 'test' ? 'test' as const : 'claude' as const,
-  agentdSocket: env.get('AGENTD_SOCK').default('/run/agentd/agentd.sock').asString(),
-  consoleUrl: env.get('CONSOLE_URL').default('').asString().replace(/\/+$/, ''),
-  slackApi: env.get('SLACK_API_URL').default('https://slack.com/api').asUrlString().replace(/\/+$/, ''),
+  setupCode: process.env.SETUP_CODE ?? '',
+  modelMode: process.env.JAKEBOX_MODEL === 'test' ? 'test' as const : 'claude' as const,
+  agentdSocket: process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock',
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))).version,
   build: fileOr(new URL('../../../../BUILD', import.meta.url), 'dev'),
   started: Math.floor(Date.now() / 1000),

@@ -16,12 +16,12 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
   from the one it replaced.
 
 ## Data and secrets
-- PGlite (Postgres in WASM) in `JAKEBOX_DATA`, served on a private Unix socket so Kysely talks to it through `pg`, with
-  one connection (PGlite is single-user). `install_setting` is created at import time because settings and the auth
-  secret load then.
+- PGlite (Postgres in WASM) in `JAKEBOX_DATA`, through Kysely's own PGlite dialect, which runs one query or
+  transaction at a time (PGlite is single-user). `install_setting` is created at import time because settings and the
+  auth secret load then.
 - `auth_secret` is created once; it keys every seal (AES-256-GCM) and every agent token.
-- Agent token: `<id>.<hmac>` = HMAC(auth_secret, `id:token_version`); bumping `token_version` revokes it. Nothing is
-  stored. The gateway also requires the call to come from the agent's own `/24`.
+- Agent token: `<id>.<hmac>` = HMAC(auth_secret, id). Nothing is stored; a deleted agent's token matches no row. The
+  gateway also requires the call to come from the agent's own `/24`.
 - Passwords: scrypt off the event loop (so sign-ins can't stall the gateway). An unknown name hashes a dummy, so
   timing doesn't reveal which names exist.
 - `connection_event` has no foreign keys: calls stay in the audit after their agent or connection is deleted.
@@ -71,7 +71,14 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 
 ## Conventions the code relies on
 - Every agentd reply is validated with a Zod schema per command (`platform/agentd.ts`); a reply that doesn't match is a
-  502 that says agentd and the app may be different releases. Keep the fake agentd's replies in step.
+  502 that says agentd and the app may be different releases. Keep the fake agentd's replies in step. agentd's own
+  follow-up work (the restart after WhatsApp pairing) goes through the same per-agent queue as a closure, not a
+  socket command.
+- `findRow` (`platform/db.ts`) is a raw `select *`: Kysely's builder can't take the table as a type parameter. It
+  refuses ids not shaped `<prefix>_<8 chars>` before querying. Connections keep their own lookup so it never loads the
+  sealed config.
+- Updates pass the parsed patch straight to `.set()`: Kysely skips undefined fields, and `atLeastOneField` runs on the
+  parsed body (unknown keys already stripped), so an empty patch is a 400 and never reaches SQL.
 - Audit events go through `record({ action, actor, target })` (evlog), e.g. `person.removed`, `agent.created`,
   `connection.shared`, `oauth.app_connected`. Background work logs structured fields (`build.applied {from, to}`,
   `reconcile.started {agent}`), never free text; tests match on those fields.

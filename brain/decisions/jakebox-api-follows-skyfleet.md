@@ -26,3 +26,5 @@ structure before going further.
   only, usernames); the agents' gateway on plain `node:http` for explicit per-agent limits; the dashboard's approved
   CSS instead of Tailwind and shadcn.
 - New people come from `POST /api/people` with either the installer's `setupCode` (the owner) or an invite's `inviteToken`.
+- Lists page forward only, with `startingAfter`; there is no `endingBefore`.
+- An MCP app is disconnected with `DELETE /api/oauth/grants/:id`; there is no RFC 7009 revocation endpoint.

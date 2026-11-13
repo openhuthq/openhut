@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { CreateConnection, ListConnectionEvents, UpdateConnection } from '@jakebox/common/connections/connection.ts'
-import { deleted, listOf } from '../platform/responses.ts'
+import { listOf } from '../platform/responses.ts'
 import { who } from '../team/identity.ts'
 import { connectionEventService } from './connection-event-service.ts'
 import { connectionService } from './connection-service.ts'
@@ -14,10 +14,7 @@ export const connectionController: FastifyPluginAsync = async (app) => {
 
   app.patch<{ Params: { id: string }; Body: UpdateConnection }>('/:id', UpdateRequest, async (req) => connectionService.update({ actor: await who(req), id: req.params.id, ...req.body }))
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req) => {
-    await connectionService.delete({ actor: await who(req), id: req.params.id })
-    return deleted({ id: req.params.id, object: 'connection' })
-  })
+  app.delete<{ Params: { id: string } }>('/:id', async (req) => connectionService.delete({ actor: await who(req), id: req.params.id }))
 }
 
 export const connectionEventController: FastifyPluginAsync = async (app) => {

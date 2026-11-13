@@ -9,12 +9,11 @@ import { promisify } from 'node:util'
 const run = promisify(execFile)
 const SOCK = process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock'
 const IMAGE = process.env.AGENT_IMAGE || readFileSync(new URL('../../../install/agent-image', import.meta.url), 'utf8').trim()
-const RUNTIME = process.env.AGENT_RUNTIME ?? 'runsc'
 const APP_GID = Number(process.env.APP_GID ?? 0)
 const FIREWALL = fileURLToPath(new URL('../../../install/agents-firewall.sh', import.meta.url))
 const PLUGINS = fileURLToPath(new URL('../../../vendor/hermes-plugins', import.meta.url))
 const CLAUDE_BIN = fileURLToPath(new URL('../../../bin/claude', import.meta.url))
-const BRIDGE = process.env.WHATSAPP_BRIDGE ?? '/var/lib/jakebox/whatsapp-bridge'
+const BRIDGE = '/var/lib/jakebox/whatsapp-bridge'
 const AGENT_UID = 10000
 const ID = /^ag_[a-z0-9]{8}$/
 const FILES = ['config.yaml', '.env', 'SOUL.md'] as const
@@ -43,7 +42,6 @@ const pairings = new Map<string, Pairing>()
 const queues = new Map<string, Promise<unknown>>()
 let lastFirewallCheck = { at: 0, on: false }
 let pendingFirewallCheck: Promise<boolean> | undefined
-let watchdog = 'ok'
 
 mkdirSync(dirname(SOCK), { recursive: true })
 rmSync(SOCK, { force: true })
@@ -51,7 +49,7 @@ setInterval(() => watchFirewall().catch((e) => console.error(`watchdog: ${errorT
 createServer({ allowHalfOpen: true }, serve).listen(SOCK, () => {
   chownSync(SOCK, 0, APP_GID)
   chmodSync(SOCK, 0o660)
-  console.log(`agentd on ${SOCK}, runtime ${RUNTIME}`)
+  console.log(`agentd on ${SOCK}`)
 })
 
 function serve(sock: Socket) {
@@ -66,7 +64,10 @@ function serve(sock: Socket) {
       return
     }
     Promise.resolve(buf.slice(0, end))
-      .then((line) => enqueue(parseRequest(JSON.parse(line))))
+      .then((line) => {
+        const req = parseRequest(JSON.parse(line))
+        return 'id' in req ? enqueue(req.id, () => handle(req)) : handle(req)
+      })
       .then(
         (reply) => sock.end(JSON.stringify({ ok: true, ...reply })),
         (e) => sock.end(JSON.stringify({ ok: false, error: errorText(e).slice(0, 2000) })),
@@ -77,10 +78,8 @@ function serve(sock: Socket) {
   sock.on('error', () => {})
 }
 
-function enqueue(req: AgentdRequest): Promise<Reply> {
-  if (!('id' in req)) return handle(req)
-  const { id } = req
-  const next = (queues.get(id) ?? Promise.resolve()).catch(() => {}).then(() => handle(req))
+function enqueue<T>(id: string, work: () => Promise<T>): Promise<T> {
+  const next = (queues.get(id) ?? Promise.resolve()).catch(() => {}).then(work)
   queues.set(id, next)
   next
     .finally(() => {
@@ -90,14 +89,10 @@ function enqueue(req: AgentdRequest): Promise<Reply> {
   return next
 }
 
-function enqueueRestart(id: string) {
-  return enqueue({ cmd: 'restart-now', id })
-}
-
 async function handle(req: AgentdRequest): Promise<Reply> {
   switch (req.cmd) {
     case 'health':
-      return { runtime: RUNTIME, firewall: await firewallRecent(), image: IMAGE, watchdog }
+      return { firewall: await firewallRecent(), image: IMAGE }
     case 'ps':
       return { states: await containerStates() }
     case 'create':
@@ -115,9 +110,6 @@ async function handle(req: AgentdRequest): Promise<Reply> {
       pairings.delete(req.id)
       await docker('stop', '-t', '10', `ag-${req.id}`)
       return { stopped: req.id }
-    case 'restart-now':
-      await restartContainer(req.id)
-      return { restarted: req.id }
     case 'rm':
       return remove(req.id)
     case 'wa-pair':
@@ -140,7 +132,6 @@ function parseRequest(value: unknown): AgentdRequest {
       return { cmd, id: agentId(value.id), files: filesOf(value.files), restart: value.restart === true, force: value.force === true }
     case 'start':
     case 'stop':
-    case 'restart-now':
     case 'rm':
     case 'wa-pair':
     case 'wa-unlink':
@@ -181,7 +172,7 @@ async function create(id: string, net: number, files: AgentFiles) {
     'create',
     ...['--name', `ag-${id}`, '--hostname', id, '--restart', 'no'],
     ...['--label', `jakebox.agent=${id}`, '--label', `agent.digest=${digest}`],
-    ...['--runtime', RUNTIME, '--user', `${AGENT_UID}:${AGENT_UID}`, '--init', '--entrypoint', '/opt/hermes/bin/hermes'],
+    ...['--runtime', 'runsc', '--user', `${AGENT_UID}:${AGENT_UID}`, '--init', '--entrypoint', '/opt/hermes/bin/hermes'],
     ...['--read-only', '--tmpfs', '/tmp:rw,nosuid,size=256m', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'],
     ...['--pids-limit', '512', '--memory', '1g', '--cpus', '1', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'],
     ...['--network', `ag-${id}`, '--ip', `10.200.${net}.2`],
@@ -254,7 +245,7 @@ async function pair(id: string): Promise<Pairing> {
   proc.on('exit', (code) => {
     clearTimeout(timer)
     if (pending(p)) failPairing(p, `pairing exited (${code})`)
-    if (pairings.get(id) === p) enqueueRestart(id).catch((e) => console.error(`wa-pair: restart ${id}: ${errorText(e)}`))
+    if (pairings.get(id) === p) enqueue(id, () => restartContainer(id)).catch((e) => console.error(`wa-pair: restart ${id}: ${errorText(e)}`))
   })
   return p
 }
@@ -290,14 +281,12 @@ async function watchFirewall() {
   if (await firewallOn()) return
   await run(FIREWALL, [], EXEC).catch((e) => console.error(`watchdog: firewall re-apply failed: ${errorText(e)}`))
   if (await firewallOn()) {
-    watchdog = `re-applied the firewall at ${new Date().toISOString()}`
-    console.log(`watchdog: ${watchdog}`)
+    console.log(`watchdog: re-applied the firewall at ${new Date().toISOString()}`)
     return
   }
   const ids = (await docker('ps', '-q', '--filter', 'label=jakebox.agent').catch(() => '')).split('\n').filter(Boolean)
   if (ids.length) await docker('stop', '-t', '5', ...ids).catch((e) => console.error(`watchdog: stop failed: ${errorText(e)}`))
-  watchdog = `firewall missing; stopped ${ids.length} agents at ${new Date().toISOString()}`
-  console.error(`watchdog: ${watchdog}`)
+  console.error(`watchdog: firewall missing; stopped ${ids.length} agents at ${new Date().toISOString()}`)
 }
 
 function firewallOn() {
@@ -431,16 +420,15 @@ export type AgentdRequest =
   | { cmd: 'ps' }
   | { cmd: 'create'; id: string; net: number; files: AgentFiles }
   | { cmd: 'apply'; id: string; files: AgentFiles; restart: boolean; force?: boolean }
-  | { cmd: 'start' | 'stop' | 'restart-now' | 'rm' | 'wa-pair' | 'wa-unlink'; id: string }
+  | { cmd: 'start' | 'stop' | 'rm' | 'wa-pair' | 'wa-unlink'; id: string }
 
 export type AgentdReplies = {
-  health: { runtime: string; firewall: boolean; image: string; watchdog: string }
+  health: { firewall: boolean; image: string }
   ps: { states: Record<string, string> }
   create: { container: string }
   apply: { applied: string; restarted: boolean }
   start: { started: string }
   stop: { stopped: string }
-  'restart-now': { restarted: string }
   rm: { removed: string }
   'wa-pair': Pairing
   'wa-unlink': { unlinked: string }

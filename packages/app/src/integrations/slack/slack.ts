@@ -1,8 +1,8 @@
 import * as z from 'zod/mini'
 import type { Audience } from '@jakebox/common/channels/channel.ts'
-import { config } from '../../platform/config.ts'
 import { HttpError, messageOf } from '../../platform/http-error.ts'
 
+const SLACK_API = 'https://slack.com/api'
 const SlackOk = z.object({ ok: z.literal(true), team: z.optional(z.string()), user: z.optional(z.string()) })
 const SlackFailure = z.object({ ok: z.literal(false), error: z.string() })
 
@@ -27,7 +27,7 @@ export const slack = {
 }
 
 async function call({ method, token }: { method: string; token: string }): Promise<z.infer<typeof SlackOk> | z.infer<typeof SlackFailure>> {
-  const res = await fetch(`${config.slackApi}/${method}`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) })
+  const res = await fetch(`${SLACK_API}/${method}`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) })
     .catch((err: unknown) => { throw new HttpError(502, `Slack didn't answer (${messageOf(err)}). Try again.`) })
   const body: unknown = await res.json().catch(() => undefined)
   const ok = z.safeParse(SlackOk, body)

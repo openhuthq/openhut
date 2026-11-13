@@ -9,7 +9,6 @@ the installer, agentd and the e2e run live here. `jakebox-server.md` covers the 
 - **A read-only transaction doesn't contain a superuser**: `COPY … TO PROGRAM` and server-file functions still work. Refuse superuser and `pg_execute_server_program` / `pg_*_server_files` roles.
 - **pg connection strings let `?host=` override the URL's host** and `?sslrootcert=` read local files. Parse into explicit fields; allow only `sslmode`.
 - **`net.BlockList` matches IPv4-mapped IPv6** (`::ffff:127.0.0.1`) against IPv4 rules; `new URL` rewrites that to `::ffff:7f00:1`.
-- **`node --check file.ts` doesn't really parse TypeScript**: a duplicate `const` sailed through. Check with `module.stripTypeScriptTypes` into a `.mjs`, then `node --check` that.
 
 ## The installer (`install/`)
 
@@ -57,21 +56,24 @@ the installer, agentd and the e2e run live here. `jakebox-server.md` covers the 
 ## The e2e run (`packages/e2e`)
 
 - `npm run e2e` runs everything on a Mac with Docker Desktop, in this order:
-  1. a tampered install on a throwaway server, which must be refused;
-  2. build `e2e-1` installed with one curl on a bare `docker:dind` server, then the `main` phase;
-  3. build `e2e-2` installed over it (the upgrade), then `after-upgrade`;
+  1. build `e2e-1` installed with one curl on a bare `docker:dind` server (the only preparation is `apk add curl`), then the `main` phase;
+  2. build `e2e-2` with one byte of its `jakebox.tgz` changed, installed over it, which must fail and leave `e2e-1` running;
+  3. the real `e2e-2` installed over it (the upgrade), then `after-upgrade`;
   4. a server restart, then `after-restart`;
   5. the report.
 
-  It takes about 25 minutes and needs Node 22.18+ on the Mac and 127.0.0.1:8098, :8099 and :8787 free. The script is named `e2e`, not `test`, so turbo's test task never starts it.
+  It takes about 25 minutes and needs Node 22.18+ on the Mac and 127.0.0.1:8099 and :8787 free. The script is named `e2e`, not `test`, so turbo's test task never starts it.
+- Releases are served by the site's own Caddy image (`jakebox-mirror` on 127.0.0.1:8099, a release folder mounted at `/srv/release`). `release.sh` deletes and recreates `dist/`, which leaves a running container's mount pointing at the old folder, so the mirror is started afresh for each release, and the tampered copy gets its own folder, `dist/tampered`.
+- The tampered build is `e2e-2`, not the running `e2e-1`, so an install that went through would show up as a changed `BUILD`.
 - Named volumes cache Docker images (`jakebox-docker`), Alpine packages (`jakebox-apkcache`) and the Claude CLI (`jakebox-dlcache`). Everything else starts empty. On Docker Desktop, a reused `/var/lib/docker` volume brings back old containers, so `e2e.sh` prunes it to images only.
 - Traffic between two Docker networks is dropped by Docker itself, so firewall targets live outside the server: `jakebox-lan` listens at an address in each private range and at the metadata address. Every target an agent must not reach is checked from the server too, where it must be open, so "blocked" can only come from the agent firewall.
-- `sources.ts` fingerprints what the run ships or tests before it starts, and `report.ts` fails when the tree has changed since.
+- `e2e.sh` hashes the tree (`HEAD`, `git diff HEAD` and the untracked files) at the start and again at the end, and the report fails if they differ, so it always describes the code that ran.
 - `e2e.ts` isn't part of the release. It's copied onto the server after each install (the upgrade swaps in a clean `/opt/jakebox`) and runs there as root, playing the people, the channel and the attacker. `docker cp` keeps the Mac's owner, so the copy is chowned to root.
-- Each check is its own `node:test` test, run in order, so one failure doesn't stop the rest. Results go to `results/e2e-<phase>.json` (`report.ts` and `scripts/plan-tab.ts` read them). `main` always writes `state.json` for the later phases: the agent, the OAuth refresh token, the firewall and the PIDs. Refresh tokens rotate, so each later phase saves the new one.
+- Each check is its own `node:test` test, run in order, so one failure doesn't stop the rest. Results go to `results/e2e-<phase>.json`, which `report.ts` turns into `e2e-report.md`, next to the install, tamper and upgrade logs (setup code redacted), the server's logs, the container spec, the firewall and the probes' matrices. `main` always writes `state.json` for the later phases: the agent, the OAuth refresh token, the firewall and the PIDs. Refresh tokens rotate, so each later phase saves the new one.
 - The upgrade's release pins the same image as `docker.io/<pin>`, so the run can tell agentd took the new release's pin.
 - The team DB's TLS files live in `/root`, because the server's `/tmp` is emptied when it restarts and the DB has to come back. `wrong.test` is the DB's address under a name its certificate lacks. The postgres image answers `pg_isready` on its socket during init, before it restarts, so the run waits for a TCP answer.
-- The deployed gateway trusts public CAs only, so the test CA passes `sslmode=require` and fails `verify-full`/`verify-ca`. Name checking (K10b) runs `postgres.query` in a scratch process with the test CA trusted. U1 renders an agent's files in claude mode the same way, since the run has no real Claude subscription.
+- The deployed gateway trusts public CAs only, so the test CA passes `sslmode=require` and fails `verify-full`/`verify-ca`. Name checking (K10b) runs `postgres.query` in a scratch process with the test CA trusted. The run has no real Claude subscription, so claude mode's rendered files are a unit test (`hermes-files.test.ts`).
+- D6 counts the audit rows it expects as the run goes: every `callTool` and `chat('sql: …')` adds one, by its reply (allowed, `Denied:` or failed).
 - The test model echoes a tool result as `TOOL RESULT: <untrusted_tool_result …>preamble\n\n{"result"|"error": …}`. Checks compare the gateway's own text inside it.
 - The gateway-limit checks call the gateway straight from the agent's network with its token, because Hermes pauses a server for ~59 s after three refused calls.
 - `/health` reads a firewall check at most 5 s old, so the watchdog checks wait for the 503 before acting.

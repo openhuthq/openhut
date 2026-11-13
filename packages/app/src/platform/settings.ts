@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto'
 import { db } from './db.ts'
 import { config } from './config.ts'
 import { seal, unseal } from './secrets.ts'
@@ -16,11 +15,6 @@ export const settings = {
   setSeatToken: (token: string) => write('seat_token', seal(token)),
   appliedBuild: (): string | undefined => rows.get('build'),
   setAppliedBuild: (build: string) => write('build', build),
-  installId: async (): Promise<string> => {
-    const id = rows.get('install_id') ?? randomBytes(24).toString('base64url')
-    if (!rows.has('install_id')) await write('install_id', id)
-    return id
-  },
 }
 
 export function publicUrl(): string {
@@ -29,6 +23,6 @@ export function publicUrl(): string {
 
 async function write(name: string, value: string): Promise<void> {
   await db.insertInto('install_setting').values({ name, value })
-    .onConflict((oc) => oc.column('name').doUpdateSet({ value, updated_at: new Date() })).execute()
+    .onConflict((oc) => oc.column('name').doUpdateSet({ value })).execute()
   rows.set(name, value)
 }

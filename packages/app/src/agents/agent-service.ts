@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto'
 import type { Selectable } from 'kysely'
 import * as z from 'zod/mini'
 import type { Agent, AgentStatus, Grant, UpdateAgent } from '@jakebox/common/agents/agent.ts'
-import { db, isUniqueViolation } from '../platform/db.ts'
+import type { Deleted } from '@jakebox/common/api.ts'
+import { db, findRow, isUniqueViolation } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { config } from '../platform/config.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
@@ -11,11 +12,11 @@ import { settings } from '../platform/settings.ts'
 import { agentd, containerStates, type AgentFiles } from '../platform/agentd.ts'
 import { agentSubnet } from '../platform/network.ts'
 import { log, record } from '../platform/events.ts'
+import { deleted } from '../platform/responses.ts'
 import { connectionService } from '../connections/connection-service.ts'
 import { isAdmin, type Caller } from '../team/identity.ts'
 import { audienceOf } from '../channels/audience.ts'
 import { renderFiles, type RenderedChannel } from './hermes-files.ts'
-import { RECIPES, type RecipeId } from '@jakebox/recipes/recipes.ts'
 
 const MAX_AGENTS = 250
 const RECONCILE_MS = 30_000
@@ -40,20 +41,16 @@ export const agentService = {
     return row
   },
 
-  async create({ actor, name, instructions, recipeId }: { actor: Caller; name: string; instructions?: string; recipeId?: RecipeId }): Promise<Agent> {
+  async create({ actor, name, instructions }: { actor: Caller; name: string; instructions?: string }): Promise<Agent> {
     const clean = name.trim().replace(/[^\w .-]/g, '').slice(0, 40)
     if (!clean) throw new HttpError(400, 'Give the agent a name with letters or digits.', { param: 'name' })
     const used = new Set((await db.selectFrom('agent').select('net').execute()).map((row) => row.net))
     const net = Array.from({ length: MAX_AGENTS }, (_, i) => i + 1).find((n) => !used.has(n))
     if (!net) throw new HttpError(409, `This server already runs ${MAX_AGENTS} agents. Delete one first.`)
-    const recipe = recipeId ? RECIPES[recipeId] : undefined
     const row = await db.insertInto('agent').values({
-      id: newId('ag'), name: clean, owner_id: actor.id, model: recipe?.model ?? 'sonnet', net, channel_key: seal(randomBytes(24).toString('hex')),
-      instructions: (instructions || recipe?.instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000),
-    }).returningAll().executeTakeFirstOrThrow().catch((err: unknown) => {
-      if (isUniqueViolation(err)) throw new HttpError(409, 'Someone created an agent at the same moment. Try again.')
-      throw err
-    })
+      id: newId('ag'), name: clean, owner_id: actor.id, model: 'sonnet', net, channel_key: seal(randomBytes(24).toString('hex')),
+      instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000),
+    }).returningAll().executeTakeFirstOrThrow().catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'Someone created an agent at the same moment. Try again.') : err })
     try {
       await agentd.create({ id: row.id, net, files: await filesOf(row) })
     } catch (err) {
@@ -67,23 +64,19 @@ export const agentService = {
 
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateAgent }): Promise<Agent> {
     await agentService.requireEditable({ actor, id })
-    const changes: Partial<Pick<AgentRow, 'instructions' | 'model' | 'wanted'>> = {}
-    if (patch.instructions !== undefined) changes.instructions = patch.instructions
-    if (patch.model) changes.model = patch.model
-    if (patch.wanted) changes.wanted = patch.wanted
-    if (!Object.keys(changes).length) throw new HttpError(400, 'Send at least one field to change.')
-    await db.updateTable('agent').set(changes).where('id', '=', id).execute()
+    await db.updateTable('agent').set(patch).where('id', '=', id).execute()
     if (patch.instructions !== undefined || patch.model) await agentService.reapply({ id })
     if (patch.wanted) await (patch.wanted === 'running' ? agentd.start({ id }) : agentd.stop({ id }))
     return agentService.get({ actor, id })
   },
 
-  async delete({ actor, id }: { actor: Caller; id: string }): Promise<void> {
+  async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'agent'>> {
     const row = await rowOf(id)
     if (row.owner_id !== actor.id && !isAdmin(actor)) throw new HttpError(403, `Only ${row.name}'s owner or an admin can delete it.`)
     await agentd.remove({ id })
     await db.deleteFrom('agent').where('id', '=', id).execute()
     record({ action: 'agent.deleted', actor, target: { type: 'agent', id, name: row.name } })
+    return deleted({ id, object: 'agent' })
   },
 
   async reapply({ id }: { id: string }): Promise<void> {
@@ -97,8 +90,8 @@ export const agentService = {
   },
 
   async byToken({ token, address }: { token: string; address: string }): Promise<GatewayAgent | undefined> {
-    const row = await db.selectFrom('agent').select(['id', 'owner_id', 'net', 'token_version']).where('id', '=', token.split('.')[0]).executeTakeFirst()
-    if (!row || !sameSecret({ given: token, expected: agentToken({ agentId: row.id, version: row.token_version }) })) return undefined
+    const row = await db.selectFrom('agent').select(['id', 'owner_id', 'net']).where('id', '=', token.split('.')[0]).executeTakeFirst()
+    if (!row || !sameSecret({ given: token, expected: agentToken(row.id) })) return undefined
     return address.startsWith(`${agentSubnet(row.net)}.`) ? row : undefined
   },
 
@@ -120,12 +113,12 @@ export const agentService = {
     return grantOf(grant)
   },
 
-  async deleteGrant({ actor, id }: { actor: Caller; id: string }): Promise<void> {
-    const grant = await db.selectFrom('connection_grant').selectAll().where('id', '=', id).executeTakeFirst()
-    if (!grant) throw new HttpError(404, 'That grant doesn\'t exist. It may have been removed already.')
+  async deleteGrant({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'grant'>> {
+    const grant = await findRow({ table: 'connection_grant', id, missing: 'That grant doesn\'t exist. It may have been removed already.' })
     await agentService.requireEditable({ actor, id: grant.agent_id })
     await db.deleteFrom('connection_grant').where('id', '=', id).execute()
     record({ action: 'grant.deleted', actor, target: { type: 'grant', id, agentId: grant.agent_id, connectionId: grant.connection_id } })
+    return deleted({ id, object: 'grant' })
   },
 
   async reapplyAll({ force }: { force: boolean }): Promise<string[]> {
@@ -154,11 +147,7 @@ async function reconcile(): Promise<void> {
   }
 }
 
-async function rowOf(id: string): Promise<AgentRow> {
-  const row = /^ag_[a-z0-9]{8}$/.test(id) ? await db.selectFrom('agent').selectAll().where('id', '=', id).executeTakeFirst() : undefined
-  if (!row) throw new HttpError(404, 'That agent doesn\'t exist. It may have been deleted.')
-  return row
-}
+const rowOf = (id: string): Promise<AgentRow> => findRow({ table: 'agent', id, missing: 'That agent doesn\'t exist. It may have been deleted.' })
 
 async function canEdit({ actor, agent }: { actor: Caller; agent: AgentRow }): Promise<boolean> {
   if (agent.owner_id === actor.id) return true
@@ -173,7 +162,7 @@ async function filesOf(row: AgentRow): Promise<AgentFiles> {
   const owner = await db.selectFrom('person').select('username').where('id', '=', row.owner_id).executeTakeFirstOrThrow()
   const channels = await db.selectFrom('channel').selectAll().where('agent_id', '=', row.id).orderBy('kind').execute()
   return renderFiles({
-    agent: row, ownerName: owner.username, token: agentToken({ agentId: row.id, version: row.token_version }), channelKey: unseal(row.channel_key),
+    agent: row, ownerName: owner.username, token: agentToken(row.id), channelKey: unseal(row.channel_key),
     seat: settings.seatToken(), channels: channels.map(renderedChannel),
   })
 }

@@ -40,8 +40,7 @@ export async function checkPassword({ password, stored }: { password: string; st
 export const sameSecret = ({ given, expected }: { given: string; expected: string }): boolean =>
   given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected))
 
-export const agentToken = ({ agentId, version }: { agentId: string; version: number }): string =>
-  `${agentId}.${createHmac('sha256', secret).update(`${agentId}:${version}`).digest('hex')}`
+export const agentToken = (agentId: string): string => `${agentId}.${createHmac('sha256', secret).update(agentId).digest('hex')}`
 
 function derive(password: string, salt: Buffer): Promise<Buffer> {
   return new Promise((resolve, reject) => scrypt(password, salt, 32, (err, key) => (err ? reject(err) : resolve(key))))

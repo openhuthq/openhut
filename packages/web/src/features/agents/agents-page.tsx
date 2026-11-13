@@ -12,7 +12,6 @@ import { useAgents, useCreateAgent } from '@/features/agents/api'
 import { modelLabel } from '@/features/agents/model-label'
 import { copyText } from '@/lib/clipboard'
 import { formValues } from '@/lib/form'
-import { RECIPE_IDS, RECIPES } from '@jakebox/recipes/recipes.ts'
 
 const AI_LOGOS = [['claude', 'Claude'], ['cursor', 'Cursor'], ['copilot', 'GitHub Copilot'], ['gemini', 'Gemini'], ['windsurf', 'Windsurf'], ['zed', 'Zed'], ['mcp', 'Any MCP client']] as const
 
@@ -20,16 +19,8 @@ export function AgentsPage({ me, creating }: { me: Me; creating: boolean }) {
   const agents = useAgents()
   const createAgent = useCreateAgent()
   const actions = <Popover open={creating} href="/agents/new" back="/agents" buttonClass="btn sec" button={<>{ICONS.plus}<span className="lbl">New agent</span></>}>
-    <form onSubmit={(event) => {
-      const value = formValues(event)
-      const recipe = RECIPE_IDS.find((id) => id === value('recipe'))
-      createAgent.mutate({ name: value('name'), ...(recipe && { recipeId: recipe }) })
-    }}>
+    <form onSubmit={(event) => createAgent.mutate({ name: formValues(event)('name') })}>
       <Field label="Name" error={createAgent.error?.message}>{(control) => <input {...control} name="name" placeholder="Sales" required maxLength={40} />}</Field>
-      <Field label="Start from">{(control) => <select {...control} name="recipe" defaultValue="">
-        <option value="">Blank instructions</option>
-        {RECIPE_IDS.map((id) => <option key={id} value={id}>{RECIPES[id].name}: {RECIPES[id].pitch}</option>)}
-      </select>}</Field>
       <button className="btn primary" disabled={createAgent.isPending}>Create agent</button>
     </form>
   </Popover>

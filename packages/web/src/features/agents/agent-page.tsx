@@ -6,8 +6,6 @@ import { FACT_ICONS, ICONS } from '@/components/icons'
 import { Locked } from '@/components/locked'
 import { OwnerChip } from '@/components/owner-chip'
 import { Page } from '@/components/page'
-import { SectionHead } from '@/components/section-head'
-import { SOON, Soon } from '@/components/soon'
 import { StatusBadge } from '@/components/status-badge'
 import { AgentConnections } from '@/features/agents/agent-connections'
 import { useAgent, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
@@ -48,14 +46,10 @@ function AgentView({ agent, dialog }: { agent: Agent; dialog: AgentDialog | unde
     <div className="detail wide">
       <div className="left">
         <div className="hero">
-          <span className="avwrap"><Avatar id={agent.id} about={agent.instructions} size={64} /><span className="reroll" title={`Reroll the avatar: ${SOON.toLowerCase()}`}><button type="button" disabled aria-label="Reroll the avatar">{ICONS.dice}</button></span></span>
+          <Avatar id={agent.id} about={agent.instructions} size={64} />
           <h2 className="aname ellip">{agent.name}</h2>
         </div>
         <InstructionsSection agent={agent} editing={dialog === 'instructions'} lockReason={lockReason} />
-        <section>
-          <SectionHead title="Skills" />
-          <div className="box rows"><label className="upload off" title={SOON}><span className="tile">{ICONS.plus}</span><input type="file" accept=".zip,.md" disabled /><div className="t"><div className="uptitle">Upload a skill</div><div className="mute">A skill file or folder. {agent.name} restarts to load it.</div></div><Soon /></label></div>
-        </section>
       </div>
       <aside className="rail">
         <div className="box facts">

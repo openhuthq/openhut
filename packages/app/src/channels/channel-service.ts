@@ -1,10 +1,12 @@
 import type { Selectable } from 'kysely'
+import type { Deleted } from '@jakebox/common/api.ts'
 import { ADDRESS, type Channel, type CreateChannel, type UpdateChannel } from '@jakebox/common/channels/channel.ts'
-import { db, isUniqueViolation } from '../platform/db.ts'
+import { db, findRow, isUniqueViolation } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { log, record } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { newId, seal } from '../platform/secrets.ts'
+import { deleted } from '../platform/responses.ts'
 import { agentd, containerStates } from '../platform/agentd.ts'
 import { slack } from '../integrations/slack/slack.ts'
 import { agentService } from '../agents/agent-service.ts'
@@ -37,10 +39,7 @@ export const channelService = {
     if (existing) throw new HttpError(409, `${agent.name} already has ${LABEL[body.kind]}. Disconnect it first.`)
     const audience = { owner_address: body.ownerAddress, open: body.open, allowed: body.allowed.join(',') }
     const row = await db.insertInto('channel').values({ id: newId('ch'), agent_id: agent.id, kind: body.kind, ...audience, ...await setupOf({ body, agentName: agent.name, agentId: agent.id }) })
-      .returningAll().executeTakeFirstOrThrow().catch((err: unknown) => {
-        if (isUniqueViolation(err)) throw new HttpError(409, `${agent.name} already has ${LABEL[body.kind]}. Disconnect it first.`)
-        throw err
-      })
+      .returningAll().executeTakeFirstOrThrow().catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, `${agent.name} already has ${LABEL[body.kind]}. Disconnect it first.`) : err })
     record({ action: 'channel.created', actor, target: { type: 'channel', id: row.id, kind: row.kind, agentId: agent.id } })
     await reapplyOrLog(agent.id)
     return channelOf({ row, qr: null })
@@ -51,23 +50,20 @@ export const channelService = {
     await agentService.requireEditable({ actor, id: row.agent_id })
     const wrong = patch.allowed?.find((address) => !ADDRESS[row.kind].pattern.test(address))
     if (wrong) throw new HttpError(400, `${wrong} doesn't look right. ${ADDRESS[row.kind].message}`, { param: 'allowed' })
-    const changes: { open?: boolean; allowed?: string } = {}
-    if (patch.open !== undefined) changes.open = patch.open
-    if (patch.allowed) changes.allowed = patch.allowed.join(',')
-    if (!Object.keys(changes).length) throw new HttpError(400, 'Send at least one field to change.')
-    const updated = await db.updateTable('channel').set(changes).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
+    const updated = await db.updateTable('channel').set({ open: patch.open, allowed: patch.allowed?.join(',') }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
     record({ action: 'channel.updated', actor, target: { type: 'channel', id, kind: row.kind, agentId: row.agent_id } })
     await reapplyOrLog(row.agent_id)
     return channelOf({ row: updated, qr: null })
   },
 
-  async delete({ actor, id }: { actor: Caller; id: string }): Promise<void> {
+  async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'channel'>> {
     const row = await rowOf(id)
     await agentService.requireEditable({ actor, id: row.agent_id })
     await disconnect(row)
     await db.deleteFrom('channel').where('id', '=', id).execute()
     record({ action: 'channel.deleted', actor, target: { type: 'channel', id, kind: row.kind, agentId: row.agent_id } })
     await reapplyOrLog(row.agent_id)
+    return deleted({ id, object: 'channel' })
   },
 }
 
@@ -95,11 +91,7 @@ async function reapplyOrLog(agentId: string): Promise<void> {
   await agentService.reapply({ id: agentId }).catch((err: unknown) => log.warn({ event: 'channel.reapply_failed', agent: agentId, error: messageOf(err) }))
 }
 
-async function rowOf(id: string): Promise<Row> {
-  const row = /^ch_[a-z0-9]{8}$/.test(id) ? await db.selectFrom('channel').selectAll().where('id', '=', id).executeTakeFirst() : undefined
-  if (!row) throw new HttpError(404, 'That channel doesn\'t exist. It may have been disconnected.')
-  return row
-}
+const rowOf = (id: string): Promise<Row> => findRow({ table: 'channel', id, missing: 'That channel doesn\'t exist. It may have been disconnected.' })
 
 function channelOf({ row, qr }: { row: Row; qr: string | null }): Channel {
   return {

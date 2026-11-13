@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { CreateInvite, CreatePerson, CreateSession } from '@jakebox/common/team/team.ts'
 import { deleted, listOf } from '../platform/responses.ts'
-import { clearSessionCookie, sessionToken, setSessionCookie, who } from './identity.ts'
+import { clearSessionCookie, requireSignIn, sessionToken, setSessionCookie, who } from './identity.ts'
 import { teamService } from './team-service.ts'
 
 export const setupController: FastifyPluginAsync = async (app) => {
@@ -9,10 +9,7 @@ export const setupController: FastifyPluginAsync = async (app) => {
 }
 
 export const peopleController: FastifyPluginAsync = async (app) => {
-  app.get('/', async (req) => {
-    await who(req)
-    return listOf({ req, data: await teamService.listPeople() })
-  })
+  app.get('/', SignedIn, async (req) => listOf({ req, data: await teamService.listPeople() }))
 
   app.post<{ Body: CreatePerson }>('/', CreatePersonRequest, async (req, reply) => {
     const { person, token } = await teamService.createPerson({ ...req.body, origin: `${req.protocol}://${req.host}` })
@@ -20,10 +17,7 @@ export const peopleController: FastifyPluginAsync = async (app) => {
     return person
   })
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req) => {
-    await teamService.deletePerson({ actor: await who(req), id: req.params.id })
-    return deleted({ id: req.params.id, object: 'person' })
-  })
+  app.delete<{ Params: { id: string } }>('/:id', async (req) => teamService.deletePerson({ actor: await who(req), id: req.params.id }))
 }
 
 export const sessionController: FastifyPluginAsync = async (app) => {
@@ -49,16 +43,14 @@ export const inviteController: FastifyPluginAsync = async (app) => {
 
   app.post<{ Body: CreateInvite }>('/', CreateInviteRequest, async (req) => teamService.createInvite({ actor: await who(req), ...req.body }))
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req) => {
-    await teamService.deleteInvite({ actor: await who(req), id: req.params.id })
-    return deleted({ id: req.params.id, object: 'invite' })
-  })
+  app.delete<{ Params: { id: string } }>('/:id', async (req) => teamService.deleteInvite({ actor: await who(req), id: req.params.id }))
 }
 
 export const inviteLinkController: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { token: string } }>('/:token', async (req) => teamService.inviteLink({ token: req.params.token }))
 }
 
+const SignedIn = { onRequest: requireSignIn }
 const CreatePersonRequest = { schema: { body: CreatePerson } }
 const CreateSessionRequest = { schema: { body: CreateSession } }
 const CreateInviteRequest = { schema: { body: CreateInvite } }

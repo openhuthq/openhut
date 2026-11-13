@@ -42,7 +42,6 @@ export const ListConnectionEvents = z.extend(ListQuery, {
   connectionId: z.optional(z.string().check(z.maxLength(40))),
   agentId: z.optional(z.string().check(z.maxLength(40))),
   startingAfter: z.optional(EventCursor),
-  endingBefore: z.optional(EventCursor),
 })
 export type ListConnectionEvents = z.infer<typeof ListConnectionEvents>
 

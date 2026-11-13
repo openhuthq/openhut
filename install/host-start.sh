@@ -25,7 +25,7 @@ pkill -f "^node $J/packages/agentd/src/agentd.ts" 2>/dev/null || true
 pkill -f "^node $J/packages/app/src/app.ts" 2>/dev/null || true
 sleep 1; rm -f /run/agentd/agentd.sock
 RUNAS="runuser -u jakebox --"; command -v su-exec >/dev/null 2>&1 && RUNAS="su-exec jakebox"
-export APP_GID="$(id -g jakebox)" JAKEBOX_DATA=/data/app SETUP_CODE="${SETUP_CODE:-}"
+export APP_GID="$(id -g jakebox)" SETUP_CODE="${SETUP_CODE:-}"
 "$J/install/supervise.sh" "$LOG/agentd.log" node "$J/packages/agentd/src/agentd.ts" &
 i=0; until [ -S /run/agentd/agentd.sock ]; do i=$((i+1)); [ $i -gt 300 ] && { mark "agentd failed"; exit 1; }; sleep 0.2; done
 ( umask 077; cd "$J" && exec "$J/install/supervise.sh" "$LOG/app.log" $RUNAS node "$J/packages/app/src/app.ts" ) &

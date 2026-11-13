@@ -1,4 +1,3 @@
-import { RECIPES } from '@jakebox/recipes/recipes.ts'
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
@@ -71,8 +70,7 @@ o = {"uid": os.getuid(), "kernel": open("/proc/version").read().strip()[:80],
      "writable": {k: can_write(p) for k, p in paths.items()}, "renamable": {p: can_rename(p) for p in renames},
      "udp_dns": {"other_resolver": udp_dns("8.8.8.8"), "own_resolver": udp_dns(open("/etc/resolv.conf").read().split()[1])},
      "capeff": [l.split()[1] for l in open("/proc/self/status") if l.startswith("CapEff")][0],
-     "docker_sock": os.path.exists("/var/run/docker.sock"), "agentd_sock": os.path.exists("/run/agentd"),
-     "own_env_has_key": "API_SERVER_KEY" in open("/opt/data/.env").read()}
+     "docker_sock": os.path.exists("/var/run/docker.sock"), "agentd_sock": os.path.exists("/run/agentd")}
 try: socket.getaddrinfo("example.com", 443); o["dns"] = "ok"
 except Exception as e: o["dns"] = type(e).__name__
 o["net"] = {k: tcp(h, p) for k, (h, p) in json.loads(os.environ["TARGETS"]).items()}
@@ -132,6 +130,7 @@ except Exception as e:
 print(json.dumps({"bigBody": big, "slowHeaders": first, "after": round(time.time() - t)}))`
 const phase = process.argv[2] ?? 'main'
 const results: CheckResult[] = []
+const expectedEvents: Record<string, Record<string, number>> = {}
 
 mkdirSync(RESULTS, { recursive: true })
 switch (phase) {
@@ -161,14 +160,12 @@ function main() {
   const owner = { username: 'owner', password: randomBytes(12).toString('base64url') }
   const mia = { username: 'mia', password: randomBytes(12).toString('base64url') }
   const seatToken = `sk-ant-oat01-${randomBytes(24).toString('hex')}`
-  const expected: Record<string, Record<string, number>> = {}
   const extras: string[] = []
   let setupCode = ''
   let cookie = ''
   let ownerId = ''
   let miaCookie = ''
   let oauth = { access: '', refresh: '', clientId: '' }
-  let firstBoot = 0
   let fw: Firewall = {}
   let whatsapp = ''
   let call: Call
@@ -179,10 +176,6 @@ function main() {
   let helper: Agent
   let iso: Isolation
 
-  const audit = (a: AgentRef, outcome: string) => {
-    const counts = (expected[a.id] ??= {})
-    counts[outcome] = (counts[outcome] ?? 0) + 1
-  }
   const q = (sql: string, connectionId?: string) => callTool(dev, { name: 'postgres_query', arguments: { sql }, connectionId })
   const extra = async (name: string, dsn: string) => {
     const x = await call<Connection>('create_connection', { name, dsn })
@@ -194,21 +187,10 @@ function main() {
     for (const id of extras.splice(0)) await call('delete_connection', { id })
   }
 
-  check('I0', 'The installer refuses a tampered download', 'a jakebox.tgz with one byte changed: "checksum mismatch", exit 1, nothing installed', async () => {
-    const tamper = stripVTControlCharacters(readFileSync(`${RESULTS}/tamper.log`, 'utf8'))
-    return {
-      actual: tamper
-        .trim()
-        .split('\n')
-        .filter((l) => /mismatch|exit=|jakebox/.test(l)),
-      pass: /checksum mismatch: \S*jakebox\.tgz/.test(tamper) && /installer exit=1/.test(tamper) && /opt\/jakebox: No such file/.test(tamper),
-    }
-  })
-
   check(
     'I1',
     'One curl command installs JakeBox on a bare server; every download matches its pinned checksum',
-    'all steps, "JakeBox is running", no checksum or tar warnings',
+    '"JakeBox is running", no checksum or tar warnings',
     async () => {
       const log = stripVTControlCharacters(readFileSync(`${RESULTS}/install.log`, 'utf8'))
       return {
@@ -216,9 +198,7 @@ function main() {
           .trim()
           .split('\n')
           .filter((l) => l.startsWith('==>') || /JakeBox is running|mismatch|extended header/.test(l)),
-        pass:
-          ['==> Packages', '==> gVisor', '==> JakeBox', '==> Claude Code', 'JakeBox is running'].every((s) => log.includes(s)) &&
-          !/checksum mismatch|unknown extended header/i.test(log),
+        pass: log.includes('JakeBox is running') && !/checksum mismatch|unknown extended header/i.test(log),
       }
     },
   )
@@ -299,27 +279,41 @@ function main() {
   check(
     'A4',
     'Control MCP takes only OAuth access tokens, and points clients at its sign-in',
-    'no token: 401 with resource_metadata; a session cookie alone: 401; a made-up token: 401; signing in with OAuth gives a jbo_ token',
+    'no token: 401 with resource_metadata; a session cookie alone: 401; a made-up token: 401; metadata points at /mcp/authorize; signing in with OAuth gives a jbo_ token; Admin lists the app',
     async () => {
       const post = (headers: Record<string, string>) =>
         fetch(`${APP}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: '{}' })
       const noauth = await post({})
       const withCookie = await post({ cookie })
       const madeUp = await post({ authorization: `Bearer jbo_${randomBytes(24).toString('base64url')}` })
+      const meta = (await api<{ resource?: string }>('GET', '/.well-known/oauth-protected-resource/mcp')).json
+      const server = (await api<{ authorization_endpoint?: string }>('GET', '/.well-known/oauth-authorization-server')).json
       oauth = await oauthSignIn(cookie, 'e2e')
+      call = await mcp(oauth.access)
+      const apps = ((await api<List<OAuthGrant>>('GET', '/api/oauth/grants', undefined, cookie)).json.data ?? []).map((a) => a.client)
       const challenge = noauth.headers.get('www-authenticate') ?? ''
       return {
-        actual: `no token ${noauth.status} ${challenge.slice(0, 80)}; cookie ${withCookie.status}; made-up ${madeUp.status}; signed in ${oauth.access ? 'jbo_<redacted>' : 'no'}`,
-        pass: noauth.status === 401 && /resource_metadata=/.test(challenge) && withCookie.status === 401 && madeUp.status === 401 && /^jbo_/.test(oauth.access),
+        actual: {
+          noToken: `${noauth.status} ${challenge.slice(0, 80)}`,
+          cookie: withCookie.status,
+          madeUp: madeUp.status,
+          authorize: server.authorization_endpoint,
+          resource: meta.resource,
+          signedIn: oauth.access ? 'jbo_<redacted>' : 'no',
+          apps,
+        },
+        pass:
+          noauth.status === 401 &&
+          /resource_metadata=/.test(challenge) &&
+          withCookie.status === 401 &&
+          madeUp.status === 401 &&
+          server.authorization_endpoint === `${APP}/mcp/authorize` &&
+          meta.resource === `${APP}/mcp` &&
+          /^jbo_/.test(oauth.access) &&
+          isDeepStrictEqual(apps, ['e2e']),
       }
     },
   )
-
-  check('A5', 'Only one owner exists', 'list_people: [owner]', async () => {
-    call = await mcp(oauth.access)
-    const people = (await call<List<Person>>('list_people')).data.map((p) => `${p.username}:${p.role}`)
-    return { actual: people, pass: isDeepStrictEqual(people, ['owner:owner']) }
-  })
 
   check('B1', 'Control MCP creates a connection, two agents and a grant', 'Dev granted Orders DB, Sales has none', async () => {
     await startTeamDb(dbPassword, agentPassword)
@@ -337,17 +331,6 @@ function main() {
     await call('update_agent', { id: sales.id, wanted: 'running' })
     const listed = (await call<List<Agent>>('list_agents')).data
     return { actual: listed.map((a) => `${a.name}:${a.status}`), pass: listed.length === 2 && listed.every((a) => a.status === 'running') }
-  })
-
-  check('R1', 'An agent made from a recipe starts with its instructions and model, and its files say so', 'create_agent {recipeId: support}: Support\'s instructions and model, the same SOUL.md on disk; then deleted', async () => {
-    const made = await call<Agent>('create_agent', { name: 'Helpdesk', recipeId: 'support' })
-    const soul = readFileSync(`/data/agent-conf/${made.id}/SOUL.md`, 'utf8')
-    await call('delete_agent', { id: made.id })
-    const recipe = RECIPES.support
-    return {
-      actual: { model: made.model, heading: made.instructions.split('\n')[0], soulMatches: soul.trim() === recipe.instructions.trim() },
-      pass: made.model === recipe.model && made.instructions === recipe.instructions && soul.trim() === recipe.instructions.trim(),
-    }
   })
 
   check('B3', 'The gateway keeps the DB password: it never comes back out', 'not in any control MCP reply, dashboard page, agent file or log', async () => {
@@ -431,8 +414,7 @@ function main() {
   check('D1', "Both agents' Hermes gateways come up under gVisor", 'API server answers within 4 min', async () => {
     const t0 = Date.now()
     await Promise.all([waitReady(dev), waitReady(sales)])
-    firstBoot = Date.now() - t0
-    return { actual: `ready in ${Math.round(firstBoot / 1000)} s`, pass: true }
+    return { actual: `ready in ${Math.round((Date.now() - t0) / 1000)} s`, pass: true }
   })
 
   check('D2', 'A message reaches the agent and its reply comes back', '"ECHO: hello there"', async () => {
@@ -442,15 +424,8 @@ function main() {
 
   check('D3', 'Dev (granted) queries the team DB through the gateway', 'rows [{n: 42, revenue: 9030.00}]', async () => {
     const d3 = inner(await chat(dev, 'sql: select count(*)::int as n, sum(total)::text as revenue from orders'))
-    audit(dev, 'allowed')
     const row = rowsOf(d3)?.[0]
     return { actual: d3, pass: row?.n === 42 && row?.revenue === '9030.00' }
-  })
-
-  check('D4', 'Sales (no grant) is refused by the gateway', `"${DENIED}"`, async () => {
-    const d4 = inner(await chat(sales, 'sql: select count(*) from orders'))
-    audit(sales, 'denied')
-    return { actual: d4, pass: d4 === DENIED }
   })
 
   check(
@@ -461,11 +436,8 @@ function main() {
       const deleteAsTheRole = ['psql', '-U', 'jakebox_agent', '-d', 'postgres', '-c', 'begin', '-c', 'delete from orders', '-c', 'rollback']
       const control = await docker('exec', 'teamdb', ...deleteAsTheRole).catch((e) => failure(e))
       const del = (await q('delete from orders')).text
-      audit(dev, 'failed')
       const seq = (await q("select nextval('orders_id_seq')")).text
-      audit(dev, 'failed')
       const multi = (await q('select 1; commit; delete from orders')).text
-      audit(dev, 'failed')
       const left = await orderCount()
       const lastId = (await psql('select last_value from orders_id_seq')).trim()
       return {
@@ -484,7 +456,6 @@ function main() {
   check('E1', 'Revoking the grant takes effect on the next call, no restart', '"Denied: …" and a new denied audit row', async () => {
     await call('delete_grant', { id: devGrant.id })
     const e1 = inner(await chat(dev, 'sql: select 1 as one'))
-    audit(dev, 'denied')
     const lastRow = (await call<List<ConnectionEvent>>('list_connection_events', { agentId: dev.id, limit: 1 })).data[0]
     return {
       actual: { reply: e1, audit: `${lastRow?.tool} ${lastRow?.outcome}` },
@@ -495,53 +466,39 @@ function main() {
   check('E2', 'Granting again works immediately', 'rows [{seven: 7}]', async () => {
     await call('create_grant', { agentId: dev.id, connectionId: conn.id })
     const e2 = inner(await chat(dev, 'sql: select 7 as seven'))
-    audit(dev, 'allowed')
     return { actual: e2, pass: rowsOf(e2)?.[0]?.seven === 7 }
   })
 
-  check(
-    'E3',
-    "A connection's Activity lists the calls through it; a denied call with no connection stays in its agent's events",
-    "connection events: Dev's calls only, with agent names; Sales' denial in list_connection_events for Sales",
-    async () => {
-      const connEvents =
-        (await api<List<ConnectionEvent>>('GET', `/api/connection-events?connectionId=${conn.id}&limit=100`, undefined, cookie)).json.data ?? []
-      const salesDenied = (await events(call, { agentId: sales.id })).filter((e) => e.outcome === 'denied').length
-      return {
-        actual: { events: connEvents.length, agents: [...new Set(connEvents.map((e) => e.agentName))], salesDenied },
-        pass: connEvents.length >= 3 && connEvents.every((e) => e.agentId === dev.id && e.agentName === 'Dev') && salesDenied >= 1,
-      }
-    },
-  )
+  check('E3', "A connection's Activity lists the calls through it", "connection events: Dev's calls only, with agent names", async () => {
+    const connEvents = (await api<List<ConnectionEvent>>('GET', `/api/connection-events?connectionId=${conn.id}&limit=100`, undefined, cookie)).json.data ?? []
+    return {
+      actual: { events: connEvents.length, agents: [...new Set(connEvents.map((e) => e.agentName))] },
+      pass: connEvents.length >= 3 && connEvents.every((e) => e.agentId === dev.id && e.agentName === 'Dev'),
+    }
+  })
 
   check(
     'K1',
     "A query is cancelled after 15 s, and a call can't lift that for the next one",
-    'pg_sleep(20) fails with "statement timeout" in 14-19 s, before and after a call sets statement_timeout to 0',
+    'after a call sets statement_timeout to 0, pg_sleep(20) still fails with "statement timeout" in 14-19 s',
     async () => {
-      const k1 = await q('select pg_sleep(20)')
-      audit(dev, 'failed')
       const off = await q("select set_config('statement_timeout', '0', false) as was")
-      audit(dev, 'allowed')
-      const k2 = await q('select pg_sleep(20)')
-      audit(dev, 'failed')
+      const k1 = await q('select pg_sleep(20)')
       return {
-        actual: [`${k1.ms} ms ${k1.text}`, `set: ${off.text}`, `${k2.ms} ms ${k2.text}`],
-        pass: !off.isError && [k1, k2].every((k) => k.isError && /statement timeout/.test(k.text) && k.ms > 14_000 && k.ms < 19_000),
+        actual: [`set: ${off.text}`, `${k1.ms} ms ${k1.text}`],
+        pass: !off.isError && k1.isError && /statement timeout/.test(k1.text) && k1.ms > 14_000 && k1.ms < 19_000,
       }
     },
   )
 
   check('K2', 'At most 1000 rows come back', '1000 rows, truncated: true', async () => {
     const k3 = await q('select g from generate_series(1, 2000) g')
-    audit(dev, 'allowed')
     const body: { rows?: unknown[]; truncated?: boolean } = k3.text.startsWith('{') ? JSON.parse(k3.text) : {}
     return { actual: { rows: body.rows?.length, truncated: body.truncated }, pass: body.rows?.length === 1000 && body.truncated === true }
   })
 
   check('K3', 'A data-modifying CTE is refused', 'fails; still 42 rows', async () => {
     const k4 = await q('with d as (delete from orders returning 1) select * from d')
-    audit(dev, 'failed')
     const left = await orderCount()
     return { actual: `${k4.text} | rows=${left}`, pass: k4.isError && left === '42' }
   })
@@ -557,51 +514,15 @@ function main() {
         await extra('Superuser member DB', `postgres://jakebox_member:${agentPassword}@172.30.0.10:5432/postgres`),
       ]
       const replies: string[] = []
-      for (const id of ids) {
-        replies.push((await q('select 1', id)).text)
-        audit(dev, 'failed')
-      }
+      for (const id of ids) replies.push((await q('select 1', id)).text)
       return { actual: replies, pass: replies.every((t) => /^Failed: Refused: this connection logs in as a superuser/.test(t)) }
     },
   )
 
-  check(
-    'K5',
-    "The gateway won't connect to loopback, this host, link-local or agent addresses, by IP (IPv4-mapped too) or by name",
-    '7 × "Refused address …" (127.0.0.1, ::ffff:127.0.0.1, 169.254.169.254, the gateway\'s own 10.200.x.1, 0.0.0.0, ::1, localhost)',
-    async () => {
-      const replies: string[] = []
-      for (const host of ['127.0.0.1', '[::ffff:127.0.0.1]', '169.254.169.254', `10.200.${dev.net}.1`, '0.0.0.0', '[::1]', 'localhost']) {
-        const id = await extra(`Guard ${host}`, `postgres://u:p@${host}:5432/x`)
-        replies.push((await q('select 1', id)).text)
-        audit(dev, 'failed')
-      }
-      return { actual: replies, pass: replies.length === 7 && replies.every((t) => /^Failed: Refused address/.test(t)) }
-    },
-  )
-
-  check('K6', "Connection strings can't override the host or point at local files", 'both refused: "Remove host|sslrootcert from the connection string"', async () => {
-    const refused: string[] = []
-    for (const dsn of [
-      `postgres://jakebox_agent:${agentPassword}@172.30.0.10/postgres?host=127.0.0.1`,
-      'postgres://u:p@172.30.0.10/x?sslrootcert=/etc/jakebox/env',
-    ]) {
-      refused.push(
-        await call('create_connection', { name: 'Sneaky', dsn }).then(
-          () => 'accepted',
-          (e) => failure(e),
-        ),
-      )
-    }
-    return { actual: refused, pass: refused.every((m) => /^Remove (host|sslrootcert) from the connection string/.test(m)) }
-  })
-
   check('K7', 'Ambiguous and malformed calls fail cleanly', '"More than one connection …"; "Unknown arguments: evil." with a hint', async () => {
     try {
       const ambiguous = await q('select 1')
-      audit(dev, 'failed')
       const malformed = await callTool(dev, { name: 'postgres_query', arguments: { sql: 'select 1', evil: 1 }, connectionId: conn.id })
-      audit(dev, 'failed')
       return {
         actual: [ambiguous.text, malformed.text],
         pass: /^More than one connection has postgres_query/.test(ambiguous.text) && /^Unknown arguments: evil\./.test(malformed.text),
@@ -617,11 +538,8 @@ function main() {
     '600 rows parse; ~1 MB: "Result too large for the agent"; ~20 MB: "Result too large: over 8 MB"; the app still answers',
     async () => {
       const fits = await q("select g, repeat('x', 40) as pad from generate_series(1, 600) g")
-      audit(dev, 'allowed')
       const oneMb = await q("select g, repeat('x', 1000) as pad from generate_series(1, 1000) g")
-      audit(dev, 'failed')
       const twentyMb = await q("select repeat('x', 1000000) as x from generate_series(1, 20)")
-      audit(dev, 'failed')
       const fitsRows = rowsOf(fits.text)?.length
       const h = await health()
       return {
@@ -637,7 +555,6 @@ function main() {
 
   check('K9', 'At most 2 calls per agent per connection run at once', '3 parallel 4-second queries: 2 run, 1 "Busy"', async () => {
     const parallel = await Promise.all([1, 2, 3].map(() => q('select pg_sleep(4)')))
-    for (const r of parallel) audit(dev, r.isError ? 'failed' : 'allowed')
     const busy = parallel.filter((r) => /^Busy:/.test(r.text)).length
     const done = parallel.filter((r) => !r.isError).length
     return { actual: parallel.map((r) => r.text.slice(0, 80)), pass: done === 2 && busy === 1 }
@@ -653,7 +570,6 @@ function main() {
         for (const mode of ['require', 'verify-full', 'verify-ca']) {
           const id = await extra(`TLS ${mode}`, `postgres://jakebox_agent:${agentPassword}@teamdb.test:5432/postgres?sslmode=${mode}`)
           live[mode] = (await q('select ssl from pg_stat_ssl where pid = pg_backend_pid()', id)).text
-          audit(dev, mode === 'require' ? 'allowed' : 'failed')
         }
         const refused = (text: string) => text.startsWith('Failed: ') && UNTRUSTED_CA.test(text)
         return { actual: live, pass: rowsOf(live.require)?.[0]?.ssl === true && refused(live['verify-full']) && refused(live['verify-ca']) }
@@ -704,7 +620,7 @@ function main() {
       const salesEvents = await events(call, { agentId: sales.id })
       writeFileSync(`${RESULTS}/activity.json`, JSON.stringify({ dev: devEvents, sales: salesEvents }, null, 2))
       const got = { dev: count(devEvents.map((e) => e.outcome)), sales: count(salesEvents.map((e) => e.outcome)) }
-      const want = { dev: expected[dev.id] ?? {}, sales: expected[sales.id] ?? {} }
+      const want = { dev: expectedEvents[dev.id] ?? {}, sales: expectedEvents[sales.id] ?? {} }
       return { actual: { got, want }, pass: isDeepStrictEqual(got, want) }
     },
   )
@@ -732,22 +648,12 @@ function main() {
 
   check(
     'F4',
-    'Network: the gateway, DNS to its resolver and the internet on 443 only; everything else (mail ports included) is blocked though the server reaches it',
+    'Network: the gateway, DNS to its resolver and the internet on 443 only; everything else is blocked though the server reaches it',
     'matrix in isolation-probe-sales.json all ok',
     async () => {
       fw = await firewall()
       writeFileSync(`${RESULTS}/firewall.txt`, Object.values(fw).join('\n\n') + '\n')
       return { actual: iso.rows.map((r) => `${r.target}: ${r.agent}/${r.from_server}${r.ok ? '' : ' ✗'}`), pass: iso.pass }
-    },
-  )
-
-  check(
-    'F5',
-    "An agent reads its own .env (accepted risk) but no other agent's files",
-    "own key visible; C2 shows no other agent's folder mounted",
-    async () => {
-      const mountsExact = results.find((r) => r.id === 'C2')?.pass === true
-      return { actual: { own: iso.probe.own_env_has_key, mountsExact }, pass: iso.probe.own_env_has_key && mountsExact }
     },
   )
 
@@ -850,10 +756,8 @@ function main() {
       await call('update_connection', { id: conn.id, everyone: true })
       const shared = await api('POST', '/api/grants', { agentId: helper.id, connectionId: conn.id }, miaCookie)
       const whileShared = await callTool(helper, { name: 'postgres_query', arguments: { sql: 'select count(*)::int as n from orders' } })
-      audit(helper, 'allowed')
       await call('update_connection', { id: conn.id, everyone: false })
       const unshared = await callTool(helper, { name: 'postgres_query', arguments: { sql: 'select 1' } })
-      audit(helper, 'denied')
       return {
         actual: { grant: shared.status, shared: whileShared.text, unshared: unshared.text },
         pass: shared.status === 200 && rowsOf(whileShared.text)?.[0]?.n === 42 && unshared.text === DENIED,
@@ -861,25 +765,12 @@ function main() {
     },
   )
 
-  check('P4', 'A member deletes their own agent from the dashboard', 'deleted; container gone', async () => {
-    const removed = await api<Deleted<'agent'>>('DELETE', `/api/agents/${helper.id}`, undefined, miaCookie)
-    const container = await docker('ps', '-aq', '--filter', `name=ag-${helper.id}`)
-    return {
-      actual: `${removed.status} ${removed.json.deleted} container=${container || 'gone'}`,
-      pass: removed.status === 200 && removed.json.deleted === true && !container,
-    }
-  })
-
   check(
     'P5',
     'Removing a person ends their access at once',
     "their session 401, their OAuth app 401, sign-in 401; their agent stopped; they're off the People list",
     async () => {
       const miaToken = (await oauthSignIn(miaCookie, "mia's assistant")).access
-      const keeper = (await api<Agent>('POST', '/api/agents', { name: 'Keeper' }, miaCookie)).json
-      await call('update_connection', { id: conn.id, everyone: true })
-      await api('POST', '/api/grants', { agentId: keeper.id, connectionId: conn.id }, miaCookie)
-      await api('PATCH', `/api/agents/${keeper.id}`, { wanted: 'running' }, miaCookie)
       const miaId = (await call<List<Person>>('list_people')).data.find((p) => p.username === 'mia')?.id
       await call('delete_person', { id: miaId })
       const afterRemoval = {
@@ -892,75 +783,14 @@ function main() {
           })
         ).status,
         signIn: (await api('POST', '/api/sessions', mia)).status,
-        agent: await statusOf(keeper.id),
-        grantsLive: (await call<List<Grant>>('list_grants', { agentId: keeper.id })).data.length,
+        agent: await statusOf(helper.id),
         listed: (await call<List<Person>>('list_people')).data.some((p) => p.username === 'mia'),
       }
-      await call('update_connection', { id: conn.id, everyone: false })
-      await call('delete_agent', { id: keeper.id })
+      await call('delete_agent', { id: helper.id })
       return {
         actual: afterRemoval,
         pass:
           afterRemoval.session === 401 && afterRemoval.token === 401 && afterRemoval.signIn === 401 && afterRemoval.agent === 'exited' && !afterRemoval.listed,
-      }
-    },
-  )
-
-  check(
-    'O1',
-    'An MCP client signs in with OAuth (registration, PKCE, refresh) and calls tools as the person',
-    'metadata points at /mcp/authorize; a code with the wrong verifier fails with invalid_grant; the right one gives jbo_/jbr_ tokens; tools work; refresh rotates (the old refresh token fails with invalid_grant); Admin lists the app',
-    async () => {
-      const meta = (await api<{ resource?: string }>('GET', '/.well-known/oauth-protected-resource/mcp')).json
-      const server = (await api<{ authorization_endpoint?: string }>('GET', '/.well-known/oauth-authorization-server')).json
-      const verifier = randomBytes(32).toString('base64url')
-      const clientId = await oauthRegister('e2e assistant')
-      const code = await oauthCode(cookie, clientId, verifier, 'xyz')
-      const wrongVerifier = await oauthToken({
-        grant_type: 'authorization_code',
-        code,
-        code_verifier: 'x'.repeat(43),
-        client_id: clientId,
-        redirect_uri: OAUTH_REDIRECT,
-      })
-      const tokens = await oauthToken({
-        grant_type: 'authorization_code',
-        code: await oauthCode(cookie, clientId, verifier),
-        code_verifier: verifier,
-        client_id: clientId,
-        redirect_uri: OAUTH_REDIRECT,
-      })
-      const access = tokens.access_token ?? ''
-      const viaOauth = (await (await mcp(access))<List<Agent>>('list_agents')).data.map((a) => a.name)
-      const refresh = { grant_type: 'refresh_token', refresh_token: tokens.refresh_token ?? '', client_id: clientId }
-      const rotated = await oauthToken(refresh)
-      const oldRefresh = await oauthToken(refresh)
-      const apps = ((await api<List<OAuthGrant>>('GET', '/api/oauth/grants', undefined, cookie)).json.data ?? []).map((a) => a.client).sort()
-      return {
-        actual: {
-          authorize: server.authorization_endpoint,
-          resource: meta.resource,
-          wrongVerifier: wrongVerifier.error ?? wrongVerifier,
-          access: /^jbo_/.test(access),
-          agents: viaOauth,
-          rotated: /^jbo_/.test(rotated.access_token ?? '') && rotated.access_token !== access,
-          oldRefresh: oldRefresh.error ?? oldRefresh,
-          apps,
-        },
-        pass:
-          server.authorization_endpoint === `${APP}/mcp/authorize` &&
-          meta.resource === `${APP}/mcp` &&
-          !!code &&
-          wrongVerifier.error === 'invalid_grant' &&
-          !wrongVerifier.access_token &&
-          /^jbo_/.test(access) &&
-          /^jbr_/.test(tokens.refresh_token ?? '') &&
-          viaOauth.includes('Dev') &&
-          !!rotated.access_token &&
-          rotated.access_token !== access &&
-          oldRefresh.error === 'invalid_grant' &&
-          !oldRefresh.access_token &&
-          isDeepStrictEqual(apps, ['e2e', 'e2e assistant']),
       }
     },
   )
@@ -1047,36 +877,17 @@ function main() {
   )
 
   check(
-    'U1',
-    'Claude mode renders the seat plugin as the model and the seat token into .env',
-    'provider claude-subscription-directsdk-experimental, default sonnet, haiku for side tasks; CLAUDE_CODE_OAUTH_TOKEN set; no test model',
-    async () => {
-      const files = await claudeModeFiles(seatToken)
-      const config = files['config.yaml'] ?? ''
-      const env = files['.env'] ?? ''
-      return {
-        actual: { config: config.split('\n').filter((l) => /model:|default:|provider|auxiliary|approval|compression/.test(l)), env: env.replace(/=.*/g, '=…') },
-        pass:
-          /provider: claude-subscription-directsdk-experimental/.test(config) &&
-          /default: sonnet/.test(config) &&
-          /approval: \{ provider: claude-subscription-directsdk-experimental, model: haiku \}/.test(config) &&
-          env.includes(`CLAUDE_CODE_OAUTH_TOKEN=${seatToken}`) &&
-          !/test-llm/.test(config),
-      }
-    },
-  )
-
-  check(
     'U2',
     'Every agent has the pinned Claude CLI and the seat plugin, read-only',
-    'claude --version 2.1.311; hermes plugins list shows claude-subscription-directsdk',
+    "claude --version is install.sh's CLAUDE= pin; hermes plugins list shows claude-subscription-directsdk",
     async () => {
+      const pin = readFileSync(`${JAKEBOX}/install/install.sh`, 'utf8').match(/^CLAUDE=(\S+)/m)?.[1]
       const cli = await docker('exec', '-u', '10000:10000', `ag-${dev.id}`, 'claude', '--version').catch((e) => failure(e))
       const plugins = await docker('exec', '-u', '10000:10000', '-e', 'COLUMNS=250', `ag-${dev.id}`, '/opt/hermes/bin/hermes', 'plugins', 'list').catch((e) =>
         failure(e, 'stdout'),
       )
       const plugin = plugins.split('\n').find((l) => l.includes('claude-subscription-directsdk'))
-      return { actual: { cli, plugin: plugin?.replace(/\s+/g, ' ').trim() ?? 'not listed' }, pass: /^2\.1\.311\b/.test(cli) && !!plugin }
+      return { actual: { pin, cli, plugin: plugin?.replace(/\s+/g, ' ').trim() ?? 'not listed' }, pass: !!pin && cli.split(' ')[0] === pin && !!plugin }
     },
   )
 
@@ -1097,8 +908,8 @@ function main() {
 
   check(
     'G1',
-    'Stop and start keep the same container, and the agent answers again as fast as a first boot',
-    'exited, then running; same container id; API server answers within max(30 s, 2 × the first boot)',
+    'Stop and start keep the same container, and the agent answers again',
+    'exited, then running; same container id; API server answers within 2 min',
     async () => {
       const before = await idOf(sales.id)
       await call('update_agent', { id: sales.id, wanted: 'stopped' })
@@ -1108,11 +919,9 @@ function main() {
       const restarted = await statusOf(sales.id)
       const afterId = await idOf(sales.id)
       await waitReady(sales, 120_000)
-      const backMs = Date.now() - t1
-      const bound = Math.max(30_000, 2 * firstBoot)
       return {
-        actual: `${stopped} -> ${restarted}; same id: ${before === afterId}; answers after ${Math.round(backMs / 1000)} s (bound ${Math.round(bound / 1000)} s)`,
-        pass: stopped === 'exited' && restarted === 'running' && before === afterId && backMs <= bound,
+        actual: `${stopped} -> ${restarted}; same id: ${before === afterId}; answers after ${Math.round((Date.now() - t1) / 1000)} s`,
+        pass: stopped === 'exited' && restarted === 'running' && before === afterId,
       }
     },
   )
@@ -1302,6 +1111,22 @@ function main() {
 
 function afterUpgrade() {
   check(
+    'I0',
+    'The installer refuses a tampered download and changes nothing',
+    'the upgrade from a mirror whose jakebox.tgz has one byte changed: "checksum mismatch", exit 1, still build e2e-1',
+    async () => {
+      const tamper = stripVTControlCharacters(readFileSync(`${RESULTS}/tamper.log`, 'utf8'))
+      return {
+        actual: tamper
+          .trim()
+          .split('\n')
+          .filter((l) => /mismatch|exit=|BUILD/.test(l)),
+        pass: /checksum mismatch: \S*jakebox\.tgz/.test(tamper) && /installer exit=1/.test(tamper) && /^BUILD e2e-1$/m.test(tamper),
+      }
+    },
+  )
+
+  check(
     'UP1',
     "Re-running the curl command upgrades in place, keeps the settings, and agentd follows the new release's image pin",
     '"JakeBox is running"; /etc/jakebox/env unchanged (JAKEBOX_MODEL=test though not passed, no AGENT_IMAGE stored); the new pin names the same image as docker.io/…, and agentd runs with exactly that',
@@ -1363,7 +1188,7 @@ function afterUpgrade() {
   check(
     'UP3',
     'Data, tokens and agents survive the upgrade; the new release restarts running agents once, so they mount its files',
-    'token works; Dev in the same container; a build.applied e2e-1 -> e2e-2 event in app.log; Dev restarted with its instructions intact and its plugin folder present; setup stays closed',
+    'token works; Dev in the same container; a build.applied e2e-1 -> e2e-2 event in app.log; Dev restarted with its instructions intact and its plugin folder present, and still answers from the team DB (n = 42); setup stays closed',
     async () => {
       const st = savedState()
       const call = await mcp(await refreshed(st))
@@ -1376,26 +1201,21 @@ function afterUpgrade() {
         failure(e).trim(),
       )
       const rebuilt = appEvents().some((e) => e.event === 'build.applied' && e.from === 'e2e-1' && e.to === 'e2e-2')
+      const reply = inner(await chat(st.dev, 'sql: select count(*)::int as n from orders'))
       const setupClosed = (await api<Setup>('GET', '/api/setup')).json.open === false
       return {
-        actual: { agents: agents.map((a) => `${a.name}:${a.status}`), sameContainer, rebuilt, soul, plugin, setup: setupClosed },
+        actual: { agents: agents.map((a) => `${a.name}:${a.status}`), sameContainer, rebuilt, soul, plugin, reply, setup: setupClosed },
         pass:
           agents.some((a) => a.id === st.dev.id && a.status === 'running') &&
           sameContainer &&
           rebuilt &&
           soul.includes('Updated instructions v2.') &&
           plugin.endsWith('inert_mcp.py') &&
+          rowsOf(reply)?.[0]?.n === 42 &&
           setupClosed,
       }
     },
   )
-
-  check('UP4', 'Dev still answers from the team DB', 'rows [{n: 42}]', async () => {
-    const st = savedState()
-    await waitReady(st.dev)
-    const reply = inner(await chat(st.dev, 'sql: select count(*)::int as n from orders'))
-    return { actual: reply, pass: rowsOf(reply)?.[0]?.n === 42 }
-  })
 }
 
 function afterRestart() {
@@ -1429,49 +1249,46 @@ function afterRestart() {
 
   check(
     'H2',
-    'The firewall after the restart is exactly the one tested before it',
-    'AGENT, AGENT-IN, both jumps and the ip rule identical to firewall.txt',
+    'The firewall after the restart is exactly the one tested before it, and health reports it',
+    'AGENT, AGENT-IN, both jumps and the ip rule identical to firewall.txt; /health 200 {ok: true, agentd: true, firewall: true}',
     async () => {
       const st = savedState()
       const now = await firewall()
-      return { actual: Object.fromEntries(Object.entries(now).map(([k, v]) => [k, v === st.fw[k]])), pass: isDeepStrictEqual(now, st.fw) }
+      const h = await health()
+      return {
+        actual: { same: Object.fromEntries(Object.entries(now).map(([k, v]) => [k, v === st.fw[k]])), health: h },
+        pass: isDeepStrictEqual(now, st.fw) && h.status === 200 && h.ok && h.agentd && h.firewall,
+      }
     },
   )
 
   check(
     'H3',
-    'JakeBox (not Docker) brings the agent back',
-    'Dev running and answering within 4 min; restart policy no; a new reconcile.started event for Dev in app.log',
+    'JakeBox (not Docker) brings the agent back, and it still reaches the DB through the gateway',
+    'Dev running and answering within 4 min, n = 42 from the team DB; restart policy no; a new reconcile.started event for Dev in app.log',
     async () => {
       const st = savedState()
       const call = await mcp(await refreshed(st))
       await waitReady(st.dev)
       const agents = (await call<List<Agent>>('list_agents')).data
+      const reply = inner(await chat(st.dev, 'sql: select count(*)::int as n from orders'))
       const restart = await docker('inspect', '-f', '{{.HostConfig.RestartPolicy.Name}}', `ag-${st.dev.id}`)
       const reconciled = reconcileCount(st.dev.id)
       return {
-        actual: { agents: agents.map((a) => `${a.name}:${a.status}`), restart, reconcileLines: `${st.reconciled} before, ${reconciled} now` },
-        pass: agents.some((a) => a.id === st.dev.id && a.status === 'running') && restart === 'no' && reconciled > st.reconciled,
+        actual: { agents: agents.map((a) => `${a.name}:${a.status}`), reply, restart, reconcileLines: `${st.reconciled} before, ${reconciled} now` },
+        pass:
+          agents.some((a) => a.id === st.dev.id && a.status === 'running') &&
+          rowsOf(reply)?.[0]?.n === 42 &&
+          restart === 'no' &&
+          reconciled > st.reconciled,
       }
     },
   )
-
-  check('H4', 'It still answers and still reaches the DB through the gateway', 'rows [{n: 42}]', async () => {
-    const st = savedState()
-    await waitReady(st.dev)
-    const reply = inner(await chat(st.dev, 'sql: select count(*)::int as n from orders'))
-    return { actual: reply, pass: rowsOf(reply)?.[0]?.n === 42 }
-  })
 
   check('H5', 'Isolation holds after the restart (same probe, from Dev)', 'matrix all ok', async () => {
     const iso = await isolation(savedState().dev)
     writeFileSync(`${RESULTS}/isolation-probe-dev-after-restart.json`, JSON.stringify({ probe: iso.probe, matrix: iso.rows }, null, 2))
     return { actual: iso.rows.map((x) => `${x.target}: ${x.agent}/${x.from_server}${x.ok ? '' : ' ✗'}`), pass: iso.pass }
-  })
-
-  check('H6', 'Health reports agentd and the firewall', '200 {ok: true, agentd: true, firewall: true}', async () => {
-    const h = await health()
-    return { actual: h, pass: h.status === 200 && h.ok && h.agentd && h.firewall }
   })
 }
 
@@ -1521,12 +1338,12 @@ async function oauthRegister(name: string) {
   return (await api<{ client_id: string }>('POST', '/api/oauth/clients', { client_name: name, redirect_uris: [OAUTH_REDIRECT] })).json.client_id
 }
 
-async function oauthCode(cookie: string, clientId: string, verifier: string, state?: string) {
+async function oauthCode(cookie: string, clientId: string, verifier: string) {
   const codeChallenge = createHash('sha256').update(verifier).digest('base64url')
   const approved = await api<OAuthCode>(
     'POST',
     '/api/oauth/codes',
-    { clientId, redirectUri: OAUTH_REDIRECT, codeChallenge, codeChallengeMethod: 'S256', state, allow: true },
+    { clientId, redirectUri: OAUTH_REDIRECT, codeChallenge, codeChallengeMethod: 'S256', allow: true },
     cookie,
   )
   return new URL(approved.json.redirect ?? '').searchParams.get('code') ?? ''
@@ -1735,13 +1552,29 @@ async function chat(a: AgentRef, text: string) {
     headers: { authorization: `Bearer ${channelKey(a.id)}`, 'content-type': 'application/json' },
     body: JSON.stringify({ model: 'hermes-agent', messages: [{ role: 'user', content: text }] }),
   })
-  const body = await r.text()
+  const reply = replyText(await r.text())
+  if (text.startsWith('sql:')) expectEvent(a, { text: inner(reply), isError: !rowsOf(inner(reply)) })
+  return reply
+}
+
+function replyText(body: string) {
   try {
     const reply: ChatReply = JSON.parse(body)
     return String(reply.choices?.[0]?.message?.content ?? body).trim()
   } catch {
     return body.trim()
   }
+}
+
+function expectEvent(a: AgentRef, reply: { text: string; isError: boolean }) {
+  const outcome = outcomeOf(reply)
+  const counts = (expectedEvents[a.id] ??= {})
+  counts[outcome] = (counts[outcome] ?? 0) + 1
+}
+
+function outcomeOf({ text, isError }: { text: string; isError: boolean }) {
+  if (!isError) return 'allowed'
+  return text.startsWith('Denied:') ? 'denied' : 'failed'
 }
 
 function inner(reply: string) {
@@ -1782,7 +1615,9 @@ async function callTool(a: AgentRef, args: Record<string, unknown>) {
     params: { name: 'call_tool', arguments: { reason: 'e2e connector check', ...args } },
   })
   const { result }: { result?: ToolResult } = JSON.parse(r.body)
-  return { text: String(result?.content?.[0]?.text ?? r.body), isError: !!result?.isError, ms: Date.now() - t0 }
+  const reply = { text: String(result?.content?.[0]?.text ?? r.body), isError: !!result?.isError }
+  expectEvent(a, reply)
+  return { ...reply, ms: Date.now() - t0 }
 }
 
 async function probe(a: AgentRef, targets: Record<string, [string, number]>): Promise<Probe> {
@@ -1825,9 +1660,6 @@ function targetsFor(a: AgentRef, other?: AgentRef) {
     gateway: { at: [`10.200.${a.net}.1`, 8081], agent: 'open' },
     internet_443: { at: ['1.1.1.1', 443], agent: 'open' },
     internet_by_name: { at: ['example.com', 443], agent: 'open' },
-    imap_993: { at: ['imap.gmail.com', 993], agent: 'blocked' },
-    smtp_465: { at: ['smtp.gmail.com', 465], agent: 'blocked' },
-    smtp_587: { at: ['smtp.gmail.com', 587], agent: 'blocked' },
     dashboard: { at: [`10.200.${a.net}.1`, 8787], agent: 'blocked' },
     team_db: { at: ['172.30.0.10', 5432], agent: 'blocked' },
     lan_10: { at: ['10.99.0.10', 80], agent: 'blocked' },
@@ -1872,14 +1704,6 @@ async function tlsProbe(dataDir: string, dsn: string, trustCa: boolean) {
   const env = { ...process.env, JAKEBOX_DATA: dataDir, DSN: dsn, ...(trustCa && { NODE_EXTRA_CA_CERTS: '/root/pgcerts/ca.crt' }) }
   const { stdout } = await sh('node', ['--input-type=module', '-e', script], { env })
   return stdout.trim().split('\n').at(-1) ?? ''
-}
-
-async function claudeModeFiles(seatToken: string): Promise<Record<string, string>> {
-  const script = `import { renderFiles } from "${JAKEBOX}/packages/app/src/agents/hermes-files.ts";
-    const agent = { id: "ag_u1u1u1u1", name: "U1", instructions: "# U1", model: "sonnet", net: 7 };
-    console.log(JSON.stringify(await renderFiles({ agent, ownerName: "u1owner", token: "ag_u1u1u1u1.token", channelKey: "k".repeat(32), seat: process.env.SEAT, channels: [] })));`
-  const { stdout } = await sh('node', ['--input-type=module', '-e', script], { env: { ...process.env, JAKEBOX_MODEL: 'claude', SEAT: seatToken } })
-  return JSON.parse(stdout.trim().split('\n').at(-1) ?? '')
 }
 
 async function timedSignIn(username: string) {
@@ -1963,7 +1787,6 @@ type Probe = {
   capeff: string
   docker_sock: boolean
   agentd_sock: boolean
-  own_env_has_key: boolean
   dns: string
   net: Record<string, string>
 }

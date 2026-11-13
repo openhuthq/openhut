@@ -3,12 +3,13 @@ import type { Connection } from '@jakebox/common/connections/connection.ts'
 import { ErrorNote } from '@/components/error-note'
 import { Mark } from '@/components/mark'
 import { SectionHead } from '@/components/section-head'
-import { useConnections, useCreateGrant, useDeleteGrant, useGrants } from '@/features/agents/api'
+import { useCreateGrant, useDeleteGrant, useGrants } from '@/features/agents/api'
+import { useConnections } from '@/features/connections/api'
 import { toastError } from '@/lib/toast'
 
 export function AgentConnections({ agent, lockReason }: { agent: Agent; lockReason: string | undefined }) {
   const connections = useConnections()
-  const grants = useGrants(agent.id)
+  const grants = useGrants({ agentId: agent.id })
   return <section>
     <SectionHead title="Connections" />
     <ErrorNote message={connections.error?.message ?? grants.error?.message} />

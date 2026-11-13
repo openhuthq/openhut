@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 IMG="${AGENT_IMAGE:-$(cat "$(dirname "$0")/agent-image")}"
-DIR="${WHATSAPP_BRIDGE:-/var/lib/jakebox/whatsapp-bridge}"
+DIR=/var/lib/jakebox/whatsapp-bridge
 [ -f "$DIR/.image" ] && [ "$(cat "$DIR/.image")" = "$IMG" ] && exit 0
 NEW="$DIR.new"
 rm -rf "$NEW" && mkdir -p "$(dirname "$DIR")"

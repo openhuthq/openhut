@@ -15,17 +15,14 @@ export const connectionEventService = {
     if (query.connectionId) await requireReadableConnection({ actor, connectionId: query.connectionId })
     if (query.agentId) await requireReadableAgent({ actor, agentId: query.agentId })
     const limit = query.limit ?? DEFAULT_LIMIT
-    const backwards = query.endingBefore !== undefined
     let select = db.selectFrom('connection_event as e').leftJoin('agent as a', 'a.id', 'e.agent_id')
       .select(['e.id', 'e.at', 'e.connection_id', 'e.agent_id', 'a.name', 'e.tool', 'e.reason', 'e.outcome', 'e.ms'])
-      .orderBy('e.id', backwards ? 'asc' : 'desc').limit(limit + 1)
+      .orderBy('e.id', 'desc').limit(limit + 1)
     if (query.connectionId) select = select.where('e.connection_id', '=', query.connectionId)
     if (query.agentId) select = select.where('e.agent_id', '=', query.agentId)
     if (query.startingAfter) select = select.where('e.id', '<', query.startingAfter)
-    if (query.endingBefore) select = select.where('e.id', '>', query.endingBefore)
     const rows = await select.execute()
-    const page = rows.slice(0, limit)
-    return { data: (backwards ? page.reverse() : page).map(eventOf), hasMore: rows.length > limit }
+    return { data: rows.slice(0, limit).map(eventOf), hasMore: rows.length > limit }
   },
 }
 

@@ -17,20 +17,13 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
 - **`packages/web`** — `@jakebox/web`, the React dashboard (Vite, TanStack Query). The approved design is its CSS.
 - **`packages/common`** — `@jakebox/common`, the API contract: Zod Mini request schemas and response types.
 - **`packages/agentd`** — `@jakebox/agentd`, the root helper: the only process that runs Docker, on a Unix socket.
-- **`packages/e2e`** — `@jakebox/e2e`, the end-to-end run: a bare Linux server in Docker, the curl install, an
-  upgrade and a restart. Results go to `packages/e2e/results/` (gitignored).
-- **`packages/recipes`** — `@jakebox/recipes`, agent templates (Dev, Support, Sales, Ops), data only, one folder per
-  recipe. `POST /api/agents { recipeId }` and the dashboard's New agent start from one.
+- **`packages/e2e`** — `@jakebox/e2e`, the end-to-end run: a bare Linux server in Docker, the curl install, a
+  tampered upgrade, the upgrade and a restart. Results go to `packages/e2e/results/` (gitignored).
 - **`packages/site`** — `@jakebox/site`, get.jakebox.dev: `install.sh` for curl, the release tarball, the home page and
-  the docs. The e2e run serves its releases with it.
-- **`packages/cli`** — `@jakebox/cli`, the `jakebox` command: signs in with OAuth and manages agents and invites.
-- **`packages/console`** — `@jakebox/console`, the release registry installs check for updates (server and web), so
-  Admin can say an update is available.
-- **`packages/infra`** — `aws/jakebox.yaml`, a CloudFormation stack: one EC2 host with an encrypted data volume, the
-  one-line installer and Caddy for HTTPS, no SSH (Session Manager). Check it with `uvx cfn-lint packages/infra/aws/jakebox.yaml`.
+  the docs, served by Caddy (`Dockerfile`, `Caddyfile`). The e2e run serves its releases with the same image.
 
 `install/` is the installer and what it runs on the server (firewall, systemd units, boot script); `scripts/release.sh`
-builds what `get.jakebox.dev` serves and `scripts/publish-release.sh` then tells the console about it; `vendor/` is the pinned Hermes plugin.
+builds what `get.jakebox.dev` serves; `vendor/` is the pinned Hermes plugin.
 
 ## Conventions (Skyfleet's)
 
@@ -61,4 +54,4 @@ people, agents and connections. The fake agentd answers without Docker, so agent
 ## Test
 
 `npx turbo run build typecheck test` builds, typechecks and runs the unit tests. `npm run e2e` runs the whole thing on Docker Desktop (about 25 minutes):
-a tampered download, the install, every check, an upgrade, a restart. Plan: `docs/verification-plan.md`.
+the install, every check, a tampered upgrade, the upgrade, a restart. Plan: `docs/verification-plan.md`.

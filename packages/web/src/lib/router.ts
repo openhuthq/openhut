@@ -1,10 +1,7 @@
 import { useLayoutEffect, useSyncExternalStore } from 'react'
 
-const listeners = new Set<() => void>()
-
 export function navigate(to: string, replace = false) {
-  history[replace ? 'replaceState' : 'pushState'](null, '', to)
-  listeners.forEach((listener) => listener())
+  navigation.navigate(to, { history: replace ? 'replace' : 'push' })
 }
 
 export function usePath() {
@@ -17,18 +14,15 @@ export function Redirect({ to }: { to: string }) {
 }
 
 function subscribe(listener: () => void) {
-  listeners.add(listener)
-  addEventListener('popstate', listener)
-  return () => {
-    listeners.delete(listener)
-    removeEventListener('popstate', listener)
-  }
+  navigation.addEventListener('currententrychange', listener)
+  return () => navigation.removeEventListener('currententrychange', listener)
 }
 
-addEventListener('click', (event) => {
-  if (!(event.target instanceof Element) || event.defaultPrevented || event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-  const anchor = event.target.closest('a')
-  if (!anchor || anchor.target || anchor.hasAttribute('download') || anchor.origin !== location.origin || anchor.pathname.startsWith('/api/')) return
-  event.preventDefault()
-  navigate(anchor.pathname + anchor.search + anchor.hash)
+function inApp(event: NavigateEvent) {
+  if (event.navigationType !== 'push' && event.navigationType !== 'replace') return false
+  return event.canIntercept && !event.hashChange && event.downloadRequest === null && !event.formData && !new URL(event.destination.url).pathname.startsWith('/api/')
+}
+
+navigation.addEventListener('navigate', (event) => {
+  if (inApp(event)) event.intercept({ focusReset: 'manual', scroll: 'manual' })
 })

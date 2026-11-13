@@ -8,7 +8,6 @@
   },
   "devDependencies": {
     "@jakebox/common": "*",
-    "@jakebox/recipes": "*",
     "@modelcontextprotocol/sdk": "1.30.1",
     "@types/node": "26.6.2"
   }

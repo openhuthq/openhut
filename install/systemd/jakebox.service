@@ -6,7 +6,6 @@ Wants=jakebox-agentd.service
 [Service]
 User=jakebox
 EnvironmentFile=/etc/jakebox/env
-Environment=JAKEBOX_DATA=/data/app
 WorkingDirectory=/opt/jakebox
 ExecStart=/usr/bin/env node /opt/jakebox/packages/app/src/app.ts
 UMask=0077

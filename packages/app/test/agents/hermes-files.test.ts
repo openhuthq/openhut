@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { renderFiles, type RenderedChannel } from '../../src/agents/hermes-files.ts'
+import { config } from '../../src/platform/config.ts'
 
 const agent = { id: 'ag_chantest', name: 'Dev', instructions: '# Dev', model: 'sonnet', net: 3 }
 const render = (channels: RenderedChannel[]) => renderFiles({ agent, ownerName: 'owner', token: 'ag_chantest.token', channelKey: 'k'.repeat(32), seat: '', channels })
@@ -30,6 +31,12 @@ test('WhatsApp open to anyone: bot mode, everyone allowed, smart approvals, the 
   assert.match(files['config.yaml'], /"15551234567@s\.whatsapp\.net"/)
 })
 
-test('the gateway is the agent\'s own .1 on the gateway port', () => {
-  assert.match(render([])['config.yaml'], /url: http:\/\/10\.200\.3\.1:8081\/api\/v1\/mcp/)
+test('Claude mode: the seat plugin is the model, haiku does side tasks, and the seat token goes into .env', (t) => {
+  config.modelMode = 'claude'
+  t.after(() => { config.modelMode = 'test' })
+  const files = renderFiles({ agent, ownerName: 'owner', token: 'ag_chantest.token', channelKey: 'k'.repeat(32), seat: 'sk-ant-oat01-seat', channels: [] })
+  assert.match(files['config.yaml'], /model:\n {2}default: sonnet\n {2}provider: claude-subscription-directsdk-experimental/)
+  assert.match(files['config.yaml'], /approval: \{ provider: claude-subscription-directsdk-experimental, model: haiku \}/)
+  assert.doesNotMatch(files['config.yaml'], /test-llm/)
+  assert.match(files['.env'], /^CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-seat$/m)
 })

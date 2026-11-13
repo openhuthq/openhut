@@ -6,7 +6,6 @@ export const ApiError = z.object({
   error: z.object({
     type: ErrorType,
     message: z.string(),
-    code: z.optional(z.string()),
     param: z.optional(z.string()),
   }),
 })
@@ -17,7 +16,6 @@ export const Timestamp = z.iso.datetime()
 export const ListQuery = z.object({
   limit: z.optional(z.coerce.number().check(z.int(), z.minimum(1), z.maximum(100))),
   startingAfter: z.optional(z.string()),
-  endingBefore: z.optional(z.string()),
 })
 export type ListQuery = z.infer<typeof ListQuery>
 

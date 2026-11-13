@@ -9,7 +9,7 @@ PREFIX=/opt/jakebox
 say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die() { printf 'jakebox: %s\n' "$*" >&2; exit 1; }
 retry() { n=0; until timeout 600 "$@"; do n=$((n+1)); [ $n -ge 4 ] && return 1; echo "  retrying: $1 ($n)"; sleep 5; done; }
-fetch() { if command -v curl >/dev/null 2>&1; then curl -fsSL --retry 4 --retry-all-errors --connect-timeout 15 -m 900 "$1" -o "$2"; else retry wget -qO "$2" -T 30 "$1"; fi; }
+fetch() { curl -fsSL --retry 4 --retry-all-errors --connect-timeout 15 -m 900 "$1" -o "$2"; }
 check() { printf '%s  %s\n' "$2" "$3" | "$1" -c - >/dev/null || die "checksum mismatch: $3"; }
 node_ok() { node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; }
 
@@ -89,7 +89,6 @@ umask 077
   echo "RESOLVER=${RESOLVER:-1.1.1.1}"
   [ -z "$IMAGE_OVERRIDE" ] || echo "AGENT_IMAGE=$IMAGE_OVERRIDE"
   echo "JAKEBOX_MODEL=${JAKEBOX_MODEL:-claude}"
-  [ -z "${CONSOLE_URL:-}" ] || echo "CONSOLE_URL=$CONSOLE_URL"
   echo "SETUP_CODE=${SETUP_CODE:-$(od -An -N9 -tx1 /dev/urandom | tr -d ' \n')}"
 } > /etc/jakebox/env.new
 mv /etc/jakebox/env.new /etc/jakebox/env

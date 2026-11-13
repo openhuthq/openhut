@@ -1,3 +1,4 @@
+import type { Deleted } from '@jakebox/common/api.ts'
 import type { CreatePerson, CreateSession, Invite, InviteLink, Me, MemberRole, Person, Session, Setup } from '@jakebox/common/team/team.ts'
 import type { Selectable } from 'kysely'
 import type { Database } from '../platform/db-schema.ts'
@@ -7,6 +8,7 @@ import { HttpError } from '../platform/http-error.ts'
 import { checkPassword, hashPassword, newId, newToken, sameSecret, sha } from '../platform/secrets.ts'
 import { publicUrl, settings } from '../platform/settings.ts'
 import { record } from '../platform/events.ts'
+import { deleted } from '../platform/responses.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { isAdmin, SESSION_DAYS, type Caller } from './identity.ts'
 
@@ -62,18 +64,19 @@ export const teamService = {
     return rows.map(inviteOf)
   },
 
-  async deleteInvite({ actor, id }: { actor: Caller; id: string }): Promise<void> {
+  async deleteInvite({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'invite'>> {
     if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can revoke invites.')
     const result = await db.deleteFrom('invite').where('id', '=', id).where('used_at', 'is', null).executeTakeFirst()
     if (!result.numDeletedRows) throw new HttpError(404, 'That invite was already used or revoked.')
     record({ action: 'invite.revoked', actor, target: { type: 'invite', id } })
+    return deleted({ id, object: 'invite' })
   },
 
   async listPeople(): Promise<Person[]> {
     return (await db.selectFrom('person').selectAll().where('removed_at', 'is', null).orderBy('created_at').execute()).map(personOf)
   },
 
-  async deletePerson({ actor, id }: { actor: Caller; id: string }): Promise<void> {
+  async deletePerson({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'person'>> {
     if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can remove people.')
     const person = await db.selectFrom('person').select(['id', 'role']).where('id', '=', id).where('removed_at', 'is', null).executeTakeFirst()
     if (!person) throw new HttpError(404, 'That person isn\'t on the team.')
@@ -86,6 +89,7 @@ export const teamService = {
     })
     await agentService.stopOwnedBy({ ownerId: id })
     record({ action: 'person.removed', actor, target: { type: 'person', id } })
+    return deleted({ id, object: 'person' })
   },
 }
 
@@ -104,10 +108,7 @@ async function createOwner({ setupCode, username, password, origin }: { setupCod
   const owner = await db.transaction().execute(async (trx) => {
     if (await trx.selectFrom('person').select('id').limit(1).executeTakeFirst()) throw new HttpError(403, 'JakeBox already has an owner. Ask them for an invite.')
     return trx.insertInto('person').values({ id: newId('usr'), username, pass, role: 'owner', removed_at: null }).returningAll().executeTakeFirstOrThrow()
-  }).catch((err: unknown) => {
-    if (isUniqueViolation(err)) throw new HttpError(403, 'JakeBox already has an owner. Ask them for an invite.')
-    throw err
-  })
+  }).catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(403, 'JakeBox already has an owner. Ask them for an invite.') : err })
   if (!settings.storedPublicUrl()) await settings.setPublicUrl(origin)
   return personOf(owner)
 }
@@ -119,10 +120,7 @@ async function acceptInvite({ inviteToken, username, password }: { inviteToken: 
       .where('expires_at', '>', new Date()).returning('role').executeTakeFirst()
     if (!invite) throw new HttpError(410, 'This invite link was already used or has expired. Ask for a new one.')
     const person = await trx.insertInto('person').values({ id: newId('usr'), username, pass, role: invite.role, removed_at: null }).returningAll().executeTakeFirstOrThrow()
-      .catch((err: unknown) => {
-        if (isUniqueViolation(err)) throw new HttpError(409, 'That username is taken. Pick another one.', { param: 'username' })
-        throw err
-      })
+      .catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'That username is taken. Pick another one.', { param: 'username' }) : err })
     return personOf(person)
   })
 }

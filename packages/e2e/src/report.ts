@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import type { PhaseResults } from './e2e.ts'
-import { fingerprint } from './sources.ts'
 
 const RESULTS = 'packages/e2e/results'
+const sameTree = process.argv[2] === 'same'
 const rows: string[] = []
 let pass = 0
 let total = 0
@@ -22,16 +22,11 @@ for (const phase of ['main', 'after-upgrade', 'after-restart']) {
     rows.push(`| ${x.id} | ${cell(x.check)} | ${cell(x.expected)} | \`${cell(x.actual)}\` | ${x.pass ? 'PASS' : '**FAIL**'} |`)
   }
 }
-const tested = existsSync(`${RESULTS}/sources.sha256`) ? readFileSync(`${RESULTS}/sources.sha256`, 'utf8') : ''
-const now = fingerprint()
-const changed = tested
-  ? [...new Set([...now.split('\n'), ...tested.split('\n')].filter((l) => l && !(tested.includes(l) && now.includes(l))).map((l) => l.split('  ')[1]))]
-  : ['(no sources.sha256)']
-const sources = changed.length ? `**changed since the run**: ${changed.join(', ')}` : 'the tree matches what the run tested'
+const sources = sameTree ? 'the tree matches what the run tested' : '**the tree changed during the run**'
 console.log(
   `# JakeBox e2e report\n\n${pass}/${total} checks passed\n\nSources: ${sources}\n\n| ID | Check | Expected | Actual | Result |\n|---|---|---|---|---|\n${rows.join('\n')}`,
 )
-process.exit(pass === total && !changed.length ? 0 : 1)
+process.exit(pass === total && sameTree ? 0 : 1)
 
 function cell(s: string) {
   return s

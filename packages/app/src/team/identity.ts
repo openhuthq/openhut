@@ -17,6 +17,10 @@ export async function who(req: FastifyRequest): Promise<Caller> {
   throw new HttpError(401, 'Sign in first.')
 }
 
+export async function requireSignIn(req: FastifyRequest): Promise<void> {
+  await who(req)
+}
+
 export async function callerOf(req: FastifyRequest): Promise<Caller | undefined> {
   const access = ACCESS_TOKEN.exec(req.headers.authorization ?? '')?.[1]
   if (access) return activePerson(await oauthService.owner(access))

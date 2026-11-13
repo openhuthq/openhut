@@ -1,28 +1,23 @@
-import { createHash } from 'node:crypto'
-import { mkdirSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { mkdirSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
-import { PGLiteSocketServer } from '@electric-sql/pglite-socket'
-import { Kysely, PostgresDialect, sql } from 'kysely'
-import pg from 'pg'
+import { Kysely, PGliteDialect, sql, type Selectable } from 'kysely'
 import { config } from './config.ts'
 import type { Database } from './db-schema.ts'
+import { HttpError } from './http-error.ts'
 
-const socketDir = join(tmpdir(), `jakebox-pg-${createHash('sha256').update(resolve(config.dataDir)).digest('hex').slice(0, 12)}`)
+const ID = /^[a-z]+_[a-z0-9]{8}$/
+
 mkdirSync(config.dataDir, { recursive: true, mode: 0o700 })
-mkdirSync(socketDir, { recursive: true, mode: 0o700 })
-rmSync(join(socketDir, '.s.PGSQL.5432'), { force: true })
 
-const pglite = await PGlite.create(`${config.dataDir}/pglite`)
-const socketServer = new PGLiteSocketServer({ db: pglite, path: join(socketDir, '.s.PGSQL.5432') })
-await socketServer.start()
+export const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite: await PGlite.create(`${config.dataDir}/pglite`) }) })
 
-export const db = new Kysely<Database>({
-  dialect: new PostgresDialect({ pool: new pg.Pool({ host: socketDir, user: 'postgres', database: 'postgres', max: 1, idleTimeoutMillis: 0 }) }),
-})
+await sql`create table if not exists install_setting (name text primary key, value text not null)`.execute(db)
 
-await sql`create table if not exists install_setting (name text primary key, value text not null, updated_at timestamptz not null default now())`.execute(db)
+export async function findRow<T extends 'agent' | 'channel' | 'connection_grant'>({ table, id, missing }: { table: T; id: string; missing: string }): Promise<Selectable<Database[T]>> {
+  const [row] = ID.test(id) ? (await sql<Selectable<Database[T]>>`select * from ${sql.table(table)} where id = ${id}`.execute(db)).rows : []
+  if (!row) throw new HttpError(404, missing)
+  return row
+}
 
 export const isUniqueViolation = (err: unknown): boolean => typeof err === 'object' && err !== null && 'code' in err && err.code === '23505'
 
@@ -38,7 +33,7 @@ export async function migrate(): Promise<void> {
   await sql`create table if not exists agent (
     id text primary key, name text not null, owner_id text not null references person(id), instructions text not null,
     model text not null default 'sonnet' check (model in ('opus', 'sonnet', 'haiku')), net integer unique not null check (net between 1 and 250),
-    token_version integer not null default 1, wanted text not null default 'stopped' check (wanted in ('running', 'stopped')),
+    wanted text not null default 'stopped' check (wanted in ('running', 'stopped')),
     channel_key text not null, created_at timestamptz not null default now())`.execute(db)
   await sql`create table if not exists channel (
     id text primary key, agent_id text not null references agent(id) on delete cascade, kind text not null check (kind in ('slack', 'whatsapp')),

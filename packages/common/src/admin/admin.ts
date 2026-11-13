@@ -14,7 +14,6 @@ export const Admin = z.object({
     total: z.number(),
   }),
   publicUrl: z.string(),
-  update: z.nullable(z.object({ latest: z.string(), command: z.string() })),
 })
 export type Admin = z.infer<typeof Admin>
 

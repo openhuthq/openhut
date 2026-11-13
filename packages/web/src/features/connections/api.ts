@@ -1,17 +1,13 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@jakebox/common/api.ts'
-import { Agent, Grant } from '@jakebox/common/agents/agent.ts'
 import { Connection, ConnectionEvent, type CreateConnection, type UpdateConnection } from '@jakebox/common/connections/connection.ts'
 import { request } from '@/lib/api-client'
-import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
+import { CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
 
 const CONNECTION_LIST = List(Connection)
 const EVENT_LIST = List(ConnectionEvent)
-const AGENT_LIST = List(Agent)
-const GRANT_LIST = List(Grant)
 const DELETED_CONNECTION = Deleted('connection')
-const DELETED_GRANT = Deleted('grant')
 const EVENTS_PER_PAGE = '25'
 
 export function useConnections() {
@@ -33,27 +29,6 @@ export function useConnectionEvents(connectionId: string) {
     },
     getNextPageParam: (page) => page.hasMore ? page.data.at(-1)?.id : undefined,
     retry: false,
-  })
-}
-
-export function useAgents() {
-  return useQuery({ queryKey: AGENTS_KEY, queryFn: () => request({ schema: AGENT_LIST, path: '/api/agents' }).then((page) => page.data) })
-}
-
-export function useGrants(connectionId: string) {
-  return useQuery({ queryKey: grantsKey({ connectionId }), queryFn: () => request({ schema: GRANT_LIST, path: `/api/grants?${new URLSearchParams({ connectionId })}` }).then((page) => page.data) })
-}
-
-export function useDeleteGrant() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (grant: Grant) => request({ schema: DELETED_GRANT, path: `/api/grants/${encodeURIComponent(grant.id)}`, method: 'DELETE' }),
-    onSuccess: (_, grant) => {
-      const remove = (grants: Grant[] | undefined) => grants?.filter((each) => each.id !== grant.id)
-      client.setQueryData<Grant[]>(grantsKey({ connectionId: grant.connectionId }), remove)
-      client.setQueryData<Grant[]>(grantsKey({ agentId: grant.agentId }), remove)
-      return client.invalidateQueries({ queryKey: CONNECTIONS_KEY })
-    },
   })
 }
 

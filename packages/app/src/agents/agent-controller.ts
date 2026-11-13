@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { CreateAgent, CreateGrant, ListGrants, UpdateAgent } from '@jakebox/common/agents/agent.ts'
-import { deleted, listOf } from '../platform/responses.ts'
-import { who } from '../team/identity.ts'
+import { listOf } from '../platform/responses.ts'
+import { requireSignIn, who } from '../team/identity.ts'
 import { agentService } from './agent-service.ts'
 
 export const agentController: FastifyPluginAsync = async (app) => {
@@ -13,27 +13,18 @@ export const agentController: FastifyPluginAsync = async (app) => {
 
   app.patch<{ Params: { id: string }; Body: UpdateAgent }>('/:id', UpdateRequest, async (req) => agentService.update({ actor: await who(req), id: req.params.id, patch: req.body }))
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req) => {
-    await agentService.delete({ actor: await who(req), id: req.params.id })
-    return deleted({ id: req.params.id, object: 'agent' })
-  })
+  app.delete<{ Params: { id: string } }>('/:id', async (req) => agentService.delete({ actor: await who(req), id: req.params.id }))
 }
 
 export const grantController: FastifyPluginAsync = async (app) => {
-  app.get<{ Querystring: ListGrants }>('/', ListGrantsRequest, async (req) => {
-    await who(req)
-    return listOf({ req, data: await agentService.listGrants(req.query) })
-  })
+  app.get<{ Querystring: ListGrants }>('/', ListGrantsRequest, async (req) => listOf({ req, data: await agentService.listGrants(req.query) }))
 
   app.post<{ Body: CreateGrant }>('/', CreateGrantRequest, async (req) => agentService.createGrant({ actor: await who(req), ...req.body }))
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req) => {
-    await agentService.deleteGrant({ actor: await who(req), id: req.params.id })
-    return deleted({ id: req.params.id, object: 'grant' })
-  })
+  app.delete<{ Params: { id: string } }>('/:id', async (req) => agentService.deleteGrant({ actor: await who(req), id: req.params.id }))
 }
 
 const CreateRequest = { schema: { body: CreateAgent } }
 const UpdateRequest = { schema: { body: UpdateAgent } }
-const ListGrantsRequest = { schema: { querystring: ListGrants } }
+const ListGrantsRequest = { onRequest: requireSignIn, schema: { querystring: ListGrants } }
 const CreateGrantRequest = { schema: { body: CreateGrant } }

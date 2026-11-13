@@ -2,13 +2,11 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { Deleted, List } from '@jakebox/common/api.ts'
 import { Agent, Grant, type CreateAgent, type UpdateAgent } from '@jakebox/common/agents/agent.ts'
 import { Channel, type CreateChannel, type UpdateChannel } from '@jakebox/common/channels/channel.ts'
-import { Connection } from '@jakebox/common/connections/connection.ts'
 import { request } from '@/lib/api-client'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
 
 const AGENT_LIST = List(Agent)
-const CONNECTION_LIST = List(Connection)
 const GRANT_LIST = List(Grant)
 const CHANNEL_LIST = List(Channel)
 const DELETED_AGENT = Deleted('agent')
@@ -64,12 +62,8 @@ export function useDeleteAgent(agentId: string) {
   })
 }
 
-export function useConnections() {
-  return useQuery({ queryKey: CONNECTIONS_KEY, queryFn: () => request({ schema: CONNECTION_LIST, path: '/api/connections' }).then((page) => page.data) })
-}
-
-export function useGrants(agentId: string) {
-  return useQuery({ queryKey: grantsKey({ agentId }), queryFn: () => request({ schema: GRANT_LIST, path: `/api/grants?${new URLSearchParams({ agentId })}` }).then((page) => page.data) })
+export function useGrants(filter: { agentId: string } | { connectionId: string }) {
+  return useQuery({ queryKey: grantsKey(filter), queryFn: () => request({ schema: GRANT_LIST, path: `/api/grants?${new URLSearchParams(filter)}` }).then((page) => page.data) })
 }
 
 export function useCreateGrant() {

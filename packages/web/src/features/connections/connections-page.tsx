@@ -5,7 +5,6 @@ import { ICONS } from '@/components/icons'
 import { Loaded } from '@/components/loaded'
 import { Mark } from '@/components/mark'
 import { Page } from '@/components/page'
-import { SOON } from '@/components/soon'
 import { useConnections } from '@/features/connections/api'
 import { ConnectionHealth } from '@/features/connections/connection-health'
 import { plural } from '@/lib/format'
@@ -61,7 +60,7 @@ function CatalogItem({ name, title, blurb, connected }: { name: BrandName; title
     <span className="t"><span className="nm">{title}</span><span className="bl">{line}</span></span>
   </>
   if (name === 'postgres') return <a className="item" href="/connections/new" title={blurb}>{content(blurb)}</a>
-  return <button type="button" className="item" disabled title={blurb}>{content(SOON)}</button>
+  return <button type="button" className="item" disabled title={blurb}>{content('Not in this build yet')}</button>
 }
 
 function audience(connection: Connection, me: Me) {

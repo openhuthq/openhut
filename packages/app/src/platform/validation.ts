@@ -1,25 +1,16 @@
 import * as z from 'zod/mini'
 import type { FastifySchemaCompiler } from 'fastify'
+import { HttpError } from './http-error.ts'
 
 z.config(z.locales.en())
 
-const PARTS: Record<string, string> = { body: 'The request body', params: 'The URL', querystring: 'The query string', headers: 'The request headers' }
-
-export class InvalidRequest extends Error {
-  statusCode = 400
-  param?: string
-
-  constructor(message: string, param?: string) {
-    super(message)
-    this.param = param
-  }
-}
+const PARTS: Record<string, string> = { body: 'The request body', querystring: 'The query string' }
 
 export const validateWithZod: FastifySchemaCompiler<z.ZodMiniType> = ({ schema, httpPart }) => (data) => {
   const result = z.safeParse(schema, data)
   if (result.success) return { value: result.data }
   const [first] = result.error.issues
-  return { error: new InvalidRequest(`${PARTS[httpPart ?? ''] ?? 'The request'} is not valid. ${describeIssues(result.error.issues)}`, first && paramOf(first)) }
+  return { error: new HttpError(400, `${PARTS[httpPart ?? ''] ?? 'The request'} is not valid. ${describeIssues(result.error.issues)}`, { param: first && paramOf(first) }) }
 }
 
 export const describeIssues = (issues: z.core.$ZodIssue[]): string =>

@@ -11,7 +11,8 @@ import { OwnerChip } from '@/components/owner-chip'
 import { Page } from '@/components/page'
 import { SectionHead } from '@/components/section-head'
 import { StatusBadge } from '@/components/status-badge'
-import { useAgents, useConnection, useConnectionEvents, useDeleteConnection, useDeleteGrant, useGrants, useUpdateConnection } from '@/features/connections/api'
+import { useAgents, useDeleteGrant, useGrants } from '@/features/agents/api'
+import { useConnection, useConnectionEvents, useDeleteConnection, useUpdateConnection } from '@/features/connections/api'
 import { ConnectionHealth } from '@/features/connections/connection-health'
 import { ago, shortDate } from '@/lib/format'
 import { toastError } from '@/lib/toast'
@@ -78,7 +79,7 @@ function Activity({ connectionId, agents }: { connectionId: string; agents: Agen
 }
 
 function GrantedAgents({ connectionId, agents }: { connectionId: string; agents: Agent[] }) {
-  const grants = useGrants(connectionId)
+  const grants = useGrants({ connectionId })
   return <section>
     <SectionHead title="Agents" />
     <Loaded query={grants}>{(loaded) => <GrantList grants={loaded} agents={agents} />}</Loaded>

@@ -120,4 +120,3 @@ function connectorTool<S extends z.ZodMiniObject>({ description, input, run }: {
 }
 
 export type ConnectorTool = { description: string; input: z.ZodMiniObject; schema: Record<string, unknown>; run: (call: { dsn: string; args: unknown }) => Promise<unknown> }
-export type ParsedDsn = ReturnType<typeof parseDsn>

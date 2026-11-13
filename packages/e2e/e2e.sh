@@ -8,16 +8,21 @@ wait_healthy() { i=0; until healthy; do i=$((i+3)); [ $i -ge "$1" ] && return 1;
 redact() { sed -E 's/(code=)[0-9a-f]+/\1<redacted>/'; }
 in_host() { docker exec jakebox-host "$@"; }
 run_phase() { in_host node --test-force-exit --test-reporter=spec /opt/jakebox/packages/e2e/src/e2e.ts "$1"; }
+tree_sha() { { git rev-parse HEAD; git diff HEAD --binary; git ls-files -o --exclude-standard -z | xargs -0 shasum -a 256; } | shasum -a 256 | cut -d' ' -f1; }
+mirror() {
+  docker rm -f jakebox-mirror >/dev/null 2>&1
+  docker run -d --name jakebox-mirror -p 127.0.0.1:8099:80 -v "$PWD/$1:/srv/release:ro" jakebox-site >/dev/null || fail "mirror of $1"
+  i=0; until curl -fs -o /dev/null http://127.0.0.1:8099/; do i=$((i+1)); [ $i -gt 50 ] && fail "mirror of $1 on :8099"; sleep 0.2; done
+}
 
 rm -rf "$R" && mkdir -p "$R"
-node packages/e2e/src/sources.ts > "$R/sources.sha256"
+tree_sha > "$R/tree.sha256"
 BUILD=e2e-1 BASE=http://host.docker.internal:8099 ./scripts/release.sh || fail "release"
-node packages/site/src/server.ts --port 8099 --release dist > dist/serve.log 2>&1 & SERVE=$!
-trap 'kill $SERVE 2>/dev/null' EXIT
-serving() { i=0; until curl -fsS -o /dev/null "http://127.0.0.1:$1/"; do i=$((i+1)); [ $i -gt 50 ] && fail "release server on :$1"; sleep 0.2; done; }
-serving 8099
+docker build -q -f packages/site/Dockerfile -t jakebox-site . >/dev/null || fail "site image"
+trap 'docker rm -f jakebox-mirror >/dev/null 2>&1' EXIT
+mirror dist
 
-docker rm -f jakebox-host jakebox-lan jakebox-tamper >/dev/null 2>&1
+docker rm -f jakebox-host jakebox-lan >/dev/null 2>&1
 docker run --rm --privileged -v jakebox-docker:/var/lib/docker --entrypoint sh docker:28-dind -c '
   (dockerd >/dev/null 2>&1 &); i=0; until docker info >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 60 ] && exit 1; sleep 1; done
   docker ps -aq | xargs -r docker rm -f >/dev/null; docker network prune -f >/dev/null; docker volume prune -af >/dev/null
@@ -39,17 +44,6 @@ docker network connect --ip 10.99.0.2 jb-lan10 jakebox-host && docker network co
 
 in_host timeout 300 apk add -q curl || fail "curl"
 
-echo "--- a mirror serving a jakebox.tgz with one byte changed: the installer must refuse it"
-mkdir -p dist/tampered && sed 's|host.docker.internal:8099|host.docker.internal:8098|g' dist/install.sh > dist/tampered/install.sh &&
-  cp dist/jakebox.tgz dist/tampered/ && printf 'X' | dd of=dist/tampered/jakebox.tgz bs=1 seek=4096 conv=notrunc 2>/dev/null || fail "tampered release"
-node packages/site/src/server.ts --port 8098 --release dist/tampered > dist/serve-tampered.log 2>&1 & BAD=$!
-serving 8098
-docker run -d --name jakebox-tamper -v jakebox-apkcache:/etc/apk/cache --add-host host.docker.internal:host-gateway \
-  --entrypoint sh docker:28-dind -c 'exec sleep infinity' >/dev/null || fail "tamper server"
-docker exec jakebox-tamper timeout 300 apk add -q curl || fail "curl on the tamper server"
-docker exec jakebox-tamper sh -c 'curl -fsSL http://host.docker.internal:8098 | JAKEBOX_MODEL=test sh; echo "installer exit=$?"; ls -d /opt/jakebox 2>&1' 2>&1 | redact | tee "$R/tamper.log"
-kill $BAD 2>/dev/null; docker rm -f jakebox-tamper >/dev/null
-
 echo "--- install: curl -fsSL http://host.docker.internal:8099 | JAKEBOX_MODEL=test sh"
 in_host sh -c 'curl -fsSL http://host.docker.internal:8099 | JAKEBOX_MODEL=test sh' 2>&1 | redact | tee "$R/install.log"
 grep -q "JakeBox is running" "$R/install.log" || fail "install"
@@ -59,8 +53,15 @@ copy_test || fail "copy test"
 
 run_phase main; main=$?
 
-echo "--- upgrade: a new build, installed over the running server with the same command and no settings"
 PIN="docker.io/$(cat install/agent-image)" BUILD=e2e-2 BASE=http://host.docker.internal:8099 ./scripts/release.sh || fail "release 2"
+echo "--- a tampered upgrade: the mirror serves e2e-2 with one byte of jakebox.tgz changed; the installer must refuse it and leave e2e-1"
+mkdir dist/tampered && cp dist/install.sh dist/jakebox.tgz dist/tampered/ &&
+  printf 'X' | dd of=dist/tampered/jakebox.tgz bs=1 seek=4096 conv=notrunc 2>/dev/null || fail "tampered release"
+mirror dist/tampered
+in_host sh -c 'curl -fsSL http://host.docker.internal:8099 | sh; echo "installer exit=$?"; echo "BUILD $(cat /opt/jakebox/BUILD)"' 2>&1 | redact | tee "$R/tamper.log"
+mirror dist
+
+echo "--- upgrade: a new build, installed over the running server with the same command and no settings"
 in_host sh -c 'curl -fsSL http://host.docker.internal:8099 | sh' 2>&1 | redact | tee "$R/upgrade.log"
 wait_healthy 300 || echo "e2e: not healthy 5 min after the upgrade"
 copy_test || fail "copy test"
@@ -71,6 +72,7 @@ wait_healthy 600 || echo "e2e: not healthy 10 min after the restart"
 run_phase after-restart; after=$?
 
 for f in boot agentd app; do in_host sh -c "grep -v -e ExperimentalWarning -e trace-warnings /var/log/jakebox/$f.log" > "$R/$f.log" 2>&1; done
-node packages/e2e/src/report.ts > "$R/e2e-report.md"; report=$?
+[ "$(tree_sha)" = "$(cat "$R/tree.sha256")" ] && tree=same || tree=changed
+node packages/e2e/src/report.ts "$tree" > "$R/e2e-report.md"; report=$?
 echo "main=$main after-upgrade=$upgrade after-restart=$after report=$report -> $R/e2e-report.md"
 [ $main -eq 0 ] && [ $upgrade -eq 0 ] && [ $after -eq 0 ] && [ $report -eq 0 ]

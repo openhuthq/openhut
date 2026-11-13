@@ -30,7 +30,7 @@ createServer({ allowHalfOpen: true }, (sock) => {
 function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
   switch (req.cmd) {
     case 'health':
-      return { runtime: 'runsc (fake)', firewall: true, image: IMAGE, watchdog: 'ok' }
+      return { firewall: true, image: IMAGE }
     case 'ps':
       return { states }
     case 'create':
@@ -51,9 +51,6 @@ function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
       delete pairReads[req.id]
       states[req.id] = 'exited'
       return { stopped: req.id }
-    case 'restart-now':
-      states[req.id] = 'running'
-      return { restarted: req.id }
     case 'rm':
       delete states[req.id]
       delete rendered[req.id]

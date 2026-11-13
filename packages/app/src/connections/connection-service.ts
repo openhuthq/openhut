@@ -1,9 +1,11 @@
 import type { Selectable } from 'kysely'
 import * as z from 'zod/mini'
+import type { Deleted } from '@jakebox/common/api.ts'
 import type { Connection, ConnectionStatus } from '@jakebox/common/connections/connection.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { record } from '../platform/events.ts'
+import { deleted } from '../platform/responses.ts'
 import { describeIssues } from '../platform/validation.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { newId, seal, unseal } from '../platform/secrets.ts'
@@ -54,11 +56,12 @@ export const connectionService = {
     return connectionService.get({ actor, id })
   },
 
-  async delete({ actor, id }: { actor: Caller; id: string }): Promise<void> {
+  async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'connection'>> {
     const row = await rowOf(id)
     if (row.owner_id !== actor.id && !isAdmin(actor)) throw new HttpError(403, 'Only its owner or an admin can delete a connection.')
     await db.deleteFrom('connection').where('id', '=', id).execute()
     record({ action: 'connection.deleted', actor, target: { type: 'connection', id, name: row.name } })
+    return deleted({ id, object: 'connection' })
   },
 
   async tools({ agent }: { agent: { id: string; owner_id: string } }): Promise<AgentTool[]> {
