@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import type { Admin, AgentContainer } from '@fastmonkey/common/admin/admin.ts'
+import type { Admin, AgentContainer, SeatUsage, SeatWindow } from '@fastmonkey/common/admin/admin.ts'
 import type { OAuthGrant } from '@fastmonkey/common/team/oauth.ts'
 import type { Me } from '@fastmonkey/common/team/team.ts'
 import type { BrandName } from '@/components/brand-icons'
@@ -14,7 +14,7 @@ import { Locked } from '@/components/locked'
 import { Mark } from '@/components/mark'
 import { Page } from '@/components/page'
 import { StatusBadge } from '@/components/status-badge'
-import { useAdmin, useCompleteSeatSignIn, useContainers, useStartSeatSignIn, useStartUpdate, useDeleteOAuthGrant, useOAuthGrants, useUpdateAdmin } from '@/features/admin/api'
+import { useAdmin, useCompleteSeatSignIn, useContainers, useSeatUsage, useStartSeatSignIn, useStartUpdate, useDeleteOAuthGrant, useOAuthGrants, useUpdateAdmin } from '@/features/admin/api'
 import { useAgents } from '@/features/agents/api'
 import { GoogleClientSetup } from '@/features/connections/google-client-setup'
 import { ago, shortDate } from '@/lib/format'
@@ -40,6 +40,7 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
         <Row icon="claude" title="Claude seat" subtitle={seatLine(admin)} status={admin.seat.set ? <Ready word="Connected" /> : <StatusBadge status="not_set_up" />}
           action={<ToggleButton label={admin.seat.set ? 'Replace' : 'Set up'} form="seat" open={form === 'seat'} canEdit={canEdit} reason="Only an owner or admin sets the seat" onOpen={openSeatTab} />} />
         {form === 'seat' && canEdit && <SeatForm />}
+        {admin.seat.set && admin.seat.mode === 'claude' && <SeatUsagePanel />}
       </Section>
       <Section number={2} title="Server">
         <Row icon="globe" title="Public URL" mono subtitle={admin.publicUrl}
@@ -65,6 +66,39 @@ function ToggleButton({ label, form, open, canEdit, reason, onOpen }: { label: s
   return <Locked reason={canEdit ? undefined : reason}>
     <button type="button" className="btn sm" disabled={!canEdit} aria-expanded={open} aria-controls={form} onClick={() => { if (!open) onOpen?.(); navigate(open ? '/admin' : `/admin/${form}`) }}>{label}</button>
   </Locked>
+}
+
+const WINDOW_NAMES: Record<SeatWindow['kind'], string> = { five_hour: 'This session', seven_day: 'This week' }
+const resetTime = new Intl.DateTimeFormat('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+
+function SeatUsagePanel() {
+  const usage = useSeatUsage()
+  if (usage.error) return <div className="aform"><span className="mute">{usage.error.message}</span></div>
+  if (!usage.data) return <div className="aform updating" role="status"><span className="spin" aria-hidden="true"></span><span>Asking Claude how much of the seat is used…</span></div>
+  return <SeatUsageView usage={usage.data} />
+}
+
+function SeatUsageView({ usage }: { usage: SeatUsage }) {
+  const total = usage.agents.reduce((sum, agent) => sum + agent.costUsd, 0)
+  const used = usage.agents.filter((agent) => agent.costUsd > 0)
+  return <div className="aform usage">
+    {usage.windows.length
+      ? usage.windows.map((window) => <Meter key={window.kind} label={WINDOW_NAMES[window.kind]} percent={window.percent} note={window.resetsAt ? `Resets ${resetTime.format(new Date(window.resetsAt))}` : ''} />)
+      : <span className="mute">Claude didn't report this seat's limits.</span>}
+    <span className="usage-head">By agent since {shortDate.format(new Date(usage.since))} <span className="mute">· share of what agents used, at API prices</span></span>
+    {used.length
+      ? used.map((agent) => <Meter key={agent.agentId} label={agent.agentName} avatar={agent.agentId} percent={Math.round((agent.costUsd / total) * 100)} note={`$${agent.costUsd.toFixed(2)}`} />)
+      : <span className="mute">No agent has used the seat this week.</span>}
+  </div>
+}
+
+function Meter({ label, percent, note, avatar }: { label: string; percent: number; note: string; avatar?: string }) {
+  return <div className="meter-row">
+    <span className="meter-label">{avatar && <Avatar id={avatar} size={20} />}<span className="ellip">{label}</span></span>
+    <span className="meter" role="meter" aria-label={label} aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${Math.min(100, percent)}%` }} /></span>
+    <span className="meter-pct">{percent}%</span>
+    <span className="meter-note mute">{note}</span>
+  </div>
 }
 
 function SeatForm() {

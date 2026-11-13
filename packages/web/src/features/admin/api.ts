@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Admin, AgentContainer, SeatSignIn, Update, type UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
+import { Admin, AgentContainer, SeatSignIn, SeatUsage, Update, type UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
 import { Deleted, List } from '@fastmonkey/common/api.ts'
 import { OAuthGrant } from '@fastmonkey/common/team/oauth.ts'
 import type { Me } from '@fastmonkey/common/team/team.ts'
@@ -21,6 +21,10 @@ export function useAdmin() {
     queryFn: () => request({ schema: Admin, path: '/api/admin' }),
     refetchInterval: (query) => query.state.data?.server.update?.status === 'running' ? UPDATE_POLL_MS : false,
   })
+}
+
+export function useSeatUsage() {
+  return useQuery({ queryKey: ['seat-usage'], queryFn: () => request({ schema: SeatUsage, path: '/api/admin/seat-usage' }), retry: false })
 }
 
 export function useUpdateAdmin(back = '/admin') {

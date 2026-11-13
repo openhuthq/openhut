@@ -25,6 +25,7 @@ export const agentd = {
   skills: ({ id }: { id: string }) => ask({ request: { cmd: 'skills', id }, doing: 'list the skills', schema: z.object({ skills: z.array(z.object({ path: z.string(), head: z.string() })), bundled: z.string() }) }),
   readSkill: ({ id, path }: { id: string; path: string }) => ask({ request: { cmd: 'skill-read', id, path }, doing: 'open the skill', schema: z.object({ body: z.string() }) }),
   writeSkill: ({ id, path, body }: { id: string; path: string; body: string }) => ask({ request: { cmd: 'skill-write', id, path, body }, doing: 'save the skill', schema: z.object({ written: z.string() }) }),
+  usage: ({ since }: { since: number }) => ask({ request: { cmd: 'usage', since }, doing: 'read the agents\' usage', schema: z.object({ usage: z.record(z.string(), z.number()) }) }),
   unlinkWhatsapp: ({ id }: { id: string }) => ask({ request: { cmd: 'wa-unlink', id }, doing: 'unlink WhatsApp', schema: z.object({ unlinked: z.string() }) }),
   joinTailnet: ({ authKey }: { authKey: string }) => ask({ request: { cmd: 'ts-up', authKey }, doing: 'join the tailnet', schema: z.extend(Tailnet, { joined: z.boolean() }) }),
   tailnet: () => ask({ request: { cmd: 'ts-status' }, doing: 'read the Tailscale status', schema: Tailnet }),

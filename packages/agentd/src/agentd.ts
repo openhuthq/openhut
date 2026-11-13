@@ -1,10 +1,11 @@
 import { execFile, spawn } from 'node:child_process'
-import { chmodSync, chownSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, chownSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
 import { dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
+import { DatabaseSync } from 'node:sqlite'
 import { isSkillPath, listSkills, MAX_SKILL_BYTES, readSkill, writeSkill, type SkillHead } from './skills.ts'
 
 const run = promisify(execFile)
@@ -142,6 +143,8 @@ async function handle(req: AgentdRequest): Promise<Reply> {
     case 'skill-write':
       writeSkill({ root: skillsRoot(req.id), path: req.path, body: req.body })
       return { written: req.path }
+    case 'usage':
+      return { usage: agentUsage(req.since) }
     case 'ts-up':
       return tailscaleUp(req.authKey)
     case 'ts-status':
@@ -166,6 +169,9 @@ function parseRequest(value: unknown): AgentdRequest {
     case 'ts-up':
       if (typeof value.authKey !== 'string' || !TAILSCALE_KEY.test(value.authKey)) throw new Error('bad tailscale auth key')
       return { cmd, authKey: value.authKey }
+    case 'usage':
+      if (typeof value.since !== 'number' || !Number.isFinite(value.since)) throw new Error('bad since')
+      return { cmd, since: value.since }
     case 'create':
       return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files), size: sizeOf(value.size) }
     case 'apply':
@@ -450,6 +456,26 @@ function home(id: string) {
   return `/data/agents/${id}`
 }
 
+function agentUsage(since: number): Record<string, number> {
+  const usage: Record<string, number> = {}
+  for (const id of readdirSync('/data/agents').filter((name) => ID.test(name))) {
+    const file = `${home(id)}/state.db`
+    if (!existsSync(file)) continue
+    try {
+      const db = new DatabaseSync(file, { readOnly: true })
+      try {
+        const row = db.prepare('SELECT COALESCE(SUM(estimated_cost_usd), 0) AS cost FROM sessions WHERE COALESCE(last_activity_at, started_at) >= ?').get(since)
+        usage[id] = Number(row?.cost ?? 0)
+      } finally {
+        db.close()
+      }
+    } catch (e) {
+      console.error(`usage ${id}: ${errorText(e)}`)
+    }
+  }
+  return usage
+}
+
 function skillsRoot(id: string) {
   return `${realpathSync('/data/agents')}/${id}/skills`
 }
@@ -548,6 +574,7 @@ export type AgentdRequest =
   | { cmd: 'start' | 'stop' | 'rm' | 'wa-pair' | 'wa-unlink' | 'skills'; id: string }
   | { cmd: 'skill-read'; id: string; path: string }
   | { cmd: 'skill-write'; id: string; path: string; body: string }
+  | { cmd: 'usage'; since: number }
   | { cmd: 'ts-up'; authKey: string }
   | { cmd: 'ts-status' | 'ts-down' }
 
@@ -566,6 +593,7 @@ export type AgentdReplies = {
   skills: { skills: SkillHead[]; bundled: string }
   'skill-read': { body: string }
   'skill-write': { written: string }
+  usage: { usage: Record<string, number> }
   'ts-up': Tailnet & { joined: boolean }
   'ts-status': Tailnet
   'ts-down': Tailnet

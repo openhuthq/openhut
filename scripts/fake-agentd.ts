@@ -114,6 +114,8 @@ function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
       if (!skills[req.path]) throw new Error('that skill is gone')
       skills[req.path] = req.body
       return { written: req.path }
+    case 'usage':
+      return { usage: Object.fromEntries(Object.keys(states).map((id, index) => [id, 0.4 / (index + 1)])) }
     case 'ts-up':
       if (req.authKey.includes('bad')) throw new Error('backend error: invalid key: unable to validate API key')
       tailnet = ON_TAILNET

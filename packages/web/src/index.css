@@ -365,6 +365,15 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .dlg.confirm{width:min(440px,calc(100vw - 32px))}
 .dlg.confirm .dlghead{border-bottom:0;padding-bottom:6px}
 .dlg.confirm .dlgfoot{border-top:0}
+.usage{gap:8px}
+.usage-head{margin-top:8px;font-size:13px;font-weight:500}
+.meter-row{display:grid;grid-template-columns:minmax(0,160px) minmax(0,1fr) 40px minmax(0,120px);align-items:center;gap:12px;font-size:13px}
+.meter-label{display:flex;align-items:center;gap:8px;min-width:0}
+.meter{height:6px;border-radius:3px;background:var(--hair);overflow:hidden}
+.meter>span{display:block;height:100%;background:var(--ink);border-radius:3px}
+.meter-pct{text-align:right;font-variant-numeric:tabular-nums}
+.meter-note{font-size:12px}
+@media (max-width:640px){.meter-row{grid-template-columns:minmax(0,1fr) 40px}.meter{grid-column:1/-1;grid-row:2}.meter-note{display:none}}
 .aform.updating{flex-direction:row;align-items:flex-start;gap:10px;color:var(--mute)}
 .spin{flex:none;width:14px;height:14px;margin-top:2px;border-radius:50%;border:2px solid var(--soft);border-top-color:var(--ink);animation:spin .8s linear infinite}
 @keyframes spin{to{rotate:360deg}}
