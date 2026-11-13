@@ -10,10 +10,10 @@ import { newToken } from '../platform/secrets.ts'
 
 const OPEN_MS = 10 * 60_000
 const PROMPT_MS = 30_000
-const TOKEN_MS = 45_000
+const TOKEN_MS = 120_000
 const LINK = /\x1b\]8;[^;]*;(https:\/\/claude\.(?:com|ai)\/[^\x1b\x07\s]*oauth\/authorize\?[^\x1b\x07\s]+)/
 const TOKEN = /sk-ant-oat01-[\w-]{20,}/
-const FAILED = /error|invalid|failed|expired/i
+const FAILED = /OAuth error[^\n]*|wasn't accepted[^\n]*/i
 const open = new Map<string, OpenSignIn>()
 
 export const seatSignIn = {
@@ -39,16 +39,19 @@ export const seatSignIn = {
 
   async complete({ id, code }: { id: string; code: string }): Promise<string> {
     const signIn = open.get(id)
-    if (!signIn) throw new HttpError(404, 'That sign-in expired. Press Sign in with Claude again.')
+    if (!signIn) throw new HttpError(404, 'That sign-in is over (each one lasts 10 minutes and takes one code). Press Set up again for a new one.')
     const before = signIn.out.length
     signIn.proc.stdin.write(`${code.trim()}\r`)
     const token = await waitFor({ signIn, ms: TOKEN_MS, find: (out) => seatToken(out.slice(before)) ?? (FAILED.test(plain(out.slice(before))) ? 'failed' : undefined) })
+    const said = plain(signIn.out.slice(before)).replace(TOKEN, '[token]').replace(/\*{6,}/g, '[code]')
     close(id)
-    if (!token || token === 'failed') {
-      log.warn({ event: 'seat.sign_in_failed', step: 'code', output: plain(signIn.out.slice(before)).replace(TOKEN, '[token]').slice(-500) })
-      throw new HttpError(400, 'That code didn\'t work. Press Sign in with Claude again and paste the new code.', { param: 'code' })
+    if (token && token !== 'failed') {
+      log.info({ event: 'seat.signed_in' })
+      return token
     }
-    return token
+    log.warn({ event: 'seat.sign_in_failed', step: 'code', output: said.slice(-2000) })
+    const reason = FAILED.exec(said)?.[0]?.replace(/Press Enter to retry\.?/, '').trim()
+    throw new HttpError(400, reason ? `Claude said: ${reason} Press Set up again for a new code.` : 'Claude didn\'t answer within 2 minutes. Press Set up again for a new code.', { param: 'code' })
   },
 }
 
