@@ -1,0 +1,45 @@
+---
+title: Your data
+description: Let agents read your Postgres database. They can't change it, and they never see the password.
+icon: logo:postgres
+---
+
+<Flow steps={[['agent', 'The agent asks a question'], ['key', 'Fast Monkey checks it may'], ['postgres', 'One read-only query runs'], ['data', 'The call is logged']]} />
+
+<Shot src="connections" alt="The Connections page with two Postgres databases connected" />
+
+<Steps>
+<Step>
+
+### Add the database
+
+Open **Connections**, pick **Postgres**, give it a name and paste the connection string. Use a database login that
+can only read. Fast Monkey stores the string on your server and never shows it again.
+
+</Step>
+<Step>
+
+### Hand it to an agent
+
+Open the agent and tick the connection under **Connections**. It works from the agent's next message.
+
+</Step>
+<Step>
+
+### See what it ran
+
+Open the connection to see every call, including the ones that were refused.
+
+</Step>
+</Steps>
+
+<Shot src="connection" alt="A connection's page with its activity, who can use it and which agents hold it" />
+
+## Share it with the team
+
+A connection is yours until you turn on **Everyone on the team**. Then teammates can hand it to their agents too.
+Turn it off, or remove an agent, and access stops on the next call.
+
+## The limits
+
+Each query is one `SELECT` in a read-only transaction, for at most 15 seconds and 1000 rows.

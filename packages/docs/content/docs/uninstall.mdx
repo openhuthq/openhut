@@ -1,0 +1,83 @@
+---
+title: Uninstall
+description: Remove Fast Monkey, its agents, its data and its firewall from your server.
+icon: remove
+---
+
+<Callout type="warn">These commands delete every agent and all of Fast Monkey's data. They can't be undone. Run them as root.</Callout>
+
+<Steps>
+<Step>
+
+### Stop Fast Monkey
+
+On a systemd server:
+
+```sh
+systemctl disable --now fastmonkey.service fastmonkey-agentd.service
+systemctl disable fastmonkey-firewall.service
+rm /etc/systemd/system/fastmonkey*.service
+systemctl daemon-reload
+```
+
+Without systemd:
+
+```sh
+pkill -f /opt/fastmonkey/install/supervise.sh
+pkill -f '^node /opt/fastmonkey/packages/agentd/src/agentd.ts'
+pkill -f '^node /opt/fastmonkey/packages/app/src/app.ts'
+```
+
+</Step>
+<Step>
+
+### Remove the agents
+
+```sh
+docker ps -aq --filter label=fastmonkey.agent | xargs -r docker rm -f
+docker network ls -q --filter label=fastmonkey.agent | xargs -r docker network rm
+docker rmi "$(cat /opt/fastmonkey/install/agent-image)"
+```
+
+The last line frees the agent image, about 3 GB. If you set `AGENT_IMAGE`, remove that image instead.
+
+</Step>
+<Step>
+
+### Remove the firewall
+
+```sh
+iptables -D DOCKER-USER -s 10.200.0.0/16 -j AGENT
+iptables -D INPUT -j AGENT-IN
+iptables -F AGENT && iptables -X AGENT
+iptables -F AGENT-IN && iptables -X AGENT-IN
+ip rule del to 10.200.0.0/16 lookup main priority 5200
+```
+
+</Step>
+<Step>
+
+### Remove the files
+
+```sh
+rm -rf /opt/fastmonkey /etc/fastmonkey /data/app /data/agents /data/agent-conf
+rm -rf /etc/agentd /var/lib/fastmonkey /var/cache/fastmonkey /var/log/fastmonkey /var/log/fastmonkey-boot.log /run/fastmonkey /run/agentd
+rmdir /data
+```
+
+`rmdir` removes `/data` only if nothing else is in it.
+
+</Step>
+<Step>
+
+### Remove the user
+
+On Debian or Ubuntu, `userdel fastmonkey`. On Alpine, `deluser fastmonkey`.
+
+</Step>
+</Steps>
+
+## What stays
+
+Docker, gVisor and Node stay installed, because other programs may use them. Remove them yourself if nothing else
+does.

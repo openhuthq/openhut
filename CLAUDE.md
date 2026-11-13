@@ -19,8 +19,10 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
 - **`packages/agentd`** — `@fastmonkey/agentd`, the root helper: the only process that runs Docker, on a Unix socket.
 - **`packages/e2e`** — `@fastmonkey/e2e`, the end-to-end run: a bare Linux server in Docker, the curl install, a
   tampered upgrade, the upgrade and a restart. Results go to `packages/e2e/results/` (gitignored).
-- **`packages/site`** — `@fastmonkey/site`, fastmonkey.dev: `install.sh` for curl, the release tarball, the home page and
-  the docs, served by a Cloudflare Worker with static assets (`wrangler.jsonc`, `src/worker.ts`) that
+- **`packages/docs`** — `@fastmonkey/docs`, the docs at fastmonkey.dev/docs: Fumadocs on TanStack Start, prerendered. MDX in
+  `content/docs`, real dashboard screenshots in `public/screenshots`. Notes: `brain/fastmonkey-site.md`.
+- **`packages/site`** — `@fastmonkey/site`, fastmonkey.dev: `install.sh` for curl, the release tarball, the home page, the brand page
+  and the built docs, served by a Cloudflare Worker with static assets (`wrangler.jsonc`, `src/worker.ts`) that
   `.github/workflows/deploy.yml` deploys on every push to `main`. The e2e run serves its releases with the same Worker
   under `wrangler dev`. Deploys and the internal instance: `brain/fastmonkey-deploy.md`.
 
