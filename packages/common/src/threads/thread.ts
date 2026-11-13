@@ -23,7 +23,6 @@ export type ThreadWithMessages = z.infer<typeof ThreadWithMessages>
 
 export const CreateThread = z.object({
   agentId: z.string().check(z.maxLength(40)),
-  title: z.string().check(z.minLength(1), z.maxLength(200)),
 })
 export type CreateThread = z.infer<typeof CreateThread>
 

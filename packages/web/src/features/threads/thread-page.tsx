@@ -14,72 +14,38 @@ import { Initial } from '@/components/initial'
 import { Page } from '@/components/page'
 import { AgentBadge, agentState } from '@/components/status-badge'
 import { useAgent, useUpdateAgent } from '@/features/agents/api'
-import { threadPath, useCreateThread, useThread, useTouchThread } from '@/features/threads/api'
-import { navigate } from '@/lib/router'
+import { threadPath, useAgentThread } from '@/features/threads/api'
 import { toastError } from '@/lib/toast'
 
 type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[] }>
 type AgentPart = AgentMessage['parts'][number]
 
 const TRIES = ['What can you do?', 'Which data can you reach?', 'Summarize your instructions in one line.']
-const firstMessages = new Map<string, string>()
 
-export function ThreadPage({ me, threadId }: { me: Me; threadId: string }) {
-  const thread = useThread(threadId)
-  if (!thread.data) return <Page title="Thread"><ErrorNote message={thread.error?.message} /></Page>
-  return <ThreadWithAgent me={me} thread={thread.data} />
-}
-
-function ThreadWithAgent({ me, thread }: { me: Me; thread: ThreadWithMessages }) {
-  const agent = useAgent(thread.agentId)
-  if (!agent.data) return <Page title={thread.title}><ErrorNote message={agent.error?.message} /></Page>
-  return <ThreadView key={thread.id} me={me} thread={thread} agent={agent.data} />
-}
-
-export function NewThreadPage({ me, agentId }: { me: Me; agentId: string }) {
+export function AgentChatPage({ me, agentId }: { me: Me; agentId: string }) {
   const agent = useAgent(agentId)
-  const createThread = useCreateThread()
-  if (!agent.data) return <Page title="New thread"><ErrorNote message={agent.error?.message} /></Page>
-  const send = (text: string) => createThread.mutate({ agentId, title: text }, {
-    onSuccess: (thread) => {
-      firstMessages.set(thread.id, text)
-      navigate(`/threads/${thread.id}`, true)
-    },
-    onError: toastError,
-  })
-  return <ChatLayout me={me} agent={agent.data} title="New thread" busy={createThread.isPending} onSend={send} onStop={() => undefined}>
-    <ChatEmpty agent={agent.data} onTry={send} />
-  </ChatLayout>
+  const thread = useAgentThread(agentId)
+  if (!agent.data || !thread.data) return <Page title={agent.data?.name ?? 'Chat'}><ErrorNote message={agent.error?.message ?? thread.error?.message} /></Page>
+  return <ThreadView key={thread.data.id} me={me} thread={thread.data} agent={agent.data} />
 }
 
 function ThreadView({ me, thread, agent }: { me: Me; thread: ThreadWithMessages; agent: Agent }) {
-  const touch = useTouchThread()
   const transport = useMemo(() => new DefaultChatTransport<AgentMessage>({
     api: `${threadPath(thread.id)}/chat`,
     prepareSendMessagesRequest: ({ messages, trigger }) => ({ body: { trigger, message: trigger === 'submit-message' ? messages.at(-1) : undefined } }),
   }), [thread.id])
-  const chat = useChat<AgentMessage>({ id: thread.id, messages: thread.messages.map(uiMessageOf), transport, onFinish: () => touch(thread.id) })
-  const { sendMessage } = chat
-  useEffect(() => {
-    const text = firstMessages.get(thread.id)
-    if (!text) return
-    firstMessages.delete(thread.id)
-    void sendMessage({ text })
-  }, [thread.id, sendMessage])
+  const chat = useChat<AgentMessage>({ id: thread.id, messages: thread.messages.map(uiMessageOf), transport })
   const busy = chat.status === 'submitted' || chat.status === 'streaming'
-  const send = (text: string) => {
-    touch(thread.id)
-    void sendMessage({ text })
-  }
+  const send = (text: string) => void chat.sendMessage({ text })
   const last = chat.messages.at(-1)
-  return <ChatLayout me={me} agent={agent} title={thread.title} busy={busy} onSend={send} onStop={() => void chat.stop()}>
+  return <ChatLayout me={me} agent={agent} busy={busy} onSend={send} onStop={() => void chat.stop()}>
     {chat.messages.length ? chat.messages.map((message) => <Message key={message.id} me={me} agent={agent} message={message} live={busy && message === last} />) : <ChatEmpty agent={agent} onTry={send} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message me={me} agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     {chat.error && <div className="chat-err" role="alert"><span>{chat.error.message}</span><button type="button" className="btn sec sm" onClick={() => void chat.regenerate()}>Retry</button></div>}
   </ChatLayout>
 }
 
-function ChatLayout({ me, agent, title, busy, onSend, onStop, children }: { me: Me; agent: Agent; title: string; busy: boolean; onSend: (text: string) => void; onStop: () => void; children: ReactNode }) {
+function ChatLayout({ me, agent, busy, onSend, onStop, children }: { me: Me; agent: Agent; busy: boolean; onSend: (text: string) => void; onStop: () => void; children: ReactNode }) {
   const log = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
   useEffect(() => {
@@ -87,7 +53,7 @@ function ChatLayout({ me, agent, title, busy, onSend, onStop, children }: { me: 
     if (el && pinned.current) el.scrollTop = el.scrollHeight
   })
   const actions = <><AgentBadge agent={agent} /><a className="btn sec sm" href={`/agents/${agent.id}`}>{ICONS.gear}<span className="lbl">Agent settings</span></a></>
-  return <Page title={title} parents={[{ label: agent.name, href: `/agents/${agent.id}` }]} actions={actions} fill>
+  return <Page title={agent.name} actions={actions} fill>
     <div className="chat-log" ref={log} aria-live="polite" onScroll={(event) => { const el = event.currentTarget; pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
       <div className="chat-col">{children}</div>
     </div>
@@ -119,7 +85,7 @@ function Composer({ me, agent, busy, onSend, onStop }: { me: Me; agent: Agent; b
         onKeyDown={enter} onInput={(event) => { const box = event.currentTarget; box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 160)}px` }} />
       <button type="submit" className={busy ? 'send stop' : 'send'} aria-label={busy ? 'Stop' : 'Send'} disabled={!busy && !ready}>{busy ? <span className="sq" /> : ICONS.up}</button>
     </form>
-    <div className="chat-hint">Enter sends · Shift+Enter adds a line · only you see this thread</div>
+    <div className="chat-hint">Enter sends · Shift+Enter adds a line · only you see this chat</div>
   </div>
 }
 

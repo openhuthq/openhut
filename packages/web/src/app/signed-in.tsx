@@ -11,8 +11,7 @@ import { AgentPage } from '@/features/agents/agent-page'
 import { AgentsPage } from '@/features/agents/agents-page'
 import { useAgents } from '@/features/agents/api'
 import { ChatTree } from '@/features/threads/chat-tree'
-import { useThreads } from '@/features/threads/api'
-import { NewThreadPage, ThreadPage } from '@/features/threads/thread-page'
+import { AgentChatPage } from '@/features/threads/thread-page'
 import { useDeleteSession } from '@/features/auth/api'
 import { ConnectionPage } from '@/features/connections/connection-page'
 import { ConnectionsPage } from '@/features/connections/connections-page'
@@ -67,8 +66,7 @@ function NavLink({ section, label, current, count }: { section: Section; label: 
 function RoutePage({ me, route }: { me: Me; route: Route }) {
   switch (route.page) {
     case 'home': return <Home />
-    case 'new-thread': return <NewThreadPage key={route.agentId} me={me} agentId={route.agentId} />
-    case 'thread': return <ThreadPage key={route.threadId} me={me} threadId={route.threadId} />
+    case 'chat': return <AgentChatPage key={route.agentId} me={me} agentId={route.agentId} />
     case 'agents': return <AgentsPage me={me} />
     case 'agent': return <AgentPage key={route.agentId} agentId={route.agentId} dialog={route.dialog} />
     case 'connections': return <ConnectionsPage me={me} adding={route.adding} />
@@ -81,11 +79,8 @@ function RoutePage({ me, route }: { me: Me; route: Route }) {
 }
 
 function Home() {
-  const threads = useThreads()
   const agents = useAgents()
-  if (!threads.data || !agents.data) return null
-  const [latest] = threads.data
-  if (latest) return <Redirect to={`/threads/${latest.id}`} />
+  if (!agents.data) return null
   const [first] = agents.data
   return <Redirect to={first ? `/agents/${first.id}/chat` : '/agents'} />
 }

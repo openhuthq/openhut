@@ -7,7 +7,7 @@ import { threadService } from './thread-service.ts'
 export const threadController: FastifyPluginAsync = async (app) => {
   app.get('/', async (req) => listOf({ req, data: await threadService.list({ actor: await who(req) }) }))
 
-  app.post<{ Body: CreateThread }>('/', CreateRequest, async (req) => threadService.create({ actor: await who(req), ...req.body }))
+  app.post<{ Body: CreateThread }>('/', CreateRequest, async (req) => threadService.create({ actor: await who(req), agentId: req.body.agentId }))
 
   app.get<{ Params: { id: string } }>('/:id', async (req) => threadService.get({ actor: await who(req), id: req.params.id }))
 

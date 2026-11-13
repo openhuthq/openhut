@@ -15,7 +15,6 @@ import { agentService, unreachable } from '../agents/agent-service.ts'
 import type { Caller } from '../team/identity.ts'
 
 const MAX_THREADS = 200
-const TITLE_LENGTH = 80
 const TURN_MS = 15 * 60_000
 const StoredMessages = z.array(ChatMessage)
 const Chunk = z.object({
@@ -34,12 +33,11 @@ export const threadService = {
     return { ...threadOf(row), messages: messagesOf(row) }
   },
 
-  async create({ actor, agentId, title }: { actor: Caller; agentId: string; title: string }): Promise<Thread> {
-    await agentService.requireEditable({ actor, id: agentId })
-    const clean = title.replace(/\s+/g, ' ').trim()
-    const row = await db.insertInto('thread').values({
-      id: newId('th'), agent_id: agentId, person_id: actor.id, title: clean.length > TITLE_LENGTH ? `${clean.slice(0, TITLE_LENGTH - 1)}…` : clean || 'New thread',
-    }).returningAll().executeTakeFirstOrThrow()
+  async create({ actor, agentId }: { actor: Caller; agentId: string }): Promise<Thread> {
+    const agent = await agentService.requireEditable({ actor, id: agentId })
+    const existing = await db.selectFrom('thread').selectAll().where('agent_id', '=', agentId).where('person_id', '=', actor.id).orderBy('created_at').executeTakeFirst()
+    if (existing) return threadOf(existing)
+    const row = await db.insertInto('thread').values({ id: newId('th'), agent_id: agentId, person_id: actor.id, title: agent.name }).returningAll().executeTakeFirstOrThrow()
     return threadOf(row)
   },
 
@@ -62,7 +60,7 @@ export const threadService = {
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         writer.write({ type: 'start' })
-        await relay({ agent, messages, writer, signal: abort.signal })
+        await relay({ agent, session: `fastmonkey-${id}`, message: messages[messages.length - 1], writer, signal: abort.signal })
         const calls = await callsSince({ agentId: agent.id, after: lastCall?.id ?? '0' })
         if (calls.length) writer.write({ type: 'data-calls', data: calls })
         writer.write({ type: 'finish' })
@@ -78,11 +76,11 @@ export const threadService = {
   },
 }
 
-async function relay({ agent, messages, writer, signal }: { agent: AgentRow; messages: ChatMessage[]; writer: UIMessageStreamWriter; signal: AbortSignal }): Promise<void> {
+async function relay({ agent, session, message, writer, signal }: { agent: AgentRow; session: string; message: ChatMessage; writer: UIMessageStreamWriter; signal: AbortSignal }): Promise<void> {
   const res = await fetch(`${agentApiUrl(agent.net)}/v1/chat/completions`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${unseal(agent.channel_key)}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'hermes-agent', stream: true, messages: messages.map(openAiOf).filter((message) => message.content) }),
+    headers: { authorization: `Bearer ${unseal(agent.channel_key)}`, 'content-type': 'application/json', 'x-hermes-session-id': session },
+    body: JSON.stringify({ model: 'hermes-agent', stream: true, messages: [openAiOf(message)] }),
     signal: AbortSignal.any([signal, AbortSignal.timeout(TURN_MS)]),
   }).catch((err: unknown) => { throw new Error(signal.aborted ? 'Stopped.' : `${agent.name} isn't reachable. ${unreachable(err)}`) })
   if (!res.ok || !res.body) throw new Error(`${agent.name} answered ${res.status}: ${(await res.text()).slice(0, 300)}`)
