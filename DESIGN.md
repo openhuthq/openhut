@@ -107,3 +107,8 @@ A dropdown trigger (Model, Computer) follows the secondary button: soft fill, no
 ### Known trade-off
 
 A ghost button at rest is bare text. In a row ("Set up", "Remove") that is the convention and the hover fill confirms it, but it is the weakest affordance in the system. If rows test badly, promote row actions to secondary `sm` rather than bringing the border back.
+
+## Icons and type
+
+- Every UI icon is Hugeicons (`@hugeicons/react` + `@hugeicons/core-free-icons`, free stroke set) through `components/icons.tsx` and `status-badge.tsx`; brand marks for other apps stay in `brand-icons.ts`. Don't hand-draw an SVG icon (owner, 2026-11-14).
+- Text is 14px across the app, sidebar included. Only small labels and counts (12px), code and tool-call chips (12.5px) and headings differ.
