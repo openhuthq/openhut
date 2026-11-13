@@ -18,7 +18,7 @@ the installer, agentd and the e2e run live here. `fastmonkey-server.md` covers t
 - `@fastify/static` is registered with `wildcard: false`, so it only serves files present at start. After rebuilding
   the dashboard, restart the app or new asset names fall through to `index.html` and the page stays blank.
 - macOS caps Unix socket paths at 104 bytes; a long `AGENTD_SOCK` is cut short and fails with `EADDRINUSE`.
-- `config.port` is fixed at 8787; when an e2e run holds it, start the app from a script that sets `config.port` first.
+- `config.port` is 8787 unless `PORT` is set; when an e2e run holds 8787, start the app with `PORT=8799`.
 
 ## The installer (`install/`)
 
@@ -70,6 +70,7 @@ the installer, agentd and the e2e run live here. `fastmonkey-server.md` covers t
 
 ## The e2e run (`packages/e2e`)
 
+- While a run is going, the Docker containers `fastmonkey-host` (holding 127.0.0.1:8787) and `fastmonkey-lan` are its server. Don't run anything inside them and don't edit the tree: the report then says "the tree changed during the run" and the run is no verdict. On 2026-11-13 a run failed only UD2 (build `e2e-3` never healthy) after both happened mid-update; the cause wasn't confirmed. For a local dashboard meanwhile, `PORT=8799 node scripts/dev.ts` works.
 - `npm run e2e` runs everything on a Mac with Docker Desktop, in this order:
   1. build `e2e-1` installed with one curl on a bare `docker:dind` server (the only preparation is `apk add curl`), then the `main` phase;
   2. build `e2e-2` with one byte of its `fastmonkey.tgz` changed, installed over it, which must fail and leave `e2e-1` running;
