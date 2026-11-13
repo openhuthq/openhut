@@ -16,5 +16,5 @@ COPYFILE_DISABLE=1 tar $ROOT --no-xattrs \
   packages/app/package.json packages/app/src packages/common packages/agentd \
   packages/web/package.json packages/web/dist packages/e2e/package.json packages/site/package.json packages/docs/package.json
 SUM=$(shasum -a 256 dist/fastmonkey.tgz | cut -d' ' -f1)
-sed -e "s|https://fastmonkey.dev|$BASE|g" -e "s|@FASTMONKEY_SHA256@|$SUM|" install/install.sh > dist/install.sh
+sed -e "s|https://fastmonkey.dev|$BASE|g" -e "s|@FASTMONKEY_SHA256@|$SUM|" -e "s|@FASTMONKEY_BUILD@|$BUILD|" install/install.sh > dist/install.sh
 echo "dist/: build $BUILD, install.sh (FASTMONKEY_URL=$BASE), fastmonkey.tgz $(du -h dist/fastmonkey.tgz | cut -f1) sha256 $SUM"

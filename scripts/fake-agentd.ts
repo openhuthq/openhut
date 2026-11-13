@@ -66,6 +66,8 @@ function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
     case 'wa-unlink':
       delete pairReads[req.id]
       return { unlinked: req.id }
+    case 'update':
+      return { updating: true }
     default:
       throw new Error('unknown command')
   }

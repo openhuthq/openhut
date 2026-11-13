@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
 const run = promisify(execFile)
+const RELEASE_URL = process.env.FASTMONKEY_URL ?? 'https://fastmonkey.dev'
+const UPDATE_SCRIPT = 'curl -fsSL "$FASTMONKEY_URL" | sh'
 const SOCK = process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock'
 const IMAGE = process.env.AGENT_IMAGE || readFileSync(new URL('../../../install/agent-image', import.meta.url), 'utf8').trim()
 const APP_GID = Number(process.env.APP_GID ?? 0)
@@ -116,6 +118,8 @@ async function handle(req: AgentdRequest): Promise<Reply> {
       return pair(req.id)
     case 'wa-unlink':
       return unlink(req.id)
+    case 'update':
+      return update()
   }
 }
 
@@ -125,6 +129,7 @@ function parseRequest(value: unknown): AgentdRequest {
   switch (cmd) {
     case 'health':
     case 'ps':
+    case 'update':
       return { cmd }
     case 'create':
       return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files) }
@@ -405,6 +410,15 @@ function ignoreMissing(e: unknown) {
   return ''
 }
 
+async function update(): Promise<AgentdReplies['update']> {
+  if (existsSync('/run/systemd/system')) {
+    await run('systemd-run', ['--unit=fastmonkey-update', '--collect', '--quiet', `--setenv=FASTMONKEY_URL=${RELEASE_URL}`, '/bin/sh', '-c', UPDATE_SCRIPT])
+  } else {
+    spawn('/bin/sh', ['-c', `(${UPDATE_SCRIPT}) >> /var/log/fastmonkey-boot.log 2>&1`], { detached: true, stdio: 'ignore', env: { ...process.env, FASTMONKEY_URL: RELEASE_URL } }).unref()
+  }
+  return { updating: true }
+}
+
 function errorText(e: unknown) {
   const stderr = isRecord(e) ? e.stderr : undefined
   if (typeof stderr === 'string' && stderr.trim()) return stderr.trim()
@@ -418,6 +432,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export type AgentdRequest =
   | { cmd: 'health' }
   | { cmd: 'ps' }
+  | { cmd: 'update' }
   | { cmd: 'create'; id: string; net: number; files: AgentFiles }
   | { cmd: 'apply'; id: string; files: AgentFiles; restart: boolean; force?: boolean }
   | { cmd: 'start' | 'stop' | 'rm' | 'wa-pair' | 'wa-unlink'; id: string }
@@ -432,6 +447,7 @@ export type AgentdReplies = {
   rm: { removed: string }
   'wa-pair': Pairing
   'wa-unlink': { unlinked: string }
+  update: { updating: boolean }
 }
 
 export type Pairing = { status: 'starting' | 'qr' | 'linked' | 'error'; qr?: string; phone?: string; error?: string }

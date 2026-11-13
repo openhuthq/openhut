@@ -18,6 +18,7 @@ export const agentd = {
   stop: ({ id }: { id: string }) => ask({ request: { cmd: 'stop', id }, doing: 'stop the agent', schema: z.object({ stopped: z.string() }) }),
   remove: ({ id }: { id: string }) => ask({ request: { cmd: 'rm', id }, doing: 'delete the agent', schema: z.object({ removed: z.string() }) }),
   pairWhatsapp: ({ id }: { id: string }) => ask({ request: { cmd: 'wa-pair', id }, doing: 'link WhatsApp', schema: Pairing }),
+  update: () => ask({ request: { cmd: 'update' }, doing: 'start the update', schema: z.object({ updating: z.boolean() }) }),
   unlinkWhatsapp: ({ id }: { id: string }) => ask({ request: { cmd: 'wa-unlink', id }, doing: 'unlink WhatsApp', schema: z.object({ unlinked: z.string() }) }),
 }
 

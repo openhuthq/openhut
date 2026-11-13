@@ -45,7 +45,7 @@ export const MCP_TOOLS = [
   tool({ name: 'list_invites', description: 'Invite links not used yet (owner or admin).', input: Nothing, call: ({ api }) => api({ method: 'GET', url: '/api/invites' }) }),
   tool({ name: 'create_invite', description: 'Make a one-time invite link (owner or admin). It works once and for 7 days.', input: CreateInvite, call: ({ api, input }) => api({ method: 'POST', url: '/api/invites', payload: input }) }),
   tool({ name: 'delete_invite', description: 'Revoke an invite link that hasn\'t been used.', input: Id, call: ({ api, input }) => api({ method: 'DELETE', url: `/api/invites/${input.id}` }) }),
-  tool({ name: 'get_admin', description: 'The Claude seat, the public URL and the server\'s health.', input: Nothing, call: ({ api }) => api({ method: 'GET', url: '/api/admin' }) }),
+  tool({ name: 'get_admin', description: 'The Claude seat, the public URL, the server\'s health, its build and whether a newer release is out.', input: Nothing, call: ({ api }) => api({ method: 'GET', url: '/api/admin' }) }),
   tool({
     name: 'update_admin',
     description: 'Set the Claude seat token from `claude setup-token` (every agent restarts with it) or the public URL. Owner or admin.',

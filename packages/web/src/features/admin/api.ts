@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Admin, type UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
+import { Admin, Update, type UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
 import { Deleted, List } from '@fastmonkey/common/api.ts'
 import { OAuthGrant } from '@fastmonkey/common/team/oauth.ts'
 import type { Me } from '@fastmonkey/common/team/team.ts'
@@ -26,6 +26,10 @@ export function useUpdateAdmin() {
       navigate('/admin')
     },
   })
+}
+
+export function useStartUpdate() {
+  return useMutation({ mutationFn: () => request({ schema: Update, path: '/api/updates', method: 'POST' }) })
 }
 
 export function useOAuthGrants() {

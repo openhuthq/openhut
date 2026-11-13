@@ -15,6 +15,7 @@ status: accepted
 - Approvals go to the agent's owner. Agents with an open channel use Hermes `smart` approvals.
 - Activity is a tool-call log only. Schedules and agent-to-agent handoff are later.
 - Cut on 2026-11-13: the `fastmonkey` CLI, the AWS template, the release console (and Admin's update check) and agent recipes.
+- Back the same day (owner): Admin shows the running and the latest build and has an **Update now** button. Never automatic; a person clicks it. How it works: `brain/fastmonkey-gotchas.md`.
 
 ## Context
 
