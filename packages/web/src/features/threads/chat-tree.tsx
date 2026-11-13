@@ -42,6 +42,7 @@ function dotOf(agent: Agent) {
     case 'running': return 'ok'
     case 'starting': return 'wait'
     case 'not_answering':
+    case 'no_seat':
     case 'missing': return 'bad'
     case 'stopped': return 'off'
   }

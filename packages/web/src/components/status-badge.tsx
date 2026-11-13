@@ -10,6 +10,7 @@ const PAUSE = badge(<><circle cx="12" cy="12" r="10" /><line x1="10" x2="10" y1=
 const STATUS = {
   running: { word: 'Ready', tip: 'Running and answering', variant: 'success', icon: CHECK_CIRCLE },
   starting: { word: 'Starting', tip: 'Hermes is starting', variant: 'warning', icon: DASHED },
+  no_seat: { word: 'Not ready', tip: 'No Claude seat is connected', variant: 'warning', icon: ALERT },
   not_answering: { word: 'Not answering', tip: 'Running, but Hermes isn\'t answering', variant: 'destructive', icon: ALERT },
   stopped: { word: 'Stopped', tip: 'Container stopped', variant: 'secondary', icon: PAUSE },
   missing: { word: 'Error', tip: 'Its container is gone. Fast Monkey recreates it within 30 seconds while it should be running.', variant: 'destructive', icon: ALERT },

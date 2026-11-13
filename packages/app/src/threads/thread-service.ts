@@ -97,7 +97,7 @@ async function relay({ agent, messages, writer, signal }: { agent: AgentRow; mes
       continue
     }
     const chunk = z.safeParse(Chunk, parseJson(event.data)).data
-    if (chunk?.error) throw new Error(`${agent.name} failed: ${chunk.error.message}`)
+    if (chunk?.error) throw new Error(modelFailure({ name: agent.name, message: chunk.error.message }))
     const delta = chunk?.choices?.[0]?.delta?.content
     if (!delta) continue
     if (!open) writer.write({ type: 'text-start', id: `t${++text}` })
@@ -105,6 +105,13 @@ async function relay({ agent, messages, writer, signal }: { agent: AgentRow; mes
     writer.write({ type: 'text-delta', id: `t${text}`, delta })
   }
   if (open) writer.write({ type: 'text-end', id: `t${text}` })
+}
+
+function modelFailure({ name, message }: { name: string; message: string }): string {
+  log.warn({ event: 'agent.chat_failed', agent: name, error: message.slice(0, 500) })
+  if (/\b401\b|not logged in|sign-in|setup-token/i.test(message)) return `${name} isn't ready: its Claude seat isn't signed in. An owner or admin connects the seat in Admin, then try again.`
+  if (/\b429\b|rate limit/i.test(message)) return `${name}'s model is rate limited right now. Try again in a few minutes.`
+  return `${name}'s model failed: ${message.slice(0, 300)}`
 }
 
 async function* sseEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<{ name: string; data: string }> {

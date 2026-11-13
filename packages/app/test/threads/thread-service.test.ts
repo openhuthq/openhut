@@ -31,6 +31,7 @@ const hermes = createServer((req, res) => {
     seen.body = JSON.parse(raw)
     await db.insertInto('connection_event').values({ agent_id: 'ag_chatrunn', connection_id: null, tool: 'postgres_query', reason: 'count orders', outcome: 'allowed', ms: 12 }).execute()
     res.writeHead(200, { 'content-type': 'text/event-stream' })
+    if (seen.body?.messages.at(-1)?.content === 'model down') return res.end(`data: ${JSON.stringify({ error: { message: 'HTTP 401: Claude Code is installed but has no usable login' } })}\n\n`)
     const chunk = (content: string) => `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content } }] })}\n\n`
     res.end(`: keepalive\n\n${chunk('Let me ')}${chunk('check.')}event: hermes.tool.progress\ndata: {"tool":"call_tool","label":"postgres_query"}\n\n${chunk('214 orders.')}data: [DONE]\n\n`)
   })
@@ -87,6 +88,13 @@ test('threads are private, and a stopped agent says so before anything is sent',
   const res = await say(stopped.id, 'hi')
   assert.equal(res.statusCode, 409)
   assert.equal(res.json().error.message, 'Sleeper is stopped. Start it and try again.')
+})
+
+test('a model that can\'t sign in ends the turn with a plain sentence, not the provider\'s dump', async () => {
+  const thread = await newThread('ag_chatrunn')
+  const res = await say(thread.id, 'model down')
+  const error = res.body.split('\n\n').filter((line) => line.startsWith('data: {')).map((line) => JSON.parse(line.slice(6))).find((chunk) => chunk.type === 'error')
+  assert.equal(error.errorText, 'Runner isn\'t ready: its Claude seat isn\'t signed in. An owner or admin connects the seat in Admin, then try again.')
 })
 
 test('an agent that isn\'t answering ends the turn with a sentence, not a hang', async () => {
