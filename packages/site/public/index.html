@@ -7,7 +7,7 @@
 <link rel="icon" href="/monkey.svg">
 </head>
 <body>
-<title>Fast Monkey: agents that get better every week</title>
+<title>Fast Monkey: build, manage and share agents with your team</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
@@ -1244,6 +1244,32 @@ footer .toplinks a{color:var(--night-ink)}
   .as-in{display:none}
   .ex .meta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;padding-left:0}
 }
+
+/* hero in Gumloop's shape: mascots over the headline, the builder window, a share card over its corner */
+.troop{display:flex;gap:6px;margin-bottom:14px}
+.d-sec.gone{display:none}
+#dAgents a:nth-child(n+5){display:none}
+.d-inst{background:var(--paper);box-shadow:inset 0 0 0 1.5px var(--line-2);border-radius:10px;padding:8px 12px;height:54px;overflow:hidden;font-size:13px;line-height:1.45;color:var(--body)}
+.share{position:absolute;left:14px;bottom:16px;width:262px;z-index:3;background:var(--paper);border:2px solid var(--ink);border-radius:12px;padding:12px 12px 10px;font-family:var(--sans);font-size:12.5px}
+.sh-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.sh-h b{font-weight:600;font-size:13px}
+.sh-h span{color:var(--muted);font-size:12px}
+.sh-p{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;text-align:center}
+.sh-p div{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
+.sh-p b{font-weight:500;font-size:12px}
+.sh-p em{font-style:normal;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.sh-p .bump .hu{animation:shb .5s}
+.sh-p .bump em{color:#0b7a3b}
+@keyframes shb{40%{transform:translateY(-5px) scale(1.08)}}
+@media (max-width:1020px){
+  .hero-frame{display:flex;flex-direction:column}
+  .share{position:static;width:auto;order:-1;margin-bottom:12px}
+}
+@media (max-width:720px){
+  .troop .cr{width:32px;height:32px}
+  .d-panel{height:404px}
+  .d-panel .d-sec:last-child{display:none}
+}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -1305,9 +1331,10 @@ footer .toplinks a{color:var(--night-ink)}
 <header class="hero" id="top">
   <div class="wrap">
     <div class="toprow"><a class="logo" href="#top"><svg class="cr" data-cr="monkey" width="40" height="40"></svg>Fast Monkey</a><span class="toplinks"><a href="/docs/">Docs</a><a href="/brand">Brand</a></span></div>
-    <h1>Agents that get better<br>every week</h1>
+    <div class="troop"><svg class="cr" data-cr="ops" width="38" height="38"></svg><svg class="cr" data-cr="support" width="38" height="38"></svg><svg class="cr" data-cr="growth" width="38" height="38"></svg><svg class="cr" data-cr="sales" width="38" height="38"></svg></div>
+    <h1>Build, manage &amp; share agents<br>with your team</h1>
     <div class="lede">
-      <p class="sub">They live in your team's Slack and WhatsApp, learn from your corrections, and run on your own server.</p>
+      <p class="sub">One agent per job, in your team's Slack and WhatsApp. They learn from corrections and run on your own server.</p>
       <div class="cmd big"><svg class="cr peek" data-cr="sales" width="54" height="54"></svg><span>curl -fsSL https://fastmonkey.dev | sh</span><button type="button" data-copy="curl -fsSL https://fastmonkey.dev | sh">Copy</button></div>
     </div>
 
@@ -1319,9 +1346,6 @@ footer .toplinks a{color:var(--night-ink)}
           <a><svg class="ico"><use href="#i-plug"/></svg>Connections<span>4</span></a>
           <div class="d-lbl">Agents</div>
           <div id="dAgents"></div>
-          <span class="grow"></span>
-          <a><svg class="ico"><use href="#i-people"/></svg>People</a>
-          <div class="d-me"><span class="hu s r" style="--c:#2e7d6b">D</span>David<small>Owner</small></div>
         </aside>
         <div class="d-chat">
           <div class="d-h"><svg class="lg"><use href="#b-slack"/></svg><b># ops</b><span>Slack</span></div>
@@ -1330,11 +1354,13 @@ footer .toplinks a{color:var(--night-ink)}
         </div>
         <aside class="d-panel">
           <div class="d-ph"><svg class="cr" data-cr="ops" width="48" height="48"></svg><div><b>Ops Desk</b><small>Slack and WhatsApp</small></div><span class="badge">Running</span></div>
-          <div class="d-sec"><div class="d-st">Needs you <em id="dNeedN">0</em></div><div class="d-need idle" id="dNeed"><span>Nothing needs you</span></div></div>
+          <div class="d-sec"><div class="d-st">Instructions</div><p class="d-inst">Chase late orders. Ask David before you move money.</p></div>
           <div class="d-sec"><div class="d-st">Skills <em id="dCount">14</em></div><div class="d-list" id="dSkills"></div></div>
-          <div class="d-sec"><div class="d-st">Activity</div><div class="d-list" id="dLog"></div></div>
+          <div class="d-sec"><div class="d-st">Needs you <em id="dNeedN">0</em></div><div class="d-need idle" id="dNeed"><span>Nothing needs you</span></div></div>
+          <div class="d-sec gone"><div class="d-list" id="dLog"></div></div>
         </aside>
       </div>
+      <div class="share" id="share"><div class="sh-h"><b>Shared with your team</b><span>this week</span></div><div class="sh-p" id="shP"></div></div>
       <button type="button" class="replay" id="replay">↻ Replay</button>
     </div>
   </div>
@@ -1873,7 +1899,11 @@ description: Answer "where is my order?"
   /* ---------- hero: the product, playing one real session. You can answer the approval yourself. ---------- */
   const demo = $('#demo'), dMsgs = $('#dMsgs'), dType = $('#dType'), dWho = $('#dWho'), dSend = $('#dSend'), dSkills = $('#dSkills'), dLog = $('#dLog'), dNeed = $('#dNeed'), dNeedN = $('#dNeedN'), dAgents = $('#dAgents')
   const PPL = { P: ['Pablo', '#7a5cc7'], D: ['David', '#2e7d6b'] }
-  const SKL = [['late-orders', 'week 2'], ['refunds', 'week 3'], ['weekly-ops-report', 'week 5']]
+  const SKL = [['late-orders', 'week 2'], ['refunds', 'week 3']]
+  const SHARED = [['P', 'Pablo', '#7a5cc7', 38], ['D', 'David', '#2e7d6b', 24], ['L', 'Lea', '#2e6ba5', 19], ['M', 'Mara', '#b0456a', 12], ['E', 'Emil', '#c2553a', 7]]
+  const shP = $('#shP')
+  const shDraw = () => { shP.innerHTML = SHARED.map(([k, n, c, v]) => `<div data-k="${k}"><span class="hu" style="--c:${c}">${k}</span><b>${n}</b><em>${v}</em></div>`).join('') }
+  const shBump = k => { const el = $(`[data-k="${k}"]`, shP); if (!el) return; const em = $('em', el); em.textContent = +em.textContent + 1; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump') }
   dAgents.innerHTML = AGENTS.map((a, i) => `<a class="d-ag${i ? '' : ' on'}" data-a="${a.id}">${cr(a.id, 24)}<b>${a.name}</b><i></i></a>`).join('')
   paintAll(dAgents)
   const at = t => t.replace(/@Ops Desk/g, '<span class="at">@Ops Desk</span>')
@@ -1886,14 +1916,14 @@ description: Answer "where is my order?"
   const needAsk = () => { dNeed.className = 'd-need pop'; dNeed.innerHTML = '<strong>Refund €149 to order #5102</strong><div class="d-acts"><button type="button" class="y" data-ok="1">Approve</button><button type="button" data-ok="0">Deny</button></div>'; dNeedN.textContent = '1' }
   let run = 0, answer = null, playing = false
   const nap = async (my, ms) => { const end = performance.now() + ms; while (performance.now() < end) { if (my !== run) return false; await sleep(Math.min(60, end - performance.now())) } return my === run }
-  const dReset = () => { dMsgs.innerHTML = ''; dType.textContent = ''; needIdle(); dSkillsDraw(false); dLog.innerHTML = ''; dLogAdd('Read orders', '42 rows'); dLogAdd('Posted in #ops', 'done') }
+  const dReset = () => { shDraw(); dMsgs.innerHTML = ''; dType.textContent = ''; needIdle(); dSkillsDraw(false); dLog.innerHTML = ''; dLogAdd('Read orders', '42 rows'); dLogAdd('Posted in #ops', 'done') }
   const dFinal = () => { dReset(); dMsgs.innerHTML = human('P', '@Ops Desk where is order #5102?') + agent('Shipped on Monday.') + human('D', 'Check the carrier too. Our system runs a day behind.') + agent('Saved. The carrier shows it stuck in Berlin since Monday.') + human('P', '@Ops Desk refund it then, €149') + agent('Done. David approved, so I refunded €149.'); paintAll(dMsgs); dSkillsDraw(true); dLogAdd('Updated skill late-orders', 'saved'); dLogAdd('Refund €149', 'approved') }
   const say = async (my, k, t) => {
     dWho.textContent = k; dWho.style.setProperty('--c', PPL[k][1]); dType.textContent = ''
     for (const ch of t) { if (!await nap(my, 22)) return false; dType.textContent += ch }
     if (!await nap(my, 260)) return false
     dSend.classList.add('press'); const ok = await nap(my, 160); dSend.classList.remove('press'); if (!ok) return false
-    dType.textContent = ''; dAdd(human(k, t)); return true
+    dType.textContent = ''; dAdd(human(k, t)); shBump(k); return true
   }
   const reply = async (my, t) => {
     if (!await nap(my, 380)) return false
