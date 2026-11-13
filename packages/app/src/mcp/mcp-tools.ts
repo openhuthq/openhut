@@ -51,7 +51,7 @@ export const MCP_TOOLS = [
     input: ListConnectionEvents,
     call: ({ api, input }) => api({ method: 'GET', url: `/api/connection-events${query(input)}` }),
   }),
-  tool({ name: 'list_channels', description: 'Agents\' Slack and WhatsApp channels.', input: ListChannels, call: ({ api, input }) => api({ method: 'GET', url: `/api/channels${query(input)}` }) }),
+  tool({ name: 'list_channels', description: 'Agents\' Slack, WhatsApp and Telegram channels.', input: ListChannels, call: ({ api, input }) => api({ method: 'GET', url: `/api/channels${query(input)}` }) }),
   tool({ name: 'list_people', description: 'People on the team and their roles.', input: Nothing, call: ({ api }) => api({ method: 'GET', url: '/api/people' }) }),
   tool({ name: 'delete_person', description: 'Remove a person (not the owner): they can\'t sign in, their apps are disconnected and their agents stop.', input: Id, call: ({ api, input }) => api({ method: 'DELETE', url: `/api/people/${input.id}` }) }),
   tool({ name: 'list_invites', description: 'Invite links not used yet (owner or admin).', input: Nothing, call: ({ api }) => api({ method: 'GET', url: '/api/invites' }) }),

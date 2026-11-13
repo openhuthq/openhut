@@ -6,6 +6,7 @@ import { fieldError } from '@/lib/api-client'
 const WORDING: Record<ChannelKind, { only: string; anyone: string; list: string; placeholder: string; hint: string }> = {
   slack: { only: 'People I list', anyone: 'Whole workspace', list: 'Slack member IDs', placeholder: 'U012AB3CD, U045EF6GH', hint: 'Besides you. Separate them with commas.' },
   whatsapp: { only: 'Numbers I list', anyone: 'Anyone', list: 'Phone numbers', placeholder: '+15551234567, +447700900123', hint: 'Besides yours, with country code. Separate them with commas.' },
+  telegram: { only: 'People I list', anyone: 'Anyone', list: 'Telegram user IDs', placeholder: '123456789, 987654321', hint: 'Besides you. Separate them with commas.' },
 }
 
 export function AudienceFields({ kind, channel, error, labelled = true }: { kind: ChannelKind; channel: Channel | undefined; error: Error | null; labelled?: boolean }) {

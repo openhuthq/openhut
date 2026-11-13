@@ -16,7 +16,7 @@ import { ModelPicker } from '@/features/agents/model-picker'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 
-export type AgentDialog = 'name' | 'instructions' | 'slack' | 'whatsapp'
+export type AgentDialog = 'name' | 'instructions' | 'slack' | 'whatsapp' | 'telegram'
 
 const PARENTS = [{ label: 'Agents', href: '/agents' }]
 
@@ -59,12 +59,21 @@ function AgentView({ agent, dialog }: { agent: Agent; dialog: AgentDialog | unde
           <div><span>{FACT_ICONS.status}Status</span><AgentBadge agent={agent} /></div>
           <div><span>{FACT_ICONS.model}Model</span><ModelPicker agent={agent} lockReason={lockReason} /></div>
           <div><span>{FACT_ICONS.owner}Owner</span><OwnerChip id={agent.ownerId} name={agent.ownerName} /></div>
+          <div><span>{FACT_ICONS.code}Code execution</span><CodeSwitch agent={agent} lockReason={lockReason} /></div>
         </div>
         <ChannelsSection agent={agent} lockReason={lockReason} dialog={dialog} />
         <AgentConnections agent={agent} lockReason={lockReason} />
       </aside>
     </div>
   </Page>
+}
+
+function CodeSwitch({ agent, lockReason }: { agent: Agent; lockReason: string | undefined }) {
+  const updateAgent = useUpdateAgent(agent.id)
+  return <Locked reason={lockReason}>
+    <button className="sw" role="switch" aria-checked={agent.codeExecution} aria-label="Code execution" disabled={!agent.canEdit || updateAgent.isPending}
+      onClick={() => updateAgent.mutate({ codeExecution: !agent.codeExecution }, { onError: toastError })}></button>
+  </Locked>
 }
 
 function AgentName({ agent, editing }: { agent: Agent; editing: boolean }) {

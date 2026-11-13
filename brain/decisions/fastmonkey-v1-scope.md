@@ -10,7 +10,7 @@ status: accepted
 - Connections is a catalog like Skyfleet's integrations page, with real brand icons and no "Who has access" matrix.
 - One gVisor container per agent. Shell and file tools stay on for every agent.
 - Model: Claude subscription only, through Hermes's official `claude-subscription-directsdk` plugin. The customer buys a dedicated Claude seat for the agents and pastes one `claude setup-token` in Admin. Each agent picks Opus, Sonnet or Haiku.
-- Channels: a native Hermes Slack app per agent, and a QR-linked WhatsApp number per agent. A channel can be open to anyone. Email (AgentMail) was dropped from v1 on 2026-11-12, so agents get no mail ports either: outbound is DNS and HTTPS only.
+- Channels: a native Hermes Slack app per agent, a QR-linked WhatsApp number per agent, and (owner, 2026-11-13) a native Hermes Telegram bot per agent, with no relay of ours. A channel can be open to anyone. Email (AgentMail) was dropped from v1 on 2026-11-12, so agents get no mail ports either: outbound is DNS and HTTPS only.
 - Sign-up: the installer prints a one-time link (`/setup?code=…`); whoever opens it first becomes the owner with just an email and password (email since 2026-11-13, owner's call; it is only the sign-in name, nothing is mailed or verified). Then sign-up closes, and people join only by invite link (one use, 7 days, member or admin), made in People or by the `create_invite` tool. No open registration, no email.
 - Approvals go to the agent's owner. Agents with an open channel use Hermes `smart` approvals.
 - Activity is a tool-call log only. Schedules and agent-to-agent handoff are later.

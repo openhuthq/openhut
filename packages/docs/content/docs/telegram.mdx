@@ -1,0 +1,33 @@
+---
+title: Telegram
+description: Each agent is its own Telegram bot. DM it or mention it in a group.
+icon: logo:telegram
+---
+
+<Shot src="telegram" alt="The Connect to Telegram dialog" />
+
+<Steps>
+<Step>
+
+### Create the bot
+
+On the agent's page, **Set up** next to Telegram, then **Open BotFather** and send `/newbot`.
+
+</Step>
+<Step>
+
+### Paste its token
+
+BotFather replies with the bot's token.
+
+</Step>
+<Step>
+
+### Choose who can message it
+
+Your own user ID (message `@userinfobot` to see it), then only people you list, or anyone. Then press **Connect**.
+
+</Step>
+</Steps>
+
+In a group the agent answers when it is mentioned. If it stays silent there, turn off privacy mode in BotFather (`/setprivacy`), then remove the bot from the group and add it again.

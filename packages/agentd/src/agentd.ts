@@ -18,6 +18,7 @@ const PLUGINS = fileURLToPath(new URL('../../../vendor/hermes-plugins', import.m
 const CLAUDE_BIN = fileURLToPath(new URL('../../../bin/claude', import.meta.url))
 const BRIDGE = '/var/lib/fastmonkey/whatsapp-bridge'
 const AGENT_UID = 10000
+const SPEC = '2'
 const ID = /^ag_[a-z0-9]{8}$/
 const FILES = ['config.yaml', '.env', 'SOUL.md'] as const
 const MAX_FILE = 200_000
@@ -106,6 +107,13 @@ async function handle(req: AgentdRequest): Promise<Reply> {
       return create(req.id, req.net, req.files)
     case 'apply': {
       writeConf(req.id, req.files)
+      if (await outdated(req.id)) {
+        pairings.delete(req.id)
+        await docker('rm', '-f', `ag-${req.id}`)
+        await create(req.id, req.net, req.files)
+        if (req.restart) await start(req.id)
+        return { applied: req.id, restarted: req.restart }
+      }
       const shouldRestart = req.restart && (req.force || (await stale(req.id)))
       if (shouldRestart) await restartContainer(req.id)
       return { applied: req.id, restarted: shouldRestart }
@@ -152,7 +160,7 @@ function parseRequest(value: unknown): AgentdRequest {
     case 'create':
       return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files) }
     case 'apply':
-      return { cmd, id: agentId(value.id), files: filesOf(value.files), restart: value.restart === true, force: value.force === true }
+      return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files), restart: value.restart === true, force: value.force === true }
     case 'start':
     case 'stop':
     case 'rm':
@@ -195,7 +203,7 @@ async function create(id: string, net: number, files: AgentFiles) {
   await docker(
     'create',
     ...['--name', `ag-${id}`, '--hostname', id, '--restart', 'no'],
-    ...['--label', `fastmonkey.agent=${id}`, '--label', `agent.digest=${digest}`],
+    ...['--label', `fastmonkey.agent=${id}`, '--label', `agent.digest=${digest}`, '--label', `fastmonkey.spec=${SPEC}`],
     ...['--runtime', 'runsc', '--user', `${AGENT_UID}:${AGENT_UID}`, '--init', '--entrypoint', '/opt/hermes/bin/hermes'],
     ...['--read-only', '--tmpfs', '/tmp:rw,nosuid,size=256m', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'],
     ...['--pids-limit', '512', '--memory', '1g', '--cpus', '1', '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'],
@@ -206,7 +214,6 @@ async function create(id: string, net: number, files: AgentFiles) {
     ...['--mount', `type=bind,src=${home(id)}/platforms,dst=/opt/data/platforms`],
     ...['--mount', `type=bind,src=${home(id)}/.claude,dst=/opt/data/.claude`],
     ...FILES.flatMap((name) => readOnly(id, name, name)),
-    ...readOnly(id, 'skills', 'skills'),
     ...readOnly(id, CLAUDE_SETTINGS_FILE, '.claude/settings.json'),
     ...['--mount', `type=bind,src=${PLUGINS},dst=/opt/data/plugins,readonly`],
     ...['--mount', `type=bind,src=${CLAUDE_BIN},dst=/usr/local/bin/claude,readonly`],
@@ -367,6 +374,11 @@ async function isRunning(id: string) {
   return (await docker('inspect', '-f', '{{.State.Running}}', `ag-${id}`).catch(ignoreMissing)) === 'true'
 }
 
+async function outdated(id: string) {
+  const spec = await docker('inspect', '-f', 'spec={{index .Config.Labels "fastmonkey.spec"}}', `ag-${id}`).catch(ignoreMissing)
+  return spec !== '' && spec !== `spec=${SPEC}`
+}
+
 async function stale(id: string) {
   const started = Date.parse((await docker('inspect', '-f', '{{.State.StartedAt}}', `ag-${id}`)).replace(/(\.\d{3})\d+/, '$1'))
   return Math.max(...[...FILES, CLAUDE_SETTINGS_FILE].map((name) => statSync(`${conf(id)}/${name}`).mtimeMs)) > started
@@ -374,11 +386,9 @@ async function stale(id: string) {
 
 function writeConf(id: string, files: AgentFiles) {
   const dir = conf(id)
-  mkdirSync(`${dir}/skills`, { recursive: true })
-  for (const d of [dir, `${dir}/skills`]) {
-    chownSync(d, 0, AGENT_UID)
-    chmodSync(d, 0o750)
-  }
+  mkdirSync(dir, { recursive: true })
+  chownSync(dir, 0, AGENT_UID)
+  chmodSync(dir, 0o750)
   for (const name of FILES) writeIfChanged(`${dir}/${name}`, files[name])
   writeIfChanged(`${dir}/${CLAUDE_SETTINGS_FILE}`, CLAUDE_SETTINGS)
 }
@@ -390,7 +400,7 @@ function writeIfChanged(path: string, body: string) {
 }
 
 function makeHome(id: string) {
-  for (const sub of ['', '/.claude', '/home', '/platforms', '/scripts', '/scripts/whatsapp-bridge']) {
+  for (const sub of ['', '/.claude', '/home', '/platforms', '/scripts', '/scripts/whatsapp-bridge', '/skills']) {
     const d = `${home(id)}${sub}`
     mkdirSync(d, { recursive: true })
     chownSync(d, AGENT_UID, AGENT_UID)
@@ -502,7 +512,7 @@ export type AgentdRequest =
   | { cmd: 'ps' | 'containers' }
   | { cmd: 'update' }
   | { cmd: 'create'; id: string; net: number; files: AgentFiles }
-  | { cmd: 'apply'; id: string; files: AgentFiles; restart: boolean; force?: boolean }
+  | { cmd: 'apply'; id: string; net: number; files: AgentFiles; restart: boolean; force?: boolean }
   | { cmd: 'start' | 'stop' | 'rm' | 'wa-pair' | 'wa-unlink'; id: string }
   | { cmd: 'ts-up'; authKey: string }
   | { cmd: 'ts-status' | 'ts-down' }

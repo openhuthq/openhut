@@ -3,12 +3,13 @@ import type { AgentFiles } from '../platform/agentd.ts'
 import { config } from '../platform/config.ts'
 import { agentSubnet } from '../platform/network.ts'
 import { slack } from '../integrations/slack/slack.ts'
+import { telegram } from '../integrations/telegram/telegram.ts'
 import { whatsapp } from '../integrations/whatsapp/whatsapp.ts'
 
 const AUXILIARY_TASKS = ['approval', 'compression', 'title_generation', 'background_review']
 
 export function renderFiles({ agent, ownerName, token, channelKey, seat, channels }: {
-  agent: { id: string; name: string; instructions: string; model: string; net: number }
+  agent: { id: string; name: string; instructions: string; model: string; net: number; code_execution: boolean }
   ownerName: string
   token: string
   channelKey: string
@@ -18,10 +19,11 @@ export function renderFiles({ agent, ownerName, token, channelKey, seat, channel
   const gateway = `http://${agentSubnet(agent.net)}.1:${config.gatewayPort}`
   const approvers = [ownerName, ...channels.map(approverOf)]
   const approvalsMode = channels.some((channel) => channel.audience.open) ? 'smart' : 'manual'
+  const disabled = ['browser', 'delegation', 'cronjob', ...(agent.code_execution ? [] : ['code_execution'])]
   const yaml = [
     modelYaml({ gateway, token, model: agent.model }),
     'terminal:\n  backend: local',
-    'agent:\n  api_max_retries: 30\n  disabled_toolsets: [browser, code_execution, delegation, cronjob]',
+    `agent:\n  api_max_retries: 30\n  disabled_toolsets: [${disabled.join(', ')}]`,
     `approvals:\n  mode: ${approvalsMode}\n  approvers: ${JSON.stringify(approvers)}`,
     'platform_toolsets:\n  api_server: [hermes-api-server, fastmonkey]',
     'tools:\n  tool_search:\n    enabled: "off"',
@@ -47,6 +49,7 @@ function modelYaml({ gateway, token, model }: { gateway: string; token: string; 
 function yamlOf(channel: RenderedChannel): string[] {
   switch (channel.kind) {
     case 'slack': return [slack.yaml.trimEnd()]
+    case 'telegram': return [telegram.yaml.trimEnd()]
     case 'whatsapp': return []
   }
 }
@@ -54,6 +57,7 @@ function yamlOf(channel: RenderedChannel): string[] {
 function envOf(channel: RenderedChannel): string[] {
   switch (channel.kind) {
     case 'slack': return slack.env({ botToken: channel.botToken, appToken: channel.appToken, audience: channel.audience })
+    case 'telegram': return telegram.env({ botToken: channel.botToken, audience: channel.audience })
     case 'whatsapp': return whatsapp.env(channel.audience)
   }
 }
@@ -61,10 +65,12 @@ function envOf(channel: RenderedChannel): string[] {
 function approverOf(channel: RenderedChannel): string {
   switch (channel.kind) {
     case 'slack': return slack.approver(channel.audience)
+    case 'telegram': return telegram.approver(channel.audience)
     case 'whatsapp': return whatsapp.approver(channel.audience)
   }
 }
 
 export type RenderedChannel =
   | { kind: Extract<ChannelKind, 'slack'>; audience: Audience; botToken: string; appToken: string }
+  | { kind: Extract<ChannelKind, 'telegram'>; audience: Audience; botToken: string }
   | { kind: Extract<ChannelKind, 'whatsapp'>; audience: Audience }

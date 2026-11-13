@@ -14,8 +14,8 @@ export const agentd = {
   ps: () => ask({ request: { cmd: 'ps' }, doing: 'list the agents', schema: z.object({ states: z.record(z.string(), z.string()) }) }),
   create: ({ id, net, files }: { id: string; net: number; files: AgentFiles }) =>
     ask({ request: { cmd: 'create', id, net, files }, doing: 'create the agent', schema: z.object({ container: z.string() }) }),
-  apply: ({ id, files, restart, force = false }: { id: string; files: AgentFiles; restart: boolean; force?: boolean }) =>
-    ask({ request: { cmd: 'apply', id, files, restart, force }, doing: 'update the agent\'s files', schema: z.object({ applied: z.string(), restarted: z.boolean() }) }),
+  apply: ({ id, net, files, restart, force = false }: { id: string; net: number; files: AgentFiles; restart: boolean; force?: boolean }) =>
+    ask({ request: { cmd: 'apply', id, net, files, restart, force }, doing: 'update the agent\'s files', schema: z.object({ applied: z.string(), restarted: z.boolean() }) }),
   start: ({ id }: { id: string }) => ask({ request: { cmd: 'start', id }, doing: 'start the agent', schema: z.object({ started: z.string() }) }),
   stop: ({ id }: { id: string }) => ask({ request: { cmd: 'stop', id }, doing: 'stop the agent', schema: z.object({ stopped: z.string() }) }),
   remove: ({ id }: { id: string }) => ask({ request: { cmd: 'rm', id }, doing: 'delete the agent', schema: z.object({ removed: z.string() }) }),

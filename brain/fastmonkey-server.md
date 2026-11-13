@@ -74,7 +74,8 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 - WhatsApp: each agent gets its own number in bot mode. The bridge drops anyone not allowed before Hermes sees them.
   agentd runs the bridge's pairing mode inside the agent's container and keeps the latest QR payload; only people who
   can edit the agent see it. Approvers are compared as `<digits>@s.whatsapp.net`.
-- An agent anyone can message uses Hermes's `smart` approvals; approvals go to the owner (email, Slack ID, WhatsApp).
+- Telegram: each agent is its own BotFather bot, run by Hermes's Telegram gateway (no relay of ours). The app checks the token with `getMe` before sealing it; people are numeric user IDs. Groups need an @mention.
+- An agent anyone can message uses Hermes's `smart` approvals; approvals go to the owner (email, Slack ID, WhatsApp, Telegram ID).
 
 ## Chat (threads)
 - One chat per person per agent: `POST /api/threads {agentId}` returns that person's thread, creating it the first time. `POST /api/threads/:id/chat` takes only the new user message (or a retry, which drops our stored last answer and resends the message).
