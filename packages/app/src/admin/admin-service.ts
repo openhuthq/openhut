@@ -1,4 +1,5 @@
 import type { Admin, Health, UpdateAdmin } from '@jakebox/common/admin/admin.ts'
+import { Release } from '@jakebox/common/console/console.ts'
 import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
 import { HttpError } from '../platform/http-error.ts'
@@ -8,6 +9,12 @@ import { log, record } from '../platform/events.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { isAdmin, type Caller } from '../team/identity.ts'
 
+const UPDATE_CHECK_EVERY_MS = 60 * 60_000
+const CONSOLE_TIMEOUT_MS = 5_000
+const UPDATE_COMMAND = 'curl -fsSL https://get.jakebox.dev | sh'
+
+let updateCheck: { at: number; update: Promise<Admin['update']> } | undefined
+
 export const adminService = {
   async health(): Promise<Health> {
     const reply = await agentd.health().catch(() => undefined)
@@ -16,7 +23,7 @@ export const adminService = {
   },
 
   async status(): Promise<Admin> {
-    const [health, states, agents] = await Promise.all([adminService.health(), containerStates(), db.selectFrom('agent').select('id').execute()])
+    const [health, states, agents, update] = await Promise.all([adminService.health(), containerStates(), db.selectFrom('agent').select('id').execute(), availableUpdate()])
     return {
       object: 'admin',
       seat: { set: !!settings.seatToken(), mode: config.modelMode },
@@ -25,6 +32,7 @@ export const adminService = {
         running: agents.filter((agent) => states?.[agent.id] === 'running').length, total: agents.length,
       },
       publicUrl: publicUrl(),
+      update,
     }
   },
 
@@ -35,6 +43,42 @@ export const adminService = {
     record({ action: 'admin.updated', actor, target: { type: 'admin', id: 'install', fields: Object.keys(patch) } })
     return adminService.status()
   },
+}
+
+function availableUpdate(): Promise<Admin['update']> {
+  if (!config.consoleUrl) return Promise.resolve(null)
+  if (!updateCheck || Date.now() - updateCheck.at >= UPDATE_CHECK_EVERY_MS) updateCheck = { at: Date.now(), update: checkForUpdate() }
+  return updateCheck.update
+}
+
+async function checkForUpdate(): Promise<Admin['update']> {
+  const [latest] = await Promise.all([latestRelease().catch(skipped('update.check_failed')), checkIn().catch(skipped('update.check_in_failed'))])
+  if (!latest || latest.build === config.build) return null
+  return { latest: latest.version || latest.build, command: UPDATE_COMMAND }
+}
+
+async function latestRelease(): Promise<Release | null> {
+  const res = await fetch(`${config.consoleUrl}/api/releases/latest`, { signal: AbortSignal.timeout(CONSOLE_TIMEOUT_MS) })
+  if (res.status === 404) return null
+  if (!res.ok) throw new HttpError(502, `The release console answered ${res.status} for the latest release.`)
+  return Release.parse(await res.json())
+}
+
+async function checkIn(): Promise<void> {
+  const res = await fetch(`${config.consoleUrl}/api/installs`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ installId: await settings.installId(), build: config.build, version: config.version }),
+    signal: AbortSignal.timeout(CONSOLE_TIMEOUT_MS),
+  })
+  if (!res.ok) throw new HttpError(502, `The release console answered ${res.status} to the check-in.`)
+}
+
+function skipped(event: string) {
+  return (err: Error) => {
+    log.warn({ event, consoleUrl: config.consoleUrl, error: err.message })
+    return null
+  }
 }
 
 async function setSeat(token: string): Promise<void> {

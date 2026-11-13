@@ -4,6 +4,7 @@ import type { OAuthGrant } from '@jakebox/common/team/oauth.ts'
 import type { Me } from '@jakebox/common/team/team.ts'
 import type { BrandName } from '@/components/brand-icons'
 import { ConfirmButton } from '@/components/confirm-button'
+import { CopyButton } from '@/components/copy-button'
 import { ErrorNote } from '@/components/error-note'
 import { Loaded } from '@/components/loaded'
 import { Locked } from '@/components/locked'
@@ -47,6 +48,8 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
         {form === 'public-url' && canEdit && <PublicUrlForm publicUrl={admin.publicUrl} />}
         <Row icon="update" title={`Version ${server.version}`} subtitle={`${server.running} of ${plural(server.total, 'agent')} running`}
           status={server.healthy ? <Ready word="Healthy" /> : <StatusBadge status="missing" tip="Agents can't start until this is fixed. See /health." word="Not responding" />} />
+        {admin.update && <Row icon="update" title={`Update available: ${admin.update.latest}`} subtitle="Run as root on the server to upgrade"
+          action={<CopyButton text={admin.update.command} />} />}
         <Row icon="backup" title="Backups" subtitle="Back up the data folder yourself for now" action={<SoonButton label="Download" className="btn sec sm aw" />} />
       </Section>
       <Section number={4} title="AI assistant"><ConnectedApps /></Section>

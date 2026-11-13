@@ -1,3 +1,4 @@
+import { RECIPES } from '@jakebox/recipes/recipes.ts'
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
@@ -336,6 +337,17 @@ function main() {
     await call('update_agent', { id: sales.id, wanted: 'running' })
     const listed = (await call<List<Agent>>('list_agents')).data
     return { actual: listed.map((a) => `${a.name}:${a.status}`), pass: listed.length === 2 && listed.every((a) => a.status === 'running') }
+  })
+
+  check('R1', 'An agent made from a recipe starts with its instructions and model, and its files say so', 'create_agent {recipeId: support}: Support\'s instructions and model, the same SOUL.md on disk; then deleted', async () => {
+    const made = await call<Agent>('create_agent', { name: 'Helpdesk', recipeId: 'support' })
+    const soul = readFileSync(`/data/agent-conf/${made.id}/SOUL.md`, 'utf8')
+    await call('delete_agent', { id: made.id })
+    const recipe = RECIPES.support
+    return {
+      actual: { model: made.model, heading: made.instructions.split('\n')[0], soulMatches: soul.trim() === recipe.instructions.trim() },
+      pass: made.model === recipe.model && made.instructions === recipe.instructions && soul.trim() === recipe.instructions.trim(),
+    }
   })
 
   check('B3', 'The gateway keeps the DB password: it never comes back out', 'not in any control MCP reply, dashboard page, agent file or log', async () => {

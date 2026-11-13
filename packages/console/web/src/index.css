@@ -1,0 +1,33 @@
+:root{
+  color-scheme:light;
+  --sidebar:oklch(96.2% .0025 290); --canvas:oklch(98.5% .0015 290); --card:#ffffff; --soft:oklch(0% 0 0 / .05); --mid:oklch(0% 0 0 / .15);
+  --hair:oklch(0% 0 0 / .08); --ink:oklch(23.5% .0038 290); --mute:oklch(51.1% .0033 290);
+  --primary:oklch(54% .213 267.8); --primary-hover:oklch(49% .213 267.8); --pass:oklch(61.7% .208 142.85); --fail:oklch(55% .185 27);
+  --sans:'Inter',ui-sans-serif,system-ui,sans-serif;
+  --mono:'Geist Mono','Geist Mono Variable',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{background:var(--sidebar);color:var(--ink);margin:0}
+body{font-family:var(--sans);font-size:14px;font-weight:450;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:var(--primary)}
+button{font:inherit;color:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.5}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:6px}
+.mono{font-family:var(--mono);font-size:12px}
+.mute{color:var(--mute)}
+.panel{max-width:1000px;margin:16px auto;background:var(--canvas);border:1px solid var(--hair);border-radius:12px;padding:24px 24px 32px;display:flex;flex-direction:column;gap:32px}
+.head{display:flex;align-items:center;gap:10px}
+.logo{width:28px;height:28px;border-radius:6px;background:var(--primary);color:#fff;display:grid;place-items:center;font-weight:600;flex:none}
+h1{font-size:18px;font-weight:500;margin:0}
+h2{font-size:16px;font-weight:500;margin:0 0 12px}
+.box{border:1px solid var(--hair);border-radius:8px;background:var(--card);overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:12px;font-weight:500;color:var(--mute);text-transform:uppercase;letter-spacing:.04em;padding:10px 16px}
+td{padding:12px 16px;border-top:1px solid var(--hair);white-space:nowrap}
+.empty{padding:32px 16px;text-align:center;color:var(--mute)}
+.pill{height:22px;margin-left:8px;padding:0 8px;border-radius:9999px;border:1px solid var(--hair);display:inline-flex;align-items:center;font-size:12px;font-weight:500;color:var(--pass)}
+.keyform{display:flex;gap:8px;margin-bottom:12px;max-width:480px}
+input{flex:1;height:32px;background:var(--card);border:1px solid var(--hair);border-radius:8px;color:var(--ink);font:inherit;padding:0 12px}
+.btn{height:32px;padding:0 12px;border-radius:6px;border:0;background:var(--primary);color:#fff;font-weight:500;white-space:nowrap}
+.btn:hover{background:var(--primary-hover)}
+.err{color:var(--fail);margin:0 0 12px}

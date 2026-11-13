@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@jakebox/common/api.ts'
-import { Agent, Grant, type UpdateAgent } from '@jakebox/common/agents/agent.ts'
+import { Agent, Grant, type CreateAgent, type UpdateAgent } from '@jakebox/common/agents/agent.ts'
 import { Channel, type CreateChannel, type UpdateChannel } from '@jakebox/common/channels/channel.ts'
 import { Connection } from '@jakebox/common/connections/connection.ts'
 import { request } from '@/lib/api-client'
@@ -30,7 +30,7 @@ export function useAgent(agentId: string) {
 export function useCreateAgent() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (name: string) => request({ schema: Agent, path: '/api/agents', method: 'POST', body: { name } }),
+    mutationFn: (body: CreateAgent) => request({ schema: Agent, path: '/api/agents', method: 'POST', body }),
     onSuccess: (agent) => {
       client.setQueryData([...AGENTS_KEY, agent.id], agent)
       client.setQueryData<Agent[]>(AGENTS_KEY, (agents) => agents && [...agents, agent])

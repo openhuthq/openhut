@@ -3,11 +3,14 @@
   "private": true,
   "type": "module",
   "sideEffects": false,
-  "exports": { "./*": "./src/*" },
+  "exports": {
+    "./*": "./src/*"
+  },
   "scripts": {
     "typecheck": "tsc -p ."
   },
   "dependencies": {
+    "@jakebox/recipes": "*",
     "zod": "4.6.7"
   }
 }

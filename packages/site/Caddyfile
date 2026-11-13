@@ -1,0 +1,39 @@
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options SAMEORIGIN
+		Cache-Control no-cache
+		Vary Accept
+	}
+
+	@install {
+		path /
+		not header Accept *text/html*
+	}
+	handle @install {
+		root * /srv/release
+		rewrite * /install.sh
+		header Content-Type "text/plain; charset=utf-8"
+		file_server
+	}
+
+	handle /jakebox.tgz {
+		root * /srv/release
+		file_server
+	}
+
+	handle {
+		header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+		root * /srv/site
+		try_files {path}.html
+		file_server
+	}
+}

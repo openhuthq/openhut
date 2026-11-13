@@ -15,6 +15,7 @@ import { connectionService } from '../connections/connection-service.ts'
 import { isAdmin, type Caller } from '../team/identity.ts'
 import { audienceOf } from '../channels/audience.ts'
 import { renderFiles, type RenderedChannel } from './hermes-files.ts'
+import { RECIPES, type RecipeId } from '@jakebox/recipes/recipes.ts'
 
 const MAX_AGENTS = 250
 const RECONCILE_MS = 30_000
@@ -39,15 +40,16 @@ export const agentService = {
     return row
   },
 
-  async create({ actor, name, instructions }: { actor: Caller; name: string; instructions?: string }): Promise<Agent> {
+  async create({ actor, name, instructions, recipeId }: { actor: Caller; name: string; instructions?: string; recipeId?: RecipeId }): Promise<Agent> {
     const clean = name.trim().replace(/[^\w .-]/g, '').slice(0, 40)
     if (!clean) throw new HttpError(400, 'Give the agent a name with letters or digits.', { param: 'name' })
     const used = new Set((await db.selectFrom('agent').select('net').execute()).map((row) => row.net))
     const net = Array.from({ length: MAX_AGENTS }, (_, i) => i + 1).find((n) => !used.has(n))
     if (!net) throw new HttpError(409, `This server already runs ${MAX_AGENTS} agents. Delete one first.`)
+    const recipe = recipeId ? RECIPES[recipeId] : undefined
     const row = await db.insertInto('agent').values({
-      id: newId('ag'), name: clean, owner_id: actor.id, model: 'sonnet', net, channel_key: seal(randomBytes(24).toString('hex')),
-      instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000),
+      id: newId('ag'), name: clean, owner_id: actor.id, model: recipe?.model ?? 'sonnet', net, channel_key: seal(randomBytes(24).toString('hex')),
+      instructions: (instructions || recipe?.instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000),
     }).returningAll().executeTakeFirstOrThrow().catch((err: unknown) => {
       if (isUniqueViolation(err)) throw new HttpError(409, 'Someone created an agent at the same moment. Try again.')
       throw err

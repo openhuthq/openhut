@@ -12,7 +12,7 @@ run_phase() { in_host node --test-force-exit --test-reporter=spec /opt/jakebox/p
 rm -rf "$R" && mkdir -p "$R"
 node packages/e2e/src/sources.ts > "$R/sources.sha256"
 BUILD=e2e-1 BASE=http://host.docker.internal:8099 ./scripts/release.sh || fail "release"
-node packages/e2e/src/serve.ts 8099 > dist/serve.log 2>&1 & SERVE=$!
+node packages/site/src/server.ts --port 8099 --release dist > dist/serve.log 2>&1 & SERVE=$!
 trap 'kill $SERVE 2>/dev/null' EXIT
 serving() { i=0; until curl -fsS -o /dev/null "http://127.0.0.1:$1/"; do i=$((i+1)); [ $i -gt 50 ] && fail "release server on :$1"; sleep 0.2; done; }
 serving 8099
@@ -42,7 +42,7 @@ in_host timeout 300 apk add -q curl || fail "curl"
 echo "--- a mirror serving a jakebox.tgz with one byte changed: the installer must refuse it"
 mkdir -p dist/tampered && sed 's|host.docker.internal:8099|host.docker.internal:8098|g' dist/install.sh > dist/tampered/install.sh &&
   cp dist/jakebox.tgz dist/tampered/ && printf 'X' | dd of=dist/tampered/jakebox.tgz bs=1 seek=4096 conv=notrunc 2>/dev/null || fail "tampered release"
-node packages/e2e/src/serve.ts 8098 dist/tampered > dist/serve-tampered.log 2>&1 & BAD=$!
+node packages/site/src/server.ts --port 8098 --release dist/tampered > dist/serve-tampered.log 2>&1 & BAD=$!
 serving 8098
 docker run -d --name jakebox-tamper -v jakebox-apkcache:/etc/apk/cache --add-host host.docker.internal:host-gateway \
   --entrypoint sh docker:28-dind -c 'exec sleep infinity' >/dev/null || fail "tamper server"

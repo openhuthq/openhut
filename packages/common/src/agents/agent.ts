@@ -1,4 +1,5 @@
 import * as z from 'zod/mini'
+import { RECIPE_IDS } from '@jakebox/recipes/recipes.ts'
 import { Timestamp, atLeastOneField } from '../api.ts'
 
 export const ModelId = z.enum(['opus', 'sonnet', 'haiku'])
@@ -33,7 +34,11 @@ export const Agent = z.object({
 })
 export type Agent = z.infer<typeof Agent>
 
-export const CreateAgent = z.object({ name: z.string().check(z.minLength(1), z.maxLength(40)), instructions: z.optional(z.string().check(z.maxLength(20_000))) })
+export const CreateAgent = z.object({
+  name: z.string().check(z.minLength(1), z.maxLength(40)),
+  instructions: z.optional(z.string().check(z.maxLength(20_000))),
+  recipeId: z.optional(z.enum(RECIPE_IDS)),
+})
 export type CreateAgent = z.infer<typeof CreateAgent>
 
 export const UpdateAgentFields = {

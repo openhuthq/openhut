@@ -1,0 +1,144 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: JakeBox, self-hosted. One EC2 host runs JakeBox, installed with its one-line installer, behind Caddy for HTTPS. No SSH; use Session Manager.
+
+Parameters:
+  Address:
+    Type: String
+    Default: ''
+    Description: The address people open, like jakebox.acme.com, with an A record pointing at the IP in Outputs. Leave empty for a free <ip>.sslip.io address.
+    AllowedPattern: '^$|^([a-z0-9-]+\.)+[a-z]{2,}$'
+  InstallUrl:
+    Type: String
+    Default: https://get.jakebox.dev
+    Description: Where the installer comes from.
+    AllowedPattern: '^https://[^\s]+$'
+  InstanceType:
+    Type: String
+    Default: t4g.large
+    AllowedValues: [t4g.medium, t4g.large, t4g.xlarge, t4g.2xlarge]
+    Description: Each agent takes up to 1 GiB and 1 CPU; size for how many run at once.
+  DataSize:
+    Type: Number
+    Default: 50
+    MinValue: 20
+    Description: GiB for /data (agents' homes and the database) and Docker's images.
+
+Conditions:
+  OwnAddress: !Not [!Equals [!Ref Address, '']]
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.41.0.0/16
+      EnableDnsHostnames: true
+      Tags: [{ Key: Name, Value: !Ref AWS::StackName }]
+  Gateway:
+    Type: AWS::EC2::InternetGateway
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: { VpcId: !Ref Vpc, InternetGatewayId: !Ref Gateway }
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.41.0.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags: [{ Key: Name, Value: !Ref AWS::StackName }]
+  Routes:
+    Type: AWS::EC2::RouteTable
+    Properties: { VpcId: !Ref Vpc }
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties: { RouteTableId: !Ref Routes, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref Gateway }
+  SubnetRoutes:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: { SubnetId: !Ref Subnet, RouteTableId: !Ref Routes }
+  WebOnly:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTPS and the HTTP certificate challenge only. Port 8787 and the agents gateway stay closed to the internet.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+  HostRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement: [{ Effect: Allow, Principal: { Service: ec2.amazonaws.com }, Action: sts:AssumeRole }]
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+  HostProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: { Roles: [!Ref HostRole] }
+  PublicAddress:
+    Type: AWS::EC2::EIP
+    Properties: { Domain: vpc }
+  Data:
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Size: !Ref DataSize
+      VolumeType: gp3
+      Encrypted: true
+      Tags: [{ Key: Name, Value: !Sub '${AWS::StackName}-data' }]
+  Host:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: '{{resolve:ssm:/aws/service/debian/release/13/latest/arm64}}'
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref HostProfile
+      SubnetId: !Ref Subnet
+      SecurityGroupIds: [!Ref WebOnly]
+      MetadataOptions: { HttpTokens: required, HttpPutResponseHopLimit: 1 }
+      BlockDeviceMappings: [{ DeviceName: /dev/xvda, Ebs: { VolumeSize: 30, VolumeType: gp3, Encrypted: true } }]
+      Volumes: [{ Device: /dev/sdf, VolumeId: !Ref Data }]
+      Tags: [{ Key: Name, Value: !Ref AWS::StackName }]
+      UserData:
+        Fn::Base64: !Sub
+          - |
+            #!/bin/bash
+            set -euxo pipefail
+            host=${Host}
+            while [ ! -e /dev/sdf ] && [ ! -e /dev/nvme1n1 ]; do sleep 2; done
+            disk=$([ -e /dev/nvme1n1 ] && echo /dev/nvme1n1 || echo /dev/sdf)
+            blkid "$disk" || mkfs.ext4 -L jakebox-data "$disk"
+            mkdir -p /data
+            grep -q jakebox-data /etc/fstab || echo 'LABEL=jakebox-data /data ext4 defaults,nofail 0 2' >> /etc/fstab
+            mount -a
+            mkdir -p /data/docker /etc/docker
+            [ -f /etc/docker/daemon.json ] || echo '{"data-root":"/data/docker"}' > /etc/docker/daemon.json
+            apt-get update
+            apt-get install -y curl caddy
+            curl -fsSL ${InstallUrl} | sh
+            cat > /etc/caddy/Caddyfile <<CADDY
+            $host {
+              reverse_proxy 127.0.0.1:8787
+            }
+            CADDY
+            systemctl restart caddy
+            . /etc/jakebox/env
+            printf 'Create the owner account: https://%s/setup?code=%s\n' "$host" "$SETUP_CODE" > /root/jakebox-owner-link
+            chmod 600 /root/jakebox-owner-link
+          - Host: !If [OwnAddress, !Ref Address, !Join ['', [!Join ['-', !Split ['.', !Ref PublicAddress]], '.sslip.io']]]
+  HostAddress:
+    Type: AWS::EC2::EIPAssociation
+    Properties: { AllocationId: !GetAtt PublicAddress.AllocationId, InstanceId: !Ref Host }
+
+Outputs:
+  Url:
+    Description: Where JakeBox answers, once the host has finished installing (about 10 minutes, mostly the agent image).
+    Value: !Sub
+      - https://${Host}
+      - Host: !If [OwnAddress, !Ref Address, !Join ['', [!Join ['-', !Split ['.', !Ref PublicAddress]], '.sslip.io']]]
+  Ip:
+    Description: Point your Address's A record here.
+    Value: !Ref PublicAddress
+  OwnerLink:
+    Description: Prints the one-time owner sign-up link. The first person to open it becomes the owner.
+    Value: !Sub 'aws ssm start-session --target ${Host} --document-name AWS-StartInteractiveCommand --parameters command="sudo cat /root/jakebox-owner-link"'
