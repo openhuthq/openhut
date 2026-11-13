@@ -104,3 +104,13 @@ the installer, agentd and the e2e run live here. `fastmonkey-server.md` covers t
 - `npm run dev` builds the dashboard, then `scripts/dev.ts` starts `scripts/fake-agentd.ts` and the app with `FASTMONKEY_DATA=.data`, `SETUP_CODE=dev` and `FASTMONKEY_MODEL=test`. The fake agentd answers from memory without Docker, so agents never really run on a laptop. It mirrors agentd's reply shapes because the app validates every reply.
 - Open `http://localhost:8787/setup?code=dev`. On a fresh `.data`, `node scripts/seed-ui.ts` adds sample people, agents and connections; sign in as `mo` with the password it prints.
 - `scripts/release.sh` runs on macOS (BSD tar) and in CI (GNU tar). Their flags for a root-owned archive differ (`--uid 0 --uname root` vs `--owner=0 --numeric-owner`), so the script picks by `tar --version`; the first CI deploy failed on `--uid`.
+
+## GitHub bot (`integrations/github/github.ts`)
+
+- The same callback URL is hit twice with one `state`: first with `code` (the app exists; exchange it for the key within the hour, then send the browser to the install page), then with `installation_id`. The sign-in is remembered again between the two, so a restart in between leaves an app on GitHub with no connection; delete it under GitHub's Developer settings.
+- The installation is fetched with the app's own JWT before it's saved, so a made-up `installation_id` can't attach someone else's installation.
+- A personal-account app can only be installed on that account. For an organization's repositories the app must be created under the organization (the dialog's Organization field), which needs an org owner.
+- The bot's permissions are fixed in the manifest (contents, pull requests and issues write; actions and checks read). Pushing changes to `.github/workflows` needs the Workflows permission, added on the app's page on GitHub.
+- GitHub connections are saved with `sign_in` false, so there's no Reconnect: a new bot means delete and connect again.
+- Local dev: the gateway port (8081) is fixed, so two worktrees can't run `npm run dev` at once.
+

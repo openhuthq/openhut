@@ -13,11 +13,14 @@ and how it stays safe on the left, numbered steps on the right) and each connect
 - **Sign-ins through the vendor's own MCP server**: PostHog (`mcp.posthog.com/mcp`) and Linear (`mcp.linear.app/mcp`)
   register Fast Monkey themselves (OAuth dynamic registration, PKCE), like Skyfleet's remote MCP connections. A custom
   MCP server can sign in the same way.
-- **GitHub** (owner, 2026-11-13) is GitHub's own MCP server (`api.githubcopilot.com/mcp/`) with a pasted access token
-  sent as `Authorization: Bearer`. GitHub's server has no dynamic registration, so it can't sign in like Linear; a
-  fine-grained token also lets the person pick the repositories and whether agents may write. Agents read files, make
-  branches, commit and open pull requests through its tools. They do not `git clone`: that would put a token inside
-  the container and open the agent's firewall to github.com, against "the gateway holds every key".
+- **GitHub** (owner, 2026-11-14) is a bot: a GitHub App the person registers from the connect dialog (GitHub's
+  manifest flow: name it, press Create on GitHub, pick its repositories). Fast Monkey keeps the app's private key
+  sealed and mints one-hour installation tokens. They go to GitHub's own MCP server (`api.githubcopilot.com/mcp/`) as
+  the bearer, so commits and pull requests show as `name[bot]`, and to the agent through the `github_git_credentials`
+  tool, which returns the `git config` lines for cloning and pushing from its terminal as the bot. This replaces the
+  pasted personal token of 2026-11-13 and reverses "agents do not `git clone`": the owner wants real clones, the
+  token that enters the container dies in an hour and reaches only the installed repositories, and agents could
+  already reach github.com on 443. The key itself never leaves the server.
 - **Google** (Gmail, Drive, Workspace = Docs, Sheets, Slides and Calendar) uses Google's MCP servers
   (`<product>mcp.googleapis.com/mcp/v1`). Google has no dynamic registration, so an owner or admin pastes a Google
   OAuth client (Web application) once, in Admin or in step 1 of the dialog; Fast Monkey runs the OAuth itself.

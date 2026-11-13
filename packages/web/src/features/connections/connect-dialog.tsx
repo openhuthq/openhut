@@ -16,20 +16,24 @@ const ROLE_SQL = `create role fastmonkey_reader login password 'choose-a-passwor
 grant pg_read_all_data to fastmonkey_reader;`
 
 function GithubFlow({ item, info, close, returned }: FlowProps) {
-  const createConnection = useCreateConnection()
-  return <form id="connect-main" onSubmit={(event) => createConnection.mutate({ kind: 'github', name: item.title, token: formValues(event)('token') })}>
+  const authorize = useAuthorizeConnection()
+  return <form id="connect-main" onSubmit={(event) => {
+    const field = formValues(event)
+    authorize.mutate({ kind: 'github', name: field('name'), organization: field('organization') || undefined })
+  }}>
     <SetupSteps>
-      <SetupStep n={1} title="Create a fine-grained token" state="now" tag="pick the repositories">
-        <div><a className="btn sec sm" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer">{ICONS.ext}Open GitHub tokens</a></div>
-        <p className="hint">Contents and Pull requests: Read and write to let agents commit. Read-only to let them look.</p>
+      <SetupStep n={1} title="Name the bot" state="now">
+        <Field label="Bot name" error={fieldError(authorize.error, 'name')}>{(control) =>
+          <input {...control} name="name" placeholder="acme-monkey" required maxLength={34} autoComplete="off" autoFocus />}</Field>
+        <Field label="Organization" error={fieldError(authorize.error, 'organization')}>{(control) =>
+          <input {...control} name="organization" placeholder="Empty for your own account" pattern="[A-Za-z0-9\-]{1,39}" title="The organization as it appears in its GitHub URL." autoComplete="off" />}</Field>
+        <p className="hint">Commits and pull requests show as name[bot]. The name must be free on GitHub.</p>
       </SetupStep>
-      <SetupStep n={2} title="Paste it">
-        <Field label="Access token" error={fieldError(createConnection.error, 'token')}>{(control) =>
-          <input {...control} name="token" type="password" className="mono" placeholder="github_pat_…" required autoComplete="off" />}</Field>
-      </SetupStep>
+      <SetupStep n={2} title="Create it on GitHub" tag="one click" />
+      <SetupStep n={3} title="Pick its repositories" tag="on GitHub" />
     </SetupSteps>
-    <SetupFoot info={info} cancel={close} error={formError(createConnection.error, ['token']) ?? returned}>
-      <SetupSubmit pending={createConnection.isPending} label="Test and connect" busy="Testing…" />
+    <SetupFoot info={info} cancel={close} error={formError(authorize.error, ['name', 'organization']) ?? returned}>
+      <SetupSubmit brand={item.name} pending={authorize.isPending} label="Create the bot on GitHub" busy="Opening GitHub…" />
     </SetupFoot>
   </form>
 }
