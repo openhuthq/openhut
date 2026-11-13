@@ -524,6 +524,10 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .setup-line.warn>svg{color:#a15c00}
 .setup-more summary{cursor:pointer;color:var(--mute);font-size:12px;text-decoration:underline;text-underline-offset:2px;list-style:none}
 .setup-more summary::-webkit-details-marker{display:none}
+.skills-more>summary{cursor:pointer;color:var(--mute);font-size:12.5px;padding:10px 12px;list-style:none}
+.skills-more>summary::-webkit-details-marker{display:none}
+.skills-more[open]>summary{border-bottom:1px solid var(--hair)}
+.skills-more .row+.row{border-top:1px solid var(--hair)}
 .setup-more[open]{flex-basis:100%}
 .setup-more ul{margin:8px 0 0 23px;padding:0;display:flex;flex-direction:column;gap:4px;color:var(--mute)}
 .setup-err{margin:0;padding:10px 20px;color:var(--fail);font-size:13px;border-top:1px solid var(--hair)}

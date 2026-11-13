@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@fastmonkey/common/api.ts'
 import { Agent, Grant, type CreateAgent, type UpdateAgent } from '@fastmonkey/common/agents/agent.ts'
+import { Skill } from '@fastmonkey/common/agents/skill.ts'
 import { Channel, type CreateChannel, type UpdateChannel } from '@fastmonkey/common/channels/channel.ts'
 import { request } from '@/lib/api-client'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
@@ -9,6 +10,7 @@ import { navigate } from '@/lib/router'
 const AGENT_LIST = List(Agent)
 const GRANT_LIST = List(Grant)
 const CHANNEL_LIST = List(Channel)
+const SKILL_LIST = List(Skill)
 const DELETED_AGENT = Deleted('agent')
 const DELETED_GRANT = Deleted('grant')
 const DELETED_CHANNEL = Deleted('channel')
@@ -115,6 +117,29 @@ export function useDeleteChannel() {
     mutationFn: (channel: Channel) => request({ schema: DELETED_CHANNEL, path: channelPath(channel.id), method: 'DELETE' }),
     onSuccess: (_, channel) => client.setQueryData<Channel[]>(channelsKey(channel.agentId), (channels) => channels?.filter((each) => each.id !== channel.id)),
   })
+}
+
+export function useSkills(agentId: string) {
+  return useQuery({ queryKey: ['skills', agentId], queryFn: () => request({ schema: SKILL_LIST, path: `/api/skills?${new URLSearchParams({ agentId })}` }).then((page) => page.data) })
+}
+
+export function useSkill(skillId: string) {
+  return useQuery({ queryKey: ['skill', skillId], queryFn: () => request({ schema: Skill, path: skillPath(skillId) }) })
+}
+
+export function useUpdateSkill(skillId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: string) => request({ schema: Skill, path: skillPath(skillId), method: 'PATCH', body: { body } }),
+    onSuccess: (skill) => {
+      client.setQueryData(['skill', skill.id], skill)
+      client.setQueryData<Skill[]>(['skills', skill.agentId], (skills) => skills?.map((each) => each.id === skill.id ? { ...skill, body: null } : each))
+    },
+  })
+}
+
+function skillPath(skillId: string) {
+  return `/api/skills/${encodeURIComponent(skillId)}`
 }
 
 function agentPath(agentId: string) {

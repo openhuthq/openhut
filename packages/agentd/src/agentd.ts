@@ -1,10 +1,11 @@
 import { execFile, spawn } from 'node:child_process'
-import { chmodSync, chownSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, chownSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
 import { dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
+import { isSkillPath, listSkills, MAX_SKILL_BYTES, readSkill, writeSkill, type SkillHead } from './skills.ts'
 
 const run = promisify(execFile)
 const RELEASE_URL = process.env.FASTMONKEY_URL ?? 'https://fastmonkey.dev'
@@ -133,6 +134,13 @@ async function handle(req: AgentdRequest): Promise<Reply> {
       return unlink(req.id)
     case 'update':
       return update()
+    case 'skills':
+      return listSkills(skillsRoot(req.id))
+    case 'skill-read':
+      return { body: readSkill({ root: skillsRoot(req.id), path: req.path }) }
+    case 'skill-write':
+      writeSkill({ root: skillsRoot(req.id), path: req.path, body: req.body })
+      return { written: req.path }
     case 'ts-up':
       return tailscaleUp(req.authKey)
     case 'ts-status':
@@ -166,7 +174,13 @@ function parseRequest(value: unknown): AgentdRequest {
     case 'rm':
     case 'wa-pair':
     case 'wa-unlink':
+    case 'skills':
       return { cmd, id: agentId(value.id) }
+    case 'skill-read':
+      return { cmd, id: agentId(value.id), path: skillPath(value.path) }
+    case 'skill-write':
+      if (typeof value.body !== 'string' || !value.body || Buffer.byteLength(value.body) > MAX_SKILL_BYTES) throw new Error('missing or oversized skill body')
+      return { cmd, id: agentId(value.id), path: skillPath(value.path), body: value.body }
     default:
       throw new Error(`unknown command ${String(cmd)}`)
   }
@@ -174,6 +188,11 @@ function parseRequest(value: unknown): AgentdRequest {
 
 function agentId(value: unknown) {
   if (typeof value !== 'string' || !ID.test(value)) throw new Error('bad agent id')
+  return value
+}
+
+function skillPath(value: unknown) {
+  if (!isSkillPath(value)) throw new Error('bad skill path')
   return value
 }
 
@@ -424,6 +443,10 @@ function home(id: string) {
   return `/data/agents/${id}`
 }
 
+function skillsRoot(id: string) {
+  return `${realpathSync('/data/agents')}/${id}/skills`
+}
+
 function pending(p: Pairing | undefined) {
   return p?.status === 'starting' || p?.status === 'qr'
 }
@@ -513,7 +536,9 @@ export type AgentdRequest =
   | { cmd: 'update' }
   | { cmd: 'create'; id: string; net: number; files: AgentFiles }
   | { cmd: 'apply'; id: string; net: number; files: AgentFiles; restart: boolean; force?: boolean }
-  | { cmd: 'start' | 'stop' | 'rm' | 'wa-pair' | 'wa-unlink'; id: string }
+  | { cmd: 'start' | 'stop' | 'rm' | 'wa-pair' | 'wa-unlink' | 'skills'; id: string }
+  | { cmd: 'skill-read'; id: string; path: string }
+  | { cmd: 'skill-write'; id: string; path: string; body: string }
   | { cmd: 'ts-up'; authKey: string }
   | { cmd: 'ts-status' | 'ts-down' }
 
@@ -529,6 +554,9 @@ export type AgentdReplies = {
   'wa-pair': Pairing
   'wa-unlink': { unlinked: string }
   update: { updating: boolean }
+  skills: { skills: SkillHead[]; bundled: string }
+  'skill-read': { body: string }
+  'skill-write': { written: string }
   'ts-up': Tailnet & { joined: boolean }
   'ts-status': Tailnet
   'ts-down': Tailnet

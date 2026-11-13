@@ -13,6 +13,7 @@ import { useAgent, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { ChannelsSection } from '@/features/agents/channels-section'
 import { InstructionsSection } from '@/features/agents/instructions-section'
 import { ModelPicker } from '@/features/agents/model-picker'
+import { SkillsSection } from '@/features/agents/skills-section'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 
@@ -20,13 +21,13 @@ export type AgentDialog = 'name' | 'instructions' | 'slack' | 'whatsapp' | 'tele
 
 const PARENTS = [{ label: 'Agents', href: '/agents' }]
 
-export function AgentPage({ agentId, dialog }: { agentId: string; dialog: AgentDialog | undefined }) {
+export function AgentPage({ agentId, dialog, skill }: { agentId: string; dialog: AgentDialog | undefined; skill: string | undefined }) {
   const agent = useAgent(agentId)
   if (!agent.data) return <Page title="Agent" parents={PARENTS}><ErrorNote message={agent.error?.message} /></Page>
-  return <AgentView agent={agent.data} dialog={dialog} />
+  return <AgentView agent={agent.data} dialog={dialog} skill={skill} />
 }
 
-function AgentView({ agent, dialog }: { agent: Agent; dialog: AgentDialog | undefined }) {
+function AgentView({ agent, dialog, skill }: { agent: Agent; dialog: AgentDialog | undefined; skill: string | undefined }) {
   const updateAgent = useUpdateAgent(agent.id)
   const deleteAgent = useDeleteAgent(agent.id)
   const lockReason = agent.canEdit ? undefined : `Only ${agent.ownerName} or an admin can change ${agent.name}`
@@ -63,6 +64,7 @@ function AgentView({ agent, dialog }: { agent: Agent; dialog: AgentDialog | unde
         </div>
         <ChannelsSection agent={agent} lockReason={lockReason} dialog={dialog} />
         <AgentConnections agent={agent} lockReason={lockReason} />
+        <SkillsSection agent={agent} lockReason={lockReason} open={skill} />
       </aside>
     </div>
   </Page>

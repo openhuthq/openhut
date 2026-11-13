@@ -85,7 +85,7 @@ function RoutePage({ me, route }: { me: Me; route: Route }) {
     case 'home': return <Home />
     case 'chat': return <AgentChatPage key={route.agentId} me={me} agentId={route.agentId} />
     case 'agents': return <AgentsPage me={me} />
-    case 'agent': return <AgentPage key={route.agentId} agentId={route.agentId} dialog={route.dialog} />
+    case 'agent': return <AgentPage key={route.agentId} agentId={route.agentId} dialog={route.dialog} skill={route.skill} />
     case 'connections': return <ConnectionsPage me={me} adding={route.adding} />
     case 'tailscale': return <TailscalePage me={me} />
     case 'connection': return <ConnectionPage key={route.connectionId} me={me} connectionId={route.connectionId} />
