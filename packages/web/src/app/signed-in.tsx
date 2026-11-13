@@ -3,6 +3,7 @@ import type { Me } from '@fastmonkey/common/team/team.ts'
 import { Avatar } from '@/components/avatar'
 import { ICONS, NAV_ICONS } from '@/components/icons'
 import { Initial } from '@/components/initial'
+import { Monkey } from '@/components/monkey'
 import { Page, SidebarToggle } from '@/components/page'
 import type { Route } from '@/app/routes'
 import { AdminPage } from '@/features/admin/admin-page'
@@ -35,7 +36,7 @@ export function SignedIn({ me, route }: { me: Me; route: Route }) {
   return <SidebarToggle value={() => setCollapsed(!collapsed)}>
     <div className={collapsed ? 'app collapsed' : 'app'}>
       <aside className="side" aria-label="Sidebar">
-        <div className="team"><div className="logo" aria-hidden="true">{ICONS.logo}</div><div className="teamname">Fast Monkey</div></div>
+        <div className="team"><Monkey className="monkey logo" /><div className="teamname">Fast Monkey</div></div>
         <NavLink section="agents" label="Agents" current={current} count={agents.data?.length} />
         <NavLink section="connections" label="Connections" current={current} />
         <div className="sidefoot">
