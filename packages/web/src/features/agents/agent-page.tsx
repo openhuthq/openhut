@@ -59,12 +59,22 @@ function AgentView({ agent, dialog }: { agent: Agent; dialog: AgentDialog | unde
           <div><span>{FACT_ICONS.status}Status</span><AgentBadge agent={agent} /></div>
           <div><span>{FACT_ICONS.model}Model</span><ModelPicker agent={agent} lockReason={lockReason} /></div>
           <div><span>{FACT_ICONS.owner}Owner</span><OwnerChip id={agent.ownerId} name={agent.ownerName} /></div>
+          <div><span>{FACT_ICONS.browser}Browser</span><ToolSwitch agent={agent} tool="browser" label="Browser" lockReason={lockReason} /></div>
+          <div><span>{FACT_ICONS.code}Code execution</span><ToolSwitch agent={agent} tool="codeExecution" label="Code execution" lockReason={lockReason} /></div>
         </div>
         <ChannelsSection agent={agent} lockReason={lockReason} dialog={dialog} />
         <AgentConnections agent={agent} lockReason={lockReason} />
       </aside>
     </div>
   </Page>
+}
+
+function ToolSwitch({ agent, tool, label, lockReason }: { agent: Agent; tool: 'browser' | 'codeExecution'; label: string; lockReason: string | undefined }) {
+  const updateAgent = useUpdateAgent(agent.id)
+  return <Locked reason={lockReason}>
+    <button className="sw" role="switch" aria-checked={agent[tool]} aria-label={label} disabled={!agent.canEdit || updateAgent.isPending}
+      onClick={() => updateAgent.mutate({ [tool]: !agent[tool] }, { onError: toastError })}></button>
+  </Locked>
 }
 
 function AgentName({ agent, editing }: { agent: Agent; editing: boolean }) {

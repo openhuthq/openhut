@@ -23,6 +23,7 @@ const RECONCILE_MS = 30_000
 const PROBE_MS = 3_000
 const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
+const RENDERED = ['instructions', 'model', 'browser', 'codeExecution'] as const
 const SlackSecrets = z.object({ botToken: z.string(), appToken: z.string() })
 
 export const agentService = {
@@ -67,8 +68,9 @@ export const agentService = {
 
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateAgent }): Promise<Agent> {
     await agentService.requireEditable({ actor, id })
-    await db.updateTable('agent').set(patch.name === undefined ? patch : { ...patch, name: cleanName(patch.name) }).where('id', '=', id).execute()
-    if (patch.instructions !== undefined || patch.model) await agentService.reapply({ id })
+    const { codeExecution, ...fields } = patch
+    await db.updateTable('agent').set({ ...fields, code_execution: codeExecution, name: patch.name === undefined ? undefined : cleanName(patch.name) }).where('id', '=', id).execute()
+    if (RENDERED.some((field) => patch[field] !== undefined)) await agentService.reapply({ id })
     if (patch.wanted) await (patch.wanted === 'running' ? agentd.start({ id }) : agentd.stop({ id }))
     return agentService.get({ actor, id })
   },
@@ -84,7 +86,7 @@ export const agentService = {
 
   async reapply({ id }: { id: string }): Promise<void> {
     const row = await rowOf(id)
-    await agentd.apply({ id, files: await filesOf(row), restart: row.wanted === 'running' })
+    await agentd.apply({ id, net: row.net, files: await filesOf(row), restart: row.wanted === 'running' })
   },
 
   async stopOwnedBy({ ownerId }: { ownerId: string }): Promise<void> {
@@ -127,7 +129,7 @@ export const agentService = {
   async reapplyAll({ force }: { force: boolean }): Promise<string[]> {
     const failed: string[] = []
     for (const row of await db.selectFrom('agent').selectAll().execute()) {
-      await agentd.apply({ id: row.id, files: await filesOf(row), restart: row.wanted === 'running', force })
+      await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), restart: row.wanted === 'running', force })
         .catch((err: unknown) => failed.push(`${row.name}: ${messageOf(err)}`))
     }
     return failed
@@ -191,7 +193,7 @@ async function keepRunning({ row, state }: { row: AgentRow; state: string | unde
     log.info({ event: 'reconcile.started', agent: row.id })
     return
   }
-  const { restarted } = await agentd.apply({ id: row.id, files: await filesOf(row), restart: true })
+  const { restarted } = await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), restart: true })
   if (restarted) log.info({ event: 'reconcile.restarted', agent: row.id })
 }
 
@@ -210,7 +212,7 @@ async function applyRelease(): Promise<void> {
 function agentOf({ row, ownerName, state, health, editable }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean }): Agent {
   return {
     id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, wanted: row.wanted,
-    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
+    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, browser: row.browser, codeExecution: row.code_execution, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
   }
 }
 

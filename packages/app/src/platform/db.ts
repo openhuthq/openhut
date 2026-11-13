@@ -37,6 +37,8 @@ export async function migrate(): Promise<void> {
     model text not null default 'sonnet' check (model in ('opus', 'sonnet', 'haiku')), net integer unique not null check (net between 1 and 250),
     wanted text not null default 'stopped' check (wanted in ('running', 'stopped')),
     channel_key text not null, created_at timestamptz not null default now())`.execute(db)
+  await sql`alter table agent add column if not exists browser boolean not null default true`.execute(db)
+  await sql`alter table agent add column if not exists code_execution boolean not null default true`.execute(db)
   await sql`create table if not exists channel (
     id text primary key, agent_id text not null references agent(id) on delete cascade, kind text not null check (kind in ('slack', 'whatsapp')),
     status text not null check (status in ('connected', 'linking')), account text, owner_address text not null, secrets text not null default '',

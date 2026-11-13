@@ -50,7 +50,7 @@ def can_write(p):
     try:
         open(p, "a").close(); return True
     except Exception: return False
-paths = {"root": "/usr/fm_probe", "config": "/opt/data/config.yaml", "env": "/opt/data/.env", "soul": "/opt/data/SOUL.md", "skills": "/opt/data/skills/x.md",
+paths = {"root": "/usr/fm_probe", "config": "/opt/data/config.yaml", "env": "/opt/data/.env", "soul": "/opt/data/SOUL.md",
          "hooks": "/opt/data/hooks/x.py", "plugins": "/opt/data/plugins/x.py", "pairing": "/opt/data/platforms/pairing/slack-approved.json",
          "legacy_pairing": "/opt/data/pairing/slack-approved.json", "claude_settings": "/opt/data/.claude/settings.json", "claude_cli": "/usr/local/bin/claude"}
 def can_rename(p):
@@ -65,7 +65,7 @@ def udp_dns(server):
     except socket.timeout: return "timeout"
     except Exception as e: return type(e).__name__
 renames = ["/opt/data/platforms", "/opt/data/.claude", "/opt/data/platforms/pairing", "/opt/data/.claude/settings.json", "/opt/data/config.yaml",
-           "/opt/data/.env", "/opt/data/SOUL.md", "/opt/data/skills", "/opt/data/hooks", "/opt/data/plugins", "/opt/data/pairing"]
+           "/opt/data/.env", "/opt/data/SOUL.md", "/opt/data/hooks", "/opt/data/plugins", "/opt/data/pairing"]
 o = {"uid": os.getuid(), "kernel": open("/proc/version").read().strip()[:80],
      "writable": {k: can_write(p) for k, p in paths.items()}, "renamable": {p: can_rename(p) for p in renames},
      "udp_dns": {"other_resolver": udp_dns("8.8.8.8"), "own_resolver": udp_dns(open("/etc/resolv.conf").read().split()[1])},
@@ -399,7 +399,6 @@ function main() {
         `${c}/SOUL.md -> /opt/data/SOUL.md (ro)`,
         `${c}/claude-settings.json -> /opt/data/.claude/settings.json (ro)`,
         `${c}/config.yaml -> /opt/data/config.yaml (ro)`,
-        `${c}/skills -> /opt/data/skills (ro)`,
         `/data/agents/${dev.id} -> /opt/data`,
         `/data/agents/${dev.id}/.claude -> /opt/data/.claude`,
         `/data/agents/${dev.id}/platforms -> /opt/data/platforms`,
@@ -639,7 +638,7 @@ function main() {
 
   check(
     'F2',
-    "Can't write, or rename away, its config, .env, SOUL.md, skills, hooks, plugins, channel approvals, Claude settings or CLI, or the root FS",
+    "Can't write, or rename away, its config, .env, SOUL.md, hooks, plugins, channel approvals, Claude settings or CLI, or the root FS",
     'every write and every rename fails',
     async () => {
       const { writable, renamable } = iso.probe

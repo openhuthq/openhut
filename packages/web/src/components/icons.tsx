@@ -25,6 +25,8 @@ export const FACT_ICONS = {
   status: line(<path d="M22 12h-4l-3 9L9 3l-3 9H2" />, 'fi'),
   model: line(<><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" /></>, 'fi'),
   owner: line(<><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>, 'fi'),
+  browser: line(<><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>, 'fi'),
+  code: line(<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14" />, 'fi'),
 }
 
 export const NAV_ICONS = {

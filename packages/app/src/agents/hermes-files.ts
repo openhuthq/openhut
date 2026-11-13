@@ -8,7 +8,7 @@ import { whatsapp } from '../integrations/whatsapp/whatsapp.ts'
 const AUXILIARY_TASKS = ['approval', 'compression', 'title_generation', 'background_review']
 
 export function renderFiles({ agent, ownerName, token, channelKey, seat, channels }: {
-  agent: { id: string; name: string; instructions: string; model: string; net: number }
+  agent: { id: string; name: string; instructions: string; model: string; net: number; browser: boolean; code_execution: boolean }
   ownerName: string
   token: string
   channelKey: string
@@ -18,10 +18,11 @@ export function renderFiles({ agent, ownerName, token, channelKey, seat, channel
   const gateway = `http://${agentSubnet(agent.net)}.1:${config.gatewayPort}`
   const approvers = [ownerName, ...channels.map(approverOf)]
   const approvalsMode = channels.some((channel) => channel.audience.open) ? 'smart' : 'manual'
+  const disabled = ['delegation', 'cronjob', ...(agent.browser ? [] : ['browser']), ...(agent.code_execution ? [] : ['code_execution'])]
   const yaml = [
     modelYaml({ gateway, token, model: agent.model }),
     'terminal:\n  backend: local',
-    'agent:\n  api_max_retries: 30\n  disabled_toolsets: [browser, code_execution, delegation, cronjob]',
+    `agent:\n  api_max_retries: 30\n  disabled_toolsets: [${disabled.join(', ')}]`,
     `approvals:\n  mode: ${approvalsMode}\n  approvers: ${JSON.stringify(approvers)}`,
     'platform_toolsets:\n  api_server: [hermes-api-server, fastmonkey]',
     'tools:\n  tool_search:\n    enabled: "off"',
