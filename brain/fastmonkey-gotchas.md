@@ -17,6 +17,7 @@ the installer, agentd and the e2e run live here. `fastmonkey-server.md` covers t
 
 - `@fastify/static` is registered with `wildcard: false`, so it only serves files present at start. After rebuilding
   the dashboard, restart the app or new asset names fall through to `index.html` and the page stays blank.
+- Fast Monkey installs only on Linux (Debian, Ubuntu or Alpine; x86_64 or arm64): gVisor, the iptables firewall and systemd need a Linux kernel, and a native macOS port would drop the sandbox. On a Mac, run `install.sh` inside a Linux VM (OrbStack, Lima, UTM). The installer checks the OS before root so a Mac user isn't asked for sudo first.
 - macOS caps Unix socket paths at 104 bytes; a long `AGENTD_SOCK` is cut short and fails with `EADDRINUSE`.
 - Two worktrees can't run `npm run dev` at once: the gateway (8081, `config.ts`) and the fake Hermes (18642, `fake-agentd.ts` and `dev.ts`) are fixed, and `PORT` only moves 8787 (`seed-ui.ts` also assumes 8787). To check the UI from a second worktree, change those locally, run with `PORT`, and revert before committing. Don't point Vite at another worktree's app: it may be on a different API and the pages fail to parse. Stop your own processes by PID (`lsof -tiTCP:<port>`), never `pkill -f fake-agentd`: every worktree's dev runs the same command line, so it kills theirs too.
 - Stop your own dev server by PID (`lsof -nP -iTCP -sTCP:LISTEN`), never `pkill -f scripts/dev.ts`: that also matches other worktrees' servers, and killing only `dev.ts` leaves its app child holding the port.
