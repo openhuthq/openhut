@@ -21,7 +21,7 @@ const FOLDED = 12
 
 export function SkillsSection({ agent, lockReason, open }: { agent: Agent; lockReason: string | undefined; open: string | undefined }) {
   const skills = useSkills(agent.id)
-  const [filter, setFilter] = useState<Filter>('builtIn')
+  const [filter, setFilter] = useState<Filter>('learned')
   const [unfolded, setUnfolded] = useState(false)
   const all = skills.data ?? []
   const counts: Record<Filter, number> = { all: all.length, learned: all.filter((skill) => !skill.builtIn).length, builtIn: all.filter((skill) => skill.builtIn).length }
