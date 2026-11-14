@@ -1,10 +1,12 @@
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import {
-  Activity01Icon, Add01Icon, AiMagicIcon, ArrowDown01Icon, ArrowExpand01Icon, ArrowRight01Icon, ArrowTurnBackwardIcon, ArrowUp02Icon, AtIcon, Calendar03Icon,
-  Cancel01Icon, ChartColumnIcon, Clock01Icon, ComputerIcon, Copy01Icon, Delete02Icon, EraserIcon, File01Icon, File02Icon, Flag01Icon, FlashIcon, Globe02Icon,
-  GridTableIcon, HierarchyIcon, Key01Icon, LaptopIcon, Link01Icon, LinkSquare02Icon, Logout03Icon, Message01Icon, MoreHorizontalIcon, NoteEditIcon,
+  Activity01Icon, Add01Icon, AiBrain01Icon, AiMagicIcon, ArrowDown01Icon, ArrowExpand01Icon, ArrowRight01Icon, ArrowTurnBackwardIcon, ArrowUp02Icon, AtIcon,
+  BookOpen01Icon, Calendar03Icon, Cancel01Icon, ChartColumnIcon, CheckListIcon, Clock01Icon, CodeIcon, CommandIcon, ComputerIcon, Copy01Icon, Delete02Icon,
+  EraserIcon, File01Icon, File02Icon, Flag01Icon, FlashIcon, GitBranchIcon, Globe02Icon, GridTableIcon, HierarchyIcon, InformationCircleIcon, Key01Icon, LaptopIcon,
+  Link01Icon, LinkSquare02Icon, Logout03Icon, Mail01Icon, Megaphone01Icon, Message01Icon, MoreHorizontalIcon, NoteEditIcon, Notebook01Icon, PaintBoardIcon,
   PencilEdit01Icon, PencilEdit02Icon, PlayIcon, Presentation01Icon, Robot01Icon, Search01Icon, SecurityCheckIcon, ServerStack01Icon, Settings01Icon,
-  SidebarLeftIcon, SourceCodeIcon, SquareLock02Icon, StopIcon, Table01Icon, Tag01Icon, Tick02Icon, UnfoldMoreIcon, UserIcon, UserMultipleIcon, Wrench01Icon,
+  SidebarLeftIcon, SourceCodeIcon, SparklesIcon, SquareLock02Icon, StopIcon, Table01Icon, Tag01Icon, Tick02Icon, UnfoldMoreIcon, UserIcon, UserMultipleIcon,
+  Video01Icon, Wrench01Icon,
 } from '@hugeicons/core-free-icons'
 
 function icon(svg: IconSvgElement, size = 16, className?: string, strokeWidth = 1.5) {
@@ -33,6 +35,7 @@ export const ICONS = {
   updown: icon(UnfoldMoreIcon, 14),
   out: icon(Logout03Icon, 16),
   ext: icon(LinkSquare02Icon, 14),
+  info: icon(InformationCircleIcon, 14),
 }
 
 export const FACT_ICONS = {
@@ -86,3 +89,24 @@ export const SETUP_ICONS = {
   lock: icon(SquareLock02Icon),
 }
 export type SetupIcon = keyof typeof SETUP_ICONS
+
+export const LEARNED_SKILL_ICON = icon(SparklesIcon)
+
+const SKILL_ICONS = new Map(Object.entries({
+  'software-development': icon(CodeIcon),
+  devops: icon(GitBranchIcon),
+  productivity: icon(CheckListIcon),
+  creative: icon(PaintBoardIcon),
+  'autonomous-ai-agents': icon(AiBrain01Icon),
+  apple: icon(CommandIcon),
+  research: icon(BookOpen01Icon),
+  email: icon(Mail01Icon),
+  web: icon(Globe02Icon),
+  'note-taking': icon(Notebook01Icon),
+  'social-media': icon(Megaphone01Icon),
+  media: icon(Video01Icon),
+}))
+
+export function skillIcon(category: string) {
+  return SKILL_ICONS.get(category) ?? SETUP_ICONS.bolt
+}

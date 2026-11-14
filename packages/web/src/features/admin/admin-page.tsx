@@ -9,6 +9,7 @@ import { DialogFoot } from '@/components/dialog-foot'
 import { DialogHead } from '@/components/dialog-head'
 import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
+import { ICONS } from '@/components/icons'
 import { Loaded } from '@/components/loaded'
 import { Locked } from '@/components/locked'
 import { Mark } from '@/components/mark'
@@ -42,9 +43,8 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
         <Row icon="claude" title="Claude seat" subtitle={seatLine(admin)} status={admin.seat.set ? <Ready word="Connected" /> : <StatusBadge status="not_set_up" />}
           action={<ToggleButton label={admin.seat.set ? 'Replace' : 'Set up'} form="seat" open={form === 'seat'} canEdit={canEdit} reason="Only an owner or admin sets the seat" onOpen={openSeatTab} />} />
         {form === 'seat' && canEdit && <SeatForm />}
-        {admin.seat.set && admin.seat.mode === 'claude' && <SeatUsagePanel />}
       </Section>
-      {usage && <Section number={2} title="Usage by agent"><AgentUsagePanel /></Section>}
+      {usage && <Section number={2} title="Usage" info="Claude's limits for this seat. Anyone else signed in to the same Claude account counts toward them too."><UsagePanel /></Section>}
       <Section number={2 + n} title="Server">
         <Row icon="globe" title="Public URL" mono subtitle={admin.publicUrl}
           action={<ToggleButton label="Edit" form="public-url" open={form === 'public-url'} canEdit={canEdit} reason="Only an owner or admin changes it" />} />
@@ -77,35 +77,30 @@ const WINDOWS: { kind: SeatWindow['kind']; name: string; idle: string }[] = [
 ]
 const resetTime = new Intl.DateTimeFormat('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
 
-function SeatUsagePanel() {
-  return <SeatUsageLoaded>{(usage) => <div className="aform usage">
+function UsagePanel() {
+  const usage = useSeatUsage()
+  if (usage.error) return <div className="aform usage"><span className="mute">{usage.error.message}</span></div>
+  if (!usage.data) return <div className="aform usage updating" role="status"><span className="spin" aria-hidden="true"></span><span>Asking Claude how much of the seat is used…</span></div>
+  return <UsageView usage={usage.data} />
+}
+
+function UsageView({ usage }: { usage: SeatUsage }) {
+  const total = usage.agents.reduce((sum, agent) => sum + agent.costUsd, 0)
+  const used = usage.agents.filter((agent) => agent.costUsd > 0)
+  return <div className="aform usage">
     {WINDOWS.map(({ kind, name, idle }) => {
       const window = usage.windows.find((each) => each.kind === kind)
       return <Meter key={kind} label={name} percent={window?.percent ?? 0} note={window?.resetsAt ? `Resets ${resetTime.format(new Date(window.resetsAt))}` : idle} />
     })}
-  </div>}</SeatUsageLoaded>
-}
-
-function AgentUsagePanel() {
-  return <SeatUsageLoaded>{(usage) => <AgentUsageView usage={usage} />}</SeatUsageLoaded>
-}
-
-function SeatUsageLoaded({ children }: { children: (usage: SeatUsage) => ReactNode }) {
-  const usage = useSeatUsage()
-  if (usage.error) return <div className="aform usage"><span className="mute">{usage.error.message}</span></div>
-  if (!usage.data) return <div className="aform usage updating" role="status"><span className="spin" aria-hidden="true"></span><span>Asking Claude how much of the seat is used…</span></div>
-  return children(usage.data)
-}
-
-function AgentUsageView({ usage }: { usage: SeatUsage }) {
-  const total = usage.agents.reduce((sum, agent) => sum + agent.costUsd, 0)
-  const used = usage.agents.filter((agent) => agent.costUsd > 0)
-  return <div className="aform usage">
-    <span className="mute">Since {shortDate.format(new Date(usage.since))}, when this week's limit started. Each agent's share of what agents used, at API prices.</span>
+    <span className="usage-head">By agent<Info tip={`Each agent's share of what agents used since ${shortDate.format(new Date(usage.since))}, when this week's limit started, at API prices.`} /></span>
     {used.length
       ? used.map((agent) => <Meter key={agent.agentId} label={agent.agentName} avatar={agent.agentId} percent={Math.round((agent.costUsd / total) * 100)} note={`$${agent.costUsd.toFixed(2)}`} />)
       : <span className="mute">No agent has used the seat this week.</span>}
   </div>
+}
+
+function Info({ tip }: { tip: string }) {
+  return <span className="info" role="img" aria-label={tip} title={tip}>{ICONS.info}</span>
 }
 
 function Meter({ label, percent, note, avatar }: { label: string; percent: number; note: string; avatar?: string }) {
@@ -184,8 +179,8 @@ function AppRows({ grants }: { grants: OAuthGrant[] }) {
       onConfirm={() => deleteGrant.mutate(grant.id, { onError: toastError })}>Disconnect</ConfirmButton>} />)
 }
 
-function Section({ number, title, children }: { number: number; title: string; children: ReactNode }) {
-  return <section className="asec"><div className="ahead"><span className="anum">{String(number).padStart(2, '0')} {title}</span></div><div className="abox">{children}</div></section>
+function Section({ number, title, info, children }: { number: number; title: string; info?: string; children: ReactNode }) {
+  return <section className="asec"><div className="ahead"><span className="anum">{String(number).padStart(2, '0')} {title}</span>{info && <Info tip={info} />}</div><div className="abox">{children}</div></section>
 }
 
 function Row({ icon, title, subtitle, mono = false, status, action }: { icon: BrandName; title: string; subtitle: string; mono?: boolean; status?: ReactNode; action?: ReactNode }) {
