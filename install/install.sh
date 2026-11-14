@@ -14,8 +14,8 @@ fetch() { curl -fsSL --retry 4 --retry-all-errors --connect-timeout 15 -m 900 "$
 check() { printf '%s  %s\n' "$2" "$3" | "$1" -c - >/dev/null || die "checksum mismatch: $3"; }
 node_ok() { node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; }
 
+[ "$(uname -s)" = Linux ] || die "Fast Monkey runs only on Linux (Debian, Ubuntu or Alpine; x86_64 or arm64), not $(uname -s). On a Mac or Windows, run this inside a Linux VM or on a Linux server."
 [ "$(id -u)" = 0 ] || die "run as root:  curl -fsSL $FASTMONKEY_URL | sudo sh"
-[ "$(uname -s)" = Linux ] || die "Fast Monkey runs on Linux"
 if command -v flock >/dev/null 2>&1; then
   exec 9>/run/fastmonkey-install.lock
   flock -n 9 || die "another install or update is already running"
