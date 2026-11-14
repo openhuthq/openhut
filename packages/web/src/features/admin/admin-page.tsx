@@ -36,16 +36,15 @@ export function AdminPage({ me, form }: { me: Me; form: AdminForm | undefined })
 function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; form: AdminForm | undefined }) {
   const { server } = admin
   const usage = admin.seat.set && admin.seat.mode === 'claude'
-  const n = usage ? 1 : 0
   return <Page title="Admin">
     <div className="admin">
       <Section number={1} title="Claude seat">
         <Row icon="claude" title="Claude seat" subtitle={seatLine(admin)} status={admin.seat.set ? <Ready word="Connected" /> : <StatusBadge status="not_set_up" />}
           action={<ToggleButton label={admin.seat.set ? 'Replace' : 'Set up'} form="seat" open={form === 'seat'} canEdit={canEdit} reason="Only an owner or admin sets the seat" onOpen={openSeatTab} />} />
         {form === 'seat' && canEdit && <SeatForm />}
+        {usage && <UsagePanel />}
       </Section>
-      {usage && <Section number={2} title="Usage" info="Claude's limits for this seat. Anyone else signed in to the same Claude account counts toward them too."><UsagePanel /></Section>}
-      <Section number={2 + n} title="Server">
+      <Section number={2} title="Server">
         <Row icon="globe" title="Public URL" mono subtitle={admin.publicUrl}
           action={<ToggleButton label="Edit" form="public-url" open={form === 'public-url'} canEdit={canEdit} reason="Only an owner or admin changes it" />} />
         {form === 'public-url' && canEdit && <PublicUrlForm publicUrl={admin.publicUrl} />}
@@ -53,13 +52,13 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
         <Row icon="box" title="Containers" subtitle={`${server.running} of ${server.total} agents running, as Docker reports them`}
           action={<ToggleButton label="View" form="containers" open={form === 'containers'} canEdit={canEdit} reason="Only an owner or admin sees the containers" />} />
       </Section>
-      <Section number={3 + n} title="Google">
+      <Section number={3} title="Google">
         <Row icon="google" title="Google OAuth client" mono={!!admin.google.clientId} subtitle={admin.google.clientId ?? 'Needed before anyone connects Gmail, Google Drive or Google Workspace'}
           status={admin.google.clientId ? <Ready word="Ready" /> : <StatusBadge status="not_set_up" />}
           action={<ToggleButton label={admin.google.clientId ? 'Replace' : 'Set up'} form="google" open={form === 'google'} canEdit={canEdit} reason="Only an owner or admin sets it" />} />
         {form === 'google' && canEdit && <div className="aform" id="google"><GoogleClientSetup admin={admin} back="/admin" /></div>}
       </Section>
-      <Section number={4 + n} title="AI assistant"><ConnectedApps /></Section>
+      <Section number={4} title="AI assistant"><ConnectedApps /></Section>
     </div>
     {form === 'containers' && canEdit && <ContainersDialog />}
   </Page>
