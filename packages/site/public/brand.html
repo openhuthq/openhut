@@ -3,449 +3,283 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="The OpenHut brand: the hut, the crew, colours, type and how to use them.">
 <link rel="icon" href="/hut.svg">
-<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
-</head>
-<body>
-<title>OpenHut brand</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<title>OpenHut Brand</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Fredoka:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: one big beach scene opens the page (day in light mode, lantern-lit night in dark), then calm sand-coloured bands for the mark, colours, type, the crew and the mark in use. Colour lives in the art; the page around it stays quiet. */
 :root{
-  --thatch:#f7c948; --thatch-deep:#c9952a; --sand:#f2d9a8; --sand-deep:#d9b677; --lagoon:#3cc5c0; --deep:#0f6e7a; --sunset:#ffb36b; --flag:#ff5a3c; --ink:#0b0b0b; --foam:#fffaf0;
-  --display:"Fredoka","Baloo 2","Trebuchet MS",system-ui,sans-serif; --sans:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
-  /* page surfaces */
-  --bg:#fbf6ec; --surface:#fffdf8; --fg:#1d1a14; --body:#4a4337; --muted:#7c7262; --line:rgb(60 45 20 / .12); --tile-sand:#f6e6c4; --tile-night:#0d1a2e; --tile-night-fg:#f3ecdc; --tile-night-muted:#9ba7b8;
-  /* scene */
-  --sky-a:#a9e0f0; --sky-b:#ffe9c6; --sea-a:#4cc9c3; --sea-b:#1c8a95; --sea-line:rgb(255 255 255 / .55); --scene-sand:#f2d9a8; --scene-sand-deep:#e2bf80; --wet-sand:#e3c48d; --cloud:#ffffff; --sun-o:1; --moon-o:0; --stars-o:0; --glow-o:0; --bulb-o:.0; --far:#5aa7a8;
+  --paper:#ffffff; --stage:#f4f4f6; --stage-2:#e9e9ee; --line:rgb(0 0 0 / .09); --line-2:rgb(0 0 0 / .16);
+  --ink:#0b0b0c; --body:#3a3a40; --muted:#6b6b73; --faint:#9a9aa2; --ok:#12a150;
+  --display:"Bebas Neue","Arial Narrow",Impact,sans-serif;
+  --copy:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --sans:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:light;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0b1424; --surface:#111e33; --fg:#f3ecdc; --body:#cdc5b4; --muted:#949db0; --line:rgb(255 255 255 / .1); --tile-sand:#1a2a40;
-  --sky-a:#0c1830; --sky-b:#4a3360; --sea-a:#1d5a70; --sea-b:#0d2f45; --sea-line:rgb(255 240 210 / .35); --scene-sand:#c2a678; --scene-sand-deep:#9c8460; --wet-sand:#a88d63; --cloud:#55608a; --sun-o:0; --moon-o:1; --stars-o:1; --glow-o:1; --bulb-o:1; --far:#1d3550; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#0b1424; --surface:#111e33; --fg:#f3ecdc; --body:#cdc5b4; --muted:#949db0; --line:rgb(255 255 255 / .1); --tile-sand:#1a2a40;
-  --sky-a:#0c1830; --sky-b:#4a3360; --sea-a:#1d5a70; --sea-b:#0d2f45; --sea-line:rgb(255 240 210 / .35); --scene-sand:#c2a678; --scene-sand-deep:#9c8460; --wet-sand:#a88d63; --cloud:#55608a; --sun-o:0; --moon-o:1; --stars-o:1; --glow-o:1; --bulb-o:1; --far:#1d3550; color-scheme:dark}
-*,*::before,*::after{box-sizing:border-box}
-body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
-.wrap{max-width:1140px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-h1,h2,h3{font-family:var(--display);font-weight:600;margin:0;text-wrap:balance;letter-spacing:-.01em}
-h1{font-size:clamp(40px,6.4vw,76px);line-height:1}
-h2{font-size:clamp(30px,4vw,44px);line-height:1.05}
-h3{font-size:22px;line-height:1.15}
-p{margin:0;max-width:62ch;color:var(--body)}
-.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
-code{font-family:var(--mono);font-size:.9em}
-
-/* creatures */
-.cr{overflow:visible}
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:clip}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:6px}
+h1,h2,h3{font-family:var(--display);font-weight:400;text-transform:uppercase;line-height:1;margin:0;letter-spacing:-.005em;text-wrap:balance}
+p{margin:0}
+[hidden]{display:none!important}
+.logo{display:inline-flex;align-items:center;gap:8px;font-family:var(--display);font-size:26px;text-transform:uppercase;text-decoration:none;line-height:1}
+.lg{width:18px;height:18px;flex:none}
+.cr{display:block;flex:none;overflow:visible;transform-origin:50% 100%}
 .c-body{transform-box:fill-box;transform-origin:50% 100%;animation:breathe 3.4s ease-in-out infinite;animation-delay:var(--bd,0s)}
 @keyframes breathe{50%{transform:scale(1.03,.97)}}
-.c-eyes{transform-box:fill-box;transform-origin:center;animation:eyeblink 4.8s infinite;animation-delay:var(--bk,0s)}
+.c-face{translate:calc(var(--lx,0) * 1px) calc(var(--ly,0) * 1px);transition:translate .2s ease-out}
+.c-eyes{transform-box:fill-box;transform-origin:center;translate:calc(var(--lx,0) * .55px) calc(var(--ly,0) * .55px);transition:translate .2s ease-out;animation:eyeblink 4.8s infinite;animation-delay:var(--bk,0s)}
 @keyframes eyeblink{0%,93%,100%{scale:1 1}96%{scale:1 .08}}
-.c-hand{opacity:0}
-.hop:hover .c-body,.cr:hover .c-body{animation:hop .75s cubic-bezier(.3,0,.3,1)}
-@keyframes hop{0%,100%{transform:none}16%{transform:scale(1.1,.86)}44%{transform:scale(.93,1.1) translateY(-14%)}76%{transform:scale(1.08,.9)}}
+.c-mouth{transform-box:fill-box;transform-origin:50% 0}
+.cr.talk .c-mouth{animation:talk .16s ease-in-out infinite alternate}
+@keyframes talk{from{scale:.9 .45}to{scale:1.08 1.7}}
+.c-hat{transform-box:fill-box;transform-origin:50% 100%;translate:calc(var(--lx,0) * .4px) calc(var(--ly,0) * .25px);transition:translate .35s cubic-bezier(.3,1.7,.5,1)}
+.cr.hop,button:hover>.cr,.rail button:hover .cr{animation:hop .75s cubic-bezier(.3,0,.3,1)}
+@keyframes hop{0%,100%{transform:none}16%{transform:scale(1.1,.86)}44%{transform:scale(.93,1.1) translateY(-16%)}62%{transform:scale(.97,1.04) translateY(-4%)}76%{transform:scale(1.08,.9)}}
+.cr.hop .c-hat,button:hover>.cr .c-hat{animation:hat .75s cubic-bezier(.3,0,.3,1)}
+@keyframes hat{44%{transform:translateY(-9%) rotate(-7deg)}76%{transform:translateY(5%) rotate(3deg)}}
+.c-hand{transform-box:view-box;transform-origin:80px 76px;opacity:0;scale:.2;transition:opacity .16s,scale .2s cubic-bezier(.3,1.5,.5,1)}
+.cr.wave .c-hand{opacity:1;scale:1;animation:wave .34s ease-in-out infinite alternate}
+@keyframes wave{from{rotate:-14deg}to{rotate:20deg}}
+.cr.dizzy .c-face{animation:dizzy .9s linear infinite}
+@keyframes dizzy{0%{translate:3px 0}25%{translate:0 2.500px}50%{translate:-3px 0}75%{translate:0 -2.500px}100%{translate:3px 0}}
 
-/* hero */
-.hero{background:var(--sky-a);color:var(--fg)}
-:root[data-theme="dark"] .hero{color:#f3ecdc}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .hero{color:#f3ecdc}}
-.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:18px 0}
-.logo{display:flex;align-items:center;gap:10px;font-family:var(--display);font-weight:600;font-size:26px;color:inherit;text-decoration:none}
-.logo svg{width:40px;height:40px}
-.toplinks{display:flex;gap:20px;font-family:var(--mono);font-size:13px}
-.toplinks a{color:inherit;text-decoration:none}
-.toplinks a:hover{text-decoration:underline}
-.hero-copy{display:grid;gap:14px;padding-block:28px 0;position:relative;z-index:1}
-.hero-copy>*{max-width:600px}
+.wrap{max-width:1280px;margin:0 auto;padding:0 max(24px,env(safe-area-inset-left,0px))}
+.top{display:flex;justify-content:space-between;align-items:center;height:40px;margin:24px 0 26px}
+@media (max-width:720px){.top{margin-top:20px}}
+.top a.l{font-family:var(--copy);font-size:14px;text-decoration:none;margin-left:24px}
+.top a.l:hover{text-decoration:underline}
+header.b{padding-block:56px 44px}
+header.b h1{font-size:clamp(72px,13vw,168px);line-height:.9;display:flex;align-items:center;gap:.12em}
+header.b h1 .cr{width:.82em;height:.82em}
+header.b p{font-family:var(--copy);font-size:18px;margin-top:22px}
+section{padding-block:40px}
+section h2{font-size:48px;margin-bottom:20px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.tile{border-radius:18px;background:var(--stage);padding:56px 24px;display:grid;place-items:center;position:relative;min-height:220px}
+.tile.dark{background:var(--ink);color:#fff}
+.tile .logo{font-size:56px;gap:14px}
+.tile.dark .cr{filter:drop-shadow(0 0 1.2px rgb(255 255 255 / .9))}
+.act{position:absolute;right:14px;bottom:14px;font-family:var(--copy);font-size:12.5px;height:34px;padding:0 12px;border-radius:8px;background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line-2)}
+.troop{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.m{border-radius:16px;background:var(--stage);padding:18px 10px 12px;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:13.5px;font-weight:500;transition:background .2s}
+.m:hover{background:var(--stage-2)}
+.m .cr{width:72px;height:72px}
+.m small{font-family:var(--copy);font-size:11.5px;color:var(--muted);font-weight:400}
+.sw{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.s{border-radius:16px;background:var(--stage);overflow:hidden;text-align:left;display:block;width:100%}
+.s i{display:block;height:84px;background:var(--c);box-shadow:inset 0 0 0 1px var(--line)}
+.s span{display:block;padding:12px;font-size:14px;font-weight:600}
+.s code{display:block;font-family:var(--mono);font-size:12.5px;font-weight:400;color:var(--muted);margin-top:2px}
+.type{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.ty{border-radius:18px;background:var(--stage);padding:24px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.ty small{font-family:var(--copy);font-size:12.5px;color:var(--muted)}
+.ty .big{font-size:44px;line-height:1.02}
+.rules{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 32px;font-size:16px;max-width:900px}
+.rules div{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px}
+.rules i{font-style:normal;font-weight:700}
+footer{padding-block:40px 56px;font-family:var(--copy);font-size:13px;color:var(--muted)}
+@media (max-width:900px){.troop,.sw{grid-template-columns:repeat(3,minmax(0,1fr))}.type,.two,.rules{grid-template-columns:minmax(0,1fr)}.tile .logo{font-size:40px}section h2{font-size:40px}}
 
-.hero-copy p{color:inherit;opacity:.82;font-size:18px}
-.scene{display:block;width:100%;height:auto;aspect-ratio:1200/560;min-height:320px;margin-top:calc(-1 * min(12vw,170px));position:relative}
-.scene .drift{animation:drift 70s linear infinite alternate}
-.scene .drift.slow{animation-duration:110s}
-@keyframes drift{to{transform:translateX(90px)}}
-.scene .lap{animation:lap 5s ease-in-out infinite}
-@keyframes lap{50%{transform:translate(-14px,3px)}}
-.scene .bob{animation:bob 3.6s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
-@keyframes bob{50%{transform:translateY(5px) rotate(-3deg)}}
-.scene .twinkle{animation:twinkle 3s ease-in-out infinite}
-@keyframes twinkle{50%{opacity:.35}}
-.scene .sway{transform-box:view-box;transform-origin:298px 470px;animation:sway 6s ease-in-out infinite}
-@keyframes sway{50%{transform:rotate(1.4deg)}}
-
-/* sections */
-section{padding-block:72px;border-top:1px solid var(--line)}
-.sec-head{display:grid;gap:12px;margin-bottom:32px}
-.marks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px}
-.mark{display:grid;gap:16px;align-content:start;background:var(--surface);border-radius:24px;padding:20px;box-shadow:0 0 0 1px var(--line);min-width:0}
-.mark.rec{box-shadow:0 0 0 2px var(--thatch-deep)}
-.mark header{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.badge{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;background:var(--thatch);color:var(--ink);border-radius:999px;padding:3px 10px;white-space:nowrap}
-.stage{border-radius:18px;display:grid;place-items:center;padding:22px;background:radial-gradient(120% 90% at 50% 0%,#cdeef4 0%,#fdf3dd 62%,#f2d9a8 100%)}
-.stage svg{width:160px;height:160px;max-width:100%}
-.sizes{display:flex;align-items:flex-end;gap:20px;border-radius:14px;padding:12px 16px}
-.sizes.sand{background:#f6e6c4} .sizes.night{background:var(--tile-night)}
-figure{margin:0}
-.sizes figure{display:grid;justify-items:center;gap:6px}
-.sizes figcaption{font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums;color:#7c7262}
-.sizes.night figcaption{color:var(--tile-night-muted)}
-.mark p{font-size:15px}
-.copybtn{justify-self:start;font:500 14px var(--sans);height:36px;padding:0 16px;border-radius:999px;border:0;cursor:pointer;box-shadow:inset 0 0 0 1.5px var(--line);background:var(--bg);color:var(--fg)}
-.copybtn:hover{box-shadow:inset 0 0 0 1.5px var(--thatch-deep)}
-.copybtn:focus-visible,a:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
-
-.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:16px}
-.sw{display:grid;grid-template-rows:auto 1fr;border-radius:22px;overflow:hidden;background:var(--surface);box-shadow:0 0 0 1px var(--line);text-align:left;border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
-.sw .chip{height:112px;position:relative}
-.sw .chip::after{content:"";position:absolute;inset:auto 0 -1px;height:22px;background:var(--surface);clip-path:path("M0 22V12C40 0 70 22 110 10S180 0 260 12V22Z")}
-.sw .meta{display:grid;gap:2px;padding:6px 16px 16px}
-.sw b{font-family:var(--display);font-weight:600;font-size:19px}
-.sw code{color:var(--muted)}
-.sw span{font-size:14px;color:var(--body)}
-.sw:hover .chip{filter:saturate(1.08) brightness(1.03)}
-
-.type{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:20px}
-.spec{container-type:inline-size;background:var(--surface);border-radius:24px;padding:28px;box-shadow:0 0 0 1px var(--line);display:grid;gap:14px;align-content:start;min-width:0}
-.spec .big{font-family:var(--display);font-weight:600;font-size:min(96px,24cqi);line-height:.95;letter-spacing:-.02em}
-.spec .row{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:12px;font-family:var(--mono);font-size:12px;color:var(--muted)}
-.spec .body-sample{font-size:18px;color:var(--fg);max-width:40ch}
-
-.beachline{border-radius:28px;overflow:hidden;position:relative;background:linear-gradient(var(--sky-a),var(--sky-b) 34%,var(--sea-a) 34%,var(--sea-b) 48%,var(--scene-sand) 48%)}
-.crew{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-end;gap:10px 18px;padding:32px 20px 36px;position:relative}
-.crew figure{display:grid;justify-items:center;gap:6px}
-.crew figcaption{font-family:var(--mono);font-size:11px;color:#3d3423;background:rgb(255 250 240 / .8);padding:2px 8px;border-radius:999px}
-.dev{margin-top:20px}.dev summary{cursor:pointer;font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.crew-notes{display:grid;gap:8px;margin:14px 0 0;padding-left:18px;color:var(--body);max-width:72ch}
-
-.uses{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:20px}
-.use{border-radius:24px;padding:26px;display:grid;place-items:center;gap:18px;min-height:260px;position:relative;min-width:0}
-.use .tag{position:absolute;top:14px;left:18px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
-.use.sand{background:#f6e6c4;color:#1d1a14} .use.sand .tag{color:#7c7262}
-.use.night{background:var(--tile-night);color:var(--tile-night-fg)} .use.night .tag{color:var(--tile-night-muted)}
-@media (min-width:1000px){.span2{grid-column:span 2}}
-.lockup{display:flex;align-items:center;gap:12px;font-family:var(--display);font-weight:600;font-size:clamp(40px,5vw,54px);line-height:1;letter-spacing:-.015em}
-.lockup svg{width:66px;height:66px}
-.tab{display:flex;align-items:center;gap:8px;border-radius:12px 12px 0 0;padding:9px 16px;font-size:13px;max-width:100%}
-.use.sand .tab{background:#fffdf8;color:#1d1a14;box-shadow:0 0 0 1px rgb(60 45 20 / .12)} .use.night .tab{background:#1a2942;color:#f3ecdc}
-.homescreen{display:flex;gap:22px;flex-wrap:wrap;justify-content:center}
-.app{display:grid;justify-items:center;gap:8px;font-size:12px}
-.app svg{width:76px;height:76px;filter:drop-shadow(0 6px 10px rgb(0 0 0 / .25))}
-.app .ghost{width:76px;height:76px;border-radius:20px;background:rgb(255 255 255 / .08)}
-.sticker svg{width:170px;height:170px;filter:drop-shadow(0 0 0 #fff) drop-shadow(3px 0 0 #fff) drop-shadow(-3px 0 0 #fff) drop-shadow(0 3px 0 #fff) drop-shadow(0 -3px 0 #fff) drop-shadow(0 8px 12px rgb(0 0 0 / .18));transform:rotate(-6deg)}
-.postcard{width:100%;max-width:420px;aspect-ratio:1200/630;border-radius:16px;overflow:hidden;position:relative;background:linear-gradient(#a9e0f0,#ffe9c6 58%,#4cc9c3 58%,#1c8a95 72%,#f2d9a8 72%);box-shadow:0 10px 24px rgb(0 0 0 / .18);color:#1d1a14}
-.postcard svg{position:absolute;right:6%;bottom:12%;width:34%;height:auto}
-.postcard .pc-copy{position:absolute;left:6%;top:12%;width:56%;display:grid;gap:4px}
-.postcard b{font-family:var(--display);font-weight:600;font-size:clamp(18px,4.6vw,26px);line-height:1.05}
-.postcard small{font-family:var(--mono);font-size:10px;opacity:.75}
-
-.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px}
-.rule{display:grid;gap:10px;align-content:start;background:var(--surface);border-radius:24px;padding:20px;box-shadow:0 0 0 1px var(--line);min-width:0}
-.rule p{font-size:15px}
-.rule-art{border-radius:16px;background:#f6e6c4;display:grid;place-items:center;min-height:180px;padding:16px}
-.rule-art.clear svg{width:150px;height:150px}
-.rule-art.mins{display:flex;align-items:center;justify-content:center;gap:28px}
-.rule-art.mins figure{display:grid;justify-items:center;gap:8px}
-.rule-art.mins figcaption{font-family:var(--mono);font-size:11px;color:#7c7262}
-.pairs{display:grid;gap:6px;min-height:180px;align-content:center}
-.pairs span{display:flex;justify-content:space-between;gap:8px;border-radius:10px;padding:6px 12px;font-size:14px;font-weight:600}
-.pairs b{font-family:var(--mono);font-size:11px;font-weight:500;opacity:.85;white-space:nowrap}
-.donts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:16px;margin-top:20px}
-.donts figure{display:grid;gap:10px}
-.dont-art{border-radius:18px;background:#f6e6c4;min-height:140px;display:grid;place-items:center;position:relative}
-.dont-art::after{content:"";position:absolute;top:12px;right:12px;width:22px;height:22px;border-radius:50%;background:var(--flag) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22'%3E%3Cpath d='M7 7l8 8M15 7l-8 8' stroke='%230b0b0b' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E")}
-.dont-art svg{width:90px;height:90px}
-.dont-art .caps{font-family:var(--display);font-weight:600;font-size:34px;color:#1d1a14;letter-spacing:.02em}
-.donts figcaption{font-size:14px;color:var(--body)}
-.donts b{color:var(--flag)}
-footer{padding-block:36px 56px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
-footer .wrap{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center}
-@media (max-width:760px){.hero .scene{margin-top:8px}.beachline{background:linear-gradient(var(--sky-a),var(--sky-b) 40px,var(--scene-sand) 40px)}}
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
+<style>html{scrollbar-width:none}html::-webkit-scrollbar{display:none}</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="b-whatsapp" viewBox="0 0 175.216 175.552"><defs><linearGradient id="lg-whatsapp-b" x1="85.915" x2="86.535" y1="32.567" y2="137.092" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#57d163"/><stop offset="1" stop-color="#23b33a"/></linearGradient><filter id="lg-whatsapp-a" width="1.115" height="1.114" x="-.057" y="-.057" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="3.531"/></filter></defs><path fill="#b3b3b3" d="m54.532 138.45 2.235 1.324c9.387 5.571 20.15 8.518 31.126 8.523h.023c33.707 0 61.139-27.426 61.153-61.135.006-16.335-6.349-31.696-17.895-43.251A60.75 60.75 0 0 0 87.94 25.983c-33.733 0-61.166 27.423-61.178 61.13a60.98 60.98 0 0 0 9.349 32.535l1.455 2.312-6.179 22.558zm-40.811 23.544L24.16 123.88c-6.438-11.154-9.825-23.808-9.821-36.772.017-40.556 33.021-73.55 73.578-73.55 19.681.01 38.154 7.669 52.047 21.572s21.537 32.383 21.53 52.037c-.018 40.553-33.027 73.553-73.578 73.553h-.032c-12.313-.005-24.412-3.094-35.159-8.954zm0 0" filter="url(#lg-whatsapp-a)"/><path fill="#fff" d="m12.966 161.238 10.439-38.114a73.42 73.42 0 0 1-9.821-36.772c.017-40.556 33.021-73.55 73.578-73.55 19.681.01 38.154 7.669 52.047 21.572s21.537 32.383 21.53 52.037c-.018 40.553-33.027 73.553-73.578 73.553h-.032c-12.313-.005-24.412-3.094-35.159-8.954z"/><path fill="url(#linearGradient1780)" d="M87.184 25.227c-33.733 0-61.166 27.423-61.178 61.13a60.98 60.98 0 0 0 9.349 32.535l1.455 2.312-6.179 22.559 23.146-6.069 2.235 1.324c9.387 5.571 20.15 8.518 31.126 8.524h.023c33.707 0 61.14-27.426 61.153-61.135a60.75 60.75 0 0 0-17.895-43.251 60.75 60.75 0 0 0-43.235-17.929z"/><path fill="url(#lg-whatsapp-b)" d="M87.184 25.227c-33.733 0-61.166 27.423-61.178 61.13a60.98 60.98 0 0 0 9.349 32.535l1.455 2.313-6.179 22.558 23.146-6.069 2.235 1.324c9.387 5.571 20.15 8.517 31.126 8.523h.023c33.707 0 61.14-27.426 61.153-61.135a60.75 60.75 0 0 0-17.895-43.251 60.75 60.75 0 0 0-43.235-17.928z"/><path fill="#fff" fill-rule="evenodd" d="M68.772 55.603c-1.378-3.061-2.828-3.123-4.137-3.176l-3.524-.043c-1.226 0-3.218.46-4.902 2.3s-6.435 6.287-6.435 15.332 6.588 17.785 7.506 19.013 12.718 20.381 31.405 27.75c15.529 6.124 18.689 4.906 22.061 4.6s10.877-4.447 12.408-8.74 1.532-7.971 1.073-8.74-1.685-1.226-3.525-2.146-10.877-5.367-12.562-5.981-2.91-.919-4.137.921-4.746 5.979-5.819 7.206-2.144 1.381-3.984.462-7.76-2.861-14.784-9.124c-5.465-4.873-9.154-10.891-10.228-12.73s-.114-2.835.808-3.751c.825-.824 1.838-2.147 2.759-3.22s1.224-1.84 1.836-3.065.307-2.301-.153-3.22-4.032-10.011-5.666-13.647"/></symbol>
+<symbol id="b-postgres" viewBox="0 0 432.071 445.383"><g id="lg-postgres-orginal" style="fill-rule:nonzero;clip-rule:nonzero;stroke:#000000;stroke-miterlimit:4;">
+	</g>
+<g id="lg-postgres-Layer_x0020_3" style="fill-rule:nonzero;clip-rule:nonzero;fill:none;stroke:#FFFFFF;stroke-width:12.4651;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;">
+<path style="fill:#000000;stroke:#000000;stroke-width:37.3953;stroke-linecap:butt;stroke-linejoin:miter;" d="M323.205,324.227c2.833-23.601,1.984-27.062,19.563-23.239l4.463,0.392c13.517,0.615,31.199-2.174,41.587-7c22.362-10.376,35.622-27.7,13.572-23.148c-50.297,10.376-53.755-6.655-53.755-6.655c53.111-78.803,75.313-178.836,56.149-203.322    C352.514-5.534,262.036,26.049,260.522,26.869l-0.482,0.089c-9.938-2.062-21.06-3.294-33.554-3.496c-22.761-0.374-40.032,5.967-53.133,15.904c0,0-161.408-66.498-153.899,83.628c1.597,31.936,45.777,241.655,98.47,178.31    c19.259-23.163,37.871-42.748,37.871-42.748c9.242,6.14,20.307,9.272,31.912,8.147l0.897-0.765c-0.281,2.876-0.157,5.689,0.359,9.019c-13.572,15.167-9.584,17.83-36.723,23.416c-27.457,5.659-11.326,15.734-0.797,18.367c12.768,3.193,42.305,7.716,62.268-20.224    l-0.795,3.188c5.325,4.26,4.965,30.619,5.72,49.452c0.756,18.834,2.017,36.409,5.856,46.771c3.839,10.36,8.369,37.05,44.036,29.406c29.809-6.388,52.6-15.582,54.677-101.107"/>
+<path style="fill:#336791;stroke:none;" d="M402.395,271.23c-50.302,10.376-53.76-6.655-53.76-6.655c53.111-78.808,75.313-178.843,56.153-203.326c-52.27-66.785-142.752-35.2-144.262-34.38l-0.486,0.087c-9.938-2.063-21.06-3.292-33.56-3.496c-22.761-0.373-40.026,5.967-53.127,15.902    c0,0-161.411-66.495-153.904,83.63c1.597,31.938,45.776,241.657,98.471,178.312c19.26-23.163,37.869-42.748,37.869-42.748c9.243,6.14,20.308,9.272,31.908,8.147l0.901-0.765c-0.28,2.876-0.152,5.689,0.361,9.019c-13.575,15.167-9.586,17.83-36.723,23.416    c-27.459,5.659-11.328,15.734-0.796,18.367c12.768,3.193,42.307,7.716,62.266-20.224l-0.796,3.188c5.319,4.26,9.054,27.711,8.428,48.969c-0.626,21.259-1.044,35.854,3.147,47.254c4.191,11.4,8.368,37.05,44.042,29.406c29.809-6.388,45.256-22.942,47.405-50.555    c1.525-19.631,4.976-16.729,5.194-34.28l2.768-8.309c3.192-26.611,0.507-35.196,18.872-31.203l4.463,0.392c13.517,0.615,31.208-2.174,41.591-7c22.358-10.376,35.618-27.7,13.573-23.148z"/>
+<path d="M215.866,286.484c-1.385,49.516,0.348,99.377,5.193,111.495c4.848,12.118,15.223,35.688,50.9,28.045c29.806-6.39,40.651-18.756,45.357-46.051c3.466-20.082,10.148-75.854,11.005-87.281"/>
+<path d="M173.104,38.256c0,0-161.521-66.016-154.012,84.109c1.597,31.938,45.779,241.664,98.473,178.316c19.256-23.166,36.671-41.335,36.671-41.335"/>
+<path d="M260.349,26.207c-5.591,1.753,89.848-34.889,144.087,34.417c19.159,24.484-3.043,124.519-56.153,203.329"/>
+<path style="stroke-linejoin:bevel;" d="M348.282,263.953c0,0,3.461,17.036,53.764,6.653c22.04-4.552,8.776,12.774-13.577,23.155c-18.345,8.514-59.474,10.696-60.146-1.069c-1.729-30.355,21.647-21.133,19.96-28.739c-1.525-6.85-11.979-13.573-18.894-30.338    c-6.037-14.633-82.796-126.849,21.287-110.183c3.813-0.789-27.146-99.002-124.553-100.599c-97.385-1.597-94.19,119.762-94.19,119.762"/>
+<path d="M188.604,274.334c-13.577,15.166-9.584,17.829-36.723,23.417c-27.459,5.66-11.326,15.733-0.797,18.365c12.768,3.195,42.307,7.718,62.266-20.229c6.078-8.509-0.036-22.086-8.385-25.547c-4.034-1.671-9.428-3.765-16.361,3.994z"/>
+<path d="M187.715,274.069c-1.368-8.917,2.93-19.528,7.536-31.942c6.922-18.626,22.893-37.255,10.117-96.339c-9.523-44.029-73.396-9.163-73.436-3.193c-0.039,5.968,2.889,30.26-1.067,58.548c-5.162,36.913,23.488,68.132,56.479,64.938"/>
+<path style="fill:#FFFFFF;stroke-width:4.155;stroke-linecap:butt;stroke-linejoin:miter;" d="M172.517,141.7c-0.288,2.039,3.733,7.48,8.976,8.207c5.234,0.73,9.714-3.522,9.998-5.559c0.284-2.039-3.732-4.285-8.977-5.015c-5.237-0.731-9.719,0.333-9.996,2.367z"/>
+<path style="fill:#FFFFFF;stroke-width:2.0775;stroke-linecap:butt;stroke-linejoin:miter;" d="M331.941,137.543c0.284,2.039-3.732,7.48-8.976,8.207c-5.238,0.73-9.718-3.522-10.005-5.559c-0.277-2.039,3.74-4.285,8.979-5.015c5.239-0.73,9.718,0.333,10.002,2.368z"/>
+<path d="M350.676,123.432c0.863,15.994-3.445,26.888-3.988,43.914c-0.804,24.748,11.799,53.074-7.191,81.435"/>
+<path style="stroke-width:3;" d="M0,60.232"/>
+</g></symbol>
+<symbol id="b-gmail" viewBox="52 42 88 66"><path fill="#4285f4" d="M58 108h14V74L52 59v43c0 3.32 2.69 6 6 6"/>
+<path fill="#34a853" d="M120 108h14c3.32 0 6-2.69 6-6V59l-20 15"/>
+<path fill="#fbbc04" d="M120 48v26l20-15v-8c0-7.42-8.47-11.65-14.4-7.2"/>
+<path fill="#ea4335" d="M72 74V48l24 18 24-18v26L96 92"/>
+<path fill="#c5221f" d="M52 51v8l20 15V48l-5.6-4.2c-5.94-4.45-14.4-.22-14.4 7.2"/></symbol>
+<symbol id="b-linear" viewBox="0 0 512 512"><g fill="none"><path fill="url(#lg-linear-a)" d="M0 0h512v512H0z"/><g filter="url(#lg-linear-b)" opacity=".8"><path fill="#fff" d="M346.112 342.268c1.674 1.674 4.369 1.77 6.112.168 58.502-53.763 61.2-148.753 4.505-205.448-56.694-56.695-151.684-53.996-205.447 4.505-1.602 1.743-1.506 4.439.168 6.113l194.662 194.662Z" shape-rendering="crispEdges" style="mix-blend-mode:multiply"/></g><g filter="url(#lg-linear-c)" opacity=".3"><path fill="url(#lg-linear-d)" d="M346.112 342.268c1.674 1.674 4.369 1.77 6.112.168 58.502-53.763 61.2-148.753 4.505-205.448-56.694-56.695-151.684-53.996-205.447 4.505-1.602 1.743-1.506 4.439.168 6.113l194.662 194.662Z"/></g><g filter="url(#lg-linear-e)" opacity=".3"><path fill="url(#lg-linear-f)" d="M261.607 324.792c2.441-1.434 2.844-4.786.912-6.855L126.121 171.95c-2.018-2.16-5.535-1.831-7.017.727a148.996 148.996 0 0 0-6.49 12.537c-.774 1.688-.389 3.673.926 4.984l137.088 136.598a4.513 4.513 0 0 0 4.985.944c2.702-1.176 4.021-1.79 5.994-2.948Z"/></g><path fill="url(#lg-linear-g)" d="M357.358 374.306c1.758 1.758 4.581 1.866 6.416.189a163.595 163.595 0 0 0 5.316-5.081c62.547-62.547 62.547-163.956 0-226.504-62.548-62.547-163.957-62.547-226.504 0a163.595 163.595 0 0 0-5.081 5.316c-1.677 1.835-1.569 4.658.189 6.416l219.664 219.664Z"/><path fill="url(#lg-linear-h)" d="M357.358 374.306c1.758 1.758 4.581 1.866 6.416.189a163.595 163.595 0 0 0 5.316-5.081c62.547-62.547 62.547-163.956 0-226.504-62.548-62.547-163.957-62.547-226.504 0a163.595 163.595 0 0 0-5.081 5.316c-1.677 1.835-1.569 4.658.189 6.416l219.664 219.664Z"/><path fill="url(#lg-linear-i)" d="M336.333 394.672c2.627-1.528 3.024-5.118.875-7.267L124.595 174.792c-2.149-2.149-5.739-1.752-7.267.875a158.87 158.87 0 0 0-7.119 13.725c-.811 1.771-.41 3.852.968 5.229l206.201 206.202c1.378 1.378 3.459 1.779 5.23.968a158.87 158.87 0 0 0 13.725-7.119Z"/><path fill="url(#lg-linear-j)" d="M336.333 394.672c2.627-1.528 3.024-5.118.875-7.267L124.595 174.792c-2.149-2.149-5.739-1.752-7.267.875a158.87 158.87 0 0 0-7.119 13.725c-.811 1.771-.41 3.852.968 5.229l206.201 206.202c1.378 1.378 3.459 1.779 5.23.968a158.87 158.87 0 0 0 13.725-7.119Z"/><path fill="url(#lg-linear-k)" d="M286.659 413.348c3.619-.707 4.86-5.136 2.253-7.743L106.395 223.088c-2.607-2.607-7.036-1.366-7.743 2.253a160.813 160.813 0 0 0-2.502 18.462 4.666 4.666 0 0 0 1.366 3.654l167.027 167.027a4.667 4.667 0 0 0 3.654 1.366 160.834 160.834 0 0 0 18.462-2.502Z"/><path fill="url(#lg-linear-l)" d="M286.659 413.348c3.619-.707 4.86-5.136 2.253-7.743L106.395 223.088c-2.607-2.607-7.036-1.366-7.743 2.253a160.813 160.813 0 0 0-2.502 18.462 4.666 4.666 0 0 0 1.366 3.654l167.027 167.027a4.667 4.667 0 0 0 3.654 1.366 160.834 160.834 0 0 0 18.462-2.502Z"/><path fill="url(#lg-linear-m)" d="M217.031 411.577c4.45 1.107 7.201-4.155 3.959-7.398L107.821 291.01c-3.243-3.242-8.504-.491-7.398 3.959 6.784 27.279 20.838 53.121 42.163 74.445 21.324 21.324 47.166 35.379 74.445 42.163Z"/><path fill="url(#lg-linear-n)" d="M217.031 411.577c4.45 1.107 7.201-4.155 3.959-7.398L107.821 291.01c-3.243-3.242-8.504-.491-7.398 3.959 6.784 27.279 20.838 53.121 42.163 74.445 21.324 21.324 47.166 35.379 74.445 42.163Z"/><path stroke="#fff" stroke-opacity=".5" stroke-width="5" d="M362.088 372.649c-.816.746-2.119.733-2.963-.111L139.462 152.875c-.844-.844-.857-2.147-.111-2.963a160.661 160.661 0 0 1 5.003-5.234c61.571-61.57 161.397-61.57 222.968 0 61.571 61.571 61.571 161.397 0 222.968a160.661 160.661 0 0 1-5.234 5.003Zm-26.648 16.523c1.038 1.038.786 2.67-.364 3.34a156.562 156.562 0 0 1-13.51 7.006c-.794.364-1.761.197-2.42-.462L112.944 192.854c-.659-.659-.826-1.626-.462-2.42a156.562 156.562 0 0 1 7.006-13.51c.67-1.15 2.302-1.402 3.34-.364L335.44 389.172Zm-48.296 18.201c1.276 1.276.574 3.221-.964 3.521a158.269 158.269 0 0 1-18.175 2.463 2.167 2.167 0 0 1-1.694-.64L99.283 245.689a2.167 2.167 0 0 1-.64-1.694 158.313 158.313 0 0 1 2.463-18.175c.3-1.538 2.245-2.24 3.521-.964l182.517 182.517Zm-67.922-1.426c.81.81.812 1.735.464 2.391-.333.63-1.007 1.072-2.052.813-26.85-6.678-52.286-20.51-73.28-41.505-20.995-20.994-34.827-46.43-41.505-73.28-.259-1.045.183-1.719.813-2.052.656-.348 1.581-.346 2.391.464l113.169 113.169Z" style="mix-blend-mode:soft-light"/><defs><linearGradient id="lg-linear-a" x1="256" x2="256" y1="0" y2="512" gradientUnits="userSpaceOnUse"><stop stop-color="#2D2E31"/><stop offset="1" stop-color="#0F1012"/></linearGradient><linearGradient id="lg-linear-d" x1="256.306" x2="256.306" y1="95.332" y2="379.492" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#C5C5C5"/></linearGradient><linearGradient id="lg-linear-f" x1="178.365" x2="178.365" y1="167.248" y2="351.126" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#C5C5C5"/></linearGradient><linearGradient id="lg-linear-g" x1="256" x2="256" y1="96" y2="416" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#CCC"/></linearGradient><linearGradient id="lg-linear-i" x1="256" x2="256" y1="96" y2="416" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#CCC"/></linearGradient><linearGradient id="lg-linear-k" x1="256" x2="256" y1="96" y2="416" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#CCC"/></linearGradient><linearGradient id="lg-linear-m" x1="256" x2="256" y1="96" y2="416" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#CCC"/></linearGradient><radialGradient id="lg-linear-h" cx="0" cy="0" r="1" gradientTransform="matrix(0 320 -320 0 256 96)" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset=".598" stop-color="#fff" stop-opacity="0"/></radialGradient><radialGradient id="lg-linear-j" cx="0" cy="0" r="1" gradientTransform="matrix(0 320 -320 0 256 96)" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset=".598" stop-color="#fff" stop-opacity="0"/></radialGradient><radialGradient id="lg-linear-l" cx="0" cy="0" r="1" gradientTransform="matrix(0 320 -320 0 256 96)" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset=".598" stop-color="#fff" stop-opacity="0"/></radialGradient><radialGradient id="lg-linear-n" cx="0" cy="0" r="1" gradientTransform="matrix(0 320 -320 0 256 96)" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset=".598" stop-color="#fff" stop-opacity="0"/></radialGradient><filter id="lg-linear-b" width="295.583" height="295.582" x="126.135" y="66.88" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" result="hardAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/><feOffset dy="-5.12"/><feGaussianBlur stdDeviation="12"/><feComposite in2="hardAlpha" operator="out"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.4 0"/><feBlend in2="BackgroundImageFix" mode="plus-lighter" result="effect1_dropShadow_14134_4654"/><feBlend in="SourceGraphic" in2="effect1_dropShadow_14134_4654" result="shape"/></filter><filter id="lg-linear-c" width="267.583" height="267.582" x="140.135" y="86" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_14134_4654" stdDeviation="5"/></filter><filter id="lg-linear-e" width="171.522" height="177.592" x="102.218" y="160.522" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_14134_4654" stdDeviation="5"/></filter></defs></g></symbol>
+<symbol id="b-posthog" viewBox="0 0 52 28"><path fill="url(#lg-posthog-logo-jump-p6)" d="M10.74 7.16 4.54.8A2.66 2.66 0 0 0 0 2.66V7.5l10.74 11.18z"/><path fill="url(#lg-posthog-logo-jump-p7)" d="M9.19 28h1.55v-9.32L0 7.5v10.73z"/><path fill="url(#lg-posthog-logo-jump-p8)" d="M0 25.41A2.6 2.6 0 0 0 2.58 28H9.2L0 18.23z"/><path fill="url(#lg-posthog-logo-jump-p3)" d="M10.74 2.66v4.5l11.22 11.52V7.63L15.3.8a2.66 2.66 0 0 0-4.56 1.86"/><path fill="url(#lg-posthog-logo-jump-p4)" d="M10.74 28h8.96l-8.96-9.32z"/><path fill="url(#lg-posthog-logo-jump-p5)" d="M10.74 7.16v11.52L19.7 28h2.26v-9.32z"/><path fill="url(#lg-posthog-logo-jump-p0)" d="M21.96 2.67v4.96l11.3 11.6h.02V7.75L26.63.85a2.8 2.8 0 0 0-2-.85 2.67 2.67 0 0 0-2.67 2.67"/><path fill="url(#lg-posthog-logo-jump-p1)" d="M21.96 7.63v11.05L31.03 28h2.25v-8.75z"/><path fill="url(#lg-posthog-logo-jump-p2)" d="M21.96 28h9.07l-9.07-9.32z"/><path fill="#111" d="M51.66 25.22A1.9 1.9 0 0 0 50 23.33l-.34-.04c-1-.13-1.94-.6-2.65-1.33L33.28 7.75V28H49a2.66 2.66 0 0 0 2.67-2.67zM39.2 23.54h-.09a1.78 1.78 0 1 1 .1 0"/><defs><linearGradient id="lg-posthog-logo-jump-p0" x1="21.96" x2="33.28" y1="9.62" y2="9.62" gradientUnits="userSpaceOnUse"><stop stop-color="#ffd849"/><stop offset=".96" stop-color="#fbae01"/></linearGradient><linearGradient id="lg-posthog-logo-jump-p1" x1="21.96" x2="33.28" y1="17.81" y2="17.81" gradientUnits="userSpaceOnUse"><stop stop-color="#ffb700"/><stop offset="1" stop-color="#f9aa01"/></linearGradient><linearGradient id="lg-posthog-logo-jump-p2" x1="21.96" x2="31.03" y1="23.34" y2="23.34" gradientUnits="userSpaceOnUse"><stop stop-color="#ff9500"/><stop offset="1" stop-color="#f8aa00"/></linearGradient><linearGradient id="lg-posthog-logo-jump-p3" x1="10.74" x2="21.96" y1="9.34" y2="9.34" gradientUnits="userSpaceOnUse"><stop stop-color="#ff651e"/><stop offset="1" stop-color="#e4400a"/></linearGradient><linearGradient id="lg-posthog-logo-jump-p4" x1="10.74" x2="19.7" y1="23.34" y2="23.34" gradientUnits="userSpaceOnUse"><stop stop-color="#c42c00"/><stop offset="1" stop-color="#d63600"/></linearGradient><linearGradient id="lg-posthog-logo-jump-p5" x1="10.74" x2="21.96" y1="17.58" y2="17.58" gradientUnits="userSpaceOnUse"><stop stop-color="#ef3c00"/><stop offset="1" stop-color="#d63601"/></linearGradient><linearGradient id="lg-posthog-logo-jump-p6" x1="0" x2="10.74" y1="9.34" y2="9.34" gradientUnits="userSpaceOnUse"><stop stop-color="#3f80ff"/><stop offset="1" stop-color="#084fe0"/></linearGradient><linearGradient id="lg-posthog-logo-jump-p7" x1="0" x2="10.74" y1="17.75" y2="17.75" gradientUnits="userSpaceOnUse"><stop stop-color="#0255ff"/><stop offset="1" stop-color="#0145d2"/></linearGradient><linearGradient id="lg-posthog-logo-jump-p8" x1="0" x2="9.19" y1="23.11" y2="23.11" gradientUnits="userSpaceOnUse"><stop stop-color="#0041c6"/><stop offset="1" stop-color="#0045d0"/></linearGradient></defs></symbol>
+<symbol id="b-drive" viewBox="0 0 87.3 78"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+	<path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+	<path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+	<path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+	<path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+	<path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></symbol>
+<symbol id="b-mcp" viewBox="0 0 24 24"><path d="M13.85 0a4.16 4.16 0 0 0-2.95 1.217L1.456 10.66a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l9.442-9.442a2.49 2.49 0 0 1 3.541 0 2.49 2.49 0 0 1 0 3.541L8.59 12.97l-.1.1a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l.1-.098 7.03-7.034a2.49 2.49 0 0 1 3.542 0l.049.05a2.49 2.49 0 0 1 0 3.54l-8.54 8.54a1.96 1.96 0 0 0 0 2.755l1.753 1.753a.835.835 0 0 0 1.18 0 .835.835 0 0 0 0-1.18l-1.753-1.753a.266.266 0 0 1 0-.394l8.54-8.54a4.185 4.185 0 0 0 0-5.9l-.05-.05a4.16 4.16 0 0 0-2.95-1.218c-.2 0-.401.02-.6.048a4.17 4.17 0 0 0-1.17-3.552A4.16 4.16 0 0 0 13.85 0m0 3.333a.84.84 0 0 0-.59.245L6.275 10.56a4.186 4.186 0 0 0 0 5.902 4.186 4.186 0 0 0 5.902 0L19.16 9.48a.835.835 0 0 0 0-1.18.835.835 0 0 0-1.18 0l-6.985 6.984a2.49 2.49 0 0 1-3.54 0 2.49 2.49 0 0 1 0-3.54l6.983-6.985a.835.835 0 0 0 0-1.18.84.84 0 0 0-.59-.245" fill="currentColor"/></symbol>
+<symbol id="b-slack" viewBox="0 0 122.8 122.8"><path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#e01e5a"/><path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#36c5f0"/><path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2eb67d"/><path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#ecb22e"/></symbol>
+<symbol id="b-convex" viewBox="0 0 24 24"><path fill="#F3B01C" d="M15.090 18.916c 3.488 -0.387 6.776 -2.246 8.586 -5.348c -0.857 7.673 -9.247 12.522 -16.095 9.545a 3.47 3.47 0 0 1 -1.547 -1.314c -1.539 -2.417 -2.044 -5.492 -1.318 -8.282c 2.077 3.584 6.3 5.78 10.374 5.399"/><path fill="#8D2676" d="M4.589 11.266c -1.414 3.266 -1.475 7.092 0.258 10.24c -6.1 -4.59 -6.033 -14.41 -0.074 -18.953a 3.44 3.44 0 0 1 1.893 -0.707c 2.825 -0.15 5.695 0.942 7.708 2.977c -4.09 0.04 -8.073 2.66 -9.785 6.442"/><path fill="#EE342F" d="M16.346 5.828C 14.283 2.951 11.053 0.992 7.515 0.933c 6.84 -3.105 15.253 1.929 16.17 9.37a 3.6 3.6 0 0 1 -0.334 2.02c -1.278 2.594 -3.647 4.607 -6.416 5.352c 2.029 -3.763 1.778 -8.36 -0.589 -11.847"/></symbol>
+<symbol id="b-claude" viewBox="0 0 24 24"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z" fill="#D97757"/></symbol>
+<symbol id="b-cursor" viewBox="0 0 24 24"><path d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23" fill="currentColor"/></symbol>
+<symbol id="b-copilot" viewBox="0 0 24 24"><path d="M23.922 16.997C23.061 18.492 18.063 22.02 12 22.02 5.937 22.02.939 18.492.078 16.997A.641.641 0 0 1 0 16.741v-2.869a.883.883 0 0 1 .053-.22c.372-.935 1.347-2.292 2.605-2.656.167-.429.414-1.055.644-1.517a10.098 10.098 0 0 1-.052-1.086c0-1.331.282-2.499 1.132-3.368.397-.406.89-.717 1.474-.952C7.255 2.937 9.248 1.98 11.978 1.98c2.731 0 4.767.957 6.166 2.093.584.235 1.077.546 1.474.952.85.869 1.132 2.037 1.132 3.368 0 .368-.014.733-.052 1.086.23.462.477 1.088.644 1.517 1.258.364 2.233 1.721 2.605 2.656a.841.841 0 0 1 .053.22v2.869a.641.641 0 0 1-.078.256Zm-11.75-5.992h-.344a4.359 4.359 0 0 1-.355.508c-.77.947-1.918 1.492-3.508 1.492-1.725 0-2.989-.359-3.782-1.259a2.137 2.137 0 0 1-.085-.104L4 11.746v6.585c1.435.779 4.514 2.179 8 2.179 3.486 0 6.565-1.4 8-2.179v-6.585l-.098-.104s-.033.045-.085.104c-.793.9-2.057 1.259-3.782 1.259-1.59 0-2.738-.545-3.508-1.492a4.359 4.359 0 0 1-.355-.508Zm2.328 3.25c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm-5 0c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm3.313-6.185c.136 1.057.403 1.913.878 2.497.442.544 1.134.938 2.344.938 1.573 0 2.292-.337 2.657-.751.384-.435.558-1.15.558-2.361 0-1.14-.243-1.847-.705-2.319-.477-.488-1.319-.862-2.824-1.025-1.487-.161-2.192.138-2.533.529-.269.307-.437.808-.438 1.578v.021c0 .265.021.562.063.893Zm-1.626 0c.042-.331.063-.628.063-.894v-.02c-.001-.77-.169-1.271-.438-1.578-.341-.391-1.046-.69-2.533-.529-1.505.163-2.347.537-2.824 1.025-.462.472-.705 1.179-.705 2.319 0 1.211.175 1.926.558 2.361.365.414 1.084.751 2.657.751 1.21 0 1.902-.394 2.344-.938.475-.584.742-1.44.878-2.497Z" fill="currentColor"/></symbol>
+<symbol id="b-windsurf" viewBox="0 0 24 24"><path d="M23.55 5.067c-1.2038-.002-2.1806.973-2.1806 2.1765v4.8676c0 .972-.8035 1.7594-1.7597 1.7594-.568 0-1.1352-.286-1.4718-.7659l-4.9713-7.1003c-.4125-.5896-1.0837-.941-1.8103-.941-1.1334 0-2.1533.9635-2.1533 2.153v4.8957c0 .972-.7969 1.7594-1.7596 1.7594-.57 0-1.1363-.286-1.4728-.7658L.4076 5.1598C.2822 4.9798 0 5.0688 0 5.2882v4.2452c0 .2147.0656.4228.1884.599l5.4748 7.8183c.3234.462.8006.8052 1.3509.9298 1.3771.313 2.6446-.747 2.6446-2.0977v-4.893c0-.972.7875-1.7593 1.7596-1.7593h.003a1.798 1.798 0 0 1 1.4718.7658l4.9723 7.0994c.4135.5905 1.05.941 1.8093.941 1.1587 0 2.1515-.9645 2.1515-2.153v-4.8948c0-.972.7875-1.7594 1.7596-1.7594h.194a.22.22 0 0 0 .2204-.2202v-4.622a.22.22 0 0 0-.2203-.2203Z" fill="currentColor"/></symbol>
+<symbol id="b-zed" viewBox="0 0 24 24"><path d="M2.25 1.5a.75.75 0 0 0-.75.75v16.5H0V2.25A2.25 2.25 0 0 1 2.25 0h20.095c1.002 0 1.504 1.212.795 1.92L10.764 14.298h3.486V12.75h1.5v1.922a1.125 1.125 0 0 1-1.125 1.125H9.264l-2.578 2.578h11.689V9h1.5v9.375a1.5 1.5 0 0 1-1.5 1.5H5.185L2.562 22.5H21.75a.75.75 0 0 0 .75-.75V5.25H24v16.5A2.25 2.25 0 0 1 21.75 24H1.655C.653 24 .151 22.788.86 22.08L13.19 9.75H9.75v1.5h-1.5V9.375A1.125 1.125 0 0 1 9.375 8.25h5.314l2.625-2.625H5.625V15h-1.5V5.625a1.5 1.5 0 0 1 1.5-1.5h13.19L21.438 1.5z" fill="#084CCF"/></symbol>
+<symbol id="b-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" style="fill:none;stroke:var(--ink);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round"/><path d="M3 12h18M12 3c2.6 2.8 3.9 5.8 3.9 9s-1.3 6.2-3.9 9c-2.6-2.8-3.9-5.8-3.9-9S9.4 5.8 12 3z" style="fill:none;stroke:var(--ink);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round"/></symbol>
+<symbol id="b-update" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4" style="fill:none;stroke:var(--ink);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round"/></symbol>
 
-<header class="hero">
-  <div class="wrap">
-    <div class="top"><a class="logo" href="#mark"><svg viewBox="4 8 100 100" aria-hidden="true" data-v="hut"></svg>OpenHut</a><span class="toplinks"><a href="/">Home</a><a href="/docs/">Docs</a></span></div>
-  </div>
-  <div class="hero-stack">
-    <div class="hero-copy wrap">
-      <span class="eyebrow" style="color:inherit;opacity:.7">Brand guide</span>
-      <h1>A warm little hut on the sand, for your agents</h1>
-      <p>Every agent gets its own sandbox to dig in. The hut keeps the lights on, on your own server. Below are the mark, the colours, the type and the crew, ready to copy.</p>
+</defs></svg>
+
+<div class="wrap">
+  <div class="top"><a class="logo" href="/"><svg class="cr" data-cr="hut" width="40" height="40"></svg>OpenHut</a><span><a class="l" href="/docs/">Docs</a><a class="l" href="/brand">Brand</a></span></div>
+  <header class="b">
+    <svg class="sk-sky" viewBox="0 0 280 160" aria-hidden="true"><circle cx="214" cy="58" r="46" fill="#ffe08a" opacity=".16"/><circle cx="214" cy="58" r="28" fill="#ffe08a" stroke="#0b0b0b" stroke-width="3.5"/><g class="drift"><path d="M30 92q0-15 16-15 5-12 20-11 14 1 16 14 15 0 15 12z" fill="#fff" stroke="#0b0b0b" stroke-width="3" stroke-linejoin="round"/></g><g stroke="#0b0b0b" stroke-width="2.4" fill="none" stroke-linecap="round"><path d="M120 40q5-6 10 0q5-6 10 0"/><path d="M144 58q4-5 8 0q4-5 8 0"/></g></svg>
+    <h1><svg class="cr" data-cr="hut"></svg>OpenHut</h1>
+    <p>Logo, mascots, colors and type. Tap anything to copy it.</p>
+  </header>
+
+  <section>
+    <h2>Logo</h2>
+    <div class="two">
+      <div class="tile"><span class="logo"><svg class="cr" data-cr="hut" width="84" height="84"></svg>OpenHut</span><button type="button" class="act" data-svg="hut">Copy mascot SVG</button></div>
+      <div class="tile dark"><span class="logo"><svg class="cr" data-cr="hut" width="84" height="84"></svg>OpenHut</span><button type="button" class="act" data-svg="hut">Copy mascot SVG</button></div>
     </div>
-  <svg class="scene" viewBox="0 0 1200 560" preserveAspectRatio="xMidYMax slice" role="img" aria-label="OpenHut's hut sits on a beach beside a palm tree, with bunting strung between them. Agents relax under an umbrella, float in the sea, and build a sandcastle in a wooden sandbox.">
-    <defs>
-      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--sky-a)"/><stop offset="1" style="stop-color:var(--sky-b)"/></linearGradient>
-      <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--sea-a)"/><stop offset="1" style="stop-color:var(--sea-b)"/></linearGradient>
-      <radialGradient id="halo"><stop offset="0" stop-color="#fff3c4" stop-opacity=".9"/><stop offset="1" stop-color="#fff3c4" stop-opacity="0"/></radialGradient>
-      <radialGradient id="glow"><stop offset="0" stop-color="#ffc86b" stop-opacity=".55"/><stop offset=".55" stop-color="#ff9d4d" stop-opacity=".18"/><stop offset="1" stop-color="#ff9d4d" stop-opacity="0"/></radialGradient>
-      <radialGradient id="moonhalo"><stop offset="0" stop-color="#f6efd9" stop-opacity=".35"/><stop offset="1" stop-color="#f6efd9" stop-opacity="0"/></radialGradient>
-      <pattern id="umb" width="40" height="200" patternUnits="userSpaceOnUse"><rect width="20" height="200" fill="#ffb36b"/><rect x="20" width="20" height="200" fill="#fffaf0"/></pattern>
-      <pattern id="towel" width="22" height="22" patternUnits="userSpaceOnUse" patternTransform="rotate(-8)"><rect width="22" height="22" fill="#3cc5c0"/><rect width="11" height="22" fill="#fffaf0"/></pattern>
-    </defs>
+  </section>
 
-    <rect width="1200" height="330" fill="url(#sky)"/>
-    <g id="stars" style="opacity:var(--stars-o)"></g>
+  <section>
+    <h2>The troop</h2>
+    <div class="troop"><button type="button" class="m" data-svg="hut"><svg class="cr" data-cr="hut"></svg>OpenHut<small>the mascot</small></button><button type="button" class="m" data-svg="ops"><svg class="cr" data-cr="ops"></svg>Ops Desk<small>beanie</small></button><button type="button" class="m" data-svg="support"><svg class="cr" data-cr="support"></svg>Support Triage<small>headset</small></button><button type="button" class="m" data-svg="growth"><svg class="cr" data-cr="growth"></svg>Growth Analyst<small>glasses</small></button><button type="button" class="m" data-svg="sales"><svg class="cr" data-cr="sales"></svg>Sales Scout<small>shades</small></button><button type="button" class="m" data-svg="finance"><svg class="cr" data-cr="finance"></svg>Finance Clerk<small>top hat</small></button><button type="button" class="m" data-svg="recruiter"><svg class="cr" data-cr="recruiter"></svg>Recruiter<small>bow</small></button><button type="button" class="m" data-svg="p1"><svg class="cr" data-cr="p1"></svg>Extra<small>any name works</small></button><button type="button" class="m" data-svg="p3"><svg class="cr" data-cr="p3"></svg>Extra<small>any name works</small></button><button type="button" class="m" data-svg="p4"><svg class="cr" data-cr="p4"></svg>Extra<small>any name works</small></button><button type="button" class="m" data-svg="p7"><svg class="cr" data-cr="p7"></svg>Extra<small>any name works</small></button><button type="button" class="m" data-svg="hermes"><svg class="cr" data-cr="hermes"></svg>Extra<small>wings</small></button></div>
+  </section>
 
-    <g style="opacity:var(--sun-o)"><circle cx="1010" cy="132" r="120" fill="url(#halo)" opacity=".6"/><circle cx="1010" cy="132" r="46" fill="#ffe08a" stroke="#0b0b0b" stroke-width="4.5"/></g>
-    <g style="opacity:var(--moon-o)"><circle cx="1010" cy="120" r="110" fill="url(#moonhalo)"/><path d="M1028 82a42 42 0 1 0 22 62 34 34 0 1 1-22-62z" fill="#f6efd9" stroke="#0b0b0b" stroke-width="5" stroke-linejoin="round"/></g>
+  <section>
+    <h2>Colors</h2>
+    <div class="sw"><button type="button" class="s" data-hex="#0b0b0c" style="--c:#0b0b0c"><i></i><span>Ink<code>#0b0b0c</code></span></button><button type="button" class="s" data-hex="#ffffff" style="--c:#ffffff"><i></i><span>Paper<code>#ffffff</code></span></button><button type="button" class="s" data-hex="#f4f4f6" style="--c:#f4f4f6"><i></i><span>Stage<code>#f4f4f6</code></span></button><button type="button" class="s" data-hex="#f7c948" style="--c:#f7c948"><i></i><span>Thatch<code>#f7c948</code></span></button><button type="button" class="s" data-hex="#ff5a3c" style="--c:#ff5a3c"><i></i><span>Flag<code>#ff5a3c</code></span></button><button type="button" class="s" data-hex="#ff7a59" style="--c:#ff7a59"><i></i><span>Coral<code>#ff7a59</code></span></button><button type="button" class="s" data-hex="#19b3b1" style="--c:#19b3b1"><i></i><span>Teal<code>#19b3b1</code></span></button><button type="button" class="s" data-hex="#3d8fdc" style="--c:#3d8fdc"><i></i><span>Blue<code>#3d8fdc</code></span></button><button type="button" class="s" data-hex="#f7c948" style="--c:#f7c948"><i></i><span>Yellow<code>#f7c948</code></span></button><button type="button" class="s" data-hex="#64ae59" style="--c:#64ae59"><i></i><span>Green<code>#64ae59</code></span></button><button type="button" class="s" data-hex="#b79cf2" style="--c:#b79cf2"><i></i><span>Lilac<code>#b79cf2</code></span></button><button type="button" class="s" data-hex="#12a150" style="--c:#12a150"><i></i><span>Go<code>#12a150</code></span></button></div>
+  </section>
 
-    <g class="drift"><path transform="translate(640 110)" d="M140 118q0-22 24-22 8-18 30-16 20 2 24 20 22 0 22 18z" fill="var(--cloud)" stroke="#0b0b0b" stroke-width="4.5" stroke-linejoin="round"/></g>
-    <g class="drift slow"><path d="M640 78q0-16 18-16 6-14 24-12 16 2 18 16 16 0 16 12z" fill="var(--cloud)" stroke="#0b0b0b" stroke-width="4" stroke-linejoin="round"/></g>
-    <g class="drift"><path d="M1040 210q0-14 16-14 5-12 20-10 13 1 15 13 14 0 14 11z" fill="var(--cloud)" stroke="#0b0b0b" stroke-width="3.5" stroke-linejoin="round"/></g>
-    <g stroke="#0b0b0b" stroke-width="3" fill="none" stroke-linecap="round" style="opacity:var(--sun-o)"><path d="M720 250q7-8 14 0q7-8 14 0"/><path d="M770 272q5-6 10 0q5-6 10 0"/></g>
-
-    <rect y="300" width="1200" height="130" fill="url(#sea)"/>
-    <path d="M90 301q22-22 48-18 18-16 40 0 24-4 34 18z" fill="var(--far)"/>
-    <path d="M160 288q-4-14-12-22M160 288q2-16 14-20" stroke="var(--far)" stroke-width="3" fill="none"/>
-    <g class="bob"><path d="M780 296h46l-6 9h-34z" fill="#fffaf0" stroke="#0b0b0b" stroke-width="3" stroke-linejoin="round"/><path d="M802 294v-36l20 32z" fill="#ffb36b" stroke="#0b0b0b" stroke-width="3" stroke-linejoin="round"/></g>
-    <g fill="var(--sea-line)"><rect x="880" y="312" width="90" height="4" rx="2"/><rect x="900" y="324" width="60" height="4" rx="2"/><rect x="915" y="336" width="34" height="4" rx="2"/></g>
-    <g class="lap" stroke="var(--sea-line)" stroke-width="3.5" fill="none" stroke-linecap="round"><path d="M40 330q20-9 40 0"/><path d="M260 352q20-9 40 0"/><path d="M690 340q20-9 40 0"/><path d="M1060 360q20-9 40 0"/><path d="M560 318q16-7 32 0"/><path d="M1100 320q16-7 32 0"/></g>
-
-    <g class="bob"><svg class="cr hop" data-cr="support" x="392" y="284" width="72" height="72"></svg><ellipse cx="428" cy="350" rx="38" ry="11" fill="none" stroke="#0b0b0b" stroke-width="15"/><ellipse cx="428" cy="350" rx="38" ry="11" fill="none" stroke="#fffaf0" stroke-width="9" stroke-dasharray="20 20"/><ellipse cx="428" cy="350" rx="38" ry="11" fill="none" stroke="#ff5a3c" stroke-width="9" stroke-dasharray="20 20" stroke-dashoffset="20"/></g>
-
-    <path class="lap" d="M-20 404C150 384 300 410 470 396S800 384 960 398 1150 390 1230 400V430H-20z" fill="#fffaf0" opacity=".9"/>
-    <path d="M-10 414C180 398 360 422 560 408S940 396 1210 414V570H-10z" fill="var(--wet-sand)"/>
-    <path d="M-10 428C200 410 380 438 600 424S980 414 1210 430V570H-10z" fill="var(--scene-sand)" stroke="#0b0b0b" stroke-width="4.5" stroke-linejoin="round"/>
-    <g stroke="var(--scene-sand-deep)" stroke-width="4" fill="none" stroke-linecap="round"><path d="M80 470q30-8 60 0"/><path d="M470 540q40-10 80 0"/><path d="M640 470q30-8 60 0"/><path d="M1120 470q20-6 40 0"/><path d="M300 520q24-6 48 0"/><path d="M620 500q18-5 36 0"/><path d="M40 520q20-6 40 0"/></g>
-
-    <circle cx="605" cy="330" r="220" fill="url(#glow)" style="opacity:var(--glow-o)"/>
-
-    <g class="sway">
-      <path d="M298 476C300 400 278 330 254 262" stroke="#0b0b0b" stroke-width="30" fill="none" stroke-linecap="round"/>
-      <path d="M298 476C300 400 278 330 254 262" stroke="#b5793f" stroke-width="21" fill="none" stroke-linecap="round"/>
-      <g stroke="#8a5527" stroke-width="3.5" stroke-linecap="round"><path d="M287 440h20M286 405h19M281 370h18M273 335h17M264 300h16"/></g>
-      <g fill="#64ae59" stroke="#0b0b0b" stroke-width="4.5" stroke-linejoin="round">
-        <path d="M254 262q70-50 140 6-70-22-140-6z"/><path d="M254 262q40-80 130-70-80 16-130 70z"/><path d="M254 262q-30-80-110-60 70 10 110 60z"/><path d="M254 262q-80-30-150 30 80-36 150-30z"/><path d="M254 262q-10 60-60 110 30-60 60-110z"/><path d="M254 262q50 30 70 100-30-60-70-100z"/>
-      </g>
-      <g stroke="#3f7a37" stroke-width="2.5" fill="none" stroke-linecap="round"><path d="M254 262q70-36 140 6"/><path d="M254 262Q299 195 384 192"/><path d="M254 262Q219 197 144 202"/><path d="M254 262Q179 244 104 292"/><path d="M254 262Q234 317 194 372"/><path d="M254 262Q299 297 324 362"/></g>
-      <g fill="#8a5527" stroke="#0b0b0b" stroke-width="3.5"><circle cx="246" cy="276" r="9"/><circle cx="264" cy="280" r="9"/></g>
-    </g>
-
-    <path id="bunting" d="M262 286Q440 372 600 250" stroke="#0b0b0b" stroke-width="2.5" fill="none"/>
-    <g id="flags"></g>
-
-    <ellipse cx="606" cy="436" rx="96" ry="11" fill="#0b0b0b" opacity=".14"/>
-    <svg class="cr hop" data-cr="hut" data-sw="2.3" x="500" y="232" width="212" height="212"></svg>
-    <g fill="#c48f5a" opacity=".55"><ellipse cx="660" cy="458" rx="5" ry="3"/><ellipse cx="682" cy="470" rx="5" ry="3"/><ellipse cx="700" cy="462" rx="5" ry="3"/><ellipse cx="722" cy="476" rx="5" ry="3"/><ellipse cx="742" cy="468" rx="5" ry="3"/></g>
-
-    <g transform="translate(-50 0)"><path d="M210 520 L222 392" stroke="#0b0b0b" stroke-width="7" stroke-linecap="round"/>
-    <path d="M222 392 L224 384" stroke="#0b0b0b" stroke-width="5" stroke-linecap="round"/>
-    <path d="M120 418Q222 336 324 418Q300 404 272 410Q248 398 222 404Q196 398 172 410Q146 404 120 418Z" fill="url(#umb)" stroke="#0b0b0b" stroke-width="4.5" stroke-linejoin="round"/>
-    <path d="M86 540l28-62h170l-14 62z" fill="url(#towel)" stroke="#0b0b0b" stroke-width="4" stroke-linejoin="round"/>
-    <svg class="cr hop" data-cr="sales" x="140" y="430" width="96" height="96"></svg></g>
-    <g transform="translate(420 512)"><circle r="24" fill="#fffaf0" stroke="#0b0b0b" stroke-width="4.5"/><path d="M0-24a24 24 0 0 1 22 14L0 0z" fill="#ff5a3c"/><path d="M22 10a24 24 0 0 1-30 13L0 0z" fill="#3cc5c0"/><path d="M-20 13a24 24 0 0 1-2-26L0 0z" fill="#f7c948"/><circle r="24" fill="none" stroke="#0b0b0b" stroke-width="4.5"/><circle r="5" fill="#fffaf0" stroke="#0b0b0b" stroke-width="3"/></g>
-    <g transform="translate(560 530) rotate(14)"><path d="M0-18 5-6 18-5 8 3 11 16 0 9-11 16-8 3-18-5-5-6z" fill="#ffb36b" stroke="#0b0b0b" stroke-width="3.5" stroke-linejoin="round"/><circle cx="-3" cy="-1" r="1.6" fill="#0b0b0b"/><circle cx="3" cy="-1" r="1.6" fill="#0b0b0b"/></g>
-    <g transform="translate(350 520)"><path d="M-12 6q0-16 12-16t12 16z" fill="#f4a6c0" stroke="#0b0b0b" stroke-width="3" stroke-linejoin="round"/><path d="M-6 4v-8M0 4v-10M6 4v-8" stroke="#0b0b0b" stroke-width="1.6"/></g>
-
-    <g>
-      <path d="M770 470h300l34 66H736z" fill="#c48a52" stroke="#0b0b0b" stroke-width="5" stroke-linejoin="round"/>
-      <path d="M786 478h268l22 42H764z" fill="#f8e6bf" stroke="#0b0b0b" stroke-width="3.5" stroke-linejoin="round"/>
-      <path d="M736 536h368v14H736z" fill="#a46d3c" stroke="#0b0b0b" stroke-width="5" stroke-linejoin="round"/>
-      <g stroke="#8a5527" stroke-width="2.5" stroke-linecap="round" opacity=".7"><path d="M760 543h60M860 543h90M990 543h80"/></g>
-      <g transform="translate(910 512)" stroke="#0b0b0b" stroke-width="3.5" stroke-linejoin="round" fill="#e9c88a">
-        <path d="M-46 0v-30h14v-8h8v8h8v-8h8v8h8v-8h8v8h14v30z"/>
-        <path d="M-14 0v-48h6v-6h6v6h4v-6h6v6h6v48z"/>
-        <path d="M-6 0v-12a6 6 0 0 1 12 0v12z" fill="#0b0b0b" stroke="none"/>
-        <path d="M1-54v-16" fill="none"/><path d="M2-70l12 4-12 4z" fill="#ff5a3c"/>
-      </g>
-      <svg class="cr hop" data-cr="growth" x="782" y="430" width="92" height="92"></svg>
-      <svg class="cr hop" data-cr="finance" x="964" y="428" width="92" height="92"></svg>
-      <g transform="translate(1124 470)"><path d="M0 0v62" stroke="#0b0b0b" stroke-width="12" stroke-linecap="round"/><path d="M0 0v62" stroke="#b5793f" stroke-width="6" stroke-linecap="round"/><rect x="-46" y="-34" width="92" height="34" rx="8" fill="#e9b877" stroke="#0b0b0b" stroke-width="4.5" transform="rotate(-5)"/><text x="0" y="-11" text-anchor="middle" transform="rotate(-5)" font-family="Fredoka,system-ui,sans-serif" font-weight="600" font-size="19" fill="#0b0b0b">sandbox</text></g>
-      <g transform="translate(726 506)"><path d="M-16-14h32l-5 28h-22z" fill="#3cc5c0" stroke="#0b0b0b" stroke-width="3.5" stroke-linejoin="round"/><path d="M-14-14q14-16 28 0" fill="none" stroke="#0b0b0b" stroke-width="3"/></g>
-    </g>
-    <path d="M-10 552C150 538 300 548 450 542S800 536 1000 546 1150 540 1210 544V570H-10z" fill="var(--bg)"/>
-  </svg>
-  </div>
-</header>
-
-<section id="mark"><div class="wrap">
-  <div class="sec-head"><span class="eyebrow">The mark</span><h2>Three huts, one family</h2><p>Same hut every time: thatched roof, cream walls, a big kind face and a red flag. The shore and the badge add the beach only where there is room for it. Every size below is the same SVG drawn at real pixels.</p></div>
-  <div class="marks">
-    <article class="mark rec">
-      <header><h3>Hut</h3><span class="badge">Primary mark</span></header>
-      <div class="stage"><svg viewBox="4 8 100 100" aria-label="OpenHut hut mark" data-v="hut"></svg></div>
-      <div class="sizes sand" data-sizes="hut"></div><div class="sizes night" data-sizes="hut"></div>
-      <p>Wordmark lockup, app chrome, avatars. Below 24 px it swaps to a small cut: no thatch lines, dot eyes, a bigger flag.</p>
-      <button type="button" class="copybtn" id="copy-hut" data-copy-v="hut">Copy SVG</button>
-    </article>
-    <article class="mark">
-      <header><h3>Hut on the shore</h3><span class="badge">Stickers</span></header>
-      <div class="stage"><svg viewBox="4 8 100 100" aria-label="OpenHut hut on a sand mound with a wave" data-v="shore"></svg></div>
-      <div class="sizes sand" data-sizes="shore"></div><div class="sizes night" data-sizes="shore"></div>
-      <p>Stickers, merch, the footer and empty states. Below 32 px the sand turns to noise, so use the small hut.</p>
-      <button type="button" class="copybtn" id="copy-shore" data-copy-v="shore">Copy SVG</button>
-    </article>
-    <article class="mark">
-      <header><h3>Beach badge</h3><span class="badge">App icon</span></header>
-      <div class="stage"><svg viewBox="4 8 100 100" aria-label="OpenHut app icon: hut on a beach under a sun" data-v="badge"></svg></div>
-      <div class="sizes sand" data-sizes="badge"></div><div class="sizes night" data-sizes="badge"></div>
-      <p>A whole little beach in a rounded square. Home screens, Slack app, social avatars.</p>
-      <button type="button" class="copybtn" id="copy-badge" data-copy-v="badge">Copy SVG</button>
-    </article>
-  </div>
-</div></section>
-
-<section id="colour"><div class="wrap">
-  <div class="sec-head"><span class="eyebrow">Colour</span><h2>Thatch, sand and a lagoon</h2><p>The hut owns thatch and flag red. The beach brings sand, lagoon and deep water. Sunset is for highlights and the odd beach ball. Click a swatch to copy its hex.</p></div>
-  <div class="swatches" id="swatches"></div>
-</div></section>
-
-<section id="type"><div class="wrap">
-  <div class="sec-head"><span class="eyebrow">Type</span><h2>Round letters, like the crew</h2><p>Fredoka matches the soft, thick-lined creatures and sets the wordmark. Figtree carries the reading. Plex Mono labels things, the way a hand-painted beach sign would.</p></div>
-  <div class="type">
-    <div class="spec"><span class="eyebrow">Display · Fredoka 600</span><div class="big">OpenHut</div><div class="row"><span>Wordmark, headings</span><span>−1.5% tracking</span></div></div>
-    <div class="spec"><span class="eyebrow">Text · Figtree 400 / 600</span><p class="body-sample">Your agents learn from every task, keep their notes in the hut, and never leave your server.</p><div class="row"><span>Body, UI</span><span>16–18 px · 1.6</span></div></div>
-    <div class="spec"><span class="eyebrow">Labels · IBM Plex Mono</span><p class="body-sample" style="font-family:var(--mono);font-size:15px">SANDBOX 03 · OPS · LAST TIDE 06:42</p><div class="row"><span>Eyebrows, status, data</span><span>11–13 px · +8%</span></div></div>
-  </div>
-</div></section>
-
-<section id="crew"><div class="wrap">
-  <div class="sec-head"><span class="eyebrow">Mascot</span><h2>The crew, dressed for the beach</h2><p>Same creature generator, same 4.5 outline, blink and breath. Costumes moved to beachwear: bucket hat, snorkel, sun hat, a flower lei. Hover any of them to make it hop.</p></div>
-  <div class="beachline"><div class="crew" id="crew-big"></div></div>
-  <details class="dev"><summary>For developers</summary><ul class="crew-notes">
-    <li>The hut keeps the class hooks <code>c-body</code>, <code>c-face</code>, <code>c-eyes</code>, <code>c-mouth</code> and <code>c-hat</code> and the viewBox <code>4 8 100 100</code>, so hop, blink, look and talk work unchanged.</li>
-    <li>The flag is the hut's <code>c-hat</code>, so it tilts on a hop like every other hat.</li>
-    <li>In dark mode the beach turns to night: a moon, stars, and a lantern glow around the hut.</li>
-  </ul></details>
-</div></section>
-
-<section id="rules"><div class="wrap">
-  <div class="sec-head"><span class="eyebrow">Rules</span><h2>Using the hut</h2><p>A few rules keep the hut looking like itself everywhere it goes.</p></div>
-  <div class="rules">
-    <div class="rule">
-      <div class="rule-art clear"><svg viewBox="-2 -8 112 124" aria-label="Clear space around the hut equals the flag height"><rect x="5" y="0" width="98" height="107" rx="4" fill="none" stroke="var(--flag)" stroke-width="1.5" stroke-dasharray="4 4"/><rect x="15" y="9" width="78" height="89" fill="none" stroke="#0b0b0b" stroke-opacity=".25" stroke-width="1"/><g data-v="hut"></g></svg></div>
-      <h3>Clear space</h3><p>Keep one flag height of empty space on every side. Nothing else goes inside that box.</p>
+  <section>
+    <h2>Type</h2>
+    <div class="type">
+      <div class="ty"><small>Headlines · Bebas Neue</small><div class="big" style="font-family:var(--display);text-transform:uppercase">Agents that get better every week</div></div>
+      <div class="ty"><small>Copy and commands · IBM Plex Mono</small><div style="font-family:var(--copy);font-size:17px;line-height:1.5">They live in your team's Slack and WhatsApp, learn from your corrections, and run on your own server.</div></div>
+      <div class="ty"><small>Product screens · Inter</small><div style="font-size:17px;font-weight:500">Ops Desk<br><span style="font-weight:400;color:var(--muted)">Tracks orders, handles refunds and chases late deliveries.</span></div></div>
     </div>
-    <div class="rule">
-      <div class="rule-art mins"><figure><svg viewBox="4 8 100 100" width="16" height="16" data-v="hut-sm" aria-hidden="true"></svg><figcaption>Small hut · 16</figcaption></figure><figure><svg viewBox="4 8 100 100" width="32" height="32" data-v="shore" aria-hidden="true"></svg><figcaption>Shore · 32</figcaption></figure><figure><svg viewBox="4 8 100 100" width="29" height="29" data-v="badge" aria-hidden="true"></svg><figcaption>Badge · 29</figcaption></figure></div>
-      <h3>Minimum sizes</h3><p>Swap to the small hut at 24 px and below. Never show the shore version under 32 px.</p>
+  </section>
+
+  <section>
+    <h2>How we use it</h2>
+    <div class="rules">
+      <div><i>✓</i><span>Black on white. Color comes from the mascots.</span></div>
+      <div><i>✓</i><span>One outline per window. Grey stage behind it.</span></div>
+      <div><i>✓</i><span>Mascots blink, look and hop. They never just float.</span></div>
+      <div><i>✓</i><span>Short, plain words. One line under a headline.</span></div>
     </div>
-    <div class="rule">
-      <div class="pairs">
-        <span style="background:#f7c948;color:#0b0b0b">Ink on Thatch <b>12.6 · AAA</b></span>
-        <span style="background:#3cc5c0;color:#0b0b0b">Ink on Lagoon <b>9.3 · AAA</b></span>
-        <span style="background:#ff5a3c;color:#0b0b0b">Ink on Flag <b>6.4 · AA</b></span>
-        <span style="background:#0f6e7a;color:#fffaf0">Foam on Deep water <b>5.7 · AA</b></span>
-        <span style="background:#f2d9a8;color:#0f6e7a">Deep water on Sand <b>4.3 · large only</b></span>
-        <span style="background:#ff5a3c;color:#fffaf0">Foam on Flag <b>3.0 · avoid</b></span>
-      </div>
-      <h3>Text on colour</h3><p>Buttons on Flag red take ink text, not white. Deep water on Sand is for headings only.</p>
-    </div>
-  </div>
-  <div class="donts">
-    <figure><div class="dont-art"><svg viewBox="4 8 100 100" data-v="hut-blue" aria-hidden="true"></svg></div><figcaption><b>Don't</b> recolour the roof</figcaption></figure>
-    <figure><div class="dont-art"><svg viewBox="4 8 100 100" preserveAspectRatio="none" style="width:130px;height:62px" data-v="hut" aria-hidden="true"></svg></div><figcaption><b>Don't</b> stretch or squash it</figcaption></figure>
-    <figure><div class="dont-art"><svg viewBox="4 8 100 100" data-v="hut-flat" aria-hidden="true"></svg></div><figcaption><b>Don't</b> drop the ink outline</figcaption></figure>
-    <figure><div class="dont-art"><span class="caps">OPENHUT</span></div><figcaption><b>Don't</b> set the name in all caps</figcaption></figure>
-  </div>
-</div></section>
-
-<section id="use"><div class="wrap">
-  <div class="sec-head"><span class="eyebrow">In use</span><h2>On the sand and after dark</h2></div>
-  <div class="uses">
-    <div class="use sand"><span class="tag">Lockup</span><div class="lockup"><svg viewBox="4 8 100 100" aria-hidden="true" data-v="hut"></svg>OpenHut</div><div class="tab"><svg viewBox="4 8 100 100" width="16" height="16" aria-hidden="true" data-v="hut-sm"></svg>OpenHut · Agents</div></div>
-    <div class="use night"><span class="tag">Lockup</span><div class="lockup"><svg viewBox="4 8 100 100" aria-hidden="true" data-v="hut"></svg>OpenHut</div><div class="tab"><svg viewBox="4 8 100 100" width="16" height="16" aria-hidden="true" data-v="hut-sm"></svg>OpenHut · Agents</div></div>
-    <div class="use night"><span class="tag">Home screen</span><div class="homescreen"><div class="app"><span class="ghost"></span>Mail</div><div class="app"><svg viewBox="4 8 100 100" aria-hidden="true" data-v="badge"></svg>OpenHut</div><div class="app"><span class="ghost"></span>Notes</div></div></div>
-    <div class="use sand"><span class="tag">Sticker</span><div class="sticker"><svg viewBox="4 8 100 100" aria-hidden="true" data-v="shore"></svg></div></div>
-    <div class="use sand span2" style="padding-top:48px"><span class="tag">Link preview · 1200 × 630</span><div class="postcard"><div class="pc-copy"><b>Self-improving agents, at home on your own server</b><small>OpenHut · the hut on the beach</small></div><svg viewBox="4 8 100 100" aria-hidden="true" data-v="hut"></svg></div></div>
-  </div>
-</div></section>
-
-<footer><div class="wrap"><span>OpenHut. Self-improving agents for your team, on your own server.</span><span class="toplinks"><a href="/">Home</a><a href="/docs/">Docs</a></span></div></footer>
-
+  </section>
+  <style>
+.logo,header.b h1{font-family:"Fredoka","Baloo 2",system-ui,sans-serif;font-weight:600;text-transform:none;letter-spacing:-.02em}
+header.b{position:relative}
+header.b h1{font-size:clamp(64px,11vw,140px);width:fit-content;padding-bottom:.08em;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 10'%3E%3Cpath d='M0 6q5-5 10 0t10 0 10 0 10 0' stroke='%233cc5c0' stroke-width='3.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x .95em 100%/auto .09em}
+.sk-sky{position:absolute;top:40px;right:0;width:280px;height:160px;pointer-events:none}
+.sk-sky .drift{animation:skdrift 18s ease-in-out infinite alternate}
+@keyframes skdrift{to{transform:translateX(-20px)}}
+@media (max-width:1000px){.sk-sky{display:none}}
+@media (prefers-reduced-motion:reduce){.sk-sky .drift{animation:none}}
+</style>
+  <footer>OpenHut. Self-improving agents for your team, on your own server.</footer>
+</div>
 <script>
 (() => {
-  const K = '#0b0b0b'
-  const HUT = (sw = 5.5) => `<g class="c-body"><rect x="27" y="53" width="54" height="45" rx="10" fill="#fbe3c8" stroke="${K}" stroke-width="${sw}"/><path d="M54 20 92 56q3 6-4 6H20q-7 0-4-6z" fill="#f7c948" stroke="${K}" stroke-width="${sw}" stroke-linejoin="round"/><path d="M37 41q4.5 4 9 0t9 0 9 0 9 0M25 52q4.8 4 9.7 0t9.7 0 9.7 0 9.7 0 9.7 0 9.7 0" stroke="#c9952a" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g><g class="c-face"><ellipse cx="37" cy="83" rx="4.3" ry="2.7" fill="#f5a48c"/><ellipse cx="71" cy="83" rx="4.3" ry="2.7" fill="#f5a48c"/><g class="c-eyes"><ellipse cx="44" cy="76" rx="5.2" ry="6.2" fill="${K}"/><ellipse cx="64" cy="76" rx="5.2" ry="6.2" fill="${K}"/><circle cx="46" cy="73.5" r="2.1" fill="#fff"/><circle cx="66" cy="73.5" r="2.1" fill="#fff"/></g><g class="c-mouth"><path d="M49.5 85q4.5 4 9 0" stroke="${K}" stroke-width="3" fill="none" stroke-linecap="round"/></g></g><g class="c-hat"><path d="M54 20V9.5" stroke="${K}" stroke-width="3.4" stroke-linecap="round"/><path d="M55.5 9 69 13.5 55.5 18z" fill="#ff5a3c" stroke="${K}" stroke-width="3" stroke-linejoin="round"/></g>`
-  const V = {
-    hut: HUT(),
-    'hut-sm': `<rect x="27" y="53" width="54" height="45" rx="10" fill="#fbe3c8" stroke="${K}" stroke-width="8"/><path d="M54 22 92 56q3 6-4 6H20q-7 0-4-6z" fill="#f7c948" stroke="${K}" stroke-width="8" stroke-linejoin="round"/><circle cx="43" cy="77" r="6.5" fill="${K}"/><circle cx="65" cy="77" r="6.5" fill="${K}"/><path d="M54 22V11" stroke="${K}" stroke-width="6" stroke-linecap="round"/><path d="M57 9.5 79 16 57 22.5z" fill="#ff5a3c" stroke="${K}" stroke-width="4.5" stroke-linejoin="round"/>`,
-    shore: `<g transform="translate(9.7 12.6) scale(.82)">${HUT(6.5)}</g><path d="M4 106C14 92 30 88 54 88s40 4 50 18z" fill="#f2d9a8" stroke="${K}" stroke-width="5" stroke-linejoin="round"/><path d="M30 97h7M68 96h8" stroke="#d9b677" stroke-width="3" stroke-linecap="round"/><path d="M6 106q5-4 10 0t10 0" stroke="#3cc5c0" stroke-width="4.5" fill="none" stroke-linecap="round"/><path d="M82 106q5-4 10 0t10 0" stroke="#3cc5c0" stroke-width="4.5" fill="none" stroke-linecap="round"/>`,
-    badge: `<clipPath id="bc__ID__"><rect x="8" y="12" width="92" height="92" rx="24"/></clipPath><g clip-path="url(#bc__ID__)"><rect x="8" y="12" width="92" height="92" fill="#a9e0f0"/><rect x="8" y="58" width="92" height="20" fill="#ffe9c6"/><circle cx="85" cy="28" r="7" fill="#ffe08a" stroke="${K}" stroke-width="3"/><rect x="8" y="72" width="92" height="14" fill="#3cc5c0"/><path d="M8 78q12-4 24 0t24 0 24 0 20 0" stroke="#fffaf0" stroke-width="2.5" fill="none"/><path d="M8 88q46-8 92 0v16H8z" fill="#f2d9a8" stroke="${K}" stroke-width="3"/><g transform="translate(21.6 29.5) scale(.6)">${HUT(7)}</g></g><rect x="8" y="12" width="92" height="92" rx="24" fill="none" stroke="${K}" stroke-width="5"/>`,
-  }
-  V['hut-blue'] = V.hut.replaceAll('#f7c948', '#3d8fdc').replaceAll('#c9952a', '#2e6ba5')
-  V['hut-flat'] = V.hut.replaceAll(`stroke="${K}" stroke-width="5.5"`, '')
-  let uid = 0
-  const render = k => V[k].replaceAll('__ID__', ++uid)
-  document.querySelectorAll('[data-sizes]').forEach(el => {
-    el.innerHTML = [64, 32, 16].map(s => `<figure><svg viewBox="4 8 100 100" width="${s}" height="${s}" aria-hidden="true" data-v="${s < 24 && el.dataset.sizes !== 'badge' ? 'hut-sm' : el.dataset.sizes}"></svg><figcaption>${s}</figcaption></figure>`).join('')
-  })
-  document.querySelectorAll('svg[data-v],g[data-v]').forEach(s => s.innerHTML = render(s.dataset.v))
-  const copy = (btn, text, done = 'Copied', back = btn.textContent) => {
-    const ok = () => { btn.dataset.label ??= back; btn.querySelector('.lbl') ? btn.querySelector('.lbl').textContent = done : btn.textContent = done; setTimeout(() => btn.querySelector('.lbl') ? btn.querySelector('.lbl').textContent = btn.dataset.label : btn.textContent = btn.dataset.label, 1200) }
-    try { navigator.clipboard.writeText(text).then(ok, ok) } catch { ok() }
-  }
-  document.querySelectorAll('[data-copy-v]').forEach(b => b.addEventListener('click', () => copy(b, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="4 8 100 100">${render(b.dataset.copyV)}</svg>`)))
-
-  const SW = [['Thatch', '#f7c948', 'The roof. Primary brand colour.'], ['Flag', '#ff5a3c', 'The flag. Calls to action, alerts.'], ['Sand', '#f2d9a8', 'Grounds, tiles, the shore.'], ['Lagoon', '#3cc5c0', 'Links, success, shallow water.'], ['Deep water', '#0f6e7a', 'Text on sand, dark accents.'], ['Sunset', '#ffb36b', 'Warm highlights, umbrellas, glow.'], ['Foam', '#fffaf0', 'Light surfaces and cards.'], ['Ink', '#0b0b0b', 'Every outline. Never grey.']]
-  document.getElementById('swatches').innerHTML = SW.map(([n, h, r], i) => `<button type="button" class="sw" id="sw-${i}" data-hex="${h}"><span class="chip" style="background:${h}"></span><span class="meta"><b>${n}</b><code class="lbl">${h}</code><span>${r}</span></span></button>`).join('')
-  document.querySelectorAll('.sw').forEach(b => { b.dataset.label = b.dataset.hex; b.addEventListener('click', () => copy(b, b.dataset.hex)) })
-
-  const scene = document.querySelector('.scene'), mq = matchMedia('(max-width:760px)')
-  const crop = () => scene.setAttribute('viewBox', mq.matches ? '425 0 820 560' : '0 0 1200 560')
-  crop(); mq.addEventListener?.('change', crop)
-  // stars + bunting in the hero
-  const NS = 'http://www.w3.org/2000/svg'
-  const stars = document.getElementById('stars')
-  for (let i = 0; i < 46; i++) { const c = document.createElementNS(NS, 'circle'); c.setAttribute('cx', (i * 263.7) % 1200); c.setAttribute('cy', 20 + (i * 97.3) % 250); c.setAttribute('r', i % 5 ? 1.6 : 2.6); c.setAttribute('fill', '#fff6dc'); if (i % 3 === 0) { c.setAttribute('class', 'twinkle'); c.style.animationDelay = -(i % 7) * .4 + 's' } stars.appendChild(c) }
-  const path = document.getElementById('bunting'), L = path.getTotalLength(), flags = document.getElementById('flags')
-  const FC = ['#ff5a3c', '#f7c948', '#3cc5c0', '#fffaf0', '#ffb36b']
-  for (let i = 1; i < 12; i++) {
-    const p = path.getPointAtLength(L * i / 12), q = path.getPointAtLength(Math.min(L, L * i / 12 + 1)), a = Math.atan2(q.y - p.y, q.x - p.x) * 180 / Math.PI
-    flags.insertAdjacentHTML('beforeend', `<g transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${a.toFixed(1)})"><path d="M-9 0h18L0 18z" fill="${FC[i % 5]}" stroke="${K}" stroke-width="2.5" stroke-linejoin="round"/><circle cy="-1" r="5" fill="#ffd86b" style="opacity:var(--bulb-o)" class="twinkle"/></g>`)
-  }
-
-  // creature generator (unchanged shape language, beach costumes)
+  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)]
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const liveIO = { observe() {} }
+  /* ---------- creatures: the product's avatar generator, with more colours, faces and costumes ---------- */
   const hash = t => { let v = 2166136261; for (const c of t) { v ^= c.charCodeAt(0); v = Math.imul(v, 16777619) } return v >>> 0 }
   const rnd = seed => { let s = hash(seed) || 1; return () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return ((s >>> 0) % 10000) / 10000 } }
   const smooth = p => { const mid = (a, b) => `${((a[0] + b[0]) / 2).toFixed(1)} ${((a[1] + b[1]) / 2).toFixed(1)}`; return 'M' + mid(p[p.length - 1], p[0]) + p.map((q, i) => ` Q${q[0].toFixed(1)} ${q[1].toFixed(1)} ${mid(q, p[(i + 1) % p.length])}`).join('') + 'Z' }
   const PALETTE = [['#19B3B1', '#0e7f7e'], ['#F2E3C6', '#c9b48a'], ['#FF7A59', '#c4553a'], ['#ee8149', '#b36137'], ['#64ae59', '#4b8343'], ['#86c7b4', '#659587'], ['#3d8fdc', '#2e6ba5'], ['#e4587e', '#ab425f'], ['#f7c948', '#c49a2c'], ['#b79cf2', '#8a72c4'], ['#9ab7ff', '#6f8bd1'], ['#f4a6c0', '#c97d97']]
+  const K = '#0b0b0b'
   const COSTUME = {
-    buckethat: `<ellipse cx="54" cy="38.5" rx="25" ry="5" fill="#3cc5c0" stroke="${K}" stroke-width="3"/><path d="M38 38l4-13q12-5 24 0l4 13z" fill="#3cc5c0" stroke="${K}" stroke-width="3" stroke-linejoin="round"/><path d="M40 32q14 4 28 0" stroke="#fffaf0" stroke-width="3" fill="none"/>`,
-    sunhat: `<ellipse cx="54" cy="37" rx="32" ry="6.5" fill="#f3d48a" stroke="${K}" stroke-width="3"/><path d="M40 37q0-16 14-16t14 16z" fill="#f3d48a" stroke="${K}" stroke-width="3" stroke-linejoin="round"/><path d="M40.5 32.5q13.5 3 27 0" stroke="#ffb36b" stroke-width="4" fill="none"/>`,
-    headset: `<path d="M28 56q0-30 26-30t26 30" fill="none" stroke="${K}" stroke-width="4"/><rect x="23" y="52" width="9" height="13" rx="4" fill="#ff5a3c" stroke="${K}" stroke-width="2.5"/><rect x="76" y="52" width="9" height="13" rx="4" fill="#ff5a3c" stroke="${K}" stroke-width="2.5"/><path d="M28 64q2 12 16 12" fill="none" stroke="${K}" stroke-width="2.5"/>`,
-    snorkel: `<rect x="35" y="46" width="38" height="17" rx="8" fill="#bfe9f5" fill-opacity=".6" stroke="${K}" stroke-width="3"/><path d="M35 52l-6-2M73 52l6-2" stroke="${K}" stroke-width="3" stroke-linecap="round"/><path d="M78 56q6 0 6-8V26" stroke="${K}" stroke-width="4" fill="none" stroke-linecap="round"/><rect x="80" y="20" width="8" height="9" rx="3" fill="#ffb36b" stroke="${K}" stroke-width="2.5"/>`,
-    shades: `<rect x="36" y="48" width="16" height="11" rx="4.5" fill="${K}"/><rect x="56" y="48" width="16" height="11" rx="4.5" fill="${K}"/><path d="M52 52h4M36 52l-6-3M72 52l6-3" stroke="${K}" stroke-width="2.6" stroke-linecap="round"/><path d="M40 52h5M60 52h5" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>`,
-    lei: [[33, 70], [40, 75.5], [48.5, 78.5], [57.5, 78.5], [66, 75.5], [73, 70]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="4.6" fill="${['#ffb36b', '#f7c948', '#f4a6c0'][i % 3]}" stroke="${K}" stroke-width="2"/><circle cx="${x}" cy="${y}" r="1.4" fill="#fffaf0"/>`).join(''),
-    flower: `<g transform="translate(73 37)" stroke="${K}" stroke-width="2"><circle cy="-6" r="4.2" fill="#f4a6c0"/><circle cx="5.7" cy="-1.9" r="4.2" fill="#f4a6c0"/><circle cx="3.5" cy="4.9" r="4.2" fill="#f4a6c0"/><circle cx="-3.5" cy="4.9" r="4.2" fill="#f4a6c0"/><circle cx="-5.7" cy="-1.9" r="4.2" fill="#f4a6c0"/><circle r="3.6" fill="#f7c948"/></g>`,
+    cap: `<path d="M30 38q22-22 46 0z" fill="#2d4c9e" stroke="${K}" stroke-width="3" stroke-linejoin="round"/><path d="M60 38q16-2 22 4" stroke="${K}" stroke-width="3" fill="#2d4c9e"/><circle cx="53" cy="29" r="3" fill="#F7A439"/>`,
+    headset: `<path d="M28 56q0-30 26-30t26 30" fill="none" stroke="${K}" stroke-width="4"/><rect x="23" y="52" width="9" height="13" rx="4" fill="#9AB7FF" stroke="${K}" stroke-width="2.5"/><rect x="76" y="52" width="9" height="13" rx="4" fill="#9AB7FF" stroke="${K}" stroke-width="2.5"/><path d="M28 64q2 12 16 12" fill="none" stroke="${K}" stroke-width="2.5"/>`,
+    glasses: `<circle cx="45" cy="54" r="7" fill="#fff" fill-opacity=".35" stroke="${K}" stroke-width="2.6"/><circle cx="63" cy="54" r="7" fill="#fff" fill-opacity=".35" stroke="${K}" stroke-width="2.6"/><path d="M52 54h4" stroke="${K}" stroke-width="2.6"/>`,
+    beanie: `<path d="M30 42q24-30 48 0z" fill="#FF7A59" stroke="${K}" stroke-width="3" stroke-linejoin="round"/><rect x="28" y="38" width="52" height="8" rx="4" fill="#F2E3C6" stroke="${K}" stroke-width="2.5"/><circle cx="54" cy="23" r="5" fill="#F2E3C6" stroke="${K}" stroke-width="2.5"/>`,
+    bow: `<g transform="translate(-5 -2)"><path d="M66 36l-8 5 8 5zM74 36l8 5-8 5z" fill="#e4587e" stroke="${K}" stroke-width="2.5" stroke-linejoin="round"/><circle cx="70" cy="41" r="3" fill="#e4587e" stroke="${K}" stroke-width="2.5"/></g>`,
+    crown: `<path d="M38 37l-2-16 10 8 8-13 8 13 10-8-2 16z" fill="#f7c948" stroke="${K}" stroke-width="3" stroke-linejoin="round"/><circle cx="54" cy="30" r="2.2" fill="#e4587e"/>`,
+    antenna: `<path d="M54 33V19" stroke="${K}" stroke-width="3" stroke-linecap="round"/><circle cx="54" cy="16" r="5" fill="#FF7A59" stroke="${K}" stroke-width="2.5"/>`,
+    party: `<path d="M41 37l14-25 11 22z" fill="#9ab7ff" stroke="${K}" stroke-width="3" stroke-linejoin="round"/><path d="M47 27l12 5M51 20l9 4" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><circle cx="55" cy="11" r="4" fill="#f7c948" stroke="${K}" stroke-width="2.5"/>`,
+    tophat: `<rect x="42" y="13" width="24" height="22" rx="2.5" fill="#26262b" stroke="${K}" stroke-width="3"/><rect x="42" y="27" width="24" height="4.500" fill="#e4587e"/><rect x="33" y="33" width="42" height="6.500" rx="3.200" fill="#26262b" stroke="${K}" stroke-width="3"/>`,
+    flower: `<g transform="translate(73 37)" stroke="${K}" stroke-width="2"><circle cy="-6" r="4.200" fill="#fff"/><circle cx="5.700" cy="-1.900" r="4.200" fill="#fff"/><circle cx="3.500" cy="4.900" r="4.200" fill="#fff"/><circle cx="-3.500" cy="4.900" r="4.200" fill="#fff"/><circle cx="-5.700" cy="-1.900" r="4.200" fill="#fff"/><circle r="3.600" fill="#f7c948"/></g>`,
+    sprout: `<path d="M54 34v-9" stroke="${K}" stroke-width="3" stroke-linecap="round"/><path d="M54 26q-11-1-13-11 10-1 13 11zM54 26q11-1 13-11-10-1-13 11z" fill="#64ae59" stroke="${K}" stroke-width="2.5" stroke-linejoin="round"/>`,
+    halo: `<ellipse cx="54" cy="23" rx="16" ry="5" fill="none" stroke="${K}" stroke-width="6.500"/><ellipse cx="54" cy="23" rx="16" ry="5" fill="none" stroke="#f7c948" stroke-width="3"/>`,
+    monocle: `<circle cx="63" cy="54" r="8" fill="#fff" fill-opacity=".35" stroke="${K}" stroke-width="2.6"/><path d="M70 59q5 9 1 19" fill="none" stroke="${K}" stroke-width="2" stroke-linecap="round"/>`,
+    shades: `<rect x="36" y="48" width="16" height="11" rx="4.500" fill="${K}"/><rect x="56" y="48" width="16" height="11" rx="4.500" fill="${K}"/><path d="M52 52h4M36 52l-6-3M72 52l6-3" stroke="${K}" stroke-width="2.6" stroke-linecap="round"/><path d="M40 52h5M60 52h5" stroke="#fff" stroke-width="1.600" stroke-linecap="round" opacity=".7"/>`,
     wings: `<path d="M38 36q-10-14-22-10 3 10 16 14zM70 36q10-14 22-10-3 10-16 14z" fill="#fff" stroke="${K}" stroke-width="2.6" stroke-linejoin="round"/>`,
+    none: '',
   }
-  const ON_FACE = ['snorkel', 'shades', 'lei']
+  const COSTUMES = Object.keys(COSTUME).filter(k => !['none', 'wings'].includes(k))
+  const BY = [[/support|customer|inbox|reply|email/i, 'headset'], [/metric|report|numbers|analy/i, 'glasses'], [/triage|alert|issue|incident/i, 'cap'], [/order|deliver|field|ops|warehouse/i, 'beanie'], [/invoice|finance|money|pay/i, 'tophat'], [/sales|lead|deal/i, 'shades'], [/hir|recruit|people/i, 'bow']]
   const EYES = {
-    dot: `<circle cx="45" cy="54" r="3.2" fill="${K}"/><circle cx="63" cy="54" r="3.2" fill="${K}"/>`,
+    dot: `<circle cx="45" cy="54" r="3.200" fill="${K}"/><circle cx="63" cy="54" r="3.200" fill="${K}"/>`,
     sleepy: `<path d="M41 54q4-3 8 0M59 54q4-3 8 0" stroke="${K}" stroke-width="3" fill="none" stroke-linecap="round"/>`,
     happy: `<path d="M41 56q4-6 8 0M59 56q4-6 8 0" stroke="${K}" stroke-width="3" fill="none" stroke-linecap="round"/>`,
-    wink: `<circle cx="45" cy="54" r="3.2" fill="${K}"/><path d="M59 55q4-5 8 0" stroke="${K}" stroke-width="3" fill="none" stroke-linecap="round"/>`,
-    wide: `<circle cx="45" cy="54" r="4.2" fill="${K}"/><circle cx="63" cy="54" r="4.2" fill="${K}"/><circle cx="46.5" cy="52.5" r="1.4" fill="#fff"/><circle cx="64.5" cy="52.5" r="1.4" fill="#fff"/>`,
+    wink: `<circle cx="45" cy="54" r="3.200" fill="${K}"/><path d="M59 55q4-5 8 0" stroke="${K}" stroke-width="3" fill="none" stroke-linecap="round"/>`,
+    wide: `<circle cx="45" cy="54" r="4.200" fill="${K}"/><circle cx="63" cy="54" r="4.200" fill="${K}"/><circle cx="46.500" cy="52.500" r="1.400" fill="#fff"/><circle cx="64.500" cy="52.500" r="1.400" fill="#fff"/>`,
   }
+  const EYE_KEYS = Object.keys(EYES)
   const LOOK = {
-    ops: { c: 2, k: 'buckethat', e: 'dot' }, support: { c: 7, k: 'headset', e: 'happy' }, growth: { c: 6, k: 'snorkel', e: 'wide' },
-    sales: { c: 8, k: 'shades', e: 'dot' }, finance: { c: 4, k: 'sunhat', e: 'sleepy' }, recruiter: { c: 9, k: 'lei', e: 'wink' },
-    hermes: { c: 1, k: 'wings', e: 'happy' }, hut: { hut: true },
+    ops: { c: 2, k: 'beanie', e: 'dot' }, support: { c: 0, k: 'headset', e: 'happy' }, growth: { c: 6, k: 'glasses', e: 'dot' },
+    sales: { c: 8, k: 'shades', e: 'dot' }, finance: { c: 4, k: 'tophat', e: 'sleepy' }, recruiter: { c: 9, k: 'bow', e: 'wink' },
+    hermes: { c: 1, k: 'wings', e: 'happy' }, hut: { hut: true, e: 'wide' },
   }
-  function creature(id, sw) {
-    const o = LOOK[id] || {}
-    if (o.hut) return HUT(sw || 4.5)
-    const r = rnd(id), [fill, shade] = PALETTE[o.c ?? hash(id) % PALETTE.length], blob = []
+  function creature(id, about = '', o = LOOK[id] || {}) {
+    const r = rnd(id)
+    const [fill, shade] = o.hut ? ['#f7c948', '#c9952a'] : PALETTE[o.c ?? hash(id) % PALETTE.length]
+    const ring = [], blob = []
+    for (let i = 0; i < 14; i++) { const t = i / 14 * Math.PI * 2, d = 30 + (r() - .5) * 3; ring.push([54 + Math.cos(t) * d, 68 + Math.sin(t) * d]) }
     for (let i = 0; i < 10; i++) { const t = i / 10 * Math.PI * 2, d = 26 + (r() - .5) * 4; blob.push([54 + Math.cos(t) * d * 1.05, 58 + Math.sin(t) * d * .97]) }
+    const eyes = EYES[o.e || EYE_KEYS[Math.floor(r() * EYE_KEYS.length)]]
     const m = r()
     const mouth = m > .72 ? `<path d="M49 64q5 8 10 0z" fill="${K}" stroke="${K}" stroke-width="2" stroke-linejoin="round"/>` : `<path d="M48 65q6 ${m > .35 ? 5 : 3} 12 -1" stroke="${K}" stroke-width="2.6" fill="none" stroke-linecap="round"/>`
-    const cheeks = `<ellipse cx="40" cy="62" rx="4" ry="2.5" fill="#EDB5AE"/><ellipse cx="68" cy="62" rx="4" ry="2.5" fill="#EDB5AE"/>`
-    const onFace = ON_FACE.includes(o.k)
-    return `<g class="c-body"><path d="${smooth(blob)}" fill="${fill}" stroke="${K}" stroke-width="4.5" stroke-linejoin="round"/><path d="M42 76q12 7 24 0" stroke="${shade}" stroke-width="5" fill="none" stroke-linecap="round" opacity=".6"/></g><g class="c-face">${cheeks}<g class="c-eyes">${EYES[o.e || 'dot']}</g><g class="c-mouth">${mouth}</g>${onFace ? COSTUME[o.k] : ''}</g><g class="c-hat">${onFace ? '' : COSTUME[o.k] || ''}</g>`
+    const cheeks = `<ellipse cx="40" cy="62" rx="4" ry="2.500" fill="#EDB5AE"/><ellipse cx="68" cy="62" rx="4" ry="2.500" fill="#EDB5AE"/>`
+    const kind = o.hut ? 'none' : o.k || BY.find(([p]) => p.test(about))?.[1] || COSTUMES[hash(id + 'c') % COSTUMES.length]
+    const onFace = ['glasses', 'monocle', 'shades'].includes(kind)
+    const under = o.hut ? `<circle cx="27" cy="55" r="10" fill="${fill}" stroke="${K}" stroke-width="4"/><circle cx="81" cy="55" r="10" fill="${fill}" stroke="${K}" stroke-width="4"/><circle cx="27" cy="55" r="4.500" fill="#f2d3b3"/><circle cx="81" cy="55" r="4.500" fill="#f2d3b3"/>` : ''
+    const patch = o.hut ? `<path d="M36 56q0-13 10-13 5 0 8 4 3-4 8-4 10 0 10 13 0 18-18 18t-18-18z" fill="#f2d3b3"/>` : `<path d="M42 76q12 7 24 0" stroke="${shade}" stroke-width="5" fill="none" stroke-linecap="round" opacity=".6"/>`
+    const hand = `<g class="c-hand"><path d="M80 76q9-4 11-13" stroke="${K}" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="92" cy="60" r="6.500" fill="${fill}" stroke="${K}" stroke-width="3.500"/></g>`
+    if (o.hut) {
+      const walls = `<rect x="27" y="53" width="54" height="45" rx="10" fill="#fbe3c8" stroke="${K}" stroke-width="4.500"/>`
+      const roof = `<path d="M54 20 92 56q3 6-4 6H20q-7 0-4-6z" fill="#f7c948" stroke="${K}" stroke-width="4.500" stroke-linejoin="round"/><path d="M37 41q4.5 4 9 0t9 0 9 0 9 0M25 52q4.8 4 9.7 0t9.7 0 9.7 0 9.7 0 9.7 0 9.7 0" stroke="#c9952a" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
+      const cheeks = `<ellipse cx="36" cy="83" rx="4.500" ry="2.800" fill="#f5a48c"/><ellipse cx="72" cy="83" rx="4.500" ry="2.800" fill="#f5a48c"/>`
+      const eyes = `<ellipse cx="44" cy="76" rx="5.200" ry="6.200" fill="${K}"/><ellipse cx="64" cy="76" rx="5.200" ry="6.200" fill="${K}"/><circle cx="46" cy="73.500" r="2.100" fill="#fff"/><circle cx="66" cy="73.500" r="2.100" fill="#fff"/>`
+      const smile = `<path d="M48.500 85q5.500 4.500 11 0" stroke="${K}" stroke-width="3" fill="none" stroke-linecap="round"/>`
+      const flag = `<path d="M54 20V9.500" stroke="${K}" stroke-width="3.400" stroke-linecap="round"/><path d="M55.500 9 69 13.500 55.500 18z" fill="#ff5a3c" stroke="${K}" stroke-width="3" stroke-linejoin="round"/>`
+      return `<g class="c-body">${walls}${roof}</g><g class="c-face">${cheeks}<g class="c-eyes">${eyes}</g><g class="c-mouth">${smile}</g></g><g class="c-hat">${flag}</g>${hand}`
+    }
+    return `<g class="c-body">${under}<path d="${smooth(blob)}" fill="${fill}" stroke="${K}" stroke-width="4.500" stroke-linejoin="round"/>${patch}</g><g class="c-face">${cheeks}<g class="c-eyes">${eyes}</g><g class="c-mouth">${mouth}</g>${onFace ? COSTUME[kind] : ''}</g><g class="c-hat">${onFace ? '' : COSTUME[kind]}</g>${hand}`
   }
-  const NAMES = { hut: 'OpenHut', ops: 'Ops', support: 'Support', growth: 'Growth', sales: 'Sales', finance: 'Finance', recruiter: 'Recruiter', hermes: 'Hermes' }
-  document.getElementById('crew-big').innerHTML = Object.keys(NAMES).map(k => `<figure><svg class="cr" data-cr="${k}"${k === 'hut' ? ' data-sw="3.5"' : ''} width="${k === 'hut' ? 120 : 92}" height="${k === 'hut' ? 120 : 92}"></svg><figcaption>${NAMES[k]}</figcaption></figure>`).join('')
-  document.querySelectorAll('svg[data-cr]').forEach((el, i) => {
-    el.setAttribute('viewBox', '4 8 100 100'); el.setAttribute('aria-hidden', 'true'); el.innerHTML = creature(el.dataset.cr, +el.dataset.sw || 0)
-    el.style.setProperty('--bd', -(i * .7 % 3.4) + 's'); el.style.setProperty('--bk', -(i * 1.3 % 4.8) + 's')
+  const paint = (el, id = el.dataset.cr, about = el.dataset.about || '', o) => { el.setAttribute('viewBox', '4 8 100 100'); el.setAttribute('aria-hidden', 'true'); el.innerHTML = creature(id, about, o); const h = hash(id + 'm'); el.style.setProperty('--bd', -(h % 34) / 10 + 's'); el.style.setProperty('--bk', -(h % 48) / 10 + 's'); liveIO.observe(el) }
+  const cr = (id, size, about = '') => `<svg class="cr" data-cr="${id}" data-about="${about}" width="${size}" height="${size}"></svg>`
+  const paintAll = (root = document) => $$('svg[data-cr]', root).forEach(el => paint(el))
+
+
+  paintAll()
+  const copy = async (btn, text, done = 'Copied') => {
+    const was = btn.dataset.label || btn.textContent; btn.dataset.label = was
+    try { await navigator.clipboard.writeText(text); btn.textContent = done } catch { btn.textContent = 'Select and copy' }
+    setTimeout(() => btn.textContent = was, 1400)
+  }
+
+  const svgOf = id => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="4 8 100 100">${creature(id).replace(/<g class="c-hand">.*?<\/g>/, '')}</svg>`
+  document.addEventListener('click', e => {
+    const m = e.target.closest('[data-svg]'), s = e.target.closest('[data-hex]')
+    if (m) { const label = m.classList.contains('act') ? m : m.querySelector('small'); copy(label, svgOf(m.dataset.svg), 'SVG copied') }
+    if (s) copy(s.querySelector('code'), s.dataset.hex)
   })
+
 })()
 </script>
-
 </body>
 </html>
