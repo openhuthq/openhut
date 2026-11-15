@@ -118,6 +118,7 @@ A ghost button at rest is bare text. In a row ("Set up", "Remove") that is the c
 
 Status: in the code since 2026-11-14.
 
+- The avatar stays large (64px) with the name beside it at 18px, in a tight row: 10px above it, 12px between avatar and name, 10px before the two columns (owner, 2026-11-16, chosen over moving both into the breadcrumb).
 - Two columns on top that end on the same line: Instructions stretches to the rail's height (the preview text is absolutely placed, so long instructions never make the row taller). Skills sit below, full width.
 - No scroll box inside the page. A nested scroller ended below the fold, trapped the wheel and, with classic scrollbars, put a 15px track inside the box's border. If a list is too long, fold it, don't scroll it.
 - Skills are the Agents page's `.grid` of `.card`s, so every card has the same width and a two-line description. A segmented filter (All / Learned / Built in, Learned selected) sits in the section head, and 12 cards show until "Show all" (12 fills 1, 2, 3 or 4 columns evenly).
