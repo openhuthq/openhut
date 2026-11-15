@@ -9,6 +9,8 @@ export const config = {
   port: Number(process.env.PORT ?? 8787),
   gatewayPort: 8081,
   releaseUrl: process.env.OPENHUT_URL ?? 'https://openhut.dev',
+  telemetry: process.env.OPENHUT_TELEMETRY !== 'off' && process.env.OPENHUT_MODEL !== 'test',
+  telemetryUrl: `${process.env.OPENHUT_URL ?? 'https://openhut.dev'}/api/events`,
   setupCode: process.env.SETUP_CODE ?? '',
   modelMode: process.env.OPENHUT_MODEL === 'test' ? 'test' as const : 'claude' as const,
   agentApi: process.env.OPENHUT_AGENT_API,

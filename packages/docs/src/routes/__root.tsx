@@ -12,6 +12,7 @@ export const Route = createRootRoute({
       { name: 'description', content: 'OpenHut docs: install it on your server, build agents for your team, and keep them safe.' },
     ],
     links: [{ rel: 'icon', href: '/docs/hut.svg' }],
+    scripts: [{ src: 'https://cdn.databuddy.cc/databuddy.js', async: true, 'data-client-id': '40a6e1dc-4e64-4fd6-8b92-415a77397465', 'data-track-web-vitals': '', 'data-track-errors': '' }],
   }),
   component: Root,
 })

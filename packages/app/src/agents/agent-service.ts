@@ -63,7 +63,7 @@ export const agentService = {
       await db.deleteFrom('agent').where('id', '=', row.id).execute()
       throw err
     }
-    record({ action: 'agent.created', actor, target: { type: 'agent', id: row.id, name: row.name } })
+    record({ action: 'agent.created', actor, target: { type: 'agent', id: row.id, name: row.name, model: row.model } })
     return agentService.get({ actor, id: row.id })
   },
 

@@ -19,3 +19,17 @@ Agents reach your data only through OpenHut's gateway. It keeps every password e
 ## What it doesn't cover
 
 A tricked agent can still leak what it holds itself: its Slack, WhatsApp or Telegram credentials, its memories and the shared Claude token.
+
+## What OpenHut sends us
+
+Your server sends a few anonymous usage events to openhut.dev, so we can see how OpenHut is used and fix what's missing:
+
+- That setup finished, and once a day that the server is running, with its version and rough size (for example "2–5 agents").
+- When an agent, channel or connection is added or removed, with only its kind (for example "slack" or "postgres").
+- When someone is invited or joins, with only their role, and when a skill or memory is edited.
+- Which dashboard pages are opened, by page name.
+- The owner's email, so we know whose server it is.
+
+It never sends anyone else's email, any names, chat messages, skills, memories, passwords or connection details. Each server is counted by a random ID.
+
+To turn it off, add `OPENHUT_TELEMETRY=off` to `/etc/openhut/env` and restart OpenHut (`systemctl restart openhut`). Upgrades keep the setting.

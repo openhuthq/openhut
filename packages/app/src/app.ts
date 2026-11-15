@@ -10,6 +10,8 @@ import { validateWithZod } from './platform/validation.ts'
 import { adminController, healthController, updateController } from './admin/admin-controller.ts'
 import { agentController, grantController } from './agents/agent-controller.ts'
 import { memoryController } from './agents/memory-controller.ts'
+import { eventsController } from './platform/events-controller.ts'
+import { startTelemetry } from './platform/telemetry.ts'
 import { skillController } from './agents/skill-controller.ts'
 import { agentService } from './agents/agent-service.ts'
 import { channelController } from './channels/channel-controller.ts'
@@ -51,6 +53,7 @@ await app.register(connectionToolController, { prefix: '/api/connection-tools' }
 await app.register(connectionAuthorizationController, { prefix: '/api/connection-authorizations' })
 await app.register(tailscaleController, { prefix: '/api/tailscale' })
 await app.register(adminController, { prefix: '/api/admin' })
+await app.register(eventsController, { prefix: '/api/events' })
 await app.register(updateController, { prefix: '/api/updates' })
 await app.register(mcpController, { prefix: '/mcp' })
 
@@ -63,5 +66,6 @@ app.setNotFoundHandler((req, reply) => {
 
 await app.listen({ port: config.port, host: '0.0.0.0' })
 log.info({ event: 'app.listening', port: config.port, build: config.build })
+await startTelemetry()
 gatewayServer.start()
 await agentService.boot()

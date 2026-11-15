@@ -12,5 +12,8 @@
     "@openhut/docs": "*",
     "@types/node": "26.6.2",
     "wrangler": "^4.156.2"
+  },
+  "dependencies": {
+    "@openhut/common": "*"
   }
 }
