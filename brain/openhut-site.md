@@ -11,6 +11,7 @@
   allows `'unsafe-inline'` scripts. The docs need it too: Fumadocs hydrates from inline scripts.
 - The home page is generated from the mock artifact's source; the positioning is in
   `brain/decisions/openhut-website-positioning.md`.
+- Section scrolling (owner, 2026-11-15): on desktop (≥1021×700) the home page snaps by section. CSS `scroll-snap-type:y mandatory` on `html` (hero and bands snap to the top under the 68 px nav, each `.cwin` collab window snaps to the centre, the footer snaps to the end), plus a wheel handler that moves one gesture to exactly one stop. CSS snap alone sent a small wheel or trackpad nudge back to the same section. Phones scroll freely because their sections are taller than the screen. A new tall section needs its own stops, or it scrolls in one jump.
 - Never name a class or id `ad-*`, `ads`, `banner-ad` and the like: ad blockers hide matching elements with cosmetic filters, and the page just shows an empty box. The usage card was `ad-top`/`ad-rows` and vanished for anyone with uBlock; it is `wu-*` now.
 
 ## The beach (owner, 2026-11-15)

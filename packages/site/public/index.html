@@ -41,6 +41,7 @@ h1,h2,h3{text-wrap:balance;margin:0;font-family:var(--display);font-weight:500;l
 p{margin:0}
 .wrap{max-width:1280px;margin:0 auto;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px))}
 .band{padding-block:104px}
+@media (min-width:1021px) and (min-height:700px){html{scroll-snap-type:y mandatory;scroll-padding-top:68px}.hero,.band{scroll-snap-align:start}footer{scroll-snap-align:end}.cwin{scroll-snap-align:center}}
 .band.night{background:var(--night);color:var(--night-ink)}
 .band.grey{background:var(--stage)}
 .mono{font-family:var(--mono)}
@@ -2134,6 +2135,26 @@ description: Answer "where is my order?"
   whenVisible(pane, async () => { await sleep(7000); if (!railTouched) show((cur + 1) % AGENTS.length) }, .5)
 
   whenVisible(boxes, async () => { await sleep(2600); if (!atkTouched) trick(1 + Math.floor(Math.random() * 4)); await sleep(3400); if (!atkTouched) trick(-1) }, .5)
+
+  /* ---------- one wheel gesture moves one section, to the same stops as the CSS scroll snap ---------- */
+  const snapMQ = matchMedia('(min-width:1021px) and (min-height:700px)')
+  let snapLock = false, snapIdle = 0
+  const stops = () => {
+    const nav = 68, max = document.documentElement.scrollHeight - innerHeight, y = el => el.getBoundingClientRect().top + scrollY
+    const ys = [...$$('.hero,.band').map(el => y(el) - nav), ...$$('.cwin').map(el => y(el) + el.offsetHeight / 2 - nav - (innerHeight - nav) / 2), max]
+    return ys.map(v => Math.round(Math.min(max, Math.max(0, v)))).sort((a, b) => a - b).filter((v, i, a) => !i || v - a[i - 1] > 40)
+  }
+  addEventListener('wheel', e => {
+    if (!snapMQ.matches || e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return
+    if (snapLock) { e.preventDefault(); clearTimeout(snapIdle); snapIdle = setTimeout(() => { snapLock = false }, 180); return }
+    if (Math.abs(e.deltaY) < 4) return
+    const all = stops(), next = e.deltaY > 0 ? all.find(v => v > scrollY + 8) : all.findLast(v => v < scrollY - 8)
+    if (next === undefined) return
+    e.preventDefault()
+    snapLock = true
+    scrollTo({ top: next, behavior: reduce ? 'auto' : 'smooth' })
+    snapIdle = setTimeout(() => { snapLock = false }, 900)
+  }, { passive: false })
 })()
 </script>
 
