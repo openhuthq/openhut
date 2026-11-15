@@ -97,7 +97,6 @@ umask 077
   echo "OPENHUT_MODEL=${OPENHUT_MODEL:-claude}"
   echo "SETUP_CODE=${SETUP_CODE:-$(od -An -N9 -tx1 /dev/urandom | tr -d ' \n')}"
   echo "OPENHUT_URL=$SOURCE_URL"
-  [ -z "${OPENHUT_TELEMETRY:-}" ] || echo "OPENHUT_TELEMETRY=$OPENHUT_TELEMETRY"
 } > /etc/openhut/env.new
 mv /etc/openhut/env.new /etc/openhut/env
 . /etc/openhut/env
@@ -139,4 +138,4 @@ rm -rf "$PREFIX.old"
 IP=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
 printf '\nOpenHut is running. Create your account (the first one is the owner; after that people join by invite):\n  http://%s:8787/setup?code=%s\n' "${IP:-this-server}" "$SETUP_CODE"
 echo "Keep port 8787 private (Tailscale or an SSH tunnel) or put TLS in front of it: sign-in travels over plain HTTP."
-[ "${OPENHUT_TELEMETRY:-}" = off ] || echo "OpenHut sends anonymous usage events and the owner's email to openhut.dev. To stop it, add OPENHUT_TELEMETRY=off to /etc/openhut/env and restart. Details: https://openhut.dev/docs/security"
+echo "OpenHut sends anonymous usage events and the owner's email to openhut.dev. Turn it off in Admin > Usage data. Details: https://openhut.dev/docs/security"

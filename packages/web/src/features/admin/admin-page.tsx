@@ -59,9 +59,25 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
         {form === 'google' && canEdit && <div className="aform" id="google"><GoogleClientSetup admin={admin} back="/admin" /></div>}
       </Section>
       <Section number={4} title="AI assistant"><ConnectedApps /></Section>
+      <Section number={5} title="Usage data">
+        <Row icon="globe" title="Share usage data with OpenHut" subtitle={usageLine(admin)} action={<UsageSwitch admin={admin} canEdit={canEdit} />} />
+      </Section>
     </div>
     {form === 'containers' && canEdit && <ContainersDialog />}
   </Page>
+}
+
+function usageLine(admin: Admin) {
+  if (admin.seat.mode === 'test') return 'Test-model servers never send usage data.'
+  return 'Anonymous usage events and the owner\'s email, sent to openhut.dev. Never what messages say.'
+}
+
+function UsageSwitch({ admin, canEdit }: { admin: Admin; canEdit: boolean }) {
+  const updateAdmin = useUpdateAdmin()
+  return <Locked reason={canEdit ? undefined : 'Only an owner or admin changes it'}>
+    <button type="button" className="sw" role="switch" aria-checked={admin.usageData} aria-label="Share usage data with OpenHut" disabled={!canEdit || updateAdmin.isPending}
+      onClick={() => updateAdmin.mutate({ usageData: !admin.usageData }, { onError: toastError })}></button>
+  </Locked>
 }
 
 function ToggleButton({ label, form, open, canEdit, reason, onOpen }: { label: string; form: AdminForm; open: boolean; canEdit: boolean; reason: string; onOpen?: () => void }) {

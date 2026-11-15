@@ -5,7 +5,7 @@ import { config } from '../platform/config.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { agentd, containerStates } from '../platform/agentd.ts'
 import { publicUrl, settings } from '../platform/settings.ts'
-import { log, record } from '../platform/events.ts'
+import { log, record, setUsageData } from '../platform/events.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { isAdmin, type Caller } from '../team/identity.ts'
 import { seatSignIn } from './seat-sign-in.ts'
@@ -53,6 +53,7 @@ export const adminService = {
       },
       publicUrl: publicUrl(),
       google: { clientId: settings.googleClient()?.clientId ?? null, redirectUri: `${publicUrl()}/api/connection-authorizations/callback` },
+      usageData: settings.usageData(),
     }
   },
 
@@ -112,10 +113,16 @@ export const adminService = {
     if (!isAdmin(actor)) throw new HttpError(403, 'Only an owner or admin can change Admin settings.')
     if (patch.publicUrl !== undefined) await setPublicUrl(patch.publicUrl)
     if (patch.seatToken !== undefined) await setSeat(patch.seatToken)
+    if (patch.usageData !== undefined) await setUsage(patch.usageData)
     if (patch.googleClientId !== undefined || patch.googleClientSecret !== undefined) await setGoogleClient(patch)
     record({ action: 'admin.updated', actor, target: { type: 'admin', id: 'install', fields: Object.keys(patch) } })
     return adminService.status()
   },
+}
+
+async function setUsage(on: boolean): Promise<void> {
+  await settings.setUsageData(on)
+  setUsageData(on)
 }
 
 export function isNewer({ latest, current }: { latest: string | null; current: string }): boolean {
