@@ -1,0 +1,16 @@
+[Unit]
+Description=OpenHut agentd (the only process that runs Docker commands for agents)
+After=docker.service openhut-firewall.service
+Requires=docker.service openhut-firewall.service
+
+[Service]
+EnvironmentFile=/etc/openhut/env
+ExecStartPre=/opt/openhut/install/prepare.sh
+ExecStartPre=/opt/openhut/install/agents-firewall.sh
+ExecStartPre=/opt/openhut/install/pull-image.sh
+ExecStart=/bin/sh -c 'APP_GID=$(id -g openhut) exec node /opt/openhut/packages/agentd/src/agentd.ts'
+TimeoutStartSec=infinity
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

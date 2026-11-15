@@ -1,0 +1,9 @@
+node_modules/
+.data/
+.turbo/
+dist/
+.old/
+.env
+/BUILD
+packages/e2e/results/
+.wrangler/
