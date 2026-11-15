@@ -957,6 +957,14 @@ h1,h2,h3{font-family:var(--display);font-weight:400;text-transform:uppercase;let
 .toplinks a{font-family:var(--copy);font-size:14px;text-decoration:none;margin-left:24px}
 .toplinks a:hover{text-decoration:underline;text-underline-offset:4px}
 footer .toplinks a{color:var(--night-ink)}
+.toplinks a.gh,.oss,.ghbtn{display:inline-flex;align-items:center;gap:7px}
+.ghi{width:16px;height:16px;flex:none}
+.subcol{display:flex;flex-direction:column;gap:14px;min-width:0}
+.oss{font-family:var(--copy);font-size:14px;color:var(--ink);text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:4px;width:fit-content}
+.oss:hover{text-decoration-color:currentColor}
+.ghbtn{height:52px;padding:0 18px;border-radius:8px;box-shadow:inset 0 0 0 1.5px var(--night-line);color:var(--night-ink);font-family:var(--copy);font-size:15px;text-decoration:none;transition:background .15s}
+.ghbtn:hover{background:var(--night-3)}
+.ghbtn .ghi{width:18px;height:18px}
 
 /* ===== one border only ===== */
 .frame{border:0;background:var(--stage)}
@@ -1361,12 +1369,12 @@ footer .toplinks a{color:var(--night-ink)}
 </style>
 <header class="hero" id="top">
   <div class="wrap">
-    <div class="toprow"><a class="logo" href="#top"><svg class="cr" data-cr="hut" width="40" height="40"></svg>OpenHut</a><span class="toplinks"><a href="/docs/">Docs</a><a href="/brand">Brand</a></span></div>
+    <div class="toprow"><a class="logo" href="#top"><svg class="cr" data-cr="hut" width="40" height="40"></svg>OpenHut</a><span class="toplinks"><a href="/docs/">Docs</a><a href="/brand">Brand</a><a class="gh" href="https://github.com/openhuthq/openhut"><svg class="ghi" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>GitHub</a></span></div>
     <svg class="sk-sky" viewBox="0 0 300 170" aria-hidden="true"><circle cx="232" cy="62" r="50" fill="#ffe08a" opacity=".16"/><circle cx="232" cy="62" r="30" fill="#ffe08a" stroke="#0b0b0b" stroke-width="3.5"/><g class="drift"><path d="M40 92q0-15 16-15 5-12 20-11 14 1 16 14 15 0 15 12z" fill="#fff" stroke="#0b0b0b" stroke-width="3" stroke-linejoin="round"/></g><g class="drift b"><path d="M196 128q0-11 12-11 4-9 15-8 10 1 12 10 11 0 11 9z" fill="#fff" stroke="#0b0b0b" stroke-width="2.6" stroke-linejoin="round"/></g><g stroke="#0b0b0b" stroke-width="2.4" fill="none" stroke-linecap="round"><path d="M128 40q5-6 10 0q5-6 10 0"/><path d="M152 58q4-5 8 0q4-5 8 0"/></g></svg>
     <div class="troop"><svg class="cr" data-cr="ops" width="38" height="38"></svg><svg class="cr" data-cr="support" width="38" height="38"></svg><svg class="cr" data-cr="growth" width="38" height="38"></svg><svg class="cr" data-cr="sales" width="38" height="38"></svg><svg class="sk-ball" viewBox="-26 -26 52 52" aria-hidden="true"><circle r="22" fill="#fffaf0"/><path d="M0-22a22 22 0 0 1 20 13L0 0z" fill="#ff5a3c"/><path d="M20 9a22 22 0 0 1-27 12L0 0z" fill="#3cc5c0"/><path d="M-18 12a22 22 0 0 1-2-24L0 0z" fill="#f7c948"/><circle r="22" fill="none" stroke="#0b0b0b" stroke-width="4"/><circle r="4.5" fill="#fffaf0" stroke="#0b0b0b" stroke-width="2.6"/></svg></div>
     <h1>Build, manage &amp; share agents<br><span class="sk-wave">with your team</span></h1>
     <div class="lede">
-      <p class="sub">Self-improving agents in Slack and WhatsApp, on your own server.</p>
+      <div class="subcol"><p class="sub">Self-improving agents in Slack and WhatsApp, on your own server.</p><a class="oss" href="https://github.com/openhuthq/openhut"><svg class="ghi" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>Open source. Read the code on GitHub</a></div>
       <div class="cmd big"><svg class="cr peek" data-cr="sales" width="54" height="54"></svg><span>curl -fsSL https://openhut.dev | sh</span><button type="button" data-copy="curl -fsSL https://openhut.dev | sh">Copy</button></div>
     </div>
 
@@ -1597,13 +1605,14 @@ description: Answer "where is my order?"
     <h2>Give your team its first agent today</h2>
     <div class="hero-cta">
       <div class="cmd big"><span>curl -fsSL https://openhut.dev | sh</span><button type="button" data-copy="curl -fsSL https://openhut.dev | sh">Copy</button></div>
+      <a class="ghbtn" href="https://github.com/openhuthq/openhut"><svg class="ghi" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>Star on GitHub</a>
     </div>
     <div class="parade" id="parade" aria-hidden="true"></div>
   </div>
 </section>
 
 <footer>
-  <div class="wrap"><div class="logo"><svg class="cr" data-cr="hut" width="40" height="40"></svg>OpenHut</div><p>Self-improving agents for your team, on your own server.</p><span class="toplinks"><a href="/docs/">Docs</a><a href="/brand">Brand</a></span></div>
+  <div class="wrap"><div class="logo"><svg class="cr" data-cr="hut" width="40" height="40"></svg>OpenHut</div><p>Self-improving agents for your team, on your own server.</p><span class="toplinks"><a href="/docs/">Docs</a><a href="/brand">Brand</a><a class="gh" href="https://github.com/openhuthq/openhut"><svg class="ghi" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>GitHub</a></span></div>
 </footer>
 
 <script>

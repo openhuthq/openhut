@@ -23,6 +23,9 @@
 - The hut's roof has two scalloped thatch rows (every `hut.svg` copy and the site's creature generator).
   Below 24 px the brand page uses a small cut: no thatch lines, dot eyes, a bigger flag.
 
+- OpenHut is open source under MIT (owner, 2026-11-15). The home page links to github.com/openhuthq/openhut in the nav,
+  under the hero, beside the closing install command and in the footer; `/brand` has it in the nav.
+
 ## The docs (`packages/docs`)
 
 - Fumadocs on TanStack Start, prerendered to static files under `/docs/`, copied from Skyfleet's docs
