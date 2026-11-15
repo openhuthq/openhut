@@ -22,7 +22,7 @@ export function McpAuthorizePage({ me }: { me: Me }) {
   const problem = params.get('response_type') === 'code' ? oauthClient.error?.message ?? createCode.error?.message : MISSING_REQUEST
   return <AuthLayout title="Connect an app">
     <div className="authform">
-      <div><h1>{`Connect ${name} to OpenHut?`}</h1><p className="lead">{`It acts as you, ${me.user.email}, and can:`}</p></div>
+      <div><h1>{`Connect ${name}?`}</h1><p className="lead">{`It reaches OpenHut as you, ${me.user.email}, and can:`}</p></div>
       <div className="box rows">{ABILITIES.map(([section, actions]) => <div className="row" key={section}>{NAV_ICONS[section]}<div className="t">{section} <span className="mute">{actions}</span></div></div>)}</div>
       {problem && <p className="err" role="alert">{problem}</p>}
       {!problem && <div className="twobtn">

@@ -12,6 +12,16 @@
 - The home page is generated from the mock artifact's source; the positioning is in
   `brain/decisions/openhut-website-positioning.md`.
 
+## The beach (owner, 2026-11-15)
+
+- The brand is a cozy beach: the hut on the sand, each agent in its own sandbox. `/brand` is the beach brand page
+  (scene, marks, colours, type, crew, rules); the home page only gets light touches (a sun, a wave under the
+  headline, a moon and a sand strip under the crew). The dashboard's sign-in scene is a night beach.
+- The name is always "OpenHut", never all caps. The wordmark is Fredoka 600 in the site, docs and dashboard, because
+  Bebas Neue has only capitals. Keep the name out of Bebas headings and uppercase eyebrows.
+- The hut's roof has two scalloped thatch rows (every `hut.svg` copy and the site's creature generator).
+  Below 24 px the brand page uses a small cut: no thatch lines, dot eyes, a bigger flag.
+
 ## The docs (`packages/docs`)
 
 - Fumadocs on TanStack Start, prerendered to static files under `/docs/`, copied from Skyfleet's docs
@@ -36,7 +46,7 @@
 ## The brand in the dashboard (`packages/web`)
 
 - Owner, 2026-11-13: the dashboard uses the site's brand. Black primary (`--primary` is ink), the hut (`src/hut.svg`,
-  the site's file) as logo and favicon, Bebas Neue for the wordmark and auth headings, IBM Plex Mono for auth copy,
+  the site's file) as logo and favicon, Fredoka 600 for the wordmark, Bebas Neue for auth headings, IBM Plex Mono for auth copy,
   Inter everywhere else. `components/avatar.tsx` is the site's creature generator; creatures breathe and blink.
 - The sign-in, setup and invite pages share `AuthLayout`: the form on white, and a night scene where agents ask the
   hut (the gateway) for data, one at a time: a packet travels the beam, the hut looks at the agent and stamps

@@ -11,7 +11,7 @@
 <title>OpenHut: build, manage and share agents with your team</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Fredoka:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: quiet black-on-white bands, each one heading plus one live product scene. All the colour comes from the creatures. */
 :root{
@@ -1334,11 +1334,37 @@ footer .toplinks a{color:var(--night-ink)}
 <symbol id="i-brain" viewBox="0 0 24 24"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 0V7a3 3 0 0 0-3-3zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 0"/></symbol>
 </defs></svg>
 
+<style>
+/* sprinkles: small beach touches on top of the existing page */
+.logo,.byo-hub b{font-family:"Fredoka","Baloo 2",system-ui,sans-serif!important;font-weight:600!important;text-transform:none!important;letter-spacing:-.01em!important}
+.logo{font-size:24px!important}
+.hero .wrap{position:relative}
+.sk-sky{position:absolute;top:96px;right:max(24px,env(safe-area-inset-right,0px));width:300px;height:170px;pointer-events:none}
+.sk-sky .drift{animation:skdrift 18s ease-in-out infinite alternate}
+.sk-sky .drift.b{animation-duration:24s}
+@keyframes skdrift{to{transform:translateX(-22px)}}
+@media (max-width:1100px){.sk-sky{display:none}}
+.hero h1{position:relative;z-index:0}
+.sk-wave{position:relative;white-space:nowrap}
+.sk-wave::after{content:"";position:absolute;left:0;right:0;bottom:-.06em;height:.22em;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 10'%3E%3Cpath d='M0 6q5-5 10 0t10 0 10 0 10 0' stroke='%233cc5c0' stroke-width='3.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 50%/auto 100%;z-index:-1}
+.troop{align-items:flex-end}
+.sk-ball{width:26px;height:26px;margin-left:6px;animation:skbob 2.6s ease-in-out infinite;transform-origin:50% 100%}
+@keyframes skbob{50%{transform:translateY(-5px) rotate(18deg)}}
+.cta{position:relative}
+.cta::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.8;background:
+ radial-gradient(1.6px 1.6px at 8% 18%,#fff6dc 98%,transparent),radial-gradient(1.2px 1.2px at 17% 42%,#fff6dc 98%,transparent),radial-gradient(2px 2px at 26% 12%,#fff6dc 98%,transparent),radial-gradient(1.2px 1.2px at 35% 30%,#fff6dc 98%,transparent),
+ radial-gradient(1.6px 1.6px at 66% 16%,#fff6dc 98%,transparent),radial-gradient(1.2px 1.2px at 74% 38%,#fff6dc 98%,transparent),radial-gradient(2px 2px at 83% 22%,#fff6dc 98%,transparent),radial-gradient(1.2px 1.2px at 92% 44%,#fff6dc 98%,transparent),radial-gradient(1.4px 1.4px at 4% 52%,#fff6dc 98%,transparent),radial-gradient(1.4px 1.4px at 58% 8%,#fff6dc 98%,transparent)}
+.cta::after{content:"";position:absolute;inset:auto 0 0;height:96px;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 96' preserveAspectRatio='none'%3E%3Cpath d='M0 18C150 4 300 22 450 12S800 2 1000 14 1150 8 1200 12V96H0z' fill='%23c2a678'/%3E%3Cpath d='M0 18C150 4 300 22 450 12S800 2 1000 14 1150 8 1200 12' stroke='%23fffaf0' stroke-opacity='.55' stroke-width='3' fill='none'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat}
+.cta .wrap{position:relative;z-index:1}
+.sk-moon{position:absolute;top:56px;left:max(24px,7%);width:54px;height:54px;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.sk-sky .drift,.sk-ball{animation:none}}
+</style>
 <header class="hero" id="top">
   <div class="wrap">
     <div class="toprow"><a class="logo" href="#top"><svg class="cr" data-cr="hut" width="40" height="40"></svg>OpenHut</a><span class="toplinks"><a href="/docs/">Docs</a><a href="/brand">Brand</a></span></div>
-    <div class="troop"><svg class="cr" data-cr="ops" width="38" height="38"></svg><svg class="cr" data-cr="support" width="38" height="38"></svg><svg class="cr" data-cr="growth" width="38" height="38"></svg><svg class="cr" data-cr="sales" width="38" height="38"></svg></div>
-    <h1>Build, manage &amp; share agents<br>with your team</h1>
+    <svg class="sk-sky" viewBox="0 0 300 170" aria-hidden="true"><circle cx="232" cy="62" r="50" fill="#ffe08a" opacity=".16"/><circle cx="232" cy="62" r="30" fill="#ffe08a" stroke="#0b0b0b" stroke-width="3.5"/><g class="drift"><path d="M40 92q0-15 16-15 5-12 20-11 14 1 16 14 15 0 15 12z" fill="#fff" stroke="#0b0b0b" stroke-width="3" stroke-linejoin="round"/></g><g class="drift b"><path d="M196 128q0-11 12-11 4-9 15-8 10 1 12 10 11 0 11 9z" fill="#fff" stroke="#0b0b0b" stroke-width="2.6" stroke-linejoin="round"/></g><g stroke="#0b0b0b" stroke-width="2.4" fill="none" stroke-linecap="round"><path d="M128 40q5-6 10 0q5-6 10 0"/><path d="M152 58q4-5 8 0q4-5 8 0"/></g></svg>
+    <div class="troop"><svg class="cr" data-cr="ops" width="38" height="38"></svg><svg class="cr" data-cr="support" width="38" height="38"></svg><svg class="cr" data-cr="growth" width="38" height="38"></svg><svg class="cr" data-cr="sales" width="38" height="38"></svg><svg class="sk-ball" viewBox="-26 -26 52 52" aria-hidden="true"><circle r="22" fill="#fffaf0"/><path d="M0-22a22 22 0 0 1 20 13L0 0z" fill="#ff5a3c"/><path d="M20 9a22 22 0 0 1-27 12L0 0z" fill="#3cc5c0"/><path d="M-18 12a22 22 0 0 1-2-24L0 0z" fill="#f7c948"/><circle r="22" fill="none" stroke="#0b0b0b" stroke-width="4"/><circle r="4.5" fill="#fffaf0" stroke="#0b0b0b" stroke-width="2.6"/></svg></div>
+    <h1>Build, manage &amp; share agents<br><span class="sk-wave">with your team</span></h1>
     <div class="lede">
       <p class="sub">Self-improving agents in Slack and WhatsApp, on your own server.</p>
       <div class="cmd big"><svg class="cr peek" data-cr="sales" width="54" height="54"></svg><span>curl -fsSL https://openhut.dev | sh</span><button type="button" data-copy="curl -fsSL https://openhut.dev | sh">Copy</button></div>
@@ -1566,6 +1592,7 @@ description: Answer "where is my order?"
 </section>
 
 <section class="band night cta" id="cta">
+  <svg class="sk-moon" viewBox="0 0 54 54" aria-hidden="true"><path d="M32 9a18 18 0 1 0 12 26 14.5 14.5 0 1 1-12-26z" fill="#f6efd9" stroke="#0b0b0b" stroke-width="2.5" stroke-linejoin="round"/></svg>
   <div class="wrap">
     <h2>Give your team its first agent today</h2>
     <div class="hero-cta">
@@ -1641,7 +1668,7 @@ description: Answer "where is my order?"
     const hand = `<g class="c-hand"><path d="M80 76q9-4 11-13" stroke="${K}" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="92" cy="60" r="6.500" fill="${fill}" stroke="${K}" stroke-width="3.500"/></g>`
     if (o.hut) {
       const walls = `<rect x="27" y="53" width="54" height="45" rx="10" fill="#fbe3c8" stroke="${K}" stroke-width="4.500"/>`
-      const roof = `<path d="M54 20 92 56q3 6-4 6H20q-7 0-4-6z" fill="#f7c948" stroke="${K}" stroke-width="4.500" stroke-linejoin="round"/><path d="M54 31 44 53M54 31l10 22" stroke="#c9952a" stroke-width="3" stroke-linecap="round"/>`
+      const roof = `<path d="M54 20 92 56q3 6-4 6H20q-7 0-4-6z" fill="#f7c948" stroke="${K}" stroke-width="4.500" stroke-linejoin="round"/><path d="M37 41q4.5 4 9 0t9 0 9 0 9 0M25 52q4.8 4 9.7 0t9.7 0 9.7 0 9.7 0 9.7 0 9.7 0" stroke="#c9952a" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
       const cheeks = `<ellipse cx="36" cy="83" rx="4.500" ry="2.800" fill="#f5a48c"/><ellipse cx="72" cy="83" rx="4.500" ry="2.800" fill="#f5a48c"/>`
       const eyes = `<ellipse cx="44" cy="76" rx="5.200" ry="6.200" fill="${K}"/><ellipse cx="64" cy="76" rx="5.200" ry="6.200" fill="${K}"/><circle cx="46" cy="73.500" r="2.100" fill="#fff"/><circle cx="66" cy="73.500" r="2.100" fill="#fff"/>`
       const smile = `<path d="M48.500 85q5.500 4.500 11 0" stroke="${K}" stroke-width="3" fill="none" stroke-linecap="round"/>`
