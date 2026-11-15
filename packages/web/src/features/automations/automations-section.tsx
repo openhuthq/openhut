@@ -129,7 +129,7 @@ function ScheduleFields({ every, onEvery, initial }: { every: Every; onEvery: (e
     {EVERY.map((option) => <button key={option.id} type="button" className="chip" role="radio" aria-checked={every === option.id} onClick={() => onEvery(option.id)}>{option.label}</button>)}
     {every === 'weekly' && <select name="day" aria-label="Day" className="chipsel" defaultValue={initial?.day ?? 1}>{DAYS.map((day, index) => <option key={day} value={index}>{day}</option>)}</select>}
     {every === 'hourly'
-      ? <select name="minute" aria-label="Minute past the hour" className="chipsel" defaultValue={initial?.at.slice(3) ?? '00'}>{MINUTES.map((minute) => <option key={minute} value={minute}>:{minute}</option>)}</select>
+      ? <select name="minute" aria-label="Minute past the hour" className="chipsel" defaultValue={initial?.at.slice(3) ?? '00'}>{[...new Set([...MINUTES, initial?.at.slice(3) ?? '00'])].sort().map((minute) => <option key={minute} value={minute}>:{minute}</option>)}</select>
       : <input type="time" name="at" aria-label="Time" className="chipsel" defaultValue={initial?.at ?? '09:00'} required />}
     <span className="hint wide">{every === 'hourly' ? 'Runs every hour at that minute.' : `Server time${zone}.`}</span>
   </div>
