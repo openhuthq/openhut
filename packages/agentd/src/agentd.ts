@@ -6,7 +6,7 @@ import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { DatabaseSync } from 'node:sqlite'
-import { messagingActivity, type Activity } from './activity.ts'
+import { newMessages, type NewMessage } from './messages.ts'
 import { isMemoryTarget, MAX_MEMORY_BYTES, readMemory, writeMemory, type MemoryTarget } from './memory.ts'
 import { isSkillPath, listSkills, MAX_SKILL_BYTES, readSkill, writeSkill, type SkillHead } from './skills.ts'
 
@@ -155,8 +155,8 @@ async function handle(req: AgentdRequest): Promise<Reply> {
       return { written: req.target }
     case 'usage':
       return { usage: agentUsage(req.since) }
-    case 'activity':
-      return messagingActivity({ files: readdirSync('/data/agents').filter((name) => ID.test(name)).map((id) => `${home(id)}/state.db`), since: req.since })
+    case 'messages':
+      return { messages: newMessages({ agents: readdirSync('/data/agents').filter((name) => ID.test(name)).map((id) => ({ id, file: `${home(id)}/state.db` })), since: req.since }) }
     case 'ts-up':
       return tailscaleUp(req.authKey)
     case 'ts-status':
@@ -182,7 +182,7 @@ function parseRequest(value: unknown): AgentdRequest {
       if (typeof value.authKey !== 'string' || !TAILSCALE_KEY.test(value.authKey)) throw new Error('bad tailscale auth key')
       return { cmd, authKey: value.authKey }
     case 'usage':
-    case 'activity':
+    case 'messages':
       if (typeof value.since !== 'number' || !Number.isFinite(value.since)) throw new Error('bad since')
       return { cmd, since: value.since }
     case 'create':
@@ -610,7 +610,7 @@ export type AgentdRequest =
   | { cmd: 'memory'; id: string }
   | { cmd: 'memory-write'; id: string; target: MemoryTarget; body: string }
   | { cmd: 'skill-write'; id: string; path: string; body: string }
-  | { cmd: 'usage' | 'activity'; since: number }
+  | { cmd: 'usage' | 'messages'; since: number }
   | { cmd: 'ts-up'; authKey: string }
   | { cmd: 'ts-status' | 'ts-down' }
 
@@ -633,7 +633,7 @@ export type AgentdReplies = {
   memory: Record<MemoryTarget, string | null>
   'memory-write': { written: MemoryTarget }
   usage: { usage: Record<string, number> }
-  activity: Activity
+  messages: { messages: NewMessage[] }
   'ts-up': Tailnet & { joined: boolean }
   'ts-status': Tailnet
   'ts-down': Tailnet

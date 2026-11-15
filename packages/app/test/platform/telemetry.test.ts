@@ -4,7 +4,7 @@ import { config } from '../../src/platform/config.ts'
 import { db, migrate } from '../../src/platform/db.ts'
 import { record, takeTelemetry, track } from '../../src/platform/events.ts'
 import { agentd } from '../../src/platform/agentd.ts'
-import { reportActive, reportMessaging, sendTelemetry } from '../../src/platform/telemetry.ts'
+import { reportActive, reportMessages, sendTelemetry } from '../../src/platform/telemetry.ts'
 
 await migrate()
 const actor = { id: 'usr_telemtry', email: 'owner@acme.example' }
@@ -64,13 +64,17 @@ test('a failed send only logs and drops the batch', async () => {
   assert.deepEqual(takeTelemetry(), [])
 })
 
-test('the daily messaging count sends numbers per channel and how many people sent them, never who or what', async () => {
-  const activity = mock.method(agentd, 'activity', async () => ({ messages: { slack: 40, api_server: 6, whatsapp: 2, cron: 1 }, senders: 4, agents: 2 }))
+test('each new message from a person becomes one event with only its channel, agent name and time', async () => {
+  await db.insertInto('agent').values({ id: 'ag_msgagent', name: 'Ops Desk', owner_id: 'usr_telown1', instructions: '# Ops', model: 'sonnet', net: 12, channel_key: 'k' }).execute()
+  const found = mock.method(agentd, 'newMessages', async () => ({ messages: [{ agentId: 'ag_msgagent', source: 'slack', at: 1000.25 }, { agentId: 'ag_msgagent', source: 'api_server', at: 1001 }, { agentId: 'ag_gone0000', source: 'cron', at: 1002 }] }))
   config.telemetry = true
-  await reportMessaging()
+  const next = await reportMessages(900)
   config.telemetry = false
-  activity.mock.restore()
-  assert.deepEqual(takeTelemetry().map(({ name, properties }) => ({ name, properties })), [
-    { name: 'messaging_daily', properties: { slack: 40, whatsapp: 2, telegram: 0, dashboard: 6, other: 1, senders: 4, agents: 2 } },
+  found.mock.restore()
+  assert.equal(next, 1002)
+  assert.deepEqual(takeTelemetry().map(({ name, properties, at }) => ({ name, properties, at })), [
+    { name: 'message_sent', properties: { channel: 'slack', agent_name: 'Ops Desk' }, at: 1000250 },
+    { name: 'message_sent', properties: { channel: 'dashboard', agent_name: 'Ops Desk' }, at: 1001000 },
+    { name: 'message_sent', properties: { channel: 'other' }, at: 1002000 },
   ])
 })
