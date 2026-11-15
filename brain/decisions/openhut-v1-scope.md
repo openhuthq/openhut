@@ -5,7 +5,7 @@ status: accepted
 
 ## Decision
 
-- Name: OpenHut, at openhut.dev, since 2026-11-15. It was JakeBox, then Fast Monkey (fastmonkey.dev) from 2026-11-13; fastmonkey.dev, its Worker and its DNS were removed on 2026-11-15. Sidebar: Agents and Connections, with People and Admin at the bottom; no Settings page.
+- Name: OpenHut, at openhut.dev, since 2026-11-15. It was JakeBox, then Fast Monkey (fastmonkey.dev) from 2026-11-13; fastmonkey.dev, its Worker and its DNS were removed on 2026-11-15. Code lives at github.com/openhuthq/openhut (org `openhuthq`, since the `openhut` name on GitHub belongs to an unrelated user). Sidebar: Agents and Connections, with People and Admin at the bottom; no Settings page.
 - Design: Skyfleet's layout and components (one navy primary, creature avatars) in Capy's light theme: light grey ground, near-white panel, white cards, one text colour, Inter 14px, 6–8px corners, chip tabs. Connections is a marketplace like Capy's Explore page. Clay, Mercury and Cursor were tried and dropped. The isolation plan page alone uses Cursor's design in white only. Code style stays Skyfleet's.
 - Connections is a catalog like Skyfleet's integrations page, with real brand icons and no "Who has access" matrix.
 - One gVisor container per agent. Shell and file tools stay on for every agent.
