@@ -144,6 +144,8 @@ function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
       if ((memories[req.id] ??= { ...SAMPLE_MEMORY })[req.target] === null) throw new Error('the agent has not saved that memory yet')
       memories[req.id][req.target] = req.body
       return { written: req.target }
+    case 'activity':
+      return { messages: { slack: 42, api_server: 7, whatsapp: 3 }, senders: 5, agents: Object.keys(states).length }
     case 'usage':
       return { usage: Object.fromEntries(Object.keys(states).map((id, index) => [id, 0.4 / (index + 1)])) }
     case 'ts-up':

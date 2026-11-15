@@ -28,6 +28,7 @@ export const agentd = {
   removeSkill: ({ id, path }: { id: string; path: string }) => ask({ request: { cmd: 'skill-rm', id, path }, doing: 'delete the skill', schema: z.object({ removed: z.string() }) }),
   memory: ({ id }: { id: string }) => ask({ request: { cmd: 'memory', id }, doing: 'read the memory', schema: z.object({ notes: z.nullable(z.string()), people: z.nullable(z.string()) }) }),
   writeMemory: ({ id, target, body }: { id: string; target: 'notes' | 'people'; body: string }) => ask({ request: { cmd: 'memory-write', id, target, body }, doing: 'save the memory', schema: z.object({ written: z.string() }) }),
+  activity: ({ since }: { since: number }) => ask({ request: { cmd: 'activity', since }, doing: 'count the messages', schema: z.object({ messages: z.record(z.string(), z.number()), senders: z.number(), agents: z.number() }) }),
   usage: ({ since }: { since: number }) => ask({ request: { cmd: 'usage', since }, doing: 'read the agents\' usage', schema: z.object({ usage: z.record(z.string(), z.number()) }) }),
   unlinkWhatsapp: ({ id }: { id: string }) => ask({ request: { cmd: 'wa-unlink', id }, doing: 'unlink WhatsApp', schema: z.object({ unlinked: z.string() }) }),
   joinTailnet: ({ authKey }: { authKey: string }) => ask({ request: { cmd: 'ts-up', authKey }, doing: 'join the tailnet', schema: z.extend(Tailnet, { joined: z.boolean() }) }),
