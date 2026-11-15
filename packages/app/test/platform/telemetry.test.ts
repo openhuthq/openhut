@@ -2,7 +2,7 @@ import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { config } from '../../src/platform/config.ts'
 import { db, migrate } from '../../src/platform/db.ts'
-import { record, takeTelemetry, track } from '../../src/platform/events.ts'
+import { record, setUsageData, takeTelemetry, track } from '../../src/platform/events.ts'
 import { agentd } from '../../src/platform/agentd.ts'
 import { reportActive, reportMessages, sendTelemetry } from '../../src/platform/telemetry.ts'
 
@@ -77,4 +77,16 @@ test('each new message from a person becomes one event with only its channel, ag
     { name: 'message_sent', properties: { channel: 'dashboard', agent_name: 'Ops Desk' }, at: 1001000 },
     { name: 'message_sent', properties: { channel: 'other' }, at: 1002000 },
   ])
+})
+
+test('turning usage data off in Admin stops tracking and drops anything not sent yet', () => {
+  config.telemetry = true
+  track('skill_edited')
+  setUsageData(false)
+  track('skill_deleted')
+  assert.deepEqual(takeTelemetry(), [])
+  setUsageData(true)
+  track('memory_edited')
+  config.telemetry = false
+  assert.deepEqual(takeTelemetry().map(({ name }) => name), ['memory_edited'])
 })

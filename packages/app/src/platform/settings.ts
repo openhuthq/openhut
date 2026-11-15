@@ -28,6 +28,8 @@ export const settings = {
   setTailscale: (join: TailscaleJoin | undefined) => join ? write('tailscale', JSON.stringify(join)) : forget('tailscale'),
   appliedBuild: (): string | undefined => rows.get('build'),
   setAppliedBuild: (build: string) => write('build', build),
+  usageData: (): boolean => rows.get('usage_data') !== 'off',
+  setUsageData: (on: boolean) => write('usage_data', on ? 'on' : 'off'),
   instanceId: (): string | undefined => rows.get('instance_id') || undefined,
   setInstanceId: async (id: string): Promise<string> => {
     await write('instance_id', id)

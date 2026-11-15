@@ -10,6 +10,7 @@ type Target = { type: string; id: string; [field: string]: unknown }
 
 const MAX_QUEUE = 500
 const queue: TelemetryEvent[] = []
+let usageOn = true
 const ASSISTANTS = ['claude', 'cursor', 'codex', 'windsurf', 'zed']
 const TELEMETRY_OF: Record<string, (target: Target, actor: { email: string }) => [string, Record<string, unknown>]> = {
   'agent.created': (target) => ['agent_created', { model: target.model }],
@@ -32,9 +33,18 @@ export function record({ action, actor, target }: { action: string; actor: { id:
 }
 
 export function track(name: string, properties: Record<string, unknown> = {}, at?: number): void {
-  if (!config.telemetry || queue.length >= MAX_QUEUE) return
+  if (!usageDataOn() || queue.length >= MAX_QUEUE) return
   const event = telemetryEvent({ name, properties, at })
   if (event) queue.push(event)
+}
+
+export function usageDataOn(): boolean {
+  return config.telemetry && usageOn
+}
+
+export function setUsageData(on: boolean): void {
+  usageOn = on
+  if (!on) queue.length = 0
 }
 
 export function takeTelemetry(): TelemetryEvent[] {

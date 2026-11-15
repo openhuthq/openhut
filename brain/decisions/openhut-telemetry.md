@@ -4,7 +4,7 @@ status: accepted
 # Usage telemetry, on by default, through one event hub
 
 ## Decision
-Owner, 2026-11-15: self-hosted OpenHut servers send usage events to openhut.dev by default. `OPENHUT_TELEMETRY=off` in `/etc/openhut/env` turns it off, and upgrades keep it. The installer's last lines and the docs Security page say so. The only personal detail ever sent is the owner's email, on `setup_completed` and the daily `instance_active`, so we know whose server it is. Agent names go on `message_sent`. Nothing else: no other emails, people's names, message content, skills, memories, credentials or OpenHut ids.
+Owner, 2026-11-15: self-hosted OpenHut servers send usage events to openhut.dev by default. An owner or admin turns it off or on in Admin › Usage data (the `usage_data` setting; owner, the same day, replacing an `OPENHUT_TELEMETRY` env var). Turning it off drops the unsent queue and stops the message polling and daily check-in. The installer's last lines and the docs Security page say so. The only personal detail ever sent is the owner's email, on `setup_completed` and the daily `instance_active`, so we know whose server it is. Agent names go on `message_sent`. Nothing else: no other emails, people's names, message content, skills, memories, credentials or OpenHut ids.
 
 ## Context
 We had no idea how many servers run OpenHut or what teams do with it. Databuddy (website "OpenHut", client id `40a6e1dc-4e64-4fd6-8b92-415a77397465`) already holds the site analytics.

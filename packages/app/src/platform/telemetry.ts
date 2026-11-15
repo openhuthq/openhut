@@ -3,7 +3,7 @@ import { agentd } from './agentd.ts'
 import { config } from './config.ts'
 import { db } from './db.ts'
 import type { TelemetryEvent } from '@openhut/common/telemetry.ts'
-import { log, takeTelemetry, track } from './events.ts'
+import { log, setUsageData, takeTelemetry, track, usageDataOn } from './events.ts'
 import { settings } from './settings.ts'
 
 const SEND_EVERY_MS = 60_000
@@ -16,9 +16,10 @@ const CHANNELS = ['slack', 'whatsapp', 'telegram']
 const PEOPLE_BUCKETS: [number, string][] = [[1, '1'], [5, '2-5'], [20, '6-20'], [Infinity, '21+']]
 
 export async function startTelemetry(): Promise<void> {
+  setUsageData(settings.usageData())
   if (!config.telemetry) return
   const instance = settings.instanceId() ?? await settings.setInstanceId(randomUUID())
-  log.info({ event: 'telemetry.on', url: config.telemetryUrl, hint: 'Set OPENHUT_TELEMETRY=off in /etc/openhut/env to stop it.' })
+  log.info({ event: 'telemetry.started', url: config.telemetryUrl, on: usageDataOn(), hint: 'Turn usage data on or off in Admin.' })
   setInterval(() => void sendTelemetry(instance), SEND_EVERY_MS).unref()
   let since = Date.now() / 1000
   setInterval(() => void reportMessages(since).then((next) => { since = next }), SEND_EVERY_MS).unref()
@@ -47,6 +48,7 @@ async function sendBatch({ instance, events }: { instance: string; events: Telem
 }
 
 export async function reportActive(): Promise<void> {
+  if (!usageDataOn()) return
   const [agents, people, owner] = await Promise.all([
     db.selectFrom('agent').select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirstOrThrow(),
     db.selectFrom('person').select((eb) => eb.fn.countAll<number>().as('n')).where('removed_at', 'is', null).executeTakeFirstOrThrow(),
@@ -56,6 +58,7 @@ export async function reportActive(): Promise<void> {
 }
 
 export async function reportMessages(since: number): Promise<number> {
+  if (!usageDataOn()) return Date.now() / 1000
   const found = await agentd.newMessages({ since }).catch(() => undefined)
   if (!found) return since
   const ids = [...new Set(found.messages.map((message) => message.agentId))]
