@@ -1,0 +1,13 @@
+{
+  "name": "@openhut/agentd",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/agentd.ts",
+    "typecheck": "tsc -p .",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2"
+  }
+}

@@ -1,0 +1,42 @@
+---
+title: Install
+description: One command on a Linux server. About ten minutes.
+icon: sales
+---
+
+You need a Linux server (Debian, Ubuntu or Alpine), root, and 3 GB of disk.
+
+<Steps>
+<Step>
+
+### Run it
+
+```sh
+curl -fsSL https://openhut.dev | sh
+```
+
+</Step>
+<Step>
+
+### Open the link it prints
+
+Enter your email and pick a password. The first person in is the owner.
+
+</Step>
+<Step>
+
+### Add your Claude plan
+
+**Admin**, then **Claude seat**. See [Claude plan](/claude).
+
+</Step>
+<Step>
+
+### Create an agent
+
+**Agents**, then **New agent**. Or let [your AI assistant](/assistant) set it up.
+
+</Step>
+</Steps>
+
+The dashboard is plain HTTP on port 8787. Keep it behind Tailscale, an SSH tunnel or HTTPS.

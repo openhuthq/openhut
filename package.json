@@ -1,0 +1,22 @@
+{
+  "name": "openhut-monorepo",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@10.9.3",
+  "engines": { "node": ">=22.18" },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run build --filter=@openhut/web && node scripts/dev.ts",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck && tsc -p scripts",
+    "test": "turbo run test",
+    "e2e": "npm -w @openhut/e2e run e2e",
+    "release": "scripts/release.sh"
+  },
+  "devDependencies": {
+    "turbo": "2.5.4",
+    "typescript": "7.0.2"
+  }
+}
