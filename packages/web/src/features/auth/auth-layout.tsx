@@ -21,6 +21,7 @@ export function AuthLayout({ title, children }: { title: string; children: React
     <div className="authside"><div className="wordmark"><Hut />OpenHut</div>{children}</div>
     <aside className="authart" aria-hidden="true">
       <div className="floor"></div>
+      <div className="moon"></div>
       <Story />
       <div className="hud"><h2>Your agents. Your server.</h2><p>Each in its own sandbox. Every key stays here.</p></div>
     </aside>

@@ -12,7 +12,7 @@ export function InvitePage({ token }: { token: string }) {
   if (inviteLink.error instanceof RequestError && inviteLink.error.status === 410) return <InviteGone />
   if (inviteLink.isPending) return null
   const role = inviteLink.data ? ROLE_WITH_ARTICLE[inviteLink.data.role] : 'a teammate'
-  return <AuthForm title="Join OpenHut" heading="Join OpenHut" lead={`You're invited as ${role}. Enter your email and pick a password.`} error={inviteLink.error ?? createPerson.error}
+  return <AuthForm title="Join OpenHut" heading="Join your team" lead={`You're invited to OpenHut as ${role}. Enter your email and pick a password.`} error={inviteLink.error ?? createPerson.error}
     fields={['email', 'password']} busy={createPerson.isPending} button="Join" foot="This link works once."
     onSubmit={(event) => {
       const field = formValues(event)
