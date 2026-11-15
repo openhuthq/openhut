@@ -111,6 +111,7 @@ A ghost button at rest is bare text. In a row ("Set up", "Remove") that is the c
 ## Icons and type
 
 - Every UI icon is Hugeicons (`@hugeicons/react` + `@hugeicons/core-free-icons`, free stroke set) through `components/icons.tsx` and `status-badge.tsx`; brand marks for other apps stay in `brand-icons.ts`. Don't hand-draw an SVG icon (owner, 2026-11-14).
+- Statuses in a list (automation runs and the like) are Linear-style circle icons, not coloured dots. The shape carries the state, so it reads without colour: running `Loading03Icon` (amber, spinning), done `CheckmarkCircle02Icon` (green), nothing to do `CircleIcon` (grey), skipped or paused `DashedLineCircleIcon` (grey), failed `CancelCircleIcon` (red). They live with the badges in `status-badge.tsx` (owner, 2026-11-15).
 - Text is 14px across the app, sidebar included. Only small labels and counts (12px), code and tool-call chips (12.5px) and headings differ.
 
 ## Agent page

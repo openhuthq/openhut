@@ -19,6 +19,9 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 - PGlite (Postgres in WASM) in `OPENHUT_DATA`, through Kysely's own PGlite dialect, which runs one query or
   transaction at a time (PGlite is single-user). `install_setting` is created at import time because settings and the
   auth secret load then.
+- To read a running server's database, copy `$OPENHUT_DATA/pglite` (default `/data/app/pglite`) to a temp dir and open
+  the copy with `PGlite.create(dir)` from `/opt/openhut/packages/app`. Don't open the live dir, because the server
+  holds it single-user. People are in `person` (`email`, `role`; there's one `owner`).
 - `auth_secret` is created once; it keys every seal (AES-256-GCM) and every agent token.
 - Agent token: `<id>.<hmac>` = HMAC(auth_secret, id). Nothing is stored; a deleted agent's token matches no row. The
   gateway also requires the call to come from the agent's own `/24`.
