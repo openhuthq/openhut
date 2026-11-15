@@ -18,7 +18,7 @@ export function SizePicker({ agent, lockReason }: { agent: Agent; lockReason: st
     note={`How much room ${agent.name} has to work. Changing it restarts ${agent.name}.`} onChoose={(size) => updateAgent.mutate({ size }, { onError: toastError })} />
 }
 
-function Picker<Id extends string>({ name, options, value, iconOf, note, disabled, lockReason, onChoose }: {
+export function Picker<Id extends string>({ name, options, value, iconOf, note, disabled, lockReason, onChoose }: {
   name: string
   options: readonly { id: Id; label: string; blurb: string; spec?: string }[]
   value: Id

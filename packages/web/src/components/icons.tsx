@@ -43,6 +43,7 @@ export const AUTOMATION_ICONS = {
   webhook: icon(WebhookIcon, 14),
   person: icon(UserIcon, 14),
   note: icon(Notebook01Icon, 14),
+  off: icon(Cancel01Icon, 14),
 }
 
 export const FACT_ICONS = {
