@@ -1087,7 +1087,7 @@ footer .toplinks a{color:var(--night-ink)}
 }
 
 /* ===== shape it as you go: ask, correct, it learns ===== */
-.teach{grid-template-columns:repeat(3,minmax(0,1fr))}
+.teach{grid-template-columns:repeat(2,minmax(0,1fr))}
 .t-as{border:2px solid var(--ink);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;height:372px;min-width:0;background:#faf9f5}
 .t-as .as-bar{height:34px;flex:none}
 .t-as .as{padding:16px 14px;gap:8px;font-size:13.5px;justify-content:flex-start}
@@ -1097,8 +1097,6 @@ footer .toplinks a{color:var(--night-ink)}
 .t-as .as .res .cr{width:36px;height:36px}
 .t-as .as .res small,.t-as .as-in{display:none}
 #learning .clients{padding:0;margin-top:16px}
-.teach .t-file .lp-h{white-space:nowrap;overflow:hidden}
-.teach .t-file .lp-h .pre,.teach .t-ok .by{display:none}
 
 /* ===== sealed and scoped ===== */
 #learning .head p,#sealed .head p{max-width:52em}
@@ -1114,25 +1112,25 @@ footer .toplinks a{color:var(--night-ink)}
 #sealed .e2 .cap{margin-top:18px}
 .eye .e4 .wu-rows{margin-bottom:4px}
 
-/* ===== small tiles under a section ===== */
-.smalls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;margin-top:20px}
-.sm{border:1.5px solid var(--line-2);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
-.sm-ill{display:flex;align-items:center;gap:8px;height:24px;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden}
-.sm-ill .lg{width:18px;height:18px;flex:none}
-.sm-ill .tog{width:30px;height:18px}
-.sm-ill .tog::after{width:14px;height:14px}
-.sm p{font-family:var(--copy);font-size:13px;line-height:1.5;color:var(--body)}
-.sm p b{font-family:var(--sans);font-size:14px;font-weight:600;color:var(--ink);display:block;margin-bottom:2px}
-.sm.hot{border:2px solid var(--ink)}
+#safe .eye{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr) minmax(0,1fr)}
+#safe .eye .sc{grid-column:auto}
+#safe .wu-top{flex-wrap:wrap;row-gap:10px}
+#safe .wu-p{width:30px;height:30px;font-size:12.5px}
+.byo-tile .cap{white-space:normal;height:auto}
+#safe .wu-row{grid-template-columns:30px 124px minmax(0,1fr) 40px}
+.byo-tile .byo-card{margin:18px 0 auto}
+.byo-tile .byo-top b{font-size:22px}
+.byo-tile .byo-top small{color:#0b7a3b}
+.byo-tile .byo-key{color:var(--ink);font-size:12.5px;white-space:nowrap}
+
 @media (max-width:1020px){
   .teach{grid-template-columns:minmax(0,1fr)}
   .t-as{height:auto}
   #learning .clients{display:flex}
   #sealed .hx-grid{grid-template-columns:minmax(0,1fr)}
   #sealed .hx-wall{align-items:center}
-  .smalls{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  #safe .eye{grid-template-columns:minmax(0,1fr)}
 }
-@media (max-width:520px){.smalls{grid-template-columns:minmax(0,1fr)}}
 
 /* ===== phone and tablet pass ===== */
 @media (max-width:1020px){
@@ -1553,7 +1551,7 @@ footer .toplinks a{color:var(--night-ink)}
 
 <section class="band" id="learning">
   <div class="wrap">
-    <div class="head"><div class="hd"><span class="mb"><svg class="cr" data-cr="ops" width="44" height="44"></svg></span><h2>Shape it as you go</h2></div><p>Ask Claude or Cursor for an agent. Correct it in Slack when it’s wrong, and it rewrites its own skill.</p></div>
+    <div class="head"><div class="hd"><span class="mb"><svg class="cr" data-cr="ops" width="44" height="44"></svg></span><h2>Shape it as you go</h2></div><p>Ask Claude or Cursor for an agent. Correct it in Slack when it’s wrong, and it remembers next time.</p></div>
     <div class="frame teach" id="teach">
   <div class="t-as">
     <div class="as-bar"><i></i><i></i><i></i><span><svg class="lg" style="width:14px;height:14px"><use href="#b-claude"/></svg>Claude · openhut connected</span></div>
@@ -1577,16 +1575,6 @@ footer .toplinks a{color:var(--night-ink)}
           <div class="m"><svg class="cr" data-cr="ops" width="36" height="36"></svg><div><b>Ops Desk<span class="app-tag">APP</span></b><p>Shipped on Monday.</p></div></div>
         </div>
         <button type="button" class="t-btn" id="tBtn">Correct it</button>
-      </div>
-      <div class="t-file">
-        <div class="lp-h"><svg class="ico" style="width:14px;height:14px"><use href="#i-file"/></svg><span class="fnm"><span class="pre">skills/</span>late-orders/SKILL.md</span><span class="t-ok" id="tOk">✓ updated<span class="by"> by Ops Desk</span></span></div>
-        <div class="file"><span class="c">---
-name: late-orders
-description: Answer "where is my order?"
----</span>
-1. Look up the order.
-2. Read its status in our system.
-<span class="ln" id="tL3">3. Say where it is in one line.</span><span class="ln hid" id="tL4">4. Say where it is in one line.</span></div>
       </div>
     </div>
     <div class="clients" aria-label="Works with any MCP client">
@@ -1621,12 +1609,6 @@ description: Answer "where is my order?"
         <p class="cap">Agents never see your database password.</p>
       </div>
     </div>
-    <div class="smalls">
-      <div class="sm"><span class="sm-ill mono">••••••••</span><p><b>Keys stay in the gateway.</b> Agents never see a password or token.</p></div>
-      <div class="sm"><span class="sm-ill mono">1 agent, 1 box</span><p><b>One container each.</b> A broken agent can’t touch the others.</p></div>
-      <div class="sm"><span class="sm-ill mono">sha256 ✓</span><p><b>Checked installs.</b> A tampered release is refused.</p></div>
-      <div class="sm"><span class="sm-ill mono">MIT</span><p><b>Open source.</b> Read every line that runs on your server.</p></div>
-    </div>
   </div>
 </section>
 
@@ -1648,12 +1630,14 @@ description: Answer "where is my order?"
         <div class="sp-legend" id="spLegend"></div>
         <p class="cap">No extra model bill.</p>
       </div>
-    </div>
-    <div class="smalls">
-      <div class="sm hot"><span class="sm-ill"><svg class="lg"><use href="#b-claude"/></svg><span class="mono">sk-ant-oat01-•••</span></span><p><b>Bring your own Claude.</b> Every agent runs on the plan you already pay for.</p></div>
-      <div class="sm"><span class="sm-ill mono">people × agents</span><p><b>Per person, per agent.</b> See who leans on which agent.</p></div>
-      <div class="sm"><span class="sm-ill mono">Sign in with OAuth</span><p><b>No personal tokens.</b> People sign in from the dashboard or their AI assistant.</p></div>
-      <div class="sm"><span class="sm-ill"><span class="tog" aria-hidden="true"></span><span class="mono">usage data</span></span><p><b>One switch for usage data.</b> Admins turn it off in settings.</p></div>
+      <div class="sc e2 byo-tile">
+        <h3>Bring your own Claude</h3>
+        <div class="byo-card">
+          <div class="byo-top"><span class="byo-logo"><svg class="lg"><use href="#b-claude"/></svg></span><div><b>Your Claude plan</b><small>Connected · 6 agents</small></div></div>
+          <div class="byo-key"><span>sk-ant-oat01-••••••••••••</span></div>
+        </div>
+        <p class="cap">Every agent runs on the plan you already pay for.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -1922,7 +1906,7 @@ description: Answer "where is my order?"
   gRows.addEventListener('click', e => { const t = e.target.closest('.g-row')?.querySelector('.tog'); if (!t) return; const g = GD[+t.dataset.i]; g[2] = g[2] ? 0 : 1; t.setAttribute('aria-pressed', !!g[2]); const em = t.previousElementSibling; em.textContent = g[2] ? g[1] : 'blocked'; em.className = g[2] ? '' : 'n'; talk($('#gCr'), 700) })
 
   /* ---------- self-improving: you press the button ---------- */
-  const tMsgs = $('#tMsgs'), tBtn = $('#tBtn'), tL3 = $('#tL3'), tL4 = $('#tL4'), tOk = $('#tOk'), OLD3 = tL3.textContent, NEWLINE = '3. Check the carrier too.'
+  const tMsgs = $('#tMsgs'), tBtn = $('#tBtn')
   const TP = { P: ['Pablo', '#7a5cc7'], D: ['David', '#2e7d6b'] }
   const th = (k, t) => `<div class="m"><span class="hu" style="--c:${TP[k][1]}">${k}</span><div><b>${TP[k][0]}</b><p>${t.replace('@Ops Desk', '<span class="at">@Ops Desk</span>')}</p></div></div>`
   const ta = t => `<div class="m">${cr('ops', 36)}<div><b>Ops Desk<span class="app-tag">APP</span></b><p>${t}</p></div></div>`
@@ -1933,13 +1917,11 @@ description: Answer "where is my order?"
   let ts = 0, tTouched = false, tTok = 0
   const tSet = async n => {
     const my = ++tTok; ts = n; tBtn.disabled = true; tBtn.classList.toggle('busy', tTouched)
-    if (n === 0) { await tFade(() => { $('#tDay').textContent = 'This week'; tMsgs.innerHTML = th('P', '@Ops Desk where is order #5102?') + ta('Shipped on Monday.'); paintAll(tMsgs); tL3.classList.remove('add'); tL3.textContent = OLD3; tL4.classList.add('hid'); tOk.classList.remove('show') }); if (my !== tTok) return; tBtn.textContent = 'Correct it' }
+    if (n === 0) { await tFade(() => { $('#tDay').textContent = 'This week'; tMsgs.innerHTML = th('P', '@Ops Desk where is order #5102?') + ta('Shipped on Monday.'); paintAll(tMsgs) }); if (my !== tTok) return; tBtn.textContent = 'Correct it' }
     if (n === 1) {
       tAdd(th('D', 'Check the carrier too. Our system runs a day behind.')); await sleep(reduce ? 0 : 750); if (my !== tTok) return
       if (!await tReply(my, 'Saved. The carrier shows it stuck in Berlin since Monday.')) return
-      tL3.classList.add('add'); tL4.classList.remove('hid'); tL3.textContent = NEWLINE
-      if (!reduce) { tL3.textContent = ''; for (const ch of NEWLINE) { if (my !== tTok) return; tL3.textContent += ch; await sleep(24) } }
-      tOk.classList.add('show'); tBtn.textContent = 'Ask again next week'
+      tBtn.textContent = 'Ask again next week'
     }
     if (n === 2) {
       await tFade(() => { $('#tDay').textContent = 'Next week'; tMsgs.innerHTML = th('P', '@Ops Desk where is order #5210?'); paintAll(tMsgs) }); if (my !== tTok) return
