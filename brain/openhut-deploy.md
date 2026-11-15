@@ -7,7 +7,7 @@
 - The repo secret `CLOUDFLARE_API_TOKEN` is the account token "openhut-site GitHub Actions deploy": Workers Scripts
   write and Account Settings read on the moabuaboud@gmail.com account, Workers Routes write on openhut.dev only.
 - DNS for openhut.dev and www is managed by the Worker's custom domains; the zone holds no other records. Wrangler's
-  OAuth login can deploy but can't edit DNS, so a record in the way has to be deleted in the dashboard. It can delete a Worker's custom domains, though: `DELETE /accounts/<id>/workers/domains/<id>` with the `oauth_token` from wrangler's config (how fastmonkey.dev was taken down, 2026-11-15).
+  OAuth login can deploy but can't edit DNS, so a record in the way has to be deleted in the dashboard. It can delete a Worker's custom domains, though: `DELETE /accounts/<id>/workers/domains/<id>` with the `oauth_token` from wrangler's config (how fastmonkey.dev was taken down, 2026-11-15). When adding a zone, choose manual DNS entry: the automatic scan imports the registrar's parking A records, and Worker custom domains then fail with "already has externally managed DNS records" (code 100117) until they are deleted.
 
 ## monkey.activepieces.dev (the internal instance)
 - Hetzner server `hermes-agents` (project MISC, Helsinki, CPX42, Ubuntu 26.04). Its only firewall,
