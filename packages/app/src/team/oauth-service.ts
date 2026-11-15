@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import * as z from 'zod/mini'
-import type { Deleted } from '@fastmonkey/common/api.ts'
-import type { CreateOAuthCode, OAuthClient, OAuthCode, OAuthGrant } from '@fastmonkey/common/team/oauth.ts'
+import type { Deleted } from '@openhut/common/api.ts'
+import type { CreateOAuthCode, OAuthClient, OAuthCode, OAuthGrant } from '@openhut/common/team/oauth.ts'
 import { db } from '../platform/db.ts'
 import { HttpError, OAuthError } from '../platform/http-error.ts'
 import { publicUrl } from '../platform/settings.ts'
@@ -40,7 +40,7 @@ export const oauthService = {
 
   async client(id: string): Promise<OAuthClient> {
     const row = await db.selectFrom('oauth_client').select(['id', 'name', 'redirect_uris']).where('id', '=', id).executeTakeFirst()
-    if (!row) throw new HttpError(404, 'This app isn\'t registered with Fast Monkey. Start the connection again from the app.')
+    if (!row) throw new HttpError(404, 'This app isn\'t registered with OpenHut. Start the connection again from the app.')
     return { id: row.id, object: 'oauth_client', name: row.name, redirectUris: RedirectUris.parse(JSON.parse(row.redirect_uris)) }
   },
 

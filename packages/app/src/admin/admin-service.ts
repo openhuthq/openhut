@@ -1,5 +1,5 @@
 import * as z from 'zod/mini'
-import type { Admin, AgentContainer, Health, SeatSignIn, SeatUsage, Update, UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
+import type { Admin, AgentContainer, Health, SeatSignIn, SeatUsage, Update, UpdateAdmin } from '@openhut/common/admin/admin.ts'
 import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
 import { HttpError } from '../platform/http-error.ts'
@@ -13,7 +13,7 @@ import { seatLimits } from './seat-limits.ts'
 
 const LATEST_TTL_MS = 60_000
 const LATEST_TIMEOUT_MS = 4_000
-const BUILD_LINE = /^FASTMONKEY_BUILD="([\w.-]+)"$/m
+const BUILD_LINE = /^OPENHUT_BUILD="([\w.-]+)"$/m
 const SEMVER = /^\d+\.\d+\.\d+$/
 const UPDATE_GRACE_MS = 20_000
 const UPDATE_LIMIT_MS = 45 * 60_000
@@ -167,7 +167,7 @@ async function setGoogleClient({ googleClientId, googleClientSecret }: UpdateAdm
 async function setPublicUrl(url: string): Promise<void> {
   const parsed = new URL(url)
   if (parsed.pathname !== '/' || parsed.search || parsed.hash || parsed.username) {
-    throw new HttpError(400, 'Use just the address, like https://fastmonkey.example.com, with no path.', { param: 'publicUrl' })
+    throw new HttpError(400, 'Use just the address, like https://openhut.example.com, with no path.', { param: 'publicUrl' })
   }
   await settings.setPublicUrl(parsed.origin)
 }

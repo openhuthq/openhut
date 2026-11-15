@@ -1,4 +1,4 @@
-import { MemberRole, type Invite, type Me, type Person } from '@fastmonkey/common/team/team.ts'
+import { MemberRole, type Invite, type Me, type Person } from '@openhut/common/team/team.ts'
 import { ConfirmButton } from '@/components/confirm-button'
 import { CopyButton } from '@/components/copy-button'
 import { ErrorNote } from '@/components/error-note'

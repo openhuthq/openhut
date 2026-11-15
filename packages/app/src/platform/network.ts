@@ -41,7 +41,7 @@ function guardedLookup(hostname: string, options: LookupOptions, callback: (err:
 }
 
 function refusal(ip: string): Error {
-  return new Error(`Refused address ${ip}: Fast Monkey never connects to this server, its agents or link-local addresses. Use the service's own address.`)
+  return new Error(`Refused address ${ip}: OpenHut never connects to this server, its agents or link-local addresses. Use the service's own address.`)
 }
 
 function blockList(): BlockList {

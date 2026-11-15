@@ -1,23 +1,23 @@
 #!/bin/sh
 set -eu
-FASTMONKEY_URL="${FASTMONKEY_URL:-https://fastmonkey.dev}"
-FASTMONKEY_SHA256="@FASTMONKEY_SHA256@"
-FASTMONKEY_BUILD="@FASTMONKEY_BUILD@"
+OPENHUT_URL="${OPENHUT_URL:-https://openhut.dev}"
+OPENHUT_SHA256="@OPENHUT_SHA256@"
+OPENHUT_BUILD="@OPENHUT_BUILD@"
 GVISOR=20261109.0
 NODE=22.23.5
 CLAUDE=2.1.311
-PREFIX=/opt/fastmonkey
+PREFIX=/opt/openhut
 say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
-die() { printf 'fastmonkey: %s\n' "$*" >&2; exit 1; }
+die() { printf 'openhut: %s\n' "$*" >&2; exit 1; }
 retry() { n=0; until timeout 600 "$@"; do n=$((n+1)); [ $n -ge 4 ] && return 1; echo "  retrying: $1 ($n)"; sleep 5; done; }
 fetch() { curl -fsSL --retry 4 --retry-all-errors --connect-timeout 15 -m 900 "$1" -o "$2"; }
 check() { printf '%s  %s\n' "$2" "$3" | "$1" -c - >/dev/null || die "checksum mismatch: $3"; }
 node_ok() { node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; }
 
-[ "$(uname -s)" = Linux ] || die "Fast Monkey runs only on Linux (Debian, Ubuntu or Alpine; x86_64 or arm64), not $(uname -s). On a Mac or Windows, run this inside a Linux VM or on a Linux server."
-[ "$(id -u)" = 0 ] || die "run as root:  curl -fsSL $FASTMONKEY_URL | sudo sh"
+[ "$(uname -s)" = Linux ] || die "OpenHut runs only on Linux (Debian, Ubuntu or Alpine; x86_64 or arm64), not $(uname -s). On a Mac or Windows, run this inside a Linux VM or on a Linux server."
+[ "$(id -u)" = 0 ] || die "run as root:  curl -fsSL $OPENHUT_URL | sudo sh"
 if command -v flock >/dev/null 2>&1; then
-  exec 9>/run/fastmonkey-install.lock
+  exec 9>/run/openhut-install.lock
   flock -n 9 || die "another install or update is already running"
 fi
 case "$(uname -m)" in
@@ -52,7 +52,7 @@ elif command -v apt-get >/dev/null 2>&1; then
 else
   die "needs apt (Debian, Ubuntu) or apk (Alpine)"
 fi
-node_ok || die "Fast Monkey needs Node 22.18 or newer (found $(node -v 2>/dev/null || echo none))"
+node_ok || die "OpenHut needs Node 22.18 or newer (found $(node -v 2>/dev/null || echo none))"
 
 say "gVisor $GVISOR"
 fetch "https://storage.googleapis.com/gvisor/releases/release/$GVISOR/$ARCH/gvisor.tar.zstd" "$TMP/gvisor.tar.zstd"
@@ -67,15 +67,15 @@ if docker info >/dev/null 2>&1; then
     i=$((i+1)); [ $i -gt 15 ] && die "Docker didn't load the runsc runtime; restart Docker and run this again"; sleep 1; done
 fi
 
-say "Fast Monkey"
-fetch "$FASTMONKEY_URL/fastmonkey.tgz" "$TMP/fastmonkey.tgz"
-check sha256sum "$FASTMONKEY_SHA256" "$TMP/fastmonkey.tgz"
-rm -rf "$PREFIX.new" && mkdir -p "$PREFIX.new/bin" && tar -xzf "$TMP/fastmonkey.tgz" -C "$PREFIX.new" --no-same-owner
+say "OpenHut"
+fetch "$OPENHUT_URL/openhut.tgz" "$TMP/openhut.tgz"
+check sha256sum "$OPENHUT_SHA256" "$TMP/openhut.tgz"
+rm -rf "$PREFIX.new" && mkdir -p "$PREFIX.new/bin" && tar -xzf "$TMP/openhut.tgz" -C "$PREFIX.new" --no-same-owner
 (cd "$PREFIX.new" && retry npm ci --omit=dev --no-audit --no-fund --loglevel=error >/dev/null)
 say "Claude Code $CLAUDE"
-CACHED="/var/cache/fastmonkey/claude-$CLAUDE-linux-$NARCH"
+CACHED="/var/cache/openhut/claude-$CLAUDE-linux-$NARCH"
 if ! printf '%s  %s\n' "$CLAUDE_SHA256" "$CACHED" | sha256sum -c - >/dev/null 2>&1; then
-  mkdir -p /var/cache/fastmonkey
+  mkdir -p /var/cache/openhut
   fetch "https://downloads.claude.ai/claude-code-releases/$CLAUDE/linux-$NARCH/claude" "$TMP/claude"
   check sha256sum "$CLAUDE_SHA256" "$TMP/claude"
   mv "$TMP/claude" "$CACHED"
@@ -83,23 +83,23 @@ fi
 cp "$CACHED" "$PREFIX.new/bin/claude" && chmod 0755 "$PREFIX.new/bin/claude"
 chown -R root:root "$PREFIX.new" && chmod -R go-w "$PREFIX.new"
 rm -rf "$PREFIX.old"; [ ! -d "$PREFIX" ] || mv "$PREFIX" "$PREFIX.old"; mv "$PREFIX.new" "$PREFIX"
-id fastmonkey >/dev/null 2>&1 || { addgroup -S fastmonkey >/dev/null 2>&1 && adduser -S -D -G fastmonkey fastmonkey >/dev/null 2>&1; } || useradd --system --user-group --no-create-home fastmonkey
+id openhut >/dev/null 2>&1 || { addgroup -S openhut >/dev/null 2>&1 && adduser -S -D -G openhut openhut >/dev/null 2>&1; } || useradd --system --user-group --no-create-home openhut
 
-mkdir -p /etc/fastmonkey && touch /etc/fastmonkey/env && chmod 0600 /etc/fastmonkey/env
+mkdir -p /etc/openhut && touch /etc/openhut/env && chmod 0600 /etc/openhut/env
 IMAGE_OVERRIDE="${AGENT_IMAGE:-}"
-SOURCE_URL="$FASTMONKEY_URL"
-. /etc/fastmonkey/env
+SOURCE_URL="$OPENHUT_URL"
+. /etc/openhut/env
 IMAGE_OVERRIDE="${IMAGE_OVERRIDE:-${AGENT_IMAGE:-}}"
 umask 077
 {
   echo "RESOLVER=${RESOLVER:-1.1.1.1}"
   [ -z "$IMAGE_OVERRIDE" ] || echo "AGENT_IMAGE=$IMAGE_OVERRIDE"
-  echo "FASTMONKEY_MODEL=${FASTMONKEY_MODEL:-claude}"
+  echo "OPENHUT_MODEL=${OPENHUT_MODEL:-claude}"
   echo "SETUP_CODE=${SETUP_CODE:-$(od -An -N9 -tx1 /dev/urandom | tr -d ' \n')}"
-  echo "FASTMONKEY_URL=$SOURCE_URL"
-} > /etc/fastmonkey/env.new
-mv /etc/fastmonkey/env.new /etc/fastmonkey/env
-. /etc/fastmonkey/env
+  echo "OPENHUT_URL=$SOURCE_URL"
+} > /etc/openhut/env.new
+mv /etc/openhut/env.new /etc/openhut/env
+. /etc/openhut/env
 umask 022
 
 start() {
@@ -107,10 +107,10 @@ start() {
   if [ -d /run/systemd/system ]; then
     cp "$PREFIX"/install/systemd/*.service /etc/systemd/system/
     systemctl daemon-reload
-    systemctl enable -q fastmonkey-firewall.service docker.service fastmonkey-agentd.service fastmonkey.service
-    systemctl restart fastmonkey-firewall.service docker.service fastmonkey-agentd.service fastmonkey.service
+    systemctl enable -q openhut-firewall.service docker.service openhut-agentd.service openhut.service
+    systemctl restart openhut-firewall.service docker.service openhut-agentd.service openhut.service
   else
-    nohup "$PREFIX/install/host-start.sh" >> /var/log/fastmonkey-boot.log 2>&1 9>&- &
+    nohup "$PREFIX/install/host-start.sh" >> /var/log/openhut-boot.log 2>&1 9>&- &
   fi
 }
 fresh() { h=$(curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$h" | grep -q '"ok":true' &&
@@ -122,19 +122,19 @@ start
 [ -d /run/systemd/system ] || echo "  No systemd here. After a reboot, run $PREFIX/install/host-start.sh (agents stay stopped until then)."
 TRIES=600
 [ -d "$PREFIX.old" ] && cmp -s "$PREFIX.old/install/agent-image" "$PREFIX/install/agent-image" && TRIES=100
-printf 'Waiting for Fast Monkey (the first start pulls the ~3 GB agent image)'
+printf 'Waiting for OpenHut (the first start pulls the ~3 GB agent image)'
 if ! up "$TRIES"; then
   printf '\n'
-  [ -d "$PREFIX.old" ] || die "not up after 30 min; see /var/log/fastmonkey"
+  [ -d "$PREFIX.old" ] || die "not up after 30 min; see /var/log/openhut"
   say "The new release didn't come up. Going back to the previous one"
   rm -rf "$PREFIX.failed"; mv "$PREFIX" "$PREFIX.failed"; mv "$PREFIX.old" "$PREFIX"
   start
   rm -rf "$PREFIX.failed"
-  up 600 || die "the new release didn't come up, and the previous one didn't come back either; see /var/log/fastmonkey"
+  up 600 || die "the new release didn't come up, and the previous one didn't come back either; see /var/log/openhut"
   printf '\n'
   die "the new release didn't come up, so the previous one is running again"
 fi
 rm -rf "$PREFIX.old"
 IP=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
-printf '\nFast Monkey is running. Create your account (the first one is the owner; after that people join by invite):\n  http://%s:8787/setup?code=%s\n' "${IP:-this-server}" "$SETUP_CODE"
+printf '\nOpenHut is running. Create your account (the first one is the owner; after that people join by invite):\n  http://%s:8787/setup?code=%s\n' "${IP:-this-server}" "$SETUP_CODE"
 echo "Keep port 8787 private (Tailscale or an SSH tunnel) or put TLS in front of it: sign-in travels over plain HTTP."

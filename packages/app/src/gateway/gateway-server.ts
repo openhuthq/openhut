@@ -36,7 +36,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 }
 
 function agentMcp(agent: GatewayAgent): McpServer {
-  const server = new McpServer({ name: 'fastmonkey', version: config.version })
+  const server = new McpServer({ name: 'openhut', version: config.version })
   const reason = z.string().min(1).max(500).describe('Why you need this, in a few words. Shown in the audit.')
   server.registerTool('list_tools', { description: 'List the tools you may call, one line each.', inputSchema: { app: z.string().max(40).optional() } }, async ({ app }) => {
     const tools = (await connectionService.tools({ agent })).filter((tool) => !app || tool.connection.kind === app)

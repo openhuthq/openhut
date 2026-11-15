@@ -1,5 +1,5 @@
-import type { Deleted } from '@fastmonkey/common/api.ts'
-import type { CreatePerson, CreateSession, Invite, InviteLink, Me, MemberRole, Person, Session, Setup } from '@fastmonkey/common/team/team.ts'
+import type { Deleted } from '@openhut/common/api.ts'
+import type { CreatePerson, CreateSession, Invite, InviteLink, Me, MemberRole, Person, Session, Setup } from '@openhut/common/team/team.ts'
 import type { Selectable } from 'kysely'
 import type { Database } from '../platform/db-schema.ts'
 import { db, isUniqueViolation } from '../platform/db.ts'
@@ -102,7 +102,7 @@ async function openSession(person: Person): Promise<{ session: Session; token: s
 
 async function createOwner({ setupCode, email, password, origin }: { setupCode: string; email: string; password: string; origin: string }): Promise<Person> {
   if (!config.setupCode || !sameSecret({ given: setupCode, expected: config.setupCode })) {
-    throw new HttpError(403, 'That setup code is wrong. Use the link the installer printed; the code is also in /etc/fastmonkey/env.', { param: 'setupCode' })
+    throw new HttpError(403, 'That setup code is wrong. Use the link the installer printed; the code is also in /etc/openhut/env.', { param: 'setupCode' })
   }
   const pass = await hashPassword(password)
   const owner = await db.transaction().execute(async (trx) => {

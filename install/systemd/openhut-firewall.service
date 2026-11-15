@@ -1,5 +1,5 @@
 [Unit]
-Description=Fast Monkey agent firewall (before Docker, so no agent ever runs unprotected)
+Description=OpenHut agent firewall (before Docker, so no agent ever runs unprotected)
 Before=docker.service
 DefaultDependencies=no
 After=network-pre.target
@@ -7,8 +7,8 @@ After=network-pre.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-EnvironmentFile=/etc/fastmonkey/env
-ExecStart=/opt/fastmonkey/install/agents-firewall.sh
+EnvironmentFile=/etc/openhut/env
+ExecStart=/opt/openhut/install/agents-firewall.sh
 
 [Install]
 WantedBy=multi-user.target

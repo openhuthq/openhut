@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { MODELS, SIZES, type Agent } from '@fastmonkey/common/agents/agent.ts'
+import { MODELS, SIZES, type Agent } from '@openhut/common/agents/agent.ts'
 import { Glyph } from '@/components/glyph'
 import { ICONS, SIZE_ICONS } from '@/components/icons'
 import { Locked } from '@/components/locked'

@@ -1,4 +1,4 @@
-import type { Agent } from '@fastmonkey/common/agents/agent.ts'
+import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Dialog } from '@/components/dialog'
 import { DialogFoot } from '@/components/dialog-foot'
 import { DialogHead } from '@/components/dialog-head'

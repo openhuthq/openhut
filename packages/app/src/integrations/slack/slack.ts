@@ -1,5 +1,5 @@
 import * as z from 'zod/mini'
-import type { Audience } from '@fastmonkey/common/channels/channel.ts'
+import type { Audience } from '@openhut/common/channels/channel.ts'
 import { HttpError, messageOf } from '../../platform/http-error.ts'
 
 const SLACK_API = 'https://slack.com/api'

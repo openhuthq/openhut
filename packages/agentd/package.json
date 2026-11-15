@@ -1,5 +1,5 @@
 {
-  "name": "@fastmonkey/agentd",
+  "name": "@openhut/agentd",
   "private": true,
   "type": "module",
   "scripts": {

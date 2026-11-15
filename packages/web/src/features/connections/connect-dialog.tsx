@@ -1,4 +1,4 @@
-import type { Me } from '@fastmonkey/common/team/team.ts'
+import type { Me } from '@openhut/common/team/team.ts'
 import { CopyButton } from '@/components/copy-button'
 import { ErrorNote } from '@/components/error-note'
 import { Field } from '@/components/field'
@@ -12,8 +12,8 @@ import { fieldError, formError } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
 import { navigate } from '@/lib/router'
 
-const ROLE_SQL = `create role fastmonkey_reader login password 'choose-a-password';
-grant pg_read_all_data to fastmonkey_reader;`
+const ROLE_SQL = `create role openhut_reader login password 'choose-a-password';
+grant pg_read_all_data to openhut_reader;`
 
 function GithubFlow({ item, info, close, returned }: FlowProps) {
   const authorize = useAuthorizeConnection()
@@ -24,7 +24,7 @@ function GithubFlow({ item, info, close, returned }: FlowProps) {
     <SetupSteps>
       <SetupStep n={1} title="Name the bot" state="now">
         <Field label="Bot name" error={fieldError(authorize.error, 'name')}>{(control) =>
-          <input {...control} name="name" placeholder="acme-monkey" required maxLength={34} autoComplete="off" autoFocus />}</Field>
+          <input {...control} name="name" placeholder="acme-hut" required maxLength={34} autoComplete="off" autoFocus />}</Field>
         <Field label="Organization" error={fieldError(authorize.error, 'organization')}>{(control) =>
           <input {...control} name="organization" placeholder="Empty for your own account" pattern="[A-Za-z0-9\-]{1,39}" title="The organization as it appears in its GitHub URL." autoComplete="off" />}</Field>
         <p className="hint">Commits and pull requests show as name[bot]. The name must be free on GitHub.</p>
@@ -72,7 +72,7 @@ function PostgresFlow({ item, info, close, returned }: FlowProps) {
       </SetupStep>
       <SetupStep n={2} title="Paste its connection string">
         <Field label="Connection string" error={fieldError(createConnection.error, 'dsn')}>{(control) =>
-          <input {...control} name="dsn" className="mono" placeholder="postgres://fastmonkey_reader:…@host:5432/db" required autoComplete="off" />}</Field>
+          <input {...control} name="dsn" className="mono" placeholder="postgres://openhut_reader:…@host:5432/db" required autoComplete="off" />}</Field>
       </SetupStep>
     </SetupSteps>
     <SetupFoot info={info} cancel={close} error={formError(createConnection.error, ['dsn']) ?? returned}>

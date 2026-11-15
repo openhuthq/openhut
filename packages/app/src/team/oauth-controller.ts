@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { CreateOAuthCode, type OAuthCode } from '@fastmonkey/common/team/oauth.ts'
+import { CreateOAuthCode, type OAuthCode } from '@openhut/common/team/oauth.ts'
 import { listOf } from '../platform/responses.ts'
 import { requireSignIn, who } from './identity.ts'
 import { oauthService } from './oauth-service.ts'

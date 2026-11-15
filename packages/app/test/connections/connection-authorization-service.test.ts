@@ -14,7 +14,7 @@ const actor = { id: 'usr_aaaaaaaa', email: 'owner@example.com', role: 'owner' as
 await migrate()
 await db.insertInto('person').values({ id: actor.id, email: actor.email, pass: 'x', role: 'owner' }).execute()
 
-test('a sign-in registers Fast Monkey, finishes once, and its token reaches the tools', { skip: !lan && 'needs a non-loopback address' }, async () => {
+test('a sign-in registers OpenHut, finishes once, and its token reaches the tools', { skip: !lan && 'needs a non-loopback address' }, async () => {
   const server = await oauthMcpServer(lan ?? '')
   try {
     const url = `${server.base}/mcp`

@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { ListSkills, UpdateSkill } from '@fastmonkey/common/agents/skill.ts'
+import { ListSkills, UpdateSkill } from '@openhut/common/agents/skill.ts'
 import { listOf } from '../platform/responses.ts'
 import { who } from '../team/identity.ts'
 import { skillService } from './skill-service.ts'

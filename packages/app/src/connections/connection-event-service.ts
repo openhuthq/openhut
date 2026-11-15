@@ -1,5 +1,5 @@
 import type { Selectable } from 'kysely'
-import type { ConnectionEvent, ListConnectionEvents } from '@fastmonkey/common/connections/connection.ts'
+import type { ConnectionEvent, ListConnectionEvents } from '@openhut/common/connections/connection.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { HttpError } from '../platform/http-error.ts'

@@ -3,8 +3,8 @@ import { PGlite } from '@electric-sql/pglite'
 import { Kysely, PGliteDialect, sql, type Selectable } from 'kysely'
 import { config } from './config.ts'
 import type { Database } from './db-schema.ts'
-import { ChannelKind } from '@fastmonkey/common/channels/channel.ts'
-import { ConnectionKind } from '@fastmonkey/common/connections/connection.ts'
+import { ChannelKind } from '@openhut/common/channels/channel.ts'
+import { ConnectionKind } from '@openhut/common/connections/connection.ts'
 import { HttpError } from './http-error.ts'
 
 const ID = /^[a-z]+_[a-z0-9]{8}$/

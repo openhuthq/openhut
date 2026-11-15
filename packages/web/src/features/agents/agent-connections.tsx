@@ -1,6 +1,6 @@
 import { Menu } from '@base-ui/react/menu'
-import type { Agent, Grant } from '@fastmonkey/common/agents/agent.ts'
-import type { Connection } from '@fastmonkey/common/connections/connection.ts'
+import type { Agent, Grant } from '@openhut/common/agents/agent.ts'
+import type { Connection } from '@openhut/common/connections/connection.ts'
 import { ErrorNote } from '@/components/error-note'
 import { ICONS } from '@/components/icons'
 import { Locked } from '@/components/locked'

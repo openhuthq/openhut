@@ -1,4 +1,4 @@
-# How the Fast Monkey server works
+# How the OpenHut server works
 
 The code carries no comments (Skyfleet's coding style), so the reasons live here.
 
@@ -16,7 +16,7 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
   from the one it replaced.
 
 ## Data and secrets
-- PGlite (Postgres in WASM) in `FASTMONKEY_DATA`, through Kysely's own PGlite dialect, which runs one query or
+- PGlite (Postgres in WASM) in `OPENHUT_DATA`, through Kysely's own PGlite dialect, which runs one query or
   transaction at a time (PGlite is single-user). `install_setting` is created at import time because settings and the
   auth secret load then.
 - `auth_secret` is created once; it keys every seal (AES-256-GCM) and every agent token.
@@ -59,12 +59,12 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
   address of every socket it opens, so redirects and IP-literal URLs are covered too.
 - Each kind is a `Connector` (`integrations/connector.ts`): `tools` and `call`. Tool lists are cached per connection
   for 5 minutes. Calls to signed-in connections run one at a time per connection, so a rotated refresh token is never
-  used twice. Connection decisions: `decisions/fastmonkey-connections.md`.
+  used twice. Connection decisions: `decisions/openhut-connections.md`.
 - A read-only transaction doesn't stop `COPY … TO PROGRAM` or server-file access, so roles that are superusers,
   members of one, or hold `pg_execute_server_program` / `pg_*_server_files` are refused. Each query runs through a
   cursor in the extended protocol: one SELECT/VALUES statement, at most 1001 rows in memory, 8 MB on the wire, and a
   reply over 64 KB is an error rather than a silently cut one.
-- `FASTMONKEY_MODEL=test` serves a deterministic OpenAI-compatible model on the gateway port: `sql: <query>` makes it call
+- `OPENHUT_MODEL=test` serves a deterministic OpenAI-compatible model on the gateway port: `sql: <query>` makes it call
   `call_tool` with `postgres_query`, a tool result is echoed back, anything else is echoed. Runs are free and repeatable.
 
 ## Channels
@@ -83,19 +83,19 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 
 ## Chat (threads)
 - One chat per person per agent: `POST /api/threads {agentId}` returns that person's thread, creating it the first time. `POST /api/threads/:id/chat` takes only the new user message (or a retry, which drops our stored last answer and resends the message).
-- Hermes keeps the history: each turn sends `X-Hermes-Session-Id: fastmonkey-<thread id>` and only the new message, so Hermes loads the session from its own `state.db` and its compression sticks (sending the whole thread made it summarize again every turn, and sessions derived from the first message collided). Our `thread.messages` is only what the dashboard shows. Research: https://claude.ai/artifact/SVAPXrNB9c78UUspB3M7KG
+- Hermes keeps the history: each turn sends `X-Hermes-Session-Id: openhut-<thread id>` and only the new message, so Hermes loads the session from its own `state.db` and its compression sticks (sending the whole thread made it summarize again every turn, and sessions derived from the first message collided). Our `thread.messages` is only what the dashboard shows. Research: https://claude.ai/artifact/SVAPXrNB9c78UUspB3M7KG
 - The reply is relayed as the AI SDK UI message stream: text parts, `data-tool` for each `hermes.tool.progress` event, then `data-calls` with the `connection_event` rows the agent wrote during the turn (allowed, denied, failed). The answer is saved in `onEnd`, also when the person stops it.
 - `health` comes from `GET /v1/models` on the agent (3 s timeout, cached 5 s, re-probed by reconcile every 30 s). Starting until it has failed for 3 minutes in a row, then not answering. `status` stays the container state, which the e2e run checks.
 - Admin › Containers › View opens a dialog of cards with `docker ps -a` for agent containers (agentd's read-only `containers` command) next to each agent's wanted state; rows that disagree are tinted. Agents with no container show as `none`, and reconcile recreates the container for one that should run. In Claude mode with no seat, health is not answering: Hermes is up but its model can't sign in.
-- An agent's "Computer" (owner, 2026-11-13) is `agent.size`: `standard` 1 GB / 1 CPU (what every agent had before), `large` 2 GB / 2 CPUs, `xlarge` 4 GB / 2 CPUs. agentd owns the numbers (`SIZES`) and accepts only the name, so the app can never pass raw limits; `SIZES` in `common/agents/agent.ts` repeats them as display text and must be kept in step. The container carries a `fastmonkey.size` label and `apply` recreates it when the label differs (a missing label counts as `standard`), the same path as a `SPEC` bump. Nothing checks the sizes against the host's RAM. Anyone who can edit the agent can resize it.
-- `FASTMONKEY_AGENT_API` points every agent at one URL; dev (`scripts/fake-agentd.ts` serves a fake Hermes on :18642) and the unit tests use it. `PORT` moves the app off 8787.
+- An agent's "Computer" (owner, 2026-11-13) is `agent.size`: `standard` 1 GB / 1 CPU (what every agent had before), `large` 2 GB / 2 CPUs, `xlarge` 4 GB / 2 CPUs. agentd owns the numbers (`SIZES`) and accepts only the name, so the app can never pass raw limits; `SIZES` in `common/agents/agent.ts` repeats them as display text and must be kept in step. The container carries a `openhut.size` label and `apply` recreates it when the label differs (a missing label counts as `standard`), the same path as a `SPEC` bump. Nothing checks the sizes against the host's RAM. Anyone who can edit the agent can resize it.
+- `OPENHUT_AGENT_API` points every agent at one URL; dev (`scripts/fake-agentd.ts` serves a fake Hermes on :18642) and the unit tests use it. `PORT` moves the app off 8787.
 
 ## Claude seat from the browser
 - Admin › Claude seat › Set up opens a blank tab on the click (so the popup isn't blocked), then runs the bundled Claude Code's `setup-token` on the server (`admin/seat-sign-in.ts`), the way Skyfleet runs `claude auth login` (`skyfleet brain/decisions/sign-in-to-claude-from-the-web.md`). The dashboard opens its claude.ai link; the pasted code is typed into it and the 1-year token it prints becomes the seat, as if pasted.
 - `setup-token` prints nothing without a terminal, so it runs under `script -qfec` (util-linux) with `stty cols 4000` so the token stays on one line. The link comes from the OSC 8 hyperlink, not the wrapped text. The code and Enter go in two writes 0.5 s apart: in one write, a full-length code plus `\r` is taken as a paste and the Enter never submits (a 48-character fake code didn't show it; the real ~87 did). A code is matched to its sign-in by the `#state` it ends with. An open sign-in lives in memory for 10 minutes in a temp `CLAUDE_CONFIG_DIR`.
 
 ## Conventions the code relies on
-- Wording (owner, 2026-11-13): status text, notes and error messages don't repeat "Fast Monkey"; they say "the app", "this server" or "it". The name stays on the logo, page titles, sign-in and invite, and in text an outside app or assistant reads (the setup prompt, MCP and OAuth messages, the Slack manifest).
+- Wording (owner, 2026-11-13): status text, notes and error messages don't repeat "OpenHut"; they say "the app", "this server" or "it". The name stays on the logo, page titles, sign-in and invite, and in text an outside app or assistant reads (the setup prompt, MCP and OAuth messages, the Slack manifest).
 - Every agentd reply is validated with a Zod schema per command (`platform/agentd.ts`); a reply that doesn't match is a
   502 that says agentd and the app may be different releases. Keep the fake agentd's replies in step. agentd's own
   follow-up work (the restart after WhatsApp pairing) goes through the same per-agent queue as a closure, not a

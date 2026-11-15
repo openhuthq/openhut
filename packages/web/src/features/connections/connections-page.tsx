@@ -1,5 +1,5 @@
-import type { Connection, Tailscale } from '@fastmonkey/common/connections/connection.ts'
-import type { Me } from '@fastmonkey/common/team/team.ts'
+import type { Connection, Tailscale } from '@openhut/common/connections/connection.ts'
+import type { Me } from '@openhut/common/team/team.ts'
 import { ErrorNote } from '@/components/error-note'
 import { ICONS } from '@/components/icons'
 import { Loaded } from '@/components/loaded'

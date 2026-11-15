@@ -1,4 +1,4 @@
-import type { Me } from '@fastmonkey/common/team/team.ts'
+import type { Me } from '@openhut/common/team/team.ts'
 import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
 import { ICONS } from '@/components/icons'

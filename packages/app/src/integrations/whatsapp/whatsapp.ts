@@ -1,4 +1,4 @@
-import type { Audience } from '@fastmonkey/common/channels/channel.ts'
+import type { Audience } from '@openhut/common/channels/channel.ts'
 
 export const whatsapp = {
   env(audience: Audience): string[] {

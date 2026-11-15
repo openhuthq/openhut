@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { CreateAgent, CreateGrant, ListGrants, UpdateAgent } from '@fastmonkey/common/agents/agent.ts'
+import { CreateAgent, CreateGrant, ListGrants, UpdateAgent } from '@openhut/common/agents/agent.ts'
 import { listOf } from '../platform/responses.ts'
 import { requireSignIn, who } from '../team/identity.ts'
 import { agentService } from './agent-service.ts'

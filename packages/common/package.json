@@ -1,5 +1,5 @@
 {
-  "name": "@fastmonkey/common",
+  "name": "@openhut/common",
   "private": true,
   "type": "module",
   "sideEffects": false,

@@ -2,7 +2,7 @@
 set -eu
 RESOLVER="${RESOLVER:-1.1.1.1}"
 AGENTS=10.200.0.0/16
-APPLIED=/run/fastmonkey/firewall.rules
+APPLIED=/run/openhut/firewall.rules
 current() { iptables -S AGENT && iptables -S AGENT-IN && iptables -S DOCKER-USER | sed -n 2p && iptables -S INPUT | sed -n 2p && ip rule show | grep "to $AGENTS lookup main"; }
 
 if [ "${1:-}" = --check ]; then

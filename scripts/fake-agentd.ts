@@ -12,7 +12,7 @@ const states: Record<string, string> = {}
 const rendered: Record<string, string> = {}
 const pairReads: Record<string, number> = {}
 const OFF_TAILNET = { state: 'NeedsLogin', tailnet: '', name: '', address: '' }
-const ON_TAILNET = { state: 'Running', tailnet: 'example.ts.net', name: 'fastmonkey.example.ts.net', address: '100.101.102.103' }
+const ON_TAILNET = { state: 'Running', tailnet: 'example.ts.net', name: 'openhut.example.ts.net', address: '100.101.102.103' }
 let tailnet = OFF_TAILNET
 const skills: Record<string, string> = {
   'late-invoices': '---\nname: late-invoices\ndescription: Chase invoices more than 30 days late.\n---\n\n# Late invoices\n\n1. Query invoices past due.\n2. Draft a reminder per customer.\n',

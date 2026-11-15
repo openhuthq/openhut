@@ -8,10 +8,10 @@ export const Route = createRootRoute({
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'Fast Monkey docs' },
-      { name: 'description', content: 'Fast Monkey docs: install it on your server, build agents for your team, and keep them safe.' },
+      { title: 'OpenHut docs' },
+      { name: 'description', content: 'OpenHut docs: install it on your server, build agents for your team, and keep them safe.' },
     ],
-    links: [{ rel: 'icon', href: '/docs/monkey.svg' }],
+    links: [{ rel: 'icon', href: '/docs/hut.svg' }],
   }),
   component: Root,
 })

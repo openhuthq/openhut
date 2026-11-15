@@ -1,4 +1,4 @@
-import type { Agent } from '@fastmonkey/common/agents/agent.ts'
+import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Avatar } from '@/components/avatar'
 import { agentState } from '@/components/status-badge'
 import type { Route } from '@/app/routes'

@@ -67,7 +67,7 @@ async function withClient<T>({ url, headers, oauth, redirectUrl, save }: { url: 
   const flow: SignIn = { ...oauth }
   const before = JSON.stringify(flow.tokens)
   const provider = oauth ? providerFor({ flow, redirectUrl, state: '' }) : undefined
-  const client = new Client({ name: 'fastmonkey', version: '1.0.0' })
+  const client = new Client({ name: 'openhut', version: '1.0.0' })
   try {
     await client.connect(new StreamableHTTPClientTransport(new URL(url), { authProvider: provider, fetch: guardedFetch, requestInit: { headers: headers ?? {} } }))
     return await fn(client)
@@ -109,7 +109,7 @@ function signIn(stored: { clientInformation?: unknown; tokens?: unknown }): Sign
 function providerFor({ flow, redirectUrl, state }: { flow: SignIn; redirectUrl: string; state: string }): OAuthClientProvider & { authorizationUrl?: URL } {
   const provider: OAuthClientProvider & { authorizationUrl?: URL } = {
     redirectUrl,
-    clientMetadata: { client_name: 'Fast Monkey', redirect_uris: [redirectUrl], grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], token_endpoint_auth_method: 'none' },
+    clientMetadata: { client_name: 'OpenHut', redirect_uris: [redirectUrl], grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], token_endpoint_auth_method: 'none' },
     state: () => state,
     clientInformation: () => flow.clientInformation,
     saveClientInformation: (info) => { flow.clientInformation = OAuthClientInformationFullSchema.parse(info) },

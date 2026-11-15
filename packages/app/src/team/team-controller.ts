@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { CreateInvite, CreatePerson, CreateSession } from '@fastmonkey/common/team/team.ts'
+import { CreateInvite, CreatePerson, CreateSession } from '@openhut/common/team/team.ts'
 import { deleted, listOf } from '../platform/responses.ts'
 import { clearSessionCookie, requireSignIn, sessionToken, setSessionCookie, who } from './identity.ts'
 import { teamService } from './team-service.ts'

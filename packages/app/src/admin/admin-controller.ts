@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { CompleteSeatSignIn, UpdateAdmin } from '@fastmonkey/common/admin/admin.ts'
+import { CompleteSeatSignIn, UpdateAdmin } from '@openhut/common/admin/admin.ts'
 import { listOf } from '../platform/responses.ts'
 import { requireSignIn, who } from '../team/identity.ts'
 import { adminService } from './admin-service.ts'

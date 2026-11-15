@@ -1,4 +1,4 @@
-import type { Skill, UpdateSkill } from '@fastmonkey/common/agents/skill.ts'
+import type { Skill, UpdateSkill } from '@openhut/common/agents/skill.ts'
 import { agentd } from '../platform/agentd.ts'
 import { record } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'

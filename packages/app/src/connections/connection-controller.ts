@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { CreateConnection, CreateConnectionAuthorization, ListConnectionEvents, ListConnectionTools, UpdateConnection } from '@fastmonkey/common/connections/connection.ts'
+import { CreateConnection, CreateConnectionAuthorization, ListConnectionEvents, ListConnectionTools, UpdateConnection } from '@openhut/common/connections/connection.ts'
 import { listOf } from '../platform/responses.ts'
 import { requireSignIn, who } from '../team/identity.ts'
 import { connectionAuthorizationService } from './connection-authorization-service.ts'

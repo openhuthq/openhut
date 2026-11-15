@@ -9,16 +9,16 @@ import { DatabaseSync } from 'node:sqlite'
 import { isSkillPath, listSkills, MAX_SKILL_BYTES, readSkill, writeSkill, type SkillHead } from './skills.ts'
 
 const run = promisify(execFile)
-const RELEASE_URL = process.env.FASTMONKEY_URL ?? 'https://fastmonkey.dev'
-const INSTALL_LOCK = '/run/fastmonkey-install.lock'
-const UPDATE_SCRIPT = 'curl -fsSL "$FASTMONKEY_URL" | sh'
+const RELEASE_URL = process.env.OPENHUT_URL ?? 'https://openhut.dev'
+const INSTALL_LOCK = '/run/openhut-install.lock'
+const UPDATE_SCRIPT = 'curl -fsSL "$OPENHUT_URL" | sh'
 const SOCK = process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock'
 const IMAGE = process.env.AGENT_IMAGE || readFileSync(new URL('../../../install/agent-image', import.meta.url), 'utf8').trim()
 const APP_GID = Number(process.env.APP_GID ?? 0)
 const FIREWALL = fileURLToPath(new URL('../../../install/agents-firewall.sh', import.meta.url))
 const PLUGINS = fileURLToPath(new URL('../../../vendor/hermes-plugins', import.meta.url))
 const CLAUDE_BIN = fileURLToPath(new URL('../../../bin/claude', import.meta.url))
-const BRIDGE = '/var/lib/fastmonkey/whatsapp-bridge'
+const BRIDGE = '/var/lib/openhut/whatsapp-bridge'
 const AGENT_UID = 10000
 const SPEC = '2'
 const SIZES = { standard: { memory: '1g', cpus: '1' }, large: { memory: '2g', cpus: '2' }, xlarge: { memory: '4g', cpus: '2' } } as const
@@ -230,12 +230,12 @@ async function create({ id, net, files, size }: { id: string; net: number; files
   makeHome(id)
   writeConf(id, files)
   await docker('network', 'rm', `ag-${id}`).catch(() => undefined)
-  await docker('network', 'create', '--subnet', `10.200.${net}.0/24`, '--gateway', `10.200.${net}.1`, '--label', `fastmonkey.agent=${id}`, `ag-${id}`)
+  await docker('network', 'create', '--subnet', `10.200.${net}.0/24`, '--gateway', `10.200.${net}.1`, '--label', `openhut.agent=${id}`, `ag-${id}`)
   const digest = await docker('image', 'inspect', '--format', '{{index .RepoDigests 0}}', IMAGE).catch(() => IMAGE)
   await docker(
     'create',
     ...['--name', `ag-${id}`, '--hostname', id, '--restart', 'no'],
-    ...['--label', `fastmonkey.agent=${id}`, '--label', `agent.digest=${digest}`, '--label', `fastmonkey.spec=${SPEC}`, '--label', `fastmonkey.size=${size}`],
+    ...['--label', `openhut.agent=${id}`, '--label', `agent.digest=${digest}`, '--label', `openhut.spec=${SPEC}`, '--label', `openhut.size=${size}`],
     ...['--runtime', 'runsc', '--user', `${AGENT_UID}:${AGENT_UID}`, '--init', '--entrypoint', '/opt/hermes/bin/hermes'],
     ...['--read-only', '--tmpfs', '/tmp:rw,nosuid,size=256m', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'],
     ...['--pids-limit', '512', '--memory', SIZES[size].memory, '--cpus', SIZES[size].cpus, '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'],
@@ -347,7 +347,7 @@ async function watchFirewall() {
     console.log(`watchdog: re-applied the firewall at ${new Date().toISOString()}`)
     return
   }
-  const ids = (await docker('ps', '-q', '--filter', 'label=fastmonkey.agent').catch(() => '')).split('\n').filter(Boolean)
+  const ids = (await docker('ps', '-q', '--filter', 'label=openhut.agent').catch(() => '')).split('\n').filter(Boolean)
   if (ids.length) await docker('stop', '-t', '5', ...ids).catch((e) => console.error(`watchdog: stop failed: ${errorText(e)}`))
   console.error(`watchdog: firewall missing; stopped ${ids.length} agents at ${new Date().toISOString()}`)
 }
@@ -378,19 +378,19 @@ async function mustHaveFirewall() {
 }
 
 async function containerList(): Promise<Container[]> {
-  const out = await docker('ps', '-a', '--no-trunc', '--filter', 'label=fastmonkey.agent', '--format', '{{json .}}')
+  const out = await docker('ps', '-a', '--no-trunc', '--filter', 'label=openhut.agent', '--format', '{{json .}}')
   return out.split('\n').filter(Boolean).map((line) => {
     const row: unknown = JSON.parse(line)
     const field = (name: string) => isRecord(row) && typeof row[name] === 'string' ? row[name] : ''
     return {
-      name: field('Names'), agentId: /(?:^|,)fastmonkey\.agent=([^,]+)/.exec(field('Labels'))?.[1] ?? '', state: field('State'), status: field('Status'),
+      name: field('Names'), agentId: /(?:^|,)openhut\.agent=([^,]+)/.exec(field('Labels'))?.[1] ?? '', state: field('State'), status: field('Status'),
       image: field('Image'), createdAt: field('CreatedAt'), networks: field('Networks'),
     }
   })
 }
 
 async function containerStates() {
-  const out = await docker('ps', '-a', '--filter', 'label=fastmonkey.agent', '--format', '{{.Label "fastmonkey.agent"}} {{.State}}')
+  const out = await docker('ps', '-a', '--filter', 'label=openhut.agent', '--format', '{{.Label "openhut.agent"}} {{.State}}')
   return Object.fromEntries(
     out
       .split('\n')
@@ -407,7 +407,7 @@ async function isRunning(id: string) {
 }
 
 async function outdated(id: string, size: AgentSize) {
-  const made = await docker('inspect', '-f', 'spec={{index .Config.Labels "fastmonkey.spec"}} size={{index .Config.Labels "fastmonkey.size"}}', `ag-${id}`).catch(ignoreMissing)
+  const made = await docker('inspect', '-f', 'spec={{index .Config.Labels "openhut.spec"}} size={{index .Config.Labels "openhut.size"}}', `ag-${id}`).catch(ignoreMissing)
   return made !== '' && made.replace(/size=$/, 'size=standard') !== `spec=${SPEC} size=${size}`
 }
 
@@ -509,7 +509,7 @@ async function tailscaleUp(authKey: string): Promise<Tailnet & { joined: boolean
   const keyFile = `${dirname(SOCK)}/tailscale.key`
   writeFileSync(keyFile, authKey, { mode: 0o600 })
   try {
-    await run('tailscale', ['up', `--auth-key=file:${keyFile}`, '--hostname=fastmonkey'], { ...EXEC, timeout: 120_000 })
+    await run('tailscale', ['up', `--auth-key=file:${keyFile}`, '--hostname=openhut'], { ...EXEC, timeout: 120_000 })
   } finally {
     rmSync(keyFile, { force: true })
   }
@@ -546,9 +546,9 @@ async function installing(): Promise<boolean> {
 async function update(): Promise<AgentdReplies['update']> {
   if (await installing()) throw new Error('an install or update is already running')
   if (existsSync('/run/systemd/system')) {
-    await run('systemd-run', ['--unit=fastmonkey-update', '--collect', '--quiet', `--setenv=FASTMONKEY_URL=${RELEASE_URL}`, '/bin/sh', '-c', UPDATE_SCRIPT])
+    await run('systemd-run', ['--unit=openhut-update', '--collect', '--quiet', `--setenv=OPENHUT_URL=${RELEASE_URL}`, '/bin/sh', '-c', UPDATE_SCRIPT])
   } else {
-    spawn('/bin/sh', ['-c', `(${UPDATE_SCRIPT}) >> /var/log/fastmonkey-boot.log 2>&1`], { detached: true, stdio: 'ignore', env: { ...process.env, FASTMONKEY_URL: RELEASE_URL } }).unref()
+    spawn('/bin/sh', ['-c', `(${UPDATE_SCRIPT}) >> /var/log/openhut-boot.log 2>&1`], { detached: true, stdio: 'ignore', env: { ...process.env, OPENHUT_URL: RELEASE_URL } }).unref()
   }
   return { updating: true }
 }

@@ -8,7 +8,7 @@ const FIELDS = ['email', 'password']
 
 export function SignInPage() {
   const createSession = useCreateSession()
-  return <AuthForm title="Sign in" heading="Welcome back" lead="Sign in to Fast Monkey." error={createSession.error} fields={FIELDS} busy={createSession.isPending}
+  return <AuthForm title="Sign in" heading="Welcome back" lead="Sign in to OpenHut." error={createSession.error} fields={FIELDS} busy={createSession.isPending}
     button="Sign in" foot="No account? Ask an owner or admin for an invite link."
     onSubmit={(event) => {
       const field = formValues(event)
