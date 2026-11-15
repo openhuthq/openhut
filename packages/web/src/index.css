@@ -64,7 +64,7 @@ button:disabled{cursor:not-allowed;opacity:.5}
 .menuitem .t{display:flex;flex-direction:column;min-width:0}
 .menuitem .t .mute{font-size:12px;white-space:normal}
 .initial{width:24px;height:24px;border-radius:9999px;display:grid;place-items:center;font-size:12px;font-weight:500;color:#fff;flex:none}
-.panel{margin:8px 8px 8px 0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 60' preserveAspectRatio='none'%3E%3Cpath d='M0 34C200 22 400 40 600 30S1000 20 1200 32V60H0z' fill='%23f2d9a8' fill-opacity='.22'/%3E%3Cpath d='M0 26C200 14 400 32 600 22S1000 12 1200 24' stroke='%233cc5c0' stroke-opacity='.28' stroke-width='2' fill='none'/%3E%3C/svg%3E") 0 100%/100% 48px no-repeat,var(--canvas);border:1px solid var(--hair);border-radius:12px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.panel{margin:8px 8px 8px 0;background:var(--canvas);border:1px solid var(--hair);border-radius:12px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .app.collapsed .panel{margin:8px}
 .ph{height:48px;flex:none;border-bottom:1px solid var(--hair);display:flex;align-items:center;gap:10px;padding:0 12px 0 16px}
 .vsep{width:1px;height:16px;background:var(--hair);flex:none}

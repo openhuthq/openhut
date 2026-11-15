@@ -16,8 +16,8 @@
 
 - The brand is a cozy beach, as sprinkles only (owner, 2026-11-15, after a full beach brand page and a beach
   sign-in scene were "a little too much"): the home and brand pages get a small sun, a wave under the headline,
-  and on home a moon and a sand strip under the crew. The dashboard gets a faint sand-and-wave line at the bottom
-  of the main panel. The sign-in scene stays the original night scene.
+  and on home a moon and a sand strip under the crew. The dashboard has no beach (owner removed the panel's sand line,
+  2026-11-15). The sign-in scene stays the original night scene.
 - The name is always "OpenHut", never all caps. The wordmark is Fredoka 600 in the site, docs and dashboard, because
   Bebas Neue has only capitals. Keep the name out of Bebas headings and uppercase eyebrows.
 - The hut's roof has two scalloped thatch rows (every `hut.svg` copy and the site's creature generator).
