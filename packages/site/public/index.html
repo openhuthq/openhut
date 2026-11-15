@@ -1086,63 +1086,53 @@ footer .toplinks a{color:var(--night-ink)}
   .hx-cap{min-height:3.2em}
 }
 
-/* ===== sandboxes ===== */
-.sand{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:26px 30px;padding:8px 4px 4px}
-.eye .sand .bx{position:relative;height:152px;border-radius:14px;border:2px solid var(--ink);background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:14px;transition:border-color .3s,background .3s}
-.eye .sand .bx .cr{width:60px;height:60px}
-.eye .sand .bx b{font-weight:600}
-.sb-tab{position:absolute;top:-10px;left:14px;background:var(--ink);color:#fff;font-family:var(--mono);font-size:10.5px;line-height:18px;padding:0 8px;border-radius:99px;transition:background .3s}
-.sb-own{font-family:var(--copy);font-size:11px;color:var(--muted)}
-.eye .sand .bx.fine{border-color:var(--ok);background:#f1fbf5}
-.eye .sand .bx.fine .sb-tab{background:var(--ok)}
-.eye .sand .bx.bad{border-color:var(--bad);background:#fff1f1}
-.eye .sand .bx.bad .sb-tab{background:var(--bad)}
-.eye .sand .bx.bad::after{content:"tricked";left:auto;right:12px;top:-10px;bottom:auto;transform:none;line-height:18px;padding:0 8px;font-size:10.5px}
-.pr{position:absolute;top:calc(50% - 10px);width:20px;height:20px;border-radius:50%;background:var(--bad);opacity:0;scale:.3}
-.pr.l{right:calc(100% + 5px)}
-.pr.r{left:calc(100% + 5px)}
-.pr::after{content:"";position:absolute;inset:0;background:linear-gradient(45deg,transparent 44%,#fff 44% 56%,transparent 56%),linear-gradient(-45deg,transparent 44%,#fff 44% 56%,transparent 56%);background-size:10px 10px;background-position:center;background-repeat:no-repeat}
-.bx.bad .pr{animation:blocked .45s cubic-bezier(.3,1.6,.5,1) .25s forwards}
-.bx.bad .pr.r{animation-delay:.5s}
-@keyframes blocked{to{opacity:1;scale:1}}
-#sandbox .e4 .cap{margin-top:22px}
-#sandbox .e2 .sv{height:auto;margin:18px 0 auto}
-#sandbox .e2 .cap{margin-top:18px}
+/* ===== shape it as you go: ask, correct, it learns ===== */
+.teach{grid-template-columns:repeat(3,minmax(0,1fr))}
+.t-as{border:2px solid var(--ink);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;height:372px;min-width:0;background:#faf9f5}
+.t-as .as-bar{height:34px;flex:none}
+.t-as .as{padding:16px 14px;gap:8px;font-size:13.5px;justify-content:flex-start}
+.t-as .as .u{max-width:92%}
+.t-as .tool{padding:7px 10px;font-size:12px}
+.t-as .as .res{padding:9px 12px}
+.t-as .as .res .cr{width:36px;height:36px}
+.t-as .as .res small,.t-as .as-in{display:none}
+#learning .clients{padding:0;margin-top:16px}
+.teach .t-file .lp-h{white-space:nowrap;overflow:hidden}
+.teach .t-file .lp-h .pre,.teach .t-ok .by{display:none}
 
-/* ===== bring your own Claude: the router ===== */
-.byo3{display:grid;grid-template-columns:230px minmax(0,1fr) 330px;align-items:center;padding:32px 36px;height:372px}
-.byo-svg{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
-.byo-svg .ln{fill:none;stroke:var(--line-2);stroke-width:2}
-.byo-svg .fl{fill:none;stroke:#d97757;stroke-width:3;stroke-linecap:round;stroke-dasharray:6 10;opacity:0;transition:opacity .3s;animation:dash 1s linear infinite}
-.byo-svg .fl.on{opacity:1}
-@keyframes dash{to{stroke-dashoffset:-16}}
-.byo3 .byo-team{display:flex;flex-direction:column;gap:8px;border:0;background:none;padding:0;border-radius:0}
-.byo3 .byo-a{flex-direction:row;justify-content:flex-start;gap:10px;height:44px;padding:0 14px 0 8px;border-radius:99px;background:var(--paper);box-shadow:inset 0 0 0 1.5px var(--line-2);font-size:14px;font-weight:500;opacity:.45;filter:grayscale(1);transition:opacity .4s,filter .4s,box-shadow .2s;text-align:left}
-.byo3 .byo-a .cr{width:34px;height:34px;max-width:none}
-.byo3.on .byo-a{opacity:1;filter:none}
-.byo3 .byo-a[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--ink)}
-.byo3:not(.on) .byo-a .c-eyes{scale:1 .12;animation:none}
-.byo3:not(.on) .byo-a .c-body{animation:none}
-.byo-hub{justify-self:center;display:flex;align-items:center;gap:12px;background:var(--ink);color:#fff;border-radius:18px;padding:16px 20px 16px 16px;width:290px}
-.byo-hub b{font-family:var(--display);font-weight:400;font-size:24px;text-transform:uppercase;line-height:1;display:block}
-.byo-hub small{font-family:var(--copy);font-size:11.5px;color:#b9b9c0;white-space:nowrap;display:block;margin-top:5px}
-.byo3.on .byo-top small{color:#0b7a3b}
-.byo3.on .byo-key,.byo3.pasting .byo-key{color:var(--ink)}
+/* ===== sealed and scoped ===== */
+#learning .head p,#sealed .head p{max-width:52em}
+#sealed .hx-grid{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:28px}
+#sealed .hx-wall{padding:30px 22px 22px;gap:18px;flex-direction:column;align-items:flex-start}
+#sealed .hx-logo{width:84px;height:84px}
+#sealed .hx-who b{font-size:32px}
+#sealed .hx-pw{margin-top:12px;gap:6px}
+#sealed .hx-pw span{height:30px;font-size:12.5px;padding:0 10px}
+#sealed .hx-t{padding:10px 12px;font-size:13.5px}
+#sealed .hx-cap{margin-top:12px;font-size:13px}
+#sealed .e2 .sv{height:auto;margin:18px 0 auto}
+#sealed .e2 .cap{margin-top:18px}
 .eye .e4 .wu-rows{margin-bottom:4px}
+
+/* ===== small tiles under a section ===== */
+.smalls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;margin-top:20px}
+.sm{border:1.5px solid var(--line-2);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.sm-ill{display:flex;align-items:center;gap:8px;height:24px;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden}
+.sm-ill .lg{width:18px;height:18px;flex:none}
+.sm-ill .tog{width:30px;height:18px}
+.sm-ill .tog::after{width:14px;height:14px}
+.sm p{font-family:var(--copy);font-size:13px;line-height:1.5;color:var(--body)}
+.sm p b{font-family:var(--sans);font-size:14px;font-weight:600;color:var(--ink);display:block;margin-bottom:2px}
+.sm.hot{border:2px solid var(--ink)}
 @media (max-width:1020px){
-  .sand{grid-template-columns:repeat(3,minmax(0,1fr));gap:22px 18px}
-  .byo3{grid-template-columns:minmax(0,1fr);height:auto;gap:18px;padding:22px}
-  .byo-svg{display:none}
-  .byo3 .byo-team{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
-  .byo-hub{width:auto;justify-self:stretch}
+  .teach{grid-template-columns:minmax(0,1fr)}
+  .t-as{height:auto}
+  #learning .clients{display:flex}
+  #sealed .hx-grid{grid-template-columns:minmax(0,1fr)}
+  #sealed .hx-wall{align-items:center}
+  .smalls{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 }
-@media (max-width:720px){
-  .sand{grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 14px}
-  .eye .sand .bx{height:138px}
-  .sb-own{display:none}
-  .byo3{padding:12px}
-  .byo3 .byo-a{font-size:13px;padding:0 8px 0 6px}
-}
+@media (max-width:520px){.smalls{grid-template-columns:minmax(0,1fr)}}
 
 /* ===== phone and tablet pass ===== */
 @media (max-width:1020px){
@@ -1546,21 +1536,6 @@ footer .toplinks a{color:var(--night-ink)}
           </div>
         </div>
 
-        <div class="win cwin" id="w-assistant" data-chan="assistant">
-          <div class="as-bar"><i></i><i></i><i></i><span><svg class="lg" style="width:14px;height:14px"><use href="#b-claude"/></svg>Claude · openhut connected</span></div>
-          <div class="as" data-seq="as">
-            <div class="u" data-step data-d="300">Make a finance agent for David on WhatsApp. It can read invoices and payments, nothing else.</div>
-            <div class="a">
-              <div class="tool" data-step data-d="800"><span class="fn">create_agent</span><span class="args">name: "Finance Clerk", owner: "daniel"</span><span class="okk">✓</span></div>
-              <div class="tool" data-step data-d="550"><span class="fn">grant_access</span><span class="args">"Invoices, Payments", read only</span><span class="okk">✓</span></div>
-              <div class="tool" data-step data-d="550"><span class="fn">add_channel</span><span class="args">whatsapp, allowed: David</span><span class="okk">✓</span></div>
-              <div class="tool" data-step data-d="550"><span class="fn">start_agent</span><span class="args">Finance Clerk</span><span class="okk">✓</span></div>
-              <div class="res" data-step data-d="700"><svg class="cr" data-cr="finance" width="48" height="48"></svg><div><b style="font-weight:600">Finance Clerk is running</b><small>Next: David scans the QR with a spare number.</small></div><span class="badge" style="margin-left:auto">Running</span></div>
-              <p class="as-say" data-step data-d="600">Done. It can read invoices and payments, and nothing else.</p>
-            </div>
-            <div class="as-in"><span>Reply to Claude…</span><span>↑</span></div>
-          </div>
-        </div>
 
       </div>
 
@@ -1570,10 +1545,6 @@ footer .toplinks a{color:var(--night-ink)}
           <button class="chan" data-go="slack" aria-current="true"><span class="t"><svg class="lg"><use href="#b-slack"/></svg>Slack</span><span class="d"><p>@mention an agent in any channel or thread</p></span></button>
           <button class="chan" data-go="whatsapp" aria-current="false"><span class="t"><svg class="lg"><use href="#b-whatsapp"/></svg>WhatsApp</span><span class="d"><p>Give any agent its own number</p></span></button>
           <button class="chan" data-go="telegram" aria-current="false"><span class="t"><svg class="lg"><use href="#b-telegram"/></svg>Telegram</span><span class="d"><p>Give any agent its own bot</p></span></button>
-          <button class="chan" data-go="assistant" aria-current="false"><span class="t"><svg class="lg"><use href="#b-claude"/></svg>Claude or Cursor</span><span class="d"><p>Set up agents by asking</p></span></button>
-        </div>
-        <div class="clients" aria-label="Works with any MCP client">
-          <span title="Claude"><svg class="lg"><use href="#b-claude"/></svg></span><span title="Cursor"><svg class="lg"><use href="#b-cursor"/></svg></span><span title="GitHub Copilot"><svg class="lg"><use href="#b-copilot"/></svg></span><span title="Windsurf"><svg class="lg"><use href="#b-windsurf"/></svg></span><span title="Zed"><svg class="lg"><use href="#b-zed"/></svg></span><span title="Any MCP client"><svg class="lg"><use href="#b-mcp"/></svg></span>
         </div>
       </div>
     </div>
@@ -1582,8 +1553,23 @@ footer .toplinks a{color:var(--night-ink)}
 
 <section class="band" id="learning">
   <div class="wrap">
-    <div class="head"><div class="hd"><span class="mb"><svg class="cr" data-cr="ops" width="44" height="44"></svg></span><h2>Self-improving</h2></div></div>
+    <div class="head"><div class="hd"><span class="mb"><svg class="cr" data-cr="ops" width="44" height="44"></svg></span><h2>Shape it as you go</h2></div><p>Ask Claude or Cursor for an agent. Correct it in Slack when it’s wrong, and it rewrites its own skill.</p></div>
     <div class="frame teach" id="teach">
+  <div class="t-as">
+    <div class="as-bar"><i></i><i></i><i></i><span><svg class="lg" style="width:14px;height:14px"><use href="#b-claude"/></svg>Claude · openhut connected</span></div>
+    <div class="as" data-seq="as">
+      <div class="u" data-step data-d="300">Make a finance agent for David on WhatsApp. It can read invoices and payments, nothing else.</div>
+      <div class="a">
+        <div class="tool" data-step data-d="800"><span class="fn">create_agent</span><span class="args">name: "Finance Clerk", owner: "david"</span><span class="okk">✓</span></div>
+        <div class="tool" data-step data-d="550"><span class="fn">grant_access</span><span class="args">"Invoices, Payments", read only</span><span class="okk">✓</span></div>
+        <div class="tool" data-step data-d="550"><span class="fn">add_channel</span><span class="args">whatsapp, allowed: David</span><span class="okk">✓</span></div>
+        <div class="tool" data-step data-d="550"><span class="fn">start_agent</span><span class="args">Finance Clerk</span><span class="okk">✓</span></div>
+        <div class="res" data-step data-d="700"><svg class="cr" data-cr="finance" width="48" height="48"></svg><div><b style="font-weight:600">Finance Clerk is running</b><small>Next: David scans the QR with a spare number.</small></div><span class="badge" style="margin-left:auto">Running</span></div>
+        <p class="as-say" data-step data-d="600">Done. It can read invoices and payments, and nothing else.</p>
+      </div>
+      <div class="as-in"><span>Reply to Claude…</span><span>↑</span></div>
+    </div>
+  </div>
       <div class="t-chat">
         <div class="lp-h"><svg class="lg" style="width:14px;height:14px"><use href="#b-slack"/></svg># ops<span class="t-day" id="tDay">This week</span></div>
         <div class="t-msgs" id="tMsgs" aria-live="polite">
@@ -1603,45 +1589,28 @@ description: Answer "where is my order?"
 <span class="ln" id="tL3">3. Say where it is in one line.</span><span class="ln hid" id="tL4">4. Say where it is in one line.</span></div>
       </div>
     </div>
-  </div>
-</section>
-
-<section class="band" id="hermes">
-  <div class="wrap">
-    <div class="head"><div class="hd"><span class="mb hx-mb"><img src="/hermes.svg" alt="" width="60" height="60"></span><h2>Powered by Hermes</h2></div><p>Every agent is <a class="hm-link" href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener">Hermes</a>, the open-source agent from Nous Research that teams already trust. OpenHut seals each one in gVisor.</p></div>
-    <div class="frame pad" id="hx">
-      <div class="hx-grid">
-        <div class="hx-wall" id="hxWall">
-          <span class="hx-tab"><svg class="ico"><use href="#i-lock"/></svg>gVisor sandbox</span>
-          <span class="hx-logo" id="hxLogo"><img src="/hermes.svg" alt="Hermes Agent logo" width="140" height="140"></span>
-          <div class="hx-who"><b>Hermes Agent</b><span>by Nous Research · open source</span>
-            <div class="hx-pw"><span><svg class="ico"><use href="#i-brain"/></svg>Remembers your team</span><span><svg class="ico"><use href="#i-file"/></svg>Writes its own skills</span><span><svg class="lg"><use href="#b-mcp"/></svg>Tools &amp; MCP</span><span><svg class="lg"><use href="#b-slack"/></svg>Slack, WhatsApp, Telegram</span></div>
-          </div>
-        </div>
-        <div class="hx-side"><small>A tricked agent tries to…</small><div class="hx-ts" id="hxThreats" role="group" aria-label="Try to break out"></div></div>
-      </div>
-      <p class="hx-cap" id="hxCap" aria-live="polite">Tap one to try it.</p>
+    <div class="clients" aria-label="Works with any MCP client">
+      <span title="Claude"><svg class="lg"><use href="#b-claude"/></svg></span><span title="Cursor"><svg class="lg"><use href="#b-cursor"/></svg></span><span title="GitHub Copilot"><svg class="lg"><use href="#b-copilot"/></svg></span><span title="Windsurf"><svg class="lg"><use href="#b-windsurf"/></svg></span><span title="Zed"><svg class="lg"><use href="#b-zed"/></svg></span><span title="Any MCP client"><svg class="lg"><use href="#b-mcp"/></svg></span>
     </div>
   </div>
 </section>
 
-<section class="band" id="agents">
+<section class="band" id="sealed">
   <div class="wrap">
-    <div class="head"><div class="hd"><span class="mb"><svg class="cr" data-cr="sales" width="44" height="44"></svg></span><h2>One agent per job</h2></div></div>
-    <div class="frame pad"><div class="win agent-win">
-      <div class="rail" id="rail" role="tablist" aria-label="Example agents"></div>
-      <div class="ag" id="agentPane" role="tabpanel"></div>
-    </div></div>
-  </div>
-</section>
-
-<section class="band" id="sandbox">
-  <div class="wrap">
-    <div class="head"><div class="hd"><span class="mb"><svg class="cr" data-cr="recruiter" width="44" height="44"></svg></span><h2>Every agent in its own sandbox</h2></div></div>
+    <div class="head"><div class="hd"><span class="mb hx-mb"><img src="/hermes.svg" alt="" width="60" height="60"></span><h2>Sealed and scoped</h2></div><p>Every agent is <a class="hm-link" href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener">Hermes</a>, the open-source agent from Nous Research, sealed in gVisor. It only reaches the data you grant.</p></div>
     <div class="eye">
-      <div class="sc e4">
-        <div class="sand" id="boxes"></div>
-        <p class="cap" id="sealCap" aria-live="polite">Each one is sealed with gVisor. Tap one to trick it.</p>
+      <div class="sc e4" id="hx">
+        <div class="hx-grid">
+          <div class="hx-wall" id="hxWall">
+            <span class="hx-tab"><svg class="ico"><use href="#i-lock"/></svg>gVisor sandbox</span>
+            <span class="hx-logo" id="hxLogo"><img src="/hermes.svg" alt="Hermes Agent logo" width="140" height="140"></span>
+            <div class="hx-who"><b>Hermes Agent</b><span>by Nous Research · open source</span>
+              <div class="hx-pw"><span><svg class="ico"><use href="#i-brain"/></svg>Remembers your team</span><span><svg class="ico"><use href="#i-file"/></svg>Writes its own skills</span><span><svg class="lg"><use href="#b-mcp"/></svg>Tools &amp; MCP</span></div>
+            </div>
+          </div>
+          <div class="hx-side"><small>A tricked agent tries to…</small><div class="hx-ts" id="hxThreats" role="group" aria-label="Try to break out"></div></div>
+        </div>
+        <p class="hx-cap" id="hxCap" aria-live="polite">Tap one to try it.</p>
       </div>
       <div class="sc e2">
         <h3>It only sees what you allow</h3>
@@ -1651,6 +1620,12 @@ description: Answer "where is my order?"
         </div>
         <p class="cap">Agents never see your database password.</p>
       </div>
+    </div>
+    <div class="smalls">
+      <div class="sm"><span class="sm-ill mono">••••••••</span><p><b>Keys stay in the gateway.</b> Agents never see a password or token.</p></div>
+      <div class="sm"><span class="sm-ill mono">1 agent, 1 box</span><p><b>One container each.</b> A broken agent can’t touch the others.</p></div>
+      <div class="sm"><span class="sm-ill mono">sha256 ✓</span><p><b>Checked installs.</b> A tampered release is refused.</p></div>
+      <div class="sm"><span class="sm-ill mono">MIT</span><p><b>Open source.</b> Read every line that runs on your server.</p></div>
     </div>
   </div>
 </section>
@@ -1674,21 +1649,11 @@ description: Answer "where is my order?"
         <p class="cap">No extra model bill.</p>
       </div>
     </div>
-  </div>
-</section>
-
-<section class="band" id="claude">
-  <div class="wrap">
-    <div class="head"><div class="hd"><span class="mb"><svg class="cr" data-cr="growth" width="44" height="44"></svg></span><h2>Bring your own Claude</h2></div><p>Every agent runs on the plan you already pay for.</p></div>
-    <div class="frame byo3" id="byo">
-      <svg class="byo-svg" id="byoSvg" aria-hidden="true"></svg>
-      <div class="byo-team" id="byoTeam" role="group" aria-label="Agents"></div>
-      <div class="byo-hub" id="byoHub"><svg class="cr" data-cr="hut" width="44" height="44"></svg><div><b>OpenHut</b><small id="byoRoute">Ops Desk → your plan</small></div></div>
-      <div class="byo-card" id="byoCard">
-        <div class="byo-top"><span class="byo-logo"><svg class="lg"><use href="#b-claude"/></svg></span><div><b>Your Claude subscription</b><small id="byoState">Not connected</small></div></div>
-        <div class="byo-key" id="byoKey"><span id="byoKeyText">Paste your token</span></div>
-        <button type="button" class="t-btn" id="byoBtn">Paste token</button>
-      </div>
+    <div class="smalls">
+      <div class="sm hot"><span class="sm-ill"><svg class="lg"><use href="#b-claude"/></svg><span class="mono">sk-ant-oat01-•••</span></span><p><b>Bring your own Claude.</b> Every agent runs on the plan you already pay for.</p></div>
+      <div class="sm"><span class="sm-ill mono">people × agents</span><p><b>Per person, per agent.</b> See who leans on which agent.</p></div>
+      <div class="sm"><span class="sm-ill mono">Sign in with OAuth</span><p><b>No personal tokens.</b> People sign in from the dashboard or their AI assistant.</p></div>
+      <div class="sm"><span class="sm-ill"><span class="tog" aria-hidden="true"></span><span class="mono">usage data</span></span><p><b>One switch for usage data.</b> Admins turn it off in settings.</p></div>
     </div>
   </div>
 </section>
@@ -1875,25 +1840,6 @@ description: Answer "where is my order?"
   const CH = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram' }
   const lg = n => `<svg class="lg"><use href="#b-${n}"/></svg>`
 
-  /* ---------- agents rail ---------- */
-  const rail = $('#rail'), pane = $('#agentPane')
-  rail.innerHTML = AGENTS.map((a, i) => `<button role="tab" aria-selected="${!i}" data-i="${i}">${cr(a.id, 40)}${a.name.split(' ')[0]}</button>`).join('')
-  let railTouched = false, cur = 0
-  const show = i => {
-    cur = i
-    const a = AGENTS[i]
-    $$('button', rail).forEach((b, j) => b.setAttribute('aria-selected', j === i))
-    const rb = $$('button', rail)[i]; if (rail.scrollWidth > rail.clientWidth) rail.scrollLeft = rb.offsetLeft - (rail.clientWidth - rb.offsetWidth) / 2
-    pane.classList.remove('swap'); void pane.offsetWidth; pane.classList.add('swap')
-    pane.innerHTML = `<div class="ag-l"><div class="ag-top">${cr(a.id, 84)}<div><h3>${a.name}</h3><p>${a.role}</p></div></div>
-      <div class="ag-cols"><div><div class="ag-lbl">Reach it on</div><div class="chips">${a.ch.map(c => `<span class="chip">${lg(c)}${CH[c]}</span>`).join('')}</div></div><div><div class="ag-lbl">It can see</div><div class="chips">${a.data.map(d => `<span class="chip">${lg('postgres')}${d}</span>`).join('')}</div></div></div>
-      <div><div class="ag-lbl">Skills it taught itself · ${a.n} so far</div><div class="chips">${a.skills.map(s => `<span class="chip k">${s}</span>`).join('')}<span class="chip k">+${a.n - a.skills.length} more</span></div></div></div>
-      <div class="ex"><div class="q">${a.q}</div><div class="r">${cr(a.id, 28)}<p>${a.a}</p></div><div class="q">${a.q2}</div><div class="r">${cr(a.id, 28)}<p>${a.a2}</p></div><div class="meta">${a.meta}</div></div>`
-    paintAll(pane); hop($('.ag-top .cr', pane)); talk($$('.ex .cr', pane)[1], 1600)
-  }
-  rail.addEventListener('click', e => { const b = e.target.closest('button'); if (b) { railTouched = true; show(+b.dataset.i) } })
-  show(0)
-
   /* ---------- parade ---------- */
   $('#parade').innerHTML = ['ops', 'p1', 'support', 'p2', 'growth', 'p7', 'sales', 'p3', 'finance', 'p4', 'recruiter'].map(id => cr(id, 100)).join('')
 
@@ -1951,16 +1897,6 @@ description: Answer "where is my order?"
   spBar.addEventListener('click', spPick); spLegend.addEventListener('click', spPick)
   spDraw()
 
-  const boxes = $('#boxes'), sealCap = $('#sealCap')
-  boxes.innerHTML = AGENTS.map((a, i) => `<button type="button" class="bx" data-i="${i}" aria-label="Trick ${a.name}"><span class="sb-tab">sandbox</span>${cr(a.id, 60)}<b>${a.name}</b><span class="sb-own">its own files, network, memory</span><i class="pr l"></i><i class="pr r"></i></button>`).join('')
-  paintAll(boxes)
-  const bxs = $$('.bx', boxes); let atkTouched = false, tricked = -1
-  const trick = i => {
-    tricked = i
-    bxs.forEach((b, j) => { b.classList.toggle('bad', j === i); b.classList.toggle('fine', i >= 0 && j !== i); $('.cr', b).classList.toggle('dizzy', j === i); if (i >= 0 && j !== i) setTimeout(() => hop($('.cr', b)), j * 70) })
-    sealCap.innerHTML = i < 0 ? 'Each one is sealed with gVisor. Tap one to trick it.' : `<b>${AGENTS[i].name}</b> got tricked. The other five are untouched.`
-  }
-  boxes.addEventListener('click', e => { const b = e.target.closest('.bx'); if (b) { atkTouched = true; trick(+b.dataset.i === tricked ? -1 : +b.dataset.i) } })
   const HX = [
     ['Read the server\'s files', 'Blocked. It only sees its own folder.'],
     ['Break out to the host', 'Blocked. gVisor answers every system call itself.'],
@@ -2014,42 +1950,6 @@ description: Answer "where is my order?"
     tBtn.disabled = false; tBtn.classList.remove('busy')
   }
   tBtn.addEventListener('click', () => { tTouched = true; tSet((ts + 1) % 3) })
-
-  /* ---------- bring your own Claude: every agent routes through to the one plan ---------- */
-  const byoEl = $('#byo'), byoBtn = $('#byoBtn'), byoTeam = $('#byoTeam'), byoKeyText = $('#byoKeyText'), byoState = $('#byoState'), byoSvg = $('#byoSvg'), byoHub = $('#byoHub'), byoCard = $('#byoCard'), byoRoute = $('#byoRoute')
-  byoTeam.innerHTML = AGENTS.map((a, i) => `<button type="button" class="byo-a" data-i="${i}" aria-pressed="false">${cr(a.id, 34)}<span>${a.name}</span></button>`).join('')
-  paintAll(byoTeam)
-  const byoChips = $$('.byo-a', byoTeam), TOKEN = 'sk-ant-oat01-••••••••••••'
-  let byoOn = false, byoTouched = false, byoTok = 0, byoSel = 0
-  const byoDraw = () => {
-    byoChips.forEach((c, i) => c.setAttribute('aria-pressed', byoOn && i === byoSel))
-    $$('.fl', byoSvg).forEach(l => l.classList.toggle('on', byoOn && (l.classList.contains('out') || +l.dataset.i === byoSel)))
-    byoRoute.textContent = byoOn ? AGENTS[byoSel].name + ' → your plan' : 'Waiting for a token'
-  }
-  const byoLanes = () => {
-    const r = byoEl.getBoundingClientRect(), h = byoHub.getBoundingClientRect(), c = byoCard.getBoundingClientRect(), hy = h.top + h.height / 2 - r.top
-    const d = byoChips.map(ch => { const b = ch.getBoundingClientRect(), x1 = b.right - r.left, y1 = b.top + b.height / 2 - r.top, x2 = h.left - r.left, m = (x1 + x2) / 2; return `M${x1} ${y1} C${m} ${y1} ${m} ${hy} ${x2} ${hy}` })
-    byoSvg.setAttribute('viewBox', `0 0 ${r.width} ${r.height}`)
-    byoSvg.innerHTML = d.map((q, i) => `<path class="ln" d="${q}"/><path class="fl" data-i="${i}" d="${q}"/>`).join('') + `<path class="ln" d="M${h.right - r.left} ${hy} H${c.left - r.left}"/><path class="fl out" d="M${h.right - r.left} ${hy} H${c.left - r.left}"/>`
-    byoDraw()
-  }
-  const byoSet = async (on, instant) => {
-    const my = ++byoTok; byoOn = on
-    if (!on) { byoEl.classList.remove('on', 'pasting'); byoKeyText.textContent = 'Paste your token'; byoState.textContent = 'Not connected'; byoBtn.textContent = 'Paste token'; byoDraw(); return }
-    byoBtn.textContent = 'Connecting…'; byoOn = false; byoDraw()
-    if (!instant && !reduce) { byoEl.classList.add('pasting'); byoKeyText.textContent = ''; for (const ch of TOKEN) { if (my !== byoTok) return; byoKeyText.textContent += ch; await sleep(26) } await sleep(220); if (my !== byoTok) return }
-    byoOn = true; byoKeyText.textContent = TOKEN; byoEl.classList.remove('pasting'); byoEl.classList.add('on'); byoState.textContent = 'Connected · 6 agents'; byoBtn.textContent = 'Disconnect'; byoDraw()
-    byoChips.forEach((c, i) => setTimeout(() => hop($('.cr', c)), 120 + i * 90))
-  }
-  byoBtn.addEventListener('click', () => byoSet(byoBtn.textContent === 'Paste token'))
-  byoTeam.addEventListener('click', e => { const b = e.target.closest('.byo-a'); if (!b) return; byoTouched = true; byoSel = +b.dataset.i; byoDraw(); hop($('.cr', b)) })
-  addEventListener('resize', byoLanes); document.fonts?.ready.then(byoLanes)
-  byoSet(true, true); byoLanes()
-
-  if (reduce) { restBubbles(); return }
-
-  const marchers = $$('#parade .cr')
-  whenVisible($('#parade'), async () => { for (const c of marchers) { hop(c); await sleep(110) } const mk = marchers[5]; mk.classList.add('wave'); await sleep(2200); mk.classList.remove('wave'); await sleep(1400) }, .2)
 
   /* ---------- hero: the product, playing one real session. You can answer the approval yourself. ---------- */
   const demo = $('#demo'), dMsgs = $('#dMsgs'), dType = $('#dType'), dWho = $('#dWho'), dSend = $('#dSend'), dSkills = $('#dSkills'), dLog = $('#dLog'), dNeed = $('#dNeed'), dNeedN = $('#dNeedN'), dAgents = $('#dAgents')
@@ -2128,13 +2028,7 @@ description: Answer "where is my order?"
   })
   whenVisible($('[data-seq="as"]'), () => seq($('[data-seq="as"]')), .35)
 
-  whenVisible(byoEl, async () => { await sleep(1900); if (!byoTouched && byoOn) { byoSel = (byoSel + 1) % AGENTS.length; byoDraw() } }, .5)
   whenVisible($('#teach'), async () => { await sleep(4600); if (!tTouched && !tBtn.disabled) await tSet((ts + 1) % 3) }, .5)
-
-  /* ---------- agents auto-rotate until touched ---------- */
-  whenVisible(pane, async () => { await sleep(7000); if (!railTouched) show((cur + 1) % AGENTS.length) }, .5)
-
-  whenVisible(boxes, async () => { await sleep(2600); if (!atkTouched) trick(1 + Math.floor(Math.random() * 4)); await sleep(3400); if (!atkTouched) trick(-1) }, .5)
 
   /* ---------- one wheel gesture moves one section, to the same stops as the CSS scroll snap ---------- */
   const snapMQ = matchMedia('(min-width:1021px) and (min-height:700px)')
