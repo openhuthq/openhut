@@ -45,6 +45,9 @@
   agents with your team", then one window that mocks the real product (agent list, chat, the agent's instructions and
   skills) with a "Shared with your team" card over its corner. The point is build an agent and share it with your
   team; deploying is a detail. A two-window version (Slack beside a OpenHut panel) was rejected the same day.
+- The home page has too many sections (owner, 2026-11-15). Combine them Gumloop-style: one heading, a few big tiles,
+  then a row of small tiles. A small fact (Bring your own Claude) is a tile, never its own section. Setting up from
+  Claude or Cursor and self-improving are one story. Proposal (8 bands down to 4): claude.ai/artifact/VKx4ggE5DioFPUZQXAUspk.
 - Docs sidebar groups (owner, 2026-11-13): Install (Install, Setup from your AI assistant), Features (Multiple
   agents, Self-improvement, Team), Integrations (Slack, WhatsApp, Postgres, Claude plan), Server (Security, Upgrade,
   Uninstall).
