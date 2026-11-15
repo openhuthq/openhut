@@ -11,6 +11,7 @@
   allows `'unsafe-inline'` scripts. The docs need it too: Fumadocs hydrates from inline scripts.
 - The home page is generated from the mock artifact's source; the positioning is in
   `brain/decisions/openhut-website-positioning.md`.
+- Never name a class or id `ad-*`, `ads`, `banner-ad` and the like: ad blockers hide matching elements with cosmetic filters, and the page just shows an empty box. The usage card was `ad-top`/`ad-rows` and vanished for anyone with uBlock; it is `wu-*` now.
 
 ## The beach (owner, 2026-11-15)
 
