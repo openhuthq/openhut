@@ -368,9 +368,6 @@ nav.top .wrap{display:flex;align-items:center;gap:32px;height:68px}
 .notes{display:flex;flex-direction:column;gap:8px;margin-top:16px}
 .note{font-size:13.5px;color:#e4e4e7;padding-left:14px;position:relative;line-height:1.45}
 .note::before{content:"";position:absolute;left:0;top:.55em;width:5px;height:5px;border-radius:50%;background:#f7c948}
-.hermes{margin-top:40px;display:flex;align-items:center;gap:14px;color:var(--night-muted);font-size:14px;flex-wrap:wrap}
-.hermes b{color:var(--night-ink);font-weight:500}
-.hermes a{color:var(--night-ink);text-decoration:underline;text-underline-offset:3px}
 
 /* agents */
 .roster{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,2fr);gap:64px;align-items:start}
@@ -650,7 +647,7 @@ h1,h2,h3{font-family:var(--display);font-weight:400;text-transform:uppercase;let
 .hero h1{font-size:clamp(44px,5vw,64px);line-height:1;letter-spacing:-.01em;max-width:none}
 .head h2,.collab-side h2,.troop h2{font-size:clamp(38px,4.2vw,56px);line-height:1;margin-top:16px}
 .head{max-width:none;margin-bottom:40px}
-.head p,.sub,.sub2,.sc h3+p,.chan .d p,.cap,footer p,.cta p,.wall-h span,.hermes{font-family:var(--copy)}
+.head p,.sub,.sub2,.sc h3+p,.chan .d p,.cap,footer p,.cta p,.wall-h span{font-family:var(--copy)}
 .head p,.sub2{color:var(--ink);font-size:16px;line-height:1.45;max-width:34em;margin-top:10px}
 .sub2{margin-top:14px}
 .mb{width:60px;height:60px;border-radius:50%;border:2px solid var(--ink);background:var(--stage);display:grid;place-items:center;overflow:hidden}
@@ -776,8 +773,6 @@ h1,h2,h3{font-family:var(--display);font-weight:400;text-transform:uppercase;let
 .lp .app-tag{background:var(--stage-2);color:var(--muted)}
 .file{border-radius:10px;border-color:var(--ink)}
 .okline{color:#0b7a3b}
-.hermes{color:var(--muted);font-size:14px;margin-top:36px}
-.hermes a{color:var(--ink)}
 
 /* install on white */
 .term{border:2px solid var(--ink);border-radius:14px;background:var(--night)}
@@ -844,7 +839,6 @@ h1,h2,h3{font-family:var(--display);font-weight:400;text-transform:uppercase;let
 .file .ln.add{background:rgb(18 161 80 / .16);color:#7ee2a8;box-shadow:inset 2px 0 0 #12a150}
 .t-ok{margin-left:auto;color:#0b7a3b;font-family:var(--sans);font-size:12.5px;font-weight:500;visibility:hidden}
 .t-ok.show{visibility:visible}
-.hermes{margin-top:20px;display:block}
 
 .agent-win{height:430px;min-height:0;grid-template-columns:92px minmax(0,1fr)}
 .rail{justify-content:space-between;padding:10px 8px}
@@ -1044,6 +1038,14 @@ footer .toplinks a{color:var(--night-ink)}
   .sp-legend button{height:40px}
 }
 
+/* ===== hermes ===== */
+.hm-link{text-decoration:underline;text-underline-offset:3px;color:var(--ink)}
+.hm-rows{margin:10px 0 4px}
+.hm-rows .g-row{width:100%;text-align:left}
+.hm-rows .g-row .ico,.hm-rows .g-row .lg{width:18px;height:18px}
+.hm-rows .g-row{color:var(--muted)}
+.hm-rows .g-row[aria-pressed="true"]{color:var(--ink);font-weight:600}
+
 /* ===== sandboxes ===== */
 .sand{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:26px 30px;padding:8px 4px 4px}
 .eye .sand .bx{position:relative;height:152px;border-radius:14px;border:2px solid var(--ink);background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:14px;transition:border-color .3s,background .3s}
@@ -1195,7 +1197,6 @@ footer .toplinks a{color:var(--night-ink)}
   /* readable small text */
   .badge,.bub small,.wa-day{font-size:12px}
   .app-tag{font-size:11px}
-  .hermes a{display:inline-block;padding:10px 0}
 }
 
 /* ===== phone pass 3 ===== */
@@ -1234,8 +1235,6 @@ footer .toplinks a{color:var(--night-ink)}
   .ag-top .cr{width:56px;height:56px}
   .ag-top{gap:12px}
   /* small things */
-  .hermes{line-height:2}
-  .hermes a{display:inline;padding:0}
   .ph-status{padding:16px 18px 6px}
   .ph-island{width:80px}
 }
@@ -1255,7 +1254,6 @@ footer .toplinks a{color:var(--night-ink)}
   .t-ok{flex-basis:auto;margin-left:auto;flex:none}
   .t-ok .by{display:none}
   .t-file{height:380px}
-  .hermes{line-height:1.6}
   .nm-f{display:none}
   .nm-s{display:inline}
   .wu-row{grid-template-columns:26px 68px minmax(0,1fr) 34px}
@@ -1565,7 +1563,24 @@ description: Answer "where is my order?"
 <span class="ln" id="tL3">3. Say where it is in one line.</span><span class="ln hid" id="tL4">4. Say where it is in one line.</span></div>
       </div>
     </div>
-    <p class="hermes">Under the hood: <a href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener">Hermes</a>, the open-source agent from Nous Research.</p>
+  </div>
+</section>
+
+<section class="band" id="hermes">
+  <div class="wrap">
+    <div class="head"><div class="hd"><span class="mb"><svg class="cr" data-cr="hermes" width="44" height="44"></svg></span><h2>Powered by Hermes</h2></div><p>Every agent is <a class="hm-link" href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener">Hermes</a>, the open-source agent from Nous Research. OpenHut is the hut around it.</p></div>
+    <div class="eye">
+      <div class="sc e3">
+        <div class="g-who"><svg class="cr" data-cr="hermes" width="44" height="44" id="hmCr0"></svg><b>Hermes does the work</b></div>
+        <div class="g-rows hm-rows" data-side="0"></div>
+        <p class="cap" id="hmCap0" aria-live="polite">It remembers your team and past chats.</p>
+      </div>
+      <div class="sc e3">
+        <div class="g-who"><svg class="cr" data-cr="hut" width="44" height="44" id="hmCr1"></svg><b>OpenHut keeps it safe</b></div>
+        <div class="g-rows hm-rows" data-side="1"></div>
+        <p class="cap" id="hmCap1" aria-live="polite">Each agent is sealed with gVisor.</p>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -1901,6 +1916,15 @@ description: Answer "where is my order?"
     sealCap.innerHTML = i < 0 ? 'Each one is sealed with gVisor. Tap one to trick it.' : `<b>${AGENTS[i].name}</b> got tricked. The other five are untouched.`
   }
   boxes.addEventListener('click', e => { const b = e.target.closest('.bx'); if (b) { atkTouched = true; trick(+b.dataset.i === tricked ? -1 : +b.dataset.i) } })
+  const HM = [
+    [['i-brain', 'Memory', 'It remembers your team and past chats.'], ['i-file', 'Skills', 'It writes and fixes its own skills.'], ['b-mcp', 'Tools', 'Shell, files, code and MCP tools.'], ['i-spark', 'Open source', 'MIT licensed, built in the open.']],
+    [['i-lock', 'Sandbox', 'Each agent is sealed with gVisor.'], ['i-key', 'Keys', 'Your keys stay in OpenHut, never in the agent.'], ['b-slack', 'Channels', 'Slack, WhatsApp and Telegram, set up for you.'], ['i-people', 'Team', 'One dashboard to share agents with your team.']],
+  ]
+  $$('.hm-rows').forEach(box => {
+    const side = +box.dataset.side, rows = HM[side], icon = id => id.startsWith('b-') ? `<svg class="lg"><use href="#${id}"/></svg>` : `<svg class="ico"><use href="#${id}"/></svg>`
+    box.innerHTML = rows.map(([ic, t], i) => `<button type="button" class="g-row" data-i="${i}" aria-pressed="${!i}">${icon(ic)}<span>${t}</span></button>`).join('')
+    box.addEventListener('click', e => { const b = e.target.closest('.g-row'); if (!b) return; $$('.g-row', box).forEach(x => x.setAttribute('aria-pressed', x === b)); $('#hmCap' + side).textContent = rows[+b.dataset.i][2]; talk($('#hmCr' + side), 900) })
+  })
   const GD = [['Orders', 'allowed', 1], ['Shipments', 'allowed', 1], ['Invoices', 'allowed', 0]], gRows = $('#gRows')
   gRows.innerHTML = GD.map(([d, r, on], i) => `<div class="g-row"><svg class="lg"><use href="#b-postgres"/></svg><span>${d}</span><em class="${on ? '' : 'n'}">${on ? r : 'blocked'}</em><button type="button" class="tog" data-i="${i}" aria-pressed="${!!on}" aria-label="Ops Desk can read ${d}"></button></div>`).join('')
   gRows.addEventListener('click', e => { const t = e.target.closest('.g-row')?.querySelector('.tog'); if (!t) return; const g = GD[+t.dataset.i]; g[2] = g[2] ? 0 : 1; t.setAttribute('aria-pressed', !!g[2]); const em = t.previousElementSibling; em.textContent = g[2] ? g[1] : 'blocked'; em.className = g[2] ? '' : 'n'; talk($('#gCr'), 700) })
