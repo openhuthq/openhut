@@ -60,7 +60,7 @@ function entriesOf(dir: string) {
   }
 }
 
-function readInside({ root, file, limit }: { root: string; file: string; limit: number }): string | undefined {
+export function readInside({ root, file, limit }: { root: string; file: string; limit: number }): string | undefined {
   const fd = openInside({ root, file, flags: constants.O_RDONLY })
   if (fd === undefined) return undefined
   try {
@@ -71,7 +71,7 @@ function readInside({ root, file, limit }: { root: string; file: string; limit: 
   }
 }
 
-function openInside({ root, file, flags }: { root: string; file: string; flags: number }): number | undefined {
+export function openInside({ root, file, flags }: { root: string; file: string; flags: number }): number | undefined {
   const fd = openQuietly(`${root}/${file}`, flags | constants.O_NOFOLLOW | constants.O_NONBLOCK)
   if (fd === undefined) return undefined
   const stat = fstatSync(fd)

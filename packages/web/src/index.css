@@ -410,6 +410,20 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .pop>form>.btn{justify-content:center}
 .owner{display:inline-flex;gap:8px;align-items:center}
 .note{margin:0;color:var(--mute)}
+.memory{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px;margin-bottom:8px}
+.memhead{display:flex;align-items:center;gap:10px;min-height:48px;padding:8px 10px 8px 16px;border-bottom:1px solid var(--hair)}
+.memhead b{font-weight:500;flex:1}
+.memhead .num{font-size:12px;font-variant-numeric:tabular-nums}
+.memuse{width:56px;height:4px;border-radius:999px;background:var(--soft);overflow:hidden}
+.memuse i{display:block;height:100%;background:var(--ink)}
+.memuse.full i{background:var(--fail)}
+.mementry{align-items:flex-start;padding-block:10px}
+.mementry p{margin:0;flex:1;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}
+.mementry .rowacts{display:flex;gap:2px;flex:none;margin:-4px -6px -4px 0}
+.mempad{padding:14px 16px}
+.memform{display:flex;flex-direction:column;gap:8px;padding:10px 12px}
+.memform textarea{min-height:76px;resize:vertical}
+.memform .acts{display:flex;justify-content:flex-end;gap:8px}
 .formbox{padding:16px;display:flex;flex-direction:column;gap:14px}
 .inline-form{display:flex;gap:8px}
 .inline-form input{flex:1}

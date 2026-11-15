@@ -41,3 +41,12 @@ test('only someone who can change the agent can save a skill', async () => {
   assert.equal(write.mock.callCount(), 0)
   assert.equal((await skillService.update({ actor: owner, id: 'ag_skilltst~late-invoices', patch: { body: 'New steps\n' } })).body, 'New steps\n')
 })
+
+test('a learned skill can be deleted by someone who can change the agent; a built-in one never', async () => {
+  const remove = mock.method(agentd, 'removeSkill', async ({ path }: { path: string }) => { delete files[path]; return { removed: path } })
+  await assert.rejects(skillService.delete({ actor: member, id: 'ag_skilltst~late-invoices' }), { status: 403 })
+  await assert.rejects(skillService.delete({ actor: owner, id: 'ag_skilltst~research~arxiv' }), { status: 400 })
+  assert.equal(remove.mock.callCount(), 0)
+  assert.deepEqual(await skillService.delete({ actor: owner, id: 'ag_skilltst~late-invoices' }), { id: 'ag_skilltst~late-invoices', object: 'skill', deleted: true })
+  assert.deepEqual(remove.mock.calls[0].arguments[0], { id: 'ag_skilltst', path: 'late-invoices' })
+})

@@ -14,6 +14,11 @@ const pairReads: Record<string, number> = {}
 const OFF_TAILNET = { state: 'NeedsLogin', tailnet: '', name: '', address: '' }
 const ON_TAILNET = { state: 'Running', tailnet: 'example.ts.net', name: 'openhut.example.ts.net', address: '100.101.102.103' }
 let tailnet = OFF_TAILNET
+const SAMPLE_MEMORY = {
+  notes: 'Orders DB: late means no shipment 5 days after the order date.\n§\nRefunds over €100 need David\'s okay first.\n§\nThe Berlin depot closes at 18:00.',
+  people: 'David runs operations and approves refunds.\n§\nPablo prefers short answers with the order number first.',
+}
+const memories: Record<string, Record<'notes' | 'people', string | null>> = {}
 const skills: Record<string, string> = {
   'late-invoices': '---\nname: late-invoices\ndescription: Chase invoices more than 30 days late.\n---\n\n# Late invoices\n\n1. Query invoices past due.\n2. Draft a reminder per customer.\n',
   'research/arxiv': '---\nname: arxiv\ndescription: "Search and summarise arXiv papers."\n---\n\n# arXiv\n',
@@ -130,6 +135,15 @@ function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
       if (!skills[req.path]) throw new Error('that skill is gone')
       skills[req.path] = req.body
       return { written: req.path }
+    case 'skill-rm':
+      delete skills[req.path]
+      return { removed: req.path }
+    case 'memory':
+      return memories[req.id] ??= { ...SAMPLE_MEMORY }
+    case 'memory-write':
+      if ((memories[req.id] ??= { ...SAMPLE_MEMORY })[req.target] === null) throw new Error('the agent has not saved that memory yet')
+      memories[req.id][req.target] = req.body
+      return { written: req.target }
     case 'usage':
       return { usage: Object.fromEntries(Object.keys(states).map((id, index) => [id, 0.4 / (index + 1)])) }
     case 'ts-up':

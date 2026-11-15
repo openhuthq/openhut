@@ -10,6 +10,8 @@ export const skillController: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { id: string } }>('/:id', async (req) => skillService.get({ actor: await who(req), id: req.params.id }))
 
   app.patch<{ Params: { id: string }; Body: UpdateSkill }>('/:id', UpdateRequest, async (req) => skillService.update({ actor: await who(req), id: req.params.id, patch: req.body }))
+
+  app.delete<{ Params: { id: string } }>('/:id', async (req) => skillService.delete({ actor: await who(req), id: req.params.id }))
 }
 
 const ListRequest = { schema: { querystring: ListSkills } }
