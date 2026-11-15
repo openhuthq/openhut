@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="OpenHut runs AI agents for your team on your own server. They live in Slack and WhatsApp and improve themselves.">
+<meta name="description" content="OpenHut runs AI agents for your team on your own server. They live in Slack, WhatsApp and Telegram and improve themselves.">
 <link rel="icon" href="/hut.svg">
 <style>html{scrollbar-width:none}html::-webkit-scrollbar{display:none}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
@@ -294,6 +294,15 @@ nav.top .wrap{display:flex;align-items:center;gap:32px;height:68px}
 .wa-qr svg{background:#fff;border-radius:8px;padding:6px;flex:none}
 .wa-qr b{font-weight:600;display:block}
 .wa-qr small{color:var(--muted);font-size:13px}
+.tg .ph-screen,.tg .ph-in{background:#dbe6cf}
+.tg .ph-h small{color:#3390ec}
+.tg .bub.me{background:#effdde}
+.tg .bub.me small{color:#5fa95a}
+.tg .wa-day{background:rgb(0 0 0 / .18);color:#fff;box-shadow:none}
+.tg .ph-in .mic{background:#3390ec}
+.tg .wa-card.on{box-shadow:0 0 0 2px #3390ec,0 14px 28px -16px rgb(51 144 236 / .5)}
+.tg .wa-card i{background:#3390ec}
+.tg-tok{font-family:var(--mono);font-size:12px;background:var(--paper);border-radius:8px;padding:8px 10px;box-shadow:0 0 0 1px var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:6px}
 
 /* assistant */
 .as-bar{background:#262624;height:40px;display:flex;align-items:center;gap:7px;padding:0 14px}
@@ -992,21 +1001,21 @@ footer .toplinks a{color:var(--night-ink)}
 .eye .bx.fine{border-color:var(--ok);background:#f1fbf5}
 .eye .bx.bad{border-color:var(--bad);background:#fff1f1}
 .eye .sv{height:206px;justify-content:center;margin:10px 0 12px}
-.ad-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
-.ad-line{font-family:var(--copy);font-size:13.5px;height:22px;white-space:nowrap;margin-top:4px}
-.ad-line b{font-weight:500}
-.ad-people{display:flex;gap:6px;flex:none}
-.ad-p{width:36px;height:36px;border-radius:50%;background:var(--c);color:#fff;font-weight:600;font-size:14px;box-shadow:0 0 0 2px var(--stage);transition:transform .2s cubic-bezier(.3,1.6,.5,1),box-shadow .2s,opacity .2s}
-.ad-p:hover{transform:translateY(-2px)}
-.ad-p[aria-pressed="true"]{box-shadow:0 0 0 2px var(--stage),0 0 0 4px var(--ink)}
-.ad-p.idle{opacity:.5}
-.ad-rows{display:flex;flex-direction:column;gap:8px;margin-top:22px}
-.ad-row{display:grid;grid-template-columns:30px 132px minmax(0,1fr) 116px;align-items:center;gap:12px;height:32px;font-size:14px;font-weight:500;transition:opacity .3s}
-.ad-row.unused{opacity:.35}
-.ad-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ad-track{height:14px;border-radius:99px;background:var(--paper);overflow:hidden}
-.ad-track i{display:block;height:100%;width:0;border-radius:99px;background:var(--c);transition:width .6s cubic-bezier(.2,.8,.2,1)}
-.ad-row b{font-family:var(--mono);font-weight:400;font-size:12.5px;text-align:right;white-space:nowrap}
+.wu-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.wu-line{font-family:var(--copy);font-size:13.5px;height:22px;white-space:nowrap;margin-top:4px}
+.wu-line b{font-weight:500}
+.wu-people{display:flex;gap:6px;flex:none}
+.wu-p{width:36px;height:36px;border-radius:50%;background:var(--c);color:#fff;font-weight:600;font-size:14px;box-shadow:0 0 0 2px var(--stage);transition:transform .2s cubic-bezier(.3,1.6,.5,1),box-shadow .2s,opacity .2s}
+.wu-p:hover{transform:translateY(-2px)}
+.wu-p[aria-pressed="true"]{box-shadow:0 0 0 2px var(--stage),0 0 0 4px var(--ink)}
+.wu-p.idle{opacity:.5}
+.wu-rows{display:flex;flex-direction:column;gap:8px;margin-top:22px}
+.wu-row{display:grid;grid-template-columns:30px 132px minmax(0,1fr) 116px;align-items:center;gap:12px;height:32px;font-size:14px;font-weight:500;transition:opacity .3s}
+.wu-row.unused{opacity:.35}
+.wu-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wu-track{height:14px;border-radius:99px;background:var(--paper);overflow:hidden}
+.wu-track i{display:block;height:100%;width:0;border-radius:99px;background:var(--c);transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.wu-row b{font-family:var(--mono);font-weight:400;font-size:12.5px;text-align:right;white-space:nowrap}
 .sp-big{display:flex;align-items:baseline;gap:10px;margin-top:14px;height:52px}
 .sp-big b{font-family:var(--display);font-weight:400;font-size:56px;line-height:1}
 .sp-big span{font-family:var(--copy);font-size:12.5px;line-height:1.35}
@@ -1024,14 +1033,14 @@ footer .toplinks a{color:var(--night-ink)}
   .eye .e4,.eye .e2,.eye .e3{grid-column:auto}
 }
 @media (max-width:720px){
-  .ad-top{flex-direction:column;gap:14px}
-  .ad-line{white-space:normal;height:40px}
-  .ad-row{grid-template-columns:26px 84px minmax(0,1fr) 62px;gap:8px;font-size:13px}
-  .ad-row .cr{width:26px;height:26px}
+  .wu-top{flex-direction:column;gap:14px}
+  .wu-line{white-space:normal;height:40px}
+  .wu-row{grid-template-columns:26px 84px minmax(0,1fr) 62px;gap:8px;font-size:13px}
+  .wu-row .cr{width:26px;height:26px}
   .eye .boxes{grid-template-columns:repeat(3,minmax(0,1fr))}
   .eye .sv{height:auto;margin:14px 0 16px}
   .eye .cap{white-space:normal;height:40px}
-  .ad-p{width:42px;height:42px}
+  .wu-p{width:42px;height:42px}
   .sp-legend button{height:40px}
 }
 
@@ -1077,7 +1086,7 @@ footer .toplinks a{color:var(--night-ink)}
 .byo-hub small{font-family:var(--copy);font-size:11.5px;color:#b9b9c0;white-space:nowrap;display:block;margin-top:5px}
 .byo3.on .byo-top small{color:#0b7a3b}
 .byo3.on .byo-key,.byo3.pasting .byo-key{color:var(--ink)}
-.eye .e4 .ad-rows{margin-bottom:4px}
+.eye .e4 .wu-rows{margin-bottom:4px}
 @media (max-width:1020px){
   .sand{grid-template-columns:repeat(3,minmax(0,1fr));gap:22px 18px}
   .byo3{grid-template-columns:minmax(0,1fr);height:auto;gap:18px;padding:22px}
@@ -1249,7 +1258,7 @@ footer .toplinks a{color:var(--night-ink)}
   .hermes{line-height:1.6}
   .nm-f{display:none}
   .nm-s{display:inline}
-  .ad-row{grid-template-columns:26px 68px minmax(0,1fr) 34px}
+  .wu-row{grid-template-columns:26px 68px minmax(0,1fr) 34px}
   .as-in{display:none}
   .ex .meta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;padding-left:0}
 }
@@ -1318,6 +1327,7 @@ footer .toplinks a{color:var(--night-ink)}
 	<path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
 	<path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></symbol>
 <symbol id="b-mcp" viewBox="0 0 24 24"><path d="M13.85 0a4.16 4.16 0 0 0-2.95 1.217L1.456 10.66a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l9.442-9.442a2.49 2.49 0 0 1 3.541 0 2.49 2.49 0 0 1 0 3.541L8.59 12.97l-.1.1a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l.1-.098 7.03-7.034a2.49 2.49 0 0 1 3.542 0l.049.05a2.49 2.49 0 0 1 0 3.54l-8.54 8.54a1.96 1.96 0 0 0 0 2.755l1.753 1.753a.835.835 0 0 0 1.18 0 .835.835 0 0 0 0-1.18l-1.753-1.753a.266.266 0 0 1 0-.394l8.54-8.54a4.185 4.185 0 0 0 0-5.9l-.05-.05a4.16 4.16 0 0 0-2.95-1.218c-.2 0-.401.02-.6.048a4.17 4.17 0 0 0-1.17-3.552A4.16 4.16 0 0 0 13.85 0m0 3.333a.84.84 0 0 0-.59.245L6.275 10.56a4.186 4.186 0 0 0 0 5.902 4.186 4.186 0 0 0 5.902 0L19.16 9.48a.835.835 0 0 0 0-1.18.835.835 0 0 0-1.18 0l-6.985 6.984a2.49 2.49 0 0 1-3.54 0 2.49 2.49 0 0 1 0-3.54l6.983-6.985a.835.835 0 0 0 0-1.18.84.84 0 0 0-.59-.245" fill="currentColor"/></symbol>
+<symbol id="b-telegram" viewBox="0 0 240 240"><circle cx="120" cy="120" r="120" fill="#2aabee"/><path fill="#fff" d="M54.3 118.8c35-15.2 58.3-25.3 70-30.2 33.3-13.9 40.3-16.3 44.8-16.4 1 0 3.2.2 4.7 1.4 1.2 1 1.5 2.3 1.7 3.3s.4 3.1.2 4.7c-1.8 19-9.6 65.1-13.6 86.3-1.7 9-5 12-8.2 12.3-7 .6-12.3-4.6-19-9-10.6-6.9-16.5-11.2-26.8-18-11.9-7.8-4.2-12.1 2.6-19.1 1.8-1.8 32.5-29.8 33.1-32.3.1-.3.1-1.5-.6-2.1s-1.7-.4-2.5-.2c-1.1.2-17.9 11.4-50.6 33.5-4.8 3.3-9.1 4.9-13 4.8-4.3-.1-12.5-2.4-18.7-4.4-7.5-2.4-13.5-3.7-13-7.9.3-2.2 3.3-4.4 8.9-6.7z"/></symbol>
 <symbol id="b-slack" viewBox="0 0 122.8 122.8"><path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#e01e5a"/><path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#36c5f0"/><path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2eb67d"/><path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#ecb22e"/></symbol>
 <symbol id="b-convex" viewBox="0 0 24 24"><path fill="#F3B01C" d="M15.090 18.916c 3.488 -0.387 6.776 -2.246 8.586 -5.348c -0.857 7.673 -9.247 12.522 -16.095 9.545a 3.47 3.47 0 0 1 -1.547 -1.314c -1.539 -2.417 -2.044 -5.492 -1.318 -8.282c 2.077 3.584 6.3 5.78 10.374 5.399"/><path fill="#8D2676" d="M4.589 11.266c -1.414 3.266 -1.475 7.092 0.258 10.24c -6.1 -4.59 -6.033 -14.41 -0.074 -18.953a 3.44 3.44 0 0 1 1.893 -0.707c 2.825 -0.15 5.695 0.942 7.708 2.977c -4.09 0.04 -8.073 2.66 -9.785 6.442"/><path fill="#EE342F" d="M16.346 5.828C 14.283 2.951 11.053 0.992 7.515 0.933c 6.84 -3.105 15.253 1.929 16.17 9.37a 3.6 3.6 0 0 1 -0.334 2.02c -1.278 2.594 -3.647 4.607 -6.416 5.352c 2.029 -3.763 1.778 -8.36 -0.589 -11.847"/></symbol>
 <symbol id="b-claude" viewBox="0 0 24 24"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z" fill="#D97757"/></symbol>
@@ -1369,12 +1379,12 @@ footer .toplinks a{color:var(--night-ink)}
 </style>
 <header class="hero" id="top">
   <div class="wrap">
-    <div class="toprow"><a class="logo" href="#top"><svg class="cr" data-cr="hut" width="40" height="40"></svg>OpenHut</a><span class="toplinks"><a href="/docs/">Docs</a><a href="/brand">Brand</a><a class="gh" href="https://github.com/openhuthq/openhut"><svg class="ghi" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>GitHub</a></span></div>
+    <div class="toprow"><a class="logo" href="/"><svg class="cr" data-cr="hut" width="40" height="40"></svg>OpenHut</a><span class="toplinks"><a href="/docs/">Docs</a><a href="/brand">Brand</a><a class="gh" href="https://github.com/openhuthq/openhut"><svg class="ghi" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>GitHub</a></span></div>
     <svg class="sk-sky" viewBox="0 0 300 170" aria-hidden="true"><circle cx="232" cy="62" r="50" fill="#ffe08a" opacity=".16"/><circle cx="232" cy="62" r="30" fill="#ffe08a" stroke="#0b0b0b" stroke-width="3.5"/><g class="drift"><path d="M40 92q0-15 16-15 5-12 20-11 14 1 16 14 15 0 15 12z" fill="#fff" stroke="#0b0b0b" stroke-width="3" stroke-linejoin="round"/></g><g class="drift b"><path d="M196 128q0-11 12-11 4-9 15-8 10 1 12 10 11 0 11 9z" fill="#fff" stroke="#0b0b0b" stroke-width="2.6" stroke-linejoin="round"/></g><g stroke="#0b0b0b" stroke-width="2.4" fill="none" stroke-linecap="round"><path d="M128 40q5-6 10 0q5-6 10 0"/><path d="M152 58q4-5 8 0q4-5 8 0"/></g></svg>
     <div class="troop"><svg class="cr" data-cr="ops" width="38" height="38"></svg><svg class="cr" data-cr="support" width="38" height="38"></svg><svg class="cr" data-cr="growth" width="38" height="38"></svg><svg class="cr" data-cr="sales" width="38" height="38"></svg><svg class="sk-ball" viewBox="-26 -26 52 52" aria-hidden="true"><circle r="22" fill="#fffaf0"/><path d="M0-22a22 22 0 0 1 20 13L0 0z" fill="#ff5a3c"/><path d="M20 9a22 22 0 0 1-27 12L0 0z" fill="#3cc5c0"/><path d="M-18 12a22 22 0 0 1-2-24L0 0z" fill="#f7c948"/><circle r="22" fill="none" stroke="#0b0b0b" stroke-width="4"/><circle r="4.5" fill="#fffaf0" stroke="#0b0b0b" stroke-width="2.6"/></svg></div>
     <h1>Build, manage &amp; share agents<br><span class="sk-wave">with your team</span></h1>
     <div class="lede">
-      <div class="subcol"><p class="sub">Self-improving agents in Slack and WhatsApp, on your own server.</p><a class="oss" href="https://github.com/openhuthq/openhut"><svg class="ghi" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>Open source. Read the code on GitHub</a></div>
+      <div class="subcol"><p class="sub">Self-improving agents in Slack, WhatsApp and Telegram, on your own server.</p><a class="oss" href="https://github.com/openhuthq/openhut"><svg class="ghi" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg>Open source. Read the code on GitHub</a></div>
       <div class="cmd big"><svg class="cr peek" data-cr="sales" width="54" height="54"></svg><span>curl -fsSL https://openhut.dev | sh</span><button type="button" data-copy="curl -fsSL https://openhut.dev | sh">Copy</button></div>
     </div>
 
@@ -1471,6 +1481,33 @@ footer .toplinks a{color:var(--night-ink)}
           </div>
         </div>
 
+        <div class="win cwin" id="w-telegram" data-chan="telegram">
+          <div class="wa2 tg">
+            <div class="ph">
+              <div class="ph-screen">
+                <span class="ph-island"></span>
+                <div class="ph-status"><span>9:15</span><span class="ph-right"><span class="ph-sig"><i></i><i></i><i></i><i></i></span><svg class="ph-wifi" viewBox="0 0 16 12" aria-hidden="true"><path d="M1 4.2a10 10 0 0 1 14 0M3.4 6.700a6.500 6.500 0 0 1 9.200 0M5.800 9.200a3 3 0 0 1 4.400 0" fill="none" stroke="#0b0b0c" stroke-width="1.700" stroke-linecap="round"/></svg><span class="ph-bat"></span></span></div>
+                <div class="ph-h"><span class="ph-back">‹</span><svg class="cr" data-cr="sales" width="38" height="38"></svg><div><b>Sales Scout</b><small>bot</small></div></div>
+                <div class="wa-msgs" id="tgMsgs">
+                  <span class="wa-day">Today</span>
+                  <div class="bub me">Who should I call first today?<small>8:41 ✓✓</small></div>
+                  <div class="bub them">Northwind. They opened the proposal three times since Friday.<small>8:41</small></div>
+                  <div class="bub me">Draft a follow-up for them<small>8:42 ✓✓</small></div>
+                  <div class="bub them">Sent it to your inbox. It mentions the pricing question they asked.<small>8:42</small></div>
+                  <div class="bub me">Ping me if they reply<small>8:42 ✓✓</small></div>
+                  <div class="bub them">Will do.<small>8:42</small></div>
+                </div>
+                <div class="ph-in"><span>+</span><div>Message</div><span class="mic"></span></div>
+              </div>
+            </div>
+            <div class="wa-cards">
+              <div class="wa-card on"><svg class="cr" data-cr="sales" width="42" height="42"></svg><div><b>Sales Scout</b><small>@sales_scout_bot</small></div><i></i></div>
+              <div class="wa-card"><svg class="cr" data-cr="recruiter" width="42" height="42"></svg><div><b>Recruiter</b><small>@recruiter_bot</small></div><i></i></div>
+              <div class="wa-qr"><svg class="lg" style="width:40px;height:40px;flex:none"><use href="#b-telegram"/></svg><div style="min-width:0"><b>Make a bot with BotFather</b><small>Paste its token and it's the agent's.</small><div class="tg-tok">7712045519:AAH…</div></div></div>
+            </div>
+          </div>
+        </div>
+
         <div class="win cwin" id="w-assistant" data-chan="assistant">
           <div class="as-bar"><i></i><i></i><i></i><span><svg class="lg" style="width:14px;height:14px"><use href="#b-claude"/></svg>Claude · openhut connected</span></div>
           <div class="as" data-seq="as">
@@ -1494,6 +1531,7 @@ footer .toplinks a{color:var(--night-ink)}
         <div class="list" role="tablist" aria-label="Where your team talks to agents">
           <button class="chan" data-go="slack" aria-current="true"><span class="t"><svg class="lg"><use href="#b-slack"/></svg>Slack</span><span class="d"><p>@mention an agent in any channel or thread</p></span></button>
           <button class="chan" data-go="whatsapp" aria-current="false"><span class="t"><svg class="lg"><use href="#b-whatsapp"/></svg>WhatsApp</span><span class="d"><p>Give any agent its own number</p></span></button>
+          <button class="chan" data-go="telegram" aria-current="false"><span class="t"><svg class="lg"><use href="#b-telegram"/></svg>Telegram</span><span class="d"><p>Give any agent its own bot</p></span></button>
           <button class="chan" data-go="assistant" aria-current="false"><span class="t"><svg class="lg"><use href="#b-claude"/></svg>Claude or Cursor</span><span class="d"><p>Set up agents by asking</p></span></button>
         </div>
         <div class="clients" aria-label="Works with any MCP client">
@@ -1566,11 +1604,11 @@ description: Answer "where is my order?"
     <div class="head"><div class="hd"><span class="mb"><svg class="cr" data-cr="finance" width="44" height="44"></svg></span><h2>Usage &amp; cost</h2></div></div>
     <div class="eye">
       <div class="sc e4">
-        <div class="ad-top">
-          <div><h3>Who's using them</h3><p class="ad-line" id="adLine" aria-live="polite"><b>5 of 6</b> teammates messaged an agent this week</p></div>
-          <div class="ad-people" id="adPeople" role="group" aria-label="Pick a teammate"></div>
+        <div class="wu-top">
+          <div><h3>Who's using them</h3><p class="wu-line" id="wuLine" aria-live="polite"><b>5 of 6</b> teammates messaged an agent this week</p></div>
+          <div class="wu-people" id="wuPeople" role="group" aria-label="Pick a teammate"></div>
         </div>
-        <div class="ad-rows" id="adRows"></div>
+        <div class="wu-rows" id="wuRows"></div>
       </div>
       <div class="sc e2">
         <h3>What it costs this week</h3>
@@ -1767,13 +1805,14 @@ description: Answer "where is my order?"
       q: 'Can I change my delivery address?', a: 'It hasn’t shipped yet, so it should be fine. I’ve asked our team to confirm the new address.', q2: 'Thanks! When will it arrive?', a2: 'Thursday, if it leaves tomorrow as planned.', meta: 'Looked up 1 order · 6 seconds' },
     { id: 'growth', name: 'Growth Analyst', model: 'Claude Sonnet', role: 'Answers questions about signups and sends the weekly numbers.', ch: ['slack', 'whatsapp'], data: ['Signups', 'Events'], skills: ['weekly-report', 'funnel-check', 'cohort-math'], n: 9,
       q: 'Where are we losing people in onboarding?', a: 'Step 3, connecting a store. 41% drop off there, more than every other step put together.', q2: 'What changed there?', a2: 'We added that step in March. Before that, onboarding lost 12% in total.', meta: 'Ran 3 queries · 11 seconds' },
-    { id: 'sales', name: 'Sales Scout', model: 'Claude Haiku', role: 'Picks the leads that look like your best customers and drafts the first note.', ch: ['slack'], data: ['CRM'], skills: ['lead-scoring', 'first-email', 'follow-up-timing'], n: 11,
+    { id: 'sales', name: 'Sales Scout', model: 'Claude Haiku', role: 'Picks the leads that look like your best customers and drafts the first note.', ch: ['slack', 'telegram'], data: ['CRM'], skills: ['lead-scoring', 'first-email', 'follow-up-timing'], n: 11,
       q: 'Who should I call this week?', a: 'Ten leads look like Northwind, your best customer. I drafted a first note for the top three.', q2: 'Show me the first one.', a2: 'It opens with their new store launch. Tell me what to change and I’ll remember it.', meta: 'Read 1,204 leads · 38 seconds' },
     { id: 'finance', name: 'Finance Clerk', model: 'Claude Opus', role: 'Watches invoices and tells you who is late.', ch: ['whatsapp'], data: ['Invoices', 'Payments'], skills: ['invoice-chasing', 'month-end', 'polite-nudges'], n: 7,
       q: 'Who still owes us for October?', a: 'Four customers, €6,240 in total. Globex is the biggest at €3,100 and is 19 days late. Should I draft reminders?', q2: 'Yes.', a2: 'Four drafts are ready for you to send.', meta: 'Read 2 tables · 5 seconds' },
-    { id: 'recruiter', name: 'Recruiter', model: 'Claude Sonnet', role: 'Screens applicants and tells you who to call first.', ch: ['slack'], data: ['Applicants'], skills: ['screening-notes', 'role-fit', 'rejection-letters'], n: 5,
+    { id: 'recruiter', name: 'Recruiter', model: 'Claude Sonnet', role: 'Screens applicants and tells you who to call first.', ch: ['slack', 'telegram'], data: ['Applicants'], skills: ['screening-notes', 'role-fit', 'rejection-letters'], n: 5,
       q: 'Anyone good for the designer role?', a: 'Three stand out of 46. Maya has shipped two products like ours. Call her first.', q2: 'Why her?', a2: 'She ran design alone at a ten-person startup, which is this role.', meta: 'Read 46 applications · 52 seconds' },
   ]
+  const CH = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram' }
   const lg = n => `<svg class="lg"><use href="#b-${n}"/></svg>`
 
   /* ---------- agents rail ---------- */
@@ -1787,7 +1826,7 @@ description: Answer "where is my order?"
     const rb = $$('button', rail)[i]; if (rail.scrollWidth > rail.clientWidth) rail.scrollLeft = rb.offsetLeft - (rail.clientWidth - rb.offsetWidth) / 2
     pane.classList.remove('swap'); void pane.offsetWidth; pane.classList.add('swap')
     pane.innerHTML = `<div class="ag-l"><div class="ag-top">${cr(a.id, 84)}<div><h3>${a.name}</h3><p>${a.role}</p></div></div>
-      <div class="ag-cols"><div><div class="ag-lbl">Reach it on</div><div class="chips">${a.ch.map(c => `<span class="chip">${lg(c)}${c === 'slack' ? 'Slack' : 'WhatsApp'}</span>`).join('')}</div></div><div><div class="ag-lbl">It can see</div><div class="chips">${a.data.map(d => `<span class="chip">${lg('postgres')}${d}</span>`).join('')}</div></div></div>
+      <div class="ag-cols"><div><div class="ag-lbl">Reach it on</div><div class="chips">${a.ch.map(c => `<span class="chip">${lg(c)}${CH[c]}</span>`).join('')}</div></div><div><div class="ag-lbl">It can see</div><div class="chips">${a.data.map(d => `<span class="chip">${lg('postgres')}${d}</span>`).join('')}</div></div></div>
       <div><div class="ag-lbl">Skills it taught itself · ${a.n} so far</div><div class="chips">${a.skills.map(s => `<span class="chip k">${s}</span>`).join('')}<span class="chip k">+${a.n - a.skills.length} more</span></div></div></div>
       <div class="ex"><div class="q">${a.q}</div><div class="r">${cr(a.id, 28)}<p>${a.a}</p></div><div class="q">${a.q2}</div><div class="r">${cr(a.id, 28)}<p>${a.a2}</p></div><div class="meta">${a.meta}</div></div>`
     paintAll(pane); hop($('.ag-top .cr', pane)); talk($$('.ex .cr', pane)[1], 1600)
@@ -1822,20 +1861,20 @@ description: Answer "where is my order?"
   const COL = ['#FF7A59', '#19B3B1', '#3d8fdc', '#f7c948', '#64ae59', '#b79cf2']
   const USE = { all: [214, 187, 96, 41, 23, 9], Emil: [38, 0, 22, 0, 12, 0], David: [41, 0, 31, 25, 11, 0], Pablo: [61, 0, 9, 0, 0, 9], Lea: [44, 0, 18, 16, 0, 0], Mara: [30, 0, 16, 0, 0, 0], Sam: [0, 0, 0, 0, 0, 0] }
   const PCOL = { Emil: '#c2553a', David: '#2e7d6b', Pablo: '#7a5cc7', Lea: '#2e6ba5', Mara: '#b0456a', Sam: '#9a9aa2' }
-  const adRows = $('#adRows'), adPeople = $('#adPeople'), adLine = $('#adLine')
-  adRows.innerHTML = AGENTS.map((a, i) => `<div class="ad-row">${cr(a.id, 30)}<span class="ad-n"><span class="nm-f">${a.name}</span><span class="nm-s">${a.name.split(' ')[0]}</span></span><span class="ad-track"><i style="--c:${COL[i]}"></i></span><b>0</b></div>`).join('')
-  adPeople.innerHTML = Object.keys(PCOL).map(n => `<button type="button" class="ad-p${n === 'Sam' ? ' idle' : ''}" data-n="${n}" aria-pressed="false" title="${n}" style="--c:${PCOL[n]}">${n[0]}</button>`).join('')
-  paintAll(adRows)
-  let adWho = null
-  const adDraw = () => {
-    const v = USE[adWho || 'all'], max = Math.max(...USE.all), total = v.reduce((a, b) => a + b, 0)
-    $$('.ad-row', adRows).forEach((r, i) => { $('i', r).style.width = (v[i] / max * 100) + '%'; $('b', r).textContent = adWho ? v[i] || '–' : v[i]; r.classList.toggle('unused', !v[i]) })
-    $$('.ad-p', adPeople).forEach(b => b.setAttribute('aria-pressed', b.dataset.n === adWho))
+  const wuRows = $('#wuRows'), wuPeople = $('#wuPeople'), wuLine = $('#wuLine')
+  wuRows.innerHTML = AGENTS.map((a, i) => `<div class="wu-row">${cr(a.id, 30)}<span class="wu-n"><span class="nm-f">${a.name}</span><span class="nm-s">${a.name.split(' ')[0]}</span></span><span class="wu-track"><i style="--c:${COL[i]}"></i></span><b>0</b></div>`).join('')
+  wuPeople.innerHTML = Object.keys(PCOL).map(n => `<button type="button" class="wu-p${n === 'Sam' ? ' idle' : ''}" data-n="${n}" aria-pressed="false" title="${n}" style="--c:${PCOL[n]}">${n[0]}</button>`).join('')
+  paintAll(wuRows)
+  let wuWho = null
+  const wuDraw = () => {
+    const v = USE[wuWho || 'all'], max = Math.max(...USE.all), total = v.reduce((a, b) => a + b, 0)
+    $$('.wu-row', wuRows).forEach((r, i) => { $('i', r).style.width = (v[i] / max * 100) + '%'; $('b', r).textContent = wuWho ? v[i] || '–' : v[i]; r.classList.toggle('unused', !v[i]) })
+    $$('.wu-p', wuPeople).forEach(b => b.setAttribute('aria-pressed', b.dataset.n === wuWho))
     const top = AGENTS[v.indexOf(Math.max(...v))].name
-    adLine.innerHTML = !adWho ? '<b>5 of 6</b> teammates messaged an agent this week' : total ? `<b>${adWho}</b> sent ${total} messages, mostly to ${top}` : `<b>${adWho}</b> hasn’t tried one yet`
+    wuLine.innerHTML = !wuWho ? '<b>5 of 6</b> teammates messaged an agent this week' : total ? `<b>${wuWho}</b> sent ${total} messages, mostly to ${top}` : `<b>${wuWho}</b> hasn’t tried one yet`
   }
-  adPeople.addEventListener('click', e => { const b = e.target.closest('.ad-p'); if (!b) return; adWho = adWho === b.dataset.n ? null : b.dataset.n; adDraw() })
-  adDraw()
+  wuPeople.addEventListener('click', e => { const b = e.target.closest('.wu-p'); if (!b) return; wuWho = wuWho === b.dataset.n ? null : b.dataset.n; wuDraw() })
+  wuDraw()
 
   /* spend: one bar for the plan, split by agent */
   const SPEND = [24, 17, 9, 6, 4, 2], spBar = $('#spBar'), spLegend = $('#spLegend'), spPct = $('#spPct'), spWho = $('#spWho')
@@ -1993,18 +2032,20 @@ description: Answer "where is my order?"
 
   /* ---------- channel windows ---------- */
   whenVisible($('[data-seq="slack"]'), () => seq($('[data-seq="slack"]'), null, 7500), .35)
-  const waMsgs = $('#waMsgs'), WA = [...$$('.bub', waMsgs)].map(b => [b.classList.contains('me'), b.innerHTML])
-  whenVisible(waMsgs, async () => {
-    waMsgs.classList.add('fade'); await sleep(230)
-    $$('.bub', waMsgs).forEach(b => b.remove()); waMsgs.classList.remove('fade'); await sleep(500)
-    for (const [me, html] of WA) {
-      waMsgs.insertAdjacentHTML('beforeend', `<div class="bub ${me ? 'me' : 'them'} pop">${me ? html : '<span class="typing"><i></i><i></i><i></i></span>'}</div>`)
-      const b = waMsgs.lastElementChild
-      if (me) { await sleep(1300); continue }
-      await sleep(1000); b.innerHTML = html; await sleep(1400)
-    }
-    await sleep(5200)
-  }, .35)
+  $$('.wa-msgs').forEach(waMsgs => {
+    const WA = [...$$('.bub', waMsgs)].map(b => [b.classList.contains('me'), b.innerHTML])
+    whenVisible(waMsgs, async () => {
+      waMsgs.classList.add('fade'); await sleep(230)
+      $$('.bub', waMsgs).forEach(b => b.remove()); waMsgs.classList.remove('fade'); await sleep(500)
+      for (const [me, html] of WA) {
+        waMsgs.insertAdjacentHTML('beforeend', `<div class="bub ${me ? 'me' : 'them'} pop">${me ? html : '<span class="typing"><i></i><i></i><i></i></span>'}</div>`)
+        const b = waMsgs.lastElementChild
+        if (me) { await sleep(1300); continue }
+        await sleep(1000); b.innerHTML = html; await sleep(1400)
+      }
+      await sleep(5200)
+    }, .35)
+  })
   whenVisible($('[data-seq="as"]'), () => seq($('[data-seq="as"]')), .35)
 
   whenVisible(byoEl, async () => { await sleep(1900); if (!byoTouched && byoOn) { byoSel = (byoSel + 1) % AGENTS.length; byoDraw() } }, .5)
