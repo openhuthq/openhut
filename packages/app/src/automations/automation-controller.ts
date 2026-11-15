@@ -27,6 +27,8 @@ export const sendTargetController: FastifyPluginAsync = async (app) => {
 }
 
 export const hookController: FastifyPluginAsync = async (app) => {
+  app.addContentTypeParser('*', { parseAs: 'string', bodyLimit: WEBHOOK_BODY_MAX }, (_req, body, done) => done(null, body))
+
   app.post<{ Params: { id: string } }>('/:id', HookRequest, async (req, reply) => reply.status(202).send(await automationService.trigger({ id: req.params.id, authorization: req.headers.authorization, body: req.body ?? undefined })))
 }
 

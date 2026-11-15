@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Automation, AutomationRun, Every, Schedule, SendTarget } from '@openhut/common/automations/automation.ts'
 import { ConfirmButton } from '@/components/confirm-button'
@@ -11,6 +13,7 @@ import { AUTOMATION_ICONS, ICONS } from '@/components/icons'
 import { Locked } from '@/components/locked'
 import { SectionHead } from '@/components/section-head'
 import { RunIcon } from '@/components/status-badge'
+import { useMe } from '@/features/auth/api'
 import { useAutomationRuns, useAutomations, useCreateAutomation, useDeleteAutomation, useRunAutomation, useSendTargets, useUpdateAutomation } from '@/features/automations/api'
 import { formValues } from '@/lib/form'
 import { ago } from '@/lib/format'
@@ -20,23 +23,25 @@ import { toastError } from '@/lib/toast'
 const EVERY: { id: Every; label: string }[] = [{ id: 'hourly', label: 'Hourly' }, { id: 'daily', label: 'Daily' }, { id: 'weekdays', label: 'Weekdays' }, { id: 'weekly', label: 'Weekly' }]
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const NOWHERE = ''
+const MINUTES = ['00', '15', '30', '45']
+const WEEK_MS = 6 * 86_400_000
 
 export function AutomationsSection({ agent, lockReason, open }: { agent: Agent; lockReason: string | undefined; open: string | undefined }) {
   const automations = useAutomations(agent.id)
   const opened = automations.data?.find((automation) => automation.id === open)
+  const placeName = usePlaceName({ agentId: agent.id, enabled: !!automations.data?.some((automation) => automation.postTo) })
   const add = <Locked reason={lockReason}><button type="button" className="btn sm" disabled={!agent.canEdit} onClick={() => navigate(`/agents/${agent.id}/automations/new`)}>{ICONS.plus}Add</button></Locked>
   return <section>
     <SectionHead title="Automations" action={add} />
     <ErrorNote message={automations.error?.message} />
     {automations.data && !automations.data.length && <p className="note">{agent.name} only answers when someone writes to it. Add an automation to have it act on a schedule or when another app calls it.</p>}
-    {!!automations.data?.length && <div className="box rows">{automations.data.map((automation) => <AutomationRow key={automation.id} agent={agent} automation={automation} lockReason={lockReason} />)}</div>}
+    {!!automations.data?.length && <div className="box rows">{automations.data.map((automation) => <AutomationRow key={automation.id} agent={agent} automation={automation} lockReason={lockReason} placeName={placeName} />)}</div>}
     {open === 'new' && agent.canEdit && <NewAutomationSheet agent={agent} />}
-    {opened && <AutomationSheet agent={agent} automation={opened} lockReason={lockReason} />}
+    {opened && <AutomationSheet agent={agent} automation={opened} lockReason={lockReason} placeName={placeName} />}
   </section>
 }
 
-function AutomationRow({ agent, automation, lockReason }: { agent: Agent; automation: Automation; lockReason: string | undefined }) {
-  const placeName = usePlaceName(agent.id)
+function AutomationRow({ agent, automation, lockReason, placeName }: { agent: Agent; automation: Automation; lockReason: string | undefined; placeName: (id: string) => string }) {
   const update = useUpdateAutomation({ agentId: agent.id, automationId: automation.id })
   return <div className="row autorow">
     <span className="mark">{AUTOMATION_ICONS[automation.trigger]}</span>
@@ -68,7 +73,7 @@ function NewAutomationSheet({ agent }: { agent: Agent }) {
   return <Dialog className="dlg sheet" labelledBy="auto-h" onClosed={() => navigate(home)}>{(close) =>
     <form className="dlgform" onSubmit={(event) => {
       const value = formValues(event)
-      const schedule: Schedule | undefined = trigger === 'schedule' ? { every, at: value('at') || '09:00', ...(every === 'weekly' && { day: Number(value('day')) }) } : undefined
+      const schedule = trigger === 'schedule' ? scheduleFrom({ every, value }) : undefined
       create.mutate({ agentId: agent.id, name: value('name'), instructions: value('instructions'), ...(schedule ? { schedule } : { webhook: true }), postTo: value('postTo') || null, enabled },
         { onSuccess: (automation) => { if (!automation.webhookSecret) close() } })
     }}>
@@ -118,16 +123,25 @@ function TriggerCard({ id, current, onPick, title, line }: { id: 'schedule' | 'w
 }
 
 function ScheduleFields({ every, onEvery, initial }: { every: Every; onEvery: (every: Every) => void; initial?: Schedule }) {
+  const me = useMe()
+  const zone = me.data?.timeZone ? ` (${me.data.timeZone})` : ''
   return <div className="chips" role="radiogroup" aria-label="How often">
     {EVERY.map((option) => <button key={option.id} type="button" className="chip" role="radio" aria-checked={every === option.id} onClick={() => onEvery(option.id)}>{option.label}</button>)}
     {every === 'weekly' && <select name="day" aria-label="Day" className="chipsel" defaultValue={initial?.day ?? 1}>{DAYS.map((day, index) => <option key={day} value={index}>{day}</option>)}</select>}
-    <input type="time" name="at" aria-label={every === 'hourly' ? 'Minute past the hour' : 'Time'} className="chipsel" defaultValue={initial?.at ?? '09:00'} required />
-    <span className="hint wide">{every === 'hourly' ? 'Runs every hour at that minute.' : 'Server time.'}</span>
+    {every === 'hourly'
+      ? <select name="minute" aria-label="Minute past the hour" className="chipsel" defaultValue={initial?.at.slice(3) ?? '00'}>{MINUTES.map((minute) => <option key={minute} value={minute}>:{minute}</option>)}</select>
+      : <input type="time" name="at" aria-label="Time" className="chipsel" defaultValue={initial?.at ?? '09:00'} required />}
+    <span className="hint wide">{every === 'hourly' ? 'Runs every hour at that minute.' : `Server time${zone}.`}</span>
   </div>
 }
 
+function scheduleFrom({ every, value }: { every: Every; value: (name: string) => string }): Schedule {
+  const at = every === 'hourly' ? `00:${value('minute') || '00'}` : value('at') || '09:00'
+  return { every, at, ...(every === 'weekly' && { day: Number(value('day')) }) }
+}
+
 function PostToPicker({ agent, value }: { agent: Agent; value: string }) {
-  const targets = useSendTargets(agent.id)
+  const targets = useSendTargets({ agentId: agent.id, enabled: true })
   const known = targets.data ?? []
   const options: SendTarget[] = value && !known.some((target) => target.id === value) ? [...known, { id: value, object: 'send_target', platform: value.split(':')[0], name: value, type: '' }] : known
   return <select name="postTo" aria-label="Post the result to" className="postsel" defaultValue={value}>
@@ -140,7 +154,7 @@ function PostToPicker({ agent, value }: { agent: Agent; value: string }) {
 
 function WebhookReady({ agent, automation, secret }: { agent: Agent; automation: Automation; secret: string }) {
   const home = `/agents/${agent.id}`
-  return <Dialog className="dlg sheet" labelledBy="hook-h" onClosed={() => navigate(home)}>{(close) =>
+  return <Dialog className="dlg sheet" labelledBy="hook-h" dismissable={false} onClosed={() => navigate(home)}>{(close) =>
     <div className="dlgform">
       <DialogHead id="hook-h" title={`${automation.name} is ready`} subtitle="Copy the secret now. It isn't shown again." onClose={close} />
       <div className="dlgbody">
@@ -153,9 +167,8 @@ function WebhookReady({ agent, automation, secret }: { agent: Agent; automation:
   </Dialog>
 }
 
-function AutomationSheet({ agent, automation, lockReason }: { agent: Agent; automation: Automation; lockReason: string | undefined }) {
+function AutomationSheet({ agent, automation, lockReason, placeName }: { agent: Agent; automation: Automation; lockReason: string | undefined; placeName: (id: string) => string }) {
   const [editing, setEditing] = useState(false)
-  const placeName = usePlaceName(agent.id)
   const runs = useAutomationRuns(automation.id)
   const run = useRunAutomation({ agentId: agent.id, automationId: automation.id })
   const remove = useDeleteAutomation({ agentId: agent.id, automationId: automation.id })
@@ -166,7 +179,7 @@ function AutomationSheet({ agent, automation, lockReason }: { agent: Agent; auto
   return <Dialog className="dlg sheet" labelledBy="autod-h" onClosed={() => navigate(home)}>{(close) => editing
     ? <form className="dlgform" onSubmit={(event) => {
       const value = formValues(event)
-      const schedule: Schedule | undefined = automation.schedule ? { every, at: value('at') || '09:00', ...(every === 'weekly' && { day: Number(value('day')) }) } : undefined
+      const schedule = automation.schedule ? scheduleFrom({ every, value }) : undefined
       update.mutate({ name: value('name'), instructions: value('instructions'), postTo: value('postTo') || null, ...(schedule && { schedule }) }, { onSuccess: () => setEditing(false) })
     }}>
       <DialogHead id="autod-h" title={`Edit ${automation.name}`} onClose={close} />
@@ -187,15 +200,14 @@ function AutomationSheet({ agent, automation, lockReason }: { agent: Agent; auto
         {automation.webhookUrl && <div className="group"><span className="glabel">Webhook URL</span><div className="secretrow"><code>{automation.webhookUrl}</code><CopyButton text={automation.webhookUrl} label="Copy" /></div></div>}
         <div className="group"><span className="glabel">Runs</span>
           <ErrorNote message={runs.error?.message} />
-          {runs.data && !runs.data.length && <p className="note">No runs yet. {automation.trigger === 'schedule' && automation.nextRunAt ? `The first is ${new Date(automation.nextRunAt).toLocaleString('en', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : ''}</p>}
+          {runs.data && !runs.data.length && <p className="note">No runs yet. {automation.trigger === 'schedule' && automation.nextRunAt ? `The first is ${when(automation.nextRunAt)}.` : ''}</p>}
           {!!runs.data?.length && <div className="box rows">{runs.data.map((each) => <RunRow key={each.id} run={each} />)}</div>}
         </div>
       </div>
-      <DialogFoot error={run.error?.message}>
-        <Locked reason={lockReason}>
-          <ConfirmButton className="btn danger" disabled={!agent.canEdit || remove.isPending} question={`Delete ${automation.name}?`} detail={automation.webhookUrl ? 'Its webhook URL stops working. This can\'t be undone.' : 'This can\'t be undone.'} action="Delete"
-            onConfirm={() => remove.mutate(undefined, { onSuccess: close, onError: toastError })}>Delete</ConfirmButton>
-        </Locked>
+      <DialogFoot error={run.error?.message} start={<Locked reason={lockReason}>
+        <ConfirmButton className="btn danger" disabled={!agent.canEdit || remove.isPending} question={`Delete ${automation.name}?`} detail={automation.webhookUrl ? 'Its webhook URL stops working. This can\'t be undone.' : 'This can\'t be undone.'} action="Delete"
+          onConfirm={() => remove.mutate(undefined, { onSuccess: close, onError: toastError })}>Delete</ConfirmButton>
+      </Locked>}>
         <Locked reason={lockReason}><button type="button" className="btn sec" disabled={!agent.canEdit} onClick={() => setEditing(true)}>Edit</button></Locked>
         <Locked reason={lockReason}><button type="button" className="btn primary" disabled={!agent.canEdit || busy} onClick={() => run.mutate()}>{busy ? 'Running…' : 'Run now'}</button></Locked>
       </DialogFoot>
@@ -209,18 +221,19 @@ function RunRow({ run }: { run: AutomationRun }) {
   return <div className="runrow-w">
     <button type="button" className="row runrow" aria-expanded={open} disabled={!detail} onClick={() => setOpen(!open)}>
       <RunIcon status={run.status} />
-      <span className="rwhen">{new Date(run.startedAt).toLocaleString('en', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+      <span className="rwhen">{when(run.startedAt)}</span>
       <span className="mute rwhat ellip">{summary(run)}</span>
       <span className="mute rdur">{run.ms === null ? '' : `${Math.round(run.ms / 1000)}s`}</span>
     </button>
-    {open && detail && <p className="runtext">{detail}</p>}
+    {open && run.error && <p className="runtext">{run.error}</p>}
+    {open && !run.error && run.answer && <div className="runtext msg-t"><Markdown remarkPlugins={[remarkGfm]}>{run.answer}</Markdown></div>}
   </div>
 }
 
 function summary(run: AutomationRun): string {
   if (run.status === 'running') return 'Running'
   if (run.status === 'quiet') return 'Nothing new, didn\'t post'
-  if (run.status === 'done') return run.answer ?? 'Done'
+  if (run.status === 'done') return plain(run.answer ?? 'Done')
   return run.error ?? run.status
 }
 
@@ -232,8 +245,8 @@ function triggerLine(automation: Automation): string {
   return `${every === 'daily' ? 'Daily' : 'Weekdays'} at ${at}`
 }
 
-function usePlaceName(agentId: string): (id: string) => string {
-  const targets = useSendTargets(agentId)
+function usePlaceName({ agentId, enabled }: { agentId: string; enabled: boolean }): (id: string) => string {
+  const targets = useSendTargets({ agentId, enabled })
   return (id) => {
     const target = targets.data?.find((each) => each.id === id)
     return target ? label(target) : id
@@ -243,4 +256,14 @@ function usePlaceName(agentId: string): (id: string) => string {
 function label(target: SendTarget): string {
   const platform = target.platform.charAt(0).toUpperCase() + target.platform.slice(1)
   return `${platform} · ${target.name}`
+}
+
+function when(iso: string): string {
+  const date = new Date(iso)
+  const far = Math.abs(Date.now() - date.getTime()) > WEEK_MS
+  return date.toLocaleString('en', far ? { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' } : { weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+}
+
+function plain(markdown: string): string {
+  return markdown.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`#>]/g, '').replace(/\s+/g, ' ').trim()
 }

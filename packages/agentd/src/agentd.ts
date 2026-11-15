@@ -9,6 +9,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { newMessages, type NewMessage } from './messages.ts'
 import { isMemoryTarget, MAX_MEMORY_BYTES, readMemory, writeMemory, type MemoryTarget } from './memory.ts'
 import { isSkillPath, listSkills, MAX_SKILL_BYTES, readSkill, writeSkill, type SkillHead } from './skills.ts'
+import { MAX_SEND_BYTES, SEND_TARGET, targetsOf, type SendTarget } from './send.ts'
 
 const run = promisify(execFile)
 const RELEASE_URL = process.env.OPENHUT_URL ?? 'https://openhut.dev'
@@ -48,8 +49,6 @@ const PAIR_MS = 5 * 60_000
 const MAX_REQUEST = 1 << 20
 const TAILSCALE_KEY = /^tskey-auth-[\w-]{10,200}$/
 const TAILSCALE_INSTALL_MS = 170_000
-const SEND_TARGET = /^[a-z]+:[\w@.#:+-]{1,200}$/
-const MAX_SEND_BYTES = 32_000
 
 const pairings = new Map<string, Pairing>()
 const queues = new Map<string, Promise<unknown>>()
@@ -473,7 +472,7 @@ function makeHome(id: string) {
 
 async function send({ id, to, text }: { id: string; to: string; text: string }): Promise<{ sent: string }> {
   if (!(await isRunning(id))) throw new Error("the agent isn't running")
-  const hermes = run('docker', ['exec', '-i', `ag-${id}`, 'hermes', 'send', '--to', to, '--quiet', '--file', '-'], EXEC)
+  const hermes = run('docker', ['exec', '-i', `ag-${id}`, 'hermes', 'send', `--to=${to}`, '--quiet', '--file', '-'], EXEC)
   hermes.child.stdin?.end(text)
   await hermes
   return { sent: to }
@@ -481,11 +480,7 @@ async function send({ id, to, text }: { id: string; to: string; text: string }):
 
 async function sendTargets(id: string): Promise<SendTarget[]> {
   if (!(await isRunning(id))) return []
-  const listed: unknown = JSON.parse(await docker('exec', `ag-${id}`, 'hermes', 'send', '--list', '--json'))
-  const platforms = isRecord(listed) && isRecord(listed.platforms) ? listed.platforms : {}
-  return Object.entries(platforms).flatMap(([platform, chats]) => (Array.isArray(chats) ? chats : []).filter(isRecord).map((chat) => ({
-    id: `${platform}:${String(chat.id)}${chat.thread_id ? `:${String(chat.thread_id)}` : ''}`, platform, name: String(chat.name ?? chat.id), type: String(chat.type ?? ''),
-  })).filter((target) => SEND_TARGET.test(target.id)))
+  return targetsOf(JSON.parse(await docker('exec', `ag-${id}`, 'hermes', 'send', '--list', '--json')))
 }
 
 async function docker(...args: string[]) {
@@ -671,7 +666,7 @@ export type AgentdReplies = {
   'ts-down': Tailnet
 }
 
-export type SendTarget = { id: string; platform: string; name: string; type: string }
+export type { SendTarget }
 
 export type Container = { name: string; agentId: string; state: string; status: string; image: string; createdAt: string; networks: string }
 

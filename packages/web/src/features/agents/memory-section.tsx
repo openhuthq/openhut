@@ -22,8 +22,12 @@ export function MemoryRow({ agent }: { agent: Agent }) {
   const count = memory.data ? memory.data.notes.entries.length + memory.data.people.entries.length : undefined
   return <div>
     <span>{FACT_ICONS.memory}Memory</span>
-    <button type="button" className="btn sec sm" onClick={() => navigate(`/agents/${agent.id}/memory`)}>{count === undefined ? 'Manage' : `${count === 1 ? '1 entry' : `${count} entries`} · Manage`}</button>
+    <button type="button" className="btn sec sm" onClick={() => navigate(`/agents/${agent.id}/memory`)}>{count === undefined ? 'Manage' : `${entriesLabel(count)} · Manage`}</button>
   </div>
+}
+
+function entriesLabel(count: number): string {
+  return count === 1 ? '1 entry' : `${count} entries`
 }
 
 export function MemorySheet({ agent, lockReason }: { agent: Agent; lockReason: string | undefined }) {
@@ -37,7 +41,9 @@ export function MemorySheet({ agent, lockReason }: { agent: Agent; lockReason: s
         {memory.data && <>
           <div className="shead flush">
             <span className="mtrs">{KINDS.map((kind) => <Meter key={kind.target} label={kind.label} used={memory.data[kind.target].used} limit={memory.data[kind.target].limit} />)}</span>
-            <Locked reason={lockReason}><button type="button" className="btn sm" disabled={!agent.canEdit || adding} onClick={() => setAdding(true)}>{ICONS.plus}Add</button></Locked>
+            <Locked reason={lockReason ?? (KINDS.some((kind) => memory.data[kind.target].saved) ? undefined : `${agent.name} hasn't saved any memory yet. You can add to it once it has.`)}>
+              <button type="button" className="btn sm" disabled={!agent.canEdit || adding || !KINDS.some((kind) => memory.data[kind.target].saved)} onClick={() => setAdding(true)}>{ICONS.plus}Add</button>
+            </Locked>
           </div>
           <MemoryList agent={agent} memory={memory.data} adding={adding} onAdded={() => setAdding(false)} />
         </>}
@@ -66,7 +72,9 @@ function MemoryList({ agent, memory, adding, onAdded }: { agent: Agent; memory: 
       const target = value('kind') === 'notes' ? 'notes' : 'people'
       save({ target, list: [...memory[target].entries, value('text')], done: onAdded })
     }}>
-      <div className="setup-seg narrow-seg">{KINDS.map((kind, i) => <label key={kind.target}><input type="radio" name="kind" value={kind.target} defaultChecked={i === 0} />{AUTOMATION_ICONS[kind.icon]}{kind.label === 'People' ? 'Person' : 'Note'}</label>)}</div>
+      <div className="setup-seg narrow-seg">{KINDS.map((kind) => <label key={kind.target} title={memory[kind.target].saved ? undefined : `${agent.name} hasn't saved any ${kind.label.toLowerCase()} yet`}>
+        <input type="radio" name="kind" value={kind.target} disabled={!memory[kind.target].saved} defaultChecked={kind.target === KINDS.find((each) => memory[each.target].saved)?.target} />{AUTOMATION_ICONS[kind.icon]}{kind.label === 'People' ? 'Person' : 'Note'}
+      </label>)}</div>
       <textarea name="text" aria-label="New memory entry" required autoFocus placeholder={`What should ${agent.name} remember?`} />
       <div className="acts"><button type="button" className="btn sec sm" onClick={onAdded}>Cancel</button><button className="btn primary sm" disabled={update.isPending}>Save</button></div>
     </form>}

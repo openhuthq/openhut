@@ -598,7 +598,9 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .dlg.sheet .dlgform{height:100%}
 .dlg.sheet .dlghead{border-bottom:0;padding-bottom:4px}
 .dlg.sheet .dlgfoot{border-top:0}
-.dlg.sheet .dlgbody{scrollbar-gutter:stable}
+.dlg.sheet .dlgbody,.dlg.sheet .dlgfoot{scrollbar-gutter:stable}
+.dlg.sheet .dlgfoot{overflow:hidden}
+.runtext.msg-t{padding:0 16px 12px 42px}
 .dlg.sheet textarea{flex:none;min-height:120px;border:1px solid var(--hair);border-radius:8px;padding:10px 12px;font:14px/1.5 var(--sans);resize:vertical}
 .dlg.sheet textarea:focus{outline:2px solid var(--ink);outline-offset:-1px}
 .dlg.sheet .memform textarea{min-height:76px}
@@ -638,7 +640,6 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .runicon.quiet,.runicon.skipped,.runicon.paused{color:var(--mute-2)}
 .runicon.failed{color:var(--fail)}
 .runicon.running{color:#d98314;animation:spin 1.2s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
 .runrow{width:100%;border:0;background:transparent;font:inherit;color:inherit;text-align:left;gap:10px}
 .runrow:hover:not(:disabled){background:var(--tint)}
 .rwhen{white-space:nowrap;flex:none;width:96px}

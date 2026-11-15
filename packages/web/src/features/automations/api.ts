@@ -8,6 +8,7 @@ const RUN_LIST = List(AutomationRun)
 const TARGET_LIST = List(SendTarget)
 const DELETED_AUTOMATION = Deleted('automation')
 const POLL_MS = 2_000
+const TARGETS_FRESH_MS = 5 * 60_000
 
 export function useAutomations(agentId: string) {
   return useQuery({
@@ -25,9 +26,11 @@ export function useAutomationRuns(automationId: string) {
   })
 }
 
-export function useSendTargets(agentId: string) {
+export function useSendTargets({ agentId, enabled }: { agentId: string; enabled: boolean }) {
   return useQuery({
     queryKey: ['send-targets', agentId],
+    enabled,
+    staleTime: TARGETS_FRESH_MS,
     queryFn: () => request({ schema: TARGET_LIST, path: `/api/send-targets?agentId=${encodeURIComponent(agentId)}` }).then((page) => page.data),
   })
 }
