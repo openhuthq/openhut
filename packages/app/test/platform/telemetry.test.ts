@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { config } from '../../src/platform/config.ts'
 import { db, migrate } from '../../src/platform/db.ts'
 import { record, takeTelemetry, track } from '../../src/platform/events.ts'
-import { reportActive, sendTelemetry } from '../../src/platform/telemetry.ts'
+import { agentd } from '../../src/platform/agentd.ts'
+import { reportActive, reportMessaging, sendTelemetry } from '../../src/platform/telemetry.ts'
 
 await migrate()
 const actor = { id: 'usr_telemtry', email: 'owner@acme.example' }
@@ -61,4 +62,15 @@ test('a failed send only logs and drops the batch', async () => {
   await sendTelemetry(INSTANCE)
   failing.mock.restore()
   assert.deepEqual(takeTelemetry(), [])
+})
+
+test('the daily messaging count sends numbers per channel and how many people sent them, never who or what', async () => {
+  const activity = mock.method(agentd, 'activity', async () => ({ messages: { slack: 40, api_server: 6, whatsapp: 2, cron: 1 }, senders: 4, agents: 2 }))
+  config.telemetry = true
+  await reportMessaging()
+  config.telemetry = false
+  activity.mock.restore()
+  assert.deepEqual(takeTelemetry().map(({ name, properties }) => ({ name, properties })), [
+    { name: 'messaging_daily', properties: { slack: 40, whatsapp: 2, telegram: 0, dashboard: 6, other: 1, senders: 4, agents: 2 } },
+  ])
 })
