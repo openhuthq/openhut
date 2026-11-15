@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { SKILL_MAX_LENGTH, type Skill } from '@openhut/common/agents/skill.ts'
 import { BRAND_ICONS, type BrandName } from '@/components/brand-icons'
+import { ConfirmButton } from '@/components/confirm-button'
 import { Dialog } from '@/components/dialog'
 import { DialogFoot } from '@/components/dialog-foot'
 import { DialogHead } from '@/components/dialog-head'
@@ -10,9 +11,10 @@ import { ICONS, LEARNED_SKILL_ICON, skillIcon } from '@/components/icons'
 import { Locked } from '@/components/locked'
 import { Mark } from '@/components/mark'
 import { SectionHead } from '@/components/section-head'
-import { useSkill, useSkills, useUpdateSkill } from '@/features/agents/api'
+import { useDeleteSkill, useSkill, useSkills, useUpdateSkill } from '@/features/agents/api'
 import { formValues } from '@/lib/form'
 import { navigate } from '@/lib/router'
+import { toastError } from '@/lib/toast'
 
 type Filter = 'all' | 'learned' | 'builtIn'
 
@@ -63,6 +65,7 @@ function isBrand(name: string): name is BrandName {
 function SkillDialog({ agent, skillId, lockReason }: { agent: Agent; skillId: string; lockReason: string | undefined }) {
   const skill = useSkill(skillId)
   const updateSkill = useUpdateSkill(skillId)
+  const deleteSkill = useDeleteSkill({ skillId, agentId: agent.id })
   return <Dialog labelledBy="skill-h" onClosed={() => navigate(`/agents/${agent.id}`)}>{(close) =>
     <form className="dlgform" onSubmit={(event) => updateSkill.mutate(formValues(event)('body'), { onSuccess: close })}>
       <DialogHead id="skill-h" title={skill.data ? `${agent.name}'s ${skill.data.name} skill` : `${agent.name}'s skill`} subtitle={skill.data?.description || skill.data?.path} onClose={close} />
@@ -70,6 +73,10 @@ function SkillDialog({ agent, skillId, lockReason }: { agent: Agent; skillId: st
         ? <textarea name="body" aria-label="Skill" maxLength={SKILL_MAX_LENGTH} required readOnly={!agent.canEdit} defaultValue={skill.data.body ?? ''} />
         : <textarea aria-label="Skill" readOnly placeholder={skill.error ? '' : 'Opening…'} />}
       <DialogFoot error={skill.error?.message ?? updateSkill.error?.message}>
+        {skill.data && !skill.data.builtIn && <Locked reason={lockReason}>
+          <ConfirmButton className="btn danger" disabled={!agent.canEdit || deleteSkill.isPending} question={`Delete the ${skill.data.name} skill?`} detail={`${agent.name} forgets it for good. This can't be undone.`} action="Delete"
+            onConfirm={() => deleteSkill.mutate(undefined, { onSuccess: close, onError: toastError })}>{ICONS.trash}<span className="lbl">Delete</span></ConfirmButton>
+        </Locked>}
         <button type="button" className="btn sec" onClick={close}>Cancel</button>
         <Locked reason={lockReason}><button className="btn primary" disabled={!agent.canEdit || !skill.data || updateSkill.isPending}>Save</button></Locked>
       </DialogFoot>

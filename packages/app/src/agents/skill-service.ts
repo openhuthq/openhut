@@ -31,6 +31,15 @@ export const skillService = {
     record({ action: 'skill.updated', actor, target: { type: 'skill', id, agentId } })
     return skillService.get({ actor, id })
   },
+
+  async delete({ actor, id }: { actor: Caller; id: string }): Promise<{ id: string; object: 'skill'; deleted: true }> {
+    const skill = await skillService.get({ actor, id })
+    await agentService.requireEditable({ actor, id: skill.agentId })
+    if (skill.builtIn) throw new HttpError(400, 'Built-in skills come with Hermes and can\'t be deleted. Only skills the agent learned can.')
+    await agentd.removeSkill({ id: skill.agentId, path: skill.path })
+    record({ action: 'skill.deleted', actor, target: { type: 'skill', id, agentId: skill.agentId } })
+    return { id, object: 'skill', deleted: true }
+  },
 }
 
 const MISSING = 'That skill doesn\'t exist. The agent may have removed it.'

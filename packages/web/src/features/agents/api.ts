@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
 import { Agent, Grant, type CreateAgent, type UpdateAgent } from '@openhut/common/agents/agent.ts'
+import { Memory, type UpdateMemory } from '@openhut/common/agents/memory.ts'
 import { Skill } from '@openhut/common/agents/skill.ts'
 import { Channel, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
 import { request } from '@/lib/api-client'
@@ -14,6 +15,7 @@ const SKILL_LIST = List(Skill)
 const DELETED_AGENT = Deleted('agent')
 const DELETED_GRANT = Deleted('grant')
 const DELETED_CHANNEL = Deleted('channel')
+const DELETED_SKILL = Deleted('skill')
 
 export function useAgents() {
   return useQuery({ queryKey: AGENTS_KEY, queryFn: () => request({ schema: AGENT_LIST, path: '/api/agents' }).then((page) => page.data) })
@@ -136,6 +138,33 @@ export function useUpdateSkill(skillId: string) {
       client.setQueryData<Skill[]>(['skills', skill.agentId], (skills) => skills?.map((each) => each.id === skill.id ? { ...skill, body: null } : each))
     },
   })
+}
+
+export function useDeleteSkill({ skillId, agentId }: { skillId: string; agentId: string }) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => request({ schema: DELETED_SKILL, path: skillPath(skillId), method: 'DELETE' }),
+    onSuccess: () => {
+      client.removeQueries({ queryKey: ['skill', skillId] })
+      client.setQueryData<Skill[]>(['skills', agentId], (skills) => skills?.filter((each) => each.id !== skillId))
+    },
+  })
+}
+
+export function useMemory(agentId: string) {
+  return useQuery({ queryKey: ['memory', agentId], queryFn: () => request({ schema: Memory, path: memoryPath(agentId) }) })
+}
+
+export function useUpdateMemory(agentId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (patch: UpdateMemory) => request({ schema: Memory, path: memoryPath(agentId), method: 'PATCH', body: patch }),
+    onSuccess: (memory) => client.setQueryData(['memory', agentId], memory),
+  })
+}
+
+function memoryPath(agentId: string) {
+  return `/api/memories/${encodeURIComponent(agentId)}`
 }
 
 function skillPath(skillId: string) {

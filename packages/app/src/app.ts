@@ -9,6 +9,7 @@ import { answerErrors, errorBody } from './platform/http-error.ts'
 import { validateWithZod } from './platform/validation.ts'
 import { adminController, healthController, updateController } from './admin/admin-controller.ts'
 import { agentController, grantController } from './agents/agent-controller.ts'
+import { memoryController } from './agents/memory-controller.ts'
 import { skillController } from './agents/skill-controller.ts'
 import { agentService } from './agents/agent-service.ts'
 import { channelController } from './channels/channel-controller.ts'
@@ -41,6 +42,7 @@ await app.register(oauthMetadataController)
 await app.register(agentController, { prefix: '/api/agents' })
 await app.register(grantController, { prefix: '/api/grants' })
 await app.register(skillController, { prefix: '/api/skills' })
+await app.register(memoryController, { prefix: '/api/memories' })
 await app.register(threadController, { prefix: '/api/threads' })
 await app.register(channelController, { prefix: '/api/channels' })
 await app.register(connectionController, { prefix: '/api/connections' })

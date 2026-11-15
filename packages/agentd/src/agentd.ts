@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { DatabaseSync } from 'node:sqlite'
+import { isMemoryTarget, MAX_MEMORY_BYTES, readMemory, writeMemory, type MemoryTarget } from './memory.ts'
 import { isSkillPath, listSkills, MAX_SKILL_BYTES, readSkill, writeSkill, type SkillHead } from './skills.ts'
 
 const run = promisify(execFile)
@@ -143,6 +144,14 @@ async function handle(req: AgentdRequest): Promise<Reply> {
     case 'skill-write':
       writeSkill({ root: skillsRoot(req.id), path: req.path, body: req.body })
       return { written: req.path }
+    case 'skill-rm':
+      await removeSkill(req.id, req.path)
+      return { removed: req.path }
+    case 'memory':
+      return readMemory(memoriesRoot(req.id))
+    case 'memory-write':
+      writeMemory({ root: memoriesRoot(req.id), target: req.target, body: req.body })
+      return { written: req.target }
     case 'usage':
       return { usage: agentUsage(req.since) }
     case 'ts-up':
@@ -184,7 +193,14 @@ function parseRequest(value: unknown): AgentdRequest {
     case 'skills':
       return { cmd, id: agentId(value.id) }
     case 'skill-read':
+    case 'skill-rm':
       return { cmd, id: agentId(value.id), path: skillPath(value.path) }
+    case 'memory':
+      return { cmd, id: agentId(value.id) }
+    case 'memory-write':
+      if (!isMemoryTarget(value.target)) throw new Error('bad memory target')
+      if (typeof value.body !== 'string' || Buffer.byteLength(value.body) > MAX_MEMORY_BYTES) throw new Error('missing or oversized memory')
+      return { cmd, id: agentId(value.id), target: value.target, body: value.body }
     case 'skill-write':
       if (typeof value.body !== 'string' || !value.body || Buffer.byteLength(value.body) > MAX_SKILL_BYTES) throw new Error('missing or oversized skill body')
       return { cmd, id: agentId(value.id), path: skillPath(value.path), body: value.body }
@@ -476,6 +492,20 @@ function agentUsage(since: number): Record<string, number> {
   return usage
 }
 
+async function removeSkill(id: string, path: string) {
+  const digest = await docker('image', 'inspect', '--format', '{{index .RepoDigests 0}}', IMAGE).catch(() => IMAGE)
+  await docker(
+    'run', '--rm',
+    ...['--runtime', 'runsc', '--user', `${AGENT_UID}:${AGENT_UID}`, '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'],
+    ...['--mount', `type=bind,src=${home(id)},dst=/opt/data`, '--entrypoint', 'rm'],
+    ...[digest, '-rf', '--', `/opt/data/skills/${path}`],
+  )
+}
+
+function memoriesRoot(id: string) {
+  return `${realpathSync('/data/agents')}/${id}/memories`
+}
+
 function skillsRoot(id: string) {
   return `${realpathSync('/data/agents')}/${id}/skills`
 }
@@ -572,7 +602,9 @@ export type AgentdRequest =
   | { cmd: 'create'; id: string; net: number; files: AgentFiles; size: AgentSize }
   | { cmd: 'apply'; id: string; net: number; files: AgentFiles; size: AgentSize; restart: boolean; force?: boolean }
   | { cmd: 'start' | 'stop' | 'rm' | 'wa-pair' | 'wa-unlink' | 'skills'; id: string }
-  | { cmd: 'skill-read'; id: string; path: string }
+  | { cmd: 'skill-read' | 'skill-rm'; id: string; path: string }
+  | { cmd: 'memory'; id: string }
+  | { cmd: 'memory-write'; id: string; target: MemoryTarget; body: string }
   | { cmd: 'skill-write'; id: string; path: string; body: string }
   | { cmd: 'usage'; since: number }
   | { cmd: 'ts-up'; authKey: string }
@@ -593,6 +625,9 @@ export type AgentdReplies = {
   skills: { skills: SkillHead[]; bundled: string }
   'skill-read': { body: string }
   'skill-write': { written: string }
+  'skill-rm': { removed: string }
+  memory: Record<MemoryTarget, string | null>
+  'memory-write': { written: MemoryTarget }
   usage: { usage: Record<string, number> }
   'ts-up': Tailnet & { joined: boolean }
   'ts-status': Tailnet

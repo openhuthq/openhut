@@ -13,6 +13,7 @@ import { useAgent, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { ChannelsSection } from '@/features/agents/channels-section'
 import { InstructionsSection } from '@/features/agents/instructions-section'
 import { ModelPicker, SizePicker } from '@/features/agents/model-picker'
+import { MemorySection } from '@/features/agents/memory-section'
 import { SkillsSection } from '@/features/agents/skills-section'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
@@ -69,6 +70,7 @@ function AgentView({ agent, dialog, skill }: { agent: Agent; dialog: AgentDialog
         </aside>
       </div>
       <SkillsSection agent={agent} lockReason={lockReason} open={skill} />
+      <MemorySection agent={agent} lockReason={lockReason} />
     </div>
   </Page>
 }
