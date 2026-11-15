@@ -11,7 +11,7 @@ export function ChatTree({ route }: { route: Route }) {
   return <div className="chats">
     <div className="sidelabel">Chats</div>
     {agents.data.map((agent) => <a key={agent.id} className="nav chat-agent" href={`/agents/${agent.id}/chat`} aria-current={agent.id === openId ? 'page' : undefined}>
-      <Avatar id={agent.id} about={agent.instructions} size={20} /><span className="ellip">{agent.name}</span><i className={`dot ${dotOf(agent)}`} title={agentState(agent)} />
+      <Avatar id={agent.id} about={agent.instructions} size={26} /><span className="ellip">{agent.name}</span><i className={`dot ${dotOf(agent)}`} title={agentState(agent)} />
     </a>)}
   </div>
 }
