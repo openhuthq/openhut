@@ -39,18 +39,18 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Release files
         run: scripts/release.sh
-      - name: Deploy fastmonkey.dev
-        run: npm -w @fastmonkey/site run deploy
+      - name: Deploy openhut.dev
+        run: npm -w @openhut/site run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      - name: Check that fastmonkey.dev serves this release
+      - name: Check that openhut.dev serves this release
         run: |
-          want=$(sed -n 's/^FASTMONKEY_SHA256="\([0-9a-f]*\)"$/\1/p' dist/install.sh)
+          want=$(sed -n 's/^OPENHUT_SHA256="\([0-9a-f]*\)"$/\1/p' dist/install.sh)
           for i in 1 2 3 4 5 6; do
-            got=$(curl -fsS https://fastmonkey.dev/fastmonkey.tgz | sha256sum | cut -d' ' -f1)
-            served=$(curl -fsS https://fastmonkey.dev/ | sed -n 's/^FASTMONKEY_SHA256="\([0-9a-f]*\)"$/\1/p')
+            got=$(curl -fsS https://openhut.dev/openhut.tgz | sha256sum | cut -d' ' -f1)
+            served=$(curl -fsS https://openhut.dev/ | sed -n 's/^OPENHUT_SHA256="\([0-9a-f]*\)"$/\1/p')
             [ "$got" = "$want" ] && [ "$served" = "$want" ] && break
-            [ "$i" = 6 ] && { echo "fastmonkey.dev doesn't serve this release yet." >&2; exit 1; }
+            [ "$i" = 6 ] && { echo "openhut.dev doesn't serve this release yet." >&2; exit 1; }
             sleep 10
           done
-          curl -fsS -H 'accept: text/html' https://fastmonkey.dev/ | grep -q '<html'
+          curl -fsS -H 'accept: text/html' https://openhut.dev/ | grep -q '<html'

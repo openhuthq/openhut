@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto'
-import type { Agent } from '@fastmonkey/common/agents/agent.ts'
-import type { ApiError } from '@fastmonkey/common/api.ts'
-import type { Connection } from '@fastmonkey/common/connections/connection.ts'
-import type { Invite } from '@fastmonkey/common/team/team.ts'
+import type { Agent } from '@openhut/common/agents/agent.ts'
+import type { ApiError } from '@openhut/common/api.ts'
+import type { Connection } from '@openhut/common/connections/connection.ts'
+import type { Invite } from '@openhut/common/team/team.ts'
 
 const APP = 'http://127.0.0.1:8787'
 const AGENTS = [

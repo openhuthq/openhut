@@ -1,4 +1,4 @@
-import type { Admin } from '@fastmonkey/common/admin/admin.ts'
+import type { Admin } from '@openhut/common/admin/admin.ts'
 import { CopyButton } from '@/components/copy-button'
 import { Field } from '@/components/field'
 import { ICONS } from '@/components/icons'

@@ -2,8 +2,8 @@ import type { FastifyReply } from 'fastify'
 import type { Selectable } from 'kysely'
 import { createUIMessageStream, pipeUIMessageStreamToResponse, type UIMessageStreamWriter } from 'ai'
 import * as z from 'zod/mini'
-import { ChatMessage, ToolProgress, type ChatCall, type SendChat, type Thread, type ThreadWithMessages } from '@fastmonkey/common/threads/thread.ts'
-import type { Deleted } from '@fastmonkey/common/api.ts'
+import { ChatMessage, ToolProgress, type ChatCall, type SendChat, type Thread, type ThreadWithMessages } from '@openhut/common/threads/thread.ts'
+import type { Deleted } from '@openhut/common/api.ts'
 import { db, findRow } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { log } from '../platform/events.ts'
@@ -60,7 +60,7 @@ export const threadService = {
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         writer.write({ type: 'start' })
-        await relay({ agent, session: `fastmonkey-${id}`, message: messages[messages.length - 1], writer, signal: abort.signal })
+        await relay({ agent, session: `openhut-${id}`, message: messages[messages.length - 1], writer, signal: abort.signal })
         const calls = await callsSince({ agentId: agent.id, after: lastCall?.id ?? '0' })
         if (calls.length) writer.write({ type: 'data-calls', data: calls })
         writer.write({ type: 'finish' })

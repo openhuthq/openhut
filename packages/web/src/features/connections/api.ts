@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Deleted, List } from '@fastmonkey/common/api.ts'
-import { Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, Tailscale, type ConnectTailscale, type CreateConnection, type CreateConnectionAuthorization, type UpdateConnection } from '@fastmonkey/common/connections/connection.ts'
+import { Deleted, List } from '@openhut/common/api.ts'
+import { Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, Tailscale, type ConnectTailscale, type CreateConnection, type CreateConnectionAuthorization, type UpdateConnection } from '@openhut/common/connections/connection.ts'
 import { request } from '@/lib/api-client'
 import { CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'

@@ -1,5 +1,5 @@
 import type { ColumnType, Generated } from 'kysely'
-import type { ConnectionKind } from '@fastmonkey/common/connections/connection.ts'
+import type { ConnectionKind } from '@openhut/common/connections/connection.ts'
 
 type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>
 

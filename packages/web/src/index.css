@@ -28,11 +28,11 @@ button:disabled{cursor:not-allowed;opacity:.5}
 .app.collapsed .side{display:none}
 .side{display:flex;flex-direction:column;padding:8px;gap:2px;min-width:0}
 .team{height:48px;display:flex;align-items:center;gap:10px;padding:0 8px}
-.monkey{display:block;flex:none}
-.monkey svg{display:block;width:100%;height:100%;overflow:visible;transform-origin:50% 100%}
+.hut{display:block;flex:none}
+.hut svg{display:block;width:100%;height:100%;overflow:visible;transform-origin:50% 100%}
 .logo{width:28px;height:28px;border-radius:7px;background:var(--ink);padding:2px}
-.team:hover .logo svg,.wordmark:hover .monkey svg{animation:hop .75s cubic-bezier(.3,0,.3,1)}
-/* creatures, as on fastmonkey.dev: they breathe, blink, look and hop */
+.team:hover .logo svg,.wordmark:hover .hut svg{animation:hop .75s cubic-bezier(.3,0,.3,1)}
+/* creatures, as on openhut.dev: they breathe, blink, look and hop */
 .c-body{transform-box:fill-box;transform-origin:50% 100%;animation:breathe 3.4s ease-in-out infinite}
 .c-eyes{transform-box:fill-box;transform-origin:center;animation:blink 4.8s infinite}
 .c-face,.c-hat{translate:calc(var(--lx,0) * 1px) calc(var(--ly,0) * 1px);transition:translate .2s ease-out}
@@ -127,11 +127,11 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .rename{flex:none;display:grid;place-items:center;width:26px;height:26px;border:0;border-radius:6px;background:transparent;color:var(--mute);opacity:0;transition:opacity .15s}
 .anamebox:hover .rename,.rename:focus-visible{opacity:1}
 .rename:hover{background:var(--soft);color:var(--ink)}
-/* signed out: the form on white, and a night scene where agents ask the monkey (the gateway) for data */
+/* signed out: the form on white, and a night scene where agents ask the hut (the gateway) for data */
 .auth{min-height:100vh;min-height:100dvh;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);background:var(--card)}
 .authside{display:flex;flex-direction:column;padding:28px 40px}
 .wordmark{display:flex;align-items:center;gap:10px;width:fit-content;font-family:var(--display);font-size:26px;line-height:1;text-transform:uppercase}
-.wordmark .monkey{width:34px;height:34px}
+.wordmark .hut{width:34px;height:34px}
 .authform{margin:auto;width:100%;max-width:380px;display:flex;flex-direction:column;gap:18px;padding:48px 0}
 .authform h1{font-family:var(--display);font-weight:400;font-size:56px;line-height:.92;text-transform:uppercase;margin:0;text-wrap:balance}
 .authform .lead{margin:12px 0 0;font-family:var(--copy);font-size:14px;line-height:1.55;color:var(--mute)}
@@ -175,13 +175,13 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .denied .packet{background:#ff5a3c;box-shadow:0 0 14px 4px rgb(255 90 60 / .55)}
 .core{--lx:var(--sx,0);--ly:var(--sy,0);position:relative;z-index:1;width:var(--core);height:var(--core);filter:drop-shadow(0 0 1.5px rgb(255 255 255 / .9)) drop-shadow(0 0 36px oklch(100% 0 0 / .22))}
 .auth[data-mood] .core{--lx:inherit;--ly:inherit}
-.core .monkey{width:100%;height:100%}
+.core .hut{width:100%;height:100%}
 .verdict{position:absolute;left:50%;top:calc(50% + var(--core) / 2 + 4px);translate:-50% 0;z-index:3;white-space:nowrap;font-family:var(--copy);font-size:12px;padding:4px 10px;border-radius:999px;background:#141416;box-shadow:inset 0 0 0 1px #2a2a2e;color:#5ee08f;animation:pop .3s cubic-bezier(.3,1.6,.5,1)}
 .denied .verdict{color:#ff7a5c}
-.paws{position:absolute;inset:0;width:100%;height:100%;opacity:0;transform:translateY(55%);transition:transform .38s cubic-bezier(.3,1.4,.5,1),opacity .2s}
-.auth[data-mood=shy] .paws{opacity:1;transform:none}
+.shutters{position:absolute;inset:0;width:100%;height:100%;opacity:0;transform:translateY(55%);transition:transform .38s cubic-bezier(.3,1.4,.5,1),opacity .2s}
+.auth[data-mood=shy] .shutters{opacity:1;transform:none}
 .auth[data-mood=shy] .sat .c-eyes{animation:none;scale:1 .1}
-.auth:has(.err) .core .monkey svg,.denied .core .monkey svg{animation:no .6s ease-in-out}
+.auth:has(.err) .core .hut svg,.denied .core .hut svg{animation:no .6s ease-in-out}
 @keyframes no{20%{transform:rotate(-9deg)}40%{transform:rotate(8deg)}60%{transform:rotate(-6deg)}80%{transform:rotate(3deg)}}
 .hud{display:flex;flex-direction:column;gap:12px;text-align:center}
 .hud h2{margin:0;font-family:var(--display);font-weight:400;font-size:clamp(40px,4.4vw,64px);line-height:.95;text-transform:uppercase;text-wrap:balance}
@@ -416,7 +416,7 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .ailogo:nth-child(1){--i:0}.ailogo:nth-child(2){--i:1}.ailogo:nth-child(3){--i:2}.ailogo:nth-child(4){--i:3}.ailogo:nth-child(5){--i:4}.ailogo:nth-child(6){--i:5}.ailogo:nth-child(7){--i:6}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-/* chat: the site's product window (fastmonkey.dev hero), in the dashboard */
+/* chat: the site's product window (openhut.dev hero), in the dashboard */
 .status.warning{background:#fff7e6;color:#a15c00}
 .side{overflow:hidden}
 .chats{display:flex;flex-direction:column;gap:2px;min-height:0;overflow:auto;margin:0 -8px;padding:0 8px}

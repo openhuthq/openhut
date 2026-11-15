@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { ConnectTailscale } from '@fastmonkey/common/connections/connection.ts'
+import { ConnectTailscale } from '@openhut/common/connections/connection.ts'
 import { requireSignIn, who } from '../../team/identity.ts'
 import { tailscaleService } from './tailscale-service.ts'
 

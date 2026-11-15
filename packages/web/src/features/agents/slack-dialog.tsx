@@ -1,5 +1,5 @@
-import type { Agent } from '@fastmonkey/common/agents/agent.ts'
-import { ADDRESS, type Channel } from '@fastmonkey/common/channels/channel.ts'
+import type { Agent } from '@openhut/common/agents/agent.ts'
+import { ADDRESS, type Channel } from '@openhut/common/channels/channel.ts'
 import { slackCreateUrl, slackManifest } from './slack-manifest'
 import { CopyButton } from '@/components/copy-button'
 import { Dialog } from '@/components/dialog'

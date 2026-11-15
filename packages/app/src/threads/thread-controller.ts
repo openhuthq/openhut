@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { CreateThread, SendChat } from '@fastmonkey/common/threads/thread.ts'
+import { CreateThread, SendChat } from '@openhut/common/threads/thread.ts'
 import { listOf } from '../platform/responses.ts'
 import { who } from '../team/identity.ts'
 import { threadService } from './thread-service.ts'

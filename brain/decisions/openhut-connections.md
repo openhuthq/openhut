@@ -1,7 +1,7 @@
 ---
 status: accepted
 ---
-# Fast Monkey connections: keys, vendors' own MCP servers, and a customer Google client
+# OpenHut connections: keys, vendors' own MCP servers, and a customer Google client
 
 ## Decision
 
@@ -11,10 +11,10 @@ and how it stays safe on the left, numbered steps on the right) and each connect
 - **Keys**: Postgres (DSN), Convex (deploy key, ported from Skyfleet), and a custom MCP server (URL plus an optional
   `Name: value` header). The key is tested before it's saved.
 - **Sign-ins through the vendor's own MCP server**: PostHog (`mcp.posthog.com/mcp`) and Linear (`mcp.linear.app/mcp`)
-  register Fast Monkey themselves (OAuth dynamic registration, PKCE), like Skyfleet's remote MCP connections. A custom
+  register OpenHut themselves (OAuth dynamic registration, PKCE), like Skyfleet's remote MCP connections. A custom
   MCP server can sign in the same way.
 - **GitHub** (owner, 2026-11-14) is a bot: a GitHub App the person registers from the connect dialog (GitHub's
-  manifest flow: name it, press Create on GitHub, pick its repositories). Fast Monkey keeps the app's private key
+  manifest flow: name it, press Create on GitHub, pick its repositories). OpenHut keeps the app's private key
   sealed and mints one-hour installation tokens. They go to GitHub's own MCP server (`api.githubcopilot.com/mcp/`) as
   the bearer, so commits and pull requests show as `name[bot]`, and to the agent through the `github_git_credentials`
   tool, which returns the `git config` lines for cloning and pushing from its terminal as the bot. This replaces the
@@ -23,7 +23,7 @@ and how it stays safe on the left, numbered steps on the right) and each connect
   already reach github.com on 443. The key itself never leaves the server.
 - **Google** (Gmail, Drive, Workspace = Docs, Sheets, Slides and Calendar) uses Google's MCP servers
   (`<product>mcp.googleapis.com/mcp/v1`). Google has no dynamic registration, so an owner or admin pastes a Google
-  OAuth client (Web application) once, in Admin or in step 1 of the dialog; Fast Monkey runs the OAuth itself.
+  OAuth client (Web application) once, in Admin or in step 1 of the dialog; OpenHut runs the OAuth itself.
 - **Tailscale** isn't a connection agents hold: agentd joins the server to the tailnet so the app's connections reach
   private hosts. Agents stay off it (the firewall drops `tailscale0`).
 - Every kind is one `Connector` (`tools`, `call`) in `integrations/`; agents see `<kind>_<tool>` names through the gateway.

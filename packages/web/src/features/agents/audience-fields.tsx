@@ -1,4 +1,4 @@
-import { ADDRESS, type Channel, type ChannelKind } from '@fastmonkey/common/channels/channel.ts'
+import { ADDRESS, type Channel, type ChannelKind } from '@openhut/common/channels/channel.ts'
 import { Field } from '@/components/field'
 import { Choices } from '@/components/setup'
 import { fieldError } from '@/lib/api-client'

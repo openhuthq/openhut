@@ -5,17 +5,17 @@ import * as z from 'zod/mini'
 const PackageJson = z.object({ version: z.string() })
 
 export const config = {
-  dataDir: process.env.FASTMONKEY_DATA ?? '/data/app',
+  dataDir: process.env.OPENHUT_DATA ?? '/data/app',
   port: Number(process.env.PORT ?? 8787),
   gatewayPort: 8081,
-  releaseUrl: process.env.FASTMONKEY_URL ?? 'https://fastmonkey.dev',
+  releaseUrl: process.env.OPENHUT_URL ?? 'https://openhut.dev',
   setupCode: process.env.SETUP_CODE ?? '',
-  modelMode: process.env.FASTMONKEY_MODEL === 'test' ? 'test' as const : 'claude' as const,
-  agentApi: process.env.FASTMONKEY_AGENT_API,
+  modelMode: process.env.OPENHUT_MODEL === 'test' ? 'test' as const : 'claude' as const,
+  agentApi: process.env.OPENHUT_AGENT_API,
   agentdSocket: process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock',
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))).version,
   build: fileOr(new URL('../../../../BUILD', import.meta.url), 'dev'),
-  claudeBin: process.env.FASTMONKEY_CLAUDE ?? fileURLToPath(new URL('../../../../bin/claude', import.meta.url)),
+  claudeBin: process.env.OPENHUT_CLAUDE ?? fileURLToPath(new URL('../../../../bin/claude', import.meta.url)),
   started: Math.floor(Date.now() / 1000),
   webDist: new URL('../../../web/dist/', import.meta.url),
 }

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Deleted } from '@fastmonkey/common/api.ts'
-import { Thread, ThreadWithMessages } from '@fastmonkey/common/threads/thread.ts'
+import { Deleted } from '@openhut/common/api.ts'
+import { Thread, ThreadWithMessages } from '@openhut/common/threads/thread.ts'
 import { request } from '@/lib/api-client'
 import { THREADS_KEY } from '@/lib/query-keys'
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { Agent } from '@fastmonkey/common/agents/agent.ts'
-import { SKILL_MAX_LENGTH, type Skill } from '@fastmonkey/common/agents/skill.ts'
+import type { Agent } from '@openhut/common/agents/agent.ts'
+import { SKILL_MAX_LENGTH, type Skill } from '@openhut/common/agents/skill.ts'
 import { BRAND_ICONS, type BrandName } from '@/components/brand-icons'
 import { Dialog } from '@/components/dialog'
 import { DialogFoot } from '@/components/dialog-foot'

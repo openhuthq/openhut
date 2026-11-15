@@ -87,7 +87,7 @@ function appJwt({ appId, pem }: GithubApp): string {
 }
 
 async function call<T>({ path, method = 'GET', bearer, schema }: { path: string; method?: string; bearer?: string; schema: z.ZodMiniType<T> }): Promise<T> {
-  const res = await guardedFetch(`${API}${path}`, { method, headers: { accept: 'application/vnd.github+json', 'user-agent': 'fastmonkey', ...(bearer && { authorization: `Bearer ${bearer}` }) } })
+  const res = await guardedFetch(`${API}${path}`, { method, headers: { accept: 'application/vnd.github+json', 'user-agent': 'openhut', ...(bearer && { authorization: `Bearer ${bearer}` }) } })
   if (!res.ok) throw new Error(`GitHub answered ${res.status}: ${(await res.text()).slice(0, 200)}`)
   return z.parse(schema, await res.json())
 }

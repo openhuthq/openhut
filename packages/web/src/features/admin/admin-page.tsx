@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import type { Admin, AgentContainer, SeatUsage, SeatWindow } from '@fastmonkey/common/admin/admin.ts'
-import type { OAuthGrant } from '@fastmonkey/common/team/oauth.ts'
-import type { Me } from '@fastmonkey/common/team/team.ts'
+import type { Admin, AgentContainer, SeatUsage, SeatWindow } from '@openhut/common/admin/admin.ts'
+import type { OAuthGrant } from '@openhut/common/team/oauth.ts'
+import type { Me } from '@openhut/common/team/team.ts'
 import type { BrandName } from '@/components/brand-icons'
 import { Avatar } from '@/components/avatar'
 import { Dialog } from '@/components/dialog'
@@ -209,7 +209,7 @@ function VersionRow({ server, canEdit }: { server: Admin['server']; canEdit: boo
       </Locked>} />
     {updating && <div className="aform updating" role="status"><span className="spin" aria-hidden="true"></span>
       <span>Updating to version <span className="mono">{server.update?.to}</span>. The app and its agents restart once. You can leave or refresh; this page follows along.</span></div>}
-    {server.update?.status === 'failed' && <div className="aform"><span className="mute" role="status">The last update didn't finish, so it went back to version <span className="mono">{server.build}</span>. Nothing was lost. Details: <code>journalctl -u fastmonkey-update</code> on the server.</span></div>}
+    {server.update?.status === 'failed' && <div className="aform"><span className="mute" role="status">The last update didn't finish, so it went back to version <span className="mono">{server.build}</span>. Nothing was lost. Details: <code>journalctl -u openhut-update</code> on the server.</span></div>}
   </>
 }
 

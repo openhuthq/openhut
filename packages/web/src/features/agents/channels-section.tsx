@@ -1,5 +1,5 @@
-import type { Agent } from '@fastmonkey/common/agents/agent.ts'
-import type { Channel, ChannelKind } from '@fastmonkey/common/channels/channel.ts'
+import type { Agent } from '@openhut/common/agents/agent.ts'
+import type { Channel, ChannelKind } from '@openhut/common/channels/channel.ts'
 import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
 import { Locked } from '@/components/locked'

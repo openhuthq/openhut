@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { CreateChannel, ListChannels, UpdateChannel } from '@fastmonkey/common/channels/channel.ts'
+import { CreateChannel, ListChannels, UpdateChannel } from '@openhut/common/channels/channel.ts'
 import { listOf } from '../platform/responses.ts'
 import { requireSignIn, who } from '../team/identity.ts'
 import { channelService } from './channel-service.ts'

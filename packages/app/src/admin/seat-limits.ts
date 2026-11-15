@@ -1,4 +1,4 @@
-import type { SeatWindow } from '@fastmonkey/common/admin/admin.ts'
+import type { SeatWindow } from '@openhut/common/admin/admin.ts'
 import { HttpError } from '../platform/http-error.ts'
 
 const MESSAGES_URL = 'https://api.anthropic.com/v1/messages'

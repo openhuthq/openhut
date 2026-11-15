@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import * as z from 'zod/mini'
-import type { GOOGLE_KINDS } from '@fastmonkey/common/connections/connection.ts'
+import type { GOOGLE_KINDS } from '@openhut/common/connections/connection.ts'
 import { HttpError } from '../../platform/http-error.ts'
 import { guardedFetch } from '../../platform/network.ts'
 import { settings, type GoogleClient } from '../../platform/settings.ts'
@@ -41,7 +41,7 @@ export const google = {
 
   async finishSignIn({ code, verifier, redirectUri }: { code: string; verifier: string; redirectUri: string }): Promise<GoogleConfig> {
     const tokens = await token({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: redirectUri })
-    if (!tokens.refresh_token) throw new HttpError(400, 'Google didn’t send a refresh token. Remove Fast Monkey from your Google account’s third-party access, then sign in again.')
+    if (!tokens.refresh_token) throw new HttpError(400, 'Google didn’t send a refresh token. Remove OpenHut from your Google account’s third-party access, then sign in again.')
     const email = tokens.id_token ? z.safeParse(IdToken, JSON.parse(Buffer.from(tokens.id_token.split('.')[1] ?? '', 'base64url').toString('utf8') || '{}')).data?.email : undefined
     return { accessToken: tokens.access_token, refreshToken: tokens.refresh_token, expiresAt: Date.now() + tokens.expires_in * 1000, email: email ?? 'a Google account' }
   },

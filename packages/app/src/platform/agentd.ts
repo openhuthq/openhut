@@ -1,6 +1,6 @@
 import { connect } from 'node:net'
 import * as z from 'zod/mini'
-import type { AgentSize } from '@fastmonkey/common/agents/agent.ts'
+import type { AgentSize } from '@openhut/common/agents/agent.ts'
 import { config } from './config.ts'
 import { HttpError } from './http-error.ts'
 
@@ -40,7 +40,7 @@ export async function containerStates(): Promise<Record<string, string> | undefi
 async function ask<S extends z.ZodMiniType>({ request, doing, schema }: { request: Record<string, unknown>; doing: string; schema: S }): Promise<z.output<S>> {
   const reply = await send({ request, doing })
   const failure = z.safeParse(Failure, reply)
-  if (failure.success) throw new HttpError(502, `The agent runner couldn't ${doing}: ${failure.data.error}. Details are in /var/log/fastmonkey/agentd.log.`)
+  if (failure.success) throw new HttpError(502, `The agent runner couldn't ${doing}: ${failure.data.error}. Details are in /var/log/openhut/agentd.log.`)
   const parsed = z.safeParse(schema, reply)
   if (!parsed.success) throw new HttpError(502, `The agent runner sent a reply the app doesn't understand while trying to ${doing}. Check that agentd and the app are the same release.`)
   return parsed.data

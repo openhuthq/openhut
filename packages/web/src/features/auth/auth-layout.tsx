@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode, type SyntheticEvent } from 'react'
 import { Avatar } from '@/components/avatar'
-import { Monkey } from '@/components/monkey'
+import { Hut } from '@/components/hut'
 
 const CALLS = [
   { key: 'ops', about: 'Order tracking', ask: 'Where is order #5102?', grant: 'orders · read', answer: 'Shipped Tuesday' },
@@ -17,8 +17,8 @@ const LOOK_PX = 4
 export function AuthLayout({ title, children }: { title: string; children: ReactNode }) {
   return <div className="auth" onFocus={react} onInput={react} onBlur={(event) => { delete event.currentTarget.dataset.mood }}
     onPointerMove={(event) => { if (!event.currentTarget.dataset.mood) watch(event.currentTarget, event.clientX, event.clientY) }}>
-    <title>{`${title} · Fast Monkey`}</title>
-    <div className="authside"><div className="wordmark"><Monkey />Fast Monkey</div>{children}</div>
+    <title>{`${title} · OpenHut`}</title>
+    <div className="authside"><div className="wordmark"><Hut />OpenHut</div>{children}</div>
     <aside className="authart" aria-hidden="true">
       <div className="floor"></div>
       <Story />
@@ -55,7 +55,7 @@ function Story() {
       </div>
     })}
     <span className={moving ? 'packet' : 'packet gone'} style={{ translate: atGate ? '0 0' : `calc(var(--r) * ${x}) calc(var(--r) * ${y})` }}></span>
-    <div className="core"><Monkey /><Paws /></div>
+    <div className="core"><Hut /><Shutters /></div>
     {beat >= 2 && beat <= 4 && <span className="verdict" key={tick - beat}>{call.denied ? '✕' : '✓'} {call.grant}{call.denied ? ' · no grant' : ''}</span>}
   </div>
 }
@@ -65,13 +65,9 @@ function spot(i: number) {
   return [Number(Math.sin(angle).toFixed(3)), Number((-Math.cos(angle)).toFixed(3))]
 }
 
-function Paws() {
-  return <svg className="paws" viewBox="4 8 100 100">{[[34, 44], [74, 64]].map(([from, x]) => <g key={x}>
-    <path d={`M${from} 94Q${(from + x) / 2} 80 ${x} 64`} stroke="#0b0b0b" strokeWidth="14" strokeLinecap="round" fill="none" />
-    <path d={`M${from} 94Q${(from + x) / 2} 80 ${x} 64`} stroke="#b9773f" strokeWidth="7" strokeLinecap="round" fill="none" />
-    <ellipse cx={x} cy="57" rx="10.5" ry="9.5" fill="#b9773f" stroke="#0b0b0b" strokeWidth="4" />
-    <path d={`M${x - 4} 50v5M${x} 49v6M${x + 4} 50v5`} stroke="#8a5527" strokeWidth="2" strokeLinecap="round" />
-  </g>)}</svg>
+function Shutters() {
+  return <svg className="shutters" viewBox="4 8 100 100">{[45, 63].map(x =>
+    <rect key={x} x={x - 8.5} y="60" width="17" height="15" rx="3" fill="#c9952a" stroke="#0b0b0b" strokeWidth="3.5" />)}</svg>
 }
 
 function react(event: SyntheticEvent<HTMLElement>) {

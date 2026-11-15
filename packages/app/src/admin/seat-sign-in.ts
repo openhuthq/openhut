@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SeatSignIn } from '@fastmonkey/common/admin/admin.ts'
+import type { SeatSignIn } from '@openhut/common/admin/admin.ts'
 import { config } from '../platform/config.ts'
 import { log } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
@@ -20,7 +20,7 @@ const open = new Map<string, OpenSignIn>()
 
 export const seatSignIn = {
   async start(): Promise<SeatSignIn> {
-    const dir = mkdtempSync(join(tmpdir(), 'fastmonkey-seat-'))
+    const dir = mkdtempSync(join(tmpdir(), 'openhut-seat-'))
     const proc = spawn('script', ['-qfec', `stty cols 4000 rows 60; exec ${config.claudeBin} setup-token`, '/dev/null'], {
       cwd: dir, env: { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: dir, CLAUDE_CONFIG_DIR: dir, BROWSER: '/bin/true', TERM: 'xterm-256color', DISABLE_AUTOUPDATER: '1' },
     })

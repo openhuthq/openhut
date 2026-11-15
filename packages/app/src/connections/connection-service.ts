@@ -1,6 +1,6 @@
 import type { Selectable } from 'kysely'
-import type { Deleted } from '@fastmonkey/common/api.ts'
-import { SIGN_IN_KINDS, type Connection, type ConnectionKind, type ConnectionStatus, type ConnectionTool, type CreateConnection } from '@fastmonkey/common/connections/connection.ts'
+import type { Deleted } from '@openhut/common/api.ts'
+import { SIGN_IN_KINDS, type Connection, type ConnectionKind, type ConnectionStatus, type ConnectionTool, type CreateConnection } from '@openhut/common/connections/connection.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { log, record } from '../platform/events.ts'

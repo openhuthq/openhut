@@ -10,26 +10,26 @@ import { isDeepStrictEqual, promisify, stripVTControlCharacters } from 'node:uti
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js'
-import type { Admin, Health, Update } from '@fastmonkey/common/admin/admin.ts'
-import type { Agent, Grant } from '@fastmonkey/common/agents/agent.ts'
-import type { ApiError, Deleted, List } from '@fastmonkey/common/api.ts'
-import type { Channel } from '@fastmonkey/common/channels/channel.ts'
-import type { Connection, ConnectionEvent } from '@fastmonkey/common/connections/connection.ts'
-import type { OAuthCode, OAuthGrant } from '@fastmonkey/common/team/oauth.ts'
-import type { Invite, InviteLink, Person, Session, Setup } from '@fastmonkey/common/team/team.ts'
+import type { Admin, Health, Update } from '@openhut/common/admin/admin.ts'
+import type { Agent, Grant } from '@openhut/common/agents/agent.ts'
+import type { ApiError, Deleted, List } from '@openhut/common/api.ts'
+import type { Channel } from '@openhut/common/channels/channel.ts'
+import type { Connection, ConnectionEvent } from '@openhut/common/connections/connection.ts'
+import type { OAuthCode, OAuthGrant } from '@openhut/common/team/oauth.ts'
+import type { Invite, InviteLink, Person, Session, Setup } from '@openhut/common/team/team.ts'
 import type { AgentdReplies } from '../../agentd/src/agentd.ts'
 
 const sh = promisify(execFile)
 const APP = 'http://127.0.0.1:8787'
-const FASTMONKEY = '/opt/fastmonkey'
+const OPENHUT = '/opt/openhut'
 const RESULTS = process.env.RESULTS ?? '/results'
 const DENIED = 'Denied: no connection grants postgres_query to this agent.'
 const OAUTH_REDIRECT = 'http://127.0.0.1:33417/callback'
 const AGENTS_NET = '10.200.0.0/16'
 const DOCKER_USER_JUMP = ['DOCKER-USER', '-s', AGENTS_NET, '-j', 'AGENT']
-const FIREWALL_SCRIPT = `${FASTMONKEY}/install/agents-firewall.sh`
-const AGENTD_PROCESS = `^node ${FASTMONKEY}/packages/agentd/src/agentd.ts`
-const APP_PROCESS = `^node ${FASTMONKEY}/packages/app/src/app.ts`
+const FIREWALL_SCRIPT = `${OPENHUT}/install/agents-firewall.sh`
+const AGENTD_PROCESS = `^node ${OPENHUT}/packages/agentd/src/agentd.ts`
+const APP_PROCESS = `^node ${OPENHUT}/packages/app/src/app.ts`
 const UNTRUSTED_CA = /self-signed|unable to (get|verify)/i
 const WHATSAPP_PAIRING = /^(2@|https:\/\/wa\.me\/)/
 const DNS_QUERY = '123401000001000000000000076578616d706c6503636f6d0000010001'
@@ -195,16 +195,16 @@ function main() {
 
   check(
     'I1',
-    'One curl command installs Fast Monkey on a bare server; every download matches its pinned checksum',
-    '"Fast Monkey is running", no checksum or tar warnings',
+    'One curl command installs OpenHut on a bare server; every download matches its pinned checksum',
+    '"OpenHut is running", no checksum or tar warnings',
     async () => {
       const log = stripVTControlCharacters(readFileSync(`${RESULTS}/install.log`, 'utf8'))
       return {
         actual: log
           .trim()
           .split('\n')
-          .filter((l) => l.startsWith('==>') || /Fast Monkey is running|mismatch|extended header/.test(l)),
-        pass: log.includes('Fast Monkey is running') && !/checksum mismatch|unknown extended header/i.test(log),
+          .filter((l) => l.startsWith('==>') || /OpenHut is running|mismatch|extended header/.test(l)),
+        pass: log.includes('OpenHut is running') && !/checksum mismatch|unknown extended header/i.test(log),
       }
     },
   )
@@ -212,9 +212,9 @@ function main() {
   check(
     'I2',
     'Code that root runs is owned by root and writable by nobody else',
-    'no file or folder under /opt/fastmonkey (symlinks aside) owned by another user or group-/world-writable',
+    'no file or folder under /opt/openhut (symlinks aside) owned by another user or group-/world-writable',
     async () => {
-      const loose = await shell(`find ${FASTMONKEY} ! -type l \\( ! -user root -o ! -group root -o -perm -0020 -o -perm -0002 \\) -print | head -5`)
+      const loose = await shell(`find ${OPENHUT} ! -type l \\( ! -user root -o ! -group root -o -perm -0020 -o -perm -0002 \\) -print | head -5`)
       return { actual: loose || 'none', pass: loose === '' }
     },
   )
@@ -222,11 +222,11 @@ function main() {
   check(
     'I3',
     'The database (holds auth_secret) and settings are private',
-    '/data/app 700 fastmonkey, its Postgres folder 700, env 600 root, agent folders 700',
+    '/data/app 700 openhut, its Postgres folder 700, env 600 root, agent folders 700',
     async () => {
-      const perms = await shell("stat -c '%a %U %n' /data/app /data/app/pglite /etc/fastmonkey/env /data/agents /data/agent-conf")
+      const perms = await shell("stat -c '%a %U %n' /data/app /data/app/pglite /etc/openhut/env /data/agents /data/agent-conf")
       const modes = perms.split('\n').map((l) => l.split(' ').slice(0, 2).join(' '))
-      return { actual: perms, pass: isDeepStrictEqual(modes, ['700 fastmonkey', '700 fastmonkey', '600 root', '700 root', '700 root']) }
+      return { actual: perms, pass: isDeepStrictEqual(modes, ['700 openhut', '700 openhut', '600 root', '700 root', '700 root']) }
     },
   )
 
@@ -245,7 +245,7 @@ function main() {
     "The installer's link signs up the owner in one step",
     'the install prints the /setup?code= link; posting the code with an email and password makes the owner and a session cookie, HttpOnly and SameSite=Strict',
     async () => {
-      setupCode = readFileSync('/etc/fastmonkey/env', 'utf8').match(/SETUP_CODE=(\S+)/)?.[1] ?? ''
+      setupCode = readFileSync('/etc/openhut/env', 'utf8').match(/SETUP_CODE=(\S+)/)?.[1] ?? ''
       writeFileSync(`${RESULTS}/.test-credentials.json`, JSON.stringify(owner))
       const printed = readFileSync(`${RESULTS}/install.log`, 'utf8').includes('/setup?code=')
       const setup = await api<Person>('POST', '/api/people', { setupCode, ...owner })
@@ -323,7 +323,7 @@ function main() {
 
   check('B1', 'Control MCP creates a connection, two agents and a grant', 'Dev granted Orders DB, Sales has none', async () => {
     await startTeamDb(dbPassword, agentPassword)
-    conn = await call<Connection>('create_connection', { name: 'Orders DB', dsn: `postgres://fastmonkey_agent:${agentPassword}@172.30.0.10:5432/postgres` })
+    conn = await call<Connection>('create_connection', { name: 'Orders DB', dsn: `postgres://openhut_agent:${agentPassword}@172.30.0.10:5432/postgres` })
     dev = await call<Agent>('create_agent', { name: 'Dev', instructions: '# Dev\nYou answer engineers. Use the Orders DB when asked for data.' })
     sales = await call<Agent>('create_agent', { name: 'Sales', instructions: '# Sales\nYou answer customers. You have no database access.' })
     devGrant = await call<Grant>('create_grant', { agentId: dev.id, connectionId: conn.id })
@@ -350,7 +350,7 @@ function main() {
       agent_api: (await api('GET', `/api/agents/${dev.id}`, undefined, cookie)).json,
     }
     const files = await shell(
-      `grep -rlF -e '${agentPassword}' -e '${dbPassword}' /data/agent-conf/${dev.id} /data/agents/${dev.id} /var/log/fastmonkey 2>/dev/null || true`,
+      `grep -rlF -e '${agentPassword}' -e '${dbPassword}' /data/agent-conf/${dev.id} /data/agents/${dev.id} /var/log/openhut 2>/dev/null || true`,
     )
     const leaks = Object.entries(outputs)
       .filter(([, v]) => JSON.stringify(v).includes(agentPassword))
@@ -403,9 +403,9 @@ function main() {
         `/data/agents/${dev.id}/.claude -> /opt/data/.claude`,
         `/data/agents/${dev.id}/platforms -> /opt/data/platforms`,
         '/etc/agentd/resolv.conf -> /etc/resolv.conf (ro)',
-        `${FASTMONKEY}/bin/claude -> /usr/local/bin/claude (ro)`,
-        `${FASTMONKEY}/vendor/hermes-plugins -> /opt/data/plugins (ro)`,
-        '/var/lib/fastmonkey/whatsapp-bridge -> /opt/data/scripts/whatsapp-bridge (ro)',
+        `${OPENHUT}/bin/claude -> /usr/local/bin/claude (ro)`,
+        `${OPENHUT}/vendor/hermes-plugins -> /opt/data/plugins (ro)`,
+        '/var/lib/openhut/whatsapp-bridge -> /opt/data/scripts/whatsapp-bridge (ro)',
       ].sort()
       writeFileSync(`${RESULTS}/dev-config.yaml`, redact(readFileSync(`${c}/config.yaml`, 'utf8')))
       return {
@@ -438,7 +438,7 @@ function main() {
     "A granted agent can't write, even with a role that can (one read-only SELECT per call)",
     'role alone can delete (control); via the gateway: delete, nextval() and a stacked "commit; delete" all fail; still 42 rows, sequence at 42',
     async () => {
-      const deleteAsTheRole = ['psql', '-U', 'fastmonkey_agent', '-d', 'postgres', '-c', 'begin', '-c', 'delete from orders', '-c', 'rollback']
+      const deleteAsTheRole = ['psql', '-U', 'openhut_agent', '-d', 'postgres', '-c', 'begin', '-c', 'delete from orders', '-c', 'rollback']
       const control = await docker('exec', 'teamdb', ...deleteAsTheRole).catch((e) => failure(e))
       const del = (await q('delete from orders')).text
       const seq = (await q("select nextval('orders_id_seq')")).text
@@ -515,8 +515,8 @@ function main() {
     async () => {
       const ids = [
         await extra('Superuser DB', `postgres://postgres:${dbPassword}@172.30.0.10:5432/postgres`),
-        await extra('Server files DB', `postgres://fastmonkey_files:${agentPassword}@172.30.0.10:5432/postgres`),
-        await extra('Superuser member DB', `postgres://fastmonkey_member:${agentPassword}@172.30.0.10:5432/postgres`),
+        await extra('Server files DB', `postgres://openhut_files:${agentPassword}@172.30.0.10:5432/postgres`),
+        await extra('Superuser member DB', `postgres://openhut_member:${agentPassword}@172.30.0.10:5432/postgres`),
       ]
       const replies: string[] = []
       for (const id of ids) replies.push((await q('select 1', id)).text)
@@ -573,7 +573,7 @@ function main() {
       try {
         const live: Record<string, string> = {}
         for (const mode of ['require', 'verify-full', 'verify-ca']) {
-          const id = await extra(`TLS ${mode}`, `postgres://fastmonkey_agent:${agentPassword}@teamdb.test:5432/postgres?sslmode=${mode}`)
+          const id = await extra(`TLS ${mode}`, `postgres://openhut_agent:${agentPassword}@teamdb.test:5432/postgres?sslmode=${mode}`)
           live[mode] = (await q('select ssl from pg_stat_ssl where pid = pg_backend_pid()', id)).text
         }
         const refused = (text: string) => text.startsWith('Failed: ') && UNTRUSTED_CA.test(text)
@@ -592,7 +592,7 @@ function main() {
       const scratch = mkdtempSync('/tmp/fm-tls-')
       try {
         const tls = (host: string, mode: string, trustCa: boolean) =>
-          tlsProbe(scratch, `postgres://fastmonkey_agent:${agentPassword}@${host}:5432/postgres?sslmode=${mode}`, trustCa)
+          tlsProbe(scratch, `postgres://openhut_agent:${agentPassword}@${host}:5432/postgres?sslmode=${mode}`, trustCa)
         const k10 = {
           fullRightName: await tls('teamdb.test', 'verify-full', true),
           fullWrongName: await tls('wrong.test', 'verify-full', true),
@@ -886,7 +886,7 @@ function main() {
     'Every agent has the pinned Claude CLI and the seat plugin, read-only',
     "claude --version is install.sh's CLAUDE= pin; hermes plugins list shows claude-subscription-directsdk",
     async () => {
-      const pin = readFileSync(`${FASTMONKEY}/install/install.sh`, 'utf8').match(/^CLAUDE=(\S+)/m)?.[1]
+      const pin = readFileSync(`${OPENHUT}/install/install.sh`, 'utf8').match(/^CLAUDE=(\S+)/m)?.[1]
       const cli = await docker('exec', '-u', '10000:10000', `ag-${dev.id}`, 'claude', '--version').catch((e) => failure(e))
       const plugins = await docker('exec', '-u', '10000:10000', '-e', 'COLUMNS=250', `ag-${dev.id}`, '/opt/hermes/bin/hermes', 'plugins', 'list').catch((e) =>
         failure(e, 'stdout'),
@@ -984,7 +984,7 @@ function main() {
       await until(async () => (await health()).ok === true, 45_000, '/health to be ok again')
       await until(async () => (await statusOf(dev.id)) === 'running', 45_000, 'Dev to run again')
       await waitReady(dev, 120_000)
-      const log = await shell('tail -n 50 /var/log/fastmonkey/agentd.log')
+      const log = await shell('tail -n 50 /var/log/openhut/agentd.log')
       return {
         actual: log
           .split('\n')
@@ -1081,7 +1081,7 @@ function main() {
       await until(async () => (await health()).ok === true, 45_000, '/health to be ok again')
       await until(async () => (await statusOf(dev.id)) === 'running', 45_000, 'Dev to run again')
       await waitReady(dev, 120_000)
-      const log = await shell('tail -n 50 /var/log/fastmonkey/agentd.log')
+      const log = await shell('tail -n 50 /var/log/openhut/agentd.log')
       return {
         actual: {
           health: healthWhileBroken,
@@ -1096,12 +1096,12 @@ function main() {
   )
 
   after(async () => {
-    writeFileSync(`${FASTMONKEY}/packages/app/src/only-in-the-previous-release.ts`, '')
+    writeFileSync(`${OPENHUT}/packages/app/src/only-in-the-previous-release.ts`, '')
     const state: Partial<State> = {
       dev: await settled(async () => ({ id: dev.id, net: dev.net })),
       conn: await settled(async () => conn.id),
       oauth: { refresh: oauth.refresh, clientId: oauth.clientId },
-      envSha: await settled(async () => sha(readFileSync('/etc/fastmonkey/env', 'utf8'))),
+      envSha: await settled(async () => sha(readFileSync('/etc/openhut/env', 'utf8'))),
       pin: await settled(async () => agentImagePin()),
       fw,
       devContainer: await settled(() => idOf(dev.id)),
@@ -1118,7 +1118,7 @@ function afterUpgrade() {
   check(
     'I0',
     'The installer refuses a tampered download and changes nothing',
-    'the upgrade from a mirror whose fastmonkey.tgz has one byte changed: "checksum mismatch", exit 1, still build e2e-1',
+    'the upgrade from a mirror whose openhut.tgz has one byte changed: "checksum mismatch", exit 1, still build e2e-1',
     async () => {
       const tamper = stripVTControlCharacters(readFileSync(`${RESULTS}/tamper.log`, 'utf8'))
       return {
@@ -1126,7 +1126,7 @@ function afterUpgrade() {
           .trim()
           .split('\n')
           .filter((l) => /mismatch|exit=|BUILD/.test(l)),
-        pass: /checksum mismatch: \S*fastmonkey\.tgz/.test(tamper) && /installer exit=1/.test(tamper) && /^BUILD e2e-1$/m.test(tamper),
+        pass: /checksum mismatch: \S*openhut\.tgz/.test(tamper) && /installer exit=1/.test(tamper) && /^BUILD e2e-1$/m.test(tamper),
       }
     },
   )
@@ -1134,27 +1134,27 @@ function afterUpgrade() {
   check(
     'UP1',
     "Re-running the curl command upgrades in place, keeps the settings, and agentd follows the new release's image pin",
-    '"Fast Monkey is running"; /etc/fastmonkey/env unchanged (FASTMONKEY_MODEL=test though not passed, no AGENT_IMAGE stored); the new pin names the same image as docker.io/…, and agentd runs with exactly that',
+    '"OpenHut is running"; /etc/openhut/env unchanged (OPENHUT_MODEL=test though not passed, no AGENT_IMAGE stored); the new pin names the same image as docker.io/…, and agentd runs with exactly that',
     async () => {
       const st = savedState()
       const log = stripVTControlCharacters(readFileSync(`${RESULTS}/upgrade.log`, 'utf8'))
-      const env = readFileSync('/etc/fastmonkey/env', 'utf8')
+      const env = readFileSync('/etc/openhut/env', 'utf8')
       const pin = agentImagePin()
       const h = await health()
       const agentd = (await agentdHealth()).image
       return {
         actual: {
-          done: log.includes('Fast Monkey is running'),
+          done: log.includes('OpenHut is running'),
           envUnchanged: sha(env) === st.envSha,
-          model: env.match(/FASTMONKEY_MODEL=\S+/)?.[0],
+          model: env.match(/OPENHUT_MODEL=\S+/)?.[0],
           imageStored: /AGENT_IMAGE=/.test(env),
           pin,
           agentd,
         },
         pass:
-          log.includes('Fast Monkey is running') &&
+          log.includes('OpenHut is running') &&
           sha(env) === st.envSha &&
-          /FASTMONKEY_MODEL=test/.test(env) &&
+          /OPENHUT_MODEL=test/.test(env) &&
           !/AGENT_IMAGE=/.test(env) &&
           pin === `docker.io/${st.pin}` &&
           agentd === pin &&
@@ -1169,9 +1169,9 @@ function afterUpgrade() {
     "/health build e2e-2 (was e2e-1); 1 agentd and 1 app with new PIDs, 2 supervisors; the previous release's extra file gone",
     async () => {
       const st = savedState()
-      const pids = { agentd: await pidOf(AGENTD_PROCESS), app: await pidOf(APP_PROCESS), supervisors: await pidOf(`^/bin/sh ${FASTMONKEY}/install/supervise.sh`) }
+      const pids = { agentd: await pidOf(AGENTD_PROCESS), app: await pidOf(APP_PROCESS), supervisors: await pidOf(`^/bin/sh ${OPENHUT}/install/supervise.sh`) }
       const h = await health()
-      const leftover = await shell(`ls ${FASTMONKEY}/packages/app/src/only-in-the-previous-release.ts 2>&1 || true`)
+      const leftover = await shell(`ls ${OPENHUT}/packages/app/src/only-in-the-previous-release.ts 2>&1 || true`)
       return {
         actual: { build: `${st.build} -> ${h.build}`, pids: { before: st.pids, after: pids }, leftover },
         pass:
@@ -1179,7 +1179,7 @@ function afterUpgrade() {
           h.agentd === true &&
           h.build === 'e2e-2' &&
           st.build === 'e2e-1' &&
-          readFileSync(`${FASTMONKEY}/BUILD`, 'utf8').trim() === 'e2e-2' &&
+          readFileSync(`${OPENHUT}/BUILD`, 'utf8').trim() === 'e2e-2' &&
           processCount(pids.agentd) === 1 &&
           processCount(pids.app) === 1 &&
           processCount(pids.supervisors) === 2 &&
@@ -1232,7 +1232,7 @@ function afterRestart() {
       const st = savedState()
       await until(async () => (await statusOf(st.dev.id)) === 'running', 60_000, 'Dev to run again')
       await waitReady(st.dev, 180_000)
-      const boot = readFileSync('/var/log/fastmonkey/boot.log', 'utf8').trim().split('\n')
+      const boot = readFileSync('/var/log/openhut/boot.log', 'utf8').trim().split('\n')
       const launched = boot.findLastIndex((l) => l.endsWith(' dockerd launching'))
       const start = boot.slice(0, launched).findLastIndex((l) => l.endsWith(' boot'))
       const next = boot.findIndex((l, i) => i > launched && l.endsWith(' boot'))
@@ -1269,7 +1269,7 @@ function afterRestart() {
 
   check(
     'H3',
-    'Fast Monkey (not Docker) brings the agent back, and it still reaches the DB through the gateway',
+    'OpenHut (not Docker) brings the agent back, and it still reaches the DB through the gateway',
     'Dev running and answering within 4 min, n = 42 from the team DB; restart policy no; a new reconcile.started event for Dev in app.log',
     async () => {
       const st = savedState()
@@ -1301,7 +1301,7 @@ function updateBroken() {
   check(
     'UD1',
     "Update now with a release whose app can't start: the previous release comes back and Admin says the update failed",
-    'POST /api/updates 200 running, to e2e-broken; a second POST 409; then the same build as before, /health ok, Admin update failed, the install lock free, no /opt/fastmonkey.* left, Dev running',
+    'POST /api/updates 200 running, to e2e-broken; a second POST 409; then the same build as before, /health ok, Admin update failed, the install lock free, no /opt/openhut.* left, Dev running',
     async () => {
       const st = savedState()
       const token = await refreshed(st)
@@ -1312,8 +1312,8 @@ function updateBroken() {
       await until(async () => (await statusOf(st.dev.id)) === 'running', 180_000, 'Dev to run again')
       const admin = (await asOwner<Admin>('GET', '/api/admin', token)).json
       const now = await health()
-      const lock = await shell('flock -n /run/fastmonkey-install.lock true && echo free || echo held')
-      const leftovers = await shell('ls -d /opt/fastmonkey.* 2>/dev/null || true')
+      const lock = await shell('flock -n /run/openhut-install.lock true && echo free || echo held')
+      const leftovers = await shell('ls -d /opt/openhut.* 2>/dev/null || true')
       return {
         actual: { started: [started.status, started.json.status, started.json.to], twice: twice.status, build: `${before.build} -> ${now.build}`, ok: now.ok, update: admin.server.update?.status, lock, leftovers },
         pass:
@@ -1474,7 +1474,7 @@ function savedState(): State {
 }
 
 function agentImagePin() {
-  return readFileSync(`${FASTMONKEY}/install/agent-image`, 'utf8').trim()
+  return readFileSync(`${OPENHUT}/install/agent-image`, 'utf8').trim()
 }
 
 async function startTeamDb(dbPassword: string, agentPassword: string) {
@@ -1496,9 +1496,9 @@ async function startTeamDb(dbPassword: string, agentPassword: string) {
     'the team DB to accept TCP connections',
   )
   await psql(`create table orders(id serial primary key, customer text, total numeric(10,2)); insert into orders(customer,total) select 'c'||g, g*10 from generate_series(1,42) g;
-    create role fastmonkey_agent login password '${agentPassword}'; grant select, insert, update, delete on orders to fastmonkey_agent; grant usage, select, update on sequence orders_id_seq to fastmonkey_agent;
-    create role fastmonkey_files login password '${agentPassword}'; grant pg_read_server_files to fastmonkey_files;
-    create role fastmonkey_member login noinherit password '${agentPassword}'; grant postgres to fastmonkey_member;`)
+    create role openhut_agent login password '${agentPassword}'; grant select, insert, update, delete on orders to openhut_agent; grant usage, select, update on sequence orders_id_seq to openhut_agent;
+    create role openhut_files login password '${agentPassword}'; grant pg_read_server_files to openhut_files;
+    create role openhut_member login noinherit password '${agentPassword}'; grant postgres to openhut_member;`)
 }
 
 function psql(sql: string) {
@@ -1561,7 +1561,7 @@ function reconcileCount(id: string) {
 }
 
 function appEvents() {
-  return readFileSync('/var/log/fastmonkey/app.log', 'utf8')
+  return readFileSync('/var/log/openhut/app.log', 'utf8')
     .split('\n')
     .flatMap((line) => {
       try {
@@ -1757,10 +1757,10 @@ async function isolation(a: AgentRef, other?: AgentRef): Promise<Isolation> {
 }
 
 async function tlsProbe(dataDir: string, dsn: string, trustCa: boolean) {
-  const script = `import { postgres } from "${FASTMONKEY}/packages/app/src/integrations/postgres/postgres.ts";
+  const script = `import { postgres } from "${OPENHUT}/packages/app/src/integrations/postgres/postgres.ts";
      try { const r = await postgres.query({ dsn: process.env.DSN, sql: "select ssl from pg_stat_ssl where pid = pg_backend_pid()" }); console.log("ok " + JSON.stringify(r.rows)); }
      catch (e) { console.log("error " + e.message); }`
-  const env = { ...process.env, FASTMONKEY_DATA: dataDir, DSN: dsn, ...(trustCa && { NODE_EXTRA_CA_CERTS: '/root/pgcerts/ca.crt' }) }
+  const env = { ...process.env, OPENHUT_DATA: dataDir, DSN: dsn, ...(trustCa && { NODE_EXTRA_CA_CERTS: '/root/pgcerts/ca.crt' }) }
   const { stdout } = await sh('node', ['--input-type=module', '-e', script], { env })
   return stdout.trim().split('\n').at(-1) ?? ''
 }

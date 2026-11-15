@@ -1,15 +1,15 @@
 {
-  "name": "@fastmonkey/site",
+  "name": "@openhut/site",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node src/build.ts",
     "typecheck": "tsc -p .",
     "test": "node --test \"test/**/*.test.ts\"",
-    "deploy": "npm -w @fastmonkey/docs run build && node src/build.ts && cp ../../dist/install.sh ../../dist/fastmonkey.tgz dist/ && wrangler deploy"
+    "deploy": "npm -w @openhut/docs run build && node src/build.ts && cp ../../dist/install.sh ../../dist/openhut.tgz dist/ && wrangler deploy"
   },
   "devDependencies": {
-    "@fastmonkey/docs": "*",
+    "@openhut/docs": "*",
     "@types/node": "26.6.2",
     "wrangler": "^4.156.2"
   }

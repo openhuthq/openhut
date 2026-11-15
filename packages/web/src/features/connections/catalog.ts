@@ -1,4 +1,4 @@
-import type { ConnectionKind } from '@fastmonkey/common/connections/connection.ts'
+import type { ConnectionKind } from '@openhut/common/connections/connection.ts'
 import type { SetupIcon } from '@/components/icons'
 
 export type CatalogName = ConnectionKind | 'tailscale'
@@ -58,7 +58,7 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
   { shelf: 'Network', items: [
     {
       name: 'tailscale', short: 'Let connections reach private hosts.', chips: [['network', 'Reach 100.x hosts'], ['globe', 'MagicDNS names']], safeLine: 'Agents stay off the tailnet. The key is used once and not kept.', eta: '1 minute', title: 'Tailscale', blurb: 'Joins this server to your tailnet so Postgres can reach private hosts. Owners and admins.',
-      gets: ['This server joins your tailnet as fastmonkey', 'Postgres, Convex and MCP connections can reach 100.x addresses and MagicDNS names', 'Agents stay off the tailnet: their firewall drops it'],
+      gets: ['This server joins your tailnet as openhut', 'Postgres, Convex and MCP connections can reach 100.x addresses and MagicDNS names', 'Agents stay off the tailnet: their firewall drops it'],
       safe: ['Only owners and admins can join or leave', 'The auth key is used once and never stored', 'A server already on a tailnet is left as it is'],
     },
   ] },

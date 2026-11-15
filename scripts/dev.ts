@@ -5,7 +5,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 const DATA = '.data'
 const SOCK = `${DATA}/agentd.sock`
 const SOCKET_WAIT_MS = 10_000
-const env = { ...process.env, AGENTD_SOCK: SOCK, FASTMONKEY_DATA: DATA, SETUP_CODE: 'dev', FASTMONKEY_MODEL: 'test', FASTMONKEY_AGENT_API: 'http://127.0.0.1:18642' }
+const env = { ...process.env, AGENTD_SOCK: SOCK, OPENHUT_DATA: DATA, SETUP_CODE: 'dev', OPENHUT_MODEL: 'test', OPENHUT_AGENT_API: 'http://127.0.0.1:18642' }
 
 mkdirSync(DATA, { recursive: true })
 rmSync(SOCK, { force: true })

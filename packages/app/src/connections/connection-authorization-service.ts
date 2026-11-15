@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { GOOGLE_KINDS, type ConnectionAuthorization, type CreateConnectionAuthorization, type SIGN_IN_KINDS } from '@fastmonkey/common/connections/connection.ts'
+import { GOOGLE_KINDS, type ConnectionAuthorization, type CreateConnectionAuthorization, type SIGN_IN_KINDS } from '@openhut/common/connections/connection.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { publicUrl } from '../platform/settings.ts'
 import { github, type GithubApp } from '../integrations/github/github.ts'
@@ -40,7 +40,7 @@ export const connectionAuthorizationService = {
     if (state) pending.delete(state)
     if (!sign || sign.expires < Date.now()) return { error: 'This sign-in expired or was already used. Start it again.' }
     const grant = sign.app ? installationId : code
-    if (error || !grant) return { kind: sign.kind, error: `${TITLES[sign.kind]} didn't approve Fast Monkey (${error ?? 'no code'}).` }
+    if (error || !grant) return { kind: sign.kind, error: `${TITLES[sign.kind]} didn't approve OpenHut (${error ?? 'no code'}).` }
     let connectionId = sign.connectionId
     try {
       if (state && sign.kind === 'github' && !sign.app) {

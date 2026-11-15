@@ -6,7 +6,7 @@ export const SidebarToggle = createContext(() => {})
 export function Page({ title, parents = [], actions, fill = false, children }: { title: string; parents?: { label: string; href: string }[]; actions?: ReactNode; fill?: boolean; children?: ReactNode }) {
   const toggleSidebar = use(SidebarToggle)
   return <>
-    <title>{`${title} · Fast Monkey`}</title>
+    <title>{`${title} · OpenHut`}</title>
     <div className="ph">
       <button type="button" className="btn icon sm" aria-label="Toggle sidebar" title="Toggle sidebar" onClick={toggleSidebar}>{ICONS.side}</button><span className="vsep"></span>
       <nav className="crumb" aria-label="Breadcrumb">

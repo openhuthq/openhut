@@ -1,13 +1,13 @@
-# Deploying Fast Monkey
+# Deploying OpenHut
 
-## fastmonkey.dev (the installer site)
+## openhut.dev (the installer site)
 - Pushing to `main` runs `.github/workflows/deploy.yml`: typecheck and unit tests, then `scripts/release.sh` and
-  `npm -w @fastmonkey/site run deploy`, then a check that fastmonkey.dev serves an `install.sh` whose checksum matches
+  `npm -w @openhut/site run deploy`, then a check that openhut.dev serves an `install.sh` whose checksum matches
   the tarball it serves. Rerun it by hand with `gh workflow run deploy.yml`.
-- The repo secret `CLOUDFLARE_API_TOKEN` is the account token "fastmonkey-site GitHub Actions deploy": Workers Scripts
-  write and Account Settings read on the moabuaboud@gmail.com account, Workers Routes write on fastmonkey.dev only.
-- DNS for fastmonkey.dev and www is managed by the Worker's custom domains; the zone holds no other records. Wrangler's
-  OAuth login can deploy but can't edit DNS, so a record in the way has to be deleted in the dashboard.
+- The repo secret `CLOUDFLARE_API_TOKEN` is the account token "openhut-site GitHub Actions deploy": Workers Scripts
+  write and Account Settings read on the moabuaboud@gmail.com account, Workers Routes write on openhut.dev only.
+- DNS for openhut.dev and www is managed by the Worker's custom domains; the zone holds no other records. Wrangler's
+  OAuth login can deploy but can't edit DNS, so a record in the way has to be deleted in the dashboard. It can delete a Worker's custom domains, though: `DELETE /accounts/<id>/workers/domains/<id>` with the `oauth_token` from wrangler's config (how fastmonkey.dev was taken down, 2026-11-15).
 
 ## monkey.activepieces.dev (the internal instance)
 - Hetzner server `hermes-agents` (project MISC, Helsinki, CPX42, Ubuntu 26.04). Its only firewall,
@@ -22,5 +22,6 @@
   reloads Caddy. The token in `/root/.secrets/cloudflare.ini` (0600) is the account token "hermes-agents certbot":
   DNS write on activepieces.dev only, and only from the server's IPs (2.29.192.61, 2a01:4f9:c012:c2a4::/64), so it's
   useless anywhere else. A systemd drop-in starts Caddy after tailscaled.
-- Installed with the public command (`curl -fsSL https://fastmonkey.dev | sh` as root over Tailscale SSH); upgrading is
+- Installed with the public command (`curl -fsSL https://openhut.dev | sh` as root over Tailscale SSH); upgrading is
   the same command.
+- It still runs the Fast Monkey install (`/opt/fastmonkey`, `fastmonkey*.service`). The OpenHut installer uses new paths and unit names, so move it with uninstall plus a fresh install, not an upgrade.

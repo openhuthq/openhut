@@ -1,11 +1,11 @@
 ---
 status: accepted
 ---
-# Fast Monkey is a monorepo built the way Skyfleet is
+# OpenHut is a monorepo built the way Skyfleet is
 
 ## Decision
 Owner, 2026-11-13: build the backend for real and "scaffold the repo the same as Skyfleet", as a Turborepo, with
-Skyfleet's domain modules and resource-oriented API. Fast Monkey is npm workspaces + Turborepo: `packages/app` (Fastify,
+Skyfleet's domain modules and resource-oriented API. OpenHut is npm workspaces + Turborepo: `packages/app` (Fastify,
 Kysely on PGlite), `packages/web` (React, Vite, TanStack Query), `packages/common` (the Zod Mini contract),
 `packages/agentd` and `packages/e2e`. The API follows Skyfleet's `resource-oriented-api` and
 `api-responses-follow-stripe` decisions: flat collections (`/api/agents`, `/api/grants`, `/api/channels`,

@@ -1,6 +1,6 @@
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import { AlertCircleIcon, CheckmarkBadge01Icon, CheckmarkCircle02Icon, DashedLineCircleIcon, PauseCircleIcon, UnavailableIcon } from '@hugeicons/core-free-icons'
-import type { Agent } from '@fastmonkey/common/agents/agent.ts'
+import type { Agent } from '@openhut/common/agents/agent.ts'
 
 const CHECK_CIRCLE = badge(CheckmarkCircle02Icon)
 const BADGE_CHECK = badge(CheckmarkBadge01Icon)
