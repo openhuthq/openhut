@@ -1638,19 +1638,17 @@ description: Answer "where is my order?"
     const onFace = ['glasses', 'monocle', 'shades'].includes(kind)
     const under = o.hut ? `<circle cx="27" cy="55" r="10" fill="${fill}" stroke="${K}" stroke-width="4"/><circle cx="81" cy="55" r="10" fill="${fill}" stroke="${K}" stroke-width="4"/><circle cx="27" cy="55" r="4.500" fill="#f2d3b3"/><circle cx="81" cy="55" r="4.500" fill="#f2d3b3"/>` : ''
     const patch = o.hut ? `<path d="M36 56q0-13 10-13 5 0 8 4 3-4 8-4 10 0 10 13 0 18-18 18t-18-18z" fill="#f2d3b3"/>` : `<path d="M42 76q12 7 24 0" stroke="${shade}" stroke-width="5" fill="none" stroke-linecap="round" opacity=".6"/>`
-    const halo = o.hut ? '' : `<path d="${smooth(ring)}" fill="${shade}" opacity=".35"/><path d="${smooth(ring)}" fill="none" stroke="${fill}" stroke-width="3"/>`
     const hand = `<g class="c-hand"><path d="M80 76q9-4 11-13" stroke="${K}" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="92" cy="60" r="6.500" fill="${fill}" stroke="${K}" stroke-width="3.500"/></g>`
     if (o.hut) {
-      const ring2 = `<path d="${smooth(ring)}" fill="#c9952a" opacity=".28"/><path d="${smooth(ring)}" fill="none" stroke="#f7c948" stroke-width="3"/>`
       const walls = `<rect x="27" y="53" width="54" height="45" rx="10" fill="#fbe3c8" stroke="${K}" stroke-width="4.500"/>`
       const roof = `<path d="M54 20 92 56q3 6-4 6H20q-7 0-4-6z" fill="#f7c948" stroke="${K}" stroke-width="4.500" stroke-linejoin="round"/><path d="M54 31 44 53M54 31l10 22" stroke="#c9952a" stroke-width="3" stroke-linecap="round"/>`
       const cheeks = `<ellipse cx="36" cy="83" rx="4.500" ry="2.800" fill="#f5a48c"/><ellipse cx="72" cy="83" rx="4.500" ry="2.800" fill="#f5a48c"/>`
       const eyes = `<ellipse cx="44" cy="76" rx="5.200" ry="6.200" fill="${K}"/><ellipse cx="64" cy="76" rx="5.200" ry="6.200" fill="${K}"/><circle cx="46" cy="73.500" r="2.100" fill="#fff"/><circle cx="66" cy="73.500" r="2.100" fill="#fff"/>`
       const smile = `<path d="M48.500 85q5.500 4.500 11 0" stroke="${K}" stroke-width="3" fill="none" stroke-linecap="round"/>`
       const flag = `<path d="M54 20V9.500" stroke="${K}" stroke-width="3.400" stroke-linecap="round"/><path d="M55.500 9 69 13.500 55.500 18z" fill="#ff5a3c" stroke="${K}" stroke-width="3" stroke-linejoin="round"/>`
-      return `${ring2}<g class="c-body">${walls}${roof}</g><g class="c-face">${cheeks}<g class="c-eyes">${eyes}</g><g class="c-mouth">${smile}</g></g><g class="c-hat">${flag}</g>${hand}`
+      return `<g class="c-body">${walls}${roof}</g><g class="c-face">${cheeks}<g class="c-eyes">${eyes}</g><g class="c-mouth">${smile}</g></g><g class="c-hat">${flag}</g>${hand}`
     }
-    return `${halo}<g class="c-body">${under}<path d="${smooth(blob)}" fill="${fill}" stroke="${K}" stroke-width="4.500" stroke-linejoin="round"/>${patch}</g><g class="c-face">${cheeks}<g class="c-eyes">${eyes}</g><g class="c-mouth">${mouth}</g>${onFace ? COSTUME[kind] : ''}</g><g class="c-hat">${onFace ? '' : COSTUME[kind]}</g>${hand}`
+    return `<g class="c-body">${under}<path d="${smooth(blob)}" fill="${fill}" stroke="${K}" stroke-width="4.500" stroke-linejoin="round"/>${patch}</g><g class="c-face">${cheeks}<g class="c-eyes">${eyes}</g><g class="c-mouth">${mouth}</g>${onFace ? COSTUME[kind] : ''}</g><g class="c-hat">${onFace ? '' : COSTUME[kind]}</g>${hand}`
   }
   const paint = (el, id = el.dataset.cr, about = el.dataset.about || '', o) => { el.setAttribute('viewBox', '4 8 100 100'); el.setAttribute('aria-hidden', 'true'); el.innerHTML = creature(id, about, o); const h = hash(id + 'm'); el.style.setProperty('--bd', -(h % 34) / 10 + 's'); el.style.setProperty('--bk', -(h % 48) / 10 + 's'); liveIO.observe(el) }
   const cr = (id, size, about = '') => `<svg class="cr" data-cr="${id}" data-about="${about}" width="${size}" height="${size}"></svg>`

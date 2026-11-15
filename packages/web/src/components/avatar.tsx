@@ -55,7 +55,7 @@ function creature(id: string, about: string) {
   const costume = costumeFor(id, about)
   const onFace = ON_FACE.includes(costume)
   const blink = `animation-delay:-${(hash(id + 'b') % 48) / 10}s`
-  return `<path d="${smooth(ring)}" fill="${shade}" opacity=".35"/><path d="${smooth(ring)}" fill="none" stroke="${fill}" stroke-width="3"/><g class="c-body"><path d="${smooth(blob)}" fill="${fill}" stroke="${K}" stroke-width="4.5" stroke-linejoin="round"/><path d="M42 76q12 7 24 0" stroke="${shade}" stroke-width="5" fill="none" stroke-linecap="round" opacity=".6"/></g><g class="c-face"><ellipse cx="40" cy="62" rx="4" ry="2.5" fill="#EDB5AE"/><ellipse cx="68" cy="62" rx="4" ry="2.5" fill="#EDB5AE"/><g class="c-eyes" style="${blink}">${eyes}</g><g class="c-mouth">${mouth}</g>${onFace ? COSTUME[costume] : ''}</g><g class="c-hat">${onFace ? '' : COSTUME[costume]}</g>`
+  return `<g class="c-body"><path d="${smooth(blob)}" fill="${fill}" stroke="${K}" stroke-width="4.5" stroke-linejoin="round"/><path d="M42 76q12 7 24 0" stroke="${shade}" stroke-width="5" fill="none" stroke-linecap="round" opacity=".6"/></g><g class="c-face"><ellipse cx="40" cy="62" rx="4" ry="2.5" fill="#EDB5AE"/><ellipse cx="68" cy="62" rx="4" ry="2.5" fill="#EDB5AE"/><g class="c-eyes" style="${blink}">${eyes}</g><g class="c-mouth">${mouth}</g>${onFace ? COSTUME[costume] : ''}</g><g class="c-hat">${onFace ? '' : COSTUME[costume]}</g>`
 }
 
 function costumeFor(id: string, about: string) {
