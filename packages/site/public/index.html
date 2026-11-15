@@ -1041,11 +1041,85 @@ footer .toplinks a{color:var(--night-ink)}
 
 /* ===== hermes ===== */
 .hm-link{text-decoration:underline;text-underline-offset:3px;color:var(--ink)}
-.hm-rows{margin:10px 0 4px}
-.hm-rows .g-row{width:100%;text-align:left}
-.hm-rows .g-row .ico,.hm-rows .g-row .lg{width:18px;height:18px}
-.hm-rows .g-row{color:var(--muted)}
-.hm-rows .g-row[aria-pressed="true"]{color:var(--ink);font-weight:600}
+.hx-flow{display:grid;grid-template-columns:minmax(0,1.25fr) 40px minmax(0,1.1fr) 40px minmax(0,1fr);align-items:stretch}
+.hx-n{border:2px solid var(--line-2);border-radius:14px;background:var(--paper);padding:18px;display:flex;flex-direction:column;gap:8px;min-width:0;min-height:400px;transition:border-color .3s,box-shadow .3s}
+.hx-n.on{border-color:var(--ink);box-shadow:0 14px 30px -16px rgb(10 10 20 / .4)}
+.hx-n small{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:4px}
+.hx-n>p{font-family:var(--copy);font-size:12.5px;color:var(--muted);margin-top:auto}
+.hx-chat .lp-h{margin-bottom:0}
+.hx-msgs{flex:1;min-height:0}
+.hx-msgs .m{animation:in .35s cubic-bezier(.2,.8,.2,1) backwards}
+.hx-asks{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding-top:12px;border-top:1.5px solid var(--line)}
+.hx-ask{display:flex;align-items:center;gap:8px;min-height:40px;padding:6px 9px;border-radius:9px;background:var(--stage);font-size:13px;font-weight:500;text-align:left;line-height:1.25;transition:box-shadow .2s,background .2s}
+.hx-ask:hover{background:var(--stage-2)}
+.hx-ask[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--ink);background:var(--paper)}
+.hx-box{border-style:dashed;align-items:center;text-align:center}
+.hx-box small{align-self:flex-start}
+.hx-hermes{position:relative;display:flex;flex-direction:column;align-items:center;margin-top:auto;padding-top:44px}
+.hx-logo{display:block;width:150px;height:150px;border-radius:50%;border:2.5px solid var(--ink);background:#fff;overflow:hidden;position:relative}
+.hx-logo img{width:100%;height:100%;object-fit:cover;scale:1.08;translate:0 5%}
+.hx-logo.ping{animation:ping .9s cubic-bezier(.2,.8,.2,1)}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgb(11 11 12 / .35)}30%{scale:1.04}100%{box-shadow:0 0 0 22px rgb(11 11 12 / 0)}}
+.hx-mb{background:#fff}
+.hx-mb img{width:100%;height:100%;object-fit:cover;scale:1.1;translate:0 6%}
+.hx-hermes b{font-family:var(--display);font-size:34px;font-weight:500;line-height:1;margin-top:6px}
+.hx-hermes span{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.hx-say{position:absolute;top:0;left:50%;translate:-50% 0;white-space:nowrap;background:var(--ink);color:#fff;border-radius:10px;padding:6px 11px;font-family:var(--copy);font-size:12.5px;opacity:0;scale:.9;transition:opacity .2s,scale .3s cubic-bezier(.3,1.6,.5,1)}
+.hx-say::after{content:"";position:absolute;left:50%;bottom:-5px;width:10px;height:10px;background:var(--ink);translate:-50% 0;rotate:45deg;border-radius:2px}
+.hx-say.on{opacity:1;scale:1}
+.hx-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:16px}
+.hx-chips span{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:99px;background:var(--stage);font-size:13.5px;font-weight:500;transition:box-shadow .3s}
+.hx-chips i{font-style:normal;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.hx-chips span.on{box-shadow:inset 0 0 0 2px var(--ink)}
+.hx-chips i.bump{animation:bump .6s cubic-bezier(.3,1.6,.5,1);color:var(--ok)}
+@keyframes bump{40%{scale:1.6}}
+.hx-env{margin-top:auto;font-family:var(--mono);font-size:12px;color:var(--muted);padding:6px 10px;border-radius:8px;border:1.5px dashed var(--line-2);transition:border-color .3s,color .3s}
+.hx-env span{color:var(--faint);margin-right:6px}
+.hx-env.on{border-color:var(--ink);color:var(--ink)}
+.hx-row{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500;padding:10px 11px;border-radius:9px;background:var(--stage);transition:box-shadow .3s}
+.hx-row.on{box-shadow:inset 0 0 0 2px var(--ink)}
+.hx-row em{margin-left:auto;font-style:normal;font-family:var(--mono);font-size:12px;color:var(--ok);font-weight:400;white-space:nowrap}
+.hx-row em.n{color:var(--bad)}
+.hx-row em.k{color:var(--muted)}
+.hx-count{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:auto}
+.hx-count div{border-radius:9px;background:var(--stage);padding:12px}
+.hx-count b{display:block;font-family:var(--display);font-size:38px;font-weight:500;line-height:1}
+.hx-count div+div b{color:var(--bad)}
+.hx-count span{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.hx-count b.bump{animation:bump .6s cubic-bezier(.3,1.6,.5,1)}
+.hx-gw>p{margin-top:8px}
+.hx-w{align-self:center;height:2px;background:repeating-linear-gradient(90deg,var(--line-2) 0 6px,transparent 6px 12px);background-size:24px 100%}
+.hx-w.on{background-image:repeating-linear-gradient(90deg,var(--ink) 0 6px,transparent 6px 12px);animation:hxflow .5s linear infinite}
+.hx.back .hx-w.on{animation-direction:reverse}
+@keyframes hxflow{to{background-position:24px 0}}
+.hx-log{margin-top:20px;background:var(--paper);border:2px solid var(--line-2);border-radius:14px;padding:14px 18px;font-family:var(--mono);font-size:13px}
+.hx-lh{font-size:12px;color:var(--muted);margin-bottom:8px}
+#hxLog{min-height:calc(6 * 30px)}
+.hx-l{display:grid;grid-template-columns:76px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:30px;animation:in .3s cubic-bezier(.2,.8,.2,1) backwards}
+.hx-l time{color:var(--faint);font-size:12px}
+.hx-l b{font-weight:500}
+.hx-l .ok{color:var(--ok)}.hx-l .no{color:var(--bad)}
+.hx-tag{font-size:10.5px;font-weight:600;letter-spacing:.04em;text-align:center;padding:2px 0;border-radius:5px;border:1.5px solid var(--ink)}
+.hx-tag.h{background:#F2E3C6}.hx-tag.o{background:#f7c948}
+.hx-hint{color:var(--muted);min-height:30px;display:flex;align-items:center}
+@media (max-width:1020px){
+  .hx-flow{grid-template-columns:minmax(0,1fr)}
+  .hx-n{min-height:0}
+  .hx-chat{height:400px}
+  .hx-w{width:2px;height:28px;justify-self:center;background-image:repeating-linear-gradient(180deg,var(--line-2) 0 6px,transparent 6px 12px);background-size:100% 24px}
+  .hx-w.on{background-image:repeating-linear-gradient(180deg,var(--ink) 0 6px,transparent 6px 12px);animation-name:hxflowv}
+  .hx-hermes{margin-top:0}
+  .hx-env{margin-top:10px}
+}
+@keyframes hxflowv{to{background-position:0 24px}}
+@media (max-width:720px){
+  .hx-asks{grid-template-columns:minmax(0,1fr)}
+  .hx-chat{height:auto}
+  .hx-msgs{height:190px;flex:none}
+  .hx-l{grid-template-columns:68px minmax(0,1fr);gap:4px 10px;padding:4px 0}
+  .hx-l time{display:none}
+  #hxLog{min-height:calc(6 * 46px)}
+}
 
 /* ===== sandboxes ===== */
 .sand{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:26px 30px;padding:8px 4px 4px}
@@ -1569,18 +1643,32 @@ description: Answer "where is my order?"
 
 <section class="band" id="hermes">
   <div class="wrap">
-    <div class="head"><div class="hd"><span class="mb"><svg class="cr" data-cr="hermes" width="44" height="44"></svg></span><h2>Powered by Hermes</h2></div><p>Every agent is <a class="hm-link" href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener">Hermes</a>, the open-source agent from Nous Research. OpenHut is the hut around it.</p></div>
-    <div class="eye">
-      <div class="sc e3">
-        <div class="g-who"><svg class="cr" data-cr="hermes" width="44" height="44" id="hmCr0"></svg><b>Hermes does the work</b></div>
-        <div class="g-rows hm-rows" data-side="0"></div>
-        <p class="cap" id="hmCap0" aria-live="polite">It remembers your team and past chats.</p>
+    <div class="head"><div class="hd"><span class="mb hx-mb"><img src="/hermes.svg" alt="" width="60" height="60"></span><h2>Powered by Hermes</h2></div><p>Every agent is <a class="hm-link" href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener">Hermes</a>, the open-source agent from Nous Research. OpenHut runs it, seals it and holds its keys.</p></div>
+    <div class="frame pad hx" id="hx">
+      <div class="hx-flow">
+        <div class="hx-n hx-chat" data-k="chan">
+          <div class="lp-h"><svg class="lg" style="width:14px;height:14px"><use href="#b-slack"/></svg># ops</div>
+          <div class="t-msgs hx-msgs" id="hxMsgs" aria-live="polite"></div>
+          <div class="hx-asks" id="hxAsks" role="group" aria-label="Ask Ops Desk"></div>
+        </div>
+        <div class="hx-w" data-k="w1"></div>
+        <div class="hx-n hx-box" data-k="box">
+          <small><svg class="ico"><use href="#i-lock"/></svg>Ops Desk's gVisor sandbox</small>
+          <div class="hx-hermes"><p class="hx-say" id="hxSay"></p><span class="hx-logo" id="hxLogo"><img src="/hermes.svg" alt="Hermes Agent logo" width="150" height="150"></span><b>Hermes Agent</b><span>by Nous Research</span></div>
+          <div class="hx-chips"><span data-k="mem"><svg class="ico"><use href="#i-brain"/></svg>Memory <i id="hxMem">12</i></span><span data-k="skill"><svg class="ico"><use href="#i-file"/></svg>Skills <i>9</i></span><span data-k="claude"><svg class="lg"><use href="#b-claude"/></svg>Your Claude plan</span></div>
+          <p class="hx-env" data-k="env"><span>env</span> no keys in here</p>
+        </div>
+        <div class="hx-w" data-k="w2"></div>
+        <div class="hx-n hx-gw" data-k="gw">
+          <small><svg class="ico"><use href="#i-admin"/></svg>OpenHut gateway</small>
+          <div class="hx-row" data-k="shop"><svg class="lg"><use href="#b-postgres"/></svg>Shop database<em>read</em></div>
+          <div class="hx-row" data-k="fin"><svg class="lg"><use href="#b-postgres"/></svg>Finance database<em class="n">blocked</em></div>
+          <div class="hx-row" data-k="key"><svg class="ico"><use href="#i-key"/></svg>Postgres key<em class="k">held here</em></div>
+          <div class="hx-count"><div><b id="hxCalls">0</b><span>calls checked</span></div><div><b id="hxBlocked">0</b><span>blocked</span></div></div>
+          <p>Every call is checked here.</p>
+        </div>
       </div>
-      <div class="sc e3">
-        <div class="g-who"><svg class="cr" data-cr="hut" width="44" height="44" id="hmCr1"></svg><b>OpenHut keeps it safe</b></div>
-        <div class="g-rows hm-rows" data-side="1"></div>
-        <p class="cap" id="hmCap1" aria-live="polite">Each agent is sealed with gVisor.</p>
-      </div>
+      <div class="hx-log"><div class="hx-lh">Trace: who did what</div><div id="hxLog" aria-live="polite"></div></div>
     </div>
   </div>
 </section>
@@ -1921,15 +2009,67 @@ description: Answer "where is my order?"
     sealCap.innerHTML = i < 0 ? 'Each one is sealed with gVisor. Tap one to trick it.' : `<b>${AGENTS[i].name}</b> got tricked. The other five are untouched.`
   }
   boxes.addEventListener('click', e => { const b = e.target.closest('.bx'); if (b) { atkTouched = true; trick(+b.dataset.i === tricked ? -1 : +b.dataset.i) } })
-  const HM = [
-    [['i-brain', 'Memory', 'It remembers your team and past chats.'], ['i-file', 'Skills', 'It writes and fixes its own skills.'], ['b-mcp', 'Tools', 'Shell, files, code and MCP tools.'], ['i-spark', 'Open source', 'MIT licensed, built in the open.']],
-    [['i-lock', 'Sandbox', 'Each agent is sealed with gVisor.'], ['i-key', 'Keys', 'Your keys stay in OpenHut, never in the agent.'], ['b-slack', 'Channels', 'Slack, WhatsApp and Telegram, set up for you.'], ['i-people', 'Team', 'One dashboard to share agents with your team.']],
+  const HX = [
+    { who: ['Pablo', '#7a5cc7'], q: 'Where is order #5102?', a: 'Shipped on Monday.', steps: [
+      [['chan', 'w1'], 'o', 'Sends Pablo\'s Slack message into Ops Desk\'s sandbox'],
+      [['box', 'skill'], 'h', 'Opens its skill <b>late-orders/SKILL.md</b>', 'Let me look that up.'],
+      [['box', 'w2'], 'h', 'Calls <b>orders.lookup</b> through the gateway'],
+      [['gw', 'shop'], 'o', 'Checks the grant: Ops Desk may read Shop database <span class="ok">✓</span>'],
+      [['gw', 'key'], 'o', 'Runs the query with the Postgres key Hermes never sees'],
+      [['box', 'w1', 'chan', 'claude'], 'h', 'Writes the answer on your Claude plan and replies', 0, 1],
+    ] },
+    { who: ['Sara', '#e4587e'], q: 'What did we invoice Acme?', a: 'I can\'t read invoices. Ask Finance Desk.', steps: [
+      [['chan', 'w1'], 'o', 'Sends Sara\'s Slack message into Ops Desk\'s sandbox'],
+      [['box', 'w2'], 'h', 'Calls <b>invoices.query</b> through the gateway', 'Checking invoices.'],
+      [['gw', 'fin'], 'o', 'Checks the grant: Finance database is blocked <span class="no">✗</span>'],
+      [['box', 'w1', 'chan'], 'h', 'Tells Sara it can\'t, and who can', 0, 1],
+    ] },
+    { who: ['Omar', '#3d8fdc'], q: 'What\'s our database password?', a: 'I don\'t have it. OpenHut does.', steps: [
+      [['chan', 'w1'], 'o', 'Sends Omar\'s Slack message into Ops Desk\'s sandbox'],
+      [['box', 'env'], 'h', 'Looks through its own files and env: <b>no keys in here</b>', 'Hmm, nothing here.'],
+      [['gw', 'key'], 'o', 'Keeps the Postgres key in the gateway, outside every sandbox'],
+      [['box', 'w1', 'chan'], 'h', 'Replies that it has nothing to share', 0, 1],
+    ] },
+    { who: ['Lina', '#64ae59'], q: 'Refunds over €100 need David.', a: 'Got it. I\'ll ask David first.', mem: 1, steps: [
+      [['chan', 'w1'], 'o', 'Sends Lina\'s Slack message into Ops Desk\'s sandbox'],
+      [['box', 'mem'], 'h', 'Saves it to its memory, kept on your server', 'Noted for next time.'],
+      [['box', 'w1', 'chan'], 'h', 'Confirms in Slack', 0, 1],
+    ] },
   ]
-  $$('.hm-rows').forEach(box => {
-    const side = +box.dataset.side, rows = HM[side], icon = id => id.startsWith('b-') ? `<svg class="lg"><use href="#${id}"/></svg>` : `<svg class="ico"><use href="#${id}"/></svg>`
-    box.innerHTML = rows.map(([ic, t], i) => `<button type="button" class="g-row" data-i="${i}" aria-pressed="${!i}">${icon(ic)}<span>${t}</span></button>`).join('')
-    box.addEventListener('click', e => { const b = e.target.closest('.g-row'); if (!b) return; $$('.g-row', box).forEach(x => x.setAttribute('aria-pressed', x === b)); $('#hmCap' + side).textContent = rows[+b.dataset.i][2]; talk($('#hmCr' + side), 900) })
-  })
+  const hx = $('#hx'), hxMsgs = $('#hxMsgs'), hxLog = $('#hxLog'), hxSay = $('#hxSay'), hxAsks = $('#hxAsks')
+  hxAsks.innerHTML = HX.map((s, i) => `<button type="button" class="hx-ask" data-i="${i}" aria-pressed="false"><span class="hu s" style="--c:${s.who[1]}">${s.who[0][0]}</span>${s.q}</button>`).join('')
+  const hxHint = () => { hxLog.innerHTML = '<div class="hx-hint">Ask Ops Desk something. Each step shows who did it.</div>' }
+  hxHint()
+  const hxMsg = html => { hxMsgs.insertAdjacentHTML('beforeend', html); paintAll(hxMsgs.lastElementChild); while (hxMsgs.children.length > 6) hxMsgs.firstElementChild.remove() }
+  const hxLight = (on = [], back) => { $$('[data-k]', hx).forEach(el => el.classList.toggle('on', on.includes(el.dataset.k))); hx.classList.toggle('back', !!back) }
+  const hxBump = sel => { const m = $(sel); m.textContent = +m.textContent + 1; m.classList.remove('bump'); void m.offsetWidth; m.classList.add('bump') }
+  let hxRun = 0, hxManual = false, hxNext = 0, hxPending = null
+  const hxPlay = async i => {
+    const id = ++hxRun, s = HX[i], live = () => id === hxRun
+    $$('.hx-ask', hxAsks).forEach(b => b.setAttribute('aria-pressed', +b.dataset.i === i))
+    hxLog.innerHTML = ''
+    hxPending?.remove()
+    hxMsg(`<div class="m"><span class="hu" style="--c:${s.who[1]}">${s.who[0][0]}</span><div><b>${s.who[0]}</b><p><span class="at">@Ops Desk</span> ${s.q}</p></div></div>`)
+    hxPending = hxMsgs.lastElementChild
+    for (const [n, [on, tag, text, say, back]] of s.steps.entries()) {
+      hxLight(on, back)
+      hxLog.insertAdjacentHTML('beforeend', `<div class="hx-l"><span class="hx-tag ${tag}">${tag === 'h' ? 'HERMES' : 'OPENHUT'}</span><span>${text}</span><time>${(n * .7 + .1).toFixed(1)}s</time></div>`)
+      hxSay.textContent = say || ''
+      hxSay.classList.toggle('on', !!say)
+      if (on.includes('box')) act($('#hxLogo'), 'ping', 900)
+      if (on.includes('mem') && s.mem) hxBump('#hxMem')
+      if (on.includes('shop') || on.includes('fin')) hxBump('#hxCalls')
+      if (on.includes('fin')) hxBump('#hxBlocked')
+      await sleep(1250)
+      if (!live()) return
+    }
+    hxPending = null
+    hxMsg(`<div class="m">${cr('ops', 36)}<div><b>Ops Desk<span class="app-tag">APP</span></b><p>${s.a}</p></div></div>`)
+    await sleep(900)
+    if (live()) hxLight()
+  }
+  hxAsks.addEventListener('click', e => { const b = e.target.closest('.hx-ask'); if (!b) return; hxManual = true; hxPlay(+b.dataset.i) })
+  whenVisible(hx, async () => { if (hxManual) return sleep(1500); await hxPlay(hxNext); hxNext = (hxNext + 1) % HX.length; await sleep(2200) })
   const GD = [['Orders', 'allowed', 1], ['Shipments', 'allowed', 1], ['Invoices', 'allowed', 0]], gRows = $('#gRows')
   gRows.innerHTML = GD.map(([d, r, on], i) => `<div class="g-row"><svg class="lg"><use href="#b-postgres"/></svg><span>${d}</span><em class="${on ? '' : 'n'}">${on ? r : 'blocked'}</em><button type="button" class="tog" data-i="${i}" aria-pressed="${!!on}" aria-label="Ops Desk can read ${d}"></button></div>`).join('')
   gRows.addEventListener('click', e => { const t = e.target.closest('.g-row')?.querySelector('.tog'); if (!t) return; const g = GD[+t.dataset.i]; g[2] = g[2] ? 0 : 1; t.setAttribute('aria-pressed', !!g[2]); const em = t.previousElementSibling; em.textContent = g[2] ? g[1] : 'blocked'; em.className = g[2] ? '' : 'n'; talk($('#gCr'), 700) })
