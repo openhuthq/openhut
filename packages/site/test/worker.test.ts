@@ -6,6 +6,7 @@ const FILES: Record<string, [string, string]> = {
   '/install.sh': ['#!/bin/sh\necho install\n', 'application/x-sh'],
   '/': ['<!doctype html><title>OpenHut</title>', 'text/html; charset=utf-8'],
   '/openhut.tgz': ['tarball', 'application/gzip'],
+  '/changelog': ['<!doctype html><title>OpenHut Changelog</title>', 'text/html; charset=utf-8'],
 }
 const env = {
   ASSETS: {
@@ -29,6 +30,12 @@ test('curl gets install.sh as plain text', async () => {
 test('a browser gets the home page with the page CSP', async () => {
   const res = await get('/', 'text/html,application/xhtml+xml')
   assert.match(await res.text(), /<title>OpenHut<\/title>/)
+  assert.match(res.headers.get('content-security-policy') ?? '', /^default-src 'self'/)
+})
+
+test('the changelog is a page with the page CSP', async () => {
+  const res = await get('/changelog', 'text/html')
+  assert.match(await res.text(), /<title>OpenHut Changelog<\/title>/)
   assert.match(res.headers.get('content-security-policy') ?? '', /^default-src 'self'/)
 })
 

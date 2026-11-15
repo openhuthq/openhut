@@ -1,6 +1,6 @@
 # The site (`packages/site`)
 
-- openhut.dev: `/` is `install.sh` unless `Accept` has `text/html`, then the home page; `/brand`; `/openhut.tgz` is the tarball; `/docs/<page>`.
+- openhut.dev: `/` is `install.sh` unless `Accept` has `text/html`, then the home page; `/brand`; `/changelog`; `/openhut.tgz` is the tarball; `/docs/<page>`.
 - It's the Worker `openhut-site` (static assets, `run_worker_first`) in the owner's Cloudflare account,
   on the custom domains openhut.dev and www. `src/worker.ts` only picks `install.sh` for curl and sets headers;
   every response is `Cache-Control: no-cache`, so the edge never serves a tarball that doesn't match `install.sh`.
@@ -13,6 +13,8 @@
   `brain/decisions/openhut-website-positioning.md`.
 - Section scrolling (owner, 2026-11-15): on desktop (≥1021×700) the home page snaps by section. CSS `scroll-snap-type:y mandatory` on `html` (hero and bands snap to the top under the 68 px nav, each `.cwin` collab window snaps to the centre, the footer snaps to the end), plus a wheel handler that moves one gesture to exactly one stop. CSS snap alone sent a small wheel or trackpad nudge back to the same section. Phones scroll freely because their sections are taller than the screen. A new tall section needs its own stops, or it scrolls in one jump.
 - Never name a class or id `ad-*`, `ads`, `banner-ad` and the like: ad blockers hide matching elements with cosmetic filters, and the page just shows an empty box. The usage card was `ad-top`/`ad-rows` and vanished for anyone with uBlock; it is `wu-*` now.
+
+- The changelog (`public/changelog.html`, owner 2026-11-15) is one `<article class="rel">` per release, newest first, labelled with the version Admin shows (`.ver`), the date and a GitHub link. A release opens with its biggest product change as `.lead`, then `.sm` entries (in a `.pair` when two images are tall), each a plain headline, one short line, then a real dashboard screenshot from `public/changelog/` with a one-line caption. Smaller product changes go in a `.quiet` list headed Also, and openhut.dev's own changes in one headed Website. Add the entry in the PR that ships the change: a new version gets a new article on top, and a bigger change in the current version becomes the `.lead` while the old lead moves down to `.sm`. Product screens are real screenshots, never drawings.
 
 ## The beach (owner, 2026-11-15)
 
