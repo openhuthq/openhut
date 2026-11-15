@@ -7,7 +7,7 @@ export function baseOptions(): BaseLayoutProps {
       url: '/',
     },
     links: [{ text: 'Site', url: 'https://openhut.dev', external: true }, { text: 'Brand', url: 'https://openhut.dev/brand', external: true }],
-    githubUrl: 'https://github.com/abuaboud/openhut',
+    githubUrl: 'https://github.com/openhuthq/openhut',
     themeSwitch: { enabled: false },
   }
 }
