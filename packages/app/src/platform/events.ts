@@ -31,9 +31,9 @@ export function record({ action, actor, target }: { action: string; actor: { id:
   if (mapped) track(mapped[0], mapped[1])
 }
 
-export function track(name: string, properties: Record<string, unknown> = {}): void {
+export function track(name: string, properties: Record<string, unknown> = {}, at?: number): void {
   if (!config.telemetry || queue.length >= MAX_QUEUE) return
-  const event = telemetryEvent({ name, properties })
+  const event = telemetryEvent({ name, properties, at })
   if (event) queue.push(event)
 }
 

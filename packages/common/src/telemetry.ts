@@ -17,7 +17,7 @@ export const TELEMETRY_EVENTS = {
   memory_edited: [],
   assistant_connected: ['client'],
   dashboard_page_viewed: ['page'],
-  messaging_daily: ['slack', 'whatsapp', 'telegram', 'dashboard', 'other', 'senders', 'agents'],
+  message_sent: ['channel', 'agent_name'],
 } as const satisfies Record<string, readonly string[]>
 
 export const BROWSER_EVENTS = ['dashboard_page_viewed'] as const
@@ -32,6 +32,7 @@ export type TrackEvent = z.infer<typeof TrackEvent>
 
 const VALUE = /^[A-Za-z0-9][\w.+-]{0,31}$/
 const MAX_COUNT = 10_000_000
+const NAME = /^[^\u0000-\u001f\u007f]{1,64}$/
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/
 const INSTANCE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const VERSION = /^[\w.+-]{1,32}$/
@@ -46,7 +47,7 @@ export function telemetryEvent({ name, properties = {}, at = Date.now() }: { nam
   const kept = allowed.flatMap((key): [string, string | number][] => {
     const value = properties[key]
     if (typeof value === 'number') return Number.isInteger(value) && value >= 0 && value <= MAX_COUNT ? [[key, value]] : []
-    const pattern = key.endsWith('_email') ? EMAIL : VALUE
+    const pattern = patternOf(key)
     return typeof value === 'string' && pattern.test(value) ? [[key, value]] : []
   })
   return { name, properties: Object.fromEntries(kept), at: Number.isFinite(at) ? at : Date.now() }
@@ -62,6 +63,12 @@ export function telemetryBatch(value: unknown): TelemetryBatch | undefined {
     return event ? [event] : []
   })
   return { instance, version, events }
+}
+
+function patternOf(key: string): RegExp {
+  if (key.endsWith('_email')) return EMAIL
+  if (key.endsWith('_name')) return NAME
+  return VALUE
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
