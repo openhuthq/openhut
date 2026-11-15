@@ -37,7 +37,7 @@ export const teamService = {
 
   async me({ personId }: { personId: string }): Promise<Me> {
     const person = await db.selectFrom('person').selectAll().where('id', '=', personId).executeTakeFirstOrThrow()
-    return { object: 'me', user: personOf(person), publicUrl: publicUrl() }
+    return { object: 'me', user: personOf(person), publicUrl: publicUrl(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }
   },
 
   async createInvite({ actor, role }: { actor: Caller; role: MemberRole }): Promise<Invite> {

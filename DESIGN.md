@@ -111,7 +111,7 @@ A ghost button at rest is bare text. In a row ("Set up", "Remove") that is the c
 ## Icons and type
 
 - Every UI icon is Hugeicons (`@hugeicons/react` + `@hugeicons/core-free-icons`, free stroke set) through `components/icons.tsx` and `status-badge.tsx`; brand marks for other apps stay in `brand-icons.ts`. Don't hand-draw an SVG icon (owner, 2026-11-14).
-- Statuses in a list (automation runs and the like) are Linear-style circle icons, not coloured dots. The shape carries the state, so it reads without colour: running `Loading03Icon` (amber, spinning), done `CheckmarkCircle02Icon` (green), nothing to do `CircleIcon` (grey), skipped or paused `DashedLineCircleIcon` (grey), failed `CancelCircleIcon` (red). They live with the badges in `status-badge.tsx` (owner, 2026-11-15).
+- Statuses in a list (automation runs and the like) are Linear-style circle icons, not coloured dots. The shape carries the state, so it reads without colour: running `Loading02Icon` (amber, spinning, so every status keeps the circle shape), done `CheckmarkCircle02Icon` (green), nothing to do `CircleIcon` (grey), skipped or paused `DashedLineCircleIcon` (grey), failed `CancelCircleIcon` (red). They live with the badges in `status-badge.tsx` (owner, 2026-11-15).
 - Text is 14px across the app, sidebar included. Only small labels and counts (12px), code and tool-call chips (12.5px) and headings differ.
 
 ## Agent page
@@ -120,5 +120,7 @@ Status: in the code since 2026-11-14.
 
 - Two columns on top that end on the same line: Instructions stretches to the rail's height (the preview text is absolutely placed, so long instructions never make the row taller). Skills sit below, full width.
 - No scroll box inside the page. A nested scroller ended below the fold, trapped the wheel and, with classic scrollbars, put a 15px track inside the box's border. If a list is too long, fold it, don't scroll it.
-- Skills are the Agents page's `.grid` of `.card`s, so every card has the same width and a two-line description. A segmented filter (All / Learned / Built in, Built in selected) sits in the section head, and 12 cards show until "Show all" (12 fills 1, 2, 3 or 4 columns evenly).
+- Skills are the Agents page's `.grid` of `.card`s, so every card has the same width and a two-line description. A segmented filter (All / Learned / Built in, Learned selected) sits in the section head, and 12 cards show until "Show all" (12 fills 1, 2, 3 or 4 columns evenly).
 - A skill's icon: a learned skill gets the ink sparkle tile; a built-in one gets the brand mark when its name starts with a brand in `brand-icons.ts` (github, google, claude), else the Hugeicon for its Hermes category, the folder in `skill.path` (`skillIcon` in `icons.tsx`), else the bolt.
+- Memory is one row in the facts box ("5 entries · Manage") that opens a sheet with one list of everything the agent saved, people first. Automations sit under Instructions in the left column, so both columns end level.
+- Detail that belongs to one thing on a page (memory, an automation and its runs) opens in a sheet: the same native `<dialog>` as `.dlg`, with `.sheet` pinning it to the right edge, full height, 560px, sliding in 2.5rem with a fade over 200ms and a light blurred backdrop, like shadcn's Sheet. Which sheet is open lives in the URL.

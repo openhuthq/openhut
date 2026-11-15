@@ -144,6 +144,11 @@ function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
       if ((memories[req.id] ??= { ...SAMPLE_MEMORY })[req.target] === null) throw new Error('the agent has not saved that memory yet')
       memories[req.id][req.target] = req.body
       return { written: req.target }
+    case 'send':
+      console.log(`fake agentd: ${req.id} posts to ${req.to}: ${req.text.slice(0, 200)}`)
+      return { sent: req.to }
+    case 'send-targets':
+      return { targets: [{ id: 'slack:C0FAKEGTM', platform: 'slack', name: '#gtm', type: 'channel' }, { id: 'telegram:-100123456', platform: 'telegram', name: 'Sales group', type: 'group' }, { id: 'whatsapp:120363000000@g.us', platform: 'whatsapp', name: 'Sales', type: 'group' }] }
     case 'messages':
       return { messages: Object.keys(states).slice(0, 1).map((agentId) => ({ agentId, source: 'slack', at: Date.now() / 1000 })) }
     case 'usage':

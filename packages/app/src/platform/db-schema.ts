@@ -22,6 +22,14 @@ export interface Database {
   }
   connection_grant: { id: string; connection_id: string; agent_id: string; created_at: Timestamp }
   thread: { id: string; agent_id: string; person_id: string; title: string; messages: Generated<string>; created_at: Timestamp; updated_at: Timestamp }
+  automation: {
+    id: string; agent_id: string; name: string; instructions: string; schedule: string | null; webhook_hash: string | null; post_to: string | null
+    enabled: Generated<boolean>; next_run_at: Timestamp | null; created_at: Timestamp
+  }
+  automation_run: {
+    id: string; automation_id: string; trigger: 'schedule' | 'webhook' | 'manual'; status: 'running' | 'done' | 'quiet' | 'skipped' | 'failed'
+    answer: string | null; error: string | null; started_at: Timestamp; ms: number | null
+  }
   connection_event: {
     id: Generated<string>; at: Timestamp; agent_id: string; connection_id: string | null; tool: string; reason: string
     outcome: 'allowed' | 'denied' | 'failed'; ms: number

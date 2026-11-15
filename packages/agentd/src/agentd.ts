@@ -9,6 +9,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { newMessages, type NewMessage } from './messages.ts'
 import { isMemoryTarget, MAX_MEMORY_BYTES, readMemory, writeMemory, type MemoryTarget } from './memory.ts'
 import { isSkillPath, listSkills, MAX_SKILL_BYTES, readSkill, writeSkill, type SkillHead } from './skills.ts'
+import { MAX_SEND_BYTES, SEND_TARGET, targetsOf, type SendTarget } from './send.ts'
 
 const run = promisify(execFile)
 const RELEASE_URL = process.env.OPENHUT_URL ?? 'https://openhut.dev'
@@ -153,6 +154,10 @@ async function handle(req: AgentdRequest): Promise<Reply> {
     case 'memory-write':
       writeMemory({ root: memoriesRoot(req.id), target: req.target, body: req.body })
       return { written: req.target }
+    case 'send':
+      return send(req)
+    case 'send-targets':
+      return { targets: await sendTargets(req.id) }
     case 'usage':
       return { usage: agentUsage(req.since) }
     case 'messages':
@@ -200,7 +205,12 @@ function parseRequest(value: unknown): AgentdRequest {
     case 'skill-rm':
       return { cmd, id: agentId(value.id), path: skillPath(value.path) }
     case 'memory':
+    case 'send-targets':
       return { cmd, id: agentId(value.id) }
+    case 'send':
+      if (typeof value.to !== 'string' || !SEND_TARGET.test(value.to)) throw new Error('bad send target')
+      if (typeof value.text !== 'string' || !value.text || Buffer.byteLength(value.text) > MAX_SEND_BYTES) throw new Error('missing or oversized message')
+      return { cmd, id: agentId(value.id), to: value.to, text: value.text }
     case 'memory-write':
       if (!isMemoryTarget(value.target)) throw new Error('bad memory target')
       if (typeof value.body !== 'string' || Buffer.byteLength(value.body) > MAX_MEMORY_BYTES) throw new Error('missing or oversized memory')
@@ -460,6 +470,19 @@ function makeHome(id: string) {
   }
 }
 
+async function send({ id, to, text }: { id: string; to: string; text: string }): Promise<{ sent: string }> {
+  if (!(await isRunning(id))) throw new Error("the agent isn't running")
+  const hermes = run('docker', ['exec', '-i', `ag-${id}`, 'hermes', 'send', `--to=${to}`, '--quiet', '--file', '-'], EXEC)
+  hermes.child.stdin?.end(text)
+  await hermes
+  return { sent: to }
+}
+
+async function sendTargets(id: string): Promise<SendTarget[]> {
+  if (!(await isRunning(id))) return []
+  return targetsOf(JSON.parse(await docker('exec', `ag-${id}`, 'hermes', 'send', '--list', '--json')))
+}
+
 async function docker(...args: string[]) {
   return (await run('docker', args, EXEC)).stdout.trim()
 }
@@ -609,6 +632,8 @@ export type AgentdRequest =
   | { cmd: 'skill-read' | 'skill-rm'; id: string; path: string }
   | { cmd: 'memory'; id: string }
   | { cmd: 'memory-write'; id: string; target: MemoryTarget; body: string }
+  | { cmd: 'send'; id: string; to: string; text: string }
+  | { cmd: 'send-targets'; id: string }
   | { cmd: 'skill-write'; id: string; path: string; body: string }
   | { cmd: 'usage' | 'messages'; since: number }
   | { cmd: 'ts-up'; authKey: string }
@@ -632,12 +657,16 @@ export type AgentdReplies = {
   'skill-rm': { removed: string }
   memory: Record<MemoryTarget, string | null>
   'memory-write': { written: MemoryTarget }
+  send: { sent: string }
+  'send-targets': { targets: SendTarget[] }
   usage: { usage: Record<string, number> }
   messages: { messages: NewMessage[] }
   'ts-up': Tailnet & { joined: boolean }
   'ts-status': Tailnet
   'ts-down': Tailnet
 }
+
+export type { SendTarget }
 
 export type Container = { name: string; agentId: string; state: string; status: string; image: string; createdAt: string; networks: string }
 

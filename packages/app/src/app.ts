@@ -14,6 +14,8 @@ import { eventsController } from './platform/events-controller.ts'
 import { startTelemetry } from './platform/telemetry.ts'
 import { skillController } from './agents/skill-controller.ts'
 import { agentService } from './agents/agent-service.ts'
+import { automationController, automationRunController, hookController, sendTargetController } from './automations/automation-controller.ts'
+import { automationService } from './automations/automation-service.ts'
 import { channelController } from './channels/channel-controller.ts'
 import { connectionAuthorizationController, connectionController, connectionEventController, connectionToolController } from './connections/connection-controller.ts'
 import { gatewayServer } from './gateway/gateway-server.ts'
@@ -45,6 +47,10 @@ await app.register(agentController, { prefix: '/api/agents' })
 await app.register(grantController, { prefix: '/api/grants' })
 await app.register(skillController, { prefix: '/api/skills' })
 await app.register(memoryController, { prefix: '/api/memories' })
+await app.register(automationController, { prefix: '/api/automations' })
+await app.register(automationRunController, { prefix: '/api/automation-runs' })
+await app.register(sendTargetController, { prefix: '/api/send-targets' })
+await app.register(hookController, { prefix: '/hooks' })
 await app.register(threadController, { prefix: '/api/threads' })
 await app.register(channelController, { prefix: '/api/channels' })
 await app.register(connectionController, { prefix: '/api/connections' })
@@ -69,3 +75,4 @@ log.info({ event: 'app.listening', port: config.port, build: config.build })
 await startTelemetry()
 gatewayServer.start()
 await agentService.boot()
+await automationService.start()

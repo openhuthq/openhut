@@ -76,17 +76,35 @@ export const threadService = {
   },
 }
 
-async function relay({ agent, session, message, writer, signal }: { agent: AgentRow; session: string; message: ChatMessage; writer: UIMessageStreamWriter; signal: AbortSignal }): Promise<void> {
+export async function askAgent({ agent, session, content, signal }: { agent: AgentRow; session: string; content: string; signal: AbortSignal }): Promise<string> {
+  const body = await callAgent({ agent, session, message: { role: 'user', content }, signal })
+  let answer = ''
+  for await (const event of sseEvents(body)) {
+    if (event.data === '[DONE]') break
+    if (event.name !== 'message') continue
+    const chunk = z.safeParse(Chunk, parseJson(event.data)).data
+    if (chunk?.error) throw new HttpError(502, modelFailure({ name: agent.name, message: chunk.error.message }))
+    answer += chunk?.choices?.[0]?.delta?.content ?? ''
+  }
+  return answer.trim()
+}
+
+async function callAgent({ agent, session, message, signal }: { agent: AgentRow; session: string; message: { role: 'user' | 'assistant'; content: string }; signal: AbortSignal }): Promise<ReadableStream<Uint8Array>> {
   const res = await fetch(`${agentApiUrl(agent.net)}/v1/chat/completions`, {
     method: 'POST',
     headers: { authorization: `Bearer ${unseal(agent.channel_key)}`, 'content-type': 'application/json', 'x-hermes-session-id': session },
-    body: JSON.stringify({ model: 'hermes-agent', stream: true, messages: [openAiOf(message)] }),
+    body: JSON.stringify({ model: 'hermes-agent', stream: true, messages: [message] }),
     signal: AbortSignal.any([signal, AbortSignal.timeout(TURN_MS)]),
-  }).catch((err: unknown) => { throw new Error(signal.aborted ? 'Stopped.' : `${agent.name} isn't reachable. ${unreachable(err)}`) })
-  if (!res.ok || !res.body) throw new Error(`${agent.name} answered ${res.status}: ${(await res.text()).slice(0, 300)}`)
+  }).catch((err: unknown) => { throw new HttpError(502, signal.aborted ? 'Stopped.' : `${agent.name} isn't reachable. ${unreachable(err)}`) })
+  if (!res.ok || !res.body) throw new HttpError(502, `${agent.name} answered ${res.status}: ${(await res.text()).slice(0, 300)}`)
+  return res.body
+}
+
+async function relay({ agent, session, message, writer, signal }: { agent: AgentRow; session: string; message: ChatMessage; writer: UIMessageStreamWriter; signal: AbortSignal }): Promise<void> {
+  const body = await callAgent({ agent, session, message: openAiOf(message), signal })
   let text = 0
   let open = false
-  for await (const event of sseEvents(res.body)) {
+  for await (const event of sseEvents(body)) {
     if (event.data === '[DONE]') break
     if (event.name === 'hermes.tool.progress') {
       if (open) writer.write({ type: 'text-end', id: `t${text}` })

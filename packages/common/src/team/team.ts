@@ -31,6 +31,7 @@ export const Me = z.object({
   object: z.literal('me'),
   user: Person,
   publicUrl: z.string(),
+  timeZone: z.string(),
 })
 export type Me = z.infer<typeof Me>
 

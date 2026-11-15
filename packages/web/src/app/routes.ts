@@ -2,13 +2,14 @@ import type { AdminForm } from '@/features/admin/admin-page'
 import type { AgentDialog } from '@/features/agents/agent-page'
 import { integration } from '@/features/connections/catalog'
 
-const AGENT_DIALOGS: AgentDialog[] = ['name', 'instructions', 'slack', 'whatsapp', 'telegram']
+const AGENT_DIALOGS: AgentDialog[] = ['name', 'instructions', 'slack', 'whatsapp', 'telegram', 'memory']
 const ADMIN_FORMS: AdminForm[] = ['seat', 'public-url', 'google', 'containers']
 const MISSING: Route = { page: 'missing' }
 
 export function routeOf(path: string): Route {
   const [section = '', id = '', detail = '', ...rest] = path.split('/').slice(1)
   if (section === 'agents' && detail === 'skills' && rest.length === 1) return { page: 'agent', agentId: decodeURIComponent(id), dialog: undefined, skill: decodeURIComponent(rest[0]) }
+  if (section === 'agents' && detail === 'automations' && rest.length === 1) return { page: 'agent', agentId: decodeURIComponent(id), dialog: undefined, automation: decodeURIComponent(rest[0]) }
   if (rest.length) return MISSING
   switch (section) {
     case '': return { page: 'home' }
@@ -59,7 +60,7 @@ export type Route =
   | { page: 'invite'; token: string }
   | { page: 'mcp-authorize' }
   | { page: 'agents' }
-  | { page: 'agent'; agentId: string; dialog: AgentDialog | undefined; skill?: string }
+  | { page: 'agent'; agentId: string; dialog: AgentDialog | undefined; skill?: string; automation?: string }
   | { page: 'chat'; agentId: string }
   | { page: 'connections'; adding: string | undefined }
   | { page: 'tailscale' }

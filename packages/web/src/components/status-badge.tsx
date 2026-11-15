@@ -1,6 +1,7 @@
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
-import { AlertCircleIcon, CheckmarkBadge01Icon, CheckmarkCircle02Icon, DashedLineCircleIcon, PauseCircleIcon, UnavailableIcon } from '@hugeicons/core-free-icons'
+import { AlertCircleIcon, CancelCircleIcon, CheckmarkBadge01Icon, CheckmarkCircle02Icon, CircleIcon, DashedLineCircleIcon, Loading02Icon, PauseCircleIcon, UnavailableIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
+import type { RunStatus } from '@openhut/common/automations/automation.ts'
 
 const CHECK_CIRCLE = badge(CheckmarkCircle02Icon)
 const BADGE_CHECK = badge(CheckmarkBadge01Icon)
@@ -40,4 +41,17 @@ export function AgentBadge({ agent }: { agent: Agent }) {
 export function agentState(agent: Agent) {
   if (agent.status !== 'running' || agent.health === null || agent.health === 'answering') return agent.status
   return agent.health
+}
+
+const RUN = {
+  running: { icon: Loading02Icon, word: 'Running' },
+  done: { icon: CheckmarkCircle02Icon, word: 'Done' },
+  quiet: { icon: CircleIcon, word: 'Nothing new' },
+  skipped: { icon: DashedLineCircleIcon, word: 'Skipped' },
+  failed: { icon: CancelCircleIcon, word: 'Failed' },
+}
+
+export function RunIcon({ status, size = 16 }: { status: RunStatus | 'paused'; size?: number }) {
+  const { icon, word } = status === 'paused' ? { icon: DashedLineCircleIcon, word: 'Paused' } : RUN[status]
+  return <HugeiconsIcon icon={icon} size={size} strokeWidth={1.8} className={`runicon ${status}`} aria-label={word} role="img" />
 }
