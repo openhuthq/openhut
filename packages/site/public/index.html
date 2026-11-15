@@ -1641,13 +1641,14 @@ description: Answer "where is my order?"
     const halo = o.hut ? '' : `<path d="${smooth(ring)}" fill="${shade}" opacity=".35"/><path d="${smooth(ring)}" fill="none" stroke="${fill}" stroke-width="3"/>`
     const hand = `<g class="c-hand"><path d="M80 76q9-4 11-13" stroke="${K}" stroke-width="5" fill="none" stroke-linecap="round"/><circle cx="92" cy="60" r="6.500" fill="${fill}" stroke="${K}" stroke-width="3.500"/></g>`
     if (o.hut) {
-      const ring2 = `<path d="${smooth(ring)}" fill="#b07d1c" opacity=".28"/><path d="${smooth(ring)}" fill="none" stroke="#f7c948" stroke-width="3"/>`
-      const walls = `<rect x="31" y="52" width="46" height="40" rx="7" fill="#fbe3c8" stroke="${K}" stroke-width="4.500"/><path d="M48.500 92v-6.500a5.500 5.500 0 0 1 11 0V92z" fill="#8a5527" stroke="${K}" stroke-width="3.600" stroke-linejoin="round"/>`
-      const roof = `<path d="M54 22 89.500 55.500q2 4.500-3 4.500h-65q-5 0-3-4.500z" fill="#f7c948" stroke="${K}" stroke-width="4.500" stroke-linejoin="round"/><path d="M54 31 41 56M54 31l13 25M54 31v25" stroke="#c9952a" stroke-width="2.600" stroke-linecap="round"/>`
-      const eyes = `<ellipse cx="45" cy="68" rx="4.300" ry="5" fill="${K}"/><ellipse cx="63" cy="68" rx="4.300" ry="5" fill="${K}"/><circle cx="46.600" cy="66" r="1.700" fill="#fff"/><circle cx="64.600" cy="66" r="1.700" fill="#fff"/>`
-      const smile = `<path d="M49.500 75q4.500 4 9 0" stroke="${K}" stroke-width="2.800" fill="none" stroke-linecap="round"/>`
-      const flag = `<path d="M54 22V11" stroke="${K}" stroke-width="3" stroke-linecap="round"/><path d="M55 10.500 68 14.500 55 18.500z" fill="#ff5a3c" stroke="${K}" stroke-width="2.600" stroke-linejoin="round"/>`
-      return `${ring2}<g class="c-body">${walls}${roof}</g><g class="c-face"><ellipse cx="39" cy="73" rx="4.200" ry="2.600" fill="#f5a48c"/><ellipse cx="69" cy="73" rx="4.200" ry="2.600" fill="#f5a48c"/><g class="c-eyes">${eyes}</g><g class="c-mouth">${smile}</g></g><g class="c-hat">${flag}</g>${hand}`
+      const ring2 = `<path d="${smooth(ring)}" fill="#c9952a" opacity=".28"/><path d="${smooth(ring)}" fill="none" stroke="#f7c948" stroke-width="3"/>`
+      const walls = `<rect x="27" y="53" width="54" height="45" rx="10" fill="#fbe3c8" stroke="${K}" stroke-width="4.500"/>`
+      const roof = `<path d="M54 20 92 56q3 6-4 6H20q-7 0-4-6z" fill="#f7c948" stroke="${K}" stroke-width="4.500" stroke-linejoin="round"/><path d="M54 31 44 53M54 31l10 22" stroke="#c9952a" stroke-width="3" stroke-linecap="round"/>`
+      const cheeks = `<ellipse cx="36" cy="83" rx="4.500" ry="2.800" fill="#f5a48c"/><ellipse cx="72" cy="83" rx="4.500" ry="2.800" fill="#f5a48c"/>`
+      const eyes = `<ellipse cx="44" cy="76" rx="5.200" ry="6.200" fill="${K}"/><ellipse cx="64" cy="76" rx="5.200" ry="6.200" fill="${K}"/><circle cx="46" cy="73.500" r="2.100" fill="#fff"/><circle cx="66" cy="73.500" r="2.100" fill="#fff"/>`
+      const smile = `<path d="M48.500 85q5.500 4.500 11 0" stroke="${K}" stroke-width="3" fill="none" stroke-linecap="round"/>`
+      const flag = `<path d="M54 20V9.500" stroke="${K}" stroke-width="3.400" stroke-linecap="round"/><path d="M55.500 9 69 13.500 55.500 18z" fill="#ff5a3c" stroke="${K}" stroke-width="3" stroke-linejoin="round"/>`
+      return `${ring2}<g class="c-body">${walls}${roof}</g><g class="c-face">${cheeks}<g class="c-eyes">${eyes}</g><g class="c-mouth">${smile}</g></g><g class="c-hat">${flag}</g>${hand}`
     }
     return `${halo}<g class="c-body">${under}<path d="${smooth(blob)}" fill="${fill}" stroke="${K}" stroke-width="4.500" stroke-linejoin="round"/>${patch}</g><g class="c-face">${cheeks}<g class="c-eyes">${eyes}</g><g class="c-mouth">${mouth}</g>${onFace ? COSTUME[kind] : ''}</g><g class="c-hat">${onFace ? '' : COSTUME[kind]}</g>${hand}`
   }

@@ -66,8 +66,8 @@ function spot(i: number) {
 }
 
 function Shutters() {
-  return <svg className="shutters" viewBox="4 8 100 100">{[45, 63].map(x =>
-    <rect key={x} x={x - 8.5} y="60" width="17" height="15" rx="3" fill="#c9952a" stroke="#0b0b0b" strokeWidth="3.5" />)}</svg>
+  return <svg className="shutters" viewBox="4 8 100 100">{[44, 64].map(x =>
+    <rect key={x} x={x - 9.5} y="68" width="19" height="16" rx="3" fill="#c9952a" stroke="#0b0b0b" strokeWidth="3.5" />)}</svg>
 }
 
 function react(event: SyntheticEvent<HTMLElement>) {
