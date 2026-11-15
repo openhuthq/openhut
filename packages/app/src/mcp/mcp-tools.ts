@@ -1,6 +1,8 @@
 import * as z from 'zod/mini'
 import { CreateAgent, CreateGrant, ListGrants, UpdateAgentFields } from '@openhut/common/agents/agent.ts'
 import { UpdateAdminFields } from '@openhut/common/admin/admin.ts'
+import { UpdateMemory } from '@openhut/common/agents/memory.ts'
+import { CreateAutomation, CreateAutomationRun, ListAutomationRuns, ListAutomations, ListSendTargets, UpdateAutomationFields } from '@openhut/common/automations/automation.ts'
 import { ListChannels } from '@openhut/common/channels/channel.ts'
 import { CreateConnection, CreateConnectionAuthorization, ListConnectionEvents, ListConnectionTools, UpdateConnection } from '@openhut/common/connections/connection.ts'
 import { CreateInvite } from '@openhut/common/team/team.ts'
@@ -51,6 +53,30 @@ export const MCP_TOOLS = [
     input: ListConnectionEvents,
     call: ({ api, input }) => api({ method: 'GET', url: `/api/connection-events${query(input)}` }),
   }),
+  tool({ name: 'get_memory', description: 'What an agent remembers: notes for itself and what it knows about people, with how full each is.', input: Id, call: ({ api, input }) => api({ method: 'GET', url: `/api/memories/${input.id}` }) }),
+  tool({
+    name: 'update_memory',
+    description: 'Replace an agent\'s notes or what it knows about people with this list of entries. Read get_memory first and send the whole list you want kept.',
+    input: z.extend(UpdateMemory, { id: z.string() }),
+    call: ({ api, input: { id, ...patch } }) => api({ method: 'PATCH', url: `/api/memories/${id}`, payload: patch }),
+  }),
+  tool({ name: 'list_automations', description: 'An agent\'s automations: what starts each (a schedule or a webhook), where it posts, whether it\'s on, and its last run.', input: ListAutomations, call: ({ api, input }) => api({ method: 'GET', url: `/api/automations${query(input)}` }) }),
+  tool({
+    name: 'create_automation',
+    description: 'Make an agent do something on its own: on a schedule ({ every: hourly | daily | weekdays | weekly, at: "09:00", day: 0-6 for weekly }, server time) or from a webhook (webhook: true). postTo is a target from list_send_targets, or leave it out to only keep the run. A webhook automation returns its URL and secret once: pass both on.',
+    input: CreateAutomation,
+    call: ({ api, input }) => api({ method: 'POST', url: '/api/automations', payload: input }),
+  }),
+  tool({
+    name: 'update_automation',
+    description: 'Change an automation\'s name, instructions, schedule or where it posts, or pause it (enabled: false) and turn it back on.',
+    input: z.object({ id: z.string(), ...UpdateAutomationFields }),
+    call: ({ api, input: { id, ...patch } }) => api({ method: 'PATCH', url: `/api/automations/${id}`, payload: patch }),
+  }),
+  tool({ name: 'delete_automation', description: 'Delete an automation. Its webhook URL stops working.', input: Id, call: ({ api, input }) => api({ method: 'DELETE', url: `/api/automations/${input.id}` }) }),
+  tool({ name: 'run_automation', description: 'Run an automation now, the same as Run now in the dashboard. Check list_automation_runs for the result.', input: CreateAutomationRun, call: ({ api, input }) => api({ method: 'POST', url: '/api/automation-runs', payload: input }) }),
+  tool({ name: 'list_automation_runs', description: 'An automation\'s runs, newest first: status (running, done, quiet, skipped, failed), the answer, any error and how long it took.', input: ListAutomationRuns, call: ({ api, input }) => api({ method: 'GET', url: `/api/automation-runs${query(input)}` }) }),
+  tool({ name: 'list_send_targets', description: 'Where an agent can post: the Slack channels, Telegram chats and WhatsApp chats its connected channels reach. Use an id as postTo.', input: ListSendTargets, call: ({ api, input }) => api({ method: 'GET', url: `/api/send-targets${query(input)}` }) }),
   tool({ name: 'list_channels', description: 'Agents\' Slack, WhatsApp and Telegram channels.', input: ListChannels, call: ({ api, input }) => api({ method: 'GET', url: `/api/channels${query(input)}` }) }),
   tool({ name: 'list_people', description: 'People on the team and their roles.', input: Nothing, call: ({ api }) => api({ method: 'GET', url: '/api/people' }) }),
   tool({ name: 'delete_person', description: 'Remove a person (not the owner): they can\'t sign in, their apps are disconnected and their agents stop.', input: Id, call: ({ api, input }) => api({ method: 'DELETE', url: `/api/people/${input.id}` }) }),

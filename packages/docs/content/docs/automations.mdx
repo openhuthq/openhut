@@ -1,0 +1,20 @@
+---
+title: Automations
+description: Have an agent act on its own, on a schedule or when another app calls it.
+icon: ops
+---
+
+Open an agent and press **Add** under **Automations**. Give it a name, say what the agent should do each time, and pick what starts it:
+
+- **Schedule**: hourly, daily, on weekdays or once a week, at a time in the server's time zone.
+- **Webhook**: another app sends `POST` to the automation's URL with `Authorization: Bearer <secret>`. The body goes to the agent with the instructions. The secret is shown once, when you create it.
+
+**Post the result** is optional. Pick a Slack channel, Telegram chat or WhatsApp chat the agent is already in, and the agent posts its answer there. Every run is kept either way: open the automation to see each run, what the agent said, and how long it took.
+
+Say when to stay quiet, like `If nothing changed, say nothing.` A run with nothing to say is kept as **Nothing new** and posts nothing. A run while the agent is stopped is **Skipped**.
+
+From your own AI assistant, the control MCP has the same tools: `create_automation`, `list_send_targets`, `run_automation` and more.
+
+```txt
+Have Sales post a pipeline digest in #sales every weekday at 9.
+```

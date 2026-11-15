@@ -15,7 +15,7 @@ export const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite: aw
 
 await sql`create table if not exists install_setting (name text primary key, value text not null)`.execute(db)
 
-export async function findRow<T extends 'agent' | 'channel' | 'connection_grant' | 'thread'>({ table, id, missing }: { table: T; id: string; missing: string }): Promise<Selectable<Database[T]>> {
+export async function findRow<T extends 'agent' | 'automation' | 'channel' | 'connection_grant' | 'thread'>({ table, id, missing }: { table: T; id: string; missing: string }): Promise<Selectable<Database[T]>> {
   const [row] = ID.test(id) ? (await sql<Selectable<Database[T]>>`select * from ${sql.table(table)} where id = ${id}`.execute(db)).rows : []
   if (!row) throw new HttpError(404, missing)
   return row
@@ -71,4 +71,14 @@ export async function migrate(): Promise<void> {
     id text primary key, agent_id text not null references agent(id) on delete cascade, person_id text not null references person(id) on delete cascade,
     title text not null, messages text not null default '[]', created_at timestamptz not null default now(), updated_at timestamptz not null default now())`.execute(db)
   await sql`create index if not exists thread_by_person on thread (person_id, updated_at desc)`.execute(db)
+  await sql`create table if not exists automation (
+    id text primary key, agent_id text not null references agent(id) on delete cascade, name text not null, instructions text not null,
+    schedule text, webhook_hash text, post_to text, enabled boolean not null default true, next_run_at timestamptz,
+    created_at timestamptz not null default now(), check ((schedule is null) <> (webhook_hash is null)))`.execute(db)
+  await sql`create index if not exists automation_due on automation (next_run_at) where enabled`.execute(db)
+  await sql`create table if not exists automation_run (
+    id text primary key, automation_id text not null references automation(id) on delete cascade,
+    trigger text not null check (trigger in ('schedule', 'webhook', 'manual')), status text not null check (status in ('running', 'done', 'quiet', 'skipped', 'failed')),
+    answer text, error text, started_at timestamptz not null default now(), ms integer)`.execute(db)
+  await sql`create index if not exists automation_run_by_automation on automation_run (automation_id, started_at desc)`.execute(db)
 }

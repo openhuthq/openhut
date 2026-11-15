@@ -13,22 +13,23 @@ import { useAgent, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { ChannelsSection } from '@/features/agents/channels-section'
 import { InstructionsSection } from '@/features/agents/instructions-section'
 import { ModelPicker, SizePicker } from '@/features/agents/model-picker'
-import { MemorySection } from '@/features/agents/memory-section'
+import { MemoryRow, MemorySheet } from '@/features/agents/memory-section'
 import { SkillsSection } from '@/features/agents/skills-section'
+import { AutomationsSection } from '@/features/automations/automations-section'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 
-export type AgentDialog = 'name' | 'instructions' | 'slack' | 'whatsapp' | 'telegram'
+export type AgentDialog = 'name' | 'instructions' | 'slack' | 'whatsapp' | 'telegram' | 'memory'
 
 const PARENTS = [{ label: 'Agents', href: '/agents' }]
 
-export function AgentPage({ agentId, dialog, skill }: { agentId: string; dialog: AgentDialog | undefined; skill: string | undefined }) {
+export function AgentPage({ agentId, dialog, skill, automation }: { agentId: string; dialog: AgentDialog | undefined; skill: string | undefined; automation?: string }) {
   const agent = useAgent(agentId)
   if (!agent.data) return <Page title="Agent" parents={PARENTS}><ErrorNote message={agent.error?.message} /></Page>
-  return <AgentView agent={agent.data} dialog={dialog} skill={skill} />
+  return <AgentView agent={agent.data} dialog={dialog} skill={skill} automation={automation} />
 }
 
-function AgentView({ agent, dialog, skill }: { agent: Agent; dialog: AgentDialog | undefined; skill: string | undefined }) {
+function AgentView({ agent, dialog, skill, automation }: { agent: Agent; dialog: AgentDialog | undefined; skill: string | undefined; automation: string | undefined }) {
   const updateAgent = useUpdateAgent(agent.id)
   const deleteAgent = useDeleteAgent(agent.id)
   const lockReason = agent.canEdit ? undefined : `Only ${agent.ownerName} or an admin can change ${agent.name}`
@@ -49,13 +50,14 @@ function AgentView({ agent, dialog, skill }: { agent: Agent; dialog: AgentDialog
   </>
   return <Page title={agent.name} parents={PARENTS} actions={actions}>
     <div className="wrap">
+      <div className="hero">
+        <Avatar id={agent.id} about={agent.instructions} size={64} />
+        <AgentName agent={agent} editing={dialog === 'name' && agent.canEdit} />
+      </div>
       <div className="detail wide">
         <div className="left">
-          <div className="hero">
-            <Avatar id={agent.id} about={agent.instructions} size={64} />
-            <AgentName agent={agent} editing={dialog === 'name' && agent.canEdit} />
-          </div>
           <InstructionsSection agent={agent} editing={dialog === 'instructions'} lockReason={lockReason} />
+          <AutomationsSection agent={agent} lockReason={lockReason} open={automation} />
         </div>
         <aside className="rail">
           <div className="box facts">
@@ -64,13 +66,14 @@ function AgentView({ agent, dialog, skill }: { agent: Agent; dialog: AgentDialog
             <div><span>{FACT_ICONS.computer}Computer</span><SizePicker agent={agent} lockReason={lockReason} /></div>
             <div><span>{FACT_ICONS.owner}Owner</span><OwnerChip id={agent.ownerId} name={agent.ownerName} /></div>
             <div><span>{FACT_ICONS.code}Code execution</span><CodeSwitch agent={agent} lockReason={lockReason} /></div>
+            <MemoryRow agent={agent} />
           </div>
           <ChannelsSection agent={agent} lockReason={lockReason} dialog={dialog} />
           <AgentConnections agent={agent} lockReason={lockReason} />
         </aside>
       </div>
       <SkillsSection agent={agent} lockReason={lockReason} open={skill} />
-      <MemorySection agent={agent} lockReason={lockReason} />
+      {dialog === 'memory' && <MemorySheet agent={agent} lockReason={lockReason} />}
     </div>
   </Page>
 }

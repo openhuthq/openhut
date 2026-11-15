@@ -6,7 +6,7 @@ import {
   Link01Icon, LinkSquare02Icon, Logout03Icon, Mail01Icon, Megaphone01Icon, Message01Icon, MoreHorizontalIcon, NoteEditIcon, Notebook01Icon, PaintBoardIcon,
   PencilEdit01Icon, PencilEdit02Icon, PlayIcon, Presentation01Icon, Robot01Icon, Search01Icon, SecurityCheckIcon, ServerStack01Icon, Settings01Icon,
   SidebarLeftIcon, SourceCodeIcon, SparklesIcon, SquareLock02Icon, StopIcon, Table01Icon, Tag01Icon, Tick02Icon, UnfoldMoreIcon, UserIcon, UserMultipleIcon,
-  Video01Icon, Wrench01Icon,
+  Video01Icon, WebhookIcon, Wrench01Icon,
 } from '@hugeicons/core-free-icons'
 
 function icon(svg: IconSvgElement, size = 16, className?: string, strokeWidth = 1.5) {
@@ -38,7 +38,15 @@ export const ICONS = {
   info: icon(InformationCircleIcon, 14),
 }
 
+export const AUTOMATION_ICONS = {
+  schedule: icon(Clock01Icon, 14),
+  webhook: icon(WebhookIcon, 14),
+  person: icon(UserIcon, 14),
+  note: icon(Notebook01Icon, 14),
+}
+
 export const FACT_ICONS = {
+  memory: icon(AiBrain01Icon, 16, 'fi'),
   status: icon(Activity01Icon, 16, 'fi'),
   model: icon(AiMagicIcon, 16, 'fi'),
   owner: icon(UserIcon, 16, 'fi'),
