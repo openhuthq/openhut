@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Menu } from '@base-ui/react/menu'
 import type { Me } from '@openhut/common/team/team.ts'
 import { Avatar } from '@/components/avatar'
@@ -7,6 +7,7 @@ import { Initial } from '@/components/initial'
 import { Hut } from '@/components/hut'
 import { Page, SidebarToggle } from '@/components/page'
 import type { Route } from '@/app/routes'
+import { track } from '@/lib/track'
 import { AdminPage } from '@/features/admin/admin-page'
 import { AgentPage } from '@/features/agents/agent-page'
 import { AgentsPage } from '@/features/agents/agents-page'
@@ -36,6 +37,7 @@ export function SignedIn({ me, route }: { me: Me; route: Route }) {
   const deleteSession = useDeleteSession()
   const [collapsed, setCollapsed] = useState(false)
   const current = SECTION_OF[route.page]
+  useEffect(() => track({ name: 'dashboard_page_viewed', properties: { page: route.page } }), [route.page])
   return <SidebarToggle value={() => setCollapsed(!collapsed)}>
     <div className={collapsed ? 'app collapsed' : 'app'}>
       <aside className="side" aria-label="Sidebar">
