@@ -5,15 +5,18 @@ import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Automation, AutomationRun, Every, Schedule, SendTarget } from '@openhut/common/automations/automation.ts'
 import { ConfirmButton } from '@/components/confirm-button'
 import { CopyButton } from '@/components/copy-button'
+import { BRAND_ICONS, type BrandName } from '@/components/brand-icons'
 import { Dialog } from '@/components/dialog'
 import { DialogFoot } from '@/components/dialog-foot'
 import { DialogHead } from '@/components/dialog-head'
 import { ErrorNote } from '@/components/error-note'
+import { Glyph } from '@/components/glyph'
 import { AUTOMATION_ICONS, ICONS } from '@/components/icons'
 import { Locked } from '@/components/locked'
 import { SectionHead } from '@/components/section-head'
 import { RunIcon } from '@/components/status-badge'
 import { useMe } from '@/features/auth/api'
+import { Picker } from '@/features/agents/model-picker'
 import { useAutomationRuns, useAutomations, useCreateAutomation, useDeleteAutomation, useRunAutomation, useSendTargets, useUpdateAutomation } from '@/features/automations/api'
 import { formValues } from '@/lib/form'
 import { ago } from '@/lib/format'
@@ -47,7 +50,7 @@ function AutomationRow({ agent, automation, lockReason, placeName }: { agent: Ag
     <span className="mark">{AUTOMATION_ICONS[automation.trigger]}</span>
     <a className="alink" href={`/agents/${agent.id}/automations/${automation.id}`}>
       <span className="ellip aname-l">{automation.name}</span>
-      <span className="mute ellip">{triggerLine(automation)}{automation.postTo ? ` · posts to ${placeName(automation.postTo)}` : ''}</span>
+      <span className="mute ellip">{triggerLine(automation)}{automation.postTo && <> · posts to <PlaceLogo id={automation.postTo} />{placeName(automation.postTo)}</>}</span>
     </a>
     <LastRun automation={automation} />
     <Locked reason={lockReason}>
@@ -142,14 +145,35 @@ function scheduleFrom({ every, value }: { every: Every; value: (name: string) =>
 
 function PostToPicker({ agent, value }: { agent: Agent; value: string }) {
   const targets = useSendTargets({ agentId: agent.id, enabled: true })
+  const [chosen, setChosen] = useState(value)
   const known = targets.data ?? []
-  const options: SendTarget[] = value && !known.some((target) => target.id === value) ? [...known, { id: value, object: 'send_target', platform: value.split(':')[0], name: value, type: '' }] : known
-  return <select name="postTo" aria-label="Post the result to" className="postsel" defaultValue={value}>
-    <option value={NOWHERE}>Don't post</option>
-    {options.map((target) => <option key={target.id} value={target.id}>{label(target)}</option>)}
-    {targets.isLoading && <option disabled>Looking for channels…</option>}
-    {targets.data && !known.length && <option disabled>{agent.status === 'running' ? 'No channels yet: connect Slack, Telegram or WhatsApp' : `Start ${agent.name} to see its channels`}</option>}
-  </select>
+  const listed: SendTarget[] = value && !known.some((target) => target.id === value) ? [...known, { id: value, object: 'send_target', platform: value.split(':')[0], name: value, type: '' }] : known
+  const options = [{ id: NOWHERE, label: 'Don\'t post', blurb: 'Every run is kept either way' }, ...listed.map((target) => ({ id: target.id, label: target.name, blurb: `${platformName(target.platform)}${target.type ? ` · ${target.type}` : ''}` }))]
+  return <div className="postsel">
+    <input type="hidden" name="postTo" value={chosen} />
+    <Picker name="Post the result to" options={options} value={chosen} disabled={false} lockReason={undefined} onChoose={setChosen}
+      iconOf={(id, size) => id ? <PlaceLogo id={id} size={size} /> : AUTOMATION_ICONS.off}
+      note={targets.data && !known.length ? emptyNote(agent) : undefined} />
+  </div>
+}
+
+function emptyNote(agent: Agent): string {
+  return agent.status === 'running' ? 'No channels yet. Connect Slack, Telegram or WhatsApp to post the result.' : `Start ${agent.name} to see where it can post.`
+}
+
+function PlaceLogo({ id, size = 12 }: { id: string; size?: number }) {
+  const platform = id.split(':')[0]
+  return isBrand(platform) ? <span className="placelogo"><Glyph name={platform} size={size} /></span> : null
+}
+
+function isBrand(name: string): name is BrandName {
+  return Object.hasOwn(BRAND_ICONS, name)
+}
+
+const PLATFORM_NAMES: Record<string, string> = { slack: 'Slack', telegram: 'Telegram', whatsapp: 'WhatsApp' }
+
+function platformName(platform: string): string {
+  return PLATFORM_NAMES[platform] ?? platform.charAt(0).toUpperCase() + platform.slice(1)
 }
 
 function WebhookReady({ agent, automation, secret }: { agent: Agent; automation: Automation; secret: string }) {
@@ -169,6 +193,7 @@ function WebhookReady({ agent, automation, secret }: { agent: Agent; automation:
 
 function AutomationSheet({ agent, automation, lockReason, placeName }: { agent: Agent; automation: Automation; lockReason: string | undefined; placeName: (id: string) => string }) {
   const [editing, setEditing] = useState(false)
+  const me = useMe()
   const runs = useAutomationRuns(automation.id)
   const run = useRunAutomation({ agentId: agent.id, automationId: automation.id })
   const remove = useDeleteAutomation({ agentId: agent.id, automationId: automation.id })
@@ -195,12 +220,12 @@ function AutomationSheet({ agent, automation, lockReason, placeName }: { agent: 
       </DialogFoot>
     </form>
     : <div className="dlgform">
-      <DialogHead id="autod-h" title={automation.name} subtitle={`${triggerLine(automation)}${automation.postTo ? ` · posts to ${placeName(automation.postTo)}` : ''}`} onClose={close} />
+      <DialogHead id="autod-h" title={automation.name} subtitle={<>{triggerLine(automation)}{automation.postTo && <> · posts to <PlaceLogo id={automation.postTo} />{placeName(automation.postTo)}</>}</>} onClose={close} />
       <div className="dlgbody">
         {automation.webhookUrl && <div className="group"><span className="glabel">Webhook URL</span><div className="secretrow"><code>{automation.webhookUrl}</code><CopyButton text={automation.webhookUrl} label="Copy" /></div></div>}
         <div className="group"><span className="glabel">Runs</span>
           <ErrorNote message={runs.error?.message} />
-          {runs.data && !runs.data.length && <p className="note">No runs yet. {automation.trigger === 'schedule' && automation.nextRunAt ? `The first is ${when(automation.nextRunAt)}.` : ''}</p>}
+          {runs.data && !runs.data.length && <p className="note">No runs yet. {automation.trigger === 'schedule' && automation.nextRunAt ? `The first is ${when({ iso: automation.nextRunAt, timeZone: me.data?.timeZone })}.` : ''}</p>}
           {!!runs.data?.length && <div className="box rows">{runs.data.map((each) => <RunRow key={each.id} run={each} />)}</div>}
         </div>
       </div>
@@ -216,12 +241,13 @@ function AutomationSheet({ agent, automation, lockReason, placeName }: { agent: 
 }
 
 function RunRow({ run }: { run: AutomationRun }) {
+  const timeZone = useMe().data?.timeZone
   const [open, setOpen] = useState(false)
   const detail = run.error ?? run.answer
   return <div className="runrow-w">
     <button type="button" className="row runrow" aria-expanded={open} disabled={!detail} onClick={() => setOpen(!open)}>
       <RunIcon status={run.status} />
-      <span className="rwhen">{when(run.startedAt)}</span>
+      <span className="rwhen">{when({ iso: run.startedAt, timeZone })}</span>
       <span className="mute rwhat ellip">{summary(run)}</span>
       <span className="mute rdur">{run.ms === null ? '' : `${Math.round(run.ms / 1000)}s`}</span>
     </button>
@@ -254,14 +280,14 @@ function usePlaceName({ agentId, enabled }: { agentId: string; enabled: boolean 
 }
 
 function label(target: SendTarget): string {
-  const platform = target.platform.charAt(0).toUpperCase() + target.platform.slice(1)
-  return `${platform} · ${target.name}`
+  return `${platformName(target.platform)} · ${target.name}`
 }
 
-function when(iso: string): string {
+function when({ iso, timeZone }: { iso: string; timeZone: string | undefined }): string {
   const date = new Date(iso)
   const far = Math.abs(Date.now() - date.getTime()) > WEEK_MS
-  return date.toLocaleString('en', far ? { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' } : { weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+  const day: Intl.DateTimeFormatOptions = far ? { month: 'short', day: 'numeric' } : { weekday: 'short' }
+  return date.toLocaleString('en', { ...day, hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone })
 }
 
 function plain(markdown: string): string {
