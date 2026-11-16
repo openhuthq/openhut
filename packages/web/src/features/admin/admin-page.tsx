@@ -92,6 +92,8 @@ const WINDOWS: { kind: SeatWindow['kind']; name: string; idle: string }[] = [
 ]
 const resetTime = new Intl.DateTimeFormat('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })
 
+const SPEND_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
+
 function UsagePanel() {
   const usage = useSeatUsage()
   if (usage.error) return <div className="aform usage"><span className="mute">{usage.error.message}</span></div>
@@ -100,26 +102,48 @@ function UsagePanel() {
 }
 
 function UsageView({ usage }: { usage: SeatUsage }) {
-  const total = usage.agents.reduce((sum, agent) => sum + agent.costUsd, 0)
-  const used = usage.agents.filter((agent) => agent.costUsd > 0).sort((a, b) => b.costUsd - a.costUsd)
+  const slices = spendSlices(usage.agents)
+  const ranked = [...slices].sort((a, b) => b.usd - a.usd)
+  const total = slices.reduce((sum, slice) => sum + slice.usd, 0)
   return <div className="aform usage">
     {WINDOWS.map(({ kind, name, idle }) => {
       const window = usage.windows.find((each) => each.kind === kind)
       return <Meter key={kind} label={name} percent={window?.percent ?? 0} note={window?.resetsAt ? `Resets ${resetTime.format(new Date(window.resetsAt))}` : idle} />
     })}
-    <span className="usage-head">By agent<Info tip={`Each agent's share of what agents used since ${shortDate.format(new Date(usage.since))}, when this week's limit started, at API prices.`} /></span>
-    {used.length
-      ? <div className="spend">
-        {used.map((agent) => <div key={agent.agentId} className="spend-row">
-          <span className="meter-label"><Avatar id={agent.agentId} size={20} /><span className="ellip">{agent.agentName}</span></span>
-          <span className="mute spend-share">{Math.round((agent.costUsd / total) * 100)}%</span>
-          <span className="spend-usd">${agent.costUsd.toFixed(2)}</span>
-        </div>)}
-        {used.length > 1 && <div className="spend-row spend-total"><span>Total</span><span></span><span className="spend-usd">${total.toFixed(2)}</span></div>}
-      </div>
+    <span className="usage-head">By agent, this week<Info tip={`Each agent's share of what agents used since ${shortDate.format(new Date(usage.since))}, when this week's limit started, at API prices.`} />{!!slices.length && <span className="spend-sum">${total.toFixed(2)} total</span>}</span>
+    {slices.length
+      ? <>
+        <div className="spend-strip" role="img" aria-label={slices.map((slice) => `${slice.name} ${share(slice.usd, total)}`).join(', ')}>
+          {slices.map((slice) => <i key={slice.id} style={{ flexGrow: slice.usd, background: slice.color }} title={`${slice.name}: $${slice.usd.toFixed(2)}, ${share(slice.usd, total)}`} />)}
+        </div>
+        <div className="spend">
+          {ranked.map((slice) => <div key={slice.id} className="spend-row">
+            <span className="spend-name"><i className="spend-dot" style={{ background: slice.color }} /><span className="ellip">{slice.name}</span></span>
+            <span className="mute spend-share">{share(slice.usd, total)}</span>
+            <span className="spend-usd">${slice.usd.toFixed(2)}</span>
+          </div>)}
+        </div>
+      </>
       : <span className="mute">No agent has used the seat this week.</span>}
   </div>
 }
+
+function spendSlices(agents: SeatUsage['agents']): SpendSlice[] {
+  const used = agents.filter((agent) => agent.costUsd > 0)
+  const byCost = [...used].sort((a, b) => b.costUsd - a.costUsd)
+  const kept = new Set((used.length > SPEND_COLORS.length ? byCost.slice(0, SPEND_COLORS.length - 1) : byCost).map((agent) => agent.agentId))
+  const slices = used.filter((agent) => kept.has(agent.agentId)).map((agent, index) => ({ id: agent.agentId, name: agent.agentName, usd: agent.costUsd, color: SPEND_COLORS[index] }))
+  const rest = used.filter((agent) => !kept.has(agent.agentId))
+  if (rest.length) slices.push({ id: 'other', name: `${rest.length} more agents`, usd: rest.reduce((sum, agent) => sum + agent.costUsd, 0), color: 'var(--mute-2)' })
+  return slices
+}
+
+function share(usd: number, total: number): string {
+  const percent = (usd / total) * 100
+  return percent > 0 && percent < 1 ? '<1%' : `${Math.round(percent)}%`
+}
+
+type SpendSlice = { id: string; name: string; usd: number; color: string }
 
 function Info({ tip }: { tip: string }) {
   return <span className="info" role="img" aria-label={tip} title={tip}>{ICONS.info}</span>
