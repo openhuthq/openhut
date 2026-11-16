@@ -519,12 +519,13 @@ function main() {
     }
   })
 
-  check('R4', 'Take over: the owner watches live, the agent is paused, the owner\'s clicks and keys drive the page, and handing back frees the agent', 'frames arrive; input before Take over is refused (409); while held the agent\'s click is denied by policy; the owner clicks the search box, types gVisor and Enter and the page lands on the gVisor article; after hand back the agent browses again; closing the view stops the screencast', async () => {
+  check('R4', 'Take over: the owner watches live, the agent is paused, the owner\'s clicks and keys drive the page, and handing back frees the agent', 'frames arrive, and the picture endpoint streams JPEG parts; input before Take over is refused (409); while held the agent\'s click is denied by policy; the owner clicks the search box, types gVisor and Enter and the page lands on the gVisor article; after hand back the agent browses again; closing the view stops the screencast', async () => {
     await chat(dev, 'browser: open https://www.wikipedia.org/')
     const center = /"(\d+),(\d+)"/.exec(await agentBrowser(dev, 'eval', "(r => Math.round(r.x + r.width / 2) + ',' + Math.round(r.y + r.height / 2))(document.querySelector('#searchInput').getBoundingClientRect())"))
     const box = center ? { x: Number(center[1]), y: Number(center[2]) } : undefined
     const view = await openStream(`/api/browsers/${dev.id}/stream`, cookie)
     await until(async () => view.events.some((e) => e.event === 'frame'), 30_000, 'the first live frame')
+    const picture = await firstJpeg(`/api/browsers/${dev.id}/frames`, cookie)
     const click = [{ type: 'mouse', action: 'down', x: box?.x ?? 0, y: box?.y ?? 0 }, { type: 'mouse', action: 'up', x: box?.x ?? 0, y: box?.y ?? 0 }]
     const early = await api('POST', `/api/browsers/${dev.id}/input`, { events: click }, cookie)
     const held = await api<Browser>('POST', `/api/browsers/${dev.id}/hold`, undefined, cookie)
@@ -540,8 +541,8 @@ function main() {
     view.close()
     await until(async () => /Screencasting: false/.test(await agentBrowser(dev, 'stream', 'status')), 30_000, 'the screencast to stop after the view closed')
     return {
-      actual: { box, frames, early: early.status, held: `${held.status} ${held.json.heldBy}`, agentWhileHeld: agentWhileHeld.trim().slice(0, 120), typed: `${typed.status} ${typed.json.accepted}`, landed, released: `${released.status} ${released.json.heldBy}`, holdEvents, agentAfter: agentAfter.trim().split('\n')[0] },
-      pass: !!box && frames >= 2 && early.status === 409 && held.status === 200 && held.json.heldBy === owner.email && /denied by policy/.test(agentWhileHeld) &&
+      actual: { box, frames, picture, early: early.status, held: `${held.status} ${held.json.heldBy}`, agentWhileHeld: agentWhileHeld.trim().slice(0, 120), typed: `${typed.status} ${typed.json.accepted}`, landed, released: `${released.status} ${released.json.heldBy}`, holdEvents, agentAfter: agentAfter.trim().split('\n')[0] },
+      pass: !!box && frames >= 2 && picture.status === 200 && picture.type.startsWith('multipart/x-mixed-replace') && picture.jpeg && picture.bytes > 1000 && early.status === 409 && held.status === 200 && held.json.heldBy === owner.email && /denied by policy/.test(agentWhileHeld) &&
         typed.status === 200 && typed.json.accepted === 16 && !!landed?.includes('wikipedia.org/wiki/GVisor') && released.status === 200 && released.json.heldBy === null && agentAfter.includes(BROWSE_TITLE),
     }
   })
@@ -1657,6 +1658,23 @@ async function openStream(path: string, cookie: string) {
   }
   read().catch(() => undefined)
   return { status: response.status, events, close: () => abort.abort() }
+}
+
+async function firstJpeg(path: string, cookie: string) {
+  const abort = new AbortController()
+  const response = await fetch(APP + path, { headers: { cookie }, signal: abort.signal })
+  const reader = response.body?.getReader()
+  let seen = Buffer.alloc(0)
+  for (let parts = []; reader && parts.length < 2 && seen.length < 8 << 20;) {
+    const chunk = await reader.read()
+    if (chunk.done) break
+    seen = Buffer.concat([seen, chunk.value])
+    parts = seen.toString('latin1').split('--openhut-frame').slice(1)
+  }
+  abort.abort()
+  const part = seen.toString('latin1').split('--openhut-frame')[1] ?? ''
+  const body = Buffer.from(part.slice(part.indexOf('\r\n\r\n') + 4), 'latin1')
+  return { status: response.status, type: response.headers.get('content-type') ?? '', bytes: Number(/content-length: (\d+)/.exec(part)?.[1] ?? 0), jpeg: body[0] === 0xff && body[1] === 0xd8 }
 }
 
 async function docker(...args: string[]) {
