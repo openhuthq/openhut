@@ -23,5 +23,5 @@ export const telegram = {
     return [`TELEGRAM_BOT_TOKEN=${botToken}`, who, `TELEGRAM_HOME_CHANNEL=${audience.ownerAddress}`]
   },
 
-  yaml: 'telegram:\n  require_mention: true\n  unauthorized_dm_behavior: ignore\n',
+  yaml: 'telegram:\n  require_mention: true\n  unauthorized_dm_behavior: ignore\n  gateway_restart_notification: false\n',
 }
