@@ -77,14 +77,14 @@ header.b p{font-family:var(--copy);font-size:17px;line-height:1.55;color:var(--b
 .lead h2{font-size:clamp(36px,4.4vw,54px)}
 .lead p{font-family:var(--copy);font-size:16px;line-height:1.6;color:var(--body);max-width:60ch;margin-top:12px}
 .lead figure{margin-top:24px}
-.pair{display:grid;grid-template-columns:1fr 1fr;gap:48px 28px}
 .sm h3{font-size:30px}
+.sm a{color:var(--ink)}
 .sm p{font-family:var(--copy);font-size:14px;line-height:1.6;color:var(--body);max-width:60ch;margin-top:8px}
 .sm figure{margin-top:18px}
 .stage{background:var(--stage);border-radius:18px;padding:36px;display:grid;place-items:center}
 .sm .stage{padding:28px}
 .stage img{display:block;width:100%;height:auto;border-radius:10px;border:2px solid var(--ink);background:var(--paper)}
-.pair .stage img{max-width:380px}
+.stage img.tall{max-width:440px}
 figcaption{font-family:var(--copy);font-size:12.5px;color:var(--muted);margin-top:10px}
 .quiet{display:flex;flex-direction:column;gap:10px;padding-top:24px;border-top:1px solid var(--line)}
 .quiet h4{margin:0;font-family:var(--copy);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
@@ -96,7 +96,7 @@ figcaption{font-family:var(--copy);font-size:12.5px;color:var(--muted);margin-to
   .when{position:static;flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px 12px}
   .when .cr{width:32px;height:32px;margin:0}
 }
-@media (max-width:640px){.pair{grid-template-columns:minmax(0,1fr)}.body{gap:44px}}
+@media (max-width:640px){.body{gap:44px}}
 @media (max-width:560px){.stage,.sm .stage{padding:14px;border-radius:12px}}
 
 .more{padding-block:56px 96px;font-family:var(--copy);font-size:14px;color:var(--muted)}
@@ -137,10 +137,19 @@ footer .toplinks a{color:var(--night-ink)}
       </div>
       <div class="body">
         <section class="lead">
-          <h2>Agents that work on their own</h2>
+          <h2>Agents that browse the web</h2>
+          <p>Turn Browser on and an agent opens real web pages: it reads them, clicks and fills in forms. Watch it live from the dashboard, and take over when it needs a hand.</p>
+          <figure>
+            <div class="stage"><img src="/changelog/browser.jpg" alt="The Dev agent's page with Browser switched on and a still picture of the Wikipedia page it has open" width="1432" height="817"></div>
+            <figcaption>Browser is a switch on the agent. Watch live opens the stream.</figcaption>
+          </figure>
+        </section>
+
+        <section class="sm">
+          <h3>Agents that work on their own</h3>
           <p>Give an agent an automation and it runs on a schedule, or when another app calls its webhook. It posts the result to Slack, Telegram or WhatsApp, and stays quiet when there's nothing new.</p>
           <figure>
-            <div class="stage"><img src="/changelog/automations.jpg" alt="An agent's page with three automations: a weekday digest, a webhook for new leads, and a paused Friday recap" width="1568" height="1053"></div>
+            <div class="stage"><img src="/changelog/automations.jpg" alt="An agent's page with three automations: a weekday digest, a webhook for new leads, and a paused Friday recap" width="1568" height="1053" loading="lazy"></div>
             <figcaption>Automations sit under an agent's instructions. Each run is kept.</figcaption>
           </figure>
         </section>
@@ -155,32 +164,32 @@ footer .toplinks a{color:var(--night-ink)}
         </section>
 
         <section class="sm">
-          <h3>Turn usage data off from Admin</h3>
-          <p>Owners and admins can switch usage data off with one click. It never includes what messages say.</p>
+          <h3>Chat in Slack, WhatsApp or Telegram</h3>
+          <p>Each agent gets its own Slack app, WhatsApp number or Telegram bot. In Slack it answers in the channels you pick, private and shared ones included, so there are no member IDs to copy.</p>
           <figure>
-            <div class="stage"><img src="/changelog/admin-usage.jpg" alt="Admin, Usage data: Share usage data with OpenHut, switched on" width="1568" height="440" loading="lazy"></div>
-            <figcaption>Admin › Usage data. On by default.</figcaption>
+            <div class="stage"><img class="tall" src="/changelog/slack-dialog.jpg" alt="The Connect Support to Slack dialog, picking channels from a dropdown" width="1064" height="1146" loading="lazy"></div>
+            <figcaption>Connecting an agent to Slack takes about three minutes. Agents already on Slack need to be set up again.</figcaption>
           </figure>
         </section>
 
-        <div class="pair">
-          <section class="sm">
-            <h3>Chat in Slack, WhatsApp or Telegram</h3>
-            <p>Each agent gets its own Slack app, WhatsApp number or Telegram bot. In Slack it answers in the channels you pick.</p>
-            <figure>
-              <div class="stage"><img src="/changelog/slack-dialog.jpg" alt="The Connect Support to Slack dialog, picking channels from a dropdown" width="1064" height="1146" loading="lazy"></div>
-              <figcaption>Connecting an agent to Slack takes about three minutes.</figcaption>
-            </figure>
-          </section>
-          <section class="sm">
-            <h3>Agents see only what you allow</h3>
-            <p>Connect a database once, then pick which agents can use it. They never see the password.</p>
-            <figure>
-              <div class="stage"><img src="/changelog/connection-agents.jpg" alt="A Postgres connection used only by the Dev and Support agents" width="828" height="924" loading="lazy"></div>
-              <figcaption>A database, and the two agents allowed to use it.</figcaption>
-            </figure>
-          </section>
-        </div>
+        <section class="sm">
+          <h3>Your agent's face in Slack</h3>
+          <p>Connecting sets the Slack app's icon to the creature you see on the dashboard. Slack asks for a configuration token to do that; OpenHut uses it once and doesn't keep it.</p>
+        </section>
+
+        <section class="sm">
+          <h3>Agents see only what you allow</h3>
+          <p>Connect a database once, then pick which agents can use it. They never see the password.</p>
+          <figure>
+            <div class="stage"><img class="tall" src="/changelog/connection-agents.jpg" alt="A Postgres connection used only by the Dev and Support agents" width="828" height="924" loading="lazy"></div>
+            <figcaption>A database, and the two agents allowed to use it.</figcaption>
+          </figure>
+        </section>
+
+        <section class="sm">
+          <h3>Diagrams with Excalidraw</h3>
+          <p>A new connection: agents draw a diagram and send a link that opens it in Excalidraw. One click, no account.</p>
+        </section>
 
         <section class="sm">
           <h3>Set it up from Claude or Cursor</h3>
@@ -200,16 +209,20 @@ footer .toplinks a{color:var(--night-ink)}
           </figure>
         </section>
 
-        <div class="quiet">
-          <h4>Also</h4>
-          <ul>
-            <li>Slack agents answer in channels you pick from a list, including private channels, shared channels and group DMs. Everyone in them can talk to the agent, so there are no member IDs to copy. Agents already on Slack need to be set up again.</li>
-            <li>A Slack agent gets its face: connecting sets its Slack app's icon to the creature you see on the dashboard. Slack asks for a configuration token to do that; OpenHut uses it once and doesn't keep it.</li>
-            <li>Excalidraw is a new connection: agents draw a diagram and send a link that opens it in Excalidraw. One click, no account.</li>
-            <li>The code is open source under the MIT license, on <a href="https://github.com/openhuthq/openhut" target="_blank" rel="noopener">GitHub</a>, with a guide for contributors.</li>
-            <li>Usage data is a count of messages, a daily check-in and the owner's email. Never what a message says or who wrote it.</li>
-          </ul>
-        </div>
+        <section class="sm">
+          <h3>Turn usage data off from Admin</h3>
+          <p>Usage data is a count of messages, a daily check-in and the owner's email, never what a message says. Owners and admins can switch it off with one click.</p>
+          <figure>
+            <div class="stage"><img src="/changelog/admin-usage.jpg" alt="Admin, Usage data: Share usage data with OpenHut, switched on" width="1568" height="440" loading="lazy"></div>
+            <figcaption>Admin › Usage data. On by default.</figcaption>
+          </figure>
+        </section>
+
+        <section class="sm">
+          <h3>Open source</h3>
+          <p>The code is MIT licensed, on <a href="https://github.com/openhuthq/openhut" target="_blank" rel="noopener">GitHub</a>, with a guide for contributors.</p>
+        </section>
+
         <div class="quiet">
           <h4>Website</h4>
           <ul>
