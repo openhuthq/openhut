@@ -19,9 +19,14 @@ const LOOK: Record<MarkVariant, Record<Kind, string>> = {
 }
 const TILE = 'grid shrink-0 place-items-center border-0'
 
+function kindOf(icon: BrandIcon): Kind {
+  if (icon.full) return 'full'
+  return icon.tile ? 'filled' : 'plain'
+}
+
 export function Mark({ name, size = 28, variant = 'default', className }: { name: BrandName; size?: number; variant?: MarkVariant; className?: string }) {
   const icon: BrandIcon = BRAND_ICONS[name]
-  const kind: Kind = icon.full ? 'full' : icon.tile ? 'filled' : 'plain'
+  const kind = kindOf(icon)
   const look = cn(TILE, LOOK[variant][kind], kind === 'full' && 'overflow-hidden [&_svg]:block', className)
   if (kind === 'full') return <span className={look} style={{ width: size, height: size }}><Glyph name={name} size={size} /></span>
   return <span className={look} style={{ width: size, height: size, background: icon.tile }}><Glyph name={name} size={Math.round(size / 2)} onTile /></span>

@@ -14,7 +14,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `agents/` (agents, grants, their Hermes files), `channels/`, `connections/`, `gateway/` (the agents' MCP gateway on
   :8081), `mcp/` (the control MCP on `/mcp`, whose tools call the API in-process), `admin/`, and `integrations/<service>/` (Postgres, Slack, WhatsApp).
   Tests in `test/`.
-- **`packages/web`** — `@openhut/web`, the React dashboard (Vite, TanStack Query). The approved design is its CSS.
+- **`packages/web`** — `@openhut/web`, the React dashboard (Vite, TanStack Query). Tailwind v4 with shared components in `src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.
 - **`packages/agentd`** — `@openhut/agentd`, the root helper: the only process that runs Docker, on a Unix socket.
 - **`packages/e2e`** — `@openhut/e2e`, the end-to-end run: a bare Linux server in Docker, the curl install, a
