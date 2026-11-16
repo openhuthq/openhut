@@ -10,6 +10,10 @@
 - DNS for openhut.dev and www is managed by the Worker's custom domains; the zone holds no other records. Wrangler's
   OAuth login can deploy but can't edit DNS, so a record in the way has to be deleted in the dashboard. It can delete a Worker's custom domains, though: `DELETE /accounts/<id>/workers/domains/<id>` with the `oauth_token` from wrangler's config. When adding a zone, choose manual DNS entry: the automatic scan imports the registrar's parking A records, and Worker custom domains then fail with "already has externally managed DNS records" (code 100117) until they are deleted.
 
+- openhut.dev lives in the owner's personal Cloudflare account, not the Activepieces one. Wrangler's OAuth token there can create a Cloudflare Tunnel (`wrangler tunnel create`) and set its ingress and fetch its token over the API (`connectivity: admin`), but it can't write DNS (code 10000), so a tunnel's CNAME is added in the dashboard.
+
+## The internal instance
+- internal.openhut.dev is the team's own test instance (it replaced monkey.activepieces.dev on 2026-11-15). It is reached through the Cloudflare Tunnel `openhut-internal` (`cloudflared` as a systemd service on the host, ingress to `127.0.0.1:8787`), so the host needs no open inbound port and no certificate. Host details stay out of this repo.
 
 ## The GitHub repo and org (openhuthq)
 
