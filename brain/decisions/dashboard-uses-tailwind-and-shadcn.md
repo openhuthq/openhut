@@ -15,5 +15,6 @@ Shared components with typed variants stop new one-off classes, and shadcn's com
 ## Consequences
 - Tokens live in `@theme` in `index.css`; app names (`text-mute`, `bg-soft`, `border-hair`) and shadcn aliases both resolve to them. No dark mode.
 - Generated shadcn code is adapted, not pasted: no `size-4` icon sizing, no focus-ring utilities (the global 2px ring stays), no `/NN` on translucent tokens, `scale-[.96]` on press, our keyframes instead of tw-animate.
-- Dialogs, sheets and popovers are controlled by the URL. Native radios stay inside `RadioGroup` so uncontrolled forms and `:has()` toggles keep working. Toasts stay `lib/toast.ts`, tooltips stay `title`, and the sidebar keeps its own top bar under 900px.
+- Dialogs, sheets and popovers are controlled by the URL. Native radios stay inside `RadioGroup` so uncontrolled forms and `:has()` toggles keep working. Toasts stay `lib/toast.ts` and tooltips stay `title`.
+- The sidebar follows shadcn's: under 900px (`useIsMobile`) it is a left sheet opened by the page's trigger and closed by any link in it, which is the one dialog not in the URL; on desktop ⌘B or Ctrl+B collapses it with a slide and the `sidebar_state` cookie remembers it (2026-11-17).
 - `test/ui-conventions.test.ts` keeps raw controls and inline styles out of screens.

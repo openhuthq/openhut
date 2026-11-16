@@ -50,7 +50,7 @@ export function SignedIn({ me, route }: { me: Me; route: Route }) {
         <NavLink section="admin" label="Admin" current={current} />
       </SidebarFooter>
       <DropdownMenu>
-        <DropdownMenuTrigger className="flex h-12 w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 text-left text-sm/[1.3] hover:bg-tint data-popup-open:bg-tint mobile:ml-auto mobile:h-8 mobile:w-auto mobile:px-1 mobile:[&>:not([data-slot=avatar])]:hidden">
+        <DropdownMenuTrigger className="flex h-12 w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 text-left text-sm/[1.3] hover:bg-tint data-popup-open:bg-tint">
           <Initial id={me.user.id} email={me.user.email} />
           <Who email={me.user.email} role={ROLE_LABEL[me.user.role]} />
           <span className="text-mute">{ICONS.updown}</span>
