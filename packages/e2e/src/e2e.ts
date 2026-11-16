@@ -21,6 +21,8 @@ import type { AgentdReplies } from '../../agentd/src/agentd.ts'
 
 const sh = promisify(execFile)
 const APP = 'http://127.0.0.1:8787'
+const BROWSE_URL = 'https://example.com/'
+const BROWSE_TITLE = 'Example Domain'
 const OPENHUT = '/opt/openhut'
 const RESULTS = process.env.RESULTS ?? '/results'
 const DENIED = 'Denied: no connection grants postgres_query to this agent.'
@@ -458,7 +460,7 @@ function main() {
     },
   )
 
-  check('E1', 'Revoking the grant takes effect on the next call, no restart', '"Denied: …" and a new denied audit row', async () => {
+  check('E1', 'Revoking the grant takes effect on the next call', '"Denied: …" and a new denied audit row', async () => {
     await call('delete_grant', { id: devGrant.id })
     const e1 = inner(await chat(dev, 'sql: select 1 as one'))
     const lastRow = (await call<List<ConnectionEvent>>('list_connection_events', { agentId: dev.id, limit: 1 })).data[0]
@@ -480,6 +482,43 @@ function main() {
       actual: { events: connEvents.length, agents: [...new Set(connEvents.map((e) => e.agentName))] },
       pass: connEvents.length >= 3 && connEvents.every((e) => e.agentId === dev.id && e.agentName === 'Dev'),
     }
+  })
+
+  check('R1', 'The browser is off until someone switches it on', 'browser false, the toolset disabled in config.yaml, the model is not offered browser_exec (it echoes)', async () => {
+    const agent = (await api<Agent>('GET', `/api/agents/${dev.id}`, undefined, cookie)).json
+    const disabled = await docker('exec', `ag-${dev.id}`, 'grep', 'disabled_toolsets', '/opt/data/config.yaml')
+    const reply = await chat(dev, `browse: ${BROWSE_URL}`)
+    return { actual: { browser: agent.browser, disabled, reply: reply.slice(0, 80) }, pass: agent.browser === false && disabled.includes('[browser,') && reply.startsWith('ECHO:') }
+  })
+
+  check('R2', "Switched on, the agent opens a public page in Chromium inside its own gVisor container, within its memory limit", 'PATCH 200, the page title comes back from a container that is still runsc, read-only and limited to 1 GiB', async () => {
+    const patched = await api<Agent>('PATCH', `/api/agents/${dev.id}`, { browser: true }, cookie)
+    await waitReady(dev)
+    const reply = await chat(dev, `browse: ${BROWSE_URL}`)
+    const spec = await docker('inspect', '--format', '{{.HostConfig.Runtime}} {{.HostConfig.ReadonlyRootfs}} {{.HostConfig.Memory}}', `ag-${dev.id}`)
+    const memory = await docker('stats', '--no-stream', '--format', '{{.MemUsage}}', `ag-${dev.id}`)
+    return {
+      actual: { status: patched.status, browser: patched.json.browser, reply: reply.slice(0, 300), spec, memory },
+      pass: patched.status === 200 && patched.json.browser === true && reply.includes(BROWSE_TITLE) && spec === 'runsc true 1073741824',
+    }
+  })
+
+  check('R3', "The agent's browser reaches nothing the agent's shell can't", 'the LAN, cloud metadata and another agent all fail to load; none returns a page title', async () => {
+    const targets = { lan: 'http://10.99.0.10/', lanHttps: 'https://192.168.77.10/', metadata: 'http://169.254.169.254/latest/meta-data/', otherAgent: `http://10.200.${sales.net}.2:8642/v1/models` }
+    const replies: Record<string, string> = {}
+    for (const [name, url] of Object.entries(targets)) replies[name] = await chat(dev, `browse: ${url}`)
+    const loaded = Object.entries(replies).filter(([name, reply]) => reply.includes(`'url': '${targets[name as keyof typeof targets]}`) || reply.includes(BROWSE_TITLE)).map(([name]) => name)
+    return {
+      actual: { loaded, metadata: replies.metadata.slice(0, 160), lan: replies.lan.slice(0, 160) },
+      pass: loaded.length === 0 && replies.metadata.includes('cloud metadata') && Object.values(replies).every((reply) => reply.startsWith('TOOL RESULT:')),
+    }
+  })
+
+  check('R4', 'Switched off again, the browser is gone', 'PATCH 200, the model is not offered browser_exec', async () => {
+    const patched = await api<Agent>('PATCH', `/api/agents/${dev.id}`, { browser: false }, cookie)
+    await waitReady(dev)
+    const reply = await chat(dev, `browse: ${BROWSE_URL}`)
+    return { actual: { status: patched.status, browser: patched.json.browser, reply: reply.slice(0, 80) }, pass: patched.status === 200 && patched.json.browser === false && reply.startsWith('ECHO:') }
   })
 
   check(
@@ -1604,6 +1643,7 @@ function waitReady(a: AgentRef, ms = 240_000) {
 }
 
 async function chat(a: AgentRef, text: string) {
+  await waitReady(a)
   const r = await fetch(`http://10.200.${a.net}.2:8642/v1/chat/completions`, {
     method: 'POST',
     signal: AbortSignal.timeout(180_000),
@@ -1656,6 +1696,7 @@ function rowsOf(text: string) {
 }
 
 async function asAgent(a: AgentRef, code: string, env: Record<string, string> = {}) {
+  await waitReady(a)
   const python = (await docker('exec', `ag-${a.id}`, 'sh', '-c', 'command -v python3 || ls /opt/hermes/.venv/bin/python')).split('\n')[0]
   return docker('exec', '-u', '10000:10000', ...Object.entries(env).flatMap(([k, v]) => ['-e', `${k}=${v}`]), `ag-${a.id}`, python, '-c', code)
 }

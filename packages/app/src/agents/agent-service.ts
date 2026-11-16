@@ -24,7 +24,7 @@ const RECONCILE_MS = 30_000
 const PROBE_MS = 3_000
 const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
-const RENDERED = ['instructions', 'model', 'codeExecution', 'size'] as const
+const RENDERED = ['instructions', 'model', 'codeExecution', 'browser', 'size'] as const
 const TelegramSecrets = z.object({ botToken: z.string() })
 
 export const agentService = {
@@ -69,8 +69,8 @@ export const agentService = {
 
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateAgent }): Promise<Agent> {
     await agentService.requireEditable({ actor, id })
-    const { codeExecution, ...fields } = patch
-    await db.updateTable('agent').set({ ...fields, code_execution: codeExecution, name: patch.name === undefined ? undefined : cleanName(patch.name) }).where('id', '=', id).execute()
+    const { codeExecution, browser, ...fields } = patch
+    await db.updateTable('agent').set({ ...fields, code_execution: codeExecution, web_browser: browser, name: patch.name === undefined ? undefined : cleanName(patch.name) }).where('id', '=', id).execute()
     if (RENDERED.some((field) => patch[field] !== undefined)) await agentService.reapply({ id })
     if (patch.wanted) await (patch.wanted === 'running' ? agentd.start({ id }) : agentd.stop({ id }))
     return agentService.get({ actor, id })
@@ -220,7 +220,7 @@ async function applyRelease(): Promise<void> {
 function agentOf({ row, ownerName, state, health, editable }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean }): Agent {
   return {
     id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, wanted: row.wanted,
-    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, size: row.size, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
+    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, browser: row.web_browser, size: row.size, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
   }
 }
 

@@ -9,7 +9,7 @@ import { whatsapp } from '../integrations/whatsapp/whatsapp.ts'
 const AUXILIARY_TASKS = ['approval', 'compression', 'title_generation', 'background_review']
 
 export function renderFiles({ agent, ownerName, token, channelKey, seat, channels, connections }: {
-  agent: { id: string; name: string; instructions: string; model: string; net: number; code_execution: boolean }
+  agent: { id: string; name: string; instructions: string; model: string; net: number; code_execution: boolean; web_browser: boolean }
   ownerName: string
   token: string
   channelKey: string
@@ -18,7 +18,7 @@ export function renderFiles({ agent, ownerName, token, channelKey, seat, channel
   connections: { name: string; kind: string }[]
 }): AgentFiles {
   const gateway = `http://${agentSubnet(agent.net)}.1:${config.gatewayPort}`
-  const disabled = ['browser', 'delegation', 'cronjob', ...(agent.code_execution ? [] : ['code_execution'])]
+  const disabled = [...(agent.web_browser ? [] : ['browser']), 'delegation', 'cronjob', ...(agent.code_execution ? [] : ['code_execution'])]
   const yaml = [
     modelYaml({ gateway, token, model: agent.model }),
     'terminal:\n  backend: local',
