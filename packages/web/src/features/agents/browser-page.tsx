@@ -79,7 +79,7 @@ export function BrowserPage({ me, agentId }: { me: Me; agentId: string }) {
       <div className="bbar-in">
         <a className="bback" href={`/agents/${encodeURIComponent(agentId)}`} title={`Back to ${name}`}>{ICONS.chev}{name}</a>
         <span className="bvsep" />
-        {agent.data && <Avatar id={agent.data.id} about={agent.data.instructions} size={24} />}
+        {agent.data && <Avatar id={agent.data.id} about={agent.data.instructions} size={32} />}
         <h1 className="ellip">{name}'s browser</h1>
         {mine ? <span className="bpill mine">You're in control</span>
           : heldByOther ? <span className="bpill mine">{live.heldBy} is in control</span>
