@@ -26,6 +26,8 @@ the installer, agentd and the e2e run live here. `openhut-server.md` covers the 
 - `scripts/seed-ui.ts` hardcodes `127.0.0.1:8787`, so on another `PORT` seed from a copy with the port swapped. In the dashboard, "New agent" creates the agent on click (no form), so clicking it for a screenshot adds one.
 - The button and dropdown rules (which variant for which action) are in `DESIGN.md` at the repo root and in `index.css` since 2026-11-13. `index.css` is one global namespace with short class names: a new `.role` for the invite popover restyled `.card .role` on the agent cards. Grep the stylesheet for a class name before adding it.
 - Rebuilding `packages/web` while `npm run dev` is running leaves the app serving a blank page (the hashed asset names change); restart it.
+- A Base UI popup (combobox, menu) inside our `Dialog` portals to `<body>` by default, under the modal `<dialog>`'s top layer, so it opens invisibly. Pass the enclosing `<dialog>` as the Portal's `container` and use `positionMethod="fixed"` on the Positioner so the dialog's scroll area can't clip it (`slack-channels.tsx`).
+- Dev never calls slack.com: `OPENHUT_SLACK_API` points at a fake Slack in `scripts/fake-agentd.ts` (workspace Acme, bot @gus, public, private, shared and group-DM channels). Any `xoxb-…`/`xapp-…` of the right shape connects.
 
 ## The installer (`install/`)
 

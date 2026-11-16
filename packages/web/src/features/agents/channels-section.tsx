@@ -7,6 +7,7 @@ import { Mark } from '@/components/mark'
 import { SectionHead } from '@/components/section-head'
 import type { AgentDialog } from '@/features/agents/agent-page'
 import { useChannels, useDeleteChannel } from '@/features/agents/api'
+import { SlackChannels } from '@/features/agents/slack-channels'
 import { SlackDialog } from '@/features/agents/slack-dialog'
 import { TelegramDialog } from '@/features/agents/telegram-dialog'
 import { WhatsappDialog } from '@/features/agents/whatsapp-dialog'
@@ -32,18 +33,20 @@ export function ChannelsSection({ agent, lockReason, dialog }: { agent: Agent; l
       <ChannelRow kind="whatsapp" agent={agent} channel={whatsapp} lockReason={lockReason} />
       <ChannelRow kind="telegram" agent={agent} channel={telegram} lockReason={lockReason} />
     </div>}
-    {channels.data && agent.canEdit && dialog === 'slack' && <SlackDialog agent={agent} channel={slack} />}
+    {channels.data && agent.canEdit && dialog === 'slack' && <SlackDialog agent={agent} channel={slack} lockReason={lockReason} />}
     {channels.data && agent.canEdit && dialog === 'whatsapp' && <WhatsappDialog agent={agent} channel={whatsapp} />}
     {channels.data && agent.canEdit && dialog === 'telegram' && <TelegramDialog agent={agent} channel={telegram} />}
   </section>
 }
 
 function ChannelRow({ kind, agent, channel, lockReason }: { kind: ChannelKind; agent: Agent; channel: Channel | undefined; lockReason: string | undefined }) {
-  return <div className="row">
+  const row = <div className="row">
     <Mark name={kind} size={24} />
     <div className="t ellip">{KINDS[kind].label} <span className="mute">{channelLine(channel)}</span></div>
     <ChannelActions kind={kind} agent={agent} channel={channel} lockReason={lockReason} />
   </div>
+  if (kind !== 'slack' || !channel) return row
+  return <div>{row}<SlackChannels key={channel.allowed.join()} agent={agent} channel={channel} lockReason={lockReason} /></div>
 }
 
 function ChannelActions({ kind, agent, channel, lockReason }: { kind: ChannelKind; agent: Agent; channel: Channel | undefined; lockReason: string | undefined }) {
@@ -53,9 +56,11 @@ function ChannelActions({ kind, agent, channel, lockReason }: { kind: ChannelKin
   if (!channel) return open
   if (channel.status === 'linking') return <>{open}<Locked reason={lockReason}><button type="button" className="btn sm" disabled={disabled} onClick={() => deleteChannel.mutate(channel, { onError: toastError })}>Cancel</button></Locked></>
   const { label, remove } = KINDS[kind]
-  return <>{open}<Locked reason={lockReason}>
+  const removal = <Locked reason={lockReason}>
     <ConfirmButton className="btn sm danger" disabled={disabled} question={`${remove} ${label}?`} detail={removalDetail(kind, agent, channel)} action={remove} onConfirm={() => deleteChannel.mutate(channel, { onError: toastError })}>{remove}</ConfirmButton>
-  </Locked></>
+  </Locked>
+  if (kind === 'slack') return removal
+  return <>{open}{removal}</>
 }
 
 function channelLine(channel: Channel | undefined) {

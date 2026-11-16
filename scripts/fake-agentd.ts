@@ -19,6 +19,12 @@ const SAMPLE_MEMORY = {
   people: 'David runs operations and approves refunds.\n§\nPablo prefers short answers with the order number first.',
 }
 const memories: Record<string, Record<'notes' | 'people', string | null>> = {}
+const SLACK_CHANNELS = [
+  ['C0SUPPORT1', 'support', 42, false, false], ['C0ENGINEER', 'engineering', 31, false, false], ['C0SALES001', 'sales', 17, false, false],
+  ['C0DESIGN01', 'design', 8, false, false], ['C0GENERAL1', 'general', 128, false, false], ['C0RANDOM01', 'random', 120, false, false],
+  ['C0GROWTH01', 'growth', 14, false, true], ['G0LEADERS1', 'leadership', 6, true, true], ['C0PARTNER1', 'acme-partners', 23, false, true, true],
+  ['G0MPIM0001', 'mpdm-mo--sara--gus-1', 3, true, true, false, true],
+].map(([id, name, num_members, is_private, is_member, is_ext_shared, is_mpim]) => ({ id, name, num_members, is_private, is_member, is_ext_shared, is_mpim }))
 const skills: Record<string, string> = {
   'late-invoices': '---\nname: late-invoices\ndescription: Chase invoices more than 30 days late.\n---\n\n# Late invoices\n\n1. Query invoices past due.\n2. Draft a reminder per customer.\n',
   'research/arxiv': '---\nname: arxiv\ndescription: "Search and summarise arXiv papers."\n---\n\n# arXiv\n',
@@ -64,6 +70,7 @@ createHttpServer((req, res) => {
   req.on('data', (chunk) => { raw += chunk })
   req.on('end', async () => {
     if (req.url?.endsWith('/models')) return res.writeHead(200, { 'content-type': 'application/json' }).end('{"object":"list","data":[{"id":"hermes-agent"}]}')
+    if (req.url?.startsWith('/slack/')) return res.writeHead(200, { 'content-type': 'application/json', 'x-oauth-scopes': 'channels:read,channels:join,chat:write' }).end(JSON.stringify(fakeSlack(req.url.slice(7), new URLSearchParams(raw))))
     const messages: { content: string }[] = JSON.parse(raw || '{}').messages ?? []
     const last = messages.at(-1)?.content ?? ''
     res.writeHead(200, { 'content-type': 'text/event-stream' })
@@ -82,6 +89,13 @@ createHttpServer((req, res) => {
     res.end('data: [DONE]\n\n')
   })
 }).listen(HERMES_PORT, '127.0.0.1', () => console.log(`fake Hermes API on :${HERMES_PORT}`))
+
+function fakeSlack(method: string, params: URLSearchParams) {
+  if (method === 'auth.test') return { ok: true, team: 'Acme', user: 'gus' }
+  if (method === 'conversations.list') return { ok: true, channels: SLACK_CHANNELS.filter((each) => !!each.is_mpim === (params.get('types') === 'mpim')), response_metadata: { next_cursor: '' } }
+  if (method === 'conversations.join') Object.assign(SLACK_CHANNELS.find((each) => each.id === params.get('channel')) ?? {}, { is_member: true })
+  return { ok: true }
+}
 
 function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
   switch (req.cmd) {

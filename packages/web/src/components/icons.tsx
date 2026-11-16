@@ -2,7 +2,7 @@ import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import {
   Activity01Icon, Add01Icon, AiBrain01Icon, AiMagicIcon, ArrowDown01Icon, ArrowExpand01Icon, ArrowRight01Icon, ArrowTurnBackwardIcon, ArrowUp02Icon, AtIcon,
   BookOpen01Icon, Calendar03Icon, Cancel01Icon, ChartColumnIcon, CheckListIcon, Clock01Icon, CodeIcon, CommandIcon, ComputerIcon, Copy01Icon, Delete02Icon,
-  EraserIcon, File01Icon, File02Icon, Flag01Icon, FlashIcon, GitBranchIcon, Globe02Icon, GridTableIcon, HierarchyIcon, InformationCircleIcon, Key01Icon, LaptopIcon,
+  EraserIcon, File01Icon, File02Icon, Flag01Icon, FlashIcon, GitBranchIcon, Globe02Icon, HashtagIcon, GridTableIcon, HierarchyIcon, InformationCircleIcon, Key01Icon, LaptopIcon,
   Link01Icon, LinkSquare02Icon, Logout03Icon, Mail01Icon, Megaphone01Icon, Message01Icon, MoreHorizontalIcon, NoteEditIcon, Notebook01Icon, PaintBoardIcon,
   PencilEdit01Icon, PencilEdit02Icon, PlayIcon, Presentation01Icon, Robot01Icon, Search01Icon, SecurityCheckIcon, ServerStack01Icon, Settings01Icon,
   SidebarLeftIcon, SourceCodeIcon, SparklesIcon, SquareLock02Icon, StopIcon, Table01Icon, Tag01Icon, Tick02Icon, UnfoldMoreIcon, UserIcon, UserMultipleIcon,
@@ -97,6 +97,7 @@ export const SETUP_ICONS = {
   clock: icon(Clock01Icon),
   check: icon(Tick02Icon),
   lock: icon(SquareLock02Icon),
+  hash: icon(HashtagIcon),
 }
 export type SetupIcon = keyof typeof SETUP_ICONS
 

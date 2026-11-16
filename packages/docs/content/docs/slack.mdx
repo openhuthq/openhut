@@ -1,10 +1,10 @@
 ---
 title: Slack
-description: Each agent is its own Slack app. DM it or mention it in a channel.
+description: Each agent is its own Slack app. It answers in the channels you pick.
 icon: logo:slack
 ---
 
-<Shot src="slack" alt="The Connect to Slack dialog" />
+<Shot src="slack" alt="The Connect to Slack dialog, picking channels from a dropdown" />
 
 <Steps>
 <Step>
@@ -23,9 +23,16 @@ The **Bot token** (`xoxb-`) and the **App-level token** (`xapp-`).
 </Step>
 <Step>
 
-### Choose who can message it
+### Pick its channels
 
-Only people you list, or anyone in the workspace. Then press **Connect**.
+Press **Connect**, then pick channels from the list. Everyone in them can mention the agent. Private channels and group DMs show up once you type `/invite @agent` in them.
+
+</Step>
+<Step>
+
+### Change them any time
+
+The agent's page lists its channels. Remove one with its ×, or add one from the same list.
 
 </Step>
 </Steps>

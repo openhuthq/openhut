@@ -5,12 +5,11 @@ export const ChannelKind = z.enum(['slack', 'whatsapp', 'telegram'])
 export type ChannelKind = z.infer<typeof ChannelKind>
 
 export const ADDRESS = {
-  slack: { pattern: /^[UW][A-Z0-9]{6,}$/, message: 'Use a Slack member ID, like U012AB3CD.' },
+  slack: { pattern: /^[CG][A-Z0-9]{6,}$/, message: 'Pick Slack channels from the list.' },
   whatsapp: { pattern: /^\+?[1-9]\d{6,14}$/, message: 'Use a phone number with its country code, like +15551234567.' },
   telegram: { pattern: /^[1-9]\d{4,14}$/, message: 'Use a Telegram user ID, like 123456789. @userinfobot tells you yours.' },
 } as const satisfies Record<ChannelKind, { pattern: RegExp; message: string }>
 
-const SlackId = z.string().check(z.regex(ADDRESS.slack.pattern, ADDRESS.slack.message))
 const Phone = z.string().check(z.regex(ADDRESS.whatsapp.pattern, ADDRESS.whatsapp.message))
 const TelegramId = z.string().check(z.regex(ADDRESS.telegram.pattern, ADDRESS.telegram.message))
 
@@ -37,9 +36,6 @@ export const CreateChannel = z.discriminatedUnion('kind', [
     agentId: z.string().check(z.maxLength(40)),
     botToken: z.string().check(z.regex(/^xoxb-[\w-]{10,}$/, 'Paste the bot token: it starts with xoxb-.')),
     appToken: z.string().check(z.regex(/^xapp-[\w-]{10,}$/, 'Paste the app-level token: it starts with xapp-.')),
-    ownerAddress: SlackId,
-    open: z.boolean(),
-    allowed: z.array(SlackId).check(z.maxLength(50)),
   }),
   z.object({
     kind: z.literal('whatsapp'),
@@ -64,6 +60,17 @@ export const UpdateChannel = z.object({
   allowed: z.optional(z.array(z.string().check(z.maxLength(20))).check(z.maxLength(50))),
 }).check(atLeastOneField)
 export type UpdateChannel = z.infer<typeof UpdateChannel>
+
+export const Conversation = z.object({
+  id: z.string(),
+  object: z.literal('conversation'),
+  name: z.string(),
+  type: z.enum(['public', 'private', 'group']),
+  shared: z.boolean(),
+  members: z.number(),
+  joined: z.boolean(),
+})
+export type Conversation = z.infer<typeof Conversation>
 
 export const ListChannels = z.object({ agentId: z.optional(z.string()) })
 export type ListChannels = z.infer<typeof ListChannels>
