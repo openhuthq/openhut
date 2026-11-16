@@ -9,6 +9,8 @@ export const channelController: FastifyPluginAsync = async (app) => {
 
   app.post<{ Body: CreateChannel }>('/', CreateRequest, async (req) => channelService.create({ actor: await who(req), ...req.body }))
 
+  app.get<{ Params: { id: string } }>('/:id/conversations', async (req) => listOf({ req, data: await channelService.conversations({ actor: await who(req), id: req.params.id }) }))
+
   app.get<{ Params: { id: string } }>('/:id', async (req) => channelService.get({ actor: await who(req), id: req.params.id }))
 
   app.patch<{ Params: { id: string }; Body: UpdateChannel }>('/:id', UpdateRequest, async (req) => channelService.update({ actor: await who(req), id: req.params.id, patch: req.body }))

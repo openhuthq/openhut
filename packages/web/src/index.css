@@ -667,3 +667,29 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .narrow-seg{width:220px}
 @media (prefers-reduced-motion:reduce){.runicon.running,.dlg.sheet[open]{animation:none}}
 @media (max-width:640px){.trig{grid-template-columns:1fr}.postsel{max-width:none;width:100%}.rowsplit{flex-wrap:wrap}}
+
+.slack-chs{display:flex;flex-direction:column;gap:8px;padding:0 12px 12px 46px;min-width:0}
+.setup-sb .slack-chs{padding:0}
+.picker{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-height:32px;padding:3px;border:1px solid var(--hair);border-radius:8px;background:var(--card);cursor:text;min-width:0}
+.picker:focus-within{border-color:var(--mid)}
+.picker[data-disabled]{opacity:.6;cursor:not-allowed}
+.picker-chips{display:contents}
+.pchip{display:inline-flex;align-items:center;gap:4px;height:24px;max-width:100%;padding:0 2px 0 7px;border-radius:6px;background:var(--soft);font-size:14px;font-weight:500;white-space:nowrap;outline:0}
+.pchip[data-highlighted],.pchip:focus-within{background:var(--mid)}
+.pchip>svg,.picker-row>svg,.picker-pop .menuitem>svg{width:12px;height:12px;color:var(--mute);flex:none}
+.pchip-x{display:grid;place-items:center;width:18px;height:18px;border:0;border-radius:4px;background:transparent;padding:0;color:var(--mute)}
+.pchip-x svg{width:12px;height:12px}
+.pchip-x:hover{background:var(--mid);color:var(--ink)}
+.picker-in{flex:1;width:auto;min-width:96px;height:24px;border:0;border-radius:0;padding:0 6px;background:transparent;font-size:14px}
+.picker-in:focus{outline:none}
+.picker-pop{max-height:min(var(--available-height),320px);overflow:auto;width:max(var(--anchor-width),260px)}
+.picker-pop .menuitem{gap:6px}
+.picker-tick{width:14px;display:grid;place-items:center;flex:none;color:var(--ink)}
+.picker-tag{flex:none;font-size:12px;font-weight:500;color:var(--mute);background:var(--soft);border-radius:5px;padding:0 5px}
+.picker-n{margin-left:auto;padding-left:8px;font-family:var(--mono);font-size:12px;color:var(--mute)}
+.picker-none{padding:6px 8px;color:var(--mute)}
+.picker-foot{margin:4px -4px -4px;padding:8px 12px;border-top:1px solid var(--hair);font-size:12px;color:var(--mute)}
+.picker-wait{display:flex;flex-direction:column;gap:2px}
+.picker-wait>.mute{font-size:12px}
+.picker-row{display:flex;align-items:center;gap:6px;min-height:30px;min-width:0}
+.picker-row .btn{margin-left:auto;height:24px}

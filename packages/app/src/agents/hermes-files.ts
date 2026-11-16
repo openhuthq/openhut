@@ -64,7 +64,7 @@ function yamlOf(channel: RenderedChannel): string[] {
 
 function envOf(channel: RenderedChannel): string[] {
   switch (channel.kind) {
-    case 'slack': return slack.env({ botToken: channel.botToken, appToken: channel.appToken, audience: channel.audience })
+    case 'slack': return slack.env({ botToken: channel.botToken, appToken: channel.appToken, channels: channel.audience.allowed })
     case 'telegram': return telegram.env({ botToken: channel.botToken, audience: channel.audience })
     case 'whatsapp': return whatsapp.env(channel.audience)
   }

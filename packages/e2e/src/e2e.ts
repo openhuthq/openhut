@@ -813,9 +813,6 @@ function main() {
           agentId: dev.id,
           botToken: 'xoxb-1111-2222-notarealtoken',
           appToken: 'xapp-1-A111-2222-notarealtoken',
-          ownerAddress: 'U012ABCDEF',
-          open: false,
-          allowed: [],
         },
         cookie,
       )

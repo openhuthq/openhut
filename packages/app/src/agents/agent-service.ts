@@ -16,6 +16,7 @@ import { deleted } from '../platform/responses.ts'
 import { connectionService } from '../connections/connection-service.ts'
 import { isAdmin, type Caller } from '../team/identity.ts'
 import { audienceOf } from '../channels/audience.ts'
+import { SlackSecrets } from '../integrations/slack/slack.ts'
 import { renderFiles, type RenderedChannel } from './hermes-files.ts'
 
 const MAX_AGENTS = 250
@@ -24,7 +25,6 @@ const PROBE_MS = 3_000
 const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
 const RENDERED = ['instructions', 'model', 'codeExecution', 'size'] as const
-const SlackSecrets = z.object({ botToken: z.string(), appToken: z.string() })
 const TelegramSecrets = z.object({ botToken: z.string() })
 
 export const agentService = {

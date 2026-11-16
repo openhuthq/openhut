@@ -46,6 +46,7 @@ export async function migrate(): Promise<void> {
     open boolean not null default false, allowed text not null default '', created_at timestamptz not null default now(), unique (agent_id, kind))`.execute(db)
   await sql`alter table channel drop constraint if exists channel_kind_check`.execute(db)
   await sql`alter table channel add constraint channel_kind_check check (kind in (${sql.join(ChannelKind.options.map((kind) => sql.lit(kind)))}))`.execute(db)
+  await sql`update channel set owner_address = '', open = false, allowed = '' where kind = 'slack' and owner_address <> ''`.execute(db)
   await sql`create table if not exists connection (
     id text primary key, kind text not null, name text not null, owner_id text not null references person(id),
     config text not null, everyone boolean not null default false, created_at timestamptz not null default now())`.execute(db)

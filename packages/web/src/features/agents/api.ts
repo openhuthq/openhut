@@ -3,7 +3,7 @@ import { Deleted, List } from '@openhut/common/api.ts'
 import { Agent, Grant, type CreateAgent, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import { Memory, type UpdateMemory } from '@openhut/common/agents/memory.ts'
 import { Skill } from '@openhut/common/agents/skill.ts'
-import { Channel, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
+import { Channel, Conversation, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
 import { request } from '@/lib/api-client'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
@@ -11,6 +11,7 @@ import { navigate } from '@/lib/router'
 const AGENT_LIST = List(Agent)
 const GRANT_LIST = List(Grant)
 const CHANNEL_LIST = List(Channel)
+const CONVERSATION_LIST = List(Conversation)
 const SKILL_LIST = List(Skill)
 const DELETED_AGENT = Deleted('agent')
 const DELETED_GRANT = Deleted('grant')
@@ -109,7 +110,18 @@ export function useUpdateChannel() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: ({ channelId, change }: { channelId: string; change: UpdateChannel }) => request({ schema: Channel, path: channelPath(channelId), method: 'PATCH', body: change }),
-    onSuccess: (channel) => writeChannel(client, channel),
+    onSuccess: (channel) => {
+      writeChannel(client, channel)
+      void client.invalidateQueries({ queryKey: conversationsKey(channel.id) })
+    },
+  })
+}
+
+export function useConversations(channelId: string) {
+  return useQuery({
+    queryKey: conversationsKey(channelId),
+    queryFn: () => request({ schema: CONVERSATION_LIST, path: `${channelPath(channelId)}/conversations` }).then((page) => page.data),
+    staleTime: 30_000,
   })
 }
 
@@ -177,6 +189,10 @@ function agentPath(agentId: string) {
 
 function channelPath(channelId: string) {
   return `/api/channels/${encodeURIComponent(channelId)}`
+}
+
+function conversationsKey(channelId: string) {
+  return ['conversations', channelId]
 }
 
 function channelsKey(agentId: string) {

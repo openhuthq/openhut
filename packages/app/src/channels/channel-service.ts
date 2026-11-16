@@ -1,14 +1,14 @@
 import type { Selectable } from 'kysely'
 import type { Deleted } from '@openhut/common/api.ts'
-import { ADDRESS, type Channel, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
+import { ADDRESS, type Channel, type Conversation, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
 import { db, findRow, isUniqueViolation } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { log, record } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
-import { newId, seal } from '../platform/secrets.ts'
+import { newId, seal, unseal } from '../platform/secrets.ts'
 import { deleted } from '../platform/responses.ts'
 import { agentd, containerStates } from '../platform/agentd.ts'
-import { slack } from '../integrations/slack/slack.ts'
+import { slack, SlackSecrets } from '../integrations/slack/slack.ts'
 import { telegram } from '../integrations/telegram/telegram.ts'
 import { agentService } from '../agents/agent-service.ts'
 import type { Caller } from '../team/identity.ts'
@@ -38,7 +38,7 @@ export const channelService = {
     const agent = await agentService.requireEditable({ actor, id: body.agentId })
     const existing = await db.selectFrom('channel').select('id').where('agent_id', '=', agent.id).where('kind', '=', body.kind).executeTakeFirst()
     if (existing) throw new HttpError(409, `${agent.name} already has ${LABEL[body.kind]}. Disconnect it first.`)
-    const audience = { owner_address: body.ownerAddress, open: body.open, allowed: body.allowed.join(',') }
+    const audience = body.kind === 'slack' ? { owner_address: '', open: false, allowed: '' } : { owner_address: body.ownerAddress, open: body.open, allowed: body.allowed.join(',') }
     const row = await db.insertInto('channel').values({ id: newId('ch'), agent_id: agent.id, kind: body.kind, ...audience, ...await setupOf({ body, agentName: agent.name, agentId: agent.id }) })
       .returningAll().executeTakeFirstOrThrow().catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, `${agent.name} already has ${LABEL[body.kind]}. Disconnect it first.`) : err })
     record({ action: 'channel.created', actor, target: { type: 'channel', id: row.id, kind: row.kind, agentId: agent.id } })
@@ -48,13 +48,25 @@ export const channelService = {
 
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateChannel }): Promise<Channel> {
     const row = await rowOf(id)
-    await agentService.requireEditable({ actor, id: row.agent_id })
+    const agent = await agentService.requireEditable({ actor, id: row.agent_id })
     const wrong = patch.allowed?.find((address) => !ADDRESS[row.kind].pattern.test(address))
     if (wrong) throw new HttpError(400, `${wrong} doesn't look right. ${ADDRESS[row.kind].message}`, { param: 'allowed' })
-    const updated = await db.updateTable('channel').set({ open: patch.open, allowed: patch.allowed?.join(',') }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
+    if (row.kind === 'slack' && !patch.allowed) throw new HttpError(400, 'A Slack agent answers everyone in the channels you pick. Send allowed with the channel IDs.', { param: 'allowed' })
+    const added = [...new Set(patch.allowed ?? [])].filter((address) => !audienceOf(row).allowed.includes(address))
+    if (row.kind === 'slack') await slack.enter({ botToken: slackSecrets(row).botToken, ids: added, agentName: agent.name })
+    const open = row.kind === 'slack' ? undefined : patch.open
+    const updated = await db.updateTable('channel').set({ open, allowed: patch.allowed && [...new Set(patch.allowed)].join(',') }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
     record({ action: 'channel.updated', actor, target: { type: 'channel', id, kind: row.kind, agentId: row.agent_id } })
     await reapplyOrLog(row.agent_id)
+    if (row.kind === 'slack' && added.length) await greetOrLog({ row, ids: added, agentName: agent.name })
     return channelOf({ row: updated, qr: null })
+  },
+
+  async conversations({ actor, id }: { actor: Caller; id: string }): Promise<Conversation[]> {
+    const row = await rowOf(id)
+    await agentService.get({ actor, id: row.agent_id })
+    if (row.kind !== 'slack') throw new HttpError(404, `Only Slack has channels to pick. This is ${LABEL[row.kind]}.`)
+    return slack.conversations({ botToken: slackSecrets(row).botToken })
   },
 
   async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'channel'>> {
@@ -92,6 +104,13 @@ async function disconnect(row: Row): Promise<void> {
     case 'telegram': return
   }
 }
+
+async function greetOrLog({ row, ids, agentName }: { row: Row; ids: string[]; agentName: string }): Promise<void> {
+  const failed = await slack.greet({ botToken: slackSecrets(row).botToken, ids, agentName }).catch((err: unknown) => [messageOf(err)])
+  if (failed.length) log.warn({ event: 'channel.greet_failed', agent: row.agent_id, failed })
+}
+
+const slackSecrets = (row: Row) => SlackSecrets.parse(JSON.parse(unseal(row.secrets)))
 
 async function reapplyOrLog(agentId: string): Promise<void> {
   await agentService.reapply({ id: agentId }).catch((err: unknown) => log.warn({ event: 'channel.reapply_failed', agent: agentId, error: messageOf(err) }))

@@ -14,6 +14,7 @@ export const config = {
   setupCode: process.env.SETUP_CODE ?? '',
   modelMode: process.env.OPENHUT_MODEL === 'test' ? 'test' as const : 'claude' as const,
   agentApi: process.env.OPENHUT_AGENT_API,
+  slackApi: process.env.OPENHUT_SLACK_API ?? 'https://slack.com/api',
   agentdSocket: process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock',
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))).version,
   build: fileOr(new URL('../../../../BUILD', import.meta.url), 'dev'),
