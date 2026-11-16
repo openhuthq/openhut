@@ -101,7 +101,7 @@ function UsagePanel() {
 
 function UsageView({ usage }: { usage: SeatUsage }) {
   const total = usage.agents.reduce((sum, agent) => sum + agent.costUsd, 0)
-  const used = usage.agents.filter((agent) => agent.costUsd > 0)
+  const used = usage.agents.filter((agent) => agent.costUsd > 0).sort((a, b) => b.costUsd - a.costUsd)
   return <div className="aform usage">
     {WINDOWS.map(({ kind, name, idle }) => {
       const window = usage.windows.find((each) => each.kind === kind)
@@ -109,7 +109,14 @@ function UsageView({ usage }: { usage: SeatUsage }) {
     })}
     <span className="usage-head">By agent<Info tip={`Each agent's share of what agents used since ${shortDate.format(new Date(usage.since))}, when this week's limit started, at API prices.`} /></span>
     {used.length
-      ? used.map((agent) => <Meter key={agent.agentId} label={agent.agentName} avatar={agent.agentId} percent={Math.round((agent.costUsd / total) * 100)} note={`$${agent.costUsd.toFixed(2)}`} />)
+      ? <div className="spend">
+        {used.map((agent) => <div key={agent.agentId} className="spend-row">
+          <span className="meter-label"><Avatar id={agent.agentId} size={20} /><span className="ellip">{agent.agentName}</span></span>
+          <span className="mute spend-share">{Math.round((agent.costUsd / total) * 100)}%</span>
+          <span className="spend-usd">${agent.costUsd.toFixed(2)}</span>
+        </div>)}
+        {used.length > 1 && <div className="spend-row spend-total"><span>Total</span><span></span><span className="spend-usd">${total.toFixed(2)}</span></div>}
+      </div>
       : <span className="mute">No agent has used the seat this week.</span>}
   </div>
 }
@@ -118,9 +125,9 @@ function Info({ tip }: { tip: string }) {
   return <span className="info" role="img" aria-label={tip} title={tip}>{ICONS.info}</span>
 }
 
-function Meter({ label, percent, note, avatar }: { label: string; percent: number; note: string; avatar?: string }) {
+function Meter({ label, percent, note }: { label: string; percent: number; note: string }) {
   return <div className="meter-row">
-    <span className="meter-label">{avatar && <Avatar id={avatar} size={20} />}<span className="ellip">{label}</span></span>
+    <span className="meter-label"><span className="ellip">{label}</span></span>
     <span className="meter" role="meter" aria-label={label} aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${Math.min(100, percent)}%` }} /></span>
     <span className="meter-pct">{percent}%</span>
     <span className="meter-note mute">{note}</span>
