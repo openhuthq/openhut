@@ -86,11 +86,6 @@ header.b p{font-family:var(--copy);font-size:17px;line-height:1.55;color:var(--b
 .stage img{display:block;width:100%;height:auto;border-radius:10px;border:2px solid var(--ink);background:var(--paper)}
 .stage img.tall{max-width:440px}
 figcaption{font-family:var(--copy);font-size:12.5px;color:var(--muted);margin-top:10px}
-.quiet{display:flex;flex-direction:column;gap:10px;padding-top:24px;border-top:1px solid var(--line)}
-.quiet h4{margin:0;font-family:var(--copy);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.quiet ul{padding-left:18px;display:flex;flex-direction:column;gap:4px;font-family:var(--copy);font-size:13.5px;color:var(--muted)}
-.quiet li::marker{color:var(--faint)}
-.quiet a{color:var(--ink)}
 @media (max-width:900px){
   .rel{grid-template-columns:minmax(0,1fr);padding-block:44px}
   .when{position:static;flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px 12px}
@@ -137,11 +132,11 @@ footer .toplinks a{color:var(--night-ink)}
       </div>
       <div class="body">
         <section class="lead">
-          <h2>Agents that browse the web</h2>
-          <p>Turn Browser on and an agent opens real web pages: it reads them, clicks and fills in forms. Watch it live from the dashboard, and take over when it needs a hand.</p>
+          <h2>Watch your agents browse the web, live</h2>
+          <p>Switch on Browser and an agent gets a real web browser inside its own sandbox. Take over to log in or get past a check.</p>
           <figure>
-            <div class="stage"><img src="/changelog/browser.jpg" alt="The Dev agent's page with Browser switched on and a still picture of the Wikipedia page it has open" width="1432" height="817"></div>
-            <figcaption>Browser is a switch on the agent. Watch live opens the stream.</figcaption>
+            <div class="stage"><img src="/changelog/browser.jpg" alt="Scout's browser, live: the Wikipedia article Hermit crab, with Scout's steps listed beside it" width="1328" height="791"></div>
+            <figcaption>The live view. Take over pauses the agent until you hand back.</figcaption>
           </figure>
         </section>
 
@@ -173,22 +168,12 @@ footer .toplinks a{color:var(--night-ink)}
         </section>
 
         <section class="sm">
-          <h3>Your agent's face in Slack</h3>
-          <p>Connecting sets the Slack app's icon to the creature you see on the dashboard. Slack asks for a configuration token to do that; OpenHut uses it once and doesn't keep it.</p>
-        </section>
-
-        <section class="sm">
           <h3>Agents see only what you allow</h3>
           <p>Connect a database once, then pick which agents can use it. They never see the password.</p>
           <figure>
             <div class="stage"><img class="tall" src="/changelog/connection-agents.jpg" alt="A Postgres connection used only by the Dev and Support agents" width="828" height="924" loading="lazy"></div>
             <figcaption>A database, and the two agents allowed to use it.</figcaption>
           </figure>
-        </section>
-
-        <section class="sm">
-          <h3>Diagrams with Excalidraw</h3>
-          <p>A new connection: agents draw a diagram and send a link that opens it in Excalidraw. One click, no account.</p>
         </section>
 
         <section class="sm">
@@ -209,30 +194,6 @@ footer .toplinks a{color:var(--night-ink)}
           </figure>
         </section>
 
-        <section class="sm">
-          <h3>Turn usage data off from Admin</h3>
-          <p>Usage data is a count of messages, a daily check-in and the owner's email, never what a message says. Owners and admins can switch it off with one click.</p>
-          <figure>
-            <div class="stage"><img src="/changelog/admin-usage.jpg" alt="Admin, Usage data: Share usage data with OpenHut, switched on" width="1568" height="440" loading="lazy"></div>
-            <figcaption>Admin › Usage data. On by default.</figcaption>
-          </figure>
-        </section>
-
-        <section class="sm">
-          <h3>Open source</h3>
-          <p>The code is MIT licensed, on <a href="https://github.com/openhuthq/openhut" target="_blank" rel="noopener">GitHub</a>, with a guide for contributors.</p>
-        </section>
-
-        <div class="quiet">
-          <h4>Website</h4>
-          <ul>
-            <li>The home page is half as long: four sections instead of eight.</li>
-            <li>Usage and cost are three cards: who uses your agents, what they cost, and the Claude plan they run on.</li>
-            <li>On a computer, one scroll moves one section.</li>
-            <li>A new diagram shows how each agent stays sealed in its sandbox.</li>
-            <li>The usage card shows again for people with an ad blocker, the logo takes you home, and GitHub links open in a new tab.</li>
-          </ul>
-        </div>
       </div>
     </article>
 
@@ -317,7 +278,6 @@ footer .toplinks a{color:var(--night-ink)}
   const paint = (el, id = el.dataset.cr, about = el.dataset.about || '', o) => { el.setAttribute('viewBox', '4 8 100 100'); el.setAttribute('aria-hidden', 'true'); el.innerHTML = creature(id, about, o); const h = hash(id + 'm'); el.style.setProperty('--bd', -(h % 34) / 10 + 's'); el.style.setProperty('--bk', -(h % 48) / 10 + 's'); liveIO.observe(el) }
   const cr = (id, size, about = '') => `<svg class="cr" data-cr="${id}" data-about="${about}" width="${size}" height="${size}"></svg>`
   const paintAll = (root = document) => $$('svg[data-cr]', root).forEach(el => paint(el))
-
 
   paintAll()
 })()

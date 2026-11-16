@@ -1321,6 +1321,50 @@ footer .toplinks a{color:var(--night-ink)}
   .hero-frame{padding-top:12px}
 }
 .toprow{height:40px}
+.bz{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(0,1fr);gap:48px;align-items:center}
+.bz .bz-stage{order:-1}
+.bz-side h2{font-size:clamp(38px,4.2vw,56px);line-height:1}
+.bz-side .hd{align-items:flex-start}
+.bz-side .hd .mb{margin-top:2px}
+.bz-sub{font-family:var(--copy);font-size:16px;line-height:1.45;margin:14px 0 0;max-width:26em}
+.bz-hand{display:flex;flex-direction:column;margin-top:26px;max-width:360px}
+.bz-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1.5px solid var(--line-2);font-size:14.5px;font-weight:500}
+.bz-row:first-child{border-top:0}
+.bz-row .badge{margin-left:auto}
+.bz-row .hu{width:34px;height:34px;font-size:12.5px;border-radius:50%}
+.bz-btn{margin-top:12px;height:44px;border-radius:10px;background:var(--pri);color:var(--pri-ink);font-weight:600;font-size:14.5px;transition:transform .12s}
+.bz-btn:active{transform:scale(.98)}
+.bz-left{margin:10px 0 0;font-family:var(--copy);font-size:12.5px;color:var(--muted);min-height:19px}
+.bz-facts{display:flex;flex-direction:column;gap:9px;margin:26px 0 0;padding:0;list-style:none;font-family:var(--copy);font-size:13.5px}
+.bz-facts li{display:flex;align-items:center;gap:9px}
+.bz-facts .ico{width:15px;height:15px}
+.bz-stage{background:var(--stage);padding:28px;min-width:0}
+.bz-win{border:2px solid var(--ink);border-radius:12px;overflow:hidden;background:var(--paper);box-shadow:var(--shadow)}
+.bz-bar{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;font-size:13.5px;min-width:0}
+.bz-bar b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bz-pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:999px;background:var(--stage);font-size:12px;font-weight:500;white-space:nowrap;flex:none}
+.bz-pill i{width:7px;height:7px;border-radius:50%;background:var(--bad);animation:blink 1.6s ease-in-out infinite}
+.bz-win.held .bz-pill{background:var(--ink);color:#fff}
+.bz-win.held .bz-pill i{display:none}
+.bz-addr{display:flex;align-items:center;gap:8px;min-width:0;margin-left:auto;max-width:56%;height:26px;padding:0 10px;border-radius:7px;background:var(--stage);font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.bz-addr span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bz-addr b{font-weight:400;color:var(--ink)}
+.bz-addr .ico{width:12px;height:12px;color:var(--ok)}
+.bz-who{display:flex;align-items:center;height:26px;padding:0 12px;font-size:12px;background:var(--stage);color:var(--body);border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .2s,color .2s}
+.bz-win.held .bz-who{background:var(--ink);color:#fff}
+.bz-screen{position:relative;aspect-ratio:1270/700;overflow:hidden;background:#fff;border-top:1px solid var(--line)}
+.bz-screen img{position:absolute;left:0;top:0;width:100%;height:auto;max-width:none;opacity:0;user-select:none;-webkit-user-drag:none}
+.bz-screen img.on{opacity:1;animation:bzscroll .3s cubic-bezier(.2,.8,.2,1)}
+@keyframes bzscroll{from{transform:translateY(var(--dy,0))}}
+.bz-win.held .bz-screen{cursor:pointer}
+.bz-rip{position:absolute;width:28px;height:28px;margin:-14px 0 0 -14px;border:2px solid var(--ink);border-radius:50%;pointer-events:none;animation:bzrip .6s ease-out forwards}
+@keyframes bzrip{from{transform:scale(.3);opacity:1}to{transform:scale(1.6);opacity:0}}
+.bz-hint{position:absolute;left:50%;bottom:12px;translate:-50% 0;padding:6px 12px;border-radius:999px;background:var(--ink);color:#fff;font-size:12px;white-space:nowrap;opacity:0;transition:opacity .2s;pointer-events:none}
+.bz-hint.on{opacity:1}
+.bz-cap{margin:12px 0 0;height:20px;font-family:var(--copy);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:1020px){.bz{grid-template-columns:minmax(0,1fr);gap:28px}.bz .bz-stage{order:0}.bz-hand{max-width:none}}
+@media (max-width:720px){.bz-stage{padding:14px}.bz-addr{display:none}}
+@media (prefers-reduced-motion:reduce){.bz-pill i,.bz-rip,.bz-screen img.on{animation:none}}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -1581,6 +1625,39 @@ footer .toplinks a{color:var(--night-ink)}
     </div>
     <div class="clients" aria-label="Works with any MCP client">
       <span title="Claude"><svg class="lg"><use href="#b-claude"/></svg></span><span title="Cursor"><svg class="lg"><use href="#b-cursor"/></svg></span><span title="GitHub Copilot"><svg class="lg"><use href="#b-copilot"/></svg></span><span title="Windsurf"><svg class="lg"><use href="#b-windsurf"/></svg></span><span title="Zed"><svg class="lg"><use href="#b-zed"/></svg></span><span title="Any MCP client"><svg class="lg"><use href="#b-mcp"/></svg></span>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="browse">
+  <div class="wrap bz">
+    <div class="bz-side">
+      <div class="hd"><span class="mb"><svg class="cr" data-cr="scout" data-about="looks things up" width="44" height="44"></svg></span><h2>Agents that browse the web</h2></div>
+      <p class="bz-sub">Watch them work live. Take over when a site needs you.</p>
+      <div class="bz-hand">
+        <div class="bz-row"><svg class="cr" data-cr="scout" data-about="looks things up" width="34" height="34"></svg><span>Scout</span><span class="badge" id="bzAgentSt">Driving</span></div>
+        <div class="bz-row"><span class="hu" style="--c:#3d8fdc">You</span><span>You</span><span class="badge off" id="bzYouSt">Watching</span></div>
+        <button type="button" class="bz-btn" id="bzBtn">Take over</button>
+        <p class="bz-left" id="bzLeft" aria-live="polite">Log in or get past a check.</p>
+      </div>
+      <ul class="bz-facts">
+        <li><svg class="ico"><use href="#i-key"/></svg>Logins stay between chats</li>
+        <li><svg class="ico"><use href="#i-lock"/></svg>HTTPS only, inside its sandbox</li>
+        <li><svg class="ico"><use href="#i-check"/></svg>Every click listed</li>
+      </ul>
+    </div>
+    <div class="bz-stage">
+      <div class="bz-win" id="bzWin">
+        <div class="bz-bar"><svg class="cr" data-cr="scout" data-about="looks things up" width="26" height="26"></svg><b>Scout's browser</b><span class="bz-pill" id="bzPill"><i></i><span>Live</span></span><span class="bz-addr"><svg class="ico"><use href="#i-lock"/></svg><span><b>en.wikipedia.org</b>/wiki/Hermit_crab</span></span></div>
+        <div class="bz-who" id="bzWho">Scout is driving.</div>
+        <div class="bz-screen" id="bzScreen">
+          <img class="on" loading="lazy" src="/browse/frame-1.jpg" alt="Scout's browser showing the Wikipedia article Hermit crab" width="1270" height="792" draggable="false">
+          <img loading="lazy" src="/browse/frame-2.jpg" alt="" width="1270" height="792" draggable="false">
+          <img loading="lazy" src="/browse/frame-3.jpg" alt="" width="1270" height="792" draggable="false">
+          <span class="bz-hint" id="bzHint">Take over to click</span>
+        </div>
+      </div>
+      <p class="bz-cap" id="bzCap" aria-live="polite">Opened en.wikipedia.org</p>
     </div>
   </div>
 </section>
@@ -2033,6 +2110,49 @@ footer .toplinks a{color:var(--night-ink)}
     scrollTo({ top: next, behavior: reduce ? 'auto' : 'smooth' })
     snapIdle = setTimeout(() => { snapLock = false }, 900)
   }, { passive: false })
+})()
+</script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id)
+  const win = $('bzWin'), screen = $('bzScreen'), frames = [...screen.querySelectorAll('img')], who = $('bzWho'), pill = $('bzPill').lastElementChild
+  const btn = $('bzBtn'), left = $('bzLeft'), cap = $('bzCap'), hint = $('bzHint'), agentSt = $('bzAgentSt'), youSt = $('bzYouSt')
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const STEPS = [[0, 'Opened en.wikipedia.org'], [1, 'Scrolled to Description'], [2, 'Read Shells and shell remodeling'], [0, 'Scrolled to the top']]
+  const IDLE = 120
+  let step = 1, held = false, idle = IDLE, timer = 0, tick = 0, shown = 0
+  const show = i => { if (i === shown) return; frames[i].style.setProperty('--dy', i > shown ? '7%' : '-7%'); frames[shown].classList.remove('on'); frames[i].classList.add('on'); shown = i }
+  const drive = () => { const [f, text] = STEPS[step++ % STEPS.length]; show(f); cap.textContent = text }
+  const clock = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  const paused = () => { who.textContent = `Scout is paused · hands back in ${clock(idle)} if idle` }
+  const setHeld = on => {
+    held = on
+    win.classList.toggle('held', on)
+    pill.textContent = on ? "You're in control" : 'Live'
+    btn.textContent = on ? 'Hand back to Scout' : 'Take over'
+    agentSt.textContent = on ? 'Paused' : 'Driving'
+    agentSt.classList.toggle('off', on)
+    youSt.textContent = on ? 'In control' : 'Watching'
+    youSt.classList.toggle('off', !on)
+    left.textContent = on ? 'Click the page to try it.' : 'Log in or get past a check.'
+    clearInterval(timer); clearInterval(tick)
+    if (on) {
+      idle = IDLE; paused(); cap.textContent = 'Scout waits for you.'
+      tick = setInterval(() => { idle--; paused(); if (idle <= 0) setHeld(false) }, 1000)
+    } else {
+      who.textContent = 'Scout is driving.'
+      if (!reduce) timer = setInterval(drive, 2600)
+    }
+  }
+  btn.addEventListener('click', () => setHeld(!held))
+  screen.addEventListener('click', e => {
+    if (!held) { hint.classList.add('on'); setTimeout(() => hint.classList.remove('on'), 1400); return }
+    const box = screen.getBoundingClientRect(), rip = document.createElement('span')
+    rip.className = 'bz-rip'; rip.style.left = `${e.clientX - box.left}px`; rip.style.top = `${e.clientY - box.top}px`
+    screen.append(rip); setTimeout(() => rip.remove(), 600)
+    idle = IDLE; paused(); cap.textContent = 'You clicked. Scout is still paused.'
+  })
+  setHeld(false)
 })()
 </script>
 
