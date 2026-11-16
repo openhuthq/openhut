@@ -53,6 +53,9 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
   tools and wrote its own upload code. Only names and kinds go in, read from the database, so rendering needs no
   network and the file changes only when a grant does. A grant or its removal reapplies the agent's files, which
   restarts a running agent once so Hermes reads the new line; the gateway check itself is still live.
+- `list_tools` matches its `app` filter against a connection's kind or name, in any letter case. It compared the kind
+  exactly, so an agent that read "Excalidraw" in `SOUL.md` and asked for that app was told nobody had granted it a
+  connection, and it drew an SVG by hand instead (2026-11-16).
 - Editing an agent needs edit rights on it and access to every connection it holds, so nobody borrows a teammate's
   login through an agent.
 - The gateway is plain `node:http`, so its limits are explicit: 8 requests in flight per agent, 1 MB bodies, headers
