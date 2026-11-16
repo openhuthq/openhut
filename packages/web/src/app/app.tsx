@@ -1,6 +1,7 @@
 import { ErrorNote } from '@/components/error-note'
 import { routeOf } from '@/app/routes'
 import { SignedIn } from '@/app/signed-in'
+import { BrowserPage } from '@/features/agents/browser-page'
 import { nextPath, useMe, useSetup } from '@/features/auth/api'
 import { InvitePage } from '@/features/auth/invite-page'
 import { McpAuthorizePage } from '@/features/auth/mcp-authorize-page'
@@ -21,6 +22,7 @@ export function App() {
   }
   if (!me.data) return setup.isPending ? null : <Redirect to={signInPath(setup.data?.open ?? false)} />
   if (route.page === 'mcp-authorize') return <McpAuthorizePage me={me.data} />
+  if (route.page === 'browser') return <BrowserPage me={me.data} agentId={route.agentId} />
   return <SignedIn me={me.data} route={route} />
 }
 

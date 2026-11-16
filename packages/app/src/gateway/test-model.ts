@@ -21,7 +21,7 @@ export function testModel({ path, body, res }: { path: string; body: unknown; re
   const toolNames = (request.tools ?? []).map((tool) => tool.function?.name ?? tool.name).filter((name) => name !== undefined)
   const callTool = toolNames.find((name) => name.endsWith('call_tool'))
   log.info({ event: 'test_llm.request', messages: messages.length, lastRole: last.role, tools: toolNames.length, callTool })
-  const reply = replyTo({ last, callTool })
+  const reply = replyTo({ last, callTool, canRunCommands: toolNames.includes('terminal') })
   const base = { id: `cmpl-${Date.now()}`, created: Math.floor(Date.now() / 1000), model: request.model ?? 'openhut-test' }
   const toolCalls = reply.tool ? [{ id: `call_${Date.now()}`, type: 'function', function: { name: reply.tool.name, arguments: reply.tool.args } }] : undefined
   const finish = reply.tool ? 'tool_calls' : 'stop'
@@ -37,10 +37,12 @@ export function testModel({ path, body, res }: { path: string; body: unknown; re
   res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ...base, object: 'chat.completion', choices: [{ index: 0, message, finish_reason: finish }], usage: USAGE }))
 }
 
-function replyTo({ last, callTool }: { last: { role?: string; content?: unknown }; callTool: string | undefined }): { content?: string; tool?: { name: string; args: string } } {
+function replyTo({ last, callTool, canRunCommands }: { last: { role?: string; content?: unknown }; callTool: string | undefined; canRunCommands: boolean }): { content?: string; tool?: { name: string; args: string } } {
   if (last.role === 'tool') return { content: `TOOL RESULT: ${asText(last.content).slice(0, 20_000)}` }
   const sql = /sql:\s*([\s\S]+?)\s*$/i.exec(asText(last.content))?.[1]
   if (sql && callTool) return { tool: { name: callTool, args: JSON.stringify({ reason: 'The user asked for data', name: 'postgres_query', arguments: { sql } }) } }
+  const command = /browser:\s*([a-z][a-z -]*(?:\s+[^\s'"`$;&|<>\\]+)*)\s*$/i.exec(asText(last.content))?.[1]
+  if (command && canRunCommands) return { tool: { name: 'terminal', args: JSON.stringify({ command: `agent-browser ${command}` }) } }
   return { content: `ECHO: ${asText(last.content).slice(-200)}` }
 }
 

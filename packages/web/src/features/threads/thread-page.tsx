@@ -54,7 +54,8 @@ function ChatLayout({ me, agent, busy, onSend, onStop, extra, children }: { me: 
     const el = log.current
     if (el && pinned.current) el.scrollTop = el.scrollHeight
   })
-  const actions = <><AgentBadge agent={agent} /><a className="btn" href={`/agents/${agent.id}`}>{ICONS.gear}<span className="lbl">Settings</span></a>{extra}</>
+  const browser = agent.browser && agent.canEdit && <a className="btn" href={`/agents/${agent.id}/browser`} target="_blank" rel="noopener">{ICONS.ext}<span className="lbl">Browser</span></a>
+  const actions = <><AgentBadge agent={agent} />{browser}<a className="btn" href={`/agents/${agent.id}`}>{ICONS.gear}<span className="lbl">Settings</span></a>{extra}</>
   return <Page title={agent.name} actions={actions} fill>
     <div className="chat-log" ref={log} aria-live="polite" onScroll={(event) => { const el = event.currentTarget; pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
       <div className="chat-col">{children}</div>

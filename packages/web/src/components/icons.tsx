@@ -53,6 +53,7 @@ export const FACT_ICONS = {
   model: icon(AiMagicIcon, 16, 'fi'),
   owner: icon(UserIcon, 16, 'fi'),
   code: icon(SourceCodeIcon, 16, 'fi'),
+  browser: icon(Globe02Icon, 16, 'fi'),
   computer: icon(ComputerIcon, 16, 'fi'),
 }
 

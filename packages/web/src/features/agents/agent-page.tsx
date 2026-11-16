@@ -9,6 +9,7 @@ import { OwnerChip } from '@/components/owner-chip'
 import { Page } from '@/components/page'
 import { AgentBadge } from '@/components/status-badge'
 import { AgentConnections } from '@/features/agents/agent-connections'
+import { BrowserCard } from '@/features/agents/browser-card'
 import { useAgent, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { ChannelsSection } from '@/features/agents/channels-section'
 import { InstructionsSection } from '@/features/agents/instructions-section'
@@ -65,9 +66,11 @@ function AgentView({ agent, dialog, skill, automation }: { agent: Agent; dialog:
             <div><span>{FACT_ICONS.model}Model</span><ModelPicker agent={agent} lockReason={lockReason} /></div>
             <div><span>{FACT_ICONS.computer}Computer</span><SizePicker agent={agent} lockReason={lockReason} /></div>
             <div><span>{FACT_ICONS.owner}Owner</span><OwnerChip id={agent.ownerId} name={agent.ownerName} /></div>
-            <div><span>{FACT_ICONS.code}Code execution</span><CodeSwitch agent={agent} lockReason={lockReason} /></div>
+            <div><span>{FACT_ICONS.code}Code execution</span><ToolSwitch agent={agent} field="codeExecution" label="Code execution" lockReason={lockReason} /></div>
+            <div><span title="Opens websites inside the agent's sandbox. A web page can carry text written to mislead the agent.">{FACT_ICONS.browser}Browser</span><ToolSwitch agent={agent} field="browser" label="Browser" lockReason={lockReason} /></div>
             <MemoryRow agent={agent} />
           </div>
+          <BrowserCard agent={agent} />
           <ChannelsSection agent={agent} lockReason={lockReason} dialog={dialog} />
           <AgentConnections agent={agent} lockReason={lockReason} />
         </aside>
@@ -78,11 +81,11 @@ function AgentView({ agent, dialog, skill, automation }: { agent: Agent; dialog:
   </Page>
 }
 
-function CodeSwitch({ agent, lockReason }: { agent: Agent; lockReason: string | undefined }) {
+function ToolSwitch({ agent, field, label, lockReason }: { agent: Agent; field: 'codeExecution' | 'browser'; label: string; lockReason: string | undefined }) {
   const updateAgent = useUpdateAgent(agent.id)
   return <Locked reason={lockReason}>
-    <button className="sw" role="switch" aria-checked={agent.codeExecution} aria-label="Code execution" disabled={!agent.canEdit || updateAgent.isPending}
-      onClick={() => updateAgent.mutate({ codeExecution: !agent.codeExecution }, { onError: toastError })}></button>
+    <button className="sw" role="switch" aria-checked={agent[field]} aria-label={label} disabled={!agent.canEdit || updateAgent.isPending}
+      onClick={() => updateAgent.mutate({ [field]: !agent[field] }, { onError: toastError })}></button>
   </Locked>
 }
 

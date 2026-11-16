@@ -6,6 +6,7 @@ OPENHUT_BUILD="@OPENHUT_BUILD@"
 GVISOR=20261109.0
 NODE=22.23.5
 CLAUDE=2.1.311
+AGENT_BROWSER=0.43.0
 PREFIX=/opt/openhut
 say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die() { printf 'openhut: %s\n' "$*" >&2; exit 1; }
@@ -23,10 +24,12 @@ fi
 case "$(uname -m)" in
   x86_64)  ARCH=x86_64 NARCH=x64
            CLAUDE_SHA256=86dc1fcc69498159eaf15f446613e847010f9036bfbbdffd4c49350be8489ada
+           AGENT_BROWSER_SHA512=598f2fcb649a6b7a11b7a5c49b3e1269ed56e6a4bd4e361c6d7e8813e7716fcb3600f7cbf57c908cc1c2ea3059ae1c2a0c122f51e4cc093fcfd9cab75cb3d207
            GVISOR_SHA512=0a0041fd862f4ea3042a9db8d41c742f48a01f909699adc2a0256e46d85e53f97b82b9fd154b3dce636f62b8d557677639f91c77d13f3f875ff9fa535275393c
            NODE_SHA256=cdeb8670a0c81f51b4dc4ac61919f9b1ad917b304bf8221eb939570663d240f8 ;;
   aarch64) ARCH=aarch64 NARCH=arm64
            CLAUDE_SHA256=2e2496c9a8065df93acb0fca2d341f59a6b8777649b2e025ab8c9bcd5eef61f3
+           AGENT_BROWSER_SHA512=f030b6df82c69570a7f00d985c693ac28cb5b938f27b1bed1ddfd33901cbad5dac7d43190fae3b1d31c427217edb3d49d68477e0b681e63a8727d7744440be0b
            GVISOR_SHA512=a0b5d911512ef5fe70e833821e653a90c4d06c7027246ee49423f1d2fe2b2a509389a637797248958b90e49a069bb079ecde860efe1871b1d980ec0fe17e18ac
            NODE_SHA256=2babb9eb5264860d540849f4b064a6fbdebcdc323657d9d382ce23d313fd5e09 ;;
   *) die "unsupported CPU: $(uname -m)" ;;
@@ -81,6 +84,15 @@ if ! printf '%s  %s\n' "$CLAUDE_SHA256" "$CACHED" | sha256sum -c - >/dev/null 2>
   mv "$TMP/claude" "$CACHED"
 fi
 cp "$CACHED" "$PREFIX.new/bin/claude" && chmod 0755 "$PREFIX.new/bin/claude"
+say "agent-browser $AGENT_BROWSER"
+CACHED="/var/cache/openhut/agent-browser-$AGENT_BROWSER-linux-$NARCH.tgz"
+if ! printf '%s  %s\n' "$AGENT_BROWSER_SHA512" "$CACHED" | sha512sum -c - >/dev/null 2>&1; then
+  mkdir -p /var/cache/openhut
+  fetch "https://registry.npmjs.org/@agent-browser/cli-linux-$NARCH-gnu/-/cli-linux-$NARCH-gnu-$AGENT_BROWSER.tgz" "$TMP/agent-browser.tgz"
+  check sha512sum "$AGENT_BROWSER_SHA512" "$TMP/agent-browser.tgz"
+  mv "$TMP/agent-browser.tgz" "$CACHED"
+fi
+tar -xzf "$CACHED" -C "$TMP" package/bin/agent-browser && cp "$TMP/package/bin/agent-browser" "$PREFIX.new/bin/agent-browser" && chmod 0755 "$PREFIX.new/bin/agent-browser"
 chown -R root:root "$PREFIX.new" && chmod -R go-w "$PREFIX.new"
 rm -rf "$PREFIX.old"; [ ! -d "$PREFIX" ] || mv "$PREFIX" "$PREFIX.old"; mv "$PREFIX.new" "$PREFIX"
 id openhut >/dev/null 2>&1 || { addgroup -S openhut >/dev/null 2>&1 && adduser -S -D -G openhut openhut >/dev/null 2>&1; } || useradd --system --user-group --no-create-home openhut

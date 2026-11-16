@@ -10,6 +10,7 @@ import { newMessages, type NewMessage } from './messages.ts'
 import { isMemoryTarget, MAX_MEMORY_BYTES, readMemory, writeMemory, type MemoryTarget } from './memory.ts'
 import { isSkillPath, listSkills, MAX_SKILL_BYTES, readSkill, writeSkill, type SkillHead } from './skills.ts'
 import { MAX_SEND_BYTES, SEND_TARGET, targetsOf, type SendTarget } from './send.ts'
+import { CLOSED, FREE_POLICY, HELD_POLICY, isInputLine, POLICY_FILE, stillOf, type BrowserStill } from './browser.ts'
 
 const run = promisify(execFile)
 const RELEASE_URL = process.env.OPENHUT_URL ?? 'https://openhut.dev'
@@ -21,7 +22,13 @@ const APP_GID = Number(process.env.APP_GID ?? 0)
 const FIREWALL = fileURLToPath(new URL('../../../install/agents-firewall.sh', import.meta.url))
 const PLUGINS = fileURLToPath(new URL('../../../vendor/hermes-plugins', import.meta.url))
 const CLAUDE_BIN = fileURLToPath(new URL('../../../bin/claude', import.meta.url))
-const BRIDGE = '/var/lib/openhut/whatsapp-bridge'
+const BROWSER_BIN = fileURLToPath(new URL('../../../bin/agent-browser', import.meta.url))
+const BROWSER_DIR = fileURLToPath(new URL('../../../install/agent-browser', import.meta.url))
+const BRIDGE = '/opt/agent-browser/bridge.mjs'
+const BROWSER_MEMORY = '4g'
+const BROWSER_TMP = '1g'
+const UNQUEUED = new Set(['browser-still', 'browser-hold'])
+const WHATSAPP_BRIDGE = '/var/lib/openhut/whatsapp-bridge'
 const AGENT_UID = 10000
 const SPEC = '2'
 const SIZES = { standard: { memory: '1g', cpus: '1' }, large: { memory: '2g', cpus: '2' }, xlarge: { memory: '4g', cpus: '2' } } as const
@@ -71,6 +78,7 @@ function serve(sock: Socket) {
     const end = buf.indexOf('\n')
     if (end < 0 && buf.length <= MAX_REQUEST) return
     sock.off('data', read)
+    sock.pause()
     if (end < 0 || end > MAX_REQUEST) {
       sock.end(JSON.stringify({ ok: false, error: 'request too large' }))
       return
@@ -78,10 +86,11 @@ function serve(sock: Socket) {
     Promise.resolve(buf.slice(0, end))
       .then((line) => {
         const req = parseRequest(JSON.parse(line))
-        return 'id' in req ? enqueue(req.id, () => handle(req)) : handle(req)
+        if (req.cmd === 'browser-live') return live({ sock, id: req.id, rest: buf.slice(end + 1) })
+        return 'id' in req && !UNQUEUED.has(req.cmd) ? enqueue(req.id, () => handle(req)) : handle(req)
       })
       .then(
-        (reply) => sock.end(JSON.stringify({ ok: true, ...reply })),
+        (reply) => reply && sock.end(JSON.stringify({ ok: true, ...reply })),
         (e) => sock.end(JSON.stringify({ ok: false, error: errorText(e).slice(0, 2000) })),
       )
   }
@@ -113,7 +122,7 @@ async function handle(req: AgentdRequest): Promise<Reply> {
       return create(req)
     case 'apply': {
       writeConf(req.id, req.files)
-      if (await outdated(req.id, req.size)) {
+      if (await outdated(req.id, req.size, req.browser)) {
         pairings.delete(req.id)
         await docker('rm', '-f', `ag-${req.id}`)
         await create(req)
@@ -169,6 +178,11 @@ async function handle(req: AgentdRequest): Promise<Reply> {
     case 'ts-down':
       await run('tailscale', ['logout'], EXEC)
       return tailscaleStatus()
+    case 'browser-still':
+      return browserStill(req.id)
+    case 'browser-hold':
+      writeIfChanged(`${conf(req.id)}/${POLICY_FILE}`, req.held ? HELD_POLICY : FREE_POLICY)
+      return { held: req.held }
   }
 }
 
@@ -191,9 +205,14 @@ function parseRequest(value: unknown): AgentdRequest {
       if (typeof value.since !== 'number' || !Number.isFinite(value.since)) throw new Error('bad since')
       return { cmd, since: value.since }
     case 'create':
-      return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files), size: sizeOf(value.size) }
+      return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files), size: sizeOf(value.size), browser: value.browser === true }
     case 'apply':
-      return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files), size: sizeOf(value.size), restart: value.restart === true, force: value.force === true }
+      return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files), size: sizeOf(value.size), browser: value.browser === true, restart: value.restart === true, force: value.force === true }
+    case 'browser-still':
+    case 'browser-live':
+      return { cmd, id: agentId(value.id) }
+    case 'browser-hold':
+      return { cmd, id: agentId(value.id), held: value.held === true }
     case 'start':
     case 'stop':
     case 'rm':
@@ -255,8 +274,9 @@ function filesOf(value: unknown): AgentFiles {
   return files
 }
 
-async function create({ id, net, files, size }: { id: string; net: number; files: AgentFiles; size: AgentSize }) {
+async function create({ id, net, files, size, browser }: { id: string; net: number; files: AgentFiles; size: AgentSize; browser: boolean }) {
   await mustHaveFirewall()
+  if (browser && !existsSync(BROWSER_BIN)) throw new Error("agent-browser isn't installed on this server; run the installer again")
   makeHome(id)
   writeConf(id, files)
   await docker('network', 'rm', `ag-${id}`).catch(() => undefined)
@@ -265,10 +285,10 @@ async function create({ id, net, files, size }: { id: string; net: number; files
   await docker(
     'create',
     ...['--name', `ag-${id}`, '--hostname', id, '--restart', 'no'],
-    ...['--label', `openhut.agent=${id}`, '--label', `agent.digest=${digest}`, '--label', `openhut.spec=${SPEC}`, '--label', `openhut.size=${size}`],
+    ...['--label', `openhut.agent=${id}`, '--label', `agent.digest=${digest}`, '--label', `openhut.spec=${SPEC}`, '--label', `openhut.size=${size}`, '--label', `openhut.browser=${browser ? 'on' : 'off'}`],
     ...['--runtime', 'runsc', '--user', `${AGENT_UID}:${AGENT_UID}`, '--init', '--entrypoint', '/opt/hermes/bin/hermes'],
-    ...['--read-only', '--tmpfs', '/tmp:rw,nosuid,size=256m', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'],
-    ...['--pids-limit', '512', '--memory', SIZES[size].memory, '--cpus', SIZES[size].cpus, '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'],
+    ...['--read-only', '--tmpfs', `/tmp:rw,nosuid,size=${browser ? BROWSER_TMP : '256m'}`, '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'],
+    ...['--pids-limit', '512', '--memory', browser ? BROWSER_MEMORY : SIZES[size].memory, '--cpus', SIZES[size].cpus, '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'],
     ...['--network', `ag-${id}`, '--ip', `10.200.${net}.2`],
     ...Object.entries(AGENT_ENV).flatMap(([name, value]) => ['-e', `${name}=${value}`]),
     ...['--mount', 'type=bind,src=/etc/agentd/resolv.conf,dst=/etc/resolv.conf,readonly'],
@@ -279,7 +299,8 @@ async function create({ id, net, files, size }: { id: string; net: number; files
     ...readOnly(id, CLAUDE_SETTINGS_FILE, '.claude/settings.json'),
     ...['--mount', `type=bind,src=${PLUGINS},dst=/opt/data/plugins,readonly`],
     ...['--mount', `type=bind,src=${CLAUDE_BIN},dst=/usr/local/bin/claude,readonly`],
-    ...(existsSync(`${BRIDGE}/node_modules`) ? ['--mount', `type=bind,src=${BRIDGE},dst=/opt/data/scripts/whatsapp-bridge,readonly`] : []),
+    ...(existsSync(`${WHATSAPP_BRIDGE}/node_modules`) ? ['--mount', `type=bind,src=${WHATSAPP_BRIDGE},dst=/opt/data/scripts/whatsapp-bridge,readonly`] : []),
+    ...(browser ? browserMounts(id) : []),
     ...['--tmpfs', '/opt/data/hooks:ro,size=4k', '--tmpfs', '/opt/data/pairing:ro,size=4k', '--tmpfs', '/opt/data/platforms/pairing:ro,size=4k'],
     ...[digest, 'gateway', 'run'],
   )
@@ -311,7 +332,7 @@ async function remove(id: string) {
 async function pair(id: string): Promise<Pairing> {
   const known = pairings.get(id)
   if (known && known.status !== 'error') return known
-  if (!existsSync(`${BRIDGE}/node_modules`)) throw new Error("the WhatsApp bridge isn't installed on this server; run the installer again")
+  if (!existsSync(`${WHATSAPP_BRIDGE}/node_modules`)) throw new Error("the WhatsApp bridge isn't installed on this server; run the installer again")
   if (!(await isRunning(id))) throw new Error("the agent isn't running")
   const p: Pairing = { status: 'starting' }
   pairings.set(id, p)
@@ -436,9 +457,50 @@ async function isRunning(id: string) {
   return (await docker('inspect', '-f', '{{.State.Running}}', `ag-${id}`).catch(ignoreMissing)) === 'true'
 }
 
-async function outdated(id: string, size: AgentSize) {
-  const made = await docker('inspect', '-f', 'spec={{index .Config.Labels "openhut.spec"}} size={{index .Config.Labels "openhut.size"}}', `ag-${id}`).catch(ignoreMissing)
-  return made !== '' && made.replace(/size=$/, 'size=standard') !== `spec=${SPEC} size=${size}`
+async function outdated(id: string, size: AgentSize, browser: boolean) {
+  const made = await docker('inspect', '-f', 'spec={{index .Config.Labels "openhut.spec"}} size={{index .Config.Labels "openhut.size"}} browser={{index .Config.Labels "openhut.browser"}}', `ag-${id}`).catch(ignoreMissing)
+  return made !== '' && made.replace(/size= /, 'size=standard ').replace(/browser=$/, 'browser=off') !== `spec=${SPEC} size=${size} browser=${browser ? 'on' : 'off'}`
+}
+
+function browserMounts(id: string) {
+  return [
+    '--mount', `type=bind,src=${BROWSER_BIN},dst=/usr/local/lib/agent-browser,readonly`,
+    '--mount', `type=bind,src=${BROWSER_DIR},dst=/opt/agent-browser,readonly`,
+    '--mount', `type=bind,src=${BROWSER_DIR}/agent-browser.sh,dst=/usr/local/bin/agent-browser,readonly`,
+    ...readOnly(id, POLICY_FILE, POLICY_FILE),
+  ]
+}
+
+async function browserStill(id: string): Promise<BrowserStill> {
+  if (!(await isRunning(id))) return CLOSED
+  const { stdout } = await run('docker', ['exec', '-u', `${AGENT_UID}:${AGENT_UID}`, `ag-${id}`, 'node', BRIDGE, 'still'], { ...EXEC, timeout: 15_000 }).catch(() => ({ stdout: '' }))
+  return stillOf(stdout)
+}
+
+async function live({ sock, id, rest }: { sock: Socket; id: string; rest: string }): Promise<undefined> {
+  if (!(await isRunning(id))) {
+    sock.end(`${JSON.stringify({ type: 'closed' })}\n`)
+    return undefined
+  }
+  const bridge = spawn('docker', ['exec', '-i', '-u', `${AGENT_UID}:${AGENT_UID}`, `ag-${id}`, 'node', BRIDGE, 'live'], { stdio: ['pipe', 'pipe', 'ignore'] })
+  let pending = ''
+  const forward = (chunk: string) => {
+    pending += chunk
+    for (let end = pending.indexOf('\n'); end >= 0; end = pending.indexOf('\n')) {
+      const line = pending.slice(0, end)
+      pending = pending.slice(end + 1)
+      if (isInputLine(line)) bridge.stdin.write(`${line}\n`)
+    }
+    if (pending.length > 4096) sock.destroy()
+  }
+  bridge.stdout.pipe(sock)
+  sock.resume()
+  bridge.on('error', () => sock.destroy())
+  sock.on('data', forward)
+  sock.on('end', () => bridge.stdin.end())
+  sock.on('close', () => bridge.stdin.end())
+  forward(rest)
+  return undefined
 }
 
 async function stale(id: string) {
@@ -453,6 +515,7 @@ function writeConf(id: string, files: AgentFiles) {
   chmodSync(dir, 0o750)
   for (const name of FILES) writeIfChanged(`${dir}/${name}`, files[name])
   writeIfChanged(`${dir}/${CLAUDE_SETTINGS_FILE}`, CLAUDE_SETTINGS)
+  writeIfChanged(`${dir}/${POLICY_FILE}`, FREE_POLICY)
 }
 
 function writeIfChanged(path: string, body: string) {
@@ -626,8 +689,10 @@ export type AgentdRequest =
   | { cmd: 'health' }
   | { cmd: 'ps' | 'containers' }
   | { cmd: 'update' }
-  | { cmd: 'create'; id: string; net: number; files: AgentFiles; size: AgentSize }
-  | { cmd: 'apply'; id: string; net: number; files: AgentFiles; size: AgentSize; restart: boolean; force?: boolean }
+  | { cmd: 'create'; id: string; net: number; files: AgentFiles; size: AgentSize; browser: boolean }
+  | { cmd: 'apply'; id: string; net: number; files: AgentFiles; size: AgentSize; browser: boolean; restart: boolean; force?: boolean }
+  | { cmd: 'browser-still' | 'browser-live'; id: string }
+  | { cmd: 'browser-hold'; id: string; held: boolean }
   | { cmd: 'start' | 'stop' | 'rm' | 'wa-pair' | 'wa-unlink' | 'skills'; id: string }
   | { cmd: 'skill-read' | 'skill-rm'; id: string; path: string }
   | { cmd: 'memory'; id: string }
@@ -664,9 +729,12 @@ export type AgentdReplies = {
   'ts-up': Tailnet & { joined: boolean }
   'ts-status': Tailnet
   'ts-down': Tailnet
+  'browser-still': BrowserStill
+  'browser-hold': { held: boolean }
+  'browser-live': undefined
 }
 
-export type { SendTarget }
+export type { BrowserStill, SendTarget }
 
 export type Container = { name: string; agentId: string; state: string; status: string; image: string; createdAt: string; networks: string }
 
