@@ -37,6 +37,8 @@ export const ICONS = {
   ext: icon(LinkSquare02Icon, 14),
   info: icon(InformationCircleIcon, 14),
   link: icon(Link01Icon, 15),
+  globe: icon(Globe02Icon, 14),
+  lock: icon(SquareLock02Icon, 13),
 }
 
 export const AUTOMATION_ICONS = {
