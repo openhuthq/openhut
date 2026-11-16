@@ -8,12 +8,15 @@ const MAX_FRAME = 4 << 20
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/
 const INPUT_TYPES = new Set(['input_mouse', 'input_keyboard', 'ping'])
 
-export function stillOf(stdout: string): BrowserStill {
-  const line = stdout.split('\n').find((each) => each.startsWith('{'))
-  const message = parse(line ?? '')
-  if (!message || message.type !== 'still') return CLOSED
-  const data = typeof message.data === 'string' && message.data.length <= MAX_FRAME && BASE64.test(message.data) ? message.data : ''
-  return { open: true, url: text(message.url, 2048), title: text(message.title, 300), data }
+export function stillAfter(still: BrowserStill, line: string): BrowserStill {
+  const message = parse(line)
+  switch (message?.type) {
+    case 'frame': return typeof message.data === 'string' && message.data.length <= MAX_FRAME && BASE64.test(message.data) ? { ...still, open: true, data: message.data } : still
+    case 'tabs': return { ...still, open: true, ...activeTab(message.tabs) }
+    case 'url': return { ...still, open: true, url: text(message.url, 2048) }
+    case 'closed': return CLOSED
+    default: return still
+  }
 }
 
 export function isInputLine(line: string): boolean {
@@ -29,6 +32,12 @@ function parse(line: string): Record<string, unknown> | undefined {
   } catch {
     return undefined
   }
+}
+
+function activeTab(tabs: unknown): { url: string; title: string } {
+  const list = Array.isArray(tabs) ? tabs.map((tab: unknown) => typeof tab === 'object' && tab !== null ? Object.fromEntries(Object.entries(tab)) : {}) : []
+  const tab = list.find((each) => each.active === true) ?? list[0]
+  return { url: text(tab?.url, 2048), title: text(tab?.title, 300) }
 }
 
 function text(value: unknown, max: number): string {

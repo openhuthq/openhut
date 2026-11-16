@@ -506,12 +506,16 @@ function main() {
     }
   })
 
-  check('R3', 'Only while someone looks: the dashboard gets one still picture of the agent\'s page, and nothing streams when nobody watches', 'GET /api/browsers/:id: open, the page address, a JPEG; agent-browser reports no screencast running', async () => {
+  check('R3', 'Only while someone looks: the dashboard gets a still picture of the agent\'s page, and the screencast stops once nobody asks', 'GET /api/browsers/:id: open, the page address, a JPEG; a second GET is served from the cache in under 1 s; within 60 s of the last GET agent-browser reports no screencast', async () => {
     const still = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, cookie)
+    const started = Date.now()
+    const again = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, cookie)
+    const cached = Date.now() - started
+    await until(async () => /Screencasting: false/.test(await agentBrowser(dev, 'stream', 'status')), 60_000, 'the screencast to stop after the agent page stopped asking')
     const status = await agentBrowser(dev, 'stream', 'status')
     return {
-      actual: { status: still.status, open: still.json.open, url: still.json.url, picture: String(still.json.still).slice(0, 30), bytes: String(still.json.still).length, stream: status.replace(/\s+/g, ' ') },
-      pass: still.status === 200 && still.json.open === true && still.json.url === BROWSE_URL && String(still.json.still).startsWith('data:image/jpeg;base64,/9j/') && /Screencasting: false/.test(status),
+      actual: { status: still.status, open: still.json.open, url: still.json.url, picture: String(still.json.still).slice(0, 30), bytes: String(still.json.still).length, cachedMs: cached, again: again.json.open, stream: status.replace(/\s+/g, ' ') },
+      pass: still.status === 200 && still.json.open === true && still.json.url === BROWSE_URL && String(still.json.still).startsWith('data:image/jpeg;base64,/9j/') && again.json.open === true && cached < 1000 && /Screencasting: false/.test(status),
     }
   })
 
