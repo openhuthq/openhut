@@ -116,6 +116,7 @@ export const agentService = {
       .onConflict((oc) => oc.columns(['connection_id', 'agent_id']).doNothing()).execute()
     const grant = await db.selectFrom('connection_grant').selectAll().where('agent_id', '=', agentId).where('connection_id', '=', connectionId).executeTakeFirstOrThrow()
     record({ action: 'grant.created', actor, target: { type: 'grant', id: grant.id, agentId, connectionId } })
+    await tellAgent(agentId)
     return grantOf(grant)
   },
 
@@ -124,6 +125,7 @@ export const agentService = {
     await agentService.requireEditable({ actor, id: grant.agent_id })
     await db.deleteFrom('connection_grant').where('id', '=', id).execute()
     record({ action: 'grant.deleted', actor, target: { type: 'grant', id, agentId: grant.agent_id, connectionId: grant.connection_id } })
+    await tellAgent(grant.agent_id)
     return deleted({ id, object: 'grant' })
   },
 
@@ -165,12 +167,16 @@ async function canEdit({ actor, agent }: { actor: Caller; agent: AgentRow }): Pr
   return true
 }
 
+async function tellAgent(id: string): Promise<void> {
+  await agentService.reapply({ id }).catch((err: unknown) => log.warn({ event: 'agent.reapply_failed', agent: id, error: messageOf(err) }))
+}
+
 async function filesOf(row: AgentRow): Promise<AgentFiles> {
   const owner = await db.selectFrom('person').select('email').where('id', '=', row.owner_id).executeTakeFirstOrThrow()
   const channels = await db.selectFrom('channel').selectAll().where('agent_id', '=', row.id).orderBy('kind').execute()
   return renderFiles({
     agent: row, ownerName: owner.email, token: agentToken(row.id), channelKey: unseal(row.channel_key),
-    seat: settings.seatToken(), channels: channels.map(renderedChannel),
+    seat: settings.seatToken(), channels: channels.map(renderedChannel), connections: await connectionService.reachable({ agent: row }),
   })
 }
 

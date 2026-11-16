@@ -4,7 +4,7 @@ import { renderFiles, type RenderedChannel } from '../../src/agents/hermes-files
 import { config } from '../../src/platform/config.ts'
 
 const agent = { id: 'ag_chantest', name: 'Dev', instructions: '# Dev', model: 'sonnet', net: 3, code_execution: true }
-const render = (channels: RenderedChannel[]) => renderFiles({ agent, ownerName: 'owner', token: 'ag_chantest.token', channelKey: 'k'.repeat(32), seat: '', channels })
+const render = (channels: RenderedChannel[]) => renderFiles({ agent, ownerName: 'owner', token: 'ag_chantest.token', channelKey: 'k'.repeat(32), seat: '', channels, connections: [] })
 
 test('no channels: approvals are off, no Slack or WhatsApp settings', () => {
   const files = render([])
@@ -32,7 +32,7 @@ test('WhatsApp open to anyone: bot mode, everyone allowed, approvals still off',
 test('Claude mode: the seat plugin is the model, haiku does side tasks, and the seat token goes into .env', (t) => {
   config.modelMode = 'claude'
   t.after(() => { config.modelMode = 'test' })
-  const files = renderFiles({ agent, ownerName: 'owner', token: 'ag_chantest.token', channelKey: 'k'.repeat(32), seat: 'sk-ant-oat01-seat', channels: [] })
+  const files = renderFiles({ agent, ownerName: 'owner', token: 'ag_chantest.token', channelKey: 'k'.repeat(32), seat: 'sk-ant-oat01-seat', channels: [], connections: [] })
   assert.match(files['config.yaml'], /model:\n {2}default: sonnet\n {2}provider: claude-subscription-directsdk-experimental/)
   assert.match(files['config.yaml'], /approval: \{ provider: claude-subscription-directsdk-experimental, model: haiku \}/)
   assert.doesNotMatch(files['config.yaml'], /test-llm/)
@@ -41,7 +41,7 @@ test('Claude mode: the seat plugin is the model, haiku does side tasks, and the 
 
 test('code execution is on unless the agent switches it off; the browser stays off', () => {
   assert.match(render([])['config.yaml'], /disabled_toolsets: \[browser, delegation, cronjob\]/)
-  const off = renderFiles({ agent: { ...agent, code_execution: false }, ownerName: 'owner', token: 't', channelKey: 'k'.repeat(32), seat: '', channels: [] })
+  const off = renderFiles({ agent: { ...agent, code_execution: false }, ownerName: 'owner', token: 't', channelKey: 'k'.repeat(32), seat: '', channels: [], connections: [] })
   assert.match(off['config.yaml'], /disabled_toolsets: \[browser, delegation, cronjob, code_execution\]/)
 })
 
@@ -57,4 +57,10 @@ test('Telegram open to anyone: everyone allowed', () => {
   const files = render([{ kind: 'telegram', botToken: '123456789:AAEtoken', audience: { ownerAddress: '111222333', open: true, allowed: [] } }])
   assert.match(files['.env'], /^TELEGRAM_ALLOW_ALL_USERS=true$/m)
   assert.doesNotMatch(files['.env'], /TELEGRAM_ALLOWED_USERS/)
+})
+
+test('SOUL.md names the connected apps in one line, and stays the instructions alone when there are none', () => {
+  assert.equal(render([])['SOUL.md'], '# Dev\n')
+  const files = renderFiles({ agent, ownerName: 'owner', token: 't', channelKey: 'k'.repeat(32), seat: '', channels: [], connections: [{ name: 'Excalidraw', kind: 'excalidraw' }, { name: 'Orders\nDB', kind: 'postgres' }] })
+  assert.equal(files['SOUL.md'], '# Dev\n\n## Connected apps\n\nThe openhut tools reach: Excalidraw, Orders DB (postgres). Call list_tools to see what each one does, and use it before doing the same work by hand.\n')
 })

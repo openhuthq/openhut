@@ -48,6 +48,11 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 - A person can use a connection they own or one shared with everyone. An agent reaches a connection only while it
   holds a grant and its owner can use it, checked live on every call; un-sharing or removing the owner cuts it off
   at once, and grants need no restart.
+- Agents are told which apps they can reach (owner, 2026-11-16): `SOUL.md` ends with one line naming the granted
+  connections and pointing at `list_tools`. Without it an agent asked for an Excalidraw drawing never looked at its
+  tools and wrote its own upload code. Only names and kinds go in, read from the database, so rendering needs no
+  network and the file changes only when a grant does. A grant or its removal reapplies the agent's files, which
+  restarts a running agent once so Hermes reads the new line; the gateway check itself is still live.
 - Editing an agent needs edit rights on it and access to every connection it holds, so nobody borrows a teammate's
   login through an agent.
 - The gateway is plain `node:http`, so its limits are explicit: 8 requests in flight per agent, 1 MB bodies, headers
