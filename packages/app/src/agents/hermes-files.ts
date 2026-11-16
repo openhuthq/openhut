@@ -71,7 +71,7 @@ function yamlOf(channel: RenderedChannel): string[] {
   switch (channel.kind) {
     case 'slack': return [slack.yaml.trimEnd()]
     case 'telegram': return [telegram.yaml.trimEnd()]
-    case 'whatsapp': return []
+    case 'whatsapp': return [whatsapp.yaml.trimEnd()]
   }
 }
 

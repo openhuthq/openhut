@@ -21,7 +21,7 @@ test('Slack in picked channels: tokens, everyone in them, only those channels', 
   assert.match(files['.env'], /^SLACK_ALLOWED_CHANNELS=C012ABCDEF,G034GHIJKL$/m)
   assert.match(files['.env'], /^SLACK_HOME_CHANNEL=C012ABCDEF$/m)
   assert.doesNotMatch(files['.env'], /SLACK_ALLOWED_USERS/)
-  assert.match(files['config.yaml'], /slack:\n {2}require_mention: true\n {2}unauthorized_dm_behavior: ignore/)
+  assert.match(files['config.yaml'], /slack:\n {2}require_mention: true\n {2}unauthorized_dm_behavior: ignore\n {2}gateway_restart_notification: false/)
 })
 
 test('Slack before any channel is picked: no Slack settings, so it answers nowhere', () => {
@@ -35,6 +35,7 @@ test('WhatsApp open to anyone: bot mode, everyone allowed, approvals still off',
   assert.match(files['.env'], /^WHATSAPP_MODE=bot$/m)
   assert.match(files['.env'], /^WHATSAPP_ALLOWED_USERS=\*$/m)
   assert.match(files['config.yaml'], /mode: "off"/)
+  assert.match(files['config.yaml'], /whatsapp:\n {2}gateway_restart_notification: false/)
 })
 
 test('Claude mode: the seat plugin is the model, haiku does side tasks, and the seat token goes into .env', (t) => {
@@ -69,7 +70,7 @@ test('Telegram for listed people: the bot token, numeric IDs with the owner, str
   assert.match(files['.env'], /^TELEGRAM_ALLOWED_USERS=111222333,444555666$/m)
   assert.match(files['.env'], /^TELEGRAM_HOME_CHANNEL=111222333$/m)
   assert.doesNotMatch(files['.env'], /TELEGRAM_ALLOW_ALL_USERS/)
-  assert.match(files['config.yaml'], /telegram:\n {2}require_mention: true\n {2}unauthorized_dm_behavior: ignore/)
+  assert.match(files['config.yaml'], /telegram:\n {2}require_mention: true\n {2}unauthorized_dm_behavior: ignore\n {2}gateway_restart_notification: false/)
 })
 
 test('Telegram open to anyone: everyone allowed', () => {

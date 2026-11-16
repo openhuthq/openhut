@@ -69,7 +69,7 @@ export const slack = {
     return [`SLACK_BOT_TOKEN=${botToken}`, `SLACK_APP_TOKEN=${appToken}`, 'SLACK_ALLOW_ALL_USERS=true', `SLACK_ALLOWED_CHANNELS=${channels.join(',')}`, `SLACK_HOME_CHANNEL=${channels[0]}`]
   },
 
-  yaml: 'slack:\n  require_mention: true\n  unauthorized_dm_behavior: ignore\n',
+  yaml: 'slack:\n  require_mention: true\n  unauthorized_dm_behavior: ignore\n  gateway_restart_notification: false\n',
 }
 
 async function listConversations({ botToken, types }: { botToken: string; types: string }): Promise<unknown[]> {
