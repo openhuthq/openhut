@@ -24,6 +24,12 @@ and how it stays safe on the left, numbered steps on the right) and each connect
 - **Google** (Gmail, Drive, Workspace = Docs, Sheets, Slides and Calendar) uses Google's MCP servers
   (`<product>mcp.googleapis.com/mcp/v1`). Google has no dynamic registration, so an owner or admin pastes a Google
   OAuth client (Web application) once, in Admin or in step 1 of the dialog; OpenHut runs the OAuth itself.
+- **Excalidraw** (owner, 2026-11-16) takes no key and no sign-in: one native tool, `excalidraw_draw`, turns boxes,
+  arrows and notes into a drawing, encrypts it on this server and stores it on excalidraw.com the way its own Share
+  button does, then returns the `excalidraw.com/#json=<id>,<key>` link. Excalidraw's public MCP server
+  (`mcp.excalidraw.com`) was tried first and dropped: its drawing tool only renders inside chat apps that show its
+  widget, and its upload tool takes finished Excalidraw JSON that the widget builds in the browser, so an agent in
+  Slack got shapes with no labels. Excalidraw+ has a real MCP server, but it needs a paid workspace.
 - **Tailscale** isn't a connection agents hold: agentd joins the server to the tailnet so the app's connections reach
   private hosts. Agents stay off it (the firewall drops `tailscale0`).
 - Every kind is one `Connector` (`tools`, `call`) in `integrations/`; agents see `<kind>_<tool>` names through the gateway.
@@ -46,5 +52,8 @@ The catalog listed eight services as "Not in this build yet". Skyfleet already h
 - PostHog's sign-in asks for every scope its server lists (the MCP SDK uses `scopes_supported`).
 - Google's scopes: Gmail modify + compose (no tool sends), Drive readonly + file, Docs/Sheets/Slides write, Calendar
   events. Restricted scopes mean the consent screen should be Internal.
+- An Excalidraw link is public to anyone who has it and can't be taken back, so the tool tells agents to leave
+  secrets out. Someone who already has a drawing open on excalidraw.com is asked whether to replace it when they open
+  a link. Text sizes are estimated (0.55 of the font size per character), since measuring needs a browser.
 - Connecting Tailscale runs Tailscale's install script as root the first time. A server already on a tailnet is left
   as it is and is never logged out by Disconnect.

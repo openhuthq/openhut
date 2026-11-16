@@ -1,10 +1,10 @@
 import * as z from 'zod/mini'
 import { ListQuery, Timestamp } from '../api.ts'
 
-export const KEYED_KINDS = ['postgres', 'convex', 'mcp'] as const
+export const KEYED_KINDS = ['postgres', 'convex', 'excalidraw', 'mcp'] as const
 export const SIGN_IN_KINDS = ['posthog', 'linear', 'github', 'gmail', 'drive', 'google', 'mcp'] as const
 export const GOOGLE_KINDS = ['gmail', 'drive', 'google'] as const
-export const ConnectionKind = z.enum(['postgres', 'convex', 'posthog', 'linear', 'github', 'gmail', 'drive', 'google', 'mcp'])
+export const ConnectionKind = z.enum(['postgres', 'convex', 'posthog', 'linear', 'github', 'gmail', 'drive', 'google', 'excalidraw', 'mcp'])
 export type ConnectionKind = z.infer<typeof ConnectionKind>
 
 export const ConnectionStatus = z.enum(['connected', 'failing', 'no_calls'])
