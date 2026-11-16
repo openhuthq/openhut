@@ -449,12 +449,14 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 @keyframes blinkdot{50%{opacity:.3}}
 .pfill{flex:1;display:flex;flex-direction:column;min-height:0;background:var(--card)}
 .chat-log{flex:1;overflow:auto;padding:20px 24px;display:flex;flex-direction:column}
-.chat-col{width:100%;max-width:720px;margin:auto auto 0;display:flex;flex-direction:column;gap:2px}
-.msg{display:grid;grid-template-columns:32px minmax(0,1fr);gap:10px;padding:6px 0;animation:msgin .3s cubic-bezier(.2,.8,.2,1)}
+.chat-col{width:100%;max-width:720px;margin:auto auto 0;display:flex;flex-direction:column;gap:10px}
+.msg{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;padding:6px 0;animation:msgin .3s cubic-bezier(.2,.8,.2,1)}
 @keyframes msgin{from{opacity:0;transform:translateY(6px)}}
-.msg .initial{width:32px;height:32px;border-radius:8px;font-size:14px}
-.msg-b{min-width:0}
-.msg-h b{font-weight:600;font-size:14px}
+.msg.mine{display:flex;justify-content:flex-end}
+.bubble{max-width:78%;background:var(--sidebar);border-radius:16px 16px 4px 16px;padding:8px 14px;font-size:14px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg-b{min-width:0;display:flex;flex-direction:column;gap:8px;padding-top:3px}
+.msg-t a .ext{margin-left:3px;font-size:11px;color:var(--mute)}
+.noreply{font-size:13.5px;font-style:italic;color:var(--mute-2)}
 .msg-t{font-size:14px;line-height:1.55;color:var(--ink);overflow-wrap:anywhere}
 .msg-t.plain{white-space:pre-wrap}
 .msg-t>:first-child{margin-top:0}.msg-t>:last-child{margin-bottom:0}
@@ -470,29 +472,48 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .typing{display:inline-flex;gap:3px;padding:8px 0}
 .typing i{width:5px;height:5px;border-radius:50%;background:var(--mute-2);animation:blinkdot 1s infinite}
 .typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
-.tool-use{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mute);margin:4px 0;padding:3px 9px;border:1.5px solid var(--mid);border-radius:999px;width:fit-content}
-.calls{display:flex;flex-direction:column;gap:4px;margin:6px 0}
-.call{border:1.5px solid var(--mid);border-radius:9px;font-size:12.5px;background:var(--card)}
-.call summary{display:flex;align-items:center;gap:8px;padding:5px 10px;cursor:pointer;list-style:none;min-width:0}
-.call summary::-webkit-details-marker{display:none}
-.call summary .ellip{flex:1}
-.call p{margin:0;padding:6px 10px;border-top:1px solid var(--hair);color:var(--body);background:var(--sidebar);border-radius:0 0 8px 8px}
-.chat-err{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1.5px solid oklch(80% .08 27);background:oklch(97% .02 27);color:var(--fail);border-radius:9px;padding:8px 10px;margin:6px 0 0 42px;font-size:14px}
+.steps{font-size:13px;color:var(--mute)}
+.steps summary{display:flex;align-items:center;gap:8px;width:fit-content;max-width:100%;min-width:0;margin-left:-4px;padding:3px 8px 3px 4px;border-radius:8px;cursor:pointer;list-style:none}
+.steps summary::-webkit-details-marker{display:none}
+.steps summary:hover{background:var(--tint);color:var(--ink)}
+.steps .chev{display:grid;flex:none;color:var(--mute-2);transition:transform .15s}
+.steps[open] .chev{transform:rotate(90deg)}
+.tiles{display:flex;gap:3px;flex:none}
+.tile{--k:var(--mute);width:22px;height:22px;border-radius:6px;display:grid;place-items:center;flex:none;color:var(--k);background:color-mix(in oklch,var(--k) 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in oklch,var(--k) 22%,transparent);animation:tilein .26s cubic-bezier(.22,1,.36,1)}
+.tile.k-code{--k:oklch(50% .14 265)}
+.tile.k-web{--k:oklch(54% .12 233)}
+.tile.k-find{--k:oklch(52% .1 200)}
+.tile.k-app{--k:oklch(52% .13 163)}
+.tile.k-file{--k:oklch(55% .13 70)}
+.tile.k-memory{--k:oklch(52% .16 305)}
+.tile.k-bad{--k:var(--fail)}
+.tile.run{animation:tilepulse 1.2s ease-in-out infinite}
+@keyframes tilein{from{opacity:0;transform:scale(.5)}}
+@keyframes tilepulse{50%{opacity:.45}}
+.shimmer{background:linear-gradient(90deg,var(--mute) 30%,var(--ink) 50%,var(--mute) 70%) 0 0/200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 1.4s linear infinite;white-space:nowrap}
+@keyframes shimmer{from{background-position:150% 0}to{background-position:-50% 0}}
+.steps ul{list-style:none;margin:6px 0 2px 14px;padding:2px 0 2px 14px;border-left:1.5px solid var(--hair);display:flex;flex-direction:column;gap:8px}
+.steps li{display:flex;flex-direction:column;gap:6px;min-width:0}
+.step-row{display:flex;align-items:center;gap:8px;min-width:0}
+.step-row .mono:not(.mute){color:var(--ink)}
+.step-row .ms{margin-left:auto}
+.step-why{margin:0;font-size:12.5px;color:var(--body)}
+.step-code{margin:0;font-family:var(--mono);font-size:11.5px;line-height:1.55;color:var(--body);background:var(--sidebar);border-radius:8px;padding:8px 10px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:9.5em;overflow:auto}
+.chat-err{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1.5px solid oklch(80% .08 27);background:oklch(97% .02 27);color:var(--fail);border-radius:9px;padding:8px 10px;margin:6px 0 0 40px;font-size:14px}
 .chat-err .btn{margin-left:auto}
 .chat-empty{margin:auto;max-width:400px;text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center;padding:32px 0}
 .chat-empty h3{margin:6px 0 0;font-family:var(--display);font-weight:400;font-size:32px;line-height:1;text-transform:uppercase;letter-spacing:.01em;padding-bottom:10px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 10'%3E%3Cpath d='M0 6q5-5 10 0t10 0 10 0 10 0' stroke='%233cc5c0' stroke-width='3.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 100%/auto 7px}
 .chat-empty p{margin:0;font-family:var(--copy);font-size:14px;color:var(--body);line-height:1.5}
 .chat-foot{flex:none;padding:0 24px 12px}
-.composer{max-width:760px;margin:0 auto;border:1px solid var(--mid);border-radius:16px;padding:12px 12px 10px 16px;display:flex;flex-direction:column;gap:6px;background:var(--card);box-shadow:0 1px 2px oklch(0% 0 0 / .04),0 8px 24px -12px oklch(0% 0 0 / .12);transition:border-color .15s,box-shadow .15s}
+.composer{max-width:760px;margin:0 auto;border:1px solid var(--mid);border-radius:14px;padding:6px 6px 6px 14px;display:flex;align-items:flex-end;gap:8px;background:var(--card);box-shadow:0 1px 2px oklch(0% 0 0 / .04),0 8px 24px -12px oklch(0% 0 0 / .12);transition:border-color .15s,box-shadow .15s}
 .composer:focus-within{border-color:var(--ink);box-shadow:0 0 0 3px oklch(0% 0 0 / .06),0 8px 24px -12px oklch(0% 0 0 / .16)}
-.composer textarea{width:100%;min-height:72px;max-height:240px;border:0;border-radius:0;outline:none;resize:none;background:transparent;font:inherit;font-size:15px;line-height:1.5;padding:4px 0;color:var(--ink)}
+.composer textarea{flex:1;min-width:0;min-height:32px;max-height:240px;border:0;border-radius:0;outline:none;resize:none;background:transparent;font:inherit;font-size:15px;line-height:1.5;padding:5px 0;color:var(--ink)}
 .composer-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px}
-.composer-bar .chat-hint{margin:0}
 .composer textarea:disabled{cursor:not-allowed}
-.send{width:34px;height:34px;border-radius:10px;border:0;background:var(--primary);color:#fff;display:grid;place-items:center;flex:none}
+.send{width:32px;height:32px;border-radius:10px;border:0;background:var(--primary);color:#fff;display:grid;place-items:center;flex:none}
 .send .sq{width:10px;height:10px;border-radius:2px;background:#fff}
-.chat-hint{font-family:var(--copy);font-size:11.5px;color:var(--mute-2)}
-@media (prefers-reduced-motion:reduce){.msg,.talking .c-mouth,.typing i,.chat-agent .dot.wait{animation:none}}
+.chat-hint{font-family:var(--copy);font-size:11px;color:var(--mute-2);text-align:center;margin-top:6px}
+@media (prefers-reduced-motion:reduce){.msg,.talking .c-mouth,.typing i,.chat-agent .dot.wait,.tile{animation:none}.shimmer{animation:none;background:none;color:var(--mute)}}
 /* Connect dialog: a wide two-pane guide, the integration on the left and its steps on the right */
 .box.pad{padding:16px}
 .cform{display:flex;flex-direction:column;gap:14px}
