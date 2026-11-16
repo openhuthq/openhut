@@ -57,7 +57,7 @@ export const agentService = {
       instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000),
     }).returningAll().executeTakeFirstOrThrow().catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'Someone created an agent at the same moment. Try again.') : err })
     try {
-      await agentd.create({ id: row.id, net, files: await filesOf(row), size: row.size })
+      await agentd.create({ id: row.id, net, files: await filesOf(row), size: row.size, browser: row.web_browser })
     } catch (err) {
       await agentd.remove({ id: row.id }).catch(() => undefined)
       await db.deleteFrom('agent').where('id', '=', row.id).execute()
@@ -87,7 +87,7 @@ export const agentService = {
 
   async reapply({ id }: { id: string }): Promise<void> {
     const row = await rowOf(id)
-    await agentd.apply({ id, net: row.net, files: await filesOf(row), size: row.size, restart: row.wanted === 'running' })
+    await agentd.apply({ id, net: row.net, files: await filesOf(row), size: row.size, browser: row.web_browser, restart: row.wanted === 'running' })
   },
 
   async stopOwnedBy({ ownerId }: { ownerId: string }): Promise<void> {
@@ -132,7 +132,7 @@ export const agentService = {
   async reapplyAll({ force }: { force: boolean }): Promise<string[]> {
     const failed: string[] = []
     for (const row of await db.selectFrom('agent').selectAll().execute()) {
-      await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), size: row.size, restart: row.wanted === 'running', force })
+      await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), size: row.size, browser: row.web_browser, restart: row.wanted === 'running', force })
         .catch((err: unknown) => failed.push(`${row.name}: ${messageOf(err)}`))
     }
     return failed
@@ -191,7 +191,7 @@ function renderedChannel(channel: Selectable<Database['channel']>): RenderedChan
 
 async function keepRunning({ row, state }: { row: AgentRow; state: string | undefined }): Promise<void> {
   if (state === undefined) {
-    await agentd.create({ id: row.id, net: row.net, files: await filesOf(row), size: row.size })
+    await agentd.create({ id: row.id, net: row.net, files: await filesOf(row), size: row.size, browser: row.web_browser })
     await agentd.start({ id: row.id })
     log.info({ event: 'reconcile.recreated', agent: row.id })
     return
@@ -201,7 +201,7 @@ async function keepRunning({ row, state }: { row: AgentRow; state: string | unde
     log.info({ event: 'reconcile.started', agent: row.id })
     return
   }
-  const { restarted } = await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), size: row.size, restart: true })
+  const { restarted } = await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), size: row.size, browser: row.web_browser, restart: true })
   if (restarted) log.info({ event: 'reconcile.restarted', agent: row.id })
 }
 

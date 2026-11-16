@@ -177,6 +177,12 @@ function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
     case 'ts-down':
       tailnet = OFF_TAILNET
       return tailnet
+    case 'browser-still':
+      return { open: false, url: '', title: '', data: '' }
+    case 'browser-hold':
+      return { held: req.held }
+    case 'browser-live':
+      return undefined
     default:
       throw new Error('unknown command')
   }

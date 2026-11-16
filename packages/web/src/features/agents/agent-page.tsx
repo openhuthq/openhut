@@ -9,6 +9,7 @@ import { OwnerChip } from '@/components/owner-chip'
 import { Page } from '@/components/page'
 import { AgentBadge } from '@/components/status-badge'
 import { AgentConnections } from '@/features/agents/agent-connections'
+import { BrowserCard } from '@/features/agents/browser-card'
 import { useAgent, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { ChannelsSection } from '@/features/agents/channels-section'
 import { InstructionsSection } from '@/features/agents/instructions-section'
@@ -69,6 +70,7 @@ function AgentView({ agent, dialog, skill, automation }: { agent: Agent; dialog:
             <div><span title="Opens websites inside the agent's sandbox. A web page can carry text written to mislead the agent.">{FACT_ICONS.browser}Browser</span><ToolSwitch agent={agent} field="browser" label="Browser" lockReason={lockReason} /></div>
             <MemoryRow agent={agent} />
           </div>
+          <BrowserCard agent={agent} />
           <ChannelsSection agent={agent} lockReason={lockReason} dialog={dialog} />
           <AgentConnections agent={agent} lockReason={lockReason} />
         </aside>

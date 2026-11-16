@@ -126,3 +126,4 @@ the installer, agentd and the e2e run live here. `openhut-server.md` covers the 
 - The bot's permissions are fixed in the manifest (contents, pull requests and issues write; actions and checks read). Pushing changes to `.github/workflows` needs the Workflows permission, added on the app's page on GitHub.
 - GitHub connections are saved with `sign_in` false, so there's no Reconnect: a new bot means delete and connect again.
 - A grant change restarts the agent (since #95, so `SOUL.md` lists its apps), and the API call returns while Hermes is still starting. The e2e's `chat` and `asAgent` wait for the agent's API first; a check that talks to an agent another way has to do the same.
+- Swapping `packages/web/dist` on a running server needs an app restart: `fastify-static` is registered with `wildcard: false`, so it only serves the file names it found at boot, and a new build's hashed assets 404 (blank page).

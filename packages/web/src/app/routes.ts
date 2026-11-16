@@ -29,6 +29,7 @@ function agentRoute(id: string, detail: string): Route {
   if (!id) return { page: 'agents' }
   if (!detail) return { page: 'agent', agentId: decodeURIComponent(id), dialog: undefined }
   if (detail === 'chat') return { page: 'chat', agentId: decodeURIComponent(id) }
+  if (detail === 'browser') return { page: 'browser', agentId: decodeURIComponent(id) }
   const dialog = AGENT_DIALOGS.find((name) => name === detail)
   return dialog ? { page: 'agent', agentId: decodeURIComponent(id), dialog } : MISSING
 }
@@ -62,6 +63,7 @@ export type Route =
   | { page: 'agents' }
   | { page: 'agent'; agentId: string; dialog: AgentDialog | undefined; skill?: string; automation?: string }
   | { page: 'chat'; agentId: string }
+  | { page: 'browser'; agentId: string }
   | { page: 'connections'; adding: string | undefined }
   | { page: 'tailscale' }
   | { page: 'connection'; connectionId: string }

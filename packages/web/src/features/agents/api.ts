@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
 import { Agent, Grant, type CreateAgent, type UpdateAgent } from '@openhut/common/agents/agent.ts'
+import { Browser } from '@openhut/common/agents/browser.ts'
 import { Memory, type UpdateMemory } from '@openhut/common/agents/memory.ts'
 import { Skill } from '@openhut/common/agents/skill.ts'
 import { Channel, Conversation, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
@@ -211,4 +212,29 @@ function writeGrant(client: QueryClient, grant: Grant, change: (grants: Grant[])
 
 function writeChannel(client: QueryClient, channel: Channel) {
   client.setQueryData<Channel[]>(channelsKey(channel.agentId), (channels) => channels && [...channels.filter((each) => each.kind !== channel.kind), channel])
+}
+
+export function useBrowser(agentId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: browserKey(agentId),
+    queryFn: () => request({ schema: Browser, path: browserPath(agentId) }),
+    enabled,
+    refetchInterval: 5_000,
+  })
+}
+
+export function useHoldBrowser(agentId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (held: boolean) => request({ schema: Browser, path: `${browserPath(agentId)}/hold`, method: held ? 'POST' : 'DELETE' }),
+    onSuccess: (browser) => client.setQueryData<Browser>(browserKey(agentId), (known) => known && { ...known, heldBy: browser.heldBy }),
+  })
+}
+
+export function browserPath(agentId: string) {
+  return `/api/browsers/${encodeURIComponent(agentId)}`
+}
+
+function browserKey(agentId: string) {
+  return ['browser', agentId]
 }
