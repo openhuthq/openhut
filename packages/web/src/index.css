@@ -305,14 +305,12 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 @media (max-width:640px){.lrow .lwho{display:none}}
 
 /* People, after Capy's members page */
-.people{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
-.ptable{display:flex;flex-direction:column;border-collapse:collapse}
-.ptable thead,.ptable tbody{display:contents}
-.ptable th,.ptable td{padding:0;text-align:left;font-weight:inherit}
-.prow{display:grid;grid-template-columns:minmax(0,1fr) 6.5rem 5rem;align-items:center;gap:12px;min-height:48px;padding:6px 8px;border-bottom:1px solid var(--hair)}
-.prow:last-child{border-bottom:0}
-.phead{min-height:32px;border-bottom:0;font-weight:450}
-.pname{display:flex;align-items:center;gap:10px;min-width:0;font-weight:500}
+.people{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:32px}
+.people ul{list-style:none;margin:0;padding:0}
+.people .lrow:hover{background:none}
+.people .pophead h3 .mute{font-weight:450}
+.prole{width:4.5rem;flex:none;color:var(--body)}
+.invmark{width:32px;height:32px;border-radius:9999px;border:1.5px dashed var(--mid);display:grid;place-items:center;color:var(--mute);flex:none}
 
 /* Agents page: set up from your agent, a copy-prompt hero with AI logos */
 .aihero{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:24px;padding:28px;border-radius:8px;background:var(--card);box-shadow:inset 0 0 0 1px var(--hair);overflow:hidden}
@@ -342,7 +340,6 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 
 .logo-sprite{position:absolute;width:0;height:0;overflow:hidden}
 
-@media (max-width:560px){.prow{grid-template-columns:minmax(0,1fr) 6rem}.pc-joined{display:none}}
 @media (max-width:900px){
   .app{grid-template-columns:1fr;height:auto;min-height:100vh}
   .side{flex-direction:row;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--hair)}
@@ -409,9 +406,7 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .qr{width:248px;height:248px;display:grid;place-items:center;border:1px solid var(--hair);border-radius:8px;background:#fff}
 .qr canvas{display:block}
 .twobtn{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.ptable.acts .prow{grid-template-columns:minmax(0,1fr) 6.5rem 5rem 28px}
-.pact{display:flex;justify-content:flex-end}
-@media (max-width:560px){.ptable.acts .prow{grid-template-columns:minmax(0,1fr) 6rem 28px}}
+.pact{width:28px;flex:none;display:flex;justify-content:flex-end}
 .teamname{font-family:var(--brand);font-weight:600;font-size:19px;line-height:1;letter-spacing:-.01em}
 .me .who,.card .who{min-width:0;flex:1}
 .pop>form>.btn{justify-content:center}
