@@ -21,9 +21,9 @@ export function PeoplePage({ me, inviting }: { me: Me; inviting: boolean }) {
   const createInvite = useCreateInvite()
   return <Page title="People" actions={<InviteButton canManage={canManage} open={inviting} createInvite={createInvite} />}>
     <div className="people">
-      <Loaded query={people}>{(loaded) => <PeopleTable people={loaded} canManage={canManage} />}</Loaded>
+      <Loaded query={people}>{(loaded) => <Members people={loaded} me={me} canManage={canManage} />}</Loaded>
       <ErrorNote message={invites.error?.message} />
-      {invites.data && invites.data.length > 0 && <PendingInvites invites={invites.data} />}
+      {invites.data && invites.data.length > 0 && <UnusedInvites invites={invites.data} me={me} />}
     </div>
   </Page>
 }
@@ -62,32 +62,34 @@ function InviteLink({ role, link, onAgain }: { role: MemberRole; link: string; o
   </section>
 }
 
-function PeopleTable({ people, canManage }: { people: Person[]; canManage: boolean }) {
+function Members({ people, me, canManage }: { people: Person[]; me: Me; canManage: boolean }) {
   const deletePerson = useDeletePerson()
-  return <table className={canManage ? 'ptable acts' : 'ptable'} aria-label="People">
-    <thead><tr className="prow phead"><th scope="col">Name</th><th scope="col" className="pc-role">Role</th><th scope="col" className="pc-joined">Joined</th>{canManage && <th scope="col"><span className="sr-only">Actions</span></th>}</tr></thead>
-    <tbody>{people.map((person) => <tr className="prow" key={person.id}>
-      <td className="pname"><Initial id={person.id} email={person.email} /><span className="ellip">{person.email}</span></td>
-      <td className="pc-role">{ROLE_LABEL[person.role]}</td>
-      <td className="pc-joined">{shortDate.format(new Date(person.joinedAt))}</td>
-      {canManage && <td className="pact">{person.role !== 'owner' && <ConfirmButton className="btn icon sm danger" label="Remove" disabled={deletePerson.isPending} question={`Remove ${person.email}?`}
-        detail="They can't sign in anymore, their tokens stop working, and their agents stop." action="Remove" onConfirm={() => deletePerson.mutate(person.id, { onError: toastError })}>{ICONS.trash}</ConfirmButton>}</td>}
-    </tr>)}</tbody>
-  </table>
+  return <section className="msec">
+    <div className="pophead"><h3>Members <span className="mute">{people.length}</span></h3><p className="mute">People who can sign in to this OpenHut.</p></div>
+    <ul className="lbox" aria-label="Members">{people.map((person) => <li className="lrow" key={person.id}>
+      <Initial id={person.id} email={person.email} size={32} />
+      <div className="t">
+        <span className="nm"><span className="ellip">{person.email}</span>{person.id === me.user.id && <span className="setup-tag">You</span>}</span>
+        <span className="bl">Joined {shortDate.format(new Date(person.joinedAt))}</span>
+      </div>
+      <span className="prole">{ROLE_LABEL[person.role]}</span>
+      {canManage && <span className="pact">{person.role !== 'owner' && <ConfirmButton className="btn icon sm danger" label="Remove" disabled={deletePerson.isPending} question={`Remove ${person.email}?`}
+        detail="They can't sign in anymore, their tokens stop working, and their agents stop." action="Remove" onConfirm={() => deletePerson.mutate(person.id, { onError: toastError })}>{ICONS.trash}</ConfirmButton>}</span>}
+    </li>)}</ul>
+  </section>
 }
 
-function PendingInvites({ invites }: { invites: Invite[] }) {
+function UnusedInvites({ invites, me }: { invites: Invite[]; me: Me }) {
   const deleteInvite = useDeleteInvite()
   return <section className="msec">
-    <div className="shead"><h3>Pending invites <span className="count">{invites.length}</span></h3></div>
-    <table className="ptable acts" aria-label="Pending invites">
-      <thead><tr className="prow phead"><th scope="col">Role</th><th scope="col" className="pc-role">Created by</th><th scope="col" className="pc-joined">Expires</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
-      <tbody>{invites.map((invite) => <tr className="prow" key={invite.id}>
-        <td className="pname">{ROLE_LABEL[invite.role]}</td>
-        <td className="pc-role ellip">{invite.createdBy}</td>
-        <td className="pc-joined">{shortDate.format(new Date(invite.expiresAt))}</td>
-        <td className="pact"><button type="button" className="btn icon sm" title="Revoke" aria-label="Revoke" disabled={deleteInvite.isPending} onClick={() => deleteInvite.mutate(invite.id, { onError: toastError })}>{ICONS.x}</button></td>
-      </tr>)}</tbody>
-    </table>
+    <div className="pophead"><h3>Unused invite links <span className="mute">{invites.length}</span></h3><p className="mute">Nobody has joined with these yet. Each link works once, then expires.</p></div>
+    <ul className="lbox" aria-label="Unused invite links">{invites.map((invite) => <li className="lrow" key={invite.id}>
+      <span className="invmark" aria-hidden="true">{ICONS.link}</span>
+      <div className="t">
+        <span className="nm">Link for {ROLE_WITH_ARTICLE[invite.role]}</span>
+        <span className="bl">Created by {invite.createdBy === me.user.email ? 'you' : invite.createdBy} · expires {shortDate.format(new Date(invite.expiresAt))}</span>
+      </div>
+      <button type="button" className="btn sm danger" disabled={deleteInvite.isPending} onClick={() => deleteInvite.mutate(invite.id, { onError: toastError })}>Revoke</button>
+    </li>)}</ul>
   </section>
 }
