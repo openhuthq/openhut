@@ -569,6 +569,7 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .setup-tag.ok{color:#047857;background:#ecfdf5}
 .setup-acts{display:flex;flex-wrap:wrap;gap:6px}
 .setup-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.setup-sb .hint b{font-weight:600;color:var(--body)}
 .setup-seg{display:flex;gap:4px;background:var(--canvas);border-radius:10px;padding:3px;box-shadow:inset 0 0 0 1px var(--hair)}
 .setup-seg label{flex:1;min-width:0;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;font-weight:500;color:var(--mute);cursor:pointer;position:relative;white-space:nowrap}
 .setup-seg label svg{width:13px;height:13px}
@@ -697,7 +698,7 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .picker-chips{display:contents}
 .pchip{display:inline-flex;align-items:center;gap:4px;height:24px;max-width:100%;padding:0 2px 0 7px;border-radius:6px;background:var(--soft);font-size:14px;font-weight:500;white-space:nowrap;outline:0}
 .pchip[data-highlighted],.pchip:focus-within{background:var(--mid)}
-.pchip>svg,.picker-row>svg,.picker-pop .menuitem>svg{width:12px;height:12px;color:var(--mute);flex:none}
+.pchip>svg,.picker-pop .menuitem>svg{width:12px;height:12px;color:var(--mute);flex:none}
 .pchip-x{display:grid;place-items:center;width:18px;height:18px;border:0;border-radius:4px;background:transparent;padding:0;color:var(--mute)}
 .pchip-x svg{width:12px;height:12px}
 .pchip-x:hover{background:var(--mid);color:var(--ink)}
@@ -710,7 +711,3 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .picker-n{margin-left:auto;padding-left:8px;font-family:var(--mono);font-size:12px;color:var(--mute)}
 .picker-none{padding:6px 8px;color:var(--mute)}
 .picker-foot{margin:4px -4px -4px;padding:8px 12px;border-top:1px solid var(--hair);font-size:12px;color:var(--mute)}
-.picker-wait{display:flex;flex-direction:column;gap:2px}
-.picker-wait>.mute{font-size:12px}
-.picker-row{display:flex;align-items:center;gap:6px;min-height:30px;min-width:0}
-.picker-row .btn{margin-left:auto;height:24px}

@@ -83,7 +83,7 @@ export const channelService = {
 async function setupOf({ body, agentName, agentId }: { body: CreateChannel; agentName: string; agentId: string }): Promise<{ status: 'connected' | 'linking'; account: string | null; secrets: string }> {
   switch (body.kind) {
     case 'slack': {
-      const account = await slack.verify({ botToken: body.botToken, appToken: body.appToken })
+      const account = await slack.verify({ botToken: body.botToken, appToken: body.appToken, configToken: body.configToken, icon: body.icon, agentName })
       return { status: 'connected', account, secrets: seal(JSON.stringify({ botToken: body.botToken, appToken: body.appToken })) }
     }
     case 'telegram': {
