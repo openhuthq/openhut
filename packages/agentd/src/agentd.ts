@@ -10,7 +10,7 @@ import { newMessages, type NewMessage } from './messages.ts'
 import { isMemoryTarget, MAX_MEMORY_BYTES, readMemory, writeMemory, type MemoryTarget } from './memory.ts'
 import { isSkillPath, listSkills, MAX_SKILL_BYTES, readSkill, writeSkill, type SkillHead } from './skills.ts'
 import { MAX_SEND_BYTES, SEND_TARGET, targetsOf, type SendTarget } from './send.ts'
-import { CLOSED, FREE_POLICY, HELD_POLICY, isInputLine, POLICY_FILE, stillOf, type BrowserStill } from './browser.ts'
+import { CLOSED, FREE_POLICY, HELD_POLICY, isInputLine, POLICY_FILE, stillAfter, type BrowserStill } from './browser.ts'
 
 const run = promisify(execFile)
 const RELEASE_URL = process.env.OPENHUT_URL ?? 'https://openhut.dev'
@@ -26,6 +26,10 @@ const BROWSER_BIN = fileURLToPath(new URL('../../../bin/agent-browser', import.m
 const BROWSER_DIR = fileURLToPath(new URL('../../../install/agent-browser', import.meta.url))
 const BRIDGE = '/opt/agent-browser/bridge.mjs'
 const BROWSER_MEMORY = '4g'
+const STILL_WAIT_MS = 5000
+const STILL_IDLE_MS = 30_000
+const PING_MS = 10_000
+const watched = new Map<string, Watch>()
 const BROWSER_TMP = '1g'
 const UNQUEUED = new Set(['browser-still', 'browser-hold'])
 const WHATSAPP_BRIDGE = '/var/lib/openhut/whatsapp-bridge'
@@ -473,8 +477,30 @@ function browserMounts(id: string) {
 
 async function browserStill(id: string): Promise<BrowserStill> {
   if (!(await isRunning(id))) return CLOSED
-  const { stdout } = await run('docker', ['exec', '-u', `${AGENT_UID}:${AGENT_UID}`, `ag-${id}`, 'node', BRIDGE, 'still'], { ...EXEC, timeout: 15_000 }).catch(() => ({ stdout: '' }))
-  return stillOf(stdout)
+  const watch = watched.get(id) ?? startWatching(id)
+  watch.seen = Date.now()
+  for (const end = Date.now() + STILL_WAIT_MS; !watch.still.data && !watch.ended && Date.now() < end;) await new Promise((done) => setTimeout(done, 100))
+  return watch.still
+}
+
+function startWatching(id: string): Watch {
+  const bridge = spawn('docker', ['exec', '-i', '-u', `${AGENT_UID}:${AGENT_UID}`, `ag-${id}`, 'node', BRIDGE, 'live'], { stdio: ['pipe', 'pipe', 'ignore'] })
+  const watch: Watch = { still: CLOSED, seen: Date.now(), ended: false }
+  watched.set(id, watch)
+  const ping = setInterval(() => {
+    if (Date.now() - watch.seen > STILL_IDLE_MS) bridge.stdin.end()
+    else bridge.stdin.write(`${JSON.stringify({ type: 'ping' })}\n`)
+  }, PING_MS)
+  const finish = () => {
+    clearInterval(ping)
+    watch.ended = true
+    if (watched.get(id) === watch) watched.delete(id)
+  }
+  createInterface({ input: bridge.stdout }).on('line', (line) => { watch.still = stillAfter(watch.still, line) })
+  bridge.on('exit', finish)
+  bridge.on('error', finish)
+  bridge.stdin.on('error', () => undefined)
+  return watch
 }
 
 async function live({ sock, id, rest }: { sock: Socket; id: string; rest: string }): Promise<undefined> {
@@ -684,6 +710,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export type AgentSize = keyof typeof SIZES
+type Watch = { still: BrowserStill; seen: number; ended: boolean }
 
 export type AgentdRequest =
   | { cmd: 'health' }
