@@ -7,7 +7,7 @@ import type { Caller } from '../team/identity.ts'
 import { agentService } from './agent-service.ts'
 
 const MAX_VIEWERS = 3
-const FRAME_GAP_MS = 160
+const FRAME_GAP_MS = 33
 const HOLD_IDLE_MS = 120_000
 const KEEPALIVE_MS = 15_000
 const RETRY_MS = 4_000
@@ -39,7 +39,7 @@ export const browserService = {
     const res = reply.raw
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache, no-transform', 'x-accel-buffering': 'no' })
     res.write(`retry: ${RETRY_MS}\n\n`)
-    const viewer: Viewer = { personId: actor.id, write: (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`), end: () => res.end() }
+    const viewer: Viewer = { personId: actor.id, write: (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`), busy: () => res.writableNeedDrain, end: () => res.end() }
     session.viewers.add(viewer)
     viewer.write('page', session.page)
     viewer.write('hold', { heldBy: session.holder?.email ?? null })
@@ -128,7 +128,7 @@ function showFrame({ session, message }: { session: Session; message: Record<str
   session.frameTimer = setTimeout(() => {
     session.frameTimer = undefined
     session.sentAt = Date.now()
-    broadcast(session, 'frame', session.frame)
+    for (const viewer of session.viewers) if (!viewer.busy()) viewer.write('frame', session.frame)
   }, wait)
 }
 
@@ -200,7 +200,7 @@ function textOf(value: unknown, max: number): string {
 }
 
 type Frame = { data: string }
-type Viewer = { personId: string; write: (event: string, data: unknown) => void; end: () => void }
+type Viewer = { personId: string; write: (event: string, data: unknown) => void; busy: () => boolean; end: () => void }
 type Session = {
   agentId: string
   live: LiveBrowser

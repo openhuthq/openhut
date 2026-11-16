@@ -13,8 +13,8 @@ import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { browserPath, useAgent, useHoldBrowser } from '@/features/agents/api'
 
-const FLUSH_MS = 40
-const MOVE_MS = 80
+const FLUSH_MS = 16
+const MOVE_MS = 33
 const BATCH = 64
 const ACTIONS_SHOWN = 12
 const RIPPLE_MS = 600

@@ -16,7 +16,10 @@ function live() {
     process.exit(0)
   })
   ws.addEventListener('close', () => process.exit(0))
-  ws.addEventListener('message', ({ data }) => process.stdout.write(`${data}\n`))
+  ws.addEventListener('message', ({ data }) => {
+    if (process.stdout.writableNeedDrain && data.includes('"type":"frame"')) return
+    process.stdout.write(`${data}\n`)
+  })
   ws.addEventListener('open', () => createInterface({ input: process.stdin })
     .on('line', (line) => {
       pinged = Date.now()
