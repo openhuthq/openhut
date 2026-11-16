@@ -6,7 +6,7 @@ import { errorBody, HttpError, messageOf } from '../platform/http-error.ts'
 import { log } from '../platform/events.ts'
 import { serveMcp } from '../platform/mcp-transport.ts'
 import { agentService, type GatewayAgent } from '../agents/agent-service.ts'
-import { connectionService } from '../connections/connection-service.ts'
+import { connectionService, type AgentTool } from '../connections/connection-service.ts'
 import { testModel } from './test-model.ts'
 
 const PER_AGENT = 8
@@ -39,9 +39,7 @@ function agentMcp(agent: GatewayAgent): McpServer {
   const server = new McpServer({ name: 'openhut', version: config.version })
   const reason = z.string().min(1).max(500).describe('Why you need this, in a few words. Shown in the audit.')
   server.registerTool('list_tools', { description: 'List the tools you may call, one line each.', inputSchema: { app: z.string().max(40).optional() } }, async ({ app }) => {
-    const tools = (await connectionService.tools({ agent })).filter((tool) => !app || tool.connection.kind === app)
-    const lines = tools.map((tool) => `${tool.name} [${tool.connection.name}, ${tool.connection.id}]: ${tool.spec.description}`.slice(0, 140))
-    return text(lines.length ? lines.slice(0, 100).join('\n') : 'No tools: nobody has granted this agent a connection yet.')
+    return text(toolList({ granted: await connectionService.tools({ agent }), app }))
   })
   server.registerTool('describe_tool', { description: 'Show the input schema of one or more tools.', inputSchema: { names: z.array(z.string().max(100)).min(1).max(20) } }, async ({ names }) => {
     const byName = new Map((await connectionService.tools({ agent })).map((tool) => [tool.name, tool.spec]))
@@ -55,6 +53,14 @@ function agentMcp(agent: GatewayAgent): McpServer {
     return text(result.text, result.isError)
   })
   return server
+}
+
+export function toolList({ granted, app }: { granted: AgentTool[]; app: string | undefined }): string {
+  const wanted = app?.trim().toLowerCase()
+  const tools = granted.filter((tool) => !wanted || tool.connection.kind === wanted || tool.connection.name.toLowerCase() === wanted)
+  const lines = tools.map((tool) => `${tool.name} [${tool.connection.name}, ${tool.connection.id}]: ${tool.spec.description}`.slice(0, 140))
+  if (lines.length) return lines.slice(0, 100).join('\n')
+  return granted.length ? `No app named ${app}. Leave app out to list every tool.` : 'No tools: nobody has granted this agent a connection yet.'
 }
 
 async function readBody(req: IncomingMessage): Promise<unknown> {
