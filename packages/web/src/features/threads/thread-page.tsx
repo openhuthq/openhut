@@ -116,9 +116,9 @@ function NotReady({ agent }: { agent: Agent }) {
 function Message({ agent, message, live }: { agent: Agent; message: AgentMessage; live: boolean }) {
   if (message.role === 'user') return <div className={cn(MESSAGE, 'flex justify-end')}><div className="max-w-[78%] rounded-[16px_16px_4px_16px] bg-sidebar px-3.5 py-2 text-sm/[1.55] [overflow-wrap:anywhere] whitespace-pre-wrap">{textOf(message)}</div></div>
   const blocks = blocksOf(message)
-  return <div className={cn(MESSAGE, 'grid grid-cols-[28px_minmax(0,1fr)] gap-3')}>
-    <span className={live ? 'talking' : undefined}><Creature id={agent.id} about={agent.instructions} size={28} /></span>
-    <div className="flex min-w-0 flex-col gap-2 pt-[3px]">
+  return <div className={cn(MESSAGE, 'grid grid-cols-[40px_minmax(0,1fr)] gap-3')}>
+    <span className={live ? 'talking' : undefined}><Creature id={agent.id} about={agent.instructions} size={40} /></span>
+    <div className="flex min-w-0 flex-col gap-2 pt-[9px]">
       {blocks.map((block, index) => block.type === 'text'
         ? <div key={index} className="msg-t"><Markdown remarkPlugins={[remarkGfm]} components={{ a: ChatLink }}>{block.text}</Markdown></div>
         : <Steps key={index} steps={block.steps} live={live && index === blocks.length - 1} />)}
