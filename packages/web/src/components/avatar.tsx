@@ -34,6 +34,17 @@ export function Avatar({ id, about = '', size, label }: { id: string; about?: st
   return <svg className="av" width={size} height={size} viewBox="4 8 100 100" {...accessible} dangerouslySetInnerHTML={{ __html: creature(id, about) }} />
 }
 
+export async function avatarPng({ id, about = '' }: { id: string; about?: string }): Promise<string> {
+  const [fill] = PALETTE[hash(id) % PALETTE.length]
+  const ground = `<rect x="-6" y="-2" width="120" height="120" fill="#fff"/><rect x="-6" y="-2" width="120" height="120" fill="${fill}" opacity=".22"/>`
+  const image = new Image()
+  image.src = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="-6 -2 120 120">${ground}${creature(id, about)}</svg>`)}`
+  await image.decode()
+  const canvas = Object.assign(document.createElement('canvas'), { width: 1024, height: 1024 })
+  canvas.getContext('2d')?.drawImage(image, 0, 0)
+  return canvas.toDataURL('image/png').split(',')[1]
+}
+
 function creature(id: string, about: string) {
   const random = randomFrom(id)
   const [fill, shade] = PALETTE[hash(id) % PALETTE.length]

@@ -5,7 +5,8 @@ import { HttpError, messageOf } from '../../platform/http-error.ts'
 
 const Failure = z.object({ ok: z.literal(false), error: z.string() })
 const Ok = z.object({ ok: z.literal(true) })
-const AuthTest = z.object({ ok: z.literal(true), team: z.string(), user: z.string() })
+const AuthTest = z.object({ ok: z.literal(true), team: z.string(), user: z.string(), bot_id: z.optional(z.string()) })
+const BotInfo = z.object({ ok: z.literal(true), bot: z.object({ app_id: z.string() }) })
 const RawConversation = z.object({
   id: z.string(), name: z.optional(z.string()), is_private: z.optional(z.boolean()), is_mpim: z.optional(z.boolean()), is_member: z.optional(z.boolean()),
   num_members: z.optional(z.number()), is_ext_shared: z.optional(z.boolean()), is_shared: z.optional(z.boolean()),
@@ -21,10 +22,17 @@ const TYPES = ['public_channel,private_channel', 'mpim']
 const PAGES = 20
 
 export const slack = {
-  async verify({ botToken, appToken }: { botToken: string; appToken: string }): Promise<string> {
+  async verify({ botToken, appToken, configToken, icon, agentName }: { botToken: string; appToken: string; configToken: string; icon: string; agentName: string }): Promise<string> {
     const bot = await checkBot(botToken)
     const app = await call({ method: 'apps.connections.open', token: appToken, schema: Ok })
     if (!app.ok) throw new HttpError(400, `Slack didn't accept the app-level token (${app.error}). Make one with the connections:write scope.`, { param: 'appToken' })
+    const info = await call({ method: 'bots.info', token: botToken, params: { bot: bot.bot_id ?? '' }, schema: BotInfo })
+    if (!info.ok) throw new HttpError(400, `Slack didn't say which app the bot token belongs to (${info.error}). Copy it again from OAuth & Permissions.`, { param: 'botToken' })
+    const form = new FormData()
+    form.set('app_id', info.data.bot.app_id)
+    form.set('file', new Blob([Buffer.from(icon, 'base64')], { type: 'image/png' }), 'icon.png')
+    const set = await call({ method: 'apps.icon.set', token: configToken, form, schema: Ok })
+    if (!set.ok) throw new HttpError(400, `Slack didn't give ${agentName} its face (${set.error}). Generate a new configuration token and paste it again.`, { param: 'configToken' })
     return `${bot.team} · @${bot.user}`
   },
 
@@ -96,7 +104,7 @@ function groupName(name: string): string {
   return name.replace(/^mpdm-/, '').replace(/-\d+$/, '').split('--').join(', ')
 }
 
-async function checkBot(botToken: string): Promise<{ team: string; user: string }> {
+async function checkBot(botToken: string): Promise<z.infer<typeof AuthTest>> {
   const bot = await call({ method: 'auth.test', token: botToken, schema: AuthTest })
   if (!bot.ok) throw new HttpError(400, `Slack didn't accept the bot token (${bot.error}). Copy it again from OAuth & Permissions.`, { param: 'botToken' })
   if (bot.scopes.some((scope) => DM_SCOPES.includes(scope))) {
@@ -105,9 +113,9 @@ async function checkBot(botToken: string): Promise<{ team: string; user: string 
   return bot.data
 }
 
-async function call<T>({ method, token, params = {}, schema }: { method: string; token: string; params?: Record<string, string>; schema: z.ZodMiniType<T> }): Promise<{ ok: true; data: T; scopes: string[] } | { ok: false; error: string }> {
+async function call<T>({ method, token, params = {}, form, schema }: { method: string; token: string; params?: Record<string, string>; form?: FormData; schema: z.ZodMiniType<T> }): Promise<{ ok: true; data: T; scopes: string[] } | { ok: false; error: string }> {
   const res = await fetch(`${config.slackApi}/${method}`, {
-    method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(params), signal: AbortSignal.timeout(10_000),
+    method: 'POST', headers: { authorization: `Bearer ${token}` }, body: form ?? new URLSearchParams(params), signal: AbortSignal.timeout(10_000),
   }).catch((err: unknown) => { throw new HttpError(502, `Slack didn't answer (${messageOf(err)}). Try again.`) })
   const body: unknown = await res.json().catch(() => undefined)
   const ok = z.safeParse(schema, body)

@@ -19,7 +19,6 @@ export function SlackChannels({ agent, channel, lockReason }: { agent: Agent; ch
   const items = useMemo(() => Combobox.createItems(conversations.data ?? [], { getValue: (each) => each.id, getLabel: (each) => each.name }), [conversations.data])
   const known = new Map(conversations.data?.map((each) => [each.id, each]))
   const bot = channel.account?.split('@')[1] ?? agent.name
-  const waiting = conversations.data?.filter((each) => each.joined && !channel.allowed.includes(each.id)) ?? []
   const disabled = !agent.canEdit || !!lockReason || updateChannel.isPending
   const pick = (next: string[]) => {
     latest.current = next
@@ -59,13 +58,6 @@ export function SlackChannels({ agent, channel, lockReason }: { agent: Agent; ch
       </Combobox.Root>
     </Locked>
     <ErrorNote message={conversations.error?.message} />
-    {waiting.length > 0 && <div className="picker-wait">
-      <span className="mute">In Slack, but {agent.name} doesn't answer there</span>
-      {waiting.map((each) => <div className="picker-row" key={each.id}>
-        {glyph(each)}<span className="ellip">{each.name}</span>
-        <Locked reason={lockReason}><button type="button" className="btn sm sec" disabled={disabled} onClick={() => { pick([...latest.current, each.id]); save() }}>Allow</button></Locked>
-      </div>)}
-    </div>}
   </div>
 }
 

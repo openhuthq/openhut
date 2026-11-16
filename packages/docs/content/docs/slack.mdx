@@ -1,10 +1,10 @@
 ---
 title: Slack
-description: Each agent is its own Slack app. It answers in the channels you pick.
+description: Each agent is its own Slack app, with its face. It answers in the channels you pick.
 icon: logo:slack
 ---
 
-<Shot src="slack" alt="The Connect to Slack dialog, picking channels from a dropdown" />
+<Shot src="slack" alt="The Connect to Slack dialog: create the app, then paste its three tokens" />
 
 <Steps>
 <Step>
@@ -16,9 +16,11 @@ On the agent's page, **Set up** next to Slack, then **Create the Slack app**. Sl
 </Step>
 <Step>
 
-### Paste two tokens
+### Paste three tokens
 
-The **Bot token** (`xoxb-`) and the **App-level token** (`xapp-`).
+- **App token** (`xapp-`): **Basic Information** › **App-Level Tokens** › **Generate Token and Scopes**, with the `connections:write` scope.
+- **Bot token** (`xoxb-`): **OAuth & Permissions** › **Install to** your workspace › **Allow**, then copy the **Bot User OAuth Token**.
+- **Configuration token** (`xoxe.xoxp-`): on [Your Apps](https://api.slack.com/apps), **Your App Configuration Tokens** › **Generate Token**. OpenHut uses it once to set the app's icon to the agent's face, and doesn't keep it.
 
 </Step>
 <Step>
