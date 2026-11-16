@@ -101,6 +101,17 @@ export const SETUP_ICONS = {
 }
 export type SetupIcon = keyof typeof SETUP_ICONS
 
+export const STEP_ICONS = {
+  code: icon(SourceCodeIcon, 13),
+  web: icon(Globe02Icon, 13),
+  file: icon(File01Icon, 13),
+  memory: icon(AiBrain01Icon, 13),
+  app: icon(Link01Icon, 13),
+  find: icon(Search01Icon, 13),
+  other: icon(Wrench01Icon, 13),
+  blocked: icon(Cancel01Icon, 13, undefined, 2),
+}
+
 export const LEARNED_SKILL_ICON = icon(SparklesIcon)
 
 const SKILL_ICONS = new Map(Object.entries({

@@ -10,12 +10,12 @@ import type { Me } from '@openhut/common/team/team.ts'
 import { ChatCall, ToolProgress, type ChatMessage, type ThreadWithMessages } from '@openhut/common/threads/thread.ts'
 import { Avatar } from '@/components/avatar'
 import { ErrorNote } from '@/components/error-note'
-import { ICONS } from '@/components/icons'
-import { Initial } from '@/components/initial'
+import { ICONS, STEP_ICONS } from '@/components/icons'
 import { Page } from '@/components/page'
 import { AgentBadge, agentState } from '@/components/status-badge'
 import { useAgent, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { threadPath, useAgentThread, useClearChat } from '@/features/threads/api'
+import { attachCalls, kindOf, stepsOf, type Step } from '@/features/threads/steps'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { toastError } from '@/lib/toast'
 
@@ -41,8 +41,8 @@ function ThreadView({ me, thread, agent }: { me: Me; thread: ThreadWithMessages;
   const last = chat.messages.at(-1)
   const menu = <ChatMenu agent={agent} threadId={thread.id} canClear={!busy && chat.messages.length > 0} />
   return <ChatLayout me={me} agent={agent} busy={busy} onSend={send} onStop={() => void chat.stop()} extra={menu}>
-    {chat.messages.length ? chat.messages.map((message) => <Message key={message.id} me={me} agent={agent} message={message} live={busy && message === last} />) : <ChatEmpty agent={agent} onTry={send} />}
-    {chat.status === 'submitted' && last?.role === 'user' && <Message me={me} agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
+    {chat.messages.length ? chat.messages.map((message) => <Message key={message.id} agent={agent} message={message} live={busy && message === last} />) : <ChatEmpty agent={agent} onTry={send} />}
+    {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     {chat.error && <div className="chat-err" role="alert"><span>{chat.error.message}</span><button type="button" className="btn sec sm" onClick={() => void chat.regenerate()}>Retry</button></div>}
   </ChatLayout>
 }
@@ -82,12 +82,13 @@ function Composer({ me, agent, busy, onSend, onStop }: { me: Me; agent: Agent; b
   return <div className="chat-foot">
     {!ready && !busy && <NotReady agent={agent} />}
     <form className="composer" onSubmit={submit}>
-      <textarea name="text" rows={3} aria-label="Message" placeholder={ready ? `Message ${agent.name}…` : `${agent.name} isn't ready yet`} disabled={!ready} autoFocus
+      <textarea name="text" rows={1} aria-label="Message" placeholder={ready ? `Message ${agent.name}…` : `${agent.name} isn't ready yet`} disabled={!ready} autoFocus
         onKeyDown={enter} onInput={(event) => { const box = event.currentTarget; box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 240)}px` }} />
       <div className="composer-bar">
-        <button type="submit" className={busy ? 'send stop' : 'send'} aria-label={busy ? 'Stop' : 'Send'} title={busy ? 'Stop' : 'Send (Enter). Shift+Enter for a new line'} disabled={!busy && !ready}>{busy ? <span className="sq" /> : ICONS.enter}</button>
+        <button type="submit" className={busy ? 'send stop' : 'send'} aria-label={busy ? 'Stop' : 'Send'} title={busy ? 'Stop' : 'Send (Enter). Shift+Enter for a new line'} disabled={!busy && !ready}>{busy ? <span className="sq" /> : ICONS.up}</button>
       </div>
     </form>
+    <div className="chat-hint">Enter to send, Shift+Enter for a new line</div>
   </div>
 }
 
@@ -105,34 +106,91 @@ function NotReady({ agent }: { agent: Agent }) {
   return <div className="chat-notice" role="status"><b>{agent.name} isn't ready.</b> {reason} {action}</div>
 }
 
-function Message({ me, agent, message, live }: { me: Me; agent: Agent; message: AgentMessage; live: boolean }) {
-  if (message.role === 'user') {
-    return <div className="msg">
-      <Initial id={me.user.id} email={me.user.email} size={32} />
-      <div className="msg-b"><div className="msg-h"><b>{me.user.email.split('@')[0]}</b></div><div className="msg-t plain">{textOf(message)}</div></div>
-    </div>
-  }
-  const hasText = message.parts.some((part) => part.type === 'text' && part.text)
+function Message({ agent, message, live }: { agent: Agent; message: AgentMessage; live: boolean }) {
+  if (message.role === 'user') return <div className="msg mine"><div className="bubble">{textOf(message)}</div></div>
+  const blocks = blocksOf(message)
   return <div className="msg">
-    <span className={live ? 'talking' : undefined}><Avatar id={agent.id} about={agent.instructions} size={32} /></span>
+    <span className={live ? 'talking' : undefined}><Avatar id={agent.id} about={agent.instructions} size={28} /></span>
     <div className="msg-b">
-      <div className="msg-h"><b>{agent.name}</b></div>
-      {message.parts.map((part, index) => <Part key={index} part={part} />)}
-      {live && !hasText && <span className="typing" aria-label={`${agent.name} is thinking`}><i /><i /><i /></span>}
+      {blocks.map((block, index) => block.type === 'text'
+        ? <div key={index} className="msg-t"><Markdown remarkPlugins={[remarkGfm]} components={{ a: ChatLink }}>{block.text}</Markdown></div>
+        : <Steps key={index} steps={block.steps} live={live && index === blocks.length - 1} />)}
+      {live && !blocks.length && <span className="typing" aria-label={`${agent.name} is thinking`}><i /><i /><i /></span>}
+      {!live && !blocks.length && <span className="noreply">No reply.</span>}
     </div>
   </div>
 }
 
-function Part({ part }: { part: AgentPart }) {
-  switch (part.type) {
-    case 'text': return <div className="msg-t"><Markdown remarkPlugins={[remarkGfm]}>{part.text}</Markdown></div>
-    case 'data-tool': return <div className="tool-use">{ICONS.ext}Using {part.data.label ?? part.data.tool ?? part.data.name ?? 'a tool'}</div>
-    case 'data-calls': return <div className="calls">{part.data.map((call, index) => <details className="call" key={index}>
-      <summary><span className="mono">{call.tool}</span><span className="mute ellip">{call.connectionName ?? ''}</span><span className={`status ${call.outcome === 'allowed' ? 'success' : 'destructive'}`}>{call.outcome === 'allowed' ? 'Allowed' : call.outcome === 'denied' ? 'Denied' : 'Failed'}</span><span className="mono mute">{call.ms} ms</span></summary>
-      <p>{call.reason}</p>
-    </details>)}</div>
-    default: return null
+type Block = { type: 'text'; text: string } | { type: 'steps'; steps: Step[] }
+
+function blocksOf(message: AgentMessage): Block[] {
+  const blocks: Block[] = []
+  let events: ToolProgress[] = []
+  const flush = () => {
+    if (events.length) blocks.push({ type: 'steps', steps: stepsOf(events) })
+    events = []
   }
+  for (const part of message.parts) {
+    if (part.type === 'data-tool') events.push(part.data)
+    if (part.type === 'text' && part.text) {
+      flush()
+      blocks.push({ type: 'text', text: part.text })
+    }
+  }
+  flush()
+  const steps = blocks.flatMap((block) => block.type === 'steps' ? block.steps : [])
+  const calls = message.parts.flatMap((part) => part.type === 'data-calls' ? part.data : [])
+  const left = attachCalls({ steps, calls }).map((call, index): Step => ({ key: `call${index}`, tool: call.tool, title: call.tool, count: 1, done: true, call }))
+  if (left.length) blocks.push({ type: 'steps', steps: left })
+  return blocks
+}
+
+function Steps({ steps, live }: { steps: Step[]; live: boolean }) {
+  const running = live ? steps.filter((step) => !step.done).at(-1) : undefined
+  const blocked = steps.filter(failed).length
+  const summary = steps.length === 1 ? steps[0].title : `${steps.length} tools`
+  return <details className="steps">
+    <summary>
+      <span className="tiles">{steps.slice(-6).map((step) => <StepTile key={step.key} step={step} running={step === running} />)}</span>
+      {running ? <span className="shimmer">Running <span className="mono">{running.title}</span>…</span> : <span className="ellip">Used {steps.length === 1 ? <span className="mono">{summary}</span> : summary}</span>}
+      {blocked > 0 && <span className="status destructive">{blocked} blocked</span>}
+      <span className="chev">{ICONS.chev}</span>
+    </summary>
+    <ul>{steps.map((step) => <li key={step.key}>
+      <div className="step-row">
+        <StepTile step={step} running={step === running} />
+        <span className="mono">{step.title}</span>
+        {step.count > 1 && <span className="mono mute">×{step.count}</span>}
+        {step.call?.connectionName && <span className="mute ellip">{step.call.connectionName}</span>}
+        {step.call && <span className={`status ${failed(step) ? 'destructive' : 'success'}`} title={step.call.reason}>{OUTCOME[step.call.outcome]}</span>}
+        {step.call && <span className="mono mute ms">{step.call.ms} ms</span>}
+      </div>
+      {step.call && failed(step) && <p className="step-why">{step.call.reason}</p>}
+      {step.detail && <pre className="step-code">{step.detail}</pre>}
+    </li>)}</ul>
+  </details>
+}
+
+const OUTCOME = { allowed: 'Allowed', denied: 'Denied', failed: 'Failed' }
+
+function StepTile({ step, running }: { step: Step; running: boolean }) {
+  const kind = kindOf(step.call ? 'call_tool' : step.tool)
+  const bad = failed(step)
+  return <span className={`tile k-${bad ? 'bad' : kind}${running ? ' run' : ''}`} title={step.title}>{STEP_ICONS[bad ? 'blocked' : kind]}</span>
+}
+
+function failed(step: Step) {
+  return step.call !== undefined && step.call.outcome !== 'allowed'
+}
+
+function ChatLink({ href, children }: { href?: string; children?: ReactNode }) {
+  const bare = href !== undefined && children === href && /^https?:\/\//.test(href)
+  return <a href={href} target="_blank" rel="noreferrer">{bare ? shortUrl(href) : children}{bare && <span className="ext">↗</span>}</a>
+}
+
+function shortUrl(href: string) {
+  const short = href.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')
+  return short.length > 40 ? `${short.slice(0, 38)}…` : short
 }
 
 function ChatMenu({ agent, threadId, canClear }: { agent: Agent; threadId: string; canClear: boolean }) {
