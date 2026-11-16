@@ -114,7 +114,7 @@ function UsageView({ usage }: { usage: SeatUsage }) {
     {slices.length
       ? <>
         <div className="spend-strip" role="img" aria-label={slices.map((slice) => `${slice.name} ${share(slice.usd, total)}`).join(', ')}>
-          {slices.map((slice) => <i key={slice.id} style={{ flexGrow: slice.usd, background: slice.color }} title={`${slice.name}: $${slice.usd.toFixed(2)}, ${share(slice.usd, total)}`} />)}
+          {slices.map((slice) => <i key={slice.id} style={{ flexGrow: (slice.usd / total) * 100, background: slice.color }} title={`${slice.name}: $${slice.usd.toFixed(2)}, ${share(slice.usd, total)}`} />)}
         </div>
         <div className="spend">
           {ranked.map((slice) => <div key={slice.id} className="spend-row">
