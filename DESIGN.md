@@ -1,6 +1,6 @@
 # Design
 
-How the dashboard (`packages/web`) looks and why. The stylesheet is `packages/web/src/index.css`; this file is the rules behind it.
+How the dashboard (`packages/web`) looks and why. The look lives in the shared components in `packages/web/src/components/ui/` (Tailwind and cva variants over Base UI) and the tokens in `packages/web/src/index.css`; this file is the rules behind them.
 
 ## Buttons
 
@@ -14,20 +14,20 @@ Rejected: adding an accent colour so borderless accent text could carry the seco
 
 ### Variants
 
-| Variant | Class | Rest | Hover | Use for | Never for |
+| Variant | `Button` | Rest | Hover | Use for | Never for |
 |---|---|---|---|---|---|
-| Primary | `btn primary` | fill `--primary`, white text | fill `--primary-hover` | the one action the view exists for: create, save, connect, allow | navigation, row actions |
-| Secondary | `btn sec` | fill `--soft`, text `--ink`, no border | fill `--hair` | every other action that should look like a button: Cancel, Chat, Stop/Start, Retry, external links, labelled Copy | destructive actions |
-| Ghost | `btn` | transparent, text `--ink` | fill `--soft` | row actions, toolbar actions, the close X | the only action in a view |
-| Danger | `btn danger` | transparent, text `--fail` | fill `--fail` at 8% | the trigger of a destructive action | anything not behind a confirm |
-| Danger fill | `btn primary danger` | fill `--fail`, white text | same, slightly darker | only the final button inside a confirm dialog | everywhere else |
-| Icon-only | add `icon` | square, transparent, icon in `--mute` | soft fill, icon in `--ink` (red with `danger`) | Close, Toggle sidebar, Rename, More (⋯), Send/Stop, and the one repeated action of a table row | any action without a universally known glyph |
-| Link | `a`, `linkbtn` | underlined, inherited colour | none | an action inside a sentence | standalone actions |
-| Overflow menu | `.menu`, `.menuitem` | ghost icon trigger (⋯) | `--tint` highlight | two or more rare actions in a header | a single item, or the primary |
+| Primary | `variant="primary"` | fill `--primary`, white text | fill `--primary-hover` | the one action the view exists for: create, save, connect, allow | navigation, row actions |
+| Secondary | `variant="secondary"` | fill `--soft`, text `--ink`, no border | fill `--mid` | every other action that should look like a button: Cancel, Chat, Stop/Start, Retry, external links, labelled Copy | destructive actions |
+| Ghost | default | transparent, text `--ink` | fill `--soft` | row actions, toolbar actions, the close X | the only action in a view |
+| Danger | `variant="danger"` | transparent, text `--fail` | fill `--fail` at 8% | the trigger of a destructive action | anything not behind a confirm |
+| Danger fill | `variant="destructive"` | fill `--fail`, white text | same, slightly darker | only the final button inside a confirm dialog | everywhere else |
+| Icon-only | `size="icon"` or `"icon-sm"` | square, transparent, icon in `--mute` | soft fill, icon in `--ink` (red with `danger`) | Close, Toggle sidebar, Rename, More (⋯), Send/Stop, and the one repeated action of a table row | any action without a universally known glyph |
+| Link | `a`, `variant="link"` | underlined, inherited colour | none | an action inside a sentence | standalone actions |
+| Overflow menu | `DropdownMenu` | ghost icon trigger (⋯) | `--tint` highlight | two or more rare actions in a header | a single item, or the primary |
 
 All variants share: active `scale(.96)`, the global 2px focus ring, disabled at 50% opacity with no hover change.
 
-Two sizes. 32px (default) in page headers, dialog and popover footers, empty states. 28px (`sm`) inside cards, rows, tables, inline forms, setup steps and chat. The 44px sign-in button and the 34px composer send button are the only exceptions.
+Two sizes. 32px (default) in page headers, dialog and popover footers, empty states. 28px (`sm`) inside cards, rows, tables, inline forms, setup steps and chat. Both use 14px text. The 44px sign-in button (`lg`) and the 32px composer send button (`variant="send"`, radius 10px) are the only exceptions.
 
 ### Rules
 
@@ -52,7 +52,7 @@ Two sizes. 32px (default) in page headers, dialog and popover footers, empty sta
 
 | Page | Control | Before | After |
 |---|---|---|---|
-| Everywhere | Cancel, and every `btn sec` | white, grey border | soft grey fill, no border |
+| Everywhere | Cancel, and every secondary button | white, grey border | soft grey fill, no border |
 | Everywhere | confirm dialog action | white, bordered, red text (same as its trigger) | red fill |
 | Everywhere | ghost buttons (close X, sidebar toggle, row actions) | no hover state | soft fill on hover |
 | Everywhere | labelled copy chips (Copy SQL, Copy manifest) | mono bordered chip | secondary `sm`; a chip that shows the copied value stays |
@@ -79,26 +79,9 @@ Two sizes. 32px (default) in page headers, dialog and popover footers, empty sta
 | Admin | Update now | primary `sm` (a second primary when a form is open) | secondary `sm` |
 | Invite | Sign in instead | secondary, though it is the only action | primary |
 
-### CSS
+### Code
 
-Classes that go: `.btn.ghost` (the base becomes the ghost), `.btn.stop`, `.btn.go`, `.btn.row`, `.btn.tight`, `.send.stop`, the unused `.tries`. Classes added: `.btn.icon`, `.menuitem.danger`. No new tokens.
-
-```css
-.btn{background:transparent}
-.btn:hover:not(:disabled){background:var(--soft)}
-.btn.primary{background:var(--primary);color:#fff}
-.btn.primary:hover:not(:disabled){background:var(--primary-hover)}
-.btn.sec{background:var(--soft)}
-.btn.sec:hover:not(:disabled){background:var(--hair)}
-.btn.sm{height:28px;padding:0 10px;font-size:13px}
-.btn.icon{width:32px;padding:0;justify-content:center}
-.btn.icon.sm{width:28px}
-.btn.danger{color:var(--fail)}
-.btn.danger:hover:not(:disabled){background:oklch(55% .185 27 / .08)}
-.btn.primary.danger{background:var(--fail);color:#fff}
-.btn.primary.danger:hover:not(:disabled){filter:brightness(.92)}
-.menuitem.danger,.menuitem.danger svg{color:var(--fail)}
-```
+Every variant and size is in `components/ui/button.tsx` (`buttonVariants` for links styled as buttons). A destructive trigger is `ConfirmButton`, which opens the `AlertDialog`; overflow menus are `DropdownMenu` with `DropdownMenuItem variant="destructive"`.
 
 ### Dropdowns
 
@@ -121,7 +104,7 @@ Status: in the code since 2026-11-14.
 - The avatar stays large (64px) with the name beside it at 18px, in a tight row: 10px above it, 12px between avatar and name, 10px before the two columns (owner, 2026-11-16, chosen over moving both into the breadcrumb).
 - Two columns on top that end on the same line: Instructions stretches to the rail's height (the preview text is absolutely placed, so long instructions never make the row taller). Skills sit below, full width.
 - No scroll box inside the page. A nested scroller ended below the fold, trapped the wheel and, with classic scrollbars, put a 15px track inside the box's border. If a list is too long, fold it, don't scroll it.
-- Skills are the Agents page's `.grid` of `.card`s, so every card has the same width and a two-line description. A segmented filter (All / Learned / Built in, Learned selected) sits in the section head, and 12 cards show until "Show all" (12 fills 1, 2, 3 or 4 columns evenly).
+- Skills are the Agents page's grid of tile `Card`s, so every card has the same width and a two-line description. A segmented filter (All / Learned / Built in, Learned selected) sits in the section head, and 12 cards show until "Show all" (12 fills 1, 2, 3 or 4 columns evenly).
 - A skill's icon: a learned skill gets the ink sparkle tile; a built-in one gets the brand mark when its name starts with a brand in `brand-icons.ts` (github, google, claude), else the Hugeicon for its Hermes category, the folder in `skill.path` (`skillIcon` in `icons.tsx`), else the bolt.
 - Memory is one row in the facts box ("5 entries · Manage") that opens a sheet with one list of everything the agent saved, people first. Automations sit under Instructions in the left column, so both columns end level.
-- Detail that belongs to one thing on a page (memory, an automation and its runs) opens in a sheet: the same native `<dialog>` as `.dlg`, with `.sheet` pinning it to the right edge, full height, 560px, sliding in 2.5rem with a fade over 200ms and a light blurred backdrop, like shadcn's Sheet. Which sheet is open lives in the URL.
+- Detail that belongs to one thing on a page (memory, an automation and its runs) opens in a `Sheet` (`components/ui/sheet.tsx`): the same Base UI dialog as `Dialog`, pinned to the right edge, full height, 560px, sliding in 2.5rem with a fade over 200ms and a light blurred backdrop, like shadcn's Sheet. Which sheet is open lives in the URL.
