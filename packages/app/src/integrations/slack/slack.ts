@@ -66,7 +66,7 @@ export const slack = {
 
   env({ botToken, appToken, channels }: { botToken: string; appToken: string; channels: string[] }): string[] {
     if (!channels.length) return []
-    return [`SLACK_BOT_TOKEN=${botToken}`, `SLACK_APP_TOKEN=${appToken}`, 'SLACK_ALLOW_ALL_USERS=true', `SLACK_ALLOWED_CHANNELS=${channels.join(',')}`]
+    return [`SLACK_BOT_TOKEN=${botToken}`, `SLACK_APP_TOKEN=${appToken}`, 'SLACK_ALLOW_ALL_USERS=true', `SLACK_ALLOWED_CHANNELS=${channels.join(',')}`, `SLACK_HOME_CHANNEL=${channels[0]}`]
   },
 
   yaml: 'slack:\n  require_mention: true\n  unauthorized_dm_behavior: ignore\n',
