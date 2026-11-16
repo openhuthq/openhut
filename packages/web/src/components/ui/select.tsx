@@ -10,7 +10,7 @@ export function SelectTrigger({ className, ...props }: ComponentProps<typeof Sel
 
 export function SelectContent({ className, children, ...props }: ComponentProps<typeof SelectPrimitive.Popup>) {
   return <SelectPrimitive.Portal>
-    <SelectPrimitive.Positioner className="z-30" side="bottom" align="end" sideOffset={6} alignItemWithTrigger={false}>
+    <SelectPrimitive.Positioner className="z-50" side="bottom" align="end" sideOffset={6} alignItemWithTrigger={false}>
       <SelectPrimitive.Popup className={cn('w-72 origin-top-right animate-[grow_.14s_cubic-bezier(.2,.8,.2,1)] rounded-[10px] bg-card p-1.5 shadow-[0_0_0_1px_var(--hair),0_12px_32px_oklch(0%_0_0/.14)] outline-none', className)} {...props}>
         <SelectPrimitive.List>{children}</SelectPrimitive.List>
       </SelectPrimitive.Popup>

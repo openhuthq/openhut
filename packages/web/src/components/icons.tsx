@@ -47,13 +47,15 @@ export const AUTOMATION_ICONS = {
   off: icon(Cancel01Icon, 14),
 }
 
+const FACT = 'shrink-0 text-mute'
+
 export const FACT_ICONS = {
-  memory: icon(AiBrain01Icon, 16, 'fi'),
-  status: icon(Activity01Icon, 16, 'fi'),
-  model: icon(AiMagicIcon, 16, 'fi'),
-  owner: icon(UserIcon, 16, 'fi'),
-  code: icon(SourceCodeIcon, 16, 'fi'),
-  computer: icon(ComputerIcon, 16, 'fi'),
+  memory: icon(AiBrain01Icon, 16, FACT),
+  status: icon(Activity01Icon, 16, FACT),
+  model: icon(AiMagicIcon, 16, FACT),
+  owner: icon(UserIcon, 16, FACT),
+  code: icon(SourceCodeIcon, 16, FACT),
+  computer: icon(ComputerIcon, 16, FACT),
 }
 
 export const SIZE_ICONS = {

@@ -1,5 +1,7 @@
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Channel, ChannelKind } from '@openhut/common/channels/channel.ts'
+import { Button } from '@/components/ui/button'
+import { Item, ItemContent, ItemGroup } from '@/components/ui/item'
 import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
 import { Locked } from '@/components/locked'
@@ -28,11 +30,11 @@ export function ChannelsSection({ agent, lockReason, dialog }: { agent: Agent; l
   return <section>
     <SectionHead title="Channels" />
     <ErrorNote message={channels.error?.message} />
-    {channels.data && <div className="box rows">
+    {channels.data && <ItemGroup>
       <ChannelRow kind="slack" agent={agent} channel={slack} lockReason={lockReason} />
       <ChannelRow kind="whatsapp" agent={agent} channel={whatsapp} lockReason={lockReason} />
       <ChannelRow kind="telegram" agent={agent} channel={telegram} lockReason={lockReason} />
-    </div>}
+    </ItemGroup>}
     {channels.data && agent.canEdit && dialog === 'slack' && <SlackDialog agent={agent} channel={slack} lockReason={lockReason} />}
     {channels.data && agent.canEdit && dialog === 'whatsapp' && <WhatsappDialog agent={agent} channel={whatsapp} />}
     {channels.data && agent.canEdit && dialog === 'telegram' && <TelegramDialog agent={agent} channel={telegram} />}
@@ -40,24 +42,24 @@ export function ChannelsSection({ agent, lockReason, dialog }: { agent: Agent; l
 }
 
 function ChannelRow({ kind, agent, channel, lockReason }: { kind: ChannelKind; agent: Agent; channel: Channel | undefined; lockReason: string | undefined }) {
-  const row = <div className="row">
+  const row = <Item size="sm">
     <Mark name={kind} size={24} />
-    <div className="t ellip">{KINDS[kind].label} <span className="mute">{channelLine(channel)}</span></div>
+    <ItemContent className="truncate">{KINDS[kind].label} <span className="text-mute">{channelLine(channel)}</span></ItemContent>
     <ChannelActions kind={kind} agent={agent} channel={channel} lockReason={lockReason} />
-  </div>
+  </Item>
   if (kind !== 'slack' || !channel) return row
-  return <div>{row}<SlackChannels key={channel.allowed.join()} agent={agent} channel={channel} lockReason={lockReason} /></div>
+  return <div>{row}<SlackChannels key={channel.allowed.join()} agent={agent} channel={channel} lockReason={lockReason} inset /></div>
 }
 
 function ChannelActions({ kind, agent, channel, lockReason }: { kind: ChannelKind; agent: Agent; channel: Channel | undefined; lockReason: string | undefined }) {
   const deleteChannel = useDeleteChannel()
   const disabled = !agent.canEdit || deleteChannel.isPending
-  const open = <Locked reason={lockReason}><button type="button" className="btn sm" disabled={disabled} onClick={() => navigate(`/agents/${agent.id}/${kind}`)}>{actionLabel(channel)}</button></Locked>
+  const open = <Locked reason={lockReason}><Button type="button" size="sm" disabled={disabled} onClick={() => navigate(`/agents/${agent.id}/${kind}`)}>{actionLabel(channel)}</Button></Locked>
   if (!channel) return open
-  if (channel.status === 'linking') return <>{open}<Locked reason={lockReason}><button type="button" className="btn sm" disabled={disabled} onClick={() => deleteChannel.mutate(channel, { onError: toastError })}>Cancel</button></Locked></>
+  if (channel.status === 'linking') return <>{open}<Locked reason={lockReason}><Button type="button" size="sm" disabled={disabled} onClick={() => deleteChannel.mutate(channel, { onError: toastError })}>Cancel</Button></Locked></>
   const { label, remove } = KINDS[kind]
   const removal = <Locked reason={lockReason}>
-    <ConfirmButton className="btn sm danger" disabled={disabled} question={`${remove} ${label}?`} detail={removalDetail(kind, agent, channel)} action={remove} onConfirm={() => deleteChannel.mutate(channel, { onError: toastError })}>{remove}</ConfirmButton>
+    <ConfirmButton size="sm" disabled={disabled} question={`${remove} ${label}?`} detail={removalDetail(kind, agent, channel)} action={remove} onConfirm={() => deleteChannel.mutate(channel, { onError: toastError })}>{remove}</ConfirmButton>
   </Locked>
   if (kind === 'slack') return removal
   return <>{open}{removal}</>

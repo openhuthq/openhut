@@ -1,8 +1,9 @@
 import { useState } from 'react'
+import { Button, type ButtonVariants } from '@/components/ui/button'
 import { ICONS } from '@/components/icons'
 import { copyText } from '@/lib/clipboard'
 
-export function CopyButton({ text, label, className = 'btn sec sm' }: { text: string; label: string; className?: string }) {
+export function CopyButton({ text, label, variant = 'secondary', size = 'sm' }: { text: string; label: string } & ButtonVariants) {
   const [copied, setCopied] = useState(false)
   const copy = () => copyText(text).then((ok) => {
     if (!ok) return
@@ -10,9 +11,9 @@ export function CopyButton({ text, label, className = 'btn sec sm' }: { text: st
     setTimeout(() => setCopied(false), 1500)
   })
   return (
-    <button type="button" className={className} onClick={copy}>
-      {copied ? <span className="copied">{ICONS.check}</span> : ICONS.copy}
+    <Button type="button" variant={variant} size={size} onClick={copy}>
+      {copied ? <span className="inline-flex w-3 animate-[copy-pop_.2s_ease-out] justify-center">{ICONS.check}</span> : ICONS.copy}
       {label}
-    </button>
+    </Button>
   )
 }

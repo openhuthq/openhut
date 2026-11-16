@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
-import { Menu } from '@base-ui/react/menu'
+import { useEffect } from 'react'
 import type { Me } from '@openhut/common/team/team.ts'
-import { Avatar } from '@/components/avatar'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Empty } from '@/components/ui/empty'
+import { Sidebar, SidebarFooter, SidebarHeader, SidebarInset, SidebarMenuBadge, SidebarMenuButton, SidebarProvider } from '@/components/ui/sidebar'
+import { Creature } from '@/components/creature'
 import { ICONS, NAV_ICONS } from '@/components/icons'
 import { Initial } from '@/components/initial'
 import { Hut } from '@/components/hut'
-import { Page, SidebarToggle } from '@/components/page'
+import { Page } from '@/components/page'
 import type { Route } from '@/app/routes'
 import { track } from '@/lib/track'
 import { AdminPage } from '@/features/admin/admin-page'
@@ -35,51 +37,48 @@ const SECTION_OF: Partial<Record<Route['page'], Section>> = {
 export function SignedIn({ me, route }: { me: Me; route: Route }) {
   const agents = useAgents()
   const deleteSession = useDeleteSession()
-  const [collapsed, setCollapsed] = useState(false)
   const current = SECTION_OF[route.page]
   useEffect(() => track({ name: 'dashboard_page_viewed', properties: { page: route.page } }), [route.page])
-  return <SidebarToggle value={() => setCollapsed(!collapsed)}>
-    <div className={collapsed ? 'app collapsed' : 'app'}>
-      <aside className="side" aria-label="Sidebar">
-        <div className="team"><Hut className="hut logo" /><div className="teamname">OpenHut</div></div>
-        <NavLink section="agents" label="Agents" current={current} count={agents.data?.length} />
-        <NavLink section="connections" label="Connections" current={current} />
-        <ChatTree route={route} />
-        <div className="sidefoot">
-          <NavLink section="people" label="People" current={current} />
-          <NavLink section="admin" label="Admin" current={current} />
-        </div>
-        <Menu.Root>
-          <Menu.Trigger className="me">
-            <Initial id={me.user.id} email={me.user.email} />
-            <span className="who"><span className="ellip">{me.user.email}</span><span className="ellip mute">{ROLE_LABEL[me.user.role]}</span></span>
-            <span className="mute">{ICONS.updown}</span>
-          </Menu.Trigger>
-          <Menu.Portal>
-            <Menu.Positioner className="menupos" side="top" align="start" sideOffset={4}>
-              <Menu.Popup className="menu">
-                <Menu.Group>
-                  <Menu.GroupLabel className="menuhead">
-                    <Initial id={me.user.id} email={me.user.email} size={32} />
-                    <span className="who"><span className="ellip">{me.user.email}</span><span className="ellip mute">{ROLE_LABEL[me.user.role]}</span></span>
-                  </Menu.GroupLabel>
-                </Menu.Group>
-                <Menu.Separator className="menusep" />
-                <Menu.Item className="menuitem" disabled={deleteSession.isPending} onClick={() => deleteSession.mutate(undefined, { onError: toastError })}>{ICONS.out}Log out</Menu.Item>
-              </Menu.Popup>
-            </Menu.Positioner>
-          </Menu.Portal>
-        </Menu.Root>
-      </aside>
-      <main className="panel"><RoutePage me={me} route={route} /></main>
-    </div>
-  </SidebarToggle>
+  return <SidebarProvider>
+    <Sidebar aria-label="Sidebar">
+      <SidebarHeader><Hut className="size-7 rounded-[7px] bg-ink p-0.5 group-hover/team:[&>svg]:animate-hop" /><div className="font-brand text-[19px]/none font-semibold tracking-[-.01em]">OpenHut</div></SidebarHeader>
+      <NavLink section="agents" label="Agents" current={current} count={agents.data?.length} />
+      <NavLink section="connections" label="Connections" current={current} />
+      <ChatTree route={route} />
+      <SidebarFooter>
+        <NavLink section="people" label="People" current={current} />
+        <NavLink section="admin" label="Admin" current={current} />
+      </SidebarFooter>
+      <DropdownMenu>
+        <DropdownMenuTrigger className="flex h-12 w-full items-center gap-2 rounded-md border-0 bg-transparent px-2 text-left text-sm/[1.3] hover:bg-tint data-popup-open:bg-tint mobile:ml-auto mobile:h-8 mobile:w-auto mobile:px-1 mobile:[&>:not([data-slot=avatar])]:hidden">
+          <Initial id={me.user.id} email={me.user.email} />
+          <Who email={me.user.email} role={ROLE_LABEL[me.user.role]} />
+          <span className="text-mute">{ICONS.updown}</span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="start">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>
+              <Initial id={me.user.id} email={me.user.email} size={32} />
+              <Who email={me.user.email} role={ROLE_LABEL[me.user.role]} />
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled={deleteSession.isPending} onClick={() => deleteSession.mutate(undefined, { onError: toastError })}>{ICONS.out}Log out</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </Sidebar>
+    <SidebarInset><RoutePage me={me} route={route} /></SidebarInset>
+  </SidebarProvider>
+}
+
+function Who({ email, role }: { email: string; role: string }) {
+  return <span className="grid min-w-0 flex-1"><span className="truncate">{email}</span><span className="truncate text-mute">{role}</span></span>
 }
 
 function NavLink({ section, label, current, count }: { section: Section; label: string; current: Section | undefined; count?: number }) {
-  return <a className="nav" href={`/${section}`} aria-current={section === current ? 'page' : undefined}>
-    {NAV_ICONS[section]}{label}{count !== undefined && <span className="count">{count}</span>}
-  </a>
+  return <SidebarMenuButton href={`/${section}`} aria-current={section === current ? 'page' : undefined}>
+    {NAV_ICONS[section]}{label}{count !== undefined && <SidebarMenuBadge>{count}</SidebarMenuBadge>}
+  </SidebarMenuButton>
 }
 
 function RoutePage({ me, route }: { me: Me; route: Route }) {
@@ -93,7 +92,7 @@ function RoutePage({ me, route }: { me: Me; route: Route }) {
     case 'connection': return <ConnectionPage key={route.connectionId} me={me} connectionId={route.connectionId} />
     case 'people': return <PeoplePage me={me} inviting={route.inviting} />
     case 'admin': return <AdminPage me={me} form={route.form} />
-    default: return <Page title="Not found"><div className="empty"><Avatar id="lost" size={96} /><div>Nothing here</div></div></Page>
+    default: return <Page title="Not found"><Empty><Creature id="lost" size={96} /><div>Nothing here</div></Empty></Page>
   }
 }
 

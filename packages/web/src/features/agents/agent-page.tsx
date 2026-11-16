@@ -1,12 +1,16 @@
 import { useEffect, useRef } from 'react'
 import type { Agent } from '@openhut/common/agents/agent.ts'
-import { Avatar } from '@/components/avatar'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
+import { Creature } from '@/components/creature'
 import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
+import { Fact, Facts } from '@/components/facts'
 import { FACT_ICONS, ICONS } from '@/components/icons'
 import { Locked } from '@/components/locked'
 import { OwnerChip } from '@/components/owner-chip'
-import { Page } from '@/components/page'
+import { ButtonLabel, Page } from '@/components/page'
 import { AgentBadge } from '@/components/status-badge'
 import { AgentConnections } from '@/features/agents/agent-connections'
 import { useAgent, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
@@ -18,10 +22,13 @@ import { SkillsSection } from '@/features/agents/skills-section'
 import { AutomationsSection } from '@/features/automations/automations-section'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
+import { cn } from '@/lib/utils'
 
 export type AgentDialog = 'name' | 'instructions' | 'slack' | 'whatsapp' | 'telegram' | 'memory'
 
 const PARENTS = [{ label: 'Agents', href: '/agents' }]
+const NAME_BOX = 'group/name flex min-w-0 items-center gap-1.5'
+const NAME = 'm-0 min-w-0 text-[18px] font-medium selection:bg-[oklch(0%_0_0/.14)]'
 
 export function AgentPage({ agentId, dialog, skill, automation }: { agentId: string; dialog: AgentDialog | undefined; skill: string | undefined; automation?: string }) {
   const agent = useAgent(agentId)
@@ -35,39 +42,39 @@ function AgentView({ agent, dialog, skill, automation }: { agent: Agent; dialog:
   const lockReason = agent.canEdit ? undefined : `Only ${agent.ownerName} or an admin can change ${agent.name}`
   const running = agent.status === 'running'
   const actions = <>
-    <a className="btn sec" href={`/agents/${agent.id}/chat`}>{ICONS.chat}<span className="lbl">Chat</span></a>
+    <a className={buttonVariants({ variant: 'secondary' })} href={`/agents/${agent.id}/chat`}>{ICONS.chat}<ButtonLabel>Chat</ButtonLabel></a>
     <Locked reason={lockReason}>
-      <button className="btn sec" disabled={!agent.canEdit || updateAgent.isPending} onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}>
-        {running ? ICONS.stop : ICONS.play}<span className="lbl">{running ? 'Stop' : 'Start'}</span>
-      </button>
+      <Button type="button" variant="secondary" disabled={!agent.canEdit || updateAgent.isPending} onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}>
+        {running ? ICONS.stop : ICONS.play}<ButtonLabel>{running ? 'Stop' : 'Start'}</ButtonLabel>
+      </Button>
     </Locked>
-    <span className="vsep"></span>
+    <Separator orientation="vertical" />
     <Locked reason={lockReason}>
-      <ConfirmButton className="btn danger" disabled={!agent.canEdit} question={`Delete ${agent.name}?`} detail="This can't be undone." action="Delete" onConfirm={() => deleteAgent.mutate(undefined, { onError: toastError })}>
-        {ICONS.trash}<span className="lbl">Delete</span>
+      <ConfirmButton disabled={!agent.canEdit} question={`Delete ${agent.name}?`} detail="This can't be undone." action="Delete" onConfirm={() => deleteAgent.mutate(undefined, { onError: toastError })}>
+        {ICONS.trash}<ButtonLabel>Delete</ButtonLabel>
       </ConfirmButton>
     </Locked>
   </>
-  return <Page title={agent.name} parents={PARENTS} actions={actions}>
-    <div className="wrap">
-      <div className="hero">
-        <Avatar id={agent.id} about={agent.instructions} size={64} />
+  return <Page title={agent.name} parents={PARENTS} actions={actions} hero>
+    <div className="mx-auto flex max-w-[1152px] flex-col gap-8">
+      <div className="-mb-[22px] flex items-center gap-3">
+        <Creature id={agent.id} about={agent.instructions} size={64} />
         <AgentName agent={agent} editing={dialog === 'name' && agent.canEdit} />
       </div>
-      <div className="detail wide">
-        <div className="left">
+      <div className="mx-auto grid w-full max-w-[1152px] grid-cols-[minmax(0,1fr)_380px] gap-6 mobile:grid-cols-1">
+        <div className="flex min-w-0 flex-col gap-6">
           <InstructionsSection agent={agent} editing={dialog === 'instructions'} lockReason={lockReason} />
           <AutomationsSection agent={agent} lockReason={lockReason} open={automation} />
         </div>
-        <aside className="rail">
-          <div className="box facts">
-            <div><span>{FACT_ICONS.status}Status</span><AgentBadge agent={agent} /></div>
-            <div><span>{FACT_ICONS.model}Model</span><ModelPicker agent={agent} lockReason={lockReason} /></div>
-            <div><span>{FACT_ICONS.computer}Computer</span><SizePicker agent={agent} lockReason={lockReason} /></div>
-            <div><span>{FACT_ICONS.owner}Owner</span><OwnerChip id={agent.ownerId} name={agent.ownerName} /></div>
-            <div><span>{FACT_ICONS.code}Code execution</span><CodeSwitch agent={agent} lockReason={lockReason} /></div>
+        <aside className="flex min-w-0 flex-col gap-6 mobile:-order-1">
+          <Facts>
+            <Fact icon={FACT_ICONS.status} label="Status"><AgentBadge agent={agent} /></Fact>
+            <Fact icon={FACT_ICONS.model} label="Model"><ModelPicker agent={agent} lockReason={lockReason} /></Fact>
+            <Fact icon={FACT_ICONS.computer} label="Computer"><SizePicker agent={agent} lockReason={lockReason} /></Fact>
+            <Fact icon={FACT_ICONS.owner} label="Owner"><OwnerChip id={agent.ownerId} name={agent.ownerName} /></Fact>
+            <Fact icon={FACT_ICONS.code} label="Code execution"><CodeSwitch agent={agent} lockReason={lockReason} /></Fact>
             <MemoryRow agent={agent} />
-          </div>
+          </Facts>
           <ChannelsSection agent={agent} lockReason={lockReason} dialog={dialog} />
           <AgentConnections agent={agent} lockReason={lockReason} />
         </aside>
@@ -81,8 +88,8 @@ function AgentView({ agent, dialog, skill, automation }: { agent: Agent; dialog:
 function CodeSwitch({ agent, lockReason }: { agent: Agent; lockReason: string | undefined }) {
   const updateAgent = useUpdateAgent(agent.id)
   return <Locked reason={lockReason}>
-    <button className="sw" role="switch" aria-checked={agent.codeExecution} aria-label="Code execution" disabled={!agent.canEdit || updateAgent.isPending}
-      onClick={() => updateAgent.mutate({ codeExecution: !agent.codeExecution }, { onError: toastError })}></button>
+    <Switch checked={agent.codeExecution} aria-label="Code execution" disabled={!agent.canEdit || updateAgent.isPending}
+      onCheckedChange={() => updateAgent.mutate({ codeExecution: !agent.codeExecution }, { onError: toastError })} />
   </Locked>
 }
 
@@ -97,13 +104,13 @@ function AgentName({ agent, editing }: { agent: Agent; editing: boolean }) {
     getSelection()?.selectAllChildren(ref.current)
   }, [editing])
   if (!editing) {
-    return <div className="anamebox">
-      <h2 className="aname ellip" title={agent.canEdit ? 'Double-click to rename' : undefined} onDoubleClick={agent.canEdit ? edit : undefined}>{updateAgent.isPending ? updateAgent.variables.name ?? agent.name : agent.name}</h2>
-      {agent.canEdit && <button type="button" className="rename" aria-label={`Rename ${agent.name}`} title="Rename" onClick={edit}>{ICONS.pencil}</button>}
+    return <div className={NAME_BOX}>
+      <h2 className={cn(NAME, 'truncate')} title={agent.canEdit ? 'Double-click to rename' : undefined} onDoubleClick={agent.canEdit ? edit : undefined}>{updateAgent.isPending ? updateAgent.variables.name ?? agent.name : agent.name}</h2>
+      {agent.canEdit && <Button type="button" size="icon-xs" className="opacity-0 [transition:opacity_.15s] group-hover/name:opacity-100 focus-visible:opacity-100" aria-label={`Rename ${agent.name}`} title="Rename" onClick={edit}>{ICONS.pencil}</Button>}
     </div>
   }
-  return <div className="anamebox">
-    <h2 ref={ref} className="aname editing" contentEditable="plaintext-only" suppressContentEditableWarning role="textbox" aria-label="Agent name" spellCheck={false}
+  return <div className={NAME_BOX}>
+    <h2 ref={ref} className={cn(NAME, 'min-w-[1ch] cursor-text overflow-hidden rounded-none whitespace-nowrap shadow-[0_2px_0_var(--ink)] outline-none')} contentEditable="plaintext-only" suppressContentEditableWarning role="textbox" aria-label="Agent name" spellCheck={false}
       onKeyDown={(event) => {
         if (event.key === 'Escape') event.currentTarget.textContent = agent.name
         if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); event.currentTarget.blur() }

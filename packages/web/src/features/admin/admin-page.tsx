@@ -3,12 +3,21 @@ import type { Admin, AgentContainer, SeatUsage, SeatWindow } from '@openhut/comm
 import type { OAuthGrant } from '@openhut/common/team/oauth.ts'
 import type { Me } from '@openhut/common/team/team.ts'
 import type { BrandName } from '@/components/brand-icons'
-import { Avatar } from '@/components/avatar'
-import { Dialog } from '@/components/dialog'
-import { DialogFoot } from '@/components/dialog-foot'
-import { DialogHead } from '@/components/dialog-head'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardHeader } from '@/components/ui/card'
+import { Dialog, DialogBody, DialogBox, DialogFoot, DialogHead } from '@/components/ui/dialog'
+import { Empty } from '@/components/ui/empty'
+import { FieldError } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { Item, ItemContent, ItemGroup } from '@/components/ui/item'
+import { Meter as MeterBar } from '@/components/ui/meter'
+import { Spinner } from '@/components/ui/spinner'
+import { Switch } from '@/components/ui/switch'
+import { Creature } from '@/components/creature'
 import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
+import { Fact, Facts } from '@/components/facts'
 import { ICONS } from '@/components/icons'
 import { Loaded } from '@/components/loaded'
 import { Locked } from '@/components/locked'
@@ -22,6 +31,11 @@ import { ago, shortDate } from '@/lib/format'
 import { formValues } from '@/lib/form'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
+import { cn } from '@/lib/utils'
+
+const PANEL = 'flex flex-col gap-2.5 border-t border-hair pt-3.5 pb-4'
+const USAGE = 'gap-1.5 py-3'
+const UPDATING = 'flex-row items-start gap-2.5 text-mute'
 
 export type AdminForm = 'seat' | 'public-url' | 'google' | 'containers'
 
@@ -37,7 +51,7 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
   const { server } = admin
   const usage = admin.seat.set && admin.seat.mode === 'claude'
   return <Page title="Admin">
-    <div className="admin">
+    <div className="mx-auto flex max-w-[880px] flex-col">
       <Section number={1} title="Claude seat">
         <Row icon="claude" title="Claude seat" subtitle={seatLine(admin)} status={admin.seat.set ? <Ready word="Connected" /> : <StatusBadge status="not_set_up" />}
           action={<ToggleButton label={admin.seat.set ? 'Replace' : 'Set up'} form="seat" open={form === 'seat'} canEdit={canEdit} reason="Only an owner or admin sets the seat" onOpen={openSeatTab} />} />
@@ -56,7 +70,7 @@ function AdminView({ admin, canEdit, form }: { admin: Admin; canEdit: boolean; f
         <Row icon="google" title="Google OAuth client" mono={!!admin.google.clientId} subtitle={admin.google.clientId ?? 'Needed before anyone connects Gmail, Google Drive or Google Workspace'}
           status={admin.google.clientId ? <Ready word="Ready" /> : <StatusBadge status="not_set_up" />}
           action={<ToggleButton label={admin.google.clientId ? 'Replace' : 'Set up'} form="google" open={form === 'google'} canEdit={canEdit} reason="Only an owner or admin sets it" />} />
-        {form === 'google' && canEdit && <div className="aform" id="google"><GoogleClientSetup admin={admin} back="/admin" /></div>}
+        {form === 'google' && canEdit && <div className={PANEL} id="google"><GoogleClientSetup admin={admin} back="/admin" /></div>}
       </Section>
       <Section number={4} title="AI assistant"><ConnectedApps /></Section>
       <Section number={5} title="Usage data">
@@ -75,14 +89,14 @@ function usageLine(admin: Admin) {
 function UsageSwitch({ admin, canEdit }: { admin: Admin; canEdit: boolean }) {
   const updateAdmin = useUpdateAdmin()
   return <Locked reason={canEdit ? undefined : 'Only an owner or admin changes it'}>
-    <button type="button" className="sw" role="switch" aria-checked={admin.usageData} aria-label="Share usage data with OpenHut" disabled={!canEdit || updateAdmin.isPending}
-      onClick={() => updateAdmin.mutate({ usageData: !admin.usageData }, { onError: toastError })}></button>
+    <Switch checked={admin.usageData} aria-label="Share usage data with OpenHut" disabled={!canEdit || updateAdmin.isPending}
+      onCheckedChange={() => updateAdmin.mutate({ usageData: !admin.usageData }, { onError: toastError })} />
   </Locked>
 }
 
 function ToggleButton({ label, form, open, canEdit, reason, onOpen }: { label: string; form: AdminForm; open: boolean; canEdit: boolean; reason: string; onOpen?: () => void }) {
   return <Locked reason={canEdit ? undefined : reason}>
-    <button type="button" className="btn sm" disabled={!canEdit} aria-expanded={open} aria-controls={form} onClick={() => { if (!open) onOpen?.(); navigate(open ? '/admin' : `/admin/${form}`) }}>{label}</button>
+    <Button type="button" size="sm" disabled={!canEdit} aria-expanded={open} aria-controls={form} onClick={() => { if (!open) onOpen?.(); navigate(open ? '/admin' : `/admin/${form}`) }}>{label}</Button>
   </Locked>
 }
 
@@ -96,8 +110,8 @@ const SPEND_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#0
 
 function UsagePanel() {
   const usage = useSeatUsage()
-  if (usage.error) return <div className="aform usage"><span className="mute">{usage.error.message}</span></div>
-  if (!usage.data) return <div className="aform usage updating" role="status"><span className="spin" aria-hidden="true"></span><span>Asking Claude how much of the seat is used…</span></div>
+  if (usage.error) return <div className={cn(PANEL, USAGE)}><span className="text-mute">{usage.error.message}</span></div>
+  if (!usage.data) return <div className={cn(PANEL, USAGE, UPDATING)} role="status"><Spinner /><span>Asking Claude how much of the seat is used…</span></div>
   return <UsageView usage={usage.data} />
 }
 
@@ -105,26 +119,26 @@ function UsageView({ usage }: { usage: SeatUsage }) {
   const slices = spendSlices(usage.agents)
   const ranked = [...slices].sort((a, b) => b.usd - a.usd)
   const total = slices.reduce((sum, slice) => sum + slice.usd, 0)
-  return <div className="aform usage">
+  return <div className={cn(PANEL, USAGE)}>
     {WINDOWS.map(({ kind, name, idle }) => {
       const window = usage.windows.find((each) => each.kind === kind)
       return <Meter key={kind} label={name} percent={window?.percent ?? 0} note={window?.resetsAt ? `Resets ${resetTime.format(new Date(window.resetsAt))}` : idle} />
     })}
-    <span className="usage-head">By agent, this week<Info tip={`Each agent's share of what agents used since ${shortDate.format(new Date(usage.since))}, when this week's limit started, at API prices.`} />{!!slices.length && <span className="spend-sum">${total.toFixed(2)} total</span>}</span>
+    <span className="mt-1.5 flex items-center gap-1 text-xs text-mute">By agent, this week<Info tip={`Each agent's share of what agents used since ${shortDate.format(new Date(usage.since))}, when this week's limit started, at API prices.`} />{!!slices.length && <span className="ml-auto tabular-nums">${total.toFixed(2)} total</span>}</span>
     {slices.length
       ? <>
-        <div className="spend-strip" role="img" aria-label={slices.map((slice) => `${slice.name} ${share(slice.usd, total)}`).join(', ')}>
-          {slices.map((slice) => <i key={slice.id} style={{ flexGrow: (slice.usd / total) * 100, background: slice.color }} title={`${slice.name}: $${slice.usd.toFixed(2)}, ${share(slice.usd, total)}`} />)}
+        <div className="flex h-2.5 gap-0.5" role="img" aria-label={slices.map((slice) => `${slice.name} ${share(slice.usd, total)}`).join(', ')}>
+          {slices.map((slice) => <i key={slice.id} className="block min-w-[3px] basis-0 first:rounded-l-[4px] last:rounded-r-[4px]" style={{ flexGrow: (slice.usd / total) * 100, background: slice.color }} title={`${slice.name}: $${slice.usd.toFixed(2)}, ${share(slice.usd, total)}`} />)}
         </div>
-        <div className="spend">
-          {ranked.map((slice) => <div key={slice.id} className="spend-row">
-            <span className="spend-name"><i className="spend-dot" style={{ background: slice.color }} /><span className="ellip">{slice.name}</span></span>
-            <span className="mute spend-share">{share(slice.usd, total)}</span>
-            <span className="spend-usd">${slice.usd.toFixed(2)}</span>
+        <div className="flex flex-col [&>*+*]:border-t [&>*+*]:border-hair">
+          {ranked.map((slice) => <div key={slice.id} className="grid min-h-8 grid-cols-[minmax(0,1fr)_auto_72px] items-center gap-3 text-sm">
+            <span className="flex min-w-0 items-center gap-2.5"><i className="size-2.5 shrink-0 rounded-[3px]" style={{ background: slice.color }} /><span className="truncate">{slice.name}</span></span>
+            <span className="text-xs text-mute tabular-nums">{share(slice.usd, total)}</span>
+            <span className="text-right tabular-nums">${slice.usd.toFixed(2)}</span>
           </div>)}
         </div>
       </>
-      : <span className="mute">No agent has used the seat this week.</span>}
+      : <span className="text-mute">No agent has used the seat this week.</span>}
   </div>
 }
 
@@ -146,15 +160,15 @@ function share(usd: number, total: number): string {
 type SpendSlice = { id: string; name: string; usd: number; color: string }
 
 function Info({ tip }: { tip: string }) {
-  return <span className="info" role="img" aria-label={tip} title={tip}>{ICONS.info}</span>
+  return <span className="inline-flex cursor-help text-mute" role="img" aria-label={tip} title={tip}>{ICONS.info}</span>
 }
 
 function Meter({ label, percent, note }: { label: string; percent: number; note: string }) {
-  return <div className="meter-row">
-    <span className="meter-label"><span className="ellip">{label}</span></span>
-    <span className="meter" role="meter" aria-label={label} aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${Math.min(100, percent)}%` }} /></span>
-    <span className="meter-pct">{percent}%</span>
-    <span className="meter-note mute">{note}</span>
+  return <div className="grid grid-cols-[minmax(0,160px)_minmax(0,1fr)_40px_minmax(0,120px)] items-center gap-3 text-sm phone:grid-cols-[minmax(0,1fr)_40px]">
+    <span className="flex min-w-0 items-center gap-2"><span className="truncate">{label}</span></span>
+    <MeterBar aria-label={label} min={0} max={100} value={Math.min(100, percent)} className="phone:col-span-full phone:row-start-2" />
+    <span className="text-right tabular-nums">{percent}%</span>
+    <span className="text-xs text-mute phone:hidden">{note}</span>
   </div>
 }
 
@@ -173,18 +187,18 @@ function SeatForm() {
     })
   }, [mutate])
   const signIn = start.data
-  return <form className="aform" id="seat" onSubmit={(event) => signIn && complete.mutate({ id: signIn.id, code: formValues(event)('code') })}>
+  return <form className={PANEL} id="seat" onSubmit={(event) => signIn && complete.mutate({ id: signIn.id, code: formValues(event)('code') })}>
     {start.error
-      ? <span className="ferr" role="alert">{start.error.message} <button type="button" className="linkbtn" onClick={() => { started.current = false; start.reset(); navigate('/admin', true) }}>Close</button></span>
-      : <span className="mute">{signIn?.url
+      ? <FieldError>{start.error.message} <Button type="button" variant="link" onClick={() => { started.current = false; start.reset(); navigate('/admin', true) }}>Close</Button></FieldError>
+      : <span className="text-mute">{signIn?.url
         ? <>claude.ai opened in a new tab. Press Authorize there (in a full-size window), then paste the code it shows. <a href={signIn.url} target="_blank" rel="noreferrer">Open claude.ai again</a></>
-        : <span className="seat-wait"><span className="spin" aria-hidden="true"></span>Starting the Claude sign-in. This takes about 10 seconds.</span>}</span>}
-    <div className="inline-form">
-      <input name="code" required minLength={10} autoComplete="off" spellCheck={false} aria-label="Code from claude.ai" aria-describedby="seat-error" placeholder="Paste the code from claude.ai" className="mono" disabled={!signIn} autoFocus />
-      <button type="button" className="btn sec sm" onClick={() => navigate('/admin', true)}>Cancel</button>
-      <button className="btn primary sm" disabled={!signIn || complete.isPending}>{complete.isPending ? 'Connecting…' : 'Connect'}</button>
+        : <span className="inline-flex items-center gap-2"><Spinner className="mt-0" />Starting the Claude sign-in. This takes about 10 seconds.</span>}</span>}
+    <div className="flex gap-2">
+      <Input mono className="flex-1" name="code" required minLength={10} autoComplete="off" spellCheck={false} aria-label="Code from claude.ai" aria-describedby="seat-error" placeholder="Paste the code from claude.ai" disabled={!signIn} autoFocus />
+      <Button type="button" variant="secondary" size="sm" onClick={() => navigate('/admin', true)}>Cancel</Button>
+      <Button type="submit" variant="primary" size="sm" disabled={!signIn || complete.isPending}>{complete.isPending ? 'Connecting…' : 'Connect'}</Button>
     </div>
-    {complete.error && <span id="seat-error" className="ferr" role="alert">{complete.error.message}</span>}
+    {complete.error && <FieldError id="seat-error">{complete.error.message}</FieldError>}
   </form>
 }
 
@@ -201,14 +215,14 @@ function openSeatTab() {
 
 function PublicUrlForm({ publicUrl }: { publicUrl: string }) {
   const updateAdmin = useUpdateAdmin()
-  return <form className="aform" id="public-url" onSubmit={(event) => updateAdmin.mutate({ publicUrl: formValues(event)('publicUrl') })}>
-    <span className="mute">The address people open this dashboard on. Invite links and the MCP URL use it.</span>
-    <div className="inline-form">
-      <input name="publicUrl" type="url" required pattern="https?://.+" maxLength={200} defaultValue={publicUrl} aria-label="Public URL" aria-describedby="public-url-error" className="mono" autoFocus />
-      <button type="button" className="btn sec sm" onClick={() => navigate('/admin')}>Cancel</button>
-      <button className="btn primary sm" disabled={updateAdmin.isPending}>Save</button>
+  return <form className={PANEL} id="public-url" onSubmit={(event) => updateAdmin.mutate({ publicUrl: formValues(event)('publicUrl') })}>
+    <span className="text-mute">The address people open this dashboard on. Invite links and the MCP URL use it.</span>
+    <div className="flex gap-2">
+      <Input mono className="flex-1" name="publicUrl" type="url" required pattern="https?://.+" maxLength={200} defaultValue={publicUrl} aria-label="Public URL" aria-describedby="public-url-error" autoFocus />
+      <Button type="button" variant="secondary" size="sm" onClick={() => navigate('/admin')}>Cancel</Button>
+      <Button type="submit" variant="primary" size="sm" disabled={updateAdmin.isPending}>Save</Button>
     </div>
-    {updateAdmin.error && <span id="public-url-error" className="ferr" role="alert">{updateAdmin.error.message}</span>}
+    {updateAdmin.error && <FieldError id="public-url-error">{updateAdmin.error.message}</FieldError>}
   </form>
 }
 
@@ -221,20 +235,20 @@ function AppRows({ grants }: { grants: OAuthGrant[] }) {
   const deleteGrant = useDeleteOAuthGrant()
   if (!grants.length) return <Row icon="mcp" title="Connected apps" subtitle="No apps yet. Add your AI assistant with the prompt on the Agents page." />
   return grants.map((grant) => <Row key={grant.id} icon={appMark(grant.client)} title={grant.client} subtitle={appLine(grant)}
-    action={<ConfirmButton className="btn sm danger" disabled={deleteGrant.isPending} question={`Disconnect ${grant.client}?`} detail="It can't act as you anymore until you connect it again." action="Disconnect"
+    action={<ConfirmButton size="sm" disabled={deleteGrant.isPending} question={`Disconnect ${grant.client}?`} detail="It can't act as you anymore until you connect it again." action="Disconnect"
       onConfirm={() => deleteGrant.mutate(grant.id, { onError: toastError })}>Disconnect</ConfirmButton>} />)
 }
 
 function Section({ number, title, info, children }: { number: number; title: string; info?: string; children: ReactNode }) {
-  return <section className="asec"><div className="ahead"><span className="anum">{String(number).padStart(2, '0')} {title}</span>{info && <Info tip={info} />}</div><div className="abox">{children}</div></section>
+  return <section className="flex flex-col gap-1.5 border-t border-hair py-[22px] first:border-t-0 first:pt-1"><div className="flex items-center gap-2"><span className="font-mono text-xs tracking-[.1em] uppercase">{String(number).padStart(2, '0')} {title}</span>{info && <Info tip={info} />}</div><ItemGroup variant="inset">{children}</ItemGroup></section>
 }
 
 function Row({ icon, title, subtitle, mono = false, status, action }: { icon: BrandName; title: string; subtitle: string; mono?: boolean; status?: ReactNode; action?: ReactNode }) {
-  return <div className="arow">
+  return <Item size="md">
     <Mark name={icon} size={40} />
-    <span className="t"><span className="atitle">{title}</span><span className={mono ? 'mono asub' : 'asub'}>{subtitle}</span></span>
+    <ItemContent stacked><span className="flex items-center gap-2 font-medium">{title}</span><span className={cn('truncate text-sm text-mute', mono && 'font-mono text-xs')}>{subtitle}</span></ItemContent>
     {status}{action}
-  </div>
+  </Item>
 }
 
 function Ready({ word }: { word: string }) {
@@ -252,11 +266,11 @@ function VersionRow({ server, canEdit }: { server: Admin['server']; canEdit: boo
     <Row icon="update" title={`Version ${server.build}`} subtitle={versionLine(server)}
       status={versionStatus(server)}
       action={server.updateAvailable && !updating && <Locked reason={canEdit ? undefined : 'Only an owner or admin can update'}>
-        <button type="button" className="btn sec sm" disabled={!canEdit || startUpdate.isPending} onClick={() => startUpdate.mutate(undefined, { onError: toastError })}>{server.update ? 'Try again' : 'Update now'}</button>
+        <Button type="button" variant="secondary" size="sm" disabled={!canEdit || startUpdate.isPending} onClick={() => startUpdate.mutate(undefined, { onError: toastError })}>{server.update ? 'Try again' : 'Update now'}</Button>
       </Locked>} />
-    {updating && <div className="aform updating" role="status"><span className="spin" aria-hidden="true"></span>
-      <span>Updating to version <span className="mono">{server.update?.to}</span>. The app and its agents restart once. You can leave or refresh; this page follows along.</span></div>}
-    {server.update?.status === 'failed' && <div className="aform"><span className="mute" role="status">The last update didn't finish, so it went back to version <span className="mono">{server.build}</span>. Nothing was lost. Details: <code>journalctl -u openhut-update</code> on the server.</span></div>}
+    {updating && <div className={cn(PANEL, UPDATING)} role="status"><Spinner />
+      <span>Updating to version <span className="font-mono text-xs">{server.update?.to}</span>. The app and its agents restart once. You can leave or refresh; this page follows along.</span></div>}
+    {server.update?.status === 'failed' && <div className={PANEL}><span className="text-mute" role="status">The last update didn't finish, so it went back to version <span className="font-mono text-xs">{server.build}</span>. Nothing was lost. Details: <code>journalctl -u openhut-update</code> on the server.</span></div>}
   </>
 }
 
@@ -292,31 +306,38 @@ function ContainersDialog() {
   const containers = useContainers()
   const agents = useAgents()
   const about = (agentId: string) => agents.data?.find((agent) => agent.id === agentId)?.instructions
-  return <Dialog labelledBy="containers-h" onClosed={() => navigate('/admin', true)}>{(close) => <div className="dlgform auto">
-    <DialogHead id="containers-h" title="Containers" subtitle={<>Straight from <code>docker ps -a</code> on this server, next to what each agent should be doing. Refreshes every 5 seconds.</>} onClose={close} />
-    <div className="dlgbody">
+  const close = () => navigate('/admin', true)
+  return <Dialog onClose={close}><DialogBox height="auto">
+    <DialogHead title="Containers" subtitle={<>Straight from <code>docker ps -a</code> on this server, next to what each agent should be doing. Refreshes every 5 seconds.</>} onClose={close} />
+    <DialogBody>
       <Loaded query={containers}>{(list) => list.length
-        ? <div className="ccards">{list.map((row) => <ContainerCard key={`${row.agentId}-${row.name ?? 'none'}`} row={row} about={about(row.agentId)} />)}</div>
-        : <div className="empty">No agent containers on this server.</div>}</Loaded>
-    </div>
-    <DialogFoot><button type="button" className="btn sec" onClick={close}>Close</button></DialogFoot>
-  </div>}</Dialog>
+        ? <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-2.5">{list.map((row) => <ContainerCard key={`${row.agentId}-${row.name ?? 'none'}`} row={row} about={about(row.agentId)} />)}</div>
+        : <Empty>No agent containers on this server.</Empty>}</Loaded>
+    </DialogBody>
+    <DialogFoot><Button type="button" variant="secondary" onClick={close}>Close</Button></DialogFoot>
+  </DialogBox></Dialog>
 }
 
 function ContainerCard({ row, about }: { row: AgentContainer; about: string | undefined }) {
   const disagree = row.wanted === null || (row.wanted === 'running') !== (row.state === 'running')
-  return <div className="box ccard">
-    <div className="ccard-top">
-      <Avatar id={row.agentId} about={about} size={36} />
-      <div className="t"><div className="ellip">{row.agentName ?? 'Deleted agent'}</div><div className="mono mute ellip">{row.name ?? row.agentId}</div></div>
-      <span className={`status ${row.state === 'running' ? 'success' : row.state === 'none' ? 'destructive' : 'secondary'}`}>{row.state === 'none' ? 'No container' : row.state}</span>
-    </div>
-    <div className="facts">
-      <div><span>Should be</span><span>{row.wanted ?? 'Agent deleted'}</span></div>
-      <div><span>Docker</span><span className="ellip">{row.status}</span></div>
-      <div><span>Image</span><span className="mono ellip" title={row.image}>{row.image ? row.image.split('@')[0].split('/').pop() : '—'}</span></div>
-      <div><span>Created</span><span className="mono">{row.createdAt ? row.createdAt.slice(0, 16) : '—'}</span></div>
-    </div>
-    {disagree && <p className="ccard-warn">Docker and the app disagree. Reconcile fixes this within 30 seconds while the agent should run.</p>}
-  </div>
+  return <Card className="flex min-w-0 flex-col">
+    <CardHeader>
+      <Creature id={row.agentId} about={about} size={36} />
+      <div className="min-w-0 flex-1"><div className="truncate font-medium">{row.agentName ?? 'Deleted agent'}</div><div className="truncate font-mono text-xs text-mute">{row.name ?? row.agentId}</div></div>
+      <Badge variant={stateBadge(row.state)}>{row.state === 'none' ? 'No container' : row.state}</Badge>
+    </CardHeader>
+    <Facts boxed={false} className="[&>div>span:last-child]:min-w-0 [&>div>span:last-child]:text-right">
+      <Fact label="Should be"><span>{row.wanted ?? 'Agent deleted'}</span></Fact>
+      <Fact label="Docker"><span className="truncate">{row.status}</span></Fact>
+      <Fact label="Image"><span className="truncate font-mono text-xs" title={row.image}>{row.image ? row.image.split('@')[0].split('/').pop() : '—'}</span></Fact>
+      <Fact label="Created"><span className="font-mono text-xs">{row.createdAt ? row.createdAt.slice(0, 16) : '—'}</span></Fact>
+    </Facts>
+    {disagree && <p className="m-0 px-4 pt-2 pb-3 text-sm text-warning-foreground">Docker and the app disagree. Reconcile fixes this within 30 seconds while the agent should run.</p>}
+  </Card>
+}
+
+function stateBadge(state: AgentContainer['state']) {
+  if (state === 'running') return 'success'
+  if (state === 'none') return 'destructive'
+  return 'secondary'
 }

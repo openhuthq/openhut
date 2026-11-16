@@ -1,20 +1,26 @@
-import { createContext, Fragment, use, type ReactNode } from 'react'
-import { ICONS } from '@/components/icons'
+import { Fragment, type ReactNode } from 'react'
+import { Breadcrumb, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb'
+import { Separator } from '@/components/ui/separator'
+import { SidebarTrigger } from '@/components/ui/sidebar'
+import { cn } from '@/lib/utils'
 
-export const SidebarToggle = createContext(() => {})
+const ACTIONS = 'ml-auto flex items-center gap-2 phone:[&_:has(>[data-label])]:w-8 phone:[&_:has(>[data-label])]:justify-center phone:[&_:has(>[data-label])]:px-0 phone:[&_[data-label]]:sr-only'
 
-export function Page({ title, parents = [], actions, fill = false, children }: { title: string; parents?: { label: string; href: string }[]; actions?: ReactNode; fill?: boolean; children?: ReactNode }) {
-  const toggleSidebar = use(SidebarToggle)
+export function Page({ title, parents = [], actions, fill = false, hero = false, children }: { title: string; parents?: { label: string; href: string }[]; actions?: ReactNode; fill?: boolean; hero?: boolean; children?: ReactNode }) {
   return <>
     <title>{`${title} · OpenHut`}</title>
-    <div className="ph">
-      <button type="button" className="btn icon sm" aria-label="Toggle sidebar" title="Toggle sidebar" onClick={toggleSidebar}>{ICONS.side}</button><span className="vsep"></span>
-      <nav className="crumb" aria-label="Breadcrumb">
-        {parents.map((parent) => <Fragment key={parent.href}><a href={parent.href}>{parent.label}</a><span className="mute" aria-hidden="true">/</span></Fragment>)}
-        <h1 className="ellip">{title}</h1>
-      </nav>
-      <div className="actions">{actions}</div>
+    <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-hair pr-3 pl-4">
+      <SidebarTrigger /><Separator orientation="vertical" />
+      <Breadcrumb>
+        {parents.map((parent) => <Fragment key={parent.href}><BreadcrumbLink href={parent.href}>{parent.label}</BreadcrumbLink><BreadcrumbSeparator /></Fragment>)}
+        <BreadcrumbPage>{title}</BreadcrumbPage>
+      </Breadcrumb>
+      <div className={ACTIONS}>{actions}</div>
     </div>
-    <div className={fill ? 'pfill' : 'pb'}>{children}</div>
+    <div className={fill ? 'flex min-h-0 flex-1 flex-col bg-card' : cn('flex-1 overflow-auto px-6 pt-4 pb-8 mobile:p-4', hero && 'pt-2.5 mobile:pt-2.5')}>{children}</div>
   </>
+}
+
+export function ButtonLabel({ children }: { children: ReactNode }) {
+  return <span data-label>{children}</span>
 }

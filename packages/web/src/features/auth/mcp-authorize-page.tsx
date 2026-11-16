@@ -1,5 +1,9 @@
 import type { Me } from '@openhut/common/team/team.ts'
+import { Button } from '@/components/ui/button'
+import { Item, ItemContent, ItemGroup } from '@/components/ui/item'
+import { ErrorNote } from '@/components/error-note'
 import { NAV_ICONS } from '@/components/icons'
+import { AuthHeading, AuthPanel } from '@/features/auth/auth-form'
 import { useCreateOAuthCode, useOAuthClient } from '@/features/auth/api'
 import { AuthLayout } from '@/features/auth/auth-layout'
 
@@ -21,22 +25,22 @@ export function McpAuthorizePage({ me }: { me: Me }) {
   if (createCode.isSuccess) return <Answered name={name} allowed={createCode.variables.allow} />
   const problem = params.get('response_type') === 'code' ? oauthClient.error?.message ?? createCode.error?.message : MISSING_REQUEST
   return <AuthLayout title="Connect an app">
-    <div className="authform">
-      <div><h1>{`Connect ${name}?`}</h1><p className="lead">{`It reaches OpenHut as you, ${me.user.email}, and can:`}</p></div>
-      <div className="box rows">{ABILITIES.map(([section, actions]) => <div className="row" key={section}>{NAV_ICONS[section]}<div className="t">{section} <span className="mute">{actions}</span></div></div>)}</div>
-      {problem && <p className="err" role="alert">{problem}</p>}
-      {!problem && <div className="twobtn">
-        <button type="button" className="btn sec" disabled={createCode.isPending || !oauthClient.data} onClick={() => createCode.mutate({ ...ask, allow: false })}>Deny</button>
-        <button type="button" className="btn primary" disabled={createCode.isPending || !oauthClient.data} onClick={() => createCode.mutate({ ...ask, allow: true })}>Allow</button>
+    <AuthPanel>
+      <AuthHeading heading={`Connect ${name}?`} lead={`It reaches OpenHut as you, ${me.user.email}, and can:`} />
+      <ItemGroup>{ABILITIES.map(([section, actions]) => <Item key={section}>{NAV_ICONS[section]}<ItemContent>{section} <span className="text-mute">{actions}</span></ItemContent></Item>)}</ItemGroup>
+      <ErrorNote message={problem} />
+      {!problem && <div className="grid grid-cols-2 gap-2">
+        <Button type="button" variant="secondary" size="lg" disabled={createCode.isPending || !oauthClient.data} onClick={() => createCode.mutate({ ...ask, allow: false })}>Deny</Button>
+        <Button type="button" variant="primary" size="lg" disabled={createCode.isPending || !oauthClient.data} onClick={() => createCode.mutate({ ...ask, allow: true })}>Allow</Button>
       </div>}
-    </div>
+    </AuthPanel>
   </AuthLayout>
 }
 
 function Answered({ name, allowed }: { name: string; allowed: boolean }) {
   return <AuthLayout title="Connect an app">
-    <div className="authform">
-      <div><h1>{allowed ? `${name} is connected` : 'Not connected'}</h1><p className="lead">Go back to the app. You can close this tab.</p></div>
-    </div>
+    <AuthPanel>
+      <AuthHeading heading={allowed ? `${name} is connected` : 'Not connected'} lead="Go back to the app. You can close this tab." />
+    </AuthPanel>
   </AuthLayout>
 }

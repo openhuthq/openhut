@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode, type SyntheticEvent } from 'react'
-import { Avatar } from '@/components/avatar'
+import { Creature } from '@/components/creature'
 import { Hut } from '@/components/hut'
+import './auth-scene.css'
 
 const CALLS = [
   { key: 'ops', about: 'Order tracking', ask: 'Where is order #5102?', grant: 'orders · read', answer: 'Shipped Tuesday' },
@@ -15,10 +16,10 @@ const BEAT_MS = 700
 const LOOK_PX = 4
 
 export function AuthLayout({ title, children }: { title: string; children: ReactNode }) {
-  return <div className="auth" onFocus={react} onInput={react} onBlur={(event) => { delete event.currentTarget.dataset.mood }}
+  return <div className="auth grid min-h-dvh grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] bg-card mobile:grid-cols-1" onFocus={react} onInput={react} onBlur={(event) => { delete event.currentTarget.dataset.mood }}
     onPointerMove={(event) => { if (!event.currentTarget.dataset.mood) watch(event.currentTarget, event.clientX, event.clientY) }}>
     <title>{`${title} · OpenHut`}</title>
-    <div className="authside"><div className="wordmark"><Hut />OpenHut</div>{children}</div>
+    <div className="flex flex-col px-10 py-7 mobile:p-5"><div className="group/wordmark flex w-fit items-center gap-2.5 font-brand text-[24px]/none font-semibold tracking-[-.01em]"><Hut className="size-[34px] group-hover/wordmark:[&>svg]:animate-hop" />OpenHut</div>{children}</div>
     <aside className="authart" aria-hidden="true">
       <div className="floor"></div>
       <Story />
@@ -50,12 +51,12 @@ function Story() {
       const [sx, sy] = spot(i)
       const talking = i === active && (beat === 0 || beat >= 4)
       return <div key={item.key} className={talking ? 'sat talk' : 'sat'} style={{ translate: `calc(var(--r) * ${sx}) calc(var(--r) * ${sy})` }}>
-        <Avatar id={`crew-${item.key}`} about={item.about} size={56} />
+        <Creature id={`crew-${item.key}`} about={item.about} size={56} />
         {i === active && <span className={`say${sy > .5 ? ' below' : ''}${beat >= 4 ? ' done' : ''}`} key={beat >= 4 ? 'answer' : 'ask'}>{beat >= 4 ? call.answer : call.ask}</span>}
       </div>
     })}
     <span className={moving ? 'packet' : 'packet gone'} style={{ translate: atGate ? '0 0' : `calc(var(--r) * ${x}) calc(var(--r) * ${y})` }}></span>
-    <div className="core"><Hut /><Shutters /></div>
+    <div className="core"><Hut className="size-full" /><Shutters /></div>
     {beat >= 2 && beat <= 4 && <span className="verdict" key={tick - beat}>{call.denied ? '✕' : '✓'} {call.grant}{call.denied ? ' · no grant' : ''}</span>}
   </div>
 }

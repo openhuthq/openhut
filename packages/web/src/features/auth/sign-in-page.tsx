@@ -1,4 +1,5 @@
-import { Field } from '@/components/field'
+import { Field } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
 import { useCreateSession } from '@/features/auth/api'
 import { AuthForm } from '@/features/auth/auth-form'
 import { fieldError } from '@/lib/api-client'
@@ -14,7 +15,7 @@ export function SignInPage() {
       const field = formValues(event)
       createSession.mutate({ email: field('email'), password: field('password') })
     }}>
-    <Field label="Email" error={fieldError(createSession.error, 'email')}>{(control) => <input {...control} name="email" type="email" required autoComplete="email" />}</Field>
-    <Field label="Password" error={fieldError(createSession.error, 'password')}>{(control) => <input {...control} name="password" type="password" required autoComplete="current-password" />}</Field>
+    <Field strong label="Email" error={fieldError(createSession.error, 'email')}>{(control) => <Input variant="lg" {...control} name="email" type="email" required autoComplete="email" />}</Field>
+    <Field strong label="Password" error={fieldError(createSession.error, 'password')}>{(control) => <Input variant="lg" {...control} name="password" type="password" required autoComplete="current-password" />}</Field>
   </AuthForm>
 }

@@ -12,7 +12,7 @@ export function App() {
   const route = routeOf(usePath())
   const me = useMe()
   const setup = useSetup(me.data === null)
-  if (me.error) return <ErrorNote message={me.error.message} />
+  if (me.error) return <ErrorNote className="mx-6 mt-4" message={me.error.message} />
   if (me.data === undefined) return null
   switch (route.page) {
     case 'invite': return <InvitePage token={route.token} />

@@ -1,6 +1,8 @@
-import { Menu } from '@base-ui/react/menu'
 import type { Agent, Grant } from '@openhut/common/agents/agent.ts'
 import type { Connection } from '@openhut/common/connections/connection.ts'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Item, ItemContent, ItemGroup } from '@/components/ui/item'
 import { ErrorNote } from '@/components/error-note'
 import { ICONS } from '@/components/icons'
 import { Locked } from '@/components/locked'
@@ -27,38 +29,34 @@ function ConnectionList({ agent, connections, grants, lockReason }: { agent: Age
   const others = connections.filter((connection) => !grants.some((grant) => grant.connectionId === connection.id))
   return <section>
     <SectionHead title="Connections" action={<AddConnection agent={agent} connections={others} lockReason={lockReason} />} />
-    {!added.length && <p className="note">{agent.name} can't use any connection yet.</p>}
-    {added.length > 0 && <div className="box rows">{added.map(({ grant, connection }) => <div className="row" key={grant.id}>
+    {!added.length && <p className="m-0 text-mute">{agent.name} can't use any connection yet.</p>}
+    {added.length > 0 && <ItemGroup>{added.map(({ grant, connection }) => <Item size="sm" key={grant.id}>
       <Mark name={connection.kind} size={24} />
-      <div className="t ellip">{connection.name}</div>
+      <ItemContent className="truncate">{connection.name}</ItemContent>
       <Locked reason={lockReason}>
-        <button type="button" className="btn icon sm" title="Remove" aria-label={`Remove ${connection.name}`} disabled={!!lockReason || deleteGrant.isPending} onClick={() => deleteGrant.mutate(grant, { onError: toastError })}>{ICONS.x}</button>
+        <Button type="button" size="icon-sm" title="Remove" aria-label={`Remove ${connection.name}`} disabled={!!lockReason || deleteGrant.isPending} onClick={() => deleteGrant.mutate(grant, { onError: toastError })}>{ICONS.x}</Button>
       </Locked>
-    </div>)}</div>}
+    </Item>)}</ItemGroup>}
   </section>
 }
 
 function AddConnection({ agent, connections, lockReason }: { agent: Agent; connections: Connection[]; lockReason: string | undefined }) {
   const createGrant = useCreateGrant()
   return <Locked reason={lockReason}>
-    <Menu.Root>
-      <Menu.Trigger className="btn sm" disabled={!!lockReason || createGrant.isPending}>{ICONS.plus}Add</Menu.Trigger>
-      <Menu.Portal>
-        <Menu.Positioner className="menupos" side="bottom" align="end" sideOffset={4}>
-          <Menu.Popup className="menu">
-            {connections.map((connection) => {
-              const blocked = blockedReason(agent, connection)
-              return <Menu.Item className="menuitem tall" key={connection.id} disabled={!!blocked} onClick={() => createGrant.mutate({ agentId: agent.id, connectionId: connection.id }, { onError: toastError })}>
-                <Mark name={connection.kind} size={24} />
-                <span className="t"><span className="ellip">{connection.name}</span>{blocked && <span className="mute">{blocked}</span>}</span>
-              </Menu.Item>
-            })}
-            {connections.length > 0 && <Menu.Separator className="menusep" />}
-            <Menu.Item className="menuitem" onClick={() => navigate('/connections')}>{ICONS.plus}New connection</Menu.Item>
-          </Menu.Popup>
-        </Menu.Positioner>
-      </Menu.Portal>
-    </Menu.Root>
+    <DropdownMenu>
+      <DropdownMenuTrigger className={buttonVariants({ size: 'sm' })} disabled={!!lockReason || createGrant.isPending}>{ICONS.plus}Add</DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {connections.map((connection) => {
+          const blocked = blockedReason(agent, connection)
+          return <DropdownMenuItem size="tall" key={connection.id} disabled={!!blocked} onClick={() => createGrant.mutate({ agentId: agent.id, connectionId: connection.id }, { onError: toastError })}>
+            <Mark name={connection.kind} size={24} />
+            <span className="flex min-w-0 flex-col"><span className="truncate">{connection.name}</span>{blocked && <span className="text-xs whitespace-normal text-mute">{blocked}</span>}</span>
+          </DropdownMenuItem>
+        })}
+        {connections.length > 0 && <DropdownMenuSeparator />}
+        <DropdownMenuItem onClick={() => navigate('/connections')}>{ICONS.plus}New connection</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   </Locked>
 }
 

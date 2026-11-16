@@ -1,31 +1,28 @@
-import { useId, useRef, type ReactNode, type RefObject } from 'react'
-import { createPortal } from 'react-dom'
-import { DialogFoot } from '@/components/dialog-foot'
-import { DialogHead } from '@/components/dialog-head'
+import { useState, type ReactNode } from 'react'
+import { AlertDialog } from '@/components/ui/alert-dialog'
+import { Button, type ButtonVariants } from '@/components/ui/button'
+import { DialogFoot, DialogHead } from '@/components/ui/dialog'
 
 type Confirmation = { question: string; detail: string; action: string; onConfirm: () => void }
 
-export function ConfirmButton({ className, label, disabled, children, ...confirmation }: Confirmation & {
-  className: string
+export function ConfirmButton({ variant = 'danger', size, label, disabled, children, ...confirmation }: Confirmation & ButtonVariants & {
   label?: string
   disabled?: boolean
   children: ReactNode
 }) {
-  const ref = useRef<HTMLDialogElement>(null)
+  const [open, setOpen] = useState(false)
   return <>
-    <button type="button" className={className} title={label} aria-label={label} disabled={disabled} onClick={() => ref.current?.showModal()}>{children}</button>
-    <ConfirmDialog dialogRef={ref} {...confirmation} />
+    <Button type="button" variant={variant} size={size} title={label} aria-label={label} disabled={disabled} onClick={() => setOpen(true)}>{children}</Button>
+    <ConfirmDialog open={open} onOpenChange={setOpen} {...confirmation} />
   </>
 }
 
-export function ConfirmDialog({ dialogRef, question, detail, action, onConfirm }: Confirmation & { dialogRef: RefObject<HTMLDialogElement | null> }) {
-  const headingId = useId()
-  const close = () => dialogRef.current?.close()
-  return createPortal(<dialog ref={dialogRef} className="dlg confirm" aria-labelledby={headingId} onClick={(event) => { if (event.target === event.currentTarget) close() }}>
-    <DialogHead id={headingId} title={question} subtitle={detail} />
+export function ConfirmDialog({ open, onOpenChange, question, detail, action, onConfirm }: Confirmation & { open: boolean; onOpenChange: (open: boolean) => void }) {
+  return <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <DialogHead title={question} subtitle={detail} />
     <DialogFoot>
-      <button type="button" className="btn sec" onClick={close}>Cancel</button>
-      <button type="button" className="btn primary danger" onClick={() => { close(); onConfirm() }}>{action}</button>
+      <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
+      <Button type="button" variant="destructive" onClick={() => { onOpenChange(false); onConfirm() }}>{action}</Button>
     </DialogFoot>
-  </dialog>, document.body)
+  </AlertDialog>
 }

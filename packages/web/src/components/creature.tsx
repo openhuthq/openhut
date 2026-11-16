@@ -29,9 +29,9 @@ const EYES = [
   `<circle cx="45" cy="54" r="4.2" fill="${K}"/><circle cx="63" cy="54" r="4.2" fill="${K}"/><circle cx="46.5" cy="52.5" r="1.4" fill="#fff"/><circle cx="64.5" cy="52.5" r="1.4" fill="#fff"/>`,
 ]
 
-export function Avatar({ id, about = '', size, label }: { id: string; about?: string; size: number; label?: string }) {
+export function Creature({ id, about = '', size, label }: { id: string; about?: string; size: number; label?: string }) {
   const accessible = label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true }
-  return <svg className="av" width={size} height={size} viewBox="4 8 100 100" {...accessible} dangerouslySetInnerHTML={{ __html: creature(id, about) }} />
+  return <svg data-slot="creature" className="block shrink-0" width={size} height={size} viewBox="4 8 100 100" {...accessible} dangerouslySetInnerHTML={{ __html: creature(id, about) }} />
 }
 
 function creature(id: string, about: string) {

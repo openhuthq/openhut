@@ -1,22 +1,24 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { Combobox } from '@base-ui/react/combobox'
+import { useMemo, useRef, useState } from 'react'
+import { Combobox as ComboboxPrimitive } from '@base-ui/react/combobox'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Channel, Conversation } from '@openhut/common/channels/channel.ts'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Combobox, ComboboxChip, ComboboxChips, ComboboxChipsInput, ComboboxContent, ComboboxEmpty, ComboboxItem, ComboboxItemIndicator, ComboboxList } from '@/components/ui/combobox'
 import { ErrorNote } from '@/components/error-note'
-import { ICONS, SETUP_ICONS } from '@/components/icons'
+import { SETUP_ICONS } from '@/components/icons'
 import { Locked } from '@/components/locked'
 import { useConversations, useUpdateChannel } from '@/features/agents/api'
 import { toastError } from '@/lib/toast'
+import { cn } from '@/lib/utils'
 
-export function SlackChannels({ agent, channel, lockReason }: { agent: Agent; channel: Channel; lockReason: string | undefined }) {
+export function SlackChannels({ agent, channel, lockReason, inset = false }: { agent: Agent; channel: Channel; lockReason: string | undefined; inset?: boolean }) {
   const conversations = useConversations(channel.id)
   const updateChannel = useUpdateChannel()
   const [picked, setPicked] = useState(channel.allowed)
   const latest = useRef(picked)
   const isOpen = useRef(false)
-  const [frame, setFrame] = useState<HTMLElement>()
-  const findFrame = useCallback((node: HTMLDivElement | null) => setFrame(node?.closest('dialog') ?? undefined), [])
-  const items = useMemo(() => Combobox.createItems(conversations.data ?? [], { getValue: (each) => each.id, getLabel: (each) => each.name }), [conversations.data])
+  const items = useMemo(() => ComboboxPrimitive.createItems(conversations.data ?? [], { getValue: (each) => each.id, getLabel: (each) => each.name }), [conversations.data])
   const known = new Map(conversations.data?.map((each) => [each.id, each]))
   const bot = channel.account?.split('@')[1] ?? agent.name
   const waiting = conversations.data?.filter((each) => each.joined && !channel.allowed.includes(each.id)) ?? []
@@ -30,40 +32,33 @@ export function SlackChannels({ agent, channel, lockReason }: { agent: Agent; ch
     if (next.length === channel.allowed.length && next.every((id) => channel.allowed.includes(id))) return
     updateChannel.mutate({ channelId: channel.id, change: { allowed: next } }, { onError: (err) => { pick(channel.allowed); toastError(err) } })
   }
-  return <div className="slack-chs" ref={findFrame}>
+  return <div className={cn('flex min-w-0 flex-col gap-2', inset && 'pr-3 pb-3 pl-[46px]')}>
     <Locked reason={lockReason}>
-      <Combobox.Root multiple items={items} value={picked} disabled={disabled}
+      <Combobox multiple items={items} value={picked} disabled={disabled}
         onValueChange={(next: string[]) => { pick(next); if (!isOpen.current) save() }}
         onOpenChange={(open) => { isOpen.current = open; if (!open) save() }}>
-        <Combobox.InputGroup className="picker">
-          <Combobox.Chips className="picker-chips" aria-label={picked.length ? 'Channels' : undefined}>
-            {picked.map((id) => <Combobox.Chip key={id} className="pchip" aria-label={known.get(id)?.name ?? id}>
-              {glyph(known.get(id))}<span className="ellip">{known.get(id)?.name ?? '…'}</span>
-              <Combobox.ChipRemove className="pchip-x" aria-label={`Remove ${known.get(id)?.name ?? id}`}>{ICONS.x}</Combobox.ChipRemove>
-            </Combobox.Chip>)}
-            <Combobox.Input className="picker-in" placeholder={picked.length ? 'Add a channel' : 'Pick channels'} aria-label="Slack channels" />
-          </Combobox.Chips>
-        </Combobox.InputGroup>
-        <Combobox.Portal container={frame}>
-          <Combobox.Positioner className="menupos" side="bottom" align="start" sideOffset={4} positionMethod="fixed">
-            <Combobox.Popup className="menu picker-pop">
-              <Combobox.Empty><div className="picker-none">{conversations.isPending ? 'Loading channels…' : 'No channel by that name.'}</div></Combobox.Empty>
-              <Combobox.List>{(each: Conversation) => <Combobox.Item key={each.id} value={each.id} className="menuitem">
-                {glyph(each)}<span className="ellip">{each.name}</span>{each.shared && <span className="picker-tag" title="Shared with people outside this workspace">shared</span>}<span className="picker-n">{each.members}</span>
-                <span className="picker-tick"><Combobox.ItemIndicator>{SETUP_ICONS.check}</Combobox.ItemIndicator></span>
-              </Combobox.Item>}</Combobox.List>
-              <p className="picker-foot">Private channels and group DMs show up here once @{bot} is in them: type /invite @{bot} there.</p>
-            </Combobox.Popup>
-          </Combobox.Positioner>
-        </Combobox.Portal>
-      </Combobox.Root>
+        <ComboboxChips aria-label={picked.length ? 'Channels' : undefined}>
+          {picked.map((id) => <ComboboxChip key={id} aria-label={known.get(id)?.name ?? id} removeLabel={`Remove ${known.get(id)?.name ?? id}`}>
+            {glyph(known.get(id))}<span className="truncate">{known.get(id)?.name ?? '…'}</span>
+          </ComboboxChip>)}
+          <ComboboxChipsInput placeholder={picked.length ? 'Add a channel' : 'Pick channels'} aria-label="Slack channels" />
+        </ComboboxChips>
+        <ComboboxContent>
+          <ComboboxEmpty><div className="px-2 py-1.5 text-mute">{conversations.isPending ? 'Loading channels…' : 'No channel by that name.'}</div></ComboboxEmpty>
+          <ComboboxList>{(each: Conversation) => <ComboboxItem key={each.id} value={each.id}>
+            {glyph(each)}<span className="truncate">{each.name}</span>{each.shared && <Badge variant="count" title="Shared with people outside this workspace">shared</Badge>}<span className="ml-auto pl-2 font-mono text-xs text-mute">{each.members}</span>
+            <span className="grid w-3.5 shrink-0 place-items-center text-ink"><ComboboxItemIndicator>{SETUP_ICONS.check}</ComboboxItemIndicator></span>
+          </ComboboxItem>}</ComboboxList>
+          <p className="-mx-1 mt-1 -mb-1 border-t border-hair px-3 py-2 text-xs text-mute">Private channels and group DMs show up here once @{bot} is in them: type /invite @{bot} there.</p>
+        </ComboboxContent>
+      </Combobox>
     </Locked>
     <ErrorNote message={conversations.error?.message} />
-    {waiting.length > 0 && <div className="picker-wait">
-      <span className="mute">In Slack, but {agent.name} doesn't answer there</span>
-      {waiting.map((each) => <div className="picker-row" key={each.id}>
-        {glyph(each)}<span className="ellip">{each.name}</span>
-        <Locked reason={lockReason}><button type="button" className="btn sm sec" disabled={disabled} onClick={() => { pick([...latest.current, each.id]); save() }}>Allow</button></Locked>
+    {waiting.length > 0 && <div className="flex flex-col gap-0.5">
+      <span className="text-xs text-mute">In Slack, but {agent.name} doesn't answer there</span>
+      {waiting.map((each) => <div className="flex min-h-[30px] min-w-0 items-center gap-1.5 [&>svg]:size-3 [&>svg]:shrink-0 [&>svg]:text-mute" key={each.id}>
+        {glyph(each)}<span className="truncate">{each.name}</span>
+        <Locked reason={lockReason}><Button type="button" variant="secondary" size="xs" className="ml-auto" disabled={disabled} onClick={() => { pick([...latest.current, each.id]); save() }}>Allow</Button></Locked>
       </div>)}
     </div>}
   </div>

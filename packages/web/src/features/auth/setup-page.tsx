@@ -1,4 +1,5 @@
-import { Field } from '@/components/field'
+import { Field } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
 import { useCreatePerson, useSetup } from '@/features/auth/api'
 import { AuthForm } from '@/features/auth/auth-form'
 import { CredentialFields } from '@/features/auth/credential-fields'
@@ -17,8 +18,8 @@ export function SetupPage() {
       const field = formValues(event)
       createPerson.mutate({ setupCode: field('setupCode'), email: field('email'), password: field('password') })
     }}>
-    {code && <input type="hidden" name="setupCode" value={code} />}
-    {!code && <Field label="Setup code" error={fieldError(createPerson.error, 'setupCode')}>{(control) => <input {...control} name="setupCode" required autoComplete="one-time-code" placeholder="Printed at the end of the install" />}</Field>}
+    {code && <Input type="hidden" name="setupCode" value={code} />}
+    {!code && <Field strong label="Setup code" error={fieldError(createPerson.error, 'setupCode')}>{(control) => <Input variant="lg" {...control} name="setupCode" required autoComplete="one-time-code" placeholder="Printed at the end of the install" />}</Field>}
     <CredentialFields error={createPerson.error} />
   </AuthForm>
 }

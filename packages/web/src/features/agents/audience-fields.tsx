@@ -1,5 +1,6 @@
 import { ADDRESS, type Channel, type ChannelKind } from '@openhut/common/channels/channel.ts'
-import { Field } from '@/components/field'
+import { Field, FieldError, FieldSet, FieldTitle } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
 import { Choices } from '@/components/setup'
 import { fieldError } from '@/lib/api-client'
 
@@ -14,12 +15,12 @@ export function AudienceFields({ kind, channel, error, labelled = true }: { kind
   const wording = WORDING[kind]
   const address = addressPattern(kind)
   return <>
-    <div className="f">{labelled && <span className="flabel">Who can message</span>}
+    <FieldSet className="peer/open">{labelled && <FieldTitle>Who can message</FieldTitle>}
       <Choices name="open" value={channel?.open ? '1' : ''} options={[['', 'users', wording.only], ['1', 'globe', wording.anyone]]} />
-      {fieldError(error, 'open') && <span className="ferr" role="alert">{fieldError(error, 'open')}</span>}
-    </div>
-    <Field className="f allowed" label={wording.list} error={fieldError(error, 'allowed')} hint={wording.hint}>{(control) =>
-      <input {...control} name="allowed" className="mono" defaultValue={channel?.allowed.join(', ')} placeholder={wording.placeholder} autoComplete="off"
+      {fieldError(error, 'open') && <FieldError>{fieldError(error, 'open')}</FieldError>}
+    </FieldSet>
+    <Field className="hidden peer-has-[input[name=open][value='']:checked]/open:flex" label={wording.list} error={fieldError(error, 'allowed')} hint={wording.hint}>{(control) =>
+      <Input {...control} mono name="allowed" defaultValue={channel?.allowed.join(', ')} placeholder={wording.placeholder} autoComplete="off"
         pattern={`[\\s,]*${address}(?:[\\s,]+${address})*[\\s,]*`} title={ADDRESS[kind].message} />}</Field>
   </>
 }

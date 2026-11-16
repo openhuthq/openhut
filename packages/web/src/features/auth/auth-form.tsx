@@ -1,4 +1,6 @@
 import type { FormEvent, ReactNode } from 'react'
+import { Button } from '@/components/ui/button'
+import { ErrorNote } from '@/components/error-note'
 import { AuthLayout } from '@/features/auth/auth-layout'
 import { formError } from '@/lib/api-client'
 
@@ -16,12 +18,22 @@ export function AuthForm({ title, heading, lead, error, fields, busy, button, fo
 }) {
   const message = formError(error, fields)
   return <AuthLayout title={title}>
-    <form className="authform" noValidate onSubmit={onSubmit}>
-      <div><h1>{heading}</h1><p className="lead">{lead}</p></div>
-      {message && <p className="err" role="alert">{message}</p>}
+    <form className={PANEL} noValidate onSubmit={onSubmit}>
+      <AuthHeading heading={heading} lead={lead} />
+      <ErrorNote message={message} />
       {children}
-      <button className="btn primary" disabled={busy}>{button}</button>
-      <p className="authfoot">{foot}</p>
+      <Button type="submit" variant="primary" size="lg" disabled={busy}>{button}</Button>
+      <p className="m-0 font-copy text-xs text-mute">{foot}</p>
     </form>
   </AuthLayout>
+}
+
+const PANEL = 'm-auto flex w-full max-w-[380px] flex-col gap-[18px] py-12'
+
+export function AuthPanel({ children }: { children: ReactNode }) {
+  return <div className={PANEL}>{children}</div>
+}
+
+export function AuthHeading({ heading, lead }: { heading: string; lead: string }) {
+  return <div><h1 className="m-0 font-display text-[56px]/[.92] font-normal text-balance uppercase">{heading}</h1><p className="mt-3 mb-0 font-copy text-sm/[1.55] text-mute">{lead}</p></div>
 }

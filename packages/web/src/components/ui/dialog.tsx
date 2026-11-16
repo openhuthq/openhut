@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from 'react'
+import { useRef, type ComponentProps, type ReactNode } from 'react'
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { Button } from '@/components/ui/button'
@@ -28,11 +28,24 @@ export function popupClass(size: DialogSize, className?: string) {
   return cn(popupVariants({ size }), className)
 }
 
+const SCROLLING = new Set(['auto', 'scroll'])
+const FOCUSABLE = ':is(a[href], button, input:not([type=hidden]), select, textarea, [tabindex]):not(:disabled, [tabindex="-1"])'
+
+export function firstFocusable(popup: HTMLElement | null) {
+  const scrolls = (element: HTMLElement) => {
+    const style = getComputedStyle(element)
+    return (element.scrollHeight > element.clientHeight && SCROLLING.has(style.overflowY)) || (element.scrollWidth > element.clientWidth && SCROLLING.has(style.overflowX))
+  }
+  const found = [...popup?.querySelectorAll<HTMLElement>('*') ?? []].find((element) => element.checkVisibility({ visibilityProperty: true }) && (element.matches(FOCUSABLE) || scrolls(element)))
+  return found ?? true
+}
+
 export function Dialog({ size = 'default', dismissable = true, onClose, className, children }: { size?: DialogSize; dismissable?: boolean; onClose: () => void; className?: string; children: ReactNode }) {
+  const popup = useRef<HTMLDivElement>(null)
   return <DialogPrimitive.Root open disablePointerDismissal={!dismissable} onOpenChange={(open, details) => { if (!open && (dismissable || details.reason !== 'escape-key')) onClose() }}>
     <DialogPrimitive.Portal>
       <DialogPrimitive.Backdrop className={backdropClass(size)} />
-      <DialogPrimitive.Popup data-size={size} className={popupClass(size, className)}>{children}</DialogPrimitive.Popup>
+      <DialogPrimitive.Popup ref={popup} initialFocus={() => firstFocusable(popup.current)} data-size={size} className={popupClass(size, className)}>{children}</DialogPrimitive.Popup>
     </DialogPrimitive.Portal>
   </DialogPrimitive.Root>
 }

@@ -1,7 +1,10 @@
+import type { ReactNode } from 'react'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import { AlertCircleIcon, CancelCircleIcon, CheckmarkBadge01Icon, CheckmarkCircle02Icon, CircleIcon, DashedLineCircleIcon, Loading02Icon, PauseCircleIcon, UnavailableIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { RunStatus } from '@openhut/common/automations/automation.ts'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 
 const CHECK_CIRCLE = badge(CheckmarkCircle02Icon)
 const BADGE_CHECK = badge(CheckmarkBadge01Icon)
@@ -17,16 +20,16 @@ const STATUS = {
   stopped: { word: 'Stopped', tip: 'Container stopped', variant: 'secondary', icon: PAUSE },
   missing: { word: 'Error', tip: 'Its container is gone. It is recreated within 30 seconds while it should be running.', variant: 'destructive', icon: ALERT },
   connected: { word: 'Connected', tip: 'Last call succeeded', variant: 'success', icon: BADGE_CHECK },
-  failing: { word: 'Failing', tip: 'Last call failed', variant: 'outlined', icon: ALERT },
-  no_calls: { word: 'No calls yet', tip: 'No agent has called it yet', variant: 'outlined', icon: DASHED },
+  failing: { word: 'Failing', tip: 'Last call failed', variant: 'outline', icon: ALERT },
+  no_calls: { word: 'No calls yet', tip: 'No agent has called it yet', variant: 'outline', icon: DASHED },
   ready: { word: 'Ready', tip: 'Done', variant: 'success', icon: BADGE_CHECK },
-  not_set_up: { word: 'Not set up', tip: 'Not done', variant: 'outlined', icon: DASHED },
+  not_set_up: { word: 'Not set up', tip: 'Not done', variant: 'outline', icon: DASHED },
   denied: { word: 'Denied', tip: 'No grant for this tool', variant: 'destructive', icon: BAN },
-  failed: { word: 'Failed', tip: 'The tool ran and failed', variant: 'outlined', icon: ALERT },
-}
+  failed: { word: 'Failed', tip: 'The tool ran and failed', variant: 'outline', icon: ALERT },
+} satisfies Record<string, { word: string; tip: string; variant: 'success' | 'warning' | 'destructive' | 'secondary' | 'outline'; icon: ReactNode }>
 
 export function StatusBadge({ status, tip = STATUS[status].tip, word = STATUS[status].word }: { status: keyof typeof STATUS; tip?: string; word?: string }) {
-  return <span className={`status ${STATUS[status].variant}`} data-slot="badge" title={tip}>{STATUS[status].icon}{word}</span>
+  return <Badge variant={STATUS[status].variant} title={tip}>{STATUS[status].icon}{word}</Badge>
 }
 
 function badge(svg: IconSvgElement) {
@@ -43,6 +46,8 @@ export function agentState(agent: Agent) {
   return agent.health
 }
 
+const RUN_COLOR = { running: 'animate-spin-slow text-amber', done: 'text-pass', quiet: 'text-mute-2', skipped: 'text-mute-2', paused: 'text-mute-2', failed: 'text-fail' }
+
 const RUN = {
   running: { icon: Loading02Icon, word: 'Running' },
   done: { icon: CheckmarkCircle02Icon, word: 'Done' },
@@ -53,5 +58,5 @@ const RUN = {
 
 export function RunIcon({ status, size = 16 }: { status: RunStatus | 'paused'; size?: number }) {
   const { icon, word } = status === 'paused' ? { icon: DashedLineCircleIcon, word: 'Paused' } : RUN[status]
-  return <HugeiconsIcon icon={icon} size={size} strokeWidth={1.8} className={`runicon ${status}`} aria-label={word} role="img" />
+  return <HugeiconsIcon icon={icon} size={size} strokeWidth={1.8} className={cn('shrink-0', RUN_COLOR[status])} aria-label={word} role="img" />
 }

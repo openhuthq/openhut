@@ -1,5 +1,6 @@
 import { useCreatePerson, useInviteLink } from '@/features/auth/api'
-import { AuthForm } from '@/features/auth/auth-form'
+import { buttonVariants } from '@/components/ui/button'
+import { AuthForm, AuthHeading, AuthPanel } from '@/features/auth/auth-form'
 import { AuthLayout } from '@/features/auth/auth-layout'
 import { CredentialFields } from '@/features/auth/credential-fields'
 import { RequestError } from '@/lib/api-client'
@@ -24,9 +25,9 @@ export function InvitePage({ token }: { token: string }) {
 
 function InviteGone() {
   return <AuthLayout title="Invite expired">
-    <div className="authform">
-      <div><h1>This invite doesn't work anymore</h1><p className="lead">It was already used, or it's older than 7 days. Ask whoever sent it for a new one.</p></div>
-      <a className="btn primary" href="/login">Sign in instead</a>
-    </div>
+    <AuthPanel>
+      <AuthHeading heading="This invite doesn't work anymore" lead="It was already used, or it's older than 7 days. Ask whoever sent it for a new one." />
+      <a className={buttonVariants({ variant: 'primary', size: 'lg' })} href="/login">Sign in instead</a>
+    </AuthPanel>
   </AuthLayout>
 }

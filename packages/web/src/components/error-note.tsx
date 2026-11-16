@@ -1,4 +1,6 @@
-export function ErrorNote({ message }: { message?: string }) {
+import { Alert } from '@/components/ui/alert'
+
+export function ErrorNote({ message, className }: { message?: string; className?: string }) {
   if (!message) return null
-  return <p className="err" role="alert">{message}</p>
+  return <Alert role="alert" data-error className={className}>{message}</Alert>
 }
