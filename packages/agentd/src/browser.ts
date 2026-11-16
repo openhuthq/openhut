@@ -6,7 +6,7 @@ export const CLOSED: BrowserStill = { open: false, url: '', title: '', data: '' 
 const MAX_INPUT_LINE = 2048
 const MAX_FRAME = 4 << 20
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/
-const INPUT_TYPES = new Set(['input_mouse', 'input_keyboard'])
+const INPUT_TYPES = new Set(['input_mouse', 'input_keyboard', 'ping'])
 
 export function stillOf(stdout: string): BrowserStill {
   const line = stdout.split('\n').find((each) => each.startsWith('{'))
