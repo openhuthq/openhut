@@ -14,7 +14,7 @@ const GAP = 6
 const Id = z.string().check(z.regex(/^[A-Za-z0-9_-]{1,40}$/, 'Use letters, digits, - and _ in an id, 40 at most.'))
 const Text = z.string().check(z.minLength(1), z.maxLength(400))
 const Place = z.number().check(z.gte(-20_000), z.lte(20_000))
-const Size = z.number().check(z.gte(20), z.lte(4000))
+const Size = z.number().check(z.gte(4), z.lte(4000))
 const Box = z.strictObject({
   id: Id, x: Place, y: Place, width: Size, height: Size, label: z.optional(Text),
   shape: z.optional(z.enum(['rectangle', 'ellipse', 'diamond'])),

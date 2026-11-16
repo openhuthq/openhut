@@ -8,13 +8,14 @@ import { whatsapp } from '../integrations/whatsapp/whatsapp.ts'
 
 const AUXILIARY_TASKS = ['approval', 'compression', 'title_generation', 'background_review']
 
-export function renderFiles({ agent, ownerName, token, channelKey, seat, channels }: {
+export function renderFiles({ agent, ownerName, token, channelKey, seat, channels, connections }: {
   agent: { id: string; name: string; instructions: string; model: string; net: number; code_execution: boolean }
   ownerName: string
   token: string
   channelKey: string
   seat: string
   channels: RenderedChannel[]
+  connections: { name: string; kind: string }[]
 }): AgentFiles {
   const gateway = `http://${agentSubnet(agent.net)}.1:${config.gatewayPort}`
   const disabled = ['browser', 'delegation', 'cronjob', ...(agent.code_execution ? [] : ['code_execution'])]
@@ -33,7 +34,16 @@ export function renderFiles({ agent, ownerName, token, channelKey, seat, channel
     ...(config.modelMode === 'claude' && seat ? [`CLAUDE_CODE_OAUTH_TOKEN=${seat}`] : []),
     ...channels.flatMap(envOf),
   ].join('\n') + '\n'
-  return { 'config.yaml': yaml, '.env': env, 'SOUL.md': `${agent.instructions}\n` }
+  return { 'config.yaml': yaml, '.env': env, 'SOUL.md': `${agent.instructions}\n${connectedApps(connections)}` }
+}
+
+function connectedApps(connections: { name: string; kind: string }[]): string {
+  if (!connections.length) return ''
+  const apps = connections.map(({ name, kind }) => {
+    const plain = name.replace(/\s+/g, ' ').trim()
+    return plain.toLowerCase() === kind ? plain : `${plain} (${kind})`
+  })
+  return `\n## Connected apps\n\nThe openhut tools reach: ${apps.join(', ')}. Call list_tools to see what each one does, and use it before doing the same work by hand.\n`
 }
 
 function modelYaml({ gateway, token, model }: { gateway: string; token: string; model: string }): string {
