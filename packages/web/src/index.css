@@ -376,12 +376,19 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .meter-pct{text-align:right;font-variant-numeric:tabular-nums}
 .meter-note{font-size:12px}
 @media (max-width:640px){.meter-row{grid-template-columns:minmax(0,1fr) 40px}.meter{grid-column:1/-1;grid-row:2}.meter-note{display:none}}
+.spend-sum{margin-left:auto;font-variant-numeric:tabular-nums}
+.spend-strip{display:flex;gap:2px;height:10px}
+.spend-strip>i{display:block;min-width:3px;flex-basis:0}
+.spend-strip>i:first-child{border-radius:4px 0 0 4px}
+.spend-strip>i:last-child{border-radius:0 4px 4px 0}
+.spend-strip>i:only-child{border-radius:4px}
 .spend{display:flex;flex-direction:column}
 .spend-row{display:grid;grid-template-columns:minmax(0,1fr) auto 72px;align-items:center;gap:12px;min-height:32px;font-size:14px}
 .spend-row+.spend-row{border-top:1px solid var(--hair)}
+.spend-name{display:flex;align-items:center;gap:10px;min-width:0}
+.spend-dot{width:10px;height:10px;border-radius:3px;flex:none}
 .spend-share{font-size:12px;font-variant-numeric:tabular-nums}
 .spend-usd{text-align:right;font-variant-numeric:tabular-nums}
-.spend-total{font-weight:500}
 .aform.updating{flex-direction:row;align-items:flex-start;gap:10px;color:var(--mute)}
 .spin{flex:none;width:14px;height:14px;margin-top:2px;border-radius:50%;border:2px solid var(--soft);border-top-color:var(--ink);animation:spin .8s linear infinite}
 @keyframes spin{to{rotate:360deg}}

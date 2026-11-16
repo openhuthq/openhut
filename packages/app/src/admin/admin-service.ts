@@ -66,7 +66,7 @@ export const adminService = {
     const [{ usage }, agents] = await Promise.all([agentd.usage({ since: since / 1000 }), db.selectFrom('agent').select(['id', 'name']).orderBy('created_at').execute()])
     return {
       object: 'seat_usage', windows, since: new Date(since).toISOString(),
-      agents: agents.map((agent) => ({ agentId: agent.id, agentName: agent.name, costUsd: usage[agent.id] ?? 0 })).sort((a, b) => b.costUsd - a.costUsd),
+      agents: agents.map((agent) => ({ agentId: agent.id, agentName: agent.name, costUsd: usage[agent.id] ?? 0 })),
     }
   },
 
