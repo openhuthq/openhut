@@ -25,6 +25,8 @@ const CLAUDE_BIN = fileURLToPath(new URL('../../../bin/claude', import.meta.url)
 const BROWSER_BIN = fileURLToPath(new URL('../../../bin/agent-browser', import.meta.url))
 const BROWSER_DIR = fileURLToPath(new URL('../../../install/agent-browser', import.meta.url))
 const BRIDGE = '/opt/agent-browser/bridge.mjs'
+const BROWSER_MEMORY = '4g'
+const BROWSER_TMP = '1g'
 const UNQUEUED = new Set(['browser-still', 'browser-hold'])
 const WHATSAPP_BRIDGE = '/var/lib/openhut/whatsapp-bridge'
 const AGENT_UID = 10000
@@ -285,8 +287,8 @@ async function create({ id, net, files, size, browser }: { id: string; net: numb
     ...['--name', `ag-${id}`, '--hostname', id, '--restart', 'no'],
     ...['--label', `openhut.agent=${id}`, '--label', `agent.digest=${digest}`, '--label', `openhut.spec=${SPEC}`, '--label', `openhut.size=${size}`, '--label', `openhut.browser=${browser ? 'on' : 'off'}`],
     ...['--runtime', 'runsc', '--user', `${AGENT_UID}:${AGENT_UID}`, '--init', '--entrypoint', '/opt/hermes/bin/hermes'],
-    ...['--read-only', '--tmpfs', '/tmp:rw,nosuid,size=256m', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'],
-    ...['--pids-limit', '512', '--memory', SIZES[size].memory, '--cpus', SIZES[size].cpus, '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'],
+    ...['--read-only', '--tmpfs', `/tmp:rw,nosuid,size=${browser ? BROWSER_TMP : '256m'}`, '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'],
+    ...['--pids-limit', '512', '--memory', browser ? BROWSER_MEMORY : SIZES[size].memory, '--cpus', SIZES[size].cpus, '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'],
     ...['--network', `ag-${id}`, '--ip', `10.200.${net}.2`],
     ...Object.entries(AGENT_ENV).flatMap(([name, value]) => ['-e', `${name}=${value}`]),
     ...['--mount', 'type=bind,src=/etc/agentd/resolv.conf,dst=/etc/resolv.conf,readonly'],

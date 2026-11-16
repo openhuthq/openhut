@@ -19,7 +19,7 @@ export function BrowserCard({ agent }: { agent: Agent }) {
           <span className="mute ellip">{page.heldBy ? `${page.heldBy} is using it` : page.title}</span>
         </> : <span className="mute">{browser.isPending ? 'Looking…' : `${agent.name} hasn't opened a page yet.`}</span>}
         <span className="mute bmini-n">A still picture, every 5 seconds while this page is open.</span>
-        {agent.size === 'standard' && <span className="mute bmini-n">Pages use a lot of memory. Pick Large under Computer if {agent.name} browses busy sites.</span>}
+        <span className="mute bmini-n">With Browser on, {agent.name} can use up to 4 GB of memory.</span>
       </div>
     </div>
   </section>

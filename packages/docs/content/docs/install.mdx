@@ -51,10 +51,12 @@ Plan memory for the busiest moment: every running agent can use up to its **Comp
 | A team: 5 agents, 2 of them browse | 4 vCPU | 8 GB | 30 GB |
 | A bigger team: 10 agents, 4 of them browse | 8 vCPU | 16 GB | 40 GB |
 
+The memory column plans 2 GB for each agent that browses. One busy page can take an agent toward its 4 GB limit; on a server sized like the table, two of them at once still fit.
+
 To size your own:
 
 - **Memory:** 1 GB for OpenHut and the system, plus each running agent's Computer size: Standard 1 GB, Large 2 GB, Extra large 4 GB. An idle agent uses about 400 MB of it.
-- **Agents that browse:** pick **Large**. The browser runs inside the agent's own sandbox, and busy news sites took a Standard agent to 980 MB of its 1 GB.
+- **Agents that browse:** an agent with Browser on can use up to 4 GB, whatever its Computer size, because the browser runs inside its sandbox. Busy news sites used about 1 GB in our tests; plan 2 GB for each agent that browses.
 - **CPU:** one core for OpenHut, plus one for each agent working at the same moment. Opening a page uses a full core for a second or two.
 - **Disk:** 10 GB for the agent image (3.2 GB), OpenHut and Docker, plus about 1 GB per agent for its memory, files and browser profile.
 

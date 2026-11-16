@@ -493,7 +493,7 @@ function main() {
     return { actual: { browser: agent.browser, disabled, installed, reply: reply.slice(-160) }, pass: agent.browser === false && disabled.includes('[browser,') && installed === 'missing' && reply.includes('not found') && !reply.includes(BROWSE_TITLE) }
   })
 
-  check('R2', 'Switched on, the agent opens a public page with agent-browser, inside its own gVisor container', 'PATCH 200; the container is rebuilt still runsc, read-only, 1 GiB, with agent-browser mounted read-only; the agent\'s command returns the page title', async () => {
+  check('R2', 'Switched on, the agent opens a public page with agent-browser, inside its own gVisor container', 'PATCH 200; the container is rebuilt still runsc and read-only, with a 4 GiB memory limit and agent-browser mounted read-only; the agent\'s command returns the page title', async () => {
     const patched = await api<Agent>('PATCH', `/api/agents/${dev.id}`, { browser: true }, cookie)
     await waitReady(dev)
     const reply = await chat(dev, `browser: open ${BROWSE_URL}`)
@@ -502,7 +502,7 @@ function main() {
     const browserMounts = mounts.filter((m) => /agent-browser|browser-policy/.test(m.Destination)).map((m) => `${m.Destination} ${m.RW ? 'rw' : 'ro'}`)
     return {
       actual: { status: patched.status, browser: patched.json.browser, spec, browserMounts, reply: reply.slice(-200) },
-      pass: patched.status === 200 && patched.json.browser === true && spec === 'runsc true 1073741824 on' && browserMounts.length === 4 && browserMounts.every((m) => m.endsWith(' ro')) && reply.includes(BROWSE_TITLE),
+      pass: patched.status === 200 && patched.json.browser === true && spec === 'runsc true 4294967296 on' && browserMounts.length === 4 && browserMounts.every((m) => m.endsWith(' ro')) && reply.includes(BROWSE_TITLE),
     }
   })
 
@@ -542,13 +542,13 @@ function main() {
     }
   })
 
-  check('R5', 'Switched off again, the browser is gone', 'PATCH 200; the container is rebuilt without agent-browser; the dashboard reports no browser', async () => {
+  check('R5', 'Switched off again, the browser is gone', 'PATCH 200; the container is rebuilt without agent-browser and back to its 1 GiB size; the dashboard reports no browser', async () => {
     const patched = await api<Agent>('PATCH', `/api/agents/${dev.id}`, { browser: false }, cookie)
     await waitReady(dev)
     const installed = await docker('exec', `ag-${dev.id}`, 'sh', '-c', 'command -v agent-browser || echo missing')
-    const label = await docker('inspect', '--format', '{{index .Config.Labels "openhut.browser"}}', `ag-${dev.id}`)
+    const label = await docker('inspect', '--format', '{{index .Config.Labels "openhut.browser"}} {{.HostConfig.Memory}}', `ag-${dev.id}`)
     const still = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, cookie)
-    return { actual: { status: patched.status, browser: patched.json.browser, installed, label, open: still.json.open }, pass: patched.status === 200 && patched.json.browser === false && installed === 'missing' && label === 'off' && still.json.open === false }
+    return { actual: { status: patched.status, browser: patched.json.browser, installed, label, open: still.json.open }, pass: patched.status === 200 && patched.json.browser === false && installed === 'missing' && label === 'off 1073741824' && still.json.open === false }
   })
 
   check(
