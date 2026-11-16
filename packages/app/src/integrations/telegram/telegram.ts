@@ -20,7 +20,7 @@ export const telegram = {
 
   env({ botToken, audience }: { botToken: string; audience: Audience }): string[] {
     const who = audience.open ? 'TELEGRAM_ALLOW_ALL_USERS=true' : `TELEGRAM_ALLOWED_USERS=${[audience.ownerAddress, ...audience.allowed].join(',')}`
-    return [`TELEGRAM_BOT_TOKEN=${botToken}`, who]
+    return [`TELEGRAM_BOT_TOKEN=${botToken}`, who, `TELEGRAM_HOME_CHANNEL=${audience.ownerAddress}`]
   },
 
   yaml: 'telegram:\n  require_mention: true\n  unauthorized_dm_behavior: ignore\n',
