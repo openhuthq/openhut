@@ -111,8 +111,9 @@ export function BrowserPage({ me, agentId }: { me: Me; agentId: string }) {
           onWheel={(event) => { if (!mine) return; const { x, y } = point(event); send({ type: 'mouse', action: 'wheel', x, y, deltaX: Math.round(event.deltaX), deltaY: Math.round(event.deltaY) }) }}
           onKeyDown={key('down')} onKeyUp={key('up')}
           onPaste={(event) => { if (!mine) return; event.preventDefault(); for (const char of event.clipboardData.getData('text').slice(0, 500)) { send({ type: 'key', action: 'down', key: char }); send({ type: 'key', action: 'up', key: char }) } }}>
-          {live.frame ? <img className="block h-auto w-full select-none" src={`data:image/jpeg;base64,${live.frame.data}`} alt={`The page ${name} has open: ${live.page.title}`} draggable={false}
-            onLoad={(event) => { const { naturalWidth: width, naturalHeight: height } = event.currentTarget; if (width && height && (width !== shape.width || height !== shape.height)) setShape({ width, height }) }} /> : <div className="flex aspect-(--ar) w-full flex-col items-center justify-center gap-3 p-6 text-center leading-[1.5] text-mute">
+          {live.state === 'live' && <img className="block h-auto w-full select-none" src={`${browserPath(agentId)}/frames?c=${live.connection}`} alt={`The page ${name} has open: ${live.page.title}`} draggable={false}
+            onLoad={(event) => { const { naturalWidth: width, naturalHeight: height } = event.currentTarget; if (width && height && (width !== shape.width || height !== shape.height)) setShape({ width, height }) }} />}
+          {live.state !== 'live' && <div className="flex aspect-(--ar) w-full flex-col items-center justify-center gap-3 p-6 text-center leading-[1.5] text-mute">
             {agent.data && <Creature id={agent.data.id} about={agent.data.instructions} size={48} />}
             <p className="m-0 max-w-[36ch]">{live.state === 'closed' ? `${name} hasn't opened a page yet. This view starts as soon as it does.` : 'Connecting to the browser…'}</p>
           </div>}
@@ -147,7 +148,7 @@ function addressOf(url: string) {
 }
 
 function useLive(agentId: string) {
-  const [frame, setFrame] = useState<{ data: string }>()
+  const [connection, setConnection] = useState(0)
   const [page, setPage] = useState({ url: '', title: '' })
   const [heldBy, setHeldBy] = useState<string | null>(null)
   const [actions, setActions] = useState<{ action: string; url: string; at: number }[]>([])
@@ -161,12 +162,12 @@ function useLive(agentId: string) {
   useEffect(() => {
     const source = new EventSource(`${browserPath(agentId)}/stream`)
     const on = (event: string, handle: (data: unknown) => void) => source.addEventListener(event, (message) => handle(JSON.parse(message.data)))
-    on('frame', (data) => { setFrame(data as typeof frame); setState('live') })
+    on('frame', () => setState('live'))
     on('page', (data) => setPage(data as typeof page))
     on('hold', (data) => setHeldBy((data as { heldBy: string | null }).heldBy))
     on('action', (data) => setActions((known) => [{ ...(data as { action: string; url: string }), at: Date.now() }, ...known].slice(0, ACTIONS_SHOWN)))
-    on('closed', () => { setState('closed'); setFrame(undefined) })
-    source.onopen = () => setError(undefined)
+    on('closed', () => setState('closed'))
+    source.onopen = () => { setError(undefined); setConnection((n) => n + 1) }
     source.onerror = () => {
       if (source.readyState !== EventSource.CLOSED) return
       setState('closed')
@@ -174,7 +175,7 @@ function useLive(agentId: string) {
     }
     return () => source.close()
   }, [agentId])
-  return { frame, page, heldBy, actions, state, error }
+  return { connection, page, heldBy, actions, state, error }
 }
 
 function useInput(agentId: string, enabled: boolean) {

@@ -8,6 +8,8 @@ export const browserController: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { id: string } }>('/:id/stream', async (req, reply) => browserService.stream({ actor: await who(req), agentId: req.params.id, req, reply }))
 
+  app.get<{ Params: { id: string } }>('/:id/frames', async (req, reply) => browserService.frames({ actor: await who(req), agentId: req.params.id, req, reply }))
+
   app.post<{ Params: { id: string } }>('/:id/hold', async (req) => browserService.hold({ actor: await who(req), agentId: req.params.id }))
 
   app.delete<{ Params: { id: string } }>('/:id/hold', async (req) => browserService.release({ actor: await who(req), agentId: req.params.id }))

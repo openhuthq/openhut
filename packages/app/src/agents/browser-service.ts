@@ -13,6 +13,7 @@ const KEEPALIVE_MS = 15_000
 const RETRY_MS = 4_000
 const PING_MS = 10_000
 const MAX_FRAME = 4 << 20
+const BOUNDARY = 'openhut-frame'
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/
 const MOUSE_EVENTS = { down: 'mousePressed', up: 'mouseReleased', move: 'mouseMoved', wheel: 'mouseWheel' } as const
 const KEY_CODES: Record<string, number> = {
@@ -39,15 +40,37 @@ export const browserService = {
     const res = reply.raw
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache, no-transform', 'x-accel-buffering': 'no' })
     res.write(`retry: ${RETRY_MS}\n\n`)
-    const viewer: Viewer = { personId: actor.id, write: (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`), busy: () => res.writableNeedDrain, end: () => res.end() }
+    const viewer: Viewer = { personId: actor.id, write: (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`), end: () => res.end() }
     session.viewers.add(viewer)
     viewer.write('page', session.page)
     viewer.write('hold', { heldBy: session.holder?.email ?? null })
-    if (session.frame) viewer.write('frame', session.frame)
+    if (session.frame) viewer.write('frame', {})
     const keepalive = setInterval(() => res.write(': keepalive\n\n'), KEEPALIVE_MS)
     req.raw.on('close', () => {
       clearInterval(keepalive)
       leave({ session, viewer })
+    })
+  },
+
+  async frames({ actor, agentId, req, reply }: { actor: Caller; agentId: string; req: FastifyRequest; reply: FastifyReply }): Promise<void> {
+    const row = await agentService.requireEditable({ actor, id: agentId })
+    if (!row.web_browser) throw new HttpError(409, `${row.name}'s browser is off. Switch Browser on in ${row.name}'s settings first.`)
+    const session = sessionOf(agentId)
+    if (session.screens.size >= MAX_VIEWERS) throw new HttpError(429, `${MAX_VIEWERS} people are already watching ${row.name}'s browser. Try again when one of them closes it.`)
+    reply.hijack()
+    const res = reply.raw
+    res.writeHead(200, { 'content-type': `multipart/x-mixed-replace; boundary=${BOUNDARY}`, 'cache-control': 'no-cache, no-store, no-transform', 'x-accel-buffering': 'no' })
+    const screen: Screen = (jpeg) => {
+      if (res.writableNeedDrain) return
+      res.write(`--${BOUNDARY}\r\ncontent-type: image/jpeg\r\ncontent-length: ${jpeg.length}\r\n\r\n`)
+      res.write(jpeg)
+      res.write('\r\n')
+    }
+    session.screens.set(screen, () => res.end())
+    if (session.frame) screen(session.frame)
+    req.raw.on('close', () => {
+      session.screens.delete(screen)
+      closeIfUnwatched(session)
     })
   },
 
@@ -103,7 +126,7 @@ export function inputLine(event: BrowserInputEvent): string {
 function sessionOf(agentId: string): Session {
   const known = sessions.get(agentId)
   if (known) return known
-  const session: Session = { agentId, viewers: new Set(), page: { url: '', title: '' }, sentAt: 0, live: { send: () => undefined, close: () => undefined } }
+  const session: Session = { agentId, viewers: new Set(), screens: new Map(), page: { url: '', title: '' }, sentAt: 0, live: { send: () => undefined, close: () => undefined } }
   session.live = liveBrowser({ id: agentId, onLine: (line) => onLine({ session, line }), onEnd: () => void ended(session) })
   session.pinger = setInterval(() => session.live.send(JSON.stringify({ type: 'ping' })), PING_MS)
   sessions.set(agentId, session)
@@ -122,13 +145,14 @@ function onLine({ session, line }: { session: Session; line: string }): void {
 
 function showFrame({ session, message }: { session: Session; message: Record<string, unknown> }): void {
   if (typeof message.data !== 'string' || message.data.length > MAX_FRAME || !BASE64.test(message.data)) return
-  session.frame = { data: message.data }
+  session.frame = Buffer.from(message.data, 'base64')
   if (session.frameTimer) return
   const wait = Math.max(0, session.sentAt + FRAME_GAP_MS - Date.now())
   session.frameTimer = setTimeout(() => {
     session.frameTimer = undefined
     session.sentAt = Date.now()
-    for (const viewer of session.viewers) if (!viewer.busy()) viewer.write('frame', session.frame)
+    for (const screen of session.screens.keys()) if (session.frame) screen(session.frame)
+    broadcast(session, 'frame', {})
   }, wait)
 }
 
@@ -143,7 +167,11 @@ function broadcast(session: Session, event: string, data: unknown): void {
 
 function leave({ session, viewer }: { session: Session; viewer: Viewer }): void {
   session.viewers.delete(viewer)
-  if (session.viewers.size || sessions.get(session.agentId) !== session) return
+  closeIfUnwatched(session)
+}
+
+function closeIfUnwatched(session: Session): void {
+  if (session.viewers.size || session.screens.size || sessions.get(session.agentId) !== session) return
   session.live.close()
 }
 
@@ -153,6 +181,7 @@ async function ended(session: Session): Promise<void> {
   clearInterval(session.pinger)
   broadcast(session, 'closed', {})
   for (const viewer of session.viewers) viewer.end()
+  for (const end of session.screens.values()) end()
   if (session.holder) await letGo(session).catch(() => undefined)
 }
 
@@ -199,14 +228,15 @@ function textOf(value: unknown, max: number): string {
   return typeof value === 'string' ? value.slice(0, max) : ''
 }
 
-type Frame = { data: string }
-type Viewer = { personId: string; write: (event: string, data: unknown) => void; busy: () => boolean; end: () => void }
+type Viewer = { personId: string; write: (event: string, data: unknown) => void; end: () => void }
+type Screen = (jpeg: Buffer) => void
 type Session = {
   agentId: string
   live: LiveBrowser
   viewers: Set<Viewer>
   page: { url: string; title: string }
-  frame?: Frame
+  screens: Map<Screen, () => void>
+  frame?: Buffer
   frameTimer?: NodeJS.Timeout
   sentAt: number
   holder?: { personId: string; email: string }
