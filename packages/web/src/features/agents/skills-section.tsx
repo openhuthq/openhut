@@ -36,7 +36,7 @@ export function SkillsSection({ agent, lockReason, open }: { agent: Agent; lockR
     <SectionHead title="Skills" action={filters} />
     <ErrorNote message={skills.error?.message} />
     {skills.data && !shown.length && <p className="note">{filter === 'builtIn' ? `${agent.name} has no built-in skills.` : `${agent.name} hasn't learned a skill yet.`}</p>}
-    {!!shown.length && <div className="grid">{(unfolded ? shown : shown.slice(0, FOLDED)).map((skill) => <SkillCard key={skill.id} agent={agent} skill={skill} />)}</div>}
+    {!!shown.length && <div className="cards">{(unfolded ? shown : shown.slice(0, FOLDED)).map((skill) => <SkillCard key={skill.id} agent={agent} skill={skill} />)}</div>}
     {shown.length > FOLDED && <div className="skill-more">
       <button type="button" className="btn sm" aria-expanded={unfolded} onClick={() => setUnfolded(!unfolded)}>{unfolded ? 'Show fewer' : `Show all ${shown.length}`}{ICONS.chevd}</button>
     </div>}

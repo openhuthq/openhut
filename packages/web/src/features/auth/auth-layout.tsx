@@ -43,8 +43,8 @@ function Story() {
   const looking = beat >= 1 && beat <= 3
   return <div className={call.denied && beat >= 2 ? 'orbits denied' : 'orbits'} data-beat={beat}
     style={{ '--sx': looking ? x * LOOK_PX : 0, '--sy': looking ? y * LOOK_PX : 0 } as CSSProperties}>
-    <div className="ring"></div>
-    <div className="ring dash"></div>
+    <div className="orbit"></div>
+    <div className="orbit dash"></div>
     {CALLS.map((item, i) => <div key={item.key} className={i === active ? 'beam on' : 'beam'} style={{ rotate: `${i * 60 + 30}deg` }}></div>)}
     {CALLS.map((item, i) => {
       const [sx, sy] = spot(i)

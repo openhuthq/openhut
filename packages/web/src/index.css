@@ -1,3 +1,90 @@
+@layer theme, base, components, legacy, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@custom-variant mobile (@media (max-width: 900px));
+@custom-variant narrow (@media (max-width: 720px));
+@custom-variant phone (@media (max-width: 640px));
+@custom-variant tiny (@media (max-width: 560px));
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Variable', ui-monospace, monospace;
+  --font-copy: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-display: 'Bebas Neue', 'Arial Narrow', Impact, sans-serif;
+  --font-brand: 'Fredoka', 'Baloo 2', system-ui, sans-serif;
+  --font-weight-book: 450;
+  --text-xs: 12px;
+  --text-xs--line-height: 1.5;
+  --text-sm: 14px;
+  --text-sm--line-height: 1.5;
+  --shadow-menu: 0 6px 18px oklch(0% 0 0 / .06), 0 1px 1px oklch(0% 0 0 / .05);
+  --shadow-pop: 0 12px 32px oklch(0% 0 0 / .1), 0 1px 2px oklch(0% 0 0 / .06);
+  --shadow-dialog: 0 24px 80px oklch(0% 0 0 / .22);
+  --shadow-sheet: 0 10px 15px -3px oklch(0% 0 0 / .1), 0 4px 6px -4px oklch(0% 0 0 / .1);
+  --color-badge-secondary: oklch(.97 0 0);
+  --color-badge-secondary-foreground: oklch(.205 0 0);
+  --color-badge-destructive: oklch(.577 .245 27.325);
+  --color-badge-outline: oklch(.922 0 0);
+  --color-badge-outline-foreground: oklch(.145 0 0);
+  --color-success-subtle: #ecfdf5;
+  --color-success-foreground: #047857;
+  --color-success-strong: #0b6b3a;
+  --color-warning-subtle: #fff7e6;
+  --color-warning-foreground: #a15c00;
+  --color-warning-strong: #7a4500;
+  --color-amber: #d98314;
+  --animate-grow: grow .18s cubic-bezier(.2, .8, .2, 1);
+  --animate-sheetin: sheetin .2s ease-in-out;
+  --animate-spin: spin .8s linear infinite;
+  --animate-spin-slow: spin 1.2s linear infinite;
+}
+
+@theme inline {
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-canvas: var(--canvas);
+  --color-card: var(--card);
+  --color-soft: var(--soft);
+  --color-mid: var(--mid);
+  --color-hair: var(--hair);
+  --color-ink: var(--ink);
+  --color-body: var(--body);
+  --color-mute: var(--mute);
+  --color-mute-2: var(--mute-2);
+  --color-tint: var(--tint);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: #fff;
+  --color-night: var(--night);
+  --color-night-muted: var(--night-muted);
+  --color-pass: var(--pass);
+  --color-fail: var(--fail);
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--ink);
+  --color-card-foreground: var(--ink);
+  --color-secondary: var(--soft);
+  --color-secondary-foreground: var(--ink);
+  --color-muted: var(--soft);
+  --color-muted-foreground: var(--mute);
+  --color-accent: var(--soft);
+  --color-accent-foreground: var(--ink);
+  --color-destructive: var(--fail);
+  --color-success: var(--pass);
+  --color-border: var(--hair);
+  --color-input: var(--mid);
+  --color-ring: var(--breeze);
+  --color-sidebar-foreground: var(--ink);
+  --color-sidebar-accent: var(--tint);
+  --color-sidebar-accent-foreground: var(--ink);
+  --color-sidebar-border: var(--hair);
+}
+
+@layer legacy {
 :root{
   color-scheme:light;
   --sidebar:oklch(96.6% .0025 290); --canvas:oklch(98.8% .001 290); --card:#ffffff; --soft:oklch(0% 0 0 / .06); --mid:oklch(0% 0 0 / .16);
@@ -9,6 +96,7 @@
   --display:'Bebas Neue','Arial Narrow',Impact,sans-serif;
   --brand:'Fredoka','Baloo 2',system-ui,sans-serif;
   --copy:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --radius:.5rem;
   --sans:'Inter',ui-sans-serif,system-ui,sans-serif;
   --mono:'Geist Mono','Geist Mono Variable',ui-monospace,monospace;
 }
@@ -100,7 +188,7 @@ button:disabled{cursor:not-allowed;opacity:.5}
 .rows>:first-child{border-radius:7px 7px 0 0}.rows>:last-child{border-radius:0 0 7px 7px}.rows>:only-child{border-radius:7px}
 .copied{display:inline-flex;width:12px;justify-content:center;animation:copy-pop .2s ease-out}
 @keyframes copy-pop{from{transform:scale(.6);opacity:0}}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
 .card{background:var(--card);border:1px solid var(--hair);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:10px;color:inherit;text-decoration:none;transition:border-color .15s}
 .card:hover{border-color:var(--mid)}
 .card .top{display:flex;gap:12px;align-items:center}
@@ -157,8 +245,8 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .floor{position:absolute;left:-60%;right:-60%;top:66%;height:80%;z-index:-1;background-image:linear-gradient(oklch(100% 0 0 / .18) 1px,transparent 1px),linear-gradient(90deg,oklch(100% 0 0 / .18) 1px,transparent 1px);background-size:48px 48px;transform:perspective(360px) rotateX(64deg);transform-origin:50% 0;-webkit-mask-image:linear-gradient(transparent,#000 40%);mask-image:linear-gradient(transparent,#000 40%);animation:floor 2.4s linear infinite}
 @keyframes floor{to{background-position:0 48px}}
 .orbits{position:relative;width:calc(var(--r) * 2 + 56px);aspect-ratio:1;display:grid;place-items:center;flex:none}
-.ring{position:absolute;inset:28px;border-radius:50%;border:1px solid oklch(100% 0 0 / .14)}
-.ring.dash{inset:calc(28px + var(--r) * .36);border:1.5px dashed oklch(100% 0 0 / .2)}
+.orbit{position:absolute;inset:28px;border-radius:50%;border:1px solid oklch(100% 0 0 / .14)}
+.orbit.dash{inset:calc(28px + var(--r) * .36);border:1.5px dashed oklch(100% 0 0 / .2)}
 .beam{position:absolute;left:50%;bottom:50%;width:2px;margin-left:-1px;height:var(--r);transform-origin:50% 100%;background:linear-gradient(to top,transparent 35%,oklch(100% 0 0 / .14));transition:background .3s}
 .beam.on{background:linear-gradient(to top,transparent 30%,oklch(100% 0 0 / .8));filter:drop-shadow(0 0 4px rgb(255 255 255 / .6))}
 .denied .beam.on{background:linear-gradient(to top,transparent 30%,#ff5a3c);filter:drop-shadow(0 0 4px rgb(255 90 60 / .6))}
@@ -208,7 +296,7 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .mnote{margin:6px -6px -6px;padding:8px 14px;border-top:1px solid var(--hair);font-size:12px;color:var(--mute)}
 .mcheck{width:14px;display:inline-flex;justify-content:center;color:var(--primary)}
 /* instructions: a preview card that grows into an editor dialog */
-.grow{flex:1;display:flex;flex-direction:column}
+.soulsec{flex:1;display:flex;flex-direction:column}
 .soul{display:block;flex:1;width:100%;text-align:left;font:inherit;color:inherit;border:1px solid var(--hair);border-radius:8px;background:var(--card);padding:0;position:relative;cursor:zoom-in;min-height:200px;overflow:hidden;transition:border-color .15s,box-shadow .15s}
 .soul:hover{border-color:var(--mid);box-shadow:0 4px 16px oklch(0% 0 0 / .06)}
 .soul:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
@@ -267,7 +355,7 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .status svg{width:12px;height:12px;flex:none;pointer-events:none}
 .status.secondary{background:oklch(.97 0 0);color:oklch(.205 0 0)}
 .status.destructive{background:oklch(.577 .245 27.325);color:#fff}
-.status.outline{border-color:oklch(.922 0 0);color:oklch(.145 0 0)}
+.status.outlined{border-color:oklch(.922 0 0);color:oklch(.145 0 0)}
 .status.success{background:#ecfdf5;color:#047857}
 
 /* Connections marketplace, matched to Capy's Explore page */
@@ -434,7 +522,6 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .inline-form input{flex:1}
 .more{align-self:flex-start;margin-top:8px}
 .ailogo:nth-child(1){--i:0}.ailogo:nth-child(2){--i:1}.ailogo:nth-child(3){--i:2}.ailogo:nth-child(4){--i:3}.ailogo:nth-child(5){--i:4}.ailogo:nth-child(6){--i:5}.ailogo:nth-child(7){--i:6}
-.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 /* chat: the site's product window (openhut.dev hero), in the dashboard */
 .status.warning{background:#fff7e6;color:#a15c00}
@@ -714,3 +801,4 @@ textarea{min-height:260px;font-family:var(--mono);font-size:12px;line-height:1.7
 .picker-wait>.mute{font-size:12px}
 .picker-row{display:flex;align-items:center;gap:6px;min-height:30px;min-width:0}
 .picker-row .btn{margin-left:auto;height:24px}
+}

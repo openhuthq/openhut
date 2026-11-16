@@ -17,12 +17,12 @@ const STATUS = {
   stopped: { word: 'Stopped', tip: 'Container stopped', variant: 'secondary', icon: PAUSE },
   missing: { word: 'Error', tip: 'Its container is gone. It is recreated within 30 seconds while it should be running.', variant: 'destructive', icon: ALERT },
   connected: { word: 'Connected', tip: 'Last call succeeded', variant: 'success', icon: BADGE_CHECK },
-  failing: { word: 'Failing', tip: 'Last call failed', variant: 'outline', icon: ALERT },
-  no_calls: { word: 'No calls yet', tip: 'No agent has called it yet', variant: 'outline', icon: DASHED },
+  failing: { word: 'Failing', tip: 'Last call failed', variant: 'outlined', icon: ALERT },
+  no_calls: { word: 'No calls yet', tip: 'No agent has called it yet', variant: 'outlined', icon: DASHED },
   ready: { word: 'Ready', tip: 'Done', variant: 'success', icon: BADGE_CHECK },
-  not_set_up: { word: 'Not set up', tip: 'Not done', variant: 'outline', icon: DASHED },
+  not_set_up: { word: 'Not set up', tip: 'Not done', variant: 'outlined', icon: DASHED },
   denied: { word: 'Denied', tip: 'No grant for this tool', variant: 'destructive', icon: BAN },
-  failed: { word: 'Failed', tip: 'The tool ran and failed', variant: 'outline', icon: ALERT },
+  failed: { word: 'Failed', tip: 'The tool ran and failed', variant: 'outlined', icon: ALERT },
 }
 
 export function StatusBadge({ status, tip = STATUS[status].tip, word = STATUS[status].word }: { status: keyof typeof STATUS; tip?: string; word?: string }) {

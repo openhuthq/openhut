@@ -35,7 +35,7 @@ export function AgentsPage({ me }: { me: Me }) {
 
 function AgentGrid({ agents }: { agents: Agent[] }) {
   if (!agents.length) return <div className="empty"><Avatar id="empty" about="support" size={96} /><div>No agents yet</div></div>
-  return <div className="grid">{agents.map((agent) => <a className="card" href={`/agents/${agent.id}`} key={agent.id}>
+  return <div className="cards">{agents.map((agent) => <a className="card" href={`/agents/${agent.id}`} key={agent.id}>
     <div className="top"><Avatar id={agent.id} about={agent.instructions} size={44} /><div className="who"><div className="name ellip">{agent.name}</div><div className="mute">{modelLabel(agent.model)}</div></div><AgentBadge agent={agent} /></div>
     <div className="role">{agent.summary || 'No instructions yet'}</div>
   </a>)}</div>
