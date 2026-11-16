@@ -29,7 +29,7 @@ export const MCP_TOOLS = [
   tool({ name: 'get_connection', description: 'One connection.', input: Id, call: ({ api, input }) => api({ method: 'GET', url: `/api/connections/${input.id}` }) }),
   tool({
     name: 'create_connection',
-    description: 'Add a connection that takes a key: Postgres (dsn), Convex (deployKey) or a custom MCP server (url, and an optional header like "Authorization: Bearer …"). Keys are sealed and never returned.',
+    description: 'Add a connection that takes a key: Postgres (dsn), Convex (deployKey), Excalidraw (kind alone, it takes no key) or a custom MCP server (url, and an optional header like "Authorization: Bearer …"). Keys are sealed and never returned.',
     input: CreateConnection,
     call: ({ api, input }) => api({ method: 'POST', url: '/api/connections', payload: input }),
   }),

@@ -49,6 +49,7 @@ function Flow(props: FlowProps & { me: Me }) {
     case 'postgres': return <PostgresFlow {...props} />
     case 'convex': return <ConvexFlow {...props} />
     case 'github': return <GithubFlow {...props} />
+    case 'excalidraw': return <ExcalidrawFlow {...props} />
     case 'posthog':
     case 'linear': return <SignInFlow {...props} />
     case 'gmail':
@@ -98,6 +99,15 @@ function ConvexFlow({ item, info, close, returned }: FlowProps) {
     </SetupSteps>
     <SetupFoot info={info} cancel={close} error={formError(createConnection.error, ['deployKey']) ?? returned}>
       <SetupSubmit pending={createConnection.isPending} label="Test and connect" busy="Testing…" />
+    </SetupFoot>
+  </form>
+}
+
+function ExcalidrawFlow({ item, info, close, returned }: FlowProps) {
+  const createConnection = useCreateConnection()
+  return <form id="connect-main" onSubmit={(event) => { event.preventDefault(); createConnection.mutate({ kind: 'excalidraw', name: item.title }) }}>
+    <SetupFoot info={info} cancel={close} error={formError(createConnection.error, []) ?? returned}>
+      <SetupSubmit brand={item.name} pending={createConnection.isPending} label="Connect" busy="Connecting…" />
     </SetupFoot>
   </form>
 }

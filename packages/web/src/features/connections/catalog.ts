@@ -40,6 +40,11 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
       safe: ['The bot is a GitHub App you own: it reaches only the repositories you install it on', 'Its private key is sealed on this server: agents get one-hour tokens, never the key', 'Commits show as the bot, not as a person'],
     },
     {
+      name: 'excalidraw', short: 'Hand-drawn diagrams agents share as a link.', chips: [['pencil', 'Draw diagrams'], ['globe', 'Share a link']], safeLine: 'Drawings live on excalidraw.com. Anyone with the link can open them.', eta: 'One click', title: 'Excalidraw', blurb: 'Agents draw a diagram and send a link that opens it in Excalidraw. No account or key.',
+      gets: ['draw: boxes, arrows and notes become a diagram', 'A link that opens the drawing in Excalidraw, where people can edit it'],
+      safe: ['Drawings are encrypted on this server, and the key is only in the link', 'Anyone with the link can open the drawing, so agents are told to leave secrets out', 'There is no account or key to leak'],
+    },
+    {
       name: 'gmail', short: 'Search, label and draft, never send.', chips: [['search', 'Search threads'], ['tag', 'Label'], ['draft', 'Write drafts']], safeLine: 'No tool sends mail. Agents leave drafts for you.', eta: 'One approval', title: 'Gmail', blurb: "Search, read, label and draft through Google's Gmail MCP.",
       gets: ['search_threads, get_thread and get_message', 'Labels: list, create, apply and remove', 'Drafts: create and read', 'Trash and spam, never a permanent delete'],
       safe: ['No tool sends mail: agents leave drafts for you', ...SIGNED_IN('Google')],
