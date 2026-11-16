@@ -11,6 +11,7 @@ const FRAME_GAP_MS = 160
 const HOLD_IDLE_MS = 120_000
 const KEEPALIVE_MS = 15_000
 const RETRY_MS = 4_000
+const PING_MS = 10_000
 const MAX_FRAME = 4 << 20
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/
 const MOUSE_EVENTS = { down: 'mousePressed', up: 'mouseReleased', move: 'mouseMoved', wheel: 'mouseWheel' } as const
@@ -104,6 +105,7 @@ function sessionOf(agentId: string): Session {
   if (known) return known
   const session: Session = { agentId, viewers: new Set(), page: { url: '', title: '' }, sentAt: 0, live: { send: () => undefined, close: () => undefined } }
   session.live = liveBrowser({ id: agentId, onLine: (line) => onLine({ session, line }), onEnd: () => void ended(session) })
+  session.pinger = setInterval(() => session.live.send(JSON.stringify({ type: 'ping' })), PING_MS)
   sessions.set(agentId, session)
   return session
 }
@@ -148,6 +150,7 @@ function leave({ session, viewer }: { session: Session; viewer: Viewer }): void 
 async function ended(session: Session): Promise<void> {
   if (sessions.get(session.agentId) === session) sessions.delete(session.agentId)
   clearTimeout(session.frameTimer)
+  clearInterval(session.pinger)
   broadcast(session, 'closed', {})
   for (const viewer of session.viewers) viewer.end()
   if (session.holder) await letGo(session).catch(() => undefined)
@@ -208,4 +211,5 @@ type Session = {
   sentAt: number
   holder?: { personId: string; email: string }
   holdTimer?: NodeJS.Timeout
+  pinger?: NodeJS.Timeout
 }

@@ -9,7 +9,8 @@ test('a still picture comes back with its page; a closed browser or junk reads a
   assert.equal(stillOf('{"type":"still","url":"x","title":"y","data":"<script>"}').data, '')
 })
 
-test('only mouse and keyboard input reach the browser, and only in small lines', () => {
+test('only mouse and keyboard input, and the app\'s keep-alive ping, reach the bridge, and only in small lines', () => {
+  assert.equal(isInputLine('{"type":"ping"}'), true)
   assert.equal(isInputLine('{"type":"input_mouse","eventType":"mousePressed","x":1,"y":2}'), true)
   assert.equal(isInputLine('{"type":"input_keyboard","eventType":"keyDown","key":"a"}'), true)
   assert.equal(isInputLine('{"type":"command","action":"navigate","url":"http://10.0.0.1/"}'), false)
