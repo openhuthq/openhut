@@ -60,7 +60,8 @@ function ChatLayout({ me, agent, busy, onSend, onStop, extra, children }: { me: 
     const el = log.current
     if (el && pinned.current) el.scrollTop = el.scrollHeight
   })
-  const actions = <><AgentBadge agent={agent} /><a className={buttonVariants()} href={`/agents/${agent.id}`}>{ICONS.gear}<ButtonLabel>Settings</ButtonLabel></a>{extra}</>
+  const browser = agent.browser && agent.canEdit && <a className={buttonVariants()} href={`/agents/${agent.id}/browser`} target="_blank" rel="noopener">{ICONS.ext}<ButtonLabel>Browser</ButtonLabel></a>
+  const actions = <><AgentBadge agent={agent} />{browser}<a className={buttonVariants()} href={`/agents/${agent.id}`}>{ICONS.gear}<ButtonLabel>Settings</ButtonLabel></a>{extra}</>
   return <Page title={agent.name} actions={actions} fill>
     <div className="flex flex-1 flex-col overflow-auto px-6 py-5" ref={log} aria-live="polite" onScroll={(event) => { const el = event.currentTarget; pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
       <div className="mx-auto mt-auto mb-0 flex w-full max-w-[720px] flex-col gap-2.5">{children}</div>

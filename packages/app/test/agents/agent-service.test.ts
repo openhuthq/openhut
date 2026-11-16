@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { sql } from 'kysely'
 import { db, migrate } from '../../src/platform/db.ts'
 import { agentToken, seal } from '../../src/platform/secrets.ts'
 import { agentService } from '../../src/agents/agent-service.ts'
@@ -23,4 +24,11 @@ test('renaming an agent cleans the name and refuses an empty one', async () => {
   const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
   assert.equal((await agentService.update({ actor, id: 'ag_tokentst', patch: { name: '  Sales <b>bot</b> ' } })).name, 'Sales bbotb')
   await assert.rejects(agentService.update({ actor, id: 'ag_tokentst', patch: { name: '<>' } }), { status: 400 })
+})
+
+test('the browser is off for every agent, even on a database that kept the old browser column that defaulted to on', async () => {
+  await sql`alter table agent add column if not exists browser boolean not null default true`.execute(db)
+  await migrate()
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
+  assert.equal((await agentService.get({ actor, id: 'ag_tokentst' })).browser, false)
 })

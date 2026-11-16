@@ -4,7 +4,7 @@ description: One command on a Linux server. About ten minutes.
 icon: sales
 ---
 
-You need a Linux server (Debian, Ubuntu or Alpine), root, and 3 GB of disk.
+You need a Linux server (Debian, Ubuntu or Alpine, x86_64 or arm64) and root. See [Hardware](#hardware) for how big.
 
 <Steps>
 <Step>
@@ -40,3 +40,24 @@ Enter your email and pick a password. The first person in is the owner.
 </Steps>
 
 The dashboard is plain HTTP on port 8787. Keep it behind Tailscale, an SSH tunnel or HTTPS.
+
+## Hardware
+
+Plan memory for the busiest moment: every running agent can use up to its **Computer** size at once.
+
+| Server | CPU | Memory | Disk |
+| --- | --- | --- | --- |
+| Try it: 2 agents, no browser | 2 vCPU | 4 GB | 20 GB |
+| A team: 5 agents, 2 of them browse | 4 vCPU | 8 GB | 30 GB |
+| A bigger team: 10 agents, 4 of them browse | 8 vCPU | 16 GB | 40 GB |
+
+The memory column plans 2 GB for each agent that browses. One busy page can take an agent toward its 4 GB limit; on a server sized like the table, two of them at once still fit.
+
+To size your own:
+
+- **Memory:** 1 GB for OpenHut and the system, plus each running agent's Computer size: Standard 1 GB, Large 2 GB, Extra large 4 GB. An idle agent uses about 400 MB of it.
+- **Agents that browse:** an agent with Browser on can use up to 4 GB, whatever its Computer size, because the browser runs inside its sandbox. Busy news sites used about 1 GB in our tests; plan 2 GB for each agent that browses.
+- **CPU:** one core for OpenHut, plus one for each agent working at the same moment. Opening a page uses a full core for a second or two.
+- **Disk:** 10 GB for the agent image (3.2 GB), OpenHut and Docker, plus about 1 GB per agent for its memory, files and browser profile.
+
+OpenHut itself uses about 550 MB: the dashboard and gateway 340 MB, the agent runner 80 MB, Docker 115 MB. Measured on an arm64 test server, November 2026.

@@ -3,7 +3,6 @@ import { Combobox as ComboboxPrimitive } from '@base-ui/react/combobox'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Channel, Conversation } from '@openhut/common/channels/channel.ts'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Combobox, ComboboxChip, ComboboxChips, ComboboxChipsInput, ComboboxContent, ComboboxEmpty, ComboboxItem, ComboboxItemIndicator, ComboboxList } from '@/components/ui/combobox'
 import { ErrorNote } from '@/components/error-note'
 import { SETUP_ICONS } from '@/components/icons'
@@ -21,7 +20,6 @@ export function SlackChannels({ agent, channel, lockReason, inset = false }: { a
   const items = useMemo(() => ComboboxPrimitive.createItems(conversations.data ?? [], { getValue: (each) => each.id, getLabel: (each) => each.name }), [conversations.data])
   const known = new Map(conversations.data?.map((each) => [each.id, each]))
   const bot = channel.account?.split('@')[1] ?? agent.name
-  const waiting = conversations.data?.filter((each) => each.joined && !channel.allowed.includes(each.id)) ?? []
   const disabled = !agent.canEdit || !!lockReason || updateChannel.isPending
   const pick = (next: string[]) => {
     latest.current = next
@@ -54,13 +52,6 @@ export function SlackChannels({ agent, channel, lockReason, inset = false }: { a
       </Combobox>
     </Locked>
     <ErrorNote message={conversations.error?.message} />
-    {waiting.length > 0 && <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-mute">In Slack, but {agent.name} doesn't answer there</span>
-      {waiting.map((each) => <div className="flex min-h-[30px] min-w-0 items-center gap-1.5 [&>svg]:size-3 [&>svg]:shrink-0 [&>svg]:text-mute" key={each.id}>
-        {glyph(each)}<span className="truncate">{each.name}</span>
-        <Locked reason={lockReason}><Button type="button" variant="secondary" size="xs" className="ml-auto" disabled={disabled} onClick={() => { pick([...latest.current, each.id]); save() }}>Allow</Button></Locked>
-      </div>)}
-    </div>}
   </div>
 }
 

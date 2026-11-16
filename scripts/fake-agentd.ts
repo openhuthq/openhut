@@ -91,7 +91,8 @@ createHttpServer((req, res) => {
 }).listen(HERMES_PORT, '127.0.0.1', () => console.log(`fake Hermes API on :${HERMES_PORT}`))
 
 function fakeSlack(method: string, params: URLSearchParams) {
-  if (method === 'auth.test') return { ok: true, team: 'Acme', user: 'gus' }
+  if (method === 'auth.test') return { ok: true, team: 'Acme', user: 'gus', bot_id: 'B0FAKEGUS' }
+  if (method === 'bots.info') return { ok: true, bot: { app_id: 'A0FAKEGUS' } }
   if (method === 'conversations.list') return { ok: true, channels: SLACK_CHANNELS.filter((each) => !!each.is_mpim === (params.get('types') === 'mpim')), response_metadata: { next_cursor: '' } }
   if (method === 'conversations.join') Object.assign(SLACK_CHANNELS.find((each) => each.id === params.get('channel')) ?? {}, { is_member: true })
   return { ok: true }
@@ -176,6 +177,12 @@ function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
     case 'ts-down':
       tailnet = OFF_TAILNET
       return tailnet
+    case 'browser-still':
+      return { open: false, url: '', title: '', data: '' }
+    case 'browser-hold':
+      return { held: req.held }
+    case 'browser-live':
+      return undefined
     default:
       throw new Error('unknown command')
   }

@@ -19,8 +19,8 @@ export function ChatTree({ route }: { route: Route }) {
   const openId = route.page === 'chat' ? route.agentId : undefined
   return <div className="-mx-2 flex min-h-0 flex-col gap-0.5 overflow-auto px-2">
     <SidebarGroupLabel>Chats</SidebarGroupLabel>
-    {agents.data.map((agent) => <SidebarMenuButton key={agent.id} href={`/agents/${agent.id}/chat`} aria-current={agent.id === openId ? 'page' : undefined}>
-      <Creature id={agent.id} about={agent.instructions} size={26} /><span className="truncate">{agent.name}</span><i className={cn('size-[7px] shrink-0 rounded-full', DOT[dotOf(agent)])} title={agentState(agent)} />
+    {agents.data.map((agent) => <SidebarMenuButton className="h-9 gap-2 pl-1" key={agent.id} href={`/agents/${agent.id}/chat`} aria-current={agent.id === openId ? 'page' : undefined}>
+      <Creature id={agent.id} about={agent.instructions} size={32} className="-my-0.5" /><span className="truncate">{agent.name}</span><i className={cn('size-[7px] shrink-0 rounded-full', DOT[dotOf(agent)])} title={agentState(agent)} />
     </SidebarMenuButton>)}
   </div>
 }

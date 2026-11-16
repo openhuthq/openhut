@@ -36,6 +36,8 @@ export const CreateChannel = z.discriminatedUnion('kind', [
     agentId: z.string().check(z.maxLength(40)),
     botToken: z.string().check(z.regex(/^xoxb-[\w-]{10,}$/, 'Paste the bot token: it starts with xoxb-.')),
     appToken: z.string().check(z.regex(/^xapp-[\w-]{10,}$/, 'Paste the app-level token: it starts with xapp-.')),
+    configToken: z.string().check(z.regex(/^xoxe\.xoxp-[\w.-]{10,}$/, 'Paste the app configuration token: it starts with xoxe.xoxp-.')),
+    icon: z.string().check(z.maxLength(1_000_000), z.regex(/^[A-Za-z0-9+/]+={0,2}$/, 'Send the icon as a base64 PNG.')),
   }),
   z.object({
     kind: z.literal('whatsapp'),

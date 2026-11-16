@@ -10,6 +10,7 @@ import { validateWithZod } from './platform/validation.ts'
 import { adminController, healthController, updateController } from './admin/admin-controller.ts'
 import { agentController, grantController } from './agents/agent-controller.ts'
 import { memoryController } from './agents/memory-controller.ts'
+import { browserController } from './agents/browser-controller.ts'
 import { eventsController } from './platform/events-controller.ts'
 import { startTelemetry } from './platform/telemetry.ts'
 import { skillController } from './agents/skill-controller.ts'
@@ -47,6 +48,7 @@ await app.register(agentController, { prefix: '/api/agents' })
 await app.register(grantController, { prefix: '/api/grants' })
 await app.register(skillController, { prefix: '/api/skills' })
 await app.register(memoryController, { prefix: '/api/memories' })
+await app.register(browserController, { prefix: '/api/browsers' })
 await app.register(automationController, { prefix: '/api/automations' })
 await app.register(automationRunController, { prefix: '/api/automation-runs' })
 await app.register(sendTargetController, { prefix: '/api/send-targets' })

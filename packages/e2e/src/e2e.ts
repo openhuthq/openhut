@@ -12,6 +12,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { Admin, Health, Update } from '@openhut/common/admin/admin.ts'
 import type { Agent, Grant } from '@openhut/common/agents/agent.ts'
+import type { Browser } from '@openhut/common/agents/browser.ts'
 import type { ApiError, Deleted, List } from '@openhut/common/api.ts'
 import type { Channel } from '@openhut/common/channels/channel.ts'
 import type { Connection, ConnectionEvent } from '@openhut/common/connections/connection.ts'
@@ -21,6 +22,8 @@ import type { AgentdReplies } from '../../agentd/src/agentd.ts'
 
 const sh = promisify(execFile)
 const APP = 'http://127.0.0.1:8787'
+const BROWSE_URL = 'https://example.com/'
+const BROWSE_TITLE = 'Example Domain'
 const OPENHUT = '/opt/openhut'
 const RESULTS = process.env.RESULTS ?? '/results'
 const DENIED = 'Denied: no connection grants postgres_query to this agent.'
@@ -458,7 +461,7 @@ function main() {
     },
   )
 
-  check('E1', 'Revoking the grant takes effect on the next call, no restart', '"Denied: …" and a new denied audit row', async () => {
+  check('E1', 'Revoking the grant takes effect on the next call', '"Denied: …" and a new denied audit row', async () => {
     await call('delete_grant', { id: devGrant.id })
     const e1 = inner(await chat(dev, 'sql: select 1 as one'))
     const lastRow = (await call<List<ConnectionEvent>>('list_connection_events', { agentId: dev.id, limit: 1 })).data[0]
@@ -480,6 +483,76 @@ function main() {
       actual: { events: connEvents.length, agents: [...new Set(connEvents.map((e) => e.agentName))] },
       pass: connEvents.length >= 3 && connEvents.every((e) => e.agentId === dev.id && e.agentName === 'Dev'),
     }
+  })
+
+  check('R1', 'The browser is off until someone switches it on', 'browser false; Hermes\'s own browser toolset disabled; agent-browser is not in the container, so the agent\'s command fails', async () => {
+    const agent = (await api<Agent>('GET', `/api/agents/${dev.id}`, undefined, cookie)).json
+    const disabled = await docker('exec', `ag-${dev.id}`, 'grep', 'disabled_toolsets', '/opt/data/config.yaml')
+    const installed = await docker('exec', `ag-${dev.id}`, 'sh', '-c', 'command -v agent-browser || echo missing')
+    const reply = await chat(dev, `browser: open ${BROWSE_URL}`)
+    return { actual: { browser: agent.browser, disabled, installed, reply: reply.slice(-160) }, pass: agent.browser === false && disabled.includes('[browser,') && installed === 'missing' && reply.includes('not found') && !reply.includes(BROWSE_TITLE) }
+  })
+
+  check('R2', 'Switched on, the agent opens a public page with agent-browser, inside its own gVisor container', 'PATCH 200; the container is rebuilt still runsc and read-only, with a 4 GiB memory limit and agent-browser mounted read-only; the agent\'s command returns the page title', async () => {
+    const patched = await api<Agent>('PATCH', `/api/agents/${dev.id}`, { browser: true }, cookie)
+    await waitReady(dev)
+    const reply = await chat(dev, `browser: open ${BROWSE_URL}`)
+    const spec = await docker('inspect', '--format', '{{.HostConfig.Runtime}} {{.HostConfig.ReadonlyRootfs}} {{.HostConfig.Memory}} {{index .Config.Labels "openhut.browser"}}', `ag-${dev.id}`)
+    const mounts: { Destination: string; RW: boolean }[] = JSON.parse(await docker('inspect', '--format', '{{json .Mounts}}', `ag-${dev.id}`))
+    const browserMounts = mounts.filter((m) => /agent-browser|browser-policy/.test(m.Destination)).map((m) => `${m.Destination} ${m.RW ? 'rw' : 'ro'}`)
+    return {
+      actual: { status: patched.status, browser: patched.json.browser, spec, browserMounts, reply: reply.slice(-200) },
+      pass: patched.status === 200 && patched.json.browser === true && spec === 'runsc true 4294967296 on' && browserMounts.length === 4 && browserMounts.every((m) => m.endsWith(' ro')) && reply.includes(BROWSE_TITLE),
+    }
+  })
+
+  check('R3', 'Only while someone looks: the dashboard gets a still picture of the agent\'s page, and the screencast stops once nobody asks', 'GET /api/browsers/:id: open, the page address, a JPEG; a second GET is served from the cache in under 1 s; within 60 s of the last GET agent-browser reports no screencast', async () => {
+    const still = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, cookie)
+    const started = Date.now()
+    const again = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, cookie)
+    const cached = Date.now() - started
+    await until(async () => /Screencasting: false/.test(await agentBrowser(dev, 'stream', 'status')), 60_000, 'the screencast to stop after the agent page stopped asking')
+    const status = await agentBrowser(dev, 'stream', 'status')
+    return {
+      actual: { status: still.status, open: still.json.open, url: still.json.url, picture: String(still.json.still).slice(0, 30), bytes: String(still.json.still).length, cachedMs: cached, again: again.json.open, stream: status.replace(/\s+/g, ' ') },
+      pass: still.status === 200 && still.json.open === true && still.json.url === BROWSE_URL && String(still.json.still).startsWith('data:image/jpeg;base64,/9j/') && again.json.open === true && cached < 1000 && /Screencasting: false/.test(status),
+    }
+  })
+
+  check('R4', 'Take over: the owner watches live, the agent is paused, the owner\'s clicks and keys drive the page, and handing back frees the agent', 'frames arrive; input before Take over is refused (409); while held the agent\'s click is denied by policy; the owner clicks the search box, types gVisor and Enter and the page lands on the gVisor article; after hand back the agent browses again; closing the view stops the screencast', async () => {
+    await chat(dev, 'browser: open https://www.wikipedia.org/')
+    const center = /"(\d+),(\d+)"/.exec(await agentBrowser(dev, 'eval', "(r => Math.round(r.x + r.width / 2) + ',' + Math.round(r.y + r.height / 2))(document.querySelector('#searchInput').getBoundingClientRect())"))
+    const box = center ? { x: Number(center[1]), y: Number(center[2]) } : undefined
+    const view = await openStream(`/api/browsers/${dev.id}/stream`, cookie)
+    await until(async () => view.events.some((e) => e.event === 'frame'), 30_000, 'the first live frame')
+    const click = [{ type: 'mouse', action: 'down', x: box?.x ?? 0, y: box?.y ?? 0 }, { type: 'mouse', action: 'up', x: box?.x ?? 0, y: box?.y ?? 0 }]
+    const early = await api('POST', `/api/browsers/${dev.id}/input`, { events: click }, cookie)
+    const held = await api<Browser>('POST', `/api/browsers/${dev.id}/hold`, undefined, cookie)
+    const agentWhileHeld = await agentBrowser(dev, 'click', '#searchInput')
+    const keys = [...'gVisor', 'Enter'].flatMap((key) => [{ type: 'key', action: 'down', key }, { type: 'key', action: 'up', key }])
+    const typed = await api<{ accepted: number }>('POST', `/api/browsers/${dev.id}/input`, { events: [...click, ...keys] }, cookie)
+    await until(async () => (await agentBrowser(dev, 'get', 'url')).includes('/wiki/GVisor'), 30_000, 'the search to land on the gVisor article')
+    const landed = (await agentBrowser(dev, 'get', 'url')).trim().split('\n').pop()
+    const released = await api<Browser>('DELETE', `/api/browsers/${dev.id}/hold`, undefined, cookie)
+    const agentAfter = await agentBrowser(dev, 'open', BROWSE_URL)
+    const frames = view.events.filter((e) => e.event === 'frame').length
+    const holdEvents = view.events.filter((e) => e.event === 'hold').map((e) => JSON.stringify(e.data))
+    view.close()
+    await until(async () => /Screencasting: false/.test(await agentBrowser(dev, 'stream', 'status')), 30_000, 'the screencast to stop after the view closed')
+    return {
+      actual: { box, frames, early: early.status, held: `${held.status} ${held.json.heldBy}`, agentWhileHeld: agentWhileHeld.trim().slice(0, 120), typed: `${typed.status} ${typed.json.accepted}`, landed, released: `${released.status} ${released.json.heldBy}`, holdEvents, agentAfter: agentAfter.trim().split('\n')[0] },
+      pass: !!box && frames >= 2 && early.status === 409 && held.status === 200 && held.json.heldBy === owner.email && /denied by policy/.test(agentWhileHeld) &&
+        typed.status === 200 && typed.json.accepted === 16 && !!landed?.includes('wikipedia.org/wiki/GVisor') && released.status === 200 && released.json.heldBy === null && agentAfter.includes(BROWSE_TITLE),
+    }
+  })
+
+  check('R5', 'Switched off again, the browser is gone', 'PATCH 200; the container is rebuilt without agent-browser and back to its 1 GiB size; the dashboard reports no browser', async () => {
+    const patched = await api<Agent>('PATCH', `/api/agents/${dev.id}`, { browser: false }, cookie)
+    await waitReady(dev)
+    const installed = await docker('exec', `ag-${dev.id}`, 'sh', '-c', 'command -v agent-browser || echo missing')
+    const label = await docker('inspect', '--format', '{{index .Config.Labels "openhut.browser"}} {{.HostConfig.Memory}}', `ag-${dev.id}`)
+    const still = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, cookie)
+    return { actual: { status: patched.status, browser: patched.json.browser, installed, label, open: still.json.open }, pass: patched.status === 200 && patched.json.browser === false && installed === 'missing' && label === 'off 1073741824' && still.json.open === false }
   })
 
   check(
@@ -720,6 +793,20 @@ function main() {
     },
   )
 
+  check('R6', "Only people who can edit an agent can see or drive its browser", 'Mia (a member who does not own Dev): 403 on the picture, the stream, Take over and input; no session: 401', async () => {
+    const path = `/api/browsers/${dev.id}`
+    const stream = await fetch(`${APP}${path}/stream`, { headers: { cookie: miaCookie } })
+    await stream.body?.cancel()
+    const statuses = {
+      picture: (await api('GET', path, undefined, miaCookie)).status,
+      stream: stream.status,
+      hold: (await api('POST', `${path}/hold`, undefined, miaCookie)).status,
+      input: (await api('POST', `${path}/input`, { events: [{ type: 'key', action: 'down', key: 'a' }] }, miaCookie)).status,
+      anonymous: (await api('GET', path)).status,
+    }
+    return { actual: statuses, pass: statuses.picture === 403 && statuses.stream === 403 && statuses.hold === 403 && statuses.input === 403 && statuses.anonymous === 401 }
+  })
+
   check('P1', 'A member manages their own agent from the dashboard', 'create 200 (ag_…); start 200; instructions 200; container running', async () => {
     const created = await api<Agent>('POST', '/api/agents', { name: 'Helper' }, miaCookie)
     helper = created.json
@@ -813,6 +900,8 @@ function main() {
           agentId: dev.id,
           botToken: 'xoxb-1111-2222-notarealtoken',
           appToken: 'xapp-1-A111-2222-notarealtoken',
+          configToken: 'xoxe.xoxp-1-notarealtoken',
+          icon: 'iVBORw0KGgo=',
         },
         cookie,
       )
@@ -1541,6 +1630,35 @@ function startedAt(id: string) {
   return docker('inspect', '-f', '{{.State.StartedAt}}', `ag-${id}`)
 }
 
+async function agentBrowser(a: AgentRef, ...args: string[]) {
+  return (await sh('docker', ['exec', '-u', '10000:10000', `ag-${a.id}`, 'agent-browser', ...args], { maxBuffer: 8 << 20, timeout: 90_000 }).catch((e: { stdout?: string; stderr?: string }) => ({ stdout: `${e.stdout ?? ''}${e.stderr ?? ''}` }))).stdout
+}
+
+async function openStream(path: string, cookie: string) {
+  const abort = new AbortController()
+  const events: { event: string; data: unknown }[] = []
+  const response = await fetch(APP + path, { headers: { cookie }, signal: abort.signal })
+  const read = async () => {
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    for (;;) {
+      const chunk = await reader?.read()
+      if (!chunk || chunk.done) return
+      buffer += decoder.decode(chunk.value, { stream: true })
+      for (let end = buffer.indexOf('\n\n'); end >= 0; end = buffer.indexOf('\n\n')) {
+        const block = buffer.slice(0, end)
+        buffer = buffer.slice(end + 2)
+        const event = /^event: (.*)$/m.exec(block)?.[1]
+        const data = /^data: (.*)$/m.exec(block)?.[1]
+        if (event && data) events.push({ event, data: JSON.parse(data) })
+      }
+    }
+  }
+  read().catch(() => undefined)
+  return { status: response.status, events, close: () => abort.abort() }
+}
+
 async function docker(...args: string[]) {
   return (await sh('docker', args, { maxBuffer: 32 << 20 })).stdout.trim()
 }
@@ -1602,6 +1720,7 @@ function waitReady(a: AgentRef, ms = 240_000) {
 }
 
 async function chat(a: AgentRef, text: string) {
+  await waitReady(a)
   const r = await fetch(`http://10.200.${a.net}.2:8642/v1/chat/completions`, {
     method: 'POST',
     signal: AbortSignal.timeout(180_000),
@@ -1654,6 +1773,7 @@ function rowsOf(text: string) {
 }
 
 async function asAgent(a: AgentRef, code: string, env: Record<string, string> = {}) {
+  await waitReady(a)
   const python = (await docker('exec', `ag-${a.id}`, 'sh', '-c', 'command -v python3 || ls /opt/hermes/.venv/bin/python')).split('\n')[0]
   return docker('exec', '-u', '10000:10000', ...Object.entries(env).flatMap(([k, v]) => ['-e', `${k}=${v}`]), `ag-${a.id}`, python, '-c', code)
 }

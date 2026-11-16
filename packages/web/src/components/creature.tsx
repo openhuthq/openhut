@@ -1,4 +1,5 @@
 import { hash } from '@/lib/hash'
+import { cn } from '@/lib/utils'
 
 const K = '#0b0b0b'
 const PALETTE = [['#19B3B1', '#0e7f7e'], ['#F2E3C6', '#c9b48a'], ['#FF7A59', '#c4553a'], ['#ee8149', '#b36137'], ['#64ae59', '#4b8343'], ['#86c7b4', '#659587'], ['#3d8fdc', '#2e6ba5'], ['#e4587e', '#ab425f'], ['#f7c948', '#c49a2c'], ['#b79cf2', '#8a72c4'], ['#9ab7ff', '#6f8bd1'], ['#f4a6c0', '#c97d97']]
@@ -29,9 +30,20 @@ const EYES = [
   `<circle cx="45" cy="54" r="4.2" fill="${K}"/><circle cx="63" cy="54" r="4.2" fill="${K}"/><circle cx="46.5" cy="52.5" r="1.4" fill="#fff"/><circle cx="64.5" cy="52.5" r="1.4" fill="#fff"/>`,
 ]
 
-export function Creature({ id, about = '', size, label }: { id: string; about?: string; size: number; label?: string }) {
+export function Creature({ id, about = '', size, label, className }: { id: string; about?: string; size: number; label?: string; className?: string }) {
   const accessible = label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true }
-  return <svg data-slot="creature" className="block shrink-0" width={size} height={size} viewBox="4 8 100 100" {...accessible} dangerouslySetInnerHTML={{ __html: creature(id, about) }} />
+  return <svg data-slot="creature" className={cn('block shrink-0', className)} width={size} height={size} viewBox="4 8 100 100" {...accessible} dangerouslySetInnerHTML={{ __html: creature(id, about) }} />
+}
+
+export async function avatarPng({ id, about = '' }: { id: string; about?: string }): Promise<string> {
+  const [fill] = PALETTE[hash(id) % PALETTE.length]
+  const ground = `<rect x="-6" y="-2" width="120" height="120" fill="#fff"/><rect x="-6" y="-2" width="120" height="120" fill="${fill}" opacity=".22"/>`
+  const image = new Image()
+  image.src = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="-6 -2 120 120">${ground}${creature(id, about)}</svg>`)}`
+  await image.decode()
+  const canvas = Object.assign(document.createElement('canvas'), { width: 1024, height: 1024 })
+  canvas.getContext('2d')?.drawImage(image, 0, 0)
+  return canvas.toDataURL('image/png').split(',')[1]
 }
 
 function creature(id: string, about: string) {

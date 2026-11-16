@@ -15,6 +15,8 @@ const variants = cva('', {
       tag: 'rounded-md bg-soft px-[7px] py-px text-[11px] font-medium text-mute',
       'tag-success': 'rounded-md bg-success-subtle px-[7px] py-px text-[11px] font-medium text-success-foreground',
       count: 'shrink-0 rounded-[5px] bg-soft px-[5px] text-xs font-medium text-mute',
+      pill: 'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-soft px-2.5 text-[12px] font-[550] whitespace-nowrap text-body',
+      'pill-ink': 'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-ink px-2.5 text-[12px] font-[550] whitespace-nowrap text-white',
       chip: 'inline-flex h-7 items-center gap-1.5 rounded-full bg-canvas px-2.5 text-sm font-medium text-body shadow-[inset_0_0_0_1px_var(--hair)] [&_svg]:size-[13px] [&_svg]:text-ink',
     },
   },
