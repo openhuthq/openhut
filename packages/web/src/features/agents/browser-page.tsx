@@ -101,6 +101,7 @@ export function BrowserPage({ me, agentId }: { me: Me; agentId: string }) {
             <span className={cn('inline-flex shrink-0', address.secure ? 'text-pass' : 'text-mute')} aria-label={address.secure ? 'Secure connection' : undefined}>{address.secure ? ICONS.lock : ICONS.globe}</span>
             <span className="truncate"><span className="text-ink">{address.host || 'about:blank'}</span><span className="text-mute">{address.rest}</span></span>
           </div>
+          {live.state === 'live' && <span className="shrink-0 pl-2.5 font-mono text-xs text-mute tabular-nums" title="Frames a second the live view is getting">{live.fps} fps</span>}
         </div>
         <div className={cn('flex h-[34px] min-w-0 shrink-0 items-center border-b px-3 text-[12.5px]', mine ? 'border-b-transparent bg-ink font-medium text-white shadow-[inset_0_-1px_0_oklch(100%_0_0/.18)]' : 'border-hair bg-soft text-mute')} role="status">
           <span className="truncate">{mine ? `${name} is paused · hands back in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} if idle`
@@ -155,14 +156,17 @@ function useLive(agentId: string) {
   const [state, setState] = useState<'connecting' | 'live' | 'closed'>('connecting')
   const [error, setError] = useState<string>()
   const [, setTicks] = useState(0)
+  const frames = useRef(0)
+  const [fps, setFps] = useState(0)
   useEffect(() => {
     const tick = setInterval(() => setTicks((n) => n + 1), 10_000)
-    return () => clearInterval(tick)
+    const count = setInterval(() => { setFps(frames.current); frames.current = 0 }, 1000)
+    return () => { clearInterval(tick); clearInterval(count) }
   }, [])
   useEffect(() => {
     const source = new EventSource(`${browserPath(agentId)}/stream`)
     const on = (event: string, handle: (data: unknown) => void) => source.addEventListener(event, (message) => handle(JSON.parse(message.data)))
-    on('frame', () => setState('live'))
+    on('frame', () => { frames.current += 1; setState('live') })
     on('page', (data) => setPage(data as typeof page))
     on('hold', (data) => setHeldBy((data as { heldBy: string | null }).heldBy))
     on('action', (data) => setActions((known) => [{ ...(data as { action: string; url: string }), at: Date.now() }, ...known].slice(0, ACTIONS_SHOWN)))
@@ -175,7 +179,7 @@ function useLive(agentId: string) {
     }
     return () => source.close()
   }, [agentId])
-  return { connection, page, heldBy, actions, state, error }
+  return { connection, page, heldBy, actions, state, error, fps }
 }
 
 function useInput(agentId: string, enabled: boolean) {
