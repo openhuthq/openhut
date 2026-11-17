@@ -326,6 +326,7 @@ function main() {
 
   check('B1', 'Control MCP creates a connection, two agents and a grant', 'Dev granted Orders DB, Sales has none', async () => {
     await startTeamDb(dbPassword, agentPassword)
+    await until(() => docker('image', 'inspect', agentImagePin()).then(() => true, () => false), 30 * 60_000, 'the agent image to download')
     conn = await call<Connection>('create_connection', { name: 'Orders DB', dsn: `postgres://openhut_agent:${agentPassword}@172.30.0.10:5432/postgres` })
     dev = await call<Agent>('create_agent', { name: 'Dev', instructions: '# Dev\nYou answer engineers. Use the Orders DB when asked for data.' })
     sales = await call<Agent>('create_agent', { name: 'Sales', instructions: '# Sales\nYou answer customers. You have no database access.' })

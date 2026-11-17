@@ -117,7 +117,7 @@ function enqueue<T>(id: string, work: () => Promise<T>): Promise<T> {
 async function handle(req: AgentdRequest): Promise<Reply> {
   switch (req.cmd) {
     case 'health':
-      return { firewall: await firewallRecent(), image: IMAGE, updating: await installing() }
+      return { firewall: await firewallRecent(), image: IMAGE, imageReady: await docker('image', 'inspect', IMAGE).then(() => true, () => false), updating: await installing() }
     case 'ps':
       return { states: await containerStates() }
     case 'containers':
@@ -732,7 +732,7 @@ export type AgentdRequest =
   | { cmd: 'ts-status' | 'ts-down' }
 
 export type AgentdReplies = {
-  health: { firewall: boolean; image: string; updating: boolean }
+  health: { firewall: boolean; image: string; imageReady: boolean; updating: boolean }
   ps: { states: Record<string, string> }
   containers: { containers: Container[] }
   create: { container: string }

@@ -18,7 +18,7 @@ if ! docker info >/dev/null 2>&1; then
   mark "dockerd up"
 fi
 "$J/install/agents-firewall.sh"; mark "firewall reapplied"
-"$J/install/pull-image.sh"
+if [ -n "$(ls -A /data/agents)" ]; then "$J/install/pull-image.sh"; else "$J/install/pull-image.sh" >> "$LOG/pull.log" 2>&1 & fi
 
 pkill -f "$J/install/supervise.sh" 2>/dev/null || true
 pkill -f "^node $J/packages/agentd/src/agentd.ts" 2>/dev/null || true

@@ -3,6 +3,7 @@ set -u
 [ "$(uname)" = Darwin ] && [ -z "${E2E_AWAKE:-}" ] && E2E_AWAKE=1 exec caffeinate -is "$0" "$@"
 cd "$(dirname "$0")/../.."
 R=packages/e2e/results
+HOST_IMAGE=$(sed -n 's/^HOST_IMAGE=//p' install/install.sh)
 fail() { echo "e2e: $*"; exit 1; }
 healthy() { curl -fsS http://127.0.0.1:8787/health 2>/dev/null | grep -q '"ok":true'; }
 wait_healthy() { i=0; until healthy; do i=$((i+3)); [ $i -ge "$1" ] && return 1; sleep 3; done; }
@@ -27,7 +28,7 @@ trap stop_mirror EXIT
 mirror dist
 
 docker rm -f openhut-host openhut-lan >/dev/null 2>&1
-docker run --rm --privileged -v openhut-docker:/var/lib/docker --entrypoint sh docker:28-dind -c '
+docker run --rm --privileged -v openhut-docker:/var/lib/docker --entrypoint sh "$HOST_IMAGE" -c '
   (dockerd >/dev/null 2>&1 &); i=0; until docker info >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 60 ] && exit 1; sleep 1; done
   docker ps -aq | xargs -r docker rm -f >/dev/null; docker network prune -f >/dev/null; docker volume prune -af >/dev/null
   echo "server cache: $(docker images -q | wc -l) images, $(docker ps -aq | wc -l) containers, $(docker network ls -q --filter type=custom | wc -l) networks"' || fail "cache cleanup"
@@ -35,13 +36,13 @@ docker run --rm --privileged -v openhut-docker:/var/lib/docker --entrypoint sh d
 for n in "fm-lan10 10.99.0" "fm-lan172 172.29.0" "fm-lan192 192.168.77" "fm-meta 169.254.169"; do
   set -- $n; docker network inspect "$1" >/dev/null 2>&1 || docker network create --subnet "$2.0/24" "$1" >/dev/null || fail "network $1"
 done
-docker run -d --name openhut-lan --network fm-lan10 --ip 10.99.0.10 --entrypoint sh docker:28-dind -c 'exec nc -lk -p 80 -e true' >/dev/null || fail "lan listener"
+docker run -d --name openhut-lan --network fm-lan10 --ip 10.99.0.10 --entrypoint sh "$HOST_IMAGE" -c 'exec nc -lk -p 80 -e true' >/dev/null || fail "lan listener"
 docker network connect --ip 172.29.0.10 fm-lan172 openhut-lan && docker network connect --ip 192.168.77.10 fm-lan192 openhut-lan &&
   docker network connect --ip 169.254.169.254 fm-meta openhut-lan || fail "lan listener networks"
 
 docker run -d --privileged --name openhut-host -p 127.0.0.1:8787:8787 \
   -v openhut-docker:/var/lib/docker -v openhut-apkcache:/etc/apk/cache -v openhut-dlcache:/var/cache/openhut -v "$PWD/$R:/results" \
-  --add-host host.docker.internal:host-gateway --entrypoint sh docker:28-dind \
+  --add-host host.docker.internal:host-gateway --entrypoint sh "$HOST_IMAGE" \
   -c 'if [ -x /opt/openhut/install/host-start.sh ]; then exec /opt/openhut/install/host-start.sh; fi; exec sleep infinity' >/dev/null || fail "server"
 docker network connect --ip 10.99.0.2 fm-lan10 openhut-host && docker network connect --ip 172.29.0.2 fm-lan172 openhut-host &&
   docker network connect --ip 192.168.77.2 fm-lan192 openhut-host && docker network connect --ip 169.254.169.2 fm-meta openhut-host || fail "server networks"
