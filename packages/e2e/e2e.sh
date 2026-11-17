@@ -1,5 +1,6 @@
 #!/bin/sh
 set -u
+[ "$(uname)" = Darwin ] && [ -z "${E2E_AWAKE:-}" ] && E2E_AWAKE=1 exec caffeinate -is "$0" "$@"
 cd "$(dirname "$0")/../.."
 R=packages/e2e/results
 fail() { echo "e2e: $*"; exit 1; }
