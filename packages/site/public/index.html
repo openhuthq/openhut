@@ -423,35 +423,6 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
 .bz-st{font-size:13px;color:var(--mute)}
 .bz-cap{margin-top:12px;text-align:center}
 
-.duo.wide{grid-template-columns:3fr 2fr}
-.duo .card.hx{display:grid;grid-template-columns:1fr 220px;gap:20px;padding:24px;align-items:center}
-.wall{position:relative;display:flex;flex-direction:column;align-items:center;gap:12px;padding:26px 16px 20px;border-radius:18px;box-shadow:inset 0 0 0 6px var(--ink);text-align:center}
-.wall.hit{animation:hit .5s}
-@keyframes hit{25%{translate:4px 0}50%{translate:-3px 0}75%{translate:1px 0}}
-.wall .tag{position:absolute;top:-11px;left:50%;translate:-50% 0;display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:12px;font-weight:500;white-space:nowrap}
-.wall img{width:96px;height:96px}
-.wall b{font-size:15px;font-weight:600}
-.wall small{font-size:12.5px;color:var(--mute)}
-.powers{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:4px}
-.powers span{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;background:var(--soft);font-size:12.5px}
-.threats{display:flex;flex-direction:column;gap:6px}
-.threats small{font-size:12.5px;color:var(--mute);margin-bottom:2px}
-.th{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:10px;background:var(--bg-2);font-size:13.5px;text-align:left}
-.th:hover{background:var(--soft)}
-.th em{margin-left:auto;font-style:normal;font-size:12px;color:var(--fail);opacity:0}
-.th.on em{opacity:1}
-.th.go{animation:go .6s}
-@keyframes go{40%{translate:-14px 0}60%{translate:-10px 0}}
-.hx-cap{grid-column:1/-1;min-height:20px;font-size:14px;color:var(--body);text-align:center}
-.grants{display:flex;flex-direction:column;gap:2px;margin:0 -10px}
-.grow-r{display:flex;align-items:center;gap:10px;height:40px;padding:0 10px;border-radius:8px;font-size:14px;cursor:pointer}
-.grow-r:hover{background:var(--hover)}
-.grow-r em{margin-left:auto;font-style:normal;font-size:12.5px;color:var(--mute)}
-.page-sw{position:relative;width:32px;height:18px;flex:none;border-radius:999px;background:var(--mid);transition:background .15s}
-.page-sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:translate .15s}
-.page-sw[aria-checked=true]{background:var(--ink)}
-.page-sw[aria-checked=true]::after{translate:14px 0}
-
 .trio{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:20px}
 .trio .card{padding:22px;display:flex;flex-direction:column;gap:16px}
 .ppl{display:flex;gap:4px}
@@ -512,7 +483,7 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
 @media (max-width:820px){.foot-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.foot-brand{grid-column:1/-1}}
 @media (max-width:420px){.foot-grid{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:1020px){
-  .split,.duo,.duo.wide,.trio{grid-template-columns:minmax(0,1fr)}
+  .split,.duo,.trio{grid-template-columns:minmax(0,1fr)}
   .split{gap:32px}
   .tabs{flex-direction:row;flex-wrap:wrap}
   .tab{flex:1;min-width:180px}
@@ -526,7 +497,6 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
   .stage{padding:14px;min-height:0}
   .scene{flex-direction:column}
   .ids{width:100%}
-  .duo .card.hx{grid-template-columns:1fr;padding:16px}
   .tab span{display:none}
   .tab{min-width:0;grid-template-columns:20px auto;padding:10px 12px}
   .ur{grid-template-columns:28px 64px 1fr 32px}
@@ -716,25 +686,91 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
 </section>
 
 <section class="band" id="sealed">
+<style>
+#sealed .ar-dia{position:relative;display:grid;grid-template-columns:minmax(0,1fr);gap:56px;text-align:left}
+#sealed .ar-wires{position:absolute;z-index:3;left:0;top:0;pointer-events:none;overflow:visible}
+#sealed .ar-wires path{fill:none;stroke:var(--mid);stroke-width:1.5;stroke-dasharray:5 5}
+#sealed [data-k]{cursor:help}
+#sealed .ar-lbl{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--ink)}
+#sealed .ar-pc{position:relative;display:flex;flex-direction:column;gap:14px;padding:14px;border-radius:12px;background:var(--bg-2);box-shadow:0 0 0 1px var(--hair)}
+#sealed .ar-app{position:relative;z-index:1;align-self:center;display:flex;align-items:center;gap:6px;padding:10px 14px;border-radius:12px;background:var(--card);box-shadow:0 0 0 1px var(--hair),0 10px 26px -14px oklch(0% 0 0 / .3)}
+#sealed .ar-app i{width:9px;height:9px;border-radius:50%;background:#ff5f57}
+#sealed .ar-app i:nth-child(2){background:#febc2e}
+#sealed .ar-app i:nth-child(3){background:#28c840}
+#sealed .ar-app b{margin-left:8px;font:600 16px/1 Fredoka,var(--sans);letter-spacing:-.01em}
+#sealed .ar-app small{margin-left:6px;font-size:12.5px;color:var(--mute)}
+#sealed .ar-sock{position:relative;align-self:center;display:flex;justify-content:center;height:34px;margin:-14px 0}
+#sealed .ar-sock::before{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:1.5px dashed var(--mid)}
+#sealed .ar-pill{position:relative;align-self:center;display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;background:var(--card);box-shadow:0 0 0 1px var(--hair);font-size:12px;color:var(--body);white-space:nowrap}
+#sealed .ar-ts{position:absolute;z-index:4;top:-12px;left:50%;translate:-50% 0}
+#sealed .ar-wide .ar-ts{translate:-50% -50%}
+#sealed .ar-rt{container-type:inline-size;display:flex;flex-direction:column;gap:16px;padding:12px 14px 16px;border-radius:12px;background:var(--card);box-shadow:0 0 0 1px var(--hair)}
+#sealed .ar-rtb{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+@container (min-width:330px){#sealed .ar-rtb{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);align-items:center}}
+#sealed .ar-boxes{display:flex;flex-direction:column;gap:22px;padding-top:10px}
+#sealed .ar-slot{position:relative;height:108px}
+#sealed .ar-slot:empty::before{content:attr(data-empty);display:grid;place-items:center;height:80px;padding:0 12px;border-radius:12px;border:1.5px dashed var(--mid);font-size:13px;color:var(--mute);text-align:center}
+#sealed .ar-agent{position:relative;display:flex;flex-direction:column;gap:8px}
+#sealed .ar-wall{position:relative;height:80px;display:flex;align-items:center;gap:12px;padding:12px 14px 8px;border-radius:12px;box-shadow:inset 0 0 0 4px var(--ink);background:var(--card)}
+#sealed .ar-tag{position:absolute;top:-11px;left:12px;display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:11.5px;font-weight:500;white-space:nowrap}
+#sealed #arMac .ar-kind::after{content:"microVM"}
+#sealed #arSrv .ar-kind::after{content:"gVisor"}
+#sealed .ar-hermes{display:flex;align-items:center;gap:12px;min-width:0;border-radius:8px}
+#sealed .ar-who{display:grid;line-height:1.25;min-width:0}
+#sealed .ar-who b{font-weight:600;font-size:15px}
+#sealed .ar-who small{font-size:12.5px;color:var(--mute)}
+#sealed .ar-chans{display:flex;gap:4px;height:20px;padding-left:4px;border-radius:6px;align-self:flex-start}
+#sealed .ar-lc{width:20px;height:20px;flex:none;display:grid;place-items:center;border-radius:5px;background:#fff;box-shadow:0 0 0 1px var(--hair)}
+#sealed .ar-sealed{position:absolute;inset:0;display:none;place-items:center;border-radius:12px;background:color-mix(in oklch,var(--card) 82%,transparent)}
+#sealed .ar-sealed span{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:12px;font-weight:600}
+#sealed .ar-moving .ar-sealed{display:grid}
+#sealed .ar-moving{z-index:5}
+#sealed .ar-gwcol{display:flex;flex-direction:column}
+#sealed .ar-gw{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 10px;border-radius:8px;background:var(--bg-2);box-shadow:0 0 0 1px var(--mid);text-align:center;transition:box-shadow .3s}
+#sealed .ar-gw b{font-weight:600;font-size:14px}
+#sealed .ar-gw small{font-size:12px;line-height:1.35;color:var(--mute)}
+#sealed .ar-keys{display:flex;gap:4px}
+#sealed .ar-keys .i{transition:color .3s}
+#sealed .ar-gw.ar-lit{box-shadow:0 0 0 1px var(--mid),0 0 0 6px color-mix(in oklch,var(--amber) 35%,transparent)}
+#sealed .ar-gw.ar-lit .ar-keys .i:first-child{color:var(--amber)}
+#sealed .ar-tick{align-self:center;height:14px;border-left:1.5px solid var(--mid)}
+#sealed .ar-conn{display:flex;align-items:center;gap:8px;padding:6px 10px 6px 6px;border-radius:8px;background:var(--card);box-shadow:0 0 0 1px var(--hair);transition:box-shadow .3s}
+#sealed .ar-conn .ar-lc{width:22px;height:22px;border-radius:6px}
+#sealed .ar-conn span{display:grid;line-height:1.25}
+#sealed .ar-conn b{font-weight:600;font-size:13px}
+#sealed .ar-conn small{font-size:11.5px;color:var(--mute)}
+#sealed .ar-conn.ar-ok{box-shadow:0 0 0 2px var(--pass)}
+#sealed .ar-pk{position:absolute;left:0;top:0;z-index:20;pointer-events:none;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;border-radius:999px;background:var(--ink);color:var(--bg);font:500 11.5px/1 var(--mono);white-space:nowrap;opacity:0;transition:opacity .25s;box-shadow:0 4px 14px -4px oklch(0% 0 0 / .3)}
+#sealed .ar-mark{position:absolute;z-index:21;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;display:grid;place-items:center;background:var(--pass);color:var(--bg);pointer-events:none;animation:ar-pop .3s ease-out,ar-fade .4s 1.6s forwards}
+#sealed .ar-mark .i{stroke-width:2.4}
+@keyframes ar-pop{from{scale:.4;opacity:0}}
+@keyframes ar-fade{to{opacity:0}}
+#sealed .ar-say{min-height:50px;max-width:62ch;margin:24px auto 0;text-align:center;font-size:15px;color:var(--body);text-wrap:pretty}
+#sealed .ar-say b{color:var(--ink);font-weight:600}
+#sealed .ar-ctl{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:20px}
+#sealed #arMove{min-width:210px}
+@media (min-width:860px){
+  #sealed .ar-dia{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:repeat(4,auto);gap:0 72px}
+  #sealed .ar-pc{display:grid;grid-row:span 4;grid-template-rows:subgrid;grid-template-columns:minmax(0,1fr);row-gap:14px;align-content:start}
+  #sealed #arSrv .ar-rt{grid-row:4}
+  #sealed .ar-rt{align-self:stretch}
+  #sealed .ar-app,#sealed .ar-sock{justify-self:center}
+}
+@media (prefers-reduced-motion:reduce){
+  #sealed *{transition:none!important}
+  #sealed .ar-mark{animation:ar-fade .01s 2s forwards}
+}
+</style>
   <div class="wrap">
-    <div class="head"><h2>Sealed and scoped</h2><p>Every agent is <a href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener">Hermes</a>, the open-source agent from Nous Research, sealed in gVisor. It only reaches the data you grant.</p></div>
-    <div class="duo wide">
-      <div class="card hx">
-        <div class="wall" id="wall">
-          <span class="tag"><svg class="i" width="13" height="13" viewBox="0 0 24 24" data-icon="SquareLock02"></svg>gVisor sandbox</span>
-          <img src="/hermes.svg" alt="Hermes Agent logo" width="96" height="96">
-          <b>Hermes Agent</b><small>by Nous Research · open source</small>
-          <div class="powers"><span><svg class="i" width="14" height="14" viewBox="0 0 24 24" data-icon="AiBrain01"></svg>Remembers your team</span><span><svg class="i" width="14" height="14" viewBox="0 0 24 24" data-icon="BookOpen01"></svg>Writes its own skills</span><span><svg class="lg" width="14" height="14"><use href="#lg-mcp"/></svg>Tools &amp; MCP</span></div>
-        </div>
-        <div class="threats" id="threats" role="group" aria-label="Try to break out"><small>A tricked agent tries to…</small></div>
-        <p class="hx-cap" id="hxCap" aria-live="polite">Tap one to try it.</p>
-      </div>
-      <div class="card" style="padding:22px;display:flex;flex-direction:column;gap:16px">
-        <h3 class="ct">It only reaches what you grant</h3>
-        <div style="display:flex;align-items:center;gap:10px"><svg class="cr" data-face="ops" width="36" height="36" id="gFace"></svg><b style="font-weight:600">Ops can use</b></div>
-        <div class="grants" id="grants"></div>
-        <p class="cap" style="margin-top:auto">Agents never see your database password. The gateway holds every key.</p>
-      </div>
+    <div class="head"><h2>One app. Your computers do the work.</h2><p>The app on your Mac only steers. Each computer runs its own agents and keeps its own keys.</p></div>
+    <div class="ar-dia" id="arDia" aria-label="The OpenHut app on your Mac, steering an Agent Runtime on this Mac and one on a Linux server">
+      <svg class="ar-wires" id="arWires" aria-hidden="true"></svg>
+      <div class="ar-pk" id="arPk" aria-hidden="true"></div>
+    </div>
+    <p class="ar-say" id="arSay" aria-live="polite">Hover or tap any part to see what it is.</p>
+    <div class="ar-ctl">
+      <button type="button" class="btn pri" id="arMove">Move to the server</button>
+      <button type="button" class="btn sec" id="arUse">Use the database</button>
     </div>
   </div>
 </section>
@@ -1331,23 +1367,141 @@ tSet(0)
   setHeld(false)
 }
 
-/* sealed */
-const HX = [["Read the server's files", 'Blocked. It only sees its own folder.'], ['Break out to the host', 'Blocked. gVisor answers every system call itself.'], ['Peek at another agent', 'Blocked. Every agent gets its own sandbox.'], ['Grab the database password', "Not in here. OpenHut's gateway holds every key."]]
-$('#threats').insertAdjacentHTML('beforeend', HX.map(([t], i) => `<button type="button" class="th" data-i="${i}">${t}<em>✗ blocked</em></button>`).join(''))
-const hxHit = i => {
-  const b = $$('.th')[i]
-  $$('.th').forEach(x => x.classList.toggle('on', x === b))
-  b.classList.remove('go'); void b.offsetWidth; b.classList.add('go')
-  const w = $('#wall'); w.classList.remove('hit'); void w.offsetWidth; setTimeout(() => w.classList.add('hit'), reduce ? 0 : 250)
-  $('#hxCap').innerHTML = `<b>${esc(HX[i][0])}?</b> ${esc(HX[i][1])}`
-}
-$('#threats').addEventListener('click', e => { const b = e.target.closest('.th'); if (b) { hxManual = true; hxHit(+b.dataset.i) } })
-let hxManual = false, hxNext = 0
-whenVisible($('#wall'), () => { const go = () => { if (hxManual || reduce) return; hxHit(hxNext); hxNext = (hxNext + 1) % HX.length; setTimeout(go, 2600) }; go() })
-const GR = [['postgres', 'Postgres', 'read-only', true], ['gmail', 'Gmail', 'drafts, never sends', true], ['drive', 'Google Drive', 'its own files', false]]
-const paintGrants = () => { $('#grants').innerHTML = GR.map(([k, n, how, on], i) => `<div class="grow-r" data-i="${i}">${lg(k, 18)}${n}<em>${on ? how : 'no access'}</em><button class="page-sw" role="switch" aria-checked="${on}" aria-label="Ops can use ${n}"></button></div>`).join('') }
-$('#grants').addEventListener('click', e => { const r = e.target.closest('.grow-r'); if (!r) return; GR[+r.dataset.i][3] = !GR[+r.dataset.i][3]; paintGrants(); talk($('#gFace'), 700) })
-paintGrants()
+/* how it works: the architecture section */
+(() => {
+  const init = () => {
+    const $ = (s, r = document) => r.querySelector(s)
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+    const wait = ms => new Promise(r => setTimeout(r, reduce ? Math.min(ms, 50) : ms))
+    const chip = (n, s) => `<span class="ar-lc">${lg(n, s)}</span>`
+    const SAY = {
+      app: ['OpenHut app', 'A window on your Mac. It shows and steers your agents, and stores nothing about them.'],
+      mac: ['This Mac', 'It runs the OpenHut app and its own Agent Runtime.'],
+      srv: ['Linux server', 'A computer you added. It runs its own Agent Runtime and keeps working while your Mac sleeps.'],
+      sock: ['Private socket', 'The app reaches this Mac’s Agent Runtime over a socket only your account can open.'],
+      ts: ['Tailscale + key', 'The app reaches the server over Tailscale, with a key it made when you added the server.'],
+      runtime: ['Agent Runtime', 'One per computer. It runs the agents and keeps their keys and data on that computer.'],
+      sandbox: ['Sandbox', 'One per agent: a microVM on a Mac, gVisor on a Linux server. The agent can’t see past its walls.'],
+      hermes: ['Hermes', 'The agent inside the sandbox: the open-source agent from Nous Research.'],
+      channels: ['Channels', 'Where people talk to the agent: its own Slack app, WhatsApp number or Telegram bot.'],
+      gateway: ['Gateway', 'It holds every key and checks the agent’s grants on every call.'],
+      connection: ['Connection', 'Team data the agent may use, like Postgres. The Gateway holds its password, never the agent.'],
+      slot: ['Agent Runtime', 'One computer can run many agents, each in its own sandbox.'],
+    }
+    const agent = (id, name, look, chans) => `<div class="ar-agent" id="${id}">
+      <div class="ar-wall" data-k="sandbox" tabindex="0"><span class="ar-tag">${ic('SquareLock02', 11)}Sandbox · <span class="ar-kind"></span></span>
+        <span class="ar-hermes" data-k="hermes">${face(look, 48)}<span class="ar-who"><b>Hermes</b><small>the ${name} agent</small></span></span>
+        <span class="ar-sealed"><span>${ic('SquareLock02', 12)}Sealed for the trip</span></span></div>
+      <div class="ar-chans" data-k="channels" tabindex="0">${chans.map(c => chip(c, 12)).join('')}</div>
+    </div>`
+    const runtime = slots => `<div class="ar-rt" data-k="runtime" tabindex="0">
+      <div class="ar-lbl">Agent Runtime</div>
+      <div class="ar-rtb">
+        <div class="ar-boxes">${slots}</div>
+        <div class="ar-gwcol">
+          <div class="ar-gw" data-k="gateway" tabindex="0"><span class="ar-keys">${ic('Key01', 14).repeat(3)}</span><b>Gateway</b><small>holds every key</small></div>
+          <i class="ar-tick"></i>
+          <div class="ar-conn" data-k="connection" tabindex="0">${chip('postgres', 14)}<span><b>Postgres</b><small>read-only</small></span></div>
+        </div>
+      </div>
+    </div>`
+    const dia = $('#arDia'), wires = $('#arWires'), pk = $('#arPk'), say = $('#arSay')
+    dia.insertAdjacentHTML('beforeend', `
+    <div class="ar-pc" id="arMac" data-k="mac" role="group" aria-label="This Mac">
+      <div class="ar-lbl">${ic('Laptop', 16)}This Mac</div>
+      <div class="ar-app" data-k="app" tabindex="0"><i></i><i></i><i></i><b>OpenHut app</b><small>shows and steers</small></div>
+      <div class="ar-sock"><span class="ar-pill" data-k="sock" tabindex="0">${ic('SquareLock02', 12)}private socket</span></div>
+      ${runtime(`<div class="ar-slot" data-empty="Ops moved to the server">${agent('arOps', 'Ops', { seed: 'ops', pal: 2, costume: 'beanie' }, ['slack', 'whatsapp'])}</div>`)}
+    </div>
+    <div class="ar-pc" id="arSrv" data-k="srv" role="group" aria-label="Linux server">
+      <span class="ar-pill ar-ts" id="arTs" data-k="ts" tabindex="0">${ic('Key01', 12)}Tailscale + key</span>
+      <div class="ar-lbl">${ic('ServerStack01', 16)}Linux server</div>
+      ${runtime(`<div class="ar-slot">${agent('arSupport', 'Support', { seed: 'support', pal: 9, costume: 'headset' }, ['slack', 'telegram'])}</div><div class="ar-slot" data-k="slot" data-empty="Room for another agent"></div>`)}
+    </div>`)
+
+    let busy = false
+    const pick = e => { const el = e.target.closest('[data-k]'); if (!el || busy) return; const [t, d] = SAY[el.dataset.k]; say.innerHTML = `<b>${t}.</b> ${d}` }
+    dia.addEventListener('pointerover', pick)
+    dia.addEventListener('focusin', pick)
+    dia.addEventListener('click', pick)
+
+    const box = el => {
+      const r = el.getBoundingClientRect(), d = dia.getBoundingClientRect()
+      return { l: r.left - d.left, t: r.top - d.top, r: r.right - d.left, b: r.bottom - d.top, cx: r.left - d.left + r.width / 2, cy: r.top - d.top + r.height / 2 }
+    }
+    const draw = () => {
+      const A = box($('#arMac .ar-app')), R = box($('#arSrv .ar-rt')), S = box($('#arSrv')), ts = $('#arTs'), wide = R.t < box($('#arMac')).b
+      dia.classList.toggle('ar-wide', wide)
+      wires.setAttribute('width', dia.scrollWidth)
+      wires.setAttribute('height', dia.scrollHeight)
+      if (!wide) { wires.innerHTML = ''; ts.style.left = ts.style.top = ''; return }
+      const x = R.l + 70
+      wires.innerHTML = `<path d="M${A.r} ${A.cy}H${x - 12}Q${x} ${A.cy} ${x} ${A.cy + 12}V${R.t}"/>`
+      ts.style.left = x - S.l + 'px'
+      ts.style.top = (A.cy + R.t) / 2 + 6 - S.t + 'px'
+    }
+    new ResizeObserver(draw).observe(dia)
+    document.fonts?.ready.then(draw)
+
+    const at = ([x, y]) => `translate(${x}px,${y}px) translate(-50%,-50%)`
+    const center = el => { const B = box(el); return [B.cx, B.cy] }
+    const fly = async (from, to, label, ms = 700) => {
+      pk.innerHTML = label
+      pk.style.opacity = 1
+      await pk.animate([{ transform: at(from) }, { transform: at(to) }], { duration: reduce ? 0 : ms, easing: 'cubic-bezier(.45,0,.3,1)', fill: 'forwards' }).finished
+    }
+    const run = fn => async () => {
+      if (busy) return
+      busy = true
+      try { say.innerHTML = await fn() } finally { pk.style.opacity = 0; busy = false }
+    }
+
+    $('#arUse').addEventListener('click', run(async () => {
+      const a = $('#arOps'), rt = a.closest('.ar-rt'), gw = $('.ar-gw', rt), pg = $('.ar-conn', rt), hermes = $('.cr', a), F = center(hermes)
+      talk(hermes)
+      await fly(F, center(gw), 'SELECT … read-only')
+      gw.classList.add('ar-lit')
+      await wait(350)
+      await fly(center(gw), center(pg), `query + ${ic('Key01', 11)}`, 450)
+      pg.classList.add('ar-ok')
+      await wait(400)
+      await fly(center(pg), center(gw), '42 rows', 450)
+      gw.classList.remove('ar-lit')
+      await fly(center(gw), F, '42 rows')
+      const m = document.createElement('span')
+      m.className = 'ar-mark'
+      m.style.left = F[0] + 'px'
+      m.style.top = F[1] + 'px'
+      m.innerHTML = ic('Tick02', 13)
+      dia.append(m)
+      setTimeout(() => m.remove(), 2200)
+      setTimeout(() => pg.classList.remove('ar-ok'), 900)
+      return '<b>Allowed.</b> The Gateway checked the grant and added the password. Hermes got the rows, never the password.'
+    }))
+
+    const moveBtn = $('#arMove')
+    moveBtn.addEventListener('click', run(async () => {
+      const el = $('#arOps'), toMac = !!el.closest('#arSrv'), from = el.parentElement
+      const dest = toMac ? $('#arMac .ar-slot') : $('#arSrv .ar-slot[data-k=slot]')
+      const f = el.getBoundingClientRect()
+      dest.append(el)
+      const l = el.getBoundingClientRect()
+      from.dataset.k = 'slot'
+      dest.removeAttribute('data-k')
+      dest.closest('.ar-pc').style.zIndex = 2
+      el.classList.add('ar-moving')
+      await el.animate([{ transform: `translate(${f.left - l.left}px,${f.top - l.top}px)` }, { transform: 'none' }], { duration: reduce ? 0 : 1300, easing: 'cubic-bezier(.5,0,.2,1)' }).finished
+      await wait(250)
+      el.classList.remove('ar-moving')
+      dest.closest('.ar-pc').style.zIndex = ''
+      talk($('.cr', el))
+      moveBtn.textContent = toMac ? 'Move to the server' : 'Move back to this Mac'
+      return `<b>Ops moved to ${toMac ? 'this Mac' : 'the Linux server'}.</b> Its memory traveled sealed, so only that computer could open it. It keeps its Slack and WhatsApp.`
+    }))
+    draw()
+  }
+  document.readyState === 'loading' ? addEventListener('DOMContentLoaded', init) : init()
+})()
 
 /* usage */
 const UA = [['ops', 'Ops', '#FF7A59'], ['growth', 'Growth', '#86c7b4'], ['support', 'Support', '#b79cf2'], ['sales', 'Sales', '#3d8fdc'], ['finance', 'Finance', '#f7c948'], ['recruit', 'Recruit', '#e4587e']]
