@@ -49,12 +49,12 @@
   GitHub) sits on the sand inside it. There is no separate white footer.
 - Never reuse a short generic class across the page and the app copy: the panel's `.sec` once turned `.btn.sec`
   into a column and stacked the GitHub icon over its label.
-- How it works (owner, 2026-11-18): the "Sealed and scoped" band (Hermes behind a gVisor wall, threats, grants) is
-  replaced by an architecture section, still `id="sealed"`: "One app. Your computers do the work." The app on This Mac
-  steers an Agent Runtime on each computer (sandboxed Hermes, Gateway with the keys, Postgres read-only), the Linux
-  server is reached over Tailscale, and Move carries an agent between them without changing the section's height.
-  Its CSS is scoped under `#sealed`; its script lives in the page script and uses the same face/ic/lg/talk helpers.
-  `public/hermes.svg` went with the old band.
+- How it works (owner, 2026-11-18): the "Sealed and scoped" band is replaced by an architecture section, still
+  `id="sealed"`: "One app. Your computers do the work." A laptop drawing (This Mac, a mini app on its screen) and a
+  rack server (Linux server), each with its own Agent Runtime: a "Sealed box" per agent, a "Key safe" that holds every
+  password and Postgres, joined by a "private network". One Move button carries Ops between them without changing
+  the section's height. Its CSS is scoped under `#sealed`; its script lives in the page script and uses the same
+  face/ic/lg/talk helpers. The headline breaks after "One app." only above 720px.
 - No section snapping any more: the hero is taller than a screen and the wheel handler fought the chat's own scroll.
 - Never name a class or id `ad-*`, `ads`, `banner-ad` and the like: ad blockers hide matching elements with cosmetic filters, and the page just shows an empty box. The usage card was `ad-top`/`ad-rows` and vanished for anyone with uBlock; it is `wu-*` now.
 
