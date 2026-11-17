@@ -28,7 +28,7 @@ if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
   D=docker; docker info >/dev/null 2>&1 || D="$SUDO docker"
   i=0; until $D info >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 30 ] && die "Docker isn't running. Start it, then run this again."; sleep 1; done
   say "OpenHut container"
-  $D container inspect openhut >/dev/null 2>&1 || $D run -d --name openhut --privileged --restart unless-stopped -p 8787:8787 \
+  $D container inspect openhut >/dev/null 2>&1 || $D run -d -q --name openhut --privileged --restart unless-stopped -p 8787:8787 \
     -v openhut:/var/lib/docker --entrypoint sh "$HOST_IMAGE" \
     -c 'if [ -x /opt/openhut/install/host-start.sh ]; then exec /opt/openhut/install/host-start.sh; fi; exec sleep infinity' >/dev/null
   $D start openhut >/dev/null
