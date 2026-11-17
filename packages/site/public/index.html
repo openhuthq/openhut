@@ -415,11 +415,13 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
 .held .screen{cursor:pointer;box-shadow:inset 0 0 0 3px var(--ink)}
 .rip{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:2px solid var(--ink);pointer-events:none;animation:rip .6s forwards}
 @keyframes rip{from{transform:scale(.3);opacity:1}to{transform:scale(1.6);opacity:0}}
-.hand{display:flex;flex-direction:column;gap:10px;margin-top:28px;padding:16px;border-radius:16px;background:var(--card);box-shadow:0 0 0 1px var(--hair)}
-.hand .r{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500}
-.facts{list-style:none;display:flex;flex-direction:column;gap:10px;margin:24px 0 0;padding:0;font-size:14.5px;color:var(--body)}
+.facts{list-style:none;display:flex;flex-direction:column;gap:10px;margin:28px 0 0;padding:0;font-size:14px;color:var(--ink)}
 .facts li{display:flex;align-items:center;gap:10px}
 .facts .i{color:var(--mute)}
+.bz-ctl{display:flex;align-items:center;gap:12px;margin-top:28px}
+.bz-ctl .btn{height:32px;padding:0 14px;font-size:14px}
+.bz-ctl .btn:focus:not(:focus-visible){outline:none}
+.bz-st{font-size:13px;color:var(--mute)}
 .bz-cap{margin-top:12px;text-align:center}
 
 .duo.wide{grid-template-columns:3fr 2fr}
@@ -689,18 +691,13 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
     <div class="side-head">
       <svg class="cr" data-face="scout" width="48" height="48"></svg>
       <h2>Agents that browse the web</h2>
-      <p>Watch them work live. Take over when a site needs you.</p>
-      <div class="hand">
-        <div class="r"><svg class="cr" data-face="scout" width="28" height="28"></svg>Scout<span class="badge" id="bzAgent"><i></i>Driving</span></div>
-        <div class="r"><span class="hu s" style="--c:#3d8fdc">Y</span>You<span class="badge off" id="bzYou"><i></i>Watching</span></div>
-        <button type="button" class="btn pri" id="bzBtn">Take over</button>
-        <p class="cap" id="bzLeft" aria-live="polite">Log in or get past a check.</p>
-      </div>
+      <p>Watch them work live. Take over when a site needs a login.</p>
       <ul class="facts">
         <li><svg class="i" width="16" height="16" viewBox="0 0 24 24" data-icon="Key01"></svg>Logins stay between chats</li>
         <li><svg class="i" width="16" height="16" viewBox="0 0 24 24" data-icon="SquareLock02"></svg>HTTPS only, inside its sandbox</li>
         <li><svg class="i" width="16" height="16" viewBox="0 0 24 24" data-icon="Tick02"></svg>Every click listed</li>
       </ul>
+      <div class="bz-ctl"><button type="button" class="btn sec" id="bzBtn">Take over</button><span class="bz-st" id="bzSt" aria-live="polite">Scout is driving</span></div>
     </div>
     <div>
       <div class="card bz-win" id="bzWin">
@@ -1270,10 +1267,8 @@ tSet(0)
   const setHeld = on => {
     held = on; win.classList.toggle('held', on)
     $('#bzPill').textContent = on ? "You're in control" : 'Live'
-    btn.textContent = on ? 'Hand back to Scout' : 'Take over'
-    $('#bzAgent').innerHTML = `<i></i>${on ? 'Paused' : 'Driving'}`; $('#bzAgent').classList.toggle('off', on)
-    $('#bzYou').innerHTML = `<i></i>${on ? 'In control' : 'Watching'}`; $('#bzYou').classList.toggle('off', !on)
-    $('#bzLeft').textContent = on ? 'Click the page to try it.' : 'Log in or get past a check.'
+    btn.textContent = on ? 'Hand back' : 'Take over'
+    $('#bzSt').textContent = on ? "You're in control" : 'Scout is driving'
     cap.textContent = on ? 'Scout waits for you.' : 'Scout is driving.'
     clearInterval(timer)
     if (!on && !reduce) timer = setInterval(() => { const [f, t] = STEPS[step++ % STEPS.length]; show(f); cap.textContent = t }, 2600)

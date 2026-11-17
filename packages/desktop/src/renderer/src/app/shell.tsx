@@ -18,17 +18,13 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
   const agents = useAgents()
   const threads = useThreads()
   const [collapsed, setCollapsed] = useState(false)
-  const [query, setQuery] = useState('')
-  const search = useRef<HTMLInputElement>(null)
   const order = useRef<string[]>([])
   const activeId = route.page === 'agent' ? route.agentId : undefined
   useEffect(() => track({ name: 'dashboard_page_viewed', properties: { page: overlay ?? route.page } }), [overlay, route.page])
-  const focusSearch = () => { setCollapsed(false); requestAnimationFrame(() => search.current?.focus()) }
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return
       if (event.key === '\\') { event.preventDefault(); setCollapsed((on) => !on) }
-      if (event.key === 'k') { event.preventDefault(); focusSearch() }
       const nth = /^[1-9]$/.test(event.key) ? order.current[Number(event.key) - 1] : undefined
       if (nth) { event.preventDefault(); navigate(agentPath({ agentId: nth })) }
     }
@@ -36,15 +32,13 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
     return () => window.removeEventListener('keydown', key)
   }, [])
   const contacts: Contact[] = (agents.data ?? [])
-    .filter((agent) => agent.name.toLowerCase().includes(query.trim().toLowerCase()))
     .map((agent) => ({ agent, thread: threads.data?.find((thread) => thread.agentId === agent.id) }))
     .sort((a, b) => lastSeen(b) - lastSeen(a))
   const newAgent = () => navigate(activeId ? agentPath({ agentId: activeId, dialog: 'new' }) : '/new')
   order.current = contacts.map(({ agent }) => agent.id)
-  const controls = { collapsed, expand: () => setCollapsed(false), search: focusSearch, newAgent }
+  const controls = { collapsed, expand: () => setCollapsed(false), newAgent }
   return <SidebarContext value={controls}><div className="flex h-dvh overflow-hidden bg-card text-left">
-    <Sidebar contacts={contacts} activeId={activeId} collapsed={collapsed} search={search}
-      query={query} onQuery={setQuery} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} />
+    <Sidebar contacts={contacts} activeId={activeId} collapsed={collapsed} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} />
     {route.page === 'agent' && <AgentView key={route.agentId} agentId={route.agentId} dialog={route.dialog} detail={route.detail} />}
     {route.page === 'home' && agents.data && <Home first={contacts[0]?.agent.id} adding={route.adding} overlaid={!!overlay} />}
     {route.page === 'missing' && <Redirect to="/" />}

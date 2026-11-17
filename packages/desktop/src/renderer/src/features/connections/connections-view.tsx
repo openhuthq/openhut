@@ -14,12 +14,12 @@ import { Glyph } from '@/components/glyph'
 import { Loaded } from '@/components/loaded'
 import { useAgents } from '@/features/agents/api'
 import { nameOf, useComputers } from '@/features/computers/api'
-import { useConnections, useTailscale } from '@/features/connections/api'
+import { useConnections } from '@/features/connections/api'
 import { SHELVES, integration, titleOf } from '@/features/connections/catalog'
-import { ConnectSheet } from '@/features/connections/connect-sheets'
-import { AgentGrants, ConnectionSheet, Faces, TailscaleSheet } from '@/features/connections/manage-sheets'
+import { ConnectSheet, useQuickConnect } from '@/features/connections/connect-sheets'
+import { AgentGrants, ConnectionSheet, Faces } from '@/features/connections/manage-sheets'
 import { useMe } from '@/features/people/api'
-import { AppWindow, I } from '@/components/kit'
+import { AppWindow, I, PILL } from '@/components/kit'
 import { usePath, useSearch } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
@@ -28,18 +28,17 @@ const CONNECTED = 'Connected'
 export function ConnectionsView({ onClose }: { onClose: () => void }) {
   const me = useMe()
   const connections = useConnections()
-  const tailscale = useTailscale()
   const agents = useAgents()
   const computers = useComputers()
+  const quick = useQuickConnect()
   const many = (computers.data?.length ?? 0) > 1
   const [shelf, setShelf] = useState('All')
   const [query, setQuery] = useState('')
   const [, , id = '', kind = ''] = usePath().split('/')
   const search = new URLSearchParams(useSearch())
-  const joined = tailscale.data?.connected
   const list = connections.data ?? []
   const returned = id ? undefined : search.get('error') ?? undefined
-  const count = list.length + (joined ? 1 : 0)
+  const count = list.length
   const words = query.trim().toLowerCase()
   const shown = SHELVES.filter((each) => shelf === 'All' || each.shelf === shelf).flatMap((each) => each.items)
     .filter((item) => !words || `${item.title} ${item.short}`.toLowerCase().includes(words))
@@ -56,20 +55,21 @@ export function ConnectionsView({ onClose }: { onClose: () => void }) {
       <ErrorNote message={returned} />
       {shelf === CONNECTED
         ? <div className="mt-6 flex flex-col gap-3"><span className="text-[12px] text-mute">Connected</span>
-          <Loaded query={connections}>{(loaded) => loaded.length || joined
+          <Loaded query={connections}>{(loaded) => loaded.length
             ? <ItemGroup>
               {loaded.map((connection) => <Row key={connection.id} connection={connection} agents={agents.data ?? []} computers={many ? computers.data : undefined} />)}
-              {joined && <Item size="sm"><a href="/connections/tailscale" className="flex min-w-0 flex-1 items-center gap-3 text-ink no-underline"><Glyph name="tailscale" size={26} /><ItemContent stacked><ItemTitle>Tailscale</ItemTitle><ItemDescription>{[joined.tailnet, joined.address].filter(Boolean).join(' · ') || 'This server'}</ItemDescription></ItemContent></a></Item>}
             </ItemGroup>
             : <p className="m-0 text-[13px] text-balance text-body">Nothing yet. Pick one under All: each opens a short guide.</p>}</Loaded>
         </div>
         : <div className="mt-6 flex flex-col gap-3"><span className="text-[12px] text-mute">{shelf === 'All' ? 'Apps' : shelf}</span>
           <div className="grid grid-cols-2 items-start gap-x-8 gap-y-4">{shown.map((item) => {
-            const href = item.name === 'tailscale' && joined ? '/connections/tailscale' : `/connections/new/${item.name}`
+            const href = `/connections/new/${item.name}`
             return <div key={item.name} className="flex min-w-0 items-start gap-3">
               <span className="mt-0.5 shrink-0 self-start"><Glyph name={item.name} size={24} /></span>
               <span className="grid min-w-0 flex-1"><span className="truncate text-[13px]/[18px] font-medium">{item.title}</span><span className="line-clamp-2 text-[13px]/[18px] text-mute" title={item.blurb}>{item.short}</span></span>
-              <a href={href} className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'mt-0.5 h-[26px] shrink-0 self-start rounded-full px-2.5 text-[12px] font-normal')}>Connect</a>
+              {quick.direct(item)
+                ? <Button type="button" variant="secondary" className={cn(PILL, 'mt-0.5 shrink-0 self-start')} disabled={quick.pending} onClick={() => quick.connect(item)}>Connect</Button>
+                : <a href={href} className={cn(buttonVariants({ variant: 'secondary' }), PILL, 'mt-0.5 shrink-0 self-start')}>Connect</a>}
             </div>
           })}</div>
           {!shown.length && <p className="m-0 text-[14px] text-body">Nothing matches “{query}”.</p>}
@@ -84,7 +84,6 @@ function Sheet({ me, id, kind, connected }: { me: Me; id: string; kind: string; 
     const item = integration(kind)
     return item ? <ConnectSheet key={item.name} me={me} item={item} /> : null
   }
-  if (id === 'tailscale') return <TailscaleSheet me={me} />
   return <ConnectionSheet key={id} me={me} connectionId={id} connected={connected} />
 }
 
@@ -103,7 +102,6 @@ function Row({ connection, agents, computers }: { connection: OpenHutConnection;
       <PopoverContent className="w-[260px] gap-0.5 p-1.5">
         <div className="px-2 pt-1 pb-1.5 text-[12px] text-mute">Who can use {connection.name}</div>
         <AgentGrants connection={connection} agents={agents} />
-        <p className="m-0 px-2 pt-1.5 pb-1 font-copy text-[11px]/[1.5] text-mute">{connection.usable ? 'Agents you leave out get nothing from it, not even its name.' : `${connection.ownerName} hasn't shared it with you.`}</p>
       </PopoverContent>
     </Popover>
   </Item>

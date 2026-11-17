@@ -6,7 +6,6 @@ import { HttpError } from './http-error.ts'
 const TIMEOUT_MS = 180_000
 const MAX_LIVE_LINE = 8 << 20
 const Failure = z.object({ ok: z.literal(false), error: z.string() })
-const Tailnet = z.object({ state: z.string(), tailnet: z.string(), name: z.string(), address: z.string() })
 const Pairing = z.object({ status: z.enum(['starting', 'qr', 'linked', 'error']), qr: z.optional(z.string()), phone: z.optional(z.string()), error: z.optional(z.string()) })
 
 export const agentd = {
@@ -34,9 +33,6 @@ export const agentd = {
   newMessages: ({ since }: { since: number }) => ask({ request: { cmd: 'messages', since }, doing: 'look for new messages', schema: z.object({ messages: z.array(z.object({ agentId: z.string(), source: z.string(), at: z.number() })) }) }),
   usage: ({ since }: { since: number }) => ask({ request: { cmd: 'usage', since }, doing: 'read the agents\' usage', schema: z.object({ usage: z.record(z.string(), z.number()) }) }),
   unlinkWhatsapp: ({ id }: { id: string }) => ask({ request: { cmd: 'wa-unlink', id }, doing: 'unlink WhatsApp', schema: z.object({ unlinked: z.string() }) }),
-  joinTailnet: ({ authKey }: { authKey: string }) => ask({ request: { cmd: 'ts-up', authKey }, doing: 'join the tailnet', schema: z.extend(Tailnet, { joined: z.boolean() }) }),
-  tailnet: () => ask({ request: { cmd: 'ts-status' }, doing: 'read the Tailscale status', schema: Tailnet }),
-  leaveTailnet: () => ask({ request: { cmd: 'ts-down' }, doing: 'leave the tailnet', schema: Tailnet }),
 }
 
 export function liveBrowser({ id, onLine, onEnd }: { id: string; onLine: (line: string) => void; onEnd: () => void }): LiveBrowser {

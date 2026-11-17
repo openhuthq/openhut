@@ -1,9 +1,8 @@
-import { createContext, type RefObject } from 'react'
-import { PlusSignIcon, Search01Icon, Settings02Icon, SidebarLeftIcon } from '@hugeicons/core-free-icons'
+import { createContext } from 'react'
+import { PlusSignIcon, Settings02Icon, SidebarLeftIcon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@openhut/client'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Glyph } from '@/components/glyph'
 import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
 import { agentPath } from '@/app/routes'
@@ -17,12 +16,11 @@ const LIVE = { on: 'bg-pass', wait: 'animate-[blinkdot_1s_infinite] bg-amber', b
 
 export type Contact = { agent: OpenHutAgent; thread: Thread | undefined }
 
-export type SidebarControls = { collapsed: boolean; expand: () => void; search: () => void; newAgent: () => void }
+export type SidebarControls = { collapsed: boolean; expand: () => void; newAgent: () => void }
 export const SidebarContext = createContext<SidebarControls | null>(null)
 
-export function Sidebar({ contacts, activeId, collapsed, search, query, onQuery, onCollapse, onNew }: {
-  contacts: Contact[]; activeId: string | undefined; collapsed: boolean; search: RefObject<HTMLInputElement | null>
-  query: string; onQuery: (query: string) => void; onCollapse: () => void; onNew: () => void
+export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
+  contacts: Contact[]; activeId: string | undefined; collapsed: boolean; onCollapse: () => void; onNew: () => void
 }) {
   const computers = useComputers().data
   const many = new Set(contacts.map(({ agent }) => agent.computer)).size > 1
@@ -31,13 +29,8 @@ export function Sidebar({ contacts, activeId, collapsed, search, query, onQuery,
     <div className={cn('flex h-[56px] shrink-0 items-center gap-1.5 pr-3 pl-5', DRAG)}>
       <span className="ml-auto flex gap-1.5">
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Hide sidebar" title="Hide sidebar ⌘\" onClick={onCollapse}><I icon={SidebarLeftIcon} size={16} /></Button>
-        <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Search" title="Search ⌘K" onClick={() => search.current?.focus()}><I icon={Search01Icon} size={16} /></Button>
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="New agent" title="New agent" onClick={onNew}><I icon={PlusSignIcon} size={16} /></Button>
       </span>
-    </div>
-    <div className={cn('overflow-hidden px-3 transition-[height] duration-150', query ? 'h-10' : 'h-0 focus-within:h-10')}>
-      <Input ref={search} type="search" value={query} onChange={(event) => onQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') { onQuery(''); event.currentTarget.blur() } }} placeholder="Search agents" aria-label="Search agents"
-        className="h-8 rounded-md border-0 bg-[oklch(0%_0_0/.05)] px-3.5 text-[13px] [-webkit-appearance:none]" />
     </div>
     <nav className="flex min-h-0 flex-col gap-1 overflow-auto px-3 pt-1">
       {contacts.map(({ agent }) => <a key={agent.id} href={agentPath({ agentId: agent.id })} aria-current={agent.id === activeId ? 'page' : undefined}
@@ -49,7 +42,7 @@ export function Sidebar({ contacts, activeId, collapsed, search, query, onQuery,
           <span className={cn('truncate text-[13px]', agent.online ? 'text-body' : 'text-mute')}>{many && `${nameOf({ computers, id: agent.computer })} · `}{agent.online ? agent.summary || 'Say hello' : 'Offline'}</span>
         </span>
       </a>)}
-      {!contacts.length && <p className="m-0 px-2.5 py-2 text-[13px] text-mute">{query ? `No agent called “${query}”.` : 'No agents yet'}</p>}
+      {!contacts.length && <p className="m-0 px-2.5 py-2 text-[13px] text-mute">No agents yet</p>}
     </nav>
     <div className="mt-auto flex items-center gap-2 px-3 pt-2 pb-3">
       <Gear />

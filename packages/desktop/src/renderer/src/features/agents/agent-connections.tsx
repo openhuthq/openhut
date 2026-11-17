@@ -42,24 +42,17 @@ function AddConnection({ agent, connections }: { agent: Agent; connections: Open
     <DropdownMenuTrigger className="inline-flex items-center gap-1 border-0 bg-transparent p-0 text-xs font-medium text-ink" disabled={!agent.canEdit || createGrant.isPending}><I icon={PlusSignIcon} size={12} />Add</DropdownMenuTrigger>
     <DropdownMenuContent align="end">
       {connections.map((connection) => {
-        const blocked = blockedReason(agent, connection)
         const missing = !connection.computers.some((copy) => copy.computer === home)
         const pick = () => missing
           ? addTo.mutate({ id: connection.id, computer: home }, { onSuccess: () => toast(`${connection.name} is on ${there} now. Add it again to grant it.`), onError: toastError })
           : createGrant.mutate({ agentId: agent.id, connectionId: connection.id }, { onError: toastError })
-        return <DropdownMenuItem size="tall" key={connection.id} disabled={!!blocked || addTo.isPending} onClick={pick}>
+        return <DropdownMenuItem size="tall" key={connection.id} disabled={addTo.isPending} onClick={pick}>
           <Glyph name={connection.kind} size={16} />
-          <span className="flex min-w-0 flex-col"><span className="truncate">{connection.name}</span>{(blocked || missing) && <span className="text-xs whitespace-normal text-mute">{blocked ?? `Add to ${there}`}</span>}</span>
+          <span className="flex min-w-0 flex-col"><span className="truncate">{connection.name}</span>{missing && <span className="text-xs whitespace-normal text-mute">Add to {there}</span>}</span>
         </DropdownMenuItem>
       })}
       {connections.length > 0 && <DropdownMenuSeparator />}
       <DropdownMenuItem onClick={() => navigate('/connections')}><I icon={PlusSignIcon} size={14} />New connection</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
-}
-
-function blockedReason(agent: Agent, connection: OpenHutConnection) {
-  if (!connection.usable) return `Private to ${connection.ownerName}. Only ${connection.ownerName} can share it.`
-  if (!connection.everyone && connection.ownerId !== agent.ownerId) return `${agent.ownerName} owns ${agent.name} and can't use ${connection.name}.`
-  return undefined
 }

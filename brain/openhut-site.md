@@ -78,7 +78,7 @@
   skills) with a "Shared with your team" card over its corner. The point is build an agent and share it with your
   team; deploying is a detail. A two-window version (Slack beside a OpenHut panel) was rejected the same day.
 - The home page has too many sections (owner, 2026-11-15). Combine them Gumloop-style: one heading, a few big tiles,
-- Browser band (owner, 2026-11-17, after Gumloop's "A real browser for every agent"): compact, two columns. On the left, a live window cycles three real stream frames from an agent's browser (`public/browse/`); on the right, the heading, a working Take over toggle and three one-line facts. A two-row bento with a paragraph per tile was too wordy.
+- Browser band (owner, 2026-11-17, after Gumloop's "A real browser for every agent"): compact, two columns. On the left, a live window cycles three real stream frames from an agent's browser (`public/browse/`); on the right, the heading, a working Take over toggle and three one-line facts. A two-row bento with a paragraph per tile was too wordy. Rebalanced (owner, 2026-11-17): heading, one line ("Take over when a site needs a login."), the three facts at 14px, then one small grey "Take over"/"Hand back" pill with a muted status beside it. No Driving/Watching card, no black full-width button.
   then a row of small tiles. A small fact (Bring your own Claude) is a tile, never its own section. Setting up from
   Claude or Cursor and self-improving are one story. Proposal (8 bands down to 4): claude.ai/artifact/VKx4ggE5DioFPUZQXAUspk.
 - Docs sidebar groups (2026-11-17, the desktop app): Get started (Install, Computers, MCP), Features (Multiple

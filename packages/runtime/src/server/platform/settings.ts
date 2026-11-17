@@ -4,7 +4,6 @@ import { seal, unseal } from './secrets.ts'
 
 const GoogleClient = z.object({ clientId: z.string(), clientSecret: z.string() })
 const CodexTokens = z.object({ accessToken: z.string(), refreshToken: z.string() })
-const TailscaleJoin = z.object({ by: z.string(), at: z.string(), joined: z.boolean() })
 const loaded = await db.selectFrom('install_setting').select(['name', 'value']).execute()
 const rows = new Map(loaded.map((row) => [row.name, row.value]))
 
@@ -36,11 +35,6 @@ export const settings = {
     return sealed ? z.parse(GoogleClient, JSON.parse(unseal(sealed))) : undefined
   },
   setGoogleClient: (client: GoogleClient) => write('google_client', seal(JSON.stringify(client))),
-  tailscale: (): TailscaleJoin | undefined => {
-    const stored = rows.get('tailscale')
-    return stored ? z.parse(TailscaleJoin, JSON.parse(stored)) : undefined
-  },
-  setTailscale: (join: TailscaleJoin | undefined) => join ? write('tailscale', JSON.stringify(join)) : forget('tailscale'),
   appliedBuild: (): string | undefined => rows.get('build'),
   setAppliedBuild: (build: string) => write('build', build),
   usageData: (): boolean => rows.get('usage_data') !== 'off',
@@ -67,4 +61,3 @@ async function write(name: string, value: string): Promise<void> {
 
 export type GoogleClient = z.infer<typeof GoogleClient>
 export type CodexTokens = z.infer<typeof CodexTokens>
-export type TailscaleJoin = z.infer<typeof TailscaleJoin>

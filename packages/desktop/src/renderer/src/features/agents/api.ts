@@ -108,7 +108,7 @@ export function useChannels(agentId: string) {
 export function useCreateChannel() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (body: CreateChannel) => request({ schema: Channel, path: '/api/channels', method: 'POST', body }),
+    mutationFn: (body: CreateChannel) => request({ schema: Channel, path: on({ agentId: body.agentId, path: '/api/channels' }), method: 'POST', body }),
     onSuccess: (channel) => writeChannel(client, channel),
   })
 }

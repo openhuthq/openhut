@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
-import { Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, Tailscale, type ConnectTailscale, type CreateConnection, type CreateConnectionAuthorization, type UpdateConnection } from '@openhut/common/connections/connection.ts'
+import { Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, type CreateConnection, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
 import type { OpenHutConnection } from '@openhut/client'
 import { request } from '@/lib/api-client'
 import { at, openhut, rememberHomes } from '@/lib/openhut'
@@ -9,7 +9,6 @@ import { navigate } from '@/lib/router'
 
 const EVENT_LIST = List(ConnectionEvent)
 const TOOL_LIST = List(ConnectionTool)
-const TAILSCALE_KEY = ['tailscale']
 const DELETED_CONNECTION = Deleted('connection')
 const EVENTS_PER_PAGE = '25'
 
@@ -79,43 +78,6 @@ export function useConnectionTools(connectionId: string) {
     queryKey: ['connection-tools', connectionId],
     queryFn: () => request({ schema: TOOL_LIST, path: at({ id: connectionId, path: `/api/connection-tools?${new URLSearchParams({ connectionId })}` }) }).then((page) => page.data),
     retry: false,
-  })
-}
-
-export function useTailscale() {
-  return useQuery({ queryKey: TAILSCALE_KEY, queryFn: () => request({ schema: Tailscale, path: '/api/tailscale' }) })
-}
-
-export function useConnectTailscale() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (body: ConnectTailscale) => request({ schema: Tailscale, path: '/api/tailscale', method: 'PUT', body }),
-    onSuccess: (tailscale) => {
-      client.setQueryData(TAILSCALE_KEY, tailscale)
-      navigate('/connections/tailscale', true)
-    },
-  })
-}
-
-export function useDisconnectTailscale() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: () => request({ schema: Tailscale, path: '/api/tailscale', method: 'DELETE' }),
-    onSuccess: (tailscale) => {
-      client.setQueryData(TAILSCALE_KEY, tailscale)
-      navigate('/connections')
-    },
-  })
-}
-
-export function useUpdateConnection(connectionId: string) {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (body: UpdateConnection) => request({ schema: Connection, path: connectionPath(connectionId), method: 'PATCH', body }),
-    onSuccess: (connection) => {
-      client.setQueryData([...CONNECTIONS_KEY, connectionId], connection)
-      client.setQueryData<OpenHutConnection[]>(CONNECTIONS_KEY, (connections) => connections?.map((each) => each.id === connectionId ? { ...each, ...connection } : each))
-    },
   })
 }
 

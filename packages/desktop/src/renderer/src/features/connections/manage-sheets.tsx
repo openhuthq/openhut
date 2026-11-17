@@ -5,17 +5,15 @@ import type { Me } from '@openhut/common/team/team.ts'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
-import { Switch } from '@/components/ui/switch'
 import { ConfirmButton } from '@/components/confirm-button'
 import { Creature } from '@/components/creature'
 import { Loaded } from '@/components/loaded'
 import { StatusBadge } from '@/components/status-badge'
 import { useAgents, useCreateGrant, useDeleteGrant, useGrants } from '@/features/agents/api'
-import { useAuthorizeConnection, useConnection, useConnectionEvents, useConnectionTools, useDeleteConnection, useDisconnectTailscale, useTailscale, useUpdateConnection } from '@/features/connections/api'
+import { useAuthorizeConnection, useConnection, useConnectionEvents, useConnectionTools, useDeleteConnection } from '@/features/connections/api'
 import { integration, titleOf } from '@/features/connections/catalog'
-import { ConnectSheet } from '@/features/connections/connect-sheets'
 import { Section, SetupSheet } from '@/components/kit'
-import { Lines, Success } from '@/features/connections/sheet'
+import { Success } from '@/features/connections/sheet'
 import { AgentCheck } from '@/features/settings/kit'
 import { ago, shortDate } from '@/lib/format'
 import { navigate } from '@/lib/router'
@@ -59,11 +57,10 @@ function AccessSheet({ connection, agents }: { me: Me; connection: Connection; a
   const [picked, setPicked] = useState<string[]>(editable.slice(0, 1).map((agent) => agent.id))
   const item = integration(connection.kind)
   const done = () => Promise.all(picked.map((agentId) => createGrant.mutateAsync({ agentId, connectionId: connection.id }))).then(close, toastError)
-  return <SetupSheet brand={connection.kind} title={`Who can use ${connection.name}`} blurb={item?.blurb ?? ''} safe={item?.safeLine} onClose={close}
+  return <SetupSheet brand={connection.kind} title={`Who can use ${connection.name}`} blurb={item?.short ?? ''} onClose={close}
     foot={<Button variant="primary" disabled={createGrant.isPending} onClick={() => void done()}>Done</Button>}>
     <Success>{successLine(connection)}</Success>
     <div className="flex animate-grow flex-col gap-3">
-      <div className="flex flex-col gap-1"><span className="text-[13.5px] font-medium">Give agents access</span><p className="m-0 font-copy text-[12px]/[1.55] text-mute">{connection.signIn ? 'Only you can use it until you share it. Agents act as you, with your access.' : 'Only these agents can use it. You can change this any time.'}</p></div>
       <div className="flex flex-col gap-0.5 rounded-lg border border-hair bg-card p-1">
         {editable.length ? editable.map((agent) => <AgentCheck key={agent.id} agent={agent} checked={picked.includes(agent.id)} onChange={() => setPicked(picked.includes(agent.id) ? picked.filter((id) => id !== agent.id) : [...picked, agent.id])} />)
           : <p className="m-0 px-2 py-1.5 text-[12.5px] text-mute">You have no agents yet. Grant it from here once you make one.</p>}
@@ -79,13 +76,12 @@ function successLine(connection: Connection) {
 }
 
 function ManageSheet({ me, connection, agents }: { me: Me; connection: Connection; agents: Agent[] }) {
-  const update = useUpdateConnection(connection.id)
   const remove = useDeleteConnection(connection.id)
   const authorize = useAuthorizeConnection()
   const owned = connection.ownerId === me.user.id
   const returned = new URLSearchParams(location.search).get('error') ?? undefined
   return <SetupSheet brand={connection.kind} title={connection.name} blurb={[titleOf(connection.kind), connection.account].filter(Boolean).join(' · ')} error={returned} onClose={close}
-    safe={`Added by ${connection.ownerName} on ${shortDate.format(new Date(connection.createdAt))}`}
+    safe={`Added ${shortDate.format(new Date(connection.createdAt))}`}
     foot={<>
       <ConfirmButton variant="secondary" disabled={!connection.canDelete} question={`Delete ${connection.name}?`} detail="Every agent loses it on its next call." action="Delete" onConfirm={() => remove.mutate(undefined, { onError: toastError })}>Delete</ConfirmButton>
       {connection.signIn && owned && <Button variant="secondary" disabled={authorize.isPending} onClick={() => authorize.mutate({ connectionId: connection.id }, { onError: toastError })}>{authorize.isPending ? 'Opening…' : 'Reconnect'}</Button>}
@@ -93,8 +89,6 @@ function ManageSheet({ me, connection, agents }: { me: Me; connection: Connectio
     </>}>
     <ItemGroup className="rounded-lg">
       <Item size="sm"><ItemContent stacked><ItemTitle>Status</ItemTitle><ItemDescription className="text-xs">{connection.lastSuccessAt ? `Last good call ${ago(connection.lastSuccessAt)} ago` : 'No calls yet'}</ItemDescription></ItemContent><StatusBadge status={connection.status} /></Item>
-      <Item size="sm"><ItemContent stacked><ItemTitle>Everyone on the team</ItemTitle><ItemDescription className="text-xs">{owned ? 'Let other people grant it to their agents too' : `Only ${connection.ownerName} can share it`}</ItemDescription></ItemContent>
-        <Switch checked={connection.everyone} aria-label="Everyone on the team" disabled={!owned || update.isPending} onCheckedChange={() => update.mutate({ everyone: !connection.everyone }, { onError: toastError })} /></Item>
     </ItemGroup>
     <Section title="Who can use it"><div className="flex flex-col gap-0.5 rounded-lg border border-hair bg-card p-1"><AgentGrants connection={connection} agents={agents} /></div></Section>
     {connection.usable && <Tools connectionId={connection.id} />}
@@ -125,21 +119,4 @@ function Activity({ connectionId, agents }: { connectionId: string; agents: Agen
       </Item>)}</ItemGroup>
     }}</Loaded>
   </Section>
-}
-
-export function TailscaleSheet({ me }: { me: Me }) {
-  const tailscale = useTailscale()
-  const disconnect = useDisconnectTailscale()
-  const item = integration('tailscale')
-  const joined = tailscale.data?.connected
-  if (!tailscale.data || !item) return null
-  if (!joined) return <ConnectSheet me={me} item={item} />
-  return <SetupSheet brand="tailscale" title="Tailscale" blurb={[joined.tailnet, joined.name, joined.address].filter(Boolean).join(' · ') || 'This server'} safe={`Connected by ${joined.by} on ${shortDate.format(new Date(joined.at))}`} onClose={close}
-    foot={<>
-      <ConfirmButton variant="secondary" disabled={disconnect.isPending} question="Disconnect Tailscale?" detail={joined.joined ? 'This server logs out of the tailnet. Connections to tailnet hosts stop working.' : 'Only the record here is removed. The server was on this tailnet before, so it stays on it.'} action="Disconnect" onConfirm={() => disconnect.mutate(undefined, { onError: toastError })}>Disconnect</ConfirmButton>
-      <Button variant="primary" onClick={close}>Done</Button>
-    </>}>
-    <ItemGroup className="rounded-lg"><Item size="sm"><ItemContent stacked><ItemTitle>Status</ItemTitle><ItemDescription className="text-xs">Tailscale is {joined.state}</ItemDescription></ItemContent>{joined.state === 'Running' ? <StatusBadge status="connected" /> : <StatusBadge status="failing" word={joined.state} />}</Item></ItemGroup>
-    <Lines title="What it does" lines={item.gets} />
-  </SetupSheet>
 }

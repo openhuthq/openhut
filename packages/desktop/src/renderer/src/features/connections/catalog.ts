@@ -1,11 +1,11 @@
 import type { ConnectionKind } from '@openhut/common/connections/connection.ts'
 
-export type CatalogName = ConnectionKind | 'tailscale'
+export type CatalogName = ConnectionKind
 export type Integration = { name: CatalogName; title: string; blurb: string; gets: string[]; safe: string[]; short: string; safeLine: string; warn?: string; eta: string }
 
 const SIGNED_IN = (service: string) => [
   `Agents act as the person who signs in, with their ${service} access.`,
-  'Only you can use it until you share it, and only agents you grant it to.',
+  'Only agents you grant it to can use it.',
   'Tokens are sealed on this server and refreshed for you.',
 ]
 
@@ -22,14 +22,14 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
       safe: ['run can change data: grant it only to agents you trust with writes.', 'The deploy key is sealed on this server and never shown again.'],
     },
     {
-      name: 'posthog', short: 'Insights, events and flags, with your sign-in.', safeLine: 'Agents act as you. Only you can use it until you share it.', eta: 'One approval', title: 'PostHog', blurb: "Events, insights and feature flags through PostHog's own MCP, with your sign-in.",
+      name: 'posthog', short: 'Insights, events and flags, with your sign-in.', safeLine: 'Agents act as you.', eta: 'One approval', title: 'PostHog', blurb: "Events, insights and feature flags through PostHog's own MCP, with your sign-in.",
       gets: ['Insights, trends and funnels', 'HogQL queries over your events', 'Feature flags and experiments', 'Error tracking issues', 'Whatever else PostHog adds to its MCP server'],
       safe: SIGNED_IN('PostHog'),
     },
   ] },
   { shelf: 'Work', items: [
     {
-      name: 'linear', short: 'Issues and projects, as the person who connects.', safeLine: 'Agents act as you. Only you can use it until you share it.', eta: 'One approval', title: 'Linear', blurb: "Search, read and file issues through Linear's MCP, as the person who connects.",
+      name: 'linear', short: 'Issues and projects, as the person who connects.', safeLine: 'Agents act as you.', eta: 'One approval', title: 'Linear', blurb: "Search, read and file issues through Linear's MCP, as the person who connects.",
       gets: ['Search and read issues, projects and cycles', 'File issues, update them and comment', 'Read documents, teams and people'],
       safe: SIGNED_IN('Linear'),
     },
@@ -54,16 +54,9 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
       safe: ['Agents can only change files they created.', ...SIGNED_IN('Google')],
     },
     {
-      name: 'google', short: 'Docs, Sheets, Slides and Calendar.', safeLine: 'Agents act as you. Only you can use it until you share it.', eta: 'One approval', title: 'Google Workspace', blurb: "Docs, Sheets, Slides and Calendar through Google's own MCP servers.",
+      name: 'google', short: 'Docs, Sheets, Slides and Calendar.', safeLine: 'Agents act as you.', eta: 'One approval', title: 'Google Workspace', blurb: "Docs, Sheets, Slides and Calendar through Google's own MCP servers.",
       gets: ['Docs: read_doc and update_doc', 'Sheets: get_values, update_values and update_formulas', 'Slides: read_presentation and update_presentation', 'Calendar: list_events, suggest_time and create_event'],
       safe: SIGNED_IN('Google'),
-    },
-  ] },
-  { shelf: 'Network', items: [
-    {
-      name: 'tailscale', short: 'Let connections reach private hosts.', safeLine: 'Agents stay off the tailnet. The key is used once and not kept.', eta: '1 minute', title: 'Tailscale', blurb: 'Joins this server to your tailnet so Postgres can reach private hosts. Owners and admins.',
-      gets: ['This server joins your tailnet as openhut', 'Postgres, Convex and MCP connections can reach 100.x addresses and MagicDNS names', 'Agents stay off the tailnet: their firewall drops it'],
-      safe: ['Only owners and admins can join or leave.', 'The auth key is used once and never stored.', 'A server already on a tailnet is left as it is.'],
     },
   ] },
   { shelf: 'Any MCP', items: [
@@ -83,4 +76,11 @@ export function integration(name: string): Integration | undefined {
 
 export function titleOf(kind: CatalogName): string {
   return integration(kind)?.title ?? kind
+}
+
+export function uniqueName({ title, taken }: { title: string; taken: string[] }) {
+  if (!taken.includes(title)) return title
+  let n = 2
+  while (taken.includes(`${title} ${n}`)) n += 1
+  return `${title} ${n}`
 }
