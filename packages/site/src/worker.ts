@@ -20,7 +20,8 @@ export default {
     const asset = await env.ASSETS.fetch(new Request(url, request))
     const response = new Response(asset.body, asset)
     for (const [name, value] of Object.entries(HEADERS)) response.headers.set(name, value)
-    if (response.ok && request.method === 'GET' && isLive(url)) {
+    const counted = response.ok || (response.status === 302 && url.pathname.startsWith('/download/'))
+    if (counted && request.method === 'GET' && isLive(url)) {
       const event = downloadEvent({ installer, path: url.pathname, userAgent: request.headers.get('user-agent') ?? '' })
       if (event) ctx.waitUntil(forward({ env, events: [event] }))
     }
@@ -33,6 +34,7 @@ export default {
 function downloadEvent({ installer, path, userAgent }: { installer: boolean; path: string; userAgent: string }) {
   if (installer) return telemetryEvent({ name: 'install_script_fetched', properties: { client: clientOf(userAgent) } })
   if (path === '/openhut.tgz') return telemetryEvent({ name: 'release_downloaded' })
+  if (path === '/download/mac' || path === '/download/linux') return telemetryEvent({ name: 'app_downloaded', properties: { platform: path.slice('/download/'.length) } })
   return undefined
 }
 

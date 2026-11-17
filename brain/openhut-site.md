@@ -24,13 +24,21 @@
 - Arrangement (2026-11-17): headline, one line, then ONE download button above the window so it shows without
   scrolling, then the window centred and big. A two-column version
   (text and downloads left, window right) was tried: at 1440 the window drops to the narrow layout without its panel.
-- The download button (owner, 2026-11-17, after dusk.bot): one row, a black pill with the OS logo left of the label
-  and a grey "Other platforms" pill to GitHub releases (that is where the .deb is), no line under it, the same in the
-  closing band. The HTML says "Download for Mac" with the Apple logo, so it works without JS; the script reads
-  `navigator.userAgentData.platform` (else `navigator.platform`, else the user agent) and only Linux (not Android, not
-  ChromeOS) switches it to "Download for Linux" with Tux and `/download/linux`. Windows, phones and anything unknown
-  keep Mac. Clicks track `mac_download_clicked` or `linux_download_clicked`; Other platforms counts as `github_clicked`.
-  GitHub's own link lives in the nav and the footer on the sand; the hero has no GitHub line (owner, fewer rows).
+- The download control (owner, 2026-11-18): ONE component, a black split pill: "Download for Mac" with the Apple logo
+  (or "Download for Linux" with Tux on Linux), a divider, and a chevron that opens a white menu of the builds we ship:
+  macOS · Apple silicon, Linux · .deb, Linux · .AppImage, All downloads (GitHub releases). It lives once in
+  `<template id="dl-tpl">`; every `.dl-slot` (hero, closing band) is filled from it, and the slot's plain "Download for
+  Mac" link is the no-JS fallback. The closing band only recolours it (white pill) and opens the menu upward. Detection:
+  `navigator.userAgentData.platform`, else `navigator.platform`, else the user agent; only Linux (not Android, not
+  ChromeOS) switches. Clicks track `mac_download_clicked` / `linux_download_clicked {format}`; All downloads counts as
+  `github_clicked`. The Worker also sends `app_downloaded {platform}` on every `/download/*` 302, so downloads from the
+  docs count too. Never name a class `.split`: the sections already use it.
+- Footer (owner, 2026-11-18): off the sand, on the page background under a hairline: logo, tagline and © on the left,
+  Product / Resources / Community columns, then "MIT licensed" and the GitHub mark. The night band ends with the sand
+  and the parade, with no text on it.
+- Changelog: 0.1.0 is the first desktop release; the older server article is labelled "Server preview" with a note on
+  what the app dropped. Check every page's inline scripts with `node --check` after editing them: a stray `})` once
+  left the changelog's mascots blank.
 - The rest of the page follows the app's calm: Inter headings at a few sizes, sentence case, grey pills, hairline
   cards, colour only from faces, brand marks and status dots. Bebas Neue and IBM Plex Mono are gone from the home page
   (the docs and `/brand` still use them). Sections and their substance are unchanged: channels, shape it as you go,

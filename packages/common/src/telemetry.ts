@@ -3,6 +3,7 @@ import * as z from 'zod/mini'
 export const TELEMETRY_EVENTS = {
   install_script_fetched: ['client'],
   release_downloaded: [],
+  app_downloaded: ['platform'],
   setup_completed: ['owner_email'],
   instance_active: ['agents', 'people', 'owner_email'],
   agent_created: ['model'],
