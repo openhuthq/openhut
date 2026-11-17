@@ -1,5 +1,6 @@
 #!/bin/sh
 set -u
+[ "$(uname)" = Darwin ] && [ -z "${E2E_AWAKE:-}" ] && E2E_AWAKE=1 exec caffeinate -is "$0" "$@"
 cd "$(dirname "$0")/../.."
 R=packages/e2e/results
 fail() { echo "e2e: $*"; exit 1; }
@@ -12,6 +13,7 @@ tree_sha() { { git rev-parse HEAD; git diff HEAD --binary; git ls-files -o --exc
 stop_mirror() { [ -z "${MIRROR:-}" ] && return; kill -INT "$MIRROR" 2>/dev/null; i=0; while curl -fs -o /dev/null http://127.0.0.1:8099/ && [ $i -lt 50 ]; do i=$((i+1)); sleep 0.2; done; MIRROR=; }
 mirror() {
   stop_mirror
+  curl -fs -o /dev/null http://127.0.0.1:8099/ && fail ":8099 already answers; stop the mirror an earlier run left behind"
   (cd packages/site && WRANGLER_SEND_METRICS=false exec ../../node_modules/.bin/wrangler dev --ip 0.0.0.0 --port 8099 --inspector-port 0 \
     --assets "../../$1" --show-interactive-dev-session=false --log-level warn) >>"$R/mirror.log" 2>&1 &
   MIRROR=$!

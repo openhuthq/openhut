@@ -19,7 +19,7 @@ node_ok() { node -e 'const [a,b]=process.versions.node.split(".").map(Number);pr
 [ "$(id -u)" = 0 ] || die "run as root:  curl -fsSL $OPENHUT_URL | sudo sh"
 if command -v flock >/dev/null 2>&1; then
   exec 9>/run/openhut-install.lock
-  flock -n 9 || die "another install or update is already running"
+  i=0; until flock -n 9; do i=$((i+1)); [ $i -ge 10 ] && die "another install or update is already running"; sleep 1; done
 fi
 case "$(uname -m)" in
   x86_64)  ARCH=x86_64 NARCH=x64
