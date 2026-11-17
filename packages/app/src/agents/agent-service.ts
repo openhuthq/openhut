@@ -52,6 +52,7 @@ export const agentService = {
     const used = new Set((await db.selectFrom('agent').select('net').execute()).map((row) => row.net))
     const net = Array.from({ length: MAX_AGENTS }, (_, i) => i + 1).find((n) => !used.has(n))
     if (!net) throw new HttpError(409, `This server already runs ${MAX_AGENTS} agents. Delete one first.`)
+    if ((await agentd.health()).imageReady === false) throw new HttpError(409, 'OpenHut is still downloading the agent image. This happens once, on the first start, and takes a few minutes. Try again shortly.')
     const row = await db.insertInto('agent').values({
       id: newId('ag'), name: clean, owner_id: actor.id, model: 'sonnet', net, channel_key: seal(randomBytes(24).toString('hex')),
       instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000),

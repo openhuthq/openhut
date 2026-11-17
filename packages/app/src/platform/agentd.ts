@@ -11,7 +11,7 @@ const Tailnet = z.object({ state: z.string(), tailnet: z.string(), name: z.strin
 const Pairing = z.object({ status: z.enum(['starting', 'qr', 'linked', 'error']), qr: z.optional(z.string()), phone: z.optional(z.string()), error: z.optional(z.string()) })
 
 export const agentd = {
-  health: () => ask({ request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), updating: z.optional(z.boolean()) }) }),
+  health: () => ask({ request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), imageReady: z.optional(z.boolean()), updating: z.optional(z.boolean()) }) }),
   containers: () => ask({ request: { cmd: 'containers' }, doing: 'list the containers', schema: z.object({ containers: z.array(z.object({ name: z.string(), agentId: z.string(), state: z.string(), status: z.string(), image: z.string(), createdAt: z.string(), networks: z.string() })) }) }),
   ps: () => ask({ request: { cmd: 'ps' }, doing: 'list the agents', schema: z.object({ states: z.record(z.string(), z.string()) }) }),
   create: ({ id, net, files, size, browser }: { id: string; net: number; files: AgentFiles; size: AgentSize; browser: boolean }) =>

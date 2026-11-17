@@ -101,7 +101,7 @@ function fakeSlack(method: string, params: URLSearchParams) {
 function handle(req: AgentdRequest): AgentdReplies[AgentdRequest['cmd']] {
   switch (req.cmd) {
     case 'health':
-      return { firewall: true, image: IMAGE, updating: false }
+      return { firewall: true, image: IMAGE, imageReady: true, updating: false }
     case 'ps':
       return { states }
     case 'containers':

@@ -7,6 +7,7 @@ GVISOR=20261109.0
 NODE=22.23.5
 CLAUDE=2.1.311
 AGENT_BROWSER=0.43.0
+HOST_IMAGE=docker:28-dind@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac
 PREFIX=/opt/openhut
 say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die() { printf 'openhut: %s\n' "$*" >&2; exit 1; }
@@ -14,6 +15,26 @@ retry() { n=0; until timeout 600 "$@"; do n=$((n+1)); [ $n -ge 4 ] && return 1; 
 fetch() { curl -fsSL --retry 4 --retry-all-errors --connect-timeout 15 -m 900 "$1" -o "$2"; }
 check() { printf '%s  %s\n' "$2" "$3" | "$1" -c - >/dev/null || die "checksum mismatch: $3"; }
 node_ok() { node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; }
+
+if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
+  SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+  if ! command -v docker >/dev/null 2>&1; then
+    [ "$(uname -s)" = Linux ] || die "OpenHut runs in Docker. Install Docker Desktop (https://docs.docker.com/desktop/), open it, then run this again."
+    say "Docker"
+    if command -v apt-get >/dev/null 2>&1; then $SUDO apt-get update -qq && $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker.io >/dev/null
+    elif command -v apk >/dev/null 2>&1; then $SUDO apk add -q docker && $SUDO rc-update add docker default >/dev/null && $SUDO service docker start >/dev/null
+    else die "install Docker, then run this again"; fi
+  fi
+  D=docker; docker info >/dev/null 2>&1 || D="$SUDO docker"
+  i=0; until $D info >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 30 ] && die "Docker isn't running. Start it, then run this again."; sleep 1; done
+  say "OpenHut container"
+  $D container inspect openhut >/dev/null 2>&1 || $D run -d --name openhut --privileged --restart unless-stopped -p 8787:8787 \
+    -v openhut:/var/lib/docker --entrypoint sh "$HOST_IMAGE" \
+    -c 'if [ -x /opt/openhut/install/host-start.sh ]; then exec /opt/openhut/install/host-start.sh; fi; exec sleep infinity' >/dev/null
+  $D start openhut >/dev/null
+  IP=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
+  exec $D exec -e SETUP_HOST="${IP:-localhost}" openhut sh -c "apk add -q curl && curl -fsSL $OPENHUT_URL | sh"
+fi
 
 [ "$(uname -s)" = Linux ] || die "OpenHut runs only on Linux (Debian, Ubuntu or Alpine; x86_64 or arm64), not $(uname -s). On a Mac or Windows, run this inside a Linux VM or on a Linux server."
 [ "$(id -u)" = 0 ] || die "run as root:  curl -fsSL $OPENHUT_URL | sudo sh"
@@ -131,10 +152,10 @@ up() { i=0; until fresh; do i=$((i+1)); [ $i -gt "$1" ] && return 1; printf .; s
 
 say "Starting"
 start
-[ -d /run/systemd/system ] || echo "  No systemd here. After a reboot, run $PREFIX/install/host-start.sh (agents stay stopped until then)."
+[ -d /run/systemd/system ] || [ -n "${SETUP_HOST:-}" ] || echo "  No systemd here. After a reboot, run $PREFIX/install/host-start.sh (agents stay stopped until then)."
 TRIES=600
 [ -d "$PREFIX.old" ] && cmp -s "$PREFIX.old/install/agent-image" "$PREFIX/install/agent-image" && TRIES=100
-printf 'Waiting for OpenHut (the first start pulls the ~3 GB agent image)'
+printf 'Waiting for OpenHut'
 if ! up "$TRIES"; then
   printf '\n'
   [ -d "$PREFIX.old" ] || die "not up after 30 min; see /var/log/openhut"
@@ -148,6 +169,7 @@ if ! up "$TRIES"; then
 fi
 rm -rf "$PREFIX.old"
 IP=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
-printf '\nOpenHut is running. Create your account (the first one is the owner; after that people join by invite):\n  http://%s:8787/setup?code=%s\n' "${IP:-this-server}" "$SETUP_CODE"
+printf '\nOpenHut is running. Create your account (the first one is the owner; after that people join by invite):\n  http://%s:8787/setup?code=%s\n' "${SETUP_HOST:-${IP:-this-server}}" "$SETUP_CODE"
+docker image inspect "${AGENT_IMAGE:-$(cat "$PREFIX/install/agent-image")}" >/dev/null 2>&1 || echo "The agent image (about 1 GB) is still downloading. You can sign in now and create agents once it's done."
 echo "Keep port 8787 private (Tailscale or an SSH tunnel) or put TLS in front of it: sign-in travels over plain HTTP."
 echo "OpenHut sends anonymous usage events and the owner's email to openhut.dev. Turn it off in Admin > Usage data. Details: https://openhut.dev/docs/security"
