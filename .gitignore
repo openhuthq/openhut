@@ -13,3 +13,4 @@ __pycache__/
 /bin/claude
 /bin/claude-darwin
 .data-*/
+packages/desktop/release-linux/

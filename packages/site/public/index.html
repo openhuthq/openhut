@@ -77,11 +77,9 @@ h1,h2,h3{text-wrap:balance;font-weight:600;letter-spacing:-.03em}
 .btn.sec:hover{background:var(--mid)}
 .btn.big{height:48px;padding:0 24px;font-size:16px}
 .os{width:16px;height:16px;flex:none;display:block}
-.os-linux,.on-linux{display:none}
+.os-linux{display:none}
 [data-os=linux] .os-linux{display:block}
-[data-os=linux] .on-linux{display:inline}
-[data-os=linux] .os-mac,[data-os=linux] .on-mac{display:none}
-.dl-note{font-size:14px;font-weight:500}
+[data-os=linux] .os-mac{display:none}
 .pill{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:999px;background:var(--soft);font-size:12px;color:var(--ink);white-space:nowrap}
 .pill:hover{background:var(--mid)}
 
@@ -95,13 +93,8 @@ h1,h2,h3{text-wrap:balance;font-weight:600;letter-spacing:-.03em}
 .sub{margin:18px auto 0;max-width:34em;font-size:18px;line-height:1.5;color:var(--body);text-wrap:balance}
 .get{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:28px}
 .get-row{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px}
-.note{font-size:13px;color:var(--mute)}
-.note a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
 .try{margin:40px 0 14px;font-size:13px;color:var(--mute);display:flex;align-items:center;justify-content:center;gap:8px}
 .try i{width:6px;height:6px;border-radius:50%;background:var(--pass);animation:pulse 1.6s infinite}
-.server{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px 14px;margin-top:26px;font-size:14px;color:var(--body)}
-.oss{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--body)}
-.oss:hover{color:var(--ink)}
 
 /* ===== the app window: a replica of packages/desktop's renderer ===== */
 .appbox{position:relative;margin:0 auto;text-align:left}
@@ -493,8 +486,6 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
 .cta .btn.pri:hover{background:#fff}
 .cta .btn.sec{background:oklch(100% 0 0 / .12);color:var(--night-ink)}
 .cta .btn.sec:hover{background:oklch(100% 0 0 / .2)}
-.cta .note{color:var(--night-mute)}
-.cta .note a{color:var(--night-ink)}
 .sand{position:relative;z-index:1;margin-top:110px;background:var(--sand)}
 .sand::before{content:"";position:absolute;left:0;right:0;top:-23px;height:24px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 24' preserveAspectRatio='none'%3E%3Cpath d='M0 14C150 3 300 18 450 9S800 2 1000 11 1150 6 1200 9V24H0z' fill='%23c2a678'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat}
 .parade{position:absolute;left:0;right:0;top:-46px;display:flex;justify-content:center;gap:clamp(6px,2vw,22px)}
@@ -526,6 +517,7 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
   .foot .links{margin-left:0}
   .foot{justify-content:center;text-align:center}
 }
+@media (max-width:480px){.get-row{gap:8px}.get-row .btn.big{padding:0 16px;font-size:15px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -569,8 +561,10 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
       <h1>Build, manage &amp; share agents <span class="wave">with your team</span></h1>
       <p class="sub">Self-improving agents in Slack, WhatsApp and Telegram. They run on your Mac, or on your own server.</p>
       <div class="get" id="get">
-        <a class="btn pri big dl" data-dl data-location="hero" href="/download/mac"><svg class="os os-mac" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg><svg class="os os-linux" viewBox="0 0 256 295" aria-hidden="true"><use href="#os-linux"/></svg><span data-dl-label>Download for Mac</span></a>
-        <p class="note dl-note"><span class="on-mac">Apple silicon · macOS 14 or later</span><span class="on-linux">x64 · also as a <a data-deb data-location="hero" href="https://github.com/openhuthq/openhut/releases/latest/download/openhut-x64.deb">.deb</a></span> · <a data-location="hero" href="https://github.com/openhuthq/openhut/releases/latest" target="_blank" rel="noopener">Other platforms</a></p>
+        <div class="get-row">
+          <a class="btn pri big dl" data-dl data-location="hero" href="/download/mac"><svg class="os os-mac" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg><svg class="os os-linux" viewBox="0 0 256 295" aria-hidden="true"><use href="#os-linux"/></svg><span data-dl-label>Download for Mac</span></a>
+          <a class="btn sec big" data-location="hero" href="https://github.com/openhuthq/openhut/releases/latest" target="_blank" rel="noopener">Other platforms</a>
+        </div>
       </div>
     </div>
     <div class="hero-app">
@@ -614,7 +608,6 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
         </div>
       </div>
     </div>
-    <div class="server" id="server"><a class="oss" data-location="hero" href="https://github.com/openhuthq/openhut" target="_blank" rel="noopener"><svg class="ghi" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Open source, MIT</a></div>
   </div>
 </section>
 
@@ -769,9 +762,8 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
     <div class="get">
       <div class="get-row">
         <a class="btn pri big dl" data-dl data-location="closing" href="/download/mac"><svg class="os os-mac" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg><svg class="os os-linux" viewBox="0 0 256 295" aria-hidden="true"><use href="#os-linux"/></svg><span data-dl-label>Download for Mac</span></a>
-        <a class="btn sec big" data-location="closing" href="https://github.com/openhuthq/openhut" target="_blank" rel="noopener"><svg class="ghi" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Star on GitHub</a>
+        <a class="btn sec big" data-location="closing" href="https://github.com/openhuthq/openhut/releases/latest" target="_blank" rel="noopener">Other platforms</a>
       </div>
-      <p class="note dl-note"><span class="on-mac">Apple silicon · macOS 14 or later</span><span class="on-linux">x64 · also as a <a data-deb data-location="closing" href="https://github.com/openhuthq/openhut/releases/latest/download/openhut-x64.deb">.deb</a></span> · <a data-location="closing" href="https://github.com/openhuthq/openhut/releases/latest" target="_blank" rel="noopener">Other platforms</a></p>
     </div>
   </div>
   <div class="sand"><div class="parade" id="parade" aria-hidden="true"></div>
@@ -889,7 +881,7 @@ const AGENTS = [
     answer: 'Northwind is still the warmest. Acme replied overnight and wants a call on Thursday.' },
 ]
 AGENTS.forEach(a => { a.running = true; a.msgs = a.past.map(([role, text, steps]) => ({ role, text, steps })) })
-const COMPUTERS = [{ id: 'This Mac', kind: 'laptop', line: 'Online · 3 agents · OpenHut 0.1.0', online: true, note: 'Only while this Mac is awake' }, { id: 'beelink', kind: 'server', line: 'Online · 1 agent · OpenHut 0.1.0', online: true, note: 'Always on' }]
+const COMPUTERS = [{ id: 'This Mac', kind: 'laptop', line: 'Online · 3 agents · OpenHut 0.3.0', online: true, note: 'Only while this Mac is awake' }, { id: 'beelink', kind: 'server', line: 'Online · 1 agent · OpenHut 0.3.0', online: true, note: 'Always on' }]
 const CATALOG = [
   ['Data', 'postgres', 'Postgres', 'Read-only access to a database.'], ['Data', 'convex', 'Convex', 'Tables, functions and logs of one deployment.'], ['Data', 'posthog', 'PostHog', 'Insights, events and flags, with your sign-in.'],
   ['Work', 'linear', 'Linear', 'Issues and projects, as the person who connects.'], ['Work', 'github', 'GitHub', 'A bot of your own that reads code, commits and opens pull requests.'], ['Work', 'excalidraw', 'Excalidraw', 'Hand-drawn diagrams agents share as a link.'],
@@ -1136,10 +1128,10 @@ const SET = {
     <div><div class="slbl">Notify me when</div><div class="srows">${srow(hue('Notification01', 'amber'), 'An agent replies', 'While this window is closed or in the background.', sw('replies', 'An agent replies'))}${srow(hue('Alert02', 'red'), 'An agent stops or fails', 'The Dock icon also shows how many agents need you.', sw('fails', 'An agent stops or fails'))}</div></div>
     <div><div class="slbl">Data</div><div class="srows">${srow(hue('Folder01', 'blue'), '~/Library/Application Support/OpenHut', '2.4 GB', '<button class="apill">Show in Finder</button>')}${srow(hue('Analytics01', 'violet'), 'Share anonymous usage data', 'Which features are used, never messages, data or your email.', sw('usage', 'Share anonymous usage data'))}</div></div>`,
   updates: () => `<p class="intro">OpenHut updates itself in the background. Agents keep their memory and chats.</p>
-    <div><div class="slbl">This app</div><div class="srows">${srow(hue('CloudDownload', 'sky'), 'OpenHut 0.1.0', 'Checks every few hours and installs when the app restarts.', '<span class="st"><i></i>Up to date</span><button class="apill" data-set="check">Check for updates</button>')}</div></div>
-    <div><div class="slbl">Computers</div><div class="srows">${srow(cmark('laptop', true), 'This Mac', 'OpenHut 0.1.0 · updates with this app')}${srow(cmark('server', true), 'beelink', 'OpenHut 0.1.0', '<span class="st"><i></i>Up to date</span>')}</div></div>`,
+    <div><div class="slbl">This app</div><div class="srows">${srow(hue('CloudDownload', 'sky'), 'OpenHut 0.3.0', 'Checks every few hours and installs when the app restarts.', '<span class="st"><i></i>Up to date</span><button class="apill" data-set="check">Check for updates</button>')}</div></div>
+    <div><div class="slbl">Computers</div><div class="srows">${srow(cmark('laptop', true), 'This Mac', 'OpenHut 0.3.0 · updates with this app')}${srow(cmark('server', true), 'beelink', 'OpenHut 0.3.0', '<span class="st"><i></i>Up to date</span>')}</div></div>`,
   computers: () => `<p class="intro">Where your agents run. This Mac runs them while it's awake.</p>
-    <div class="srows">${COMPUTERS.map((c, i) => { const n = AGENTS.filter(a => a.on === c.id).length; return srow(cmark(c.kind, c.online), c.id, `Online · ${n} agent${n === 1 ? '' : 's'} · OpenHut 0.1.0`, i ? `<button class="tiny" aria-label="More for ${c.id}">${ic('MoreHorizontal')}</button>` : `${ic('Tick02', 14)}Current`) }).join('')}
+    <div class="srows">${COMPUTERS.map((c, i) => { const n = AGENTS.filter(a => a.on === c.id).length; return srow(cmark(c.kind, c.online), c.id, `Online · ${n} agent${n === 1 ? '' : 's'} · OpenHut 0.3.0`, i ? `<button class="tiny" aria-label="More for ${c.id}">${ic('MoreHorizontal')}</button>` : `${ic('Tick02', 14)}Current`) }).join('')}
     ${srow(hue('PlusSign', 'green'), 'Add a computer', 'An always-on Linux computer keeps agents answering while this Mac sleeps.', ic('ArrowRight01', 16), true)}</div>`,
   models: () => `<p class="intro">Sign in with the subscription you already pay for. Each agent then picks one.</p>
     <div class="srows">${srow(lg('claude', 22), 'Claude subscription', 'Max · 23% of this 5-hour window<br>On This Mac, beelink', '<span class="st"><i></i>Signed in</span>')}${srow(lg('openai', 22), 'Codex subscription', 'ChatGPT Plus or Pro', '<span style="color:var(--a-mute)">Coming soon</span>')}</div>
@@ -1218,9 +1210,8 @@ if (os === 'linux') {
 document.addEventListener('click', e => {
   const gh = e.target.closest('a[href^="https://github.com/openhuthq/openhut"]')
   if (gh) window.databuddy?.track('github_clicked', { location: gh.dataset.location || 'other' })
-  const dl = e.target.closest('a[data-dl], a[data-deb]')
-  if (dl && dl.hasAttribute('data-deb')) window.databuddy?.track('linux_download_clicked', { location: dl.dataset.location, format: 'deb' })
-  else if (dl && os === 'linux') window.databuddy?.track('linux_download_clicked', { location: dl.dataset.location, format: 'appimage' })
+  const dl = e.target.closest('a[data-dl]')
+  if (dl && os === 'linux') window.databuddy?.track('linux_download_clicked', { location: dl.dataset.location, format: 'appimage' })
   else if (dl) window.databuddy?.track('mac_download_clicked', { location: dl.dataset.location })
 })
 
