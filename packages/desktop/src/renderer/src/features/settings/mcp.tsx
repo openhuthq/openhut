@@ -17,7 +17,7 @@ export function McpSettings() {
     {commands.data?.map((each) => <Section key={each.computer} title={each.computer === 'local' ? `On this ${HERE}` : nameOf({ computers, id: each.computer })}>
       <div className="flex flex-col gap-1.5 px-2.5">
         <Command text={each.command} />
-        {each.computer !== 'local' && <p className="m-0 text-[13px] text-mute">It goes through this Mac, so it works while OpenHut is open here.</p>}
+        {each.computer !== 'local' && <p className="m-0 text-[13px] text-mute">It goes through this {HERE}, so it works while OpenHut is open here.</p>}
       </div>
     </Section>)}
     {bridge && <Rows>

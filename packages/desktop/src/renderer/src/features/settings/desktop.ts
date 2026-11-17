@@ -1,3 +1,4 @@
+import { WORDS } from '@/lib/platform'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Peer } from '@/features/settings/peers'
 
@@ -24,7 +25,7 @@ const PREFS_KEY = ['prefs']
 const FIRST_RUN_POLL_MS = 500
 
 export const desktop: Bridge | undefined = Reflect.get(window, 'openhut')
-export const HERE = navigator.userAgent.includes('Mac') ? 'Mac' : 'computer'
+export const HERE = WORDS.here
 
 export function useTailnet() {
   return useQuery({ queryKey: ['tailnet'], queryFn: async (): Promise<Tailnet> => tailnetOf(await desktop?.tailnet()), enabled: !!desktop, retry: false })

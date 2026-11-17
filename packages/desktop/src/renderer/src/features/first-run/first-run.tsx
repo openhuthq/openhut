@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Hut } from '@/components/hut'
 import { ErrorNote } from '@/components/error-note'
 import { HERE, useFirstRun } from '@/features/settings/desktop'
+import { WORDS } from '@/lib/platform'
 import { I } from '@/components/kit'
 import { Progress } from '@/features/settings/kit'
 import { navigate } from '@/lib/router'
@@ -28,7 +29,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
     <Button variant="primary" size="lg" className="mt-2 w-[240px] justify-center gap-2" onClick={onStart} autoFocus><I icon={PlayIcon} size={15} />Start</Button>
     <div className="mt-2 flex items-center gap-5 text-[12px] text-mute">
       <span className="inline-flex items-center gap-1.5"><I icon={Shield01Icon} size={14} />Sealed per agent</span>
-      <span className="inline-flex items-center gap-1.5"><I icon={Key01Icon} size={14} />Keys in {HERE === 'Mac' ? 'Keychain' : 'your keyring'}</span>
+      <span className="inline-flex items-center gap-1.5"><I icon={Key01Icon} size={14} />Keys in the {WORDS.keychain}</span>
       <span className="inline-flex items-center gap-1.5"><I icon={ZapIcon} size={14} />About 1 GB of memory per agent</span>
     </div>
   </Center>

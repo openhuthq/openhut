@@ -18,6 +18,7 @@ import { fieldError, formError } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
+import { WORDS } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 
 const ROLE_SQL = `create role openhut_reader login password 'choose-a-password';
@@ -163,7 +164,7 @@ function usePutOn(item: Integration) {
     <Field label="Name" error={error}><Input name="name" required defaultValue={uniqueName({ title: item.title, taken })} maxLength={60} autoComplete="off" /></Field>
     {many && <div className="flex min-w-0 flex-col gap-1.5"><span className="text-xs font-medium text-mute">Computers</span>
       {signIn
-        ? <span className="flex h-8 items-center text-[13px] text-mute">This Mac only for now</span>
+        ? <span className="flex h-8 items-center text-[13px] text-mute">{WORDS.thisComputer} only for now</span>
         : <MultiSelect label="Computers" value={picked} onChange={(next) => next.length > 0 && setPicked(next)} options={computers.map((computer) => ({ value: computer.id, label: computer.name, disabled: !computer.online, note: computer.online ? undefined : 'Offline' }))} />}
     </div>}
   </div>
