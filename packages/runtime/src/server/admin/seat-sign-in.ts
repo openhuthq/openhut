@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { SeatSignIn } from '@openhut/common/admin/admin.ts'
@@ -68,7 +68,7 @@ export const seatSignIn = {
 
 async function hostClaude(): Promise<void> {
   const bin = config.claudeHostBin
-  if (process.platform !== 'darwin' || existsSync(bin)) return
+  if (process.platform !== 'darwin' || (existsSync(bin) && (!config.claudeVersion || versionOf(bin) === config.claudeVersion))) return
   if (!config.claudeVersion) throw new HttpError(503, 'Claude Code isn\'t on this Mac yet, and this build doesn\'t say which version to get.')
   const base = `https://downloads.claude.ai/claude-code-releases/${config.claudeVersion}`
   const platform = `darwin-${process.arch}`
@@ -80,7 +80,12 @@ async function hostClaude(): Promise<void> {
   writeFileSync(`${bin}.new`, body)
   chmodSync(`${bin}.new`, 0o755)
   renameSync(`${bin}.new`, bin)
+  writeFileSync(`${bin}.version`, config.claudeVersion)
   log.info({ event: 'seat.claude_downloaded', version: config.claudeVersion })
+}
+
+function versionOf(bin: string): string {
+  try { return readFileSync(`${bin}.version`, 'utf8').trim() } catch { return '' }
 }
 
 function signInFor({ id, code }: { id: string; code: string }): OpenSignIn | undefined {

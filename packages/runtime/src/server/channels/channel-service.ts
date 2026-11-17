@@ -7,7 +7,7 @@ import { log, record } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { newId, seal, unseal } from '../platform/secrets.ts'
 import { deleted } from '../platform/responses.ts'
-import { agentd, containerStates } from '../platform/agentd.ts'
+import { agentd, containerStates, features } from '../platform/agentd.ts'
 import { slack, SlackSecrets } from '../integrations/slack/slack.ts'
 import { telegram, TelegramSecrets } from '../integrations/telegram/telegram.ts'
 import { agentService } from '../agents/agent-service.ts'
@@ -97,6 +97,7 @@ async function setupOf({ body, agentName, agentId }: { body: CreateChannel; agen
       return { status: 'connected', account, secrets: seal(JSON.stringify({ botToken: body.botToken })) }
     }
     case 'whatsapp': {
+      if (!(await features()).whatsapp) throw new HttpError(409, 'This computer can\'t link WhatsApp. Run the agent on a Linux computer you added to use it.', { param: 'kind' })
       if ((await containerStates())?.[agentId] !== 'running') throw new HttpError(409, `Start ${agentName} first: WhatsApp links from inside its container.`)
       return { status: 'linking', account: null, secrets: '' }
     }

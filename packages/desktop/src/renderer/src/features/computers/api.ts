@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { Computer } from '@openhut/client'
+import type { Computer, Features } from '@openhut/client'
+import { useAgents } from '@/features/agents/api'
 import { Admin } from '@openhut/common/admin/admin.ts'
 import { ApiError } from '@openhut/common/api.ts'
 import { openhut } from '@/lib/openhut'
@@ -11,6 +12,11 @@ const ADMINS_KEY = [...COMPUTERS_KEY, 'admins']
 
 export function useComputers() {
   return useQuery({ queryKey: COMPUTERS_KEY, queryFn: () => openhut.computers.list() })
+}
+
+export function useFeatures(agentId: string): Features {
+  const computer = useAgents().data?.find((each) => each.id === agentId)?.computer
+  return useComputers().data?.find((each) => each.id === computer)?.features ?? { whatsapp: false, browser: false }
 }
 
 export function useComputerAdmins() {

@@ -4,7 +4,7 @@
 - Pushing to `main` runs `.github/workflows/deploy.yml`: typecheck and unit tests, then `scripts/release.sh` and
   `npm -w @openhut/site run deploy`, then a check that openhut.dev serves an `install.sh` whose checksum matches
   the tarball it serves. Rerun it by hand with `gh workflow run deploy.yml`.
-- A build is numbered `<major.minor from packages/runtime/package.json>.<commit count>`. Anything that drops commits (a squash or a history reset) makes new builds number lower than installed ones, so bump the minor first (0.2 after the first 2026-11-15 reset, 0.3 after the second, which squashed `main` to one commit).
+- A build is numbered `<major.minor from packages/runtime/package.json>.<100 + the commits that touch install, packages/runtime, packages/common or vendor>` (2026-11-18; it was the repo-wide commit count, so a site-only commit offered every runtime an update that restarted its agents; the +100 keeps it above the last such build, 0.1.95). The packaged desktop app writes its own `backend/BUILD` (`<app version>-<short commit>`), so an app update re-applies its agents once; its local runtime never offers installer updates (`latestBuild` is null in socket mode). Anything that drops commits (a squash or a history reset) makes new builds number lower than installed ones, so bump the minor first (0.2 after the first 2026-11-15 reset, 0.3 after the second, which squashed `main` to one commit).
 - The repo secret `CLOUDFLARE_API_TOKEN` is the account token "openhut-site GitHub Actions deploy": Workers Scripts
   write and Account Settings read on the owner's account, Workers Routes write on openhut.dev only.
 - DNS for openhut.dev and www is managed by the Worker's custom domains; the zone holds no other records. Wrangler's

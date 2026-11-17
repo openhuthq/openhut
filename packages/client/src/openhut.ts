@@ -5,7 +5,8 @@ import { Connection, ConnectionAuthorization, SIGN_IN_KINDS, type CreateConnecti
 import { Me } from '@openhut/common/team/team.ts'
 
 export type StoredComputer = { id: string; name: string; url: string }
-export type Computer = StoredComputer & { online: boolean }
+export type Features = { whatsapp: boolean; browser: boolean }
+export type Computer = StoredComputer & { online: boolean; features: Features; appTooOld: boolean }
 export type TailnetPeer = { name: string; dns: string }
 export type Transport = (path: string, init?: RequestInit) => Promise<Response>
 export type Platform = {
@@ -17,6 +18,7 @@ export type Platform = {
     remove: (id: string) => Promise<void>
   }
   openUrl: (url: string) => void
+  appVersion?: string
 }
 export type OpenHutAgent = Agent & { computer: string; online: boolean }
 export type Copy = { computer: string; id: string; online: boolean }
@@ -94,17 +96,20 @@ export function createOpenHut(platform: Platform) {
   const computers = {
     async list(): Promise<Computer[]> {
       const rows = await across({ seen: adminsSeen, read: (each) => call({ computer: each, path: '/api/admin', schema: Admin }) })
-      return rows.map((row) => ({ ...row.computer, online: row.online }))
+      return rows.map((row) => ({
+        ...row.computer, online: row.online, features: row.value?.features ?? { whatsapp: !!row.computer.url, browser: !!row.computer.url },
+        appTooOld: !!platform.appVersion && !!row.value?.minAppVersion && older({ version: platform.appVersion, than: row.value.minAppVersion }),
+      }))
     },
     async add(peer: TailnetPeer): Promise<Computer> {
       const added = await platform.store.add(peer)
       await account.sync().catch(() => undefined)
-      return { ...added, online: true }
+      return { ...added, online: true, features: { whatsapp: true, browser: true }, appTooOld: false }
     },
     async adopt(input: { name: string; url: string; key: string }): Promise<Computer> {
       const added = await platform.store.adopt(input)
       await account.sync().catch(() => undefined)
-      return { ...added, online: true }
+      return { ...added, online: true, features: { whatsapp: true, browser: true }, appTooOld: false }
     },
     remove: (id: string): Promise<void> => platform.store.remove(id),
   }
@@ -135,19 +140,26 @@ export function createOpenHut(platform: Platform) {
       const restart = async (where: StoredComputer) => { if (wanted === 'running') await call({ computer: where, path, method: 'PATCH', body: { wanted }, schema: Agent }) }
       await call({ computer: from, path, method: 'PATCH', body: { wanted: 'stopped' }, schema: Agent })
       let moved: AgentImport | undefined
+      let imported: 'no' | 'maybe' | 'yes' = 'no'
       try {
         const { publicKey } = await call({ computer: target, path: '/api/admin', schema: Admin })
         const { sealed } = await call({ computer: from, path: `${path}/export`, method: 'POST', body: { publicKey }, schema: Export })
-        moved = await call({ computer: target, path: '/api/agents/imports', method: 'POST', body: { sealed }, schema: AgentImport })
+        imported = 'maybe'
+        moved = await call({ computer: target, path: '/api/agents/imports', method: 'POST', body: { sealed }, schema: AgentImport }).catch((err: unknown) => {
+          if (err instanceof RequestError && err.status < 500) imported = 'no'
+          throw err
+        })
+        imported = 'yes'
         await restart(target)
       } catch (err) {
-        if (moved) await call({ computer: target, path, method: 'DELETE', schema: AGENT_DELETED }).catch(() => undefined)
+        const gone = imported === 'no' || await call({ computer: target, path, method: 'DELETE', schema: AGENT_DELETED }).then(() => true, (missing: unknown) => missing instanceof RequestError && missing.status === 404)
+        if (!gone) throw new RequestError({ message: `The move stopped (${messageOf(err)}), and ${target.name} may still have a copy, so ${from.name} keeps it stopped to never run it twice. Delete it on ${target.name}, then start it on ${from.name}.`, status: 502 })
         await restart(from).catch(() => undefined)
         throw err
       }
       homes.set(id, target.id)
       await call({ computer: from, path, method: 'DELETE', schema: AGENT_DELETED }).catch((err: unknown) => {
-        throw new RequestError({ message: `${moved?.agent.name ?? 'The agent'} is on ${target.name} now, but ${from.name} couldn't delete its old copy (${err instanceof Error ? err.message : String(err)}). Delete it there.`, status: 502 })
+        throw new RequestError({ message: `${moved?.agent.name ?? 'The agent'} is on ${target.name} now, but ${from.name} couldn't delete its old copy (${messageOf(err)}). Delete it there.`, status: 502 })
       })
       return { agent: { ...moved.agent, wanted, computer: target.id, online: true }, ungranted: moved.ungranted }
     },
@@ -249,6 +261,16 @@ function signedIn({ admin, kind }: { admin: Admin | undefined; kind: Subscriptio
   const state = kind === 'claude' ? admin?.seat : admin?.codex
   if (!state?.set) return ''
   return state.updatedAt ?? new Date(0).toISOString()
+}
+
+export function older({ version, than }: { version: string; than: string }): boolean {
+  const [a, b] = [version, than].map((each) => each.split(/[.-]/).slice(0, 3).map(Number))
+  const at = a.findIndex((part, index) => part !== b[index])
+  return at >= 0 && a[at] < b[at]
+}
+
+function messageOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
 }
 
 function signInKind(kind: Connection['kind']): (typeof SIGN_IN_KINDS)[number] {

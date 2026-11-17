@@ -5,8 +5,10 @@ cd "$(dirname "$0")/../release"
 if [ -n "${NOTARY_PROFILE:-}" ]; then
   auth=(--keychain-profile "$NOTARY_PROFILE")
 else
-  echo "$NOTARY_KEY_P8_BASE64" | base64 --decode > "${RUNNER_TEMP:-/tmp}/notary.p8"
-  auth=(--key "${RUNNER_TEMP:-/tmp}/notary.p8" --key-id "$NOTARY_KEY_ID")
+  p8=$(umask 077 && mktemp "${RUNNER_TEMP:-/tmp}/notary.XXXXXX")
+  trap 'rm -f "$p8"' EXIT
+  echo "$NOTARY_KEY_P8_BASE64" | base64 --decode > "$p8"
+  auth=(--key "$p8" --key-id "$NOTARY_KEY_ID")
   [ -n "${NOTARY_ISSUER_ID:-}" ] && auth+=(--issuer "$NOTARY_ISSUER_ID")
 fi
 
@@ -39,7 +41,23 @@ staple "$app"
 notarize "$dmg"
 staple "$dmg"
 zip=$(ls OpenHut-*-arm64.zip 2>/dev/null | head -1 || true)
-if [ -n "$zip" ]; then rm -f "$zip" "$zip.blockmap"; ditto -c -k --sequesterRsrc --keepParent "$app" "$zip"; fi
+if [ -n "$zip" ]; then rm -f "$zip"; ditto -c -k --sequesterRsrc --keepParent "$app" "$zip"; fi
+rm -f ./*.blockmap
+node - <<'JS'
+const { createHash } = require('node:crypto')
+const { readFileSync, statSync, writeFileSync } = require('node:fs')
+const sum = (file) => createHash('sha512').update(readFileSync(file)).digest('base64')
+let file = ''
+const lines = readFileSync('latest-mac.yml', 'utf8').split('\n').filter((line) => !/^\s*blockMapSize:/.test(line)).map((line) => {
+  const named = /^(\s*-?\s*)(url|path): (.+)$/.exec(line)
+  if (named) file = named[3].trim()
+  if (/^\s*sha512: /.test(line)) return line.replace(/sha512: .*/, `sha512: ${sum(file)}`)
+  if (/^\s*size: /.test(line)) return line.replace(/size: .*/, `size: ${statSync(file).size}`)
+  return line
+})
+writeFileSync('latest-mac.yml', lines.join('\n'))
+JS
+cat latest-mac.yml
 
 spctl -a -vvv -t exec "$app" 2>&1 | tee /dev/stderr | grep -q "source=Notarized Developer ID"
 xcrun stapler validate "$dmg"

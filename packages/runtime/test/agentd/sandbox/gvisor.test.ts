@@ -1,5 +1,6 @@
 import { after, test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { once } from 'node:events'
 import { mkdirSync, mkdtempSync } from 'node:fs'
 import { connect } from 'node:net'
@@ -22,6 +23,7 @@ after(() => server.close())
 const PLUGINS = fileURLToPath(new URL('../../../../../vendor/hermes-plugins', import.meta.url))
 const CLAUDE_BIN = fileURLToPath(new URL('../../../../../bin/claude', import.meta.url))
 const DIGEST = 'ghcr.io/openhut/agent@sha256:0123'
+const MOUNTS = createHash('sha256').update(`${PLUGINS}\n${CLAUDE_BIN}`).digest('hex').slice(0, 16)
 const BARE = new Set(['--init', '--read-only'])
 
 test('docker create gets the same flags, mounts and limits it got before the sandbox interface', async () => {
@@ -39,11 +41,22 @@ test('apply recreates a sandbox made by an older spec, like a Large one, at the 
   await ask({ cmd: 'create', id, net: 8, browser: false, files })
   Object.assign(boxes.get(id)?.spec ?? {}, { memoryMib: 2048, cpus: 2, labels: { 'openhut.spec': '3', 'openhut.size': 'large', 'openhut.browser': 'off' } })
   assert.deepEqual(await ask({ cmd: 'apply', id, net: 8, size: 'large', browser: false, files, restart: true }), { ok: true, applied: id, restarted: true })
-  assert.deepEqual(boxes.get(id)?.spec.labels, { 'openhut.spec': '4', 'openhut.browser': 'off' })
+  assert.deepEqual(boxes.get(id)?.spec.labels, { 'openhut.spec': '4', 'openhut.browser': 'off', 'openhut.mounts': MOUNTS })
   assert.deepEqual([boxes.get(id)?.spec.memoryMib, boxes.get(id)?.spec.cpus], [1024, 1])
   assert.deepEqual(await ask({ cmd: 'ps' }), { ok: true, states: { ag_abcd1234: 'created', [id]: 'running' } })
   assert.deepEqual(await ask({ cmd: 'rm', id }), { ok: true, removed: id })
   assert.equal(boxes.has(id), false)
+})
+
+test('apply recreates a sandbox whose mounts came from somewhere else, like the app run from another folder', async () => {
+  const id = 'ag_mount123'
+  const files = { 'config.yaml': '', '.env': '', 'SOUL.md': '', 'auth.json': '' }
+  await ask({ cmd: 'create', id, net: 9, browser: false, files })
+  assert.deepEqual(await ask({ cmd: 'apply', id, net: 9, browser: false, files, restart: false }), { ok: true, applied: id, restarted: false })
+  Object.assign(boxes.get(id)?.spec.labels ?? {}, { 'openhut.mounts': 'from-a-tmp-mount' })
+  assert.deepEqual(await ask({ cmd: 'apply', id, net: 9, browser: false, files, restart: true }), { ok: true, applied: id, restarted: true })
+  assert.equal(boxes.get(id)?.spec.labels['openhut.mounts'], MOUNTS)
+  await ask({ cmd: 'rm', id })
 })
 
 function oldCreateArgs({ id, net, memory, cpus, tmp }: { id: string; net: number; memory: string; cpus: string; tmp: string }) {
@@ -54,7 +67,7 @@ function oldCreateArgs({ id, net, memory, cpus, tmp }: { id: string; net: number
   return [
     'create',
     ...['--name', `ag-${id}`, '--hostname', id, '--restart', 'no'],
-    ...['--label', `openhut.agent=${id}`, '--label', `agent.digest=${DIGEST}`, '--label', 'openhut.spec=4', '--label', 'openhut.browser=off'],
+    ...['--label', `openhut.agent=${id}`, '--label', `agent.digest=${DIGEST}`, '--label', 'openhut.spec=4', '--label', 'openhut.browser=off', '--label', `openhut.mounts=${MOUNTS}`],
     ...['--runtime', 'runsc', '--user', '10000:10000', '--init', '--entrypoint', '/opt/hermes/bin/hermes'],
     ...['--read-only', '--tmpfs', `/tmp:rw,nosuid,size=${tmp}`, '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'],
     ...['--pids-limit', '512', '--memory', memory, '--cpus', cpus, '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'],

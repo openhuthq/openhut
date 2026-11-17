@@ -5,11 +5,12 @@ import { HttpError } from './http-error.ts'
 
 const TIMEOUT_MS = 180_000
 const MAX_LIVE_LINE = 8 << 20
+const Features = z.object({ whatsapp: z.boolean(), browser: z.boolean() })
 const Failure = z.object({ ok: z.literal(false), error: z.string() })
 const Pairing = z.object({ status: z.enum(['starting', 'qr', 'linked', 'error']), qr: z.optional(z.string()), phone: z.optional(z.string()), error: z.optional(z.string()) })
 
 export const agentd = {
-  health: () => ask({ request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), imageReady: z.optional(z.boolean()), updating: z.optional(z.boolean()) }) }),
+  health: () => ask({ request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), imageReady: z.optional(z.boolean()), updating: z.optional(z.boolean()), features: z.optional(Features) }) }),
   ps: () => ask({ request: { cmd: 'ps' }, doing: 'list the agents', schema: z.object({ states: z.record(z.string(), z.string()) }) }),
   create: ({ id, net, files, browser }: { id: string; net: number; files: AgentFiles; browser: boolean }) =>
     ask({ request: { cmd: 'create', id, net, files, browser }, doing: 'create the agent', schema: z.object({ container: z.string() }) }),
@@ -21,7 +22,7 @@ export const agentd = {
   stop: ({ id }: { id: string }) => ask({ request: { cmd: 'stop', id }, doing: 'stop the agent', schema: z.object({ stopped: z.string() }) }),
   remove: ({ id }: { id: string }) => ask({ request: { cmd: 'rm', id }, doing: 'delete the agent', schema: z.object({ removed: z.string() }) }),
   pairWhatsapp: ({ id }: { id: string }) => ask({ request: { cmd: 'wa-pair', id }, doing: 'link WhatsApp', schema: Pairing }),
-  update: () => ask({ request: { cmd: 'update' }, doing: 'start the update', schema: z.object({ updating: z.boolean() }) }),
+  update: ({ appVersion }: { appVersion?: string }) => ask({ request: { cmd: 'update', appVersion }, doing: 'start the update', schema: z.object({ updating: z.boolean() }) }),
   skills: ({ id }: { id: string }) => ask({ request: { cmd: 'skills', id }, doing: 'list the skills', schema: z.object({ skills: z.array(z.object({ path: z.string(), head: z.string() })), bundled: z.string() }) }),
   readSkill: ({ id, path }: { id: string; path: string }) => ask({ request: { cmd: 'skill-read', id, path }, doing: 'open the skill', schema: z.object({ body: z.string() }) }),
   writeSkill: ({ id, path, body }: { id: string; path: string; body: string }) => ask({ request: { cmd: 'skill-write', id, path, body }, doing: 'save the skill', schema: z.object({ written: z.string() }) }),
@@ -53,6 +54,10 @@ export function liveBrowser({ id, onLine, onEnd }: { id: string; onLine: (line: 
   return { send: (line) => socket.write(`${line}\n`), close: () => socket.destroy() }
 }
 
+export async function features(): Promise<z.output<typeof Features>> {
+  return (await agentd.health().catch(() => undefined))?.features ?? { whatsapp: false, browser: false }
+}
+
 export async function containerStates(): Promise<Record<string, string> | undefined> {
   const reply = await agentd.ps().catch(() => undefined)
   return reply?.states
@@ -75,7 +80,8 @@ function send({ request, body = '', doing }: { request: Record<string, unknown>;
       socket.destroy()
       reject(new HttpError(504, `The agent runner didn't ${doing} in time. Try again.`))
     })
-    socket.on('data', (chunk) => { buffer += chunk })
+    socket.setEncoding('utf8')
+    socket.on('data', (chunk: string) => { buffer += chunk })
     socket.on('end', () => {
       try { resolve(JSON.parse(buffer)) } catch { reject(new HttpError(502, `The agent runner sent a broken reply while trying to ${doing}. Try again.`)) }
     })

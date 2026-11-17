@@ -12,7 +12,7 @@ type Computers = {
   onEnrollments: (listener: (list: Enrollment[]) => void) => void
 }
 
-const bridge: { computers: Computers } | undefined = Reflect.get(window, 'openhut')
+const bridge: { computers: Computers; version?: string } | undefined = Reflect.get(window, 'openhut')
 const BROWSER: StoredComputer[] = [{ id: 'local', name: 'This computer', url: '' }]
 
 async function answer<T extends object>(call: Promise<T | Failure> | undefined): Promise<T> {
@@ -31,6 +31,7 @@ const platform: Platform = {
     remove: async (id) => { await answer(bridge?.computers.remove({ id })) },
   },
   openUrl: (url) => { window.open(url, '_blank') },
+  appVersion: bridge?.version,
 }
 
 export const openhut = createOpenHut(platform)

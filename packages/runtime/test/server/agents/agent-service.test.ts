@@ -91,3 +91,9 @@ test('an agent moves sealed with its channels, chats, home and the grants this c
   await agentService.delete({ actor, id })
   await assert.rejects(agentService.importSealed({ actor, sealed: codex.sealed }), { status: 409, message: 'Codex is coming soon.' })
 })
+
+test('a computer without agent-browser refuses the browser switch before changing anything', async () => {
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com' }
+  await assert.rejects(agentService.update({ actor, id: 'ag_tokentst', patch: { browser: true } }), { status: 409, param: 'browser' })
+  assert.equal((await db.selectFrom('agent').select('web_browser').where('id', '=', 'ag_tokentst').executeTakeFirstOrThrow()).web_browser, false)
+})

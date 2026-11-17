@@ -12,7 +12,7 @@ import { config } from '../platform/config.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { agentToken, newId, openSealed, sameSecret, seal, sealFor, unseal } from '../platform/secrets.ts'
 import { settings } from '../platform/settings.ts'
-import { agentd, containerStates, type AgentFiles } from '../platform/agentd.ts'
+import { agentd, containerStates, features, type AgentFiles } from '../platform/agentd.ts'
 import { agentApiUrl } from '../platform/network.ts'
 import { log, record } from '../platform/events.ts'
 import { deleted } from '../platform/responses.ts'
@@ -77,11 +77,19 @@ export const agentService = {
   },
 
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateAgent }): Promise<Agent> {
-    await agentService.requireEditable({ actor, id })
+    const before = await agentService.requireEditable({ actor, id })
     if (patch.model === 'codex') throw new HttpError(409, CODEX_SOON, { param: 'model' })
+    if (patch.browser && !(await features()).browser) throw new HttpError(409, 'This computer can\'t give agents a browser. Run the agent on a Linux computer you added to use one.', { param: 'browser' })
     const { codeExecution, browser, ...fields } = patch
     await db.updateTable('agent').set({ ...fields, code_execution: codeExecution, web_browser: browser, name: patch.name === undefined ? undefined : cleanName(patch.name) }).where('id', '=', id).execute()
-    if (RENDERED.some((field) => patch[field] !== undefined)) await agentService.reapply({ id })
+    if (RENDERED.some((field) => patch[field] !== undefined)) {
+      await agentService.reapply({ id }).catch(async (err: unknown) => {
+        if (browser === undefined || browser === before.web_browser) throw err
+        await db.updateTable('agent').set({ web_browser: before.web_browser }).where('id', '=', id).execute()
+        await agentService.reapply({ id }).catch(() => undefined)
+        throw err
+      })
+    }
     if (patch.wanted) await (patch.wanted === 'running' ? agentd.start({ id }) : agentd.stop({ id }))
     return agentService.get({ actor, id })
   },

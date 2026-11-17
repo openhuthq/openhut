@@ -24,7 +24,7 @@ export const adminController: FastifyPluginAsync = async (app) => {
 }
 
 export const updateController: FastifyPluginAsync = async (app) => {
-  app.post('/', SignedIn, async (req) => adminService.startUpdate({ actor: await who(req) }))
+  app.post('/', SignedIn, async (req) => adminService.startUpdate({ actor: await who(req), appVersion: req.headers['openhut-app-version'] }))
 }
 
 export const healthController: FastifyPluginAsync = async (app) => {
