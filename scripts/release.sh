@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 BASE="${BASE:-https://openhut.dev}"
 if [ -z "${BUILD:-}" ]; then
   [ "$(git rev-parse --is-shallow-repository)" = false ] || { echo "release.sh needs the full git history to number the release (fetch-depth: 0)." >&2; exit 1; }
-  BUILD="$(sed -n 's/^  "version": "\([0-9]*\.[0-9]*\)\..*/\1/p' packages/runtime/package.json).$(git rev-list --count HEAD)"
+  BUILD="$(sed -n 's/^  "version": "\([0-9]*\.[0-9]*\)\..*/\1/p' packages/runtime/package.json).$((100 + $(git rev-list --count HEAD -- install packages/runtime packages/common vendor)))"
 fi
 cleanup() { rm -f BUILD; [ ! -f install/agent-image.keep ] || mv install/agent-image.keep install/agent-image; }
 trap cleanup EXIT
@@ -17,6 +17,8 @@ COPYFILE_DISABLE=1 tar $ROOT --no-xattrs \
   -czf dist/openhut.tgz BUILD package.json package-lock.json install vendor \
   packages/runtime/package.json packages/runtime/src packages/runtime/test/agentd packages/common \
   packages/desktop/package.json packages/e2e/package.json packages/site/package.json packages/docs/package.json
+MIN_APP=$(sed -n "s/^export const MIN_APP_VERSION = '\(.*\)'$/\1/p" packages/common/src/admin/admin.ts)
+[ -n "$MIN_APP" ] || { echo "release.sh: no MIN_APP_VERSION in packages/common/src/admin/admin.ts" >&2; exit 1; }
 SUM=$(shasum -a 256 dist/openhut.tgz | cut -d' ' -f1)
-sed -e "s|https://openhut.dev|$BASE|g" -e "s|@OPENHUT_SHA256@|$SUM|" -e "s|@OPENHUT_BUILD@|$BUILD|" install/install.sh > dist/install.sh
+sed -e "s|https://openhut.dev|$BASE|g" -e "s|@OPENHUT_SHA256@|$SUM|" -e "s|@OPENHUT_BUILD@|$BUILD|" -e "s|@OPENHUT_MIN_APP@|$MIN_APP|" install/install.sh > dist/install.sh
 echo "dist/: build $BUILD, install.sh (OPENHUT_URL=$BASE), openhut.tgz $(du -h dist/openhut.tgz | cut -f1) sha256 $SUM"

@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { chmodSync, chownSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
 import { dirname } from 'node:path'
@@ -22,8 +23,10 @@ const run = promisify(execFile)
 const SOCK = process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock'
 const IMAGE = process.env.AGENT_IMAGE || readFileSync(new URL('../../../../install/agent-image', import.meta.url), 'utf8').trim()
 const APP_GID = Number(process.env.APP_GID ?? 0)
-const PLUGINS = fileURLToPath(new URL('../../../../vendor/hermes-plugins', import.meta.url))
-const CLAUDE_BIN = fileURLToPath(new URL('../../../../bin/claude', import.meta.url))
+const ASSETS = process.env.AGENTD_ASSETS || dirname(fileURLToPath(new URL('../../../../package.json', import.meta.url)))
+const PLUGINS = `${ASSETS}/vendor/hermes-plugins`
+const CLAUDE_BIN = `${ASSETS}/bin/claude`
+const MOUNTS = createHash('sha256').update(`${PLUGINS}\n${CLAUDE_BIN}`).digest('hex').slice(0, 16)
 const BROWSER_BIN = fileURLToPath(new URL('../../../../bin/agent-browser', import.meta.url))
 const BROWSER_DIR = fileURLToPath(new URL('../../../../install/agent-browser', import.meta.url))
 const BRIDGE = '/opt/agent-browser/bridge.mjs'
@@ -125,7 +128,7 @@ function enqueue<T>(id: string, work: () => Promise<T>): Promise<T> {
 async function handle(req: AgentdRequest): Promise<Reply> {
   switch (req.cmd) {
     case 'health':
-      return { firewall: await firewallRecent(), image: IMAGE, imageReady: box.name === 'gvisor' ? await imageReady(IMAGE) : true, updating: await installing() }
+      return { firewall: await firewallRecent(), image: IMAGE, imageReady: box.name === 'gvisor' ? await imageReady(IMAGE) : true, updating: await installing(), features: features() }
     case 'ps':
       return { states: await containerStates() }
     case 'create':
@@ -156,7 +159,7 @@ async function handle(req: AgentdRequest): Promise<Reply> {
     case 'wa-unlink':
       return unlink(req.id)
     case 'update':
-      return box.name === 'memory' ? { updating: true } : update()
+      return box.name === 'memory' ? { updating: true } : update({ appVersion: req.appVersion })
     case 'skills':
       return listSkills(inHome(req.id, 'skills'))
     case 'skill-read':
@@ -198,9 +201,11 @@ function parseRequest(value: unknown): AgentdRequest {
   switch (cmd) {
     case 'health':
     case 'ps':
-    case 'update':
     case 'fence':
       return { cmd }
+    case 'update':
+      if (value.appVersion !== undefined && (typeof value.appVersion !== 'string' || !/^\d+\.\d+\.\d+$/.test(value.appVersion))) throw new Error('bad app version')
+      return { cmd, appVersion: value.appVersion }
     case 'usage':
     case 'messages':
       if (typeof value.since !== 'number' || !Number.isFinite(value.since)) throw new Error('bad since')
@@ -375,7 +380,7 @@ async function isRunning(id: string) {
 
 async function outdated(id: string, browser: boolean) {
   const made = (await sandboxOf(id))?.labels
-  return !!made && `${made['openhut.spec'] ?? ''} ${made['openhut.browser'] || 'off'}` !== `${SPEC} ${browser ? 'on' : 'off'}`
+  return !!made && `${made['openhut.spec'] ?? ''} ${made['openhut.browser'] || 'off'} ${made['openhut.mounts'] ?? ''}` !== `${SPEC} ${browser ? 'on' : 'off'} ${MOUNTS}`
 }
 
 function specOf({ id, net, browser }: { id: string; net: number; browser: boolean }): SandboxSpec {
@@ -395,7 +400,7 @@ function specOf({ id, net, browser }: { id: string; net: number; browser: boolea
       ...(browser ? browserMounts(id) : []),
     ],
     tmpfs: [{ guest: '/tmp', sizeMib: browser ? BROWSER_TMP_MIB : TMP_MIB }, ...LOCKED_TMPFS.map((guest) => ({ guest, sizeMib: 4 / 1024, readOnly: true }))],
-    labels: { 'openhut.spec': SPEC, 'openhut.browser': browser ? 'on' : 'off' },
+    labels: { 'openhut.spec': SPEC, 'openhut.browser': browser ? 'on' : 'off', 'openhut.mounts': MOUNTS },
     net,
   }
 }
@@ -464,6 +469,10 @@ async function live({ sock, id, rest }: { sock: Socket; id: string; rest: string
   sock.on('close', () => bridge.stdin?.end())
   forward(rest)
   return undefined
+}
+
+function features() {
+  return { whatsapp: existsSync(`${WHATSAPP_BRIDGE}/node_modules`), browser: box.name === 'memory' || existsSync(BROWSER_BIN) }
 }
 
 function restOf({ sock, rest }: { sock: Socket; rest: string }): Promise<string> {
@@ -563,10 +572,12 @@ async function checkFence() {
 }
 
 type Watch = { still: BrowserStill; seen: number; ended: boolean }
+type Features = { whatsapp: boolean; browser: boolean }
 type Readiness = { ok: boolean; reason?: string }
 
 export type AgentdRequest =
-  | { cmd: 'health' | 'ps' | 'update' | 'fence' }
+  | { cmd: 'health' | 'ps' | 'fence' }
+  | { cmd: 'update'; appVersion?: string }
   | { cmd: 'create'; id: string; net: number; files: AgentFiles; browser: boolean }
   | { cmd: 'apply'; id: string; net: number; files: AgentFiles; browser: boolean; restart: boolean; force?: boolean }
   | { cmd: 'browser-hold'; id: string; held: boolean }
@@ -577,7 +588,7 @@ export type AgentdRequest =
   | { cmd: 'usage' | 'messages'; since: number }
 
 export type AgentdReplies = {
-  health: { firewall: boolean; image: string; imageReady: boolean; updating: boolean }
+  health: { firewall: boolean; image: string; imageReady: boolean; updating: boolean; features: Features }
   ps: { states: Record<string, string> }
   create: { container: string }
   apply: { applied: string; restarted: boolean }

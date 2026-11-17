@@ -13,7 +13,7 @@
     "build": "vite build src/renderer",
     "dev": "vite src/renderer",
     "typecheck": "tsc -p src/renderer",
-    "test": "node --test \"src/renderer/test/**/*.test.ts\"",
+    "test": "node --test \"src/renderer/test/**/*.test.ts\" \"test/**/*.test.ts\"",
     "pack-backend": "node scripts/pack-backend.mjs",
     "dist": "npm run build && npm run pack-backend && electron-builder --mac --arm64 --publish never",
     "dist:linux": "umask 022 && npm run build && npm run pack-backend && electron-builder --linux --x64 --publish never"

@@ -3,6 +3,7 @@ set -eu
 OPENHUT_URL="${OPENHUT_URL:-https://openhut.dev}"
 OPENHUT_SHA256="@OPENHUT_SHA256@"
 OPENHUT_BUILD="@OPENHUT_BUILD@"
+MIN_APP_VERSION="@OPENHUT_MIN_APP@"
 GVISOR=20261109.0
 NODE=22.23.5
 CLAUDE=2.1.311
@@ -60,6 +61,16 @@ fresh() { h=$(curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$h" |
 up() { i=0; until fresh; do i=$((i+1)); [ $i -gt "$1" ] && return 1; printf .; sleep 3; done; }
 running() { echo "OpenHut is running for the app key sha256:$(printf '%s' "$CLIENT_KEY" | cut -c1-8)..."; }
 
+NO_KEY="no app key: add this computer from the OpenHut app (Settings > Computers), which installs OpenHut with OPENHUT_CLIENT_KEY_SHA256 set to its key's hex SHA-256"
+if [ -n "${OPENHUT_APP_VERSION:-}" ] && [ "${MIN_APP_VERSION#@}" = "$MIN_APP_VERSION" ] &&
+  [ "$(printf '%s\n%s\n' "$MIN_APP_VERSION" "$OPENHUT_APP_VERSION" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" != "$MIN_APP_VERSION" ]; then
+  die "this release needs the OpenHut app $MIN_APP_VERSION or newer, and yours is $OPENHUT_APP_VERSION. Update OpenHut, then try again. Nothing changed here."
+fi
+container() {
+  $D run -d -q --name openhut --privileged --restart unless-stopped -p 127.0.0.1:8787:8787 -v openhut:/var/lib/docker --entrypoint sh "$1" \
+    -c 'if [ -x /opt/openhut/install/host-start.sh ]; then exec /opt/openhut/install/host-start.sh; fi; exec sleep infinity' >/dev/null
+}
+
 if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
   SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
   if ! command -v docker >/dev/null 2>&1; then
@@ -72,11 +83,18 @@ if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
   D=docker; docker info >/dev/null 2>&1 || D="$SUDO docker"
   i=0; until $D info >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 30 ] && die "Docker isn't running. Start it, then run this again."; sleep 1; done
   say "OpenHut container"
-  $D container inspect openhut >/dev/null 2>&1 || $D run -d -q --name openhut --privileged --restart unless-stopped -p 127.0.0.1:8787:8787 \
-    -v openhut:/var/lib/docker --entrypoint sh "$HOST_IMAGE" \
-    -c 'if [ -x /opt/openhut/install/host-start.sh ]; then exec /opt/openhut/install/host-start.sh; fi; exec sleep infinity' >/dev/null
+  if ! $D container inspect openhut >/dev/null 2>&1; then
+    printf '%s' "${OPENHUT_CLIENT_KEY_SHA256:-}" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
+    container "$HOST_IMAGE"
+  elif [ "$($D container inspect -f '{{range (index .HostConfig.PortBindings "8787/tcp")}}{{.HostIp}}{{end}}' openhut 2>/dev/null)" != 127.0.0.1 ]; then
+    say "Publishing OpenHut on this computer's 127.0.0.1 only (the container is kept: its data comes along)"
+    $D stop -t 30 openhut >/dev/null
+    $D commit -q openhut openhut:kept >/dev/null
+    $D rm openhut >/dev/null
+    container openhut:kept
+  fi
   $D start openhut >/dev/null
-  $D exec -e OPENHUT_CONTAINER=1 -e OPENHUT_CLIENT_KEY_SHA256 openhut sh -c "apk add -q curl && curl -fsSL $OPENHUT_URL | sh" || exit 1
+  $D exec -e OPENHUT_CONTAINER=1 -e "OPENHUT_CLIENT_KEY_SHA256=${OPENHUT_CLIENT_KEY_SHA256:-}" -e "OPENHUT_APP_VERSION=${OPENHUT_APP_VERSION:-}" openhut sh -c "apk add -q curl && curl -fsSL $OPENHUT_URL | sh" || exit 1
   serve
   exit 0
 fi
@@ -85,7 +103,7 @@ fi
 [ "$(id -u)" = 0 ] || die "run as root:  curl -fsSL $OPENHUT_URL | sudo sh"
 ENROLLED="$(sed -n 's/^OPENHUT_CLIENT_KEY_SHA256=//p' /etc/openhut/env 2>/dev/null)"
 CLIENT_KEY="${OPENHUT_CLIENT_KEY_SHA256:-$ENROLLED}"
-printf '%s' "$CLIENT_KEY" | grep -Eqx '[0-9a-f]{64}' || die "no app key: add this computer from the OpenHut app (Settings > Computers), which installs OpenHut with OPENHUT_CLIENT_KEY_SHA256 set to its key's hex SHA-256"
+printf '%s' "$CLIENT_KEY" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
 if command -v flock >/dev/null 2>&1; then
   exec 9>/run/openhut-install.lock
   i=0; until flock -n 9; do

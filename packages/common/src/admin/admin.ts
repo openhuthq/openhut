@@ -10,6 +10,8 @@ export const Update = z.object({
 })
 export type Update = z.infer<typeof Update>
 
+export const MIN_APP_VERSION = '0.1.0'
+
 export const Admin = z.object({
   object: z.literal('admin'),
   seat: z.object({ set: z.boolean(), mode: z.enum(['claude', 'test']), updatedAt: z.nullable(Timestamp) }),
@@ -30,6 +32,8 @@ export const Admin = z.object({
   google: z.object({ clientId: z.nullable(z.string()), redirectUri: z.string() }),
   usageData: z.boolean(),
   publicKey: z.string(),
+  features: z.optional(z.object({ whatsapp: z.boolean(), browser: z.boolean() })),
+  minAppVersion: z.optional(z.string()),
 })
 export type Admin = z.infer<typeof Admin>
 

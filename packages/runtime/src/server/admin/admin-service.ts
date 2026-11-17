@@ -1,10 +1,10 @@
 import * as z from 'zod/mini'
-import type { Admin, CodexSignIn, CreateExport, Export, Health, SeatSignIn, SeatUsage, Update, UpdateAdmin } from '@openhut/common/admin/admin.ts'
+import { MIN_APP_VERSION, type Admin, type CodexSignIn, type CreateExport, type Export, type Health, type SeatSignIn, type SeatUsage, type Update, type UpdateAdmin } from '@openhut/common/admin/admin.ts'
 import { ConnectionKind, type Connection } from '@openhut/common/connections/connection.ts'
 import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
 import { HttpError } from '../platform/http-error.ts'
-import { agentd, containerStates } from '../platform/agentd.ts'
+import { agentd, containerStates, features } from '../platform/agentd.ts'
 import { settings } from '../platform/settings.ts'
 import { record, setUsageData } from '../platform/events.ts'
 import { newId, openSealed, sealFor, transferPublicKey } from '../platform/secrets.ts'
@@ -38,7 +38,7 @@ export const adminService = {
   },
 
   async status(): Promise<Admin> {
-    const [{ health, installing }, states, agents, latestBuild] = await Promise.all([probe(), containerStates(), db.selectFrom('agent').select('id').execute(), adminService.latestBuild()])
+    const [{ health, installing }, states, agents, latestBuild, available] = await Promise.all([probe(), containerStates(), db.selectFrom('agent').select('id').execute(), adminService.latestBuild(), features()])
     return {
       object: 'admin',
       seat: { set: !!settings.seatToken(), mode: config.modelMode, updatedAt: settings.seatAt() },
@@ -51,6 +51,8 @@ export const adminService = {
       google: { clientId: settings.googleClient()?.clientId ?? null, redirectUri: connectionService.redirectUrl() },
       usageData: settings.usageData(),
       publicKey: transferPublicKey,
+      features: available,
+      minAppVersion: MIN_APP_VERSION,
     }
   },
 
@@ -91,6 +93,7 @@ export const adminService = {
   },
 
   async latestBuild(): Promise<string | null> {
+    if (config.socket) return null
     if (Date.now() - latest.at < LATEST_TTL_MS) return latest.build
     const script = await fetch(config.releaseUrl, { headers: { accept: 'text/plain' }, signal: AbortSignal.timeout(LATEST_TIMEOUT_MS) })
       .then((response) => response.ok ? response.text() : '').catch(() => '')
@@ -98,7 +101,7 @@ export const adminService = {
     return latest.build
   },
 
-  async startUpdate({ actor }: { actor: Caller }): Promise<Update> {
+  async startUpdate({ actor, appVersion }: { actor: Caller; appVersion?: string | string[] }): Promise<Update> {
     latest.at = 0
     const to = await adminService.latestBuild()
     if (!to || !isNewer({ latest: to, current: config.build })) throw new HttpError(409, 'This is already the latest release.')
@@ -106,7 +109,7 @@ export const adminService = {
     if (running?.status === 'running') throw new HttpError(409, 'An update is already running. This page shows when it finishes.')
     const stored = { from: config.build, to, startedAt: new Date().toISOString() }
     await settings.setUpdate(JSON.stringify(stored))
-    await agentd.update().catch(async (err: unknown) => {
+    await agentd.update({ appVersion: typeof appVersion === 'string' && SEMVER.test(appVersion) ? appVersion : undefined }).catch(async (err: unknown) => {
       await settings.setUpdate('')
       throw err
     })

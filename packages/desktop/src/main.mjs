@@ -27,9 +27,10 @@ const SCRIPTS = DEV
   ? { agentd: 'packages/runtime/src/agentd/agentd.ts', server: 'packages/runtime/src/server/app.ts' }
   : { agentd: 'packages/runtime/src/agentd/agentd.mjs', server: 'packages/runtime/src/server/platform/app.mjs' }
 const MSB = join(BACKEND, `node_modules/@superradcompany/microsandbox-${process.platform}-${process.arch}${MAC ? '' : '-gnu'}`)
-const BRIDGE = DEV ? join(HERE, '../bin/openhut-mcp.mjs') : join(BACKEND, 'bin/openhut-mcp.mjs')
 const GATEWAY_PORT = 8081
 const HOME = app.getPath('userData')
+const BRIDGE = join(HOME, 'bin/openhut-mcp')
+const ASSETS = DEV ? ROOT : join(HOME, 'assets', app.getVersion())
 const LOGS = app.getPath('logs')
 const DATA = join(HOME, 'data')
 const SOCK = join(HOME, 'agentd.sock')
@@ -58,6 +59,7 @@ const openhut = createOpenHut({
   transport: (computer) => (path, init) => serve(new Request(`${APP_ORIGIN}/c/${computer.id}${path}`, init)),
   store: { computers: async () => computers(), add: (peer) => enroll({ peer }), adopt, remove: async (id) => { forget({ id }) } },
   openUrl: (url) => shell.openExternal(url),
+  appVersion: app.getVersion(),
 })
 const children = new Map()
 const restarts = { agentd: 0, server: 0 }
@@ -94,9 +96,8 @@ function start(name, env) {
 }
 
 async function waitFor(check, seconds) {
-  for (let i = 0; i < seconds * 4; i++) {
+  for (const until = Date.now() + seconds * 1000; Date.now() < until; await sleep(250)) {
     if (await check().catch(() => false)) return true
-    await sleep(250)
   }
   return false
 }
@@ -239,7 +240,7 @@ async function install({ peer, dns, entry }) {
   const key = randomBytes(32).toString('hex')
   const hash = createHash('sha256').update(key).digest('hex')
   say(`Installing OpenHut on ${dns} over Tailscale SSH`)
-  await tailscaleSsh({ args: ['ssh', `root@${dns}`, `curl -fsSL '${INSTALL_URL}' | OPENHUT_CLIENT_KEY_SHA256=${hash} sh`], say })
+  await tailscaleSsh({ args: ['ssh', `root@${dns}`, `curl -fsSL '${INSTALL_URL}' | OPENHUT_CLIENT_KEY_SHA256=${hash} OPENHUT_APP_VERSION=${app.getVersion()} sh`], say })
   const url = `https://${dns}`
   say(`Waiting for ${url} to answer`)
   if (!await waitFor(async () => (await remote({ url, key, path: '/api/me' })).ok, 120)) throw new Error(`OpenHut is installed, but ${url} didn't answer within 2 minutes.`)
@@ -517,10 +518,11 @@ async function boot() {
   for (const file of readdirSync(LOGS).filter((each) => each.endsWith('.log') && !each.endsWith('.old.log'))) {
     if (statSync(join(LOGS, file)).size > MAX_LOG) renameSync(join(LOGS, file), join(LOGS, file.replace(/\.log$/, '.old.log')))
   }
-  const shared = { OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_CLAUDE_HOST: MAC ? join(DATA, 'bin/claude') : join(BACKEND, 'bin/claude'), OPENHUT_CLAUDE_VERSION: claudeVersion() }
+  assets()
+  const shared = { OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_CLAUDE_HOST: MAC ? join(DATA, 'bin/claude') : join(ASSETS, 'bin/claude'), OPENHUT_CLAUDE_VERSION: claudeVersion() }
   const pinned = DEV ? {} : msb()
   rmSync(SOCK, { force: true })
-  start('agentd', { ...shared, ...pinned, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'microsandbox', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK })
+  start('agentd', { ...shared, ...pinned, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'microsandbox', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK, AGENTD_ASSETS: ASSETS })
   await waitFor(async () => existsSync(SOCK), 30)
   rmSync(SERVER_SOCK, { force: true })
   await rootSecret()
@@ -528,6 +530,18 @@ async function boot() {
   if (!await waitFor(async () => existsSync(SERVER_SOCK), 60)) return false
   if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   return true
+}
+
+function assets() {
+  mkdirSync(dirname(BRIDGE), { recursive: true })
+  cpSync(DEV ? join(HERE, '../bin/openhut-mcp') : join(BACKEND, 'bin/openhut-mcp'), BRIDGE)
+  chmodSync(BRIDGE, 0o755)
+  if (DEV || existsSync(ASSETS)) return
+  rmSync(`${ASSETS}.tmp`, { recursive: true, force: true })
+  for (const path of ['bin/claude', 'vendor/hermes-plugins']) cpSync(join(BACKEND, path), join(`${ASSETS}.tmp`, path), { recursive: true })
+  renameSync(`${ASSETS}.tmp`, ASSETS)
+  const older = readdirSync(dirname(ASSETS)).filter((name) => name !== app.getVersion() && !name.endsWith('.tmp'))
+  for (const name of older.sort((a, b) => statSync(join(dirname(ASSETS), b)).mtimeMs - statSync(join(dirname(ASSETS), a)).mtimeMs).slice(1)) rmSync(join(dirname(ASSETS), name), { recursive: true, force: true })
 }
 
 function msb() {
@@ -564,7 +578,7 @@ function window(path = '/agents') {
     width: 1280, height: 820, ...savedBounds(), minWidth: 900, minHeight: 600, show: false, title: 'OpenHut',
     ...(MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 18 } } : { autoHideMenuBar: true }),
     backgroundColor: CANVAS,
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-mcp=${BRIDGE}`] },
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-mcp=${BRIDGE}`, `--openhut-version=${app.getVersion()}`] },
   })
   win.on('close', saveBounds)
   win.once('ready-to-show', () => win.show())
@@ -630,10 +644,12 @@ function menu() {
 }
 
 function update() {
-  updater.autoUpdater.logger = new console.Console(createWriteStream(join(LOGS, 'updates.log'), { flags: 'a' }))
-  updater.autoUpdater.on('error', () => undefined)
-  updater.autoUpdater.checkForUpdatesAndNotify().catch(() => undefined)
-  setInterval(() => updater.autoUpdater.checkForUpdates().catch(() => undefined), 6 * 3600_000)
+  const logger = new console.Console(createWriteStream(join(LOGS, 'updates.log'), { flags: 'a' }))
+  const failed = (error) => logger.error(`openhut: update failed: ${error?.stack ?? error}`)
+  updater.autoUpdater.logger = logger
+  updater.autoUpdater.on('error', failed)
+  updater.autoUpdater.checkForUpdatesAndNotify().catch(failed)
+  setInterval(() => updater.autoUpdater.checkForUpdates().catch(failed), 6 * 3600_000)
 }
 
 function serve(req) {
@@ -657,6 +673,7 @@ async function toComputer({ req, id, path }) {
   const headers = new Headers(req.headers)
   for (const name of ['host', 'origin', 'cookie', 'connection']) headers.delete(name)
   headers.set('authorization', `Bearer ${await keyOf(computer)}`)
+  headers.set('openhut-app-version', app.getVersion())
   const res = await fetch(`${computer.url}${target}`, { method: req.method, headers, body: req.body, duplex: 'half', redirect: 'manual' }).catch(() => undefined)
   if (!res) return refuse(502, `${computer.name} isn't answering. It may be off or off your tailnet.`)
   const out = new Headers(res.headers)

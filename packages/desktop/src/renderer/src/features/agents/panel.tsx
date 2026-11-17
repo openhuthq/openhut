@@ -13,7 +13,7 @@ import { ConfirmIcon } from '@/components/confirm-button'
 import { Choice, DialogCard, DRAG, GLASS, HOVER, I, MenuCard, ROW, TINY_ICON } from '@/components/kit'
 import { agentPath, type AgentDialog } from '@/app/routes'
 import { useAgents, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
-import { nameOf, useComputers } from '@/features/computers/api'
+import { nameOf, useComputers, useFeatures } from '@/features/computers/api'
 import { CanUse } from '@/features/agents/agent-connections'
 import { ChannelRows } from '@/features/agents/channels'
 import { Face } from '@/features/agents/face'
@@ -53,15 +53,16 @@ export function Panel({ agent, naming }: { agent: Agent; naming: boolean }) {
 const LABEL = 'pb-1.5 text-[12px]/[16px] text-mute'
 
 function AgentActions({ agent }: { agent: Agent }) {
+  const features = useFeatures(agent.id)
   const updateAgent = useUpdateAgent(agent.id)
   const change = (patch: Parameters<typeof updateAgent.mutate>[0]) => updateAgent.mutate(patch, { onError: toastError })
   const locked = !agent.canEdit || updateAgent.isPending
   return <div className="mt-auto flex flex-col pt-2">
     <span className={LABEL}>Computer</span>
     <div className="-mx-2.5 flex flex-col gap-px">
-      <label className={ROW}><I icon={Globe02Icon} size={15} className="text-mute" />Browser
+      {(features.browser || agent.browser) && <label className={ROW}><I icon={Globe02Icon} size={15} className="text-mute" />Browser
         {agent.browser && agent.canEdit && <a className="ml-auto text-[12px] text-body underline-offset-2 hover:underline" href={`/agents/${encodeURIComponent(agent.id)}/browser`} target="_blank" rel="noopener">Open</a>}
-        <Switch className={agent.browser && agent.canEdit ? 'ml-2' : 'ml-auto'} checked={agent.browser} aria-label="Browser" disabled={locked} onCheckedChange={() => change({ browser: !agent.browser })} /></label>
+        <Switch className={agent.browser && agent.canEdit ? 'ml-2' : 'ml-auto'} checked={agent.browser} aria-label="Browser" disabled={locked} onCheckedChange={() => change({ browser: !agent.browser })} /></label>}
       <label className={ROW}><I icon={SourceCodeIcon} size={15} className="text-mute" />Run code<Switch className="ml-auto" checked={agent.codeExecution} aria-label="Run code" disabled={locked} onCheckedChange={() => change({ codeExecution: !agent.codeExecution })} /></label>
     </div>
   </div>

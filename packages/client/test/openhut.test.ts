@@ -10,6 +10,7 @@ const AT = '2026-11-17T00:00:00.000Z'
 type Fake = {
   up: boolean
   refuseImport?: boolean
+  downAfterImport?: boolean
   codexAt?: string
   agents: Agent[]
   connections: (Connection & { secret?: string })[]
@@ -49,6 +50,7 @@ function serve({ id, runtime }: { id: string; runtime: Fake }) {
       const sealed = JSON.parse(body.sealed)
       if (runtime.refuseImport || sealed.for !== `key-of-${id}`) return Response.json({ error: { type: 'invalid_request_error', message: 'Not today.' } }, { status: 409 })
       runtime.agents.push({ ...sealed.payload, wanted: 'stopped' })
+      if (runtime.downAfterImport) runtime.up = false
       return Response.json({ object: 'agent_import', agent: { ...sealed.payload, wanted: 'stopped' }, ungranted: ['GitHub'] })
     }
     const one = /^\/api\/agents\/(ag_\w+)(\/export)?$/.exec(path)
@@ -182,4 +184,18 @@ test('only the Claude sign-in is pushed while Codex is coming soon', async () =>
   runtimes.local.codexAt = '2026-11-17T10:00:00.000Z'
   assert.deepEqual(await openhut.account.sync(), { claude: [], codex: [] })
   assert.equal(runtimes.local.calls.includes('POST /api/admin/exports'), false)
+})
+
+test('a move that fails after the new computer may have a copy leaves the agent stopped where it was, so it never runs twice', async () => {
+  const { runtimes, openhut } = setup(['local', 'beelink'])
+  runtimes.local.agents = [agent('Ops')]
+  runtimes.beelink.downAfterImport = true
+  await openhut.agents.list()
+  await assert.rejects(openhut.agents.move({ id: 'ag_ops', to: 'beelink' }), /beelink may still have a copy, so local keeps it stopped/)
+  assert.deepEqual(runtimes.local.agents.map((each) => [each.id, each.wanted]), [['ag_ops', 'stopped']])
+})
+
+test('an app older than a computer asks for is flagged; versions compare part by part', async () => {
+  const { older } = await import('../src/openhut.ts')
+  assert.deepEqual([older({ version: '0.1.9', than: '0.1.10' }), older({ version: '0.2.0', than: '0.1.10' }), older({ version: '0.1.0', than: '0.1.0' }), older({ version: 'dev', than: '0.1.0' })], [true, false, false, false])
 })

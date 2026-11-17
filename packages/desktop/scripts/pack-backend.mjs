@@ -1,4 +1,5 @@
 import { build } from 'esbuild'
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -18,10 +19,11 @@ const bundle = (entry, outfile) => build({
 await bundle('packages/runtime/src/agentd/agentd.ts', 'packages/runtime/src/agentd/agentd.mjs')
 await bundle('packages/runtime/src/server/app.ts', 'packages/runtime/src/server/platform/app.mjs')
 await bundle('packages/client/src/openhut.ts', 'client.mjs')
+writeFileSync(join(OUT, 'BUILD'), `${JSON.parse(readFileSync(join(import.meta.dirname, '../package.json'), 'utf8')).version}-${execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT }).toString().trim()}\n`)
 writeFileSync(join(OUT, 'packages/runtime/package.json'), JSON.stringify({ version: JSON.parse(readFileSync(join(ROOT, 'packages/runtime/package.json'), 'utf8')).version }))
 for (const path of ['install/agent-image', 'install/agent-browser', 'vendor/hermes-plugins']) cpSync(join(ROOT, path), join(OUT, path), { recursive: true })
 for (const name of NATIVE) cpSync(join(ROOT, 'node_modules', name), join(OUT, 'node_modules', name), { recursive: true, dereference: true })
-cpSync(join(import.meta.dirname, '../bin/openhut-mcp.mjs'), join(OUT, 'bin/openhut-mcp.mjs'))
+cpSync(join(import.meta.dirname, '../bin/openhut-mcp'), join(OUT, 'bin/openhut-mcp'))
 await claude()
 
 async function claude() {

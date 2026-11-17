@@ -61,6 +61,7 @@ function ComputerList() {
 
 function noteOf({ computer, admin, count }: { computer: Computer; admin: Admin | undefined; count: number }) {
   if (!computer.online) return 'Offline'
+  if (computer.appTooOld) return 'Update OpenHut to use this computer'
   return [`Online · ${count} agent${count === 1 ? '' : 's'}`, admin && `OpenHut ${admin.server.version}`].filter(Boolean).join(' · ')
 }
 

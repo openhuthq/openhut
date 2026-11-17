@@ -9,6 +9,7 @@ import { Glyph } from '@/components/glyph'
 import { ROW, Section } from '@/components/kit'
 import { agentPath } from '@/app/routes'
 import { useChannels, useDeleteChannel } from '@/features/agents/api'
+import { useFeatures } from '@/features/computers/api'
 import { SlackDialog } from '@/features/agents/slack-dialog'
 import { TelegramDialog } from '@/features/agents/telegram-dialog'
 import { WhatsappDialog } from '@/features/agents/whatsapp-dialog'
@@ -25,9 +26,11 @@ const ORDER: ChannelKind[] = ['slack', 'whatsapp', 'telegram']
 
 export function ChannelRows({ agent }: { agent: Agent }) {
   const channels = useChannels(agent.id)
+  const features = useFeatures(agent.id)
+  const offered = ORDER.filter((kind) => kind !== 'whatsapp' || features.whatsapp || channels.data?.some((channel) => channel.kind === 'whatsapp'))
   return <Section title="Talk to it on">
     <ErrorNote message={channels.error?.message} />
-    <div className="-mx-2.5 flex flex-col gap-px">{ORDER.map((kind) => <ChannelRow key={kind} agent={agent} kind={kind} channel={channels.data?.find((channel) => channel.kind === kind)} />)}</div>
+    <div className="-mx-2.5 flex flex-col gap-px">{offered.map((kind) => <ChannelRow key={kind} agent={agent} kind={kind} channel={channels.data?.find((channel) => channel.kind === kind)} />)}</div>
   </Section>
 }
 
