@@ -93,11 +93,9 @@ h1,h2,h3{text-wrap:balance;font-weight:600;letter-spacing:-.03em}
 .sub{margin:18px auto 0;max-width:34em;font-size:18px;line-height:1.5;color:var(--body);text-wrap:balance}
 .get{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:28px}
 .get-row{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px}
-.try{margin:40px 0 14px;font-size:13px;color:var(--mute);display:flex;align-items:center;justify-content:center;gap:8px}
-.try i{width:6px;height:6px;border-radius:50%;background:var(--pass);animation:pulse 1.6s infinite}
 
 /* ===== the app window: a replica of packages/desktop's renderer ===== */
-.appbox{position:relative;margin:0 auto;text-align:left}
+.appbox{position:relative;margin:40px auto 0;text-align:left}
 .app{position:absolute;top:0;left:0;width:1180px;height:740px;display:flex;overflow:hidden;border-radius:12px;background:var(--a-card);color:var(--a-ink);font:450 14px/1.5 var(--sans);transform-origin:0 0;transform:scale(var(--s,1));
   box-shadow:0 0 0 .5px oklch(0% 0 0 / .22),0 2px 6px oklch(0% 0 0 / .05),0 30px 80px -24px oklch(0% 0 0 / .28);user-select:none;-webkit-user-select:none}
 .app *{scrollbar-width:thin;scrollbar-color:transparent transparent}
@@ -568,7 +566,6 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
       </div>
     </div>
     <div class="hero-app">
-      <p class="try"><i></i>Try it: switch agents, say hi, or open Connections.</p>
       <div class="appbox" id="appbox">
         <div class="app" id="app" role="application" aria-label="The OpenHut app">
           <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
