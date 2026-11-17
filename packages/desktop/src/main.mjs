@@ -111,7 +111,7 @@ function tailnet() {
     const status = JSON.parse(stdout)
     if (status.BackendState !== 'Running') return resolve({ state: 'stopped' })
     const peer = (p) => ({ name: p.HostName, dns: (p.DNSName ?? '').replace(/\.$/, ''), os: p.OS, ip: (p.TailscaleIPs ?? [])[0] ?? '', online: !!p.Online, ssh: (p.sshHostKeys ?? []).length > 0 })
-    resolve({ state: 'running', tailnet: status.CurrentTailnet?.Name ?? '', self: { name: status.Self?.HostName ?? 'This Mac', os: status.Self?.OS ?? '', ip: (status.Self?.TailscaleIPs ?? [])[0] ?? '' }, peers: Object.values(status.Peer ?? {}).map(peer) })
+    resolve({ state: 'running', tailnet: status.CurrentTailnet?.Name ?? '', self: { name: status.Self?.HostName ?? LOCAL.name, os: status.Self?.OS ?? '', ip: (status.Self?.TailscaleIPs ?? [])[0] ?? '' }, peers: Object.values(status.Peer ?? {}).map(peer) })
   }))
 }
 
@@ -450,7 +450,7 @@ function watch() {
 
 function firstRun(start) {
   if (start && (!setup || setup.failed)) {
-    setup = { failed: false, agentId: '', steps: [['Checked this Mac', '', 'now'], ['Starting OpenHut', '', 'next'], ['Agent runtime and network fence', '', 'next'], ['Meeting your first agent', '', 'next']] }
+    setup = { failed: false, agentId: '', steps: [[`Checked this ${MAC ? 'Mac' : 'computer'}`, '', 'now'], ['Starting OpenHut', '', 'next'], ['Agent runtime and network fence', '', 'next'], ['Meeting your first agent', '', 'next']] }
     meet(setup).catch((error) => {
       const step = setup.steps.find((each) => each[2] === 'now')
       if (step) step.splice(1, 2, error.message, 'failed')

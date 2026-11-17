@@ -8,6 +8,7 @@ import { I, PILL, Section } from '@/components/kit'
 import { useAdmin, useUpdateAdmin } from '@/features/settings/api'
 import { HERE, bytes, desktop, home, useMachine, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
 import { Intro, Row, Rows } from '@/features/settings/kit'
+import { WORDS } from '@/lib/platform'
 import { toastError } from '@/lib/toast'
 
 export function GeneralSettings() {
@@ -22,7 +23,7 @@ export function GeneralSettings() {
     <Section title="Notify me when">
       <Rows>
         <PrefSwitch icon={Notification01Icon} hue="text-hue-amber" name="notifyReplies" title="An agent replies" note="While this window is closed or in the background." />
-        <PrefSwitch icon={Alert02Icon} hue="text-hue-red" name="notifyFailures" title="An agent stops or fails" note="The Dock icon also shows how many agents need you." />
+        <PrefSwitch icon={Alert02Icon} hue="text-hue-red" name="notifyFailures" title="An agent stops or fails" note={WORDS.dockBadge ? 'The Dock badge counts the agents that need you.' : 'You get a notification when one stops answering.'} />
       </Rows>
     </Section>
     <Section title="Data">
@@ -46,7 +47,7 @@ function DataFolder() {
   const machine = useMachine()
   if (!machine.data) return <ErrorNote message={machine.error?.message} />
   return <Row icon={<I icon={Folder01Icon} size={20} className="text-hue-blue" />} title={home(machine.data.folder)} note={bytes(machine.data.size)}>
-    <Button variant="secondary" className={PILL} onClick={() => void desktop?.showFolder()}>{HERE === 'Mac' ? 'Show in Finder' : 'Open folder'}</Button>
+    <Button variant="secondary" className={PILL} onClick={() => void desktop?.showFolder()}>{WORDS.showFolder}</Button>
   </Row>
 }
 

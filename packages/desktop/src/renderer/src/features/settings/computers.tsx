@@ -124,11 +124,11 @@ function EnrollRow({ enrollment }: { enrollment: Enrollment }) {
   const failed = enrollment.status === 'failed'
   const steps = stepsOf({ lines: enrollment.lines, failed })
   const current = Math.max(0, steps.findIndex((step) => step.state === 'now' || step.state === 'failed'))
-  const failure = failed ? failureOf({ error: enrollment.error, url: enrollment.url, name: enrollment.peer.name }) : undefined
+  const failure = failed ? failureOf({ error: enrollment.error, url: enrollment.url, name: enrollment.peer.name, here: HERE }) : undefined
   const retryIn = enrollment.retryAt ? Math.max(0, Math.ceil((enrollment.retryAt - now) / 1000)) : 0
   const note = failure
     ? `${failure.sentence}${retryIn ? ` Retrying in ${clock(retryIn)}…` : ''}`
-    : `Adding… · ${STEPS[current]} (step ${current + 1} of ${STEPS.length})`
+    : `Adding… · ${labelOf(STEPS[current])} (step ${current + 1} of ${STEPS.length})`
   const expanded = enrollment.expanded ?? failed
   const id = `enroll-${enrollment.peer.dns}`
   return <div className="flex flex-col">
@@ -149,7 +149,7 @@ function EnrollRow({ enrollment }: { enrollment: Enrollment }) {
     <Expand open={expanded} id={id}><div className="flex flex-col gap-2 pt-1 pr-2.5 pb-3 pl-[50px]">
       {steps.map((step) => <div key={step.label} className="flex items-center gap-2.5 text-[13px]/[18px]">
         <StepMark state={step.state} />
-        <span className={cn(step.state === 'next' && 'text-mute')}>{step.label}</span>
+        <span className={cn(step.state === 'next' && 'text-mute')}>{labelOf(step.label)}</span>
         {step.detail && <span className="text-mute">{step.detail}</span>}
       </div>)}
       {!failed && enrollment.url && <div className="flex items-center gap-2.5 text-[13px]"><span className="size-4" />Approve the Tailscale sign-in<a href={enrollment.url} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Approve in browser</a></div>}
@@ -173,6 +173,10 @@ function UpdatingRow({ computer, admin }: { computer: Computer; admin: Admin }) 
       <p className="m-0 text-[12px] text-mute">{elapsed(now - Date.parse(update?.startedAt ?? new Date().toISOString()))} · its agents restart when it's done</p>
     </div></Expand>
   </div>
+}
+
+function labelOf(label: string) {
+  return label === 'Pair' ? `Pair with this ${HERE}` : label
 }
 
 function StepMark({ state }: { state: StepState }) {
@@ -241,7 +245,7 @@ function TailscaleStep() {
       <a href={GET_TAILSCALE} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Get Tailscale</a>
       <Button type="button" variant="ghost" className={PILL} disabled={tailnet.isFetching} onClick={recheck}>I've installed it</Button>
     </Empty>}
-    {data?.state === 'stopped' && <Empty title="Open Tailscale and sign in" line="Tailscale is installed but not connected on this Mac.">
+    {data?.state === 'stopped' && <Empty title="Open Tailscale and sign in" line={`Tailscale is installed but not connected on this ${HERE}.`}>
       <Button type="button" variant="secondary" className={PILL} disabled={tailnet.isFetching} onClick={recheck}>Check again</Button>
     </Empty>}
     {data?.state === 'running' && <Peers peers={data.peers} tailnet={data.tailnet} recheck={recheck} checking={tailnet.isFetching} onAdd={add} />}

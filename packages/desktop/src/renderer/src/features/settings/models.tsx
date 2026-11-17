@@ -9,11 +9,11 @@ import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { useAdmin, useCompleteSeatSignIn, useSeatUsage, useStartSeatSignIn } from '@/features/settings/api'
 import { useComputerAdmins } from '@/features/computers/api'
-import { HERE } from '@/features/settings/desktop'
 import { DialogCard, I, PILL, Section, Status } from '@/components/kit'
 import { CardTitle, Intro, Row, Rows } from '@/features/settings/kit'
 import { open, useOpen } from '@/lib/router'
 import { formValues } from '@/lib/form'
+import { WORDS } from '@/lib/platform'
 
 const SPEND_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
 const resetTime = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' })
@@ -36,7 +36,7 @@ export function ModelsSettings() {
       </Row>
     </Rows>}
     {usage.data && <Spend usage={usage.data} />}
-    <p className="m-0 flex items-center gap-4 px-2.5 text-[13px] whitespace-nowrap text-mute"><span className="grid size-6 shrink-0 place-items-center"><I icon={Key01Icon} size={16} className="text-hue-amber" /></span>Sign-ins are sealed in the {HERE === 'Mac' ? 'macOS Keychain' : 'system keyring'}.</p>
+    <p className="m-0 flex items-center gap-4 px-2.5 text-[13px] whitespace-nowrap text-mute"><span className="grid size-6 shrink-0 place-items-center"><I icon={Key01Icon} size={16} className="text-hue-amber" /></span>Sign-ins are sealed in the {WORDS.keychain}.</p>
     {dialog === 'seat' && <SeatSignIn />}
   </>
 }

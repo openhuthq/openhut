@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { clean, failureOf, stepsOf } from '../../../src/features/computers/enroll-steps.ts'
 
 const name = 'box'
-const kind = (error: string, url: string | null = null) => failureOf({ error, url, name }).kind
+const kind = (error: string, url: string | null = null) => failureOf({ error, url, name, here: 'Mac' }).kind
 
 test('known install failures map to a plain sentence', () => {
   assert.equal(kind('The install stopped: openhut: another install or update is already running'), 'busy')
@@ -12,7 +12,7 @@ test('known install failures map to a plain sentence', () => {
   assert.equal(kind("https://box didn't accept that key (it answered 401)."), 'key')
   assert.equal(kind("OpenHut is installed, but https://box didn't answer within 2 minutes."), 'timeout')
   assert.equal(kind('Something new'), 'other')
-  assert.equal(failureOf({ error: 'x', url: null, name }).sentence, "Couldn't add box.")
+  assert.equal(failureOf({ error: 'x', url: null, name, here: 'Mac' }).sentence, "Couldn't add box.")
 })
 
 test('installer lines lose their colour codes and move the steps forward', () => {
