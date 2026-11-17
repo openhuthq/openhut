@@ -687,91 +687,98 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
 
 <section class="band" id="sealed">
 <style>
-#sealed .ar-dia{position:relative;display:grid;grid-template-columns:minmax(0,1fr);gap:56px;text-align:left}
+#sealed .ar-dia{position:relative;display:flex;flex-direction:column;gap:56px;text-align:left}
 #sealed .ar-wires{position:absolute;z-index:3;left:0;top:0;pointer-events:none;overflow:visible}
 #sealed .ar-wires path{fill:none;stroke:var(--mid);stroke-width:1.5;stroke-dasharray:5 5}
 #sealed [data-k]{cursor:help}
-#sealed .ar-lbl{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--ink)}
-#sealed .ar-pc{position:relative;display:flex;flex-direction:column;gap:14px;padding:14px;border-radius:12px;background:var(--bg-2);box-shadow:0 0 0 1px var(--hair)}
-#sealed .ar-app{position:relative;z-index:1;align-self:center;display:flex;align-items:center;gap:6px;padding:10px 14px;border-radius:12px;background:var(--card);box-shadow:0 0 0 1px var(--hair),0 10px 26px -14px oklch(0% 0 0 / .3)}
-#sealed .ar-app i{width:9px;height:9px;border-radius:50%;background:#ff5f57}
-#sealed .ar-app i:nth-child(2){background:#febc2e}
-#sealed .ar-app i:nth-child(3){background:#28c840}
-#sealed .ar-app b{margin-left:8px;font:600 16px/1 Fredoka,var(--sans);letter-spacing:-.01em}
-#sealed .ar-app small{margin-left:6px;font-size:12.5px;color:var(--mute)}
-#sealed .ar-sock{position:relative;align-self:center;display:flex;justify-content:center;height:34px;margin:-14px 0}
-#sealed .ar-sock::before{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:1.5px dashed var(--mid)}
-#sealed .ar-pill{position:relative;align-self:center;display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;background:var(--card);box-shadow:0 0 0 1px var(--hair);font-size:12px;color:var(--body);white-space:nowrap}
-#sealed .ar-ts{position:absolute;z-index:4;top:-12px;left:50%;translate:-50% 0}
-#sealed .ar-wide .ar-ts{translate:-50% -50%}
-#sealed .ar-rt{container-type:inline-size;display:flex;flex-direction:column;gap:16px;padding:12px 14px 16px;border-radius:12px;background:var(--card);box-shadow:0 0 0 1px var(--hair)}
-#sealed .ar-rtb{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
-@container (min-width:330px){#sealed .ar-rtb{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);align-items:center}}
-#sealed .ar-boxes{display:flex;flex-direction:column;gap:22px;padding-top:10px}
-#sealed .ar-slot{position:relative;height:108px}
-#sealed .ar-slot:empty::before{content:attr(data-empty);display:grid;place-items:center;height:80px;padding:0 12px;border-radius:12px;border:1.5px dashed var(--mid);font-size:13px;color:var(--mute);text-align:center}
-#sealed .ar-agent{position:relative;display:flex;flex-direction:column;gap:8px}
-#sealed .ar-wall{position:relative;height:80px;display:flex;align-items:center;gap:12px;padding:12px 14px 8px;border-radius:12px;box-shadow:inset 0 0 0 4px var(--ink);background:var(--card)}
+#sealed .ar-lbl{height:20px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink)}
+#sealed .ar-lbl small{font-weight:450;font-size:12.5px;color:var(--mute)}
+
+#sealed .ar-laptop{display:flex;flex-direction:column}
+#sealed .ar-screen,#sealed .ar-rack{position:relative;display:flex;flex-direction:column;gap:12px;margin:0 14px;padding:10px 12px 14px;background:var(--bg-2);border:2.5px solid var(--ink)}
+#sealed .ar-screen{border-radius:16px 16px 4px 4px}
+#sealed .ar-cam{position:absolute;top:7px;left:50%;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--mid)}
+#sealed .ar-base{position:relative;height:14px;border:2.5px solid var(--ink);border-radius:2px 2px 12px 12px;background:var(--card)}
+#sealed .ar-base::before{content:"";position:absolute;top:-2.5px;left:50%;width:64px;height:5px;margin-left:-32px;border-radius:0 0 5px 5px;background:var(--ink)}
+#sealed .ar-rack{border-radius:10px}
+#sealed .ar-leds{margin-left:auto;display:flex;gap:6px}
+#sealed .ar-leds i{width:7px;height:7px;border-radius:50%;background:var(--pass)}
+#sealed .ar-leds i+i{background:var(--mid)}
+#sealed .ar-bays{height:70px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:6px}
+#sealed .ar-bays i:nth-child(n+9){display:none}
+#sealed .ar-bays i{position:relative;border-radius:5px;box-shadow:inset 0 0 0 1.5px var(--mid);background:var(--card)}
+#sealed .ar-bays i::before{content:"";position:absolute;left:10px;right:22px;top:50%;border-top:1.5px solid var(--mid)}
+#sealed .ar-bays i::after{content:"";position:absolute;right:9px;top:50%;width:5px;height:5px;margin-top:-2.5px;border-radius:50%;background:var(--mid)}
+#sealed .ar-bays i:nth-child(-n+3)::after{background:var(--pass)}
+#sealed .ar-spare{flex:none;height:96px;margin-top:-12px}
+#sealed .ar-two .ar-spare{flex:1 1 0;height:auto}
+#sealed .ar-vents{height:12px;background:repeating-linear-gradient(90deg,var(--mid) 0 1.5px,transparent 1.5px 9px) 50% 100%/60% 8px no-repeat}
+#sealed .ar-net{position:absolute;z-index:4;top:-40px;left:50%;translate:-50% 0;display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;background:var(--card);box-shadow:0 0 0 1px var(--hair);font-size:12px;color:var(--body);white-space:nowrap}
+#sealed .ar-rack::before{content:"";position:absolute;left:50%;top:-59px;height:56px;border-left:1.5px dashed var(--mid)}
+
+#sealed .ar-win{position:relative;z-index:1;display:flex;height:150px;border-radius:10px;overflow:hidden;background:var(--card);box-shadow:0 0 0 .5px oklch(0% 0 0 / .22),0 10px 26px -14px oklch(0% 0 0 / .3);font-size:11px;line-height:1.4}
+#sealed .ar-side{width:38%;flex:none;display:flex;flex-direction:column;gap:3px;padding:9px 7px;background:var(--bg-2);border-right:.5px solid var(--hair)}
+#sealed .ar-lights{display:flex;gap:5px;margin:0 0 7px 3px}
+#sealed .ar-lights i{width:8px;height:8px;border-radius:50%;background:#ff5f57}
+#sealed .ar-lights i:nth-child(2){background:#febc2e}
+#sealed .ar-lights i:nth-child(3){background:#28c840}
+#sealed .ar-row{display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;gap:7px;padding:4px 5px;border-radius:6px}
+#sealed .ar-row.on{background:var(--soft)}
+#sealed .ar-row span{display:grid;min-width:0;line-height:1.25}
+#sealed .ar-row b,#sealed .ar-chat b{font-weight:600}
+#sealed .ar-row small{font-size:10px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sealed .ar-chat{flex:1;min-width:0;display:flex;flex-direction:column;padding:9px 12px 10px;gap:8px}
+#sealed .ar-log{margin-top:auto;display:flex;flex-direction:column;gap:8px}
+#sealed .ar-mu{align-self:flex-end;max-width:85%;padding:5px 9px;border-radius:9px 9px 3px 9px;background:var(--soft)}
+#sealed .ar-ma{display:grid;grid-template-columns:16px minmax(0,1fr);gap:6px;align-items:start}
+
+#sealed .ar-rt{container-type:inline-size;display:flex;flex-direction:column;gap:14px;padding:12px 14px 14px;border-radius:12px;background:var(--card);box-shadow:0 0 0 1px var(--hair)}
+#sealed .ar-rtb{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+@container (min-width:330px){#sealed .ar-rtb{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);align-items:start}}
+#sealed .ar-boxes{display:flex;flex-direction:column;gap:16px;padding-top:10px}
+#sealed .ar-slot{position:relative;height:80px}
+#sealed .ar-slot:empty::before{content:attr(data-empty);display:grid;place-items:center;height:100%;padding:0 12px;border-radius:12px;border:1.5px dashed var(--mid);font-size:13px;color:var(--mute);text-align:center}
+#sealed .ar-agent{position:relative}
+#sealed .ar-wall{position:relative;height:80px;display:flex;align-items:center;padding:12px 14px 8px;border-radius:12px;box-shadow:inset 0 0 0 4px var(--ink);background:var(--card)}
 #sealed .ar-tag{position:absolute;top:-11px;left:12px;display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:11.5px;font-weight:500;white-space:nowrap}
-#sealed #arMac .ar-kind::after{content:"microVM"}
-#sealed #arSrv .ar-kind::after{content:"gVisor"}
-#sealed .ar-hermes{display:flex;align-items:center;gap:12px;min-width:0;border-radius:8px}
+#sealed .ar-me{display:flex;align-items:center;gap:12px;min-width:0;border-radius:8px}
 #sealed .ar-who{display:grid;line-height:1.25;min-width:0}
 #sealed .ar-who b{font-weight:600;font-size:15px}
 #sealed .ar-who small{font-size:12.5px;color:var(--mute)}
-#sealed .ar-chans{display:flex;gap:4px;height:20px;padding-left:4px;border-radius:6px;align-self:flex-start}
-#sealed .ar-lc{width:20px;height:20px;flex:none;display:grid;place-items:center;border-radius:5px;background:#fff;box-shadow:0 0 0 1px var(--hair)}
 #sealed .ar-sealed{position:absolute;inset:0;display:none;place-items:center;border-radius:12px;background:color-mix(in oklch,var(--card) 82%,transparent)}
 #sealed .ar-sealed span{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:12px;font-weight:600}
 #sealed .ar-moving .ar-sealed{display:grid}
 #sealed .ar-moving{z-index:5}
-#sealed .ar-gwcol{display:flex;flex-direction:column}
-#sealed .ar-gw{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 10px;border-radius:8px;background:var(--bg-2);box-shadow:0 0 0 1px var(--mid);text-align:center;transition:box-shadow .3s}
-#sealed .ar-gw b{font-weight:600;font-size:14px}
-#sealed .ar-gw small{font-size:12px;line-height:1.35;color:var(--mute)}
-#sealed .ar-keys{display:flex;gap:4px}
-#sealed .ar-keys .i{transition:color .3s}
-#sealed .ar-gw.ar-lit{box-shadow:0 0 0 1px var(--mid),0 0 0 6px color-mix(in oklch,var(--amber) 35%,transparent)}
-#sealed .ar-gw.ar-lit .ar-keys .i:first-child{color:var(--amber)}
-#sealed .ar-tick{align-self:center;height:14px;border-left:1.5px solid var(--mid)}
-#sealed .ar-conn{display:flex;align-items:center;gap:8px;padding:6px 10px 6px 6px;border-radius:8px;background:var(--card);box-shadow:0 0 0 1px var(--hair);transition:box-shadow .3s}
-#sealed .ar-conn .ar-lc{width:22px;height:22px;border-radius:6px}
-#sealed .ar-conn span{display:grid;line-height:1.25}
-#sealed .ar-conn b{font-weight:600;font-size:13px}
-#sealed .ar-conn small{font-size:11.5px;color:var(--mute)}
-#sealed .ar-conn.ar-ok{box-shadow:0 0 0 2px var(--pass)}
-#sealed .ar-pk{position:absolute;left:0;top:0;z-index:20;pointer-events:none;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;border-radius:999px;background:var(--ink);color:var(--bg);font:500 11.5px/1 var(--mono);white-space:nowrap;opacity:0;transition:opacity .25s;box-shadow:0 4px 14px -4px oklch(0% 0 0 / .3)}
-#sealed .ar-mark{position:absolute;z-index:21;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;display:grid;place-items:center;background:var(--pass);color:var(--bg);pointer-events:none;animation:ar-pop .3s ease-out,ar-fade .4s 1.6s forwards}
-#sealed .ar-mark .i{stroke-width:2.4}
-@keyframes ar-pop{from{scale:.4;opacity:0}}
-@keyframes ar-fade{to{opacity:0}}
+#sealed .ar-safe{margin-top:10px;display:flex;flex-direction:column;border-radius:10px;background:var(--bg-2);box-shadow:0 0 0 1px var(--mid);overflow:hidden}
+#sealed .ar-safe>div{display:flex;align-items:center;gap:10px;padding:8px 10px}
+#sealed .ar-safe>div+div{border-top:1px solid var(--hair);background:var(--card)}
+#sealed .ar-safe span{display:grid;line-height:1.25;min-width:0}
+#sealed .ar-safe b{font-weight:600;font-size:13px}
+#sealed .ar-safe small{font-size:11.5px;color:var(--mute)}
+#sealed .ar-key{width:22px;height:22px;flex:none;display:grid;place-items:center;border-radius:6px;background:var(--card);box-shadow:0 0 0 1px var(--hair);color:var(--amber)}
+#sealed .ar-lc{width:22px;height:22px;flex:none;display:grid;place-items:center;border-radius:6px;background:#fff;box-shadow:0 0 0 1px var(--hair)}
+
 #sealed .ar-say{min-height:50px;max-width:62ch;margin:24px auto 0;text-align:center;font-size:15px;color:var(--body);text-wrap:pretty}
 #sealed .ar-say b{color:var(--ink);font-weight:600}
-#sealed .ar-ctl{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:20px}
-#sealed #arMove{min-width:210px}
+#sealed .ar-ctl{display:flex;justify-content:center;margin-top:20px}
+#sealed #arMove{min-width:240px}
 @media (min-width:860px){
-  #sealed .ar-dia{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:repeat(4,auto);gap:0 72px}
-  #sealed .ar-pc{display:grid;grid-row:span 4;grid-template-rows:subgrid;grid-template-columns:minmax(0,1fr);row-gap:14px;align-content:start}
-  #sealed #arSrv .ar-rt{grid-row:4}
-  #sealed .ar-rt{align-self:stretch}
-  #sealed .ar-app,#sealed .ar-sock{justify-self:center}
+  #sealed .ar-dia{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:0 128px}
+  #sealed .ar-rack::before{display:none}
+  #sealed .ar-net{translate:-50% -50%}
+  #sealed .ar-bays{height:150px;grid-template-rows:repeat(3,minmax(0,1fr))}
+  #sealed .ar-bays i:nth-child(n+9){display:block}
 }
-@media (prefers-reduced-motion:reduce){
-  #sealed *{transition:none!important}
-  #sealed .ar-mark{animation:ar-fade .01s 2s forwards}
-}
+@media (prefers-reduced-motion:reduce){#sealed *{transition:none!important}}
+@media (max-width:720px){#sealed .br-wide{display:none}}
 </style>
   <div class="wrap">
-    <div class="head"><h2>One app. Your computers do the work.</h2><p>The app on your Mac only steers. Each computer runs its own agents and keeps its own keys.</p></div>
-    <div class="ar-dia" id="arDia" aria-label="The OpenHut app on your Mac, steering an Agent Runtime on this Mac and one on a Linux server">
+    <div class="head"><h2>One app. <br class="br-wide">Your computers do the work.</h2><p>The app on your Mac only steers. Each computer runs its own agents and keeps its own passwords.</p></div>
+    <div class="ar-dia" id="arDia" aria-label="The OpenHut app on your Mac, steering agents on this Mac and on a Linux server">
       <svg class="ar-wires" id="arWires" aria-hidden="true"></svg>
-      <div class="ar-pk" id="arPk" aria-hidden="true"></div>
     </div>
     <p class="ar-say" id="arSay" aria-live="polite">Hover or tap any part to see what it is.</p>
-    <div class="ar-ctl">
-      <button type="button" class="btn pri" id="arMove">Move to the server</button>
-      <button type="button" class="btn sec" id="arUse">Use the database</button>
-    </div>
+    <div class="ar-ctl"><button type="button" class="btn pri" id="arMove">Move Ops to the server</button></div>
   </div>
 </section>
 
@@ -1372,51 +1379,60 @@ tSet(0)
   const init = () => {
     const $ = (s, r = document) => r.querySelector(s)
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
-    const wait = ms => new Promise(r => setTimeout(r, reduce ? Math.min(ms, 50) : ms))
-    const chip = (n, s) => `<span class="ar-lc">${lg(n, s)}</span>`
+    const OPS = { seed: 'ops', pal: 2, costume: 'beanie' }, SUPPORT = { seed: 'support', pal: 9, costume: 'headset' }
     const SAY = {
-      app: ['OpenHut app', 'A window on your Mac. It shows and steers your agents, and stores nothing about them.'],
-      mac: ['This Mac', 'It runs the OpenHut app and its own Agent Runtime.'],
-      srv: ['Linux server', 'A computer you added. It runs its own Agent Runtime and keeps working while your Mac sleeps.'],
-      sock: ['Private socket', 'The app reaches this Mac’s Agent Runtime over a socket only your account can open.'],
-      ts: ['Tailscale + key', 'The app reaches the server over Tailscale, with a key it made when you added the server.'],
-      runtime: ['Agent Runtime', 'One per computer. It runs the agents and keeps their keys and data on that computer.'],
-      sandbox: ['Sandbox', 'One per agent: a microVM on a Mac, gVisor on a Linux server. The agent can’t see past its walls.'],
-      hermes: ['Hermes', 'The agent inside the sandbox: the open-source agent from Nous Research.'],
-      channels: ['Channels', 'Where people talk to the agent: its own Slack app, WhatsApp number or Telegram bot.'],
-      gateway: ['Gateway', 'It holds every key and checks the agent’s grants on every call.'],
-      connection: ['Connection', 'Team data the agent may use, like Postgres. The Gateway holds its password, never the agent.'],
-      slot: ['Agent Runtime', 'One computer can run many agents, each in its own sandbox.'],
+      app: ['OpenHut app', 'Where you see and steer your agents. It keeps nothing about them.'],
+      mac: ['This Mac', 'Runs the app and its own agents.'],
+      srv: ['Linux server', 'Runs its own agents, even while your Mac sleeps.'],
+      net: ['Private network', 'How the app reaches the server. Nobody else can get in.'],
+      runtime: ['Agent Runtime', 'Runs the agents on this computer and keeps their memory here.'],
+      box: ['Sealed box', 'Every agent gets its own (a microVM on a Mac, gVisor on a server). It can’t see the computer or other agents.'],
+      agent: ['Agent', 'Built on Hermes, the open-source agent from Nous Research.'],
+      safe: ['Key safe', 'Holds the database password. The agent asks, the Key safe checks and makes the call. The agent never sees the password.'],
+      slot: ['Free space', 'This computer can run more agents.'],
     }
-    const agent = (id, name, look, chans) => `<div class="ar-agent" id="${id}">
-      <div class="ar-wall" data-k="sandbox" tabindex="0"><span class="ar-tag">${ic('SquareLock02', 11)}Sandbox · <span class="ar-kind"></span></span>
-        <span class="ar-hermes" data-k="hermes">${face(look, 48)}<span class="ar-who"><b>Hermes</b><small>the ${name} agent</small></span></span>
+    const agent = (id, name, look) => `<div class="ar-agent" id="${id}">
+      <div class="ar-wall" data-k="box" tabindex="0"><span class="ar-tag">${ic('SquareLock02', 11)}Sealed box</span>
+        <span class="ar-me" data-k="agent">${face(look, 44)}<span class="ar-who"><b>${name}</b><small>agent</small></span></span>
         <span class="ar-sealed"><span>${ic('SquareLock02', 12)}Sealed for the trip</span></span></div>
-      <div class="ar-chans" data-k="channels" tabindex="0">${chans.map(c => chip(c, 12)).join('')}</div>
     </div>`
     const runtime = slots => `<div class="ar-rt" data-k="runtime" tabindex="0">
-      <div class="ar-lbl">Agent Runtime</div>
+      <div class="ar-lbl">Agent Runtime<small>runs your agents</small></div>
       <div class="ar-rtb">
         <div class="ar-boxes">${slots}</div>
-        <div class="ar-gwcol">
-          <div class="ar-gw" data-k="gateway" tabindex="0"><span class="ar-keys">${ic('Key01', 14).repeat(3)}</span><b>Gateway</b><small>holds every key</small></div>
-          <i class="ar-tick"></i>
-          <div class="ar-conn" data-k="connection" tabindex="0">${chip('postgres', 14)}<span><b>Postgres</b><small>read-only</small></span></div>
+        <div class="ar-safe" data-k="safe" tabindex="0">
+          <div><span class="ar-key">${ic('Key01', 13)}</span><span><b>Key safe</b><small>holds every password</small></span></div>
+          <div><span class="ar-lc">${lg('postgres', 14)}</span><span><b>Postgres</b><small>your database</small></span></div>
         </div>
       </div>
     </div>`
-    const dia = $('#arDia'), wires = $('#arWires'), pk = $('#arPk'), say = $('#arSay')
+    const win = `<div class="ar-win" data-k="app" tabindex="0" role="img" aria-label="The OpenHut app window">
+      <div class="ar-side"><div class="ar-lights"><i></i><i></i><i></i></div>
+        <div class="ar-row on">${face(OPS, 22)}<span><b>Ops</b><small id="arOpsWhere">This Mac</small></span></div>
+        <div class="ar-row">${face(SUPPORT, 22)}<span><b>Support</b><small>Linux server</small></span></div>
+      </div>
+      <div class="ar-chat"><b>Ops</b>
+        <div class="ar-log"><div class="ar-mu">Did the Stripe payout land?</div>
+          <div class="ar-ma">${face(OPS, 16)}<span>Yes, <b>$18,240</b> at 6:02 this morning.</span></div></div>
+      </div>
+    </div>`
+    const dia = $('#arDia'), wires = $('#arWires'), say = $('#arSay')
     dia.insertAdjacentHTML('beforeend', `
-    <div class="ar-pc" id="arMac" data-k="mac" role="group" aria-label="This Mac">
-      <div class="ar-lbl">${ic('Laptop', 16)}This Mac</div>
-      <div class="ar-app" data-k="app" tabindex="0"><i></i><i></i><i></i><b>OpenHut app</b><small>shows and steers</small></div>
-      <div class="ar-sock"><span class="ar-pill" data-k="sock" tabindex="0">${ic('SquareLock02', 12)}private socket</span></div>
-      ${runtime(`<div class="ar-slot" data-empty="Ops moved to the server">${agent('arOps', 'Ops', { seed: 'ops', pal: 2, costume: 'beanie' }, ['slack', 'whatsapp'])}</div>`)}
+    <div class="ar-laptop" id="arMac" role="group" aria-label="This Mac">
+      <div class="ar-screen" data-k="mac"><i class="ar-cam"></i>
+        <div class="ar-lbl">${ic('Laptop', 16)}This Mac</div>
+        ${win}
+        ${runtime(`<div class="ar-slot" data-empty="Ops moved to the server">${agent('arOps', 'Ops', OPS)}</div>`)}
+      </div>
+      <div class="ar-base" data-k="mac"></div>
     </div>
-    <div class="ar-pc" id="arSrv" data-k="srv" role="group" aria-label="Linux server">
-      <span class="ar-pill ar-ts" id="arTs" data-k="ts" tabindex="0">${ic('Key01', 12)}Tailscale + key</span>
-      <div class="ar-lbl">${ic('ServerStack01', 16)}Linux server</div>
-      ${runtime(`<div class="ar-slot">${agent('arSupport', 'Support', { seed: 'support', pal: 9, costume: 'headset' }, ['slack', 'telegram'])}</div><div class="ar-slot" data-k="slot" data-empty="Room for another agent"></div>`)}
+    <div class="ar-rack" id="arSrv" data-k="srv" role="group" aria-label="Linux server">
+      <span class="ar-net" id="arNet" data-k="net" tabindex="0">private network</span>
+      <div class="ar-lbl">${ic('ServerStack01', 16)}Linux server<span class="ar-leds"><i></i><i></i></span></div>
+      <div class="ar-bays" aria-hidden="true">${'<i></i>'.repeat(12)}</div>
+      ${runtime(agent('arSupport', 'Support', SUPPORT))}
+      <div class="ar-spare"></div>
+      <div class="ar-vents" aria-hidden="true"></div>
     </div>`)
 
     let busy = false
@@ -1427,77 +1443,48 @@ tSet(0)
 
     const box = el => {
       const r = el.getBoundingClientRect(), d = dia.getBoundingClientRect()
-      return { l: r.left - d.left, t: r.top - d.top, r: r.right - d.left, b: r.bottom - d.top, cx: r.left - d.left + r.width / 2, cy: r.top - d.top + r.height / 2 }
+      return { l: r.left - d.left, t: r.top - d.top, r: r.right - d.left, b: r.bottom - d.top }
     }
     const draw = () => {
-      const A = box($('#arMac .ar-app')), R = box($('#arSrv .ar-rt')), S = box($('#arSrv')), ts = $('#arTs'), wide = R.t < box($('#arMac')).b
-      dia.classList.toggle('ar-wide', wide)
+      const A = box($('.ar-win', dia)), M = box($('.ar-screen', dia)), S = box($('#arSrv')), R = box($('#arSrv .ar-rt')), net = $('#arNet')
+      const rack = $('#arSrv')
+      if (!rack.classList.contains('ar-two')) { rack.style.minHeight = ''; rack.style.minHeight = rack.offsetHeight + 'px' }
       wires.setAttribute('width', dia.scrollWidth)
       wires.setAttribute('height', dia.scrollHeight)
-      if (!wide) { wires.innerHTML = ''; ts.style.left = ts.style.top = ''; return }
-      const x = R.l + 70
-      wires.innerHTML = `<path d="M${A.r} ${A.cy}H${x - 12}Q${x} ${A.cy} ${x} ${A.cy + 12}V${R.t}"/>`
-      ts.style.left = x - S.l + 'px'
-      ts.style.top = (A.cy + R.t) / 2 + 6 - S.t + 'px'
+      if (S.t > M.b - 10) { wires.innerHTML = ''; net.style.left = net.style.top = ''; return }
+      const x = (M.r + S.l) / 2, ay = (A.t + A.b) / 2, ry = R.t + 22, r = 10
+      wires.innerHTML = `<path d="M${A.r} ${ay}H${x - r}Q${x} ${ay} ${x} ${ay + r}V${ry - r}Q${x} ${ry} ${x + r} ${ry}H${R.l}"/>`
+      net.style.left = x - S.l + 'px'
+      net.style.top = (ay + ry) / 2 - S.t + 'px'
     }
     new ResizeObserver(draw).observe(dia)
     document.fonts?.ready.then(draw)
 
-    const at = ([x, y]) => `translate(${x}px,${y}px) translate(-50%,-50%)`
-    const center = el => { const B = box(el); return [B.cx, B.cy] }
-    const fly = async (from, to, label, ms = 700) => {
-      pk.innerHTML = label
-      pk.style.opacity = 1
-      await pk.animate([{ transform: at(from) }, { transform: at(to) }], { duration: reduce ? 0 : ms, easing: 'cubic-bezier(.45,0,.3,1)', fill: 'forwards' }).finished
-    }
-    const run = fn => async () => {
+    const moveBtn = $('#arMove')
+    moveBtn.addEventListener('click', async () => {
       if (busy) return
       busy = true
-      try { say.innerHTML = await fn() } finally { pk.style.opacity = 0; busy = false }
-    }
-
-    $('#arUse').addEventListener('click', run(async () => {
-      const a = $('#arOps'), rt = a.closest('.ar-rt'), gw = $('.ar-gw', rt), pg = $('.ar-conn', rt), hermes = $('.cr', a), F = center(hermes)
-      talk(hermes)
-      await fly(F, center(gw), 'SELECT … read-only')
-      gw.classList.add('ar-lit')
-      await wait(350)
-      await fly(center(gw), center(pg), `query + ${ic('Key01', 11)}`, 450)
-      pg.classList.add('ar-ok')
-      await wait(400)
-      await fly(center(pg), center(gw), '42 rows', 450)
-      gw.classList.remove('ar-lit')
-      await fly(center(gw), F, '42 rows')
-      const m = document.createElement('span')
-      m.className = 'ar-mark'
-      m.style.left = F[0] + 'px'
-      m.style.top = F[1] + 'px'
-      m.innerHTML = ic('Tick02', 13)
-      dia.append(m)
-      setTimeout(() => m.remove(), 2200)
-      setTimeout(() => pg.classList.remove('ar-ok'), 900)
-      return '<b>Allowed.</b> The Gateway checked the grant and added the password. Hermes got the rows, never the password.'
-    }))
-
-    const moveBtn = $('#arMove')
-    moveBtn.addEventListener('click', run(async () => {
       const el = $('#arOps'), toMac = !!el.closest('#arSrv'), from = el.parentElement
-      const dest = toMac ? $('#arMac .ar-slot') : $('#arSrv .ar-slot[data-k=slot]')
+      const dest = toMac ? $('#arMac .ar-slot') : $('#arSrv .ar-boxes')
       const f = el.getBoundingClientRect()
       dest.append(el)
+      $('#arSrv').classList.toggle('ar-two', !toMac)
       const l = el.getBoundingClientRect()
-      from.dataset.k = 'slot'
-      dest.removeAttribute('data-k')
-      dest.closest('.ar-pc').style.zIndex = 2
+      if (toMac) dest.removeAttribute('data-k')
+      else from.dataset.k = 'slot'
+      const host = toMac ? $('#arMac .ar-screen') : $('#arSrv')
+      host.style.zIndex = 2
       el.classList.add('ar-moving')
       await el.animate([{ transform: `translate(${f.left - l.left}px,${f.top - l.top}px)` }, { transform: 'none' }], { duration: reduce ? 0 : 1300, easing: 'cubic-bezier(.5,0,.2,1)' }).finished
-      await wait(250)
+      await new Promise(r => setTimeout(r, reduce ? 0 : 250))
       el.classList.remove('ar-moving')
-      dest.closest('.ar-pc').style.zIndex = ''
+      host.style.zIndex = ''
       talk($('.cr', el))
-      moveBtn.textContent = toMac ? 'Move to the server' : 'Move back to this Mac'
-      return `<b>Ops moved to ${toMac ? 'this Mac' : 'the Linux server'}.</b> Its memory traveled sealed, so only that computer could open it. It keeps its Slack and WhatsApp.`
-    }))
+      $('#arOpsWhere').textContent = toMac ? 'This Mac' : 'Linux server'
+      moveBtn.textContent = toMac ? 'Move Ops to the server' : 'Move Ops back to this Mac'
+      say.innerHTML = `<b>Ops moved to ${toMac ? 'this Mac' : 'the Linux server'}.</b> Its memory traveled sealed, and the app still shows it.`
+      busy = false
+    })
     draw()
   }
   document.readyState === 'loading' ? addEventListener('DOMContentLoaded', init) : init()
