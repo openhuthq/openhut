@@ -30,8 +30,9 @@ and how it stays safe on the left, numbered steps on the right) and each connect
   (`mcp.excalidraw.com`) was tried first and dropped: its drawing tool only renders inside chat apps that show its
   widget, and its upload tool takes finished Excalidraw JSON that the widget builds in the browser, so an agent in
   Slack got shapes with no labels. Excalidraw+ has a real MCP server, but it needs a paid workspace.
-- **Tailscale** isn't a connection agents hold: agentd joins the server to the tailnet so the app's connections reach
-  private hosts. Agents stay off it (the firewall drops `tailscale0`).
+- The Tailscale connection (joining a runtime to a tailnet so connections reach private hosts) was removed on
+  2026-11-17 (owner: not relevant). Tailscale stays only for adding computers. The `tailscale` settings row is left in
+  place, unread.
 - Every kind is one `Connector` (`tools`, `call`) in `integrations/`; agents see `<kind>_<tool>` names through the gateway.
 
 ## Context
@@ -55,5 +56,3 @@ The catalog listed eight services as "Not in this build yet". Skyfleet already h
 - An Excalidraw link is public to anyone who has it and can't be taken back, so the tool tells agents to leave
   secrets out. Someone who already has a drawing open on excalidraw.com is asked whether to replace it when they open
   a link. Text sizes are estimated (0.55 of the font size per character), since measuring needs a browser.
-- Connecting Tailscale runs Tailscale's install script as root the first time. A server already on a tailnet is left
-  as it is and is never logged out by Disconnect.

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { ArrowLeft01Icon, Delete02Icon, LaptopIcon, MoreHorizontalIcon, NetworkIcon, PlusSignIcon, ServerStack01Icon, SmartPhone01Icon, Tick02Icon, WifiDisconnected02Icon } from '@hugeicons/core-free-icons'
 import type { Computer, OpenHutAgent, TailnetPeer } from '@openhut/client'
 import type { Admin } from '@openhut/common/admin/admin.ts'
@@ -11,11 +12,11 @@ import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { I, ICON_BUTTON, PILL } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
-import { useAdoptComputer, useComputerAdmins, useComputers, useRemoveComputer } from '@/features/computers/api'
+import { useAdoptComputer, useComputerAdmins, useComputers, useRemoveComputer, useUpdateComputer } from '@/features/computers/api'
 import { useEnroll, useEnrollments, type Enrollment } from '@/features/computers/enroll'
 import { STEPS, clean, failureOf, stepsOf, type StepState } from '@/features/computers/enroll-steps'
 import { Field } from '@/features/connections/sheet'
-import { HERE, useTailnet } from '@/features/settings/desktop'
+import { HERE, desktop, useTailnet } from '@/features/settings/desktop'
 import { byEligibility, stateOf, type Peer, type PeerState } from '@/features/settings/peers'
 import { Chevron, Command, Expand, Intro, Row, Rows } from '@/features/settings/kit'
 import { formValues } from '@/lib/form'
@@ -49,8 +50,8 @@ function ComputerList() {
         const admin = admins?.find((each) => each.computer.id === computer.id)?.admin
         if (admin?.server.update?.status === 'running') return <UpdatingRow key={computer.id} computer={computer} admin={admin} />
         const note = noteOf({ computer, admin, count: agents.filter((agent) => agent.computer === computer.id).length })
-        if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={computer.name} note={note}><span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Current</span></Row>
-        return <RemovableRow key={computer.id} computer={computer} note={note} agents={agents.filter((agent) => agent.computer === computer.id)} />
+        if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={computer.name} note={note}><AppUpdate /></Row>
+        return <RemovableRow key={computer.id} computer={computer} admin={admin} note={note} agents={agents.filter((agent) => agent.computer === computer.id)} />
       })}
       {enrollments.map((enrollment) => <EnrollRow key={enrollment.peer.dns} enrollment={enrollment} />)}
       <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note={`An always-on Linux computer keeps agents answering while this ${HERE} sleeps.`}><Chevron /></Row>
@@ -74,8 +75,17 @@ function Mark({ icon, dot }: { icon: typeof LaptopIcon; dot?: string }) {
   </span>
 }
 
-function RemovableRow({ computer, note, agents }: { computer: Computer; note: string; agents: OpenHutAgent[] }) {
+function AppUpdate() {
+  const updates = desktop?.updates
+  const status = useQuery({ queryKey: ['app-update'], queryFn: () => updates?.status(), enabled: !!updates })
+  const install = useMutation({ mutationFn: async () => updates?.install(), onError: toastError })
+  if (status.data?.state === 'ready') return <Button variant="primary" className={PILL} disabled={install.isPending} onClick={() => install.mutate()}>Restart to update</Button>
+  return <span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Current</span>
+}
+
+function RemovableRow({ computer, admin, note, agents }: { computer: Computer; admin: Admin | undefined; note: string; agents: OpenHutAgent[] }) {
   const remove = useRemoveComputer()
+  const update = useUpdateComputer()
   const [confirming, setConfirming] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -96,7 +106,12 @@ function RemovableRow({ computer, note, agents }: { computer: Computer; note: st
         <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
         <Button type="button" variant="destructive" className={PILL} disabled={remove.isPending} onClick={() => remove.mutate({ id: computer.id, agents: agents.map((agent) => agent.id) }, { onError: toastError })}>Remove</Button>
       </>
-      : <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(true)}>Remove</Button>}
+      : <>
+        {admin?.server.updateAvailable && (update.isPending
+          ? <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>
+          : <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate(computer, { onError: toastError })}>Update</Button>)}
+        <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(true)}>Remove</Button>
+      </>}
   </Row></div>
 }
 

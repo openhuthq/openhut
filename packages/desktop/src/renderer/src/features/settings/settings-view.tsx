@@ -1,17 +1,15 @@
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiMagicIcon, CloudDownloadIcon, LaptopIcon, PlugSocketIcon, Settings02Icon } from '@hugeicons/core-free-icons'
+import { AiMagicIcon, LaptopIcon, PlugSocketIcon, Settings02Icon } from '@hugeicons/core-free-icons'
 import { ComputersSettings } from '@/features/settings/computers'
 import { GeneralSettings } from '@/features/settings/general'
 import { ModelsSettings } from '@/features/settings/models'
 import { McpSettings } from '@/features/settings/mcp'
-import { UpdatesSettings } from '@/features/settings/updates'
 import { AppWindow, HOVER, I, PICKED } from '@/components/kit'
-import { navigate } from '@/lib/router'
+import { navigate, Redirect } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
 const TABS: [string, string, IconSvgElement, string][] = [
   ['general', 'General', Settings02Icon, 'text-hue-slate'],
-  ['updates', 'Updates', CloudDownloadIcon, 'text-hue-sky'],
   ['computers', 'Computers', LaptopIcon, 'text-hue-blue'],
   ['models', 'Models', AiMagicIcon, 'text-hue-violet'],
   ['mcp', 'MCP', PlugSocketIcon, 'text-hue-teal'],
@@ -34,7 +32,7 @@ export function SettingsView({ tab, onClose }: { tab: string; onClose: () => voi
 function Tab({ tab }: { tab: string }) {
   switch (tab) {
     case 'computers': return <ComputersSettings />
-    case 'updates': return <UpdatesSettings />
+    case 'updates': return <Redirect to="/settings/computers" />
     case 'models': return <ModelsSettings canEdit />
     case 'mcp':
     case 'your-ai': return <McpSettings />

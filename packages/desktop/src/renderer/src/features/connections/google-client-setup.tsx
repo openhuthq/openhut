@@ -21,7 +21,7 @@ export function GoogleClientSetup({ admin, onSaved }: { admin: Admin; onSaved: (
     const field = formValues(event)
     updateAdmin.mutate({ googleClientId: field('googleClientId'), googleClientSecret: field('googleClientSecret') }, { onSuccess: onSaved })
   }}>
-    <p className="m-0 font-copy text-[12px]/[1.55] text-mute">Make a web client in Google Cloud: type <b className="font-medium text-body">Web application</b>, consent screen <b className="font-medium text-body">Internal</b>, with this redirect URL. Then turn on the APIs.</p>
+    <p className="m-0 text-[12px]/[16px] text-mute">Make a web client in Google Cloud: type <b className="font-medium text-body">Web application</b>, consent screen <b className="font-medium text-body">Internal</b>, with this redirect URL. Then turn on the APIs.</p>
     <div className="flex flex-wrap gap-1.5">
       <a className={buttonVariants({ variant: 'secondary', size: 'sm' })} href={CLIENT_URL} target="_blank" rel="noreferrer"><I icon={LinkSquare02Icon} size={14} />Create a web client</a>
       <CopyButton text={admin.google.redirectUri} label="Copy redirect URL" />

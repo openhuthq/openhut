@@ -4,7 +4,7 @@ import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, type UIMessage } from 'ai'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowUp02Icon, EraserIcon, PlayIcon, PlusSignIcon, Search01Icon, SidebarLeftIcon } from '@hugeicons/core-free-icons'
+import { ArrowUp02Icon, EraserIcon, PlayIcon, PlusSignIcon, SidebarLeftIcon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@openhut/client'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { ChatCall, ToolProgress, type ChatMessage, type ThreadWithMessages } from '@openhut/common/threads/thread.ts'
@@ -71,7 +71,6 @@ function ChatFrame({ agent, composer, tools, children }: { agent: Agent; compose
     <div className={cn('flex h-[52px] shrink-0 items-center gap-2 px-4', sidebar?.collapsed && 'pl-[84px]', DRAG)}>
       {sidebar?.collapsed && <span className="mr-2 flex animate-[fadein_120ms_80ms_ease-out_backwards] items-center gap-0.5">
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Show sidebar" title="Show sidebar ⌘\" onClick={sidebar.expand}><I icon={SidebarLeftIcon} size={16} /></Button>
-        <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Search" title="Search ⌘K" onClick={sidebar.search}><I icon={Search01Icon} size={16} /></Button>
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="New agent" title="New agent" onClick={sidebar.newAgent}><I icon={PlusSignIcon} size={16} /></Button>
       </span>}
       <Face agent={agent} size={26} /><span className="text-[14px] font-semibold">{agent.name}</span>

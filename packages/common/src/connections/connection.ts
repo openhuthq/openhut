@@ -95,22 +95,3 @@ export const ConnectionAuthorization = z.object({
   manifest: z.optional(z.string()),
 })
 export type ConnectionAuthorization = z.infer<typeof ConnectionAuthorization>
-
-export const Tailscale = z.object({
-  object: z.literal('tailscale'),
-  connected: z.nullable(z.object({
-    by: z.string(),
-    at: Timestamp,
-    joined: z.boolean(),
-    state: z.string(),
-    tailnet: z.string(),
-    name: z.string(),
-    address: z.string(),
-  })),
-})
-export type Tailscale = z.infer<typeof Tailscale>
-
-export const ConnectTailscale = z.object({
-  authKey: z.string().check(z.regex(/^tskey-auth-[\w-]{10,200}$/, 'Paste an auth key from Tailscale’s Settings › Keys. It starts with tskey-auth-.')),
-})
-export type ConnectTailscale = z.infer<typeof ConnectTailscale>

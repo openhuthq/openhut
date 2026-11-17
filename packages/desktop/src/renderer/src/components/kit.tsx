@@ -1,7 +1,7 @@
 import { createContext, useContext, type FormEvent, type ReactNode } from 'react'
 
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
-import { ArrowLeft01Icon, Cancel01Icon, Clock01Icon, Shield01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, Cancel01Icon, Clock01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -22,7 +22,7 @@ export const PILL = 'h-[26px] rounded-full px-2.5 text-[12px] font-normal'
 export const TINY_ICON = 'grid size-7 shrink-0 place-items-center rounded-md border-0 bg-transparent p-0 text-ink hover:bg-hover disabled:opacity-50'
 export const ICON_BUTTON = 'grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent p-0 text-body no-underline shadow-none outline-offset-0 hover:bg-hover hover:text-ink'
 export const DRAG = '[-webkit-app-region:drag] select-none [&_a,&_button,&_input]:[-webkit-app-region:no-drag]'
-export const HINT = 'm-0 font-copy text-[11.5px]/[1.55] text-mute [&_b]:font-medium [&_b]:text-body [&_code]:font-mono [&_code]:text-[11.5px] [&_code]:text-ink'
+export const HINT = 'm-0 text-[12px]/[16px] text-mute [&_b]:font-medium [&_b]:text-body [&_code]:font-mono [&_code]:text-[11.5px] [&_code]:text-ink'
 
 export function I({ icon, size = 16, className }: { icon: IconSvgElement; size?: number; className?: string }) {
   return <HugeiconsIcon icon={icon} size={size} strokeWidth={1.6} className={className} aria-hidden="true" />
@@ -97,17 +97,17 @@ export function SetupSheet({ brand, title, blurb, eta, safe, error, foot, onSubm
   const body = <>
     <div className={cn('flex items-start gap-3.5 px-5 pt-5 pb-4', inWindow && 'items-center px-8 pt-[26px] pr-14')}>
       {inWindow && <Button type="button" size="icon-sm" aria-label="Back" title="All connections" className="-ml-2" onClick={onClose}><I icon={ArrowLeft01Icon} size={16} /></Button>}
-      {inWindow ? <Glyph name={brand} size={30} /> : <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-card shadow-[inset_0_0_0_1px_var(--hair)]"><Glyph name={brand} size={22} /></span>}
+      <Glyph name={brand} size={inWindow ? 30 : 28} />
       <div className="grid min-w-0 flex-1 gap-1">
-        <div className="flex items-center gap-2"><DialogTitle className={inWindow ? 'text-[17px]/[24px] font-medium' : 'font-display text-[26px]/none font-normal tracking-[.01em] uppercase'}>{title}</DialogTitle>{eta && <span className="inline-flex items-center gap-1 text-[11.5px] text-mute-2"><I icon={Clock01Icon} size={12} />{eta}</span>}</div>
-        <p className={cn('m-0 text-body', inWindow ? 'text-[13px]/[18px]' : 'font-copy text-[12.5px]/[1.55]')}>{blurb}</p>
+        <div className="flex items-center gap-2"><DialogTitle className={inWindow ? 'text-[17px]/[24px] font-medium' : 'text-[15px]/[22px] font-medium'}>{title}</DialogTitle>{eta && <span className="inline-flex items-center gap-1 text-[11.5px] text-mute-2"><I icon={Clock01Icon} size={12} />{eta}</span>}</div>
+        <p className="m-0 text-[13px]/[18px] text-body">{blurb}</p>
       </div>
       {!inWindow && <Button type="button" size="icon-sm" aria-label="Close" tabIndex={-1} className="-mt-1 -mr-1" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>}
     </div>
     {children && <div className={cn('flex min-h-0 flex-1 flex-col gap-5 overflow-auto px-5 pt-1 pb-5', inWindow && 'no-scrollbar fade-b px-8 pb-6')}>{children}</div>}
     {error && <p role="alert" className="m-0 border-t border-hair bg-[color-mix(in_oklch,var(--fail)_8%,transparent)] px-5 py-2.5 text-[13px] text-ink">{error}</p>}
-    <div className={cn('flex items-center gap-3 border-t-[0.5px] border-hair px-5 py-3', inWindow && 'px-8 [&_button]:text-[13px]')}>
-      {safe && <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 font-copy text-[11.5px]/[1.45] text-mute"><I icon={Shield01Icon} size={13} className="shrink-0" />{safe}</span>}
+    <div className={cn('flex items-center gap-3 border-t-[0.5px] border-hair px-5 py-3 [&_button]:text-[13px]', inWindow && 'px-8')}>
+      {safe && <span className="min-w-0 flex-1 text-[12px]/[16px] text-mute">{safe}</span>}
       <span className="ml-auto flex shrink-0 gap-2">{foot}</span>
     </div>
   </>

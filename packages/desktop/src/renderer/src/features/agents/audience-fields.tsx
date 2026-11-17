@@ -1,41 +1,37 @@
 import { ADDRESS, type Channel, type ChannelKind } from '@openhut/common/channels/channel.ts'
-import { Field, FieldError, FieldSet, FieldTitle } from '@/components/ui/field'
+import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { SETUP_ICONS, type SetupIcon } from '@/components/icons'
 import { fieldError } from '@/lib/api-client'
 
 type PeopleKind = Exclude<ChannelKind, 'slack'>
 
-const WORDING: Record<PeopleKind, { only: string; anyone: string; list: string; placeholder: string; hint: string }> = {
-  whatsapp: { only: 'Numbers I list', anyone: 'Anyone', list: 'Phone numbers', placeholder: '+15551234567, +447700900123', hint: 'Besides yours, with country code. Separate them with commas.' },
-  telegram: { only: 'People I list', anyone: 'Anyone', list: 'Telegram user IDs', placeholder: '123456789, 987654321', hint: 'Besides you. Separate them with commas.' },
+const WORDING: Record<PeopleKind, { label: string; placeholder: string; hint: string }> = {
+  whatsapp: { label: 'Phone numbers', placeholder: '+15551234567, +447700900123', hint: 'With country code. The first one is yours.' },
+  telegram: { label: 'Telegram user IDs', placeholder: '123456789, 987654321', hint: 'Message @userinfobot to get an ID.' },
 }
 
-export function AudienceFields({ kind, channel, error, labelled = true }: { kind: PeopleKind; channel: Channel | undefined; error: Error | null; labelled?: boolean }) {
+export function PeopleField({ kind, channel, error }: { kind: PeopleKind; channel: Channel | undefined; error: Error | null }) {
   const wording = WORDING[kind]
   const address = addressPattern(kind)
-  return <>
-    <FieldSet className="peer/open">{labelled && <FieldTitle>Who can message</FieldTitle>}
-      <Choices name="open" value={channel?.open ? '1' : ''} options={[['', 'users', wording.only], ['1', 'globe', wording.anyone]]} />
-      {fieldError(error, 'open') && <FieldError>{fieldError(error, 'open')}</FieldError>}
-    </FieldSet>
-    <Field className="hidden peer-has-[input[name=open][value='']:checked]/open:flex" label={wording.list} error={fieldError(error, 'allowed')} hint={wording.hint}>{(control) =>
-      <Input {...control} mono name="allowed" defaultValue={channel?.allowed.join(', ')} placeholder={wording.placeholder} autoComplete="off"
-        pattern={`[\\s,]*${address}(?:[\\s,]+${address})*[\\s,]*`} title={ADDRESS[kind].message} />}</Field>
-  </>
+  const known = channel ? [...new Set([channel.ownerAddress, ...channel.allowed])].join(', ') : undefined
+  return <Field label={<span className="text-xs font-medium text-mute">{wording.label}</span>} error={fieldError(error, 'ownerAddress') ?? fieldError(error, 'allowed')} hint={wording.hint}>{(control) =>
+    <Input {...control} mono name="people" required defaultValue={known} placeholder={wording.placeholder} autoComplete="off"
+      pattern={`[\\s,]*${address}(?:[\\s,]+${address})*[\\s,]*`} title={ADDRESS[kind].message} />}</Field>
 }
 
-export function audienceOf(field: (name: string) => string) {
-  return { open: field('open') === '1', allowed: field('allowed').split(/[\s,]+/).filter(Boolean) }
+export function peopleOf(field: (name: string) => string) {
+  const people = listOf(field)
+  return { ownerAddress: people[0] ?? '', allowed: people.slice(1), open: false }
+}
+
+export function changeOf({ field, channel }: { field: (name: string) => string; channel: Channel }) {
+  return { open: false, allowed: listOf(field).filter((each) => each !== channel.ownerAddress) }
+}
+
+function listOf(field: (name: string) => string) {
+  return [...new Set(field('people').split(/[\s,]+/).filter(Boolean))]
 }
 
 export function addressPattern(kind: ChannelKind) {
   return ADDRESS[kind].pattern.source.slice(1, -1)
-}
-
-function Choices({ name, options, value }: { name: string; options: [string, SetupIcon, string][]; value: string }) {
-  return <RadioGroup name={name} variant="segmented">{options.map(([option, icon, label]) => <RadioGroupItem key={option} value={option} defaultChecked={option === value}>
-    {SETUP_ICONS[icon]}<span>{label}</span>
-  </RadioGroupItem>)}</RadioGroup>
 }

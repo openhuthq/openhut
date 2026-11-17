@@ -14,7 +14,6 @@ import { MAX_HOME_BASE64, packHome, unpackHome } from './home.ts'
 import { FIREWALL, imageReady } from './sandbox/gvisor.ts'
 import { sandboxes } from './sandbox/index.ts'
 import type { Mount, SandboxSpec, SandboxState } from './sandbox/sandbox.ts'
-import { TAILSCALE_KEY, tailscaleDown, tailscaleStatus, tailscaleUp, type Tailnet } from './tailscale.ts'
 import { installing, update } from './update.ts'
 import { errorText, EXEC, isRecord } from './util.ts'
 import { followPairing, PAIR_COMMAND, pending, type Pairing } from './whatsapp.ts'
@@ -182,12 +181,6 @@ async function handle(req: AgentdRequest): Promise<Reply> {
       return { usage: usage({ agents: stateDbs(), since: req.since }) }
     case 'messages':
       return { messages: newMessages({ agents: stateDbs(), since: req.since }) }
-    case 'ts-up':
-      return tailscaleUp({ authKey: req.authKey, keyFile: `${dirname(SOCK)}/tailscale.key` })
-    case 'ts-status':
-      return tailscaleStatus()
-    case 'ts-down':
-      return tailscaleDown()
     case 'browser-still':
       return browserStill(req.id)
     case 'fence':
@@ -206,13 +199,8 @@ function parseRequest(value: unknown): AgentdRequest {
     case 'health':
     case 'ps':
     case 'update':
-    case 'ts-status':
-    case 'ts-down':
     case 'fence':
       return { cmd }
-    case 'ts-up':
-      if (typeof value.authKey !== 'string' || !TAILSCALE_KEY.test(value.authKey)) throw new Error('bad tailscale auth key')
-      return { cmd, authKey: value.authKey }
     case 'usage':
     case 'messages':
       if (typeof value.since !== 'number' || !Number.isFinite(value.since)) throw new Error('bad since')
@@ -578,7 +566,7 @@ type Watch = { still: BrowserStill; seen: number; ended: boolean }
 type Readiness = { ok: boolean; reason?: string }
 
 export type AgentdRequest =
-  | { cmd: 'health' | 'ps' | 'update' | 'ts-status' | 'ts-down' | 'fence' }
+  | { cmd: 'health' | 'ps' | 'update' | 'fence' }
   | { cmd: 'create'; id: string; net: number; files: AgentFiles; browser: boolean }
   | { cmd: 'apply'; id: string; net: number; files: AgentFiles; browser: boolean; restart: boolean; force?: boolean }
   | { cmd: 'browser-hold'; id: string; held: boolean }
@@ -587,7 +575,6 @@ export type AgentdRequest =
   | { cmd: 'skill-write'; id: string; path: string; body: string }
   | { cmd: 'memory-write'; id: string; target: MemoryTarget; body: string }
   | { cmd: 'usage' | 'messages'; since: number }
-  | { cmd: 'ts-up'; authKey: string }
 
 export type AgentdReplies = {
   health: { firewall: boolean; image: string; imageReady: boolean; updating: boolean }
@@ -610,9 +597,6 @@ export type AgentdReplies = {
   'home-import': { imported: string }
   usage: { usage: Record<string, number> }
   messages: { messages: NewMessage[] }
-  'ts-up': Tailnet & { joined: boolean }
-  'ts-status': Tailnet
-  'ts-down': Tailnet
   'browser-still': BrowserStill
   'browser-hold': { held: boolean }
   'browser-live': undefined
