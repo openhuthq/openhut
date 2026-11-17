@@ -39,5 +39,5 @@
 Developer ID Application `.p12`, base64), `CSC_KEY_PASSWORD`, `APPLE_API_KEY` (the `.p8` contents), `APPLE_API_KEY_ID`,
 `APPLE_API_ISSUER` and `APPLE_TEAM_ID` (`59SL6MZZ8F`). The tag must equal `v` + `packages/desktop/package.json`'s version.
 The packaged app checks GitHub Releases with electron-updater at start and every 6 hours (`~/Library/Logs/OpenHut/updates.log`);
-until a release exists it logs "No published versions on GitHub". The 0.3.0 → 0.3.1 update path is untested. The Developer
+until a release exists it logs "No published versions on GitHub". The 0.1.0 → 0.1.1 update path is untested. The Developer
 ID certificate expires on 1 Feb 2027; renew it in January and re-export `CSC_LINK`.
