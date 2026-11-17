@@ -145,7 +145,7 @@ export function DoesDialog({ agent, onClose }: { agent: Agent; onClose: () => vo
     <form className="contents" onSubmit={(event) => updateAgent.mutate({ instructions: formValues(event)('instructions') }, { onSuccess: onClose })}>
       <div className="flex items-center gap-3"><Face agent={agent} size={40} /><DialogTitle className="text-[18px] font-semibold">What {agent.name} does</DialogTitle></div>
       <Textarea autoFocus name="instructions" aria-label="Instructions" maxLength={20000} readOnly={!agent.canEdit} defaultValue={agent.instructions} rows={9} placeholder={`What does ${agent.name} do? Who does it answer, and what must it never do?`}
-        className="min-h-[220px] rounded-lg font-mono text-[13px]/[1.65]" />
+        className="min-h-[220px] rounded-lg font-sans text-[14px]/[1.55]" />
       {updateAgent.error && <p role="alert" className="m-0 text-xs text-fail">{updateAgent.error.message}</p>}
       <div className="flex items-center gap-2">
         <span className="inline-flex items-center gap-1.5 text-[13px] text-mute"><I icon={SparklesIcon} size={13} />Plain words are fine. {agent.name} reads this before every reply.</span>

@@ -2,13 +2,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
 import { Thread, ThreadWithMessages } from '@openhut/common/threads/thread.ts'
 import { request } from '@/lib/api-client'
-import { on } from '@/lib/openhut'
+import { on, onComputer, openhut } from '@/lib/openhut'
 import { THREADS_KEY } from '@/lib/query-keys'
 
 const THREAD_LIST = List(Thread)
 
 export function useThreads() {
-  return useQuery({ queryKey: THREADS_KEY, queryFn: () => request({ schema: THREAD_LIST, path: '/api/threads' }).then((page) => page.data) })
+  return useQuery({
+    queryKey: THREADS_KEY,
+    queryFn: async () => (await Promise.all((await openhut.computers.list()).filter((computer) => computer.online)
+      .map((computer) => request({ schema: THREAD_LIST, path: onComputer({ computer: computer.id, path: '/api/threads' }) }).then((page) => page.data, () => [])))).flat(),
+  })
 }
 
 export function useAgentThread(agentId: string) {

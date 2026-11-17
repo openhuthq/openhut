@@ -56,7 +56,7 @@ export function SlackDialog({ agent, channel, onClose }: { agent: Agent; channel
         </>}
       </Step>
       <Step n={3} title="Pick its channels" state={channel ? 'now' : 'next'}>
-        {channel && <SlackChannels key={channel.allowed.join()} agent={agent} channel={channel} lockReason={undefined} />}
+        {channel && <SlackChannels key={channel.allowed.join()} agent={agent} channel={channel} />}
       </Step>
     </form>
   </SetupSheet>

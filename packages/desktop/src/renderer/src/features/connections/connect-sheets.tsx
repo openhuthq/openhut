@@ -154,16 +154,6 @@ export function useQuickConnect() {
 
 const QUICK = new Set(['posthog', 'linear', 'github', 'excalidraw'])
 
-export function nameFromUrl(url: string, fallback: string) {
-  try {
-    const parsed = new URL(url)
-    const database = parsed.protocol.startsWith('postgres') ? decodeURIComponent(parsed.pathname.slice(1)) : ''
-    return (database || parsed.hostname.replace(/^(www|mcp)\./, '') || fallback).slice(0, 60)
-  } catch {
-    return fallback
-  }
-}
-
 function usePutOn(item: Integration) {
   const computers = useComputers().data ?? []
   const taken = (useConnections().data ?? []).map((connection) => connection.name)

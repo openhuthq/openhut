@@ -20,7 +20,7 @@ export function App() {
   if (route.page === 'welcome') return <FirstRun />
   if (me.error) return <ErrorNote className="mx-6 mt-4" message={me.error.message} />
   if (!me.data) return null
-  if (route.page === 'browser') return <BrowserPage me={me.data} agentId={route.agentId} />
+  if (route.page === 'browser') return <BrowserPage agentId={route.agentId} />
   const close = () => navigate(background.current.path)
   return <>
     <Shell route={route.page === 'settings' || route.page === 'connections' ? background.current.route : route} overlay={route.page === 'settings' || route.page === 'connections' ? route.page : undefined} />

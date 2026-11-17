@@ -135,6 +135,8 @@ handle('computers.list', computers)
 handle('computers.add', answer(enroll))
 handle('computers.adopt', answer(adopt))
 handle('computers.remove', answer(forget))
+handle('computers.enrollments', () => [...enrollments.values()])
+handle('computers.dismiss', ({ dns } = {}) => { enrollments.delete(dns); shareEnrollments(); return { dns } })
 handle('mcp.commands', mcpCommands)
 
 function answer(fn) {
@@ -197,13 +199,43 @@ async function adopt({ name, url, key } = {}) {
   return remember({ name: String(name).trim(), url: origin, key })
 }
 
-async function enroll({ peer } = {}) {
+const enrollments = new Map()
+const RETRY_MS = 60_000
+
+function shareEnrollments() {
+  main?.webContents.send('computers.enrollments', [...enrollments.values()])
+}
+
+async function enroll({ peer, retried = false } = {}) {
   const dns = String(peer?.dns ?? '').replace(/\.$/, '')
+  const entry = { peer: { name: String(peer?.name || dns), dns }, lines: [], url: null, startedAt: Date.now(), status: 'running', error: '', retryAt: null, retried }
+  enrollments.set(dns, entry)
+  shareEnrollments()
+  try {
+    const added = await install({ peer, dns, entry })
+    enrollments.delete(dns)
+    shareEnrollments()
+    if (!main?.isFocused()) notify({ title: `${entry.peer.name} is ready`, body: 'Its agents can run there now.', path: '/settings/computers' })
+    return added
+  } catch (error) {
+    const retryAt = !retried && /already running/i.test(error.message) ? Date.now() + RETRY_MS : null
+    Object.assign(entry, { status: 'failed', error: error.message, retryAt })
+    shareEnrollments()
+    if (retryAt) setTimeout(() => { if (enrollments.get(dns) === entry) enroll({ peer, retried: true }).catch(() => undefined) }, RETRY_MS)
+    throw error
+  }
+}
+
+async function install({ peer, dns, entry }) {
   if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(dns)) throw new Error('Pick a computer from your tailnet.')
   if (!TAILSCALE) throw new Error('Tailscale isn\'t installed on this computer. Install it from tailscale.com/download and sign in.')
   if (DEV && !process.env.OPENHUT_INSTALL_URL) throw new Error('Set OPENHUT_INSTALL_URL to a local release to add computers from a dev build.')
   if (!/^https?:\/\/[\w.:/-]+$/.test(INSTALL_URL)) throw new Error('OPENHUT_INSTALL_URL isn\'t a plain http(s) address.')
-  const say = (line) => main?.webContents.send('computers.progress', { peer: dns, line, url: /https:\/\/login\.tailscale\.com\/\S+/.exec(line)?.[0] ?? null })
+  const say = (line) => {
+    entry.lines.push(line)
+    entry.url = /https:\/\/login\.tailscale\.com\/\S+/.exec(line)?.[0] ?? entry.url
+    shareEnrollments()
+  }
   const key = randomBytes(32).toString('hex')
   const hash = createHash('sha256').update(key).digest('hex')
   say(`Installing OpenHut on ${dns} over Tailscale SSH`)

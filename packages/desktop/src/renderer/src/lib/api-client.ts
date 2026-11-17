@@ -1,17 +1,9 @@
+import { RequestError } from '@openhut/client'
 import { ApiError } from '@openhut/common/api.ts'
 
 type Schema<T> = { safeParse: (data: unknown) => { success: true; data: T } | { success: false } }
 
-export class RequestError extends Error {
-  readonly status: number
-  readonly param: string | undefined
-
-  constructor({ message, status, param }: { message: string; status: number; param?: string }) {
-    super(message)
-    this.status = status
-    this.param = param
-  }
-}
+export { RequestError }
 
 export async function request<T>({ schema, path, method = 'GET', body }: { schema: Schema<T>; path: string; method?: string; body?: unknown }): Promise<T> {
   const json = body === undefined ? undefined : JSON.stringify(body)

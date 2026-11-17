@@ -5,7 +5,7 @@ import { GeneralSettings } from '@/features/settings/general'
 import { ModelsSettings } from '@/features/settings/models'
 import { McpSettings } from '@/features/settings/mcp'
 import { AppWindow, HOVER, I, PICKED } from '@/components/kit'
-import { navigate, Redirect } from '@/lib/router'
+import { navigate } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
 const TABS: [string, string, IconSvgElement, string][] = [
@@ -32,10 +32,8 @@ export function SettingsView({ tab, onClose }: { tab: string; onClose: () => voi
 function Tab({ tab }: { tab: string }) {
   switch (tab) {
     case 'computers': return <ComputersSettings />
-    case 'updates': return <Redirect to="/settings/computers" />
-    case 'models': return <ModelsSettings canEdit />
-    case 'mcp':
-    case 'your-ai': return <McpSettings />
-    default: return <GeneralSettings canEdit />
+    case 'models': return <ModelsSettings />
+    case 'mcp': return <McpSettings />
+    default: return <GeneralSettings />
   }
 }

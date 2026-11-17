@@ -6,12 +6,11 @@ import { Badge } from '@/components/ui/badge'
 import { Combobox, ComboboxChip, ComboboxChips, ComboboxChipsInput, ComboboxContent, ComboboxEmpty, ComboboxItem, ComboboxItemIndicator, ComboboxList } from '@/components/ui/combobox'
 import { ErrorNote } from '@/components/error-note'
 import { SETUP_ICONS } from '@/components/icons'
-import { Locked } from '@/components/locked'
 import { useConversations, useUpdateChannel } from '@/features/agents/api'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
-export function SlackChannels({ agent, channel, lockReason, inset = false }: { agent: Agent; channel: Channel; lockReason: string | undefined; inset?: boolean }) {
+export function SlackChannels({ agent, channel, inset = false }: { agent: Agent; channel: Channel; inset?: boolean }) {
   const conversations = useConversations(channel)
   const updateChannel = useUpdateChannel()
   const [picked, setPicked] = useState(channel.allowed)
@@ -20,7 +19,7 @@ export function SlackChannels({ agent, channel, lockReason, inset = false }: { a
   const items = useMemo(() => ComboboxPrimitive.createItems(conversations.data ?? [], { getValue: (each) => each.id, getLabel: (each) => each.name }), [conversations.data])
   const known = new Map(conversations.data?.map((each) => [each.id, each]))
   const bot = channel.account?.split('@')[1] ?? agent.name
-  const disabled = !agent.canEdit || !!lockReason || updateChannel.isPending
+  const disabled = !agent.canEdit || updateChannel.isPending
   const pick = (next: string[]) => {
     latest.current = next
     setPicked(next)
@@ -31,7 +30,6 @@ export function SlackChannels({ agent, channel, lockReason, inset = false }: { a
     updateChannel.mutate({ channel, change: { allowed: next } }, { onError: (err) => { pick(channel.allowed); toastError(err) } })
   }
   return <div className={cn('flex min-w-0 flex-col gap-2', inset && 'pr-3 pb-3 pl-[46px]')}>
-    <Locked reason={lockReason}>
       <Combobox multiple items={items} value={picked} disabled={disabled}
         onValueChange={(next: string[]) => { pick(next); if (!isOpen.current) save() }}
         onOpenChange={(open) => { isOpen.current = open; if (!open) save() }}>
@@ -50,7 +48,6 @@ export function SlackChannels({ agent, channel, lockReason, inset = false }: { a
           <p className="-mx-1 mt-1 -mb-1 border-t border-hair px-3 py-2 text-xs text-mute">Private channels and group DMs show up here once @{bot} is in them: type /invite @{bot} there.</p>
         </ComboboxContent>
       </Combobox>
-    </Locked>
     <ErrorNote message={conversations.error?.message} />
   </div>
 }

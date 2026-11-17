@@ -24,9 +24,9 @@ function Welcome({ onStart }: { onStart: () => void }) {
   return <Center>
     <div className="relative"><span className="absolute inset-0 scale-150 rounded-md bg-[radial-gradient(circle,#f7c94855,transparent_65%)]" /><Hut className="relative size-28" /></div>
     <Headline>Your agents. On this {HERE}.</Headline>
-    <p className="m-0 max-w-[440px] font-copy text-sm/[1.65] text-body">Each agent gets its own sealed computer. Chats, memory and keys stay here. There's no account to make.</p>
+    <p className="m-0 max-w-[440px] text-[14px]/[1.5] text-body">Each agent gets its own sealed computer. Chats, memory and keys stay here. There's no account to make.</p>
     <Button variant="primary" size="lg" className="mt-2 w-[240px] justify-center gap-2" onClick={onStart} autoFocus><I icon={PlayIcon} size={15} />Start</Button>
-    <div className="mt-2 flex items-center gap-5 font-copy text-xs text-mute">
+    <div className="mt-2 flex items-center gap-5 text-[12px] text-mute">
       <span className="inline-flex items-center gap-1.5"><I icon={Shield01Icon} size={14} />Sealed per agent</span>
       <span className="inline-flex items-center gap-1.5"><I icon={Key01Icon} size={14} />Keys in {HERE === 'Mac' ? 'Keychain' : 'your keyring'}</span>
       <span className="inline-flex items-center gap-1.5"><I icon={ZapIcon} size={14} />About 1 GB of memory per agent</span>
@@ -42,7 +42,7 @@ function Starting({ run, error, onRetry }: { run: ReturnType<typeof useFirstRun>
     <ErrorNote message={error} />
     {run?.failed
       ? <Button variant="secondary" className="gap-2" onClick={onRetry}><I icon={Refresh01Icon} size={14} />Try again</Button>
-      : <span className="inline-flex items-center gap-1.5 font-copy text-xs text-mute-2"><I icon={Clock01Icon} size={13} />Only the first time. After this it starts in about ten seconds.</span>}
+      : <span className="inline-flex items-center gap-1.5 text-[12px] text-mute"><I icon={Clock01Icon} size={13} />Only the first time. After this it starts in about ten seconds.</span>}
   </Center>
 }
 
@@ -51,5 +51,5 @@ function Center({ children }: { children: ReactNode }) {
 }
 
 function Headline({ children }: { children: ReactNode }) {
-  return <h1 className="m-0 bg-(image:--squiggle) bg-size-[auto_8px] bg-bottom-left bg-repeat-x pb-3 font-display text-[56px]/none font-normal tracking-[.01em] text-ink uppercase">{children}</h1>
+  return <h1 className="m-0 text-[20px]/[1.3] font-semibold text-ink">{children}</h1>
 }
