@@ -1,23 +1,16 @@
 import * as z from 'zod/mini'
 import { Timestamp, atLeastOneField } from '../api.ts'
+import { CreateExport } from '../admin/admin.ts'
 
-export const ModelId = z.enum(['opus', 'sonnet', 'haiku'])
+export const ModelId = z.enum(['opus', 'sonnet', 'haiku', 'codex'])
 export type ModelId = z.infer<typeof ModelId>
 
 export const MODELS = [
   { id: 'opus', label: 'Opus 5.5', blurb: 'Most capable, for hard problems' },
   { id: 'sonnet', label: 'Sonnet 5.5', blurb: 'Fast and capable: the default' },
   { id: 'haiku', label: 'Haiku 5.5', blurb: 'Fastest, for quick replies' },
+  { id: 'codex', label: 'GPT-5.5', blurb: 'Coming soon' },
 ] as const satisfies readonly { id: ModelId; label: string; blurb: string }[]
-
-export const AgentSize = z.enum(['standard', 'large', 'xlarge'])
-export type AgentSize = z.infer<typeof AgentSize>
-
-export const SIZES = [
-  { id: 'standard', label: 'Standard', blurb: 'Chat, lookups and short tasks', spec: '1 GB memory, 1 CPU' },
-  { id: 'large', label: 'Large', blurb: 'Bigger files and longer tasks', spec: '2 GB memory, 2 CPUs' },
-  { id: 'xlarge', label: 'Extra large', blurb: 'Heavy data work and big code runs', spec: '4 GB memory, 2 CPUs' },
-] as const satisfies readonly { id: AgentSize; label: string; blurb: string; spec: string }[]
 
 export const AgentStatus = z.enum(['running', 'stopped', 'missing'])
 export type AgentStatus = z.infer<typeof AgentStatus>
@@ -44,7 +37,6 @@ export const Agent = z.object({
   instructions: z.string(),
   codeExecution: z.boolean(),
   browser: z.boolean(),
-  size: AgentSize,
   canEdit: z.boolean(),
   createdAt: Timestamp,
 })
@@ -65,7 +57,6 @@ export const UpdateAgentFields = {
   wanted: z.optional(Wanted),
   codeExecution: z.optional(z.boolean()),
   browser: z.optional(z.boolean()),
-  size: z.optional(AgentSize),
 }
 export const UpdateAgent = z.object(UpdateAgentFields).check(atLeastOneField)
 export type UpdateAgent = z.infer<typeof UpdateAgent>
@@ -85,3 +76,18 @@ export type CreateGrant = z.infer<typeof CreateGrant>
 export const ListGrants = z.object({ agentId: z.optional(z.string()), connectionId: z.optional(z.string()) })
 export type ListGrants = z.infer<typeof ListGrants>
 
+
+export const MAX_SEALED_AGENT = 256 << 20
+
+export const ExportAgent = z.pick(CreateExport, { publicKey: true })
+export type ExportAgent = z.infer<typeof ExportAgent>
+
+export const ImportAgent = z.object({ sealed: z.string().check(z.maxLength(MAX_SEALED_AGENT)) })
+export type ImportAgent = z.infer<typeof ImportAgent>
+
+export const AgentImport = z.object({
+  object: z.literal('agent_import'),
+  agent: Agent,
+  ungranted: z.array(z.string()),
+})
+export type AgentImport = z.infer<typeof AgentImport>

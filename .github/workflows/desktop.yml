@@ -1,0 +1,70 @@
+name: Desktop app
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      MAC_SIGNED: ${{ secrets.CSC_LINK != '' }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx turbo run typecheck test
+      - name: Tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: test "$GITHUB_REF_NAME" = "v$(node -p "require('./packages/desktop/package.json').version")"
+      - name: Ad-hoc sign when there is no Developer ID certificate yet
+        if: env.MAC_SIGNED != 'true'
+        run: |
+          echo "::warning title=Mac build not notarized::no CSC_LINK secret, so the Mac build is ad-hoc signed"
+          perl -0pi -e 's/^mac:\n/mac:\n  identity: "-"\n/m' packages/desktop/electron-builder.yml
+      - name: Build and sign
+        working-directory: packages/desktop
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: npm run build && npm run pack-backend && npx electron-builder --mac --arm64 --publish never
+      - name: Notarize, staple and check Gatekeeper
+        if: env.MAC_SIGNED == 'true'
+        env:
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: packages/desktop/scripts/notarize.sh
+      - name: Upload to a draft release
+        working-directory: packages/desktop/release
+        run: |
+          tag="${GITHUB_REF_NAME#refs/tags/}"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --draft --title "$tag" --notes ""
+          gh release upload "$tag" OpenHut-arm64.dmg OpenHut-*-arm64.zip latest-mac.yml --clobber
+
+  linux:
+    needs: release
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Build the AppImage and deb and upload them to the same draft release
+        working-directory: packages/desktop
+        run: umask 022 && npm run build && npm run pack-backend && npx electron-builder --linux --x64 --publish always
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false

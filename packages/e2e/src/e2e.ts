@@ -3,7 +3,8 @@ import { execFile } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createSocket } from 'node:dgram'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { connect } from 'node:net'
+import { once } from 'node:events'
+import { connect, createServer } from 'node:net'
 import { after, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { isDeepStrictEqual, promisify, stripVTControlCharacters } from 'node:util'
@@ -16,9 +17,8 @@ import type { Browser } from '@openhut/common/agents/browser.ts'
 import type { ApiError, Deleted, List } from '@openhut/common/api.ts'
 import type { Channel } from '@openhut/common/channels/channel.ts'
 import type { Connection, ConnectionEvent } from '@openhut/common/connections/connection.ts'
-import type { OAuthCode, OAuthGrant } from '@openhut/common/team/oauth.ts'
-import type { Invite, InviteLink, Person, Session, Setup } from '@openhut/common/team/team.ts'
-import type { AgentdReplies } from '../../agentd/src/agentd.ts'
+import type { Me } from '@openhut/common/team/team.ts'
+import type { AgentdReplies } from '../../runtime/src/agentd/agentd.ts'
 
 const sh = promisify(execFile)
 const APP = 'http://127.0.0.1:8787'
@@ -27,17 +27,26 @@ const BROWSE_TITLE = 'Example Domain'
 const OPENHUT = '/opt/openhut'
 const RESULTS = process.env.RESULTS ?? '/results'
 const DENIED = 'Denied: no connection grants postgres_query to this agent.'
-const OAUTH_REDIRECT = 'http://127.0.0.1:33417/callback'
+const KEY = process.env.OPENHUT_E2E_KEY ?? ''
 const AGENTS_NET = '10.200.0.0/16'
 const DOCKER_USER_JUMP = ['DOCKER-USER', '-s', AGENTS_NET, '-j', 'AGENT']
 const FIREWALL_SCRIPT = `${OPENHUT}/install/agents-firewall.sh`
-const AGENTD_PROCESS = `^node ${OPENHUT}/packages/agentd/src/agentd.ts`
-const APP_PROCESS = `^node ${OPENHUT}/packages/app/src/app.ts`
+const AGENTD_PROCESS = `^node ${OPENHUT}/packages/runtime/src/agentd/agentd.ts`
+const APP_PROCESS = `^node ${OPENHUT}/packages/runtime/src/server/app.ts`
 const UNTRUSTED_CA = /self-signed|unable to (get|verify)/i
 const WHATSAPP_PAIRING = /^(2@|https:\/\/wa\.me\/)/
+const SERVER_LISTENER_PORT = 9999
+const FENCE_CHECKS = ['private address', 'cloud metadata', 'tailnet address', 'host listener', 'public https', 'gateway']
 const DNS_QUERY = '123401000001000000000000076578616d706c6503636f6d0000010001'
 const GW = `import urllib.request, json, os
 req = urllib.request.Request(os.environ["URL"], data=os.environ["BODY"].encode(), headers={"authorization": "Agent " + os.environ["TOKEN"], "content-type": "application/json", "accept": "application/json, text/event-stream"})
+try:
+    r = urllib.request.urlopen(req, timeout=60); print(json.dumps({"status": r.status, "body": r.read().decode()}))
+except urllib.error.HTTPError as e:
+    print(json.dumps({"status": e.code, "body": e.read().decode()}))`
+const BROKER = `import urllib.request, json, os
+body = os.environ["BODY"].encode() or None
+req = urllib.request.Request(os.environ["URL"], data=body, method=os.environ["METHOD"], headers={"authorization": "Bearer " + os.environ["TOKEN"], "content-type": "application/json", "anthropic-version": "2023-06-01"})
 try:
     r = urllib.request.urlopen(req, timeout=60); print(json.dumps({"status": r.status, "body": r.read().decode()}))
 except urllib.error.HTTPError as e:
@@ -166,15 +175,9 @@ after(() => {
 function main() {
   const dbPassword = randomBytes(12).toString('hex')
   const agentPassword = randomBytes(12).toString('hex')
-  const owner = { email: 'owner@example.com', password: randomBytes(12).toString('base64url') }
-  const mia = { email: 'mia@example.com', password: randomBytes(12).toString('base64url') }
   const seatToken = `sk-ant-oat01-${randomBytes(24).toString('hex')}`
   const extras: string[] = []
-  let setupCode = ''
-  let cookie = ''
-  let ownerId = ''
-  let miaCookie = ''
-  let oauth = { access: '', refresh: '', clientId: '' }
+  let owner = ''
   let fw: Firewall = {}
   let whatsapp = ''
   let call: Call
@@ -182,7 +185,6 @@ function main() {
   let dev: Agent
   let sales: Agent
   let devGrant: Grant
-  let helper: Agent
   let iso: Isolation
 
   const q = (sql: string, connectionId?: string) => callTool(dev, { name: 'postgres_query', arguments: { sql }, connectionId })
@@ -233,93 +235,67 @@ function main() {
     },
   )
 
-  check('A1', 'Setup needs the code the installer printed', 'open before; a wrong code: 403 on setupCode; still open, no owner', async () => {
-    const open = (await api<Setup>('GET', '/api/setup')).json.open
-    const wrongCode = await api('POST', '/api/people', { setupCode: '0'.repeat(18), email: 'mallory@example.com', password: 'mallory-password-1' })
-    const stillOpen = (await api<Setup>('GET', '/api/setup')).json.open
-    return {
-      actual: `open ${open} | wrong code ${wrongCode.status} ${wrongCode.json.error?.param} | open after ${stillOpen}`,
-      pass: open === true && wrongCode.status === 403 && wrongCode.json.error?.param === 'setupCode' && stillOpen === true,
-    }
-  })
+  check(
+    'A1',
+    'The runtime answers only the key the app enrolled; the installer kept its hash, never the key',
+    'no key: 401; a wrong key: 401; the enrolled key: 200 on /api/agents and /api/me; /etc/openhut/env holds the sha256; the key itself is in no log',
+    async () => {
+      const none = await api('GET', '/api/agents')
+      const wrong = await api('GET', '/api/agents', undefined, 'not-the-key')
+      const right = await api<List<Agent>>('GET', '/api/agents', undefined, KEY)
+      owner = (await api<Me>('GET', '/api/me', undefined, KEY)).json.user?.email ?? ''
+      const stored = await shell("sed -n 's/^OPENHUT_CLIENT_KEY_SHA256=//p' /etc/openhut/env")
+      const leaked = await shell(`grep -rlF -e '${KEY}' ${RESULTS}/install.log /var/log/openhut /var/log/openhut-boot.log /etc/openhut 2>/dev/null || true`)
+      const hash = createHash('sha256').update(KEY).digest('hex')
+      const logged = readFileSync(`${RESULTS}/install.log`, 'utf8').includes(`sha256:${hash.slice(0, 8)}`)
+      return {
+        actual: { none: none.status, wrong: wrong.status, right: `${right.status} ${right.json.object}`, owner, stored: stored === hash, logged, leaked: leaked || 'none' },
+        pass: KEY.length >= 32 && none.status === 401 && wrong.status === 401 && right.status === 200 && !!owner && stored === hash && logged && leaked === '',
+      }
+    },
+  )
 
   check(
     'A2',
-    "The installer's link signs up the owner in one step",
-    'the install prints the /setup?code= link; posting the code with an email and password makes the owner and a session cookie, HttpOnly and SameSite=Strict',
+    'The runtime answers only on loopback (tailscale serve reaches it there), so the key works from nowhere else',
+    "with the enrolled key: from a container on the server's Docker bridge no HTTP answer at all; to the server's own LAN address, ECONNREFUSED",
     async () => {
-      setupCode = readFileSync('/etc/openhut/env', 'utf8').match(/SETUP_CODE=(\S+)/)?.[1] ?? ''
-      writeFileSync(`${RESULTS}/.test-credentials.json`, JSON.stringify(owner))
-      const printed = readFileSync(`${RESULTS}/install.log`, 'utf8').includes('/setup?code=')
-      const setup = await api<Person>('POST', '/api/people', { setupCode, ...owner })
-      cookie = setup.cookie
-      ownerId = setup.json.id ?? ''
-      return {
-        actual: `link printed ${printed} | ${setup.status} ${setup.json.role} ${setup.setCookie.replace(/=[^;]+/, '=<redacted>')}`,
-        pass:
-          printed && setup.status === 200 && setup.json.role === 'owner' && /HttpOnly/.test(setup.setCookie) && /SameSite=Strict/.test(setup.setCookie),
-      }
+      const bridge = await shell("ip -4 addr show docker0 | sed -n 's/.*inet \\([0-9.]*\\).*/\\1/p'")
+      const fromLan = await docker('run', '--rm', 'alpine:3.20', 'sh', '-c', `wget -S -T 3 -O /dev/null --header 'Authorization: Bearer ${KEY}' http://${bridge}:8787/api/agents 2>&1 | grep -q 'HTTP/' && echo answered || echo blocked`)
+      const lanIp = await shell("ip -4 route get 1.1.1.1 | sed -n 's/.* src \\([0-9.]*\\).*/\\1/p'")
+      const toLanIp = await fetch(`http://${lanIp}:8787/api/agents`, { headers: { authorization: `Bearer ${KEY}` } }).then((r) => `answered ${r.status}`, (e: { cause?: { code?: string } }) => e.cause?.code ?? 'no code')
+      return { actual: { bridge, fromLan, lanIp, toLanIp }, pass: !!bridge && fromLan === 'blocked' && !!lanIp && toLanIp === 'ECONNREFUSED' }
     },
   )
 
-  check(
-    'A3',
-    'Setup closes after the owner exists; sign-in checks the password, taking as long for unknown names',
-    'setup again: 403 and closed; wrong password 401; unknown user 401; right password 200 with a session; unknown/wrong time 0.5-2×',
-    async () => {
-      const again = await api('POST', '/api/people', { setupCode, email: 'second@example.com', password: 'second-password-1' })
-      const open = (await api<Setup>('GET', '/api/setup')).json.open
-      const bad = await api('POST', '/api/sessions', { email: 'owner@example.com', password: 'wrong-password-123' })
-      const nobody = await api('POST', '/api/sessions', { email: 'nobody@example.com', password: 'wrong-password-123' })
-      const good = await api<Session>('POST', '/api/sessions', owner)
-      const ms: { wrong: number[]; unknown: number[] } = { wrong: [], unknown: [] }
-      for (let i = 0; i < 5; i++) {
-        ms.wrong.push(await timedSignIn('owner@example.com'))
-        ms.unknown.push(await timedSignIn(`nobody${i}@example.com`))
-      }
-      const ratio = average(ms.unknown) / average(ms.wrong)
-      return {
-        actual: `setup ${again.status} open ${open} | wrong ${bad.status} | unknown ${nobody.status} | right ${good.status} | ms wrong ${ms.wrong} unknown ${ms.unknown} ratio ${ratio.toFixed(2)}`,
-        pass: again.status === 403 && bad.status === 401 && nobody.status === 401 && good.status === 200 && !!good.cookie && ratio > 0.5 && ratio < 2,
-      }
-    },
-  )
+  check('T1', 'Local mode sends no email, login or username in its usage data', 'setup_completed queued with no owner_email; no email, login or username anywhere (a unit-level check: events.ts in local mode in a node process on the server, not a running desktop app)', async () => {
+    const events = `file://${OPENHUT}/packages/runtime/src/server/platform/events.ts`
+    const script = `const { record, takeTelemetry } = await import(${JSON.stringify(events)})
+record({ action: 'person.joined', actor: { id: 'usr_e2elocal', email: 'owner@acme.example' }, target: { type: 'person', id: 'usr_e2elocal', role: 'owner' } })
+console.log(JSON.stringify(takeTelemetry()))`
+    const { stdout } = await sh('node', ['--input-type=module', '-e', script], { env: { ...process.env, OPENHUT_SOCKET: '/tmp/e2e-local.sock', OPENHUT_MODEL: 'claude' } })
+    const sent: { name: string; properties: Record<string, unknown> }[] = JSON.parse(stdout.trim().split('\n').at(-1) ?? '[]')
+    return { actual: sent, pass: sent.some((e) => e.name === 'setup_completed') && !/email|login|username|owner@acme/.test(JSON.stringify(sent)) }
+  })
+
+  check('A3', 'The installer prints the next step: tailscale serve, then open it from the OpenHut app', 'install log mentions tailscale serve and no setup link', async () => {
+    const log = readFileSync(`${RESULTS}/install.log`, 'utf8')
+    return { actual: { serve: log.includes('tailscale serve'), setupLink: log.includes('/setup?code=') }, pass: log.includes('tailscale serve') && !log.includes('/setup?code=') }
+  })
 
   check(
     'A4',
-    'Control MCP takes only OAuth access tokens, and points clients at its sign-in',
-    'no token: 401 with resource_metadata; a session cookie alone: 401; a made-up token: 401; metadata points at /mcp/authorize; signing in with OAuth gives a fmo_ token; Admin lists the app',
+    'The control MCP takes the same enrolled key; there is no OAuth server',
+    'no key: 401; with the key it lists tools; OAuth discovery and token endpoints: 404',
     async () => {
-      const post = (headers: Record<string, string>) =>
-        fetch(`${APP}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: '{}' })
-      const noauth = await post({})
-      const withCookie = await post({ cookie })
-      const madeUp = await post({ authorization: `Bearer fmo_${randomBytes(24).toString('base64url')}` })
-      const meta = (await api<{ resource?: string }>('GET', '/.well-known/oauth-protected-resource/mcp')).json
-      const server = (await api<{ authorization_endpoint?: string }>('GET', '/.well-known/oauth-authorization-server')).json
-      oauth = await oauthSignIn(cookie, 'e2e')
-      call = await mcp(oauth.access)
-      const apps = ((await api<List<OAuthGrant>>('GET', '/api/oauth/grants', undefined, cookie)).json.data ?? []).map((a) => a.client)
-      const challenge = noauth.headers.get('www-authenticate') ?? ''
+      const noLogin = await fetch(`${APP}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) })
+      call = await mcp(KEY)
+      const agents = await call<List<Agent>>('list_agents')
+      const discovery = (await fetch(`${APP}/.well-known/oauth-authorization-server`)).status
+      const token = (await fetch(`${APP}/api/oauth/token`, { method: 'POST' })).status
       return {
-        actual: {
-          noToken: `${noauth.status} ${challenge.slice(0, 80)}`,
-          cookie: withCookie.status,
-          madeUp: madeUp.status,
-          authorize: server.authorization_endpoint,
-          resource: meta.resource,
-          signedIn: oauth.access ? 'fmo_<redacted>' : 'no',
-          apps,
-        },
-        pass:
-          noauth.status === 401 &&
-          /resource_metadata=/.test(challenge) &&
-          withCookie.status === 401 &&
-          madeUp.status === 401 &&
-          server.authorization_endpoint === `${APP}/mcp/authorize` &&
-          meta.resource === `${APP}/mcp` &&
-          /^fmo_/.test(oauth.access) &&
-          isDeepStrictEqual(apps, ['e2e']),
+        actual: { noLogin: noLogin.status, listAgents: agents.object, discovery, token },
+        pass: noLogin.status === 401 && agents.object === 'list' && discovery === 404 && token === 404,
       }
     },
   )
@@ -350,8 +326,8 @@ function main() {
       get_agent: await call('get_agent', { id: dev.id }),
       list_agents: await call('list_agents'),
       created: conn,
-      connection_api: (await api('GET', `/api/connections/${conn.id}`, undefined, cookie)).json,
-      agent_api: (await api('GET', `/api/agents/${dev.id}`, undefined, cookie)).json,
+      connection_api: (await api('GET', `/api/connections/${conn.id}`, undefined, KEY)).json,
+      agent_api: (await api('GET', `/api/agents/${dev.id}`, undefined, KEY)).json,
     }
     const files = await shell(
       `grep -rlF -e '${agentPassword}' -e '${dbPassword}' /data/agent-conf/${dev.id} /data/agents/${dev.id} /var/log/openhut 2>/dev/null || true`,
@@ -401,6 +377,7 @@ function main() {
       const wantMounts = [
         `${c}/.env -> /opt/data/.env (ro)`,
         `${c}/SOUL.md -> /opt/data/SOUL.md (ro)`,
+        `${c}/auth.json -> /opt/data/auth.json (ro)`,
         `${c}/claude-settings.json -> /opt/data/.claude/settings.json (ro)`,
         `${c}/config.yaml -> /opt/data/config.yaml (ro)`,
         `/data/agents/${dev.id} -> /opt/data`,
@@ -479,7 +456,7 @@ function main() {
   })
 
   check('E3', "A connection's Activity lists the calls through it", "connection events: Dev's calls only, with agent names", async () => {
-    const connEvents = (await api<List<ConnectionEvent>>('GET', `/api/connection-events?connectionId=${conn.id}&limit=100`, undefined, cookie)).json.data ?? []
+    const connEvents = (await api<List<ConnectionEvent>>('GET', `/api/connection-events?connectionId=${conn.id}&limit=100`, undefined, KEY)).json.data ?? []
     return {
       actual: { events: connEvents.length, agents: [...new Set(connEvents.map((e) => e.agentName))] },
       pass: connEvents.length >= 3 && connEvents.every((e) => e.agentId === dev.id && e.agentName === 'Dev'),
@@ -487,7 +464,7 @@ function main() {
   })
 
   check('R1', 'The browser is off until someone switches it on', 'browser false; Hermes\'s own browser toolset disabled; agent-browser is not in the container, so the agent\'s command fails', async () => {
-    const agent = (await api<Agent>('GET', `/api/agents/${dev.id}`, undefined, cookie)).json
+    const agent = (await api<Agent>('GET', `/api/agents/${dev.id}`, undefined, KEY)).json
     const disabled = await docker('exec', `ag-${dev.id}`, 'grep', 'disabled_toolsets', '/opt/data/config.yaml')
     const installed = await docker('exec', `ag-${dev.id}`, 'sh', '-c', 'command -v agent-browser || echo missing')
     const reply = await chat(dev, `browser: open ${BROWSE_URL}`)
@@ -495,7 +472,7 @@ function main() {
   })
 
   check('R2', 'Switched on, the agent opens a public page with agent-browser, inside its own gVisor container', 'PATCH 200; the container is rebuilt still runsc and read-only, with a 4 GiB memory limit and agent-browser mounted read-only; the agent\'s command returns the page title', async () => {
-    const patched = await api<Agent>('PATCH', `/api/agents/${dev.id}`, { browser: true }, cookie)
+    const patched = await api<Agent>('PATCH', `/api/agents/${dev.id}`, { browser: true }, KEY)
     await waitReady(dev)
     const reply = await chat(dev, `browser: open ${BROWSE_URL}`)
     const spec = await docker('inspect', '--format', '{{.HostConfig.Runtime}} {{.HostConfig.ReadonlyRootfs}} {{.HostConfig.Memory}} {{index .Config.Labels "openhut.browser"}}', `ag-${dev.id}`)
@@ -508,9 +485,9 @@ function main() {
   })
 
   check('R3', 'Only while someone looks: the dashboard gets a still picture of the agent\'s page, and the screencast stops once nobody asks', 'GET /api/browsers/:id: open, the page address, a JPEG; a second GET is served from the cache in under 1 s; within 60 s of the last GET agent-browser reports no screencast', async () => {
-    const still = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, cookie)
+    const still = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, KEY)
     const started = Date.now()
-    const again = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, cookie)
+    const again = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, KEY)
     const cached = Date.now() - started
     await until(async () => /Screencasting: false/.test(await agentBrowser(dev, 'stream', 'status')), 60_000, 'the screencast to stop after the agent page stopped asking')
     const status = await agentBrowser(dev, 'stream', 'status')
@@ -524,18 +501,18 @@ function main() {
     await chat(dev, 'browser: open https://www.wikipedia.org/')
     const center = /"(\d+),(\d+)"/.exec(await agentBrowser(dev, 'eval', "(r => Math.round(r.x + r.width / 2) + ',' + Math.round(r.y + r.height / 2))(document.querySelector('#searchInput').getBoundingClientRect())"))
     const box = center ? { x: Number(center[1]), y: Number(center[2]) } : undefined
-    const view = await openStream(`/api/browsers/${dev.id}/stream`, cookie)
+    const view = await openStream(`/api/browsers/${dev.id}/stream`, KEY)
     await until(async () => view.events.some((e) => e.event === 'frame'), 30_000, 'the first live frame')
-    const picture = await firstJpeg(`/api/browsers/${dev.id}/frames`, cookie)
+    const picture = await firstJpeg(`/api/browsers/${dev.id}/frames`, KEY)
     const click = [{ type: 'mouse', action: 'down', x: box?.x ?? 0, y: box?.y ?? 0 }, { type: 'mouse', action: 'up', x: box?.x ?? 0, y: box?.y ?? 0 }]
-    const early = await api('POST', `/api/browsers/${dev.id}/input`, { events: click }, cookie)
-    const held = await api<Browser>('POST', `/api/browsers/${dev.id}/hold`, undefined, cookie)
+    const early = await api('POST', `/api/browsers/${dev.id}/input`, { events: click }, KEY)
+    const held = await api<Browser>('POST', `/api/browsers/${dev.id}/hold`, undefined, KEY)
     const agentWhileHeld = await agentBrowser(dev, 'click', '#searchInput')
     const keys = [...'gVisor', 'Enter'].flatMap((key) => [{ type: 'key', action: 'down', key }, { type: 'key', action: 'up', key }])
-    const typed = await api<{ accepted: number }>('POST', `/api/browsers/${dev.id}/input`, { events: [...click, ...keys] }, cookie)
+    const typed = await api<{ accepted: number }>('POST', `/api/browsers/${dev.id}/input`, { events: [...click, ...keys] }, KEY)
     await until(async () => (await agentBrowser(dev, 'get', 'url')).includes('/wiki/GVisor'), 30_000, 'the search to land on the gVisor article')
     const landed = (await agentBrowser(dev, 'get', 'url')).trim().split('\n').pop()
-    const released = await api<Browser>('DELETE', `/api/browsers/${dev.id}/hold`, undefined, cookie)
+    const released = await api<Browser>('DELETE', `/api/browsers/${dev.id}/hold`, undefined, KEY)
     const agentAfter = await agentBrowser(dev, 'open', BROWSE_URL)
     const frames = view.events.filter((e) => e.event === 'frame').length
     const holdEvents = view.events.filter((e) => e.event === 'hold').map((e) => JSON.stringify(e.data))
@@ -543,17 +520,17 @@ function main() {
     await until(async () => /Screencasting: false/.test(await agentBrowser(dev, 'stream', 'status')), 30_000, 'the screencast to stop after the view closed')
     return {
       actual: { box, frames, picture, early: early.status, held: `${held.status} ${held.json.heldBy}`, agentWhileHeld: agentWhileHeld.trim().slice(0, 120), typed: `${typed.status} ${typed.json.accepted}`, landed, released: `${released.status} ${released.json.heldBy}`, holdEvents, agentAfter: agentAfter.trim().split('\n')[0] },
-      pass: !!box && frames >= 2 && picture.status === 200 && picture.type.startsWith('multipart/x-mixed-replace') && picture.jpeg && picture.bytes > 1000 && early.status === 409 && held.status === 200 && held.json.heldBy === owner.email && /denied by policy/.test(agentWhileHeld) &&
+      pass: !!box && frames >= 2 && picture.status === 200 && picture.type.startsWith('multipart/x-mixed-replace') && picture.jpeg && picture.bytes > 1000 && early.status === 409 && held.status === 200 && held.json.heldBy === owner && /denied by policy/.test(agentWhileHeld) &&
         typed.status === 200 && typed.json.accepted === 16 && !!landed?.includes('wikipedia.org/wiki/GVisor') && released.status === 200 && released.json.heldBy === null && agentAfter.includes(BROWSE_TITLE),
     }
   })
 
   check('R5', 'Switched off again, the browser is gone', 'PATCH 200; the container is rebuilt without agent-browser and back to its 1 GiB size; the dashboard reports no browser', async () => {
-    const patched = await api<Agent>('PATCH', `/api/agents/${dev.id}`, { browser: false }, cookie)
+    const patched = await api<Agent>('PATCH', `/api/agents/${dev.id}`, { browser: false }, KEY)
     await waitReady(dev)
     const installed = await docker('exec', `ag-${dev.id}`, 'sh', '-c', 'command -v agent-browser || echo missing')
     const label = await docker('inspect', '--format', '{{index .Config.Labels "openhut.browser"}} {{.HostConfig.Memory}}', `ag-${dev.id}`)
-    const still = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, cookie)
+    const still = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, KEY)
     return { actual: { status: patched.status, browser: patched.json.browser, installed, label, open: still.json.open }, pass: patched.status === 200 && patched.json.browser === false && installed === 'missing' && label === 'off 1073741824' && still.json.open === false }
   })
 
@@ -729,7 +706,7 @@ function main() {
   check(
     'F4',
     'Network: the gateway, DNS to its resolver and the internet on 443 only; everything else is blocked though the server reaches it',
-    'matrix in isolation-probe-sales.json all ok',
+    'matrix in isolation-probe-sales.json all ok: every blocked target times out from the agent (dropped, not reset), including the LAN and metadata stand-ins on 443 and a listener on the server itself, while the server reaches each one',
     async () => {
       fw = await firewall()
       writeFileSync(`${RESULTS}/firewall.txt`, Object.values(fw).join('\n\n') + '\n')
@@ -737,157 +714,54 @@ function main() {
     },
   )
 
-  check('F6', "Dev's gateway token is useless from Sales' network", 'from Sales: 401; same request from Dev: 200', async () => {
+  check('F8', 'agentd proves the fence itself when it starts', "fence report ok on gvisor with exactly six checks: the server's private address, metadata and tailnet address on 443, and a listener agentd holds open on the server for the run, each dropped (a connect timeout; a reset or any answer fails); public HTTPS and the gateway answer", async () => {
+    const report = (await agentdAsk('fence')) as AgentdReplies['fence']
+    writeFileSync(`${RESULTS}/fence.json`, JSON.stringify(report, null, 2))
+    const names = report.checks.map((c) => c.name)
+    return {
+      actual: { ok: report.ok, sandbox: report.sandbox, checks: report.checks.map((c) => `${c.pass ? 'pass' : 'FAIL'} ${c.name} ${c.expect}: ${c.got}`) },
+      pass: report.ok && report.sandbox === 'gvisor' && isDeepStrictEqual(names, FENCE_CHECKS) && report.checks.every((c) => c.pass),
+    }
+  })
+
+  check('S1', 'The sandbox contract suite passes on the real gVisor implementation', 'node --test contract.test.ts with OPENHUT_SANDBOX=gvisor: every test passes (# tests equals # pass), 0 fail, 0 skipped', async () => {
+    const out = await shell(`cd ${OPENHUT}/packages/runtime && OPENHUT_SANDBOX=gvisor timeout 300 node --test --test-reporter=tap test/agentd/sandbox/contract.test.ts 2>&1; true`)
+    writeFileSync(`${RESULTS}/contract-gvisor.txt`, out + '\n')
+    const count = (name: string) => Number(out.match(new RegExp(`^# ${name} (\\d+)`, 'm'))?.[1] ?? -1)
+    const actual = { tests: count('tests'), pass: count('pass'), fail: count('fail'), skipped: count('skipped') }
+    return { actual, pass: actual.tests > 0 && actual.pass === actual.tests && actual.fail === 0 && actual.skipped === 0 }
+  })
+
+  check('F6', "The gateway trusts only the agent's own token", "Dev's token: 200; Dev's id with a forged signature: 401", async () => {
     const list = { jsonrpc: '2.0', id: 1, method: 'tools/list' }
-    const stolen = await gwRaw(sales, agentToken(dev.id), list)
-    const own = await gwRaw(dev, agentToken(dev.id), list)
-    return { actual: `from Sales ${stolen.status}; from Dev ${own.status}`, pass: stolen.status === 401 && own.status === 200 }
+    const token = agentToken(dev.id)
+    const own = await gwRaw(dev, token, list)
+    const forged = await gwRaw(dev, `${token.slice(0, -1)}${token.endsWith('0') ? '1' : '0'}`, list)
+    return { actual: `own ${own.status}; forged ${forged.status}`, pass: own.status === 200 && forged.status === 401 }
   })
 
   check(
     'F7',
     "Only agents reach the gateway port; other containers on the server don't",
-    "from the team DB's network: 8081 gets no HTTP answer at all; 8787 answers (control)",
+    "from the team DB's network: 8081 gets no HTTP answer at all (only 8081 is tested here; 8787 listens on loopback only, see A2)",
     async () => {
-      const viaWget = (port: number) =>
-        docker('exec', 'teamdb', 'sh', '-c', `wget -S -T 3 -O /dev/null http://172.30.0.1:${port}/health 2>&1 | grep -q 'HTTP/' && echo open || echo blocked`)
-      const f7 = { gateway_8081: await viaWget(8081), dashboard_8787: await viaWget(8787) }
-      return { actual: f7, pass: f7.gateway_8081 === 'blocked' && f7.dashboard_8787 === 'open' }
+      const gateway = await docker('exec', 'teamdb', 'sh', '-c', `wget -S -T 3 -O /dev/null http://172.30.0.1:8081/health 2>&1 | grep -q 'HTTP/' && echo open || echo blocked`)
+      return { actual: { gateway_8081: gateway }, pass: gateway === 'blocked' }
     },
   )
 
-  check(
-    'P0',
-    'People join only by invite; a link works once and can be revoked',
-    'create_invite gives a link; its lookup 200 (member); joining makes a member with a session; the same link again 410; an unknown link 410; a revoked admin link 410',
-    async () => {
-      const invite = await call<Invite>('create_invite', { role: 'member' })
-      const inviteToken = inviteTokenOf(invite)
-      const linkInfo = await api<InviteLink>('GET', `/api/invite-links/${inviteToken}`)
-      const join = await api<Person>('POST', '/api/people', { inviteToken, ...mia })
-      miaCookie = join.cookie
-      const reuse = await api('POST', '/api/people', { inviteToken, email: 'mallory@example.com', password: 'mallory-password-1' })
-      const unknown = await api('GET', '/api/invite-links/not-a-real-invite')
-      const adminInvite = await call<Invite>('create_invite', { role: 'admin' })
-      const revoked = await call<Deleted<'invite'>>('delete_invite', { id: adminInvite.id })
-      const revokedUse = await api('POST', '/api/people', { inviteToken: inviteTokenOf(adminInvite), email: 'mallory@example.com', password: 'mallory-password-1' })
-      return {
-        actual: {
-          link: String(invite.link).replace(inviteToken, '<token>'),
-          lookup: `${linkInfo.status} ${linkInfo.json.role}`,
-          join: `${join.status} ${join.json.role}`,
-          session: !!miaCookie,
-          reuse: reuse.status,
-          unknown: unknown.status,
-          revoked: `${revoked.deleted} then ${revokedUse.status}`,
-        },
-        pass:
-          linkInfo.status === 200 &&
-          linkInfo.json.role === 'member' &&
-          join.status === 200 &&
-          join.json.role === 'member' &&
-          !!miaCookie &&
-          reuse.status === 410 &&
-          unknown.status === 410 &&
-          revoked.deleted === true &&
-          revokedUse.status === 410,
-      }
-    },
-  )
-
-  check('R6', "Only people who can edit an agent can see or drive its browser", 'Mia (a member who does not own Dev): 403 on the picture, the stream, Take over and input; no session: 401', async () => {
+  check('R6', 'Only the enrolled key sees or drives an agent\'s browser', 'no key: 401 on the picture, the stream, Take over and input', async () => {
     const path = `/api/browsers/${dev.id}`
-    const stream = await fetch(`${APP}${path}/stream`, { headers: { cookie: miaCookie } })
+    const stream = await fetch(`${APP}${path}/stream`)
     await stream.body?.cancel()
     const statuses = {
-      picture: (await api('GET', path, undefined, miaCookie)).status,
+      picture: (await api('GET', path)).status,
       stream: stream.status,
-      hold: (await api('POST', `${path}/hold`, undefined, miaCookie)).status,
-      input: (await api('POST', `${path}/input`, { events: [{ type: 'key', action: 'down', key: 'a' }] }, miaCookie)).status,
-      anonymous: (await api('GET', path)).status,
+      hold: (await api('POST', `${path}/hold`)).status,
+      input: (await api('POST', `${path}/input`, { events: [{ type: 'key', action: 'down', key: 'a' }] })).status,
     }
-    return { actual: statuses, pass: statuses.picture === 403 && statuses.stream === 403 && statuses.hold === 403 && statuses.input === 403 && statuses.anonymous === 401 }
+    return { actual: statuses, pass: Object.values(statuses).every((status) => status === 401) }
   })
-
-  check('P1', 'A member manages their own agent from the dashboard', 'create 200 (ag_…); start 200; instructions 200; container running', async () => {
-    const created = await api<Agent>('POST', '/api/agents', { name: 'Helper' }, miaCookie)
-    helper = created.json
-    const steps = {
-      start: (await api('PATCH', `/api/agents/${helper.id}`, { wanted: 'running' }, miaCookie)).status,
-      instructions: (await api('PATCH', `/api/agents/${helper.id}`, { instructions: '# Helper\nHelps.' }, miaCookie)).status,
-    }
-    const state = await statusOf(helper.id)
-    return {
-      actual: { create: `${created.status} ${helper.id}`, ...steps, state },
-      pass: created.status === 200 && /^ag_/.test(helper.id) && steps.start === 200 && steps.instructions === 200 && state === 'running',
-    }
-  })
-
-  check(
-    'P2',
-    "A member can't delete others' agents, grant or read the activity of a connection they can't use, list or make invites, remove people, or set the seat",
-    'all 403; Dev still exists',
-    async () => {
-      const denied = {
-        deleteDev: (await api('DELETE', `/api/agents/${dev.id}`, undefined, miaCookie)).status,
-        grantPrivate: (await api('POST', '/api/grants', { agentId: helper.id, connectionId: conn.id }, miaCookie)).status,
-        readActivity: (await api('GET', `/api/connection-events?connectionId=${conn.id}`, undefined, miaCookie)).status,
-        listInvites: (await api('GET', '/api/invites', undefined, miaCookie)).status,
-        invite: (await api('POST', '/api/invites', { role: 'admin' }, miaCookie)).status,
-        setSeat: (await api('PATCH', '/api/admin', { seatToken: 'x'.repeat(30) }, miaCookie)).status,
-        removeOwner: (await api('DELETE', `/api/people/${ownerId}`, undefined, miaCookie)).status,
-      }
-      const devStill = (await call<List<Agent>>('list_agents')).data.some((a) => a.id === dev.id)
-      return { actual: { ...denied, devStill }, pass: Object.values(denied).every((s) => s === 403) && devStill }
-    },
-  )
-
-  check(
-    'P3',
-    'An agent reaches a connection only while its owner can: un-sharing cuts Helper off on its next call',
-    'shared: grant 200, n=42; un-shared: Denied',
-    async () => {
-      await call('update_connection', { id: conn.id, everyone: true })
-      const shared = await api('POST', '/api/grants', { agentId: helper.id, connectionId: conn.id }, miaCookie)
-      const whileShared = await callTool(helper, { name: 'postgres_query', arguments: { sql: 'select count(*)::int as n from orders' } })
-      await call('update_connection', { id: conn.id, everyone: false })
-      const unshared = await callTool(helper, { name: 'postgres_query', arguments: { sql: 'select 1' } })
-      return {
-        actual: { grant: shared.status, shared: whileShared.text, unshared: unshared.text },
-        pass: shared.status === 200 && rowsOf(whileShared.text)?.[0]?.n === 42 && unshared.text === DENIED,
-      }
-    },
-  )
-
-  check(
-    'P5',
-    'Removing a person ends their access at once',
-    "their session 401, their OAuth app 401, sign-in 401; their agent stopped; they're off the People list",
-    async () => {
-      const miaToken = (await oauthSignIn(miaCookie, "mia's assistant")).access
-      const miaId = (await call<List<Person>>('list_people')).data.find((p) => p.email === 'mia@example.com')?.id
-      await call('delete_person', { id: miaId })
-      const afterRemoval = {
-        session: (await api('GET', '/api/me', undefined, miaCookie)).status,
-        token: (
-          await fetch(`${APP}/mcp`, {
-            method: 'POST',
-            headers: { authorization: `Bearer ${miaToken}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
-            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-          })
-        ).status,
-        signIn: (await api('POST', '/api/sessions', mia)).status,
-        agent: await statusOf(helper.id),
-        listed: (await call<List<Person>>('list_people')).data.some((p) => p.email === 'mia@example.com'),
-      }
-      await call('delete_agent', { id: helper.id })
-      return {
-        actual: afterRemoval,
-        pass:
-          afterRemoval.session === 401 && afterRemoval.token === 401 && afterRemoval.signIn === 401 && afterRemoval.agent === 'exited' && !afterRemoval.listed,
-      }
-    },
-  )
 
   check(
     'CH1',
@@ -905,7 +779,7 @@ function main() {
           configToken: 'xoxe.xoxp-1-notarealtoken',
           icon: 'iVBORw0KGgo=',
         },
-        cookie,
+        KEY,
       )
       const saved = (await call<List<Channel>>('list_channels', { agentId: dev.id })).data.length
       return {
@@ -924,7 +798,7 @@ function main() {
         'POST',
         '/api/channels',
         { kind: 'whatsapp', agentId: dev.id, ownerAddress: '+15551234567', open: false, allowed: ['+15557654321'] },
-        cookie,
+        KEY,
       )
       whatsapp = created.json.id
       await waitReady(dev)
@@ -936,7 +810,7 @@ function main() {
       let error = ''
       await until(
         async () => {
-          const channel = await api<Channel>('GET', `/api/channels/${whatsapp}`, undefined, cookie)
+          const channel = await api<Channel>('GET', `/api/channels/${whatsapp}`, undefined, KEY)
           qr = channel.json.qr ?? ''
           error = channel.json.error?.message ?? ''
           return !!qr || !!error
@@ -961,7 +835,7 @@ function main() {
     'Unlinking WhatsApp stops pairing, deletes the session and turns WhatsApp off',
     'deleted; no session files; no WHATSAPP_ lines in .env',
     async () => {
-      const unlinked = await api<Deleted<'channel'>>('DELETE', `/api/channels/${whatsapp}`, undefined, cookie)
+      const unlinked = await api<Deleted<'channel'>>('DELETE', `/api/channels/${whatsapp}`, undefined, KEY)
       await waitReady(dev)
       const session = await shell(`ls /data/agents/${dev.id}/platforms/whatsapp/session 2>/dev/null | wc -l`)
       const enabled = readFileSync(`/data/agent-conf/${dev.id}/.env`, 'utf8').includes('WHATSAPP_ENABLED')
@@ -996,6 +870,84 @@ function main() {
       const outcome = { actual: { updated: updated.seat, admin: admin.seat, leak }, pass: updated.seat?.set === true && admin.seat?.set === true && !leak }
       await waitReady(dev)
       return outcome
+    },
+  )
+
+  check(
+    'X1',
+    'No real secret inside any agent: the seat stays in the gateway',
+    "grep -a (binary files too) finds no sk-ant-oat01 in Dev's or Sales's /opt/data, their container env (docker inspect and /proc/1/environ), nor any agent's rendered files. This run is in test mode; that claude mode renders only the agent's own token as the stand-in is the hermes-files unit test",
+    async () => {
+      const inside = async (a: AgentRef) => {
+        const files = (await docker('exec', `ag-${a.id}`, 'sh', '-c', 'grep -rlaF sk-ant-oat01 /opt/data 2>/dev/null; true')).trim()
+        const env = (await docker('inspect', '-f', '{{json .Config.Env}}', `ag-${a.id}`)) + (await docker('exec', `ag-${a.id}`, 'cat', '/proc/1/environ'))
+        return `${files}${env.includes('sk-ant-oat01') ? ' env' : ''}`.trim()
+      }
+      const found = { dev: await inside(dev), sales: await inside(sales), conf: (await shell('grep -rlaF sk-ant-oat01 /data/agent-conf 2>/dev/null; true')).trim() }
+      return { actual: found, pass: !found.dev && !found.sales && !found.conf }
+    },
+  )
+
+  check(
+    'X2',
+    "An agent's own token reaches the seat through the gateway; nothing else does",
+    "Dev's token on /u/anthropic: 200 and the test model's reply (it answers only the real seat); forged token 401; /v1/models 403; Telegram logOut 403, and percent-encoded log%4Fut 403; an audit row; the seat meter reads the reply's rate-limit headers",
+    async () => {
+      const token = agentToken(dev.id)
+      const ask = { model: 'sonnet', max_tokens: 10, messages: [{ role: 'user', content: 'hello broker' }] }
+      const own = await viaBroker(dev, { token, method: 'POST', path: '/u/anthropic/v1/messages', body: ask })
+      const forged = await viaBroker(dev, { token: `${token.slice(0, -1)}${token.endsWith('0') ? '1' : '0'}`, method: 'POST', path: '/u/anthropic/v1/messages', body: ask })
+      const models = await viaBroker(dev, { token, method: 'GET', path: '/u/anthropic/v1/models' })
+      const logOut = await viaBroker(dev, { token, method: 'POST', path: `/u/telegram/bot${token}/logOut` })
+      const encoded = await viaBroker(dev, { token, method: 'POST', path: `/u/telegram/bot${token}/log%4Fut` })
+      const audited = (await events(call, { agentId: dev.id })).find((e) => e.tool === 'anthropic POST /v1/messages')
+      const usage = await asOwner<{ windows: { kind: string; percent: number }[] }>('GET', '/api/admin/seat-usage')
+      const actual = {
+        own: `${own.status} ${messageText(own.body)}`, forged: forged.status, models: models.status, logOut: logOut.status, encoded: encoded.status,
+        audit: audited && `${audited.outcome} ${audited.reason}`, meter: usage.json.windows?.map((w) => `${w.kind} ${w.percent}%`).join(', '),
+      }
+      return {
+        actual,
+        pass: own.status === 200 && messageText(own.body) === 'ECHO: hello broker' && forged.status === 401 && models.status === 403 && logOut.status === 403 && encoded.status === 403 &&
+          actual.audit === 'allowed HTTP 200' && actual.meter === 'five_hour 12%, seven_day 34%',
+      }
+    },
+  )
+
+  check(
+    'X3',
+    'Rotating the seat restarts nothing; the next call uses the new seat',
+    "update_admin with a new token: Dev's container keeps its StartedAt and .env; /u/anthropic answers 200 with the new seat",
+    async () => {
+      const before = { started: await startedAt(dev.id), env: readFileSync(`/data/agent-conf/${dev.id}/.env`, 'utf8') }
+      await call<Admin>('update_admin', { seatToken: `sk-ant-oat01-${randomBytes(24).toString('hex')}` })
+      const after = { started: await startedAt(dev.id), env: readFileSync(`/data/agent-conf/${dev.id}/.env`, 'utf8') }
+      const reply = await viaBroker(dev, { token: agentToken(dev.id), method: 'POST', path: '/u/anthropic/v1/messages', body: { model: 'sonnet', max_tokens: 10, messages: [{ role: 'user', content: 'after rotation' }] } })
+      return {
+        actual: { sameStart: before.started === after.started, sameEnv: before.env === after.env, reply: `${reply.status} ${messageText(reply.body)}` },
+        pass: before.started === after.started && before.env === after.env && reply.status === 200 && messageText(reply.body) === 'ECHO: after rotation',
+      }
+    },
+  )
+
+  check(
+    'X4',
+    "Revoking one agent's token: the old one fails at once, the restarted agent holds a new one that works",
+    "revoke_agent_token on Dev: the old token 401 on /u/anthropic right away; Dev restarted; config.yaml has a new token that gets 200",
+    async () => {
+      const old = agentToken(dev.id)
+      const startedBefore = await startedAt(dev.id)
+      const ask = { model: 'sonnet', max_tokens: 10, messages: [{ role: 'user', content: 'after revoke' }] }
+      await call('revoke_agent_token', { id: dev.id })
+      const oldReply = await viaBroker(dev, { token: old, method: 'POST', path: '/u/anthropic/v1/messages', body: ask })
+      const fresh = agentToken(dev.id)
+      await waitReady(dev)
+      const newReply = await viaBroker(dev, { token: fresh, method: 'POST', path: '/u/anthropic/v1/messages', body: ask })
+      const restarted = startedBefore !== (await startedAt(dev.id))
+      return {
+        actual: { old: oldReply.status, fresh: newReply.status, changed: old !== fresh, restarted },
+        pass: oldReply.status === 401 && newReply.status === 200 && old !== fresh && restarted,
+      }
     },
   )
 
@@ -1184,11 +1136,10 @@ function main() {
   )
 
   after(async () => {
-    writeFileSync(`${OPENHUT}/packages/app/src/only-in-the-previous-release.ts`, '')
+    writeFileSync(`${OPENHUT}/packages/runtime/src/server/only-in-the-previous-release.ts`, '')
     const state: Partial<State> = {
       dev: await settled(async () => ({ id: dev.id, net: dev.net })),
       conn: await settled(async () => conn.id),
-      oauth: { refresh: oauth.refresh, clientId: oauth.clientId },
       envSha: await settled(async () => sha(readFileSync('/etc/openhut/env', 'utf8'))),
       pin: await settled(async () => agentImagePin()),
       fw,
@@ -1215,6 +1166,24 @@ function afterUpgrade() {
           .split('\n')
           .filter((l) => /mismatch|exit=|BUILD/.test(l)),
         pass: /checksum mismatch: \S*openhut\.tgz/.test(tamper) && /installer exit=1/.test(tamper) && /^BUILD e2e-1$/m.test(tamper),
+      }
+    },
+  )
+
+  check(
+    'I1',
+    'Adding a computer that already runs this build pairs instead of reinstalling; the new key replaces the old one',
+    'the same build with a new key: "Pairing with this computer", no Packages step, the replaced-key line; the first key 401 and the new one 200; adding the first key back: 200 and 401',
+    async () => {
+      const log = stripVTControlCharacters(readFileSync(`${RESULTS}/re-add.log`, 'utf8'))
+      return {
+        actual: log.trim().split('\n').filter((l) => /Pairing|Packages|new app key|first key/.test(l)),
+        pass:
+          (log.match(/==> Pairing with this computer/g) ?? []).length === 2 &&
+          !/==> Packages/.test(log) &&
+          (log.match(/A new app key/g) ?? []).length === 2 &&
+          /^first key 401, new key 200$/m.test(log) &&
+          /^first key again 200, new key 401$/m.test(log),
       }
     },
   )
@@ -1259,7 +1228,7 @@ function afterUpgrade() {
       const st = savedState()
       const pids = { agentd: await pidOf(AGENTD_PROCESS), app: await pidOf(APP_PROCESS), supervisors: await pidOf(`^/bin/sh ${OPENHUT}/install/supervise.sh`) }
       const h = await health()
-      const leftover = await shell(`ls ${OPENHUT}/packages/app/src/only-in-the-previous-release.ts 2>&1 || true`)
+      const leftover = await shell(`ls ${OPENHUT}/packages/runtime/src/server/only-in-the-previous-release.ts 2>&1 || true`)
       return {
         actual: { build: `${st.build} -> ${h.build}`, pids: { before: st.pids, after: pids }, leftover },
         pass:
@@ -1281,10 +1250,10 @@ function afterUpgrade() {
   check(
     'UP3',
     'Data, tokens and agents survive the upgrade; the new release restarts running agents once, so they mount its files',
-    'token works; Dev in the same container; a build.applied e2e-1 -> e2e-2 event in app.log; Dev restarted with its instructions intact and its plugin folder present, and still answers from the team DB (n = 42); setup stays closed',
+    'token works; Dev in the same container; a build.applied e2e-1 -> e2e-2 event in app.log; Dev restarted with its instructions intact and its plugin folder present, and still answers from the team DB (n = 42); the enrolled key still works',
     async () => {
       const st = savedState()
-      const call = await mcp(await refreshed(st))
+      const call = await mcp(KEY)
       await until(async () => (await startedAt(st.dev.id)) !== st.devStarted, 60_000, 'Dev to restart on the new build')
       await waitReady(st.dev, 180_000)
       const agents = (await call<List<Agent>>('list_agents')).data
@@ -1295,9 +1264,9 @@ function afterUpgrade() {
       )
       const rebuilt = appEvents().some((e) => e.event === 'build.applied' && e.from === 'e2e-1' && e.to === 'e2e-2')
       const reply = inner(await chat(st.dev, 'sql: select count(*)::int as n from orders'))
-      const setupClosed = (await api<Setup>('GET', '/api/setup')).json.open === false
+      const ownerKept = (await api<Me>('GET', '/api/me', undefined, KEY)).status === 200
       return {
-        actual: { agents: agents.map((a) => `${a.name}:${a.status}`), sameContainer, rebuilt, soul, plugin, reply, setup: setupClosed },
+        actual: { agents: agents.map((a) => `${a.name}:${a.status}`), sameContainer, rebuilt, soul, plugin, reply, ownerKept },
         pass:
           agents.some((a) => a.id === st.dev.id && a.status === 'running') &&
           sameContainer &&
@@ -1305,7 +1274,7 @@ function afterUpgrade() {
           soul.includes('Updated instructions v2.') &&
           plugin.endsWith('inert_mcp.py') &&
           rowsOf(reply)?.[0]?.n === 42 &&
-          setupClosed,
+          ownerKept,
       }
     },
   )
@@ -1361,7 +1330,7 @@ function afterRestart() {
     'Dev running and answering within 4 min, n = 42 from the team DB; restart policy no; a new reconcile.started event for Dev in app.log',
     async () => {
       const st = savedState()
-      const call = await mcp(await refreshed(st))
+      const call = await mcp(KEY)
       await waitReady(st.dev)
       const agents = (await call<List<Agent>>('list_agents')).data
       const reply = inner(await chat(st.dev, 'sql: select count(*)::int as n from orders'))
@@ -1392,13 +1361,12 @@ function updateBroken() {
     'POST /api/updates 200 running, to e2e-broken; a second POST 409; then the same build as before, /health ok, Admin update failed, the install lock free, no /opt/openhut.* left, Dev running',
     async () => {
       const st = savedState()
-      const token = await refreshed(st)
       const before = await health()
-      const started = await asOwner<Update>('POST', '/api/updates', token)
-      const twice = await asOwner('POST', '/api/updates', token)
-      await until(async () => (await asOwner<Admin>('GET', '/api/admin', token)).json.server.update?.status === 'failed', 20 * 60_000, 'Admin to report the failed update')
+      const started = await asOwner<Update>('POST', '/api/updates')
+      const twice = await asOwner('POST', '/api/updates')
+      await until(async () => (await asOwner<Admin>('GET', '/api/admin')).json.server.update?.status === 'failed', 20 * 60_000, 'Admin to report the failed update')
       await until(async () => (await statusOf(st.dev.id)) === 'running', 180_000, 'Dev to run again')
-      const admin = (await asOwner<Admin>('GET', '/api/admin', token)).json
+      const admin = (await asOwner<Admin>('GET', '/api/admin')).json
       const now = await health()
       const lock = await shell('flock -n /run/openhut-install.lock true && echo free || echo held')
       const leftovers = await shell('ls -d /opt/openhut.* 2>/dev/null || true')
@@ -1419,13 +1387,12 @@ function update() {
     'POST /api/updates 200 to e2e-3; Admin says running right after; then build e2e-3, /health ok, no update left in Admin, nothing newer offered, Dev still there and running',
     async () => {
       const st = savedState()
-      const token = await refreshed(st)
-      const started = await asOwner<Update>('POST', '/api/updates', token)
-      const during = (await asOwner<Admin>('GET', '/api/admin', token)).json.server.update?.status
+      const started = await asOwner<Update>('POST', '/api/updates')
+      const during = (await asOwner<Admin>('GET', '/api/admin')).json.server.update?.status
       await until(async () => { const h = await health(); return h.build === 'e2e-3' && h.ok }, 15 * 60_000, 'build e2e-3 to be healthy')
       await until(async () => (await statusOf(st.dev.id)) === 'running', 180_000, 'Dev to run again')
-      const admin = (await asOwner<Admin>('GET', '/api/admin', token)).json
-      const dev = await asOwner<Agent>('GET', `/api/agents/${st.dev.id}`, token)
+      const admin = (await asOwner<Admin>('GET', '/api/admin')).json
+      const dev = await asOwner<Agent>('GET', `/api/agents/${st.dev.id}`)
       return {
         actual: { started: [started.status, started.json.to], during, build: admin.server.build, update: admin.server.update, updateAvailable: admin.server.updateAvailable, dev: dev.status },
         pass: started.status === 200 && started.json.to === 'e2e-3' && during === 'running' && admin.server.build === 'e2e-3' && admin.server.update === null && !admin.server.updateAvailable && dev.status === 200,
@@ -1434,8 +1401,8 @@ function update() {
   )
 }
 
-async function asOwner<T = unknown>(method: string, path: string, token: string): Promise<{ status: number; json: T }> {
-  const r = await fetch(APP + path, { method, headers: { authorization: `Bearer ${token}` } })
+async function asOwner<T = unknown>(method: string, path: string): Promise<{ status: number; json: T }> {
+  const r = await fetch(APP + path, { method, headers: { authorization: `Bearer ${KEY}` } })
   return { status: r.status, json: JSON.parse(await r.text()) }
 }
 
@@ -1453,67 +1420,23 @@ async function until(check: () => Promise<boolean>, ms: number, what: string) {
   throw new Error(`Gave up waiting ${ms / 1000} s for ${what}`)
 }
 
-async function api<T = unknown>(method: string, path: string, body?: unknown, cookie = ''): Promise<Reply<T>> {
+async function api<T = unknown>(method: string, path: string, body?: unknown, key = ''): Promise<Reply<T>> {
   const r = await fetch(APP + path, {
     method,
-    headers: { ...(body !== undefined && { 'content-type': 'application/json' }), ...(cookie && { cookie }) },
+    headers: { ...(body !== undefined && { 'content-type': 'application/json' }), ...(key && { authorization: `Bearer ${key}` }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   const text = await r.text()
-  const setCookie = r.headers.get('set-cookie') ?? ''
   try {
-    return { status: r.status, json: JSON.parse(text), cookie: setCookie.split(';')[0], setCookie }
+    return { status: r.status, json: JSON.parse(text) }
   } catch {
     throw new Error(`${method} ${path} answered ${r.status} without JSON: ${text.slice(0, 200)}`)
   }
 }
 
-async function oauthSignIn(cookie: string, name: string) {
-  const verifier = randomBytes(32).toString('base64url')
-  const clientId = await oauthRegister(name)
-  const tokens = await oauthToken({
-    grant_type: 'authorization_code',
-    code: await oauthCode(cookie, clientId, verifier),
-    code_verifier: verifier,
-    client_id: clientId,
-    redirect_uri: OAUTH_REDIRECT,
-  })
-  return { access: tokens.access_token ?? '', refresh: tokens.refresh_token ?? '', clientId }
-}
-
-async function oauthRegister(name: string) {
-  return (await api<{ client_id: string }>('POST', '/api/oauth/clients', { client_name: name, redirect_uris: [OAUTH_REDIRECT] })).json.client_id
-}
-
-async function oauthCode(cookie: string, clientId: string, verifier: string) {
-  const codeChallenge = createHash('sha256').update(verifier).digest('base64url')
-  const approved = await api<OAuthCode>(
-    'POST',
-    '/api/oauth/codes',
-    { clientId, redirectUri: OAUTH_REDIRECT, codeChallenge, codeChallengeMethod: 'S256', allow: true },
-    cookie,
-  )
-  return new URL(approved.json.redirect ?? '').searchParams.get('code') ?? ''
-}
-
-async function oauthToken(body: Record<string, string>): Promise<Tokens> {
-  const r = await fetch(`${APP}/api/oauth/token`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(body),
-  })
-  return JSON.parse(await r.text())
-}
-
-async function refreshed(st: State) {
-  const t = await oauthToken({ grant_type: 'refresh_token', refresh_token: st.oauth.refresh, client_id: st.oauth.clientId })
-  writeFileSync(`${RESULTS}/state.json`, JSON.stringify({ ...st, oauth: { ...st.oauth, refresh: t.refresh_token ?? st.oauth.refresh } }))
-  return t.access_token ?? ''
-}
-
-async function mcp(token: string): Promise<Call> {
+async function mcp(key: string): Promise<Call> {
   const client = new Client({ name: 'e2e', version: '1' })
-  await client.connect(new StreamableHTTPClientTransport(new URL(`${APP}/mcp`), { requestInit: { headers: { authorization: `Bearer ${token}` } } }))
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${APP}/mcp`), { requestInit: { headers: { authorization: `Bearer ${key}` } } }))
   return async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => {
     const r = CallToolResultSchema.parse(await client.callTool({ name, arguments: args }))
     const text = r.content.flatMap((c) => (c.type === 'text' ? [c.text] : [])).join('')
@@ -1540,7 +1463,11 @@ async function health(): Promise<Health & { status: number }> {
 }
 
 function agentdHealth() {
-  return new Promise<AgentdReplies['health']>((resolve, reject) => {
+  return agentdAsk('health') as Promise<AgentdReplies['health']>
+}
+
+function agentdAsk(cmd: 'health' | 'fence') {
+  return new Promise<unknown>((resolve, reject) => {
     const s = connect('/run/agentd/agentd.sock')
     let buf = ''
     s.setEncoding('utf8')
@@ -1553,7 +1480,7 @@ function agentdHealth() {
       }
     })
     s.on('error', reject)
-    s.end(JSON.stringify({ cmd: 'health' }) + '\n')
+    s.end(JSON.stringify({ cmd }) + '\n')
   })
 }
 
@@ -1636,10 +1563,10 @@ async function agentBrowser(a: AgentRef, ...args: string[]) {
   return (await sh('docker', ['exec', '-u', '10000:10000', `ag-${a.id}`, 'agent-browser', ...args], { maxBuffer: 8 << 20, timeout: 90_000 }).catch((e: { stdout?: string; stderr?: string }) => ({ stdout: `${e.stdout ?? ''}${e.stderr ?? ''}` }))).stdout
 }
 
-async function openStream(path: string, cookie: string) {
+async function openStream(path: string, key: string) {
   const abort = new AbortController()
   const events: { event: string; data: unknown }[] = []
-  const response = await fetch(APP + path, { headers: { cookie }, signal: abort.signal })
+  const response = await fetch(APP + path, { headers: { authorization: `Bearer ${key}` }, signal: abort.signal })
   const read = async () => {
     const reader = response.body?.getReader()
     const decoder = new TextDecoder()
@@ -1661,9 +1588,9 @@ async function openStream(path: string, cookie: string) {
   return { status: response.status, events, close: () => abort.abort() }
 }
 
-async function firstJpeg(path: string, cookie: string) {
+async function firstJpeg(path: string, key: string) {
   const abort = new AbortController()
-  const response = await fetch(APP + path, { headers: { cookie }, signal: abort.signal })
+  const response = await fetch(APP + path, { headers: { authorization: `Bearer ${key}` }, signal: abort.signal })
   const reader = response.body?.getReader()
   let seen = Buffer.alloc(0)
   for (let parts = []; reader && parts.length < 2 && seen.length < 8 << 20;) {
@@ -1751,6 +1678,15 @@ async function chat(a: AgentRef, text: string) {
   return reply
 }
 
+function messageText(body: string) {
+  try {
+    const message: { content?: { text?: string }[] } = JSON.parse(body)
+    return String(message.content?.[0]?.text ?? body)
+  } catch {
+    return body
+  }
+}
+
 function replyText(body: string) {
   try {
     const reply: ChatReply = JSON.parse(body)
@@ -1799,6 +1735,10 @@ async function asAgent(a: AgentRef, code: string, env: Record<string, string> = 
 
 async function gwRaw(from: AgentRef, token: string, body: object): Promise<RawReply> {
   return JSON.parse(await asAgent(from, GW, { URL: `http://10.200.${from.net}.1:8081/api/v1/mcp`, TOKEN: token, BODY: JSON.stringify(body) }))
+}
+
+async function viaBroker(from: AgentRef, { token, method, path, body }: { token: string; method: string; path: string; body?: object }): Promise<RawReply> {
+  return JSON.parse(await asAgent(from, BROKER, { URL: `http://10.200.${from.net}.1:8081${path}`, TOKEN: token, METHOD: method, BODY: body ? JSON.stringify(body) : '' }))
 }
 
 async function callTool(a: AgentRef, args: Record<string, unknown>) {
@@ -1855,12 +1795,15 @@ function targetsFor(a: AgentRef, other?: AgentRef) {
     gateway: { at: [`10.200.${a.net}.1`, 8081], agent: 'open' },
     internet_443: { at: ['1.1.1.1', 443], agent: 'open' },
     internet_by_name: { at: ['example.com', 443], agent: 'open' },
-    dashboard: { at: [`10.200.${a.net}.1`, 8787], agent: 'blocked' },
+    server_api: { at: [`10.200.${a.net}.1`, 8787], agent: 'blocked', server: 'ECONNREFUSED' },
+    server_other: { at: [`10.200.${a.net}.1`, SERVER_LISTENER_PORT], agent: 'blocked' },
     team_db: { at: ['172.30.0.10', 5432], agent: 'blocked' },
     lan_10: { at: ['10.99.0.10', 80], agent: 'blocked' },
+    lan_10_443: { at: ['10.99.0.10', 443], agent: 'blocked' },
     lan_172: { at: ['172.29.0.10', 80], agent: 'blocked' },
     lan_192: { at: ['192.168.77.10', 80], agent: 'blocked' },
     cloud_metadata: { at: ['169.254.169.254', 80], agent: 'blocked' },
+    cloud_metadata_443: { at: ['169.254.169.254', 443], agent: 'blocked' },
     internet_80: { at: ['1.1.1.1', 80], agent: 'blocked' },
     dns_other_resolver: { at: ['8.8.8.8', 53], agent: 'blocked' },
   }
@@ -1870,14 +1813,20 @@ function targetsFor(a: AgentRef, other?: AgentRef) {
 
 async function isolation(a: AgentRef, other?: AgentRef): Promise<Isolation> {
   const targets = targetsFor(a, other)
-  const p = await probe(a, Object.fromEntries(Object.entries(targets).map(([k, v]) => [k, v.at])))
+  const listener = createServer((s) => s.end()).listen(SERVER_LISTENER_PORT, '0.0.0.0')
+  await once(listener, 'listening')
   const fromServer: Record<string, string> = {}
-  for (const [k, v] of Object.entries(targets)) if (v.agent === 'blocked') fromServer[k] = await hostTcp(...v.at)
+  const scan = async () => {
+    const reply = await probe(a, Object.fromEntries(Object.entries(targets).map(([k, v]) => [k, v.at])))
+    for (const [k, v] of Object.entries(targets)) if (v.agent === 'blocked') fromServer[k] = await hostTcp(...v.at)
+    return reply
+  }
+  const p = await scan().finally(() => listener.close())
   const rows = Object.entries(targets).map(([k, v]) => ({
     target: `${k} ${v.at.join(':')}`,
     agent: p.net[k],
     from_server: fromServer[k] ?? '-',
-    ok: v.agent === 'open' ? p.net[k] === 'open' : p.net[k] !== 'open' && fromServer[k] === 'open',
+    ok: v.agent === 'open' ? p.net[k] === 'open' : p.net[k] === 'timeout' && fromServer[k] === (v.server ?? 'open'),
   }))
   const udpFromServer = await hostUdpDns('8.8.8.8')
   rows.push(
@@ -1893,22 +1842,12 @@ async function isolation(a: AgentRef, other?: AgentRef): Promise<Isolation> {
 }
 
 async function tlsProbe(dataDir: string, dsn: string, trustCa: boolean) {
-  const script = `import { postgres } from "${OPENHUT}/packages/app/src/integrations/postgres/postgres.ts";
+  const script = `import { postgres } from "${OPENHUT}/packages/runtime/src/server/integrations/postgres/postgres.ts";
      try { const r = await postgres.query({ dsn: process.env.DSN, sql: "select ssl from pg_stat_ssl where pid = pg_backend_pid()" }); console.log("ok " + JSON.stringify(r.rows)); }
      catch (e) { console.log("error " + e.message); }`
   const env = { ...process.env, OPENHUT_DATA: dataDir, DSN: dsn, ...(trustCa && { NODE_EXTRA_CA_CERTS: '/root/pgcerts/ca.crt' }) }
   const { stdout } = await sh('node', ['--input-type=module', '-e', script], { env })
   return stdout.trim().split('\n').at(-1) ?? ''
-}
-
-async function timedSignIn(email: string) {
-  const t = Date.now()
-  await api('POST', '/api/sessions', { email, password: 'wrong-password-123' })
-  return Date.now() - t
-}
-
-function average(xs: number[]) {
-  return xs.reduce((a, b) => a + b, 0) / xs.length
 }
 
 function count(xs: string[]) {
@@ -1919,10 +1858,6 @@ function count(xs: string[]) {
 
 function processCount(pids: string) {
   return pids.split(/\s+/).filter(Boolean).length
-}
-
-function inviteTokenOf(invite: Invite) {
-  return String(invite.link).split('/invite/')[1] ?? ''
 }
 
 function sha(s: string) {
@@ -1952,14 +1887,12 @@ export type PhaseResults = { phase: string; at: string; passed: number; failed: 
 
 type Outcome = { actual: unknown; pass: boolean }
 type Call = <T = unknown>(name: string, args?: Record<string, unknown>) => Promise<T>
-type Reply<T> = { status: number; json: T & Partial<ApiError>; cookie: string; setCookie: string }
-type Tokens = { access_token?: string; refresh_token?: string; error?: string; error_description?: string }
+type Reply<T> = { status: number; json: T & Partial<ApiError> }
 type AgentRef = Pick<Agent, 'id' | 'net'>
 type Firewall = Record<string, string>
 type State = {
   dev: AgentRef
   conn: string
-  oauth: { refresh: string; clientId: string }
   envSha: string
   pin: string
   fw: Firewall
@@ -1972,7 +1905,7 @@ type State = {
 type ChatReply = { choices?: { message?: { content?: string } }[] }
 type ToolResult = { content?: { text?: string }[]; isError?: boolean }
 type RawReply = { status: number; body: string }
-type Target = { at: [string, number]; agent: 'open' | 'blocked' }
+type Target = { at: [string, number]; agent: 'open' | 'blocked'; server?: string }
 type Probe = {
   uid: number
   kernel: string

@@ -7,3 +7,9 @@ dist/
 /BUILD
 packages/e2e/results/
 .wrangler/
+packages/desktop/release/
+.DS_Store
+__pycache__/
+/bin/claude
+/bin/claude-darwin
+.data-*/

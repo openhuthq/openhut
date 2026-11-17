@@ -58,6 +58,9 @@ def _resolve(command, env):
 PLUGIN_ID = "claude-subscription-directsdk-experimental"
 TELEMETRY_SETTING = "claude_code_telemetry"
 CONFIG_DIR_SETTING = "claude_config_dir"
+# OpenHut: where the relay sends native's Messages requests; empty means Anthropic.
+RELAY_UPSTREAM_SETTING = "relay_upstream"
+ANTHROPIC_UPSTREAM = "https://api.anthropic.com"
 # Any one of these turns off Claude Code's feature-flag fetch, and with it every model its picker
 # only offers through a flag (#86: 11 models become 5). Off only when the user turns the setting off.
 QUIET_TRAFFIC = {"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", "DISABLE_TELEMETRY": "1", "DISABLE_ERROR_REPORTING": "1"}
@@ -109,6 +112,17 @@ def _setting(key, default=None):
             return default
         value = value[segment]
     return value
+
+
+def relay_upstream():
+    """The ``relay_upstream`` plugin setting, else Anthropic (OpenHut patch)."""
+    value = _setting(RELAY_UPSTREAM_SETTING)
+    return value.strip() if isinstance(value, str) and value.strip() else ANTHROPIC_UPSTREAM
+
+
+def relay_gate(timeout, upstream=None, queried=None):
+    """An Admission to ``upstream`` if given (a caller's own override), else to the relay_upstream setting (OpenHut patch)."""
+    return Admission(upstream or relay_upstream(), timeout, queried=queried, configured=not upstream)
 
 
 def telemetry_enabled():
@@ -199,7 +213,7 @@ def discover_models(command=None, env=None, timeout=40):
     # stdin, so native has no user turn to query; its debug log shows bootstrap, MCP-directory and
     # telemetry fetches and no Messages request. An inherited auth/backend override keeps the relay,
     # since the request path refuses those environments anyway and the bearer must not leave for them.
-    gate = None if _first_party(child) else Admission("https://api.anthropic.com", timeout)
+    gate = None if _first_party(child) else relay_gate(timeout)
     try:
         if gate is not None:
             child["ANTHROPIC_BASE_URL"] = gate.url
@@ -299,7 +313,7 @@ def fetch_usage(command=None, env=None, timeout=8):
     if resolved is None:
         return None, INSTALL_HINT
     child = _child_env(env)
-    gate = Admission("https://api.anthropic.com", timeout)
+    gate = relay_gate(timeout)
     try:
         child["ANTHROPIC_BASE_URL"] = gate.url
         argv = resolved + ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",

@@ -3,7 +3,7 @@
 The code carries no comments (Skyfleet's coding style), so the reasons live here.
 
 ## Processes and ports
-- `:8787` is for people: the JSON API, the web app and the control MCP (`/mcp`). `:8081` is for agents only: the
+- `:8787` is for the app: the JSON API, the web app and the control MCP (`/mcp`). `:8081` is for agents only: the
   gateway. The firewall drops everyone else on 8081.
 - The app never touches Docker. agentd does, as root, on a Unix socket with a fixed command set, one command at a
   time per agent.
@@ -20,34 +20,32 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
   transaction at a time (PGlite is single-user). `install_setting` is created at import time because settings and the
   auth secret load then.
 - To read a running server's database, copy `$OPENHUT_DATA/pglite` (default `/data/app/pglite`) to a temp dir and open
-  the copy with `PGlite.create(dir)` from `/opt/openhut/packages/app`. Don't open the live dir, because the server
-  holds it single-user. People are in `person` (`email`, `role`; there's one `owner`).
+  the copy with `PGlite.create(dir)` from `/opt/openhut/packages/runtime`. Don't open the live dir, because the server
+  holds it single-user. The one owner is in `person`.
 - `auth_secret` is created once; it keys every seal (AES-256-GCM) and every agent token.
-- Agent token: `<id>.<hmac>` = HMAC(auth_secret, id). Nothing is stored; a deleted agent's token matches no row. The
-  gateway also requires the call to come from the agent's own `/24`.
-- Passwords: scrypt off the event loop (so sign-ins can't stall the gateway). An unknown name hashes a dummy, so
-  timing doesn't reveal which names exist.
+- Agent token: `<id>.<hmac>` = HMAC(auth_secret, id), or HMAC(auth_secret, `id:epoch`) once `agent.token_epoch` was bumped
+  by a revoke. Nothing else is stored; a deleted agent's token matches no row. The token is the gateway's only check
+  (`decisions/auth-is-local-socket-or-tailscale.md`) and the stand-in for every brokered key (`decisions/credentials-broker.md`).
 - `connection_event` has no foreign keys: calls stay in the audit after their agent or connection is deleted.
 
-## People
-- The first person, holding the installer's setup code, becomes the owner. A partial unique index on `role='owner'`
-  makes a second owner impossible even if two sign-ups race. The owner's address becomes the Public URL until Admin
-  changes it; invite links and the MCP prompt use it.
-- Invites: only the token's hash is stored. Accepting is one transaction whose conditional update
-  (`used_at is null and expires_at > now()`) is the single-use check.
-- Removing a person keeps their row (agents and connections point at it) but deletes their sessions, OAuth grants and
-  open invites, and stops their agents. Every access check treats a removed person as absent, so their agents lose
-  every connection on the next call.
-- Pages never send a Referer and can't be framed: setup and invite links carry secrets in the URL.
-- The app trusts `X-Forwarded-Proto`/`-Host` only from 127.0.0.1 and ::1, so a TLS proxy on the same server (Caddy, say) makes the owner's first visit record an `https://` Public URL. Nobody else can spoof them.
-- The control MCP takes only OAuth access tokens, never the session cookie, so another site can't drive it through a
-  browser. Its 401 points MCP clients at the OAuth metadata. Its tools call the HTTP API in-process (`app.inject`), so
-  they get the same validation, permissions and response shapes as the dashboard.
+## Identity
+- `team/identity.ts` (`decisions/app-aggregates-runtimes.md`). There are no people: every request is the one owner,
+  a `person` row created on first use from `os.userInfo().username` (a partial unique index on `role='owner'` keeps it
+  one even if two first requests race). `owner_id` and `person_id` columns stay and point at it; `migrate()` moves rows a
+  removed teammate owned from before 2026-11-17 to the owner.
+- Local (`OPENHUT_SOCKET`): every request on the 0600 socket is the owner.
+- Remote: the server refuses to start without `OPENHUT_CLIENT_KEY_SHA256` (64 hex). A request is the owner only with
+  `Authorization: Bearer <key>` whose SHA-256 (of the key string as sent) matches, compared with `timingSafeEqual`;
+  otherwise 401. The server binds `OPENHUT_HOST` (127.0.0.1, or 0.0.0.0 inside the curl install's container so the
+  host's published 127.0.0.1:8787 reaches it), and the tailnet reaches it through `tailscale serve`.
+- The connection sign-in callback carries its own state, not the key. Its address is the runtime's tailnet URL (`tailnetUrl`, which the app sets when it adds the computer, `PATCH /api/admin`), else `http://127.0.0.1:<port>`, which the Mac app turns into `app://openhut`.
+- The control MCP identifies callers like the API. Its tools call the HTTP API in-process (`app.inject`) with the
+  caller's `Authorization` header, so they get the same validation, permissions and response shapes as the app.
+- Telemetry never carries an email (`withoutEmails` on every event): the owner's `email` is only a Unix username now.
 
 ## Connections and the gateway
-- A person can use a connection they own or one shared with everyone. An agent reaches a connection only while it
-  holds a grant and its owner can use it, checked live on every call; un-sharing or removing the owner cuts it off
-  at once, and grants need no restart.
+- An agent reaches a connection only while it holds a grant and its owner can use it, checked live on every call;
+  grants need no restart.
 - Agents are told which apps they can reach (owner, 2026-11-16): `SOUL.md` ends with one line naming the granted
   connections and pointing at `list_tools`. Without it an agent asked for an Excalidraw drawing never looked at its
   tools and wrote its own upload code. Only names and kinds go in, read from the database, so rendering needs no
@@ -60,6 +58,9 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
   login through an agent.
 - The gateway is plain `node:http`, so its limits are explicit: 8 requests in flight per agent, 1 MB bodies, headers
   within 10 s, 60 s per request; at most 2 calls per agent per connection at once.
+- `/u/<name>/*` is the broker (`gateway/broker.ts`): the Claude seat, Codex and Telegram reach their APIs only through it,
+  with the real key added there. It streams with a 120 s idle timeout instead of the 1 MB / 60 s caps, inside the same
+  8-per-agent limit. `OPENHUT_ANTHROPIC_API` and `OPENHUT_TELEGRAM_API` move those origins for tests.
 - Postgres DSNs are parsed into explicit fields; any query parameter but `sslmode` is refused, because `pg` lets them
   override the host (`?host=`) or read local files (`?sslrootcert=`). `sslmode` keeps libpq's meanings, `prefer` by
   default: `pg` has no prefer/allow, so the connector tries TLS without verification, then plain (`allow` the other way).
@@ -89,7 +90,7 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 
 ## Skills
 - The agent page shows an agent's skills (`GET /api/skills?agentId=`, learned first) as a full-width grid of cards under the two columns, filtered to Built in by default. Icons come from each skill's Hermes category folder; the rules are in `DESIGN.md`, Agent page. A skill opens in the same dialog as the instructions and saves with `PATCH /api/skills/:id`; ids are `<agentId>~<folder>~<folder>`. Anyone who can see the agent can read a skill; saving needs the right to change the agent. Skills can't be created from the dashboard. A learned skill can be deleted from its dialog (`DELETE /api/skills/:id`, behind a confirm); built-in ones can't, since they come with Hermes (owner, 2026-11-15).
-- The files are the agent's own, so agentd (root) treats them as hostile (`packages/agentd/src/skills.ts`): it opens with `O_NOFOLLOW`, then checks through `/proc/self/fd` that the open file is a plain, singly-linked file at exactly that path under `/data/agents/<id>/skills`, and only then reads or rewrites it in place (never creates). A symlinked file or folder, a hard link, or a swapped `skills` folder reads as "gone". The tests need Linux, so they are skipped on a Mac and run in CI.
+- The files are the agent's own, so agentd (root) treats them as hostile (`packages/runtime/src/agentd/skills.ts`): it opens with `O_NOFOLLOW`, then checks through `/proc/self/fd` that the open file is a plain, singly-linked file at exactly that path under `/data/agents/<id>/skills`, and only then reads or rewrites it in place (never creates). A symlinked file or folder, a hard link, or a swapped `skills` folder reads as "gone". The tests need Linux, so they are skipped on a Mac and run in CI.
 - Deleting a skill runs `rm -rf` inside a throwaway `docker run --rm` of the agent image (runsc, uid 10000, no network, only the agent's home mounted). agentd can't delete the folder itself safely: every agent is uid 10000 on the host, so a `skills` folder the agent swapped for a symlink could point root, or uid 10000, at another agent's files. Inside the container a symlink can only resolve within that agent's own home.
 
 ## Memory
@@ -103,8 +104,8 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 - The reply is relayed as the AI SDK UI message stream: text parts, `data-tool` for each `hermes.tool.progress` event, then `data-calls` with the `connection_event` rows the agent wrote during the turn (allowed, denied, failed). The answer is saved in `onEnd`, also when the person stops it.
 - `health` comes from `GET /v1/models` on the agent (3 s timeout, cached 5 s, re-probed by reconcile every 30 s). Starting until it has failed for 3 minutes in a row, then not answering. `status` stays the container state, which the e2e run checks.
 - Admin › Containers › View opens a dialog of cards with `docker ps -a` for agent containers (agentd's read-only `containers` command) next to each agent's wanted state; rows that disagree are tinted. Agents with no container show as `none`, and reconcile recreates the container for one that should run. In Claude mode with no seat, health is not answering: Hermes is up but its model can't sign in.
-- An agent's "Computer" (owner, 2026-11-13) is `agent.size`: `standard` 1 GB / 1 CPU (what every agent had before), `large` 2 GB / 2 CPUs, `xlarge` 4 GB / 2 CPUs. agentd owns the numbers (`SIZES`) and accepts only the name, so the app can never pass raw limits; `SIZES` in `common/agents/agent.ts` repeats them as display text and must be kept in step. The container carries a `openhut.size` label and `apply` recreates it when the label differs (a missing label counts as `standard`), the same path as a `SPEC` bump. Nothing checks the sizes against the host's RAM. Anyone who can edit the agent can resize it.
-- `OPENHUT_AGENT_API` points every agent at one URL; dev (`scripts/fake-agentd.ts` serves a fake Hermes on :18642) and the unit tests use it. `PORT` moves the app off 8787.
+- Every agent gets 1 GB and 1 CPU (4 GB with Browser on); agentd hardcodes it (`AGENT_MEMORY_MIB`, `AGENT_CPUS`) and the API takes no size. The per-agent "Computer" size (owner, 2026-11-13: Standard, Large, Extra large) was removed on 2026-11-17 (owner): the `agent.size` column stays in the database unread, an old move bundle's `size` is ignored, and `SPEC` went to `4` so a sandbox made Large or Extra large is recreated at 1 GB on its next `apply`.
+- `OPENHUT_AGENT_API` points every agent at one URL; dev (`scripts/dev.ts` serves a fake Hermes on :18642) and the unit tests use it. `PORT` moves the app off 8787.
 
 ## Claude seat from the browser
 - Admin › Claude seat › Set up opens a blank tab on the click (so the popup isn't blocked), then runs the bundled Claude Code's `setup-token` on the server (`admin/seat-sign-in.ts`), the way Skyfleet runs `claude auth login` (`skyfleet brain/decisions/sign-in-to-claude-from-the-web.md`). The dashboard opens its claude.ai link; the pasted code is typed into it and the 1-year token it prints becomes the seat, as if pasted.
@@ -113,7 +114,7 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 ## Conventions the code relies on
 - Wording (owner, 2026-11-13): status text, notes and error messages don't repeat "OpenHut"; they say "the app", "this server" or "it". The name stays on the logo, page titles, sign-in and invite, and in text an outside app or assistant reads (the setup prompt, MCP and OAuth messages, the Slack manifest).
 - Every agentd reply is validated with a Zod schema per command (`platform/agentd.ts`); a reply that doesn't match is a
-  502 that says agentd and the app may be different releases. Keep the fake agentd's replies in step. agentd's own
+  502 that says agentd and the app may be different releases. agentd's own
   follow-up work (the restart after WhatsApp pairing) goes through the same per-agent queue as a closure, not a
   socket command.
 - `findRow` (`platform/db.ts`) is a raw `select *`: Kysely's builder can't take the table as a type parameter. It
@@ -122,8 +123,7 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
 - Updates pass the parsed patch straight to `.set()`: Kysely skips undefined fields, and `atLeastOneField` runs on the
   parsed body (unknown keys already stripped), so an empty patch is a 400 and never reaches SQL.
 - Audit events go through `record({ action, actor, target })` (evlog), e.g. `person.removed`, `agent.created`,
-  `connection.shared`, `oauth.app_connected`. Background work logs structured fields (`build.applied {from, to}`,
+  `connection.shared`. Background work logs structured fields (`build.applied {from, to}`,
   `reconcile.started {agent}`), never free text; tests match on those fields.
-- OAuth endpoints answer RFC 6749 errors (`{ error: 'invalid_grant', error_description }`); everything else uses the
-  Stripe error shape.
+- Errors use the Stripe error shape.
 

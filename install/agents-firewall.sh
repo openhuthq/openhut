@@ -25,6 +25,7 @@ iptables-restore --noflush <<RULES
 -A AGENT-IN -s $AGENTS -p tcp --dport 8081 --syn -m connlimit --connlimit-above 16 --connlimit-mask 24 -j DROP
 -A AGENT-IN -s $AGENTS -p tcp --dport 8081 -j ACCEPT
 -A AGENT-IN -s $AGENTS -j DROP
+-A AGENT-IN -i lo -j RETURN
 -A AGENT-IN -p tcp --dport 8081 -j DROP
 COMMIT
 RULES

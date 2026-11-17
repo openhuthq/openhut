@@ -1,0 +1,28 @@
+{
+  "name": "@openhut/runtime",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server/app.ts",
+    "typecheck": "tsc -p .",
+    "test": "node --test --test-force-exit --test-concurrency=1 --import ./test/server/env.ts \"test/server/**/*.test.ts\" && node --test \"test/agentd/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@openhut/common": "*",
+    "@modelcontextprotocol/sdk": "1.30.1",
+    "ai": "7.0.172",
+    "evlog": "2.29.0",
+    "fastify": "5.12.5",
+    "kysely": "0.29.6",
+    "microsandbox": "0.7.15",
+    "pg": "8.23.0",
+    "undici": "7.30.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "@types/pg": "8.23.1"
+  }
+}

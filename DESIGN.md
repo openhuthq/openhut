@@ -1,6 +1,6 @@
 # Design
 
-How the dashboard (`packages/web`) looks and why. The look lives in the shared components in `packages/web/src/components/ui/` (Tailwind and cva variants over Base UI) and the tokens in `packages/web/src/index.css`; this file is the rules behind them.
+How the dashboard (`packages/desktop/src/renderer`) looks and why. The look lives in the shared components in `packages/desktop/src/renderer/src/components/ui/` (Tailwind and cva variants over Base UI) and the tokens in `packages/desktop/src/renderer/src/index.css`; this file is the rules behind them.
 
 ## Buttons
 
@@ -27,7 +27,7 @@ Rejected: adding an accent colour so borderless accent text could carry the seco
 
 All variants share: active `scale(.96)`, the global 2px focus ring, disabled at 50% opacity with no hover change.
 
-Two sizes. 32px (default) in page headers, dialog and popover footers, empty states. 28px (`sm`) inside cards, rows, tables, inline forms, setup steps and chat. Both use 14px text. The 44px sign-in button (`lg`) and the 32px composer send button (`variant="send"`, radius 10px) are the only exceptions.
+Two sizes. 32px (default) in page headers, dialog and popover footers, empty states. 28px (`sm`) inside cards, rows, tables, inline forms, setup steps and chat. Both use 14px text. The 32px composer send button (`variant="send"`, radius 10px) is the only exception.
 
 ### Rules
 
@@ -35,7 +35,7 @@ Two sizes. 32px (default) in page headers, dialog and popover footers, empty sta
 2. A row never holds a primary. Row actions are ghost `sm`.
 3. Every button in one toolbar has the same anatomy: all icon + label, or all label only.
 4. Header buttons are icon + label. Row, footer and inline-form buttons are label only, except the external-link and copy icons.
-5. Icon-only is for Close, Toggle sidebar, Rename, More, Send/Stop, and a table row's single repeated action (trash to remove a person, × to revoke an invite or take a connection off an agent), so a long table isn't a column of the same word. Each has `aria-label` and `title`.
+5. Icon-only is for Close, Toggle sidebar, Rename, More, Send/Stop, and a table row's single repeated action (trash to remove a person, × to take a connection off an agent), so a long table isn't a column of the same word. Each has `aria-label` and `title`.
 6. An action is red if and only if it opens a confirm, and it gets a confirm if and only if one click cannot undo it.
 7. The trigger is red text; the button inside the confirm is red fill. Red fill appears nowhere else.
 8. A copy button confirms in place: `CopyButton` swaps its icon for a checkmark for 1.5s, no toast. Only a failed copy toasts.
@@ -69,15 +69,11 @@ Two sizes. 32px (default) in page headers, dialog and popover footers, empty sta
 | Chat | "Open agent settings" (empty state) | secondary | primary, labelled "Settings" |
 | Connection | Delete | white bordered, red text | red text, no border |
 | Tailscale | Disconnect | trash icon | label only |
-| People | Remove (person) | black word, though it confirms | trash icon, red on hover |
-| People | Revoke (invite) | black word | × icon |
-| People | Invite popover | role select, link shown in a page banner | role cards, then the link and Copy link inside the popover |
 | Agent | Connections | a checkbox per connection | only the agent's connections, × to remove, an Add menu for the rest |
 | Connection | Remove (grant) | black word | × icon |
 | Admin | row Set up / Edit / View | `btn row` 30px | ghost `sm` 28px |
 | Admin | inline Cancel | white bordered beside a white bordered input | soft fill |
 | Admin | Update now | primary `sm` (a second primary when a form is open) | secondary `sm` |
-| Invite | Sign in instead | secondary, though it is the only action | primary |
 
 ### Code
 
@@ -93,8 +89,8 @@ A ghost button at rest is bare text. In a row ("Set up", "Remove") that is the c
 
 ## Icons and type
 
-- Every UI icon is Hugeicons (`@hugeicons/react` + `@hugeicons/core-free-icons`, free stroke set) through `components/icons.tsx` and `status-badge.tsx`; brand marks for other apps stay in `brand-icons.ts`. Don't hand-draw an SVG icon (owner, 2026-11-14).
-- Statuses in a list (automation runs and the like) are Linear-style circle icons, not coloured dots. The shape carries the state, so it reads without colour: running `Loading02Icon` (amber, spinning, so every status keeps the circle shape), done `CheckmarkCircle02Icon` (green), nothing to do `CircleIcon` (grey), skipped or paused `DashedLineCircleIcon` (grey), failed `CancelCircleIcon` (red). They live with the badges in `status-badge.tsx` (owner, 2026-11-15).
+- Every UI icon is Hugeicons (`@hugeicons/react` + `@hugeicons/core-free-icons`, free stroke set) through `components/icons.tsx` and `status-badge.tsx`; brand marks for other apps stay in `brand-icons.ts`. Don't hand-draw an SVG icon (owner, 2026-11-14). Computers too are plain line icons: a laptop for This Mac, a server for a Linux computer, a plus for Add a computer (owner, 2026-11-17).
+- Statuses in a list are Linear-style circle icons, not coloured dots. The shape carries the state, so it reads without colour: running `Loading02Icon` (amber, spinning, so every status keeps the circle shape), done `CheckmarkCircle02Icon` (green), nothing to do `CircleIcon` (grey), skipped or paused `DashedLineCircleIcon` (grey), failed `CancelCircleIcon` (red). They live with the badges in `status-badge.tsx` (owner, 2026-11-15).
 - Text is 14px across the app, sidebar included. Only small labels and counts (12px), code and tool-call chips (12.5px) and headings differ.
 
 ## Agent page
@@ -106,5 +102,43 @@ Status: in the code since 2026-11-14.
 - No scroll box inside the page. A nested scroller ended below the fold, trapped the wheel and, with classic scrollbars, put a 15px track inside the box's border. If a list is too long, fold it, don't scroll it.
 - Skills are the Agents page's grid of tile `Card`s, so every card has the same width and a two-line description. A segmented filter (All / Learned / Built in, Learned selected) sits in the section head, and 12 cards show until "Show all" (12 fills 1, 2, 3 or 4 columns evenly).
 - A skill's icon: a learned skill gets the ink sparkle tile; a built-in one gets the brand mark when its name starts with a brand in `brand-icons.ts` (github, google, claude), else the Hugeicon for its Hermes category, the folder in `skill.path` (`skillIcon` in `icons.tsx`), else the bolt.
-- Memory is one row in the facts box ("5 entries · Manage") that opens a sheet with one list of everything the agent saved, people first. Automations sit under Instructions in the left column, so both columns end level.
-- Detail that belongs to one thing on a page (memory, an automation and its runs) opens in a `Sheet` (`components/ui/sheet.tsx`): the same Base UI dialog as `Dialog`, pinned to the right edge, full height, 560px, sliding in 2.5rem with a fade over 200ms and a light blurred backdrop, like shadcn's Sheet. Which sheet is open lives in the URL.
+- Memory is one row in the facts box ("5 entries · Manage") that opens a sheet with one list of everything the agent saved, people first.
+- Detail that belongs to one thing on a page (an agent's memory) opens in a `Sheet` (`components/ui/sheet.tsx`): the same Base UI dialog as `Dialog`, pinned to the right edge, full height, 560px, sliding in 2.5rem with a fade over 200ms and a light blurred backdrop, like shadcn's Sheet. Which sheet is open lives in the URL.
+
+## Desktop app
+
+Status: in the code since 2026-11-17. Surface values are DuskBot's Daylight skin (`styles.css`, `[data-skin="daylight"]`), its Settings sheet (`styles/settings.css`) and Connect apps (`connect-apps.css`), translated to our tokens in `index.css`.
+
+### Direction: playful identity, calm chrome
+
+DuskBot's look (owner, 2026-11-17). Text and chrome are calm: ink text at a few sizes, small sentence-case titles, grey pill actions, white and light-grey surfaces, faint hairlines, no shadows except floating surfaces, no display font, no uppercase labels, no mono body copy. Personality comes from the things that identify something: agent faces, full-colour brand logos, status dots.
+
+### Colour is for identity, not decoration
+
+Owner, 2026-11-17, after a fully coloured pass read as too much.
+
+- Colour only for identity: brand logos (Slack, WhatsApp, Telegram, Gmail, Claude, OpenAI, every app in Connections), agent faces, status dots (green running, amber starting, red failing, grey off). The Claude sparkle beside a model name is a brand mark and stays.
+- Actions are plain: Stop/Start, Clear chat, Delete and every other icon button are 16px Hugeicons in ink at 1.6 stroke, 28 to 32px hit area, hover fill only. Delete turns red only on hover.
+- Settings icons carry one soft tint each; everywhere else colour is identity only (owner, 2026-11-17). In the Settings nav and Settings rows each line icon's stroke takes one calm hue from the `--hue-*` tokens in `index.css` (about 65% of the bright brand chroma): General slate, Updates sky, Computers blue, Models violet, MCP teal; open at login green, keep awake and notifications amber, failures red, the data folder blue, usage violet, the keychain note amber. One colour per icon, no fills, no tiles. The app is light-only (`color-scheme: light`), so the hues have no dark variants yet; add them with the dark theme.
+- Everywhere else row icons are plain line icons in `--mute`: the panel's rows (Model, Runs on, Memory, Skills, Browser, Run code), the chat and the sidebar.
+
+| Thing | Rule | Token / value |
+|---|---|---|
+| Panes | The sidebar and the agent's right panel share one tint; the chat between them is white. | `--sidebar` #f7f7f7 (Dusk panel), chat `--card` #fff |
+| Pane edges | One hairline between panes, no shadow. | `--hair` black 8% at 0.5px (Dusk `--color-edge` #1c1c1c14, 0.5px) |
+| Hover / selected | Rows hover with a fill, the selected row is a darker fill: no white card, no shadow. | `--hover` black 3.5%, `--picked` black 8% (Dusk hover ink/3.5, selected #e4e4e4) |
+| Surfaces on the tint | The Connections pill and the gear: white, hairline border, hover tints the white. | `SURFACE` in `kit.tsx` (Dusk `bg-composer` + `border-ink/[0.08]`) |
+| Shadows | Only floating surfaces lift: dialogs, menus, popovers, tooltips, toasts. Cards, rows, panels and the composer have none. | `shadow-dialog`, `shadow-menu`, `shadow-pop` |
+| Radius | 6px small (chips, inline buttons), 8px rows, cards, buttons, inputs, selects, alerts and tiles, 12px dialogs and chat bubbles. Nothing rounder, except circles for avatars, dots and switches, and the pill actions inside dialogs. | `rounded-md`, `rounded-lg`, `rounded-xl` |
+| Text | Text is ink by default; muted only for timestamps, counts, hints, labels and placeholders. Secondary copy that stays is `--body` or the darker `--mute`. | `--mute` 45%, `--mute-2` 56% lightness |
+| Status chips | A coloured dot and ink text ("Running", "Up to date", "Signed in"), never coloured text. | `Status` in `kit.tsx` |
+| Scrollbars | Thin, no track, shown on hover. Dialog panes hide theirs (`no-scrollbar`) and fade 16px at the bottom (`fade-b`); the chat fades 24px under its header (`fade-t`). The right panel keeps `scrollbar-gutter: stable` so its edge never moves. | global rule and utilities in `index.css` |
+| Focus | Rings only for keyboard (`:focus-visible`), never with a pointer, and none on anything behind an open dialog. | `index.css` |
+| Motion | The sidebar slides with DuskBot's spring (240ms width, content fades and moves 8px in 160ms); everything stops under reduced motion. | `--ease-spring` in `index.css` |
+
+- **Sidebar.** 280px. Header buttons are borderless 32px icons with 8px corners and a hover fill only (`ICON_BUTTON` in `kit.tsx`), whatever the state. Each agent row is the face with its status dot, the name, and one line; with more than one computer the line starts with the agent's computer ("beelink · …"), and agents on an offline computer are greyed and say "Offline". Bottom: a gear (Settings, ⌘,) and the Connections pill, both 40px. Collapsed (⌘\) the sidebar is hidden entirely, as in Claude, ChatGPT, Linear and Notion: the traffic lights sit over the chat header, which gains expand, search and new agent right after them (84px in). ⌘K searches, ⌘1–9 opens the nth agent.
+- **Chat.** The header is the face and the name, with Clear chat on the right (a 28px eraser, only when there are messages, confirming "Clear this chat? Memory stays." in a small popover). User bubbles are `--soft` with ink text, 12/12/4/12 corners. The composer is one row: text and send. An agent that can't answer shows only its face, one 20px semibold line and a 14px sentence in the middle ("Ops isn't answering" / "It restarts on its own, or Stop and Start it from the panel."), with the raw error behind a "Details" disclosure; the amber banner above the composer only appears once there are messages. Below 1100pt the right panel hides itself and a small button in the chat header brings it back.
+- **Right panel.** Header: face, name (18px semibold, sentence case) and status, with Stop/Start and Delete as 28px icon buttons on the name line, each with a tooltip; Delete confirms in a small popover from the icon ("Delete Ops? Its memory goes too."). Rows like the sidebar's, about 32px, 13px text, plain muted icon, value in ink on the right; every trailing control ends on the panel's 16px padding. Section labels are 12px sentence-case muted ("What it does", "Talk to it on", "Can use", "Computer"). Channels are a 16px brand glyph, the name, "Connected" in muted when connected, else a grey "Set up" pill. "Runs on" lists the computers; another online one is "Move to …" and moves the agent in place. "Can use" offers "Add to <computer>" for a connection that isn't on the agent's computer. The bottom "Computer" section is Browser and Run code.
+- **Settings and Connections are dialogs** over the app, never pages, one fixed size so nothing jumps between tabs: DuskBot's sheet, min(900px, 100vw − 32px) by min(700px, 100vh − 96px), 12px corners, the app dimmed behind, Esc or the round × (32px, 10px from the corner) closes and returns to the agent that was open. The URL keeps `/settings/:tab` and `/connections/*`. Inside, the type is DuskBot's: 13px/18px body.
+- **Settings.** A 198px nav (16px 12px padding, 2px gaps, items 7px 9px, 8px corners, 13px/18px, `--picked` when selected) with General, Updates, Computers, Models, MCP. The pane title sits above the scroller (26px top, 34px in, 15px/22px medium); the pane scrolls with 18px 24px 40px padding and 36px between sections. Every tab uses one row (`Row` in `settings/kit.tsx`): a 24px icon slot, 16px gap, a 13px/18px title over a 12px/16px muted line, the trailing item flush to the same right edge, 48px minimum, 9px 10px padding. Section labels are 12px muted, 10px in. Row actions are grey pills (26px, 12px text, 10px padding). Computers is one list, no detail pages; a computer that's being added or updated is an expandable row (chevron, the whole row toggles, 200ms open, failed rows open by default, the open state survives closing Settings), every other row is not: each computer's line icon (laptop or server, soft blue) with its status dot, "Online · 4 agents · OpenHut 0.3.0", "✓ Current" on This Mac and a grey "Remove" pill on the others, which confirms in the row itself: the second line becomes "Its agents stop and leave this list." and the pills become Cancel and a red Remove; Esc or a click elsewhere cancels (updates live in Settings › Updates); "Add a computer" is a row with a plain plus in soft green. It opens a step inside the pane (never a dialog on the dialog) with two rows: Tailscale and Others. Tailscale shows one of four states: not installed (logo, "Install Tailscale to reach your other computers", a Get Tailscale pill and "I've installed it"), stopped or signed out ("Open Tailscale and sign in"), no eligible computers, or the peer list, where computers already added say Added. Others is a name, https address and key. Adding never blocks: picking a computer returns to the list at once, where it shows as "Adding… · <step> (step n of 6)" with a spinner; clicking the row shows the steps (check, spinner, pending dot), the elapsed time and the installer log behind Details, colour codes stripped. The install keeps running with Settings closed; when it finishes the row becomes the normal Online computer and macOS notifies if the app is in the background. A failure gets a red dot, one plain sentence for the known cases (already installing, approve the Tailscale check, can't reach it, key refused, didn't start in 2 minutes, anything else), a Try again pill and a ⋯ menu with Remove; the raw text stays under Details. "Already installing" retries itself once after a minute with a countdown. Models: Claude is the only live subscription (its 5-hour usage and which computers hold it under the name); Codex says "Coming soon" everywhere, model pickers included. MCP: one copyable command per computer.
+- **Connections.** DuskBot's Connect apps: 22px 32px 28px padding, a 17px/24px title with "N connected ›" on the right, a search field, category chips (28px, 13px, 10px padding, 8px apart, selected one black), 12px muted group labels, and a two-column grid of apps (24px logo, 13px medium name over a 13px muted line that wraps to two lines at most, a 26px grey "Connect" pill). With more than one computer, each connection is listed once with a small chip per computer (grey dot when offline). A connection's sheet replaces the dialog's body with a back arrow; a sheet that creates something asks "Put it on" (computers with agents ticked) right under its name field.

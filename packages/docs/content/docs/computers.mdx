@@ -1,0 +1,77 @@
+---
+title: Computers
+description: Add an always-on Linux computer, so agents keep answering while your Mac sleeps.
+icon: recruiter
+---
+
+<Shot src="computers" alt="Settings, Computers: This Mac, a second computer and Add a computer" />
+
+You need [Tailscale](https://tailscale.com/download) on your Mac and on the computer, signed in to the same tailnet. Nothing needs a public address.
+
+<Steps>
+<Step>
+
+### Turn on Tailscale SSH
+
+On the computer, once:
+
+```sh
+sudo tailscale set --ssh
+```
+
+</Step>
+<Step>
+
+### Pick it
+
+**Settings › Computers › Add a computer**. The app lists the machines on your tailnet. Linux computers that are online with Tailscale SSH on can run agents.
+
+</Step>
+<Step>
+
+### Let it install
+
+The app installs OpenHut on it over Tailscale SSH and shows the log. It takes a few minutes. If Tailscale asks you to approve the check, a link shows up; open it and approve.
+
+The app makes a key for that computer and keeps it in your keychain. The computer keeps only its hash and answers nobody else.
+
+</Step>
+<Step>
+
+### Put agents on it
+
+Open an agent, then **Runs on › Move to** the computer. Its memory, skills, chats and channels go with it.
+
+</Step>
+</Steps>
+
+## Each computer is its own
+
+Every computer runs its own agents, connections and keys, and keeps working while your Mac is off. The app shows them all in one place: the sidebar names each agent's computer, and an agent on an offline computer is greyed out.
+
+A connection lives on the computers you put it on. **Connect apps** lists it once, with a chip per computer. If an agent needs one that isn't on its computer yet, **Add to** that computer under **Can use**. Your [Claude plan](/claude) is pushed to every computer.
+
+To remove a computer, **⋯ › Remove**. Its agents stop and their keys stay on it; nothing is deleted there. To wipe it, see [Uninstall](/uninstall).
+
+## What the computer needs
+
+Linux (Debian, Ubuntu or Alpine, x86_64 or arm64), always on. OpenHut runs in one Docker container named `openhut`, with each agent in a gVisor sandbox inside it. The install adds Docker if it's missing and leaves the rest of the machine alone.
+
+Plan memory for the busiest moment: every running agent can use up to 1 GB, or 4 GB with Browser on.
+
+| Computer | CPU | Memory | Disk |
+| --- | --- | --- | --- |
+| 2 agents, no browser | 2 vCPU | 4 GB | 20 GB |
+| 5 agents, 2 of them browse | 4 vCPU | 8 GB | 30 GB |
+| 10 agents, 4 of them browse | 8 vCPU | 16 GB | 40 GB |
+
+- **Memory:** 1 GB for OpenHut and the system, plus 1 GB for each running agent, and 2 GB for each one that browses.
+- **CPU:** one core for OpenHut, plus one for each agent working at the same moment.
+- **Disk:** 10 GB for OpenHut and the agent image, plus about 1 GB per agent.
+
+## Troubleshooting
+
+- **The list is empty or says Tailscale isn't running.** Install Tailscale on your Mac, open it and sign in, then refresh.
+- **"Turn on Tailscale SSH first".** Run `sudo tailscale set --ssh` on that computer, then **Check again**.
+- **"Linux only".** Only Linux computers can run agents for you; other machines on your tailnet show greyed out.
+- **A computer shows Offline.** Check that it's on and on your tailnet. Its agents keep running there; the app catches up when it's back.

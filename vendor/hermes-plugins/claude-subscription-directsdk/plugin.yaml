@@ -31,3 +31,10 @@ config_schema:
       Let Claude Code send its usage telemetry and fetch feature flags. Feature flags unlock newer
       models in the model picker; turn off to keep Claude Code quiet (the picker may then list fewer
       models).
+  relay_upstream:
+    type: string
+    default: ""
+    label: Relay upstream (OpenHut patch)
+    description: >-
+      Where the relay sends Claude Code's Messages requests. Empty means https://api.anthropic.com.
+      OpenHut points it at its gateway, which adds the real seat token, so the agent holds only a stand-in.
