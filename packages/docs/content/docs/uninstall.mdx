@@ -1,23 +1,23 @@
 ---
 title: Uninstall
-description: Remove OpenHut, its agents and its data from your server.
+description: Remove the app, or OpenHut from a computer you added.
 icon: hut
 ---
+
+## The app
+
+Stop your agents and quit OpenHut, then move it to the Trash (on Linux, delete the AppImage, or remove the .deb package).
+
+To delete its agents and data too, remove its folder: `~/Library/Application Support/OpenHut` on a Mac, `~/.config/OpenHut` on Linux. **Settings › General** shows where it is. This can't be undone.
+
+## A computer you added
+
+In the app, **Settings › Computers**, then **⋯ › Remove**. Its agents stop, and nothing on it is deleted.
+
+To wipe it, run this on the computer:
 
 ```sh
 docker rm -f openhut && docker volume rm openhut
 ```
 
-This removes OpenHut, every agent and all its data. It can't be undone. Docker stays installed.
-
-## Older installs
-
-Installs from before 17 November 2026 run directly on the server, in `/opt/openhut`. Run this as root instead:
-
-```sh
-sh /opt/openhut/install/uninstall.sh
-```
-
-It asks you to type `uninstall`, then removes OpenHut, every agent, all its data, its firewall rules and the `openhut` user. Docker, gVisor and Node stay installed.
-
-No `uninstall.sh` there? Your install is older than the script. Run the install command once to upgrade, then run this.
+This removes OpenHut, every agent there and all its data. It can't be undone. Docker stays installed.

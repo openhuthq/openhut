@@ -4,7 +4,7 @@
 - Pushing to `main` runs `.github/workflows/deploy.yml`: typecheck and unit tests, then `scripts/release.sh` and
   `npm -w @openhut/site run deploy`, then a check that openhut.dev serves an `install.sh` whose checksum matches
   the tarball it serves. Rerun it by hand with `gh workflow run deploy.yml`.
-- A build is numbered `<major.minor from packages/app/package.json>.<commit count>`. Anything that drops commits (a squash or a history reset) makes new builds number lower than installed ones, so bump the minor first (0.2 after the first 2026-11-15 reset, 0.3 after the second, which squashed `main` to one commit).
+- A build is numbered `<major.minor from packages/runtime/package.json>.<commit count>`. Anything that drops commits (a squash or a history reset) makes new builds number lower than installed ones, so bump the minor first (0.2 after the first 2026-11-15 reset, 0.3 after the second, which squashed `main` to one commit).
 - The repo secret `CLOUDFLARE_API_TOKEN` is the account token "openhut-site GitHub Actions deploy": Workers Scripts
   write and Account Settings read on the owner's account, Workers Routes write on openhut.dev only.
 - DNS for openhut.dev and www is managed by the Worker's custom domains; the zone holds no other records. Wrangler's
@@ -31,3 +31,13 @@
   picture, so it is uploaded on the org's settings page; name, description and URL go through `PATCH /orgs/openhuthq`.
 - The docs screenshots in `packages/docs/public/screenshots/` still show the Fast Monkey name and monkey (seed data
   only, no real people).
+
+## The Mac app release (unverified as of 2026-11-17)
+
+`.github/workflows/desktop.yml` builds, signs, notarizes and staples the Mac app on a `v*` tag, uploads the dmg, zip and
+`latest-mac.yml` to a draft GitHub release, then publishes it. It has never run: it needs the secrets `CSC_LINK` (the
+Developer ID Application `.p12`, base64), `CSC_KEY_PASSWORD`, `APPLE_API_KEY` (the `.p8` contents), `APPLE_API_KEY_ID`,
+`APPLE_API_ISSUER` and `APPLE_TEAM_ID` (`59SL6MZZ8F`). The tag must equal `v` + `packages/desktop/package.json`'s version.
+The packaged app checks GitHub Releases with electron-updater at start and every 6 hours (`~/Library/Logs/OpenHut/updates.log`);
+until a release exists it logs "No published versions on GitHub". The 0.3.0 → 0.3.1 update path is untested. The Developer
+ID certificate expires on 1 Feb 2027; renew it in January and re-export `CSC_LINK`.

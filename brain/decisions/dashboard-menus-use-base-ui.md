@@ -15,4 +15,4 @@ Owner, 2026-11-13: the sidebar row with a bare sign-out icon looked odd; use the
 Skyfleet's shadcn dropdown is a wrapper over Base UI's Menu. The dashboard has no Tailwind (the approved design is its CSS), so we take the same primitive for focus, keyboard and positioning, and skip shadcn's Tailwind classes.
 
 ## Consequences
-New menus reuse the `.menu*` classes. Tailwind and the shadcn CLI stay out of `packages/web`.
+New menus reuse the `.menu*` classes. Tailwind and the shadcn CLI stay out of `packages/desktop/src/renderer`.

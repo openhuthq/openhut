@@ -6,31 +6,46 @@ icon: finance
 
 ## Its own sandbox
 
-Each agent runs in its own gVisor container with a read-only system and its own network. It can't reach another agent, your server or your LAN.
+Each agent runs in its own sandbox: a small virtual machine on your Mac or Linux desktop, a gVisor container on a [computer](/computers) you add. It has a read-only system and its own network. It can't reach another agent, your computer or your LAN.
 
 ## A firewall
 
-Agents can make HTTPS calls out, and nothing else. Private ranges and the cloud metadata address are blocked. If the firewall can't be applied, every agent stops.
+Agents can make HTTPS calls out, and nothing else. Private ranges, your tailnet and the cloud metadata address are blocked. OpenHut checks this before it starts any agent; if the check fails, no agent starts.
 
 ## OpenHut holds the keys
 
-Agents reach your data only through OpenHut's gateway. It keeps every password encrypted, checks each call against what you allowed, and logs it.
+Agents reach your data only through OpenHut's gateway, on the same computer. It keeps every password encrypted, checks each call against what you allowed, and logs it.
+
+## Keys stay out of the agent
+
+An agent holds only its own token. Where it needs a key, the gateway adds the real one on the way out, so a tricked agent has nothing to copy that works anywhere else. The gateway passes only the calls each service needs and logs every one.
+
+| Key | Where it lives |
+| --- | --- |
+| Your Claude plan | The gateway adds it to each model call. Changing it restarts nothing. |
+| A Telegram bot token | The gateway adds it. The agent can't log the bot out or change where its messages go. |
+| Database passwords and app sign-ins | Encrypted on each computer you put them on. Agents call them through the gateway's tools. |
+| Slack bot and app tokens | **In the agent's sandbox**, until a later release brokers them. |
+| A WhatsApp link | **In the agent's sandbox**, until a later release moves it into a separate bridge. |
+
+The app reaches this Mac's OpenHut over a file only your user can open, and each added computer with its own key, over your tailnet. No computer is open to the internet.
+
+If an agent's own token may have leaked, ask your AI app over [MCP](/mcp) to revoke it (`revoke_agent_token`): the old one stops working at once, and the agent restarts with a new one.
 
 ## What it doesn't cover
 
-A tricked agent can still leak what it holds itself: its Slack, WhatsApp or Telegram credentials, its memories and the shared Claude token.
+A tricked agent can still use what it reaches: spend your Claude plan on its own prompts, or post as its bot. It can also leak its memories, what people tell it, and the Slack tokens or WhatsApp link it still holds. The gateway protects keys, not data.
 
 ## What OpenHut sends us
 
-Your server sends a few anonymous usage events to openhut.dev, so we can see how OpenHut is used and fix what's missing:
+Each computer sends a few anonymous usage events to openhut.dev, so we can see how OpenHut is used and fix what's missing:
 
-- That setup finished, and once a day that the server is running, with its version and rough size (for example "2–5 agents").
+- That setup finished, and once a day that it's running, with its version and rough size (for example "2–5 agents").
 - When an agent, channel or connection is added or removed, with only its kind (for example "slack" or "postgres").
-- When someone is invited or joins, with only their role, and when a skill or memory is edited.
-- Which dashboard pages are opened, by page name.
-- That a person sent one of your agents a message: the agent's name and the channel (Slack, WhatsApp, Telegram or the dashboard). Never who sent it or what it says.
-- The owner's email, so we know whose server it is.
+- When a skill or memory is edited.
+- Which screens are opened, by name.
+- That someone sent one of your agents a message: the agent's name and the channel (Slack, WhatsApp, Telegram or the app). Never who sent it or what it says.
 
-It never sends anyone else's email, people's names, what messages say, skills, memories, passwords or connection details. Each server is counted by a random ID.
+It never sends an email, names of people, what messages say, skills, memories, passwords or connection details. Each computer is counted by a random ID.
 
-An owner or admin can turn it off, or back on, in **Admin › Usage data**. Turning it off also drops anything not sent yet.
+Turn it off, or back on, with **Share anonymous usage data** in **Settings › General**. Turning it off also drops anything not sent yet.

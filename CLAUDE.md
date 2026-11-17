@@ -1,24 +1,30 @@
 # OpenHut
 
-Self-hosted agents for a team: one `curl | sh` on the customer's server runs many Hermes agents, each in its own gVisor
-container, with their own Slack app and WhatsApp number. Agents reach team data (Postgres today) only through OpenHut's
-gateway, which holds every key and checks each agent's grants on every call. People manage it from the dashboard or
-from their own AI assistant over the control MCP, signed in with OAuth (no personal tokens). Scope and decisions: `brain/decisions/openhut-v1-scope.md`.
+Self-hosted agents: the OpenHut app (Mac and Linux) is a thin window over several runtimes, one on this computer and one
+on each computer you add (`brain/decisions/app-aggregates-runtimes.md`). A runtime runs many Hermes agents, each in its
+own sandbox (a microVM on a desktop, gVisor on a server), with their own Slack app and WhatsApp number. Agents reach team
+data only through the runtime's gateway, which holds every key and checks each agent's grants on every call. You manage
+it from the app or from your own AI assistant over the control MCP. No sign-in and no people: the app reaches the local
+runtime on a 0600 Unix socket, and a remote one over the tailnet with the key it enrolled when the computer was added.
+Scope and decisions: `brain/decisions/openhut-v1-scope.md`.
 
 ## Packages
 
 An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
 
-- **`packages/app`** — `@openhut/app`, the server (Fastify, Kysely on PGlite). `src/` is grouped by domain:
-  `platform/` (config, db, secrets, settings, errors, evlog logging, the typed agentd client), `team/` (identity, people, sessions, invites, OAuth),
-  `agents/` (agents, grants, their Hermes files), `channels/`, `connections/`, `gateway/` (the agents' MCP gateway on
-  :8081), `mcp/` (the control MCP on `/mcp`, whose tools call the API in-process), `admin/`, and `integrations/<service>/` (Postgres, Slack, WhatsApp).
-  Tests in `test/`.
-- **`packages/web`** — `@openhut/web`, the React dashboard (Vite, TanStack Query). Tailwind v4 with shared components in `src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
+- **`packages/runtime`** — `@openhut/runtime`, one runtime: two processes built, shipped and updated as one package.
+  `src/server/` is the API (Fastify, Kysely on PGlite), grouped by domain: `platform/` (config, db, secrets, settings,
+  errors, evlog logging, the typed agentd client), `team/` (identity: the socket or the enrolled key, and the one owner),
+  `agents/` (agents, grants, their Hermes files), `channels/`, `connections/`, `gateway/` (the agents' MCP gateway and
+  key broker on :8081), `mcp/` (the control MCP on `/mcp`, whose tools call the API in-process), `admin/`, and
+  `integrations/<service>/`. `src/agentd/` is the root helper: the only process that starts agents (gVisor, microsandbox
+  or memory, `brain/decisions/sandbox-module.md`), on a Unix socket. Tests mirror them in `test/server/` and `test/agentd/`.
+- **`packages/desktop`** — `@openhut/desktop`, the Mac and Linux app (`brain/decisions/desktop-app.md`): Electron main (`src/main.mjs`, starts agentd and the server,
+  serves the renderer on `app://openhut`) and the React dashboard in `src/renderer` (Vite to `dist/renderer`, TanStack
+  Query), which calls `/api/*` on `app://openhut`; the main process forwards it to the runtime's socket. Tailwind v4 with shared components in `src/renderer/src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.
-- **`packages/agentd`** — `@openhut/agentd`, the root helper: the only process that runs Docker, on a Unix socket.
-- **`packages/e2e`** — `@openhut/e2e`, the end-to-end run: a bare Linux server in Docker, the curl install, a
-  tampered upgrade, the upgrade and a restart. Results go to `packages/e2e/results/` (gitignored).
+- **`packages/e2e`** — `@openhut/e2e`, the end-to-end run: a bare Linux server in Docker, the curl install of a remote
+  runtime with an enrolled key, a tampered upgrade, the upgrade and a restart. Results go to `packages/e2e/results/` (gitignored).
 - **`packages/docs`** — `@openhut/docs`, the docs at openhut.dev/docs: Fumadocs on TanStack Start, prerendered. MDX in
   `content/docs`, real dashboard screenshots in `public/screenshots`. Notes: `brain/openhut-site.md`.
 - **`packages/site`** — `@openhut/site`, openhut.dev: `install.sh` for curl, the release tarball, the home page, the brand page
@@ -26,7 +32,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `.github/workflows/deploy.yml` deploys on every push to `main`. The e2e run serves its releases with the same Worker
   under `wrangler dev`. Deploys and the internal instance: `brain/openhut-deploy.md`.
 
-`install/` is the installer and what it runs on the server (firewall, systemd units, boot script); `scripts/release.sh`
+`install/` is the installer of a remote runtime and what it runs on the server (firewall, systemd units, boot script); `scripts/release.sh`
 builds what `openhut.dev` serves; `vendor/` is the pinned Hermes plugin.
 
 ## Conventions (Skyfleet's)
@@ -55,9 +61,24 @@ npm install
 npm run dev
 ```
 
-`npm run dev` builds the dashboard, then starts the fake agentd and the app with `.data`, setup code `dev` and the test
-model. Open `http://localhost:8787/setup?code=dev`. `node scripts/seed-ui.ts` (on a fresh `.data`) fills in sample
-people, agents and connections. The fake agentd answers without Docker, so agents never really run on a laptop.
+`npm run dev` starts the real agentd with `OPENHUT_SANDBOX=memory` (no root, no Docker), the server API on 127.0.0.1:8787
+with `.data`, the test model and the dev key `dev` enrolled, and Vite for the renderer with `/api` proxied to it with
+`Authorization: Bearer dev`. Open `http://localhost:5173`. `node scripts/seed-ui.ts` (on a fresh `.data`) fills in sample
+agents and connections. Agents in microVMs need the pinned Linux `claude` at `bin/claude` (gitignored): run
+`npm -w @openhut/desktop run pack-backend` once and copy `packages/desktop/dist/claude-*-linux-arm64` there. The desktop app itself: `npm -w @openhut/desktop run build && npm -w @openhut/desktop start`. It keeps
+its data in `~/Library/Application Support/OpenHut Dev`, apart from the installed app's `OpenHut`.
+
+## Build the desktop app
+
+`npm -w @openhut/desktop run dist` builds the renderer, bundles the runtime's server and agentd with esbuild into
+`packages/desktop/dist/backend` with the pinned Linux `claude` CLI for the guest (`scripts/pack-backend.mjs`), and runs electron-builder (`electron-builder.yml`): an arm64,
+macOS 14+ `release/mac-arm64/OpenHut.app`, `release/OpenHut-arm64.dmg` and the versioned zip. It signs with the Developer ID
+in the login keychain (hardened runtime, `build/entitlements.mac.plist`) and notarizes only when `APPLE_API_KEY`,
+`APPLE_API_KEY_ID` and `APPLE_API_ISSUER` are set. The packaged app runs the real model unless `OPENHUT_MODEL` is set.
+Icon sources: `build/icon.svg`, `build/background.svg`. Gotchas: `brain/openhut-gotchas.md` (Mac app, Linux app).
+
+On x86_64 Linux, `npm -w @openhut/desktop run dist:linux` builds `release/OpenHut-x64.AppImage` and `release/openhut-x64.deb`
+with the same runtime (agents in microsandbox VMs on KVM); it needs a Linux machine, not a cross-build from the Mac.
 
 ## Test
 

@@ -1,40 +1,42 @@
 ---
 title: Connections
-description: Hand agents Postgres, Convex, PostHog, Linear, Gmail, Drive, Google Workspace, Excalidraw or any MCP server. They never see a key.
+description: Hand agents Postgres, Convex, PostHog, Linear, GitHub, Gmail, Drive, Google Workspace, Excalidraw or any MCP server. They never see a key.
 icon: logo:postgres
 ---
 
-<Shot src="connect" alt="The Connect Google Workspace dialog: what agents get, then the steps" />
+<Shot src="connect" alt="Connect Postgres: the name, the computers it goes on, then the steps" />
 
 <Steps>
 <Step>
 
 ### Pick one
 
-**Connections**, then the service. A short guide opens with what agents get and the steps.
+**Connect apps**, at the bottom of the sidebar, then **Connect** next to the service. A short guide opens with the steps.
+
+</Step>
+<Step>
+
+### Choose its computers
+
+Under **Computers**, pick where it goes: this Mac, a [computer](/computers) you added, or both. Its key stays on each computer you pick.
 
 </Step>
 <Step>
 
 ### Paste a key or sign in
 
-Postgres, Convex and a custom MCP server take a key. PostHog, Linear and Google open their sign-in. Excalidraw takes neither: agents draw a diagram and send a link to it, and anyone with the link can open it. Google needs an OAuth client once, in **Admin**.
+Postgres, Convex and a custom MCP server take a key. PostHog, Linear, GitHub and Google open their sign-in. Google needs an OAuth client once; its guide shows how. Excalidraw takes neither: agents draw a diagram and send a link to it, and anyone with the link can open it.
 
 </Step>
 <Step>
 
 ### Hand it to an agent
 
-On the agent's page, **Add** it under **Connections**.
-
-</Step>
-<Step>
-
-### See what it can do and did
-
-Open the connection: its tools, and every call, refused ones too.
+On the agent, **Add** it under **Can use**. If it isn't on the agent's computer yet, **Add to** that computer.
 
 </Step>
 </Steps>
 
-Postgres queries are one `SELECT`, at most 15 seconds and 1000 rows. **Tailscale** joins this server to your tailnet so connections reach private hosts; agents stay off it. Turn on **Everyone on the team** to share a connection.
+Open a connection to see its tools and every call, refused ones too.
+
+Postgres queries are one `SELECT`, at most 15 seconds and 1000 rows. **Tailscale** joins a computer to your tailnet so connections reach private hosts; agents stay off it.

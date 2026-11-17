@@ -1,0 +1,44 @@
+appId: dev.openhut.app
+productName: OpenHut
+copyright: Copyright © 2026 OpenHut
+directories: { buildResources: build, output: release }
+files: [src/main.mjs, src/preload.cjs, "src/trayTemplate*.png", dist/renderer/**, package.json]
+asar: true
+npmRebuild: false
+afterPack: scripts/after-pack.cjs
+extraResources: [{ from: dist/backend, to: backend }, { from: dist/backend/node_modules, to: backend/node_modules }]
+mac:
+  target: [{ target: dmg, arch: arm64 }, { target: zip, arch: arm64 }]
+  icon: build/icon.icns
+  category: public.app-category.productivity
+  minimumSystemVersion: "14.0"
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+  extendInfo: { LSArchitecturePriority: [arm64] }
+  artifactName: "OpenHut-${version}-${arch}.${ext}"
+linux:
+  target: [{ target: AppImage, arch: x64 }, { target: deb, arch: x64 }]
+  icon: build/icon.png
+  executableName: openhut
+  category: Utility
+  maintainer: OpenHut <hello@openhut.dev>
+  synopsis: Self-hosted agents for a team
+appImage: { artifactName: "OpenHut-x64.AppImage" }
+deb: { artifactName: openhut-x64.deb }
+dmg:
+  artifactName: "OpenHut-${arch}.${ext}"
+  title: OpenHut
+  sign: true
+  iconSize: 112
+  window: { width: 540, height: 380 }
+  contents: [{ x: 140, y: 168 }, { x: 400, y: 168, type: link, path: /Applications }]
+publish: { provider: github, owner: openhuthq, repo: openhut }
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true

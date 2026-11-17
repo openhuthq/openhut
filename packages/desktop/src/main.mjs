@@ -1,0 +1,702 @@
+import { app, BrowserWindow, crashReporter, dialog, ipcMain, Menu, net, Notification, powerSaveBlocker, protocol, safeStorage, screen, shell, Tray, utilityProcess } from 'electron'
+import { execFile, spawn } from 'node:child_process'
+import { createHash, randomBytes } from 'node:crypto'
+import { createServer, request } from 'node:http'
+import { connect } from 'node:net'
+import { accessSync, appendFileSync, chmodSync, constants, cpSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { cpus, homedir, totalmem } from 'node:os'
+import { dirname, join, relative } from 'node:path'
+import { Readable } from 'node:stream'
+import { json, text } from 'node:stream/consumers'
+import { setTimeout as sleep } from 'node:timers/promises'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import updater from 'electron-updater'
+
+const DEV = !app.isPackaged
+const MAC = process.platform === 'darwin'
+process.umask(0o022)
+app.setName(DEV ? 'OpenHut Dev' : 'OpenHut')
+if (DEV) app.setPath('userData', join(app.getPath('appData'), 'OpenHut Dev'))
+app.setAppLogsPath(DEV && MAC ? join(app.getPath('home'), 'Library/Logs/OpenHut Dev') : undefined)
+if (!app.requestSingleInstanceLock()) app.exit(0)
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const ROOT = join(HERE, '../../..')
+const BACKEND = DEV ? ROOT : join(process.resourcesPath, 'backend')
+const SCRIPTS = DEV
+  ? { agentd: 'packages/runtime/src/agentd/agentd.ts', server: 'packages/runtime/src/server/app.ts' }
+  : { agentd: 'packages/runtime/src/agentd/agentd.mjs', server: 'packages/runtime/src/server/platform/app.mjs' }
+const MSB = join(BACKEND, `node_modules/@superradcompany/microsandbox-${process.platform}-${process.arch}${MAC ? '' : '-gnu'}`)
+const BRIDGE = DEV ? join(HERE, '../bin/openhut-mcp.mjs') : join(BACKEND, 'bin/openhut-mcp.mjs')
+const GATEWAY_PORT = 8081
+const HOME = app.getPath('userData')
+const LOGS = app.getPath('logs')
+const DATA = join(HOME, 'data')
+const SOCK = join(HOME, 'agentd.sock')
+const SERVER_SOCK = join(HOME, 'server.sock')
+const MCP_SOCK = join(HOME, 'mcp.sock')
+const WINDOW_STATE = join(HOME, 'window.json')
+const PREFS = join(HOME, 'prefs.json')
+const SECRET = join(HOME, 'secret.bin')
+const HANDOFF = join(HOME, 'secret.handoff')
+const COMPUTERS = join(HOME, 'computers.json')
+const LOCAL = { id: 'local', name: MAC ? 'This Mac' : 'This computer', url: '' }
+const INSTALL_URL = process.env.OPENHUT_INSTALL_URL ?? 'https://openhut.dev'
+const REMOTE_MS = 15_000
+const AUTOSTART = join(app.getPath('appData'), 'autostart/openhut.desktop')
+const DEFAULT_PREFS = { keepAwake: true, notifyReplies: true, notifyFailures: true }
+const CANVAS = '#f4f3f5'
+const POLL_MS = 5000
+const HEALTHY_MS = 120_000
+const FIRST_AGENT = 'Juniper'
+const RENDERER = join(HERE, '../dist/renderer')
+const APP_ORIGIN = 'app://openhut'
+const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+const MAX_LOG = 10 << 20
+const { createOpenHut } = await import(pathToFileURL(DEV ? join(ROOT, 'packages/client/src/openhut.ts') : join(BACKEND, 'client.mjs')).href)
+const openhut = createOpenHut({
+  transport: (computer) => (path, init) => serve(new Request(`${APP_ORIGIN}/c/${computer.id}${path}`, init)),
+  store: { computers: async () => computers(), add: (peer) => enroll({ peer }), adopt, remove: async (id) => { forget({ id }) } },
+  openUrl: (url) => shell.openExternal(url),
+})
+const children = new Map()
+const restarts = { agentd: 0, server: 0 }
+const logs = {}
+const serverEnv = {}
+const keys = new Map()
+const watched = { threads: new Map(), strikes: new Map(), menu: '' }
+let quitting = false
+let main
+let tray
+let blocker
+let setup
+let booted
+protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
+crashReporter.start({ uploadToServer: false })
+
+function start(name, env) {
+  const script = join(BACKEND, SCRIPTS[name])
+  const child = DEV
+    ? spawn('node', [script], { cwd: ROOT, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
+    : utilityProcess.fork(script, [], { env: { ...process.env, ...env }, stdio: 'pipe', serviceName: `OpenHut ${name}` })
+  logs[name] ??= createWriteStream(join(LOGS, `${name}.log`), { flags: 'a' })
+  for (const stream of [child.stdout, child.stderr]) stream?.pipe(logs[name], { end: false })
+  children.set(name, child)
+  const born = Date.now()
+  child.on('exit', (code) => {
+    children.delete(name)
+    if (quitting) return
+    if (Date.now() - born > HEALTHY_MS) restarts[name] = 0
+    const seconds = Math.min(30, 2 ** restarts[name]++)
+    logs[name].write(`openhut: ${name} exited with ${code}; starting it again in ${seconds}s\n`)
+    setTimeout(() => start(name, env), seconds * 1000)
+  })
+}
+
+async function waitFor(check, seconds) {
+  for (let i = 0; i < seconds * 4; i++) {
+    if (await check().catch(() => false)) return true
+    await sleep(250)
+  }
+  return false
+}
+
+const TAILSCALE = ['/usr/bin/tailscale', '/usr/local/bin/tailscale', '/opt/homebrew/bin/tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale'].find((path) => existsSync(path))
+
+function tailnet() {
+  if (!TAILSCALE) return Promise.resolve({ state: 'missing' })
+  return new Promise((resolve) => execFile(TAILSCALE, ['status', '--json'], { timeout: 10_000, maxBuffer: 8 << 20 }, (error, stdout) => {
+    if (error) return resolve({ state: 'stopped' })
+    const status = JSON.parse(stdout)
+    if (status.BackendState !== 'Running') return resolve({ state: 'stopped' })
+    const peer = (p) => ({ name: p.HostName, dns: (p.DNSName ?? '').replace(/\.$/, ''), os: p.OS, ip: (p.TailscaleIPs ?? [])[0] ?? '', online: !!p.Online, ssh: (p.sshHostKeys ?? []).length > 0 })
+    resolve({ state: 'running', tailnet: status.CurrentTailnet?.Name ?? '', self: { name: status.Self?.HostName ?? 'This Mac', os: status.Self?.OS ?? '', ip: (status.Self?.TailscaleIPs ?? [])[0] ?? '' }, peers: Object.values(status.Peer ?? {}).map(peer) })
+  }))
+}
+
+const fromApp = (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`)
+
+function machine() {
+  const paths = [DATA, join(homedir(), '.microsandbox'), LOGS].filter((path) => existsSync(path))
+  return new Promise((resolve) => execFile('du', ['-skc', ...paths], { timeout: 20_000 }, (_error, stdout) => {
+    const total = Number.parseInt(String(stdout).trim().split('\n').at(-1) ?? '', 10) || 0
+    resolve({ chip: cpus()[0]?.model ?? '', memory: totalmem(), folder: HOME, size: total * 1024 })
+  }))
+}
+
+const handle = (name, fn) => ipcMain.handle(name, (event, arg) => fromApp(event) ? fn(arg) : { error: 'Not allowed.' })
+handle('tailnet', tailnet)
+handle('machine', machine)
+handle('show-folder', () => shell.openPath(HOME))
+handle('prefs', prefsNow)
+handle('set-prefs', setPrefs)
+handle('first-run', (start) => firstRun(start === true))
+handle('computers.list', computers)
+handle('computers.add', answer(enroll))
+handle('computers.adopt', answer(adopt))
+handle('computers.remove', answer(forget))
+handle('mcp.commands', mcpCommands)
+
+function answer(fn) {
+  return (arg) => Promise.resolve().then(() => fn(arg)).catch((error) => ({ error: error.message }))
+}
+
+function storedComputers() {
+  try {
+    return JSON.parse(readFileSync(COMPUTERS, 'utf8'))
+  } catch {
+    return []
+  }
+}
+
+function computers() {
+  return [LOCAL, ...storedComputers().map(({ id, name, url }) => ({ id, name, url }))]
+}
+
+async function keyOf(computer) {
+  if (!keys.has(computer.id)) keys.set(computer.id, (await safeStorage.decryptStringAsync(readFileSync(join(HOME, computer.keyFile)))).result)
+  return keys.get(computer.id)
+}
+
+async function remember({ name, url, key }) {
+  const others = storedComputers().filter((each) => each.url !== url)
+  const id = storedComputers().find((each) => each.url === url)?.id ?? randomBytes(4).toString('hex')
+  const keyFile = `keys/${id}.key`
+  mkdirSync(join(HOME, 'keys'), { recursive: true, mode: 0o700 })
+  writeFileSync(join(HOME, keyFile), await safeStorage.encryptStringAsync(key), { mode: 0o600 })
+  keys.set(id, key)
+  writeFileSync(COMPUTERS, JSON.stringify([...others, { id, name, url, keyFile }], null, 2))
+  return { id, name, url }
+}
+
+function forget({ id } = {}) {
+  const computer = storedComputers().find((each) => each.id === id)
+  if (!computer) throw new Error(id === LOCAL.id ? `${LOCAL.name} always stays in the list.` : 'That computer isn\'t in the list.')
+  writeFileSync(COMPUTERS, JSON.stringify(storedComputers().filter((each) => each.id !== id), null, 2))
+  rmSync(join(HOME, computer.keyFile), { force: true })
+  keys.delete(id)
+  return { id, deleted: true }
+}
+
+function remote({ url, key, path, method = 'GET', body }) {
+  return fetch(`${url}${path}`, { method, headers: { authorization: `Bearer ${key}`, ...(body && { 'content-type': 'application/json' }) }, body: body && JSON.stringify(body), signal: AbortSignal.timeout(REMOTE_MS) })
+}
+
+function originOf(url) {
+  const parsed = new URL(String(url))
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && parsed.hostname === '127.0.0.1')) throw new Error('Use the https:// address the computer is served on.')
+  return parsed.origin
+}
+
+async function adopt({ name, url, key } = {}) {
+  if (!String(name ?? '').trim() || !/^\S{16,200}$/.test(String(key ?? ''))) throw new Error('Name the computer and paste the key it was installed with.')
+  const origin = originOf(url)
+  const res = await remote({ url: origin, key, path: '/api/me' }).catch(() => undefined)
+  if (!res) throw new Error(`Couldn't reach ${origin}. Check that it's on and on your tailnet.`)
+  if (!res.ok) throw new Error(`${origin} didn't accept that key (it answered ${res.status}).`)
+  return remember({ name: String(name).trim(), url: origin, key })
+}
+
+async function enroll({ peer } = {}) {
+  const dns = String(peer?.dns ?? '').replace(/\.$/, '')
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(dns)) throw new Error('Pick a computer from your tailnet.')
+  if (!TAILSCALE) throw new Error('Tailscale isn\'t installed on this computer. Install it from tailscale.com/download and sign in.')
+  if (DEV && !process.env.OPENHUT_INSTALL_URL) throw new Error('Set OPENHUT_INSTALL_URL to a local release to add computers from a dev build.')
+  if (!/^https?:\/\/[\w.:/-]+$/.test(INSTALL_URL)) throw new Error('OPENHUT_INSTALL_URL isn\'t a plain http(s) address.')
+  const say = (line) => main?.webContents.send('computers.progress', { peer: dns, line, url: /https:\/\/login\.tailscale\.com\/\S+/.exec(line)?.[0] ?? null })
+  const key = randomBytes(32).toString('hex')
+  const hash = createHash('sha256').update(key).digest('hex')
+  say(`Installing OpenHut on ${dns} over Tailscale SSH`)
+  await tailscaleSsh({ args: ['ssh', `root@${dns}`, `curl -fsSL '${INSTALL_URL}' | OPENHUT_CLIENT_KEY_SHA256=${hash} sh`], say })
+  const url = `https://${dns}`
+  say(`Waiting for ${url} to answer`)
+  if (!await waitFor(async () => (await remote({ url, key, path: '/api/me' })).ok, 120)) throw new Error(`OpenHut is installed, but ${url} didn't answer within 2 minutes.`)
+  const set = await remote({ url, key, path: '/api/admin', method: 'PATCH', body: { tailnetUrl: url } })
+  if (!set.ok) throw new Error(`${url} didn't take its address (it answered ${set.status}).`)
+  say(`${peer.name || dns} is ready`)
+  return remember({ name: peer.name || dns, url, key })
+}
+
+function tailscaleSsh({ args, say }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(TAILSCALE, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let last = ''
+    for (const stream of [child.stdout, child.stderr]) {
+      let rest = ''
+      stream.on('data', (chunk) => {
+        const lines = (rest + chunk).split(/\r?\n|\r/)
+        rest = lines.pop()
+        for (const line of lines.filter((each) => each.trim())) {
+          last = line
+          say(line)
+        }
+      })
+    }
+    child.on('error', reject)
+    child.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`The install stopped: ${last || `tailscale ssh exited with ${code}`}`)))
+  })
+}
+
+function prefs() {
+  try {
+    return { ...DEFAULT_PREFS, ...JSON.parse(readFileSync(PREFS, 'utf8')) }
+  } catch {
+    return DEFAULT_PREFS
+  }
+}
+
+function prefsNow() {
+  return { ...prefs(), openAtLogin: MAC ? app.getLoginItemSettings().openAtLogin : existsSync(AUTOSTART) }
+}
+
+function setPrefs(patch) {
+  const known = Object.entries(patch ?? {}).filter(([name, value]) => (name in DEFAULT_PREFS || name === 'openAtLogin') && typeof value === 'boolean')
+  for (const [name, on] of known) {
+    if (name === 'openAtLogin') openAtLogin(on)
+    else writeFileSync(PREFS, JSON.stringify({ ...prefs(), [name]: on }))
+  }
+  poll().catch(() => undefined)
+  return prefsNow()
+}
+
+function openAtLogin(on) {
+  if (MAC) return app.setLoginItemSettings({ openAtLogin: on })
+  if (!on) return rmSync(AUTOSTART, { force: true })
+  mkdirSync(dirname(AUTOSTART), { recursive: true })
+  writeFileSync(AUTOSTART, `[Desktop Entry]\nType=Application\nName=OpenHut\nComment=Start OpenHut's agents in the background\nExec="${process.env.APPIMAGE ?? process.execPath}" --hidden\nX-GNOME-Autostart-enabled=true\n`)
+}
+
+function api(path, { method = 'GET', body } = {}) {
+  return new Promise((resolve, reject) => {
+    const out = request({ socketPath: SERVER_SOCK, path, method, headers: body ? { 'content-type': 'application/json' } : {} }, (res) => {
+      json(res).then((answer) => res.statusCode < 400 ? resolve(answer) : reject(new Error(answer?.error?.message ?? `The server answered ${res.statusCode}.`)), reject)
+    })
+    out.on('error', reject)
+    out.end(body ? JSON.stringify(body) : undefined)
+  })
+}
+
+function agentd(ask) {
+  return new Promise((resolve, reject) => {
+    const sock = connect(SOCK)
+    sock.on('error', reject)
+    sock.end(`${JSON.stringify(ask)}\n`)
+    text(sock).then((answer) => resolve(JSON.parse(answer)), reject)
+  })
+}
+
+async function poll() {
+  const [agents, list] = await Promise.all([openhut.agents.list(), openhut.computers.list()])
+  const wants = prefs()
+  keepAwake(wants.keepAwake && agents.some((agent) => agent.computer === LOCAL.id && agent.status === 'running'))
+  for (const agent of agents.filter((each) => each.online)) {
+    const strikes = needsYou(agent) ? (watched.strikes.get(agent.id) ?? 0) + 1 : 0
+    watched.strikes.set(agent.id, strikes)
+    if (strikes === 2 && wants.notifyFailures) notify({ title: `${agent.name} stopped answering`, body: agent.healthDetail || 'Its virtual machine isn\'t running. OpenHut keeps trying to start it.', path: `/agents/${agent.id}` })
+  }
+  app.setBadgeCount(agents.filter((agent) => agent.online && watched.strikes.get(agent.id) >= 2).length)
+  await Promise.all(list.filter((computer) => computer.online).map(async (computer) => {
+    for (const thread of (await answerOf({ computer: computer.id, path: '/api/threads' })).data ?? []) {
+      const before = watched.threads.get(thread.id)
+      watched.threads.set(thread.id, thread.updatedAt)
+      if (before && before !== thread.updatedAt && wants.notifyReplies && !looking()) await notifyReply({ computer: computer.id, thread, agent: agents.find((each) => each.id === thread.agentId) })
+    }
+  }).map((each) => each.catch(() => undefined)))
+  trayMenu({ agents, computers: list })
+}
+
+async function answerOf({ computer, path }) {
+  return (await openhut.fetch({ computer, path })).json()
+}
+
+function needsYou(agent) {
+  return agent.wanted === 'running' && (agent.status !== 'running' || agent.health === 'not_answering' || agent.health === 'no_seat')
+}
+
+function looking() {
+  return !!main && !main.isDestroyed() && main.isVisible() && main.isFocused()
+}
+
+async function notifyReply({ computer, thread, agent }) {
+  const last = (await answerOf({ computer, path: `/api/threads/${encodeURIComponent(thread.id)}` })).messages?.at(-1)
+  if (last?.role !== 'assistant') return
+  const words = last.parts.filter((part) => part.type === 'text').map((part) => part.text).join('').trim()
+  if (words) notify({ title: agent?.name ?? 'Your agent', body: words.slice(0, 200), path: `/agents/${thread.agentId}` })
+}
+
+function notify({ title, body, path }) {
+  if (!Notification.isSupported()) return
+  const note = new Notification({ title, body })
+  note.on('click', () => show(path))
+  note.show()
+}
+
+function keepAwake(on) {
+  if (on && blocker === undefined) blocker = powerSaveBlocker.start('prevent-app-suspension')
+  if (!on && blocker !== undefined) {
+    powerSaveBlocker.stop(blocker)
+    blocker = undefined
+  }
+}
+
+const STATE_WORDS = { running: 'Running', starting: 'Starting', not_answering: 'Not answering', no_seat: 'Not ready', stopped: 'Asleep', missing: 'Error' }
+
+function stateOf(agent) {
+  if (agent.wanted === 'stopped') return 'stopped'
+  if (agent.status !== 'running') return agent.status === 'missing' ? 'missing' : 'starting'
+  return agent.health === 'answering' || agent.health === null ? 'running' : agent.health
+}
+
+function trayMenu({ agents, computers: list }) {
+  if (!tray) return
+  const rows = list.flatMap((computer) => {
+    const theirs = agents.filter((agent) => agent.computer === computer.id)
+    const head = list.length > 1 ? [{ label: computer.online ? computer.name : `${computer.name}  ·  Offline`, enabled: false }] : []
+    return [...head, ...theirs.map((agent) => ({ label: `${agent.name}  ·  ${computer.online ? STATE_WORDS[stateOf(agent)] : 'Offline'}`, enabled: computer.online, click: () => show(`/agents/${agent.id}`) }))]
+  })
+  const mine = agents.filter((agent) => agent.online && agent.canEdit)
+  const key = JSON.stringify([rows.map((row) => [row.label, row.enabled]), mine.map((agent) => agent.wanted)])
+  if (key === watched.menu) return
+  watched.menu = key
+  tray.setContextMenu(Menu.buildFromTemplate([
+    ...(agents.length ? rows : [{ label: 'No agents yet', enabled: false }]),
+    { type: 'separator' },
+    { label: 'Open OpenHut', click: () => show() },
+    { label: 'Start All Agents', enabled: mine.some((agent) => agent.wanted === 'stopped'), click: () => setAll({ agents: mine, wanted: 'running' }) },
+    { label: 'Stop All Agents', enabled: mine.some((agent) => agent.wanted === 'running'), click: () => setAll({ agents: mine, wanted: 'stopped' }) },
+    { type: 'separator' },
+    { label: 'Quit OpenHut', click: () => app.quit() },
+  ]))
+}
+
+async function setAll({ agents, wanted }) {
+  await Promise.all(agents.filter((agent) => agent.wanted !== wanted).map((agent) => openhut.agents.update({ id: agent.id, change: { wanted } })))
+    .catch((error) => notify({ title: 'OpenHut', body: error.message }))
+  main?.webContents.send('changed')
+  await poll().catch(() => undefined)
+}
+
+function mcpCommands() {
+  const bridge = /\s/.test(BRIDGE) ? `"${BRIDGE}"` : BRIDGE
+  return computers().map(({ id, name }) => {
+    const server = id === LOCAL.id ? 'openhut' : `openhut-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || id}`
+    return { computer: id, name: server, command: `claude mcp add ${server} -- ${bridge}${id === LOCAL.id ? '' : ` --computer ${id}`}` }
+  })
+}
+
+async function serveMcp() {
+  rmSync(MCP_SOCK, { force: true })
+  const server = createServer((req, res) => {
+    if (!/^\/c\/[\w-]+\/mcp$/.test(req.url ?? '')) return res.writeHead(404).end()
+    const body = ['GET', 'HEAD'].includes(req.method) ? undefined : Readable.toWeb(req)
+    serve(new Request(`${APP_ORIGIN}${req.url}`, { method: req.method, headers: webHeaders(req.headers), body, duplex: 'half' }))
+      .catch((error) => refuse(502, error.message))
+      .then((answer) => {
+        res.writeHead(answer.status, Object.fromEntries(answer.headers))
+        if (answer.body) Readable.fromWeb(answer.body).pipe(res)
+        else res.end()
+      })
+  })
+  const umask = process.umask(0o177)
+  await new Promise((resolve, reject) => server.once('error', reject).listen(MCP_SOCK, resolve)).finally(() => process.umask(umask))
+  chmodSync(MCP_SOCK, 0o600)
+}
+
+function webHeaders(headers) {
+  return new Headers(Object.entries(headers).flatMap(([name, value]) => [value].flat().map((each) => [name, String(each)])))
+}
+
+function watch() {
+  if (MAC) {
+    tray = new Tray(join(HERE, 'trayTemplate.png'))
+    tray.setToolTip('OpenHut')
+  }
+  poll().catch(() => undefined)
+  setInterval(() => poll().catch(() => undefined), POLL_MS)
+}
+
+function firstRun(start) {
+  if (start && (!setup || setup.failed)) {
+    setup = { failed: false, agentId: '', steps: [['Checked this Mac', '', 'now'], ['Starting OpenHut', '', 'next'], ['Agent runtime and network fence', '', 'next'], ['Meeting your first agent', '', 'next']] }
+    meet(setup).catch((error) => {
+      const step = setup.steps.find((each) => each[2] === 'now')
+      if (step) step.splice(1, 2, error.message, 'failed')
+      setup.failed = true
+    })
+  }
+  return setup ?? { failed: false, agentId: '', steps: [] }
+}
+
+async function meet(run) {
+  const step = (index, note, state = 'done') => {
+    run.steps[index].splice(1, 2, note, state)
+    if (state === 'done' && run.steps[index + 1]) run.steps[index + 1][2] = 'now'
+  }
+  const hardware = `${cpus()[0]?.model ?? 'This computer'} · ${Math.round(totalmem() / 2 ** 30)} GB`
+  if (!(MAC ? await hypervisor() : kvm())) throw new Error(`${hardware}, but it can't run virtual machines`)
+  step(0, hardware)
+  if (await booted !== true) throw new Error(`It didn't start. The logs are in ${LOGS}.`)
+  await api('/api/me')
+  step(1, `version ${app.getVersion()}`)
+  run.steps[2][1] = 'the first time downloads about 1 GB'
+  const fence = await agentd({ cmd: 'fence' })
+  const passed = (fence.checks ?? []).filter((check) => check.pass).length
+  if (!fence.ok) throw new Error(fence.error ?? `the fence failed ${(fence.checks ?? []).filter((check) => !check.pass).map((check) => check.name).join(', ')}`)
+  step(2, `${passed} of ${fence.checks.length} checks passed`)
+  const agents = (await api('/api/agents')).data
+  const agent = agents[0] ?? await api('/api/agents', { method: 'POST', body: { name: FIRST_AGENT } })
+  await api(`/api/agents/${agent.id}`, { method: 'PATCH', body: { wanted: 'running' } })
+  run.steps[3][1] = `${agent.name} is starting`
+  const ready = await waitFor(async () => (await api(`/api/agents/${agent.id}`)).health === 'answering', 300)
+  if (!ready) throw new Error(`${agent.name} didn't answer within 5 minutes`)
+  step(3, `${agent.name} is answering`)
+  run.agentId = agent.id
+}
+
+function hypervisor() {
+  return new Promise((resolve) => execFile('sysctl', ['-n', 'kern.hv_support'], (_error, stdout) => resolve(String(stdout).trim() === '1')))
+}
+
+async function rootSecret() {
+  if (!await safeStorage.isAsyncEncryptionAvailable() || (!MAC && safeStorage.getSelectedStorageBackend() === 'basic_text')) {
+    if (existsSync(SECRET)) throw new Error('The system keychain is locked or missing, so OpenHut can\'t read its root secret. Unlock it or sign in again, then open OpenHut.')
+    appendFileSync(join(LOGS, 'server.log'), 'openhut: no system keychain (Keychain, libsecret or KWallet) is available, so the root secret stays in the database\n')
+    return
+  }
+  if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
+  if (!existsSync(SECRET)) await keepSecret(randomBytes(32).toString('hex'))
+  serverEnv.OPENHUT_SECRET = (await safeStorage.decryptStringAsync(readFileSync(SECRET))).result
+  serverEnv.OPENHUT_SECRET_HANDOFF = HANDOFF
+}
+
+async function keepSecret(hex) {
+  writeFileSync(SECRET, await safeStorage.encryptStringAsync(hex), { mode: 0o600 })
+  serverEnv.OPENHUT_SECRET = hex
+  rmSync(HANDOFF, { force: true })
+}
+
+function claudeVersion() {
+  return DEV ? /^CLAUDE=(\S+)$/m.exec(readFileSync(join(ROOT, 'install/install.sh'), 'utf8'))[1] : readFileSync(join(BACKEND, 'bin/claude-version'), 'utf8').trim()
+}
+
+async function boot() {
+  mkdirSync(LOGS, { recursive: true })
+  mkdirSync(DATA, { recursive: true })
+  for (const file of readdirSync(LOGS).filter((each) => each.endsWith('.log') && !each.endsWith('.old.log'))) {
+    if (statSync(join(LOGS, file)).size > MAX_LOG) renameSync(join(LOGS, file), join(LOGS, file.replace(/\.log$/, '.old.log')))
+  }
+  const shared = { OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_CLAUDE_HOST: MAC ? join(DATA, 'bin/claude') : join(BACKEND, 'bin/claude'), OPENHUT_CLAUDE_VERSION: claudeVersion() }
+  const pinned = DEV ? {} : msb()
+  rmSync(SOCK, { force: true })
+  start('agentd', { ...shared, ...pinned, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'microsandbox', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK })
+  await waitFor(async () => existsSync(SOCK), 30)
+  rmSync(SERVER_SOCK, { force: true })
+  await rootSecret()
+  start('server', Object.assign(serverEnv, { ...shared, AGENTD_SOCK: SOCK, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_AGENT_GATEWAY: `http://host.microsandbox.internal:${GATEWAY_PORT}` }))
+  if (!await waitFor(async () => existsSync(SERVER_SOCK), 60)) return false
+  if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
+  return true
+}
+
+function msb() {
+  const dir = process.env.APPIMAGE ? join(HOME, `msb-${app.getVersion()}`) : MSB
+  if (!existsSync(dir)) {
+    cpSync(MSB, `${dir}.tmp`, { recursive: true })
+    renameSync(`${dir}.tmp`, dir)
+  }
+  return { MSB_PATH: join(dir, 'bin/msb'), MSB_LIBKRUNFW_PATH: join(dir, 'lib', readdirSync(join(dir, 'lib'))[0]) }
+}
+
+function kvm() {
+  try {
+    accessSync('/dev/kvm', constants.R_OK | constants.W_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function savedBounds() {
+  try {
+    const bounds = JSON.parse(readFileSync(WINDOW_STATE, 'utf8'))
+    const area = screen.getDisplayMatching(bounds).workArea
+    const visible = bounds.x < area.x + area.width && bounds.x + bounds.width > area.x && bounds.y < area.y + area.height && bounds.y + bounds.height > area.y
+    return visible ? bounds : {}
+  } catch {
+    return {}
+  }
+}
+
+function window(path = '/agents') {
+  const win = new BrowserWindow({
+    width: 1280, height: 820, ...savedBounds(), minWidth: 900, minHeight: 600, show: false, title: 'OpenHut',
+    ...(MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 18 } } : { autoHideMenuBar: true }),
+    backgroundColor: CANVAS,
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-mcp=${BRIDGE}`] },
+  })
+  win.on('close', saveBounds)
+  win.once('ready-to-show', () => win.show())
+  win.loadURL(`${APP_ORIGIN}${path}`)
+  main = win
+  return win
+}
+
+function saveBounds() {
+  if (main && !main.isDestroyed()) writeFileSync(WINDOW_STATE, JSON.stringify(main.getNormalBounds()))
+}
+
+function show(path) {
+  const win = main && !main.isDestroyed() ? main : window()
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
+  if (path) win.webContents.executeJavaScript(`navigation.navigate(${JSON.stringify(path)})`).catch(() => win.loadURL(`${APP_ORIGIN}${path}`))
+}
+
+function guard(contents) {
+  const intoApp = (event) => {
+    const { protocol, hostname, pathname, search } = new URL(event.url)
+    if (!['http:', 'https:', 'app:'].includes(protocol)) return event.preventDefault()
+    if (hostname !== '127.0.0.1' && hostname !== 'localhost') return
+    event.preventDefault()
+    contents.loadURL(`${APP_ORIGIN}${pathname}${search}`)
+  }
+  contents.on('will-navigate', intoApp)
+  contents.on('will-redirect', intoApp)
+  contents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith(`${APP_ORIGIN}/`)) return { action: 'allow' }
+    if (/^https?:\/\//.test(url)) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  contents.on('context-menu', (_event, params) => {
+    if (!params.isEditable && !params.selectionText) return
+    const fixes = params.dictionarySuggestions.map((word) => ({ label: word, click: () => contents.replaceMisspelling(word) }))
+    const edit = params.isEditable ? [{ role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { type: 'separator' }, { role: 'selectAll' }] : [{ role: 'copy' }]
+    Menu.buildFromTemplate([...fixes, ...(fixes.length ? [{ type: 'separator' }] : []), ...edit]).popup()
+  })
+}
+
+function menu() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    MAC ? { label: 'OpenHut', submenu: [
+      { role: 'about' }, { type: 'separator' },
+      { label: 'Settings…', accelerator: 'CommandOrControl+,', click: () => show('/settings/general') }, { type: 'separator' },
+      { role: 'services' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' },
+    ] } : { label: 'File', submenu: [
+      { label: 'Settings…', accelerator: 'CommandOrControl+,', click: () => show('/settings/general') }, { type: 'separator' }, { role: 'quit' },
+    ] },
+    { role: 'editMenu' },
+    ...(DEV ? [{ role: 'viewMenu' }] : []),
+    { role: 'windowMenu' },
+    { role: 'help', submenu: [
+      { label: 'OpenHut Docs', click: () => shell.openExternal('https://openhut.dev/docs') },
+      { label: 'Show Logs', click: () => shell.openPath(LOGS) },
+      ...(MAC ? [] : [{ type: 'separator' }, { role: 'about' }]),
+    ] },
+  ]))
+  app.setAboutPanelOptions({ applicationName: 'OpenHut', applicationVersion: app.getVersion(), version: '', copyright: 'Copyright © 2026 OpenHut', credits: 'openhut.dev' })
+}
+
+function update() {
+  updater.autoUpdater.logger = new console.Console(createWriteStream(join(LOGS, 'updates.log'), { flags: 'a' }))
+  updater.autoUpdater.on('error', () => undefined)
+  updater.autoUpdater.checkForUpdatesAndNotify().catch(() => undefined)
+  setInterval(() => updater.autoUpdater.checkForUpdates().catch(() => undefined), 6 * 3600_000)
+}
+
+function serve(req) {
+  const { pathname } = new URL(req.url)
+  const routed = /^\/c\/([\w-]+)(\/api\/.*|\/mcp)$/.exec(pathname)
+  if (routed) return toComputer({ req, id: routed[1], path: routed[2] })
+  return pathname.startsWith('/api/') || pathname === '/mcp' ? toComputer({ req, id: LOCAL.id, path: pathname }) : serveRenderer(req)
+}
+
+function refuse(status, message) {
+  return new Response(JSON.stringify({ error: { type: status >= 500 ? 'api_error' : 'invalid_request_error', message } }), { status, headers: { 'content-type': 'application/json' } })
+}
+
+async function toComputer({ req, id, path }) {
+  const origin = req.headers.get('origin')
+  if (!['GET', 'HEAD'].includes(req.method) && origin !== null && origin !== APP_ORIGIN) return refuse(403, 'Only the OpenHut app can change things here.')
+  const target = path + new URL(req.url).search
+  if (id === LOCAL.id) return toSocket({ req, path: target })
+  const computer = storedComputers().find((each) => each.id === id)
+  if (!computer) return refuse(404, 'That computer isn\'t in your list.')
+  const headers = new Headers(req.headers)
+  for (const name of ['host', 'origin', 'cookie', 'connection']) headers.delete(name)
+  headers.set('authorization', `Bearer ${await keyOf(computer)}`)
+  const res = await fetch(`${computer.url}${target}`, { method: req.method, headers, body: req.body, duplex: 'half', redirect: 'manual' }).catch(() => undefined)
+  if (!res) return refuse(502, `${computer.name} isn't answering. It may be off or off your tailnet.`)
+  const out = new Headers(res.headers)
+  for (const name of ['content-encoding', 'content-length', 'transfer-encoding', 'connection']) out.delete(name)
+  return new Response([204, 304].includes(res.status) ? null : res.body, { status: res.status, headers: out })
+}
+
+function toSocket({ req, path }) {
+  return new Promise((resolve, reject) => {
+    const out = request({ socketPath: SERVER_SOCK, path, method: req.method, headers: Object.fromEntries(req.headers) }, (res) => {
+      const headers = webHeaders(res.headers)
+      resolve(new Response([204, 304].includes(res.statusCode) ? null : Readable.toWeb(res), { status: res.statusCode, headers }))
+    })
+    out.on('error', reject)
+    if (req.body) Readable.fromWeb(req.body).pipe(out)
+    else out.end()
+  })
+}
+
+async function serveRenderer(req) {
+  const file = join(RENDERER, decodeURIComponent(new URL(req.url).pathname))
+  const inside = !relative(RENDERER, file).startsWith('..')
+  const res = await net.fetch(pathToFileURL(inside && statSync(file, { throwIfNoEntry: false })?.isFile() ? file : join(RENDERER, 'index.html')).toString())
+  const headers = new Headers(res.headers)
+  headers.set('content-security-policy', CSP)
+  return new Response(res.body, { status: res.status, headers })
+}
+
+app.on('web-contents-created', (_event, contents) => guard(contents))
+app.on('window-all-closed', () => MAC || app.quit())
+app.on('before-quit', (event) => {
+  saveBounds()
+  if (!children.size) return
+  event.preventDefault()
+  if (quitting) return
+  quitting = true
+  const exited = [...children.values()].map((child) => new Promise((resolve) => {
+    child.once('exit', resolve)
+    child.kill()
+  }))
+  Promise.race([Promise.all(exited), sleep(5000)]).then(() => {
+    for (const child of children.values()) child.kill('SIGKILL')
+    children.clear()
+    app.quit()
+  })
+})
+
+app.whenReady().then(async () => {
+  if (DEV) app.dock?.setIcon(join(HERE, '../build/icon.png'))
+  menu()
+  protocol.handle('app', serve)
+  if (!MAC && !kvm()) {
+    await dialog.showMessageBox({ type: 'error', message: 'This computer can\'t run agents', detail: '/dev/kvm is not available, and OpenHut runs each agent in its own virtual machine. Turn on virtualization (Intel VT-x or AMD-V) in the firmware settings, or nested virtualization on a VM, and make sure your user can open /dev/kvm (sudo usermod -aG kvm $USER, then sign in again).', buttons: ['Quit'] })
+    return app.quit()
+  }
+  const fresh = !existsSync(join(DATA, 'app'))
+  const hidden = process.argv.includes('--hidden') || (MAC && app.getLoginItemSettings().wasOpenedAtLogin)
+  booted = boot().catch((error) => {
+    appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't start: ${error.message}\n`)
+    return error.message
+  })
+  if (fresh) window('/welcome')
+  const started = await booted
+  if (started !== true) {
+    const { response } = await dialog.showMessageBox({ type: 'error', message: 'OpenHut couldn\'t start', detail: `${started || 'Its server didn\'t come up within a minute.'} The logs are in ${LOGS}.`, buttons: ['Open Logs', 'Quit'], defaultId: 0 })
+    if (response === 0) await shell.openPath(LOGS)
+    return app.quit()
+  }
+  if (!fresh && !hidden) window()
+  watch()
+  serveMcp().catch((error) => appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't serve ${MCP_SOCK}: ${error.message}\n`))
+  if (!DEV) update()
+  app.on('activate', () => show())
+  app.on('second-instance', () => show())
+})

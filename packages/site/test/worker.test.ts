@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import worker from '../src/worker.ts'
 
 const FILES: Record<string, [string, string]> = {
@@ -44,6 +45,14 @@ test('the tarball is served as is, never cached by the edge', async () => {
   assert.equal(await res.text(), 'tarball')
   assert.equal(res.headers.get('cache-control'), 'no-cache')
   assert.equal(res.headers.get('content-security-policy'), null)
+})
+
+test('the downloads redirect to the latest release on GitHub', async () => {
+  assert.equal(await readFile(new URL('../public/_redirects', import.meta.url), 'utf8'), [
+    '/download/mac https://github.com/openhuthq/openhut/releases/latest/download/OpenHut-arm64.dmg 302',
+    '/download/linux https://github.com/openhuthq/openhut/releases/latest/download/OpenHut-x64.AppImage 302',
+    '',
+  ].join('\n'))
 })
 
 const sent: { url: string; auth: string | null; body: Record<string, unknown> }[] = []

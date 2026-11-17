@@ -1,5 +1,5 @@
 [Unit]
-Description=OpenHut control plane (dashboard :8787, agent gateway :8081)
+Description=OpenHut control plane (API on 127.0.0.1:8787, agent gateway :8081)
 After=openhut-agentd.service
 Wants=openhut-agentd.service
 
@@ -7,7 +7,7 @@ Wants=openhut-agentd.service
 User=openhut
 EnvironmentFile=/etc/openhut/env
 WorkingDirectory=/opt/openhut
-ExecStart=/usr/bin/env node /opt/openhut/packages/app/src/app.ts
+ExecStart=/usr/bin/env node /opt/openhut/packages/runtime/src/server/app.ts
 UMask=0077
 Restart=always
 

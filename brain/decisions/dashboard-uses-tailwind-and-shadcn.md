@@ -4,7 +4,7 @@ status: accepted
 # The dashboard uses Tailwind and shadcn components
 
 ## Decision
-`packages/web` styles with Tailwind CSS v4 (theme and utilities, no Preflight) and shadcn's Base UI components, copied into `src/components/ui/` and adapted with `cva` variants so each current look is a named `variant` or `size`. Screens in `features/` and `app/` build from those components and utilities; `index.css` keeps only tokens, base element rules and a few scoped blocks.
+`packages/desktop/src/renderer` styles with Tailwind CSS v4 (theme and utilities, no Preflight) and shadcn's Base UI components, copied into `src/components/ui/` and adapted with `cva` variants so each current look is a named `variant` or `size`. Screens in `features/` and `app/` build from those components and utilities; `index.css` keeps only tokens, base element rules and a few scoped blocks.
 
 ## Context
 Owner, 2026-11-16, after an audit of the stylesheet: every style was a short global class in one 716-line `index.css`, and the same row, segmented control, dropdown and heading had grown up to four versions because nothing was shared. This replaces `dashboard-menus-use-base-ui.md`, which kept Tailwind out.

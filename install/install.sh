@@ -14,7 +14,51 @@ die() { printf 'openhut: %s\n' "$*" >&2; exit 1; }
 retry() { n=0; until timeout 600 "$@"; do n=$((n+1)); [ $n -ge 4 ] && return 1; echo "  retrying: $1 ($n)"; sleep 5; done; }
 fetch() { curl -fsSL --retry 4 --retry-all-errors --connect-timeout 15 -m 900 "$1" -o "$2"; }
 check() { printf '%s  %s\n' "$2" "$3" | "$1" -c - >/dev/null || die "checksum mismatch: $3"; }
+serve() {
+  if command -v tailscale >/dev/null 2>&1 && ${SUDO:-} timeout 300 tailscale serve --bg --https=443 http://127.0.0.1:8787 2>&1; then
+    echo "OpenHut is served to your tailnet on port 443."
+  else
+    echo "OpenHut is on 127.0.0.1:8787 only. Next: install Tailscale, sign in, run: tailscale serve --bg --https=443 http://127.0.0.1:8787"
+  fi
+}
 node_ok() { node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; }
+
+write_env() {
+  mkdir -p /etc/openhut && touch /etc/openhut/env && chmod 0600 /etc/openhut/env
+  IMAGE_OVERRIDE="${AGENT_IMAGE:-}"
+  SOURCE_URL="$OPENHUT_URL"
+  LISTEN="${OPENHUT_CONTAINER:+0.0.0.0}"
+  . /etc/openhut/env
+  LISTEN="${LISTEN:-${OPENHUT_HOST:-}}"
+  IMAGE_OVERRIDE="${IMAGE_OVERRIDE:-${AGENT_IMAGE:-}}"
+  umask 077
+  {
+    echo "RESOLVER=${RESOLVER:-1.1.1.1}"
+    [ -z "$IMAGE_OVERRIDE" ] || echo "AGENT_IMAGE=$IMAGE_OVERRIDE"
+    echo "OPENHUT_MODEL=${OPENHUT_MODEL:-claude}"
+    echo "OPENHUT_URL=$SOURCE_URL"
+    echo "OPENHUT_CLIENT_KEY_SHA256=$CLIENT_KEY"
+    [ -z "$LISTEN" ] || echo "OPENHUT_HOST=$LISTEN"
+  } > /etc/openhut/env.new
+  mv /etc/openhut/env.new /etc/openhut/env
+  . /etc/openhut/env
+  umask 022
+}
+start() {
+  STARTED_AFTER=$(date +%s)
+  if [ -d /run/systemd/system ]; then
+    cp "$PREFIX"/install/systemd/*.service /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl enable -q openhut-firewall.service docker.service openhut-agentd.service openhut.service
+    systemctl restart ${1-openhut-firewall.service docker.service openhut-agentd.service} openhut.service
+  else
+    nohup "$PREFIX/install/host-start.sh" >> /var/log/openhut-boot.log 2>&1 9>&- &
+  fi
+}
+fresh() { h=$(curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$h" | grep -q '"ok":true' &&
+  [ "$(echo "$h" | sed -n 's/.*"started":\([0-9]*\).*/\1/p')" -ge "$STARTED_AFTER" ]; }
+up() { i=0; until fresh; do i=$((i+1)); [ $i -gt "$1" ] && return 1; printf .; sleep 3; done; }
+running() { echo "OpenHut is running for the app key sha256:$(printf '%s' "$CLIENT_KEY" | cut -c1-8)..."; }
 
 if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
   SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
@@ -28,19 +72,38 @@ if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
   D=docker; docker info >/dev/null 2>&1 || D="$SUDO docker"
   i=0; until $D info >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 30 ] && die "Docker isn't running. Start it, then run this again."; sleep 1; done
   say "OpenHut container"
-  $D container inspect openhut >/dev/null 2>&1 || $D run -d -q --name openhut --privileged --restart unless-stopped -p 8787:8787 \
+  $D container inspect openhut >/dev/null 2>&1 || $D run -d -q --name openhut --privileged --restart unless-stopped -p 127.0.0.1:8787:8787 \
     -v openhut:/var/lib/docker --entrypoint sh "$HOST_IMAGE" \
     -c 'if [ -x /opt/openhut/install/host-start.sh ]; then exec /opt/openhut/install/host-start.sh; fi; exec sleep infinity' >/dev/null
   $D start openhut >/dev/null
-  IP=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
-  exec $D exec -e SETUP_HOST="${IP:-localhost}" openhut sh -c "apk add -q curl && curl -fsSL $OPENHUT_URL | sh"
+  $D exec -e OPENHUT_CONTAINER=1 -e OPENHUT_CLIENT_KEY_SHA256 openhut sh -c "apk add -q curl && curl -fsSL $OPENHUT_URL | sh" || exit 1
+  serve
+  exit 0
 fi
 
 [ "$(uname -s)" = Linux ] || die "OpenHut runs only on Linux (Debian, Ubuntu or Alpine; x86_64 or arm64), not $(uname -s). On a Mac or Windows, run this inside a Linux VM or on a Linux server."
 [ "$(id -u)" = 0 ] || die "run as root:  curl -fsSL $OPENHUT_URL | sudo sh"
+ENROLLED="$(sed -n 's/^OPENHUT_CLIENT_KEY_SHA256=//p' /etc/openhut/env 2>/dev/null)"
+CLIENT_KEY="${OPENHUT_CLIENT_KEY_SHA256:-$ENROLLED}"
+printf '%s' "$CLIENT_KEY" | grep -Eqx '[0-9a-f]{64}' || die "no app key: add this computer from the OpenHut app (Settings > Computers), which installs OpenHut with OPENHUT_CLIENT_KEY_SHA256 set to its key's hex SHA-256"
 if command -v flock >/dev/null 2>&1; then
   exec 9>/run/openhut-install.lock
-  i=0; until flock -n 9; do i=$((i+1)); [ $i -ge 10 ] && die "another install or update is already running"; sleep 1; done
+  i=0; until flock -n 9; do
+    [ $i -eq 0 ] && say "Waiting for another install to finish"
+    i=$((i+1)); [ $i -ge 180 ] && die "another install or update is still running after 3 minutes; try again when it's done"; sleep 1
+  done
+fi
+[ -z "$ENROLLED" ] || [ "$ENROLLED" = "$CLIENT_KEY" ] || echo "  A new app key: the app that added this computer before can't reach it anymore."
+if [ "$(cat "$PREFIX/BUILD" 2>/dev/null)" = "$OPENHUT_BUILD" ] && [ -f /etc/openhut/env ]; then
+  say "Pairing with this computer"
+  write_env
+  start ''
+  printf 'Waiting for OpenHut'
+  up 100 || { printf '\n'; die "OpenHut didn't come back with the new key; see /var/log/openhut"; }
+  printf '\n'
+  running
+  [ -n "${OPENHUT_CONTAINER:-}" ] || serve
+  exit 0
 fi
 case "$(uname -m)" in
   x86_64)  ARCH=x86_64 NARCH=x64
@@ -118,41 +181,10 @@ chown -R root:root "$PREFIX.new" && chmod -R go-w "$PREFIX.new"
 rm -rf "$PREFIX.old"; [ ! -d "$PREFIX" ] || mv "$PREFIX" "$PREFIX.old"; mv "$PREFIX.new" "$PREFIX"
 id openhut >/dev/null 2>&1 || { addgroup -S openhut >/dev/null 2>&1 && adduser -S -D -G openhut openhut >/dev/null 2>&1; } || useradd --system --user-group --no-create-home openhut
 
-mkdir -p /etc/openhut && touch /etc/openhut/env && chmod 0600 /etc/openhut/env
-IMAGE_OVERRIDE="${AGENT_IMAGE:-}"
-SOURCE_URL="$OPENHUT_URL"
-. /etc/openhut/env
-IMAGE_OVERRIDE="${IMAGE_OVERRIDE:-${AGENT_IMAGE:-}}"
-umask 077
-{
-  echo "RESOLVER=${RESOLVER:-1.1.1.1}"
-  [ -z "$IMAGE_OVERRIDE" ] || echo "AGENT_IMAGE=$IMAGE_OVERRIDE"
-  echo "OPENHUT_MODEL=${OPENHUT_MODEL:-claude}"
-  echo "SETUP_CODE=${SETUP_CODE:-$(od -An -N9 -tx1 /dev/urandom | tr -d ' \n')}"
-  echo "OPENHUT_URL=$SOURCE_URL"
-} > /etc/openhut/env.new
-mv /etc/openhut/env.new /etc/openhut/env
-. /etc/openhut/env
-umask 022
-
-start() {
-  STARTED_AFTER=$(date +%s)
-  if [ -d /run/systemd/system ]; then
-    cp "$PREFIX"/install/systemd/*.service /etc/systemd/system/
-    systemctl daemon-reload
-    systemctl enable -q openhut-firewall.service docker.service openhut-agentd.service openhut.service
-    systemctl restart openhut-firewall.service docker.service openhut-agentd.service openhut.service
-  else
-    nohup "$PREFIX/install/host-start.sh" >> /var/log/openhut-boot.log 2>&1 9>&- &
-  fi
-}
-fresh() { h=$(curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$h" | grep -q '"ok":true' &&
-  [ "$(echo "$h" | sed -n 's/.*"started":\([0-9]*\).*/\1/p')" -ge "$STARTED_AFTER" ]; }
-up() { i=0; until fresh; do i=$((i+1)); [ $i -gt "$1" ] && return 1; printf .; sleep 3; done; }
-
 say "Starting"
+write_env
 start
-[ -d /run/systemd/system ] || [ -n "${SETUP_HOST:-}" ] || echo "  No systemd here. After a reboot, run $PREFIX/install/host-start.sh (agents stay stopped until then)."
+[ -d /run/systemd/system ] || [ -n "${OPENHUT_CONTAINER:-}" ] || echo "  No systemd here. After a reboot, run $PREFIX/install/host-start.sh (agents stay stopped until then)."
 TRIES=600
 [ -d "$PREFIX.old" ] && cmp -s "$PREFIX.old/install/agent-image" "$PREFIX/install/agent-image" && TRIES=100
 printf 'Waiting for OpenHut'
@@ -168,8 +200,8 @@ if ! up "$TRIES"; then
   die "the new release didn't come up, so the previous one is running again"
 fi
 rm -rf "$PREFIX.old"
-IP=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
-printf '\nOpenHut is running. Create your account (the first one is the owner; after that people join by invite):\n  http://%s:8787/setup?code=%s\n' "${SETUP_HOST:-${IP:-this-server}}" "$SETUP_CODE"
-docker image inspect "${AGENT_IMAGE:-$(cat "$PREFIX/install/agent-image")}" >/dev/null 2>&1 || echo "The agent image (about 1 GB) is still downloading. You can sign in now and create agents once it's done."
-echo "Keep port 8787 private (Tailscale or an SSH tunnel) or put TLS in front of it: sign-in travels over plain HTTP."
-echo "OpenHut sends anonymous usage events and the owner's email to openhut.dev. Turn it off in Admin > Usage data. Details: https://openhut.dev/docs/security"
+printf '\n'
+docker image inspect "${AGENT_IMAGE:-$(cat "$PREFIX/install/agent-image")}" >/dev/null 2>&1 || echo "The agent image (about 1 GB) is still downloading; agents start once it's done."
+echo "OpenHut sends anonymous usage events to openhut.dev. Turn it off in Settings > General. Details: https://openhut.dev/docs/security"
+running
+[ -n "${OPENHUT_CONTAINER:-}" ] || serve

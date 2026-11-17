@@ -1,0 +1,65 @@
+import { Cancel01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import type { Agent } from '@openhut/common/agents/agent.ts'
+import type { OpenHutConnection } from '@openhut/client'
+import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { ErrorNote } from '@/components/error-note'
+import { Glyph } from '@/components/glyph'
+import { I, Section } from '@/components/kit'
+import { useAgents, useCreateGrant, useDeleteGrant, useGrants } from '@/features/agents/api'
+import { nameOf, useComputers } from '@/features/computers/api'
+import { useAddConnectionTo, useConnections } from '@/features/connections/api'
+import { toast, toastError } from '@/lib/toast'
+import { navigate } from '@/lib/router'
+
+export function CanUse({ agent }: { agent: Agent }) {
+  const connections = useConnections()
+  const grants = useGrants({ agentId: agent.id })
+  const deleteGrant = useDeleteGrant()
+  const granted = (grants.data ?? []).flatMap((grant) => {
+    const connection = connections.data?.find((each) => each.id === grant.connectionId)
+    return connection ? [{ grant, connection }] : []
+  })
+  const others = (connections.data ?? []).filter((connection) => !grants.data?.some((grant) => grant.connectionId === connection.id))
+  return <Section title="Can use" action={<AddConnection agent={agent} connections={others} />}>
+    <ErrorNote message={connections.error?.message ?? grants.error?.message} />
+    {grants.data && !granted.length && <p className="m-0 text-[12px]/[16px] text-balance text-mute">{agent.name} can't use any connection yet.</p>}
+    <div className="flex flex-wrap gap-1.5">{granted.map(({ grant, connection }) => <span key={grant.id} className="group inline-flex h-6 items-center gap-1.5 rounded-md bg-picked pr-2 pl-1.5 text-[12px] text-ink">
+      <Glyph name={connection.kind} size={13} />{connection.name}
+      {agent.canEdit && <Button type="button" variant="bare" aria-label={`Remove ${connection.name}`} title="Remove" disabled={deleteGrant.isPending} onClick={() => deleteGrant.mutate(grant, { onError: toastError })}
+        className="-mr-1 hidden size-4 place-items-center rounded-full text-mute group-hover:grid hover:bg-soft hover:text-ink"><I icon={Cancel01Icon} size={11} /></Button>}
+    </span>)}</div>
+  </Section>
+}
+
+function AddConnection({ agent, connections }: { agent: Agent; connections: OpenHutConnection[] }) {
+  const createGrant = useCreateGrant()
+  const addTo = useAddConnectionTo()
+  const computers = useComputers().data
+  const home = useAgents().data?.find((each) => each.id === agent.id)?.computer ?? 'local'
+  const there = nameOf({ computers, id: home })
+  return <DropdownMenu>
+    <DropdownMenuTrigger className="inline-flex items-center gap-1 border-0 bg-transparent p-0 text-xs font-medium text-ink" disabled={!agent.canEdit || createGrant.isPending}><I icon={PlusSignIcon} size={12} />Add</DropdownMenuTrigger>
+    <DropdownMenuContent align="end">
+      {connections.map((connection) => {
+        const blocked = blockedReason(agent, connection)
+        const missing = !connection.computers.some((copy) => copy.computer === home)
+        const pick = () => missing
+          ? addTo.mutate({ id: connection.id, computer: home }, { onSuccess: () => toast(`${connection.name} is on ${there} now. Add it again to grant it.`), onError: toastError })
+          : createGrant.mutate({ agentId: agent.id, connectionId: connection.id }, { onError: toastError })
+        return <DropdownMenuItem size="tall" key={connection.id} disabled={!!blocked || addTo.isPending} onClick={pick}>
+          <Glyph name={connection.kind} size={16} />
+          <span className="flex min-w-0 flex-col"><span className="truncate">{connection.name}</span>{(blocked || missing) && <span className="text-xs whitespace-normal text-mute">{blocked ?? `Add to ${there}`}</span>}</span>
+        </DropdownMenuItem>
+      })}
+      {connections.length > 0 && <DropdownMenuSeparator />}
+      <DropdownMenuItem onClick={() => navigate('/connections')}><I icon={PlusSignIcon} size={14} />New connection</DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
+}
+
+function blockedReason(agent: Agent, connection: OpenHutConnection) {
+  if (!connection.usable) return `Private to ${connection.ownerName}. Only ${connection.ownerName} can share it.`
+  if (!connection.everyone && connection.ownerId !== agent.ownerId) return `${agent.ownerName} owns ${agent.name} and can't use ${connection.name}.`
+  return undefined
+}

@@ -9,7 +9,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run build --filter=@openhut/web && node scripts/dev.ts",
+    "dev": "node scripts/dev.ts",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck && tsc -p scripts",
     "test": "turbo run test",

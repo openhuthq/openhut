@@ -1,0 +1,70 @@
+import * as z from 'zod/mini'
+import { HttpError, messageOf } from '../../platform/http-error.ts'
+import { settings } from '../../platform/settings.ts'
+
+const ISSUER = 'https://auth.openai.com'
+const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
+const REFRESH_EARLY_MS = 5 * 60_000
+const TIMEOUT_MS = 20_000
+const UserCode = z.object({ device_auth_id: z.string(), user_code: z.string() })
+const Authorized = z.object({ authorization_code: z.string(), code_verifier: z.string() })
+const Tokens = z.object({ access_token: z.string(), refresh_token: z.optional(z.string()) })
+const Claims = z.object({ exp: z.optional(z.number()), 'https://api.openai.com/auth': z.optional(z.object({ chatgpt_account_id: z.optional(z.string()) })) })
+let refreshing: Promise<string> | undefined
+
+export const codex = {
+  signInUrl: `${ISSUER}/codex/device`,
+
+  async requestCode(): Promise<{ deviceAuthId: string; userCode: string }> {
+    const res = await call({ url: `${ISSUER}/api/accounts/deviceauth/usercode`, body: JSON.stringify({ client_id: CLIENT_ID }), type: 'application/json' })
+    if (!res.ok) throw new HttpError(502, `ChatGPT didn't start the sign-in (HTTP ${res.status}). Try again in a minute.`)
+    const code = z.parse(UserCode, await res.json())
+    return { deviceAuthId: code.device_auth_id, userCode: code.user_code }
+  },
+
+  async poll({ deviceAuthId, userCode }: { deviceAuthId: string; userCode: string }): Promise<boolean> {
+    const res = await call({ url: `${ISSUER}/api/accounts/deviceauth/token`, body: JSON.stringify({ device_auth_id: deviceAuthId, user_code: userCode }), type: 'application/json' })
+    if (res.status === 403 || res.status === 404) return false
+    if (!res.ok) throw new HttpError(502, `ChatGPT stopped the sign-in (HTTP ${res.status}). Start again.`)
+    const { authorization_code: code, code_verifier: verifier } = z.parse(Authorized, await res.json())
+    const tokens = await tokenRequest(new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: `${ISSUER}/deviceauth/callback`, client_id: CLIENT_ID, code_verifier: verifier }))
+    await settings.setCodexTokens({ accessToken: tokens.access_token, refreshToken: tokens.refresh_token ?? '' })
+    return true
+  },
+
+  async accessToken(): Promise<string> {
+    const stored = settings.codexTokens()
+    if (!stored) throw new HttpError(409, 'No ChatGPT account is signed in. An owner or admin signs one in under Admin.')
+    if ((claimsOf(stored.accessToken).exp ?? 0) * 1000 - Date.now() > REFRESH_EARLY_MS) return stored.accessToken
+    refreshing ??= refresh(stored.refreshToken).finally(() => { refreshing = undefined })
+    return refreshing
+  },
+
+  accountOf: (accessToken: string): string | undefined => claimsOf(accessToken)['https://api.openai.com/auth']?.chatgpt_account_id,
+}
+
+async function refresh(refreshToken: string): Promise<string> {
+  const tokens = await tokenRequest(new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: CLIENT_ID }))
+  await settings.setCodexTokens({ accessToken: tokens.access_token, refreshToken: tokens.refresh_token ?? refreshToken })
+  return tokens.access_token
+}
+
+async function tokenRequest(form: URLSearchParams): Promise<z.infer<typeof Tokens>> {
+  const res = await call({ url: `${ISSUER}/oauth/token`, body: form.toString(), type: 'application/x-www-form-urlencoded' })
+  if (res.status === 400 || res.status === 401) throw new HttpError(409, 'ChatGPT refused the sign-in. An owner or admin signs in again under Admin.')
+  if (!res.ok) throw new HttpError(502, `ChatGPT's sign-in server answered ${res.status}. Try again in a minute.`)
+  return z.parse(Tokens, await res.json())
+}
+
+function call({ url, body, type }: { url: string; body: string; type: string }): Promise<Response> {
+  return fetch(url, { method: 'POST', headers: { 'content-type': type, accept: 'application/json' }, body, signal: AbortSignal.timeout(TIMEOUT_MS) })
+    .catch((err: unknown) => { throw new HttpError(502, `ChatGPT's sign-in server didn't answer (${messageOf(err)}). Try again.`) })
+}
+
+function claimsOf(token: string): z.infer<typeof Claims> {
+  try {
+    return z.parse(Claims, JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8')))
+  } catch {
+    return {}
+  }
+}

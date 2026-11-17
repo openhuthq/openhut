@@ -10,7 +10,7 @@ use one, point it at this file. If you are one, do what it says.
 Read these first. They are short, and a change that ignores them will be sent back.
 
 1. **[`CLAUDE.md`](CLAUDE.md)**: what each package is, the conventions, and how to run and test.
-2. **[`DESIGN.md`](DESIGN.md)**: every rule behind the dashboard's look. Read it before touching `packages/web`. Use
+2. **[`DESIGN.md`](DESIGN.md)**: every rule behind the dashboard's look. Read it before touching `packages/desktop/src/renderer`. Use
    the classes and tokens it names; don't add a colour, a button variant or a size it doesn't have.
 3. **[`brain/`](brain)**: why the code is the way it is. The code carries no comments, so the reasons live here.
    Grep it for the area you're changing:
@@ -31,7 +31,7 @@ Read these first. They are short, and a change that ignores them will be sent ba
 - Log through evlog, never `console`.
 - The API follows Stripe's shapes: flat collections, `{ object: 'list', url, hasMore, data }`,
   `{ id, object, deleted: true }`, `{ error: { type, message, param? } }`.
-- Outside services live in `packages/app/src/integrations/<service>/`.
+- Outside services live in `packages/runtime/src/server/integrations/<service>/`.
 - In the dashboard: server data through `useQuery`/`useMutation`, forms uncontrolled, the open dialog in the URL.
 - Tests mirror source paths.
 - Single quotes, no semicolons, `.ts` imports.
@@ -46,8 +46,8 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:8787/setup?code=dev`. `node scripts/seed-ui.ts` on a fresh `.data` fills in sample people,
-agents and connections. The fake agentd answers without Docker, so agents never really run on a laptop.
+Open `http://localhost:5173`. `node scripts/seed-ui.ts` on a fresh `.data` fills in sample agents and
+connections. agentd runs with the memory sandbox, so agents never really run on a laptop.
 
 ## Check it
 

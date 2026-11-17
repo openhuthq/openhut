@@ -117,7 +117,8 @@ html > body[data-scroll-locked] {
 
 .stage img {
   display: block;
-  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
   border: 2px solid #0b0b0c;
   border-radius: 14px;
 }

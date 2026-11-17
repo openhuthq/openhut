@@ -671,7 +671,7 @@ class _Server(HTTPServer):
 
 
 class Admission:
-    def __init__(self, upstream, timeout, queried=None):
+    def __init__(self, upstream, timeout, queried=None, configured=False):
         self.upstream = urlsplit(upstream)
         self.queried = queried
         host = self.upstream.hostname
@@ -679,7 +679,8 @@ class Admission:
             local = ipaddress.ip_address(host).is_loopback
         except ValueError:
             local = host == 'localhost'
-        if (self.upstream.scheme != 'https' and not (self.upstream.scheme == 'http' and local)) or not host or self.upstream.username or self.upstream.password or self.upstream.query or self.upstream.fragment:
+        # OpenHut: a relay_upstream setting may be plain HTTP (its gateway on the agent's own bridge).
+        if (self.upstream.scheme != 'https' and not (self.upstream.scheme == 'http' and (local or configured))) or not host or self.upstream.username or self.upstream.password or self.upstream.query or self.upstream.fragment:
             raise ValueError('Native upstream must be HTTPS or a loopback HTTP fixture')
         self.timeout = timeout
         self.proxy = upstream_proxy(self.upstream)

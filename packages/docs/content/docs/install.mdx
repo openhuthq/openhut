@@ -1,75 +1,62 @@
 ---
 title: Install
-description: One command on a Linux server or a Mac.
+description: Download the app for Mac or Linux, open it, make an agent. No account, no Docker.
 icon: sales
 ---
-
-You need a Linux server (Debian, Ubuntu or Alpine, x86_64 or arm64) or a Mac with [Docker Desktop](https://docs.docker.com/desktop/). See [Hardware](#hardware) for how big.
 
 <Steps>
 <Step>
 
-### Run it
+### Download it
 
-```sh
-curl -fsSL https://openhut.dev | sh
-```
-
-OpenHut runs in one Docker container named `openhut` and leaves the rest of the machine alone. On Linux it installs Docker first if it's missing, which asks for your password.
+- **Mac:** [Download for Mac](https://openhut.dev/download/mac). Apple silicon, macOS 14 or later. Open the dmg and drag OpenHut to Applications.
+- **Linux:** [Download the AppImage](https://openhut.dev/download/linux), or the [.deb](https://github.com/openhuthq/openhut/releases/latest/download/openhut-x64.deb) for Debian and Ubuntu (`sudo apt install ./openhut-x64.deb`). x64 with KVM.
 
 </Step>
 <Step>
 
-### Open the link it prints
+### Open it
 
-Enter your email and pick a password. The first person in is the owner. This is a login on your own server, not an OpenHut account.
-
-The agent image (about 1 GB) keeps downloading in the background. You can create agents once it's done.
+There's no sign-in and no account. The first start takes a minute or two while it gets ready; after that it opens in about ten seconds.
 
 </Step>
 <Step>
 
 ### Add your Claude plan
 
-**Admin**, then **Claude seat**. See [Claude plan](/claude).
+**Settings › Models**, then **Sign in** next to Claude subscription. See [Claude plan](/claude).
 
 </Step>
 <Step>
 
-### Create an agent
+### Make an agent
 
-**Agents**, then **New agent**. Or let [your AI assistant](/assistant) set it up.
+**+** at the top of the sidebar. Pick a face and a name, then **Create**. Tell it its job under **What it does**. See [Multiple agents](/agents).
+
+</Step>
+<Step>
+
+### Add a computer (optional)
+
+Agents on your Mac answer only while it's awake. For agents that stay on, add an always-on Linux computer from **Settings › Computers**. See [Computers](/computers).
 
 </Step>
 </Steps>
 
-The dashboard is plain HTTP on port 8787. Keep it behind Tailscale, an SSH tunnel or HTTPS.
+Each agent runs in its own small virtual machine on your computer, with about 1 GB of memory.
 
-## On a machine that already runs other things
+## Keep your Mac awake
 
-Install it right there; you don't need a VM. OpenHut stays inside its container: it never restarts Docker or touches your other containers, and [Uninstall](/uninstall) leaves the machine as it was.
+**Settings › General**:
 
-Setting it up with an AI assistant? Run the command above on the machine itself, not in a VM.
+- **Keep this Mac awake while agents run.** The screen can still turn off. A closed lid or a sleeping Mac still stops them.
+- **Open at login.** Agents start in the background, without the window.
 
-## Hardware
+Closing the window on a Mac keeps agents running. On Linux it quits the app; the agents keep running and the app finds them when you open it again.
 
-Plan memory for the busiest moment: every running agent can use up to its **Computer** size at once.
+## Troubleshooting
 
-| Server | CPU | Memory | Disk |
-| --- | --- | --- | --- |
-| Try it: 2 agents, no browser | 2 vCPU | 4 GB | 20 GB |
-| A team: 5 agents, 2 of them browse | 4 vCPU | 8 GB | 30 GB |
-| A bigger team: 10 agents, 4 of them browse | 8 vCPU | 16 GB | 40 GB |
-
-The memory column plans 2 GB for each agent that browses. One busy page can take an agent toward its 4 GB limit; on a server sized like the table, two of them at once still fit.
-
-On a Mac, Docker Desktop's memory limit is the server's memory. Set it under **Settings**, **Resources**. Agents run only while the Mac is awake.
-
-To size your own:
-
-- **Memory:** 1 GB for OpenHut and the system, plus each running agent's Computer size: Standard 1 GB, Large 2 GB, Extra large 4 GB. An idle agent uses about 400 MB of it.
-- **Agents that browse:** an agent with Browser on can use up to 4 GB, whatever its Computer size, because the browser runs inside its sandbox. Busy news sites used about 1 GB in our tests; plan 2 GB for each agent that browses.
-- **CPU:** one core for OpenHut, plus one for each agent working at the same moment. Opening a page uses a full core for a second or two.
-- **Disk:** 10 GB for the agent image (3.2 GB), OpenHut and Docker, plus about 1 GB per agent for its memory, files and browser profile.
-
-OpenHut itself uses about 550 MB: the dashboard and gateway 340 MB, the agent runner 80 MB, Docker 115 MB. Measured on an arm64 test server, November 2026.
+- **"This computer can't run agents" on Linux.** The app needs KVM (`/dev/kvm`). Turn on virtualization (Intel VT-x or AMD-V) in the firmware settings, or nested virtualization in a VM. Then let your user open it: `sudo usermod -aG kvm $USER`, and sign in again.
+- **Intel Mac.** Not supported: the Mac app needs Apple silicon. Use the Linux app on an x64 Linux machine instead.
+- **Agents stop answering at night.** Your Mac went to sleep. Turn on **Keep this Mac awake**, or move the agent to an always-on [computer](/computers).
+- **No computers to add.** Tailscale must be installed and signed in on this Mac. See [Computers](/computers).

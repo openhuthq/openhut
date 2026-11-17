@@ -12,8 +12,8 @@ if [ -d /run/systemd/system ]; then
   systemctl daemon-reload
 fi
 pkill -f /opt/openhut/install/supervise.sh 2>/dev/null
-pkill -f '^node /opt/openhut/packages/agentd/src/agentd.ts' 2>/dev/null
-pkill -f '^node /opt/openhut/packages/app/src/app.ts' 2>/dev/null
+pkill -f '^node /opt/openhut/packages/.*agentd\.ts' 2>/dev/null
+pkill -f '^node /opt/openhut/packages/.*/app\.ts' 2>/dev/null
 
 if command -v docker >/dev/null 2>&1; then
   docker ps -aq --filter label=openhut.agent | xargs -r docker rm -f >/dev/null
