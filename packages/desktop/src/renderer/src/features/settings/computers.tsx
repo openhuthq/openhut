@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ArrowLeft01Icon, Delete02Icon, LaptopIcon, MoreHorizontalIcon, NetworkIcon, PlusSignIcon, ServerStack01Icon, SmartPhone01Icon, Tick02Icon, WifiDisconnected02Icon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, LaptopIcon, NetworkIcon, PlusSignIcon, ServerStack01Icon, SmartPhone01Icon, Tick02Icon, WifiDisconnected02Icon } from '@hugeicons/core-free-icons'
 import type { Computer, OpenHutAgent, TailnetPeer } from '@openhut/client'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Spinner } from '@/components/ui/spinner'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
@@ -14,11 +12,11 @@ import { I, ICON_BUTTON, PILL } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
 import { useAdoptComputer, useComputerAdmins, useComputers, useRemoveComputer, useUpdateComputer } from '@/features/computers/api'
 import { useEnroll, useEnrollments, type Enrollment } from '@/features/computers/enroll'
-import { STEPS, clean, failureOf, stepsOf, type StepState } from '@/features/computers/enroll-steps'
+import { failureOf, phaseOf } from '@/features/computers/enroll-steps'
 import { Field } from '@/features/connections/sheet'
 import { HERE, desktop, useTailnet } from '@/features/settings/desktop'
 import { byEligibility, stateOf, type Peer, type PeerState } from '@/features/settings/peers'
-import { Chevron, Command, Expand, Intro, Row, Rows } from '@/features/settings/kit'
+import { Chevron, Command, Intro, Row, Rows } from '@/features/settings/kit'
 import { formValues } from '@/lib/form'
 import { open, useOpen } from '@/lib/router'
 import { toastError } from '@/lib/toast'
@@ -48,7 +46,7 @@ function ComputerList() {
     <Rows>
       {computers.data?.map((computer) => {
         const admin = admins?.find((each) => each.computer.id === computer.id)?.admin
-        if (admin?.server.update?.status === 'running') return <UpdatingRow key={computer.id} computer={computer} admin={admin} />
+        if (admin?.server.update?.status === 'running') return <UpdatingRow key={computer.id} computer={computer} />
         const note = noteOf({ computer, admin, count: agents.filter((agent) => agent.computer === computer.id).length })
         if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={computer.name} note={note}><AppUpdate /></Row>
         return <RemovableRow key={computer.id} computer={computer} admin={admin} note={note} agents={agents.filter((agent) => agent.computer === computer.id)} />
@@ -116,101 +114,23 @@ function RemovableRow({ computer, admin, note, agents }: { computer: Computer; a
   </Row></div>
 }
 
-const MENU_ROW = 'flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] hover:bg-hover'
 
 function EnrollRow({ enrollment }: { enrollment: Enrollment }) {
-  const { start, dismiss, toggle } = useEnroll()
-  const now = useNow(enrollment.status === 'running' || !!enrollment.retryAt)
+  const { start, dismiss } = useEnroll()
   const failed = enrollment.status === 'failed'
-  const steps = stepsOf({ lines: enrollment.lines, failed })
-  const current = Math.max(0, steps.findIndex((step) => step.state === 'now' || step.state === 'failed'))
-  const failure = failed ? failureOf({ error: enrollment.error, url: enrollment.url, name: enrollment.peer.name, here: HERE }) : undefined
-  const retryIn = enrollment.retryAt ? Math.max(0, Math.ceil((enrollment.retryAt - now) / 1000)) : 0
-  const note = failure
-    ? `${failure.sentence}${retryIn ? ` Retrying in ${clock(retryIn)}…` : ''}`
-    : `Adding… · ${labelOf(STEPS[current])} (step ${current + 1} of ${STEPS.length})`
-  const expanded = enrollment.expanded ?? failed
-  const id = `enroll-${enrollment.peer.dns}`
-  return <div className="flex flex-col">
-    <Row onToggle={() => toggle(enrollment.peer.dns, !expanded)} expanded={expanded} controls={id} icon={<Mark icon={ServerStack01Icon} dot={failed ? 'bg-fail' : undefined} />} title={enrollment.peer.name} note={note}>
-      <span className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
-        {!failed && <Spinner className="mt-0" />}
-        {failure?.kind === 'approve' && enrollment.url && <a href={enrollment.url} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Open link</a>}
-        {failed && <Button type="button" variant="secondary" className={PILL} onClick={() => start(enrollment.peer)}>Try again</Button>}
-        {failed && <Popover>
-          <PopoverTrigger className={cn(ICON_BUTTON, '-mr-1.5')} aria-label={`More for ${enrollment.peer.name}`}><I icon={MoreHorizontalIcon} size={16} /></PopoverTrigger>
-          <PopoverContent className="w-[220px] gap-0 rounded-lg p-1.5" align="end">
-            <Button type="button" variant="bare" className={cn(MENU_ROW, 'text-fail')} onClick={() => dismiss(enrollment.peer.dns)}><I icon={Delete02Icon} size={16} />Remove from the list</Button>
-          </PopoverContent>
-        </Popover>}
-      </span>
-      <Chevron open={expanded} />
-    </Row>
-    <Expand open={expanded} id={id}><div className="flex flex-col gap-2 pt-1 pr-2.5 pb-3 pl-[50px]">
-      {steps.map((step) => <div key={step.label} className="flex items-center gap-2.5 text-[13px]/[18px]">
-        <StepMark state={step.state} />
-        <span className={cn(step.state === 'next' && 'text-mute')}>{labelOf(step.label)}</span>
-        {step.detail && <span className="text-mute">{step.detail}</span>}
-      </div>)}
-      {!failed && enrollment.url && <div className="flex items-center gap-2.5 text-[13px]"><span className="size-4" />Approve the Tailscale sign-in<a href={enrollment.url} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Approve in browser</a></div>}
-      {!failed && <p className="m-0 text-[12px] text-mute">{elapsed(now - enrollment.startedAt)} · usually 3–5 min</p>}
-      <Details lines={[...enrollment.lines, ...(failed ? [enrollment.error] : [])]} open={failed} />
-    </div></Expand>
-  </div>
+  const note = failed ? failureOf({ error: enrollment.error, url: enrollment.url, name: enrollment.peer.name, here: HERE }).sentence : phaseOf(enrollment.lines)
+  return <Row icon={<Mark icon={ServerStack01Icon} dot={failed ? 'bg-fail' : undefined} />} title={enrollment.peer.name} note={note}>
+    {failed
+      ? <>
+        <Button type="button" variant="secondary" className={PILL} onClick={() => start(enrollment.peer)}>Try again</Button>
+        <Button type="button" variant="secondary" className={PILL} onClick={() => dismiss(enrollment.peer.dns)}>Remove</Button>
+      </>
+      : <Spinner className="mt-0" />}
+  </Row>
 }
 
-function UpdatingRow({ computer, admin }: { computer: Computer; admin: Admin }) {
-  const [expanded, setExpanded] = useState(false)
-  const now = useNow(true)
-  const update = admin.server.update
-  const id = `update-${computer.id}`
-  return <div className="flex flex-col">
-    <Row onToggle={() => setExpanded(!expanded)} expanded={expanded} controls={id} icon={<ComputerMark computer={computer} />} title={computer.name} note={`Updating… · OpenHut ${update?.from ?? ''} → ${update?.to ?? ''}`}>
-      <Spinner className="mt-0" /><Chevron open={expanded} />
-    </Row>
-    <Expand open={expanded} id={id}><div className="flex flex-col gap-2 pt-1 pr-2.5 pb-3 pl-[50px]">
-      <div className="flex items-center gap-2.5 text-[13px]/[18px]"><StepMark state="now" />Install OpenHut {update?.to}</div>
-      <p className="m-0 text-[12px] text-mute">{elapsed(now - Date.parse(update?.startedAt ?? new Date().toISOString()))} · its agents restart when it's done</p>
-    </div></Expand>
-  </div>
-}
-
-function labelOf(label: string) {
-  return label === 'Pair' ? `Pair with this ${HERE}` : label
-}
-
-function StepMark({ state }: { state: StepState }) {
-  if (state === 'done') return <span className="grid size-4 place-items-center text-pass"><I icon={Tick02Icon} size={14} /></span>
-  if (state === 'now') return <span className="grid size-4 place-items-center"><Spinner className="mt-0 size-3" /></span>
-  return <span className="grid size-4 place-items-center"><i className={cn('size-1.5 rounded-full', state === 'failed' ? 'bg-fail' : 'bg-mid')} /></span>
-}
-
-function Details({ lines, open: shown }: { lines: string[]; open: boolean }) {
-  const text = lines.map(clean).filter(Boolean)
-  if (!text.length) return null
-  return <Collapsible key={String(shown)} defaultOpen={shown} className="flex flex-col gap-1.5">
-    <CollapsibleTrigger className="group/details inline-flex w-fit cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent p-0 text-[12px] text-mute hover:text-ink">Details<span className="[transition:transform_.15s] group-data-panel-open/details:rotate-90">›</span></CollapsibleTrigger>
-    <CollapsibleContent><pre className="no-scrollbar m-0 max-h-48 overflow-auto rounded-lg bg-tint px-3 py-2 font-mono text-[12px]/[1.55] [overflow-wrap:anywhere] whitespace-pre-wrap text-body">{text.join('\n')}</pre></CollapsibleContent>
-  </Collapsible>
-}
-
-function useNow(ticking: boolean) {
-  const [now, setNow] = useState(Date.now())
-  useEffect(() => {
-    if (!ticking) return
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [ticking])
-  return now
-}
-
-function clock(seconds: number) {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-}
-
-function elapsed(ms: number) {
-  const minutes = Math.floor(ms / 60_000)
-  return minutes < 1 ? 'Under a minute so far' : `${minutes} min so far`
+function UpdatingRow({ computer }: { computer: Computer }) {
+  return <Row icon={<ComputerMark computer={computer} />} title={computer.name} note="Updating…"><Spinner className="mt-0" /></Row>
 }
 
 function SubPage({ title, back, children }: { title: string; back: string; children: ReactNode }) {

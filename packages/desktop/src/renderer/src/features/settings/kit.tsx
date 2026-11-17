@@ -15,13 +15,12 @@ export function Intro({ children }: { children: ReactNode }) {
 
 const ROW = 'flex min-h-12 w-full items-center gap-4 rounded-lg border-0 bg-transparent px-2.5 py-[9px] text-left text-ink no-underline'
 
-export function Row({ icon, title, note, href, onClick, onToggle, expanded, controls, disabled, children }: { icon: ReactNode; title: ReactNode; note?: ReactNode; href?: string; onClick?: () => void; onToggle?: () => void; expanded?: boolean; controls?: string; disabled?: boolean; children?: ReactNode }) {
+export function Row({ icon, title, note, href, onClick, disabled, children }: { icon: ReactNode; title: ReactNode; note?: ReactNode; href?: string; onClick?: () => void; disabled?: boolean; children?: ReactNode }) {
   const body = <>
     <span className="grid size-6 shrink-0 place-items-center">{icon}</span>
     <span className="flex min-w-0 flex-1 flex-col"><span className="truncate text-[13px]/[18px]">{title}</span>{note && <span className="text-[12px]/[16px] text-mute">{note}</span>}</span>
     {children && <span className="flex shrink-0 items-center gap-2 text-[13px]">{children}</span>}
   </>
-  if (onToggle) return <div role="button" tabIndex={0} aria-expanded={expanded} aria-controls={controls} className={cn(ROW, 'cursor-default hover:bg-hover')} onClick={onToggle} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onToggle() } }}>{body}</div>
   if (href) return <a href={href} className={cn(ROW, 'hover:bg-hover')}>{body}</a>
   if (onClick) return <Button type="button" variant="bare" disabled={disabled} className={cn(ROW, 'not-disabled:hover:bg-hover')} onClick={onClick}>{body}</Button>
   return <div className={ROW}>{body}</div>
@@ -31,12 +30,8 @@ export function Rows({ children }: { children: ReactNode }) {
   return <div className="flex flex-col gap-0.5">{children}</div>
 }
 
-export function Chevron({ open }: { open?: boolean }) {
-  return <I icon={ArrowRight01Icon} size={16} className={cn('text-mute transition-transform duration-200', open && 'rotate-90')} />
-}
-
-export function Expand({ open, id, children }: { open: boolean; id: string; children: ReactNode }) {
-  return <div id={id} className={cn('grid transition-[grid-template-rows] duration-200 ease-out', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}><div className="min-h-0 overflow-hidden" inert={!open}>{children}</div></div>
+export function Chevron() {
+  return <I icon={ArrowRight01Icon} size={16} className="text-mute" />
 }
 
 export function Command({ text }: { text: string }) {
