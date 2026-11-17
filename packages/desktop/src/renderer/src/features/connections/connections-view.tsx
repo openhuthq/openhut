@@ -1,5 +1,4 @@
-import type { Agent } from '@openhut/common/agents/agent.ts'
-import type { Computer, OpenHutConnection } from '@openhut/client'
+import type { Computer, OpenHutAgent, OpenHutConnection } from '@openhut/client'
 import type { Me } from '@openhut/common/team/team.ts'
 import { useState } from 'react'
 import { ArrowRight01Icon, Search01Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
@@ -84,19 +83,19 @@ function Sheet({ me, id, kind, connected }: { me: Me; id: string; kind: string; 
     const item = integration(kind)
     return item ? <ConnectSheet key={item.name} me={me} item={item} /> : null
   }
-  return <ConnectionSheet key={id} me={me} connectionId={id} connected={connected} />
+  return <ConnectionSheet key={id} connectionId={id} connected={connected} />
 }
 
-function Row({ connection, agents, computers }: { connection: OpenHutConnection; agents: Agent[]; computers: Computer[] | undefined }) {
+function Row({ connection, agents, computers }: { connection: OpenHutConnection; agents: OpenHutAgent[]; computers: Computer[] | undefined }) {
   return <Item size="sm" className={cn('py-2.5', !connection.usable && 'opacity-60')}>
-    <a href={`/connections/${connection.id}`} className="flex min-w-0 flex-1 items-center gap-3 text-ink no-underline" title={connection.usable ? undefined : `Private to ${connection.ownerName}`}>
+    <a href={`/connections/${connection.id}`} className="flex min-w-0 flex-1 items-center gap-3 text-ink no-underline">
       <Glyph name={connection.kind} size={26} />
       <ItemContent stacked><ItemTitle className="flex items-center gap-2">{connection.name}{connection.kind === 'postgres' && <Badge variant="tag">read-only</Badge>}{connection.status === 'failing' && <Badge variant="warning">failing</Badge>}</ItemTitle>
         <ItemDescription className="text-[13px]">{[titleOf(connection.kind), connection.account].filter(Boolean).join(' · ')}</ItemDescription></ItemContent>
       {computers && <span className="flex shrink-0 flex-wrap gap-1">{connection.computers.map((copy) => <span key={copy.computer} title={copy.online ? undefined : 'Offline'}
         className={cn('inline-flex h-5 items-center gap-1 rounded-md bg-soft px-1.5 text-[11.5px]', copy.online ? 'text-ink' : 'text-mute-2')}><i className={cn('size-1.5 rounded-full', copy.online ? 'bg-pass' : 'bg-mute-2')} />{nameOf({ computers, id: copy.computer })}</span>)}</span>}
     </a>
-    <Faces connectionId={connection.id} agents={agents} />
+    <Faces connection={connection} agents={agents} />
     <Popover>
       <PopoverTrigger className={buttonVariants({ variant: 'secondary', size: 'sm' })}>Can use<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></PopoverTrigger>
       <PopoverContent className="w-[260px] gap-0.5 p-1.5">

@@ -18,7 +18,7 @@ import { formValues } from '@/lib/form'
 const SPEND_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
 const resetTime = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' })
 
-export function ModelsSettings({ canEdit }: { canEdit: boolean }) {
+export function ModelsSettings() {
   const admin = useAdmin()
   const dialog = useOpen()
   const signedIn = !!admin.data && admin.data.seat.mode === 'claude' && admin.data.seat.set
@@ -29,7 +29,7 @@ export function ModelsSettings({ canEdit }: { canEdit: boolean }) {
     <ErrorNote message={admin.error?.message} />
     {admin.data && <Rows>
       <Row icon={<Glyph name="claude" size={22} />} title="Claude subscription" note={<>{usageLine(usage.data) ?? 'Pro or Max · Opus, Sonnet and Haiku'}{holders.length > 0 && <><br />On {holders.join(', ')}</>}</>}>
-        <Claude admin={admin.data} canEdit={canEdit} />
+        <Claude admin={admin.data} />
       </Row>
       <Row icon={<Glyph name="openai" size={22} />} title="Codex subscription" note="ChatGPT Plus or Pro">
         <span className="text-[12px] text-mute">Coming soon</span>
@@ -37,14 +37,13 @@ export function ModelsSettings({ canEdit }: { canEdit: boolean }) {
     </Rows>}
     {usage.data && <Spend usage={usage.data} />}
     <p className="m-0 flex items-center gap-4 px-2.5 text-[13px] whitespace-nowrap text-mute"><span className="grid size-6 shrink-0 place-items-center"><I icon={Key01Icon} size={16} className="text-hue-amber" /></span>Sign-ins are sealed in the {HERE === 'Mac' ? 'macOS Keychain' : 'system keyring'}.</p>
-    {dialog === 'seat' && canEdit && <SeatSignIn />}
+    {dialog === 'seat' && <SeatSignIn />}
   </>
 }
 
-function Claude({ admin, canEdit }: { admin: Admin; canEdit: boolean }) {
+function Claude({ admin }: { admin: Admin }) {
   if (admin.seat.mode === 'test') return <span className="text-mute" title="This build answers with the built-in test model, not a Claude seat">Test model (development)</span>
-  const lock = canEdit ? undefined : 'Only an owner or admin signs in'
-  if (!admin.seat.set) return <Button variant="secondary" className={PILL} disabled={!canEdit} title={lock} onClick={() => open('seat')}>Sign in</Button>
+  if (!admin.seat.set) return <Button variant="secondary" className={PILL} onClick={() => open('seat')}>Sign in</Button>
   return <Status tone="on">Signed in</Status>
 }
 
@@ -85,7 +84,7 @@ function SeatSignIn() {
       <div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-lg bg-[#D97757]/12"><Glyph name="claude" size={20} /></span><CardTitle>Sign in with Claude</CardTitle></div>
       {start.error
         ? <FieldError>{start.error.message}</FieldError>
-        : <p className="m-0 font-copy text-[13px]/[1.6] text-body">{signIn?.url
+        : <p className="m-0 text-[13px]/[18px] text-body">{signIn?.url
           ? <>claude.ai opened in your browser. Press Authorize there, then paste the code it shows. <a href={signIn.url} target="_blank" rel="noreferrer">Open claude.ai again</a></>
           : <span className="inline-flex items-center gap-2"><Spinner className="mt-0" />Starting the Claude sign-in. This takes about 10 seconds.</span>}</p>}
       <Input mono name="code" required minLength={10} autoComplete="off" spellCheck={false} aria-label="Code from claude.ai" placeholder="Paste the code from claude.ai" disabled={!signIn} autoFocus />

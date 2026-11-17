@@ -10,9 +10,7 @@ import { HERE, bytes, desktop, home, useMachine, usePrefs, useSetPrefs, type Pre
 import { Intro, Row, Rows } from '@/features/settings/kit'
 import { toastError } from '@/lib/toast'
 
-const LOCKED = 'Only an owner or admin changes this'
-
-export function GeneralSettings({ canEdit }: { canEdit: boolean }) {
+export function GeneralSettings() {
   const admin = useAdmin()
   return <>
     <Intro>How OpenHut runs on this {HERE}.</Intro>
@@ -30,7 +28,7 @@ export function GeneralSettings({ canEdit }: { canEdit: boolean }) {
     <Section title="Data">
       <Rows>
         {desktop && <DataFolder />}
-        {admin.data && <UsageData admin={admin.data} canEdit={canEdit} />}
+        {admin.data && <UsageData admin={admin.data} />}
       </Rows>
     </Section>
   </>
@@ -52,11 +50,11 @@ function DataFolder() {
   </Row>
 }
 
-function UsageData({ admin, canEdit }: { admin: Admin; canEdit: boolean }) {
+function UsageData({ admin }: { admin: Admin }) {
   const updateAdmin = useUpdateAdmin()
   const test = admin.seat.mode === 'test'
   return <Row icon={<I icon={Analytics01Icon} size={20} className="text-hue-violet" />} title="Share anonymous usage data" note={test ? 'Test-model builds never send usage data.' : 'Which features are used, never messages, data or your email.'}>
-    <Switch checked={admin.usageData} aria-label="Share anonymous usage data" title={canEdit ? undefined : LOCKED} disabled={!canEdit || updateAdmin.isPending}
+    <Switch checked={admin.usageData} aria-label="Share anonymous usage data" disabled={updateAdmin.isPending}
       onCheckedChange={() => updateAdmin.mutate({ usageData: !admin.usageData }, { onError: toastError })} />
   </Row>
 }

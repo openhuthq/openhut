@@ -26,7 +26,7 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   }
   return <DialogCard onClose={onClose} className="w-[420px] items-center p-6 text-center">
     <form className="contents" onSubmit={(event) => createAgent.mutate({ body: { name: formValues(event)('name').trim() }, look: look(pick) })}>
-      <DialogTitle className="font-display text-[30px]/none font-normal uppercase">New agent</DialogTitle>
+      <DialogTitle className="text-[15px]/[22px] font-medium">New agent</DialogTitle>
       <Button type="button" variant="bare" aria-label="Other faces" title="Other faces" onClick={() => setRound(round + 1)}
         className="grid size-[104px] place-items-center rounded-xl bg-[radial-gradient(circle_at_50%_40%,#fff6d8,#f3ecdf)] shadow-[inset_0_0_0_1px_var(--hair)]"><Creature id={look(pick).id} about={look(pick).about} size={84} /></Button>
       <div className="flex gap-1.5" role="radiogroup" aria-label="Face">{LOOKS.map((about, index) => <Button key={about} type="button" variant="bare" role="radio" aria-checked={index === pick} aria-label={about} onClick={() => setPick(index)}
@@ -36,7 +36,7 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
         <Button type="button" size="icon" aria-label="Random name" title="Random name" onClick={reroll}><I icon={DiceFaces03Icon} /></Button>
       </div>
       <Button type="submit" variant="primary" size="lg" className="w-full justify-center" disabled={empty || createAgent.isPending}>{createAgent.isPending ? 'Creating…' : 'Create'}</Button>
-      {createAgent.error ? <p role="alert" className="m-0 text-xs text-fail">{createAgent.error.message}</p> : <span className="font-copy text-xs text-mute-2">Its job, model and channels are on its right panel.</span>}
+      {createAgent.error ? <p role="alert" className="m-0 text-xs text-fail">{createAgent.error.message}</p> : <span className="text-[12px] text-mute">Its job, model and channels are on its right panel.</span>}
     </form>
   </DialogCard>
 }

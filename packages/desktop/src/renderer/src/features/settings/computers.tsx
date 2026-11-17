@@ -31,7 +31,7 @@ const GET_TAILSCALE = 'https://tailscale.com/download'
 export function ComputersSettings() {
   const [step, name = ''] = (useOpen() ?? '').split(':')
   if (step === 'add') return <AddChooser />
-  if (step === 'tailscale' || step === 'choose') return <TailscaleStep />
+  if (step === 'tailscale') return <TailscaleStep />
   if (step === 'ssh') return <TurnOnSsh name={name} />
   if (step === 'others') return <Others />
   return <ComputerList />

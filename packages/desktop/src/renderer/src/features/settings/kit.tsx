@@ -2,8 +2,9 @@ import type { ReactNode } from 'react'
 import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox'
 import { ArrowRight01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
+import { DialogTitle } from '@/components/ui/dialog'
 import { CopyButton } from '@/components/copy-button'
-import { Creature } from '@/components/creature'
+import { Face } from '@/features/agents/face'
 import { I, PILL } from '@/components/kit'
 import { home } from '@/features/settings/desktop'
 import { cn } from '@/lib/utils'
@@ -46,7 +47,7 @@ export function Command({ text }: { text: string }) {
 }
 
 export function CardTitle({ children }: { children: ReactNode }) {
-  return <div className="text-[18px] font-semibold">{children}</div>
+  return <DialogTitle className="text-[15px]/[22px] font-medium">{children}</DialogTitle>
 }
 
 const MARKS = { done: <I icon={Tick02Icon} size={12} />, now: <i className="size-2 animate-pulse rounded-full bg-ink" />, failed: <i className="size-2 rounded-full bg-fail" />, next: null }
@@ -69,7 +70,7 @@ export function Check({ checked, disabled, onChange, children }: { checked: bool
 
 export function AgentCheck({ agent, checked, disabled, onChange }: { agent: { id: string; name: string; instructions: string }; checked: boolean; disabled?: boolean; onChange: () => void }) {
   return <Check checked={checked} disabled={disabled} onChange={onChange}>
-    <Creature id={agent.id} about={agent.instructions} size={28} />
+    <Face agent={agent} size={28} />
     <span className="grid min-w-0 leading-tight"><span className="text-[13px] font-medium">{agent.name}</span><span className="truncate text-[11.5px] text-mute">{agent.instructions.split('\n')[0] || 'No instructions yet'}</span></span>
   </Check>
 }

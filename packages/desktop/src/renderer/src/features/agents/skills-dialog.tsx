@@ -74,6 +74,6 @@ function SkillDialog({ agent, skillId, onClose }: { agent: Agent; skillId: strin
       <Textarea name="body" aria-label="Skill" maxLength={SKILL_MAX_LENGTH} required readOnly={!agent.canEdit || !skill.data || skill.data.builtIn} defaultValue={skill.data?.body ?? ''} key={skill.data ? 'loaded' : 'loading'} placeholder={skill.data ? '' : 'Opening…'}
         className="min-h-[340px] flex-1 resize-none rounded-lg bg-canvas font-mono text-[12.5px]/[1.7]" />
     </form>
-    {skill.data?.builtIn && <p className="m-0 font-copy text-[11.5px] text-mute">Built-in skills come with OpenHut and its connections. {agent.name} reads them but can't change them.</p>}
+    {skill.data?.builtIn && <p className="m-0 text-[12px]/[16px] text-mute">Built-in skills come with OpenHut and its connections. {agent.name} reads them but can't change them.</p>}
   </Frame>
 }

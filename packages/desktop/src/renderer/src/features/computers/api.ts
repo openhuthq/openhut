@@ -24,7 +24,7 @@ export function useRemoveComputer() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, agents }: { id: string; agents: string[] }) => {
-      await Promise.all(agents.map((agent) => openhut.agents.update({ id: agent, change: { wanted: 'stopped' } })))
+      await Promise.allSettled(agents.map((agent) => openhut.agents.update({ id: agent, change: { wanted: 'stopped' } })))
       await openhut.computers.remove(id)
     },
     onSuccess: () => {

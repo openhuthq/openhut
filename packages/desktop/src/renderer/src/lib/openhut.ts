@@ -1,13 +1,15 @@
 import { createOpenHut, type Platform, type StoredComputer, type TailnetPeer } from '@openhut/client'
 
-export type EnrollProgress = { peer: string; line: string; url: string | null }
+export type Enrollment = { peer: TailnetPeer; lines: string[]; url: string | null; startedAt: number; status: 'running' | 'failed'; error: string; retryAt: number | null; retried: boolean }
 type Failure = { error: string }
 type Computers = {
   list: () => Promise<StoredComputer[]>
   add: (input: { peer: TailnetPeer }) => Promise<StoredComputer | Failure>
   adopt: (input: { name: string; url: string; key: string }) => Promise<StoredComputer | Failure>
   remove: (input: { id: string }) => Promise<{ id: string } | Failure>
-  onProgress: (listener: (progress: EnrollProgress) => void) => void
+  enrollments: () => Promise<Enrollment[]>
+  dismiss: (input: { dns: string }) => Promise<unknown>
+  onEnrollments: (listener: (list: Enrollment[]) => void) => void
 }
 
 const bridge: { computers: Computers } | undefined = Reflect.get(window, 'openhut')
@@ -33,8 +35,10 @@ const platform: Platform = {
 
 export const openhut = createOpenHut(platform)
 
-export function onEnrollProgress(listener: (progress: EnrollProgress) => void) {
-  bridge?.computers.onProgress(listener)
+export const enrollments = {
+  list: async (): Promise<Enrollment[]> => await bridge?.computers.enrollments() ?? [],
+  dismiss: (dns: string) => bridge?.computers.dismiss({ dns }),
+  follow: (listener: (list: Enrollment[]) => void) => bridge?.computers.onEnrollments(listener),
 }
 
 const homes = new Map<string, string>()

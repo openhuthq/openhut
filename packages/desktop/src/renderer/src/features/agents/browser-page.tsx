@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type WheelEvent } from 'react'
 import { Browser, BrowserInputAccepted, type BrowserInputEvent } from '@openhut/common/agents/browser.ts'
-import type { Me } from '@openhut/common/team/team.ts'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { Creature } from '@/components/creature'
 import { ErrorNote } from '@/components/error-note'
 import { ICONS } from '@/components/icons'
 import { request } from '@/lib/api-client'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import { browserPath, useAgent, useHoldBrowser } from '@/features/agents/api'
+import { useQuery } from '@tanstack/react-query'
+import { Me } from '@openhut/common/team/team.ts'
+import { browserPath, useAgent, useAgents, useHoldBrowser } from '@/features/agents/api'
+import { Face } from '@/features/agents/face'
+import { on } from '@/lib/openhut'
+import { ME_KEY } from '@/lib/query-keys'
 
 const FLUSH_MS = 16
 const MOVE_MS = 33
@@ -21,7 +24,14 @@ const HOLD_IDLE_S = 120
 const PAGE = 'flex h-dvh flex-col overflow-hidden bg-sidebar [--bar:56px] [--chrome:79px] [--gap:20px] [--pad:20px] [--side:288px] [--win:min(var(--pw),calc(100vw_-_var(--side)_-_var(--gap)_-_2_*_var(--pad)),calc((100dvh_-_var(--bar)_-_2_*_var(--pad)_-_var(--chrome))_*_var(--ar)))] mobile:h-auto mobile:min-h-dvh mobile:overflow-visible mobile:[--win:calc(100vw_-_2_*_var(--pad))]'
 const ACTION_WORDS: Record<string, string> = { navigate: 'Opened', click: 'Clicked', fill: 'Filled in', type: 'Typed', press: 'Pressed a key', scroll: 'Scrolled', snapshot: 'Read the page', gettext: 'Read the text', url: 'Checked the address', title: 'Checked the title', screenshot: 'Took a screenshot', back: 'Went back', forward: 'Went forward', reload: 'Reloaded' }
 
-export function BrowserPage({ me, agentId }: { me: Me; agentId: string }) {
+export function BrowserPage({ agentId }: { agentId: string }) {
+  const listed = !!useAgents().data
+  const me = useQuery({ queryKey: [...ME_KEY, 'on', agentId], queryFn: () => request({ schema: Me, path: on({ agentId, path: '/api/me' }) }), enabled: listed })
+  if (!me.data) return <div className={PAGE}><ErrorNote className="mx-6 mt-4" message={me.error?.message} /></div>
+  return <BrowserView me={me.data} agentId={agentId} />
+}
+
+function BrowserView({ me, agentId }: { me: Me; agentId: string }) {
   const agent = useAgent(agentId)
   const live = useLive(agentId)
   const hold = useHoldBrowser(agentId)
@@ -84,10 +94,9 @@ export function BrowserPage({ me, agentId }: { me: Me; agentId: string }) {
       <div className="mx-auto flex h-full max-w-[calc(var(--win)+var(--side)+var(--gap))] min-w-0 items-center gap-2.5 mobile:max-w-none">
         <a className="inline-flex shrink-0 items-center gap-1 text-[13px] text-mute no-underline hover:text-ink mobile:hidden [&_svg]:rotate-180" href={`/agents/${encodeURIComponent(agentId)}`} title={`Back to ${name}`}>{ICONS.chev}{name}</a>
         <Separator orientation="vertical" className="h-5 mobile:hidden" />
-        {agent.data && <Creature id={agent.data.id} about={agent.data.instructions} size={32} />}
+        {agent.data && <Face agent={agent.data} size={32} />}
         <h1 className="m-0 min-w-0 truncate text-[15px] font-semibold">{name}'s browser</h1>
         {mine ? <Badge variant="pill-ink">You're in control</Badge>
-          : heldByOther ? <Badge variant="pill-ink">{live.heldBy} is in control</Badge>
           : <Badge variant="pill"><i className={cn('size-[7px] rounded-full', live.state === 'live' ? 'animate-[blive_1.6s_ease-in-out_infinite] bg-fail' : 'bg-mute-2')} />{live.state === 'live' ? 'Live' : live.state === 'closed' ? 'No page open' : 'Connecting'}</Badge>}
         <span className="flex-1" />
         <Button type="button" variant="primary" disabled={!!heldByOther || hold.isPending || (!mine && live.state !== 'live')} onClick={toggle}>{mine ? `Hand back to ${name}` : 'Take over'}</Button>
@@ -104,7 +113,7 @@ export function BrowserPage({ me, agentId }: { me: Me; agentId: string }) {
         </div>
         <div className={cn('flex h-[34px] min-w-0 shrink-0 items-center border-b px-3 text-[12.5px]', mine ? 'border-b-transparent bg-ink font-medium text-white shadow-[inset_0_-1px_0_oklch(100%_0_0/.18)]' : 'border-hair bg-soft text-mute')} role="status">
           <span className="truncate">{mine ? `${name} is paused · hands back in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} if idle`
-            : heldByOther ? `${live.heldBy} is using the page. ${name} is paused.` : `${name} is driving. Take over to use the page yourself.`}</span>
+            : `${name} is driving. Take over to use the page yourself.`}</span>
         </div>
         <div className={cn('relative bg-tint leading-[0] outline-none', mine ? 'cursor-crosshair' : 'cursor-not-allowed')} ref={screen} tabIndex={mine ? 0 : -1} role="application" aria-label={`${name}'s page`}
           onMouseDown={mouse('down')} onMouseUp={mouse('up')} onMouseMove={mouse('move')} onContextMenu={(event) => mine && event.preventDefault()}
@@ -114,7 +123,7 @@ export function BrowserPage({ me, agentId }: { me: Me; agentId: string }) {
           {live.state === 'live' && <img className="block h-auto w-full select-none" src={`${browserPath(agentId)}/frames?c=${live.connection}`} alt={`The page ${name} has open: ${live.page.title}`} draggable={false}
             onLoad={(event) => { const { naturalWidth: width, naturalHeight: height } = event.currentTarget; if (width && height && (width !== shape.width || height !== shape.height)) setShape({ width, height }) }} />}
           {live.state !== 'live' && <div className="flex aspect-(--ar) w-full flex-col items-center justify-center gap-3 p-6 text-center leading-[1.5] text-mute">
-            {agent.data && <Creature id={agent.data.id} about={agent.data.instructions} size={48} />}
+            {agent.data && <Face agent={agent.data} size={48} />}
             <p className="m-0 max-w-[36ch]">{live.state === 'closed' ? `${name} hasn't opened a page yet. This view starts as soon as it does.` : 'Connecting to the browser…'}</p>
           </div>}
           {ripples.map((ripple) => <span key={ripple.id} className="pointer-events-none absolute -mt-3.5 -ml-3.5 size-7 animate-[bripple_.6s_ease-out_forwards] rounded-full border-2 border-ink" style={{ left: ripple.x, top: ripple.y }} />)}
@@ -131,7 +140,7 @@ export function BrowserPage({ me, agentId }: { me: Me; agentId: string }) {
             <p className="mt-1 mb-0 text-[12.5px]/[1.5] text-mute">Nothing yet. {name}'s clicks and page loads appear here.</p>
           </div>}
         </div>
-        <p className="m-0 rounded-lg border border-hair bg-card px-3.5 py-3 text-[12.5px]/[1.5] text-body" title={`Only people who can edit ${name} can open this page. The picture stops when you close the tab.`}><b>Take over</b> to log in or get past a check. {name} can't act until you hand back, or after 2 minutes without input.</p>
+        <p className="m-0 rounded-lg border border-hair bg-card px-3.5 py-3 text-[12.5px]/[1.5] text-body"><b>Take over</b> to log in or get past a check. {name} can't act until you hand back, or after 2 minutes without input.</p>
         {live.error && <ErrorNote className="mx-6 mt-4" message={live.error} />}
       </aside>
     </main>

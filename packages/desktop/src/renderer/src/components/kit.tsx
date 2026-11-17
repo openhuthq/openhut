@@ -65,7 +65,7 @@ export function DialogCard({ onClose, dismissable, className, children }: { onCl
 }
 
 export function AppWindow({ label, nav, onClose, children }: { label: string; nav?: ReactNode; onClose: () => void; children: ReactNode }) {
-  return <Dialog size="window" onClose={onClose}>
+  return <Dialog size="window" label={label} onClose={onClose}>
     <InWindow value>
       {nav}
       <section aria-label={label} className={cn('relative flex min-w-0 flex-1 flex-col text-[13px]/[18px]', FLAT)}>
@@ -80,7 +80,7 @@ export function Frame({ face, title, subtitle, action, foot, onClose, children }
   return <DialogCard onClose={onClose} className="h-[min(600px,calc(100vh-48px))] w-[560px] gap-0 overflow-hidden p-0">
     <div className="flex items-start gap-3 px-5 pt-5 pb-4">
       {face}
-      <div className="grid min-w-0 flex-1 gap-1"><DialogTitle className="font-display text-[26px]/none font-normal tracking-[.01em] uppercase">{title}</DialogTitle><p className="m-0 font-copy text-[12px]/[1.55] text-body">{subtitle}</p></div>
+      <div className="grid min-w-0 flex-1 gap-1"><DialogTitle className="text-[15px]/[22px] font-medium">{title}</DialogTitle><p className="m-0 text-[13px]/[18px] text-body">{subtitle}</p></div>
       {action}
       <Button type="button" size="icon-sm" aria-label="Close" tabIndex={-1} className="-mt-1 -mr-1" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
     </div>

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
 import { Agent, Grant, type CreateAgent, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import { Browser } from '@openhut/common/agents/browser.ts'
@@ -76,6 +76,13 @@ export function useDeleteAgent(agentId: string) {
 
 export function useGrants(filter: { agentId: string } | { connectionId: string }) {
   return useQuery({ queryKey: grantsKey(filter), queryFn: () => request({ schema: GRANT_LIST, path: at({ id: 'agentId' in filter ? filter.agentId : filter.connectionId, path: `/api/grants?${new URLSearchParams(filter)}` }) }).then((page) => page.data) })
+}
+
+export function useConnectionGrants(connection: { computers: { id: string }[] }) {
+  return useQueries({
+    queries: connection.computers.map(({ id }) => ({ queryKey: grantsKey({ connectionId: id }), queryFn: () => request({ schema: GRANT_LIST, path: at({ id, path: `/api/grants?${new URLSearchParams({ connectionId: id })}` }) }).then((page) => page.data) })),
+    combine: (results) => ({ data: results.every((result) => result.data) ? results.flatMap((result) => result.data ?? []) : undefined }),
+  })
 }
 
 export function useCreateGrant() {
@@ -245,6 +252,7 @@ export function useMoveAgent() {
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agent.id ? agent : each))
       void client.invalidateQueries({ queryKey: [...AGENTS_KEY, agent.id] })
       void client.resetQueries({ queryKey: ['threads', 'agent', agent.id] })
+      for (const queryKey of [channelsKey(agent.id), ['skills', agent.id], ['memory', agent.id], browserKey(agent.id), ['conversations']]) void client.invalidateQueries({ queryKey })
       void client.invalidateQueries({ queryKey: CONNECTIONS_KEY })
       void client.invalidateQueries({ queryKey: GRANTS_KEY })
     },
