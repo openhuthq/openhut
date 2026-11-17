@@ -14,6 +14,7 @@
 
 ## The internal instance
 - internal.openhut.dev is the team's own test instance (it replaced monkey.activepieces.dev on 2026-11-15). It is reached through the Cloudflare Tunnel `openhut-internal` (`cloudflared` as a systemd service on the host, ingress to `127.0.0.1:8787`), so the host needs no open inbound port and no certificate. Host details stay out of this repo.
+- Since 2026-11-17 it runs in the one-container setup (`decisions/openhut-installs-in-one-container.md`), moved with `.agents/skills/openhut-move-to-container`. The native backup is `/root/openhut-native-backup-20261117.tgz`; `/opt/openhut.native`, the host's `/data` and the old agent image are kept for rollback until someone reclaims them. Measured there: install to dashboard 29 s, Update now 18 s (dashboard down about 2 s, agents kept running), host reboot to all agents back 44 s.
 
 ## The GitHub repo and org (openhuthq)
 
