@@ -22,14 +22,15 @@
 - Window sizes: 1180×740 at full size, scaled down to fit; below 1000 px of room it is the app's narrow layout
   (900 wide, no right panel, as the app below 1100pt); below 640 px it is one pane with the agents as a row of faces.
 - Arrangement (2026-11-17): headline, one line, then ONE download button above the window so it shows without
-  scrolling, the window centred and big, a GitHub link under it. A two-column version
+  scrolling, then the window centred and big. A two-column version
   (text and downloads left, window right) was tried: at 1440 the window drops to the narrow layout without its panel.
-- The download button (owner, 2026-11-17, after dusk.bot): one black pill with the OS logo left of the label, the
-  same in the closing band. The HTML says "Download for Mac" with the Apple logo, so it works without JS; the script
-  reads `navigator.userAgentData.platform` (else `navigator.platform`, else the user agent) and only Linux (not Android,
-  not ChromeOS) switches it to "Download for Linux" with Tux and `/download/linux`. Windows, phones and anything unknown
-  keep Mac. One muted line under it: "Apple silicon · macOS 14 or later" or "x64 · also as a .deb", then "Other
-  platforms" (GitHub releases). Clicks track `mac_download_clicked` or `linux_download_clicked` (with `format`).
+- The download button (owner, 2026-11-17, after dusk.bot): one row, a black pill with the OS logo left of the label
+  and a grey "Other platforms" pill to GitHub releases (that is where the .deb is), no line under it, the same in the
+  closing band. The HTML says "Download for Mac" with the Apple logo, so it works without JS; the script reads
+  `navigator.userAgentData.platform` (else `navigator.platform`, else the user agent) and only Linux (not Android, not
+  ChromeOS) switches it to "Download for Linux" with Tux and `/download/linux`. Windows, phones and anything unknown
+  keep Mac. Clicks track `mac_download_clicked` or `linux_download_clicked`; Other platforms counts as `github_clicked`.
+  GitHub's own link lives in the nav and the footer on the sand; the hero has no GitHub line (owner, fewer rows).
 - The rest of the page follows the app's calm: Inter headings at a few sizes, sentence case, grey pills, hairline
   cards, colour only from faces, brand marks and status dots. Bebas Neue and IBM Plex Mono are gone from the home page
   (the docs and `/brand` still use them). Sections and their substance are unchanged: channels, shape it as you go,
