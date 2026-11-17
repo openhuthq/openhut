@@ -76,6 +76,7 @@ header.b p{font-family:var(--copy);font-size:17px;line-height:1.55;color:var(--b
 .lead figure{margin-top:24px}
 .sm h3{font-size:30px}
 .sm a{color:var(--ink)}
+.was{font-family:var(--copy);font-size:14px;line-height:1.6;color:var(--muted);max-width:60ch;margin:0;padding:12px 16px;border-radius:8px;background:var(--stage)}
 .sm p{font-family:var(--copy);font-size:14px;line-height:1.6;color:var(--body);max-width:60ch;margin-top:8px}
 .sm figure{margin-top:18px}
 .stage{background:var(--stage);border-radius:18px;padding:36px;display:grid;place-items:center}
@@ -119,14 +120,53 @@ footer .toplinks a{color:var(--night-ink)}
 <main class="wrap">
   <div class="rels">
 
-    <article class="rel" id="v0-3">
+    <article class="rel" id="v0-1-0">
+      <div class="when">
+        <span class="ver">0.1.0</span>
+        <time datetime="2026-11-17">November 17, 2026</time>
+        <a class="meta" data-location="changelog" href="https://github.com/openhuthq/openhut/releases" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+      <div class="body">
+        <section class="lead">
+          <h2>OpenHut is a Mac and Linux app</h2>
+          <p>Download it, sign in to Claude and make your first agent. Each agent runs in its own sandbox on your computer, and one window shows them all.</p>
+          <figure>
+            <div class="stage"><img src="/changelog/desktop-app.jpg" alt="The OpenHut app: agents in the sidebar, Support asleep in the middle, its settings on the right" width="1568" height="1010"></div>
+            <figcaption>The app on a Mac. Every agent has a face, a chat and a panel.</figcaption>
+          </figure>
+        </section>
+        <section class="sm">
+          <h3>Add an always-on computer</h3>
+          <p>Add a Linux computer on your tailnet and agents keep answering while your Mac sleeps. Each computer runs its own Agent Runtime.</p>
+          <figure>
+            <div class="stage"><img src="/changelog/desktop-computers.jpg" alt="Settings, Computers: This Mac, a Linux computer called beelink, and Add a computer" width="1568" height="1010" loading="lazy"></div>
+            <figcaption>Settings › Computers.</figcaption>
+          </figure>
+        </section>
+        <section class="sm">
+          <h3>Move an agent to another computer</h3>
+          <p>Pick another computer under Runs on. The agent moves with its memory and chats.</p>
+        </section>
+        <section class="sm">
+          <h3>Set it up from your own AI</h3>
+          <p>Settings › MCP has one command per computer for Claude Code, Codex, Cursor or Zed. Your AI can then make agents and grant access for you.</p>
+        </section>
+        <section class="sm">
+          <h3>Runs on your Claude plan</h3>
+          <p>Sign in with the Claude subscription you already pay for. On a Mac the sign-in is sealed in the Keychain.</p>
+        </section>
+      </div>
+    </article>
+
+    <article class="rel" id="server-preview">
       <div class="when">
         <svg class="cr" data-cr="hut" width="44" height="44"></svg>
-        <span class="ver">0.3</span>
+        <span class="ver">Server preview</span>
         <time datetime="2026-11-15">November 15, 2026</time>
         <a class="meta" data-location="changelog" href="https://github.com/openhuthq/openhut/commits/main" target="_blank" rel="noopener">GitHub ↗</a>
       </div>
       <div class="body">
+        <p class="was">Before the desktop app, OpenHut was a server you installed with one command and shared with your team. The app replaced it. Automations, webhooks, team sign-in and the People page belonged to that preview and are not in the app.</p>
         <section class="lead">
           <h2>Watch your agents browse the web, live</h2>
           <p>Switch on Browser and an agent gets a real web browser inside its own sandbox. Take over to log in or get past a check.</p>
@@ -198,7 +238,7 @@ footer .toplinks a{color:var(--night-ink)}
 </main>
 
 <footer>
-  <div class="wrap"><div class="logo"><svg class="cr" data-cr="hut" width="40" height="40"></svg>OpenHut</div><p>Self-improving agents for your team, on your own server.</p><span class="toplinks"><a href="/docs/">Docs</a><a href="/brand">Brand</a><a href="/changelog">Changelog</a><a class="gh" data-location="footer" href="https://github.com/openhuthq/openhut" target="_blank" rel="noopener"><svg class="ghi" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg><span class="ghl">GitHub</span></a></span></div>
+  <div class="wrap"><div class="logo"><svg class="cr" data-cr="hut" width="40" height="40"></svg>OpenHut</div><p>Self-improving agents for your team, on your Mac, or on your own server.</p><span class="toplinks"><a href="/docs/">Docs</a><a href="/brand">Brand</a><a href="/changelog">Changelog</a><a class="gh" data-location="footer" href="https://github.com/openhuthq/openhut" target="_blank" rel="noopener"><svg class="ghi" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8"/></svg><span class="ghl">GitHub</span></a></span></div>
 </footer>
 
 <script>
@@ -277,7 +317,6 @@ footer .toplinks a{color:var(--night-ink)}
 
   paintAll()
 })()
-})
 document.addEventListener('click', e => {
   const gh = e.target.closest('a[href^="https://github.com/openhuthq/openhut"]')
   if (gh) window.databuddy?.track('github_clicked', { location: gh.dataset.location || 'other' })

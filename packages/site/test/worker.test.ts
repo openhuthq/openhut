@@ -12,7 +12,9 @@ const FILES: Record<string, [string, string]> = {
 const env = {
   ASSETS: {
     fetch: async (request: Request) => {
-      const file = FILES[new URL(request.url).pathname]
+      const path = new URL(request.url).pathname
+      if (path.startsWith('/download/')) return new Response(null, { status: 302, headers: { location: 'https://github.com/openhuthq/openhut/releases/latest' } })
+      const file = FILES[path]
       return file ? new Response(file[0], { headers: { 'content-type': file[1] } }) : new Response('Not found', { status: 404 })
     },
   },
@@ -107,4 +109,13 @@ test('serving install.sh and the release counts a download, and still works when
   await settle()
   globalThis.fetch = realFetch
   assert.deepEqual(sent.map(({ body }) => [body.name, body.properties]), [['install_script_fetched', { client: 'curl' }]])
+})
+
+test('a download from any page counts once, on the redirect', async () => {
+  captureBasket()
+  const res = await worker.fetch(new Request('https://openhut.dev/download/linux', { headers: { 'user-agent': 'Mozilla/5.0' } }), keyed, ctx)
+  assert.equal(res.status, 302)
+  await settle()
+  globalThis.fetch = realFetch
+  assert.deepEqual(sent.map(({ body }) => [body.name, body.properties]), [['app_downloaded', { platform: 'linux' }]])
 })
