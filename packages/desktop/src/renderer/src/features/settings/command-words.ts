@@ -1,5 +1,5 @@
 export function wordsOf(command: string) {
-  const parts = command.match(/"[^"]*"|\S+/g) ?? []
+  const parts = command.match(/(?:[^\s"]+|"[^"]*")+/g) ?? []
   const words: string[] = []
   for (const part of parts) {
     const last = words.at(-1)

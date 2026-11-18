@@ -6,7 +6,8 @@ import { Switch } from '@/components/ui/switch'
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Section, Status } from '@/components/kit'
 import { useAdmin, useUpdateAdmin } from '@/features/settings/api'
-import { HERE, bytes, desktop, home, useMachine, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
+import { HERE, bytes, desktop, useMachine, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
+import { home } from '@/features/settings/home'
 import { Row, Rows } from '@/features/settings/kit'
 import { WORDS } from '@/lib/platform'
 import { useAppUpdate } from '@/features/settings/update'
@@ -40,7 +41,7 @@ export function GeneralSettings() {
 function Version() {
   const state = useAppUpdate().data
   if (!state) return null
-  return <Row icon={<I icon={CloudDownloadIcon} size={20} className="text-hue-sky" />} title={`OpenHut ${state.current}`}><UpdateStatus idle={<Status tone="on">Up to date</Status>} /></Row>
+  return <Row icon={<I icon={CloudDownloadIcon} size={20} className="text-hue-sky" />} title={`OpenHut ${state.current}`} note={state.ready ? 'Ready to install.' : 'Updates download on their own.'}><UpdateStatus idle={<Status tone="on">Up to date</Status>} /></Row>
 }
 
 function PrefSwitch({ icon, hue, name, title, note }: { icon: IconSvgElement; hue: string; name: keyof Prefs; title: string; note?: string }) {
