@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('openhut', {
   devices: {
     list: () => ipcRenderer.invoke('devices.list'),
     remove: (input) => ipcRenderer.invoke('devices.remove', input),
+    allow: (input) => ipcRenderer.invoke('devices.allow', input),
   },
   computers: {
     list: () => ipcRenderer.invoke('computers.list'),

@@ -15,6 +15,7 @@ type Computers = {
 type Devices = {
   list: () => Promise<Device[] | Failure>
   remove: (input: { key: string }) => Promise<Device[] | Failure>
+  allow: (input: { id: string }) => Promise<{ id: string } | Failure>
 }
 
 const bridge: { computers: Computers; devices?: Devices; version?: string } | undefined = Reflect.get(window, 'openhut')
@@ -50,4 +51,5 @@ export const enrollments = {
 export const devices = {
   list: (): Promise<Device[]> => bridge?.devices ? answer(bridge.devices.list()) : openhut.access.list(),
   remove: (key: string): Promise<Device[]> => answer(bridge?.devices?.remove({ key })),
+  allow: (id: string): Promise<{ id: string }> => answer(bridge?.devices?.allow({ id })),
 }

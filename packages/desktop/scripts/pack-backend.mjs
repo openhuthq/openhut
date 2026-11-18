@@ -11,13 +11,15 @@ const NATIVE = LINUX ? [] : ['@electric-sql/pglite', 'microsandbox', '@microsand
 
 rmSync(OUT, { recursive: true, force: true })
 
-const bundle = (entry, outfile) => build({
+const bundle = (entry, outfile, options = {}) => build({
   entryPoints: [join(ROOT, entry)], outfile: join(OUT, outfile), bundle: true, platform: 'node', format: 'esm', target: 'node24',
   external: [...NATIVE, 'pg-native'], alias: { 'sodium-native': 'sodium-javascript' }, logLevel: 'warning',
   banner: { js: "import { createRequire as __cr } from 'node:module'; import { dirname as __dn } from 'node:path'; import { fileURLToPath as __fu } from 'node:url'; const require = __cr(import.meta.url); const __filename = __fu(import.meta.url); const __dirname = __dn(__filename);" },
+  ...options,
 })
 
 await bundle('packages/client/src/openhut.ts', 'client.mjs')
+await bundle('packages/tunnel/src/index.ts', 'tunnel.mjs', { alias: { 'sodium-universal': 'sodium-javascript' } })
 cpSync(join(import.meta.dirname, '../bin/openhut-mcp'), join(OUT, 'bin/openhut-mcp'))
 mkdirSync(join(OUT, 'node_modules'), { recursive: true })
 if (!LINUX) await runtime()

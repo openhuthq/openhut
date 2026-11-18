@@ -20,6 +20,7 @@ type Fake = {
   seat: { at: string | null; token: string }
   calls: string[]
   access?: Access
+  relayKey?: string
 }
 
 function fake(): Fake {
@@ -153,7 +154,7 @@ function setup(ids: string[], options: { owner?: boolean } = {}) {
     openUrl: (url) => { opened.push(url) },
     owner: options.owner ? async () => ({ key: ownerKeys.key, sign: async (text) => sign(null, Buffer.from(text), ownerKeys.privateKey).toString('hex'), self: { key: MAC, name: 'Mo\'s Mac' } }) : undefined,
   }
-  return { runtimes, opened, openhut: createOpenHut(platform) }
+  return { runtimes, opened, stored, openhut: createOpenHut(platform) }
 }
 
 test('agents from every computer come back tagged; connections are merged by kind and name; an offline computer keeps its last-known rows greyed', async () => {
@@ -362,4 +363,38 @@ test('only the app that holds the owner key removes devices, and never itself', 
   assert.equal(await openhut.access.sync(), undefined)
   const { openhut: mac } = setup(['local'], { owner: true })
   await assert.rejects(mac.access.remove(MAC), /can't remove itself/)
+})
+
+test('allowing a phone signs exactly one new version with it as a client, carried to every computer', async () => {
+  const { runtimes, openhut } = setup(['local', 'beelink'], { owner: true })
+  const first = await openhut.access.sync()
+  const next = await openhut.access.allow({ name: 'Mo\'s iPhone', kind: 'client', key: PHONE })
+  assert.equal(next.version, first!.version + 1)
+  assert.ok(await verify(next))
+  assert.deepEqual(next.clients.map((each) => [each.key, each.name]), [[MAC, 'Mo\'s Mac'], [PHONE, 'Mo\'s iPhone']])
+  assert.deepEqual(next.computers, first!.computers)
+  assert.deepEqual([runtimes.local.access, runtimes.beelink.access], [next, next])
+  await openhut.access.sync()
+  assert.equal((await openhut.access.allow({ name: 'Mo\'s iPhone', kind: 'client', key: PHONE })).version, next.version)
+  assert.deepEqual([runtimes.local.access?.version, runtimes.beelink.access?.version], [next.version, next.version])
+})
+
+test('allowing a computer adds it to the list\'s computers by its relay key, and a sync while it is still joining keeps it', async () => {
+  const { runtimes, openhut, stored } = setup(['local'], { owner: true })
+  await openhut.access.sync()
+  const key = 'ef'.repeat(32)
+  stored.push({ id: 'office', name: 'Office server', url: '' })
+  runtimes.office = { ...fake(), up: false }
+  const next = await openhut.access.allow({ name: 'Office server', kind: 'computer', key })
+  assert.equal(next.version, 2)
+  assert.deepEqual(next.computers.at(-1), { id: createHash('sha256').update(Buffer.from(key, 'hex')).digest('hex'), name: 'Office server', key })
+  assert.deepEqual(next.clients.map((each) => each.key), [MAC])
+  assert.equal((await openhut.access.sync())?.version, 2)
+})
+
+test('a computer that has a relay key is listed by it, not by its transfer key', async () => {
+  const { runtimes, openhut } = setup(['local'], { owner: true })
+  runtimes.local.relayKey = '12'.repeat(32)
+  const list = await openhut.access.sync()
+  assert.deepEqual(list?.computers.map((each) => each.key), ['12'.repeat(32)])
 })

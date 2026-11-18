@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ArrowLeft01Icon, LaptopIcon, Tick02Icon, NetworkIcon, PlusSignIcon, ServerStack01Icon, SmartPhone01Icon, WifiDisconnected02Icon } from '@hugeicons/core-free-icons'
+import { CommandLineIcon, LaptopIcon, Tick02Icon, NetworkIcon, PlusSignIcon, ServerStack01Icon, SmartPhone01Icon, WifiDisconnected02Icon } from '@hugeicons/core-free-icons'
 import type { Computer, OpenHutAgent, TailnetPeer } from '@openhut/client'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
-import { I, ICON_BUTTON, PILL } from '@/components/kit'
+import { I, PILL } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
 import { useAdoptComputer, useComputerAdmins, useComputers, useRemoveComputer, useUpdateComputer } from '@/features/computers/api'
 import { useEnroll, useEnrollments, type Enrollment } from '@/features/computers/enroll'
@@ -15,7 +15,9 @@ import { failureOf, phaseOf } from '@/features/computers/enroll-steps'
 import { Field } from '@/features/connections/sheet'
 import { HERE, useTailnet } from '@/features/settings/desktop'
 import { byEligibility, stateOf, type Peer, type PeerState } from '@/features/settings/peers'
-import { Chevron, Command, Intro, Row, Rows, useConfirming } from '@/features/settings/kit'
+import { Invite } from '@/features/settings/invite'
+import { joinCommand } from '@/features/settings/invitation'
+import { Chevron, Command, Intro, Row, Rows, SubPage, useConfirming } from '@/features/settings/kit'
 import { UpdateStatus } from '@/features/settings/update-pill'
 import { formValues } from '@/lib/form'
 import { open, useOpen } from '@/lib/router'
@@ -32,6 +34,7 @@ export function ComputersSettings() {
   if (step === 'tailscale') return <TailscaleStep />
   if (step === 'ssh') return <TurnOnSsh name={name} />
   if (step === 'others') return <Others />
+  if (step === 'command') return <WithCommand />
   return <ComputerList />
 }
 
@@ -126,18 +129,12 @@ function UpdatingRow({ computer }: { computer: Computer }) {
   return <Row icon={<ComputerMark computer={computer} />} title={computer.name} note="Updating…"><Spinner className="mt-0" /></Row>
 }
 
-function SubPage({ title, back, children }: { title: string; back: string; children: ReactNode }) {
-  return <div className="flex flex-col gap-4">
-    <div className="-mt-1 flex items-center gap-1"><Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Back" title="Back" onClick={() => open(back)}><I icon={ArrowLeft01Icon} size={16} /></Button><span className="text-[14px] font-medium">{title}</span></div>
-    {children}
-  </div>
-}
-
 function AddChooser() {
   const tailnet = useTailnet()
   const missing = tailnet.data?.state === 'missing'
   return <SubPage title="Add a computer" back="">
     <Rows>
+      <Row onClick={() => open('command')} icon={<I icon={CommandLineIcon} size={20} className="text-hue-teal" />} title="With a command" note="Paste one line on any Linux computer. No Tailscale needed."><Chevron /></Row>
       <Row onClick={() => open('tailscale')} icon={<I icon={NetworkIcon} size={20} className="text-hue-blue" />} title="Tailscale" note="Pick a computer on your tailnet. OpenHut installs itself over Tailscale SSH.">
         {missing && <span className="text-mute">Not installed</span>}<Chevron />
       </Row>
@@ -201,6 +198,19 @@ function TurnOnSsh({ name }: { name: string }) {
     <p className="m-0 px-2.5 text-[13px]/[18px] text-body">OpenHut installs itself over Tailscale SSH. Run this once on {name}, then check again.</p>
     <div className="px-2.5"><Command text="sudo tailscale set --ssh" /></div>
     <div className="px-2.5"><Button type="button" variant="secondary" className={PILL} disabled={tailnet.isFetching} onClick={() => void tailnet.refetch().then(() => open('tailscale'))}>Check again</Button></div>
+  </SubPage>
+}
+
+function WithCommand() {
+  return <SubPage title="With a command" back="add">
+    <Invite
+      check={(device) => `Allow it only if ${device.name} shows the same numbers. Your agents can run there once it joins.`}
+      waiting={(code) => <div className="flex flex-col gap-3 px-2.5">
+        <p className="m-0 text-[13px]/[18px] text-body">Run this on the computer you want to add. It installs OpenHut there and adds it to your computers.</p>
+        <Command text={joinCommand(code)} />
+        <p className="m-0 flex items-center gap-2 text-[12px] text-mute"><Spinner className="mt-0" />Waiting for it to join. The code works once, for 5 minutes.</p>
+      </div>}
+    />
   </SubPage>
 }
 

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox'
-import { ArrowRight01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, ArrowRight01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
 import { CopyButton } from '@/components/copy-button'
 import { Face } from '@/features/agents/face'
-import { I, PILL } from '@/components/kit'
+import { I, ICON_BUTTON, PILL } from '@/components/kit'
 import { home } from '@/features/settings/home'
+import { open } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
 export function Intro({ children }: { children: ReactNode }) {
@@ -34,6 +35,13 @@ export function Row({ icon, title, note, href, onClick, disabled, children }: { 
 
 export function Rows({ children }: { children: ReactNode }) {
   return <div className="flex flex-col gap-0.5 empty:hidden phone:rounded-2xl phone:bg-card phone:p-1">{children}</div>
+}
+
+export function SubPage({ title, back, children }: { title: string; back: string; children: ReactNode }) {
+  return <div className="flex flex-col gap-4">
+    <div className="-mt-1 flex items-center gap-1"><Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Back" title="Back" onClick={() => open(back)}><I icon={ArrowLeft01Icon} size={16} /></Button><span className="text-[14px] font-medium">{title}</span></div>
+    {children}
+  </div>
 }
 
 export function Chevron() {

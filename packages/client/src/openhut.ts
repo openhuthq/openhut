@@ -26,6 +26,7 @@ export type Platform = {
 }
 export type Owner = { key: string; sign: (text: string) => Promise<string>; self: { key: string; name: string } }
 export type Device = Client & { self: boolean }
+export type Joined = { name: string; kind: 'client' | 'computer'; key: string }
 export type OpenHutAgent = Agent & { computer: string; online: boolean }
 export type Copy = { computer: string; id: string; online: boolean }
 export type OpenHutConnection = Connection & { computers: Copy[] }
@@ -352,6 +353,22 @@ export function createOpenHut(platform: Platform) {
         await carry({ list: next, rows: await across({ seen: accessSeen, read: held }) })
       })
       return access.list()
+    },
+    async allow(device: Joined): Promise<Access> {
+      const owner = await platform.owner?.()
+      if (!owner) throw new RequestError({ message: 'Open the OpenHut app on your Mac to allow a device. Only it can sign the list.', status: 403 })
+      const list = await access.sync()
+      if (!list) throw new RequestError({ message: 'None of your computers is answering. Try again when one is back.', status: 409 })
+      const there = device.kind === 'client' ? list.clients.some((each) => each.key === device.key) : list.computers.some((each) => each.key === device.key)
+      if (there) return list
+      const added = device.kind === 'client'
+        ? { clients: [...list.clients, { key: device.key, name: device.name, addedAt: new Date().toISOString() }] }
+        : { computers: [...list.computers, { id: await computerId(device.key), name: device.name, key: device.key }] }
+      return serial(async () => {
+        const next = await signed({ owner, list: { ...list, ...added, version: list.version + 1 } })
+        await carry({ list: next, rows: await across({ seen: accessSeen, read: held }) })
+        return next
+      })
     },
   }
 

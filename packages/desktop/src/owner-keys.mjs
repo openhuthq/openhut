@@ -10,6 +10,7 @@ export async function ownerKeys({ dir, safeStorage, name }) {
     key: raw(owner),
     sign: async (text) => sign(null, Buffer.from(text), owner).toString('hex'),
     self: { key: raw(device), name },
+    device: { publicKey: Buffer.from(raw(device), 'hex'), secretKey: Buffer.from(device.export({ format: 'jwk' }).d, 'base64url') },
   }
 }
 
