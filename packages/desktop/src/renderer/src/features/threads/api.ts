@@ -36,7 +36,7 @@ export function useTouchThread() {
 export function useClearChat(agentId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (threadId: string) => request({ schema: Deleted('thread'), path: on({ agentId, path: threadPath(threadId) }), method: 'DELETE' }),
+    mutationFn: ({ threadId, uploads }: { threadId: string; uploads: string[] }) => request({ schema: Deleted('thread'), path: on({ agentId, path: threadPath(threadId) }), method: 'DELETE', body: { uploads } }),
     onSuccess: () => client.resetQueries({ queryKey: [...THREADS_KEY, 'agent', agentId] }),
   })
 }

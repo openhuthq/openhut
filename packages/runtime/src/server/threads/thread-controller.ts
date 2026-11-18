@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { CreateThread, LookUpFiles, MAX_FILE_BYTES, ReadFile, SendChat, UploadFile } from '@openhut/common/threads/thread.ts'
+import { CreateThread, DeleteThread, LookUpFiles, MAX_FILE_BYTES, ReadFile, SendChat, UploadFile } from '@openhut/common/threads/thread.ts'
 import { listOf } from '../platform/responses.ts'
 import { requireSignIn, who } from '../team/identity.ts'
 import { threadService } from './thread-service.ts'
@@ -13,7 +13,7 @@ export const threadController: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { id: string } }>('/:id', async (req) => threadService.get({ actor: await who(req), id: req.params.id }))
 
-  app.delete<{ Params: { id: string } }>('/:id', async (req) => threadService.delete({ actor: await who(req), id: req.params.id }))
+  app.delete<{ Params: { id: string }; Body: DeleteThread }>('/:id', DeleteRequest, async (req) => threadService.delete({ actor: await who(req), id: req.params.id, uploads: req.body?.uploads ?? [] }))
 
   app.post<{ Params: { id: string }; Body: SendChat }>('/:id/chat', ChatRequest, async (req, reply) => threadService.chat({ actor: await who(req), id: req.params.id, body: req.body, reply }))
 
@@ -28,6 +28,7 @@ export const threadController: FastifyPluginAsync = async (app) => {
 
 const CreateRequest = { schema: { body: CreateThread } }
 const ChatRequest = { schema: { body: SendChat } }
+const DeleteRequest = { schema: { body: DeleteThread } }
 const UploadRequest = { onRequest: requireSignIn, bodyLimit: MAX_FILE_BYTES, schema: { querystring: UploadFile } }
 const DownloadRequest = { schema: { querystring: ReadFile } }
 const LookUpRequest = { schema: { body: LookUpFiles } }
