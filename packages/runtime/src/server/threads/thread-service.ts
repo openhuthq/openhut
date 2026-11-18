@@ -2,7 +2,7 @@ import type { FastifyReply } from 'fastify'
 import type { Selectable } from 'kysely'
 import { createUIMessageStream, pipeUIMessageStreamToResponse, type UIMessageStreamWriter } from 'ai'
 import * as z from 'zod/mini'
-import { AGENT_HOME, ChatMessage, fileInHome, MAX_FILES, ToolProgress, UPLOADS, type ChatCall, type ChatFile, type SendChat, type Thread, type ThreadWithMessages, type UploadFile } from '@openhut/common/threads/thread.ts'
+import { AGENT_HOME, ChatMessage, fileInHome, MAX_FILES, ToolProgress, UPLOADS, uploadName, type ChatCall, type ChatFile, type HomeFile, type SendChat, type Thread, type ThreadWithMessages, type UploadFile } from '@openhut/common/threads/thread.ts'
 import type { Deleted } from '@openhut/common/api.ts'
 import { agentd } from '../platform/agentd.ts'
 import { db, findRow } from '../platform/db.ts'
@@ -27,6 +27,7 @@ const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 const MAX_IMAGE_BASE64 = 5_000_000
 const MAX_IMAGES_BASE64 = 8_000_000
 const MAX_NAME = 120
+const MAX_REMOVED = 200
 const MAX_NAME_BYTES = 255
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47])
 const JPEG = Buffer.from([0xff, 0xd8, 0xff])
@@ -53,9 +54,39 @@ export const threadService = {
   },
 
   async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'thread'>> {
-    await ownRow({ actor, id })
+    const row = await ownRow({ actor, id })
     await db.deleteFrom('thread').where('id', '=', id).execute()
+    const names = [...new Set(messagesOf(row).flatMap(filesOf).flatMap((file) => uploadName(file.url) ?? []))]
+    for (let start = 0; start < names.length; start += MAX_REMOVED) {
+      await agentd.removeUploads({ id: row.agent_id, names: names.slice(start, start + MAX_REMOVED) })
+        .catch((err: unknown) => log.warn({ event: 'thread.uploads_kept', thread: id, agent: row.agent_id, error: messageOf(err) }))
+    }
     return deleted({ id, object: 'thread' })
+  },
+
+  async removeFile({ actor, id, path }: { actor: Caller; id: string; path: string }): Promise<Deleted<'file'>> {
+    const row = await ownRow({ actor, id })
+    await agentService.requireEditable({ actor, id: row.agent_id })
+    const name = uploadName(path)
+    if (!name) throw new HttpError(400, `Only files uploaded to a chat, in ${UPLOADS}, can be deleted here.`, { param: 'path' })
+    await agentd.removeUploads({ id: row.agent_id, names: [name] })
+    return deleted({ id: path, object: 'file' })
+  },
+
+  async lookUpFiles({ actor, id, paths }: { actor: Caller; id: string; paths: string[] }): Promise<HomeFile[]> {
+    const row = await ownRow({ actor, id })
+    await agentService.requireEditable({ actor, id: row.agent_id })
+    const wanted = [...new Set(paths)].flatMap((path) => {
+      const inside = fileInHome(path)
+      return inside ? [{ path, inside }] : []
+    })
+    if (!wanted.length) return []
+    const { files } = await agentd.statFiles({ id: row.agent_id, paths: wanted.map((each) => each.inside) })
+    const sizes = new Map(files.map((file) => [file.path, file.size]))
+    return wanted.flatMap(({ path, inside }) => {
+      const size = sizes.get(inside)
+      return size === undefined ? [] : [{ object: 'file' as const, name: inside.slice(inside.lastIndexOf('/') + 1), path, size }]
+    })
   },
 
   async upload({ actor, id, file, body }: { actor: Caller; id: string; file: UploadFile; body: unknown }): Promise<ChatFile> {
@@ -181,7 +212,7 @@ function checkFiles(message: ChatMessage): void {
 function filesOf(message: ChatMessage): FilePart[] {
   return message.parts.flatMap((part) => {
     const file = z.safeParse(FilePart, part).data
-    return file && file.url.startsWith(`${UPLOADS}/`) && fileInHome(file.url)?.split('/').length === 2 ? [file] : []
+    return file && uploadName(file.url) ? [file] : []
   })
 }
 

@@ -88,8 +88,11 @@ createServer((req, res) => {
       await sleep(600)
     }
     if (/^file:/i.test(last)) {
-      for (const id of readdirSync(`${AGENTD_DATA}/agents`)) writeFileSync(`${AGENTD_DATA}/agents/${id}/home/report.csv`, 'order,status\n1042,late\n1043,shipped\n')
-      await say('I saved it to `/opt/data/home/report.csv`. ')
+      for (const id of readdirSync(`${AGENTD_DATA}/agents`)) {
+        writeFileSync(`${AGENTD_DATA}/agents/${id}/home/report.csv`, 'order,status\n1042,late\n1043,shipped\n')
+        writeFileSync(`${AGENTD_DATA}/agents/${id}/home/summary.md`, '# Late orders\n\n1042 is late.\n')
+      }
+      await say('I saved it to `/opt/data/home/report.csv`. The summary is at /opt/data/home/summary.md, and the old draft at /opt/data/home/draft.txt is gone. ')
     }
     if (last.includes('\n')) await say(`Fake Hermes heard:\n\n${last.split('\n').map((line) => `> ${line}`).join('\n')}`)
     else await say(`Fake Hermes heard: **${last}** (message ${messages.length} in this thread).`)

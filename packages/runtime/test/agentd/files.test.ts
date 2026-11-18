@@ -3,7 +3,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import assert from 'node:assert/strict'
 import { linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { isHomePath, isUploadName, MAX_FILE_BYTES, readHomeFile, saveUpload } from '../../src/agentd/files.ts'
+import { isHomePath, isUploadName, MAX_FILE_BYTES, readHomeFile, removeUploads, saveUpload, statHomeFiles } from '../../src/agentd/files.ts'
 
 const base = realpathSync(mkdtempSync(`${tmpdir()}/files-`))
 const home = `${base}/agent/home`
@@ -88,6 +88,69 @@ for (const [race, arrange] of Object.entries(RACES)) {
   })
 }
 
+for (const [race, arrange] of Object.entries(RACES)) {
+  test(`an agent atomically swapping ${race} while its uploads are deleted never gets a file outside deleted`, { skip: !python && 'needs python3 for an atomic swap' }, async () => {
+    const base = realpathSync(mkdtempSync(`${tmpdir()}/race-rm-`))
+    const raceHome = `${base}/agent/home`
+    const outside = `${base}/outside`
+    mkdirSync(`${raceHome}/uploads`, { recursive: true })
+    mkdirSync(`${outside}/uploads`, { recursive: true })
+    const names = Array.from({ length: 20 }, (_, index) => `victim-${index}.txt`)
+    for (const name of names) writeFileSync(`${outside}/uploads/${name}`, 'not yours')
+    const swapper = spawn('python3', ['-I', '-c', SWAP, ...arrange({ home: raceHome, outside })], { stdio: 'ignore' })
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const cwd = process.cwd()
+    let rounds = 0
+    for (const end = Date.now() + 3000; Date.now() < end; rounds++) {
+      for (const name of names) {
+        try {
+          writeFileSync(`${raceHome}/uploads/${name}`, 'mine')
+        } catch {}
+      }
+      try {
+        removeUploads({ home: raceHome, names })
+      } catch {}
+      assert.equal(process.cwd(), cwd)
+    }
+    swapper.kill()
+    assert.ok(rounds > 10)
+    assert.deepEqual(readdirSync(`${outside}/uploads`).sort(), [...names].sort())
+  })
+}
+
+test('deleting uploads removes only plain files in uploads/, and nothing when uploads or home is a symlink', () => {
+  const base = realpathSync(mkdtempSync(`${tmpdir()}/rm-`))
+  const rmHome = `${base}/agent/home`
+  const away = `${base}/away`
+  mkdirSync(`${rmHome}/uploads/folder.txt`, { recursive: true })
+  mkdirSync(away)
+  writeFileSync(`${rmHome}/uploads/a.txt`, 'a')
+  writeFileSync(`${rmHome}/uploads/b.txt`, 'b')
+  writeFileSync(`${away}/c.txt`, 'c')
+  symlinkSync(`${away}/c.txt`, `${rmHome}/uploads/c.txt`)
+  assert.deepEqual(removeUploads({ home: rmHome, names: ['a.txt', 'missing.txt', 'folder.txt'] }), ['a.txt'])
+  assert.deepEqual(readdirSync(`${rmHome}/uploads`).sort(), ['b.txt', 'c.txt', 'folder.txt'])
+  assert.deepEqual(removeUploads({ home: rmHome, names: ['c.txt'] }), [])
+  assert.equal(readFileSync(`${away}/c.txt`, 'utf8'), 'c')
+  writeFileSync(`${away}/b.txt`, 'b')
+  rmSync(`${rmHome}/uploads`, { recursive: true })
+  symlinkSync(away, `${rmHome}/uploads`)
+  assert.throws(() => removeUploads({ home: rmHome, names: ['b.txt'] }))
+  assert.equal(readFileSync(`${away}/b.txt`, 'utf8'), 'b')
+  rmSync(`${rmHome}/uploads`)
+  assert.deepEqual(removeUploads({ home: rmHome, names: ['b.txt'] }), [])
+})
+
+test('looking files up reports the plain files that exist with their sizes, and nothing behind a symlink', () => {
+  const base = realpathSync(mkdtempSync(`${tmpdir()}/stat-`))
+  const statHome = `${base}/home`
+  mkdirSync(statHome)
+  writeFileSync(`${statHome}/report.csv`, 'a,b\n')
+  writeFileSync(`${base}/secret`, 'x')
+  symlinkSync(`${base}/secret`, `${statHome}/link.txt`)
+  assert.deepEqual(statHomeFiles({ home: statHome, paths: ['report.csv', 'link.txt', 'missing.txt'] }), [{ path: 'report.csv', size: 4 }])
+})
+
 test('a copy of a long multi-byte name stays within 255 bytes and keeps its extension', () => {
   const name = `${'報'.repeat(83)}.pdf`
   assert.equal(isUploadName(name), true)
@@ -118,7 +181,7 @@ test('a file over the size limit is not read', () => {
 test('upload names and home paths that could leave the folder are refused', () => {
   assert.equal(isUploadName('Q3 report (final).pdf'), true)
   assert.equal(isUploadName('Résumé.pdf'), true)
-  for (const name of ['', '.env', '..', '../x', 'a/b', '-rf', ' x', ')x.txt', 'a\0b', 'x'.repeat(121)]) assert.equal(isUploadName(name), false, name)
+  for (const name of ['', '.env', '..', '../x', 'a/b', '-rf', ' x', ')x.txt', 'a\0b', 'x'.repeat(129)]) assert.equal(isUploadName(name), false, name)
   assert.equal(isHomePath('uploads/notes.txt'), true)
   for (const path of ['', '/etc/passwd', '../x', 'a/../../x', 'a//b', './a', 'a/\0']) assert.equal(isHomePath(path), false, path)
 })

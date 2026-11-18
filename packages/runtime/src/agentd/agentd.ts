@@ -11,7 +11,7 @@ import { isSkillPath, listSkills, MAX_SKILL_BYTES, readSkill, writeSkill, type S
 import { FREE_POLICY, HELD_POLICY, live, POLICY_FILE, policyOf } from './browser.ts'
 import { fenceLines, proveFence, type FenceReport } from './fence.ts'
 import { MAX_HOME_BASE64, packHome, unpackHome } from './home.ts'
-import { isHomePath, isUploadName, MAX_FILE_BASE64, readHomeFile, saveUpload } from './files.ts'
+import { isHomePath, isUploadName, MAX_FILE_BASE64, readHomeFile, removeUploads, saveUpload, statHomeFiles } from './files.ts'
 import { FIREWALL, imageReady } from './sandbox/gvisor.ts'
 import { sandboxes } from './sandbox/index.ts'
 import type { Mount, SandboxSpec, SandboxState } from './sandbox/sandbox.ts'
@@ -64,6 +64,7 @@ const LOCKED_TMPFS = ['/opt/data/hooks', '/opt/data/pairing', '/opt/data/platfor
 const FIREWALL_FRESH_MS = 5_000
 const WATCHDOG_MS = 30_000
 const MAX_REQUEST = 1 << 20
+const MAX_LISTED = 200
 
 const pairings = new Map<string, Pairing>()
 const queues = new Map<string, Promise<unknown>>()
@@ -177,6 +178,10 @@ async function handle(req: AgentdRequest): Promise<Reply> {
       throw new Error('send the home after the request line')
     case 'file-write':
       throw new Error('send the file after the request line')
+    case 'file-rm':
+      return { removed: removeUploads({ home: agentHome(req.id), names: req.names }) }
+    case 'file-stat':
+      return { files: statHomeFiles({ home: agentHome(req.id), paths: req.paths }) }
     case 'file-read':
       return { body: readHomeFile({ home: agentHome(req.id), path: req.path })?.toString('base64') ?? null }
     case 'memory-write':
@@ -230,6 +235,12 @@ function parseRequest(value: unknown): AgentdRequest {
     case 'file-write':
       if (!isUploadName(value.name)) throw new Error('bad file name')
       return { cmd, id: agentId(value.id), name: value.name }
+    case 'file-rm':
+      if (!Array.isArray(value.names) || value.names.length > MAX_LISTED || !value.names.every(isUploadName)) throw new Error('bad file names')
+      return { cmd, id: agentId(value.id), names: value.names }
+    case 'file-stat':
+      if (!Array.isArray(value.paths) || value.paths.length > MAX_LISTED || !value.paths.every(isHomePath)) throw new Error('bad file paths')
+      return { cmd, id: agentId(value.id), paths: value.paths }
     case 'file-read':
       if (!isHomePath(value.path)) throw new Error('bad file path')
       return { cmd, id: agentId(value.id), path: value.path }
@@ -548,6 +559,8 @@ export type AgentdRequest =
   | { cmd: 'memory-write'; id: string; target: MemoryTarget; body: string }
   | { cmd: 'file-write'; id: string; name: string }
   | { cmd: 'file-read'; id: string; path: string }
+  | { cmd: 'file-rm'; id: string; names: string[] }
+  | { cmd: 'file-stat'; id: string; paths: string[] }
   | { cmd: 'usage' | 'messages'; since: number }
 
 export type AgentdReplies = {
@@ -571,6 +584,8 @@ export type AgentdReplies = {
   'home-import': { imported: string }
   'file-write': { path: string }
   'file-read': { body: string | null }
+  'file-rm': { removed: string[] }
+  'file-stat': { files: { path: string; size: number }[] }
   usage: { usage: Record<string, number> }
   messages: { messages: NewMessage[] }
   'browser-live': undefined
