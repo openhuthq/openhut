@@ -14,7 +14,7 @@ export const PROVIDERS = [
   { id: 'codex', kind: 'subscription', name: 'Codex subscription', short: 'Codex', blurb: 'ChatGPT Plus or Pro', keysAt: null, keyHint: null },
   { id: 'openrouter', kind: 'key', name: 'OpenRouter', short: 'OpenRouter', blurb: 'One key for hundreds of models', keysAt: 'openrouter.ai/keys', keyHint: 'sk-or-v1-…' },
   { id: 'openai', kind: 'key', name: 'OpenAI', short: 'OpenAI', blurb: 'GPT models with your OpenAI key', keysAt: 'platform.openai.com/api-keys', keyHint: 'sk-…' },
-  { id: 'xai', kind: 'key', name: 'Grok (xAI API)', short: 'xAI', blurb: 'Grok models with your xAI key', keysAt: 'console.x.ai', keyHint: 'xai-…' },
+  { id: 'xai', kind: 'key', name: 'xAI', short: 'xAI', blurb: 'Grok models with your xAI key', keysAt: 'console.x.ai', keyHint: 'xai-…' },
 ] as const satisfies readonly { id: ProviderId; kind: ProviderKind; name: string; short: string; blurb: string; keysAt: string | null; keyHint: string | null }[]
 
 export const ModelKey = z.string().check(z.regex(/^(claude|codex|openrouter|openai|xai):\S{1,200}$/, 'Use provider:model, like claude:sonnet.'))

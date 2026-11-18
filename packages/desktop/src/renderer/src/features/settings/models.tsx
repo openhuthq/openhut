@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft01Icon, ArrowUpRight01Icon, LaptopIcon, Search01Icon, ServerStack01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
-import type { Admin, SeatUsage } from '@openhut/common/admin/admin.ts'
+import type { SeatUsage } from '@openhut/common/admin/admin.ts'
 import { KEY_MESSAGE, PROVIDERS, ProviderId, type Provider, type ProviderModel } from '@openhut/common/models/provider.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Field, FieldSet } from '@/components/ui/field'
@@ -56,12 +56,12 @@ export function ModelsSettings() {
     return provider && <ProviderRow key={id} provider={provider} note={provider.connected ? notesOf({ provider, where: where(provider), testModel }) : infoOf(id).blurb} />
   }
   return <>
-    <Intro>Sign in with a subscription you already pay for, or paste an API key. Agents pick from the models you switch on.</Intro>
+    <Intro>Sign in with a subscription or add an API key.</Intro>
     <ErrorNote message={admin.error?.message} />
     {providers && <>
       <Section title="Subscriptions"><Rows>{SUBSCRIPTIONS.map((info) => row(info.id))}</Rows></Section>
       <Section title="API keys"><Rows>{KEYS.map((info) => row(info.id))}</Rows></Section>
-      <p className={cn(HINT, 'px-2.5')}>A key stays sealed on the computer that holds it. Agents never see it, they only get answers back.</p>
+      <p className={cn(HINT, 'px-2.5')}>Keys stay on the computer that holds them. Agents never see them.</p>
     </>}
     {usage.data?.agents.some((agent) => agent.costUsd > 0) && <Spend usage={usage.data} />}
     {dialog === 'seat' && <SeatSignIn />}
@@ -76,7 +76,7 @@ function notesOf({ provider, where, testModel }: { provider: Provider; where: st
 
 function ProviderRow({ provider, note }: { provider: Provider; note: string }) {
   const subscription = provider.kind === 'subscription'
-  return <Row icon={<Glyph name={BRAND[provider.id]} size={22} />} title={provider.name} note={note}>
+  return <Row icon={<Glyph name={BRAND[provider.id]} size={22} />} title={infoOf(provider.id).short} note={note}>
     {provider.connected
       ? <><Status tone="on">{subscription ? 'Signed in' : 'Connected'}</Status><Button type="button" variant="secondary" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id) }}>Manage</Button></>
       : <Button type="button" variant="secondary" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id === 'claude' ? 'seat' : provider.id) }}>{subscription ? 'Sign in' : 'Add key'}</Button>}
