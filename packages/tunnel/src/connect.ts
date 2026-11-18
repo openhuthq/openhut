@@ -16,6 +16,7 @@ export type Tunnel = {
   digits: string
   control: AsyncIterable<Record<string, unknown>>
   close: () => void
+  readonly failure: TunnelError | undefined
 }
 type Closing = { code: number; reason: string }
 type OpenSocket = { receive: (chunk: Uint8Array) => void; ended: (closing: Closing) => void }
@@ -23,9 +24,11 @@ type Pending = { resolve: (response: Response) => void; reject: (error: Error) =
 
 export class TunnelError extends Error {
   type: string
-  constructor({ type, message }: { type: string; message: string }) {
+  code: number | undefined
+  constructor({ type, message, code }: { type: string; message: string; code?: number }) {
     super(message)
     this.type = type
+    this.code = code
   }
 }
 
@@ -126,7 +129,7 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
     socket.addEventListener('open', () => socket.send(new Uint8Array(first)))
     const closed = (code: number) => {
       const offline = code === 4004
-      const error = new TunnelError({ type: offline ? 'offline' : 'closed', message: offline ? 'The computer is offline.' : 'The tunnel to the computer closed.' })
+      const error = new TunnelError({ type: offline ? 'offline' : 'closed', message: offline ? 'The computer is offline.' : 'The tunnel to the computer closed.', code })
       fail(error)
       reject(error)
     }
@@ -205,7 +208,7 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
     return opened
   }
 
-  return { fetch, socket: open, digits, control, close: () => socket.close() }
+  return { fetch, socket: open, digits, control, close: () => socket.close(), get failure() { return failure } }
 }
 
 function closingOf(payload: Uint8Array): Closing {
