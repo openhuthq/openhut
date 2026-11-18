@@ -132,6 +132,14 @@ test('agents from every computer come back tagged; connections are merged by kin
   assert.deepEqual((await openhut.computers.list()).map((each) => [each.id, each.online]), [['local', true], ['beelink', false]])
 })
 
+test('agents from a computer on an older runtime still show (old model names, no fallback or helper models)', async () => {
+  const { runtimes, openhut } = setup(['local', 'beelink'])
+  const { fallbackModel: _fallback, helperModels: _helpers, ...old } = agent('Juniper')
+  runtimes.beelink.agents = [{ ...old, model: 'sonnet' } as unknown as Agent]
+  const [found] = await openhut.agents.list()
+  assert.deepEqual([found?.name, found?.computer, found?.model, found?.fallbackModel, found?.helperModels], ['Juniper', 'beelink', 'claude:sonnet', null, { compress: null, title: null, review: null }])
+})
+
 test('adding a keyed connection to another computer moves it sealed to that computer; a sign-in connection opens its sign-in there instead', async () => {
   const { runtimes, opened, openhut } = setup(['local', 'beelink'])
   runtimes.local.connections = [connection({ id: 'cn_a', kind: 'postgres', name: 'Orders DB', secret: 'postgres://u:p@db' }), connection({ id: 'cn_g', kind: 'github', name: 'GitHub' })]

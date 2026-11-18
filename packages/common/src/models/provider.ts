@@ -20,10 +20,10 @@ export const PROVIDERS = [
 export const ModelKey = z.string().check(z.regex(/^(claude|codex|openrouter|openai|xai):\S{1,200}$/, 'Use provider:model, like claude:sonnet.'))
 export type ModelKey = z.infer<typeof ModelKey>
 
-const LEGACY: Record<string, ModelKey> = { opus: 'claude:opus', sonnet: 'claude:sonnet', haiku: 'claude:haiku', codex: 'codex:gpt-5.5' }
+export const LEGACY_MODELS: Record<string, ModelKey> = { opus: 'claude:opus', sonnet: 'claude:sonnet', haiku: 'claude:haiku', codex: 'codex:gpt-5.5' }
 
 export function splitModelKey(key: string): { provider: ProviderId; model: string } | undefined {
-  const full = LEGACY[key] ?? key
+  const full = LEGACY_MODELS[key] ?? key
   const at = full.indexOf(':')
   const provider = ProviderId.safeParse(full.slice(0, at))
   return at > 0 && provider.success && full.length > at + 1 ? { provider: provider.data, model: full.slice(at + 1) } : undefined
