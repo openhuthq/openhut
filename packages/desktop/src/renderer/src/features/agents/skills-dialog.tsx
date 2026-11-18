@@ -78,7 +78,7 @@ export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: str
 }
 
 function CloseButton({ onClose, back }: { onClose: () => void; back?: boolean }) {
-  return <Button type="button" size="icon-sm" aria-label={back ? 'All skills' : 'Close'} title={back ? 'All skills' : 'Close'} tabIndex={-1} onClick={onClose}><I icon={back ? ArrowLeft01Icon : Cancel01Icon} size={15} /></Button>
+  return <Button type="button" data-back={back || undefined} size="icon-sm" aria-label={back ? 'All skills' : 'Close'} title={back ? 'All skills' : 'Close'} tabIndex={-1} onClick={onClose}><I icon={back ? ArrowLeft01Icon : Cancel01Icon} size={15} /></Button>
 }
 
 function SkillMark({ skill }: { skill: Skill }) {

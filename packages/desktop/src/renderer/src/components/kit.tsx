@@ -99,7 +99,7 @@ export function SetupSheet({ brand, title, blurb, eta, safe, error, foot, onSubm
   const inWindow = useContext(InWindow)
   const body = <>
     <div className={cn('flex items-start gap-3.5 px-5 pt-5 pb-4', inWindow && 'items-center px-8 pt-[26px] pr-14')}>
-      {inWindow && <Button type="button" size="icon-sm" aria-label="Back" title="All connections" className="-ml-2" onClick={onClose}><I icon={ArrowLeft01Icon} size={16} /></Button>}
+      {inWindow && <Button type="button" data-back size="icon-sm" aria-label="Back" title="All connections" className="-ml-2" onClick={onClose}><I icon={ArrowLeft01Icon} size={16} /></Button>}
       <Glyph name={brand} size={inWindow ? 30 : 28} />
       <div className="grid min-w-0 flex-1 gap-1">
         <div className="flex items-center gap-2"><DialogTitle className={inWindow ? 'text-[17px]/[24px] font-medium' : 'text-[15px]/[22px] font-medium'}>{title}</DialogTitle>{eta && <span className="inline-flex items-center gap-1 text-[11.5px] text-mute-2"><I icon={Clock01Icon} size={12} />{eta}</span>}</div>

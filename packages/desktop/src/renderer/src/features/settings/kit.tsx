@@ -39,7 +39,7 @@ export function Rows({ children }: { children: ReactNode }) {
 
 export function SubPage({ title, back, children }: { title: string; back: string; children: ReactNode }) {
   return <div className="flex flex-col gap-4">
-    <div className="-mt-1 flex items-center gap-1"><Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Back" title="Back" onClick={() => open(back)}><I icon={ArrowLeft01Icon} size={16} /></Button><span className="text-[14px] font-medium">{title}</span></div>
+    <div className="-mt-1 flex items-center gap-1"><Button type="button" data-back variant="bare" className={ICON_BUTTON} aria-label="Back" title="Back" onClick={() => open(back)}><I icon={ArrowLeft01Icon} size={16} /></Button><span className="text-[14px] font-medium">{title}</span></div>
     {children}
   </div>
 }

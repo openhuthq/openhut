@@ -104,7 +104,7 @@ export function leave(id: ProviderId) {
 
 function StepTitle({ id, children }: { id: ProviderId; children: string }) {
   return <h2 className="m-0 flex shrink-0 items-center gap-2 pt-[26px] pr-[52px] pb-1.5 pl-[26px] text-[15px]/[22px] font-medium">
-    <Button type="button" size="icon-sm" aria-label="Back to Models" title="Back" onClick={() => leave(id)}><I icon={ArrowLeft01Icon} size={16} /></Button>{children}
+    <Button type="button" data-back size="icon-sm" aria-label="Back to Models" title="Back" onClick={() => leave(id)}><I icon={ArrowLeft01Icon} size={16} /></Button>{children}
   </h2>
 }
 

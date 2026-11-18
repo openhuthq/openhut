@@ -69,7 +69,7 @@ function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
       </nav>
     </aside>
     <section className={cn('flex min-w-0 flex-1 flex-col', !open && 'phone:hidden')}>
-      {phone && open && <Button type="button" variant="bare" className="mx-3 mt-3 -mb-2 inline-flex w-fit items-center gap-1 px-1 text-mute" onClick={() => { setPicked(null); setAdding(false); setRemoving(false) }}><I icon={ArrowLeft01Icon} size={15} />All memory</Button>}
+      {phone && open && <Button type="button" data-back variant="bare" className="mx-3 mt-3 -mb-2 inline-flex w-fit items-center gap-1 px-1 text-mute" onClick={() => { setPicked(null); setAdding(false); setRemoving(false) }}><I icon={ArrowLeft01Icon} size={15} />All memory</Button>}
       {adding && <form className="flex flex-1 flex-col" onSubmit={(event) => {
         const value = formValues(event)
         const target = value('kind') === 'notes' ? 'notes' : 'people'

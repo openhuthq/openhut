@@ -46,9 +46,11 @@ function Dashboard() {
 }
 
 function back() {
-  if (document.querySelector('[role=menu], [role=dialog], [role=alertdialog]')) return void (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  const top = [...document.querySelectorAll<HTMLElement>('[role=menu], [role=dialog], [role=alertdialog]')].at(-1)
+  const inner = top?.querySelector<HTMLElement>('[data-back]')
+  if (inner?.checkVisibility()) return inner.click()
+  if (top) return void (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
   if (new URLSearchParams(location.search).get('open')) return open()
   if (location.pathname === '/') return leave()
-  if (navigation.canGoBack) return navigation.back()
   navigate('/', true)
 }
