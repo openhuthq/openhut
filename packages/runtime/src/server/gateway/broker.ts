@@ -6,7 +6,7 @@ import { config } from '../platform/config.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import type { GatewayAgent } from '../agents/agent-service.ts'
 import { channelService } from '../channels/channel-service.ts'
-import { providers } from '../models/providers.ts'
+import { providers } from '../models/providers/index.ts'
 
 const IDLE_MS = 120_000
 const QUIET_MS = 60_000

@@ -1,4 +1,4 @@
-import { splitModelKey, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
+import { fastModelOf, splitModelKey, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
 import type { HelperModels, HelperSlot } from '@openhut/common/agents/agent.ts'
 
 const DEFAULT_SLOT: Slot = { provider: 'claude', model: 'sonnet', contextLength: null }
@@ -19,7 +19,7 @@ export function resolveSlots({ model, fallback, helpers, catalog }: { model: str
 }
 
 export function autoFor({ primary, catalog }: { primary: Slot; catalog: Catalog }): Slot {
-  const fast = catalog(primary.provider).find((model) => model.on && model.tier === 'fast')
+  const fast = fastModelOf(catalog(primary.provider))
   return fast ? { provider: primary.provider, model: fast.id, contextLength: fast.contextLength } : primary
 }
 

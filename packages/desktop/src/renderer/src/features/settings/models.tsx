@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft01Icon, ArrowUpRight01Icon, LaptopIcon, Search01Icon, ServerStack01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import type { SeatUsage } from '@openhut/common/admin/admin.ts'
-import { KEY_MESSAGE, PROVIDERS, ProviderId, type Provider, type ProviderModel } from '@openhut/common/models/provider.ts'
+import { KEY_MESSAGE, PROVIDERS, ProviderId, providerInfo, type Provider, type ProviderModel } from '@openhut/common/models/provider.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Field, FieldSet } from '@/components/ui/field'
 import { FieldError } from '@/components/ui/field'
@@ -18,7 +18,7 @@ import { useComputers } from '@/features/computers/api'
 import { Busy, DialogCard, HINT, I, PILL, SetupSheet, Section, Status } from '@/components/kit'
 import { Check, CardTitle, ListNote, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { useCodexSignIn, useConnectProvider, useDisconnectProvider, useFoundNotice, useMergedProviders, useRefreshProvider, useSetModel } from '@/features/models/api'
-import { BRAND, consequence, count, describe, infoOf, matches, plural, updatedAgo } from '@/features/models/labels'
+import { consequence, count, describe, matches, plural, updatedAgo } from '@/features/models/labels'
 import { open, Redirect, useOpen } from '@/lib/router'
 import { formValues } from '@/lib/form'
 import { toastError } from '@/lib/toast'
@@ -53,7 +53,7 @@ export function ModelsSettings() {
   const where = (provider: { computers: string[] }) => `On ${LIST.format(provider.computers.map((id) => computers?.find((each) => each.id === id)?.name ?? id))}`
   const row = (id: ProviderId) => {
     const provider = providers?.find((each) => each.id === id)
-    return provider && <ProviderRow key={id} provider={provider} note={provider.connected ? notesOf({ provider, where: where(provider), testModel }) : infoOf(id).blurb} />
+    return provider && <ProviderRow key={id} provider={provider} note={provider.connected ? notesOf({ provider, where: where(provider), testModel }) : providerInfo(id).blurb} />
   }
   return <>
     <ErrorNote message={admin.error?.message} />
@@ -77,7 +77,7 @@ function notesOf({ provider, where, testModel }: { provider: Provider; where: st
 
 function ProviderRow({ provider, note }: { provider: Provider; note: string }) {
   const subscription = provider.kind === 'subscription'
-  return <Row icon={<Glyph name={BRAND[provider.id]} size={20} />} title={infoOf(provider.id).short} note={note}>
+  return <Row icon={<Glyph name={provider.id} size={20} />} title={providerInfo(provider.id).short} note={note}>
     {provider.connected
       ? <><Status tone="on">{subscription ? 'Signed in' : 'Connected'}</Status><Button type="button" variant="secondary" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id) }}>Manage</Button></>
       : <Button type="button" variant="secondary" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id === 'claude' ? 'seat' : provider.id) }}>{subscription ? 'Sign in' : 'Add key'}</Button>}
@@ -108,7 +108,7 @@ function StepTitle({ id, children }: { id: ProviderId; children: string }) {
 }
 
 function ConnectKey({ provider, onConnected }: { provider: Provider; onConnected: () => void }) {
-  const info = infoOf(provider.id)
+  const info = providerInfo(provider.id)
   const computers = (useComputers().data ?? []).filter((each) => each.online)
   const [ticked, setTicked] = useState<string[] | undefined>(undefined)
   const chosen = ticked ?? computers.map((each) => each.id)
@@ -117,7 +117,7 @@ function ConnectKey({ provider, onConnected }: { provider: Provider; onConnected
   const keyField = useRef<HTMLInputElement>(null)
   useEffect(() => keyField.current?.focus(), [])
   const flip = (id: string) => setTicked(chosen.includes(id) ? chosen.filter((each) => each !== id) : [...chosen, id])
-  return <SetupSheet brand={BRAND[provider.id]} title={`Connect ${info.short}`} blurb={`Paste an API key from ${info.keysAt}. The app fetches the models you can use.`} safe="Takes a few seconds." onClose={() => leave(provider.id)}
+  return <SetupSheet brand={provider.id} title={`Connect ${info.short}`} blurb={`Paste an API key from ${info.keysAt}. The app fetches the models you can use.`} safe="Takes a few seconds." onClose={() => leave(provider.id)}
     onSubmit={(event) => {
       const field = formValues(event)
       const apiKey = field('key').trim()
@@ -156,7 +156,7 @@ function CodexSignInStep({ onSignedIn }: { onSignedIn: () => void }) {
 }
 
 function Manage({ provider, notice, clearNotice }: { provider: Provider & { computers: string[] }; notice: string; clearNotice: () => void }) {
-  const info = infoOf(provider.id)
+  const info = providerInfo(provider.id)
   const admin = useAdmin().data
   const computers = useComputers().data
   const agents = useAgents().data ?? []
@@ -183,7 +183,7 @@ function Manage({ provider, notice, clearNotice }: { provider: Provider & { comp
   return <div className="flex min-h-0 flex-1 flex-col">
     <StepTitle id={provider.id}>{provider.name}</StepTitle>
     <div className="no-scrollbar fade-b flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto px-6 pt-[18px] pb-10">
-      <div ref={box}><Row icon={<Glyph name={BRAND[provider.id]} size={20} />} title={confirming ? `${off} ${info.short}?` : provider.name}
+      <div ref={box}><Row icon={<Glyph name={provider.id} size={20} />} title={confirming ? `${off} ${info.short}?` : provider.name}
         note={confirming ? effect : <>{provider.keyHint && <><span className="font-mono">{provider.keyHint}</span> · </>}{where}{updated && ` · updated ${updated}`}</>}>
         {confirming
           ? <>
@@ -217,8 +217,9 @@ function Manage({ provider, notice, clearNotice }: { provider: Provider & { comp
 }
 
 const ModelRow = memo(function ModelRow({ provider, model, onSwitch }: { provider: Provider; model: ProviderModel; onSwitch: (model: string, on: boolean) => void }) {
-  const id = provider.id === 'openrouter' ? <><span className="font-mono">{model.id}</span> · </> : null
-  return <Row icon={<Glyph name={BRAND[provider.id]} size={16} />} title={model.name} note={<>{id}{describe({ provider, model })}</>}>
+  const note = describe({ provider, model })
+  const id = provider.id === 'openrouter' ? <><span className="font-mono">{model.id}</span>{note && ' · '}</> : null
+  return <Row icon={<Glyph name={provider.id} size={16} />} title={model.name} note={<>{id}{note}</>}>
     <Switch checked={model.on} aria-label={model.name} onCheckedChange={(on) => onSwitch(model.id, on)} />
   </Row>
 }, (a, b) => a.model === b.model && a.provider.id === b.provider.id && a.onSwitch === b.onSwitch)

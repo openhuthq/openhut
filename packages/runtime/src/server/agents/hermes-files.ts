@@ -5,7 +5,7 @@ import { agentSubnet } from '../platform/network.ts'
 import { slack } from '../integrations/slack/slack.ts'
 import { telegram } from '../integrations/telegram/telegram.ts'
 import { whatsapp } from '../integrations/whatsapp/whatsapp.ts'
-import { providers, type Route } from '../models/providers.ts'
+import { providers, type Route } from '../models/providers/index.ts'
 import type { Slot, Slots } from '../models/model-slots.ts'
 
 const AUXILIARY: [keyof Slots['helpers'], string][] = [['approval', 'approval'], ['compress', 'compression'], ['title', 'title_generation'], ['review', 'background_review']]
