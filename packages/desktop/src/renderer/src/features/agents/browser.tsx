@@ -44,12 +44,13 @@ export function BrowserDialog({ agent, onClose }: { agent: Agent; onClose: () =>
   const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([])
   const [lastInput, setLastInput] = useState(0)
   const [now, setNow] = useState(Date.now())
-  const mine = live.held
+  const mine = live.mine
   const name = agent.name
   useEffect(() => {
     if (!mine) return
     screen.current?.focus({ preventScroll: true })
     setLastInput(Date.now())
+    setNow(Date.now())
     const tick = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(tick)
   }, [mine])
@@ -58,7 +59,10 @@ export function BrowserDialog({ agent, onClose }: { agent: Agent; onClose: () =>
     const scale = canvas.current?.width ? canvas.current.width / box.width : 1
     return { x: Math.max(0, Math.round((event.clientX - box.left) * scale)), y: Math.max(0, Math.round((event.clientY - box.top) * scale)), left: event.clientX - box.left, top: event.clientY - box.top }
   }
-  const touched = () => setLastInput(Date.now())
+  const touched = () => {
+    setLastInput(Date.now())
+    setNow(Date.now())
+  }
   const mouse = (action: 'down' | 'up' | 'move') => (event: MouseEvent<HTMLElement>) => {
     if (!mine) return
     event.preventDefault()
@@ -102,7 +106,7 @@ export function BrowserDialog({ agent, onClose }: { agent: Agent; onClose: () =>
           </div>
         </div>
         <div className={cn('flex h-[34px] min-w-0 shrink-0 items-center border-b px-3 text-[12.5px]', mine ? 'border-b-transparent bg-ink font-medium text-white' : 'border-hair bg-soft text-mute')} role="status">
-          <span className="truncate">{mine ? `${name} is paused · hands back in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} if idle` : `${name} is driving. Take over to use the page yourself.`}</span>
+          <span className="truncate">{mine ? `${name} is paused · hands back in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} if idle` : live.held ? `Someone in another window is using ${name}'s browser. Take over to use it here.` : `${name} is driving. Take over to use the page yourself.`}</span>
         </div>
         <div className={cn('relative min-h-0 bg-tint leading-[0] outline-none', mine ? 'cursor-crosshair' : 'cursor-not-allowed')} ref={screen} tabIndex={mine ? 0 : -1} role="application" aria-label={`${name}'s page`}
           onMouseDown={mouse('down')} onMouseUp={mouse('up')} onMouseMove={mouse('move')} onContextMenu={(event) => mine && event.preventDefault()}

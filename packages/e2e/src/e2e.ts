@@ -502,7 +502,7 @@ console.log(JSON.stringify(takeTelemetry()))`
     }
   })
 
-  check('R4', 'Take over: the owner watches live, the agent is paused, the owner\'s clicks and keys drive the page, and handing back frees the agent', 'input before Take over does nothing; hold is confirmed on the socket; while held the agent\'s click is denied by policy; the owner clicks the search box, types gVisor and Enter and the page lands on the gVisor article; hand back is confirmed and the agent browses again; closing the view stops the screencast', async () => {
+  check('R4', 'Take over: the owner watches live, the agent is paused, the owner\'s clicks and keys drive the page, and handing back frees the agent', 'input before Take over does nothing; hold is confirmed on the socket and outlasts a reconcile (35 s); while held the agent\'s click is refused with "A person is using this browser"; the owner clicks the search box, types gVisor and Enter and the page lands on the gVisor article; hand back is confirmed and the agent browses again; closing the view stops the screencast', async () => {
     await chat(dev, 'browser: open https://www.wikipedia.org/')
     const center = /"(\d+),(\d+)"/.exec(await agentBrowser(dev, 'eval', "(r => Math.round(r.x + r.width / 2) + ',' + Math.round(r.y + r.height / 2))(document.querySelector('#searchInput').getBoundingClientRect())"))
     const box = center ? { x: Number(center[1]), y: Number(center[2]) } : undefined
@@ -516,6 +516,7 @@ console.log(JSON.stringify(takeTelemetry()))`
     const early = (await agentBrowser(dev, 'get', 'url')).trim().split('\n').pop()
     view.send({ type: 'hold', held: true })
     await until(async () => view.lines.some((line) => line.type === 'hold' && line.held === true), 10_000, 'the hold to be confirmed')
+    await sleep(35_000)
     const agentWhileHeld = await agentBrowser(dev, 'click', '#searchInput')
     for (const input of [...click, ...keys]) view.send(input)
     await until(async () => (await agentBrowser(dev, 'get', 'url')).includes('/wiki/GVisor'), 30_000, 'the search to land on the gVisor article')
@@ -528,7 +529,7 @@ console.log(JSON.stringify(takeTelemetry()))`
     await until(async () => /Screencasting: false/.test(await agentBrowser(dev, 'stream', 'status')), 30_000, 'the screencast to stop after the view closed')
     return {
       actual: { box, frames, early, agentWhileHeld: agentWhileHeld.trim().slice(0, 120), landed, holds: view.lines.filter((line) => line.type === 'hold').map((line) => line.held), agentAfter: agentAfter.trim().split('\n')[0] },
-      pass: !!box && frames >= 2 && early === 'https://www.wikipedia.org/' && /denied by policy/.test(agentWhileHeld) && !!landed?.includes('wikipedia.org/wiki/GVisor') && agentAfter.includes(BROWSE_TITLE),
+      pass: !!box && frames >= 2 && early === 'https://www.wikipedia.org/' && /A person is using this browser/.test(agentWhileHeld) && !!landed?.includes('wikipedia.org/wiki/GVisor') && agentAfter.includes(BROWSE_TITLE),
     }
   })
 
