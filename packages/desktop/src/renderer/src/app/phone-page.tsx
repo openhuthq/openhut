@@ -26,7 +26,7 @@ export function PhonePage({ children }: { children: ReactNode }) {
     else slide({ element: page.current, to: '0 0' })
   }
   return <Back value={back}>
-    <div ref={page} className="fixed inset-0 z-10 flex animate-[pushin_.42s_var(--ease-spring)] bg-card shadow-[-12px_0_32px_oklch(0%_0_0/.1)]">
+    <div ref={page} className="fixed inset-0 z-10 flex animate-[pushin_.42s_var(--ease-spring)] bg-card pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-[-12px_0_32px_oklch(0%_0_0/.1)]">
       {children}
       <div aria-hidden className="absolute inset-y-0 left-0 z-30 w-7 touch-none"
         onPointerDown={(event) => {

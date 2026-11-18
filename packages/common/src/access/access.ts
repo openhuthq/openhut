@@ -26,8 +26,11 @@ export function canonical(access: Unsigned): string {
 }
 
 export async function verify(access: Access): Promise<boolean> {
-  const key = await crypto.subtle.importKey('raw', bytesOf(access.owner), 'Ed25519', false, ['verify'])
-  return crypto.subtle.verify('Ed25519', key, bytesOf(access.signature), new TextEncoder().encode(canonical(access)))
+  const message = new TextEncoder().encode(canonical(access))
+  const key = await crypto.subtle.importKey('raw', bytesOf(access.owner), 'Ed25519', false, ['verify']).catch(() => null)
+  if (key) return crypto.subtle.verify('Ed25519', key, bytesOf(access.signature), message)
+  const { default: sodium } = await import('sodium-javascript')
+  return sodium.crypto_sign_verify_detached(bytesOf(access.signature), message, bytesOf(access.owner))
 }
 
 export async function computerId(key: string): Promise<string> {

@@ -69,7 +69,7 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
   const send = (frame: Frame) => {
     if (failure) throw failure
     if (!session) throw new Error('The handshake has not finished.')
-    socket.send(session.encrypt(encodeFrame(frame)))
+    socket.send(new Uint8Array(session.encrypt(encodeFrame(frame))))
   }
 
   const dispatch = ({ type, stream, payload }: Frame) => {
@@ -107,7 +107,7 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
       }
       dispatch(decodeFrame(session.decrypt(bytes)))
     }
-    socket.addEventListener('open', () => socket.send(first))
+    socket.addEventListener('open', () => socket.send(new Uint8Array(first)))
     socket.addEventListener('message', event => {
       if (!(event.data instanceof ArrayBuffer)) return
       const data = event.data

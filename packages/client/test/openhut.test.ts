@@ -138,7 +138,7 @@ function signedBy({ by, list }: { by: { privateKey: KeyObject; key: string }; li
   return { ...unsigned, signature: sign(null, Buffer.from(canonical(unsigned)), by.privateKey).toString('hex') }
 }
 
-function setup(ids: string[], options: { owner?: boolean } = {}) {
+function setup(ids: string[], options: { owner?: boolean; signed?: Platform['signed'] } = {}) {
   const runtimes = Object.fromEntries(ids.map((id) => [id, fake()]))
   const opened: string[] = []
   const stored: StoredComputer[] = ids.map((id) => ({ id, name: id, url: id === 'local' ? '' : `https://${id}.example` }))
@@ -152,6 +152,7 @@ function setup(ids: string[], options: { owner?: boolean } = {}) {
     },
     openUrl: (url) => { opened.push(url) },
     owner: options.owner ? async () => ({ key: ownerKeys.key, sign: async (text) => sign(null, Buffer.from(text), ownerKeys.privateKey).toString('hex'), self: { key: MAC, name: 'Mo\'s Mac' } }) : undefined,
+    signed: options.signed,
   }
   return { runtimes, opened, openhut: createOpenHut(platform) }
 }
@@ -362,4 +363,30 @@ test('only the app that holds the owner key removes devices, and never itself', 
   assert.equal(await openhut.access.sync(), undefined)
   const { openhut: mac } = setup(['local'], { owner: true })
   await assert.rejects(mac.access.remove(MAC), /can't remove itself/)
+})
+
+test('a phone carries the newest owner-signed list it has to computers that are behind, keeps a newer one it sees, and never carries a foreign one', async () => {
+  let held: Access | undefined = signedBy({ by: ownerKeys, list: { version: 4, clients: [{ key: PHONE, name: 'Mo\'s iPhone', addedAt: AT }], computers: [] } })
+  const { runtimes, openhut } = setup(['local', 'beelink', 'other'], { signed: { read: async () => held, save: async (list) => { held = list } } })
+  runtimes.local.access = signedBy({ by: ownerKeys, list: { ...held, version: 2 } })
+  runtimes.beelink.access = signedBy({ by: ownerKeys, list: { ...held, version: 6 } })
+  runtimes.other.access = signedBy({ by: keys(), list: { version: 9, clients: [], computers: [] } })
+  const carried = await openhut.access.sync()
+  assert.equal(carried?.version, 6)
+  assert.equal(held?.version, 6)
+  assert.deepEqual([runtimes.local.access?.version, runtimes.beelink.access?.version], [6, 6])
+  assert.equal(runtimes.other.access?.version, 9)
+  held = { ...held!, version: 7 }
+  runtimes.local.calls = []
+  assert.equal((await openhut.access.sync())?.version, 6)
+  assert.deepEqual(runtimes.local.calls.filter((call) => call.startsWith('PUT')), [])
+})
+
+test('who you are comes from the first computer that answers, so a phone still opens with its first computer off', async () => {
+  const { runtimes, openhut } = setup(['local', 'beelink'])
+  runtimes.local.up = false
+  assert.equal((await openhut.account.me()).user.id, 'usr_a')
+  assert.deepEqual(runtimes.beelink.calls, ['GET /api/me'])
+  runtimes.beelink.up = false
+  await assert.rejects(openhut.account.me(), /fetch failed/)
 })

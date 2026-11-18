@@ -23,6 +23,7 @@ export type Platform = {
   openUrl: (url: string) => void
   appVersion?: string
   owner?: () => Promise<Owner>
+  signed?: { read: () => Promise<Access | undefined>; save: (list: Access) => Promise<void> }
 }
 export type Owner = { key: string; sign: (text: string) => Promise<string>; self: { key: string; name: string } }
 export type Device = Client & { self: boolean }
@@ -257,9 +258,10 @@ export function createOpenHut(platform: Platform) {
 
   const account = {
     async me(): Promise<Me> {
-      const [first] = await platform.store.computers()
+      const [first, ...rest] = await platform.store.computers()
       if (!first) throw new RequestError({ message: 'Add a computer first.', status: 404 })
-      return call({ computer: first, path: '/api/me', schema: Me })
+      const ask = (each: StoredComputer) => call({ computer: each, path: '/api/me', schema: Me })
+      return rest.reduce((answer, each) => answer.catch(() => ask(each)), ask(first))
     },
     async sync(): Promise<Behind> {
       const rows = await across({ seen: adminsSeen, read: (each) => call({ computer: each, path: '/api/admin', schema: Admin }) })
@@ -323,10 +325,21 @@ export function createOpenHut(platform: Platform) {
     }))
   }
 
+  async function pass(): Promise<Access | undefined> {
+    const mine = await platform.signed?.read()
+    if (!mine) return undefined
+    const rows = await across({ seen: accessSeen, read: held })
+    const best = await newest({ lists: [mine, ...rows.map((row) => row.value?.access)], owner: mine.owner })
+    if (!best) return undefined
+    if (best.version > mine.version) await platform.signed?.save(best)
+    await carry({ list: best, rows })
+    return best
+  }
+
   const access = {
     sync: (): Promise<Access | undefined> => serial(async () => {
       const owner = await platform.owner?.()
-      if (!owner) return undefined
+      if (!owner) return pass()
       const rows = await across({ seen: accessSeen, read: held })
       const best = await newest({ lists: [signedLast, ...rows.map((row) => row.value?.access)], owner: owner.key })
       const list = await reconcile({ owner, best, rows })
