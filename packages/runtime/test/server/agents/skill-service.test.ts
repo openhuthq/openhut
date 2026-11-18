@@ -11,8 +11,8 @@ await db.insertInto('person').values([
   { id: 'usr_skillmem', email: 'skillmember@example.com', role: 'member', removed_at: null },
 ]).execute()
 await db.insertInto('agent').values({ id: 'ag_skilltst', name: 'Dev', owner_id: 'usr_skillown', instructions: '# Dev', model: 'sonnet', net: 9, channel_key: seal('k'.repeat(32)) }).execute()
-const owner = { id: 'usr_skillown', email: 'skillowner@example.com', role: 'admin' as const }
-const member = { id: 'usr_skillmem', email: 'skillmember@example.com', role: 'member' as const }
+const owner = { id: 'usr_skillown', email: 'skillowner@example.com', local: false, role: 'admin' as const }
+const member = { id: 'usr_skillmem', email: 'skillmember@example.com', local: false, role: 'member' as const }
 const files: Record<string, string> = {
   'research/arxiv': '---\nname: arxiv\ndescription: "Search arXiv."\n---\nBody\n',
   'late-invoices': '---\ndescription: Chase late invoices.\n---\nSteps\n',

@@ -189,7 +189,7 @@ export function updateStatus({ stored, build, installing, last, now }: { stored:
 }
 
 async function latestRelease({ fresh }: { fresh: boolean }): Promise<{ build: string | null; sha256: string }> {
-  if (config.socket) return { build: null, sha256: '' }
+  if (config.installKind !== 'server') return { build: null, sha256: '' }
   if (!fresh && Date.now() - latest.at < LATEST_TTL_MS) return latest
   const script = await fetch(config.releaseUrl, { headers: { accept: 'text/plain' }, signal: AbortSignal.timeout(LATEST_TIMEOUT_MS) })
     .then((response) => response.ok ? response.text() : '').catch(() => '')
