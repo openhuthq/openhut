@@ -84,7 +84,7 @@ test('a key the list doesn\'t hold gets closed without an answer', async () => {
   await assert.rejects(tunnel.fetch('/caller'), (error: TunnelError) => error.type === 'closed')
 })
 
-test('another computer joins with a code: the owner adds it, it gets the same signed list, and the phone reaches it through the relay', async () => {
+test('another computer joins with a code: it is on the relay while the owner decides, the owner adds it, it gets the same signed list, and the phone reaches it through the relay', async () => {
   const other = await startRelay()
   const created = await app.inject({ method: 'POST', url: '/api/invitations', headers: { authorization: 'Bearer test-key' } })
   const invitation: Invitation = created.json()
@@ -101,6 +101,9 @@ test('another computer joins with a code: the owner adds it, it gets the same si
     assert.equal(joined.status, 'joined')
     assert.equal(joined.device?.kind, 'computer')
     const second = { id: createHash('sha256').update(Buffer.from(joined.device!.key, 'hex')).digest('hex'), name: joined.device!.name, key: joined.device!.key }
+    await waitFor(other.online)
+    const early = await connect({ relayUrl: other.url, computer: second, key: phone })
+    await assert.rejects(early.fetch('/api/me'), (error: TunnelError) => error.type === 'closed')
     const list = signed({ version: 2, clients: [PHONE], computers: [{ id: computerId, name: 'This Mac', key: relayKeyHex }, second] })
     await accessService.put({ access: list, local: true })
     let theirs: unknown
@@ -109,7 +112,6 @@ test('another computer joins with a code: the owner adds it, it gets the same si
       theirs = await viaSocket({ path: join(dir, 'openhut.sock'), url: '/api/access' }).catch(() => undefined)
     }
     assert.deepEqual(theirs, list)
-    await waitFor(other.online)
     const tunnel = await connect({ relayUrl: other.url, computer: second, key: phone })
     assert.equal((await tunnel.fetch('/api/me')).status, 200)
     tunnel.close()

@@ -22,8 +22,7 @@ const JoinCode = z.object({ c: z.string(), k: z.string(), o: z.string(), s: z.st
 export const relayService = {
   async start({ server }: { server: Server }): Promise<{ close: () => void } | undefined> {
     if (!config.relayUrl) return undefined
-    if (config.join && !settings.access()) await join(config.join).catch((err: unknown) => log.error({ event: 'relay.join_failed', reason: messageOf(err) }))
-    return serve({
+    const served = serve({
       relayUrl: config.relayUrl,
       computerId,
       registerToken,
@@ -32,6 +31,8 @@ export const relayService = {
       invited: (input) => invitationService.invited(input),
       handle: (input) => handle({ server, ...input }),
     })
+    if (config.join && !settings.access()) await join(config.join).catch((err: unknown) => log.error({ event: 'relay.join_failed', reason: messageOf(err) }))
+    return served
   },
 
   handle,
