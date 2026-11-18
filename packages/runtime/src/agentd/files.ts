@@ -1,4 +1,4 @@
-import { closeSync, constants, fchownSync, fstatSync, mkdirSync, openSync, readSync, writeFileSync } from 'node:fs'
+import { closeSync, constants, existsSync, fchownSync, fstatSync, mkdirSync, openSync, readlinkSync, readSync, writeFileSync } from 'node:fs'
 import { openInside } from './skills.ts'
 
 export const MAX_FILE_BYTES = 25 << 20
@@ -8,6 +8,7 @@ const UPLOADS = 'uploads'
 const NAME = /^[\p{L}\p{N}_(+,=@][\p{L}\p{N}._ ()+,=@-]{0,119}$/u
 const MAX_DEPTH = 32
 const MAX_COPIES = 100
+const PROC = existsSync('/proc/self/fd')
 
 type Owner = { uid: number; gid: number }
 
@@ -22,32 +23,29 @@ export function isHomePath(value: unknown): value is string {
 }
 
 export function saveUpload({ home, name, body, owner }: { home: string; name: string; body: Buffer; owner?: Owner }): string {
-  const before = process.cwd()
-  try {
-    enter({ dir: home, expected: home })
+  return within({ dir: home, expected: home, work: (here) => {
     try {
-      mkdirSync(UPLOADS, { mode: 0o700 })
+      mkdirSync(`${here}${UPLOADS}`, { mode: 0o700 })
     } catch (e) {
       if (!isCode(e, 'EEXIST')) throw e
     }
-    enter({ dir: UPLOADS, expected: `${home}/${UPLOADS}` })
-    if (owner) chownHere(owner)
-    for (let copy = 1; copy <= MAX_COPIES; copy++) {
-      const saved = copy === 1 ? name : numbered({ name, copy })
-      const fd = createQuietly(saved)
-      if (fd === undefined) continue
-      try {
-        writeFileSync(fd, body)
-        if (owner) fchownSync(fd, owner.uid, owner.gid)
-      } finally {
-        closeSync(fd)
+    return within({ dir: `${here}${UPLOADS}`, expected: `${home}/${UPLOADS}`, work: (uploads) => {
+      if (owner) chownDir({ dir: uploads, owner })
+      for (let copy = 1; copy <= MAX_COPIES; copy++) {
+        const saved = copy === 1 ? name : numbered({ name, copy })
+        const fd = createQuietly(`${uploads}${saved}`)
+        if (fd === undefined) continue
+        try {
+          writeFileSync(fd, body)
+          if (owner) fchownSync(fd, owner.uid, owner.gid)
+        } finally {
+          closeSync(fd)
+        }
+        return `${UPLOADS}/${saved}`
       }
-      return `${UPLOADS}/${saved}`
-    }
-    throw new Error(`there are already ${MAX_COPIES} files called ${name}`)
-  } finally {
-    process.chdir(before)
-  }
+      throw new Error(`there are already ${MAX_COPIES} files called ${name}`)
+    } })
+  } })
 }
 
 export function readHomeFile({ home, path }: { home: string; path: string }): Buffer | undefined {
@@ -69,13 +67,38 @@ export function readHomeFile({ home, path }: { home: string; path: string }): Bu
   }
 }
 
-function enter({ dir, expected }: { dir: string; expected: string }): void {
-  process.chdir(dir)
-  if (process.cwd() !== expected) throw new Error('the agent\'s home folder isn\'t where it should be')
+function within<T>({ dir, expected, work }: { dir: string; expected: string; work: (here: string) => T }): T {
+  if (!PROC) return withCwd({ dir, expected, work })
+  const fd = openSync(dir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)
+  try {
+    if (readlinkSync(`/proc/self/fd/${fd}`) !== expected) throw moved()
+    return work(`/proc/self/fd/${fd}/`)
+  } finally {
+    closeSync(fd)
+  }
 }
 
-function chownHere(owner: Owner): void {
-  const fd = openSync('.', constants.O_RDONLY | constants.O_DIRECTORY)
+function withCwd<T>({ dir, expected, work }: { dir: string; expected: string; work: (here: string) => T }): T {
+  const before = process.cwd()
+  try {
+    process.chdir(dir)
+    if (process.cwd() !== expected) throw moved()
+    return work('./')
+  } finally {
+    try {
+      process.chdir(before)
+    } catch {
+      process.chdir('/')
+    }
+  }
+}
+
+function moved(): Error {
+  return new Error('the agent\'s home folder isn\'t where it should be')
+}
+
+function chownDir({ dir, owner }: { dir: string; owner: Owner }): void {
+  const fd = openSync(`${dir}.`, constants.O_RDONLY | constants.O_DIRECTORY)
   try {
     fchownSync(fd, owner.uid, owner.gid)
   } finally {
