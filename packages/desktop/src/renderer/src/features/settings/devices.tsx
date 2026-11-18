@@ -51,7 +51,6 @@ function AddPhone() {
   return <PairDialog
     title="Add a phone"
     check={() => `Allow it only if your phone shows the same numbers. It will see and talk to the agents on all your computers, like this ${HERE} does.`}
-    done={(device) => [`${device.name} can now reach your agents`, 'Open OpenHut on it to talk to them from anywhere.']}
     waiting={(code) => <div className="flex items-start gap-6">
       <span className="grid size-[216px] shrink-0 place-items-center rounded-xl border border-hair bg-white p-2 [&_canvas]:size-full!"><QrCode text={code} label="Code to add a phone" /></span>
       <div className="flex min-h-[216px] flex-col gap-3 pt-1">

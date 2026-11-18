@@ -192,7 +192,6 @@ function AddComputer() {
   return <PairDialog
     title="Add a computer"
     check={(device) => `Allow it only if ${device.name} shows the same numbers. Your agents can run there once it joins.`}
-    done={(device) => [`${device.name} can now run your agents`, 'Move an agent there from its panel, or make a new one on it.']}
     waiting={(code) => <>
       <p className="m-0 text-body">Run this on an always-on Linux computer. It installs OpenHut there and adds it to your computers.</p>
       <Command text={joinCommand(code)} />

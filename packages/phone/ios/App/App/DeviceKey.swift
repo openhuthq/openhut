@@ -21,6 +21,9 @@ public class DeviceKeyPlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private let service = "dev.openhut.app.device-key"
+    private let queue = DispatchQueue(label: "dev.openhut.app.device-key")
+    private let unlockFor: TimeInterval = 300
+    private var unlocked: (context: LAContext, at: Date)?
 
     @objc func publicKey(_ call: CAPPluginCall) {
         do {
@@ -35,21 +38,39 @@ public class DeviceKeyPlugin: CAPPlugin, CAPBridgedPlugin {
         guard let remote = call.getString("publicKey").flatMap(unhex), remote.count == 32 else {
             return call.reject("publicKey must be 64 lowercase hex characters.")
         }
-        do {
-            let context = LAContext()
-            context.localizedReason = "Unlock your OpenHut device key"
-            guard let raw = try read(account: "private", context: context) else {
-                return call.reject("There is no device key yet.")
+        queue.async {
+            do {
+                guard let raw = try self.read(account: "private", context: try self.unlockedContext()) else {
+                    return call.reject("There is no device key yet.")
+                }
+                let key = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: raw)
+                let secret = try key.sharedSecretFromKeyAgreement(with: Curve25519.KeyAgreement.PublicKey(rawRepresentation: remote))
+                call.resolve(["secret": self.hex(secret.withUnsafeBytes { Data($0) })])
+            } catch {
+                self.unlocked = nil
+                call.reject("Couldn't agree on a secret: \(error.localizedDescription)")
             }
-            let key = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: raw)
-            let secret = try key.sharedSecretFromKeyAgreement(with: Curve25519.KeyAgreement.PublicKey(rawRepresentation: remote))
-            call.resolve(["secret": hex(secret.withUnsafeBytes { Data($0) })])
-        } catch {
-            call.reject("Couldn't agree on a secret: \(error.localizedDescription)")
         }
     }
 
+    private func unlockedContext() throws -> LAContext {
+        if let unlocked, Date().timeIntervalSince(unlocked.at) < unlockFor { return unlocked.context }
+        let context = LAContext()
+        context.touchIDAuthenticationAllowableReuseDuration = unlockFor
+        let done = DispatchSemaphore(value: 0)
+        var failure: Error?
+        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "Unlock your OpenHut device key") { ok, error in
+            if !ok { failure = error ?? NSError(domain: LAErrorDomain, code: LAError.authenticationFailed.rawValue) }
+            done.signal()
+        }
+        done.wait()
+        if let failure { throw failure }
+        unlocked = (context, Date())
+        return context
+    }
+
     @objc func wipe(_ call: CAPPluginCall) {
+        queue.sync { unlocked = nil }
         SecItemDelete([kSecClass: kSecClassGenericPassword, kSecAttrService: service] as CFDictionary)
         call.resolve()
     }
