@@ -3,6 +3,7 @@ import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox'
 import { ArrowLeft01Icon, ArrowRight01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
+import { Meter } from '@/components/ui/meter'
 import { CopyButton } from '@/components/copy-button'
 import { Face } from '@/features/agents/face'
 import { I, ICON_BUTTON, PILL } from '@/components/kit'
@@ -61,10 +62,13 @@ export function CardTitle({ children }: { children: ReactNode }) {
 
 const MARKS = { done: <I icon={Tick02Icon} size={12} />, now: <i className="size-2 animate-pulse rounded-full bg-ink" />, failed: <i className="size-2 rounded-full bg-fail" />, next: null }
 
-export function Progress({ rows }: { rows: [string, string, 'done' | 'now' | 'next' | 'failed'][] }) {
-  return <div className="flex flex-col gap-3">{rows.map(([label, note, state]) => <div key={label} className={cn('flex items-center gap-2.5 text-sm', state === 'next' && 'text-mute-2', state === 'now' && 'font-medium', state === 'failed' && 'font-medium text-fail')}>
-    <span className={cn('grid size-5 place-items-center rounded-full', state === 'done' ? 'bg-success-subtle text-success-foreground' : 'bg-soft')}>{MARKS[state]}</span>
-    {label}<span className={cn('ml-auto text-right font-mono text-xs', state === 'failed' ? 'text-fail' : 'text-mute')}>{note}</span>
+export function Progress({ rows }: { rows: [string, string, 'done' | 'now' | 'next' | 'failed', number?][] }) {
+  return <div className="flex flex-col gap-3">{rows.map(([label, note, state, fraction]) => <div key={label} className="flex flex-col gap-2">
+    <div className={cn('flex items-center gap-2.5 text-sm', state === 'next' && 'text-mute-2', state === 'now' && 'font-medium', state === 'failed' && 'font-medium text-fail')}>
+      <span className={cn('grid size-5 place-items-center rounded-full', state === 'done' ? 'bg-success-subtle text-success-foreground' : 'bg-soft')}>{MARKS[state]}</span>
+      {label}<span className={cn('ml-auto whitespace-nowrap text-right font-mono text-xs tabular-nums', state === 'failed' ? 'text-fail' : 'text-mute')}>{note}</span>
+    </div>
+    {state === 'now' && fraction !== undefined && <Meter className="ml-[30px]" value={Math.round(fraction * 100)} aria-label={label} />}
   </div>)}</div>
 }
 
