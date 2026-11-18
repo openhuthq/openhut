@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { connect, TunnelError, type Tunnel, type TunnelSocket } from '@openhut/tunnel'
 import { Access, verify } from '@openhut/common/access/access.ts'
 import type { Platform, StoredComputer } from '@openhut/client'
-import { deviceKey, isPhone, onLink, openPage, phoneName, saved, wipe, type DeviceKey } from '@/lib/native'
+import { deviceKey, isPhone, onLink, openPage, phoneName, saved, UnlockCanceled, wipe, type DeviceKey } from '@/lib/native'
 import { mayRetry, type Failed } from '@/lib/backoff'
 import { fromPhone } from '@/lib/platform'
 
@@ -59,7 +59,7 @@ function tunnelTo(computer: StoredComputer): Promise<Tunnel> {
   const relayUrl = held.relayUrl
   const made = myKey().then((mine) => connect({ relayUrl, computer: target, key: mine }))
   tunnels.set(computer.id, made)
-  made.then(() => failures.delete(computer.id), (error: unknown) => failures.set(computer.id, { since: Date.now(), tries: (failed?.tries ?? 0) + 1, error }))
+  made.then(() => failures.delete(computer.id), (error: unknown) => { if (!(error instanceof UnlockCanceled)) failures.set(computer.id, { since: Date.now(), tries: (failed?.tries ?? 0) + 1, error }) })
   const forget = () => { if (tunnels.get(computer.id) === made) tunnels.delete(computer.id) }
   made.then(async (tunnel) => {
     for await (const _message of tunnel.control) continue

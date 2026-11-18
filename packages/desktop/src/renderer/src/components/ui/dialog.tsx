@@ -1,12 +1,12 @@
-import { useRef, type ComponentProps, type PointerEvent, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, type ComponentProps, type PointerEvent, type ReactNode } from 'react'
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { Button } from '@/components/ui/button'
 import { ICONS } from '@/components/icons'
-import { slide, TOUCH } from '@/lib/media'
+import { PHONE, slide, TOUCH } from '@/lib/media'
 import { cn } from '@/lib/utils'
 
-const SHEET = 'rides-keyboard phone:origin-top phone:data-nested-dialog-open:scale-[.94] phone:data-nested-dialog-open:-translate-y-[10px] phone:data-nested-dialog-open:brightness-90 phone:mx-0 phone:mb-(--kb) phone:mt-auto phone:max-h-[calc(100dvh-env(safe-area-inset-top)-10px-var(--kb))] phone:w-screen phone:max-w-none phone:rounded-t-[22px] phone:rounded-b-none phone:border-0 phone:pt-3 phone:pb-(--safe-bottom) phone:shadow-[0_-8px_40px_oklch(0%_0_0/.18)] phone:animate-[sheetup_.42s_var(--ease-spring)]'
+const SHEET = 'rides-keyboard phone:data-ending-style:translate-y-full phone:origin-top phone:data-nested-dialog-open:scale-[.94] phone:data-nested-dialog-open:-translate-y-[10px] phone:data-nested-dialog-open:brightness-90 phone:mx-0 phone:mb-(--kb) phone:mt-auto phone:max-h-[calc(100dvh-env(safe-area-inset-top)-10px-var(--kb))] phone:w-screen phone:max-w-none phone:rounded-t-[22px] phone:rounded-b-none phone:border-0 phone:pt-3 phone:pb-(--safe-bottom) phone:shadow-[0_-8px_40px_oklch(0%_0_0/.18)] phone:animate-[sheetup_.42s_var(--ease-spring)]'
 const TALL = 'phone:h-[calc(100dvh-env(safe-area-inset-top)-10px-var(--kb))]'
 const FITS = 'phone:h-fit'
 
@@ -16,7 +16,7 @@ const popupVariants = cva('group/dialog fixed inset-0 z-50 overflow-auto border-
       default: [SHEET, FITS, 'm-auto h-fit w-[min(880px,calc(100vw-32px))] rounded-xl shadow-dialog animate-grow'],
       narrow: [SHEET, FITS, 'm-auto h-fit w-[min(560px,calc(100vw-32px))] rounded-xl shadow-dialog animate-grow'],
       window: [SHEET, TALL, 'm-auto flex h-[min(700px,calc(100vh-96px))] max-h-[calc(100vh-32px)] w-[min(900px,calc(100vw-32px))] overflow-hidden rounded-xl shadow-dialog outline-none animate-grow'],
-      confirm: 'm-auto h-fit w-[min(440px,calc(100vw-32px))] rounded-xl shadow-dialog animate-grow phone:mb-[calc(8px+env(safe-area-inset-bottom))] phone:w-[calc(100vw-16px)] phone:rounded-[22px] phone:animate-[sheetup_.42s_var(--ease-spring)]',
+      confirm: 'm-auto h-fit w-[min(440px,calc(100vw-32px))] rounded-xl shadow-dialog animate-grow phone:transition-[translate] phone:duration-300 phone:data-ending-style:translate-y-[120%] phone:mb-[calc(8px+env(safe-area-inset-bottom))] phone:w-[calc(100vw-16px)] phone:rounded-[22px] phone:animate-[sheetup_.42s_var(--ease-spring)]',
       sheet: [SHEET, TALL, 'my-0 mr-0 ml-auto h-dvh max-h-dvh w-[min(560px,100vw)] rounded-none border-l border-hair shadow-sheet animate-sheetin'],
     },
   },
@@ -26,7 +26,7 @@ const popupVariants = cva('group/dialog fixed inset-0 z-50 overflow-auto border-
 export type DialogSize = NonNullable<VariantProps<typeof popupVariants>['size']>
 
 export function backdropClass(size: DialogSize) {
-  return cn('fixed inset-0 z-50', size === 'sheet' ? 'bg-[oklch(0%_0_0/.1)] backdrop-blur-[4px]' : 'bg-[oklch(0%_0_0/.32)] backdrop-blur-[3px]')
+  return cn('fixed inset-0 z-50 phone:transition-opacity phone:duration-300 phone:data-ending-style:opacity-0', size === 'sheet' ? 'bg-[oklch(0%_0_0/.1)] backdrop-blur-[4px]' : 'bg-[oklch(0%_0_0/.32)] backdrop-blur-[3px]')
 }
 
 export function popupClass(size: DialogSize, className?: string) {
@@ -47,19 +47,36 @@ export function firstFocusable(popup: HTMLElement | null) {
 
 export function Dialog({ size = 'default', dismissable = true, label, onClose, onEscape, className, children }: { size?: DialogSize; dismissable?: boolean; label?: string; onClose: () => void; onEscape?: () => void; className?: string; children: ReactNode }) {
   const popup = useRef<HTMLDivElement>(null)
+  const backdrop = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => () => leaveAfter({ sheet: popup.current, backdrop: backdrop.current }), [])
   return <DialogPrimitive.Root open disablePointerDismissal={!dismissable} onOpenChange={(open, details) => {
     if (open) return
     if (details.reason === 'escape-key' && onEscape) onEscape()
     else if (dismissable || details.reason !== 'escape-key') onClose()
   }}>
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Backdrop forceRender className={backdropClass(size)} />
+      <DialogPrimitive.Backdrop ref={backdrop} forceRender className={backdropClass(size)} />
       <DialogPrimitive.Popup ref={popup} initialFocus={() => size === 'window' || matchMedia(TOUCH).matches ? popup.current ?? true : firstFocusable(popup.current)} data-size={size} aria-label={label} className={popupClass(size, className)}>
         {size !== 'confirm' && <Grabber popup={popup} onClose={onClose} />}
         {children}
       </DialogPrimitive.Popup>
     </DialogPrimitive.Portal>
   </DialogPrimitive.Root>
+}
+
+function leaveAfter({ sheet, backdrop }: { sheet: HTMLElement | null; backdrop: HTMLElement | null }) {
+  if (!sheet?.isConnected || !matchMedia(PHONE).matches || sheet.style.translate === '0 100%') return
+  const rest = sheet.getBoundingClientRect()
+  for (const [element, to] of [[backdrop, { opacity: '0' }], [sheet, { translate: `0 ${innerHeight - rest.top}px` }]] as const) {
+    const ghost = element?.cloneNode(true)
+    if (!(ghost instanceof HTMLElement)) continue
+    ghost.removeAttribute('id')
+    ghost.setAttribute('aria-hidden', 'true')
+    Object.assign(ghost.style, { animation: 'none', pointerEvents: 'none', transition: 'translate .32s cubic-bezier(.32, .72, 0, 1), opacity .28s ease-out' })
+    document.body.append(ghost)
+    requestAnimationFrame(() => requestAnimationFrame(() => Object.assign(ghost.style, to)))
+    setTimeout(() => ghost.remove(), 400)
+  }
 }
 
 function Grabber({ popup, onClose }: { popup: { current: HTMLDivElement | null }; onClose: () => void }) {

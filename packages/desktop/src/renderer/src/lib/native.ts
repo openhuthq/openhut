@@ -18,7 +18,8 @@ export type DeviceKey = { publicKey: Uint8Array; agree(remote: Uint8Array): Prom
 const plugin = registerPlugin<DeviceKeyPlugin>('DeviceKey')
 
 if (Capacitor.getPlatform() === 'ios') void Keyboard.setAccessoryBarVisible({ isVisible: false })
-if (Capacitor.isNativePlatform()) {
+if (Capacitor.isNativePlatform()) document.addEventListener('dragstart', (event) => event.preventDefault())
+if (Capacitor.getPlatform() === 'ios') {
   void Keyboard.addListener('keyboardWillShow', ({ keyboardHeight }) => keyboard(keyboardHeight))
   void Keyboard.addListener('keyboardWillHide', () => keyboard(0))
 }
@@ -58,12 +59,16 @@ export async function devicePublicKey(): Promise<string | undefined> {
   return (await plugin.publicKey()).publicKey
 }
 
+export class UnlockCanceled extends Error {}
+
 export async function deviceKey(): Promise<DeviceKey | undefined> {
   if (!isPhone()) return undefined
   const { publicKey } = await plugin.publicKey()
   return {
     publicKey: fromHex(publicKey),
-    agree: async (remote) => fromHex((await plugin.agree({ publicKey: toHex(remote) })).secret),
+    agree: async (remote) => fromHex((await plugin.agree({ publicKey: toHex(remote) }).catch((err: unknown) => {
+      throw Reflect.get(Object(err), 'code') === 'canceled' ? new UnlockCanceled(String(Reflect.get(Object(err), 'message'))) : err
+    })).secret),
   }
 }
 
@@ -84,7 +89,7 @@ export function phoneName(): string {
 }
 
 export function onBack(handler: () => void): () => void {
-  if (!isPhone()) return () => {}
+  if (!Capacitor.isNativePlatform()) return () => {}
   const listener = App.addListener('backButton', handler)
   return () => void listener.then((it) => it.remove())
 }

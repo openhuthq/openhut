@@ -195,6 +195,7 @@
   :is([class*="text-[14px]"], .text-sm, .text-base):not([class*="phone:text-"]) { font-size: 16px; line-height: 1.45 }
   :is([class*="text-[15px]"]):not([class*="phone:text-"]) { font-size: 17px; line-height: 1.4 }
   :is(button, a, [role=button], label, h1, h2, h3) { -webkit-user-select: none; user-select: none }
+  a, img { -webkit-user-drag: none }
   :is(button, a, [role=button]):not(:disabled) { transition: scale .2s cubic-bezier(.28, 1.4, .36, 1), background-color .15s ease }
   :is(button, [role=button], .press):not(:disabled):active { scale: .96 }
   .row:active { background-color: var(--picked); scale: 1 }
