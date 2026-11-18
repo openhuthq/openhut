@@ -44,7 +44,7 @@ function adminOf({ id, runtime }: { id: string; runtime: Fake }): Admin {
   return {
     object: 'admin', seat: { set: !!runtime.seat.token, mode: 'claude', updatedAt: runtime.seat.at }, codex: { set: !!runtime.codexAt, updatedAt: runtime.codexAt ?? null },
     server: { version: '0.3.0', build: 'dev', latestBuild: null, updateAvailable: false, update: null, healthy: true, agentd: true, firewall: true, running: 0, total: 0 },
-    tailnetUrl: null, usageData: false, publicKey: keyOf(id), relay: { key: noiseKeyOf(id), computerId: createHash('sha256').update(Buffer.from(noiseKeyOf(id), 'hex')).digest('hex'), url: null },
+    tailnetUrl: null, usageData: false, publicKey: keyOf(id), relay: { key: runtime.relayKey ?? noiseKeyOf(id), computerId: createHash('sha256').update(Buffer.from(runtime.relayKey ?? noiseKeyOf(id), 'hex')).digest('hex'), url: null },
   }
 }
 
