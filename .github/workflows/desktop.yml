@@ -10,7 +10,21 @@ permissions:
   actions: write
 
 jobs:
+  claude:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: The pinned Linux claude the apps download on first run is on dl.openhut.dev
+        run: scripts/r2.sh claude
+
   release:
+    needs: claude
     runs-on: macos-15
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -110,6 +124,7 @@ jobs:
         run: scripts/compat.sh "$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
 
   windows:
+    needs: claude
     runs-on: windows-2022
     timeout-minutes: 60
     env:
@@ -174,13 +189,18 @@ jobs:
           BUILD="${GITHUB_REF_NAME#v}" TGZ="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/openhut.tgz" scripts/release.sh
           sh -n dist/install.sh
           gh release upload "$GITHUB_REF_NAME" dist/install.sh dist/openhut.tgz --clobber
-      - name: Every file is there, then publish the release
+      - name: Every file is there, then put them on dl.openhut.dev and publish the release
         if: env.TAGGED == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           have=$(gh release view "$GITHUB_REF_NAME" --json assets -q '.assets[].name')
           v="${GITHUB_REF_NAME#v}"
           for want in OpenHut-arm64.dmg "OpenHut-$v-arm64.zip" "OpenHut-$v-arm64.zip.blockmap" latest-mac.yml OpenHut-x64.AppImage openhut-x64.deb latest-linux.yml OpenHut-Setup-x64.exe latest.yml install.sh openhut.tgz; do
             echo "$have" | grep -qx "$want" || { echo "::error::The draft release has no $want, so it stays a draft."; exit 1; }
           done
+          gh release download "$GITHUB_REF_NAME" --dir r2
+          scripts/r2.sh release "$v" r2
           gh release edit "$GITHUB_REF_NAME" --draft=false
           gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main

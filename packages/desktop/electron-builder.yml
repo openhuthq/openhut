@@ -4,6 +4,7 @@ copyright: Copyright © 2026 OpenHut
 directories: { buildResources: build, output: release }
 files: [src/main.mjs, src/mcp-bridge.mjs, src/owner-keys.mjs, src/preload.cjs, "src/trayTemplate*.png", dist/renderer/**, package.json]
 asar: true
+electronLanguages: en-US
 npmRebuild: false
 afterPack: scripts/after-pack.cjs
 extraResources: [{ from: dist/backend, to: backend }, { from: dist/backend/node_modules, to: backend/node_modules }]
@@ -40,7 +41,7 @@ dmg:
   iconSize: 112
   window: { width: 540, height: 380 }
   contents: [{ x: 140, y: 168 }, { x: 400, y: 168, type: link, path: /Applications }]
-publish: { provider: github, owner: openhuthq, repo: openhut }
+publish: [{ provider: generic, url: "https://dl.openhut.dev/" }, { provider: github, owner: openhuthq, repo: openhut }]
 electronFuses:
   runAsNode: false
   enableNodeOptionsEnvironmentVariable: false
