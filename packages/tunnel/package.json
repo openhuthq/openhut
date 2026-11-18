@@ -1,0 +1,22 @@
+{
+  "name": "@openhut/tunnel",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "noise-handshake": "4.2.1",
+    "sodium-javascript": "0.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "@types/ws": "8.18.1",
+    "ws": "8.21.0"
+  }
+}
