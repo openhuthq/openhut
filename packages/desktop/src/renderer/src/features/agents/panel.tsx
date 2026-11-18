@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils'
 const VALUE = ROW_VALUE
 
 export function Panel({ agent, naming, watching }: { agent: Agent; naming: boolean; watching: boolean }) {
-  return <aside className={cn('flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
+  return <aside className={cn('flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] max-sm:w-full max-sm:flex-1 max-sm:border-l-0 border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
     <div className={cn('flex items-center gap-3', DRAG)}>
       <Face agent={agent} size={48} tile />
       <PanelTitle agent={agent} naming={naming} />

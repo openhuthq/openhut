@@ -25,11 +25,11 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
 }) {
   const computers = useComputers().data
   const many = new Set(contacts.map(({ agent }) => agent.computer)).size > 1
-  return <aside inert={collapsed} className={cn('shrink-0 overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring)', collapsed ? 'w-0' : 'w-[280px] border-r-[0.5px]', GLASS)}>
-    <div className={cn('flex h-full w-[280px] flex-col transition-[opacity,translate] duration-[160ms] ease-out', collapsed && '-translate-x-2 opacity-0')}>
+  return <aside inert={collapsed} className={cn('shrink-0 overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring)', collapsed ? 'w-0' : 'w-[280px] border-r-[0.5px]', activeId || !contacts.length ? 'max-sm:hidden' : 'max-sm:w-full max-sm:border-r-0', GLASS)}>
+    <div className={cn('flex h-full w-[280px] flex-col max-sm:w-full transition-[opacity,translate] duration-[160ms] ease-out', collapsed && '-translate-x-2 opacity-0')}>
     <div className={cn('flex h-[56px] shrink-0 items-center gap-1.5 pr-3 pl-5', DRAG)}>
       <span className="ml-auto flex gap-1.5">
-        <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Hide sidebar" title="Hide sidebar ⌘\" onClick={onCollapse}><I icon={SidebarLeftIcon} size={16} /></Button>
+        <Button type="button" variant="bare" className={cn(ICON_BUTTON, 'max-sm:hidden')} aria-label="Hide sidebar" title="Hide sidebar ⌘\" onClick={onCollapse}><I icon={SidebarLeftIcon} size={16} /></Button>
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="New agent" title="New agent" onClick={onNew}><I icon={PlusSignIcon} size={16} /></Button>
       </span>
     </div>
