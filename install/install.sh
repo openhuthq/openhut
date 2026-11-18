@@ -19,6 +19,7 @@ retry() { n=0; until timeout 600 "$@"; do n=$((n+1)); [ $n -ge 4 ] && return 1; 
 fetch() { curl -fsSL --retry 4 --retry-all-errors --connect-timeout 15 -m 900 "$1" -o "$2"; }
 check() { printf '%s  %s\n' "$2" "$3" | "$1" -c - >/dev/null || die "checksum mismatch: $3"; }
 serve() {
+  joining && return 0
   if command -v tailscale >/dev/null 2>&1 && ${SUDO:-} timeout 300 tailscale serve --bg --https=443 http://127.0.0.1:8787 2>&1; then
     echo "OpenHut is served to your tailnet on port 443."
   else
@@ -76,7 +77,8 @@ fresh() { h=$(curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$h" |
   [ "$(echo "$h" | sed -n 's/.*"started":\([0-9]*\).*/\1/p')" -ge "$STARTED_AFTER" ]; }
 up() { i=0; until fresh; do i=$((i+1)); [ $i -gt "$1" ] && return 1; printf .; sleep 3; done; }
 running() {
-  if joining; then echo "OpenHut is running and asking to join your computers. Check the six digits in the OpenHut app and accept it there."
+  if [ -n "$ASKED" ]; then echo "OpenHut is running and asking to join your computers. Check the six digits in the OpenHut app and accept it there."
+  elif joining; then echo "OpenHut is running."
   else echo "OpenHut is running for the app key sha256:$(printf '%s' "$CLIENT_KEY" | cut -c1-8)..."; fi
 }
 
@@ -123,6 +125,7 @@ fi
 [ "$(id -u)" = 0 ] || die "run as root:  curl -fsSL $OPENHUT_URL | sudo sh"
 ENROLLED="$(sed -n 's/^OPENHUT_CLIENT_KEY_SHA256=//p' /etc/openhut/env 2>/dev/null || true)"
 CLIENT_KEY="${OPENHUT_CLIENT_KEY_SHA256:-$ENROLLED}"
+ASKED="$JOIN_CODE"
 JOIN_CODE="${JOIN_CODE:-$(sed -n "s/^OPENHUT_JOIN='\(.*\)'$/\1/p" /etc/openhut/env 2>/dev/null || true)}"
 joining || printf '%s' "$CLIENT_KEY" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
 if command -v flock >/dev/null 2>&1; then
