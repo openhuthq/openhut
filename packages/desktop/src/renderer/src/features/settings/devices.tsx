@@ -6,16 +6,18 @@ import { I, PILL } from '@/components/kit'
 import { QrCode } from '@/features/agents/qr-code'
 import { useDevices, useRemoveDevice } from '@/features/settings/api'
 import { HERE } from '@/features/settings/desktop'
-import { Invite } from '@/features/settings/invite'
-import { Chevron, Intro, Row, Rows, SubPage, useConfirming } from '@/features/settings/kit'
+import { PairDialog, Waiting } from '@/features/settings/invite'
+import { Chevron, Intro, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { shortDate } from '@/lib/format'
 import { open, useOpen } from '@/lib/router'
 import { WORDS } from '@/lib/platform'
 import { toastError } from '@/lib/toast'
 
 export function DevicesSettings() {
-  if (useOpen() === 'add') return <AddPhone />
-  return <DeviceList />
+  return <>
+    <DeviceList />
+    {useOpen() === 'add' && <AddPhone />}
+  </>
 }
 
 function DeviceList() {
@@ -46,23 +48,23 @@ function DeviceRow({ device }: { device: Device }) {
 }
 
 function AddPhone() {
-  return <SubPage title="Add a phone" back="">
-    <Invite
-      check={() => `Allow it only if your phone shows the same numbers. It will see and talk to the agents on all your computers, like this ${HERE} does.`}
-      waiting={(code) => <div className="flex items-start gap-6 px-2.5">
-        <span className="grid size-[176px] shrink-0 place-items-center rounded-xl border border-hair bg-white p-2 [&_canvas]:size-full!"><QrCode text={code} label="Code to add a phone" /></span>
-        <div className="flex flex-col gap-2 pt-1">
-          <span className="text-[14px] font-medium">Scan with the OpenHut app</span>
-          <ol className="m-0 flex flex-col gap-1.5 pl-4 text-[13px] text-body">
-            <li>Install OpenHut on your phone.</li>
-            <li>Open it and point the camera at this code.</li>
-            <li>Check both screens show the same six numbers.</li>
-          </ol>
-          <span className="text-[12px] text-mute">The code works once, for 5 minutes.</span>
-        </div>
-      </div>}
-    />
-  </SubPage>
+  return <PairDialog
+    title="Add a phone"
+    check={() => `Allow it only if your phone shows the same numbers. It will see and talk to the agents on all your computers, like this ${HERE} does.`}
+    done={(device) => [`${device.name} can now reach your agents`, 'Open OpenHut on it to talk to them from anywhere.']}
+    waiting={(code) => <div className="flex items-start gap-6">
+      <span className="grid size-[216px] shrink-0 place-items-center rounded-xl border border-hair bg-white p-2 [&_canvas]:size-full!"><QrCode text={code} label="Code to add a phone" /></span>
+      <div className="flex min-h-[216px] flex-col gap-3 pt-1">
+        <span className="text-[14px] font-medium">Scan with the OpenHut app</span>
+        <ol className="m-0 flex flex-col gap-2 pl-4 text-body">
+          <li>Install OpenHut on your phone.</li>
+          <li>Open it and point the camera at this code.</li>
+          <li>Check both screens show the same six numbers.</li>
+        </ol>
+        <div className="mt-auto"><Waiting>Waiting for your phone…</Waiting></div>
+      </div>
+    </div>}
+  />
 }
 
 function added(device: Device) {
