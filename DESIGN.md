@@ -25,7 +25,7 @@ Rejected: adding an accent colour so borderless accent text could carry the seco
 | Link | `a`, `variant="link"` | underlined, inherited colour | none | an action inside a sentence | standalone actions |
 | Overflow menu | `DropdownMenu` | ghost icon trigger (⋯) | `--tint` highlight | two or more rare actions in a header | a single item, or the primary |
 
-All variants share: active `scale(.96)`, the global 2px focus ring, disabled at 50% opacity with no hover change.
+All variants share: active `scale(.96)`, the global 2px focus ring (shown only once Tab is pressed; a click hides it again, and typing never brings it back), disabled at 50% opacity with no hover change.
 
 Two sizes. 32px (default) in page headers, dialog and popover footers, empty states. 28px (`sm`) inside cards, rows, tables, inline forms, setup steps and chat. Both use 14px text. The 32px composer send button (`variant="send"`, radius 10px) is the only exception.
 
