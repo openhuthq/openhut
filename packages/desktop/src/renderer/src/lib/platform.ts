@@ -1,8 +1,8 @@
-export type Words = { here: string; thisComputer: string; keychain: string; showFolder: string; dockBadge: boolean }
+export type Words = { here: string; thisComputer: string; keychain: string; showFolder: string; badgeNote: string | undefined }
 
 export function wordsFor(platform: string): Words {
-  if (platform === 'darwin') return { here: 'Mac', thisComputer: 'This Mac', keychain: 'macOS Keychain', showFolder: 'Show in Finder', dockBadge: true }
-  return { here: 'computer', thisComputer: 'This computer', keychain: 'system keyring', showFolder: 'Open folder', dockBadge: false }
+  if (platform === 'darwin') return { here: 'Mac', thisComputer: 'This Mac', keychain: 'macOS Keychain', showFolder: 'Show in Finder', badgeNote: 'Even with this off, the Dock icon shows how many.' }
+  return { here: 'computer', thisComputer: 'This computer', keychain: 'system keyring', showFolder: 'Open folder', badgeNote: undefined }
 }
 
 const bridge: { platform?: string } | undefined = typeof window === 'undefined' ? undefined : Reflect.get(window, 'openhut')

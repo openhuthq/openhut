@@ -16,7 +16,7 @@ import { useAdmin, useCompleteSeatSignIn, useSeatUsage, useStartSeatSignIn } fro
 import { useAgents } from '@/features/agents/api'
 import { useComputers } from '@/features/computers/api'
 import { Busy, DialogCard, HINT, I, PILL, SetupSheet, Section, Status } from '@/components/kit'
-import { Check, CardTitle, Intro, Row, Rows, useConfirming } from '@/features/settings/kit'
+import { Check, CardTitle, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { useCodexSignIn, useConnectProvider, useDisconnectProvider, useFoundNotice, useMergedProviders, useRefreshProvider, useSetModel } from '@/features/models/api'
 import { BRAND, consequence, count, describe, infoOf, matches, plural, updatedAgo } from '@/features/models/labels'
 import { open, Redirect, useOpen } from '@/lib/router'
@@ -56,12 +56,11 @@ export function ModelsSettings() {
     return provider && <ProviderRow key={id} provider={provider} note={provider.connected ? notesOf({ provider, where: where(provider), testModel }) : infoOf(id).blurb} />
   }
   return <>
-    <Intro>Sign in with a subscription or add an API key.</Intro>
     <ErrorNote message={admin.error?.message} />
     {providers && <>
       <Section title="Subscriptions"><Rows>{SUBSCRIPTIONS.map((info) => row(info.id))}</Rows></Section>
       <Section title="API keys"><Rows>{KEYS.map((info) => row(info.id))}</Rows></Section>
-      <p className={cn(HINT, 'px-2.5')}>Keys stay on the computer that holds them. Agents never see them.</p>
+      <p className={cn(HINT, 'px-2.5')}>Keys stay on the computer you add them to. Agents never see them.</p>
     </>}
     {usage.data?.agents.some((agent) => agent.costUsd > 0) && <Spend usage={usage.data} />}
     {dialog === 'seat' && <SeatSignIn />}
@@ -143,7 +142,7 @@ function ConnectKey({ provider, onConnected }: { provider: Provider; onConnected
 function CodexSignInStep({ onSignedIn }: { onSignedIn: () => void }) {
   const cancel = () => leave('codex')
   const { signIn, error, restart } = useCodexSignIn(onSignedIn)
-  return <SetupSheet brand="openai" title="Sign in with ChatGPT" blurb="Open the page below, sign in to ChatGPT and enter this code." safe="Needs ChatGPT Plus or Pro." error={error?.message} onClose={cancel}
+  return <SetupSheet brand="codex" title="Sign in with ChatGPT" blurb="Open the page below, sign in to ChatGPT and enter this code." safe="Needs ChatGPT Plus or Pro." error={error?.message} onClose={cancel}
     foot={<><Button type="button" variant="secondary" onClick={cancel}>Cancel</Button>{error && <Button type="button" variant="primary" onClick={restart}>Start again</Button>}</>}>
     <div className="flex items-center gap-3 rounded-lg bg-sidebar py-3 pr-3 pl-4">
       <span className="flex-1 font-mono text-[22px] tracking-[.08em]" aria-label="Sign-in code">{signIn?.userCode ?? '····-····'}</span>

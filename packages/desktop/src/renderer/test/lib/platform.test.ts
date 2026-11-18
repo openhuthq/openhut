@@ -9,7 +9,7 @@ test('the app calls a Mac a Mac and anything else this computer', () => {
   assert.equal(wordsFor('linux').thisComputer, 'This computer')
   assert.equal(wordsFor('linux').here, 'computer')
   assert.equal(wordsFor('linux').showFolder, 'Open folder')
-  assert.equal(wordsFor('linux').dockBadge, false)
+  assert.equal(wordsFor('linux').badgeNote, undefined)
 })
 
 test('no screen hardcodes Mac words outside the platform helper', () => {
