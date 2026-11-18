@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiBrain01Icon, AiMagicIcon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, Globe02Icon, LaptopIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, ServerStack01Icon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, Globe02Icon, LaptopIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, ServerStack01Icon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmIcon } from '@/components/confirm-button'
-import { Choice, DialogCard, DRAG, GLASS, HOVER, I, MenuCard, ROW, TINY_ICON } from '@/components/kit'
+import { Choice, DialogCard, DRAG, GLASS, HOVER, I, MenuCard, ROW, ROW_VALUE, TINY_ICON } from '@/components/kit'
 import { agentPath, type AgentDialog } from '@/app/routes'
 import { useAgents, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
 import { nameOf, useComputers, useFeatures } from '@/features/computers/api'
@@ -18,7 +18,7 @@ import { CanUse } from '@/features/agents/agent-connections'
 import { ChannelRows } from '@/features/agents/channels'
 import { Face } from '@/features/agents/face'
 import { useMove } from '@/features/agents/move'
-import { ModelIcon, ModelMenu, modelLabel } from '@/features/agents/model-menu'
+import { ModelRows } from '@/features/agents/model-rows'
 import { AgentStatus } from '@/features/agents/status'
 import { HERE } from '@/features/settings/desktop'
 import { formValues } from '@/lib/form'
@@ -26,7 +26,7 @@ import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
-const VALUE = 'ml-auto inline-flex min-w-0 items-center gap-1.5 text-[13px] text-ink'
+const VALUE = ROW_VALUE
 
 export function Panel({ agent, naming }: { agent: Agent; naming: boolean }) {
   return <aside className={cn('flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
@@ -39,7 +39,7 @@ export function Panel({ agent, naming }: { agent: Agent; naming: boolean }) {
       <span className={cn('line-clamp-2 text-[13px]/[1.45]', agent.summary ? 'text-ink' : 'text-body')}>{agent.summary || `Tell ${agent.name} what its job is.`}</span>
     </Button>
     <div className="-mx-2.5 flex flex-col gap-px">
-      <ModelMenu agent={agent} className={ROW}><I icon={AiMagicIcon} size={15} className="text-mute" />Model<span className={VALUE}><ModelIcon model={agent.model} size={12} /><span className="truncate">{modelLabel(agent)}</span><I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></ModelMenu>
+      <ModelRows agent={agent} />
       <RunsOn agent={agent} />
       <Counted agent={agent} dialog="memory" icon={AiBrain01Icon} title="Memory" value={useMemoryCount(agent)} />
       <Counted agent={agent} dialog="skills" icon={BookOpen01Icon} title="Skills" value={useSkills(agent.id).data?.length} />

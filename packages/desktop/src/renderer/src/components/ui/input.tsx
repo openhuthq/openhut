@@ -2,7 +2,7 @@ import type { ComponentProps } from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
-export const inputVariants = cva('w-full border border-hair bg-card px-3 py-0 text-ink', {
+export const inputVariants = cva('w-full border border-hair bg-card px-3 py-0 text-ink aria-invalid:border-fail', {
   variants: {
     variant: {
       default: 'h-8 rounded-lg focus:border-[oklch(0%_0_0/.32)] focus-visible:outline-none',

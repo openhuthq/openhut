@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Connection, ConnectionKind } from '@openhut/common/connections/connection.ts'
-import { createOpenHut, type Platform, type StoredComputer } from '../src/openhut.ts'
+import { createOpenHut, mergeProviders, type Platform, type StoredComputer } from '../src/openhut.ts'
 
 const AT = '2026-11-17T00:00:00.000Z'
 
@@ -12,6 +12,7 @@ type Fake = {
   refuseImport?: boolean
   downAfterImport?: boolean
   codexAt?: string
+  keys: Record<string, string>
   agents: Agent[]
   connections: (Connection & { secret?: string })[]
   seat: { at: string | null; token: string }
@@ -19,15 +20,20 @@ type Fake = {
 }
 
 function fake(): Fake {
-  return { up: true, agents: [], connections: [], seat: { at: null, token: '' }, calls: [] }
+  return { up: true, keys: {}, agents: [], connections: [], seat: { at: null, token: '' }, calls: [] }
 }
 
 function agent(name: string): Agent {
-  return { id: `ag_${name.toLowerCase()}`, object: 'agent', name, ownerId: 'usr_a', ownerName: 'me', model: 'sonnet', wanted: 'running', status: 'running', health: 'answering', healthDetail: '', summary: '', net: 0, instructions: '', codeExecution: false, browser: false, canEdit: true, createdAt: AT }
+  return { id: `ag_${name.toLowerCase()}`, object: 'agent', name, ownerId: 'usr_a', ownerName: 'me', model: 'claude:sonnet', fallbackModel: null, helperModels: { compress: null, title: null, review: null }, wanted: 'running', status: 'running', health: 'answering', healthDetail: '', summary: '', net: 0, instructions: '', codeExecution: false, browser: false, canEdit: true, createdAt: AT }
 }
 
 function connection({ id, kind, name, secret }: { id: string; kind: ConnectionKind; name: string; secret?: string }): Connection & { secret?: string } {
   return { id, object: 'connection', kind, name, account: '', signIn: !secret, ownerId: 'usr_a', ownerName: 'me', everyone: false, usable: true, canDelete: true, agents: 0, status: 'connected', lastSuccessAt: null, createdAt: AT, secret }
+}
+
+function providerOf({ id, runtime }: { id: string; runtime: Fake }) {
+  const key = runtime.keys[id]
+  return { id, object: 'provider', kind: 'key', name: id, connected: !!key, keyHint: key ? `${key.slice(0, 3)}…` : null, updatedAt: key ? AT : null, models: key ? [{ id: 'm1', name: 'M1', on: true, tier: 'big', note: null, contextLength: null, inputPrice: null, outputPrice: null }] : [] }
 }
 
 function adminOf({ id, runtime }: { id: string; runtime: Fake }): Admin {
@@ -64,6 +70,14 @@ function serve({ id, runtime }: { id: string; runtime: Fake }) {
     }
     if (found) return Response.json(found)
     if (path === '/api/connections') return list(runtime.connections.map(({ secret: _secret, ...each }) => each))
+    if (path === '/api/providers') return list(['claude', 'codex', 'openrouter', 'openai', 'xai'].map((each) => providerOf({ id: each, runtime })))
+    const provider = /^\/api\/providers\/(\w+)(\/refresh)?$/.exec(path)
+    if (provider && method === 'PATCH' && body.apiKey) {
+      if (body.apiKey.includes('bad')) return Response.json({ error: { type: 'invalid_request_error', message: `${provider[1]} refused that key.`, param: 'apiKey' } }, { status: 400 })
+      runtime.keys[provider[1]] = body.apiKey
+    }
+    if (provider && method === 'DELETE') delete runtime.keys[provider[1]]
+    if (provider) return Response.json(providerOf({ id: provider[1], runtime }))
     if (path === '/api/admin') return Response.json(adminOf({ id, runtime }))
     if (path === '/api/me') return Response.json({ object: 'me', user: { id: 'usr_a', object: 'person', email: 'me', joinedAt: AT }, timeZone: 'UTC' })
     if (path === '/api/admin/exports') {
@@ -179,7 +193,7 @@ test('a move that fails on the new computer starts the agent again where it was'
   assert.equal(runtimes.beelink.agents.length, 0)
 })
 
-test('only the Claude sign-in is pushed while Codex is coming soon', async () => {
+test('only the Claude sign-in is pushed between computers: a Codex refresh token is single use, so each computer signs in itself', async () => {
   const { runtimes, openhut } = setup(['local', 'beelink'])
   runtimes.local.codexAt = '2026-11-17T10:00:00.000Z'
   assert.deepEqual(await openhut.account.sync(), { claude: [], codex: [] })
@@ -198,4 +212,42 @@ test('a move that fails after the new computer may have a copy leaves the agent 
 test('an app older than a computer asks for is flagged; versions compare part by part', async () => {
   const { older } = await import('../src/openhut.ts')
   assert.deepEqual([older({ version: '0.1.9', than: '0.1.10' }), older({ version: '0.2.0', than: '0.1.10' }), older({ version: '0.1.0', than: '0.1.0' }), older({ version: 'dev', than: '0.1.0' })], [true, false, false, false])
+})
+
+test('a key is put on the computers that were ticked and nowhere else, and the first refusal stops the rest', async () => {
+  const { runtimes, openhut } = setup(['local', 'beelink', 'office'])
+  await openhut.providers.connect({ id: 'openai', apiKey: 'sk-one-key', computers: ['local', 'office'] })
+  assert.deepEqual(Object.values(runtimes).map((each) => each.keys.openai), ['sk-one-key', undefined, 'sk-one-key'])
+  await assert.rejects(openhut.providers.connect({ id: 'xai', apiKey: 'xai-bad-key', computers: ['beelink', 'local'] }), /refused that key/)
+  assert.deepEqual(Object.values(runtimes).map((each) => each.keys.xai), [undefined, undefined, undefined])
+  runtimes.office.up = false
+  await assert.rejects(openhut.providers.connect({ id: 'xai', apiKey: 'xai-good-key', computers: ['local', 'office'] }), /office/)
+  assert.equal(runtimes.local.keys.xai, 'xai-good-key')
+  await assert.rejects(openhut.providers.connect({ id: 'xai', apiKey: 'xai-good-key', computers: [] }), /at least one computer/)
+})
+
+test('refresh, switches and disconnect reach every online computer that holds the provider, and only those', async () => {
+  const { runtimes, openhut } = setup(['local', 'beelink', 'office'])
+  runtimes.local.keys.openrouter = 'sk-or-1'
+  runtimes.office.keys.openrouter = 'sk-or-1'
+  await openhut.providers.refresh('openrouter')
+  await openhut.providers.setModels({ id: 'openrouter', models: [{ id: 'm1', on: false }] })
+  const touched = (name: string) => runtimes[name].calls.filter((call) => /providers\/openrouter/.test(call) && call !== 'GET /api/providers')
+  assert.deepEqual(touched('local'), ['POST /api/providers/openrouter/refresh', 'PATCH /api/providers/openrouter'])
+  assert.deepEqual(touched('beelink'), [])
+  await openhut.providers.disconnect('openrouter')
+  assert.deepEqual([runtimes.local.keys.openrouter, runtimes.office.keys.openrouter], [undefined, undefined])
+})
+
+test('Settings sees one row per provider: the computers that hold it, and the first holder\'s models and key', async () => {
+  const { runtimes, openhut } = setup(['local', 'beelink'])
+  runtimes.beelink.keys.openai = 'sk-bee-1'
+  runtimes.local.keys.openai = 'sk-loc-1'
+  const merged = mergeProviders(await openhut.providers.list())
+  assert.deepEqual(merged.map((each) => each.id), ['claude', 'codex', 'openrouter', 'openai', 'xai'])
+  const openai = merged.find((each) => each.id === 'openai')
+  assert.deepEqual([openai?.computers, openai?.keyHint], [['local', 'beelink'], 'sk-…'])
+  assert.deepEqual(merged.find((each) => each.id === 'xai')?.computers, [])
+  runtimes.local.up = false
+  assert.deepEqual(mergeProviders(await openhut.providers.list()).find((each) => each.id === 'openai')?.computers, ['beelink'])
 })

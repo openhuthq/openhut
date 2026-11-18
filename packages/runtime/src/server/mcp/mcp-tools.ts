@@ -2,6 +2,7 @@ import * as z from 'zod/mini'
 import { CreateAgent, CreateGrant, ListGrants, UpdateAgentFields } from '@openhut/common/agents/agent.ts'
 import { UpdateAdminFields } from '@openhut/common/admin/admin.ts'
 import { UpdateMemory } from '@openhut/common/agents/memory.ts'
+import { ProviderId, UpdateProvider } from '@openhut/common/models/provider.ts'
 import { ListChannels } from '@openhut/common/channels/channel.ts'
 import { CreateConnection, CreateConnectionAuthorization, ListConnectionEvents, ListConnectionTools, UpdateConnection } from '@openhut/common/connections/connection.ts'
 import { describeIssues } from '../platform/validation.ts'
@@ -15,7 +16,7 @@ export const MCP_TOOLS = [
   tool({ name: 'create_agent', description: 'Create an agent (stopped). You own it.', input: CreateAgent, call: ({ api, input }) => api({ method: 'POST', url: '/api/agents', payload: input }) }),
   tool({
     name: 'update_agent',
-    description: 'Rename an agent, change its instructions or model, switch its code execution or its web browser on or off (it restarts if running), or start or stop it with wanted.',
+    description: 'Rename an agent, change its instructions, its model, its fallback model or its helper models (compress, title, review: a model key like claude:haiku, or null for Automatic), switch its code execution or its web browser on or off (it restarts if running), or start or stop it with wanted.',
     input: z.object({ id: z.string(), ...UpdateAgentFields }),
     call: ({ api, input: { id, ...patch } }) => api({ method: 'PATCH', url: `/api/agents/${id}`, payload: patch }),
   }),
@@ -60,6 +61,15 @@ export const MCP_TOOLS = [
     call: ({ api, input: { id, ...patch } }) => api({ method: 'PATCH', url: `/api/memories/${id}`, payload: patch }),
   }),
   tool({ name: 'list_channels', description: 'Agents\' Slack, WhatsApp and Telegram channels.', input: ListChannels, call: ({ api, input }) => api({ method: 'GET', url: `/api/channels${query(input)}` }) }),
+  tool({ name: 'list_providers', description: 'The model providers (Claude and Codex subscriptions, OpenRouter, OpenAI, xAI): which are connected on this computer and every model each offers, with whether it is switched on. An agent\'s model is a key like claude:sonnet or openrouter:google/gemini-3.5-flash.', input: Nothing, call: ({ api }) => api({ method: 'GET', url: '/api/providers' }) }),
+  tool({
+    name: 'update_provider',
+    description: 'Connect OpenRouter, OpenAI or xAI by sending its API key (it is tested, sealed and never returned, and the models it offers are fetched), or switch models on or off with models: [{ id, on }]. Only models that are on can be given to agents.',
+    input: z.extend(UpdateProvider, { id: ProviderId }),
+    call: ({ api, input: { id, ...patch } }) => api({ method: 'PATCH', url: `/api/providers/${id}`, payload: patch }),
+  }),
+  tool({ name: 'refresh_provider', description: 'Ask a connected provider for its current models. Your switches stay as they are and new models come in switched off.', input: z.object({ id: ProviderId }), call: ({ api, input }) => api({ method: 'POST', url: `/api/providers/${input.id}/refresh` }) }),
+  tool({ name: 'disconnect_provider', description: 'Remove a provider\'s key or sign-in from this computer. Agents using its models stop answering until you pick others.', input: z.object({ id: ProviderId }), call: ({ api, input }) => api({ method: 'DELETE', url: `/api/providers/${input.id}` }) }),
   tool({ name: 'get_seat_usage', description: 'How much of the Claude seat\'s plan limits are used (this session and this week), and what each agent spent this week at API prices.', input: Nothing, call: ({ api }) => api({ method: 'GET', url: '/api/admin/seat-usage' }) }),
   tool({ name: 'get_admin', description: 'The Claude seat, the server\'s health, its build and whether a newer release is out.', input: Nothing, call: ({ api }) => api({ method: 'GET', url: '/api/admin' }) }),
   tool({

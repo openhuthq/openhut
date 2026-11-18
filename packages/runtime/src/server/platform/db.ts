@@ -5,7 +5,6 @@ import { config } from './config.ts'
 import type { Database } from './db-schema.ts'
 import { ChannelKind } from '@openhut/common/channels/channel.ts'
 import { ConnectionKind } from '@openhut/common/connections/connection.ts'
-import { ModelId } from '@openhut/common/agents/agent.ts'
 import { HttpError } from './http-error.ts'
 
 const ID = /^[a-z]+_[a-z0-9]{8}$/
@@ -34,7 +33,7 @@ export async function migrate(): Promise<void> {
   await sql`drop table if exists session, invite, oauth_code, oauth_grant, oauth_client`.execute(db)
   await sql`create table if not exists agent (
     id text primary key, name text not null, owner_id text not null references person(id), instructions text not null,
-    model text not null default 'sonnet' check (model in ('opus', 'sonnet', 'haiku')), net integer unique not null check (net between 1 and 250),
+    model text not null default 'claude:sonnet', net integer unique not null check (net between 1 and 250),
     wanted text not null default 'stopped' check (wanted in ('running', 'stopped')),
     channel_key text not null, created_at timestamptz not null default now())`.execute(db)
   await sql`alter table agent add column if not exists code_execution boolean not null default true`.execute(db)
@@ -42,7 +41,11 @@ export async function migrate(): Promise<void> {
   await sql`alter table agent add column if not exists size text not null default 'standard' check (size in ('standard', 'large', 'xlarge'))`.execute(db)
   await sql`alter table agent add column if not exists token_epoch integer not null default 0`.execute(db)
   await sql`alter table agent drop constraint if exists agent_model_check`.execute(db)
-  await sql`alter table agent add constraint agent_model_check check (model in (${sql.join(ModelId.options.map((model) => sql.lit(model)))}))`.execute(db)
+  await sql`alter table agent alter column model set default 'claude:sonnet'`.execute(db)
+  await sql`update agent set model = 'claude:' || model where model in ('opus', 'sonnet', 'haiku')`.execute(db)
+  await sql`update agent set model = 'codex:gpt-5.5' where model = 'codex'`.execute(db)
+  await sql`alter table agent add column if not exists fallback_model text`.execute(db)
+  await sql`alter table agent add column if not exists helper_models text not null default '{}'`.execute(db)
   await sql`create table if not exists channel (
     id text primary key, agent_id text not null references agent(id) on delete cascade, kind text not null check (kind in ('slack', 'whatsapp')),
     status text not null check (status in ('connected', 'linking')), account text, owner_address text not null, secrets text not null default '',

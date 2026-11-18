@@ -10,6 +10,7 @@ import { record, setUsageData } from '../platform/events.ts'
 import { newId, openSealed, sealFor, transferPublicKey } from '../platform/secrets.ts'
 import { codex } from '../integrations/codex/codex.ts'
 import { connectionService } from '../connections/connection-service.ts'
+import { providerService } from '../models/provider-service.ts'
 import type { Caller } from '../team/identity.ts'
 import { seatSignIn } from './seat-sign-in.ts'
 import { seatLimits } from './seat-limits.ts'
@@ -142,6 +143,7 @@ export const adminService = {
     const done = await codex.poll(open)
     if (done) {
       codexSignIns.delete(id)
+      await providerService.refresh({ id: 'codex' })
       record({ action: 'admin.codex_signed_in', actor, target: { type: 'admin', id: 'install' } })
     }
     return { id, object: 'codex_sign_in', status: done ? 'complete' : 'open', url: codex.signInUrl, userCode: open.userCode }

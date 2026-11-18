@@ -11,6 +11,7 @@ await once(fake, 'listening')
 const fakeUrl = `http://127.0.0.1:${(fake.address() as AddressInfo).port}`
 process.env.OPENHUT_ANTHROPIC_API = fakeUrl
 process.env.OPENHUT_TELEGRAM_API = fakeUrl
+process.env.OPENHUT_OPENAI_API = fakeUrl
 
 const { db, migrate } = await import('../../../src/server/platform/db.ts')
 const { agentToken, seal } = await import('../../../src/server/platform/secrets.ts')
@@ -109,6 +110,21 @@ test('Telegram: the stand-in in the path becomes the bot token, logOut, close an
   const polls = (await events()).slice(before)
   assert.deepEqual(polls, [{ tool: 'telegram GET /bot…/getUpdates', reason: 'HTTP 200', outcome: 'allowed' }])
   assert.ok((await events()).every((event) => !event.tool.includes('REAL') && !event.tool.includes(token)))
+})
+
+test('an API-key provider: the gateway adds the real key, passes chat, responses and models only, and refuses a provider with no key', async () => {
+  await settings.setProviderKey('openai', 'sk-openai-the-real-key')
+  const chat = await echoed(await send('/u/openai/v1/chat/completions', { headers: { 'x-api-key': 'leak', 'openai-organization': 'org-x' }, body: '{"model":"gpt-5.5"}' }))
+  assert.equal(chat.url, '/v1/chat/completions')
+  assert.equal(chat.headers.authorization, 'Bearer sk-openai-the-real-key')
+  assert.equal(chat.headers['x-api-key'], undefined)
+  assert.equal(chat.body, '{"model":"gpt-5.5"}')
+  assert.equal((await send('/u/openai/v1/models', { method: 'GET' })).status, 200)
+  assert.equal((await send('/u/openai/v1/files', { method: 'GET' })).status, 403)
+  assert.equal((await send('/u/openai/v1/fine_tuning/jobs')).status, 403)
+  const none = await send('/u/openrouter/v1/chat/completions', { body: '{}' })
+  assert.equal(none.status, 409)
+  assert.match(await none.text(), /OpenRouter isn't connected on this computer/)
 })
 
 test('Codex: the gateway adds the ChatGPT access token and account', async () => {

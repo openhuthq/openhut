@@ -8,6 +8,7 @@ import { PassThrough } from 'node:stream'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { memory } from '../packages/runtime/src/agentd/sandbox/memory.ts'
 import type { Exec } from '../packages/runtime/src/agentd/sandbox/sandbox.ts'
+import { fakeProviderEnv, fakeProviders } from './fake-providers.ts'
 
 const DATA = process.env.OPENHUT_DATA ?? '.data'
 const AGENTD_DATA = `${DATA}/agentd`
@@ -42,7 +43,8 @@ const SKILLS: Record<string, string> = {
   'late-invoices': '---\nname: late-invoices\ndescription: Chase invoices more than 30 days late.\n---\n\n# Late invoices\n\n1. Query invoices past due.\n2. Draft a reminder per customer.\n',
   ...Object.fromEntries(BUNDLED.map(([path, description]) => [path, `---\nname: ${path.split('/')[1]}\ndescription: ${description}\n---\n\n# ${path.split('/')[1]}\n`])),
 }
-const env = { ...process.env, AGENTD_SOCK: SOCK, OPENHUT_DATA: DATA, OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update('dev').digest('hex'), OPENHUT_MODEL: 'test', OPENHUT_AGENT_API: `http://127.0.0.1:${FAKES_PORT}`, OPENHUT_SLACK_API: `http://127.0.0.1:${FAKES_PORT}/slack` }
+const fakeModels = process.env.OPENHUT_FAKE_PROVIDERS ? fakeProviderEnv() : {}
+const env = { ...process.env, ...fakeModels, AGENTD_SOCK: SOCK, OPENHUT_DATA: DATA, OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update('dev').digest('hex'), OPENHUT_MODEL: 'test', OPENHUT_AGENT_API: `http://127.0.0.1:${FAKES_PORT}`, OPENHUT_SLACK_API: `http://127.0.0.1:${FAKES_PORT}/slack` }
 const TAILSCALE = `#!/bin/sh
 up="$AGENTD_DATA/tailscale-up"
 case "$1" in
@@ -58,6 +60,7 @@ const SLACK_CHANNELS = [
   ['G0MPIM0001', 'mpdm-mo--sara--gus-1', 3, true, true, false, true],
 ].map(([id, name, num_members, is_private, is_member, is_ext_shared, is_mpim]) => ({ id, name, num_members, is_private, is_member, is_ext_shared, is_mpim }))
 
+if (process.env.OPENHUT_FAKE_PROVIDERS) fakeProviders()
 mkdirSync(`${AGENTD_DATA}/whatsapp-bridge/node_modules`, { recursive: true })
 mkdirSync(BIN, { recursive: true })
 writeFileSync(`${BIN}/tailscale`, TAILSCALE, { mode: 0o755 })

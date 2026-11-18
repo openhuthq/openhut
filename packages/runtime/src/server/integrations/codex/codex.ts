@@ -1,8 +1,10 @@
 import * as z from 'zod/mini'
 import { HttpError, messageOf } from '../../platform/http-error.ts'
+import { config } from '../../platform/config.ts'
+import { log } from '../../platform/events.ts'
 import { settings } from '../../platform/settings.ts'
 
-const ISSUER = 'https://auth.openai.com'
+const ISSUER = config.codexAuthApi
 const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 const REFRESH_EARLY_MS = 5 * 60_000
 const TIMEOUT_MS = 20_000
@@ -58,7 +60,10 @@ async function tokenRequest(form: URLSearchParams): Promise<z.infer<typeof Token
 
 function call({ url, body, type }: { url: string; body: string; type: string }): Promise<Response> {
   return fetch(url, { method: 'POST', headers: { 'content-type': type, accept: 'application/json' }, body, signal: AbortSignal.timeout(TIMEOUT_MS) })
-    .catch((err: unknown) => { throw new HttpError(502, `ChatGPT's sign-in server didn't answer (${messageOf(err)}). Try again.`) })
+    .catch((err: unknown) => {
+      log.warn({ event: 'codex.unreachable', error: messageOf(err) })
+      throw new HttpError(502, 'ChatGPT\'s sign-in server didn\'t answer. Check your connection and try again.')
+    })
 }
 
 function claimsOf(token: string): z.infer<typeof Claims> {

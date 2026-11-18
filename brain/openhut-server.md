@@ -58,9 +58,9 @@ The code carries no comments (Skyfleet's coding style), so the reasons live here
   login through an agent.
 - The gateway is plain `node:http`, so its limits are explicit: 8 requests in flight per agent, 1 MB bodies, headers
   within 10 s, 60 s per request; at most 2 calls per agent per connection at once.
-- `/u/<name>/*` is the broker (`gateway/broker.ts`): the Claude seat, Codex and Telegram reach their APIs only through it,
+- `/u/<name>/*` is the broker (`gateway/broker.ts`): the Claude seat, Codex, the OpenRouter, OpenAI and xAI keys and Telegram reach their APIs only through it,
   with the real key added there. It streams with a 120 s idle timeout instead of the 1 MB / 60 s caps, inside the same
-  8-per-agent limit. `OPENHUT_ANTHROPIC_API` and `OPENHUT_TELEGRAM_API` move those origins for tests.
+  8-per-agent limit. `OPENHUT_ANTHROPIC_API`, `OPENHUT_TELEGRAM_API`, `OPENHUT_OPENROUTER_API`, `OPENHUT_OPENAI_API`, `OPENHUT_XAI_API`, `OPENHUT_CODEX_API` and `OPENHUT_CODEX_AUTH_API` move those origins for tests and for `npm run dev:fake`. Model providers, their keys, model lists and the per-agent fallback and helper models: `decisions/model-providers.md`.
 - Postgres DSNs are parsed into explicit fields; any query parameter but `sslmode` is refused, because `pg` lets them
   override the host (`?host=`) or read local files (`?sslrootcert=`). `sslmode` keeps libpq's meanings, `prefer` by
   default: `pg` has no prefer/allow, so the connector tries TLS without verification, then plain (`allow` the other way).
