@@ -38,8 +38,6 @@ On an always-on computer you add, watch them work live. Take over any time.
 
 On your Mac, or on your own server. Each agent in its own sandbox.
 
-## How it compares
-
 <table>
 <tr>
 <th></th>
