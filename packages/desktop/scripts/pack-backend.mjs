@@ -1,7 +1,6 @@
 import { build } from 'esbuild'
 import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const ROOT = join(import.meta.dirname, '../../..')
@@ -39,14 +38,7 @@ async function claude() {
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
   const version = /^CLAUDE=(\S+)$/m.exec(installer)[1]
   const sha256 = new RegExp(`${arch === 'arm64' ? 'aarch64' : 'x86_64'}\\)[\\s\\S]*?CLAUDE_SHA256=(\\w+)`).exec(installer)[1]
-  const cached = join(import.meta.dirname, `../dist/claude-${version}-linux-${arch}`)
-  if (!existsSync(cached)) {
-    const body = Buffer.from(await (await fetch(`https://downloads.claude.ai/claude-code-releases/${version}/linux-${arch}/claude`)).arrayBuffer())
-    if (createHash('sha256').update(body).digest('hex') !== sha256) throw new Error(`claude ${version} linux-${arch} doesn't match the installer's checksum`)
-    writeFileSync(cached, body)
-  }
   mkdirSync(join(OUT, 'bin'), { recursive: true })
-  cpSync(cached, join(OUT, 'bin/claude'))
-  chmodSync(join(OUT, 'bin/claude'), 0o755)
   writeFileSync(join(OUT, 'bin/claude-version'), version)
+  writeFileSync(join(OUT, 'bin/claude-linux.json'), JSON.stringify({ version, sha256, urls: [`https://dl.openhut.dev/claude/${version}/linux-${arch}/claude.zst`, `https://downloads.claude.ai/claude-code-releases/${version}/linux-${arch}/claude`] }))
 }
