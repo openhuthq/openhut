@@ -7,6 +7,7 @@ const FILES: Record<string, [string, string]> = {
   '/install.sh': ['#!/bin/sh\necho install\n', 'application/x-sh'],
   '/': ['<!doctype html><title>OpenHut</title>', 'text/html; charset=utf-8'],
   '/openhut.tgz': ['tarball', 'application/gzip'],
+  '/edge/install.sh': ['#!/bin/sh\necho edge\n', 'application/x-sh'],
   '/changelog': ['<!doctype html><title>OpenHut Changelog</title>', 'text/html; charset=utf-8'],
 }
 const env = {
@@ -28,6 +29,16 @@ test('curl gets install.sh as plain text', async () => {
   assert.equal(res.headers.get('content-type'), 'text/plain; charset=utf-8')
   assert.equal(await res.text(), '#!/bin/sh\necho install\n')
   assert.equal(res.headers.get('vary'), 'Accept')
+})
+
+test('without a root installer, curl is sent to the stable release on GitHub, and /edge serves the main build', async () => {
+  const stableEnv = { ASSETS: { fetch: async (request: Request) => new URL(request.url).pathname === '/install.sh' ? new Response('Not found', { status: 404 }) : env.ASSETS.fetch(request) } }
+  const stable = await worker.fetch(new Request('https://openhut.dev/', { headers: { accept: '*/*', 'user-agent': 'curl/8.5.0' } }), stableEnv, ctx)
+  assert.equal(stable.status, 302)
+  assert.equal(stable.headers.get('location'), 'https://github.com/openhuthq/openhut/releases/latest/download/install.sh')
+  const edge = await get('/edge')
+  assert.equal(edge.headers.get('content-type'), 'text/plain; charset=utf-8')
+  assert.equal(await edge.text(), '#!/bin/sh\necho edge\n')
 })
 
 test('a browser gets the home page with the page CSP', async () => {

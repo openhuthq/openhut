@@ -1283,6 +1283,19 @@ function afterUpgrade() {
 
 function afterRestart() {
   check(
+    'RC1',
+    'A server that restarts in the middle of an update puts the previous release back before anything starts',
+    '/opt/openhut is the copy left in /opt/openhut.old (it carries RECOVERED), no /opt/openhut.old or .failed is left, /etc/openhut/recover.sh is there, /health ok',
+    async () => {
+      const recovered = await shell('[ -f /opt/openhut/RECOVERED ] && echo yes || echo no')
+      const leftovers = await shell('ls -d /opt/openhut.* 2>/dev/null || true')
+      const script = await shell('[ -f /etc/openhut/recover.sh ] && echo yes || echo no')
+      const now = await health()
+      await shell('rm -f /opt/openhut/RECOVERED')
+      return { actual: { recovered, leftovers, script, ok: now.ok }, pass: recovered === 'yes' && leftovers === '' && script === 'yes' && now.ok === true }
+    },
+  )
+  check(
     'H1',
     'After a restart the firewall is up before dockerd, and the agent starts after both',
     'boot.log lines in order: firewall, dockerd launching, dockerd up, firewall reapplied, agentd and app; Dev started at least 1 s after the firewall was reapplied (marks have 1 s precision)',
@@ -1359,7 +1372,7 @@ function updateBroken() {
   check(
     'UD1',
     "Update now with a release whose app can't start: the previous release comes back and Admin says the update failed",
-    'POST /api/updates 200 running, to e2e-broken; a second POST 409; then the same build as before, /health ok, Admin update failed, the install lock free, no /opt/openhut.* left, Dev running',
+    'POST /api/updates 200 running, to e2e-broken; a second POST 409; then the same build as before, /health ok, Admin update failed with the installer\'s reason, the data copy taken before the swap, the install lock free, no /opt/openhut.* left, Dev running',
     async () => {
       const st = savedState()
       const before = await health()
@@ -1371,11 +1384,13 @@ function updateBroken() {
       const now = await health()
       const lock = await shell('flock -n /run/openhut-install.lock true && echo free || echo held')
       const leftovers = await shell('ls -d /opt/openhut.* 2>/dev/null || true')
+      const copy = await shell('[ -d /data/app.before-update ] && echo kept || echo missing')
+      const reason = admin.server.update?.reason ?? null
       return {
-        actual: { started: [started.status, started.json.status, started.json.to], twice: twice.status, build: `${before.build} -> ${now.build}`, ok: now.ok, update: admin.server.update?.status, lock, leftovers },
+        actual: { started: [started.status, started.json.status, started.json.to], twice: twice.status, build: `${before.build} -> ${now.build}`, ok: now.ok, update: admin.server.update?.status, reason, copy, lock, leftovers },
         pass:
           started.status === 200 && started.json.status === 'running' && started.json.to === 'e2e-broken' && twice.status === 409 &&
-          now.build === before.build && now.ok === true && admin.server.update?.status === 'failed' && lock === 'free' && leftovers === '',
+          now.build === before.build && now.ok === true && admin.server.update?.status === 'failed' && /previous one is running again/.test(reason ?? '') && copy === 'kept' && lock === 'free' && leftovers === '',
       }
     },
   )

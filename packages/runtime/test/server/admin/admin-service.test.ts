@@ -23,13 +23,20 @@ test('a higher version is an update, and so is any other release that is not a v
   assert.equal(isNewer({ latest: null, current: '0.1.40' }), false)
 })
 
-test('an update is running while the installer holds the lock, done on a new build, failed otherwise', () => {
-  const stored = { from: 'a', startedAt }
-  assert.equal(updateStatus({ stored, build: 'a', installing: false, now: at(5) }), 'running')
-  assert.equal(updateStatus({ stored, build: 'a', installing: true, now: at(120) }), 'running')
-  assert.equal(updateStatus({ stored, build: 'b', installing: true, now: at(30) }), 'done')
-  assert.equal(updateStatus({ stored, build: 'a', installing: false, now: at(30) }), 'failed')
-  assert.equal(updateStatus({ stored, build: 'a', installing: true, now: at(46 * 60) }), 'failed')
+test('an update is running while the installer holds the lock, done only on the build it asked for, failed with the installer\'s reason otherwise', () => {
+  const startedAt = '2026-11-13T00:00:00.000Z'
+  const stored = { from: 'a', to: 'b', startedAt }
+  const at = (seconds: number) => Date.parse(startedAt) + seconds * 1000
+  const last = (seconds: number, reason: string | null, exit = 1) => ({ exit, at: new Date(at(seconds)).toISOString(), reason })
+  assert.deepEqual(updateStatus({ stored, build: 'a', installing: false, now: at(5) }), { status: 'running', reason: null })
+  assert.deepEqual(updateStatus({ stored, build: 'a', installing: true, now: at(120) }), { status: 'running', reason: null })
+  assert.deepEqual(updateStatus({ stored, build: 'b', installing: true, now: at(30) }), { status: 'done', reason: null })
+  assert.deepEqual(updateStatus({ stored, build: 'c', installing: false, now: at(30) }), { status: 'failed', reason: 'It installed c instead of b.' })
+  assert.equal(updateStatus({ stored, build: 'a', installing: false, now: at(30) }).status, 'failed')
+  assert.equal(updateStatus({ stored, build: 'a', installing: true, now: at(46 * 60) }).status, 'failed')
+  assert.deepEqual(updateStatus({ stored, build: 'a', installing: false, last: last(10, 'the new release didn\'t come up, so the previous one is running again'), now: at(12) }),
+    { status: 'failed', reason: 'the new release didn\'t come up, so the previous one is running again' })
+  assert.deepEqual(updateStatus({ stored, build: 'a', installing: false, last: last(-60, 'an older failure'), now: at(5) }), { status: 'running', reason: null })
 })
 
 test('a keyed connection and a subscription travel sealed to a public key, keeping when the subscription was signed in', async () => {

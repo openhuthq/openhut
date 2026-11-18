@@ -81,6 +81,8 @@ wait_healthy 300 || echo "e2e: not healthy 5 min after the upgrade"
 copy_test || fail "copy test"
 run_phase after-upgrade; upgrade=$?
 
+echo "--- an update cut short: /opt/openhut.old is still there when the server restarts, so the previous release must come back"
+in_host sh -c 'rm -rf /data/app.before-update && cp -a /opt/openhut /opt/openhut.old && touch /opt/openhut.old/RECOVERED' || fail "an interrupted update"
 echo "--- restarting the server"; docker restart openhut-host >/dev/null
 wait_healthy 600 || echo "e2e: not healthy 10 min after the restart"
 run_phase after-restart; after=$?

@@ -12,50 +12,100 @@ jobs:
   release:
     runs-on: macos-15
     env:
-      MAC_SIGNED: ${{ secrets.CSC_LINK != '' }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAGGED: ${{ startsWith(github.ref, 'refs/tags/') }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
+      - name: Signing and notary secrets are set
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          missing=
+          for name in CSC_LINK CSC_KEY_PASSWORD NOTARY_KEY_P8_BASE64 NOTARY_KEY_ID NOTARY_ISSUER_ID; do
+            [ -n "$(printenv "$name")" ] || { echo "::error::The repo secret $name isn't set. A release is never built without the Developer ID and notarization."; missing=1; }
+          done
+          [ -z "$missing" ]
+      - name: Tag matches the app version
+        if: env.TAGGED == 'true'
+        run: test "$GITHUB_REF_NAME" = "v$(node -p "require('./packages/desktop/package.json').version")"
+      - name: The release isn't published yet
+        if: env.TAGGED == 'true'
+        run: |
+          if [ "$(gh release view "$GITHUB_REF_NAME" --json isDraft -q .isDraft 2>/dev/null)" = false ]; then
+            echo "::error::$GITHUB_REF_NAME is already published, and a published release never changes. Bump the version instead."
+            exit 1
+          fi
       - run: npm ci --no-audit --no-fund
       - run: npx turbo run typecheck test
-      - name: Tag matches the app version
-        if: startsWith(github.ref, 'refs/tags/')
-        run: test "$GITHUB_REF_NAME" = "v$(node -p "require('./packages/desktop/package.json').version")"
-      - name: Ad-hoc sign when there is no Developer ID certificate yet
-        if: env.MAC_SIGNED != 'true'
-        run: |
-          echo "::warning title=Mac build not notarized::no CSC_LINK secret, so the Mac build is ad-hoc signed"
-          perl -0pi -e 's/^mac:\n/mac:\n  identity: "-"\n/m' packages/desktop/electron-builder.yml
       - name: Build and sign
         working-directory: packages/desktop
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: |
-          [ -n "$CSC_LINK" ] || unset CSC_LINK CSC_KEY_PASSWORD
-          npm run build && npm run pack-backend && npx electron-builder --mac --arm64 --publish never
+        run: npm run build && npm run pack-backend && npx electron-builder --mac --arm64 --publish never
       - name: Notarize, staple and check Gatekeeper
-        if: env.MAC_SIGNED == 'true'
         env:
           NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: packages/desktop/scripts/notarize.sh
-      - name: Upload to a draft release
-        working-directory: packages/desktop/release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Signed so the release before it accepts it
+        working-directory: packages/desktop
         run: |
-          tag="${GITHUB_REF_NAME#refs/tags/}"
-          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --draft --title "$tag" --notes ""
-          gh release upload "$tag" OpenHut-arm64.dmg OpenHut-*-arm64.zip latest-mac.yml --clobber
+          mkdir -p previous/zip previous/app
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern 'OpenHut-*-arm64.zip' --dir previous/zip
+          ditto -x -k previous/zip/*.zip previous/app
+          requirement=$(codesign -d -r- previous/app/OpenHut.app 2>&1 | sed -n 's/^designated => //p')
+          echo "The previous release requires: $requirement"
+          mkdir -p shipped && ditto -x -k release/OpenHut-*-arm64.zip shipped
+          for app in release/mac-arm64/OpenHut.app shipped/OpenHut.app; do codesign --verify --deep --strict -R "=$requirement" "$app"; done
+      - name: The previous version updates to this one
+        working-directory: packages/desktop
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          npx electron-builder --mac zip --arm64 -c.extraMetadata.version=0.0.1 -c.directories.output=release-old --publish never
+          mkdir -p feed && cp release/latest-mac.yml release/OpenHut-*-arm64.zip release/OpenHut-*-arm64.zip.blockmap feed/
+          node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via button
+          node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via quit
+      - name: Upload to a draft release
+        if: env.TAGGED == 'true'
+        working-directory: packages/desktop/release
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "OpenHut ${GITHUB_REF_NAME#v}" --notes ""
+          gh release upload "$GITHUB_REF_NAME" OpenHut-arm64.dmg OpenHut-*-arm64.zip OpenHut-*-arm64.zip.blockmap latest-mac.yml --clobber
+
+  compat:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: This release and the one before it work together both ways
+        run: scripts/compat.sh "$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
 
   linux:
-    needs: release
+    needs: [release, compat]
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAGGED: ${{ startsWith(github.ref, 'refs/tags/') }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -63,13 +113,21 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Build the AppImage and deb and upload them to the same draft release
+      - name: Build the AppImage and deb, and add them to the draft release
         working-directory: packages/desktop
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: umask 022 && npm run build && npm run pack-backend && npx electron-builder --linux --x64 --publish always
-      - name: Publish the release
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "$GITHUB_REF_NAME" --draft=false
+        run: umask 022 && npm run build && npm run pack-backend && npx electron-builder --linux --x64 --publish "$([ "$TAGGED" = true ] && echo always || echo never)"
+      - name: Add the server runtime of the same commit to the draft release
+        if: env.TAGGED == 'true'
+        run: |
+          BUILD="${GITHUB_REF_NAME#v}" TGZ="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/openhut.tgz" scripts/release.sh
+          sh -n dist/install.sh
+          gh release upload "$GITHUB_REF_NAME" dist/install.sh dist/openhut.tgz --clobber
+      - name: Every file is there, then publish the release
+        if: env.TAGGED == 'true'
+        run: |
+          have=$(gh release view "$GITHUB_REF_NAME" --json assets -q '.assets[].name')
+          v="${GITHUB_REF_NAME#v}"
+          for want in OpenHut-arm64.dmg "OpenHut-$v-arm64.zip" "OpenHut-$v-arm64.zip.blockmap" latest-mac.yml OpenHut-x64.AppImage openhut-x64.deb latest-linux.yml install.sh openhut.tgz; do
+            echo "$have" | grep -qx "$want" || { echo "::error::The draft release has no $want, so it stays a draft."; exit 1; }
+          done
+          gh release edit "$GITHUB_REF_NAME" --draft=false

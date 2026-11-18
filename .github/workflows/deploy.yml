@@ -38,19 +38,32 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - name: Release files
-        run: scripts/release.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' | grep -qx install.sh; then
+            echo "openhut.dev/ sends curl to the latest GitHub release's installer"
+          else
+            OUT=dist/site scripts/release.sh
+          fi
+          OUT=dist/site/edge BASE=https://openhut.dev/edge scripts/release.sh
       - name: Deploy openhut.dev
         run: npm -w @openhut/site run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Check that openhut.dev serves this release
         run: |
-          want=$(sed -n 's/^OPENHUT_SHA256="\([0-9a-f]*\)"$/\1/p' dist/install.sh)
-          for i in 1 2 3 4 5 6; do
-            got=$(curl -fsS https://openhut.dev/openhut.tgz | sha256sum | cut -d' ' -f1)
-            served=$(curl -fsS https://openhut.dev/ | sed -n 's/^OPENHUT_SHA256="\([0-9a-f]*\)"$/\1/p')
-            [ "$got" = "$want" ] && [ "$served" = "$want" ] && break
-            [ "$i" = 6 ] && { echo "openhut.dev doesn't serve this release yet." >&2; exit 1; }
-            sleep 10
-          done
+          check() {
+            want=$(sed -n 's/^OPENHUT_SHA256="\([0-9a-f]*\)"$/\1/p' "dist/site/$1install.sh")
+            for i in 1 2 3 4 5 6; do
+              got=$(curl -fsS "https://openhut.dev/$1openhut.tgz" | sha256sum | cut -d' ' -f1)
+              served=$(curl -fsSL "https://openhut.dev/$2" | sed -n 's/^OPENHUT_SHA256="\([0-9a-f]*\)"$/\1/p')
+              [ "$got" = "$want" ] && [ "$served" = "$want" ] && return 0
+              sleep 10
+            done
+            echo "openhut.dev/$2 doesn't serve this release yet." >&2; return 1
+          }
+          check edge/ edge
+          if [ -f dist/site/install.sh ]; then check '' ''
+          else curl -fsSL https://openhut.dev/ | grep -q '^OPENHUT_BUILD='; fi
           curl -fsS -H 'accept: text/html' https://openhut.dev/ | grep -q '<html'

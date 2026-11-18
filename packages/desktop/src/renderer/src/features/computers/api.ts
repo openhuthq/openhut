@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Computer, Features } from '@openhut/client'
 import { useAgents } from '@/features/agents/api'
-import { Admin } from '@openhut/common/admin/admin.ts'
+import { Admin, Update } from '@openhut/common/admin/admin.ts'
 import { ApiError } from '@openhut/common/api.ts'
 import { openhut } from '@/lib/openhut'
 import { adminsOf } from '@/features/computers/admins'
@@ -46,7 +46,14 @@ export function nameOf({ computers, id }: { computers: Computer[] | undefined; i
   return computers?.find((each) => each.id === id)?.name ?? id
 }
 
-async function adminOf(computer: string) {
+export async function startUpdate(computer: { id: string; name: string }): Promise<Update> {
+  const response = await openhut.fetch({ computer: computer.id, path: '/api/updates', init: { method: 'POST' } })
+  const body = await response.json().catch(() => null)
+  if (!response.ok) throw new Error(ApiError.safeParse(body).data?.error.message ?? `${computer.name} answered ${response.status}.`)
+  return Update.parse(body)
+}
+
+export async function adminOf(computer: string) {
   const response = await openhut.fetch({ computer, path: '/api/admin' }).catch(() => undefined)
   return Admin.safeParse(await response?.json().catch(() => null)).data
 }
@@ -54,10 +61,7 @@ async function adminOf(computer: string) {
 export function useUpdateComputer() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: async (computer: Computer) => {
-      const response = await openhut.fetch({ computer: computer.id, path: '/api/updates', init: { method: 'POST' } })
-      if (!response.ok) throw new Error(ApiError.safeParse(await response.json().catch(() => null)).data?.error.message ?? `${computer.name} answered ${response.status}.`)
-    },
+    mutationFn: (computer: Computer) => startUpdate(computer),
     onSuccess: () => client.invalidateQueries({ queryKey: COMPUTERS_KEY }),
   })
 }
