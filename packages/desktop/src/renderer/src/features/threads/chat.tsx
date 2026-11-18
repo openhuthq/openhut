@@ -256,7 +256,7 @@ function ChatEmpty({ agent }: { agent: Agent }) {
   const copy = offline
     ? [`${agent.name}'s computer is offline`, 'It answers again as soon as its computer is back on your tailnet.']
     : {
-      running: [`Say hello to ${agent.name}`, 'Ask it anything, or tell it what its job is on the right.'],
+      running: [`Say hello to ${agent.name}`, 'Ask it anything, or tell it what its job is.'],
       starting: [`Starting ${agent.name}`, 'It takes about a minute the first time. You can type as soon as it answers.'],
       no_seat: [`${agent.name} isn't ready`, 'Sign in to Claude in Settings, then it starts answering.'],
       not_answering: [`${agent.name} isn't answering`, 'It restarts on its own, or Stop and Start it from the panel.'],
