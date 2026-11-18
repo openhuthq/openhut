@@ -41,7 +41,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' | grep -qx install.sh; then
+          set -o pipefail
+          if names=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q '.assets[].name' 2>err.txt); then :
+          elif grep -q 'HTTP 404' err.txt; then names=''
+          else cat err.txt >&2; echo "Couldn't read the latest GitHub release, so openhut.dev isn't changed." >&2; exit 1; fi
+          if echo "$names" | grep -qx install.sh; then
             echo "openhut.dev/ sends curl to the latest GitHub release's installer"
           else
             OUT=dist/site scripts/release.sh
