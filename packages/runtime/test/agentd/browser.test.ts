@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { createServer, connect, type Socket } from 'node:net'
 import { once } from 'node:events'
 import { PassThrough } from 'node:stream'
-import { downLine, FREE_POLICY, HELD_POLICY, live } from '../../src/agentd/browser.ts'
+import { downLine, FREE_POLICY, HELD_POLICY, HOLD_IDLE_MS, live, policyOf } from '../../src/agentd/browser.ts'
 import type { Exec } from '../../src/agentd/sandbox/sandbox.ts'
 
 test('while a person holds the browser the agent may look but not act', () => {
@@ -36,12 +36,31 @@ test('acks always reach the bridge; input only from the viewer holding the brows
   holder.write('{"type":"hold","held":true}\n')
   assert.deepEqual(await nextLine(watcher), { type: 'hold', held: true })
   assert.deepEqual(policy, [true])
+  assert.equal(policyOf('ag_watch001'), HELD_POLICY)
   watcher.write('{"type":"input_keyboard","eventType":"keyDown","key":"a"}\n')
   holder.write('{"type":"input_keyboard","eventType":"keyDown","key":"b"}\n')
   assert.equal((await nextLine(bridge)).key, 'b')
   assert.equal(watched.readableLength, 0)
   holder.destroy()
   assert.deepEqual(await nextLine(watcher), { type: 'hold', held: false })
+  assert.deepEqual(policy, [true, false])
+  assert.equal(policyOf('ag_watch001'), FREE_POLICY)
+})
+
+test('a hold lets the agent go after two minutes without input, and each input restarts the wait', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { viewer, bridge, policy } = await open('ag_idle0001')
+  t.after(() => viewer.destroy())
+  await nextLine(viewer)
+  viewer.write('{"type":"hold","held":true}\n')
+  assert.deepEqual(await nextLine(viewer), { type: 'hold', held: true })
+  t.mock.timers.tick(HOLD_IDLE_MS - 1)
+  viewer.write('{"type":"input_mouse","eventType":"mouseMoved","x":1,"y":2}\n')
+  assert.equal((await nextLine(bridge)).eventType, 'mouseMoved')
+  t.mock.timers.tick(HOLD_IDLE_MS - 1)
+  assert.deepEqual(policy, [true])
+  t.mock.timers.tick(1)
+  assert.deepEqual(await nextLine(viewer), { type: 'hold', held: false })
   assert.deepEqual(policy, [true, false])
 })
 

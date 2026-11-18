@@ -81,7 +81,7 @@ export function BrowserDialog({ agent, onClose }: { agent: Agent; onClose: () =>
     touched()
   }
   const address = addressOf(live.page.url)
-  const left = Math.max(0, HOLD_IDLE_S - Math.round((now - lastInput) / 1000))
+  const left = Math.min(HOLD_IDLE_S, Math.max(0, HOLD_IDLE_S - Math.round((now - lastInput) / 1000)))
   return <Dialog label={`${name}'s browser`} onClose={onClose} onEscape={mine ? () => undefined : undefined} className="flex h-[min(860px,calc(100vh-48px))] w-[min(1320px,calc(100vw-48px))] flex-col overflow-hidden">
     <header className="flex h-14 shrink-0 items-center gap-2.5 border-b border-hair px-4">
       <Face agent={agent} size={30} />

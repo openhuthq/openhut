@@ -8,7 +8,7 @@ import { promisify } from 'node:util'
 import { newMessages, usage, type NewMessage } from './messages.ts'
 import { isMemoryTarget, MAX_MEMORY_BYTES, readMemory, writeMemory, type MemoryTarget } from './memory.ts'
 import { isSkillPath, listSkills, MAX_SKILL_BYTES, readSkill, writeSkill, type SkillHead } from './skills.ts'
-import { FREE_POLICY, HELD_POLICY, live, POLICY_FILE } from './browser.ts'
+import { FREE_POLICY, HELD_POLICY, live, POLICY_FILE, policyOf } from './browser.ts'
 import { fenceLines, proveFence, type FenceReport } from './fence.ts'
 import { MAX_HOME_BASE64, packHome, unpackHome } from './home.ts'
 import { FIREWALL, imageReady } from './sandbox/gvisor.ts'
@@ -456,7 +456,7 @@ function writeConf(id: string, files: AgentFiles) {
   own({ path: dir, uid: 0, gid: AGENT_UID, mode: 0o750 })
   for (const name of FILES) writeIfChanged(`${dir}/${name}`, files[name])
   writeIfChanged(`${dir}/${CLAUDE_SETTINGS_FILE}`, CLAUDE_SETTINGS)
-  writeIfChanged(`${dir}/${POLICY_FILE}`, FREE_POLICY)
+  writeIfChanged(`${dir}/${POLICY_FILE}`, policyOf(id))
 }
 
 function writeIfChanged(path: string, body: string) {

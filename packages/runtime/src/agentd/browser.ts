@@ -60,6 +60,10 @@ export function live({ id, sock, bridge, rest, setHeld }: { id: string; sock: So
   up(rest)
 }
 
+export function policyOf(id: string): string {
+  return holds.has(id) ? HELD_POLICY : FREE_POLICY
+}
+
 export function downLine(line: string): string | undefined {
   const message = parse(line)
   if (typeof message?.type !== 'string') return undefined
