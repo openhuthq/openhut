@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmodSync, chownSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { newMessages, usage, type NewMessage } from './messages.ts'
@@ -34,7 +34,7 @@ const BROWSER_MEMORY_MIB = 4096
 const MAX_FPS = 30
 const BROWSER_TMP_MIB = 1024
 const TMP_MIB = 256
-const DATA = process.env.AGENTD_DATA || '/data'
+const DATA = resolve(process.env.AGENTD_DATA || '/data')
 const RESOLV = process.env.AGENTD_RESOLV || '/etc/agentd/resolv.conf'
 const WHATSAPP_BRIDGE = process.env.AGENTD_WHATSAPP_BRIDGE || '/var/lib/openhut/whatsapp-bridge'
 const AGENT_UID = 10000
@@ -178,7 +178,7 @@ async function handle(req: AgentdRequest): Promise<Reply> {
     case 'file-write':
       throw new Error('send the file after the request line')
     case 'file-read':
-      return { body: readHomeFile({ home: agentHome(req.id), path: req.path }).toString('base64') }
+      return { body: readHomeFile({ home: agentHome(req.id), path: req.path })?.toString('base64') ?? null }
     case 'memory-write':
       writeMemory({ root: inHome(req.id, 'memories'), target: req.target, body: req.body })
       return { written: req.target }
@@ -567,7 +567,7 @@ export type AgentdReplies = {
   'home-export': { tar: string }
   'home-import': { imported: string }
   'file-write': { path: string }
-  'file-read': { body: string }
+  'file-read': { body: string | null }
   usage: { usage: Record<string, number> }
   messages: { messages: NewMessage[] }
   'browser-live': undefined

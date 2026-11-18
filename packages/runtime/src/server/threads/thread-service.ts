@@ -27,6 +27,9 @@ const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 const MAX_IMAGE_BASE64 = 5_000_000
 const MAX_IMAGES_BASE64 = 8_000_000
 const MAX_NAME = 120
+const MAX_NAME_BYTES = 255
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+const JPEG = Buffer.from([0xff, 0xd8, 0xff])
 const MEDIA_TYPE = /^[\w.+-]+\/[\w.+-]+$/
 const CHAT_NOTE = `The person is talking to you in the OpenHut app. Files they attach are saved in ${UPLOADS} and listed at the end of their message. To give them a file, save it under ${AGENT_HOME} and write its full path in backticks, like \`${AGENT_HOME}/report.csv\`: the app shows it as a file they can download.`
 
@@ -69,8 +72,9 @@ export const threadService = {
     const inside = fileInHome(path)
     if (!inside) throw new HttpError(400, `Only files in the agent's home folder, ${AGENT_HOME}, can be downloaded.`, { param: 'path' })
     const { body } = await agentd.readFile({ id: row.agent_id, path: inside })
+    if (body === null) throw new HttpError(404, 'That file isn\'t in the agent\'s home folder. It may have been moved or deleted.', { param: 'path' })
     const name = inside.slice(inside.lastIndexOf('/') + 1)
-    return reply.header('content-type', 'application/octet-stream').header('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`).send(Buffer.from(body, 'base64'))
+    return reply.header('content-type', 'application/octet-stream').header('x-content-type-options', 'nosniff').header('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`).send(Buffer.from(body, 'base64'))
   },
 
   async chat({ actor, id, body, reply }: { actor: Caller; id: string; body: SendChat; reply: FastifyReply }): Promise<void> {
@@ -194,21 +198,31 @@ async function imagesOf({ agentId, files }: { agentId: string; files: FilePart[]
   const images: ImagePart[] = []
   let total = 0
   for (const file of files.filter((each) => IMAGE_TYPES.includes(each.mediaType))) {
-    const body = await agentd.readFile({ id: agentId, path: fileInHome(file.url) ?? '' }).then((reply) => reply.body, () => '')
-    if (!body || body.length > MAX_IMAGE_BASE64 || total + body.length > MAX_IMAGES_BASE64) continue
+    const body = await agentd.readFile({ id: agentId, path: fileInHome(file.url) ?? '' }).then((reply) => reply.body, () => null)
+    const type = body && imageTypeOf(Buffer.from(body.slice(0, 16), 'base64'))
+    if (!body || !type || body.length > MAX_IMAGE_BASE64 || total + body.length > MAX_IMAGES_BASE64) continue
     total += body.length
-    images.push({ type: 'image_url', image_url: { url: `data:${file.mediaType};base64,${body}` } })
+    images.push({ type: 'image_url', image_url: { url: `data:${type};base64,${body}` } })
   }
   return images
 }
 
+export function imageTypeOf(head: Buffer): string | undefined {
+  if (head.subarray(0, 4).equals(PNG)) return 'image/png'
+  if (head.subarray(0, 3).equals(JPEG)) return 'image/jpeg'
+  if (head.toString('latin1', 0, 4) === 'GIF8') return 'image/gif'
+  if (head.toString('latin1', 0, 4) === 'RIFF' && head.toString('latin1', 8, 12) === 'WEBP') return 'image/webp'
+  return undefined
+}
+
 export function safeFileName(name: string): string {
-  const cleaned = (name.split(/[/\\]/).pop() ?? '').normalize('NFC').replace(/[^\p{L}\p{N}._ ()+,=@-]+/gu, '-').replace(/\s+/g, ' ').replace(/^[.\s-]+/, '').trim()
+  const cleaned = (name.split(/[/\\]/).pop() ?? '').normalize('NFC').replace(/[^\p{L}\p{N}._ ()+,=@-]+/gu, '-').replace(/\s+/g, ' ').replace(/^[^\p{L}\p{N}_(+,=@]+/u, '').trim()
   const chars = Array.from(cleaned || 'file')
-  if (chars.length <= MAX_NAME) return chars.join('')
   const dot = chars.lastIndexOf('.')
   const ext = dot > 0 && chars.length - dot <= 16 ? chars.slice(dot) : []
-  return [...chars.slice(0, MAX_NAME - ext.length), ...ext].join('')
+  const stem = ext.length ? chars.slice(0, dot) : chars
+  while (stem.length > 1 && (stem.length + ext.length > MAX_NAME || Buffer.byteLength([...stem, ...ext].join('')) > MAX_NAME_BYTES)) stem.pop()
+  return [...stem, ...ext].join('')
 }
 
 const PLUMBING = ['anthropic', 'codex', 'telegram']

@@ -73,26 +73,35 @@ function ThreadView({ thread, agent, tools }: { thread: ThreadWithMessages; agen
 
 function useAttachments({ agentId, threadId }: { agentId: string; threadId: string }) {
   const [items, setItems] = useState<Attachment[]>([])
+  const taken = useRef(new Set<string>())
+  const drop = (key: string) => {
+    taken.current.delete(key)
+    setItems((list) => list.filter((each) => each.key !== key))
+  }
   const add = (files: File[]) => {
-    const room = Math.max(MAX_FILES - items.length, 0)
-    if (files.length > room) toast(`Attach at most ${MAX_FILES} files to one message.`)
-    for (const file of files.slice(0, room)) {
+    for (const file of files) {
+      if (taken.current.size >= MAX_FILES) return toast(`Attach at most ${MAX_FILES} files to one message.`)
       if (file.size > MAX_FILE_BYTES) {
         toast(`${file.name} is over ${MAX_FILE_BYTES >> 20} MB, too big to attach.`)
         continue
       }
       const key = crypto.randomUUID()
+      taken.current.add(key)
       setItems((list) => [...list, { key, name: file.name, image: file.type.startsWith('image/') }])
       uploadFile({ agentId, threadId, file }).then(
         (saved) => setItems((list) => list.map((each) => each.key === key ? { ...each, file: saved } : each)),
         (error: Error) => {
-          setItems((list) => list.filter((each) => each.key !== key))
+          drop(key)
           toastError(error)
         },
       )
     }
   }
-  return { items, add, uploading: items.some((each) => !each.file), remove: (key: string) => setItems((list) => list.filter((each) => each.key !== key)), clear: () => setItems([]) }
+  const clear = () => {
+    taken.current.clear()
+    setItems([])
+  }
+  return { items, add, uploading: items.some((each) => !each.file), remove: drop, clear }
 }
 
 type Attachments = ReturnType<typeof useAttachments>

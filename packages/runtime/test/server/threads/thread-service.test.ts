@@ -2,13 +2,14 @@ import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import Fastify from 'fastify'
+import { isUploadName } from '../../../src/agentd/files.ts'
 import { agentd } from '../../../src/server/platform/agentd.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { validateWithZod } from '../../../src/server/platform/validation.ts'
 import { threadController } from '../../../src/server/threads/thread-controller.ts'
-import { safeFileName, shownCall } from '../../../src/server/threads/thread-service.ts'
+import { imageTypeOf, safeFileName, shownCall } from '../../../src/server/threads/thread-service.ts'
 
 await migrate()
 await db.insertInto('person').values([
@@ -105,8 +106,7 @@ const saveUpload = mock.method(agentd, 'saveUpload', async ({ name, body }: { id
 })
 mock.method(agentd, 'readFile', async ({ path }: { id: string; path: string }) => {
   const body = saved.get(path)
-  if (!body) throw new Error('gone')
-  return { body: body.toString('base64') }
+  return { body: body ? body.toString('base64') : null }
 })
 const upload = ({ threadId, name, body, headers = as() }: { threadId: string; name: string; body: Buffer; headers?: Record<string, string> }) => app.inject({
   method: 'POST', url: `/api/threads/${threadId}/files?name=${encodeURIComponent(name)}&type=${name.endsWith('.png') ? 'image/png' : 'text/plain'}`,
@@ -135,6 +135,13 @@ test('file names keep only their last segment, lose hidden dots and odd characte
   assert.equal(safeFileName('notes;rm -rf $HOME.txt'), 'notes-rm -rf -HOME.txt')
   assert.equal(safeFileName('Résumé.pdf'), 'Résumé.pdf')
   assert.equal(safeFileName('...'), 'file')
+  assert.equal(safeFileName(')final.txt'), 'final.txt')
+  const cjk = safeFileName(`${'報'.repeat(119)}.pdf`)
+  assert.ok(Buffer.byteLength(cjk) <= 255, `${Buffer.byteLength(cjk)} bytes`)
+  assert.ok(cjk.endsWith('報.pdf'))
+  for (const name of [')final.txt', '+-x', '~notes', '...', '  .x', '😀.png', 'a'.repeat(400), `${'é'.repeat(200)}.tar.gz`, 'ë̈.txt', '-', '日本語のファイル名.docx', '(1)']) {
+    assert.ok(isUploadName(safeFileName(name)), `${name} -> ${safeFileName(name)}`)
+  }
   const long = safeFileName(`${'a'.repeat(300)}.xlsx`)
   assert.equal(long.length, 120)
   assert.ok(long.endsWith('.xlsx'))
@@ -158,6 +165,23 @@ test('a message with files names their paths to the agent and sends images inlin
   assert.deepEqual(kept.messages.at(-2).parts.filter((part: { type: string }) => part.type === 'file').map((part: { url: string }) => part.url), [text.path, image.path])
 })
 
+test('an image goes inline as the type its bytes say, and bytes that are no image are only named', async () => {
+  const thread = await newThread('ag_chatrunn')
+  const jpeg = Buffer.from('ffd8ffe000104a464946', 'hex')
+  const fake = (await upload({ threadId: thread.id, name: 'fake.png', body: Buffer.from('not an image at all') })).json()
+  const real = (await upload({ threadId: thread.id, name: 'photo.png', body: jpeg })).json()
+  await sendParts({ threadId: thread.id, parts: [
+    { type: 'file', mediaType: fake.mediaType, filename: fake.name, url: fake.path },
+    { type: 'file', mediaType: real.mediaType, filename: real.name, url: real.path },
+    { type: 'text', text: 'Look' },
+  ] })
+  const content = seen.body?.messages.at(-1)?.content as { type: string; image_url?: { url: string } }[]
+  assert.deepEqual(content.filter((part) => part.type === 'image_url').map((part) => part.image_url?.url), [`data:image/jpeg;base64,${jpeg.toString('base64')}`])
+  assert.equal(imageTypeOf(Buffer.from('GIF89a')), 'image/gif')
+  assert.equal(imageTypeOf(Buffer.from('RIFF\0\0\0\0WEBPVP8 ', 'latin1')), 'image/webp')
+  assert.equal(imageTypeOf(Buffer.from('RIFF\0\0\0\0WAVE', 'latin1')), undefined)
+})
+
 test('a file part that points outside the uploads folder is refused', async () => {
   const thread = await newThread('ag_chatrunn')
   for (const url of ['/opt/data/.env', '/opt/data/home/uploads/../../.env', '/opt/data/home/uploads/a/b.txt', 'https://example.com/x.png']) {
@@ -173,6 +197,10 @@ test('a file the agent made in its home downloads as an attachment; anything out
   assert.equal(res.statusCode, 200)
   assert.equal(res.headers['content-disposition'], 'attachment; filename*=UTF-8\'\'report.csv')
   assert.equal(res.body, 'a,b\n1,2\n')
+  assert.equal(res.headers['x-content-type-options'], 'nosniff')
+  const gone = await app.inject({ method: 'GET', url: `/api/threads/${thread.id}/files?path=${encodeURIComponent('~/gone.csv')}`, headers: as() })
+  assert.equal(gone.statusCode, 404)
+  assert.equal(gone.json().error.message, 'That file isn\'t in the agent\'s home folder. It may have been moved or deleted.')
   for (const path of ['/opt/data/.env', '/opt/data/home/../.env', '/etc/passwd', '~/../config.yaml']) {
     const refused = await app.inject({ method: 'GET', url: `/api/threads/${thread.id}/files?path=${encodeURIComponent(path)}`, headers: as() })
     assert.equal(refused.statusCode, 400, path)

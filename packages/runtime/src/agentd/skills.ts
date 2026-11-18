@@ -80,7 +80,7 @@ export function openInside({ root, file, flags }: { root: string; file: string; 
   return undefined
 }
 
-export function openedPath({ fd, path, ino }: { fd: number; path: string; ino: number }): string | undefined {
+function openedPath({ fd, path, ino }: { fd: number; path: string; ino: number }): string | undefined {
   if (existsSync('/proc/self/fd')) return readlinkSync(`/proc/self/fd/${fd}`)
   const real = realpathSync(path)
   return statSync(real).ino === ino ? real : undefined
