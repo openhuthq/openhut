@@ -4,6 +4,7 @@ import { App } from '@/app/app'
 import { desktop } from '@/features/settings/desktop'
 import { RequestError } from '@/lib/api-client'
 import { followEnrollments } from '@/features/computers/enroll'
+import { followUpdate, updates } from '@/features/settings/update'
 import { openhut } from '@/lib/openhut'
 import { AGENTS_KEY, COMPUTERS_KEY, CONNECTIONS_KEY } from '@/lib/query-keys'
 import sprite from '@/logos.svg?raw'
@@ -22,6 +23,7 @@ const client = new QueryClient({
 if ('openhut' in window && navigator.userAgent.includes('Mac')) document.documentElement.dataset.desktop = ''
 desktop?.onChanged(() => void client.invalidateQueries())
 followEnrollments(client)
+followUpdate({ bridge: updates, client })
 addEventListener('pointerdown', () => { document.documentElement.dataset.pointer = '' }, true)
 addEventListener('keydown', () => { delete document.documentElement.dataset.pointer }, true)
 openhut.subscribe(() => { for (const queryKey of [AGENTS_KEY, CONNECTIONS_KEY, COMPUTERS_KEY]) void client.invalidateQueries({ queryKey }) })
