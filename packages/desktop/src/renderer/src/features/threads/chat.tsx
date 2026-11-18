@@ -4,7 +4,7 @@ import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, type UIMessage } from 'ai'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowUp02Icon, Attachment01Icon, Cancel01Icon, EraserIcon, File01Icon, Image01Icon, PlayIcon, PlusSignIcon, SidebarLeftIcon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, ArrowUp02Icon, Attachment01Icon, Cancel01Icon, EraserIcon, File01Icon, Image01Icon, PlayIcon, PlusSignIcon, SidebarLeftIcon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@openhut/client'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { ChatCall, fileInHome, MAX_FILE_BYTES, MAX_FILES, ToolProgress, type ChatFile, type ChatMessage, type ThreadWithMessages } from '@openhut/common/threads/thread.ts'
@@ -150,10 +150,11 @@ function ChatFrame({ agent, composer, tools, onFiles, children }: { agent: Agent
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Show sidebar" title="Show sidebar ⌘\" onClick={sidebar.expand}><I icon={SidebarLeftIcon} size={16} /></Button>
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="New agent" title="New agent" onClick={sidebar.newAgent}><I icon={PlusSignIcon} size={16} /></Button>
       </span>}
-      <Face agent={agent} size={26} /><span className="text-[14px] font-semibold">{agent.name}</span>
+      <a href="/" aria-label="All agents" title="All agents" className={cn(ICON_BUTTON, '-ml-2 sm:hidden')}><I icon={ArrowLeft01Icon} size={18} /></a>
+      <Face agent={agent} size={26} /><span className="min-w-0 truncate text-[14px] font-semibold">{agent.name}</span>
       <span className="ml-auto flex items-center gap-0.5">{tools}</span>
     </div>
-    <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>
+    <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 max-sm:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>
       <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col justify-end gap-4">{children}</div>
     </div>
     {composer}
@@ -192,7 +193,7 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
     event.preventDefault()
     attachments.add(Array.from(event.clipboardData.files))
   }
-  return <div className="shrink-0 px-8 pb-5">
+  return <div className="shrink-0 px-8 pb-5 max-sm:px-3 max-sm:pb-3">
     {!ready && !busy && !quiet && <NotReady agent={agent} />}
     <form className="mx-auto flex max-w-[640px] flex-col gap-2 rounded-xl border border-[oklch(0%_0_0/.12)] bg-card p-2 focus-within:border-mid" onSubmit={submit}>
       {attachments.items.length > 0 && <div className="flex flex-wrap gap-1.5">{attachments.items.map((each) => <FileChip key={each.key} name={each.name} image={each.image} thumb={each.thumb} busy={!each.file} onRemove={() => attachments.remove(each.key)} />)}</div>}

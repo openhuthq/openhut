@@ -61,14 +61,14 @@ export function Choice({ icon, name, note, selected = false, disabled, onClick }
   </DropdownMenuItem>
 }
 
-export const SPLIT_DIALOG = 'h-[min(720px,calc(100vh-48px))] w-[min(1080px,calc(100vw-32px))] gap-0 overflow-hidden p-0'
+export const SPLIT_DIALOG = 'h-[min(720px,calc(100vh-48px))] w-[min(1080px,calc(100vw-32px))] gap-0 overflow-hidden p-0 max-sm:flex-col max-sm:[&>aside]:max-h-[45%] max-sm:[&>aside]:w-full max-sm:[&>aside]:border-r-0 max-sm:[&>aside]:border-b max-sm:[&>aside]:border-hair'
 
 export function DialogCard({ onClose, dismissable, className, children }: { onClose: () => void; dismissable?: boolean; className?: string; children: ReactNode }) {
   return <Dialog size="narrow" dismissable={dismissable} onClose={onClose} className={cn('flex flex-col gap-4 rounded-xl p-5', className)}>{children}</Dialog>
 }
 
 export function AppWindow({ label, nav, onClose, onEscape, children }: { label: string; nav?: ReactNode; onClose: () => void; onEscape?: () => void; children: ReactNode }) {
-  return <Dialog size="window" label={label} onClose={onClose} onEscape={onEscape}>
+  return <Dialog size="window" label={label} onClose={onClose} onEscape={onEscape} className="max-sm:flex-col max-sm:[&>nav]:w-full max-sm:[&>nav]:flex-row max-sm:[&>nav]:overflow-x-auto max-sm:[&>nav]:pr-14">
     <InWindow value>
       {nav}
       <section aria-label={label} className={cn('relative flex min-w-0 flex-1 flex-col text-[13px]/[18px]', FLAT)}>

@@ -8,6 +8,7 @@ import { AgentView } from '@/features/agents/agent-view'
 import { NewAgentDialog } from '@/features/agents/new-agent'
 import { Sidebar, SidebarContext, type Contact } from '@/features/agents/sidebar'
 import { useThreads } from '@/features/threads/api'
+import { PHONE, useMedia } from '@/lib/media'
 import { navigate, Redirect } from '@/lib/router'
 import { track } from '@/lib/track'
 import { cn } from '@/lib/utils'
@@ -46,6 +47,8 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
 }
 
 function Home({ first, adding, overlaid }: { first: string | undefined; adding: boolean; overlaid: boolean }) {
+  const phone = useMedia(PHONE)
+  if (first && phone) return adding ? <NewAgentDialog onClose={() => navigate('/')} /> : null
   if (first && overlaid) return <AgentView key={first} agentId={first} dialog={undefined} detail={undefined} />
   if (first) return <Redirect to={agentPath({ agentId: first, dialog: adding ? 'new' : undefined })} />
   return <section className="flex flex-1 flex-col items-center justify-center gap-2 bg-card px-8 pb-12 text-center">

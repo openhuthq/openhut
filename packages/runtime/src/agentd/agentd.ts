@@ -40,6 +40,7 @@ const WHATSAPP_BRIDGE = process.env.AGENTD_WHATSAPP_BRIDGE || '/var/lib/openhut/
 const AGENT_UID = 10000
 const AGENT_USER = `${AGENT_UID}:${AGENT_UID}`
 const AS_ROOT = process.getuid?.() === 0
+const PIPE = process.platform === 'win32'
 const SPEC = '4'
 const AGENT_MEMORY_MIB = 1024
 const AGENT_CPUS = 1
@@ -72,10 +73,10 @@ let lastFirewallCheck = { at: 0, on: false }
 let pendingFirewallCheck: Promise<Readiness> | undefined
 const box = await sandboxes()
 
-mkdirSync(dirname(SOCK), { recursive: true })
+if (!PIPE) mkdirSync(dirname(SOCK), { recursive: true })
 for (const dir of [`${DATA}/agents`, `${DATA}/agent-conf`]) mkdirSync(dir, { recursive: true, mode: 0o700 })
 for (const id of readdirSync(`${DATA}/agent-conf`).filter((name) => ID.test(name))) writeIfChanged(`${conf(id)}/${POLICY_FILE}`, FREE_POLICY)
-rmSync(SOCK, { force: true })
+if (!PIPE) rmSync(SOCK, { force: true })
 if (box.name === 'gvisor') setInterval(() => watchFirewall().catch((e) => console.error(`watchdog: ${errorText(e)}`)), WATCHDOG_MS)
 export const server = createServer({ allowHalfOpen: true }, serve).listen(SOCK, () => {
   own({ path: SOCK, uid: 0, gid: APP_GID, mode: 0o660 })
@@ -447,15 +448,20 @@ function features() {
 function restOf({ sock, rest, limit }: { sock: Socket; rest: string; limit: number }): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = rest
+    const done = () => resolve(body.split('\n')[0])
+    if (rest.includes('\n')) return done()
     sock.on('data', (chunk: string) => {
       body += chunk
+      if (body.includes('\n')) {
+        sock.off('end', done)
+        return done()
+      }
       if (body.length > limit) {
         sock.off('end', done)
         sock.pause()
         reject(new Error('the request is too large'))
       }
     })
-    const done = () => resolve(body)
     sock.on('end', done)
     sock.resume()
   })

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { PassThrough, Writable } from 'node:stream'
-import { NetworkPolicy, Sandbox, SandboxNotFoundError } from 'microsandbox'
+import { DnsBuilder, NetworkPolicy, Sandbox, SandboxNotFoundError } from 'microsandbox'
 import type { ExecHandle, SandboxHandle } from 'microsandbox'
 import { errorText } from '../util.ts'
 import { AGENT_API_PORT_BASE, type Sandboxes, type SandboxSpec, type SandboxState } from './sandbox.ts'
@@ -11,6 +11,7 @@ const KILL_MS = 10_000
 const RESTING = ['stopped', 'created', 'crashed']
 const LIVE_JOB = ['starting', 'running']
 const API_PORT = 8642
+const WINDOWS_DNS = ['1.1.1.1', '8.8.8.8']
 
 type Workload = { entrypoint: string[]; cmd: string[]; user: string }
 
@@ -36,7 +37,7 @@ function builder({ name, spec }: { name: string; spec: SandboxSpec }) {
     .envs(spec.env)
     .labels(spec.labels)
     .security('restricted')
-    .network((n) => n.policy(policy()))
+    .network((n) => (process.platform === 'win32' ? n.policy(policy()).dns((d: InstanceType<typeof DnsBuilder>) => d.nameservers(WINDOWS_DNS)) : n.policy(policy())))
     .detached(true)
     .replace()
   if (spec.net !== undefined) b.portBind('127.0.0.1', AGENT_API_PORT_BASE + spec.net, API_PORT)

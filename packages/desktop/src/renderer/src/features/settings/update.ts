@@ -15,7 +15,7 @@ export function followUpdate({ bridge, client }: { bridge: UpdateBridge | undefi
 }
 
 export function downloadUrl(platform: string | undefined) {
-  return `https://openhut.dev/download/${platform === 'darwin' ? 'mac' : 'linux'}`
+  return `https://openhut.dev/download/${{ darwin: 'mac', win32: 'windows' }[platform ?? ''] ?? 'linux'}`
 }
 
 export function readyNote(state: UpdateState | null | undefined) {

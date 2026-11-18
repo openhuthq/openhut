@@ -3,7 +3,7 @@ import { execFile, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer, request } from 'node:http'
 import { connect } from 'node:net'
-import { appendFileSync, chmodSync, cpSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, chmodSync, cpSync, createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { cpus, homedir, totalmem } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { Readable } from 'node:stream'
@@ -15,14 +15,17 @@ import WebSocket from 'ws'
 
 const DEV = !app.isPackaged
 const MAC = process.platform === 'darwin'
-const CONTAINER = !MAC || process.env.OPENHUT_SANDBOX === 'gvisor'
+const WIN = process.platform === 'win32'
+if (WIN) process.env.NODE_PENDING_PIPE_INSTANCES ??= '64'
+const CONTAINER = (!MAC && !WIN) || process.env.OPENHUT_SANDBOX === 'gvisor'
 process.umask(0o022)
 app.setName(DEV ? 'OpenHut Dev' : 'OpenHut')
 const TEST_HOME = process.env.OPENHUT_TEST_HOME
 if (DEV) app.setPath('userData', join(app.getPath('appData'), 'OpenHut Dev'))
 if (TEST_HOME) app.setPath('userData', TEST_HOME)
 app.setAppLogsPath(TEST_HOME ? join(TEST_HOME, 'logs') : DEV && MAC ? join(app.getPath('home'), 'Library/Logs/OpenHut Dev') : undefined)
-if (!app.requestSingleInstanceLock()) app.exit(0)
+const MCP_BRIDGE = process.argv.includes('--mcp')
+if (!MCP_BRIDGE && !app.requestSingleInstanceLock()) app.exit(0)
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '../../..')
@@ -30,7 +33,7 @@ const BACKEND = DEV ? ROOT : join(process.resourcesPath, 'backend')
 const SCRIPTS = DEV
   ? { agentd: 'packages/runtime/src/agentd/agentd.ts', server: 'packages/runtime/src/server/app.ts' }
   : { agentd: 'packages/runtime/src/agentd/agentd.mjs', server: 'packages/runtime/src/server/platform/app.mjs' }
-const MSB = join(BACKEND, `node_modules/@superradcompany/microsandbox-${process.platform}-${process.arch}`)
+const MSB = join(BACKEND, `node_modules/@superradcompany/microsandbox-${process.platform}-${process.arch}${WIN ? '-msvc' : ''}`)
 const GATEWAY_PORT = 8081
 const HOME = app.getPath('userData')
 const BRIDGE = join(HOME, 'bin/openhut-mcp')
@@ -42,9 +45,20 @@ const BOOTED = join(DATA, 'booted-version')
 const PREVIOUS = join(HOME, 'previous')
 const SKIPPED = join(HOME, 'skipped-version')
 const BUNDLE = join(dirname(app.getPath('exe')), '../..')
-const SOCK = join(HOME, 'agentd.sock')
-const SERVER_SOCK = join(HOME, 'server.sock')
-const MCP_SOCK = join(HOME, 'mcp.sock')
+const PIPES = WIN && `\\\\.\\pipe\\openhut-${createHash('sha256').update(HOME).digest('hex').slice(0, 12)}`
+const sockAt = (name) => PIPES ? `${PIPES}-${name}` : join(HOME, `${name}.sock`)
+const SOCK = sockAt('agentd')
+const SERVER_SOCK = sockAt('server')
+const MCP_SOCK = sockAt('mcp')
+if (MCP_BRIDGE) {
+  const computer = process.argv[process.argv.indexOf('--computer') + 1]
+  const remote = process.argv.includes('--computer') && computer !== 'local'
+  const input = createReadStream(null, { fd: 0 })
+  await (await import('./mcp-bridge.mjs')).bridge(remote
+    ? { sock: MCP_SOCK, path: `/c/${computer}/mcp`, down: 'The OpenHut app isn\'t running, and it holds the key for that computer', input }
+    : { sock: SERVER_SOCK, path: '/mcp', down: 'OpenHut isn\'t running', input })
+  app.exit(0)
+}
 const WINDOW_STATE = join(HOME, 'window.json')
 const PREFS = join(HOME, 'prefs.json')
 const SECRET = join(HOME, 'secret.bin')
@@ -64,6 +78,7 @@ const RENDERER = join(HERE, '../dist/renderer')
 const APP_ORIGIN = 'app://openhut'
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
 const MAX_LOG = 10 << 20
+const PIPE_TRIES = 20
 const { createOpenHut } = await import(pathToFileURL(DEV ? join(ROOT, 'packages/client/src/openhut.ts') : join(BACKEND, 'client.mjs')).href)
 const openhut = createOpenHut({
   transport: (computer) => (path, init) => serve(new Request(`${APP_ORIGIN}/c/${computer.id}${path}`, init)),
@@ -113,7 +128,7 @@ async function waitFor(check, seconds) {
   return false
 }
 
-const TAILSCALE = ['/usr/bin/tailscale', '/usr/local/bin/tailscale', '/opt/homebrew/bin/tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale'].find((path) => existsSync(path))
+const TAILSCALE = ['C:\\Program Files\\Tailscale\\tailscale.exe', '/usr/bin/tailscale', '/usr/local/bin/tailscale', '/opt/homebrew/bin/tailscale', '/Applications/Tailscale.app/Contents/MacOS/Tailscale'].find((path) => existsSync(path))
 
 function tailnet() {
   if (!TAILSCALE) return Promise.resolve({ state: 'missing' })
@@ -297,7 +312,7 @@ function prefs() {
 }
 
 function prefsNow() {
-  return { ...prefs(), openAtLogin: MAC ? app.getLoginItemSettings().openAtLogin : existsSync(AUTOSTART) }
+  return { ...prefs(), openAtLogin: MAC || WIN ? app.getLoginItemSettings().openAtLogin : existsSync(AUTOSTART) }
 }
 
 function setPrefs(patch) {
@@ -311,7 +326,7 @@ function setPrefs(patch) {
 }
 
 function openAtLogin(on) {
-  if (MAC) return app.setLoginItemSettings({ openAtLogin: on })
+  if (MAC || WIN) return app.setLoginItemSettings({ openAtLogin: on, args: WIN ? ['--hidden'] : [] })
   if (!on) return rmSync(AUTOSTART, { force: true })
   mkdirSync(dirname(AUTOSTART), { recursive: true })
   writeFileSync(AUTOSTART, `[Desktop Entry]\nType=Application\nName=OpenHut\nComment=Start OpenHut's agents in the background\nExec="${process.env.APPIMAGE ?? process.execPath}" --hidden\nX-GNOME-Autostart-enabled=true\n`)
@@ -333,7 +348,7 @@ function agentd(ask) {
   return new Promise((resolve, reject) => {
     const sock = connect(SOCK)
     sock.on('error', reject)
-    sock.end(`${JSON.stringify(ask)}\n`)
+    sock.write(`${JSON.stringify(ask)}\n`)
     text(sock).then((answer) => resolve(JSON.parse(answer)), reject)
   })
 }
@@ -430,11 +445,16 @@ async function setAll({ agents, wanted }) {
 }
 
 function mcpCommands() {
-  const bridge = /\s/.test(BRIDGE) ? `"${BRIDGE}"` : BRIDGE
+  const bridge = bridgeCommand()
   return computers().map(({ id, name }) => {
     const server = id === LOCAL.id ? 'openhut' : mcpName({ name, id })
     return { computer: id, name: server, command: `claude mcp add ${server} -- ${bridge}${id === LOCAL.id ? '' : ` --computer ${id}`}` }
   })
+}
+
+function bridgeCommand() {
+  if (WIN) return `"${process.execPath}" --mcp`
+  return /\s/.test(BRIDGE) ? `"${BRIDGE}"` : BRIDGE
 }
 
 function mcpName({ name, id }) {
@@ -443,7 +463,7 @@ function mcpName({ name, id }) {
 }
 
 async function serveMcp() {
-  rmSync(MCP_SOCK, { force: true })
+  if (!PIPES) rmSync(MCP_SOCK, { force: true })
   const server = createServer((req, res) => {
     if (!/^\/c\/[\w-]+\/mcp$/.test(req.url ?? '')) return res.writeHead(404).end()
     const body = ['GET', 'HEAD'].includes(req.method) ? undefined : Readable.toWeb(req)
@@ -457,7 +477,7 @@ async function serveMcp() {
   })
   const umask = process.umask(0o177)
   await new Promise((resolve, reject) => server.once('error', reject).listen(MCP_SOCK, resolve)).finally(() => process.umask(umask))
-  chmodSync(MCP_SOCK, 0o600)
+  if (!PIPES) chmodSync(MCP_SOCK, 0o600)
 }
 
 function webHeaders(headers) {
@@ -491,7 +511,7 @@ async function meet(run) {
     if (state === 'done' && run.steps[index + 1]) run.steps[index + 1][2] = 'now'
   }
   const hardware = `${cpus()[0]?.model ?? 'This computer'} · ${Math.round(totalmem() / 2 ** 30)} GB`
-  if (CONTAINER ? !await dockerUp() : !await hypervisor()) throw new Error(`${hardware}, but it can't run ${CONTAINER ? 'Docker' : 'virtual machines'}`)
+  if (CONTAINER ? !await dockerUp() : !await canVirtualize()) throw new Error(`${hardware}, but it can't run ${CONTAINER ? 'Docker' : 'virtual machines'}`)
   step(0, hardware)
   if (await booted !== true) throw new Error(`It didn't start. The logs are in ${LOGS}.`)
   await api('/api/me')
@@ -516,12 +536,25 @@ function dockerUp() {
   return new Promise((resolve) => execFile('docker', ['info'], { timeout: 20_000 }, (error) => resolve(!error)))
 }
 
-function hypervisor() {
+function canVirtualize() {
+  if (process.env.OPENHUT_SANDBOX === 'memory') return Promise.resolve(true)
+  if (WIN) return Promise.resolve(existsSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32\\WinHvPlatform.dll')))
   return new Promise((resolve) => execFile('sysctl', ['-n', 'kern.hv_support'], (_error, stdout) => resolve(String(stdout).trim() === '1')))
 }
 
+function listening(path) {
+  return new Promise((resolve) => {
+    const sock = connect(path)
+    sock.once('connect', () => {
+      sock.destroy()
+      resolve(true)
+    })
+    sock.once('error', () => resolve(false))
+  })
+}
+
 async function rootSecret() {
-  if (!await safeStorage.isAsyncEncryptionAvailable() || (!MAC && safeStorage.getSelectedStorageBackend() === 'basic_text')) {
+  if (!await safeStorage.isAsyncEncryptionAvailable() || (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')) {
     if (existsSync(SECRET)) throw new Error('The system keychain is locked or missing, so OpenHut can\'t read its root secret. Unlock it or sign in again, then open OpenHut.')
     appendFileSync(join(LOGS, 'server.log'), 'openhut: no system keychain (Keychain, libsecret or KWallet) is available, so the root secret stays in the database\n')
     return
@@ -553,13 +586,13 @@ async function boot() {
   assets()
   const shared = { OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_CLAUDE_HOST: MAC ? join(DATA, 'bin/claude') : join(ASSETS, 'bin/claude'), OPENHUT_CLAUDE_VERSION: claudeVersion() }
   const pinned = DEV ? {} : msb()
-  rmSync(SOCK, { force: true })
+  if (!PIPES) rmSync(SOCK, { force: true })
   start('agentd', { ...shared, ...pinned, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'microsandbox', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK, AGENTD_ASSETS: ASSETS })
-  await waitFor(async () => existsSync(SOCK), 30)
-  rmSync(SERVER_SOCK, { force: true })
+  await waitFor(() => listening(SOCK), 30)
+  if (!PIPES) rmSync(SERVER_SOCK, { force: true })
   await rootSecret()
   start('server', Object.assign(serverEnv, { ...shared, AGENTD_SOCK: SOCK, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_AGENT_GATEWAY: `http://host.microsandbox.internal:${GATEWAY_PORT}` }))
-  if (!await waitFor(async () => existsSync(SERVER_SOCK), 60)) return false
+  if (!await waitFor(() => listening(SERVER_SOCK), 60)) return false
   if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   return true
 }
@@ -637,7 +670,7 @@ function assets() {
 }
 
 function msb() {
-  return { MSB_PATH: join(MSB, 'bin/msb'), MSB_LIBKRUNFW_PATH: join(MSB, 'lib', readdirSync(join(MSB, 'lib'))[0]) }
+  return { MSB_PATH: join(MSB, WIN ? 'bin/msb.exe' : 'bin/msb'), MSB_LIBKRUNFW_PATH: join(MSB, 'lib', readdirSync(join(MSB, 'lib'))[0]) }
 }
 
 function savedBounds() {
@@ -656,7 +689,7 @@ function window(path = '/agents') {
     width: 1280, height: 820, ...savedBounds(), minWidth: 900, minHeight: 600, show: false, title: 'OpenHut',
     ...(MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 18 } } : { autoHideMenuBar: true }),
     backgroundColor: CANVAS,
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-mcp=${BRIDGE}`, `--openhut-version=${app.getVersion()}`] },
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-mcp=${bridgeCommand()}`, `--openhut-version=${app.getVersion()}`] },
   })
   win.on('close', saveBounds)
   win.once('ready-to-show', () => win.show())
@@ -776,7 +809,7 @@ async function toComputer({ req, id, path }) {
   const origin = req.headers.get('origin')
   if (!['GET', 'HEAD'].includes(req.method) && origin !== null && origin !== APP_ORIGIN) return refuse(403, 'Only the OpenHut app can change things here.')
   const target = path + new URL(req.url).search
-  if (id === LOCAL.id && !CONTAINER) return toSocket({ req, path: target })
+  if (id === LOCAL.id && !CONTAINER) return toSocket({ req, path: target }).catch((error) => refuse(502, `OpenHut's runtime didn't answer (${error.code ?? error.message}). Try again, or restart OpenHut.`))
   if (id === LOCAL.id && !keys.has(id) && !existsSync(join(HOME, LOCAL_KEY))) return refuse(503, `OpenHut is still being set up on ${LOCAL.name.toLowerCase()}.`)
   const computer = id === LOCAL.id ? { ...LOCAL, keyFile: LOCAL_KEY } : storedComputers().find((each) => each.id === id)
   if (!computer) return refuse(404, 'That computer isn\'t in your list.')
@@ -817,15 +850,26 @@ async function liveSocket(path) {
   return new WebSocket(`${computer.url.replace(/^http/, 'ws')}${target}`, { headers: { authorization: `Bearer ${await keyOf(computer)}`, 'openhut-app-version': app.getVersion() } })
 }
 
-function toSocket({ req, path }) {
+async function toSocket({ req, path }) {
+  const body = req.body ? Buffer.from(await req.arrayBuffer()) : undefined
+  for (let tries = 1; ; tries++) {
+    const answer = await socketRequest({ req, path, body }).catch((error) => {
+      if (tries >= PIPE_TRIES || !['ENOENT', 'EBUSY'].includes(error.code)) throw error
+      appendFileSync(join(LOGS, 'server.log'), `openhut: ${req.method} ${path} got ${error.code} from the runtime's pipe; trying again\n`)
+    })
+    if (answer) return answer
+    await sleep(100)
+  }
+}
+
+function socketRequest({ req, path, body }) {
   return new Promise((resolve, reject) => {
     const out = request({ socketPath: SERVER_SOCK, path, method: req.method, headers: Object.fromEntries(req.headers) }, (res) => {
       const headers = webHeaders(res.headers)
       resolve(new Response([204, 304].includes(res.statusCode) ? null : Readable.toWeb(res), { status: res.statusCode, headers }))
     })
     out.on('error', reject)
-    if (req.body) Readable.fromWeb(req.body).pipe(out)
-    else out.end()
+    out.end(body)
   })
 }
 
@@ -863,6 +907,10 @@ app.whenReady().then(async () => {
   protocol.handle('app', serve)
   if (CONTAINER && !await dockerUp()) {
     await dialog.showMessageBox({ type: 'error', message: 'OpenHut needs Docker', detail: 'On Linux, OpenHut runs each agent in its own gVisor sandbox in Docker. Install Docker (sudo apt install docker.io), let your user run it (sudo usermod -aG docker $USER), sign in again, then open OpenHut.', buttons: ['Quit'] })
+    return app.quit()
+  }
+  if (WIN && !await canVirtualize()) {
+    await dialog.showMessageBox({ type: 'error', message: 'This computer can\'t run agents', detail: 'Windows Hypervisor Platform is off, and OpenHut runs each agent in its own virtual machine. Turn it on in Windows Features (or run Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform as an administrator), restart, and open OpenHut again.', buttons: ['Quit'] })
     return app.quit()
   }
   const fresh = !existsSync(CONTAINER ? join(HOME, LOCAL_KEY) : join(DATA, 'app'))

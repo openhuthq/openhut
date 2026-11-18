@@ -50,6 +50,7 @@ export const adminService = {
         running: agents.filter((agent) => states?.[agent.id] === 'running').length, total: agents.length,
       },
       tailnetUrl: settings.tailnetUrl() ?? null,
+      google: { clientId: null, redirectUri: connectionService.redirectUrl() },
       usageData: settings.usageData(),
       publicKey: transferPublicKey,
       features: available,

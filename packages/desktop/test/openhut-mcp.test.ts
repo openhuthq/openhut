@@ -36,3 +36,31 @@ test('the sh bridge carries MCP between stdio and the runtime socket, and says w
     server.kill('SIGKILL')
   }
 })
+
+test('the node bridge (OpenHut.exe --mcp on Windows) carries MCP the same way, and says when the app is closed', async () => {
+  const { bridge: nodeBridge } = await import('../src/mcp-bridge.mjs')
+  const { PassThrough } = await import('node:stream')
+  const run = async ({ sock, path, down, lines }: { sock: string; path: string; down: string; lines: unknown[] }) => {
+    const input = new PassThrough()
+    const output = new PassThrough()
+    let out = ''
+    output.setEncoding('utf8').on('data', (chunk: string) => { out += chunk })
+    input.end(lines.map((line) => `${JSON.stringify(line)}\n`).join(''))
+    await nodeBridge({ sock, path, down, input, output })
+    return out.trim().split('\n').filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>)
+  }
+  const home = mkdtempSync(join(tmpdir(), 'oh-mcp-'))
+  const sock = join(home, 'server.sock')
+  const server = spawn(process.execPath, [SERVER], { env: { ...process.env, OPENHUT_DATA: join(home, 'data'), OPENHUT_SOCKET: sock, AGENTD_SOCK: join(home, 'none.sock'), OPENHUT_MODEL: 'test', OPENHUT_GATEWAY_PORT: '0' }, stdio: 'ignore' })
+  try {
+    for (let i = 0; i < 150 && !existsSync(sock); i++) await sleep(100)
+    const answers = await run({ sock, path: '/mcp', down: 'OpenHut isn\'t running', lines: [INIT, { jsonrpc: '2.0', method: 'notifications/initialized' }, { jsonrpc: '2.0', id: 2, method: 'tools/list' }] })
+    assert.deepEqual(answers.map((each) => each.id), [1, 2])
+    const tools = (answers[1]?.result as { tools: { name: string }[] }).tools.map((tool) => tool.name)
+    assert.ok(tools.includes('list_agents') && tools.includes('update_agent'), tools.join(', '))
+    const closed = await run({ sock: join(home, 'mcp.sock'), path: '/c/beelink/mcp', down: 'The OpenHut app isn\'t running, and it holds the key for that computer', lines: [{ ...INIT, id: 7 }] })
+    assert.deepEqual(closed, [{ jsonrpc: '2.0', id: 7, error: { code: -32603, message: 'The OpenHut app isn\'t running, and it holds the key for that computer. Open the OpenHut app, then try again.' } }])
+  } finally {
+    server.kill('SIGKILL')
+  }
+})
