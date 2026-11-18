@@ -12,16 +12,12 @@ Read these first. They are short, and a change that ignores them will be sent ba
 1. **[`CLAUDE.md`](CLAUDE.md)**: what each package is, the conventions, and how to run and test.
 2. **[`DESIGN.md`](DESIGN.md)**: every rule behind the dashboard's look. Read it before touching `packages/desktop/src/renderer`. Use
    the classes and tokens it names; don't add a colour, a button variant or a size it doesn't have.
-3. **[`brain/`](brain)**: why the code is the way it is. The code carries no comments, so the reasons live here.
-   Grep it for the area you're changing:
-   - `brain/openhut-server.md` covers the app, `brain/hermes.md` covers Hermes, `brain/openhut-site.md` the site and
-     docs, `brain/openhut-deploy.md` deploys.
-   - `brain/openhut-gotchas.md` lists what has already bitten us. Check it before you debug something twice.
-   - `brain/decisions/` holds the calls that are settled. Don't reopen one in a pull request; open an issue.
+3. The reasons behind the code live in our private notes, so they aren't in this repo. If a change needs a reason that
+   the code can't carry, put it in the pull request description.
 
 ## Coding style
 
-- No comments in executable code. A reason worth keeping goes in `brain/`.
+- No comments in executable code. A reason worth keeping goes in the pull request description.
 - A module is `<name>-service.ts` (the only layer that touches the database or agentd) and `<name>-controller.ts`
   (one-line handlers, request schemas at the end). `app.ts` only registers controllers.
 - `platform/config.ts` is the only file that reads env vars.
@@ -64,9 +60,9 @@ look in the browser, not just a green build.
 - Keep one small change per pull request. For anything large, open an issue first so we can agree on the shape.
 - Say what changed and why, and how you checked it. Add a screenshot for anything visible.
 - Add or update the test next to the code you changed.
-- If you learned something a later reader will need (a gotcha, a reason, a decision), add it to `brain/` in the same
-  pull request.
-- Never commit secrets, server addresses or personal details, in code or in `brain/`. The whole history is public.
+- If you learned something a later reader will need (a gotcha, a reason, a decision), write it in the pull request
+  description.
+- Never commit secrets, server addresses or personal details, in code or in a pull request. The whole history is public.
 - You are responsible for what your agent wrote. Read the diff before you send it.
 
 ## Security
