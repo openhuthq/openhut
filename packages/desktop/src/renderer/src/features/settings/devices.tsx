@@ -15,17 +15,17 @@ import { toastError } from '@/lib/toast'
 export function DevicesSettings() {
   return <>
     <DeviceList />
-    {useOpen() === 'add' && <AddPhone />}
+    {useOpen() === 'add-phone' && <AddPhone />}
   </>
 }
 
 function DeviceList() {
   const devices = useDevices()
   return <>
-    <Intro>Phones that can talk to the agents on all your computers.</Intro>
+    <Intro>Chat with your agents</Intro>
     <Rows>
       {devices.data?.filter((device) => !device.self).map((device) => <DeviceRow key={device.key} device={device} />)}
-      <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a phone" note={`Scan a code with the OpenHut app. Works when this ${HERE} is asleep too.`}><Chevron /></Row>
+      <Row onClick={() => open('add-phone')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a phone" note={`Scan a code with the OpenHut app. Works when this ${HERE} is asleep too.`}><Chevron /></Row>
     </Rows>
     <ErrorNote message={devices.error?.message} />
   </>
@@ -34,7 +34,7 @@ function DeviceList() {
 function DeviceRow({ device }: { device: Device }) {
   const remove = useRemoveDevice()
   const { confirming, setConfirming, box } = useConfirming()
-  return <div ref={box}><Row icon={<I icon={SmartPhone01Icon} size={20} className="text-hue-green" />} title={device.name} note={confirming ? 'It stops reaching your agents right away.' : `Added ${added(device)}`}>
+  return <div ref={box}><Row icon={<I icon={SmartPhone01Icon} size={20} className="text-hue-green" />} title={device.name} note={confirming ? 'It stops reaching your agents right away.' : `Reaches the agents on all your computers · added ${added(device)}`}>
     {confirming
       ? <>
         <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>

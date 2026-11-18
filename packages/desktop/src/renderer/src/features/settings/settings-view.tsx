@@ -1,5 +1,5 @@
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiMagicIcon, LaptopIcon, PlugSocketIcon, Settings02Icon, SmartPhone01Icon } from '@hugeicons/core-free-icons'
+import { AiMagicIcon, LaptopIcon, PlugSocketIcon, Settings02Icon } from '@hugeicons/core-free-icons'
 import { ComputersSettings } from '@/features/settings/computers'
 import { DevicesSettings } from '@/features/settings/devices'
 import { GeneralSettings } from '@/features/settings/general'
@@ -11,13 +11,15 @@ import { cn } from '@/lib/utils'
 
 const TABS: [string, string, IconSvgElement, string][] = [
   ['general', 'General', Settings02Icon, 'text-hue-slate'],
-  ['computers', 'Computers', LaptopIcon, 'text-hue-blue'],
-  ['phones', 'Phones', SmartPhone01Icon, 'text-hue-green'],
+  ['devices', 'Your devices', LaptopIcon, 'text-hue-blue'],
   ['models', 'Models', AiMagicIcon, 'text-hue-violet'],
   ['mcp', 'MCP', PlugSocketIcon, 'text-hue-teal'],
 ]
 
-export function SettingsView({ tab, onClose }: { tab: string; onClose: () => void }) {
+const MOVED: Record<string, string> = { computers: 'devices', phones: 'devices' }
+
+export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: () => void }) {
+  const tab = MOVED[asked] ?? asked
   const name = TABS.find(([slug]) => slug === tab)?.[1] ?? 'General'
   const nav = <nav aria-label="Settings" className="no-scrollbar flex w-[198px] shrink-0 flex-col gap-0.5 overflow-y-auto px-3 py-4">
     {TABS.map(([slug, name, icon, hue]) => <a key={slug} href={`/settings/${slug}`} aria-current={slug === tab ? 'page' : undefined} onClick={(event) => { event.preventDefault(); navigate(`/settings/${slug}`, true) }}
@@ -37,10 +39,17 @@ export function SettingsView({ tab, onClose }: { tab: string; onClose: () => voi
 
 function Tab({ tab }: { tab: string }) {
   switch (tab) {
-    case 'computers': return <ComputersSettings />
-    case 'phones': return <DevicesSettings />
+    case 'devices': return <YourDevices />
     case 'models': return <ModelsSettings />
     case 'mcp': return <McpSettings />
     default: return <GeneralSettings />
   }
+}
+
+function YourDevices() {
+  const step = (useOpen() ?? '').split(':')[0]
+  return <>
+    <ComputersSettings />
+    {!['tailscale', 'ssh', 'others'].includes(step) && <DevicesSettings />}
+  </>
 }

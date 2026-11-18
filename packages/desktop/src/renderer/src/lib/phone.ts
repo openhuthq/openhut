@@ -84,7 +84,7 @@ export function parseCode(text: string): Code {
   const get = (name: string) => url?.searchParams.get(name) ?? ''
   const [id, computerKey, owner, secret, relayUrl] = ['c', 'k', 'o', 's', 'r'].map(get)
   const fine = url?.protocol === 'openhut:' && [id, computerKey, owner, secret].every((each) => HEX.test(each)) && /^wss?:\/\//.test(relayUrl)
-  if (!fine) throw new Error('That isn\'t an OpenHut code. Open Settings › Phones › Add a phone on your Mac and scan the code there.')
+  if (!fine) throw new Error('That isn\'t an OpenHut code. Open Settings › Your devices › Add a phone on your Mac and scan the code there.')
   return { computer: { id, key: computerKey }, owner, secret, relayUrl }
 }
 

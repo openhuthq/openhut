@@ -128,7 +128,7 @@ function RunsOn({ agent }: { agent: Agent }) {
           note={computer.online ? computer.id === 'local' ? `Only while this ${HERE} is awake` : 'Always on' : 'Offline'}
           selected={computer.id === id} disabled={computer.id === id || !computer.online || !agent.canEdit} onClick={() => move.go(computer.id)} />)}
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="h-8 gap-2 text-[13px]" onClick={() => navigate('/settings/computers')}><I icon={PlusSignIcon} size={14} className="text-pass" />Add a computer…</DropdownMenuItem>
+        <DropdownMenuItem className="h-8 gap-2 text-[13px]" onClick={() => navigate('/settings/devices')}><I icon={PlusSignIcon} size={14} className="text-pass" />Add a computer…</DropdownMenuItem>
       </MenuCard>
     </DropdownMenu>
     {move.line && <p role="status" className="m-0 px-2.5 py-1 text-[12.5px]/[1.45] text-body">{move.line}</p>}
