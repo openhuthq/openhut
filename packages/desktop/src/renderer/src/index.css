@@ -180,6 +180,8 @@
 
 @keyframes sheetup { from { transform: translateY(100%) } }
 @keyframes pushin { from { transform: translateX(100%) } }
+@keyframes levelin { from { opacity: 0; translate: 6% 0 } }
+@keyframes levelback { from { opacity: 0; translate: -6% 0 } }
 @keyframes toastin { from { opacity: 0; transform: translateY(-140%) } }
 
 @media (max-width: 640px) {

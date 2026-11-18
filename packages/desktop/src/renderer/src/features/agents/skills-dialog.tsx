@@ -47,7 +47,7 @@ export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: str
   const toList = () => navigate(agentPath({ agentId: agent.id, dialog: 'skills' }))
   const setDraft = (skillId: string, body: string | undefined) => setDrafts(({ [skillId]: _, ...rest }) => body === undefined ? rest : { ...rest, [skillId]: body })
   return <DialogCard onClose={onClose} className={cn(SPLIT_DIALOG, 'flex-row')}>
-    <aside className={cn('flex w-[300px] shrink-0 flex-col gap-3 border-r border-hair bg-sidebar p-4', phone && (selected ? 'hidden' : '!max-h-none flex-1 !border-b-0'))}>
+    <aside className={cn('flex w-[300px] shrink-0 flex-col gap-3 border-r border-hair bg-sidebar p-4', phone && (selected ? 'hidden' : '!max-h-none flex-1 !border-b-0 animate-[levelback_.3s_cubic-bezier(.22,1,.36,1)]'))}>
       <div className="flex items-center gap-2.5">
         <Face agent={agent} size={32} />
         <div className="grid min-w-0 flex-1"><DialogTitle className="truncate text-[15px]/[20px] font-medium">{agent.name}'s skills</DialogTitle><span className="text-[12px] text-mute">{counts.learned} learned · {counts.builtIn} built in</span></div>
@@ -69,7 +69,7 @@ export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: str
         {skills.data && !shown.length && <p className="m-0 px-2 py-1 text-[13px] text-mute">{filter === 'builtIn' ? `${agent.name} has no built-in skills.` : `${agent.name} hasn't learned a skill yet.`}</p>}
       </nav>
     </aside>
-    <section className={cn('flex min-w-0 flex-1 flex-col', phone && !selected && 'hidden')}>
+    <section className={cn('flex min-w-0 flex-1 flex-col', phone && (selected ? 'animate-[levelin_.3s_cubic-bezier(.22,1,.36,1)]' : 'hidden'))}>
       {selected
         ? <SkillDetail key={selected} agent={agent} skillId={`${agent.id}~${selected}`} draft={drafts[`${agent.id}~${selected}`]} setDraft={(body) => setDraft(`${agent.id}~${selected}`, body)} onClose={phone ? toList : onClose} back={phone} />
         : <div className="flex flex-1 justify-end p-3"><CloseButton onClose={onClose} /></div>}
