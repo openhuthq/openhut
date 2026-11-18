@@ -35,7 +35,7 @@ export function renderFiles({ agent, ownerName, token, channelKey, channels, con
 }): AgentFiles {
   const gateway = config.agentGateway ?? `http://${agentSubnet(agent.net)}.1:${config.gatewayPort}`
   const disabled = ['browser', 'delegation', 'cronjob', ...(agent.code_execution ? [] : ['code_execution'])]
-  const setups = [...new Set([agent.slots.primary, agent.slots.fallback, ...Object.values(agent.slots.helpers)].flatMap((slot) => slot ? [slot.provider] : []))].map((id) => providers[id].setup({ gateway, token }))
+  const setups = [...new Set([agent.slots.primary, ...Object.values(agent.slots.helpers)].map((slot) => slot.provider))].map((id) => providers[id].setup({ gateway, token }))
   const yaml = [
     modelYaml({ gateway, token, slots: agent.slots, setups: setups.map((setup) => setup.yaml) }),
     'terminal:\n  backend: local',
@@ -71,8 +71,7 @@ function modelYaml({ gateway, token, slots, setups }: { gateway: string; token: 
   const routeOf = (slot: Slot) => providers[slot.provider].route({ gateway, token, model: slot.model, contextLength: slot.contextLength })
   const main = lines({ route: routeOf(slots.primary), model: 'default', indent: 2 })
   const helpers = AUXILIARY.map(([slot, task]) => `  ${task}:\n${lines({ route: routeOf(slots.helpers[slot]), model: 'model', indent: 4 })}`)
-  const fallback = slots.fallback ? [`fallback_providers:\n  - ${lines({ route: routeOf(slots.fallback), model: 'model', indent: 4 }).trimStart()}`] : []
-  return [`model:\n${main}`, `auxiliary:\n${helpers.join('\n')}`, ...fallback, ...setups.filter(Boolean)].join('\n')
+  return [`model:\n${main}`, `auxiliary:\n${helpers.join('\n')}`, ...setups.filter(Boolean)].join('\n')
 }
 
 function lines({ route, model, indent }: { route: Route; model: 'default' | 'model'; indent: number }): string {

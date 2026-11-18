@@ -12,8 +12,8 @@ const catalogs = {
   openai: [on('gpt-5.5'), on('gpt-5.5-mini', 'fast')],
   xai: [],
 }
-const slots = (choice: { model?: string; fallback?: string | null; helpers?: { compress?: string | null; title?: string | null; review?: string | null } } = {}) =>
-  resolveSlots({ model: choice.model ?? 'claude:sonnet', fallback: choice.fallback ?? null, helpers: choice.helpers ?? {}, catalog: (provider) => catalogs[provider] })
+const slots = (choice: { model?: string; helpers?: { compress?: string | null; title?: string | null; review?: string | null } } = {}) =>
+  resolveSlots({ model: choice.model ?? 'claude:sonnet', helpers: choice.helpers ?? {}, catalog: (provider) => catalogs[provider] })
 const agent = { id: 'ag_chantest', name: 'Dev', instructions: '# Dev', slots: slots(), net: 3, code_execution: true, web_browser: false }
 const render = (channels: RenderedChannel[]) => renderFiles({ agent, ownerName: 'owner', token: 'ag_chantest.token', channelKey: 'k'.repeat(32), channels, connections: [] })
 
@@ -87,11 +87,11 @@ test('an API-key provider is a custom endpoint at the gateway with the agent tok
   assert.deepEqual(JSON.parse(files['auth.json']), { version: 1, providers: {} })
 })
 
-test('a fallback model is one fallback_providers entry, and its provider\'s setup is rendered even when the main model is on another provider', (t) => {
+test('a helper on another provider gets that provider\'s setup, and there is no fallback', (t) => {
   config.modelMode = 'claude'
   t.after(() => { config.modelMode = 'test' })
-  const files = renderFiles({ agent: { ...agent, slots: slots({ model: 'openai:gpt-5.5', fallback: 'claude:haiku' }) }, ownerName: 'owner', token: 'ag_chantest.token', channelKey: 'k'.repeat(32), channels: [], connections: [] })
-  assert.match(files['config.yaml'], /fallback_providers:\n {2}- model: haiku\n {4}provider: claude-subscription-directsdk-experimental\n/)
+  const files = renderFiles({ agent: { ...agent, slots: slots({ model: 'openai:gpt-5.5', helpers: { compress: 'claude:haiku' } }) }, ownerName: 'owner', token: 'ag_chantest.token', channelKey: 'k'.repeat(32), channels: [], connections: [] })
+  assert.doesNotMatch(files['config.yaml'], /fallback_providers/)
   assert.match(files['config.yaml'], /relay_upstream: http:\/\/10\.200\.3\.1:8081\/u\/anthropic/)
   assert.match(files['.env'], /^CLAUDE_CODE_OAUTH_TOKEN=ag_chantest\.token$/m)
 })

@@ -24,7 +24,7 @@ function fake(): Fake {
 }
 
 function agent(name: string): Agent {
-  return { id: `ag_${name.toLowerCase()}`, object: 'agent', name, ownerId: 'usr_a', ownerName: 'me', model: 'claude:sonnet', fallbackModel: null, helperModels: { compress: null, title: null, review: null }, wanted: 'running', status: 'running', health: 'answering', healthDetail: '', summary: '', net: 0, instructions: '', codeExecution: false, browser: false, canEdit: true, createdAt: AT }
+  return { id: `ag_${name.toLowerCase()}`, object: 'agent', name, ownerId: 'usr_a', ownerName: 'me', model: 'claude:sonnet', helperModels: { compress: null, title: null, review: null }, wanted: 'running', status: 'running', health: 'answering', healthDetail: '', summary: '', net: 0, instructions: '', codeExecution: false, browser: false, canEdit: true, createdAt: AT }
 }
 
 function connection({ id, kind, name, secret }: { id: string; kind: ConnectionKind; name: string; secret?: string }): Connection & { secret?: string } {
@@ -132,12 +132,12 @@ test('agents from every computer come back tagged; connections are merged by kin
   assert.deepEqual((await openhut.computers.list()).map((each) => [each.id, each.online]), [['local', true], ['beelink', false]])
 })
 
-test('agents from a computer on an older runtime still show (old model names, no fallback or helper models)', async () => {
+test('agents from a computer on an older runtime still show (old model names, no helper models)', async () => {
   const { runtimes, openhut } = setup(['local', 'beelink'])
-  const { fallbackModel: _fallback, helperModels: _helpers, ...old } = agent('Juniper')
+  const { helperModels: _helpers, ...old } = agent('Juniper')
   runtimes.beelink.agents = [{ ...old, model: 'sonnet' } as unknown as Agent]
   const [found] = await openhut.agents.list()
-  assert.deepEqual([found?.name, found?.computer, found?.model, found?.fallbackModel, found?.helperModels], ['Juniper', 'beelink', 'claude:sonnet', null, { compress: null, title: null, review: null }])
+  assert.deepEqual([found?.name, found?.computer, found?.model, found?.helperModels], ['Juniper', 'beelink', 'claude:sonnet', { compress: null, title: null, review: null }])
 })
 
 test('adding a keyed connection to another computer moves it sealed to that computer; a sign-in connection opens its sign-in there instead', async () => {

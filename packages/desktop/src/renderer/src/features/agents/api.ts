@@ -50,7 +50,7 @@ export function useCreateAgent() {
   })
 }
 
-const RESTARTS = ['instructions', 'model', 'fallbackModel', 'helperModels', 'codeExecution', 'browser'] as const
+const RESTARTS = ['instructions', 'model', 'helperModels', 'codeExecution', 'browser'] as const
 const RESTART_SHOWN_MS = 1800
 
 export function useRestarting(agentId: string) {

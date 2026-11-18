@@ -13,8 +13,8 @@ const fake = createServer((req, res) => {
   if (req.url === '/openrouter/api/v1/key') return reply(ok ? 200 : 401, ok ? { data: {} } : { error: { message: 'no' } })
   if (req.url === '/openrouter/api/v1/models') {
     return reply(200, { data: [
-      { id: 'anthropic/claude-opus-5.5', name: 'Claude Opus 5.5', created: 30, context_length: 500000, pricing: { prompt: '0.000015', completion: '0.000075' }, architecture: { output_modalities: ['text'] } },
-      { id: 'anthropic/claude-haiku-5.5', name: 'Claude Haiku 5.5', created: 10, context_length: 1000000, pricing: { prompt: '0.0000001', completion: '0.0000005' } },
+      { id: 'anthropic/claude-opus-5.5', name: 'Anthropic: Claude Opus 5.5', created: 30, context_length: 500000, pricing: { prompt: '0.000015', completion: '0.000075' }, architecture: { output_modalities: ['text'] } },
+      { id: 'anthropic/claude-sonnet-5.5', name: 'Anthropic: Claude Sonnet 5.5', created: 10, context_length: 1000000, pricing: { prompt: '0.0000001', completion: '0.0000005' } },
       { id: 'black-forest/flux', name: 'Flux', created: 31, architecture: { output_modalities: ['image'] } },
       { id: 'openrouter/auto', name: 'Auto', created: 20, context_length: 2000000, pricing: { prompt: '-1', completion: '-1' } },
     ] })
@@ -59,7 +59,7 @@ test('a refused key is a 400 on apiKey and saves nothing', async () => {
   assert.equal(providerService.get({ id: 'xai' }).connected, false)
 })
 
-test('OpenRouter: the key is checked first, image models are left out, prices are dollars per million tokens and only the hand-picked models start on', async () => {
+test('OpenRouter: the key is checked first, image models are left out, names lose the lab prefix, prices are dollars per million tokens and only the hand-picked models start on', async () => {
   hits.length = 0
   const provider = await providerService.update({ actor, id: 'openrouter', patch: { apiKey: GOOD } })
   assert.deepEqual(hits, ['GET /openrouter/api/v1/key', 'GET /openrouter/api/v1/models'])
@@ -67,7 +67,7 @@ test('OpenRouter: the key is checked first, image models are left out, prices ar
   assert.deepEqual([opus?.name, opus?.contextLength, opus?.inputPrice, opus?.outputPrice, opus?.tier], ['Claude Opus 5.5', 500000, 15, 75, 'big'])
   assert.equal(provider.models.some((model) => model.id === 'black-forest/flux'), false)
   assert.equal(provider.models.find((model) => model.id === 'openrouter/auto')?.inputPrice, null)
-  assert.deepEqual(provider.models.filter((model) => model.on).map((model) => model.id), ['anthropic/claude-haiku-5.5'])
+  assert.deepEqual(provider.models.filter((model) => model.on).map((model) => model.id), ['anthropic/claude-opus-5.5', 'anthropic/claude-sonnet-5.5'])
 })
 
 test('switching models keeps to the list, and only a connected provider can be switched', async () => {
@@ -90,7 +90,7 @@ test('an agent may be given only a model that is connected, listed and switched 
   providerService.requireUsable({ key: 'openai:gpt-0', param: 'model' })
   assert.throws(() => providerService.requireUsable({ key: 'openai:gpt-3', param: 'model' }), /switched off/)
   assert.throws(() => providerService.requireUsable({ key: 'openai:nope', param: 'model' }), /doesn't list nope/)
-  assert.throws(() => providerService.requireUsable({ key: 'xai:grok-5', param: 'fallbackModel' }), /isn't connected on this computer/)
+  assert.throws(() => providerService.requireUsable({ key: 'xai:grok-5', param: 'model' }), /isn't connected on this computer/)
   assert.throws(() => providerService.requireUsable({ key: 'nonsense', param: 'model' }), /provider:model/)
 })
 

@@ -4,16 +4,15 @@ import type { HelperModels, HelperSlot } from '@openhut/common/agents/agent.ts'
 const DEFAULT_SLOT: Slot = { provider: 'claude', model: 'sonnet', contextLength: null }
 
 export type Slot = { provider: ProviderId; model: string; contextLength: number | null }
-export type Slots = { primary: Slot; fallback: Slot | null; helpers: Record<HelperSlot | 'approval', Slot> }
+export type Slots = { primary: Slot; helpers: Record<HelperSlot | 'approval', Slot> }
 export type Catalog = (provider: ProviderId) => ProviderModel[]
 
-export function resolveSlots({ model, fallback, helpers, catalog }: { model: string; fallback: string | null; helpers: Partial<HelperModels>; catalog: Catalog }): Slots {
+export function resolveSlots({ model, helpers, catalog }: { model: string; helpers: Partial<HelperModels>; catalog: Catalog }): Slots {
   const primary = slotOf({ key: model, catalog }) ?? DEFAULT_SLOT
   const automatic = autoFor({ primary, catalog })
   const helper = (key: string | null | undefined) => (key ? slotOf({ key, catalog }) : undefined) ?? automatic
   return {
     primary,
-    fallback: fallback ? slotOf({ key: fallback, catalog }) ?? null : null,
     helpers: { compress: helper(helpers.compress), title: helper(helpers.title), review: helper(helpers.review), approval: automatic },
   }
 }
