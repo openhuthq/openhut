@@ -3,7 +3,7 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-const RELAYS = { phone: ['wss://cloud.openhut.dev'], 'phone-debug': ['wss://cloud.openhut.dev', 'ws://127.0.0.1:8790'] }
+const RELAYS = { phone: ['wss://cloud.openhut.dev'], 'phone-debug': ['wss://cloud.openhut.dev', process.env.OPENHUT_RELAY_URL ?? 'ws://127.0.0.1:8790'] }
 
 function policy(relays: string[]): Plugin {
   const csp = [
