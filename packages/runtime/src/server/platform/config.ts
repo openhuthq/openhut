@@ -14,6 +14,7 @@ export const config = {
   telemetry: process.env.OPENHUT_MODEL !== 'test',
   telemetryUrl: `${process.env.OPENHUT_URL ?? 'https://openhut.dev'}/api/events`,
   socket: process.env.OPENHUT_SOCKET,
+  installKind: installKindOf(process.env.OPENHUT_SOCKET),
   clientKeySha256: process.env.OPENHUT_CLIENT_KEY_SHA256,
   modelMode: process.env.OPENHUT_MODEL === 'test' ? 'test' as const : 'claude' as const,
   agentApi: process.env.OPENHUT_AGENT_API,
@@ -37,6 +38,11 @@ export const config = {
   started: Math.floor(Date.now() / 1000),
 }
 delete process.env.OPENHUT_SECRET
+
+function installKindOf(socket: string | undefined): 'mac' | 'linux' | 'server' {
+  if (!socket) return 'server'
+  return process.platform === 'darwin' ? 'mac' : 'linux'
+}
 
 function fileOr(url: URL, fallback: string): string {
   try { return readFileSync(url, 'utf8').trim() || fallback } catch { return fallback }

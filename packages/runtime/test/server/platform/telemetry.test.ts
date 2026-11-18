@@ -46,6 +46,7 @@ test('the daily check-in reports buckets, never an email, and a batch goes to th
   const body = JSON.parse(String(init.body))
   assert.equal(url, config.telemetryUrl)
   assert.equal(body.instance, INSTANCE)
+  assert.equal(body.kind, 'server')
   assert.deepEqual(body.events.map(({ name, properties }: { name: string; properties: unknown }) => ({ name, properties })), [
     { name: 'instance_active', properties: { agents: '0', people: '2-5' } },
   ])
