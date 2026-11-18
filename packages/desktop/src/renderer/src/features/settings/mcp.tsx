@@ -20,10 +20,10 @@ export function McpSettings() {
         const computer = computers?.find((one) => one.id === each.computer)
         return <Row key={each.computer} icon={computer ? <ComputerMark computer={computer} /> : <I icon={CommandLineIcon} size={20} className="text-hue-teal" />} title={nameOf({ computers, id: each.computer })}
           note={<><code className="block font-mono text-[12px]/[16px] [overflow-wrap:anywhere]">{home(each.command)}</code>{each.computer !== 'local' && <span className="block">Works while OpenHut is open on this {HERE}.</span>}</>}>
-          <CopyButton text={each.command} label="Copy" className={PILL} />
+          <CopyButton text={each.command} label="Copy" plain className={PILL} />
         </Row>
       })}
-      {bridge && <Row icon={<I icon={CommandLineIcon} size={20} className="text-hue-teal" />} title="Other apps" note="Paste this path into any app that runs MCP servers."><CopyButton text={bridge} label="Copy path" className={PILL} /></Row>}
+      {bridge && <Row icon={<I icon={CommandLineIcon} size={20} className="text-hue-teal" />} title="Other apps" note="Paste this path into any app that runs MCP servers."><CopyButton text={bridge} label="Copy" plain className={PILL} /></Row>}
     </Rows>
   </>
 }

@@ -56,7 +56,7 @@ function PrefSwitch({ icon, hue, name, title, note }: { icon: IconSvgElement; hu
 function DataFolder() {
   const machine = useMachine()
   if (!machine.data) return <ErrorNote message={machine.error?.message} />
-  return <Row icon={<I icon={Folder01Icon} size={20} className="text-hue-blue" />} title={home(machine.data.folder)} note={bytes(machine.data.size)}>
+  return <Row icon={<I icon={Folder01Icon} size={20} className="text-hue-blue" />} title="Data folder" note={`${home(machine.data.folder)} · ${bytes(machine.data.size)}`}>
     <Button variant="secondary" className={PILL} onClick={() => void desktop?.showFolder()}>{WORDS.showFolder}</Button>
   </Row>
 }

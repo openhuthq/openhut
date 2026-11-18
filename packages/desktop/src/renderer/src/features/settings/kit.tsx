@@ -13,13 +13,15 @@ export function Intro({ children }: { children: ReactNode }) {
   return <p className="m-0 -mb-5 px-2.5 text-[13px]/[18px] text-mute">{children}</p>
 }
 
-const ROW = 'flex min-h-12 w-full items-center gap-4 rounded-lg border-0 bg-transparent px-2.5 py-[9px] text-left text-ink no-underline'
+const ROW = 'flex min-h-12 w-full items-start gap-4 rounded-lg border-0 bg-transparent px-2.5 py-[9px] text-left text-ink no-underline'
+
+const TOP = 'flex max-h-[34px] shrink-0 items-center self-stretch'
 
 export function Row({ icon, title, note, href, onClick, disabled, children }: { icon: ReactNode; title: ReactNode; note?: ReactNode; href?: string; onClick?: () => void; disabled?: boolean; children?: ReactNode }) {
   const body = <>
-    <span className="grid size-6 shrink-0 place-items-center">{icon}</span>
-    <span className="flex min-w-0 flex-1 flex-col"><span className="truncate text-[13px]/[18px]">{title}</span>{note && <span className="text-[12px]/[16px] text-mute">{note}</span>}</span>
-    {children && <span className="flex shrink-0 items-center gap-2 text-[13px]">{children}</span>}
+    <span className={cn(TOP, 'w-6 justify-center')}>{icon}</span>
+    <span className="flex min-w-0 flex-1 flex-col self-center"><span className="truncate text-[13px]/[18px]">{title}</span>{note && <span className="text-[12px]/[16px] text-mute">{note}</span>}</span>
+    {children && <span className={cn(TOP, 'gap-2 text-[13px]')}>{children}</span>}
   </>
   if (href) return <a href={href} className={cn(ROW, 'hover:bg-hover')}>{body}</a>
   if (onClick) return <Button type="button" variant="bare" disabled={disabled} className={cn(ROW, 'not-disabled:hover:bg-hover')} onClick={onClick}>{body}</Button>
@@ -31,7 +33,7 @@ export function Rows({ children }: { children: ReactNode }) {
 }
 
 export function Chevron() {
-  return <I icon={ArrowRight01Icon} size={16} className="text-mute" />
+  return <I icon={ArrowRight01Icon} size={16} className="-mr-[5px] text-mute" />
 }
 
 export function Command({ text }: { text: string }) {

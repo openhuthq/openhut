@@ -3,7 +3,7 @@ import { Button, type ButtonVariants } from '@/components/ui/button'
 import { ICONS } from '@/components/icons'
 import { copyText } from '@/lib/clipboard'
 
-export function CopyButton({ text, label, variant = 'secondary', size = 'sm', className }: { text: string; label: string; className?: string } & ButtonVariants) {
+export function CopyButton({ text, label, plain = false, variant = 'secondary', size = 'sm', className }: { text: string; label: string; plain?: boolean; className?: string } & ButtonVariants) {
   const [copied, setCopied] = useState(false)
   const copy = () => copyText(text).then((ok) => {
     if (!ok) return
@@ -12,7 +12,8 @@ export function CopyButton({ text, label, variant = 'secondary', size = 'sm', cl
   })
   return (
     <Button type="button" variant={variant} size={size} className={className} onClick={copy}>
-      {copied ? <span className="inline-flex w-3 animate-[copy-pop_.2s_ease-out] justify-center">{ICONS.check}</span> : ICONS.copy}
+      {copied && <span className="inline-flex w-3 animate-[copy-pop_.2s_ease-out] justify-center">{ICONS.check}</span>}
+      {!copied && !plain && ICONS.copy}
       {label}
     </Button>
   )
