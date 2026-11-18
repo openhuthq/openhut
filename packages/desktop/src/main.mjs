@@ -596,11 +596,9 @@ function follow({ run, index, read }) {
   return () => clearInterval(tick)
 }
 
-function noteOf({ done, total, unit }) {
-  if (unit === 'layers') return `${done} of ${total} parts`
-  const mb = (bytes) => Math.round(bytes / 1e6).toLocaleString('en-US')
-  if (!total) return `${mb(done)} MB`
-  return done >= total ? 'Setting up' : `${mb(done)} of ${mb(total)} MB`
+function noteOf({ done, total }) {
+  if (!total) return 'Downloading'
+  return done >= total ? 'Setting up' : `Downloading · ${Math.floor((done / total) * 100)}%`
 }
 
 function dockerUp() {
