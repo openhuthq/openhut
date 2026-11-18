@@ -101,7 +101,7 @@ fi
 
 [ "$(uname -s)" = Linux ] || die "OpenHut runs only on Linux (Debian, Ubuntu or Alpine; x86_64 or arm64), not $(uname -s). On a Mac or Windows, run this inside a Linux VM or on a Linux server."
 [ "$(id -u)" = 0 ] || die "run as root:  curl -fsSL $OPENHUT_URL | sudo sh"
-ENROLLED="$(sed -n 's/^OPENHUT_CLIENT_KEY_SHA256=//p' /etc/openhut/env 2>/dev/null)"
+ENROLLED="$(sed -n 's/^OPENHUT_CLIENT_KEY_SHA256=//p' /etc/openhut/env 2>/dev/null || true)"
 CLIENT_KEY="${OPENHUT_CLIENT_KEY_SHA256:-$ENROLLED}"
 printf '%s' "$CLIENT_KEY" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
 if command -v flock >/dev/null 2>&1; then
