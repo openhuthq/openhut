@@ -6,7 +6,7 @@ status: accepted
 ## Decision
 Owner, 2026-11-17 (design: https://claude.ai/artifact/CYW1Bob7nLCDAvfFjy2E7t). No reusable secret inside an agent's sandbox. The gateway (:8081) is also a broker: `/u/<name>/*` forwards to a fixed upstream, by swapping base URLs, not by intercepting TLS. The agent's own gateway token is the stand-in wherever a client wants a key. The gateway checks it, strips every auth header the agent sent, checks the path against the upstream's list, adds the real key from the sealed store, streams the reply and writes an audit row.
 
-One module, `packages/runtime/src/server/gateway/broker.ts`; the model providers' `Upstream`s are built in `models/providers.ts` (one entry per provider) and Telegram's stays here: an `Upstream` per service (`name`, fixed `origin`, `allow`, `credential`, `apply`, optional `observe`) and one `brokerService.forward()`.
+One module, `packages/runtime/src/server/gateway/broker.ts`; the model providers' `Upstream`s are built in `models/providers/` (one file per provider) and Telegram's stays here: an `Upstream` per service (`name`, fixed `origin`, `allow`, `credential`, `apply`, optional `observe`) and one `brokerService.forward()`.
 
 | Upstream | How the agent is pointed at it | Passes | Real key |
 | --- | --- | --- | --- |

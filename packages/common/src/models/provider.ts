@@ -17,6 +17,10 @@ export const PROVIDERS = [
   { id: 'xai', kind: 'key', name: 'xAI', short: 'xAI', blurb: 'Grok models with your xAI key', keysAt: 'console.x.ai', keyHint: 'xai-…' },
 ] as const satisfies readonly { id: ProviderId; kind: ProviderKind; name: string; short: string; blurb: string; keysAt: string | null; keyHint: string | null }[]
 
+export type ProviderInfo = (typeof PROVIDERS)[number]
+
+export const providerInfo = (id: ProviderId): ProviderInfo => PROVIDERS.find((each) => each.id === id) ?? PROVIDERS[0]
+
 export const ModelKey = z.string().check(z.regex(/^(claude|codex|openrouter|openai|xai):\S{1,200}$/, 'Use provider:model, like claude:sonnet.'))
 export type ModelKey = z.infer<typeof ModelKey>
 
@@ -42,6 +46,8 @@ export const ProviderModel = z.object({
   outputPrice: z.nullable(z.number()),
 })
 export type ProviderModel = z.infer<typeof ProviderModel>
+
+export const fastModelOf = (models: ProviderModel[]) => models.find((model) => model.on && model.tier === 'fast')
 
 export const Provider = z.object({
   id: ProviderId,

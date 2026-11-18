@@ -10,11 +10,11 @@ test('context windows read as K or M', () => {
   assert.deepEqual([context(200_000), context(1_000_000), context(256_000)], ['200K', '1M', '256K'])
 })
 
-test('a key model says its provider, context and prices; a subscription model says the plan and its note', () => {
+test('a key model says its context and prices; a subscription model says its note', () => {
   const router = provider('openrouter', [])
-  assert.equal(describe({ provider: router, model: model('x', { contextLength: 500_000, inputPrice: 15, outputPrice: 75 }) }), 'OpenRouter · 500K context · $15 / $75 per M')
-  assert.equal(describe({ provider: router, model: model('x') }), 'OpenRouter')
-  assert.equal(describe({ provider: provider('claude', [], 'subscription'), model: model('opus', { note: 'Most capable' }) }), 'Claude subscription · Most capable')
+  assert.equal(describe({ provider: router, model: model('x', { contextLength: 500_000, inputPrice: 15, outputPrice: 75 }) }), '500K context · $15 / $75 per M')
+  assert.equal(describe({ provider: router, model: model('x') }), '')
+  assert.equal(describe({ provider: provider('claude', [], 'subscription'), model: model('opus', { note: 'Most capable' }) }), 'Most capable')
 })
 
 test('Automatic is the first switched-on fast model of the same provider, else the main model', () => {
@@ -52,4 +52,5 @@ test('disconnecting says who stops answering and who only loses a fallback or a 
   assert.equal(consequence({ agents: [agent('Ops', 'claude:haiku', 'openrouter:a/b')], id: 'openrouter' }), 'Ops uses it as a fallback or helper model, and that part stops working until you pick another.')
   assert.equal(consequence({ agents: [agent('Juniper', 'openrouter:a/b')], id: 'openrouter' }), 'Juniper uses its models, and stops answering until you pick others.')
   assert.equal(consequence({ agents, id: 'xai' }), 'No agent uses its models yet.')
+  assert.equal(consequence({ agents: [agent('Old', 'sonnet')], id: 'claude' }), 'Old uses its models, and stops answering until you pick others.')
 })

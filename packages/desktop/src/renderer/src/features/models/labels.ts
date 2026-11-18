@@ -1,17 +1,12 @@
-import { PROVIDERS, splitModelKey, type Provider, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
-import type { BrandName } from '@/components/brand-icons'
-
-export const BRAND: Record<ProviderId, BrandName> = { claude: 'claude', codex: 'codex', openrouter: 'openrouter', openai: 'openai', xai: 'xai' }
-
-export const infoOf = (id: ProviderId) => PROVIDERS.find((each) => each.id === id) ?? PROVIDERS[0]
+import { fastModelOf, modelKey, splitModelKey, type Provider, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
 
 export function context(tokens: number) {
   return tokens >= 1_000_000 ? `${tokens / 1_000_000}M` : `${Math.round(tokens / 1000)}K`
 }
 
 export function describe({ provider, model }: { provider: Provider; model: ProviderModel }) {
-  if (provider.kind === 'subscription') return [provider.name, model.note].filter(Boolean).join(' · ')
-  const bits: string[] = [infoOf(provider.id).short]
+  if (provider.kind === 'subscription') return model.note ?? ''
+  const bits: string[] = []
   if (model.contextLength) bits.push(`${context(model.contextLength)} context`)
   if (model.inputPrice !== null && model.outputPrice !== null) bits.push(`$${model.inputPrice} / $${model.outputPrice} per M`)
   return bits.join(' · ')
@@ -31,9 +26,9 @@ export function nameOf({ providers, key }: { providers: Provider[] | undefined; 
 
 export function automatic({ providers, key }: { providers: Provider[] | undefined; key: string }) {
   const { split, provider } = find({ providers, key })
-  const fast = provider?.models.find((each) => each.on && each.tier === 'fast')
+  const fast = provider && fastModelOf(provider.models)
   if (!split || !fast || !provider) return { key, name: nameOf({ providers, key }), same: true }
-  return { key: `${provider.id}:${fast.id}`, name: fast.name, same: false }
+  return { key: modelKey({ provider: provider.id, model: fast.id }), name: fast.name, same: false }
 }
 
 export function matches({ model, query }: { model: ProviderModel; query: string }) {
@@ -53,7 +48,7 @@ export function plural({ count: value, one, many }: { count: number; one: string
 type Using = { name: string; model: string; fallbackModel: string | null; helperModels: Record<string, string | null> }
 
 export function consequence({ agents, id }: { agents: Using[]; id: ProviderId }) {
-  const uses = (key: string | null | undefined) => !!key?.startsWith(`${id}:`)
+  const uses = (key: string | null | undefined) => !!key && splitModelKey(key)?.provider === id
   const verb = (names: string[]) => names.length === 1 ? 'uses' : 'use'
   const main = agents.filter((agent) => uses(agent.model)).map((agent) => agent.name)
   const side = agents.filter((agent) => !uses(agent.model) && (uses(agent.fallbackModel) || Object.values(agent.helperModels).some(uses))).map((agent) => agent.name)

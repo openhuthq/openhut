@@ -6,6 +6,8 @@ status: accepted
 ## Decision
 Owner, 2026-11-18 (design prototype: Settings, Models and the agent panel). An agent's model is no longer one of four ids but a **model key**, `<provider>:<model>` (`claude:sonnet`, `codex:gpt-5.5`, `openrouter:google/gemini-3.5-flash`, `openai:gpt-5.5`, `xai:grok-5`). Five providers: the Claude and Codex subscriptions, and the OpenRouter, OpenAI and xAI API keys. After you paste a key, the runtime asks the provider which models it serves; you switch on the ones agents may use. Each agent has a model, a Fallback model and three Helper models (summarising long chats, naming chats, learning from chats; Automatic picks a fast model of the same provider as its main one).
 
+Owner, 2026-11-18 (later): the picker is a **nested dropdown**. It's a menu of providers, and each provider's models open in a submenu beside it (Base UI `Menu.SubmenuRoot`). It is not one flat list, and not a drill-in step that replaces the list. `ModelPicker`'s props stay the same. "Automatic" (the first switched-on fast model of the main model's provider) is decided in one place, `fastModelOf` in `common`, so what the app shows can't drift from what the runtime writes.
+
 This reverses "Codex is coming soon" in `app-aggregates-runtimes.md`: Codex is live, on the computer where you signed in (see Limits).
 
 ## The modules
@@ -13,14 +15,14 @@ One idea per module, each hiding what changes when a provider is added.
 
 | Module | Interface | Hides |
 | --- | --- | --- |
-| `common/models/provider.ts` | `PROVIDERS` (id, kind, name, blurb, where the key is made), `Provider`, `ProviderModel`, `UpdateProvider`, `splitModelKey`, `modelKey` | What the app and the runtime both need to say about a provider. Nothing about how to reach it. |
-| `runtime/server/models/providers.ts` | `providers[id]`: `connected()`, `list()`, `upstream`, `route()`, `setup()` | Everything that is *one provider*: its credential, how its models are fetched and parsed, the broker upstream (origin, allowed paths, how the real key is added) and the Hermes config for it. **A new provider is one entry here and one row in `PROVIDERS`.** |
+| `common/models/provider.ts` | `PROVIDERS` and `providerInfo(id)` (id, kind, name, blurb, where the key is made), `Provider`, `ProviderModel`, `UpdateProvider`, `splitModelKey`, `modelKey`, `fastModelOf` | What the app and the runtime both need to say about a provider, the only reader and writer of model keys, and the one rule for Automatic. Nothing about how to reach a provider. |
+| `runtime/server/models/providers/` | `providers[id]` from `index.ts`: `connected()`, `listModels()`, `upstream`, `route()`, `setup()` | One file per provider (`claude.ts`, `codex.ts`, `openrouter.ts`, `openai.ts`, `xai.ts`) holds everything that is *that provider*: its credential, how its models are fetched and parsed, the broker upstream (origin, allowed paths, how the real key is added) and the Hermes config. `shared.ts` has the types, `keyed()` for API-key providers and the HTTP helpers. **A new provider is one file here, one line in `index.ts` and one row in `PROVIDERS`.** |
 | `runtime/server/models/model-slots.ts` | `resolveSlots({ model, fallback, helpers, catalog })` | A pure function from an agent's choices to the six concrete slots Hermes needs (primary, fallback, compression, title, review, approval), including what Automatic means. |
 | `runtime/server/models/provider-service.ts` + controller | `list`, `get`, `update` (`apiKey` and `models` switches), `disconnect`, `refresh` on `/api/providers` | Where keys and model lists are stored (`install_setting`), the on/off state, and that connecting *tests* the key by listing the models with it. |
 | `gateway/broker.ts` | `upstreams` map | Now built from `providers[*].upstream` plus Telegram. The forwarding code did not change. |
-| `agents/hermes-files.ts` | `renderFiles({ agent: { slots } })` | Writes each slot with the provider's own `route()` and each used provider's `setup()` once (env, plugin settings, `auth.json`). No `if (provider === …)` outside `providers.ts`. |
+| `agents/hermes-files.ts` | `renderFiles({ agent: { slots } })` | Writes each slot with the provider's own `route()` and each used provider's `setup()` once (env, plugin settings, `auth.json`). No `if (provider === …)` outside `models/providers/`. |
 | `packages/client` `providers` | `list`, `connect`, `refresh`, `disconnect`, `setModels`, `mergeProviders` | "Put it on these computers": one action fanned out to each runtime, and the merge of per-computer answers into the one list Settings shows. |
-| renderer `features/models/` | `useProviders`, `ModelPicker` | The grouped, searchable picker used for Model, Fallback and the three Helpers. |
+| renderer `features/models/` | `useProviders`, `ModelPicker` | The picker used for Model, Fallback and the three Helpers: a menu of providers with each provider's models in a submenu (Base UI `Menu.SubmenuRoot`, filtered with `Menu.FilterProvider` past 8 models). |
 
 ## How it works
 - **Keys.** An API key is sealed in `install_setting` (`provider_key_<id>`) and never leaves the runtime. The agent's own gateway token is the stand-in everywhere (`credentials-broker.md`): the key providers are Hermes `custom` endpoints whose `base_url` is `<gateway>/u/<provider>/v1` and whose `api_key` is the agent token. The broker passes `POST /v1/chat/completions`, `POST /v1/responses` and `GET /v1/models` and adds the real `Authorization`. So an agent never holds a provider key, and rotating one is a database write.
@@ -48,7 +50,7 @@ Checked in the Hermes source at tag `v0.23.1` (the image's version), not run liv
 - **Provider "kinds" or plugin loading.** Five entries in a map. A sixth is a sixth entry.
 - **Codex on a second computer.** See Limits.
 - **Real prices for OpenAI and xAI.** Their model endpoints don't list prices, so those rows show the provider and nothing invented.
-- **Fast-model ratings from the providers.** `tier` is a name heuristic (`mini`, `nano`, `flash`, `haiku`, `lite`, `fast`, `small` count as fast). It only decides what Automatic helpers use.
+- **Fast-model ratings from the providers.** `tier` is a name heuristic (`mini`, `nano`, `flash`, `haiku`, `lite`, `fast`, `small` count as fast, as whole words: `gemini` contains `mini`, and before that rule every Gemini model counted as fast). It only decides what Automatic helpers use.
 
 ## Limits
 - **Codex is per computer.** OpenAI's refresh tokens are single use (`credentials-broker.md`), so copying one to a second computer, as Claude's seat is copied, makes whichever refreshes second fail. The sign-in runs on This Mac and `account.sync` still pushes only Claude. The runtime endpoints (`/api/admin/codex-sign-ins`) work on any computer, so a per-computer sign-in is the way to add it later.
@@ -64,7 +66,7 @@ Checked in the Hermes source at tag `v0.23.1` (the image's version), not run liv
 - Keys that end with a real-looking string work; anything shorter than 8 characters is refused by the API before it reaches the fake.
 
 ## Where things are
-`common/src/models/provider.ts`; `runtime/src/server/models/{providers,model-slots,provider-service,provider-controller}.ts`; `packages/client` `providers` and `mergeProviders`; renderer `features/models/` (labels, api, ModelPicker, HelperRows), `features/agents/model-rows.tsx` (panel rows and the Helper models sheet, `/agents/:id/helpers`), `features/settings/models.tsx` (the Models tab; the open step is `?open=<provider>` in the URL, `?open=seat` is still Claude's sign-in dialog).
+`common/src/models/provider.ts`; `runtime/src/server/models/providers/*.ts`, `runtime/src/server/models/{model-slots,provider-service,provider-controller}.ts`; `packages/client` `providers` and `mergeProviders`; renderer `features/models/` (labels, api, ModelPicker, HelperRows), `features/agents/model-rows.tsx` (panel rows and the Helper models sheet, `/agents/:id/helpers`), `features/settings/models.tsx` (the Models tab; the open step is `?open=<provider>` in the URL, `?open=seat` is still Claude's sign-in dialog).
 
 ## Gotchas
 - The Settings step for a provider is derived from state, not the URL: `?open=openrouter` is Connect while the provider isn't connected and Manage once it is, so a successful connect needs no navigation and the "Found N models" notice lives in the step's own state.

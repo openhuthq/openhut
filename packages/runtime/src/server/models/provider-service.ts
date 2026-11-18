@@ -3,7 +3,7 @@ import { HttpError } from '../platform/http-error.ts'
 import { record } from '../platform/events.ts'
 import { settings, type StoredCatalog } from '../platform/settings.ts'
 import type { Caller } from '../team/identity.ts'
-import { providers, tierOf, type ListedModel } from './providers.ts'
+import { providers, tierOf, type ListedModel } from './providers/index.ts'
 
 const FIRST_ON = 8
 

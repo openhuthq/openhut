@@ -35,3 +35,13 @@ export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof
 export function DropdownMenuSeparator({ className, ...props }: ComponentProps<typeof Menu.Separator>) {
   return <Menu.Separator className={cn('-mx-1 my-1 h-px bg-hair', className)} {...props} />
 }
+
+export const DropdownMenuSub = Menu.SubmenuRoot
+export const DropdownMenuFilter = Menu.FilterProvider
+export const DropdownMenuInput = Menu.Input
+export const DropdownMenuList = Menu.List
+export const DropdownMenuEmpty = Menu.Empty
+
+export function DropdownMenuSubTrigger({ className, size, ...props }: ComponentProps<typeof Menu.SubmenuTrigger> & Pick<VariantProps<typeof menuItemVariants>, 'size'>) {
+  return <Menu.SubmenuTrigger className={cn(menuItemVariants({ size }), 'data-popup-open:bg-tint', className)} {...props} />
+}
