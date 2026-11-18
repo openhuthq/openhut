@@ -68,6 +68,7 @@ export function createOpenHut(platform: Platform) {
   const accessSeen = new Map<string, Held>()
   let signedLast: Access | undefined
   let queue: Promise<unknown> = Promise.resolve()
+  let syncing: Promise<Access | undefined> | undefined
   const listeners = new Set<() => void>()
   let timer: ReturnType<typeof setInterval> | undefined
   let last = ''
@@ -325,7 +326,7 @@ export function createOpenHut(platform: Platform) {
   }
 
   const access = {
-    sync: (): Promise<Access | undefined> => serial(async () => {
+    sync: (): Promise<Access | undefined> => syncing ??= serial(async () => {
       const owner = await platform.owner?.()
       if (!owner) return undefined
       const rows = await across({ seen: accessSeen, read: held })
@@ -333,7 +334,7 @@ export function createOpenHut(platform: Platform) {
       const list = await reconcile({ owner, best, rows })
       if (list) await carry({ list, rows })
       return list
-    }),
+    }).finally(() => { syncing = undefined }),
     async list(): Promise<Device[]> {
       const owner = await platform.owner?.()
       const list = owner

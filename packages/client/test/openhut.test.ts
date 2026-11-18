@@ -392,6 +392,17 @@ test('allowing a computer adds it to the list\'s computers by its relay key, and
   assert.equal((await openhut.access.sync())?.version, 2)
 })
 
+test('syncs asked while one is running share it, so polling can\'t pile them up ahead of Allow when a computer is slow', async () => {
+  const { runtimes, openhut } = setup(['local', 'office'], { owner: true })
+  await openhut.access.sync()
+  runtimes.office.calls.length = 0
+  const lists = await Promise.all([1, 2, 3, 4, 5].map(() => openhut.access.sync()))
+  assert.equal(runtimes.office.calls.filter((each) => each === 'GET /api/access').length, 1)
+  assert.equal(new Set(lists.map((each) => each?.version)).size, 1)
+  await openhut.access.sync()
+  assert.equal(runtimes.office.calls.filter((each) => each === 'GET /api/access').length, 2)
+})
+
 test('a computer that has a relay key is listed by it, not by its transfer key', async () => {
   const { runtimes, openhut } = setup(['local'], { owner: true })
   runtimes.local.relayKey = '12'.repeat(32)
