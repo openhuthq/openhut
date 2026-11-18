@@ -1,12 +1,12 @@
 # OpenHut
 
 Self-hosted agents: the OpenHut app (Mac and Linux) is a thin window over several runtimes, one on this computer and one
-on each computer you add (`brain/decisions/app-aggregates-runtimes.md`). A runtime runs many Hermes agents, each in its
+on each computer you add (`private/brain/decisions/app-aggregates-runtimes.md`). A runtime runs many Hermes agents, each in its
 own sandbox (a microVM on a desktop, gVisor on a server), with their own Slack app and WhatsApp number. Agents reach team
 data only through the runtime's gateway, which holds every key and checks each agent's grants on every call. You manage
 it from the app or from your own AI assistant over the control MCP. No sign-in and no people: the app reaches the local
 runtime on a 0600 Unix socket, and a remote one over the tailnet with the key it enrolled when the computer was added.
-Scope and decisions: `brain/decisions/openhut-v1-scope.md`.
+Scope and decisions: `private/brain/decisions/openhut-v1-scope.md`.
 
 ## Packages
 
@@ -18,19 +18,19 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `agents/` (agents, grants, their Hermes files), `channels/`, `connections/`, `gateway/` (the agents' MCP gateway and
   key broker on :8081), `mcp/` (the control MCP on `/mcp`, whose tools call the API in-process), `admin/`, and
   `integrations/<service>/`. `src/agentd/` is the root helper: the only process that starts agents (gVisor, microsandbox
-  or memory, `brain/decisions/sandbox-module.md`), on a Unix socket. Tests mirror them in `test/server/` and `test/agentd/`.
-- **`packages/desktop`** — `@openhut/desktop`, the Mac and Linux app (`brain/decisions/desktop-app.md`): Electron main (`src/main.mjs`, starts agentd and the server,
+  or memory, `private/brain/decisions/sandbox-module.md`), on a Unix socket. Tests mirror them in `test/server/` and `test/agentd/`.
+- **`packages/desktop`** — `@openhut/desktop`, the Mac and Linux app (`private/brain/decisions/desktop-app.md`): Electron main (`src/main.mjs`, starts agentd and the server,
   serves the renderer on `app://openhut`) and the React dashboard in `src/renderer` (Vite to `dist/renderer`, TanStack
-  Query), which calls `/api/*` on `app://openhut`; the main process forwards it to the runtime's socket. Tailwind v4 with shared components in `src/renderer/src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
+  Query), which calls `/api/*` on `app://openhut`; the main process forwards it to the runtime's socket. Tailwind v4 with shared components in `src/renderer/src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`private/brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.
 - **`packages/e2e`** — `@openhut/e2e`, the end-to-end run: a bare Linux server in Docker, the curl install of a remote
   runtime with an enrolled key, a tampered upgrade, the upgrade and a restart. Results go to `packages/e2e/results/` (gitignored).
 - **`packages/docs`** — `@openhut/docs`, the docs at openhut.dev/docs: Fumadocs on TanStack Start, prerendered. MDX in
-  `content/docs`, real dashboard screenshots in `public/screenshots`. Notes: `brain/openhut-site.md`.
-- **`packages/site`** — `@openhut/site`, openhut.dev: `install.sh` for curl, the release tarball, the home page, the brand page
+  `content/docs`, real dashboard screenshots in `public/screenshots`. Notes: `private/brain/openhut-site.md`.
+- **`private/site`** — `@openhut/site`, openhut.dev, in the private submodule (see Private half below): `install.sh` for curl, the release tarball, the home page, the brand page
   and the built docs, served by a Cloudflare Worker with static assets (`wrangler.jsonc`, `src/worker.ts`) that
   `.github/workflows/deploy.yml` deploys on every push to `main`. The e2e run serves its releases with the same Worker
-  under `wrangler dev`. Deploys and the internal instance: `brain/openhut-deploy.md`.
+  under `wrangler dev`. Deploys and the internal instance: `private/brain/openhut-deploy.md`.
 
 `install/` is the installer of a remote runtime and what it runs on the server (firewall, systemd units, boot script); `scripts/release.sh`
 builds what `openhut.dev` serves; `vendor/` is the pinned Hermes plugin.
@@ -38,17 +38,30 @@ builds what `openhut.dev` serves; `vendor/` is the pinned Hermes plugin.
 ## Conventions (Skyfleet's)
 
 - The API is resource-oriented with Stripe's shapes: flat collections, `{ object: 'list', url, hasMore, data }`,
-  `{ id, object, deleted: true }`, `{ error: { type, message, param? } }` (`brain/decisions/openhut-api-follows-skyfleet.md`).
+  `{ id, object, deleted: true }`, `{ error: { type, message, param? } }` (`private/brain/decisions/openhut-api-follows-skyfleet.md`).
 - A module is `<name>-service.ts` (a deep `xService = {}`, the only layer that touches the database or agentd) and
   `<name>-controller.ts` (one-line handlers, request schemas at the end as `const FooRequest = { schema }`).
   `app.ts` only registers controllers. `platform/config.ts` is the only file that reads env vars.
 - Outside services live in `integrations/<service>/`; core reaches them by kind.
 - The dashboard reads server data with `useQuery`/`useMutation` and writes responses back with `setQueryData`; forms
   are uncontrolled; which dialog is open lives in the URL.
-- Skyfleet's `brain/coding-style.md` applies in full: no comments in executable code (reasons go in `brain/`, see
-  `brain/openhut-server.md`), exported functions with more than one parameter take one object, no nested ternaries,
+- Skyfleet's `brain/coding-style.md` applies in full: no comments in executable code (reasons go in `private/brain/`, see
+  `private/brain/openhut-server.md`), exported functions with more than one parameter take one object, no nested ternaries,
   no `any`, only `HttpError` throws with sentences for messages, tests mirror source paths, logging through evlog.
 - Single quotes, no semicolons, `.ts` imports; Node 22.18+ runs the TypeScript directly.
+
+## Private half
+
+`private/` is the submodule `openhuthq/openhut-private`: the site (`private/site`) and the brain (`private/brain`). It
+isn't published; everything outside it is MIT and builds and tests without it, so nothing outside `private/` may import
+from it. Why, and how deploys reach it: `private/brain/decisions/private-submodule.md`.
+
+- `npm install` checks it out in a fresh clone or worktree and installs the site's own deps (`scripts/private.sh`); a
+  clone without access skips it quietly. The site is its own npm package with its own lock, not a workspace, so the
+  public lock never mentions it. Run its checks with `npm --prefix private/site run typecheck` and `test`.
+- A change inside `private/` is two commits: commit in `private/` on its `main` and push, then commit the new pointer
+  here. `git push` here pushes `private/` first (`push.recurseSubmodules=on-demand`, which `scripts/private.sh` sets).
+  A brain-only change needs no pointer bump unless the parent should pin it.
 
 ## Shipping
 
@@ -75,7 +88,7 @@ its data in `~/Library/Application Support/OpenHut Dev`, apart from the installe
 macOS 14+ `release/mac-arm64/OpenHut.app`, `release/OpenHut-arm64.dmg` and the versioned zip. It signs with the Developer ID
 in the login keychain (hardened runtime, `build/entitlements.mac.plist`) and notarizes only when `APPLE_API_KEY`,
 `APPLE_API_KEY_ID` and `APPLE_API_ISSUER` are set. The packaged app runs the real model unless `OPENHUT_MODEL` is set.
-Icon sources: `build/icon.svg`, `build/background.svg`. Gotchas: `brain/openhut-gotchas.md` (Mac app, Linux app).
+Icon sources: `build/icon.svg`, `build/background.svg`. Gotchas: `private/brain/openhut-gotchas.md` (Mac app, Linux app).
 
 On x86_64 Linux, `npm -w @openhut/desktop run dist:linux` builds `release/OpenHut-x64.AppImage` and `release/openhut-x64.deb`
 with the same runtime (agents in microsandbox VMs on KVM); it needs a Linux machine, not a cross-build from the Mac.

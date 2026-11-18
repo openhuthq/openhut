@@ -32,11 +32,19 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      - name: Check out private/
+        env:
+          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
       - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - run: npm --prefix private/site run typecheck && npm --prefix private/site test
       - name: Release files
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -52,7 +60,7 @@ jobs:
           fi
           OUT=dist/site/edge BASE=https://openhut.dev/edge scripts/release.sh
       - name: Deploy openhut.dev
-        run: npm -w @openhut/site run deploy
+        run: npm --prefix private/site run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Check that openhut.dev serves this release

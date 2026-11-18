@@ -15,7 +15,7 @@ stop_mirror() { [ -z "${MIRROR:-}" ] && return; kill -INT "$MIRROR" 2>/dev/null;
 mirror() {
   stop_mirror
   curl -fs -o /dev/null http://127.0.0.1:8099/ && fail ":8099 already answers; stop the mirror an earlier run left behind"
-  (cd packages/site && WRANGLER_SEND_METRICS=false exec ../../node_modules/.bin/wrangler dev --ip 0.0.0.0 --port 8099 --inspector-port 0 \
+  (cd private/site && WRANGLER_SEND_METRICS=false exec node_modules/.bin/wrangler dev --ip 0.0.0.0 --port 8099 --inspector-port 0 \
     --assets "../../$1" --show-interactive-dev-session=false --log-level warn) >>"$R/mirror.log" 2>&1 &
   MIRROR=$!
   i=0; until curl -fs -o /dev/null http://127.0.0.1:8099/; do i=$((i+1)); [ $i -gt 150 ] && fail "mirror of $1 on :8099"; sleep 0.2; done

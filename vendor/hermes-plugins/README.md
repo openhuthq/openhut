@@ -9,7 +9,7 @@ installer downloads (pinned version and checksum) and agentd mounts read-only to
 
 Upstream refuses `ANTHROPIC_BASE_URL` and always sends the relay's Messages requests to `https://api.anthropic.com`.
 OpenHut needs them to go to its gateway, which swaps the agent's stand-in token for the real seat
-(`brain/decisions/credentials-broker.md`). The patch adds one plugin setting, `relay_upstream`
+(`private/brain/decisions/credentials-broker.md`). The patch adds one plugin setting, `relay_upstream`
 (`plugins.entries.claude-subscription-directsdk-experimental.settings.relay_upstream` in `config.yaml`):
 
 - `directsdk_setup.py`: `relay_upstream()` reads the setting (empty means Anthropic) and `relay_gate()` builds the
