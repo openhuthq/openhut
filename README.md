@@ -9,9 +9,9 @@
 <p>Self-improving agents in Slack and WhatsApp, on your own server.</p>
 
 <p>
-<a href="https://openhut.dev/download/mac?from=github"><img src="https://img.shields.io/badge/Download_for_Mac-0b0b0b?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac" height="36"></a>&nbsp;
-<a href="https://openhut.dev/download/linux?from=github"><img src="https://img.shields.io/badge/Download_for_Linux-0b0b0b?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux" height="36"></a>&nbsp;
-<a href="https://openhut.dev/docs"><img src="https://img.shields.io/badge/Get_started-f2f2f2?style=for-the-badge" alt="Get started" height="36"></a>
+<a href="https://openhut.dev/download/mac?from=github"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/mac-dark.png"><img src="docs/readme/buttons/mac-light.png" alt="Download for Mac" height="48"></picture></a>
+<a href="https://openhut.dev/download/linux?from=github"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/linux-dark.png"><img src="docs/readme/buttons/linux-light.png" alt="Download for Linux" height="48"></picture></a>
+<a href="https://openhut.dev/docs"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/start-dark.png"><img src="docs/readme/buttons/start-light.png" alt="Get started" height="48"></picture></a>
 </p>
 
 <p><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a></p>
