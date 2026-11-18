@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { connect, TunnelError, type Tunnel } from '@openhut/tunnel'
+import { connect, TunnelError, type Tunnel, type TunnelSocket } from '@openhut/tunnel'
 import { Access, verify } from '@openhut/common/access/access.ts'
 import type { Platform, StoredComputer } from '@openhut/client'
 import { deviceKey, isPhone, onLink, phoneName, saved, wipe, type DeviceKey } from '@/lib/native'
@@ -118,6 +118,12 @@ export async function join({ code, onDigits }: { code: string; onDigits: (digits
 export const phone = {
   enter: () => set({ status: 'paired', link: undefined }),
   forgetLink: () => set({ link: undefined }),
+}
+
+export async function phoneSocket({ computer, path }: { computer: string; path: string }): Promise<TunnelSocket> {
+  const stored = (await phonePlatform.store.computers()).find((each) => each.id === computer)
+  if (!stored) throw new TunnelError({ type: 'closed', message: 'That computer isn\'t on this phone\'s list.' })
+  return (await tunnelTo(stored)).socket(path)
 }
 
 export function usePhone(): PhoneState {

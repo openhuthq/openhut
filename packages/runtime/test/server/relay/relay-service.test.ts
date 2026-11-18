@@ -7,6 +7,7 @@ import { request } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
+import websocket from '@fastify/websocket'
 import Fastify from 'fastify'
 import { connect, generateKeyPair, toHex, type TunnelError } from '@openhut/tunnel'
 import { startRelay, waitFor } from '@openhut/tunnel/test/relay.ts'
@@ -44,6 +45,11 @@ app.get('/stream', async (_req, reply) => {
   await released
   reply.raw.end('data: two\n\n')
 })
+await app.register(websocket)
+app.get('/live', { websocket: true }, (socket, req) => {
+  void who(req).then((caller) => socket.send(JSON.stringify({ local: caller.local })), () => socket.close(4401, 'Not the owner.'))
+  socket.on('message', (data, binary) => socket.send(data, { binary }))
+})
 await app.register(invitationController, { prefix: '/api/invitations' })
 await app.ready()
 
@@ -76,6 +82,23 @@ test('a streamed answer arrives in chunks, the first before the route has finish
   release()
   assert.equal((await reader.read()).value, 'data: two\n\n')
   assert.equal((await reader.read()).done, true)
+  tunnel.close()
+})
+
+test('a listed device\'s socket through the relay opens a real WebSocket on the runtime as the owner, never local, and echoes both ways', async () => {
+  const tunnel = await connect({ relayUrl: relay.url, computer, key: phone })
+  const socket = tunnel.socket('/live')
+  const got: (string | ArrayBuffer)[] = []
+  const closes: number[] = []
+  socket.onmessage = (event) => got.push(event.data)
+  socket.onclose = (event) => closes.push(event.code)
+  socket.send('hello')
+  socket.send(new Uint8Array(100_000).fill(9))
+  await waitFor(() => got.length === 3)
+  assert.deepEqual(got.slice(0, 2), [JSON.stringify({ local: false }), 'hello'])
+  assert.deepEqual(new Uint8Array(got[2] as ArrayBuffer), new Uint8Array(100_000).fill(9))
+  socket.close()
+  assert.deepEqual(closes, [1000])
   tunnel.close()
 })
 

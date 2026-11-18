@@ -151,3 +151,58 @@ test('the computer pings the relay and, when the pongs stop, drops the socket an
   tunnel.close()
   await ctx.close()
 })
+
+test('an unknown device cannot open a socket', async () => {
+  const ctx = await startComputer()
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: newDevice().key })
+  const socket = tunnel.socket('/live')
+  const closes: number[] = []
+  socket.onclose = event => closes.push(event.code)
+  await waitFor(() => closes.length === 1)
+  assert.deepEqual(closes, [1006])
+  assert.deepEqual(ctx.sockets, [])
+  await ctx.close()
+})
+
+test('a removed device cannot open a socket, and removing a device closes the sockets it has open', async () => {
+  const { ctx, device, tunnel } = await client()
+  ctx.statuses.set(device.hex, 'removed')
+  const refused = tunnel.socket('/refused')
+  const refusals: { code: number; reason: string }[] = []
+  refused.onclose = event => refusals.push(event)
+  await waitFor(() => refusals.length === 1)
+  assert.deepEqual(refusals, [{ code: 4403, reason: 'This device was removed.' }])
+  assert.deepEqual(ctx.sockets, [])
+  await ctx.close()
+
+  const again = await client()
+  const socket = again.tunnel.socket('/live')
+  const got: unknown[] = []
+  const closes: { code: number; reason: string }[] = []
+  socket.onmessage = event => got.push(event.data)
+  socket.onclose = event => closes.push(event)
+  socket.send('before')
+  await waitFor(() => got.length === 1)
+  again.ctx.statuses.set(again.device.hex, 'removed')
+  socket.send('after')
+  await waitFor(() => closes.length === 1)
+  assert.deepEqual(got, ['before'])
+  assert.deepEqual(closes, [{ code: 4403, reason: 'This device was removed.' }])
+  await waitFor(() => again.ctx.sockets.includes('closed /live'))
+  await assert.rejects(again.tunnel.fetch('/again'), closed)
+  await again.ctx.close()
+})
+
+test('a message from the device over 1 MiB closes that socket with 1009', async () => {
+  const { ctx, tunnel } = await client()
+  const socket = tunnel.socket('/live')
+  const closes: { code: number; reason: string }[] = []
+  socket.onclose = event => closes.push(event)
+  socket.send(new Uint8Array(1024 * 1024 + 1))
+  await waitFor(() => closes.length === 1)
+  assert.deepEqual(closes, [{ code: 1009, reason: 'That message is too big.' }])
+  await waitFor(() => ctx.sockets.includes('closed /live'))
+  assert.equal((await tunnel.fetch('/after')).status, 200)
+  tunnel.close()
+  await ctx.close()
+})

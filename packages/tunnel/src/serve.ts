@@ -1,4 +1,4 @@
-import { FrameType, MAX_REQUEST_BODY, REQUEST_HEADERS, chunks, decodeFrame, decodeJson, encodeFrame, encodeJson, isRecord, stringRecord, type Frame } from './frames.ts'
+import { FrameType, MAX_REQUEST_BODY, MAX_SOCKET_MESSAGE, REQUEST_HEADERS, chunks, decodeFrame, decodeJson, encodeFrame, encodeJson, isRecord, messageChunks, messageJoiner, stringRecord, type Frame, type SocketMessage } from './frames.ts'
 import { fromHex, responder, toHex, type ComputerKey, type Transport } from './noise.ts'
 
 export type DeviceStatus = 'client' | 'removed' | 'unknown'
@@ -6,6 +6,8 @@ export type Hello = { type: 'hello'; proof: string; name: string; kind: 'client'
 export type Decision = { type: 'accepted'; access: object } | { type: 'declined' }
 export type Invited = { accept: () => AsyncIterable<Decision> }
 export type TunnelRequest = { device: string; method: string; path: string; headers: Record<string, string>; body: ReadableStream<Uint8Array> }
+export type SocketPeer = { send: (data: SocketMessage) => void; close: () => void }
+export type TunnelSocketRequest = { device: string; path: string; headers: Record<string, string> } & Pick<SocketPeer, 'send'> & { close: (input: { code: number; reason: string }) => void }
 export type ServeInput = {
   relayUrl: string
   computerId: string
@@ -14,8 +16,10 @@ export type ServeInput = {
   device: (key: string) => DeviceStatus
   invited: (input: { key: string; proof: string; handshakeHash: Uint8Array; hello: Hello }) => Promise<Invited | null>
   handle: (input: TunnelRequest) => Promise<Response>
+  socket: (input: TunnelSocketRequest) => Promise<SocketPeer>
   keepalive?: { every: number; within: number }
 }
+type Socket = { peer: Promise<SocketPeer>; join: ReturnType<typeof messageJoiner> }
 type Incoming = { method: string; path: string; headers: Record<string, string>; parts: Uint8Array<ArrayBuffer>[]; size: number }
 type Session = {
   id: string
@@ -23,6 +27,7 @@ type Session = {
   transport?: Transport
   first: boolean
   requests: Map<number, Incoming>
+  sockets: Map<number, Socket>
   readers: Set<ReadableStreamDefaultReader<Uint8Array>>
 }
 
@@ -45,6 +50,10 @@ function parseHello(value: Record<string, unknown>): Hello | null {
   return { type, proof, name, kind, computer: { id: computer.id, name: computer.name } }
 }
 
+function allowedHeaders(headers: unknown): Record<string, string> {
+  return Object.fromEntries(Object.entries(stringRecord(headers)).filter(([name]) => REQUEST_HEADERS.includes(name)))
+}
+
 export function serve(input: ServeInput): { close: () => void } {
   const sessions = new Map<string, Session>()
   let socket: WebSocket | undefined
@@ -60,6 +69,8 @@ export function serve(input: ServeInput): { close: () => void } {
     if (!session) return
     sessions.delete(id)
     for (const reader of session.readers) reader.cancel().catch(() => {})
+    for (const { peer } of session.sockets.values()) peer.then(open => open.close(), () => {})
+    session.sockets.clear()
   }
 
   const kill = (id: string) => {
@@ -119,16 +130,58 @@ export function serve(input: ServeInput): { close: () => void } {
     }
   }
 
-  const begin = ({ session, stream, payload }: { session: Session; stream: number; payload: Uint8Array }) => {
+  const admitted = ({ session, removed }: { session: Session; removed: Frame }) => {
     const status = input.device(session.key)
-    if (status === 'removed') {
-      send(session, { type: FrameType.responseError, stream, payload: encodeJson({ type: 'removed', message: 'This device was removed.' }) })
-      return kill(session.id)
-    }
+    if (status === 'client') return true
+    if (status === 'removed') send(session, removed)
+    kill(session.id)
+    return false
+  }
+
+  const removedSocket = (stream: number): Frame => ({ type: FrameType.socketClose, stream, payload: encodeJson({ code: 4403, reason: 'This device was removed.' }) })
+
+  const begin = ({ session, stream, payload }: { session: Session; stream: number; payload: Uint8Array }) => {
+    if (!admitted({ session, removed: { type: FrameType.responseError, stream, payload: encodeJson({ type: 'removed', message: 'This device was removed.' }) } })) return
     const head = decodeJson(payload)
-    if (status !== 'client' || session.requests.has(stream) || typeof head.method !== 'string' || typeof head.path !== 'string' || !head.path.startsWith('/')) return kill(session.id)
-    const headers = Object.fromEntries(Object.entries(stringRecord(head.headers)).filter(([name]) => REQUEST_HEADERS.includes(name)))
-    session.requests.set(stream, { method: head.method, path: head.path, headers, parts: [], size: 0 })
+    if (session.requests.has(stream) || typeof head.method !== 'string' || typeof head.path !== 'string' || !head.path.startsWith('/')) return kill(session.id)
+    session.requests.set(stream, { method: head.method, path: head.path, headers: allowedHeaders(head.headers), parts: [], size: 0 })
+  }
+
+  const shut = ({ session, stream, code, reason }: { session: Session; stream: number; code: number; reason: string }) => {
+    const open = session.sockets.get(stream)
+    if (!open) return
+    session.sockets.delete(stream)
+    send(session, { type: FrameType.socketClose, stream, payload: encodeJson({ code, reason }) })
+    open.peer.then(peer => peer.close(), () => {})
+  }
+
+  const opening = ({ session, stream, payload }: { session: Session; stream: number; payload: Uint8Array }) => {
+    if (!admitted({ session, removed: removedSocket(stream) })) return
+    const head = decodeJson(payload)
+    if (session.sockets.has(stream) || typeof head.path !== 'string' || !head.path.startsWith('/')) return kill(session.id)
+    const toDevice = (data: SocketMessage) => {
+      if (!session.sockets.has(stream) || !admitted({ session, removed: removedSocket(stream) })) return
+      for (const chunk of messageChunks(data)) send(session, { type: FrameType.socketMessage, stream, payload: chunk })
+    }
+    const closed = ({ code, reason }: { code: number; reason: string }) => {
+      if (!session.sockets.delete(stream)) return
+      send(session, { type: FrameType.socketClose, stream, payload: encodeJson({ code, reason }) })
+    }
+    const peer = input.socket({ device: session.key, path: head.path, headers: allowedHeaders(head.headers), send: toDevice, close: closed })
+    session.sockets.set(stream, { peer, join: messageJoiner() })
+    peer.catch(() => closed({ code: 1011, reason: 'The computer could not open this socket.' }))
+  }
+
+  const fromDevice = ({ session, stream, type, payload }: Frame & { session: Session }) => {
+    const open = session.sockets.get(stream)
+    if (!open || !admitted({ session, removed: removedSocket(stream) })) return
+    if (type === FrameType.socketClose) {
+      session.sockets.delete(stream)
+      return void open.peer.then(peer => peer.close(), () => {})
+    }
+    if (open.join.size() + payload.byteLength - 1 > MAX_SOCKET_MESSAGE) return shut({ session, stream, code: 1009, reason: 'That message is too big.' })
+    const data = open.join.add(payload)
+    if (data !== undefined) open.peer.then(peer => peer.send(data), () => {})
   }
 
   const receive = (session: Session, { type, stream, payload }: Frame) => {
@@ -136,6 +189,8 @@ export function serve(input: ServeInput): { close: () => void } {
     session.first = false
     if (type === FrameType.control && first) return void greet({ session, hello: parseHello(decodeJson(payload)) })
     if (type === FrameType.requestHead) return begin({ session, stream, payload })
+    if (type === FrameType.socketOpen) return opening({ session, stream, payload })
+    if (type === FrameType.socketMessage || type === FrameType.socketClose) return fromDevice({ session, stream, type, payload })
     const incoming = session.requests.get(stream)
     if (type === FrameType.requestBody && incoming) {
       incoming.size += payload.byteLength
@@ -179,7 +234,7 @@ export function serve(input: ServeInput): { close: () => void } {
     }
     if (!isRecord(message) || typeof message.session !== 'string' || !/^[0-9a-f]{32}$/.test(message.session)) return
     const id = message.session
-    if (message.type === 'open') sessions.set(id, { id, key: '', first: true, requests: new Map(), readers: new Set() })
+    if (message.type === 'open') sessions.set(id, { id, key: '', first: true, requests: new Map(), sockets: new Map(), readers: new Set() })
     if (message.type === 'close') drop(id)
   }
 
