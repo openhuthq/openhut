@@ -34,7 +34,6 @@ export type TrackEvent = z.infer<typeof TrackEvent>
 const VALUE = /^[A-Za-z0-9][\w.+-]{0,31}$/
 const MAX_COUNT = 10_000_000
 const NAME = /^[^\u0000-\u001f\u007f]{1,64}$/
-const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/
 const INSTANCE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const VERSION = /^[\w.+-]{1,32}$/
 
@@ -68,7 +67,6 @@ export function telemetryBatch(value: unknown): TelemetryBatch | undefined {
 }
 
 function patternOf(key: string): RegExp {
-  if (key.endsWith('_email')) return EMAIL
   if (key.endsWith('_name')) return NAME
   return VALUE
 }

@@ -7,7 +7,7 @@ initLogger({ env: { service: 'openhut' }, pretty: process.stdout.isTTY === true,
 export { log }
 
 type Target = { type: string; id: string; [field: string]: unknown }
-export type AppEvent = { name: string; actor?: { id: string; email: string }; target?: Target; properties?: Record<string, unknown>; at?: number }
+export type AppEvent = { name: string; actor?: { id: string }; target?: Target; properties?: Record<string, unknown>; at?: number }
 
 const MAX_QUEUE = 500
 const queue: TelemetryEvent[] = []
@@ -34,13 +34,13 @@ export function emit(event: AppEvent): void {
 }
 
 function logEvent({ name, actor, target, properties }: AppEvent): void {
-  log.info({ ...properties, event: name, actor: actor?.id, actorName: actor?.email, target })
+  log.info({ ...properties, event: name, actor: actor?.id, target })
 }
 
 function queueTelemetry(event: AppEvent): void {
   const mapped = TELEMETRY_OF[event.name]?.(event)
   if (!mapped || !usageDataOn() || queue.length >= MAX_QUEUE) return
-  const sent = telemetryEvent({ name: mapped[0], properties: withoutEmails(mapped[1]), at: event.at })
+  const sent = telemetryEvent({ name: mapped[0], properties: mapped[1], at: event.at })
   if (sent) queue.push(sent)
 }
 
@@ -55,8 +55,4 @@ export function setUsageData(on: boolean): void {
 
 export function takeTelemetry(): TelemetryEvent[] {
   return queue.splice(0, TELEMETRY_MAX_BATCH)
-}
-
-function withoutEmails(properties: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(properties).filter(([key]) => !key.endsWith('_email')))
 }

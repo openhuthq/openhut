@@ -16,8 +16,8 @@ const CHANNELS = ['slack', 'whatsapp', 'telegram']
 
 export async function startTelemetry(): Promise<void> {
   setUsageData(settings.usageData())
-  if (!config.telemetry) return
   const instance = settings.instanceId() ?? await settings.setInstanceId(randomUUID())
+  if (!config.telemetry) return
   log.info({ event: 'telemetry.started', url: config.telemetryUrl, on: usageDataOn(), hint: 'Turn usage data on or off in Admin.' })
   setInterval(() => void sendTelemetry(instance), SEND_EVERY_MS).unref()
   let since = Date.now() / 1000
