@@ -3,6 +3,7 @@ import { connect, TunnelError, type Tunnel } from '@openhut/tunnel'
 import { Access, verify } from '@openhut/common/access/access.ts'
 import type { Platform, StoredComputer } from '@openhut/client'
 import { deviceKey, isPhone, onLink, phoneName, saved, wipe, type DeviceKey } from '@/lib/native'
+import { mayRetry, type Failed } from '@/lib/backoff'
 
 export type PhoneState = { status: 'loading' | 'join' | 'paired' | 'removed'; link: { code: string } | undefined }
 type Held = { list: Access; relayUrl: string }
@@ -11,6 +12,7 @@ type Code = { computer: { id: string; key: string }; owner: string; secret: stri
 const HEX = /^[0-9a-f]{64}$/
 const listeners = new Set<() => void>()
 const tunnels = new Map<string, Promise<Tunnel>>()
+const failures = new Map<string, Failed & { error: unknown }>()
 let state: PhoneState = { status: 'loading', link: undefined }
 let held: Held | undefined
 let key: Promise<DeviceKey | undefined> | undefined
@@ -49,11 +51,14 @@ function myKey(): Promise<DeviceKey> {
 function tunnelTo(computer: StoredComputer): Promise<Tunnel> {
   const open = tunnels.get(computer.id)
   if (open) return open
+  const failed = failures.get(computer.id)
+  if (failed && !mayRetry({ now: Date.now(), failed })) return Promise.reject(failed.error)
   const target = held?.list.computers.find((each, index) => each.id === computer.id || (computer.id === 'local' && !index))
   if (!held || !target) return Promise.reject(new TunnelError({ type: 'closed', message: `${computer.name} isn't on this phone's list.` }))
   const relayUrl = held.relayUrl
   const made = myKey().then((mine) => connect({ relayUrl, computer: target, key: mine }))
   tunnels.set(computer.id, made)
+  made.then(() => failures.delete(computer.id), (error: unknown) => failures.set(computer.id, { since: Date.now(), tries: (failed?.tries ?? 0) + 1, error }))
   const forget = () => { if (tunnels.get(computer.id) === made) tunnels.delete(computer.id) }
   made.then(async (tunnel) => {
     for await (const _message of tunnel.control) continue
@@ -65,6 +70,7 @@ async function removed(): Promise<void> {
   wiping ??= (async () => {
     for (const open of tunnels.values()) void open.then((tunnel) => tunnel.close(), () => undefined)
     tunnels.clear()
+    failures.clear()
     held = undefined
     key = undefined
     await wipe()
@@ -148,4 +154,5 @@ if (isPhone()) {
     set({ status: found ? 'paired' : 'join' })
   }, () => set({ status: 'join' }))
   onLink((url) => { if (url.startsWith('openhut://join')) set({ link: { code: url } }) })
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') failures.clear() })
 }
