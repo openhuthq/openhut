@@ -1,7 +1,11 @@
 import { useLayoutEffect, useSyncExternalStore } from 'react'
 
+const MOVED = 'openhut:navigate'
+
 export function navigate(to: string, replace = false) {
-  navigation.navigate(to, { history: replace ? 'replace' : 'push' })
+  if (replace) history.replaceState(null, '', to)
+  else history.pushState(null, '', to)
+  dispatchEvent(new Event(MOVED))
 }
 
 export function usePath() {
@@ -25,16 +29,31 @@ export function Redirect({ to }: { to: string }) {
   return null
 }
 
+export function inAppPath({ href, target, download, here }: { href: string; target: string; download: boolean; here: string }): string | undefined {
+  if (!href || target || download) return undefined
+  const url = new URL(href, here)
+  const now = new URL(here)
+  if (url.protocol !== now.protocol || url.host !== now.host || url.pathname.startsWith('/api/')) return undefined
+  if (url.hash && url.pathname === now.pathname && url.search === now.search) return undefined
+  return `${url.pathname}${url.search}${url.hash}`
+}
+
 function subscribe(listener: () => void) {
-  navigation.addEventListener('currententrychange', listener)
-  return () => navigation.removeEventListener('currententrychange', listener)
+  addEventListener('popstate', listener)
+  addEventListener(MOVED, listener)
+  return () => {
+    removeEventListener('popstate', listener)
+    removeEventListener(MOVED, listener)
+  }
 }
 
-function inApp(event: NavigateEvent) {
-  if (event.navigationType !== 'push' && event.navigationType !== 'replace') return false
-  return event.canIntercept && !event.hashChange && event.downloadRequest === null && !event.formData && !new URL(event.destination.url).pathname.startsWith('/api/')
+function follow(event: MouseEvent) {
+  const link = event.target instanceof Element ? event.target.closest('a') : null
+  if (!link || event.defaultPrevented || event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+  const to = inAppPath({ href: link.getAttribute('href') ?? '', target: link.target, download: link.hasAttribute('download'), here: location.href })
+  if (!to) return
+  event.preventDefault()
+  navigate(to)
 }
 
-navigation.addEventListener('navigate', (event) => {
-  if (inApp(event)) event.intercept({ focusReset: 'manual', scroll: 'manual' })
-})
+if (typeof document !== 'undefined') document.addEventListener('click', follow)
