@@ -73,6 +73,7 @@ let tray
 let blocker
 let setup
 let booted
+let downloaded = null
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 crashReporter.start({ uploadToServer: false })
 
@@ -132,6 +133,11 @@ handle('show-folder', () => shell.openPath(HOME))
 handle('prefs', prefsNow)
 handle('set-prefs', setPrefs)
 handle('first-run', (start) => firstRun(start === true))
+handle('update.state', () => ({ current: app.getVersion(), ready: downloaded }))
+handle('update.install', () => {
+  if (downloaded) setImmediate(() => updater.autoUpdater.quitAndInstall())
+  return { installing: !!downloaded }
+})
 handle('computers.list', computers)
 handle('computers.add', answer(enroll))
 handle('computers.adopt', answer(adopt))
@@ -648,6 +654,10 @@ function update() {
   const failed = (error) => logger.error(`openhut: update failed: ${error?.stack ?? error}`)
   updater.autoUpdater.logger = logger
   updater.autoUpdater.on('error', failed)
+  updater.autoUpdater.on('update-downloaded', (info) => {
+    downloaded = { version: String(info?.version ?? '') }
+    main?.webContents.send('update.ready', downloaded)
+  })
   updater.autoUpdater.checkForUpdatesAndNotify().catch(failed)
   setInterval(() => updater.autoUpdater.checkForUpdates().catch(failed), 6 * 3600_000)
 }

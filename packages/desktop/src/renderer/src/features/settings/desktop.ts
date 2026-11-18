@@ -6,13 +6,11 @@ export type Tailnet = { state: 'running'; tailnet: string; self: { name: string;
 export type Machine = { chip: string; memory: number; folder: string; size: number }
 export type Prefs = { openAtLogin: boolean; keepAwake: boolean; notifyReplies: boolean; notifyFailures: boolean }
 export type FirstRun = { failed: boolean; agentId: string; steps: [string, string, 'done' | 'now' | 'next' | 'failed'][] }
-export type AppUpdate = { version: string; state: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error'; next?: string; error?: string }
 export type McpCommand = { computer: string; name: string; command: string }
 type Failure = { error: string }
 type Bridge = {
   mcp?: string
   mcpCommands?: () => Promise<McpCommand[]>
-  updates?: { status: () => Promise<AppUpdate>; check: () => Promise<AppUpdate>; install: () => Promise<void> }
   tailnet: () => Promise<Tailnet | Failure>
   machine: () => Promise<Machine | Failure>
   showFolder: () => Promise<string>

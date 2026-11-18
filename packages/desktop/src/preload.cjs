@@ -11,6 +11,11 @@ contextBridge.exposeInMainWorld('openhut', {
   setPrefs: (patch) => ipcRenderer.invoke('set-prefs', patch),
   firstRun: (start) => ipcRenderer.invoke('first-run', start),
   mcpCommands: () => ipcRenderer.invoke('mcp.commands'),
+  update: {
+    state: () => ipcRenderer.invoke('update.state'),
+    install: () => ipcRenderer.invoke('update.install'),
+    onReady: (listener) => ipcRenderer.on('update.ready', (_event, ready) => listener(ready)),
+  },
   onChanged: (listener) => ipcRenderer.on('changed', () => listener()),
   computers: {
     list: () => ipcRenderer.invoke('computers.list'),

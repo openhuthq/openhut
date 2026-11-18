@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { ArrowLeft01Icon, LaptopIcon, NetworkIcon, PlusSignIcon, ServerStack01Icon, SmartPhone01Icon, Tick02Icon, WifiDisconnected02Icon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, LaptopIcon, NetworkIcon, PlusSignIcon, ServerStack01Icon, SmartPhone01Icon, WifiDisconnected02Icon } from '@hugeicons/core-free-icons'
 import type { Computer, OpenHutAgent, TailnetPeer } from '@openhut/client'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -14,9 +13,10 @@ import { useAdoptComputer, useComputerAdmins, useComputers, useRemoveComputer, u
 import { useEnroll, useEnrollments, type Enrollment } from '@/features/computers/enroll'
 import { failureOf, phaseOf } from '@/features/computers/enroll-steps'
 import { Field } from '@/features/connections/sheet'
-import { HERE, desktop, useTailnet } from '@/features/settings/desktop'
+import { HERE, useTailnet } from '@/features/settings/desktop'
 import { byEligibility, stateOf, type Peer, type PeerState } from '@/features/settings/peers'
 import { Chevron, Command, Intro, Row, Rows } from '@/features/settings/kit'
+import { UpdateStatus } from '@/features/settings/update-pill'
 import { formValues } from '@/lib/form'
 import { open, useOpen } from '@/lib/router'
 import { toastError } from '@/lib/toast'
@@ -48,7 +48,7 @@ function ComputerList() {
         const admin = admins?.find((each) => each.computer.id === computer.id)?.admin
         if (admin?.server.update?.status === 'running') return <UpdatingRow key={computer.id} computer={computer} />
         const note = noteOf({ computer, admin, count: agents.filter((agent) => agent.computer === computer.id).length })
-        if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={computer.name} note={note}><AppUpdate /></Row>
+        if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={computer.name} note={note}><UpdateStatus /></Row>
         return <RemovableRow key={computer.id} computer={computer} admin={admin} note={note} agents={agents.filter((agent) => agent.computer === computer.id)} />
       })}
       {enrollments.map((enrollment) => <EnrollRow key={enrollment.peer.dns} enrollment={enrollment} />)}
@@ -74,13 +74,6 @@ function Mark({ icon, dot }: { icon: typeof LaptopIcon; dot?: string }) {
   </span>
 }
 
-function AppUpdate() {
-  const updates = desktop?.updates
-  const status = useQuery({ queryKey: ['app-update'], queryFn: () => updates?.status(), enabled: !!updates })
-  const install = useMutation({ mutationFn: async () => updates?.install(), onError: toastError })
-  if (status.data?.state === 'ready') return <Button variant="primary" className={PILL} disabled={install.isPending} onClick={() => install.mutate()}>Restart to update</Button>
-  return <span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Current</span>
-}
 
 function RemovableRow({ computer, admin, note, agents }: { computer: Computer; admin: Admin | undefined; note: string; agents: OpenHutAgent[] }) {
   const remove = useRemoveComputer()

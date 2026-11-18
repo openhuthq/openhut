@@ -9,6 +9,9 @@ import { useAdmin, useUpdateAdmin } from '@/features/settings/api'
 import { HERE, bytes, desktop, home, useMachine, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
 import { Intro, Row, Rows } from '@/features/settings/kit'
 import { WORDS } from '@/lib/platform'
+import { Hut } from '@/components/hut'
+import { useAppUpdate } from '@/features/settings/update'
+import { UpdateStatus } from '@/features/settings/update-pill'
 import { toastError } from '@/lib/toast'
 
 export function GeneralSettings() {
@@ -19,6 +22,7 @@ export function GeneralSettings() {
     <Rows>
       {desktop && <PrefSwitch icon={Login01Icon} hue="text-hue-green" name="openAtLogin" title="Open at login" note="Agents start in the background, without opening this window." />}
       {desktop && <PrefSwitch icon={Coffee01Icon} hue="text-hue-amber" name="keepAwake" title={`Keep this ${HERE} awake while agents run`} note="The screen can still turn off. Agents can't answer while it sleeps." />}
+      <Version />
     </Rows>
     <Section title="Notify me when">
       <Rows>
@@ -33,6 +37,12 @@ export function GeneralSettings() {
       </Rows>
     </Section>
   </>
+}
+
+function Version() {
+  const state = useAppUpdate().data
+  if (!state) return null
+  return <Row icon={<Hut className="size-5" />} title={`OpenHut ${state.current}`}><UpdateStatus /></Row>
 }
 
 function PrefSwitch({ icon, hue, name, title, note }: { icon: IconSvgElement; hue: string; name: keyof Prefs; title: string; note: string }) {
