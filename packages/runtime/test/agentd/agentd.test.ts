@@ -69,7 +69,11 @@ async function call(request: object): Promise<{ ok: boolean }> {
 }
 
 function policy(id: string): string {
-  return JSON.parse(readFileSync(join(data, 'agent-conf', id, 'browser-policy.json'), 'utf8')).default
+  try {
+    return JSON.parse(readFileSync(join(data, 'agent-conf', id, 'browser-policy.json'), 'utf8')).default
+  } catch {
+    return ''
+  }
 }
 
 async function until(done: () => boolean, ms = 5000) {
