@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 R=packages/e2e/results
 HOST_IMAGE=$(sed -n 's/^HOST_IMAGE=//p' install/install.sh)
 fail() { echo "e2e: $*"; exit 1; }
-healthy() { curl -fsS http://127.0.0.1:8787/health 2>/dev/null | grep -q '"ok":true'; }
+healthy() { in_host curl -fsS http://127.0.0.1:8787/health 2>/dev/null | grep -q '"ok":true'; }
 wait_healthy() { i=0; until healthy; do i=$((i+3)); [ $i -ge "$1" ] && return 1; sleep 3; done; }
 redact() { sed -E 's/(code=)[0-9a-f]+/\1<redacted>/'; }
 in_host() { docker exec openhut-host "$@"; }
