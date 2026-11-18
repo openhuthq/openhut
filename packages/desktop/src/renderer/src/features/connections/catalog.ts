@@ -49,7 +49,7 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
       safe: ['No tool sends mail: agents leave drafts for you.', ...SIGNED_IN('Google')],
     },
     {
-      name: 'drive', short: 'Files you can search, read and create', safeLine: 'Agents can change only files they created.', eta: 'One approval', title: 'Google Drive', blurb: "Search, read and create files through Google's Drive MCP, as the person who connects.",
+      name: 'drive', short: 'Files and folders', safeLine: 'Agents can change only files they created.', eta: 'One approval', title: 'Google Drive', blurb: "Search, read and create files through Google's Drive MCP, as the person who connects.",
       gets: ['search_files and list_recent_files', 'read_file_content and download_file_content', 'create_file and copy_file', 'File metadata and permissions'],
       safe: ['Agents can only change files they created.', ...SIGNED_IN('Google')],
     },
