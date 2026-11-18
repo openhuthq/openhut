@@ -28,7 +28,15 @@ export function reacher({ connect, relayUrl, key, legacy }) {
       throw new Error(error?.type === 'offline' ? `${computer.name} is offline.` : `${computer.name} isn't answering.`)
     }
   }
-  return { reach, drop }
+  const socket = async ({ computer, path }) => {
+    try {
+      return (await open(computer)).socket(path)
+    } catch (error) {
+      drop(computer.id)
+      throw error
+    }
+  }
+  return { reach, socket, drop }
 }
 
 export function relayId(key) {

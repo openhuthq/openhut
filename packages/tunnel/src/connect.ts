@@ -1,20 +1,34 @@
-import { FrameType, REQUEST_HEADERS, chunks, decodeFrame, decodeJson, encodeFrame, encodeJson, stringRecord, type Frame } from './frames.ts'
+import { FrameType, REQUEST_HEADERS, chunks, decodeFrame, decodeJson, encodeFrame, encodeJson, messageChunks, messageJoiner, stringRecord, type Frame, type SocketMessage } from './frames.ts'
 import { fromHex, initiator, pairingProof, sixDigits, type DeviceKey, type Transport } from './noise.ts'
 
 export type Invitation = { secret: string; name: string; kind: 'client' | 'computer'; computer?: { id: string; name: string } }
+export type TunnelSocket = {
+  binaryType: 'arraybuffer'
+  readyState: number
+  onmessage: ((event: { data: string | ArrayBuffer }) => void) | null
+  onclose: ((event: { code: number; reason: string }) => void) | null
+  send: (data: SocketMessage) => void
+  close: (code?: number, reason?: string) => void
+}
 export type Tunnel = {
   fetch: (path: string, init?: RequestInit) => Promise<Response>
+  socket: (path: string) => TunnelSocket
   digits: string
   control: AsyncIterable<Record<string, unknown>>
   close: () => void
+  readonly failure: TunnelError | undefined
 }
+type Closing = { code: number; reason: string }
+type OpenSocket = { receive: (chunk: Uint8Array) => void; ended: (closing: Closing) => void }
 type Pending = { resolve: (response: Response) => void; reject: (error: Error) => void; body?: ReadableStreamDefaultController<Uint8Array> }
 
 export class TunnelError extends Error {
   type: string
-  constructor({ type, message }: { type: string; message: string }) {
+  code: number | undefined
+  constructor({ type, message, code }: { type: string; message: string; code?: number }) {
     super(message)
     this.type = type
+    this.code = code
   }
 }
 
@@ -50,6 +64,7 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
   const socket = new WebSocket(`${input.relayUrl}/v1/relay/${input.computer.id}?role=device`)
   socket.binaryType = 'arraybuffer'
   const streams = new Map<number, Pending>()
+  const sockets = new Map<number, OpenSocket>()
   const control = queue<Record<string, unknown>>()
   let session: Transport | undefined
   let failure: TunnelError | undefined
@@ -64,6 +79,7 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
       else pending.reject(error)
     }
     streams.clear()
+    for (const open of sockets.values()) open.ended({ code: 1006, reason: error.message })
     control.end()
   }
 
@@ -75,6 +91,8 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
 
   const dispatch = ({ type, stream, payload }: Frame) => {
     if (type === FrameType.control) return control.push(decodeJson(payload))
+    if (type === FrameType.socketMessage) return sockets.get(stream)?.receive(payload)
+    if (type === FrameType.socketClose) return sockets.get(stream)?.ended(closingOf(payload))
     const pending = streams.get(stream)
     if (!pending) return
     if (type === FrameType.responseHead && !pending.body) {
@@ -111,7 +129,7 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
     socket.addEventListener('open', () => socket.send(new Uint8Array(first)))
     const closed = (code: number) => {
       const offline = code === 4004
-      const error = new TunnelError({ type: offline ? 'offline' : 'closed', message: offline ? 'The computer is offline.' : 'The tunnel to the computer closed.' })
+      const error = new TunnelError({ type: offline ? 'offline' : 'closed', message: offline ? 'The computer is offline.' : 'The tunnel to the computer closed.', code })
       fail(error)
       reject(error)
     }
@@ -157,7 +175,45 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
     return response
   }
 
-  return { fetch, digits, control, close: () => socket.close() }
+  const open = (path: string): TunnelSocket => {
+    if (failure) throw failure
+    const stream = next++
+    const join = messageJoiner()
+    const opened: TunnelSocket = {
+      binaryType: 'arraybuffer',
+      readyState: 1,
+      onmessage: null,
+      onclose: null,
+      send: data => {
+        if (opened.readyState !== 1) return
+        for (const chunk of messageChunks(data)) send({ type: FrameType.socketMessage, stream, payload: chunk })
+      },
+      close: (code = 1000, reason = '') => {
+        if (!sockets.has(stream)) return
+        if (!failure) send({ type: FrameType.socketClose, stream, payload: encodeJson({ code, reason }) })
+        ended({ code, reason })
+      }
+    }
+    const ended = (closing: Closing) => {
+      sockets.delete(stream)
+      opened.readyState = 3
+      opened.onclose?.(closing)
+    }
+    const receive = (chunk: Uint8Array) => {
+      const data = join.add(chunk)
+      if (data !== undefined) opened.onmessage?.({ data })
+    }
+    sockets.set(stream, { receive, ended })
+    send({ type: FrameType.socketOpen, stream, payload: encodeJson({ path }) })
+    return opened
+  }
+
+  return { fetch, socket: open, digits, control, close: () => socket.close(), get failure() { return failure } }
+}
+
+function closingOf(payload: Uint8Array): Closing {
+  const { code, reason } = decodeJson(payload)
+  return { code: typeof code === 'number' ? code : 1005, reason: typeof reason === 'string' ? reason : '' }
 }
 
 function closing(text: string, closed: (code: number) => void): void {

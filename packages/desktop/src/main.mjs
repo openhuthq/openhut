@@ -882,20 +882,20 @@ async function tailnetFetch({ computer, path, init }) {
 }
 
 async function relayLive({ port, path }) {
-  const ws = await liveSocket(String(path)).catch(() => undefined)
+  const ws = await liveSocket(String(path)).catch(() => null)
   if (!ws) {
-    port.postMessage({ closed: 4404, reason: 'That computer isn\'t in your list.' })
+    port.postMessage(ws === null ? { closed: 1006, reason: '' } : { closed: 4404, reason: 'That computer isn\'t in your list.' })
     return port.close()
   }
   port.on('message', ({ data }) => ws.readyState === WebSocket.OPEN && ws.send(String(data)))
   port.on('close', () => ws.close())
   port.start()
-  ws.on('message', (data) => port.postMessage(String(data)))
-  ws.on('close', (code, reason) => {
+  ws.onmessage = ({ data }) => port.postMessage(String(data))
+  ws.onclose = ({ code, reason }) => {
     port.postMessage({ closed: code, reason: String(reason) })
     port.close()
-  })
-  ws.on('error', () => undefined)
+  }
+  ws.onerror = () => undefined
 }
 
 async function liveSocket(path) {
@@ -904,6 +904,10 @@ async function liveSocket(path) {
   if (id === LOCAL.id && !CONTAINER) return new WebSocket(`ws://localhost${target}`, { createConnection: () => connect(SERVER_SOCK) })
   const computer = id === LOCAL.id ? { ...LOCAL, keyFile: LOCAL_KEY } : storedComputers().find((each) => each.id === id)
   if (!computer) return undefined
+  if (computer.key) {
+    const tunneled = await tunnels.socket({ computer, path: target }).catch((error) => { if (!computer.url) throw error })
+    if (tunneled) return tunneled
+  }
   return new WebSocket(`${computer.url.replace(/^http/, 'ws')}${target}`, { headers: { authorization: `Bearer ${await keyOf(computer)}`, 'openhut-app-version': app.getVersion() } })
 }
 
