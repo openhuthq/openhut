@@ -26,6 +26,7 @@ export type Platform = {
 }
 export type Owner = { key: string; sign: (text: string) => Promise<string>; self: { key: string; name: string } }
 export type Device = Client & { self: boolean }
+export type Joined = { name: string; kind: 'client' | 'computer'; key: string }
 export type OpenHutAgent = Agent & { computer: string; online: boolean }
 export type Copy = { computer: string; id: string; online: boolean }
 export type OpenHutConnection = Connection & { computers: Copy[] }
@@ -284,12 +285,12 @@ export function createOpenHut(platform: Platform) {
   }
 
   async function held(each: StoredComputer): Promise<Held> {
-    const { publicKey } = await call({ computer: each, path: '/api/admin', schema: Admin })
+    const { publicKey, relayKey } = await call({ computer: each, path: '/api/admin', schema: Admin })
     const access = await call({ computer: each, path: '/api/access', schema: Access }).catch((err: unknown) => {
       if (err instanceof RequestError && err.status === 404) return null
       throw err
     })
-    return { access, key: hexOf(Uint8Array.from(atob(publicKey), (char) => char.charCodeAt(0)).subarray(-32)) }
+    return { access, key: relayKey ?? hexOf(Uint8Array.from(atob(publicKey), (char) => char.charCodeAt(0)).subarray(-32)) }
   }
 
   async function newest({ lists, owner }: { lists: (Access | null | undefined)[]; owner: string | undefined }): Promise<Access | undefined> {
@@ -352,6 +353,22 @@ export function createOpenHut(platform: Platform) {
         await carry({ list: next, rows: await across({ seen: accessSeen, read: held }) })
       })
       return access.list()
+    },
+    async allow(device: Joined): Promise<Access> {
+      const owner = await platform.owner?.()
+      if (!owner) throw new RequestError({ message: 'Open the OpenHut app on your Mac to allow a device. Only it can sign the list.', status: 403 })
+      const list = await access.sync()
+      if (!list) throw new RequestError({ message: 'None of your computers is answering. Try again when one is back.', status: 409 })
+      const there = device.kind === 'client' ? list.clients.some((each) => each.key === device.key) : list.computers.some((each) => each.key === device.key)
+      if (there) return list
+      const added = device.kind === 'client'
+        ? { clients: [...list.clients, { key: device.key, name: device.name, addedAt: new Date().toISOString() }] }
+        : { computers: [...list.computers, { id: await computerId(device.key), name: device.name, key: device.key }] }
+      return serial(async () => {
+        const next = await signed({ owner, list: { ...list, ...added, version: list.version + 1 } })
+        await carry({ list: next, rows: await across({ seen: accessSeen, read: held }) })
+        return next
+      })
     },
   }
 
