@@ -44,7 +44,7 @@ function queue<T>() {
   }
 }
 
-export async function connect(input: { relayUrl: string; computer: { id: string; key: string }; key: DeviceKey; invitation?: Invitation }): Promise<Tunnel> {
+export async function connect(input: { relayUrl: string; computer: { id: string; key: string }; key: DeviceKey; invitation?: Invitation; timeout?: number }): Promise<Tunnel> {
   const handshake = initiator({ key: input.key, remote: fromHex(input.computer.key) })
   const first = await handshake.write()
   const socket = new WebSocket(`${input.relayUrl}/v1/relay/${input.computer.id}?role=device`)
@@ -55,6 +55,7 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
   let failure: TunnelError | undefined
   let next = 1
   let inbox = Promise.resolve()
+  let late: ReturnType<typeof setTimeout> | undefined
 
   const fail = (error: TunnelError) => {
     failure ??= error
@@ -121,9 +122,15 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
       inbox = inbox.then(() => receive(data)).catch(() => socket.close())
     })
     socket.addEventListener('close', event => closed(event.code))
+    late = setTimeout(() => {
+      const error = new TunnelError({ type: 'closed', message: 'The computer didn\'t answer in time.' })
+      fail(error)
+      reject(error)
+      socket.close()
+    }, input.timeout ?? 15_000)
   })
 
-  const transport = await ready
+  const transport = await ready.finally(() => clearTimeout(late))
   const digits = await sixDigits(transport.handshakeHash)
   if (input.invitation) {
     const { secret, ...hello } = input.invitation

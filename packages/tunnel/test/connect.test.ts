@@ -101,3 +101,15 @@ test('a closing notice from the relay is acted on at once, without waiting for t
   for (const client of server.clients) client.terminate()
   server.close()
 })
+
+test('a handshake that never gets an answer fails as closed after the timeout and closes the socket', async () => {
+  const { WebSocketServer } = await import('ws')
+  const server = new WebSocketServer({ port: 0 })
+  const gone = new Promise(resolve => server.on('connection', socket => socket.on('close', resolve)))
+  const { port } = server.address() as { port: number }
+  const started = Date.now()
+  await assert.rejects(connect({ relayUrl: `ws://127.0.0.1:${port}`, computer: { id: 'ab'.repeat(32), key: 'cd'.repeat(32) }, key: newDevice().key, timeout: 100 }), (error: TunnelError) => error.type === 'closed')
+  assert.ok(Date.now() - started < 1000)
+  await gone
+  server.close()
+})

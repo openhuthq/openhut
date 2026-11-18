@@ -10,6 +10,9 @@ export type Relay = {
   frames: Buffer[]
   kickComputer: () => void
   online: () => boolean
+  registered: number
+  pongs: number
+  deaf: boolean
   close: () => Promise<void>
 }
 
@@ -31,6 +34,9 @@ export async function startRelay(): Promise<Relay> {
     frames: [],
     kickComputer: () => computer?.close(1012, 'restart'),
     online: () => computer !== undefined,
+    registered: 0,
+    pongs: 0,
+    deaf: false,
     close: async () => {
       for (const client of server.clients) client.terminate()
       server.close()
@@ -40,14 +46,22 @@ export async function startRelay(): Promise<Relay> {
   server.on('connection', (socket, request) => {
     const url = new URL(request.url ?? '/', 'http://relay')
     if (url.searchParams.get('role') === 'computer') {
-      const hash = createHash('sha256').update(url.searchParams.get('token') ?? '').digest('hex')
+      const token = request.headers['x-openhut-token']
+      if (typeof token !== 'string' || !token || url.searchParams.has('token')) return socket.close(4001, 'token')
+      const hash = createHash('sha256').update(token).digest('hex')
       if (tokenHash && tokenHash !== hash) return socket.close(4001, 'token')
       tokenHash = hash
+      relay.registered++
       computer?.close(1000, 'replaced')
       computer = socket
       socket.on('message', (data, binary) => {
         const message = bytes(data)
         if (binary) return devices.get(message.subarray(0, 16).toString('hex'))?.send(message.subarray(16))
+        if (message.toString() === 'ping') {
+          if (relay.deaf) return
+          relay.pongs++
+          return socket.send('pong')
+        }
         const parsed: { type?: string; session?: string } = JSON.parse(message.toString())
         if (parsed.type === 'close' && parsed.session) devices.get(parsed.session)?.close(4003, 'closed')
       })
@@ -79,7 +93,7 @@ export async function startRelay(): Promise<Relay> {
   return relay
 }
 
-export async function startComputer(options: Partial<Pick<ServeInput, 'handle' | 'invited'>> = {}) {
+export async function startComputer(options: Partial<Pick<ServeInput, 'handle' | 'invited' | 'keepalive'>> = {}) {
   const relay = await startRelay()
   const key = generateKeyPair()
   const statuses = new Map<string, DeviceStatus>()
@@ -92,6 +106,7 @@ export async function startComputer(options: Partial<Pick<ServeInput, 'handle' |
     key,
     device: device => statuses.get(device) ?? 'unknown',
     invited: options.invited ?? (async (): Promise<Invited | null> => null),
+    keepalive: options.keepalive,
     handle: async request => {
       handled.push(`${request.method} ${request.path}`)
       if (options.handle) return options.handle(request)

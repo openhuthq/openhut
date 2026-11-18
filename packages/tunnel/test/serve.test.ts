@@ -136,3 +136,18 @@ test('pairing with the right secret shows the same six digits on both sides and 
   tunnel.close()
   await ctx.close()
 })
+
+test('the computer pings the relay and, when the pongs stop, drops the socket and registers again', async () => {
+  const ctx = await startComputer({ keepalive: { every: 20, within: 100 } })
+  await waitFor(() => ctx.relay.pongs >= 3)
+  assert.equal(ctx.relay.registered, 1)
+  ctx.relay.deaf = true
+  await waitFor(() => ctx.relay.registered === 2)
+  ctx.relay.deaf = false
+  const device = newDevice()
+  ctx.statuses.set(device.hex, 'client')
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  assert.equal((await tunnel.fetch('/after')).status, 200)
+  tunnel.close()
+  await ctx.close()
+})
