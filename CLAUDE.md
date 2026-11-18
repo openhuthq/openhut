@@ -2,7 +2,7 @@
 
 Self-hosted agents: the OpenHut app (Mac and Linux) is a thin window over several runtimes, one on this computer and one
 on each computer you add (`private/brain/decisions/app-aggregates-runtimes.md`). A runtime runs many Hermes agents, each in its
-own sandbox (a microVM on a desktop, gVisor on a server), with their own Slack app and WhatsApp number. Agents reach team
+own sandbox (a microVM on a Mac, gVisor in Docker on Linux), with their own Slack app and WhatsApp number. Agents reach team
 data only through the runtime's gateway, which holds every key and checks each agent's grants on every call. You manage
 it from the app or from your own AI assistant over the control MCP. No sign-in and no people: the app reaches the local
 runtime on a 0600 Unix socket, and a remote one over the tailnet with the key it enrolled when the computer was added.
@@ -18,7 +18,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `agents/` (agents, grants, their Hermes files), `channels/`, `connections/`, `gateway/` (the agents' MCP gateway and
   key broker on :8081), `mcp/` (the control MCP on `/mcp`, whose tools call the API in-process), `admin/`, and
   `integrations/<service>/`. `src/agentd/` is the root helper: the only process that starts agents (gVisor, microsandbox
-  or memory, `private/brain/decisions/sandbox-module.md`), on a Unix socket. Tests mirror them in `test/server/` and `test/agentd/`.
+  on the Mac, or memory, `private/brain/decisions/sandbox-module.md`), on a Unix socket. Tests mirror them in `test/server/` and `test/agentd/`.
 - **`packages/desktop`** — `@openhut/desktop`, the Mac and Linux app (`private/brain/decisions/desktop-app.md`): Electron main (`src/main.mjs`, starts agentd and the server,
   serves the renderer on `app://openhut`) and the React dashboard in `src/renderer` (Vite to `dist/renderer`, TanStack
   Query), which calls `/api/*` on `app://openhut`; the main process forwards it to the runtime's socket. Tailwind v4 with shared components in `src/renderer/src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`private/brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
@@ -90,8 +90,8 @@ in the login keychain (hardened runtime, `build/entitlements.mac.plist`) and not
 `APPLE_API_KEY_ID` and `APPLE_API_ISSUER` are set. The packaged app runs the real model unless `OPENHUT_MODEL` is set.
 Icon sources: `build/icon.svg`, `build/background.svg`. Gotchas: `private/brain/openhut-gotchas.md` (Mac app, Linux app).
 
-On x86_64 Linux, `npm -w @openhut/desktop run dist:linux` builds `release/OpenHut-x64.AppImage` and `release/openhut-x64.deb`
-with the same runtime (agents in microsandbox VMs on KVM); it needs a Linux machine, not a cross-build from the Mac.
+On x86_64 Linux, `npm -w @openhut/desktop run dist:linux` builds `release/OpenHut-x64.AppImage` and `release/openhut-x64.deb`;
+the Linux app runs this computer's runtime with the curl install in Docker (agents on gVisor, no KVM needed). It needs a Linux machine, not a cross-build from the Mac.
 
 ## Test
 

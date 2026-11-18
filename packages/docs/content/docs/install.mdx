@@ -1,6 +1,6 @@
 ---
 title: Install
-description: Download the app for Mac or Linux, open it, make an agent. No account, no Docker.
+description: Download the app for Mac or Linux, open it, make an agent. No account.
 icon: sales
 ---
 
@@ -10,7 +10,7 @@ icon: sales
 ### Download it
 
 - **Mac:** [Download for Mac](https://openhut.dev/download/mac). Apple silicon, macOS 14 or later. Open the dmg and drag OpenHut to Applications.
-- **Linux:** [Download the AppImage](https://openhut.dev/download/linux), or the [.deb](https://github.com/openhuthq/openhut/releases/latest/download/openhut-x64.deb) for Debian and Ubuntu (`sudo apt install ./openhut-x64.deb`). x64 with KVM.
+- **Linux:** [Download the AppImage](https://openhut.dev/download/linux), or the [.deb](https://github.com/openhuthq/openhut/releases/latest/download/openhut-x64.deb) for Debian and Ubuntu (`sudo apt install ./openhut-x64.deb`). x64, with [Docker](https://docs.docker.com/engine/install/) your user can run (`sudo usermod -aG docker $USER`, then sign in again).
 
 </Step>
 <Step>
@@ -43,7 +43,7 @@ Agents on your Mac answer only while it's awake. For agents that stay on, add an
 </Step>
 </Steps>
 
-Each agent runs in its own small virtual machine on your computer, with about 1 GB of memory.
+Each agent runs in its own sandbox on your computer, with about 1 GB of memory: a small virtual machine on a Mac, a gVisor container in Docker on Linux.
 
 ## Keep your Mac awake
 
@@ -56,7 +56,7 @@ Closing the window on a Mac keeps agents running. On Linux it quits the app; the
 
 ## Troubleshooting
 
-- **"This computer can't run agents" on Linux.** The app needs KVM (`/dev/kvm`). Turn on virtualization (Intel VT-x or AMD-V) in the firmware settings, or nested virtualization in a VM. Then let your user open it: `sudo usermod -aG kvm $USER`, and sign in again.
+- **"OpenHut needs Docker" on Linux.** Install Docker (`sudo apt install docker.io`), let your user run it (`sudo usermod -aG docker $USER`), and sign in again. No virtualization is needed.
 - **Intel Mac.** Not supported: the Mac app needs Apple silicon. Use the Linux app on an x64 Linux machine instead.
 - **Agents stop answering at night.** Your Mac went to sleep. Turn on **Keep this Mac awake**, or move the agent to an always-on [computer](/computers).
 - **No computers to add.** Tailscale must be installed and signed in on this Mac. See [Computers](/computers).

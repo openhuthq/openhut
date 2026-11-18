@@ -6,8 +6,8 @@ import { behind, updateServers, type Behind } from '../../../src/features/settin
 const admin = (server: Partial<Admin['server']>) => ({ server: { build: '0.2.0', updateAvailable: false, update: null, ...server } }) as unknown as Admin
 const started = (to: string): Update => ({ object: 'update', status: 'running', from: '0.2.0', to, startedAt: '2026-11-18T00:00:00.000Z' })
 
-test('only online servers with an update are behind; this computer updates with the app', () => {
-  const computers = [{ id: 'local', name: 'This Mac', online: true }, { id: 'a', name: 'beelink', online: true }, { id: 'b', name: 'nuc', online: false }, { id: 'c', name: 'pi', online: true }]
+test('only online servers with an update are behind; this Mac updates with the app, a Linux desktop\'s Docker runtime like a server', () => {
+  const computers = [{ id: 'local', name: 'This Mac', url: '', online: true }, { id: 'a', name: 'beelink', url: 'https://beelink.ts.net', online: true }, { id: 'b', name: 'nuc', url: 'https://nuc.ts.net', online: false }, { id: 'c', name: 'pi', url: 'https://pi.ts.net', online: true }]
   const admins = [
     { computer: { id: 'local' }, admin: admin({ updateAvailable: true }) },
     { computer: { id: 'a' }, admin: admin({ updateAvailable: true }) },
@@ -15,6 +15,8 @@ test('only online servers with an update are behind; this computer updates with 
     { computer: { id: 'c' }, admin: admin({}) },
   ]
   assert.deepEqual(behind({ computers, admins }), [{ id: 'a', name: 'beelink' }])
+  const linux = computers.map((each) => each.id === 'local' ? { ...each, name: 'This computer', url: 'http://127.0.0.1:8787' } : each)
+  assert.deepEqual(behind({ computers: linux, admins }), [{ id: 'local', name: 'This computer' }, { id: 'a', name: 'beelink' }])
 })
 
 test('servers update one at a time; one that fails says why and the next still updates', async () => {
