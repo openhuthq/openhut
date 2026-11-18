@@ -10,7 +10,11 @@ import { home } from '@/features/settings/desktop'
 import { cn } from '@/lib/utils'
 
 export function Intro({ children }: { children: ReactNode }) {
-  return <p className="m-0 -mb-5 px-2.5 text-[13px]/[18px] text-mute">{children}</p>
+  return <p className="m-0 -mb-[30px] px-2.5 text-[13px]/[18px] text-mute">{children}</p>
+}
+
+export function ListNote({ children }: { children: ReactNode }) {
+  return <p className="m-0 -mt-1 pr-2.5 pl-[50px] text-[12px]/[16px] text-mute">{children}</p>
 }
 
 const ROW = 'flex min-h-12 w-full items-start gap-4 rounded-lg border-0 bg-transparent px-2.5 py-[9px] text-left text-ink no-underline'
