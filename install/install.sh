@@ -89,7 +89,7 @@ if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
   elif [ "$($D container inspect -f '{{range (index .HostConfig.PortBindings "8787/tcp")}}{{.HostIp}}{{end}}' openhut 2>/dev/null)" != 127.0.0.1 ]; then
     say "Publishing OpenHut on this computer's 127.0.0.1 only (the container is kept: its data comes along)"
     $D stop -t 30 openhut >/dev/null
-    $D commit -q openhut openhut:kept >/dev/null
+    $D commit openhut openhut:kept >/dev/null
     $D rm openhut >/dev/null
     container openhut:kept
   fi
