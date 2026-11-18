@@ -8,10 +8,11 @@ import { parseArgs } from 'node:util'
 
 const { values: args } = parseArgs({ options: { from: { type: 'string' }, feed: { type: 'string' }, via: { type: 'string', default: 'button' }, keep: { type: 'boolean', default: false }, broken: { type: 'boolean', default: false } } })
 if (!args.from || !args.feed || !['button', 'quit'].includes(args.via)) {
-  console.error('usage: node scripts/update-test.mjs --from <old OpenHut.app> --feed <folder with latest-mac.yml and the new zip> [--via button|quit] [--broken] [--keep]')
+  console.error('usage: node scripts/update-test.mjs --from <old OpenHut.app> --feed <folder or URL with latest-mac.yml and the new zip> [--via button|quit] [--broken] [--keep]')
   process.exit(2)
 }
-const want = /^version: (.+)$/m.exec(readFileSync(join(args.feed, 'latest-mac.yml'), 'utf8'))[1].trim()
+const remote = /^https?:\/\//.test(args.feed)
+const want = /^version: (.+)$/m.exec(remote ? await (await fetch(new URL('latest-mac.yml', args.feed))).text() : readFileSync(join(args.feed, 'latest-mac.yml'), 'utf8'))[1].trim()
 const root = mkdtempSync(join(tmpdir(), 'openhut-update-'))
 const app = join(root, 'Applications/OpenHut.app')
 const home = join(root, 'home')
@@ -30,7 +31,7 @@ const feed = createServer((req, res) => {
   createReadStream(file).pipe(res)
 }).listen(0, '127.0.0.1')
 await new Promise((resolve) => feed.once('listening', resolve))
-const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_UPDATE_FEED: `http://127.0.0.1:${feed.address().port}/`, OPENHUT_MODEL: 'test', OPENHUT_SANDBOX: 'memory' }
+const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_UPDATE_FEED: remote ? args.feed : `http://127.0.0.1:${feed.address().port}/`, OPENHUT_MODEL: 'test', OPENHUT_SANDBOX: 'memory' }
 
 let child
 try {

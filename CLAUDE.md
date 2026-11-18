@@ -79,14 +79,14 @@ npm run dev
 `npm run dev` starts the real agentd with `OPENHUT_SANDBOX=memory` (no root, no Docker), the server API on 127.0.0.1:8787
 with `.data`, the test model and the dev key `dev` enrolled, and Vite for the renderer with `/api` proxied to it with
 `Authorization: Bearer dev`. Open `http://localhost:5173`. Port 8787 taken (Docker or another checkout)? `PORT=8797 npm run dev` moves the API and Vite's proxy; Vite picks the next free port itself. Another checkout's `npm run dev` already running? Also set `OPENHUT_FAKES_PORT` (fake Hermes, 18642) and `OPENHUT_GATEWAY_PORT` (8081). `node scripts/seed-ui.ts` (on a fresh `.data`) fills in sample
-agents and connections. Agents in microVMs need the pinned Linux `claude` at `bin/claude` (gitignored): run
-`npm -w @openhut/desktop run pack-backend` once and copy `packages/desktop/dist/claude-*-linux-arm64` there. The desktop app itself: `npm -w @openhut/desktop run build && npm -w @openhut/desktop start`. It keeps
+agents and connections. Agents in microVMs need the pinned Linux `claude` at `bin/claude` (gitignored):
+`curl -o bin/claude https://downloads.claude.ai/claude-code-releases/$(sed -n 's/^CLAUDE=//p' install/install.sh)/linux-arm64/claude && chmod +x bin/claude`. The desktop app itself: `npm -w @openhut/desktop run build && npm -w @openhut/desktop start`. It keeps
 its data in `~/Library/Application Support/OpenHut Dev`, apart from the installed app's `OpenHut`.
 
 ## Build the desktop app
 
 `npm -w @openhut/desktop run dist` builds the renderer, bundles the runtime's server and agentd with esbuild into
-`packages/desktop/dist/backend` with the pinned Linux `claude` CLI for the guest (`scripts/pack-backend.mjs`; on Linux it packs only the client and the MCP bridge, since the install in Docker brings the rest), and runs electron-builder (`electron-builder.yml`): an arm64,
+`packages/desktop/dist/backend` with where to get the pinned Linux `claude` CLI for the guest, which the app downloads on first run (`scripts/pack-backend.mjs`; on Linux it packs only the client and the MCP bridge, since the install in Docker brings the rest), and runs electron-builder (`electron-builder.yml`): an arm64,
 macOS 14+ `release/mac-arm64/OpenHut.app`, `release/OpenHut-arm64.dmg` and the versioned zip. It signs with the Developer ID
 in the login keychain (hardened runtime, `build/entitlements.mac.plist`) and never notarizes (`notarize: false`): only the
 release workflow (`.github/workflows/desktop.yml`, `scripts/notarize.sh`) notarizes, staples and checks a build. The packaged app runs the real model unless `OPENHUT_MODEL` is set.

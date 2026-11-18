@@ -9,6 +9,8 @@ import { dirname, join, relative } from 'node:path'
 import { Readable } from 'node:stream'
 import { text } from 'node:stream/consumers'
 import { setTimeout as sleep } from 'node:timers/promises'
+import { promisify } from 'node:util'
+import { zstdDecompress } from 'node:zlib'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import updater from 'electron-updater'
 import WebSocket from 'ws'
@@ -634,7 +636,7 @@ async function boot() {
   }
   if (CONTAINER) return bootContainer()
   keepData()
-  assets()
+  await assets()
   const shared = { OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_CLAUDE_HOST: MAC ? join(DATA, 'bin/claude') : join(ASSETS, 'bin/claude'), OPENHUT_CLAUDE_VERSION: claudeVersion() }
   const pinned = DEV ? {} : msb()
   if (!PIPES) rmSync(SOCK, { force: true })
@@ -649,7 +651,7 @@ async function boot() {
 }
 
 async function bootContainer() {
-  assets()
+  await assets()
   const answers = async () => (await api('/api/me').then(() => true, () => false))
   if (existsSync(join(HOME, LOCAL_KEY)) && await waitFor(answers, 90)) return true
   if (!await dockerUp()) throw new Error('Docker isn\'t running, or your user can\'t use it. Install Docker, add yourself to the docker group (sudo usermod -aG docker $USER), sign in again, then open OpenHut.')
@@ -708,16 +710,33 @@ function goBack(version) {
   app.quit()
 }
 
-function assets() {
+async function assets() {
   mkdirSync(dirname(BRIDGE), { recursive: true })
   cpSync(DEV ? join(HERE, '../bin/openhut-mcp') : join(BACKEND, 'bin/openhut-mcp'), BRIDGE)
   chmodSync(BRIDGE, 0o755)
   if (DEV || CONTAINER || existsSync(ASSETS)) return
   rmSync(`${ASSETS}.tmp`, { recursive: true, force: true })
-  for (const path of ['bin/claude', 'vendor/hermes-plugins']) cpSync(join(BACKEND, path), join(`${ASSETS}.tmp`, path), { recursive: true })
+  cpSync(join(BACKEND, 'vendor/hermes-plugins'), join(`${ASSETS}.tmp`, 'vendor/hermes-plugins'), { recursive: true })
+  await guestClaude(join(`${ASSETS}.tmp`, 'bin/claude'))
   renameSync(`${ASSETS}.tmp`, ASSETS)
   const older = readdirSync(dirname(ASSETS)).filter((name) => name !== app.getVersion() && !name.endsWith('.tmp'))
   for (const name of older.sort((a, b) => statSync(join(dirname(ASSETS), b)).mtimeMs - statSync(join(dirname(ASSETS), a)).mtimeMs).slice(1)) rmSync(join(dirname(ASSETS), name), { recursive: true, force: true })
+}
+
+async function guestClaude(to) {
+  const want = JSON.parse(readFileSync(join(BACKEND, 'bin/claude-linux.json'), 'utf8'))
+  const sha256 = (body) => createHash('sha256').update(body).digest('hex')
+  mkdirSync(dirname(to), { recursive: true })
+  const kept = readdirSync(dirname(ASSETS)).filter((name) => !name.endsWith('.tmp')).map((name) => join(dirname(ASSETS), name, 'bin/claude')).find((bin) => existsSync(bin) && sha256(readFileSync(bin)) === want.sha256)
+  if (kept) return cpSync(kept, to)
+  for (const url of want.urls) {
+    const body = await fetch(url, { signal: AbortSignal.timeout(900_000) })
+      .then(async (response) => response.ok ? Buffer.from(await response.arrayBuffer()) : null)
+      .then((raw) => raw && url.endsWith('.zst') ? promisify(zstdDecompress)(raw) : raw)
+      .catch((error) => appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't download ${url}: ${error.message}\n`))
+    if (body && sha256(body) === want.sha256) return writeFileSync(to, body, { mode: 0o755 })
+  }
+  throw new Error(`Couldn't download Claude Code ${want.version}, which the agents run. OpenHut gets it the first time it opens, so check the internet connection and open it again.`)
 }
 
 function msb() {
