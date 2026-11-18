@@ -567,7 +567,7 @@ async function meet(run) {
   const hardware = `${cpus()[0]?.model ?? 'This computer'} · ${Math.round(totalmem() / 2 ** 30)} GB`
   if (CONTAINER ? !await dockerUp() : !await canVirtualize()) throw new Error(`${hardware}, but it can't run ${CONTAINER ? 'Docker' : 'virtual machines'}`)
   step(0, hardware)
-  const downloading = follow({ run, index: 1, read: async () => fetching })
+  const downloading = follow({ run, index: 1, read: async () => fetching ?? (CONTAINER ? (await agentd({ cmd: 'progress' })).pull : null) })
   const started = await booted.finally(downloading)
   if (started !== true) throw new Error(`It didn't start. The logs are in ${LOGS}.`)
   await api('/api/me')
