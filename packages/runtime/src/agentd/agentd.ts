@@ -410,7 +410,10 @@ async function openLive({ sock, id, fps, rest }: { sock: Socket; id: string; fps
     return undefined
   }
   const bridge = await box.exec({ id, command: ['node', BRIDGE, 'live', String(fps)], stdin: true })
-  live({ id, sock, bridge, rest, setHeld: (held) => writeIfChanged(`${conf(id)}/${POLICY_FILE}`, held ? HELD_POLICY : FREE_POLICY) })
+  const setHeld = (held: boolean) => {
+    if (existsSync(conf(id))) writeIfChanged(`${conf(id)}/${POLICY_FILE}`, held ? HELD_POLICY : FREE_POLICY)
+  }
+  live({ id, sock, bridge, rest, setHeld })
   return undefined
 }
 

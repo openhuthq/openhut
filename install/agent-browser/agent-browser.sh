@@ -10,8 +10,15 @@ export AGENT_BROWSER_STREAM_MAX_WIDTH=1280
 export AGENT_BROWSER_STREAM_MAX_HEIGHT=800
 export AGENT_BROWSER_NO_VERSION_CHECK=1
 grep -qs '"default":"deny"' "$AGENT_BROWSER_ACTION_POLICY" || exec /usr/local/lib/agent-browser "$@"
-out=$(/usr/local/lib/agent-browser "$@" 2>&1)
+out=$(mktemp -d)
+/usr/local/lib/agent-browser "$@" >"$out/stdout" 2>"$out/stderr"
 code=$?
-case "$out" in *'denied by policy'*) echo 'A person is using this browser in OpenHut right now. Wait a minute, then try again.' >&2; exit 1 ;; esac
-printf '%s\n' "$out"
+if [ "$code" -ne 0 ] && grep -Eqs "^(.\[[0-9;]*m)*✗ (.\[[0-9;]*m)*Action '[a-z_]+' denied by policy" "$out/stdout" "$out/stderr"; then
+  rm -rf "$out"
+  echo 'A person is using this browser in OpenHut right now. Wait a minute, then try again.' >&2
+  exit 1
+fi
+cat "$out/stdout"
+cat "$out/stderr" >&2
+rm -rf "$out"
 exit "$code"

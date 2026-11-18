@@ -19,7 +19,7 @@ export function live({ id, sock, bridge, rest, setHeld }: { id: string; sock: So
   const viewer: Viewer = { say: (message) => sock.write(`${typeof message === 'string' ? message : JSON.stringify(message)}\n`) }
   const others = viewers.get(id) ?? new Set()
   viewers.set(id, others.add(viewer))
-  viewer.say({ type: 'hold', held: holds.has(id) })
+  viewer.say(holdFor({ id, viewer }))
   const toBridge = (line: string) => bridge.stdin?.write(`${line}\n`)
   const ping = setInterval(() => toBridge('{"type":"ping"}'), PING_MS)
   createInterface({ input: bridge.stdout }).on('line', (line) => {
@@ -54,6 +54,7 @@ export function live({ id, sock, bridge, rest, setHeld }: { id: string; sock: So
   bridge.exit.then(() => sock.end(), () => sock.destroy())
   sock.setEncoding('utf8')
   sock.on('data', up)
+  sock.on('end', () => sock.destroy())
   sock.on('close', leave)
   sock.on('error', () => sock.destroy())
   sock.resume()
@@ -83,7 +84,7 @@ function hold({ id, viewer, held, setHeld }: { id: string; viewer: Viewer; held:
   setHeld(true)
   holds.set(id, { viewer })
   idle({ id, setHeld })
-  tell(id, { type: 'hold', held: true })
+  announce(id)
 }
 
 function idle({ id, setHeld }: { id: string; setHeld: (held: boolean) => void }): void {
@@ -97,11 +98,15 @@ function letGo({ id, setHeld }: { id: string; setHeld: (held: boolean) => void }
   clearTimeout(holds.get(id)?.timer)
   holds.delete(id)
   setHeld(false)
-  tell(id, { type: 'hold', held: false })
+  announce(id)
 }
 
-function tell(id: string, message: object): void {
-  for (const viewer of viewers.get(id) ?? []) viewer.say(message)
+function announce(id: string): void {
+  for (const viewer of viewers.get(id) ?? []) viewer.say(holdFor({ id, viewer }))
+}
+
+function holdFor({ id, viewer }: { id: string; viewer: Viewer }) {
+  return { type: 'hold', held: holds.has(id), mine: holds.get(id)?.viewer === viewer }
 }
 
 function parse(line: string): Record<string, unknown> | undefined {

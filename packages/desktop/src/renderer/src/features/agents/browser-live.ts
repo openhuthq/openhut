@@ -19,6 +19,7 @@ export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTML
   const [state, setState] = useState<'connecting' | 'live' | 'closed'>('connecting')
   const [page, setPage] = useState({ url: '', title: '' })
   const [held, setHeld] = useState(false)
+  const [mine, setMine] = useState(false)
   const [actions, setActions] = useState<Action[]>([])
   const [error, setError] = useState<string>()
   const [rate, setRate] = useState(0)
@@ -46,7 +47,10 @@ export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTML
           }
           if (message?.type === 'tabs') setPage(activeTab(message.tabs))
           if (message?.type === 'url' && typeof message.url === 'string') setPage((known) => ({ ...known, url: message.url as string }))
-          if (message?.type === 'hold') setHeld(message.held === true)
+          if (message?.type === 'hold') {
+            setHeld(message.held === true)
+            setMine(message.mine === true)
+          }
           if (message?.type === 'closed') setState('closed')
           if (message?.type === 'command' && typeof message.action === 'string') pending.set(String(message.id), { action: message.action, url: typeof message.url === 'string' ? message.url : '' })
           if (message?.type === 'result') {
@@ -58,6 +62,7 @@ export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTML
         onClose: (code, reason) => {
           channel.current = undefined
           setHeld(false)
+          setMine(false)
           setState((known) => known === 'live' ? 'connecting' : 'closed')
           if (code >= 4000) setError(reason || 'The live view was refused.')
           else if (!stopped) retry = setTimeout(connect, RETRY_MS)
@@ -73,7 +78,7 @@ export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTML
     }
   }, [path, canvas])
   const send = (message: object) => channel.current?.send(JSON.stringify(message))
-  return { state, page, held, actions, error, fps: rate, hold: (held: boolean) => send({ type: 'hold', held }), mouse: (event: Mouse) => send(mouseInput(event)), key: (event: Key) => send(keyInput(event)) }
+  return { state, page, held, mine, actions, error, fps: rate, hold: (held: boolean) => send({ type: 'hold', held }), mouse: (event: Mouse) => send(mouseInput(event)), key: (event: Key) => send(keyInput(event)) }
 }
 
 export function mouseInput(event: Mouse) {
