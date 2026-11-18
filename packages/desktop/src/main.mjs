@@ -195,8 +195,14 @@ async function allow({ id } = {}) {
   const { status, device } = await api(path)
   if (status === 'expired') throw new Error('This code expired. Make a new one.')
   if (status !== 'joined' || !/^[0-9a-f]{64}$/.test(device?.key ?? '')) throw new Error('Nothing is waiting to join with this code.')
+  const before = storedComputers()
   if (device.kind === 'computer') rememberJoined(device)
-  await openhut.access.allow({ name: String(device.name), kind: device.kind === 'computer' ? 'computer' : 'client', key: device.key })
+  try {
+    await openhut.access.allow({ name: String(device.name), kind: device.kind === 'computer' ? 'computer' : 'client', key: device.key })
+  } catch (err) {
+    if (device.kind === 'computer') writeFileSync(COMPUTERS, JSON.stringify(before, null, 2))
+    throw err
+  }
   return api(path)
 }
 
