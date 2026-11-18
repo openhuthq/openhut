@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>OpenHut: build, manage and share agents with your team</title>
-<meta name="description" content="OpenHut runs AI agents for your team on your Mac or your own server. They live in Slack, WhatsApp and Telegram and improve themselves.">
+<title>OpenHut: give every job on your team an agent that learns it</title>
+<meta name="description" content="OpenHut gives every job on your team an AI agent that learns it. Ask it in Slack, WhatsApp or Telegram. Free and open source, on your Mac or your own server.">
 <link rel="icon" href="/hut.svg">
 <script src="https://cdn.databuddy.cc/databuddy.js" data-client-id="40a6e1dc-4e64-4fd6-8b92-415a77397465" data-track-web-vitals data-track-errors async></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -503,6 +503,128 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
 }
 @media (max-width:480px){.dlsplit .split-main{padding:0 14px 0 18px;font-size:15px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* ===== the new sections (v-*) ===== */
+:root{--ease:cubic-bezier(.2,.8,.2,1);--t1:.2s;--t2:.4s}
+#collaborate .stage{min-height:488px}
+#collaborate .scene .msg{animation-play-state:paused}
+#collaborate.seen .scene .msg{animation-play-state:running}
+.v-band{padding-block:112px}
+.v-tint{background:var(--bg-2)}
+.v-head{max-width:620px;margin:0 auto 48px;text-align:center}
+.v-head h2,.v-start h2{font-size:clamp(30px,4vw,44px);line-height:1.1;letter-spacing:-.035em;text-wrap:balance}
+.v-head p{margin-top:14px;font-size:17px;line-height:1.5;color:var(--body);text-wrap:balance}
+.v-band h3{font-size:16px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+
+.v-what{padding-block:96px 24px}
+
+
+
+
+.v-where{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;max-width:960px;margin:0 auto}
+.v-place{display:flex;flex-direction:column;gap:6px}
+.v-place p{font-size:14px;line-height:1.5;color:var(--body)}
+.v-dev{height:168px;margin-bottom:12px;padding:12px;border-radius:16px;background:var(--card);box-shadow:0 0 0 1px var(--hair);display:flex;flex-direction:column;gap:10px}
+.v-dev-h{display:flex;align-items:center;gap:8px;font-size:13px}
+.v-st{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--mute)}
+.v-st i{width:7px;height:7px;border-radius:50%;background:var(--pass)}
+.v-st i.amber{background:var(--amber)}
+.v-slots{flex:1;display:flex;flex-direction:column;gap:6px}
+.v-slot{display:flex;align-items:center;gap:8px;height:34px;padding:0 8px;border-radius:8px;background:var(--bg-2);font-size:13px;transition:opacity var(--t1),translate var(--t1) var(--ease)}
+.v-slot span{color:var(--mute);font-size:12px;margin-left:auto}
+
+.v-start{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:64px;align-items:start}
+.v-how{margin:32px 0 0;padding:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:20px}
+.v-how li{counter-increment:s;display:grid;grid-template-columns:32px minmax(0,1fr);gap:2px 14px}
+.v-how li::before{content:counter(s);grid-row:span 2;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--ink);color:var(--pri-ink);font-size:13px;font-weight:600}
+.v-how b{font-size:16px;font-weight:600;color:var(--ink)}
+.v-how span{font-size:14px;color:var(--body)}
+.v-facts{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:12px}
+.v-facts li{display:flex;align-items:center;gap:16px;padding:20px;border-radius:16px;background:var(--card);box-shadow:0 0 0 1px var(--hair)}
+.v-facts li>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.v-facts b{font-size:15px;font-weight:600;color:var(--ink)}
+.v-facts div span{font-size:14px;color:var(--body)}
+.v-big{flex:none;width:72px;font-size:28px;font-weight:700;letter-spacing:-.04em;text-align:center}
+.v-logos{flex:none;width:72px;display:flex;justify-content:center;gap:4px}
+
+@supports (animation-timeline:view()){
+  @media (prefers-reduced-motion:no-preference){
+    .rv{animation:v-rise linear both;animation-timeline:view();animation-range:entry 0% entry 55%}
+    @keyframes v-rise{from{opacity:0;translate:0 24px}}
+  }
+}
+
+@media (max-width:900px){
+  .v-where,.v-start{grid-template-columns:minmax(0,1fr)}
+  .v-start{gap:40px}
+}
+@media (max-width:600px){
+  .v-band{padding-block:72px}
+}
+
+
+.v-pic{margin-bottom:12px;padding:76px 20px 32px;border-radius:18px;background:var(--img) 50% 30%/cover;box-shadow:0 0 0 1px var(--hair)}
+.v-pic .v-dev{margin:0;height:auto;min-height:168px;box-shadow:0 0 0 1px var(--hair),0 10px 28px -8px oklch(20% .05 250 / .35)}
+.v-beach{padding:clamp(20px,5vw,72px);border-radius:24px;background:url(/scenes/jobs-band.jpg) 50% 100%/cover;box-shadow:0 0 0 1px var(--hair)}
+.v-beach .v-start{padding:clamp(24px,4vw,48px);border-radius:20px;background:var(--card);box-shadow:0 0 0 1px var(--hair),0 24px 48px -16px oklch(20% .05 250 / .35)}
+.v-beach .v-facts li{background:var(--bg-2);box-shadow:none}
+@media (max-width:600px){.v-pic{padding:40px 12px 12px}.v-beach{padding:16px 12px 64px}}
+
+.v-bzpic{min-width:0;padding:clamp(16px,4vw,44px);border-radius:20px;background:url(/scenes/browse-band.jpg) 50% 50%/cover;box-shadow:0 0 0 1px var(--hair)}
+.v-bzpic .bz-win{box-shadow:0 0 0 1px var(--hair),0 24px 48px -16px oklch(20% .05 250 / .4)}
+.v-bzpic .bz-cap{width:fit-content;max-width:100%;margin:12px auto 0;padding:4px 12px;border-radius:999px;background:var(--card);box-shadow:0 0 0 1px var(--hair)}
+/* show more of each scene: a fixed 4:3 picture, the device card compact at its foot */
+.v-pic{aspect-ratio:4/3;display:flex;flex-direction:column;justify-content:flex-end;padding:14px}
+.v-pic .v-dev{min-height:0;height:auto;padding:10px;gap:6px}
+.v-pic .v-dev-h{font-size:12px}
+.v-pic .v-slots{flex:none;gap:4px}
+.v-pic .v-slot{height:28px;font-size:12px}
+.v-pic .v-slot span{font-size:11px}
+.v-beach{padding:clamp(20px,6vw,96px) clamp(16px,6vw,80px) clamp(96px,14vw,200px)}
+@media (max-width:600px){.v-pic{padding:12px}}
+
+/* phones */
+.v-phone{display:none;margin-top:12px;max-width:30ch;font-size:13px;line-height:1.45;color:var(--mute);text-align:center;text-wrap:balance}
+.cta .v-phone{color:var(--night-mute)}
+.bz-bar .live{white-space:nowrap}
+#collaborate .stage{display:grid}
+#collaborate .scene{grid-area:1/1;display:flex;visibility:hidden}
+#collaborate .scene.on{visibility:visible}
+@media (max-width:720px){
+  .tab{flex:1 1 0;min-width:0;justify-content:center;gap:6px;padding:0 8px;min-height:44px;align-items:center}
+  .links a{min-height:44px;display:inline-flex;align-items:center}
+  .bz-ctl .btn{height:44px}
+  .foot-col a{display:inline-block;padding-block:10px}
+}
+@media (max-width:640px),(pointer:coarse) and (max-width:900px){.v-phone{display:block;margin-inline:auto}}
+@media (max-width:600px){
+  .v-facts li{flex-direction:column;align-items:flex-start;gap:10px}
+  .v-big,.v-logos{width:auto;justify-content:flex-start;text-align:left}
+  #browse .screen{aspect-ratio:4/3}
+  #browse .screen img{object-position:22% 0}
+}
+@media (max-width:480px){.bz-bar .addr{display:none}}
+@media (hover:none){
+  .btn.sec:hover{background:var(--soft)}
+  .btn.pri:hover{background:var(--pri)}
+  .cta .btn.pri:hover{background:var(--night-ink)}
+  .pill:hover{background:var(--soft)}
+  .tab:hover{background:none}
+  .tab[aria-selected=true]:hover{background:var(--card)}
+  .links a:hover{background:none}
+}
+
+/* the app on a pixel scene */
+.hero-app{margin-top:40px;padding:clamp(12px,5vw,72px) clamp(12px,5vw,72px) clamp(40px,7vw,104px);border-radius:28px;background:url(/scenes/hero-band.jpg) 50% 100%/cover;box-shadow:0 0 0 1px var(--hair)}
+.hero-app .appbox{margin-top:0}
+.hero-app .app{box-shadow:0 0 0 1px var(--a-hair),0 30px 60px -20px oklch(20% .05 250 / .45)}
+@media (max-width:720px){.links a.narrow-hide{display:none}}
+@media (min-width:1360px){.hero-app{margin-inline:-72px}}
+@media (max-width:600px){.hero-app{padding:8px 8px 32px;border-radius:18px}}
+.hero .sun{display:none}
+
+@media (max-width:720px){#collaborate .scene{flex-direction:row}#collaborate .ids{width:auto}#collaborate .stage{padding:24px}}
+
 </style>
 </head>
 <body>
@@ -542,8 +664,8 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
     <div class="hero-top">
       <svg class="sun" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="#ffe08a" opacity=".22"/><circle cx="32" cy="32" r="17" fill="#ffe08a" stroke="#0b0b0b" stroke-width="3"/></svg>
       <div class="troop" id="troop"></div>
-      <h1>Build, manage &amp; share agents <span class="wave">with your team</span></h1>
-      <p class="sub">Self-improving agents in Slack, WhatsApp and Telegram. They run on your Mac, or on your own server.</p>
+      <h1>Give every job on your team an&nbsp;agent that <span class="wave">learns&nbsp;it</span></h1>
+      <p class="sub">Ask it in Slack, WhatsApp or Telegram. It works in its own sealed computer, uses only the apps you allow, and learns from your corrections. Free and open source, on your Mac or your own server.</p>
       <div class="get" id="get">
         <div class="get-row">
           <div class="dl-slot" data-location="hero"><a class="btn pri big" href="/download/mac">Download for Mac</a></div>
@@ -595,10 +717,10 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
     <div class="side-head">
       <svg class="cr" data-face="support" width="48" height="48"></svg>
       <h2>Meet your team where they work</h2>
-      <p>Every agent gets its own Slack app, WhatsApp number and Telegram bot.</p>
+      <p>Every agent gets its own Slack app, WhatsApp number and Telegram bot. Correct it in the chat once and it remembers.</p>
       <div class="tabs" role="tablist" aria-label="Where your team talks to agents">
         <button class="tab" role="tab" data-go="slack" aria-selected="true"><svg class="lg" width="18" height="18"><use href="#lg-slack"/></svg><b>Slack</b><span>@mention an agent in any channel or thread</span></button>
-        <button class="tab" role="tab" data-go="whatsapp" aria-selected="false"><svg class="lg" width="18" height="18"><use href="#lg-whatsapp"/></svg><b>WhatsApp</b><span>Give any agent its own number</span></button>
+        <button class="tab" role="tab" data-go="whatsapp" aria-selected="false"><svg class="lg" width="18" height="18"><use href="#lg-whatsapp"/></svg><b>WhatsApp</b><span>Its own number, and it remembers what you correct</span></button>
         <button class="tab" role="tab" data-go="telegram" aria-selected="false"><svg class="lg" width="18" height="18"><use href="#lg-telegram"/></svg><b>Telegram</b><span>Give any agent its own bot</span></button>
       </div>
     </div>
@@ -610,55 +732,27 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
             <div class="sm msg"><span class="hu" style="--c:#2e7d6b">D</span><div><span class="who">David</span><time>9:12 AM</time><p><span class="at">@Growth</span> how did signups do this week?</p>
               <div class="thr"><div class="sm msg" style="animation-delay:.5s"><svg class="cr" data-face="growth" width="36" height="36"></svg><div><span class="who">Growth</span><span class="app-tag">APP</span><time>9:12 AM</time><p><b>1,947 signups</b>, up 18% on last week. Thursday was the best day.</p><div class="bars" aria-label="Signups per day, Friday to Thursday"><i style="--h:42%"></i><i style="--h:35%"></i><i style="--h:30%"></i><i style="--h:55%"></i><i style="--h:62%"></i><i style="--h:70%"></i><i style="--h:100%"></i></div></div></div></div>
             </div></div>
-            <div class="sm msg" style="animation-delay:1s"><span class="hu" style="--c:#7a5cc7">P</span><div><span class="who">Pablo</span><time>10:02 AM</time><p><span class="at">@Ops</span> where is order #5102?</p>
-              <div class="thr"><div class="sm msg" style="animation-delay:1.5s"><svg class="cr" data-face="ops" width="36" height="36"></svg><div><span class="who">Ops</span><span class="app-tag">APP</span><time>10:02 AM</time><p>Shipped Tuesday with DHL. It lands Thursday.</p></div></div></div>
+            <div class="sm msg" style="animation-delay:1s"><span class="hu" style="--c:#7a5cc7">P</span><div><span class="who">Pablo</span><time>10:02 AM</time><p><span class="at">@Ops</span> did the Friday payout land?</p>
+              <div class="thr"><div class="sm msg" style="animation-delay:1.5s"><svg class="cr" data-face="ops" width="36" height="36"></svg><div><span class="who">Ops</span><span class="app-tag">APP</span><time>10:02 AM</time><p>Yes, $18,240 at 6:02 this morning. It matches Friday's 41 orders.</p></div></div></div>
             </div></div>
           </div>
         </div>
       </div>
       <div class="scene" data-scene="whatsapp">
         <div class="phone"><div class="p-h"><svg class="cr" data-face="growth" width="32" height="32"></svg><div><b>Growth</b><small>online</small></div></div>
-          <div class="p-b"><div class="bub me msg">How many signups yesterday?</div><div class="bub them msg" style="animation-delay:.4s">312, up 9% from Tuesday. Most came from the pricing page.</div><div class="bub me msg" style="animation-delay:.8s">Send me this every morning at 9</div><div class="bub them msg" style="animation-delay:1.2s">Will do. I'll remember.</div><div class="bub me msg" style="animation-delay:1.6s">Skip weekends</div><div class="bub them msg" style="animation-delay:2s">Done. Weekdays at 9.</div></div></div>
+          <div class="p-b"><div class="bub me msg">How many signups yesterday?</div><div class="bub them msg" style="animation-delay:.4s">312, up 9% from Tuesday. Most came from the pricing page.</div><div class="bub me msg" style="animation-delay:.8s">Next time, leave out bot signups</div><div class="bub them msg" style="animation-delay:1.2s">Got it. I saved that.</div><div class="bub me msg" style="animation-delay:1.6s">And yesterday without them?</div><div class="bub them msg" style="animation-delay:2s">281, up 6%.</div></div></div>
         <div class="ids"><div class="idc"><svg class="cr" data-face="growth" width="30" height="30"></svg><div><b>Growth</b><small>+49 151 0042 0117</small></div><svg class="lg" width="16" height="16" style="margin-left:auto"><use href="#lg-whatsapp"/></svg></div><div class="idc"><svg class="cr" data-face="support" width="30" height="30"></svg><div><b>Support</b><small>+49 151 0042 0118</small></div><svg class="lg" width="16" height="16" style="margin-left:auto"><use href="#lg-whatsapp"/></svg></div><div class="idc dash"><div><b>Bring a spare number</b><small>Scan once and it's the agent's.</small></div></div></div>
       </div>
       <div class="scene" data-scene="telegram">
         <div class="phone"><div class="p-h"><svg class="cr" data-face="sales" width="32" height="32"></svg><div><b>Sales</b><small>bot</small></div></div>
-          <div class="p-b"><div class="bub me msg">Who should I call first today?</div><div class="bub them msg" style="animation-delay:.4s">Northwind. They opened the proposal three times since Friday.</div><div class="bub me msg" style="animation-delay:.8s">Draft a follow-up for them</div><div class="bub them msg" style="animation-delay:1.2s">It's in your drafts. It answers the pricing question they asked.</div><div class="bub me msg" style="animation-delay:1.6s">Ping me if they reply</div><div class="bub them msg" style="animation-delay:2s">Will do.</div></div></div>
+          <div class="p-b"><div class="bub me msg">Who should I call first today?</div><div class="bub them msg" style="animation-delay:.4s">Northwind. Their trial ends Friday and they haven't booked a call.</div><div class="bub me msg" style="animation-delay:.8s">Draft a follow-up for them</div><div class="bub them msg" style="animation-delay:1.2s">It's in your drafts. It answers the pricing question they asked.</div><div class="bub me msg" style="animation-delay:1.6s">What did they ask last time?</div><div class="bub them msg" style="animation-delay:2s">Whether the price covers five seats. The draft answers it.</div></div></div>
         <div class="ids"><div class="idc"><svg class="cr" data-face="sales" width="30" height="30"></svg><div><b>Sales</b><small>@acme_sales_bot</small></div><svg class="lg" width="16" height="16" style="margin-left:auto"><use href="#lg-telegram"/></svg></div><div class="idc"><svg class="cr" data-face="support" width="30" height="30"></svg><div><b>Support</b><small>@acme_help_bot</small></div><svg class="lg" width="16" height="16" style="margin-left:auto"><use href="#lg-telegram"/></svg></div><div class="idc dash"><div><b>Make a bot with BotFather</b><small>Paste its token and it's the agent's.</small></div></div></div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="band" id="learning">
-  <div class="wrap">
-    <div class="head"><svg class="cr" data-face="ops" width="48" height="48"></svg><h2>Shape it as you go</h2><p>Ask Claude or Cursor for an agent. Correct it in Slack when it's wrong, and it remembers next time.</p></div>
-    <div class="duo">
-      <div class="card" id="as">
-        <div class="card-h"><svg class="lg" width="16" height="16"><use href="#lg-claude"/></svg>Claude<small>openhut connected</small></div>
-        <div class="card-b" id="asB">
-          <div class="ask">Make a finance agent for David on WhatsApp. It can read invoices and payments, nothing else.</div>
-          <div class="tool"><span class="fn">create_agent</span><span class="args">name: "Finance", owner: "david"</span><span class="ok">✓</span></div>
-          <div class="tool"><span class="fn">grant_access</span><span class="args">Postgres, read-only</span><span class="ok">✓</span></div>
-          <div class="tool"><span class="fn">add_channel</span><span class="args">whatsapp, allowed: David</span><span class="ok">✓</span></div>
-          <div class="tool"><span class="fn">start_agent</span><span class="args">Finance</span><span class="ok">✓</span></div>
-          <div class="res"><svg class="cr" data-face="finance" width="36" height="36"></svg><div><b>Finance is running</b><small>Next: David scans the QR with a spare number.</small></div><span class="badge"><i></i>Running</span></div>
-          <p class="said">Done. It can read invoices and payments, and nothing else.</p>
-        </div>
-      </div>
-      <div class="card" id="teach">
-        <div class="card-h"><svg class="lg" width="16" height="16"><use href="#lg-slack"/></svg># ops<small id="tDay">This week</small></div>
-        <div class="card-b" id="tMsgs" aria-live="polite"></div>
-        <div class="card-f"><button type="button" class="btn sec" id="tBtn">Correct it</button><span class="cap" id="tHint">Ops gets it wrong. Show it once.</span></div>
-      </div>
-    </div>
-    <div class="clients" aria-label="Works with any MCP client">
-      <span><svg class="lg" width="20" height="20"><use href="#lg-claude"/></svg>Claude</span><span><svg class="lg" width="20" height="20"><use href="#lg-cursor"/></svg>Cursor</span><span><svg class="lg" width="20" height="20"><use href="#lg-copilot"/></svg>Copilot</span><span><svg class="lg" width="20" height="20"><use href="#lg-windsurf"/></svg>Windsurf</span><span><svg class="lg" width="20" height="20"><use href="#lg-zed"/></svg>Zed</span><span><svg class="lg" width="20" height="20"><use href="#lg-mcp"/></svg>Any MCP client</span>
-    </div>
-  </div>
-</section>
-
-<section class="band tint" id="browse">
+<section class="band" id="browse">
   <div class="wrap split">
     <div class="side-head">
       <svg class="cr" data-face="scout" width="48" height="48"></svg>
@@ -671,7 +765,7 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
       </ul>
       <div class="bz-ctl"><button type="button" class="btn sec" id="bzBtn">Take over</button><span class="bz-st" id="bzSt" aria-live="polite">Scout is driving</span></div>
     </div>
-    <div>
+    <div class="v-bzpic">
       <div class="card bz-win" id="bzWin">
         <div class="bz-bar"><svg class="cr" data-face="scout" width="22" height="22"></svg><b>Scout's browser</b><span class="live"><i></i><span id="bzPill">Live</span></span><span class="addr"><svg class="i" width="13" height="13" viewBox="0 0 24 24" data-icon="SquareLock02"></svg><span><b>en.wikipedia.org</b>/wiki/Hermit_crab</span></span></div>
         <div class="screen" id="bzScreen">
@@ -685,126 +779,45 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
   </div>
 </section>
 
-<section class="band" id="sealed">
-<style>
-#sealed .ar-dia{position:relative;display:flex;flex-direction:column;gap:56px;text-align:left}
-#sealed .ar-wires{position:absolute;z-index:3;left:0;top:0;pointer-events:none;overflow:visible}
-#sealed .ar-wires path{fill:none;stroke:var(--mid);stroke-width:1.5;stroke-dasharray:5 5}
-#sealed [data-k]{cursor:help}
-#sealed .ar-lbl{height:20px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink)}
-#sealed .ar-lbl small{font-weight:450;font-size:12.5px;color:var(--mute)}
-
-#sealed .ar-laptop{display:flex;flex-direction:column}
-#sealed .ar-screen,#sealed .ar-rack{position:relative;display:flex;flex-direction:column;gap:12px;margin:0 14px;padding:10px 12px 14px;background:var(--bg-2);border:2.5px solid var(--ink)}
-#sealed .ar-screen{border-radius:16px 16px 4px 4px}
-#sealed .ar-cam{position:absolute;top:7px;left:50%;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--mid)}
-#sealed .ar-base{position:relative;height:14px;border:2.5px solid var(--ink);border-radius:2px 2px 12px 12px;background:var(--card)}
-#sealed .ar-base::before{content:"";position:absolute;top:-2.5px;left:50%;width:64px;height:5px;margin-left:-32px;border-radius:0 0 5px 5px;background:var(--ink)}
-#sealed .ar-rack{border-radius:10px}
-#sealed .ar-leds{margin-left:auto;display:flex;gap:6px}
-#sealed .ar-leds i{width:7px;height:7px;border-radius:50%;background:var(--pass)}
-#sealed .ar-leds i+i{background:var(--mid)}
-#sealed .ar-bays{height:70px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:6px}
-#sealed .ar-bays i:nth-child(n+9){display:none}
-#sealed .ar-bays i{position:relative;border-radius:5px;box-shadow:inset 0 0 0 1.5px var(--mid);background:var(--card)}
-#sealed .ar-bays i::before{content:"";position:absolute;left:10px;right:22px;top:50%;border-top:1.5px solid var(--mid)}
-#sealed .ar-bays i::after{content:"";position:absolute;right:9px;top:50%;width:5px;height:5px;margin-top:-2.5px;border-radius:50%;background:var(--mid)}
-#sealed .ar-bays i:nth-child(-n+3)::after{background:var(--pass)}
-#sealed .ar-spare{flex:none;height:96px;margin-top:-12px}
-#sealed .ar-two .ar-spare{flex:1 1 0;height:auto}
-#sealed .ar-vents{height:12px;background:repeating-linear-gradient(90deg,var(--mid) 0 1.5px,transparent 1.5px 9px) 50% 100%/60% 8px no-repeat}
-#sealed .ar-net{position:absolute;z-index:4;top:-40px;left:50%;translate:-50% 0;display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;background:var(--card);box-shadow:0 0 0 1px var(--hair);font-size:12px;color:var(--body);white-space:nowrap}
-#sealed .ar-rack::before{content:"";position:absolute;left:50%;top:-59px;height:56px;border-left:1.5px dashed var(--mid)}
-
-#sealed .ar-win{position:relative;z-index:1;display:flex;height:150px;border-radius:10px;overflow:hidden;background:var(--card);box-shadow:0 0 0 .5px oklch(0% 0 0 / .22),0 10px 26px -14px oklch(0% 0 0 / .3);font-size:11px;line-height:1.4}
-#sealed .ar-side{width:38%;flex:none;display:flex;flex-direction:column;gap:3px;padding:9px 7px;background:var(--bg-2);border-right:.5px solid var(--hair)}
-#sealed .ar-lights{display:flex;gap:5px;margin:0 0 7px 3px}
-#sealed .ar-lights i{width:8px;height:8px;border-radius:50%;background:#ff5f57}
-#sealed .ar-lights i:nth-child(2){background:#febc2e}
-#sealed .ar-lights i:nth-child(3){background:#28c840}
-#sealed .ar-row{display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;gap:7px;padding:4px 5px;border-radius:6px}
-#sealed .ar-row.on{background:var(--soft)}
-#sealed .ar-row span{display:grid;min-width:0;line-height:1.25}
-#sealed .ar-row b,#sealed .ar-chat b{font-weight:600}
-#sealed .ar-row small{font-size:10px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#sealed .ar-chat{flex:1;min-width:0;display:flex;flex-direction:column;padding:9px 12px 10px;gap:8px}
-#sealed .ar-log{margin-top:auto;display:flex;flex-direction:column;gap:8px}
-#sealed .ar-mu{align-self:flex-end;max-width:85%;padding:5px 9px;border-radius:9px 9px 3px 9px;background:var(--soft)}
-#sealed .ar-ma{display:grid;grid-template-columns:16px minmax(0,1fr);gap:6px;align-items:start}
-
-#sealed .ar-rt{container-type:inline-size;display:flex;flex-direction:column;gap:14px;padding:12px 14px 14px;border-radius:12px;background:var(--card);box-shadow:0 0 0 1px var(--hair)}
-#sealed .ar-rtb{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
-@container (min-width:330px){#sealed .ar-rtb{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);align-items:start}}
-#sealed .ar-boxes{display:flex;flex-direction:column;gap:16px;padding-top:10px}
-#sealed .ar-slot{position:relative;height:80px}
-#sealed .ar-slot:empty::before{content:attr(data-empty);display:grid;place-items:center;height:100%;padding:0 12px;border-radius:12px;border:1.5px dashed var(--mid);font-size:13px;color:var(--mute);text-align:center}
-#sealed .ar-agent{position:relative}
-#sealed .ar-wall{position:relative;height:80px;display:flex;align-items:center;padding:12px 14px 8px;border-radius:12px;box-shadow:inset 0 0 0 4px var(--ink);background:var(--card)}
-#sealed .ar-tag{position:absolute;top:-11px;left:12px;display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:11.5px;font-weight:500;white-space:nowrap}
-#sealed .ar-me{display:flex;align-items:center;gap:12px;min-width:0;border-radius:8px}
-#sealed .ar-who{display:grid;line-height:1.25;min-width:0}
-#sealed .ar-who b{font-weight:600;font-size:15px}
-#sealed .ar-who small{font-size:12.5px;color:var(--mute)}
-#sealed .ar-sealed{position:absolute;inset:0;display:none;place-items:center;border-radius:12px;background:color-mix(in oklch,var(--card) 82%,transparent)}
-#sealed .ar-sealed span{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;background:var(--ink);color:var(--bg);font-size:12px;font-weight:600}
-#sealed .ar-moving .ar-sealed{display:grid}
-#sealed .ar-moving{z-index:5}
-#sealed .ar-safe{margin-top:10px;display:flex;flex-direction:column;border-radius:10px;background:var(--bg-2);box-shadow:0 0 0 1px var(--mid);overflow:hidden}
-#sealed .ar-safe>div{display:flex;align-items:center;gap:10px;padding:8px 10px}
-#sealed .ar-safe>div+div{border-top:1px solid var(--hair);background:var(--card)}
-#sealed .ar-safe span{display:grid;line-height:1.25;min-width:0}
-#sealed .ar-safe b{font-weight:600;font-size:13px}
-#sealed .ar-safe small{font-size:11.5px;color:var(--mute)}
-#sealed .ar-key{width:22px;height:22px;flex:none;display:grid;place-items:center;border-radius:6px;background:var(--card);box-shadow:0 0 0 1px var(--hair);color:var(--amber)}
-#sealed .ar-lc{width:22px;height:22px;flex:none;display:grid;place-items:center;border-radius:6px;background:#fff;box-shadow:0 0 0 1px var(--hair)}
-
-#sealed .ar-say{min-height:50px;max-width:62ch;margin:24px auto 0;text-align:center;font-size:15px;color:var(--body);text-wrap:pretty}
-#sealed .ar-say b{color:var(--ink);font-weight:600}
-#sealed .ar-ctl{display:flex;justify-content:center;margin-top:20px}
-#sealed #arMove{min-width:240px}
-@media (min-width:860px){
-  #sealed .ar-dia{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:0 128px}
-  #sealed .ar-rack::before{display:none}
-  #sealed .ar-net{translate:-50% -50%}
-  #sealed .ar-bays{height:150px;grid-template-rows:repeat(3,minmax(0,1fr))}
-  #sealed .ar-bays i:nth-child(n+9){display:block}
-}
-@media (prefers-reduced-motion:reduce){#sealed *{transition:none!important}}
-@media (max-width:720px){#sealed .br-wide{display:none}}
-</style>
+<section class="v-band v-tint" id="where">
   <div class="wrap">
-    <div class="head"><h2>One app. <br class="br-wide">Your computers do the work.</h2><p>The app on your Mac only steers. Each computer runs its own agents and keeps its own passwords.</p></div>
-    <div class="ar-dia" id="arDia" aria-label="The OpenHut app on your Mac, steering agents on this Mac and on a Linux server">
-      <svg class="ar-wires" id="arWires" aria-hidden="true"></svg>
+    <div class="v-head">
+      <h2>Where your agents live</h2>
+      <p>On computers you own. Each agent is a Hermes agent in its own sealed microVM. A key safe on that computer holds every password and lets each agent use only the apps you allow.</p>
     </div>
-    <p class="ar-say" id="arSay" aria-live="polite">Hover or tap any part to see what it is.</p>
-    <div class="ar-ctl"><button type="button" class="btn pri" id="arMove">Move Ops to the server</button></div>
-  </div>
-</section>
-
-<section class="band tint" id="usage">
-  <div class="wrap">
-    <div class="head"><h2>Usage &amp; cost</h2><p>See who uses which agent, and what it costs.</p></div>
-    <div class="trio">
-      <div class="card">
-        <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><h3 class="ct">Who's using them</h3><p class="line" id="wuLine" aria-live="polite"></p></div><div class="ppl" id="ppl" role="group" aria-label="Pick a teammate"></div></div>
-        <div class="urows" id="urows"></div>
-      </div>
-      <div class="card">
-        <h3 class="ct">What it costs this week</h3>
-        <div class="pct"><b id="spPct">62%</b><span id="spWho">of your Claude plan</span></div>
-        <div class="plan" id="plan" role="group" aria-label="Plan use by agent"></div>
-        <div class="legend" id="legend"></div>
-        <p class="cap" style="margin-top:auto">No extra model bill.</p>
-      </div>
-      <div class="card">
-        <h3 class="ct">Bring your own Claude</h3>
-        <div class="byo"><div class="t"><svg class="lg" width="28" height="28"><use href="#lg-claude"/></svg><div><b style="font-weight:600">Your Claude plan</b><small>Signed in · 6 agents</small></div></div><div class="key">sk-ant-oat01-••••••••••••</div></div>
-        <p class="cap" style="margin-top:auto">Every agent runs on the plan you already pay for.</p>
-      </div>
+    <div class="v-where">
+      <article class="v-place rv">
+        <div class="v-pic" style="--img:url(/scenes/where-mac.jpg)"><div class="v-dev"><div class="v-dev-h"><span data-icon="Laptop" data-size="15"></span><b>This Mac</b><span class="v-st"><i></i>Awake</span></div><div class="v-slots" id="vMac"></div></div></div>
+        <h3>On your Mac</h3>
+        <p>Download, open, done. Agents, chats and memory stay on your disk. They pause while your Mac sleeps.</p>
+      </article>
+      <article class="v-place rv">
+        <div class="v-pic" style="--img:url(/scenes/where-server.jpg)"><div class="v-dev"><div class="v-dev-h"><span data-icon="ServerStack01" data-size="15"></span><b>ops-server</b><span class="v-st"><i></i>Always on</span></div><div class="v-slots" id="vSrv"></div></div></div>
+        <h3>On your own server</h3>
+        <p>Add a Linux server from Settings over Tailscale. Agents keep working with your laptop shut, and you can move any agent here in one click.</p>
+      </article>
     </div>
   </div>
 </section>
+
+<section class="v-band" id="start">
+  <div class="wrap"><div class="v-beach"><div class="v-start">
+    <div class="v-start-l">
+      <h2>Free, open source, working in two minutes</h2>
+      <ol class="v-how">
+        <li><b>Download it and open it.</b></li>
+        <li><b>Name your first agent and give it a job.</b></li>
+        <li><b>Add it to Slack, WhatsApp or Telegram.</b></li>
+      </ol>
+    </div>
+    <ul class="v-facts">
+      <li class="rv"><span class="v-big">$0</span><div><b>MIT licensed</b><span>Every feature, no seat count, no trial timer.</span></div></li>
+      <li class="rv"><span class="v-logos"><svg class="lg" width="22" height="22"><use href="#lg-claude"/></svg><svg class="lg" width="22" height="22"><use href="#lg-openai"/></svg></span><div><b>Bring the AI you already pay for</b><span>Sign in with your Claude or ChatGPT plan. No extra model bill.</span></div></li>
+      <li class="rv"><span class="v-logos"><svg class="lg" width="22" height="22"><use href="#lg-cursor"/></svg><svg class="lg" width="22" height="22"><use href="#lg-copilot"/></svg><svg class="lg" width="22" height="22"><use href="#lg-zed"/></svg></span><div><b>Manage it from your own assistant</b><span>Claude, Cursor, Copilot, Windsurf or Zed over MCP.</span></div></li>
+    </ul>
+  </div></div></div>
+</section>
+
 
 <section class="cta" id="cta">
   <div class="stars" aria-hidden="true"></div>
@@ -933,25 +946,25 @@ if (!reduce && matchMedia('(pointer:fine)').matches) {
 /* ===== the app ===== */
 const app = $('#app'), box = $('#appbox')
 const AGENTS = [
-  { id: 'growth', name: 'Growth', look: LOOKS.growth, on: 'This Mac', does: 'Posts the weekly numbers to #growth and flags any drop.', model: 'Sonnet 5.5', notes: 9, skills: 38, ch: { slack: 1 }, uses: ['posthog', 'postgres'], browser: false, code: true,
+  { id: 'growth', name: 'Growth', look: LOOKS.growth, on: 'This Mac', does: 'Answers questions about signups and traffic in #growth.', model: 'Sonnet 5.5', notes: 9, skills: 38, ch: { slack: 1 }, uses: ['posthog', 'postgres'], browser: false, code: true,
     past: [['u', 'Post the signups every Monday at 9'], ['a', 'Will do. Mondays at 9, in #growth.', [['memory', 'memory']]]],
     ask: 'How did signups do this week?', tools: [['app', 'posthog_query', 'PostHog']], reply: '**1,947 signups**, up 18% on last week. Thursday was the best day, right after the launch post.',
     answer: 'Nothing unusual today. Signups are 6% above last Tuesday, mostly from the pricing page.' },
-  { id: 'support', name: 'Support', look: LOOKS.support, on: 'This Mac', does: 'Answers customers on WhatsApp and hands the hard ones to Maya.', model: 'Haiku 5.5', notes: 23, skills: 41, ch: { whatsapp: 1, telegram: 1 }, uses: ['gmail', 'linear'], browser: true, code: false,
-    past: [['u', 'Refunds over $200 always go to Maya'], ['a', "Got it. I'll hand those to Maya with the order link.", [['memory', 'memory']]]],
-    ask: 'Anything I should know from overnight?', tools: [['app', 'linear_create_issue', 'Linear']], reply: '14 chats, 12 solved. Two asked for refunds over $200, so they went to Maya. I filed one bug in Linear.',
+  { id: 'support', name: 'Support', look: LOOKS.support, on: 'This Mac', does: 'Answers customers on WhatsApp and leaves the hard ones for Maya.', model: 'Haiku 5.5', notes: 23, skills: 41, ch: { whatsapp: 1, telegram: 1 }, uses: ['gmail', 'linear'], browser: true, code: false,
+    past: [['u', 'Refunds over $200 always go to Maya'], ['a', "Got it. I'll leave those for Maya with the order link.", [['memory', 'memory']]]],
+    ask: 'Anything I should know from overnight?', tools: [['app', 'linear_create_issue', 'Linear']], reply: '14 chats, 12 solved. Two asked for refunds over $200, so I left them for Maya. I filed one bug in Linear.',
     answer: 'Quiet so far. Three chats this morning, all solved, nobody waiting.' },
-  { id: 'ops', name: 'Ops', look: LOOKS.ops, on: 'This Mac', does: "Pays invoices, files receipts in Drive and flags renewals before they're due.", model: 'Sonnet 5.5', notes: 12, skills: 44, ch: { slack: 1 }, uses: ['gmail', 'drive', 'postgres'], browser: false, code: true,
+  { id: 'ops', name: 'Ops', look: LOOKS.ops, on: 'This Mac', does: 'Checks invoices and renewals in Gmail and answers payout questions from your database.', model: 'Sonnet 5.5', notes: 12, skills: 44, ch: { slack: 1 }, uses: ['gmail', 'drive', 'postgres'], browser: false, code: true,
     past: [['u', 'Any new invoices this morning?'], ['a', 'Three. Two are paid. The AWS one is $1,284, 22% over last month, so I left it for you.', [['app', 'gmail_search', 'Gmail']]]],
-    ask: 'Did the Stripe payout land?', tools: [['app', 'postgres_query', 'Postgres']], reply: "Yes, **$18,240** at 6:02 this morning. It matches Friday's 41 orders.",
+    ask: 'Did the Friday payout land?', tools: [['app', 'postgres_query', 'Postgres']], reply: "Yes, **$18,240** at 6:02 this morning. It matches Friday's 41 orders.",
     answer: 'Nothing is overdue. The next renewal is Figma on the 28th, $540.' },
-  { id: 'sales', name: 'Sales', look: LOOKS.sales, on: 'beelink', does: 'Posts the pipeline to #sales and drafts follow-ups.', model: 'Opus 5.5', notes: 17, skills: 40, ch: { slack: 1, telegram: 1 }, uses: ['gmail', 'linear'], browser: true, code: false,
+  { id: 'sales', name: 'Sales', look: LOOKS.sales, on: 'ops-server', does: 'Researches leads and drafts follow-ups in Gmail.', model: 'Opus 5.5', notes: 17, skills: 40, ch: { slack: 1, telegram: 1 }, uses: ['gmail', 'linear'], browser: true, code: false,
     past: [['u', 'Keep follow-ups under five lines'], ['a', 'Noted. Short and to the point from now on.', [['memory', 'memory']]]],
-    ask: 'Who should I call first today?', tools: [['web', 'browser', ''], ['app', 'gmail_create_draft', 'Gmail']], reply: '**Northwind.** They opened the proposal three times since Friday. A follow-up is in your drafts.',
+    ask: 'Who should I call first today?', tools: [['web', 'browser', ''], ['app', 'gmail_create_draft', 'Gmail']], reply: '**Northwind.** Their trial ends Friday and no call is booked yet. A follow-up is in your drafts.',
     answer: 'Northwind is still the warmest. Acme replied overnight and wants a call on Thursday.' },
 ]
 AGENTS.forEach(a => { a.running = true; a.msgs = a.past.map(([role, text, steps]) => ({ role, text, steps })) })
-const COMPUTERS = [{ id: 'This Mac', kind: 'laptop', line: 'Online · 3 agents · OpenHut 0.1.1', online: true, note: 'Only while this Mac is awake' }, { id: 'beelink', kind: 'server', line: 'Online · 1 agent · OpenHut 0.1.1', online: true, note: 'Always on' }]
+const COMPUTERS = [{ id: 'This Mac', kind: 'laptop', line: 'Online · 3 agents · OpenHut 0.1.1', online: true, note: 'Only while this Mac is awake' }, { id: 'ops-server', kind: 'server', line: 'Online · 1 agent · OpenHut 0.1.1', online: true, note: 'Always on' }]
 const CATALOG = [
   ['Data', 'postgres', 'Postgres', 'Read-only access to a database.'], ['Data', 'convex', 'Convex', 'Tables, functions and logs of one deployment.'], ['Data', 'posthog', 'PostHog', 'Insights, events and flags, with your sign-in.'],
   ['Work', 'linear', 'Linear', 'Issues and projects, as the person who connects.'], ['Work', 'github', 'GitHub', 'A bot of your own that reads code, commits and opens pull requests.'], ['Work', 'excalidraw', 'Excalidraw', 'Hand-drawn diagrams agents share as a link.'],
@@ -1201,11 +1214,11 @@ const SET = {
         : srow(cmark(c.kind, c.online), c.id, note, `<button class="apill" data-set="ask" data-pc="${c.id}">Remove</button>`) }).join('')}
     ${srow(hue('PlusSign', 'green'), 'Add a computer', 'An always-on Linux computer keeps agents answering while this Mac sleeps.', ic('ArrowRight01', 16), true)}</div>`,
   models: () => `<p class="intro">Sign in with the subscription you already pay for. Each agent then picks one.</p>
-    <div class="srows">${srow(lg('claude', 22), 'Claude subscription', 'Max · 23% of this 5-hour window<br>On This Mac, beelink', '<span class="st"><i></i>Signed in</span>')}${srow(lg('openai', 22), 'Codex subscription', 'ChatGPT Plus or Pro', '<span style="color:var(--a-mute)">Coming soon</span>')}</div>
+    <div class="srows">${srow(lg('claude', 22), 'Claude subscription', 'Max · 23% of this 5-hour window<br>On This Mac, ops-server', '<span class="st"><i></i>Signed in</span>')}${srow(lg('openai', 22), 'Codex subscription', 'ChatGPT Plus or Pro', '<span style="color:var(--a-mute)">Coming soon</span>')}</div>
     <p style="display:flex;align-items:center;gap:16px;padding:0 10px;color:var(--a-mute)"><span style="width:24px;display:grid;place-items:center">${hue('Key01', 'amber', 16)}</span>Sign-ins are sealed in the macOS Keychain.</p>`,
   mcp: () => `<p class="intro">Let your own AI make agents and grant access for you. Run one of these once in your terminal.</p>
     <div class="clients-row">${[['claude', 'Claude Code'], ['openai', 'Codex'], ['cursor', 'Cursor'], ['zed', 'Zed']].map(([k, n]) => `<span data-tip="${n}" aria-label="${n}">${lg(k, 22)}</span>`).join('')}</div>
-    ${COMPUTERS.map(c => `<div class="mcp-sec"><div class="slbl">${c.id === 'This Mac' ? 'On this Mac' : c.id}<button class="apill" data-set="copy">${ic('Copy01', 13)}Copy</button></div><div class="code"><code>claude mcp add ${c.id === 'This Mac' ? 'openhut' : 'openhut-beelink'} -- /Applications/OpenHut.app/Contents/Resources/openhut-mcp.mjs${c.id === 'This Mac' ? '' : ' --computer beelink'}</code></div>${c.id === 'This Mac' ? '' : '<p style="color:var(--a-mute)">Needs the OpenHut app running.</p>'}</div>`).join('')}
+    ${COMPUTERS.map(c => `<div class="mcp-sec"><div class="slbl">${c.id === 'This Mac' ? 'On this Mac' : c.id}<button class="apill" data-set="copy">${ic('Copy01', 13)}Copy</button></div><div class="code"><code>claude mcp add ${c.id === 'This Mac' ? 'openhut' : 'openhut-ops-server'} -- /Applications/OpenHut.app/Contents/Resources/openhut-mcp.mjs${c.id === 'This Mac' ? '' : ' --computer ops-server'}</code></div>${c.id === 'This Mac' ? '' : '<p style="color:var(--a-mute)">Needs the OpenHut app running.</p>'}</div>`).join('')}
     <div class="srows">${srow(hue('CommandLine', 'teal'), 'Other apps', 'Any MCP app: add a stdio server that runs the same bridge.', `<button class="apill" data-set="copy">${ic('Copy01', 13)}Copy path</button>`)}</div>`,
 }
 let removing = null, setTab = 'general', shelf = 'All', cq = ''
@@ -1262,11 +1275,11 @@ const closeDialog = () => { dialog = null; $('.scrim', app)?.remove(); app.class
 
 /* fit the window: full size when it fits, scaled down to 0.6, then the narrow app (no panel), then one pane on a phone */
 const fit = () => {
-  const avail = box.parentElement.clientWidth
-  const mobile = avail < 640
+  const avail = (p => p.clientWidth - parseFloat(getComputedStyle(p).paddingLeft) - parseFloat(getComputedStyle(p).paddingRight))(box.parentElement)
+  const mobile = false
   app.classList.toggle('mobile', mobile)
   if (mobile) { box.style.height = ''; app.style.removeProperty('--s'); app.style.width = ''; app.style.marginLeft = ''; return }
-  const w = avail >= 1000 ? 1180 : 900, s = Math.min(1, avail / w)
+  const w = 1180, s = Math.min(1, avail / w)
   app.classList.toggle('narrow', w === 900)
   app.style.width = w + 'px'; app.style.setProperty('--s', s)
   box.style.height = 740 * s + 'px'; app.style.marginLeft = (avail - w * s) / 2 + 'px'
@@ -1317,37 +1330,11 @@ $$('[data-split]').forEach(sp => {
 
 /* channels */
 const tabs = $$('#collaborate .tab')
-const showScene = k => {
+const showChan = k => {
   tabs.forEach(t => t.setAttribute('aria-selected', t.dataset.go === k))
   $$('#collaborate .scene').forEach(s => s.classList.toggle('on', s.dataset.scene === k))
 }
-tabs.forEach(t => t.addEventListener('click', () => { showScene(t.dataset.go); hop($('#collaborate .side-head .cr')) }))
-
-/* shape it as you go: the transcript plays once, the correction is yours */
-const asKids = [...$('#asB').children]
-if (!reduce) { asKids.forEach(k => k.style.visibility = 'hidden'); whenVisible($('#as'), async () => { for (const k of asKids) { await sleep(k.classList.contains('tool') ? 450 : 700); k.style.visibility = ''; k.style.animation = 'rise .35s' } }) }
-const tMsgs = $('#tMsgs'), tBtn = $('#tBtn'), tHint = $('#tHint')
-const PEOPLE = { P: ['Pablo', '#7a5cc7'], D: ['David', '#2e7d6b'] }
-const human = (k, t) => `<div class="sm msg"><span class="hu" style="--c:${PEOPLE[k][1]}">${k}</span><div><span class="who">${PEOPLE[k][0]}</span><p>${t.replace('@Ops', '<span class="at">@Ops</span>')}</p></div></div>`
-const opsSay = (t, mem) => `<div class="sm msg"><span class="tf">${face(LOOKS.ops, 36)}</span><div><span class="who">Ops</span><span class="app-tag">APP</span><p>${t}</p>${mem ? `<span class="mem" style="margin-top:8px"><span class="tile k-memory">${ic('AiBrain01', 13)}</span>Saved to memory</span>` : ''}</div></div>`
-let tStep = 0, tTok = 0
-const tSet = async n => {
-  const my = ++tTok; tStep = n; tBtn.disabled = true
-  if (n === 0) { $('#tDay').textContent = 'This week'; tMsgs.innerHTML = human('P', '@Ops where is order #5102?') + opsSay('Shipped on Monday.'); tBtn.textContent = 'Correct it'; tHint.textContent = 'Ops gets it wrong. Show it once.' }
-  if (n === 1) {
-    tMsgs.insertAdjacentHTML('beforeend', human('D', 'Check the carrier too. Our system runs a day behind.')); await sleep(800); if (my !== tTok) return
-    tMsgs.insertAdjacentHTML('beforeend', opsSay('Saved. The carrier shows it stuck in Berlin since Monday.', true)); talk(tMsgs.lastElementChild.querySelector('.tf'))
-    tBtn.textContent = 'Ask again next week'; tHint.textContent = 'It remembers.'
-  }
-  if (n === 2) {
-    $('#tDay').textContent = 'Next week'; tMsgs.innerHTML = human('P', '@Ops where is order #5210?'); await sleep(800); if (my !== tTok) return
-    tMsgs.insertAdjacentHTML('beforeend', opsSay('Our system says shipped, but the carrier shows it stuck in Hamburg since Tuesday.')); talk(tMsgs.lastElementChild.querySelector('.tf'))
-    tBtn.textContent = 'Start over'; tHint.textContent = 'No one had to say it twice.'
-  }
-  tBtn.disabled = false
-}
-tBtn.addEventListener('click', () => tSet((tStep + 1) % 3))
-tSet(0)
+tabs.forEach(t => t.addEventListener('click', () => { showChan(t.dataset.go); hop($('#collaborate .side-head .cr')) }))
 
 /* browser */
 {
@@ -1374,151 +1361,28 @@ tSet(0)
   setHeld(false)
 }
 
-/* how it works: the architecture section */
-(() => {
-  const init = () => {
-    const $ = (s, r = document) => r.querySelector(s)
-    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
-    const OPS = { seed: 'ops', pal: 2, costume: 'beanie' }, SUPPORT = { seed: 'support', pal: 9, costume: 'headset' }
-    const SAY = {
-      app: ['OpenHut app', 'Where you see and steer your agents. It keeps nothing about them.'],
-      mac: ['This Mac', 'Runs the app and its own agents.'],
-      srv: ['Linux server', 'Runs its own agents, even while your Mac sleeps.'],
-      net: ['Private network', 'How the app reaches the server. Nobody else can get in.'],
-      runtime: ['Agent Runtime', 'Runs the agents on this computer and keeps their memory here.'],
-      box: ['Sealed box', 'Every agent gets its own (a microVM on a Mac, gVisor on a server). It can’t see the computer or other agents.'],
-      agent: ['Agent', 'Built on Hermes, the open-source agent from Nous Research.'],
-      safe: ['Key safe', 'Holds the database password. The agent asks, the Key safe checks and makes the call. The agent never sees the password.'],
-      slot: ['Free space', 'This computer can run more agents.'],
-    }
-    const agent = (id, name, look) => `<div class="ar-agent" id="${id}">
-      <div class="ar-wall" data-k="box" tabindex="0"><span class="ar-tag">${ic('SquareLock02', 11)}Sealed box</span>
-        <span class="ar-me" data-k="agent">${face(look, 44)}<span class="ar-who"><b>${name}</b><small>agent</small></span></span>
-        <span class="ar-sealed"><span>${ic('SquareLock02', 12)}Sealed for the trip</span></span></div>
-    </div>`
-    const runtime = slots => `<div class="ar-rt" data-k="runtime" tabindex="0">
-      <div class="ar-lbl">Agent Runtime<small>runs your agents</small></div>
-      <div class="ar-rtb">
-        <div class="ar-boxes">${slots}</div>
-        <div class="ar-safe" data-k="safe" tabindex="0">
-          <div><span class="ar-key">${ic('Key01', 13)}</span><span><b>Key safe</b><small>holds every password</small></span></div>
-          <div><span class="ar-lc">${lg('postgres', 14)}</span><span><b>Postgres</b><small>your database</small></span></div>
-        </div>
-      </div>
-    </div>`
-    const win = `<div class="ar-win" data-k="app" tabindex="0" role="img" aria-label="The OpenHut app window">
-      <div class="ar-side"><div class="ar-lights"><i></i><i></i><i></i></div>
-        <div class="ar-row on">${face(OPS, 22)}<span><b>Ops</b><small id="arOpsWhere">This Mac</small></span></div>
-        <div class="ar-row">${face(SUPPORT, 22)}<span><b>Support</b><small>Linux server</small></span></div>
-      </div>
-      <div class="ar-chat"><b>Ops</b>
-        <div class="ar-log"><div class="ar-mu">Did the Stripe payout land?</div>
-          <div class="ar-ma">${face(OPS, 16)}<span>Yes, <b>$18,240</b> at 6:02 this morning.</span></div></div>
-      </div>
-    </div>`
-    const dia = $('#arDia'), wires = $('#arWires'), say = $('#arSay')
-    dia.insertAdjacentHTML('beforeend', `
-    <div class="ar-laptop" id="arMac" role="group" aria-label="This Mac">
-      <div class="ar-screen" data-k="mac"><i class="ar-cam"></i>
-        <div class="ar-lbl">${ic('Laptop', 16)}This Mac</div>
-        ${win}
-        ${runtime(`<div class="ar-slot" data-empty="Ops moved to the server">${agent('arOps', 'Ops', OPS)}</div>`)}
-      </div>
-      <div class="ar-base" data-k="mac"></div>
-    </div>
-    <div class="ar-rack" id="arSrv" data-k="srv" role="group" aria-label="Linux server">
-      <span class="ar-net" id="arNet" data-k="net" tabindex="0">private network</span>
-      <div class="ar-lbl">${ic('ServerStack01', 16)}Linux server<span class="ar-leds"><i></i><i></i></span></div>
-      <div class="ar-bays" aria-hidden="true">${'<i></i>'.repeat(12)}</div>
-      ${runtime(agent('arSupport', 'Support', SUPPORT))}
-      <div class="ar-spare"></div>
-      <div class="ar-vents" aria-hidden="true"></div>
-    </div>`)
 
-    let busy = false
-    const pick = e => { const el = e.target.closest('[data-k]'); if (!el || busy) return; const [t, d] = SAY[el.dataset.k]; say.innerHTML = `<b>${t}.</b> ${d}` }
-    dia.addEventListener('pointerover', pick)
-    dia.addEventListener('focusin', pick)
-    dia.addEventListener('click', pick)
+/* ===== the new sections ===== */
+whenVisible($('#collaborate .stage'), () => $('#collaborate').classList.add('seen'))
 
-    const box = el => {
-      const r = el.getBoundingClientRect(), d = dia.getBoundingClientRect()
-      return { l: r.left - d.left, t: r.top - d.top, r: r.right - d.left, b: r.bottom - d.top }
-    }
-    const draw = () => {
-      const A = box($('.ar-win', dia)), M = box($('.ar-screen', dia)), S = box($('#arSrv')), R = box($('#arSrv .ar-rt')), net = $('#arNet')
-      const rack = $('#arSrv')
-      if (!rack.classList.contains('ar-two')) { rack.style.minHeight = ''; rack.style.minHeight = rack.offsetHeight + 'px' }
-      wires.setAttribute('width', dia.scrollWidth)
-      wires.setAttribute('height', dia.scrollHeight)
-      if (S.t > M.b - 10) { wires.innerHTML = ''; net.style.left = net.style.top = ''; return }
-      const x = (M.r + S.l) / 2, ay = (A.t + A.b) / 2, ry = R.t + 22, r = 10
-      wires.innerHTML = `<path d="M${A.r} ${ay}H${x - r}Q${x} ${ay} ${x} ${ay + r}V${ry - r}Q${x} ${ry} ${x + r} ${ry}H${R.l}"/>`
-      net.style.left = x - S.l + 'px'
-      net.style.top = (ay + ry) / 2 - S.t + 'px'
-    }
-    new ResizeObserver(draw).observe(dia)
-    document.fonts?.ready.then(draw)
+/* where they live */
+{
+  const slot = (k, n, t) => `<div class="v-slot">${face(LOOKS[k], 22)}<b>${n}</b><span>${t}</span></div>`
+  $('#vMac').innerHTML = slot('ops', 'Ops', 'answering') + slot('scout', 'Scout', 'idle')
+  $('#vSrv').innerHTML = slot('support', 'Support', 'answering') + slot('growth', 'Growth', 'idle')
+}
 
-    const moveBtn = $('#arMove')
-    moveBtn.addEventListener('click', async () => {
-      if (busy) return
-      busy = true
-      const el = $('#arOps'), toMac = !!el.closest('#arSrv'), from = el.parentElement
-      const dest = toMac ? $('#arMac .ar-slot') : $('#arSrv .ar-boxes')
-      const f = el.getBoundingClientRect()
-      dest.append(el)
-      $('#arSrv').classList.toggle('ar-two', !toMac)
-      const l = el.getBoundingClientRect()
-      if (toMac) dest.removeAttribute('data-k')
-      else from.dataset.k = 'slot'
-      const host = toMac ? $('#arMac .ar-screen') : $('#arSrv')
-      host.style.zIndex = 2
-      el.classList.add('ar-moving')
-      await el.animate([{ transform: `translate(${f.left - l.left}px,${f.top - l.top}px)` }, { transform: 'none' }], { duration: reduce ? 0 : 1300, easing: 'cubic-bezier(.5,0,.2,1)' }).finished
-      await new Promise(r => setTimeout(r, reduce ? 0 : 250))
-      el.classList.remove('ar-moving')
-      host.style.zIndex = ''
-      talk($('.cr', el))
-      $('#arOpsWhere').textContent = toMac ? 'This Mac' : 'Linux server'
-      moveBtn.textContent = toMac ? 'Move Ops to the server' : 'Move Ops back to this Mac'
-      say.innerHTML = `<b>Ops moved to ${toMac ? 'this Mac' : 'the Linux server'}.</b> Its memory traveled sealed, and the app still shows it.`
-      busy = false
-    })
-    draw()
+for (const g of document.querySelectorAll('.get')) g.insertAdjacentHTML('beforeend', '<p class="v-phone">OpenHut runs on a Mac or Linux computer. Open this page there to download.</p>')
+
+{
+  const st = $('#collaborate .stage'), W = 600
+  const fitChan = () => {
+    st.style.zoom = ''; st.style.width = ''
+    const avail = st.parentElement.clientWidth
+    if (avail < W) { st.style.width = W + 'px'; st.style.zoom = avail / W }
   }
-  document.readyState === 'loading' ? addEventListener('DOMContentLoaded', init) : init()
-})()
-
-/* usage */
-const UA = [['ops', 'Ops', '#FF7A59'], ['growth', 'Growth', '#86c7b4'], ['support', 'Support', '#b79cf2'], ['sales', 'Sales', '#3d8fdc'], ['finance', 'Finance', '#f7c948'], ['recruit', 'Recruit', '#e4587e']]
-const USE = { all: [214, 187, 96, 41, 23, 9], Emil: [38, 0, 22, 0, 12, 0], David: [41, 0, 31, 25, 11, 0], Pablo: [61, 0, 9, 0, 0, 9], Lea: [44, 0, 18, 16, 0, 0], Mara: [30, 0, 16, 0, 0, 0], Sam: [0, 0, 0, 0, 0, 0] }
-const PCOL = { Emil: '#c2553a', David: '#2e7d6b', Pablo: '#7a5cc7', Lea: '#2e6ba5', Mara: '#b0456a', Sam: '#9a9aa2' }
-$('#urows').innerHTML = UA.map(([k, n, c]) => `<div class="ur">${face(LOOKS[k], 28)}<span>${n}</span><span class="tr"><i style="--c:${c}"></i></span><b>0</b></div>`).join('')
-$('#ppl').innerHTML = Object.keys(PCOL).map(n => `<button type="button" class="${n === 'Sam' ? 'idle' : ''}" data-n="${n}" aria-pressed="false" title="${n}" style="--c:${PCOL[n]}">${n[0]}</button>`).join('')
-let who = null
-const wuDraw = () => {
-  const v = USE[who || 'all'], max = Math.max(...USE.all), total = v.reduce((a, b) => a + b, 0)
-  $$('#urows .ur').forEach((r, i) => { $('i', r).style.width = (v[i] / max * 100) + '%'; $('b', r).textContent = who ? v[i] || '–' : v[i]; r.classList.toggle('unused', !v[i]) })
-  $$('#ppl button').forEach(b => b.setAttribute('aria-pressed', b.dataset.n === who))
-  const top = UA[v.indexOf(Math.max(...v))][1]
-  $('#wuLine').innerHTML = !who ? '<b>5 of 6</b> teammates messaged an agent this week' : total ? `<b>${who}</b> sent ${total} messages, mostly to ${top}` : `<b>${who}</b> hasn't tried one yet`
+  addEventListener('resize', fitChan); fitChan()
 }
-$('#ppl').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; who = who === b.dataset.n ? null : b.dataset.n; wuDraw() })
-whenVisible($('#urows'), wuDraw)
-const SPEND = [24, 17, 9, 6, 4, 2]
-$('#plan').innerHTML = SPEND.map((v, i) => `<button type="button" data-i="${i}" style="width:${v}%;--c:${UA[i][2]}" aria-label="${UA[i][1]} ${v}%"></button>`).join('')
-$('#legend').innerHTML = UA.map(([, n, c], i) => `<button type="button" data-i="${i}" aria-pressed="false"><i style="--c:${c}"></i>${n}</button>`).join('')
-let spSel = -1
-const spPick = e => {
-  const b = e.target.closest('button'); if (!b) return
-  spSel = spSel === +b.dataset.i ? -1 : +b.dataset.i
-  $$('#plan button').forEach((x, i) => x.classList.toggle('dim', spSel >= 0 && i !== spSel))
-  $$('#legend button').forEach((x, i) => x.setAttribute('aria-pressed', i === spSel))
-  $('#spPct').textContent = (spSel < 0 ? SPEND.reduce((a, b) => a + b, 0) : SPEND[spSel]) + '%'
-  $('#spWho').textContent = spSel < 0 ? 'of your Claude plan' : 'used by ' + UA[spSel][1]
-}
-$('#plan').addEventListener('click', spPick); $('#legend').addEventListener('click', spPick)
 
 /* closing parade */
 $('#parade').innerHTML = ['scout', 'support', 'growth', 'ops', 'sales', 'finance', 'recruit'].map(k => face(LOOKS[k], 46)).join('')
