@@ -10,10 +10,13 @@ import { settings } from '../../../src/server/platform/settings.ts'
 const homes = new Map<string, string>()
 const agentd = createServer({ allowHalfOpen: true }, (sock) => {
   let raw = ''
-  sock.setEncoding('utf8').on('data', (chunk) => { raw += chunk }).on('end', () => {
+  sock.setEncoding('utf8').on('data', (chunk) => {
+    raw += chunk
     const [line = '', rest = ''] = raw.split(/\n([\s\S]*)/)
+    if (!raw.includes('\n')) return
     const req = JSON.parse(line)
-    if (req.cmd === 'home-import') homes.set(req.id, rest)
+    if (req.cmd === 'home-import' && !rest.includes('\n')) return
+    if (req.cmd === 'home-import') homes.set(req.id, rest.split('\n')[0])
     const replies: Record<string, unknown> = {
       ps: { states: {} }, health: { firewall: true, imageReady: true }, 'home-export': { tar: homes.get(req.id) ?? '' }, 'home-import': { imported: req.id },
       create: { container: `ag-${req.id}` }, apply: { applied: req.id, restarted: false }, rm: { removed: req.id },

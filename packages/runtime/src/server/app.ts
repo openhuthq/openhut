@@ -59,11 +59,12 @@ await app.register(mcpController, { prefix: '/mcp' })
 
 app.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody({ status: 404, message: `There's no ${req.method} ${req.url.split('?')[0]}.` })))
 
-if (config.socket) rmSync(config.socket, { force: true })
+const pipe = process.platform === 'win32'
+if (config.socket && !pipe) rmSync(config.socket, { force: true })
 const umask = process.umask(0o177)
 await app.listen(config.socket ? { path: config.socket } : { port: config.port, host: config.host })
 process.umask(umask)
-if (config.socket) chmodSync(config.socket, 0o600)
+if (config.socket && !pipe) chmodSync(config.socket, 0o600)
 process.once('SIGTERM', async () => {
   log.info({ event: 'app.stopping' })
   await app.close()
