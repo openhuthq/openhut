@@ -12,7 +12,6 @@ import { DialogCard, PILL, Section, Status } from '@/components/kit'
 import { CardTitle, Intro, Row, Rows } from '@/features/settings/kit'
 import { open, useOpen } from '@/lib/router'
 import { formValues } from '@/lib/form'
-import { WORDS } from '@/lib/platform'
 
 const SPEND_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
 const LIST = new Intl.ListFormat('en-GB', { type: 'conjunction' })
@@ -36,7 +35,6 @@ export function ModelsSettings() {
       </Row>
     </Rows>}
     {usage.data && <Spend usage={usage.data} />}
-    <p className="m-0 px-2.5 text-[12px]/[16px] text-mute">Saved in the {WORDS.keychain} on this {WORDS.here}.</p>
     {dialog === 'seat' && <SeatSignIn />}
   </>
 }
@@ -68,7 +66,7 @@ function Spend({ usage }: { usage: SeatUsage }) {
         <span className="text-mute tabular-nums">{Math.max(1, Math.round((agent.costUsd / total) * 100))}%</span>
         <span className="w-16 text-right font-mono text-xs tabular-nums">${agent.costUsd.toFixed(2)}</span>
       </Row>)}</Rows>
-      : <p className="m-0 pl-[50px] text-[13px]/[18px] text-mute">Not used yet.</p>}
+      : <p className="m-0 px-2.5 text-[12px]/[16px] text-mute">Not used yet.</p>}
   </Section>
 }
 
