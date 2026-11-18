@@ -1,5 +1,5 @@
 import type { IconSvgElement } from '@hugeicons/react'
-import { Alert02Icon, Analytics01Icon, Coffee01Icon, Folder01Icon, Login01Icon, Notification01Icon, CloudDownloadIcon } from '@hugeicons/core-free-icons'
+import { Alert02Icon, ChartColumnIcon, Coffee01Icon, Folder01Icon, Login01Icon, Notification01Icon, CloudDownloadIcon } from '@hugeicons/core-free-icons'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -25,7 +25,7 @@ export function GeneralSettings() {
     <Section title="Notify me when">
       <Rows>
         <PrefSwitch icon={Notification01Icon} hue="text-hue-amber" name="notifyReplies" title="An agent replies" note="While this window is closed or in the background." />
-        <PrefSwitch icon={Alert02Icon} hue="text-hue-red" name="notifyFailures" title="An agent stops or fails" note={WORDS.dockBadge ? 'The Dock icon always counts them.' : undefined} />
+        <PrefSwitch icon={Alert02Icon} hue="text-hue-red" name="notifyFailures" title="An agent stops or fails" note={WORDS.badgeNote} />
       </Rows>
     </Section>
     <Section title="Data">
@@ -62,7 +62,7 @@ function DataFolder() {
 function UsageData({ admin }: { admin: Admin }) {
   const updateAdmin = useUpdateAdmin()
   const test = admin.seat.mode === 'test'
-  return <Row icon={<I icon={Analytics01Icon} size={20} className="text-hue-violet" />} title="Share anonymous usage data" note={test ? 'Test-model builds never send usage data.' : 'Which features you use. Never your messages or files.'}>
+  return <Row icon={<I icon={ChartColumnIcon} size={20} className="text-hue-violet" />} title="Share anonymous usage data" note={test ? 'Test-model builds never send usage data.' : 'Which features you use. Never your messages or files.'}>
     <Switch checked={admin.usageData} aria-label="Share anonymous usage data" disabled={updateAdmin.isPending}
       onCheckedChange={() => updateAdmin.mutate({ usageData: !admin.usageData }, { onError: toastError })} />
   </Row>

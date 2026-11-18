@@ -44,7 +44,7 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
       safe: ['Drawings are encrypted on this server, and the key is only in the link.', 'Anyone with the link can open the drawing, so agents are told to leave secrets out.', 'There is no account or key to leak.'],
     },
     {
-      name: 'gmail', short: 'Labels and drafts', safeLine: 'No tool sends mail. Agents leave drafts for you.', eta: 'One approval', title: 'Gmail', blurb: "Search, read, label and draft through Google's Gmail MCP.",
+      name: 'gmail', short: 'Read, label and draft mail', safeLine: 'No tool sends mail. Agents leave drafts for you.', eta: 'One approval', title: 'Gmail', blurb: "Search, read, label and draft through Google's Gmail MCP.",
       gets: ['search_threads, get_thread and get_message', 'Labels: list, create, apply and remove', 'Drafts: create and read', 'Trash and spam, never a permanent delete'],
       safe: ['No tool sends mail: agents leave drafts for you.', ...SIGNED_IN('Google')],
     },

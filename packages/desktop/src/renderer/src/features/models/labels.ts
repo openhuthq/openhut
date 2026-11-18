@@ -1,7 +1,7 @@
 import { PROVIDERS, splitModelKey, type Provider, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
 import type { BrandName } from '@/components/brand-icons'
 
-export const BRAND: Record<ProviderId, BrandName> = { claude: 'claude', codex: 'openai', openrouter: 'openrouter', openai: 'openai', xai: 'xai' }
+export const BRAND: Record<ProviderId, BrandName> = { claude: 'claude', codex: 'codex', openrouter: 'openrouter', openai: 'openai', xai: 'xai' }
 
 export const infoOf = (id: ProviderId) => PROVIDERS.find((each) => each.id === id) ?? PROVIDERS[0]
 
