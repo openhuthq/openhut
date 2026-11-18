@@ -16,7 +16,7 @@ import { useAdmin, useCompleteSeatSignIn, useSeatUsage, useStartSeatSignIn } fro
 import { useAgents } from '@/features/agents/api'
 import { useComputers } from '@/features/computers/api'
 import { Busy, DialogCard, HINT, I, PILL, SetupSheet, Section, Status } from '@/components/kit'
-import { Check, CardTitle, Row, Rows, useConfirming } from '@/features/settings/kit'
+import { Check, CardTitle, ListNote, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { useCodexSignIn, useConnectProvider, useDisconnectProvider, useFoundNotice, useMergedProviders, useRefreshProvider, useSetModel } from '@/features/models/api'
 import { BRAND, consequence, count, describe, infoOf, matches, plural, updatedAgo } from '@/features/models/labels'
 import { open, Redirect, useOpen } from '@/lib/router'
@@ -59,8 +59,10 @@ export function ModelsSettings() {
     <ErrorNote message={admin.error?.message} />
     {providers && <>
       <Section title="Subscriptions"><Rows>{SUBSCRIPTIONS.map((info) => row(info.id))}</Rows></Section>
-      <Section title="API keys"><Rows>{KEYS.map((info) => row(info.id))}</Rows></Section>
-      <p className={cn(HINT, 'px-2.5')}>Keys stay on the computer you add them to. Agents never see them.</p>
+      <Section title="API keys">
+        <Rows>{KEYS.map((info) => row(info.id))}</Rows>
+        <ListNote>Keys stay on the computer you add them to. Agents never see them.</ListNote>
+      </Section>
     </>}
     {usage.data?.agents.some((agent) => agent.costUsd > 0) && <Spend usage={usage.data} />}
     {dialog === 'seat' && <SeatSignIn />}
