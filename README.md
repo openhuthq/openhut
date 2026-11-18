@@ -43,15 +43,15 @@ On your Mac, or on your own server. Each agent in its own sealed box.
 <table>
 <tr>
 <th></th>
-<th align="center"><a href="https://github.com/openhuthq/openhut"><img src="docs/readme/hut.svg" width="24" height="24" alt=""><br>OpenHut</a></th>
-<th align="center"><a href="https://github.com/openclaw/openclaw"><img src="docs/readme/logos/openclaw.png" width="24" height="24" alt=""><br>OpenClaw</a></th>
-<th align="center"><a href="https://github.com/DuskBotAI/duskbot"><img src="docs/readme/logos/duskbot.png" width="24" height="24" alt=""><br>DuskBot</a></th>
-<th align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="docs/readme/logos/hermes.png" width="24" height="24" alt=""><br>Hermes</a></th>
+<th align="center"><a href="https://github.com/openhuthq/openhut"><img src="docs/readme/hut.svg" width="24" height="24" alt=""><br><sub>OpenHut</sub></a></th>
+<th align="center"><a href="https://github.com/openclaw/openclaw"><img src="docs/readme/logos/openclaw.png" width="24" height="24" alt=""><br><sub>OpenClaw</sub></a></th>
+<th align="center"><a href="https://github.com/DuskBotAI/duskbot"><img src="docs/readme/logos/duskbot.png" width="24" height="24" alt=""><br><sub>DuskBot</sub></a></th>
+<th align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="docs/readme/logos/hermes.png" width="24" height="24" alt=""><br><sub>Hermes</sub></a></th>
 </tr>
-<tr><td>Each agent sandboxed by default</td><td align="center">✓</td><td align="center">✗</td><td align="center">✗</td><td align="center">✗</td></tr>
-<tr><td>Slack, WhatsApp and Telegram</td><td align="center">✓</td><td align="center">✓</td><td align="center">✗</td><td align="center">✓</td></tr>
-<tr><td>Learns skills and memories as it works</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td></tr>
-<tr><td>Open source, free for commercial use</td><td align="center">✓</td><td align="center">✓</td><td align="center">✗</td><td align="center">✓</td></tr>
+<tr><td>Sandboxed by default</td><td align="center">✓</td><td align="center">✗</td><td align="center">✗</td><td align="center">✗</td></tr>
+<tr><td>Slack, WhatsApp, Telegram</td><td align="center">✓</td><td align="center">✓</td><td align="center">✗</td><td align="center">✓</td></tr>
+<tr><td>Learns skills and memories</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td></tr>
+<tr><td>Open source (MIT)</td><td align="center">✓</td><td align="center">✓</td><td align="center">✗</td><td align="center">✓</td></tr>
 </table>
 
 ## Free, open source
