@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { PILL } from '@/components/kit'
@@ -12,8 +13,6 @@ export function UpdatePill({ className }: { className?: string }) {
   return <Button type="button" variant="secondary" className={cn(PILL, className)} title={note} aria-label={`Restart to update. ${note}.`} disabled={install.isPending} onClick={() => install.mutate()}>Restart to update</Button>
 }
 
-export function UpdateStatus() {
-  const state = useAppUpdate().data
-  if (state?.ready) return <UpdatePill />
-  return <span className="text-mute">Up to date</span>
+export function UpdateStatus({ idle }: { idle: ReactNode }) {
+  return useAppUpdate().data?.ready ? <UpdatePill /> : idle
 }

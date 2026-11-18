@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft01Icon, LaptopIcon, NetworkIcon, PlusSignIcon, ServerStack01Icon, SmartPhone01Icon, WifiDisconnected02Icon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, LaptopIcon, Tick02Icon, NetworkIcon, PlusSignIcon, ServerStack01Icon, SmartPhone01Icon, WifiDisconnected02Icon } from '@hugeicons/core-free-icons'
 import type { Computer, OpenHutAgent, TailnetPeer } from '@openhut/client'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -41,14 +41,14 @@ function ComputerList() {
   const agents = useAgents().data ?? []
   const enrollments = useEnrollments().data
   return <>
-    <Intro>Where your agents run. This {HERE} runs them while it's awake.</Intro>
+    <Intro>Where your agents run.</Intro>
     <ErrorNote message={computers.error?.message} />
     <Rows>
       {computers.data?.map((computer) => {
         const admin = admins?.find((each) => each.computer.id === computer.id)?.admin
         if (admin?.server.update?.status === 'running') return <UpdatingRow key={computer.id} computer={computer} />
         const note = noteOf({ computer, admin, count: agents.filter((agent) => agent.computer === computer.id).length })
-        if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={computer.name} note={note}><UpdateStatus /></Row>
+        if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={computer.name} note={note}><UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Current</span>} /></Row>
         return <RemovableRow key={computer.id} computer={computer} admin={admin} note={note} agents={agents.filter((agent) => agent.computer === computer.id)} />
       })}
       {enrollments.map((enrollment) => <EnrollRow key={enrollment.peer.dns} enrollment={enrollment} />)}
@@ -60,7 +60,12 @@ function ComputerList() {
 function noteOf({ computer, admin, count }: { computer: Computer; admin: Admin | undefined; count: number }) {
   if (!computer.online) return 'Offline'
   if (computer.appTooOld) return 'Update OpenHut to use this computer'
-  return [`Online · ${count} agent${count === 1 ? '' : 's'}`, admin && `OpenHut ${admin.server.version}`].filter(Boolean).join(' · ')
+  return [`Online · ${agentCount(count)}`, admin && `OpenHut ${admin.server.version}`].filter(Boolean).join(' · ')
+}
+
+function agentCount(count: number) {
+  if (!count) return 'No agents'
+  return `${count} agent${count === 1 ? '' : 's'}`
 }
 
 export function ComputerMark({ computer }: { computer: Computer }) {

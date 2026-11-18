@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react'
 import type { Admin, SeatUsage } from '@openhut/common/admin/admin.ts'
-import { Key01Icon } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
 import { FieldError } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -9,13 +8,14 @@ import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { useAdmin, useCompleteSeatSignIn, useSeatUsage, useStartSeatSignIn } from '@/features/settings/api'
 import { useComputerAdmins } from '@/features/computers/api'
-import { DialogCard, I, PILL, Section, Status } from '@/components/kit'
+import { DialogCard, PILL, Section, Status } from '@/components/kit'
 import { CardTitle, Intro, Row, Rows } from '@/features/settings/kit'
 import { open, useOpen } from '@/lib/router'
 import { formValues } from '@/lib/form'
 import { WORDS } from '@/lib/platform'
 
 const SPEND_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
+const LIST = new Intl.ListFormat('en-GB', { type: 'conjunction' })
 const resetTime = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' })
 
 export function ModelsSettings() {
@@ -28,7 +28,7 @@ export function ModelsSettings() {
     <Intro>Sign in with the subscription you already pay for. Each agent then picks one.</Intro>
     <ErrorNote message={admin.error?.message} />
     {admin.data && <Rows>
-      <Row icon={<Glyph name="claude" size={22} />} title="Claude subscription" note={<>{usageLine(usage.data) ?? 'Pro or Max · Opus, Sonnet and Haiku'}{holders.length > 0 && <><br />On {holders.join(', ')}</>}</>}>
+      <Row icon={<Glyph name="claude" size={22} />} title="Claude subscription" note={holders.length ? `On ${listOf(holders)}` : 'Pro or Max'}>
         <Claude admin={admin.data} />
       </Row>
       <Row icon={<Glyph name="openai" size={22} />} title="Codex subscription" note="ChatGPT Plus or Pro">
@@ -36,7 +36,7 @@ export function ModelsSettings() {
       </Row>
     </Rows>}
     {usage.data && <Spend usage={usage.data} />}
-    <p className="m-0 flex items-center gap-4 px-2.5 text-[13px] whitespace-nowrap text-mute"><span className="grid size-6 shrink-0 place-items-center"><I icon={Key01Icon} size={16} className="text-hue-amber" /></span>Sign-ins are sealed in the {WORDS.keychain}.</p>
+    <p className="m-0 px-2.5 text-[12px]/[16px] text-mute">Saved in the {WORDS.keychain} on this {WORDS.here}.</p>
     {dialog === 'seat' && <SeatSignIn />}
   </>
 }
@@ -45,6 +45,10 @@ function Claude({ admin }: { admin: Admin }) {
   if (admin.seat.mode === 'test') return <span className="text-mute" title="This build answers with the built-in test model, not a Claude seat">Test model (development)</span>
   if (!admin.seat.set) return <Button variant="secondary" className={PILL} onClick={() => open('seat')}>Sign in</Button>
   return <Status tone="on">Signed in</Status>
+}
+
+function listOf(names: string[]) {
+  return LIST.format(names)
 }
 
 function usageLine(usage: SeatUsage | undefined) {
@@ -58,13 +62,13 @@ function Spend({ usage }: { usage: SeatUsage }) {
   const used = [...usage.agents].filter((agent) => agent.costUsd > 0).sort((a, b) => b.costUsd - a.costUsd)
   const total = used.reduce((sum, agent) => sum + agent.costUsd, 0)
   const week = usage.windows.find((each) => each.kind === 'seven_day')
-  return <Section title="Claude this week" action={<span className="text-mute">{week ? `${week.percent}% of the weekly limit` : ''}</span>}>
+  return <Section title="Claude this week" action={<span className="text-mute">{[usageLine(usage), week && `${week.percent}% of the weekly limit`].filter(Boolean).join(' · ')}</span>}>
     {used.length
       ? <Rows>{used.map((agent, index) => <Row key={agent.agentId} icon={<i className="size-2.5 rounded-[3px]" style={{ background: SPEND_COLORS[index % SPEND_COLORS.length] }} />} title={agent.agentName}>
         <span className="text-mute tabular-nums">{Math.max(1, Math.round((agent.costUsd / total) * 100))}%</span>
         <span className="w-16 text-right font-mono text-xs tabular-nums">${agent.costUsd.toFixed(2)}</span>
       </Row>)}</Rows>
-      : <p className="m-0 px-2.5 text-[14px] text-body">No agent has used Claude this week.</p>}
+      : <p className="m-0 pl-[50px] text-[13px]/[18px] text-mute">Not used yet.</p>}
   </Section>
 }
 
