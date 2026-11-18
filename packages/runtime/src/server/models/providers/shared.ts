@@ -14,6 +14,7 @@ export type Setup = { env: string[]; yaml: string; auth?: object }
 export type Provider = {
   id: ProviderId
   seed: ListedModel[]
+  starters?: readonly string[]
   connected: () => boolean
   listModels: (key?: string) => Promise<ListedModel[]>
   upstream: Upstream
@@ -23,10 +24,11 @@ export type Provider = {
 
 export const listed = (id: string, extra: Partial<ListedModel> = {}): ListedModel => ({ id, name: id, note: null, contextLength: null, inputPrice: null, outputPrice: null, created: null, ...extra })
 
-export function keyed({ id, origin, listModels }: { id: ProviderId; origin: string; listModels: (key: string) => Promise<ListedModel[]> }): Provider {
+export function keyed({ id, origin, listModels, starters }: { id: ProviderId; origin: string; listModels: (key: string) => Promise<ListedModel[]>; starters?: readonly string[] }): Provider {
   return {
     id,
     seed: [],
+    starters,
     connected: () => !!settings.providerKey(id),
     listModels: (key) => listModels(key ?? settings.providerKey(id)),
     upstream: {

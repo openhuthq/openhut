@@ -6,21 +6,25 @@ const SIGN_IN_MS = Number(process.env.FAKE_CODEX_SIGN_IN_MS ?? 4000)
 const USER_CODE = 'WDJB-MJHT'
 const NOW = 1_763_000_000
 const OPENROUTER = [
-  ['anthropic/claude-opus-5.5', 'Claude Opus 5.5', 500000, 15, 75], ['anthropic/claude-sonnet-5.5', 'Claude Sonnet 5.5', 500000, 3, 15], ['anthropic/claude-haiku-5.5', 'Claude Haiku 5.5', 200000, 0.8, 4],
-  ['openai/gpt-5.5', 'GPT-5.5', 400000, 2.5, 15], ['openai/gpt-5.5-mini', 'GPT-5.5 mini', 400000, 0.3, 1.2], ['google/gemini-3.5-pro', 'Gemini 3.5 Pro', 1000000, 2, 12],
-  ['google/gemini-3.5-flash', 'Gemini 3.5 Flash', 1000000, 0.2, 0.8], ['x-ai/grok-5', 'Grok 5', 256000, 3, 15], ['x-ai/grok-5-mini', 'Grok 5 mini', 256000, 0.3, 0.5],
-  ['deepseek/deepseek-v4', 'DeepSeek V4', 128000, 0.3, 1.1], ['deepseek/deepseek-r2', 'DeepSeek R2', 128000, 0.5, 2.2], ['meta-llama/llama-5-405b', 'Llama 5 405B', 128000, 1.8, 1.8],
-  ['meta-llama/llama-5-70b', 'Llama 5 70B', 128000, 0.4, 0.4], ['mistralai/mistral-large-3', 'Mistral Large 3', 128000, 2, 6], ['mistralai/codestral-3', 'Codestral 3', 256000, 0.3, 0.9],
-  ['qwen/qwen-3.5-max', 'Qwen 3.5 Max', 256000, 1.2, 4], ['qwen/qwen-3.5-coder', 'Qwen 3.5 Coder', 256000, 0.3, 1], ['moonshotai/kimi-k3', 'Kimi K3', 256000, 0.6, 2.5],
-  ['z-ai/glm-5', 'GLM 5', 200000, 0.6, 2.2], ['cohere/command-a-2', 'Command A 2', 256000, 2.5, 10], ['perplexity/sonar-pro-2', 'Sonar Pro 2', 200000, 3, 15],
-  ['nvidia/nemotron-5-ultra', 'Nemotron 5 Ultra', 128000, 1, 3], ['amazon/nova-3-pro', 'Nova 3 Pro', 300000, 0.8, 3.2], ['microsoft/phi-5', 'Phi 5', 128000, 0.1, 0.3],
+  ['anthropic/claude-fable-5.2', 'Anthropic: Claude Fable 5.2', 1000000, 8, 40], ['anthropic/claude-haiku-5.5', 'Anthropic: Claude Haiku 5.5', 1000000, 0.1, 0.5],
+  ['openai/gpt-6.2-astra', 'OpenAI: GPT-6.2 Astra', 1050000, 8, 40], ['openai/gpt-6.2-sol', 'OpenAI: GPT-6.2 Sol', 1050000, 2, 10],
+  ['google/gemini-4-carbon', 'Google: Gemini 4 Carbon', 1048576, 2, 10], ['google/gemini-3.8-flash', 'Google: Gemini 3.8 Flash', 1048576, 0.825, 4.125],
+  ['x-ai/grok-4.7', 'SpaceXAI: Grok 4.7', 500000, 2, 6], ['deepseek/deepseek-v4-pro-0813', 'DeepSeek: DeepSeek V4 Pro 0813', 1048576, 0.111, 4.44],
+  ['deepseek/deepseek-v4.1-flash-1017', 'DeepSeek: DeepSeek V4.1 Flash 1017', 1048576, 0.036, 0.5], ['qwen/qwen4-max', 'Qwen: Qwen4 Max', 1000000, 1.425, 4.275],
+  ['qwen/qwen3.8-flash', 'Qwen: Qwen3.8 Flash', 1000000, 0.15, 0.47], ['moonshotai/kimi-k3.1-pro', 'MoonshotAI: Kimi K3.1 Pro', 1048576, 0.24, 8.402],
+  ['z-ai/glm-5.3-prime', 'Z.ai: GLM 5.3 Prime', 1000000, 1.68, 5.28], ['z-ai/glm-5.3-flash', 'Z.ai: GLM 5.3 Flash', 1048576, 0.04, 0.078],
+  ['mistralai/mistral-large-4-0', 'Mistral: Mistral Large 4', 1048576, 0.7, 2.1], ['meta/muse-wonder', 'Meta: Muse Wonder', 1048576, 4, 20],
+  ['meta/muse-ember', 'Meta: Muse Ember', 1048576, 0.1, 0.5], ['anthropic/claude-opus-5.5', 'Anthropic: Claude Opus 5.5', 1000000, 4, 20],
+  ['anthropic/claude-sonnet-5.5', 'Anthropic: Claude Sonnet 5.5', 1000000, 2, 10], ['openai/gpt-6.2-astra-pro', 'OpenAI: GPT-6.2 Astra Pro', 1050000, 8, 40],
+  ['openai/gpt-6.1-terra', 'OpenAI: GPT-6.1 Terra', 1050000, 1, 5], ['google/gemini-4-hydrogen', 'Google: Gemini 4 Hydrogen', 1048576, 1.5, 7.5],
+  ['x-ai/grok-4.6', 'SpaceXAI: Grok 4.6', 500000, 2, 6], ['qwen/qwen3.8-max-prime', 'Qwen: Qwen3.8 Max Prime', 1000000, 4, 12],
 ].map(([id, name, context, input, output], index) => ({
   id, name, created: NOW + index, context_length: context, pricing: { prompt: String(Number(input) / 1e6), completion: String(Number(output) / 1e6) }, architecture: { output_modalities: ['text'] },
 }))
 const EXTRA = Math.max(0, Number(process.env.FAKE_OPENROUTER_COUNT ?? 0) - OPENROUTER.length)
 OPENROUTER.push(...Array.from({ length: EXTRA }, (_, index) => ({ id: `fake/model-${index}`, name: `Fake model ${index}`, created: NOW - index, context_length: 128000, pricing: { prompt: '0.000001', completion: '0.000002' }, architecture: { output_modalities: ['text'] } })))
-const OPENAI = ['gpt-5.5', 'gpt-5.5-mini', 'gpt-5.5-nano', 'o5', 'o5-mini', 'gpt-4.1', 'dall-e-3', 'text-embedding-3-large', 'whisper-1', 'gpt-5.5-realtime-preview'].map((id, index) => ({ id, object: 'model', created: NOW + index, owned_by: 'fake' }))
-const XAI = ['grok-5', 'grok-5-mini', 'grok-code-fast-2', 'grok-imagine-image'].map((id, index) => ({ id, object: 'model', created: NOW + index, owned_by: 'fake' }))
+const OPENAI = ['gpt-6.2-astra', 'gpt-6.2-astra-pro', 'gpt-6.2-sol', 'gpt-6.2-sol-pro', 'gpt-6.1-terra', 'gpt-6-luna-pro', 'dall-e-3', 'text-embedding-3-large', 'whisper-1', 'gpt-6.2-realtime-preview'].map((id, index) => ({ id, object: 'model', created: NOW + index, owned_by: 'fake' }))
+const XAI = ['grok-4.7', 'grok-4.6', 'grok-build-0.1', 'grok-imagine-image'].map((id, index) => ({ id, object: 'model', created: NOW + index, owned_by: 'fake' }))
 const CODEX = [{ slug: 'gpt-5.5', display_name: 'GPT-5.5', context_window: 272000, visibility: 'list' }, { slug: 'gpt-5.5-mini', display_name: 'GPT-5.5 mini', context_window: 272000, visibility: 'list' }, { slug: 'gpt-5.5-internal', display_name: 'Internal', visibility: 'hide' }]
 const signIns = new Map<string, number>()
 
