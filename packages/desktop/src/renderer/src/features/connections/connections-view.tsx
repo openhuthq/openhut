@@ -44,10 +44,10 @@ export function ConnectionsView({ onClose }: { onClose: () => void }) {
   const sheet = me.data && id ? <Sheet me={me.data} id={decodeURIComponent(id)} kind={kind} connected={search.has('connected')} /> : null
   return <AppWindow label="Connections" onClose={onClose}>
     {sheet ?? <div className="no-scrollbar fade-b flex min-h-0 flex-1 flex-col overflow-y-auto px-8 pt-[22px] pb-7">
-      <div className="flex items-center gap-3 pr-10"><h2 className="m-0 text-[17px]/[24px] font-medium">{count ? 'Connections' : 'Connect apps'}</h2>
-        {count > 0 && <Button type="button" variant="link" className="ml-auto inline-flex items-center gap-1 text-[13px] text-mute no-underline hover:text-ink" onClick={() => setShelf(CONNECTED)}>{count} connected<I icon={ArrowRight01Icon} size={13} /></Button>}
+      <div className="mt-[30px] flex items-center gap-3"><h2 className="m-0 text-[17px]/[24px] font-medium">{count ? 'Connections' : 'Connect apps'}</h2>
+        {connections.data && <Button type="button" variant="link" className="ml-auto inline-flex items-center gap-1 text-[13px] text-mute no-underline hover:text-ink" onClick={() => setShelf(CONNECTED)}>{count} connected<I icon={ArrowRight01Icon} size={13} /></Button>}
       </div>
-      <label className="mt-4 flex h-9 items-center gap-2 text-mute"><I icon={Search01Icon} size={16} /><Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search connections" aria-label="Search connections" className="h-9 border-0 bg-transparent px-0 text-[13px] [-webkit-appearance:none]" /></label>
+      <label className="mt-4 flex h-9 items-center gap-2 text-mute"><I icon={Search01Icon} size={16} /><Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search apps" aria-label="Search apps" className="h-9 border-0 bg-transparent px-0 text-[13px] [-webkit-appearance:none]" /></label>
       <ToggleGroup variant="pill" aria-label="Category" className="mt-2 flex flex-wrap gap-2" value={shelf} onPick={setShelf}>
         {['All', ...SHELVES.filter((each) => each.items.length > 1).map((each) => each.shelf)].map((name) => <ToggleGroupItem key={name} value={name} className="h-7 border-0 bg-soft px-2.5 text-[13px] font-normal text-ink">{name}</ToggleGroupItem>)}
       </ToggleGroup>
@@ -61,14 +61,14 @@ export function ConnectionsView({ onClose }: { onClose: () => void }) {
             : <p className="m-0 text-[13px] text-balance text-body">Nothing yet. Pick one under All: each opens a short guide.</p>}</Loaded>
         </div>
         : <div className="mt-6 flex flex-col gap-3"><span className="text-[12px] text-mute">{shelf === 'All' ? 'Apps' : shelf}</span>
-          <div className="grid grid-cols-2 items-start gap-x-8 gap-y-4">{shown.map((item) => {
+          <div className="grid grid-cols-2 gap-x-8 gap-y-4">{shown.map((item) => {
             const href = `/connections/new/${item.name}`
-            return <div key={item.name} className="flex min-w-0 items-start gap-3">
-              <span className="mt-0.5 shrink-0 self-start"><Glyph name={item.name} size={24} /></span>
-              <span className="grid min-w-0 flex-1"><span className="truncate text-[13px]/[18px] font-medium">{item.title}</span><span className="line-clamp-2 text-[13px]/[18px] text-mute" title={item.blurb}>{item.short}</span></span>
+            return <div key={item.name} className="flex min-w-0 items-center gap-3">
+              <span className="shrink-0"><Glyph name={item.name} size={24} /></span>
+              <span className="grid min-w-0 flex-1"><span className="truncate text-[13px]/[18px] font-medium">{item.title}</span><span className="truncate text-[13px]/[18px] text-mute" title={item.blurb}>{item.short}</span></span>
               {quick.direct(item)
-                ? <Button type="button" variant="secondary" className={cn(PILL, 'mt-0.5 shrink-0 self-start')} disabled={quick.pending} onClick={() => quick.connect(item)}>Connect</Button>
-                : <a href={href} className={cn(buttonVariants({ variant: 'secondary' }), PILL, 'mt-0.5 shrink-0 self-start')}>Connect</a>}
+                ? <Button type="button" variant="secondary" className={cn(PILL, 'shrink-0')} disabled={quick.pending} onClick={() => quick.connect(item)}>Connect</Button>
+                : <a href={href} className={cn(buttonVariants({ variant: 'secondary' }), PILL, 'shrink-0')}>Connect</a>}
             </div>
           })}</div>
           {!shown.length && <p className="m-0 text-[14px] text-body">Nothing matches “{query}”.</p>}

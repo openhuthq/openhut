@@ -4,7 +4,7 @@ import type { Admin } from '@openhut/common/admin/admin.ts'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { ErrorNote } from '@/components/error-note'
-import { I, PILL, Section } from '@/components/kit'
+import { I, PILL, Section, Status } from '@/components/kit'
 import { useAdmin, useUpdateAdmin } from '@/features/settings/api'
 import { HERE, bytes, desktop, home, useMachine, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
 import { Intro, Row, Rows } from '@/features/settings/kit'
@@ -42,7 +42,7 @@ export function GeneralSettings() {
 function Version() {
   const state = useAppUpdate().data
   if (!state) return null
-  return <Row icon={<Hut className="size-5" />} title={`OpenHut ${state.current}`}><UpdateStatus /></Row>
+  return <Row icon={<Hut className="size-5" />} title={`OpenHut ${state.current}`}><UpdateStatus idle={<Status tone="on">Up to date</Status>} /></Row>
 }
 
 function PrefSwitch({ icon, hue, name, title, note }: { icon: IconSvgElement; hue: string; name: keyof Prefs; title: string; note: string }) {
@@ -64,7 +64,7 @@ function DataFolder() {
 function UsageData({ admin }: { admin: Admin }) {
   const updateAdmin = useUpdateAdmin()
   const test = admin.seat.mode === 'test'
-  return <Row icon={<I icon={Analytics01Icon} size={20} className="text-hue-violet" />} title="Share anonymous usage data" note={test ? 'Test-model builds never send usage data.' : 'Which features are used, never messages, data or your email.'}>
+  return <Row icon={<I icon={Analytics01Icon} size={20} className="text-hue-violet" />} title="Share anonymous usage data" note={test ? 'Test-model builds never send usage data.' : 'Which features you use. Never your messages or files.'}>
     <Switch checked={admin.usageData} aria-label="Share anonymous usage data" disabled={updateAdmin.isPending}
       onCheckedChange={() => updateAdmin.mutate({ usageData: !admin.usageData }, { onError: toastError })} />
   </Row>

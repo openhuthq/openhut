@@ -1,9 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { uniqueName } from '../../../src/features/connections/catalog.ts'
+import { SHELVES, uniqueName } from '../../../src/features/connections/catalog.ts'
 
 test('a new connection takes the service name, numbered when that name is taken', () => {
   assert.equal(uniqueName({ title: 'Linear', taken: [] }), 'Linear')
   assert.equal(uniqueName({ title: 'Linear', taken: ['Linear'] }), 'Linear 2')
   assert.equal(uniqueName({ title: 'Linear', taken: ['Linear', 'Linear 2'] }), 'Linear 3')
+})
+
+test('every app in Connect apps has a one-line description with no full stop', () => {
+  for (const item of SHELVES.flatMap((shelf) => shelf.items)) {
+    assert.ok(item.short.length <= 36, `${item.title}: "${item.short}" is too long for one line`)
+    assert.ok(!item.short.endsWith('.'), `${item.title}: "${item.short}" ends with a full stop`)
+  }
 })
