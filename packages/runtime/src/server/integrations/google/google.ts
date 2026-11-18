@@ -1,14 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto'
 import * as z from 'zod/mini'
 import type { GOOGLE_KINDS } from '@openhut/common/connections/connection.ts'
-import { HttpError } from '../../platform/http-error.ts'
-import { guardedFetch } from '../../platform/network.ts'
-import { settings, type GoogleClient } from '../../platform/settings.ts'
+import { cloud } from '../../platform/cloud.ts'
 import type { Connector, ToolSpec } from '../connector.ts'
 import { mcp } from '../mcp/mcp.ts'
 
-const AUTHORIZE = 'https://accounts.google.com/o/oauth2/v2/auth'
-const TOKEN = 'https://oauth2.googleapis.com/token'
 const SCOPE = 'https://www.googleapis.com/auth/'
 const server = (product: string) => `https://${product}mcp.googleapis.com/mcp/v1`
 const PRODUCTS: Record<GoogleKind, { servers: string[]; scopes: string[] }> = {
@@ -18,32 +14,35 @@ const PRODUCTS: Record<GoogleKind, { servers: string[]; scopes: string[] }> = {
     servers: [server('docs'), server('sheets'), server('slides'), server('calendar')],
     scopes: ['drive.readonly', 'drive.file', 'documents', 'spreadsheets', 'presentations', 'calendar.calendarlist.readonly', 'calendar.events', 'calendar.events.freebusy'],
   },
+  google_chat: {
+    servers: [server('chat')],
+    scopes: ['chat.spaces.readonly', 'chat.memberships.readonly', 'chat.messages.readonly', 'chat.messages.create', 'chat.users.readstate', 'chat.users.spacesettings'],
+  },
+  google_contacts: { servers: ['https://people.googleapis.com/mcp/v1'], scopes: ['directory.readonly', 'userinfo.profile', 'contacts.readonly'] },
+  google_search: {
+    servers: [server('workspace')],
+    scopes: ['gmail.readonly', 'drive.readonly', 'calendar.readonly', 'chat.messages.readonly', 'chat.spaces.readonly', 'chat.memberships.readonly'],
+  },
 }
 const Config = z.object({ accessToken: z.string(), refreshToken: z.string(), expiresAt: z.number(), email: z.string() })
-const Tokens = z.object({ access_token: z.string(), expires_in: z.number(), refresh_token: z.optional(z.string()), id_token: z.optional(z.string()) })
-const Failure = z.object({ error: z.string(), error_description: z.optional(z.string()) })
-const IdToken = z.object({ email: z.string() })
 const toolHomes = new Map<string, string>()
 
 export const google = {
   apis: (kind: GoogleKind): string[] => PRODUCTS[kind].servers.map((url) => new URL(url).host),
 
-  beginSignIn({ kind, redirectUri, state }: { kind: GoogleKind; redirectUri: string; state: string }): { authorizationUrl: string; verifier: string } {
-    const client = clientOrThrow()
+  async beginSignIn({ kind, redirectUri, state }: { kind: GoogleKind; redirectUri: string; state: string }): Promise<{ authorizationUrl: string; verifier: string }> {
     const verifier = randomBytes(32).toString('base64url')
-    const params = new URLSearchParams({
-      client_id: client.clientId, redirect_uri: redirectUri, response_type: 'code', access_type: 'offline', prompt: 'consent', state,
-      scope: ['openid', 'email', ...PRODUCTS[kind].scopes.map((scope) => `${SCOPE}${scope}`)].join(' '),
-      code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256',
+    const { authorizationUrl } = await cloud.authorization({
+      provider: 'google', scopes: PRODUCTS[kind].scopes.map((scope) => `${SCOPE}${scope}`), redirectUrl: redirectUri, state,
+      codeChallenge: createHash('sha256').update(verifier).digest('base64url'),
     })
-    return { authorizationUrl: `${AUTHORIZE}?${params}`, verifier }
+    return { authorizationUrl, verifier }
   },
 
-  async finishSignIn({ code, verifier, redirectUri }: { code: string; verifier: string; redirectUri: string }): Promise<GoogleConfig> {
-    const tokens = await token({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: redirectUri })
-    if (!tokens.refresh_token) throw new HttpError(400, 'Google didn’t send a refresh token. Remove OpenHut from your Google account’s third-party access, then sign in again.')
-    const email = tokens.id_token ? z.safeParse(IdToken, JSON.parse(Buffer.from(tokens.id_token.split('.')[1] ?? '', 'base64url').toString('utf8') || '{}')).data?.email : undefined
-    return { accessToken: tokens.access_token, refreshToken: tokens.refresh_token, expiresAt: Date.now() + tokens.expires_in * 1000, email: email ?? 'a Google account' }
+  async finishSignIn({ code, verifier }: { code: string; verifier: string }): Promise<GoogleConfig> {
+    const token = await cloud.token({ provider: 'google', grantType: 'authorization_code', code, codeVerifier: verifier })
+    if (!token.refreshToken) throw new Error('Google didn’t send a refresh token. Remove OpenHut from your Google account’s third-party access, then sign in again.')
+    return { accessToken: token.accessToken, refreshToken: token.refreshToken, expiresAt: Date.parse(token.expiresAt), email: token.email ?? 'a Google account' }
   },
 
   account: (config: unknown): string => z.safeParse(Config, config).data?.email ?? 'a Google account',
@@ -74,30 +73,13 @@ export const google = {
 async function bearer({ config, save }: { config: unknown; save: (config: unknown) => Promise<void> }): Promise<Record<string, string>> {
   let stored = z.parse(Config, config)
   if (stored.expiresAt - 60_000 < Date.now()) {
-    const tokens = await token({ grant_type: 'refresh_token', refresh_token: stored.refreshToken })
-    stored = { ...stored, accessToken: tokens.access_token, refreshToken: tokens.refresh_token ?? stored.refreshToken, expiresAt: Date.now() + tokens.expires_in * 1000 }
+    const token = await cloud.token({ provider: 'google', grantType: 'refresh_token', refreshToken: stored.refreshToken }).catch((error: unknown) => {
+      throw new Error(`Google refused to refresh this sign-in (${error instanceof Error ? error.message : String(error)}). Its owner can press Reconnect on its page.`)
+    })
+    stored = { ...stored, accessToken: token.accessToken, refreshToken: token.refreshToken ?? stored.refreshToken, expiresAt: Date.parse(token.expiresAt) }
     await save(stored)
   }
   return { authorization: `Bearer ${stored.accessToken}` }
-}
-
-async function token(grant: Record<string, string>): Promise<z.infer<typeof Tokens>> {
-  const client = clientOrThrow()
-  const response = await guardedFetch(TOKEN, {
-    method: 'POST', body: new URLSearchParams({ ...grant, client_id: client.clientId, client_secret: client.clientSecret }), signal: AbortSignal.timeout(15_000),
-  })
-  const body: unknown = await response.json().catch(() => undefined)
-  const tokens = z.safeParse(Tokens, body)
-  if (response.ok && tokens.success) return tokens.data
-  const failure = z.safeParse(Failure, body).data
-  if (failure?.error === 'invalid_grant') throw new Error('Google revoked this sign-in, or it expired. Its owner can press Reconnect on its page.')
-  throw new Error(`Google refused the token request (${failure?.error_description ?? failure?.error ?? `HTTP ${response.status}`}). Check the Google OAuth client in Admin.`)
-}
-
-function clientOrThrow(): GoogleClient {
-  const client = settings.googleClient()
-  if (!client) throw new HttpError(400, 'Set up the Google OAuth client first: an owner or admin pastes it in Admin, or in step 1 of this dialog.')
-  return client
 }
 
 function unique(tools: ToolSpec[]): ToolSpec[] {

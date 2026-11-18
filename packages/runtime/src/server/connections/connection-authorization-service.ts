@@ -8,7 +8,7 @@ import type { Caller } from '../team/identity.ts'
 import { callbackBase, connectionService } from './connection-service.ts'
 
 const SIGN_IN_MS = 15 * 60_000
-const TITLES: Record<SignInKind, string> = { posthog: 'PostHog', linear: 'Linear', github: 'GitHub', gmail: 'Gmail', drive: 'Google Drive', google: 'Google Workspace', mcp: 'MCP server' }
+const TITLES: Record<SignInKind, string> = { posthog: 'PostHog', linear: 'Linear', github: 'GitHub', gmail: 'Gmail', drive: 'Google Drive', google: 'Google Workspace', google_chat: 'Google Chat', google_contacts: 'Google Contacts', google_search: 'Google Search', mcp: 'MCP server' }
 const pending = new Map<string, Pending>()
 
 export const connectionAuthorizationService = {
@@ -25,7 +25,7 @@ export const connectionAuthorizationService = {
       return { object: 'connection_authorization', kind, ...github.registration({ name: base.name, organization, homeUrl: callbackBase(), redirectUrl: connectionService.redirectUrl(), state }) }
     }
     if (isGoogle(kind)) {
-      const { authorizationUrl, verifier } = google.beginSignIn({ kind, redirectUri: connectionService.redirectUrl(), state })
+      const { authorizationUrl, verifier } = await google.beginSignIn({ kind, redirectUri: connectionService.redirectUrl(), state })
       remember(state, { ...base, verifier })
       return { object: 'connection_authorization', kind, authorizationUrl }
     }
@@ -61,7 +61,7 @@ async function signedIn({ sign, code }: { sign: Pending; code: string }): Promis
   if (sign.app) return github.installed({ app: sign.app, installationId: Number(code) })
   const redirectUri = connectionService.redirectUrl()
   if (isGoogle(sign.kind)) {
-    const config = await google.finishSignIn({ code, verifier: sign.verifier ?? '', redirectUri })
+    const config = await google.finishSignIn({ code, verifier: sign.verifier ?? '' })
     return { config, account: config.email }
   }
   const url = sign.url ?? ''

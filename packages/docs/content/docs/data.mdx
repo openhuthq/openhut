@@ -1,6 +1,6 @@
 ---
 title: Connections
-description: Hand agents Postgres, Convex, PostHog, Linear, GitHub, Gmail, Drive, Google Workspace, Excalidraw or any MCP server. They never see a key.
+description: Hand agents Postgres, Convex, PostHog, Linear, GitHub, Gmail, Drive, Google Workspace, Google Chat, Contacts and Search, Excalidraw or any MCP server. They never see a key.
 icon: logo:postgres
 ---
 
@@ -25,7 +25,7 @@ Under **Computers**, pick where it goes: this Mac, a [computer](/computers) you 
 
 ### Paste a key or sign in
 
-Postgres, Convex and a custom MCP server take a key. PostHog, Linear, GitHub and Google open their sign-in. Google needs an OAuth client once; its guide shows how. Excalidraw takes neither: agents draw a diagram and send a link to it, and anyone with the link can open it.
+Postgres, Convex and a custom MCP server take a key. PostHog, Linear, GitHub and Google open their sign-in. Google signs in through OpenHut Cloud, which holds OpenHut's Google app and passes the tokens straight back to your computer without keeping them. Google shows a warning that the app isn't verified yet: choose **Advanced**, then **Go to OpenHut**. Excalidraw takes neither: agents draw a diagram and send a link to it, and anyone with the link can open it.
 
 </Step>
 <Step>
