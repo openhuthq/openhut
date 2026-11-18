@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
 import { ChatFile, HomeFile, Thread, ThreadWithMessages } from '@openhut/common/threads/thread.ts'
 import { request, requestBlob } from '@/lib/api-client'
-import { on, onComputer, openhut } from '@/lib/openhut'
+import { openhut } from '@/lib/openhut'
 import { THREADS_KEY } from '@/lib/query-keys'
 import { RASTER } from '@/features/threads/files'
 
@@ -13,7 +13,7 @@ export function useThreads() {
   return useQuery({
     queryKey: THREADS_KEY,
     queryFn: async () => (await Promise.all((await openhut.computers.list()).filter((computer) => computer.online)
-      .map((computer) => request({ schema: THREAD_LIST, path: onComputer({ computer: computer.id, path: '/api/threads' }) }).then((page) => page.data, () => [])))).flat(),
+      .map((computer) => request({ schema: THREAD_LIST, computer: computer.id, path: '/api/threads' }).then((page) => page.data, () => [])))).flat(),
   })
 }
 
@@ -21,8 +21,8 @@ export function useAgentThread(agentId: string) {
   return useQuery({
     queryKey: [...THREADS_KEY, 'agent', agentId],
     queryFn: async () => {
-      const thread = await request({ schema: Thread, path: on({ agentId, path: '/api/threads' }), method: 'POST', body: { agentId } })
-      return request({ schema: ThreadWithMessages, path: on({ agentId, path: threadPath(thread.id) }) })
+      const thread = await request({ schema: Thread, of: agentId, path: '/api/threads', method: 'POST', body: { agentId } })
+      return request({ schema: ThreadWithMessages, of: agentId, path: threadPath(thread.id) })
     },
     staleTime: Infinity,
   })
@@ -36,7 +36,7 @@ export function useTouchThread() {
 export function useClearChat(agentId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: ({ threadId, uploads }: { threadId: string; uploads: string[] }) => request({ schema: Deleted('thread'), path: on({ agentId, path: threadPath(threadId) }), method: 'DELETE', body: { uploads } }),
+    mutationFn: ({ threadId, uploads }: { threadId: string; uploads: string[] }) => request({ schema: Deleted('thread'), of: agentId, path: threadPath(threadId), method: 'DELETE', body: { uploads } }),
     onSuccess: () => client.resetQueries({ queryKey: [...THREADS_KEY, 'agent', agentId] }),
   })
 }
@@ -47,11 +47,11 @@ export function threadPath(threadId: string) {
 
 export function uploadFile({ agentId, threadId, file }: { agentId: string; threadId: string; file: File }) {
   const query = new URLSearchParams({ name: file.name, type: file.type })
-  return request({ schema: ChatFile, path: on({ agentId, path: `${threadPath(threadId)}/files?${query}` }), method: 'POST', body: file })
+  return request({ schema: ChatFile, of: agentId, path: `${threadPath(threadId)}/files?${query}`, method: 'POST', body: file })
 }
 
 export async function saveFile({ agentId, threadId, path }: { agentId: string; threadId: string; path: string }) {
-  const blob = await requestBlob(on({ agentId, path: `${threadPath(threadId)}/files?${new URLSearchParams({ path })}` }))
+  const blob = await requestBlob({ of: agentId, path: `${threadPath(threadId)}/files?${new URLSearchParams({ path })}` })
   const link = document.createElement('a')
   link.href = URL.createObjectURL(blob)
   link.download = path.slice(path.lastIndexOf('/') + 1)
@@ -60,13 +60,13 @@ export async function saveFile({ agentId, threadId, path }: { agentId: string; t
 }
 
 export function deleteUpload({ agentId, threadId, path }: { agentId: string; threadId: string; path: string }) {
-  return request({ schema: Deleted('file'), path: on({ agentId, path: `${threadPath(threadId)}/files?${new URLSearchParams({ path })}` }), method: 'DELETE' })
+  return request({ schema: Deleted('file'), of: agentId, path: `${threadPath(threadId)}/files?${new URLSearchParams({ path })}`, method: 'DELETE' })
 }
 
 export function useHomeFiles({ agentId, threadId, paths }: { agentId: string; threadId: string; paths: string[] }) {
   return useQuery({
     queryKey: [...THREADS_KEY, 'files', threadId, paths],
-    queryFn: async () => new Set((await request({ schema: HOME_FILES, path: on({ agentId, path: `${threadPath(threadId)}/files/lookups` }), method: 'POST', body: { paths } })).data.map((file) => file.path)),
+    queryFn: async () => new Set((await request({ schema: HOME_FILES, of: agentId, path: `${threadPath(threadId)}/files/lookups`, method: 'POST', body: { paths } })).data.map((file) => file.path)),
     enabled: paths.length > 0,
     staleTime: 60_000,
   }).data
@@ -75,7 +75,7 @@ export function useHomeFiles({ agentId, threadId, paths }: { agentId: string; th
 export function useThumb({ agentId, threadId, path, mediaType }: { agentId: string; threadId: string; path: string; mediaType: string }) {
   return useQuery({
     queryKey: [...THREADS_KEY, 'thumb', agentId, path],
-    queryFn: async () => URL.createObjectURL(new Blob([await requestBlob(on({ agentId, path: `${threadPath(threadId)}/files?${new URLSearchParams({ path })}` }))], { type: mediaType })),
+    queryFn: async () => URL.createObjectURL(new Blob([await requestBlob({ of: agentId, path: `${threadPath(threadId)}/files?${new URLSearchParams({ path })}` })], { type: mediaType })),
     enabled: RASTER.includes(mediaType),
     staleTime: Infinity,
     gcTime: Infinity,

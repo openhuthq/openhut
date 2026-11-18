@@ -26,7 +26,7 @@ import { deleteUpload, saveFile, threadPath, uploadFile, useAgentThread, useClea
 import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
 import { ConfirmIcon } from '@/components/confirm-button'
 import { attachCalls, kindOf, stepsOf, type Step } from '@/features/threads/steps'
-import { on } from '@/lib/openhut'
+import { openhut } from '@/lib/openhut'
 import { toast, toastError } from '@/lib/toast'
 import { usePhoneBack } from '@/app/phone-page'
 import { TOUCH, useMedia } from '@/lib/media'
@@ -49,7 +49,8 @@ export function Chat({ agent, tools, onTitle }: { agent: Agent; tools?: ReactNod
 function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessages; agent: Agent; tools: ReactNode; onTitle?: () => void }) {
   const touch = useTouchThread()
   const transport = useMemo(() => new DefaultChatTransport<AgentMessage>({
-    api: on({ agentId: agent.id, path: `${threadPath(thread.id)}/chat` }),
+    api: `${threadPath(thread.id)}/chat`,
+    fetch: (url, init) => openhut.fetch({ of: agent.id, path: String(url), init }),
     prepareSendMessagesRequest: ({ messages, trigger }) => ({ body: { trigger, message: trigger === 'submit-message' ? messages.at(-1) : undefined } }),
   }), [thread.id, agent.id])
   const chat = useChat<AgentMessage>({ id: thread.id, messages: thread.messages.map(uiMessageOf), transport, onFinish: () => touch(thread) })

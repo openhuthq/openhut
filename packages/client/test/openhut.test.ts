@@ -140,6 +140,16 @@ test('agents from a computer on an older runtime still show (old model names, no
   assert.deepEqual([found?.name, found?.computer, found?.model, found?.helperModels], ['Juniper', 'beelink', 'claude:sonnet', { compress: null, title: null, review: null }])
 })
 
+test('a call about an agent or a connection reaches the computer it lives on, found by listing when it is new to the app', async () => {
+  const { runtimes, openhut } = setup(['local', 'beelink'])
+  runtimes.beelink.agents = [agent('Sales')]
+  runtimes.beelink.connections = [connection({ id: 'cn_b', kind: 'github', name: 'GitHub' })]
+  assert.equal((await openhut.fetch({ of: 'ag_sales', path: '/api/agents/ag_sales' })).status, 200)
+  await openhut.fetch({ of: 'cn_b', path: '/api/grants' })
+  await openhut.fetch({ computer: 'local', path: '/api/me' })
+  assert.deepEqual([runtimes.beelink.calls.filter((call) => !call.endsWith('/api/agents') && !call.endsWith('/api/connections')), runtimes.local.calls.at(-1), openhut.agents.home('ag_sales')], [['GET /api/agents/ag_sales', 'GET /api/grants'], 'GET /api/me', 'beelink'])
+})
+
 test('adding a keyed connection to another computer moves it sealed to that computer; a sign-in connection opens its sign-in there instead', async () => {
   const { runtimes, opened, openhut } = setup(['local', 'beelink'])
   runtimes.local.connections = [connection({ id: 'cn_a', kind: 'postgres', name: 'Orders DB', secret: 'postgres://u:p@db' }), connection({ id: 'cn_g', kind: 'github', name: 'GitHub' })]

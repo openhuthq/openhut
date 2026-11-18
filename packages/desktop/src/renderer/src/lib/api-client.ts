@@ -1,12 +1,13 @@
-import { RequestError } from '@openhut/client'
+import { RequestError, type Where } from '@openhut/client'
 import { ApiError } from '@openhut/common/api.ts'
+import { openhut } from '@/lib/openhut'
 
 type Schema<T> = { safeParse: (data: unknown) => { success: true; data: T } | { success: false } }
 
 export { RequestError }
 
-export async function request<T>({ schema, path, method = 'GET', body }: { schema: Schema<T>; path: string; method?: string; body?: unknown }): Promise<T> {
-  const response = await fetch(path, { method, ...payloadOf(body) })
+export async function request<T>({ schema, method = 'GET', body, ...where }: Where & { schema: Schema<T>; path: string; method?: string; body?: unknown }): Promise<T> {
+  const response = await openhut.fetch({ ...where, init: { method, ...payloadOf(body) } })
   const payload: unknown = await response.json().catch(() => null)
   if (!response.ok) throw failure(response.status, payload)
   const parsed = schema.safeParse(payload)
@@ -14,8 +15,8 @@ export async function request<T>({ schema, path, method = 'GET', body }: { schem
   return parsed.data
 }
 
-export async function requestBlob(path: string): Promise<Blob> {
-  const response = await fetch(path)
+export async function requestBlob(where: Where & { path: string }): Promise<Blob> {
+  const response = await openhut.fetch(where)
   if (!response.ok) throw failure(response.status, await response.json().catch(() => null))
   return response.blob()
 }

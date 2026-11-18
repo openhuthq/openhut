@@ -15,7 +15,7 @@ export type Mouse = { action: keyof typeof MOUSE_EVENTS; x: number; y: number; b
 export type Key = { action: 'down' | 'up'; key: string; code?: string; modifiers?: number }
 export type Action = { action: string; url: string; at: number }
 
-export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTMLCanvasElement | null> }) {
+export function useLive({ computer, path, canvas }: { computer: string; path: string; canvas: RefObject<HTMLCanvasElement | null> }) {
   const [state, setState] = useState<'connecting' | 'live' | 'closed'>('connecting')
   const [page, setPage] = useState({ url: '', title: '' })
   const [held, setHeld] = useState(false)
@@ -35,6 +35,7 @@ export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTML
     const pending = new Map<string, Omit<Action, 'at'>>()
     const connect = () => {
       const open = openChannel({
+        computer,
         path,
         onLine: (line) => {
           const message = parse(line)
@@ -77,7 +78,7 @@ export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTML
       clearTimeout(retry)
       channel.current?.close()
     }
-  }, [path, canvas])
+  }, [computer, path, canvas])
   const send = (message: object) => channel.current?.send(JSON.stringify(message))
   return { state, page, held, mine, actions, error, fps: rate, hold: (held: boolean) => send({ type: 'hold', held }), mouse: (event: Mouse) => send(mouseInput(event)), key: (event: Key) => send(keyInput(event)) }
 }
@@ -105,9 +106,9 @@ export function keyInput(event: Key) {
   }
 }
 
-function openChannel({ path, onLine, onClose }: { path: string; onLine: (line: string) => void; onClose: (code: number, reason: string) => void }): Channel {
+function openChannel({ computer, path, onLine, onClose }: { computer: string; path: string; onLine: (line: string) => void; onClose: (code: number, reason: string) => void }): Channel {
   const bridge: Bridge | undefined = Reflect.get(window, 'openhut')
-  if (bridge?.browserLive) return bridge.browserLive(path, onLine, onClose)
+  if (bridge?.browserLive) return bridge.browserLive(`/c/${computer}${path}`, onLine, onClose)
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${path}`)
   ws.onmessage = ({ data }) => onLine(String(data))
   ws.onclose = ({ code, reason }) => onClose(code, reason)

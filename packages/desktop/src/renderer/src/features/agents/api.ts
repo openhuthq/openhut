@@ -7,7 +7,7 @@ import { Skill } from '@openhut/common/agents/skill.ts'
 import { Channel, Conversation, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
 import type { OpenHutAgent } from '@openhut/client'
 import { request } from '@/lib/api-client'
-import { at, on, openhut, rememberHomes } from '@/lib/openhut'
+import { openhut } from '@/lib/openhut'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
 import { saveLook } from '@/features/agents/face'
@@ -23,13 +23,13 @@ const DELETED_CHANNEL = Deleted('channel')
 const DELETED_SKILL = Deleted('skill')
 
 export function useAgents() {
-  return useQuery({ queryKey: AGENTS_KEY, queryFn: () => openhut.agents.list().then((agents) => { rememberHomes(agents); return agents }) })
+  return useQuery({ queryKey: AGENTS_KEY, queryFn: () => openhut.agents.list() })
 }
 
 export function useAgent(agentId: string) {
   return useQuery({
     queryKey: [...AGENTS_KEY, agentId],
-    queryFn: () => request({ schema: Agent, path: agentPath(agentId) }),
+    queryFn: () => request({ schema: Agent, of: agentId, path: agentPath(agentId) }),
     refetchInterval: (query) => settling(query.state.data) ? 3_000 : false,
   })
 }
@@ -38,9 +38,9 @@ export function useCreateAgent() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: async ({ body, look }: { body: CreateAgent; look: Look }) => {
-      const agent = await request({ schema: Agent, path: '/api/agents', method: 'POST', body })
+      const agent = await request({ schema: Agent, computer: 'local', path: '/api/agents', method: 'POST', body })
       saveLook({ agentId: agent.id, look })
-      return request({ schema: Agent, path: agentPath(agent.id), method: 'PATCH', body: { wanted: 'running' } })
+      return request({ schema: Agent, computer: 'local', path: agentPath(agent.id), method: 'PATCH', body: { wanted: 'running' } })
     },
     onSuccess: (agent) => {
       client.setQueryData([...AGENTS_KEY, agent.id], agent)
@@ -68,7 +68,7 @@ export function useUpdateAgent(agentId: string) {
   const client = useQueryClient()
   return useMutation({
     mutationKey: ['agent-update', agentId],
-    mutationFn: (body: UpdateAgent) => request({ schema: Agent, path: agentPath(agentId), method: 'PATCH', body }),
+    mutationFn: (body: UpdateAgent) => request({ schema: Agent, of: agentId, path: agentPath(agentId), method: 'PATCH', body }),
     onSuccess: (agent) => {
       client.setQueryData([...AGENTS_KEY, agent.id], agent)
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agent.id ? { ...each, ...agent } : each))
@@ -79,7 +79,7 @@ export function useUpdateAgent(agentId: string) {
 export function useDeleteAgent(agentId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: () => request({ schema: DELETED_AGENT, path: agentPath(agentId), method: 'DELETE' }),
+    mutationFn: () => request({ schema: DELETED_AGENT, of: agentId, path: agentPath(agentId), method: 'DELETE' }),
     onSuccess: () => {
       navigate('/')
       client.removeQueries({ queryKey: [...AGENTS_KEY, agentId] })
@@ -91,12 +91,12 @@ export function useDeleteAgent(agentId: string) {
 }
 
 export function useGrants(filter: { agentId: string } | { connectionId: string }) {
-  return useQuery({ queryKey: grantsKey(filter), queryFn: () => request({ schema: GRANT_LIST, path: at({ id: 'agentId' in filter ? filter.agentId : filter.connectionId, path: `/api/grants?${new URLSearchParams(filter)}` }) }).then((page) => page.data) })
+  return useQuery({ queryKey: grantsKey(filter), queryFn: () => request({ schema: GRANT_LIST, of: 'agentId' in filter ? filter.agentId : filter.connectionId, path: `/api/grants?${new URLSearchParams(filter)}` }).then((page) => page.data) })
 }
 
 export function useConnectionGrants(connection: { computers: { id: string }[] }) {
   return useQueries({
-    queries: connection.computers.map(({ id }) => ({ queryKey: grantsKey({ connectionId: id }), queryFn: () => request({ schema: GRANT_LIST, path: at({ id, path: `/api/grants?${new URLSearchParams({ connectionId: id })}` }) }).then((page) => page.data) })),
+    queries: connection.computers.map(({ id }) => ({ queryKey: grantsKey({ connectionId: id }), queryFn: () => request({ schema: GRANT_LIST, of: id, path: `/api/grants?${new URLSearchParams({ connectionId: id })}` }).then((page) => page.data) })),
     combine: (results) => ({ data: results.every((result) => result.data) ? results.flatMap((result) => result.data ?? []) : undefined }),
   })
 }
@@ -112,7 +112,7 @@ export function useCreateGrant() {
 export function useDeleteGrant() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (grant: Grant) => request({ schema: DELETED_GRANT, path: on({ agentId: grant.agentId, path: `/api/grants/${encodeURIComponent(grant.id)}` }), method: 'DELETE' }),
+    mutationFn: (grant: Grant) => request({ schema: DELETED_GRANT, of: grant.agentId, path: `/api/grants/${encodeURIComponent(grant.id)}`, method: 'DELETE' }),
     onSuccess: (_, grant) => writeGrant(client, grant, (grants) => grants.filter((each) => each.id !== grant.id)),
   })
 }
@@ -121,8 +121,8 @@ export function useChannels(agentId: string) {
   return useQuery({
     queryKey: channelsKey(agentId),
     queryFn: async () => {
-      const page = await request({ schema: CHANNEL_LIST, path: on({ agentId, path: `/api/channels?${new URLSearchParams({ agentId })}` }) })
-      return Promise.all(page.data.map((channel) => channel.status === 'linking' ? request({ schema: Channel, path: on({ agentId, path: channelPath(channel.id) }) }) : channel))
+      const page = await request({ schema: CHANNEL_LIST, of: agentId, path: `/api/channels?${new URLSearchParams({ agentId })}` })
+      return Promise.all(page.data.map((channel) => channel.status === 'linking' ? request({ schema: Channel, of: agentId, path: channelPath(channel.id) }) : channel))
     },
     refetchInterval: (query) => query.state.data?.some((channel) => channel.status === 'linking') ? 3_000 : false,
   })
@@ -131,7 +131,7 @@ export function useChannels(agentId: string) {
 export function useCreateChannel() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (body: CreateChannel) => request({ schema: Channel, path: on({ agentId: body.agentId, path: '/api/channels' }), method: 'POST', body }),
+    mutationFn: (body: CreateChannel) => request({ schema: Channel, of: body.agentId, path: '/api/channels', method: 'POST', body }),
     onSuccess: (channel) => writeChannel(client, channel),
   })
 }
@@ -139,7 +139,7 @@ export function useCreateChannel() {
 export function useUpdateChannel() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: ({ channel, change }: { channel: Channel; change: UpdateChannel }) => request({ schema: Channel, path: on({ agentId: channel.agentId, path: channelPath(channel.id) }), method: 'PATCH', body: change }),
+    mutationFn: ({ channel, change }: { channel: Channel; change: UpdateChannel }) => request({ schema: Channel, of: channel.agentId, path: channelPath(channel.id), method: 'PATCH', body: change }),
     onSuccess: (channel) => {
       writeChannel(client, channel)
       void client.invalidateQueries({ queryKey: conversationsKey(channel.id) })
@@ -150,7 +150,7 @@ export function useUpdateChannel() {
 export function useConversations(channel: Channel) {
   return useQuery({
     queryKey: conversationsKey(channel.id),
-    queryFn: () => request({ schema: CONVERSATION_LIST, path: on({ agentId: channel.agentId, path: `${channelPath(channel.id)}/conversations` }) }).then((page) => page.data),
+    queryFn: () => request({ schema: CONVERSATION_LIST, of: channel.agentId, path: `${channelPath(channel.id)}/conversations` }).then((page) => page.data),
     staleTime: 30_000,
   })
 }
@@ -158,23 +158,23 @@ export function useConversations(channel: Channel) {
 export function useDeleteChannel() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (channel: Channel) => request({ schema: DELETED_CHANNEL, path: on({ agentId: channel.agentId, path: channelPath(channel.id) }), method: 'DELETE' }),
+    mutationFn: (channel: Channel) => request({ schema: DELETED_CHANNEL, of: channel.agentId, path: channelPath(channel.id), method: 'DELETE' }),
     onSuccess: (_, channel) => client.setQueryData<Channel[]>(channelsKey(channel.agentId), (channels) => channels?.filter((each) => each.id !== channel.id)),
   })
 }
 
 export function useSkills(agentId: string) {
-  return useQuery({ queryKey: ['skills', agentId], queryFn: () => request({ schema: SKILL_LIST, path: on({ agentId, path: `/api/skills?${new URLSearchParams({ agentId })}` }) }).then((page) => page.data) })
+  return useQuery({ queryKey: ['skills', agentId], queryFn: () => request({ schema: SKILL_LIST, of: agentId, path: `/api/skills?${new URLSearchParams({ agentId })}` }).then((page) => page.data) })
 }
 
 export function useSkill({ skillId, agentId }: { skillId: string; agentId: string }) {
-  return useQuery({ queryKey: ['skill', skillId], queryFn: () => request({ schema: Skill, path: on({ agentId, path: skillPath(skillId) }) }) })
+  return useQuery({ queryKey: ['skill', skillId], queryFn: () => request({ schema: Skill, of: agentId, path: skillPath(skillId) }) })
 }
 
 export function useUpdateSkill({ skillId, agentId }: { skillId: string; agentId: string }) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (body: string) => request({ schema: Skill, path: on({ agentId, path: skillPath(skillId) }), method: 'PATCH', body: { body } }),
+    mutationFn: (body: string) => request({ schema: Skill, of: agentId, path: skillPath(skillId), method: 'PATCH', body: { body } }),
     onSuccess: (skill) => {
       client.setQueryData(['skill', skill.id], skill)
       client.setQueryData<Skill[]>(['skills', skill.agentId], (skills) => skills?.map((each) => each.id === skill.id ? { ...skill, body: null } : each))
@@ -185,7 +185,7 @@ export function useUpdateSkill({ skillId, agentId }: { skillId: string; agentId:
 export function useDeleteSkill({ skillId, agentId }: { skillId: string; agentId: string }) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: () => request({ schema: DELETED_SKILL, path: on({ agentId, path: skillPath(skillId) }), method: 'DELETE' }),
+    mutationFn: () => request({ schema: DELETED_SKILL, of: agentId, path: skillPath(skillId), method: 'DELETE' }),
     onSuccess: () => {
       client.removeQueries({ queryKey: ['skill', skillId] })
       client.setQueryData<Skill[]>(['skills', agentId], (skills) => skills?.filter((each) => each.id !== skillId))
@@ -194,19 +194,19 @@ export function useDeleteSkill({ skillId, agentId }: { skillId: string; agentId:
 }
 
 export function useMemory(agentId: string) {
-  return useQuery({ queryKey: ['memory', agentId], queryFn: () => request({ schema: Memory, path: memoryPath(agentId) }) })
+  return useQuery({ queryKey: ['memory', agentId], queryFn: () => request({ schema: Memory, of: agentId, path: memoryPath(agentId) }) })
 }
 
 export function useUpdateMemory(agentId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (patch: UpdateMemory) => request({ schema: Memory, path: memoryPath(agentId), method: 'PATCH', body: patch }),
+    mutationFn: (patch: UpdateMemory) => request({ schema: Memory, of: agentId, path: memoryPath(agentId), method: 'PATCH', body: patch }),
     onSuccess: (memory) => client.setQueryData(['memory', agentId], memory),
   })
 }
 
 function memoryPath(agentId: string) {
-  return on({ agentId, path: `/api/memories/${encodeURIComponent(agentId)}` })
+  return `/api/memories/${encodeURIComponent(agentId)}`
 }
 
 function skillPath(skillId: string) {
@@ -214,7 +214,7 @@ function skillPath(skillId: string) {
 }
 
 function agentPath(agentId: string) {
-  return on({ agentId, path: `/api/agents/${encodeURIComponent(agentId)}` })
+  return `/api/agents/${encodeURIComponent(agentId)}`
 }
 
 function channelPath(channelId: string) {
@@ -248,7 +248,6 @@ export function useMoveAgent() {
   return useMutation({
     mutationFn: (input: { id: string; to: string }) => openhut.agents.move(input),
     onSuccess: ({ agent }) => {
-      rememberHomes([agent])
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agent.id ? agent : each))
       void client.invalidateQueries({ queryKey: [...AGENTS_KEY, agent.id] })
       void client.resetQueries({ queryKey: ['threads', 'agent', agent.id] })

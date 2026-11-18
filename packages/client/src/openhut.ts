@@ -10,6 +10,7 @@ export type Features = { whatsapp: boolean; browser: boolean }
 export type Computer = StoredComputer & { online: boolean; features: Features; appTooOld: boolean; runtimeTooOld: boolean }
 export type TailnetPeer = { name: string; dns: string }
 export type Transport = (path: string, init?: RequestInit) => Promise<Response>
+export type Where = { computer: string } | { of: string }
 export type Platform = {
   transport: (computer: StoredComputer) => Transport
   store: {
@@ -169,7 +170,7 @@ export function createOpenHut(platform: Platform) {
       })
       return { agent: { ...moved.agent, wanted, computer: target.id, online: true }, ungranted: moved.ungranted }
     },
-    chat: (id: string): Transport => async (path, init) => platform.transport(await homeOf(id))(path, init),
+    home: (id: string): string | undefined => homes.get(id),
   }
 
   const connections = {
@@ -281,7 +282,7 @@ export function createOpenHut(platform: Platform) {
     connections,
     providers,
     account,
-    fetch: async ({ computer: id, path, init }: { computer: string; path: string; init?: RequestInit }): Promise<Response> => platform.transport(await computer(id))(path, init),
+    fetch: async (input: Where & { path: string; init?: RequestInit }): Promise<Response> => platform.transport('of' in input ? await homeOf(input.of) : await computer(input.computer))(input.path, input.init),
     subscribe(listener: () => void): () => void {
       listeners.add(listener)
       timer ??= setInterval(() => void tick().catch(() => undefined), POLL_MS)

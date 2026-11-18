@@ -67,12 +67,12 @@ export function useCodexSignIn(onSignedIn: () => void) {
   const client = useQueryClient()
   const started = useRef(false)
   const finished = useRef(false)
-  const start = useMutation({ mutationFn: () => request({ schema: CodexSignIn, path: '/api/admin/codex-sign-ins', method: 'POST' }) })
+  const start = useMutation({ mutationFn: () => request({ schema: CodexSignIn, computer: 'local', path: '/api/admin/codex-sign-ins', method: 'POST' }) })
   const id = start.data?.id
   const poll = useQuery({
     queryKey: ['codex-sign-in', id],
     enabled: !!id,
-    queryFn: () => request({ schema: CodexSignIn, path: `/api/admin/codex-sign-ins/${encodeURIComponent(id ?? '')}` }),
+    queryFn: () => request({ schema: CodexSignIn, computer: 'local', path: `/api/admin/codex-sign-ins/${encodeURIComponent(id ?? '')}` }),
     refetchInterval: (query) => query.state.data?.status === 'complete' ? false : 2500,
     retry: false,
     gcTime: 0,

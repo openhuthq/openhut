@@ -41,21 +41,3 @@ export const enrollments = {
   dismiss: (dns: string) => bridge?.computers.dismiss({ dns }),
   follow: (listener: (list: Enrollment[]) => void) => bridge?.computers.onEnrollments(listener),
 }
-
-const homes = new Map<string, string>()
-
-export function rememberHomes(things: { id: string; computer: string }[]) {
-  for (const thing of things) homes.set(thing.id, thing.computer)
-}
-
-export function onComputer({ computer, path }: { computer: string; path: string }) {
-  return bridge && computer !== 'local' ? `/c/${computer}${path}` : path
-}
-
-export function at({ id, path }: { id: string; path: string }) {
-  return onComputer({ computer: homes.get(id) ?? 'local', path })
-}
-
-export function on({ agentId, path }: { agentId: string; path: string }) {
-  return at({ id: agentId, path })
-}

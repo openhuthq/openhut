@@ -4,5 +4,5 @@ import { request } from '@/lib/api-client'
 import { ME_KEY } from '@/lib/query-keys'
 
 export function useMe() {
-  return useQuery({ queryKey: ME_KEY, queryFn: () => request({ schema: Me, path: '/api/me' }) })
+  return useQuery({ queryKey: ME_KEY, queryFn: () => request({ schema: Me, computer: 'local', path: '/api/me' }) })
 }

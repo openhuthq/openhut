@@ -10,7 +10,7 @@ import { I } from '@/components/kit'
 import { agentPath } from '@/app/routes'
 import { useLive } from '@/features/agents/browser-live'
 import { Face } from '@/features/agents/face'
-import { on } from '@/lib/openhut'
+import { openhut } from '@/lib/openhut'
 import { navigate } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
@@ -23,7 +23,7 @@ const ACTION_WORDS: Record<string, string> = { navigate: 'Opened', click: 'Click
 
 export function BrowserPreview({ agent }: { agent: Agent }) {
   const canvas = useRef<HTMLCanvasElement>(null)
-  const live = useLive({ path: livePath({ agentId: agent.id, fps: PREVIEW_FPS }), canvas })
+  const live = useLive({ computer: openhut.agents.home(agent.id) ?? 'local', path: livePath({ agentId: agent.id, fps: PREVIEW_FPS }), canvas })
   const address = addressOf(live.page.url)
   return <a href={agentPath({ agentId: agent.id, dialog: 'browser' })} hidden={live.state !== 'live'} title={`Watch ${agent.name}'s browser`}
     className="group block overflow-hidden rounded-lg border border-hair bg-card text-ink no-underline shadow-[0_1px_2px_oklch(0%_0_0/.06)] hover:border-mid">
@@ -38,7 +38,7 @@ export function BrowserPreview({ agent }: { agent: Agent }) {
 
 export function BrowserDialog({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null)
-  const live = useLive({ path: livePath({ agentId: agent.id, fps: LIVE_FPS }), canvas })
+  const live = useLive({ computer: openhut.agents.home(agent.id) ?? 'local', path: livePath({ agentId: agent.id, fps: LIVE_FPS }), canvas })
   const screen = useRef<HTMLDivElement>(null)
   const movedAt = useRef(0)
   const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([])
@@ -137,7 +137,7 @@ export function BrowserDialog({ agent, onClose }: { agent: Agent; onClose: () =>
 }
 
 function livePath({ agentId, fps }: { agentId: string; fps: number }) {
-  return on({ agentId, path: `/api/browsers/${encodeURIComponent(agentId)}/live?fps=${fps}` })
+  return `/api/browsers/${encodeURIComponent(agentId)}/live?fps=${fps}`
 }
 
 function addressOf(url: string) {
