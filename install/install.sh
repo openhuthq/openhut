@@ -79,7 +79,7 @@ if [ -n "${OPENHUT_APP_VERSION:-}" ] && [ "${MIN_APP_VERSION#@}" = "$MIN_APP_VER
   die "this release needs the OpenHut app $MIN_APP_VERSION or newer, and yours is $OPENHUT_APP_VERSION. Update OpenHut, then try again. Nothing changed here."
 fi
 container() {
-  $D run -d -q --name openhut --privileged --restart unless-stopped -p 127.0.0.1:8787:8787 -v openhut:/var/lib/docker --entrypoint sh "$1" \
+  $D run -d --name openhut --privileged --restart unless-stopped -p 127.0.0.1:8787:8787 -v openhut:/var/lib/docker --entrypoint sh "$1" \
     -c 'if [ -x /opt/openhut/install/host-start.sh ]; then exec /opt/openhut/install/host-start.sh; fi; exec sleep infinity' >/dev/null
 }
 
@@ -107,7 +107,7 @@ if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
   fi
   $D start openhut >/dev/null
   $D exec -e OPENHUT_CONTAINER=1 -e "OPENHUT_CLIENT_KEY_SHA256=${OPENHUT_CLIENT_KEY_SHA256:-}" -e "OPENHUT_APP_VERSION=${OPENHUT_APP_VERSION:-}" openhut sh -c "apk add -q curl && curl -fsSL $OPENHUT_URL | sh" || exit 1
-  serve
+  [ -n "${OPENHUT_LOCAL:-}" ] || serve
   exit 0
 fi
 

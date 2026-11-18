@@ -3,11 +3,11 @@ import { execFile, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer, request } from 'node:http'
 import { connect } from 'node:net'
-import { accessSync, appendFileSync, chmodSync, constants, cpSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, chmodSync, cpSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { cpus, homedir, totalmem } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { Readable } from 'node:stream'
-import { json, text } from 'node:stream/consumers'
+import { text } from 'node:stream/consumers'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import updater from 'electron-updater'
@@ -15,6 +15,7 @@ import WebSocket from 'ws'
 
 const DEV = !app.isPackaged
 const MAC = process.platform === 'darwin'
+const CONTAINER = !MAC || process.env.OPENHUT_SANDBOX === 'gvisor'
 process.umask(0o022)
 app.setName(DEV ? 'OpenHut Dev' : 'OpenHut')
 const TEST_HOME = process.env.OPENHUT_TEST_HOME
@@ -29,7 +30,7 @@ const BACKEND = DEV ? ROOT : join(process.resourcesPath, 'backend')
 const SCRIPTS = DEV
   ? { agentd: 'packages/runtime/src/agentd/agentd.ts', server: 'packages/runtime/src/server/app.ts' }
   : { agentd: 'packages/runtime/src/agentd/agentd.mjs', server: 'packages/runtime/src/server/platform/app.mjs' }
-const MSB = join(BACKEND, `node_modules/@superradcompany/microsandbox-${process.platform}-${process.arch}${MAC ? '' : '-gnu'}`)
+const MSB = join(BACKEND, `node_modules/@superradcompany/microsandbox-${process.platform}-${process.arch}`)
 const GATEWAY_PORT = 8081
 const HOME = app.getPath('userData')
 const BRIDGE = join(HOME, 'bin/openhut-mcp')
@@ -49,7 +50,8 @@ const PREFS = join(HOME, 'prefs.json')
 const SECRET = join(HOME, 'secret.bin')
 const HANDOFF = join(HOME, 'secret.handoff')
 const COMPUTERS = join(HOME, 'computers.json')
-const LOCAL = { id: 'local', name: MAC ? 'This Mac' : 'This computer', url: '' }
+const LOCAL = { id: 'local', name: MAC ? 'This Mac' : 'This computer', url: CONTAINER ? 'http://127.0.0.1:8787' : '' }
+const LOCAL_KEY = 'keys/local.key'
 const INSTALL_URL = process.env.OPENHUT_INSTALL_URL ?? 'https://openhut.dev'
 const REMOTE_MS = 15_000
 const AUTOSTART = join(app.getPath('appData'), 'autostart/openhut.desktop')
@@ -315,17 +317,19 @@ function openAtLogin(on) {
   writeFileSync(AUTOSTART, `[Desktop Entry]\nType=Application\nName=OpenHut\nComment=Start OpenHut's agents in the background\nExec="${process.env.APPIMAGE ?? process.execPath}" --hidden\nX-GNOME-Autostart-enabled=true\n`)
 }
 
-function api(path, { method = 'GET', body } = {}) {
-  return new Promise((resolve, reject) => {
-    const out = request({ socketPath: SERVER_SOCK, path, method, headers: body ? { 'content-type': 'application/json' } : {} }, (res) => {
-      json(res).then((answer) => res.statusCode < 400 ? resolve(answer) : reject(new Error(answer?.error?.message ?? `The server answered ${res.statusCode}.`)), reject)
-    })
-    out.on('error', reject)
-    out.end(body ? JSON.stringify(body) : undefined)
-  })
+async function api(path, { method = 'GET', body } = {}) {
+  const req = new Request(`${APP_ORIGIN}${path}`, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body && JSON.stringify(body) })
+  const res = await toComputer({ req, id: LOCAL.id, path })
+  const answer = await res.json()
+  if (res.status >= 400) throw new Error(answer?.error?.message ?? `The server answered ${res.status}.`)
+  return answer
 }
 
 function agentd(ask) {
+  if (CONTAINER) {
+    const relay = "const s = require('net').connect('/run/agentd/agentd.sock'); s.end(process.argv[1]); s.pipe(process.stdout)"
+    return new Promise((resolve, reject) => execFile('docker', ['exec', 'openhut', 'node', '-e', relay, `${JSON.stringify(ask)}\n`], { timeout: 120_000 }, (error, stdout) => error ? reject(error) : resolve(JSON.parse(stdout))))
+  }
   return new Promise((resolve, reject) => {
     const sock = connect(SOCK)
     sock.on('error', reject)
@@ -487,13 +491,14 @@ async function meet(run) {
     if (state === 'done' && run.steps[index + 1]) run.steps[index + 1][2] = 'now'
   }
   const hardware = `${cpus()[0]?.model ?? 'This computer'} · ${Math.round(totalmem() / 2 ** 30)} GB`
-  if (!(MAC ? await hypervisor() : kvm())) throw new Error(`${hardware}, but it can't run virtual machines`)
+  if (CONTAINER ? !await dockerUp() : !await hypervisor()) throw new Error(`${hardware}, but it can't run ${CONTAINER ? 'Docker' : 'virtual machines'}`)
   step(0, hardware)
   if (await booted !== true) throw new Error(`It didn't start. The logs are in ${LOGS}.`)
   await api('/api/me')
   step(1, `version ${app.getVersion()}`)
   run.steps[2][1] = 'the first time downloads about 1 GB'
-  const fence = await agentd({ cmd: 'fence' })
+  let fence = {}
+  await waitFor(async () => (fence = await agentd({ cmd: 'fence' })).ok, 900)
   const passed = (fence.checks ?? []).filter((check) => check.pass).length
   if (!fence.ok) throw new Error(fence.error ?? `the fence failed ${(fence.checks ?? []).filter((check) => !check.pass).map((check) => check.name).join(', ')}`)
   step(2, `${passed} of ${fence.checks.length} checks passed`)
@@ -505,6 +510,10 @@ async function meet(run) {
   if (!ready) throw new Error(`${agent.name} didn't answer within 5 minutes`)
   step(3, `${agent.name} is answering`)
   run.agentId = agent.id
+}
+
+function dockerUp() {
+  return new Promise((resolve) => execFile('docker', ['info'], { timeout: 20_000 }, (error) => resolve(!error)))
 }
 
 function hypervisor() {
@@ -539,6 +548,7 @@ async function boot() {
   for (const file of readdirSync(LOGS).filter((each) => each.endsWith('.log') && !each.endsWith('.old.log'))) {
     if (statSync(join(LOGS, file)).size > MAX_LOG) renameSync(join(LOGS, file), join(LOGS, file.replace(/\.log$/, '.old.log')))
   }
+  if (CONTAINER) return bootContainer()
   keepData()
   assets()
   const shared = { OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_CLAUDE_HOST: MAC ? join(DATA, 'bin/claude') : join(ASSETS, 'bin/claude'), OPENHUT_CLAUDE_VERSION: claudeVersion() }
@@ -552,6 +562,26 @@ async function boot() {
   if (!await waitFor(async () => existsSync(SERVER_SOCK), 60)) return false
   if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   return true
+}
+
+async function bootContainer() {
+  assets()
+  const answers = async () => (await api('/api/me').then(() => true, () => false))
+  if (existsSync(join(HOME, LOCAL_KEY)) && await waitFor(answers, 90)) return true
+  if (!await dockerUp()) throw new Error('Docker isn\'t running, or your user can\'t use it. Install Docker, add yourself to the docker group (sudo usermod -aG docker $USER), sign in again, then open OpenHut.')
+  const key = randomBytes(32).toString('hex')
+  const script = await (await fetch(INSTALL_URL, { signal: AbortSignal.timeout(60_000) })).text()
+  const log = createWriteStream(join(LOGS, 'install.log'), { flags: 'a' })
+  const env = { ...process.env, OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update(key).digest('hex'), OPENHUT_APP_VERSION: app.getVersion(), OPENHUT_LOCAL: '1' }
+  const child = spawn('sh', ['-s'], { env, stdio: ['pipe', 'pipe', 'pipe'] })
+  for (const stream of [child.stdout, child.stderr]) stream.pipe(log, { end: false })
+  child.stdin.end(script)
+  const code = await new Promise((resolve) => child.on('close', resolve))
+  if (code !== 0) throw new Error(`Installing OpenHut in Docker stopped (exit ${code}). See install.log.`)
+  mkdirSync(join(HOME, 'keys'), { recursive: true, mode: 0o700 })
+  writeFileSync(join(HOME, LOCAL_KEY), await safeStorage.encryptStringAsync(key), { mode: 0o600 })
+  keys.set(LOCAL.id, key)
+  return waitFor(answers, 120)
 }
 
 function lastBooted() {
@@ -598,7 +628,7 @@ function assets() {
   mkdirSync(dirname(BRIDGE), { recursive: true })
   cpSync(DEV ? join(HERE, '../bin/openhut-mcp') : join(BACKEND, 'bin/openhut-mcp'), BRIDGE)
   chmodSync(BRIDGE, 0o755)
-  if (DEV || existsSync(ASSETS)) return
+  if (DEV || CONTAINER || existsSync(ASSETS)) return
   rmSync(`${ASSETS}.tmp`, { recursive: true, force: true })
   for (const path of ['bin/claude', 'vendor/hermes-plugins']) cpSync(join(BACKEND, path), join(`${ASSETS}.tmp`, path), { recursive: true })
   renameSync(`${ASSETS}.tmp`, ASSETS)
@@ -607,21 +637,7 @@ function assets() {
 }
 
 function msb() {
-  const dir = process.env.APPIMAGE ? join(HOME, `msb-${app.getVersion()}`) : MSB
-  if (!existsSync(dir)) {
-    cpSync(MSB, `${dir}.tmp`, { recursive: true })
-    renameSync(`${dir}.tmp`, dir)
-  }
-  return { MSB_PATH: join(dir, 'bin/msb'), MSB_LIBKRUNFW_PATH: join(dir, 'lib', readdirSync(join(dir, 'lib'))[0]) }
-}
-
-function kvm() {
-  try {
-    accessSync('/dev/kvm', constants.R_OK | constants.W_OK)
-    return true
-  } catch {
-    return false
-  }
+  return { MSB_PATH: join(MSB, 'bin/msb'), MSB_LIBKRUNFW_PATH: join(MSB, 'lib', readdirSync(join(MSB, 'lib'))[0]) }
 }
 
 function savedBounds() {
@@ -760,8 +776,9 @@ async function toComputer({ req, id, path }) {
   const origin = req.headers.get('origin')
   if (!['GET', 'HEAD'].includes(req.method) && origin !== null && origin !== APP_ORIGIN) return refuse(403, 'Only the OpenHut app can change things here.')
   const target = path + new URL(req.url).search
-  if (id === LOCAL.id) return toSocket({ req, path: target })
-  const computer = storedComputers().find((each) => each.id === id)
+  if (id === LOCAL.id && !CONTAINER) return toSocket({ req, path: target })
+  if (id === LOCAL.id && !keys.has(id) && !existsSync(join(HOME, LOCAL_KEY))) return refuse(503, `OpenHut is still being set up on ${LOCAL.name.toLowerCase()}.`)
+  const computer = id === LOCAL.id ? { ...LOCAL, keyFile: LOCAL_KEY } : storedComputers().find((each) => each.id === id)
   if (!computer) return refuse(404, 'That computer isn\'t in your list.')
   const headers = new Headers(req.headers)
   for (const name of ['host', 'origin', 'cookie', 'connection']) headers.delete(name)
@@ -794,8 +811,8 @@ async function relayLive({ port, path }) {
 async function liveSocket(path) {
   const [, id = LOCAL.id, target] = /^(?:\/c\/([\w-]+))?(\/api\/browsers\/[\w-]+\/live(?:\?fps=\d+)?)$/.exec(path) ?? []
   if (!target) return undefined
-  if (id === LOCAL.id) return new WebSocket(`ws://localhost${target}`, { createConnection: () => connect(SERVER_SOCK) })
-  const computer = storedComputers().find((each) => each.id === id)
+  if (id === LOCAL.id && !CONTAINER) return new WebSocket(`ws://localhost${target}`, { createConnection: () => connect(SERVER_SOCK) })
+  const computer = id === LOCAL.id ? { ...LOCAL, keyFile: LOCAL_KEY } : storedComputers().find((each) => each.id === id)
   if (!computer) return undefined
   return new WebSocket(`${computer.url.replace(/^http/, 'ws')}${target}`, { headers: { authorization: `Bearer ${await keyOf(computer)}`, 'openhut-app-version': app.getVersion() } })
 }
@@ -844,11 +861,11 @@ app.whenReady().then(async () => {
   if (DEV) app.dock?.setIcon(join(HERE, '../build/icon.png'))
   menu()
   protocol.handle('app', serve)
-  if (!MAC && !kvm()) {
-    await dialog.showMessageBox({ type: 'error', message: 'This computer can\'t run agents', detail: '/dev/kvm is not available, and OpenHut runs each agent in its own virtual machine. Turn on virtualization (Intel VT-x or AMD-V) in the firmware settings, or nested virtualization on a VM, and make sure your user can open /dev/kvm (sudo usermod -aG kvm $USER, then sign in again).', buttons: ['Quit'] })
+  if (CONTAINER && !await dockerUp()) {
+    await dialog.showMessageBox({ type: 'error', message: 'OpenHut needs Docker', detail: 'On Linux, OpenHut runs each agent in its own gVisor sandbox in Docker. Install Docker (sudo apt install docker.io), let your user run it (sudo usermod -aG docker $USER), sign in again, then open OpenHut.', buttons: ['Quit'] })
     return app.quit()
   }
-  const fresh = !existsSync(join(DATA, 'app'))
+  const fresh = !existsSync(CONTAINER ? join(HOME, LOCAL_KEY) : join(DATA, 'app'))
   const hidden = process.argv.includes('--hidden') || (MAC && app.getLoginItemSettings().wasOpenedAtLogin)
   booted = boot().catch((error) => {
     appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't start: ${error.message}\n`)
