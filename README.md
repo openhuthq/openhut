@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/readme/hut.svg" width="88" height="88" alt="">
+
 <h1>OpenHut</h1>
 
 <p><b>Build, manage & share agents with your team</b></p>
@@ -7,60 +9,53 @@
 <p>Self-improving agents in Slack and WhatsApp, on your own server.</p>
 
 <p>
-<a href="https://openhut.dev/download/mac?from=github"><b>Download for Mac</b></a> &nbsp;·&nbsp;
-<a href="https://openhut.dev/download/linux?from=github"><b>Download for Linux</b></a> &nbsp;·&nbsp;
-<a href="https://openhut.dev/docs">Docs</a>
+<a href="https://openhut.dev/download/mac?from=github"><img src="https://img.shields.io/badge/Download_for_Mac-0b0b0b?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac" height="36"></a>&nbsp;
+<a href="https://openhut.dev/download/linux?from=github"><img src="https://img.shields.io/badge/Download_for_Linux-0b0b0b?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux" height="36"></a>&nbsp;
+<a href="https://openhut.dev/docs"><img src="https://img.shields.io/badge/Get_started-f2f2f2?style=for-the-badge" alt="Get started" height="36"></a>
 </p>
 
 <p><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a></p>
 
 </div>
 
-<p align="center"><img src="packages/docs/public/screenshots/slack.jpg" alt="Connect Sales to Slack: the agent gets its own Slack app, with its face, and answers in the channels you pick" width="480"></p>
+<p align="center"><img src="docs/readme/hero.gif" alt="The OpenHut app: Ops, Sales and Support each answer a question, use their tools and reply" width="100%"></p>
 
-## Install
+## Meet your team where they work
 
-- **Mac:** [download the app](https://openhut.dev/download/mac?from=github). Apple silicon, macOS 14 or later.
-- **Linux:** [download the AppImage](https://openhut.dev/download/linux?from=github), or the [.deb](https://github.com/openhuthq/openhut/releases/latest/download/openhut-x64.deb) for Debian and Ubuntu. x64, with Docker.
-- **An always-on server:** add it from the app, under **Settings › Computers**. The app installs OpenHut on it over Tailscale SSH. See [Computers](https://openhut.dev/docs/computers).
+<p align="center"><img src="docs/readme/channels.gif" alt="The same agents answer in a Slack channel, on WhatsApp and on Telegram" width="100%"></p>
 
-Open it, add a model under **Settings › Models**, and make an agent. No account.
+Every agent gets its own Slack app, WhatsApp number and Telegram bot.
 
-## What you get
+## Agents that browse the web
 
-- **One agent per job, each in your team's chat.** Each agent is its own Slack app, its own WhatsApp number and its own Telegram bot.
-- **Sealed.** Each agent runs in its own sandbox: a microVM on a Mac, gVisor on Linux. It can't reach another agent, your computer or your LAN.
-- **A gateway that holds the keys.** Agents reach Postgres, Linear, GitHub, Google and any MCP server only through it, and never see their passwords. It checks each call against what you allowed and logs it.
-- **Powered by [Hermes](https://github.com/NousResearch/hermes-agent).** Agents learn skills and keep memories as they work. Correct one once, in chat, and it remembers.
-- **More computers.** Add Linux computers over [Tailscale](https://tailscale.com) so agents keep answering while your Mac sleeps, and move an agent between them with its memory, skills and chats.
-- **Manage it from the app, or from your own AI** (Claude Code or any MCP app) over the control MCP.
-- **Your models.** Claude and Codex subscriptions, or OpenRouter, OpenAI and xAI keys.
+<p align="center"><img src="docs/readme/browser.webp" alt="Scout's browser, live: Scout scrolls a page, you take over and click, then hand it back" width="100%"></p>
 
-![Settings, Computers: This Mac, a second computer and Add a computer](packages/docs/public/screenshots/computers.jpg)
+Watch them work live. Take over when a site needs a login.
+
+## Where your agents live
+
+<p align="center"><img src="docs/readme/where.gif" alt="Ops and Scout on This Mac; Support and Growth on an always-on server" width="100%"></p>
+
+On your Mac, or on your own server. Each agent in its own sealed box.
 
 ## How it compares
 
-| | OpenHut | [OpenClaw](https://github.com/openclaw/openclaw) | [DuskBot](https://github.com/DuskBotAI/duskbot) | [Hermes](https://github.com/NousResearch/hermes-agent) alone |
-| --- | --- | --- | --- | --- |
-| Isolation | Each agent in its own microVM (Mac) or gVisor sandbox (Linux) | Agent on the host; a Docker sandbox for tools, off by default | On the host locally, with its desktop in a container; a bubblewrap sandbox on a server or dusk cloud | On the host by default |
-| Team channels | Each agent its own Slack app, WhatsApp number and Telegram bot | Slack, WhatsApp, Telegram and more, through one gateway | Chat in its own app | Slack, WhatsApp, Telegram and more, through one gateway |
-| License | MIT | MIT | Source-available, noncommercial use only | MIT |
+<table>
+<tr>
+<th></th>
+<th align="center"><a href="https://github.com/openhuthq/openhut"><img src="docs/readme/hut.svg" width="24" height="24" alt=""><br>OpenHut</a></th>
+<th align="center"><a href="https://github.com/openclaw/openclaw"><img src="docs/readme/logos/openclaw.png" width="24" height="24" alt=""><br>OpenClaw</a></th>
+<th align="center"><a href="https://github.com/DuskBotAI/duskbot"><img src="docs/readme/logos/duskbot.png" width="24" height="24" alt=""><br>DuskBot</a></th>
+<th align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="docs/readme/logos/hermes.png" width="24" height="24" alt=""><br>Hermes</a></th>
+</tr>
+<tr><td>Each agent sandboxed by default</td><td align="center">✓</td><td align="center">✗</td><td align="center">✗</td><td align="center">✗</td></tr>
+<tr><td>Slack, WhatsApp and Telegram</td><td align="center">✓</td><td align="center">✓</td><td align="center">✗</td><td align="center">✓</td></tr>
+<tr><td>Learns skills and memories as it works</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td></tr>
+<tr><td>Open source, free for commercial use</td><td align="center">✓</td><td align="center">✓</td><td align="center">✗</td><td align="center">✓</td></tr>
+</table>
 
-## Docs
+## Free, open source
 
-[openhut.dev/docs](https://openhut.dev/docs): install, Slack, WhatsApp, Telegram, connections, computers, MCP and security.
+<p align="center"><img src="docs/readme/open-source.gif" alt="MIT licensed, bring the Claude or ChatGPT plan you already pay for, and manage it from your own assistant over MCP" width="100%"></p>
 
-## Develop
-
-Node 22.18 or newer.
-
-```sh
-npm install
-npm run dev
-```
-
-Then open `http://localhost:5173`. How the repo is laid out, the conventions and the checks: [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## License
-
-[MIT](LICENSE)
+<sub>[MIT](LICENSE)</sub>
