@@ -1,7 +1,7 @@
 export type Words = { here: string; thisComputer: string; keychain: string; showFolder: string; badgeNote: string | undefined }
 
 export function wordsFor(platform: string): Words {
-  if (platform === 'darwin') return { here: 'Mac', thisComputer: 'This Mac', keychain: 'macOS Keychain', showFolder: 'Show in Finder', badgeNote: 'Even with this off, the Dock icon shows how many.' }
+  if (platform === 'darwin') return { here: 'Mac', thisComputer: 'This Mac', keychain: 'macOS Keychain', showFolder: 'Show in Finder', badgeNote: 'The Dock icon counts them either way.' }
   return { here: 'computer', thisComputer: 'This computer', keychain: 'system keyring', showFolder: 'Open folder', badgeNote: undefined }
 }
 

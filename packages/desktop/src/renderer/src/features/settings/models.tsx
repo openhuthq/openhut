@@ -77,7 +77,7 @@ function notesOf({ provider, where, testModel }: { provider: Provider; where: st
 
 function ProviderRow({ provider, note }: { provider: Provider; note: string }) {
   const subscription = provider.kind === 'subscription'
-  return <Row icon={<Glyph name={BRAND[provider.id]} size={22} />} title={infoOf(provider.id).short} note={note}>
+  return <Row icon={<Glyph name={BRAND[provider.id]} size={20} />} title={infoOf(provider.id).short} note={note}>
     {provider.connected
       ? <><Status tone="on">{subscription ? 'Signed in' : 'Connected'}</Status><Button type="button" variant="secondary" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id) }}>Manage</Button></>
       : <Button type="button" variant="secondary" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id === 'claude' ? 'seat' : provider.id) }}>{subscription ? 'Sign in' : 'Add key'}</Button>}
@@ -183,7 +183,7 @@ function Manage({ provider, notice, clearNotice }: { provider: Provider & { comp
   return <div className="flex min-h-0 flex-1 flex-col">
     <StepTitle id={provider.id}>{provider.name}</StepTitle>
     <div className="no-scrollbar fade-b flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto px-6 pt-[18px] pb-10">
-      <div ref={box}><Row icon={<Glyph name={BRAND[provider.id]} size={22} />} title={confirming ? `${off} ${info.short}?` : provider.name}
+      <div ref={box}><Row icon={<Glyph name={BRAND[provider.id]} size={20} />} title={confirming ? `${off} ${info.short}?` : provider.name}
         note={confirming ? effect : <>{provider.keyHint && <><span className="font-mono">{provider.keyHint}</span> · </>}{where}{updated && ` · updated ${updated}`}</>}>
         {confirming
           ? <>
