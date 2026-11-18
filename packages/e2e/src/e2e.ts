@@ -269,8 +269,8 @@ function main() {
 
   check('T1', 'Local mode sends no email, login or username in its usage data', 'setup_completed queued with no owner_email; no email, login or username anywhere (a unit-level check: events.ts in local mode in a node process on the server, not a running desktop app)', async () => {
     const events = `file://${OPENHUT}/packages/runtime/src/server/platform/events.ts`
-    const script = `const { record, takeTelemetry } = await import(${JSON.stringify(events)})
-record({ action: 'person.joined', actor: { id: 'usr_e2elocal', email: 'owner@acme.example' }, target: { type: 'person', id: 'usr_e2elocal', role: 'owner' } })
+    const script = `const { emit, takeTelemetry } = await import(${JSON.stringify(events)})
+emit({ name: 'setup.completed', actor: { id: 'usr_e2elocal', email: 'owner@acme.example' }, target: { type: 'person', id: 'usr_e2elocal' } })
 console.log(JSON.stringify(takeTelemetry()))`
     const { stdout } = await sh('node', ['--input-type=module', '-e', script], { env: { ...process.env, OPENHUT_SOCKET: '/tmp/e2e-local.sock', OPENHUT_MODEL: 'claude' } })
     const sent: { name: string; properties: Record<string, unknown> }[] = JSON.parse(stdout.trim().split('\n').at(-1) ?? '[]')

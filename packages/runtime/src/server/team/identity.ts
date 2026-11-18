@@ -3,7 +3,7 @@ import { userInfo } from 'node:os'
 import type { FastifyRequest } from 'fastify'
 import { config } from '../platform/config.ts'
 import { db, isUniqueViolation } from '../platform/db.ts'
-import { record } from '../platform/events.ts'
+import { emit } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { newId } from '../platform/secrets.ts'
 
@@ -35,7 +35,7 @@ function theOwner(): Promise<Caller | undefined> {
 async function claimOwner(): Promise<Caller | undefined> {
   const owner = await db.insertInto('person').values({ id: newId('usr'), email: userInfo().username, role: 'owner', removed_at: null }).returning(['id', 'email']).executeTakeFirstOrThrow()
     .catch((err: unknown) => { if (isUniqueViolation(err)) return undefined; throw err })
-  if (owner) record({ action: 'person.joined', actor: owner, target: { type: 'person', id: owner.id, role: 'owner' } })
+  if (owner) emit({ name: 'setup.completed', actor: owner, target: { type: 'person', id: owner.id } })
   return owner ?? theOwner()
 }
 

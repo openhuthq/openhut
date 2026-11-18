@@ -2,7 +2,7 @@ import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { config } from '../../../src/server/platform/config.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
-import { record, setUsageData, takeTelemetry, track } from '../../../src/server/platform/events.ts'
+import { emit, log, setUsageData, takeTelemetry } from '../../../src/server/platform/events.ts'
 import { agentd } from '../../../src/server/platform/agentd.ts'
 import { reportActive, reportMessages, sendTelemetry } from '../../../src/server/platform/telemetry.ts'
 
@@ -12,23 +12,26 @@ const INSTANCE = '0b9c2f2e-3c1d-4b6a-9f1e-2a7d5c8e1f00'
 
 test('telemetry is off for test-model servers, so tests and the e2e run never send anything', () => {
   assert.equal(config.telemetry, false)
-  record({ action: 'agent.created', actor, target: { type: 'agent', id: 'ag_x', name: 'Payroll', model: 'sonnet' } })
+  emit({ name: 'agent.created', actor, target: { type: 'agent', id: 'ag_x', name: 'Payroll', model: 'sonnet' } })
   assert.deepEqual(takeTelemetry(), [])
 })
 
-test('audit actions become events with only safe properties and no email', () => {
+test('every event is logged, and only catalog events are queued, with only safe properties and no email', () => {
   config.telemetry = true
-  record({ action: 'agent.created', actor, target: { type: 'agent', id: 'ag_x', name: 'Payroll bot', model: 'sonnet' } })
-  record({ action: 'person.joined', actor, target: { type: 'person', id: 'usr_telemtry', role: 'owner' } })
-  record({ action: 'person.joined', actor: { id: 'usr_b', email: 'bea@acme.example' }, target: { type: 'person', id: 'usr_b', role: 'member' } })
-  record({ action: 'connection.reconnected', actor, target: { type: 'connection', id: 'cn_x' } })
-  track('dashboard_page_viewed', { page: 'agents', path: '/agents/ag_x' })
+  const logged = mock.method(log, 'info', () => {})
+  emit({ name: 'agent.created', actor, target: { type: 'agent', id: 'ag_x', name: 'Payroll bot', model: 'sonnet' } })
+  emit({ name: 'setup.completed', actor, target: { type: 'person', id: 'usr_telemtry' } })
+  emit({ name: 'connection.reconnected', actor, target: { type: 'connection', id: 'cn_x' } })
+  emit({ name: 'dashboard.page_viewed', properties: { page: 'agents', path: '/agents/ag_x' } })
+  emit({ name: 'app.started', properties: { version: '0.1.4', kind: 'mac' } })
+  logged.mock.restore()
   config.telemetry = false
+  assert.deepEqual(logged.mock.calls.map((call) => (call.arguments[0] as { event: string }).event), ['agent.created', 'setup.completed', 'connection.reconnected', 'dashboard.page_viewed', 'app.started'])
   assert.deepEqual(takeTelemetry().map(({ name, properties }) => ({ name, properties })), [
     { name: 'agent_created', properties: { model: 'sonnet' } },
     { name: 'setup_completed', properties: {} },
-    { name: 'person_joined', properties: { role: 'member' } },
     { name: 'dashboard_page_viewed', properties: { page: 'agents' } },
+    { name: 'app_started', properties: {} },
   ])
 })
 
@@ -48,14 +51,14 @@ test('the daily check-in reports buckets, never an email, and a batch goes to th
   assert.equal(body.instance, INSTANCE)
   assert.equal(body.kind, 'server')
   assert.deepEqual(body.events.map(({ name, properties }: { name: string; properties: unknown }) => ({ name, properties })), [
-    { name: 'instance_active', properties: { agents: '0', people: '2-5' } },
+    { name: 'instance_active', properties: { agents: '0' } },
   ])
   posted.mock.restore()
 })
 
 test('a failed send only logs and drops the batch', async () => {
   config.telemetry = true
-  track('skill_edited')
+  emit({ name: 'skill.updated', target: { type: 'skill', id: 's' } })
   config.telemetry = false
   const failing = mock.method(globalThis, 'fetch', async () => { throw new Error('offline') })
   await sendTelemetry(INSTANCE)
@@ -80,12 +83,12 @@ test('each new message from a person becomes one event with only its channel, ag
 
 test('turning usage data off in Admin stops tracking and drops anything not sent yet', () => {
   config.telemetry = true
-  track('skill_edited')
+  emit({ name: 'skill.updated', target: { type: 'skill', id: 's' } })
   setUsageData(false)
-  track('skill_deleted')
+  emit({ name: 'skill.deleted', target: { type: 'skill', id: 's' } })
   assert.deepEqual(takeTelemetry(), [])
   setUsageData(true)
-  track('memory_edited')
+  emit({ name: 'memory.updated', target: { type: 'memory', id: 'm' } })
   config.telemetry = false
   assert.deepEqual(takeTelemetry().map(({ name }) => name), ['memory_edited'])
 })
@@ -93,7 +96,7 @@ test('turning usage data off in Admin stops tracking and drops anything not sent
 test('in local mode no event carries an email, login or username, only the anonymous instance id', async () => {
   config.telemetry = true
   config.socket = '/tmp/openhut-test.sock'
-  record({ action: 'person.joined', actor: { id: 'usr_local1', email: 'owner@acme.example' }, target: { type: 'person', id: 'usr_local1', role: 'owner' } })
+  emit({ name: 'setup.completed', actor: { id: 'usr_local1', email: 'owner@acme.example' }, target: { type: 'person', id: 'usr_local1' } })
   await reportActive()
   config.socket = undefined
   config.telemetry = false

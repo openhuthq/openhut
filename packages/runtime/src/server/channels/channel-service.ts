@@ -3,7 +3,7 @@ import type { Deleted } from '@openhut/common/api.ts'
 import { ADDRESS, type Channel, type Conversation, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
 import { db, findRow, isUniqueViolation } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
-import { log, record } from '../platform/events.ts'
+import { log, emit } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { newId, seal, unseal } from '../platform/secrets.ts'
 import { deleted } from '../platform/responses.ts'
@@ -41,7 +41,7 @@ export const channelService = {
     const audience = body.kind === 'slack' ? { owner_address: '', open: false, allowed: '' } : { owner_address: body.ownerAddress, open: body.open, allowed: body.allowed.join(',') }
     const row = await db.insertInto('channel').values({ id: newId('ch'), agent_id: agent.id, kind: body.kind, ...audience, ...await setupOf({ body, agentName: agent.name, agentId: agent.id }) })
       .returningAll().executeTakeFirstOrThrow().catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, `${agent.name} already has ${LABEL[body.kind]}. Disconnect it first.`) : err })
-    record({ action: 'channel.created', actor, target: { type: 'channel', id: row.id, kind: row.kind, agentId: agent.id } })
+    emit({ name: 'channel.created', actor, target: { type: 'channel', id: row.id, kind: row.kind, agentId: agent.id } })
     await reapplyOrLog(agent.id)
     return channelOf({ row, qr: null })
   },
@@ -56,7 +56,7 @@ export const channelService = {
     if (row.kind === 'slack') await slack.enter({ botToken: slackSecrets(row).botToken, ids: added, agentName: agent.name })
     const open = row.kind === 'slack' ? undefined : patch.open
     const updated = await db.updateTable('channel').set({ open, allowed: patch.allowed && [...new Set(patch.allowed)].join(',') }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
-    record({ action: 'channel.updated', actor, target: { type: 'channel', id, kind: row.kind, agentId: row.agent_id } })
+    emit({ name: 'channel.updated', actor, target: { type: 'channel', id, kind: row.kind, agentId: row.agent_id } })
     await reapplyOrLog(row.agent_id)
     if (row.kind === 'slack' && added.length) await greetOrLog({ row, ids: added, agentName: agent.name })
     return channelOf({ row: updated, qr: null })
@@ -80,7 +80,7 @@ export const channelService = {
     await agentService.requireEditable({ actor, id: row.agent_id })
     await disconnect(row)
     await db.deleteFrom('channel').where('id', '=', id).execute()
-    record({ action: 'channel.deleted', actor, target: { type: 'channel', id, kind: row.kind, agentId: row.agent_id } })
+    emit({ name: 'channel.deleted', actor, target: { type: 'channel', id, kind: row.kind, agentId: row.agent_id } })
     await reapplyOrLog(row.agent_id)
     return deleted({ id, object: 'channel' })
   },

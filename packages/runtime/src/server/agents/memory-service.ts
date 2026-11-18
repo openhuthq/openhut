@@ -1,6 +1,6 @@
 import { Memory, MEMORY_DELIMITER, MEMORY_LIMITS, memoryLength, type MemoryBlock, type MemoryTarget, type UpdateMemory } from '@openhut/common/agents/memory.ts'
 import { agentd } from '../platform/agentd.ts'
-import { record } from '../platform/events.ts'
+import { emit } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
 import type { Caller } from '../team/identity.ts'
 import { agentService } from './agent-service.ts'
@@ -27,7 +27,7 @@ export const memoryService = {
       const over = memoryLength(entries) - MEMORY_LIMITS[target]
       if (over > 0) throw new HttpError(400, `${LABEL[target]} are ${over.toLocaleString('en')} characters over the ${MEMORY_LIMITS[target].toLocaleString('en')} limit. Shorten or remove an entry.`, { param: target })
       await agentd.writeMemory({ id: agentId, target, body: entries.join(MEMORY_DELIMITER) })
-      record({ action: 'memory.updated', actor, target: { type: 'memory', id: agentId, file: target, entries: entries.length } })
+      emit({ name: 'memory.updated', actor, target: { type: 'memory', id: agentId, file: target, entries: entries.length } })
     }
     return memoryService.get({ actor, agentId })
   },

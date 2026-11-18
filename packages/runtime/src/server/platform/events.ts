@@ -7,32 +7,41 @@ initLogger({ env: { service: 'openhut' }, pretty: process.stdout.isTTY === true,
 export { log }
 
 type Target = { type: string; id: string; [field: string]: unknown }
+export type AppEvent = { name: string; actor?: { id: string; email: string }; target?: Target; properties?: Record<string, unknown>; at?: number }
 
 const MAX_QUEUE = 500
 const queue: TelemetryEvent[] = []
 let usageOn = true
-const TELEMETRY_OF: Record<string, (target: Target, actor: { email: string }) => [string, Record<string, unknown>]> = {
-  'agent.created': (target) => ['agent_created', { model: target.model }],
+const TELEMETRY_OF: Record<string, (event: AppEvent) => [string, Record<string, unknown>]> = {
+  'app.started': () => ['app_started', {}],
+  'setup.completed': () => ['setup_completed', {}],
+  'instance.active': ({ properties }) => ['instance_active', properties ?? {}],
+  'message.sent': ({ properties }) => ['message_sent', properties ?? {}],
+  'dashboard.page_viewed': ({ properties }) => ['dashboard_page_viewed', properties ?? {}],
+  'agent.created': ({ target }) => ['agent_created', { model: target?.model }],
   'agent.deleted': () => ['agent_deleted', {}],
-  'channel.created': (target) => ['channel_connected', { kind: target.kind }],
-  'channel.deleted': (target) => ['channel_removed', { kind: target.kind }],
-  'connection.created': (target) => ['connection_created', { kind: target.kind }],
-  'person.joined': (target, actor) => target.role === 'owner' ? ['setup_completed', { owner_email: actor.email }] : ['person_joined', { role: target.role }],
+  'channel.created': ({ target }) => ['channel_connected', { kind: target?.kind }],
+  'channel.deleted': ({ target }) => ['channel_removed', { kind: target?.kind }],
+  'connection.created': ({ target }) => ['connection_created', { kind: target?.kind }],
   'skill.updated': () => ['skill_edited', {}],
   'skill.deleted': () => ['skill_deleted', {}],
   'memory.updated': () => ['memory_edited', {}],
 }
+const LISTENERS: ((event: AppEvent) => void)[] = [logEvent, queueTelemetry]
 
-export function record({ action, actor, target }: { action: string; actor: { id: string; email: string }; target: Target }): void {
-  log.info({ event: action, actor: actor.id, actorName: actor.email, target })
-  const mapped = TELEMETRY_OF[action]?.(target, actor)
-  if (mapped) track(mapped[0], mapped[1])
+export function emit(event: AppEvent): void {
+  for (const listener of LISTENERS) listener(event)
 }
 
-export function track(name: string, properties: Record<string, unknown> = {}, at?: number): void {
-  if (!usageDataOn() || queue.length >= MAX_QUEUE) return
-  const event = telemetryEvent({ name, properties: withoutEmails(properties), at })
-  if (event) queue.push(event)
+function logEvent({ name, actor, target, properties }: AppEvent): void {
+  log.info({ ...properties, event: name, actor: actor?.id, actorName: actor?.email, target })
+}
+
+function queueTelemetry(event: AppEvent): void {
+  const mapped = TELEMETRY_OF[event.name]?.(event)
+  if (!mapped || !usageDataOn() || queue.length >= MAX_QUEUE) return
+  const sent = telemetryEvent({ name: mapped[0], properties: withoutEmails(mapped[1]), at: event.at })
+  if (sent) queue.push(sent)
 }
 
 export function usageDataOn(): boolean {

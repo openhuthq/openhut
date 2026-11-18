@@ -15,7 +15,7 @@ import { agentToken, newId, openSealed, sameSecret, seal, sealFor, unseal } from
 import { settings } from '../platform/settings.ts'
 import { agentd, containerStates, features, type AgentFiles } from '../platform/agentd.ts'
 import { agentApiUrl } from '../platform/network.ts'
-import { log, record } from '../platform/events.ts'
+import { log, emit } from '../platform/events.ts'
 import { deleted } from '../platform/responses.ts'
 import { connectionService } from '../connections/connection-service.ts'
 import type { Caller } from '../team/identity.ts'
@@ -77,7 +77,7 @@ export const agentService = {
       await db.deleteFrom('agent').where('id', '=', row.id).execute()
       throw err
     }
-    record({ action: 'agent.created', actor, target: { type: 'agent', id: row.id, name: row.name, model: row.model } })
+    emit({ name: 'agent.created', actor, target: { type: 'agent', id: row.id, name: row.name, model: row.model } })
     return agentService.get({ actor, id: row.id })
   },
 
@@ -106,7 +106,7 @@ export const agentService = {
     const row = await rowOf(id)
     await agentd.remove({ id })
     await db.deleteFrom('agent').where('id', '=', id).execute()
-    record({ action: 'agent.deleted', actor, target: { type: 'agent', id, name: row.name } })
+    emit({ name: 'agent.deleted', actor, target: { type: 'agent', id, name: row.name } })
     return deleted({ id, object: 'agent' })
   },
 
@@ -127,7 +127,7 @@ export const agentService = {
       home: tar,
     }
     const sealed = sealedFor({ publicKey, text: JSON.stringify(moved) })
-    record({ action: 'agent.exported', actor, target: { type: 'agent', id, name: row.name } })
+    emit({ name: 'agent.exported', actor, target: { type: 'agent', id, name: row.name } })
     return { object: 'export', sealed }
   },
 
@@ -151,7 +151,7 @@ export const agentService = {
       const ungranted = await regrant({ agentId: row.id, grants: moved.grants })
       await agentd.importHome({ id: row.id, tar: moved.home })
       await agentd.create({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser })
-      record({ action: 'agent.imported', actor, target: { type: 'agent', id: row.id, name: row.name } })
+      emit({ name: 'agent.imported', actor, target: { type: 'agent', id: row.id, name: row.name } })
       return { object: 'agent_import', agent: await agentService.get({ actor, id: row.id }), ungranted }
     } catch (err) {
       await agentd.remove({ id: row.id }).catch(() => undefined)
@@ -180,7 +180,7 @@ export const agentService = {
   async revokeToken({ actor, id }: { actor: Caller; id: string }): Promise<Agent> {
     await agentService.requireEditable({ actor, id })
     await db.updateTable('agent').set((eb) => ({ token_epoch: eb('token_epoch', '+', 1) })).where('id', '=', id).execute()
-    record({ action: 'agent.token_revoked', actor, target: { type: 'agent', id } })
+    emit({ name: 'agent.token_revoked', actor, target: { type: 'agent', id } })
     await tellAgent(id)
     return agentService.get({ actor, id })
   },
@@ -199,7 +199,7 @@ export const agentService = {
     await db.insertInto('connection_grant').values({ id: newId('gr'), agent_id: agentId, connection_id: connectionId })
       .onConflict((oc) => oc.columns(['connection_id', 'agent_id']).doNothing()).execute()
     const grant = await db.selectFrom('connection_grant').selectAll().where('agent_id', '=', agentId).where('connection_id', '=', connectionId).executeTakeFirstOrThrow()
-    record({ action: 'grant.created', actor, target: { type: 'grant', id: grant.id, agentId, connectionId } })
+    emit({ name: 'grant.created', actor, target: { type: 'grant', id: grant.id, agentId, connectionId } })
     await tellAgent(agentId)
     return grantOf(grant)
   },
@@ -208,7 +208,7 @@ export const agentService = {
     const grant = await findRow({ table: 'connection_grant', id, missing: 'That grant doesn\'t exist. It may have been removed already.' })
     await agentService.requireEditable({ actor, id: grant.agent_id })
     await db.deleteFrom('connection_grant').where('id', '=', id).execute()
-    record({ action: 'grant.deleted', actor, target: { type: 'grant', id, agentId: grant.agent_id, connectionId: grant.connection_id } })
+    emit({ name: 'grant.deleted', actor, target: { type: 'grant', id, agentId: grant.agent_id, connectionId: grant.connection_id } })
     await tellAgent(grant.agent_id)
     return deleted({ id, object: 'grant' })
   },

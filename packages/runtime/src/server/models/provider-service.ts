@@ -1,6 +1,6 @@
 import { PROVIDERS, providerInfo, splitModelKey, type Provider, type ProviderId, type ProviderModel, type UpdateProvider } from '@openhut/common/models/provider.ts'
 import { HttpError } from '../platform/http-error.ts'
-import { record } from '../platform/events.ts'
+import { emit } from '../platform/events.ts'
 import { settings, type StoredCatalog } from '../platform/settings.ts'
 import type { Caller } from '../team/identity.ts'
 import { providers, tierOf, type ListedModel } from './providers/index.ts'
@@ -47,7 +47,7 @@ export const providerService = {
     else if (id === 'codex') await settings.forgetCodex()
     else await settings.forgetProviderKey(id)
     await settings.forgetCatalog(id)
-    record({ action: 'provider.disconnected', actor, target: { type: 'provider', id } })
+    emit({ name: 'provider.disconnected', actor, target: { type: 'provider', id } })
     return providerOf(id)
   },
 }
@@ -78,7 +78,7 @@ async function connect({ actor, id, key }: { actor: Caller; id: ProviderId; key:
   if (!found.length) throw new HttpError(409, `${info.short} accepted that key but lists no chat models for it.`, { param: 'apiKey' })
   await settings.setProviderKey(id, key)
   await save({ id, listed: found })
-  record({ action: 'provider.connected', actor, target: { type: 'provider', id } })
+  emit({ name: 'provider.connected', actor, target: { type: 'provider', id } })
 }
 
 async function save({ id, listed }: { id: ProviderId; listed: ListedModel[] }): Promise<void> {

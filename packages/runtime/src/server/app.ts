@@ -3,7 +3,7 @@ import Fastify from 'fastify'
 import websocket from '@fastify/websocket'
 import { config } from './platform/config.ts'
 import { db, migrate } from './platform/db.ts'
-import { log } from './platform/events.ts'
+import { emit, log } from './platform/events.ts'
 import { answerErrors, errorBody, messageOf } from './platform/http-error.ts'
 import { validateWithZod } from './platform/validation.ts'
 import { forOlderApps } from './platform/responses.ts'
@@ -70,7 +70,7 @@ process.once('SIGTERM', async () => {
   await db.destroy()
   process.exit(0)
 })
-log.info({ event: 'app.listening', at: config.socket ?? config.port, build: config.build })
+emit({ name: 'app.started', properties: { at: config.socket ?? config.port, build: config.build, version: config.version, kind: config.installKind } })
 await startTelemetry()
 await gatewayServer.start().catch(async (err: unknown) => {
   log.error({ event: 'gateway.bind_failed', port: config.gatewayPort, error: messageOf(err) })
