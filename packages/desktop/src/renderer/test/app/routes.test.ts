@@ -9,7 +9,7 @@ test('every screen has one path and the dialog lives in it', () => {
   assert.deepEqual(routeOf('/agents/ag_1'), { page: 'agent', agentId: 'ag_1', dialog: undefined, detail: undefined })
   assert.deepEqual(routeOf('/agents/ag_1/skills/pdf'), { page: 'agent', agentId: 'ag_1', dialog: 'skills', detail: 'pdf' })
   assert.deepEqual(routeOf('/agents/ag_1/helpers'), { page: 'agent', agentId: 'ag_1', dialog: 'helpers', detail: undefined })
-  assert.deepEqual(routeOf('/agents/ag_1/browser'), { page: 'browser', agentId: 'ag_1' })
+  assert.deepEqual(routeOf('/agents/ag_1/browser'), { page: 'agent', agentId: 'ag_1', dialog: 'browser', detail: undefined })
   assert.deepEqual(routeOf('/connections/new/postgres'), { page: 'connections' })
   assert.deepEqual(routeOf('/settings'), { page: 'settings', tab: 'general' })
   assert.deepEqual(routeOf('/settings/computers'), { page: 'settings', tab: 'computers' })

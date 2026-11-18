@@ -1,5 +1,6 @@
 import { chmodSync, rmSync } from 'node:fs'
 import Fastify from 'fastify'
+import websocket from '@fastify/websocket'
 import { config } from './platform/config.ts'
 import { db, migrate } from './platform/db.ts'
 import { log } from './platform/events.ts'
@@ -34,6 +35,7 @@ app.addHook('onSend', async (_req, reply) => {
   reply.header('referrer-policy', 'no-referrer').header('x-frame-options', 'DENY')
 })
 
+await app.register(websocket)
 await app.register(healthController, { prefix: '/health' })
 await app.register(meController, { prefix: '/api/me' })
 await app.register(agentController, { prefix: '/api/agents' })

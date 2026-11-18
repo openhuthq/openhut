@@ -11,6 +11,7 @@ import { json, text } from 'node:stream/consumers'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import updater from 'electron-updater'
+import WebSocket from 'ws'
 
 const DEV = !app.isPackaged
 const MAC = process.platform === 'darwin'
@@ -145,6 +146,7 @@ handle('computers.remove', answer(forget))
 handle('computers.enrollments', () => [...enrollments.values()])
 handle('computers.dismiss', ({ dns } = {}) => { enrollments.delete(dns); shareEnrollments(); return { dns } })
 handle('mcp.commands', mcpCommands)
+ipcMain.on('browser-live', (event, path) => void relayLive({ port: event.ports[0], path: fromApp(event) ? path : '' }))
 
 function answer(fn) {
   return (arg) => Promise.resolve().then(() => fn(arg)).catch((error) => ({ error: error.message }))
@@ -694,6 +696,32 @@ async function toComputer({ req, id, path }) {
   const out = new Headers(res.headers)
   for (const name of ['content-encoding', 'content-length', 'transfer-encoding', 'connection']) out.delete(name)
   return new Response([204, 304].includes(res.status) ? null : res.body, { status: res.status, headers: out })
+}
+
+async function relayLive({ port, path }) {
+  const ws = await liveSocket(String(path)).catch(() => undefined)
+  if (!ws) {
+    port.postMessage({ closed: 4404, reason: 'That computer isn\'t in your list.' })
+    return port.close()
+  }
+  port.on('message', ({ data }) => ws.readyState === WebSocket.OPEN && ws.send(String(data)))
+  port.on('close', () => ws.close())
+  port.start()
+  ws.on('message', (data) => port.postMessage(String(data)))
+  ws.on('close', (code, reason) => {
+    port.postMessage({ closed: code, reason: String(reason) })
+    port.close()
+  })
+  ws.on('error', () => undefined)
+}
+
+async function liveSocket(path) {
+  const [, id = LOCAL.id, target] = /^(?:\/c\/([\w-]+))?(\/api\/browsers\/[\w-]+\/live(?:\?fps=\d+)?)$/.exec(path) ?? []
+  if (!target) return undefined
+  if (id === LOCAL.id) return new WebSocket(`ws://localhost${target}`, { createConnection: () => connect(SERVER_SOCK) })
+  const computer = storedComputers().find((each) => each.id === id)
+  if (!computer) return undefined
+  return new WebSocket(`${computer.url.replace(/^http/, 'ws')}${target}`, { headers: { authorization: `Bearer ${await keyOf(computer)}`, 'openhut-app-version': app.getVersion() } })
 }
 
 function toSocket({ req, path }) {

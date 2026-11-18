@@ -3,13 +3,12 @@ import { createHash } from 'node:crypto'
 import { chmodSync, chownSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
 import { dirname } from 'node:path'
-import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { newMessages, usage, type NewMessage } from './messages.ts'
 import { isMemoryTarget, MAX_MEMORY_BYTES, readMemory, writeMemory, type MemoryTarget } from './memory.ts'
 import { isSkillPath, listSkills, MAX_SKILL_BYTES, readSkill, writeSkill, type SkillHead } from './skills.ts'
-import { CLOSED, FREE_POLICY, HELD_POLICY, isInputLine, POLICY_FILE, stillAfter, type BrowserStill } from './browser.ts'
+import { FREE_POLICY, HELD_POLICY, live, POLICY_FILE } from './browser.ts'
 import { fenceLines, proveFence, type FenceReport } from './fence.ts'
 import { MAX_HOME_BASE64, packHome, unpackHome } from './home.ts'
 import { FIREWALL, imageReady } from './sandbox/gvisor.ts'
@@ -31,13 +30,9 @@ const BROWSER_BIN = fileURLToPath(new URL('../../../../bin/agent-browser', impor
 const BROWSER_DIR = fileURLToPath(new URL('../../../../install/agent-browser', import.meta.url))
 const BRIDGE = '/opt/agent-browser/bridge.mjs'
 const BROWSER_MEMORY_MIB = 4096
-const STILL_WAIT_MS = 5000
-const STILL_IDLE_MS = 30_000
-const PING_MS = 10_000
-const watched = new Map<string, Watch>()
+const MAX_FPS = 30
 const BROWSER_TMP_MIB = 1024
 const TMP_MIB = 256
-const UNQUEUED = new Set(['browser-still', 'browser-hold'])
 const DATA = process.env.AGENTD_DATA || '/data'
 const RESOLV = process.env.AGENTD_RESOLV || '/etc/agentd/resolv.conf'
 const WHATSAPP_BRIDGE = process.env.AGENTD_WHATSAPP_BRIDGE || '/var/lib/openhut/whatsapp-bridge'
@@ -77,6 +72,7 @@ const box = await sandboxes()
 
 mkdirSync(dirname(SOCK), { recursive: true })
 for (const dir of [`${DATA}/agents`, `${DATA}/agent-conf`]) mkdirSync(dir, { recursive: true, mode: 0o700 })
+for (const id of readdirSync(`${DATA}/agent-conf`).filter((name) => ID.test(name))) writeIfChanged(`${conf(id)}/${POLICY_FILE}`, FREE_POLICY)
 rmSync(SOCK, { force: true })
 if (box.name === 'gvisor') setInterval(() => watchFirewall().catch((e) => console.error(`watchdog: ${errorText(e)}`)), WATCHDOG_MS)
 export const server = createServer({ allowHalfOpen: true }, serve).listen(SOCK, () => {
@@ -100,9 +96,9 @@ function serve(sock: Socket) {
     Promise.resolve(buf.slice(0, end))
       .then((line) => {
         const req = parseRequest(JSON.parse(line))
-        if (req.cmd === 'browser-live') return live({ sock, id: req.id, rest: buf.slice(end + 1) })
+        if (req.cmd === 'browser-live') return openLive({ sock, id: req.id, fps: req.fps, rest: buf.slice(end + 1) })
         if (req.cmd === 'home-import') return restOf({ sock, rest: buf.slice(end + 1) }).then((tar) => enqueue(req.id, () => importHome({ id: req.id, tar })))
-        return 'id' in req && !UNQUEUED.has(req.cmd) ? enqueue(req.id, () => handle(req)) : handle(req)
+        return 'id' in req ? enqueue(req.id, () => handle(req)) : handle(req)
       })
       .then(
         (reply) => reply && sock.end(JSON.stringify({ ok: true, ...reply })),
@@ -184,14 +180,9 @@ async function handle(req: AgentdRequest): Promise<Reply> {
       return { usage: usage({ agents: stateDbs(), since: req.since }) }
     case 'messages':
       return { messages: newMessages({ agents: stateDbs(), since: req.since }) }
-    case 'browser-still':
-      return browserStill(req.id)
     case 'fence':
       if (!(await fence).ok) fence = checkFence()
       return fence
-    case 'browser-hold':
-      writeIfChanged(`${conf(req.id)}/${POLICY_FILE}`, req.held ? HELD_POLICY : FREE_POLICY)
-      return { held: req.held }
   }
 }
 
@@ -214,10 +205,8 @@ function parseRequest(value: unknown): AgentdRequest {
       return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files), browser: value.browser === true }
     case 'apply':
       return { cmd, id: agentId(value.id), net: netOf(value.net), files: filesOf(value.files), browser: value.browser === true, restart: value.restart === true, force: value.force === true }
-    case 'browser-hold':
-      return { cmd, id: agentId(value.id), held: value.held === true }
-    case 'browser-still':
     case 'browser-live':
+      return { cmd, id: agentId(value.id), fps: Number.isInteger(value.fps) && Number(value.fps) >= 1 ? Math.min(Number(value.fps), MAX_FPS) : MAX_FPS }
     case 'start':
     case 'stop':
     case 'rm':
@@ -414,60 +403,13 @@ function browserMounts(id: string): Mount[] {
   ]
 }
 
-async function browserStill(id: string): Promise<BrowserStill> {
-  if (!(await isRunning(id))) return CLOSED
-  const watch = watched.get(id) ?? startWatching(id)
-  watch.seen = Date.now()
-  for (const end = Date.now() + STILL_WAIT_MS; !watch.still.data && !watch.ended && Date.now() < end;) await new Promise((done) => setTimeout(done, 100))
-  return watch.still
-}
-
-function startWatching(id: string): Watch {
-  const watch: Watch = { still: CLOSED, seen: Date.now(), ended: false }
-  watched.set(id, watch)
-  const finish = () => {
-    watch.ended = true
-    if (watched.get(id) === watch) watched.delete(id)
-  }
-  box.exec({ id, command: ['node', BRIDGE, 'live'], stdin: true }).then((bridge) => {
-    const ping = setInterval(() => {
-      if (Date.now() - watch.seen > STILL_IDLE_MS) bridge.stdin?.end()
-      else bridge.stdin?.write(`${JSON.stringify({ type: 'ping' })}\n`)
-    }, PING_MS)
-    const stop = () => {
-      clearInterval(ping)
-      finish()
-    }
-    createInterface({ input: bridge.stdout }).on('line', (line) => { watch.still = stillAfter(watch.still, line) })
-    bridge.stdin?.on('error', () => undefined)
-    bridge.exit.then(stop, stop)
-  }, finish)
-  return watch
-}
-
-async function live({ sock, id, rest }: { sock: Socket; id: string; rest: string }): Promise<undefined> {
+async function openLive({ sock, id, fps, rest }: { sock: Socket; id: string; fps: number; rest: string }): Promise<undefined> {
   if (!(await isRunning(id))) {
     sock.end(`${JSON.stringify({ type: 'closed' })}\n`)
     return undefined
   }
-  const bridge = await box.exec({ id, command: ['node', BRIDGE, 'live'], stdin: true })
-  let pending = ''
-  const forward = (chunk: string) => {
-    pending += chunk
-    for (let end = pending.indexOf('\n'); end >= 0; end = pending.indexOf('\n')) {
-      const line = pending.slice(0, end)
-      pending = pending.slice(end + 1)
-      if (isInputLine(line)) bridge.stdin?.write(`${line}\n`)
-    }
-    if (pending.length > 4096) sock.destroy()
-  }
-  bridge.stdout.pipe(sock)
-  sock.resume()
-  bridge.exit.catch(() => sock.destroy())
-  sock.on('data', forward)
-  sock.on('end', () => bridge.stdin?.end())
-  sock.on('close', () => bridge.stdin?.end())
-  forward(rest)
+  const bridge = await box.exec({ id, command: ['node', BRIDGE, 'live', String(fps)], stdin: true })
+  live({ id, sock, bridge, rest, setHeld: (held) => writeIfChanged(`${conf(id)}/${POLICY_FILE}`, held ? HELD_POLICY : FREE_POLICY) })
   return undefined
 }
 
@@ -571,7 +513,6 @@ async function checkFence() {
   return report
 }
 
-type Watch = { still: BrowserStill; seen: number; ended: boolean }
 type Features = { whatsapp: boolean; browser: boolean }
 type Readiness = { ok: boolean; reason?: string }
 
@@ -580,8 +521,8 @@ export type AgentdRequest =
   | { cmd: 'update'; appVersion?: string }
   | { cmd: 'create'; id: string; net: number; files: AgentFiles; browser: boolean }
   | { cmd: 'apply'; id: string; net: number; files: AgentFiles; browser: boolean; restart: boolean; force?: boolean }
-  | { cmd: 'browser-hold'; id: string; held: boolean }
-  | { cmd: 'browser-still' | 'browser-live' | 'start' | 'stop' | 'rm' | 'wa-pair' | 'wa-unlink' | 'skills' | 'memory' | 'home-export' | 'home-import'; id: string }
+  | { cmd: 'browser-live'; id: string; fps: number }
+  | { cmd: 'start' | 'stop' | 'rm' | 'wa-pair' | 'wa-unlink' | 'skills' | 'memory' | 'home-export' | 'home-import'; id: string }
   | { cmd: 'skill-read' | 'skill-rm'; id: string; path: string }
   | { cmd: 'skill-write'; id: string; path: string; body: string }
   | { cmd: 'memory-write'; id: string; target: MemoryTarget; body: string }
@@ -608,8 +549,6 @@ export type AgentdReplies = {
   'home-import': { imported: string }
   usage: { usage: Record<string, number> }
   messages: { messages: NewMessage[] }
-  'browser-still': BrowserStill
-  'browser-hold': { held: boolean }
   'browser-live': undefined
   fence: FenceReport
 }

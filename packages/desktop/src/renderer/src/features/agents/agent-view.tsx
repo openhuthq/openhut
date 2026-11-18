@@ -7,6 +7,7 @@ import { ErrorNote } from '@/components/error-note'
 import { useQueryClient } from '@tanstack/react-query'
 import { agentPath, goneAgentPath, type AgentDialog } from '@/app/routes'
 import { useAgent, useAgents } from '@/features/agents/api'
+import { BrowserDialog } from '@/features/agents/browser'
 import { ChannelDialog } from '@/features/agents/channels'
 import { MemoryDialog } from '@/features/agents/memory-dialog'
 import { HelperModelsSheet } from '@/features/agents/model-rows'
@@ -37,7 +38,7 @@ export function AgentView({ agentId, dialog, detail }: { agentId: string; dialog
   const toggle = narrow && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label={open ? 'Hide details' : 'Show details'} aria-pressed={open} title={open ? 'Hide details' : 'Show details'} onClick={() => setShown(!open)}><I icon={SidebarRight01Icon} size={16} /></Button>
   return <>
     <Chat agent={agent.data} tools={toggle} />
-    {open && <Panel agent={agent.data} naming={dialog === 'name'} />}
+    {open && <Panel agent={agent.data} naming={dialog === 'name'} watching={dialog === 'browser'} />}
     <Dialogs agent={agent.data} dialog={dialog} detail={detail} />
   </>
 }
@@ -53,6 +54,7 @@ function Dialogs({ agent, dialog, detail }: { agent: Agent; dialog: AgentDialog 
     case 'slack':
     case 'whatsapp':
     case 'telegram': return <ChannelDialog agent={agent} kind={dialog} onClose={close} />
+    case 'browser': return agent.browser && agent.canEdit ? <BrowserDialog agent={agent} onClose={close} /> : null
     default: return null
   }
 }

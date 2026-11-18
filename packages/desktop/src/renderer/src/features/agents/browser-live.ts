@@ -1,0 +1,127 @@
+import { useEffect, useRef, useState, type RefObject } from 'react'
+
+const RETRY_MS = 3000
+const ACTIONS_SHOWN = 12
+const MOUSE_EVENTS = { down: 'mousePressed', up: 'mouseReleased', move: 'mouseMoved', wheel: 'mouseWheel' } as const
+const KEY_CODES: Record<string, number> = {
+  Backspace: 8, Tab: 9, Enter: 13, Escape: 27, ' ': 32, PageUp: 33, PageDown: 34, End: 35, Home: 36,
+  ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, Delete: 46,
+}
+const CTRL_OR_META = 2 | 4
+
+type Channel = { send: (line: string) => void; close: () => void }
+type Bridge = { browserLive?: (path: string, onLine: (line: string) => void, onClose: (code: number, reason: string) => void) => Channel }
+export type Mouse = { action: keyof typeof MOUSE_EVENTS; x: number; y: number; button?: 'left' | 'middle' | 'right'; deltaX?: number; deltaY?: number; modifiers?: number }
+export type Key = { action: 'down' | 'up'; key: string; code?: string; modifiers?: number }
+export type Action = { action: string; url: string; at: number }
+
+export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTMLCanvasElement | null> }) {
+  const [state, setState] = useState<'connecting' | 'live' | 'closed'>('connecting')
+  const [page, setPage] = useState({ url: '', title: '' })
+  const [held, setHeld] = useState(false)
+  const [actions, setActions] = useState<Action[]>([])
+  const [error, setError] = useState<string>()
+  const [rate, setRate] = useState(0)
+  const channel = useRef<Channel>(undefined)
+  const frames = useRef(0)
+  useEffect(() => {
+    const count = setInterval(() => { setRate(frames.current); frames.current = 0 }, 1000)
+    return () => clearInterval(count)
+  }, [])
+  useEffect(() => {
+    let retry: ReturnType<typeof setTimeout> | undefined
+    let stopped = false
+    const pending = new Map<string, Omit<Action, 'at'>>()
+    const connect = () => {
+      const open = openChannel({
+        path,
+        onLine: (line) => {
+          const message = parse(line)
+          if (message?.type === 'frame' && typeof message.data === 'string') {
+            const ack = () => open.send(JSON.stringify({ type: 'ack', seq: message.seq }))
+            void paint({ canvas: canvas.current, data: message.data }).finally(ack)
+            frames.current += 1
+            setState('live')
+            setError(undefined)
+          }
+          if (message?.type === 'tabs') setPage(activeTab(message.tabs))
+          if (message?.type === 'url' && typeof message.url === 'string') setPage((known) => ({ ...known, url: message.url as string }))
+          if (message?.type === 'hold') setHeld(message.held === true)
+          if (message?.type === 'closed') setState('closed')
+          if (message?.type === 'command' && typeof message.action === 'string') pending.set(String(message.id), { action: message.action, url: typeof message.url === 'string' ? message.url : '' })
+          if (message?.type === 'result') {
+            const action = pending.get(String(message.id))
+            pending.delete(String(message.id))
+            if (action) setActions((known) => [{ ...action, at: Date.now() }, ...known].slice(0, ACTIONS_SHOWN))
+          }
+        },
+        onClose: (code, reason) => {
+          channel.current = undefined
+          setHeld(false)
+          setState((known) => known === 'live' ? 'connecting' : 'closed')
+          if (code >= 4000) setError(reason || 'The live view was refused.')
+          else if (!stopped) retry = setTimeout(connect, RETRY_MS)
+        },
+      })
+      channel.current = open
+    }
+    connect()
+    return () => {
+      stopped = true
+      clearTimeout(retry)
+      channel.current?.close()
+    }
+  }, [path, canvas])
+  const send = (message: object) => channel.current?.send(JSON.stringify(message))
+  return { state, page, held, actions, error, fps: rate, hold: (held: boolean) => send({ type: 'hold', held }), mouse: (event: Mouse) => send(mouseInput(event)), key: (event: Key) => send(keyInput(event)) }
+}
+
+export function mouseInput(event: Mouse) {
+  const pressing = event.action === 'down' || event.action === 'up'
+  return {
+    type: 'input_mouse', eventType: MOUSE_EVENTS[event.action], x: event.x, y: event.y, button: pressing ? event.button ?? 'left' : 'none',
+    clickCount: pressing ? 1 : 0, deltaX: event.deltaX ?? 0, deltaY: event.deltaY ?? 0, modifiers: event.modifiers ?? 0,
+  }
+}
+
+export function keyInput(event: Key) {
+  const printable = [...event.key].length === 1 && !((event.modifiers ?? 0) & CTRL_OR_META)
+  const text = event.action === 'down' ? (event.key === 'Enter' ? '\r' : printable ? event.key : undefined) : undefined
+  const code = KEY_CODES[event.key] ?? ([...event.key].length === 1 ? event.key.toUpperCase().charCodeAt(0) : 0)
+  return {
+    type: 'input_keyboard', eventType: event.action === 'down' ? 'keyDown' : 'keyUp', key: event.key, code: event.code ?? '', text,
+    windowsVirtualKeyCode: code, modifiers: event.modifiers ?? 0,
+  }
+}
+
+function openChannel({ path, onLine, onClose }: { path: string; onLine: (line: string) => void; onClose: (code: number, reason: string) => void }): Channel {
+  const bridge: Bridge | undefined = Reflect.get(window, 'openhut')
+  if (bridge?.browserLive) return bridge.browserLive(path, onLine, onClose)
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${path}`)
+  ws.onmessage = ({ data }) => onLine(String(data))
+  ws.onclose = ({ code, reason }) => onClose(code, reason)
+  return { send: (line) => ws.readyState === WebSocket.OPEN && ws.send(line), close: () => ws.close() }
+}
+
+async function paint({ canvas, data }: { canvas: HTMLCanvasElement | null; data: string }) {
+  if (!canvas) return
+  const bitmap = await createImageBitmap(new Blob([Uint8Array.from(atob(data), (char) => char.charCodeAt(0))], { type: 'image/jpeg' }))
+  if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) Object.assign(canvas, { width: bitmap.width, height: bitmap.height })
+  canvas.getContext('2d')?.drawImage(bitmap, 0, 0)
+  bitmap.close()
+}
+
+function parse(line: string): Record<string, unknown> | undefined {
+  try {
+    const value: unknown = JSON.parse(line)
+    return typeof value === 'object' && value !== null ? Object.fromEntries(Object.entries(value)) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function activeTab(tabs: unknown): { url: string; title: string } {
+  const list = Array.isArray(tabs) ? tabs.map((tab: unknown) => (typeof tab === 'object' && tab !== null ? Object.fromEntries(Object.entries(tab)) : {})) : []
+  const tab = list.find((each) => each.active === true) ?? list[0]
+  return { url: typeof tab?.url === 'string' ? tab.url : '', title: typeof tab?.title === 'string' ? tab.title : '' }
+}

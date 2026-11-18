@@ -13,7 +13,6 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { Admin, Health, Update } from '@openhut/common/admin/admin.ts'
 import type { Agent, Grant } from '@openhut/common/agents/agent.ts'
-import type { Browser } from '@openhut/common/agents/browser.ts'
 import type { ApiError, Deleted, List } from '@openhut/common/api.ts'
 import type { Channel } from '@openhut/common/channels/channel.ts'
 import type { Connection, ConnectionEvent } from '@openhut/common/connections/connection.ts'
@@ -484,54 +483,63 @@ console.log(JSON.stringify(takeTelemetry()))`
     }
   })
 
-  check('R3', 'Only while someone looks: the dashboard gets a still picture of the agent\'s page, and the screencast stops once nobody asks', 'GET /api/browsers/:id: open, the page address, a JPEG; a second GET is served from the cache in under 1 s; within 60 s of the last GET agent-browser reports no screencast', async () => {
-    const still = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, KEY)
-    const started = Date.now()
-    const again = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, KEY)
-    const cached = Date.now() - started
-    await until(async () => /Screencasting: false/.test(await agentBrowser(dev, 'stream', 'status')), 60_000, 'the screencast to stop after the agent page stopped asking')
-    const status = await agentBrowser(dev, 'stream', 'status')
-    return {
-      actual: { status: still.status, open: still.json.open, url: still.json.url, picture: String(still.json.still).slice(0, 30), bytes: String(still.json.still).length, cachedMs: cached, again: again.json.open, stream: status.replace(/\s+/g, ' ') },
-      pass: still.status === 200 && still.json.open === true && still.json.url === BROWSE_URL && String(still.json.still).startsWith('data:image/jpeg;base64,/9j/') && again.json.open === true && cached < 1000 && /Screencasting: false/.test(status),
-    }
-  })
-
-  check('R4', 'Take over: the owner watches live, the agent is paused, the owner\'s clicks and keys drive the page, and handing back frees the agent', 'frames arrive, and the picture endpoint streams JPEG parts; input before Take over is refused (409); while held the agent\'s click is denied by policy; the owner clicks the search box, types gVisor and Enter and the page lands on the gVisor article; after hand back the agent browses again; closing the view stops the screencast', async () => {
-    await chat(dev, 'browser: open https://www.wikipedia.org/')
-    const center = /"(\d+),(\d+)"/.exec(await agentBrowser(dev, 'eval', "(r => Math.round(r.x + r.width / 2) + ',' + Math.round(r.y + r.height / 2))(document.querySelector('#searchInput').getBoundingClientRect())"))
-    const box = center ? { x: Number(center[1]), y: Number(center[2]) } : undefined
-    const view = await openStream(`/api/browsers/${dev.id}/stream`, KEY)
-    await until(async () => view.events.some((e) => e.event === 'frame'), 30_000, 'the first live frame')
-    const picture = await firstJpeg(`/api/browsers/${dev.id}/frames`, KEY)
-    const click = [{ type: 'mouse', action: 'down', x: box?.x ?? 0, y: box?.y ?? 0 }, { type: 'mouse', action: 'up', x: box?.x ?? 0, y: box?.y ?? 0 }]
-    const early = await api('POST', `/api/browsers/${dev.id}/input`, { events: click }, KEY)
-    const held = await api<Browser>('POST', `/api/browsers/${dev.id}/hold`, undefined, KEY)
-    const agentWhileHeld = await agentBrowser(dev, 'click', '#searchInput')
-    const keys = [...'gVisor', 'Enter'].flatMap((key) => [{ type: 'key', action: 'down', key }, { type: 'key', action: 'up', key }])
-    const typed = await api<{ accepted: number }>('POST', `/api/browsers/${dev.id}/input`, { events: [...click, ...keys] }, KEY)
-    await until(async () => (await agentBrowser(dev, 'get', 'url')).includes('/wiki/GVisor'), 30_000, 'the search to land on the gVisor article')
-    const landed = (await agentBrowser(dev, 'get', 'url')).trim().split('\n').pop()
-    const released = await api<Browser>('DELETE', `/api/browsers/${dev.id}/hold`, undefined, KEY)
-    const agentAfter = await agentBrowser(dev, 'open', BROWSE_URL)
-    const frames = view.events.filter((e) => e.event === 'frame').length
-    const holdEvents = view.events.filter((e) => e.event === 'hold').map((e) => JSON.stringify(e.data))
+  check('R3', 'Only while someone looks: the live view streams the agent\'s page, paced by the viewer, and the screencast stops once nobody watches', 'the WebSocket sends the page address and a JPEG frame; while the viewer holds back its ack, the agent scrolling sends no second frame; after the ack one comes; within 30 s of closing agent-browser reports no screencast', async () => {
+    const view = await openLive(`/api/browsers/${dev.id}/live?fps=30`, KEY, { ack: false })
+    await until(async () => view.lines.some((line) => line.type === 'frame'), 30_000, 'the first live frame')
+    for (let i = 0; i < 3; i++) await agentBrowser(dev, 'scroll', i % 2 ? 'up' : 'down', '300')
+    await sleep(1500)
+    const unacked = view.lines.filter((line) => line.type === 'frame').length
+    const first = view.lines.find((line) => line.type === 'frame')
+    view.send({ type: 'ack', seq: first?.seq })
+    await agentBrowser(dev, 'scroll', 'down', '300')
+    await until(async () => view.lines.filter((line) => line.type === 'frame').length > unacked, 30_000, 'a frame after the ack')
+    const page = view.lines.find((line) => line.type === 'tabs' || line.type === 'url')
     view.close()
     await until(async () => /Screencasting: false/.test(await agentBrowser(dev, 'stream', 'status')), 30_000, 'the screencast to stop after the view closed')
     return {
-      actual: { box, frames, picture, early: early.status, held: `${held.status} ${held.json.heldBy}`, agentWhileHeld: agentWhileHeld.trim().slice(0, 120), typed: `${typed.status} ${typed.json.accepted}`, landed, released: `${released.status} ${released.json.heldBy}`, holdEvents, agentAfter: agentAfter.trim().split('\n')[0] },
-      pass: !!box && frames >= 2 && picture.status === 200 && picture.type.startsWith('multipart/x-mixed-replace') && picture.jpeg && picture.bytes > 1000 && early.status === 409 && held.status === 200 && held.json.heldBy === owner && /denied by policy/.test(agentWhileHeld) &&
-        typed.status === 200 && typed.json.accepted === 16 && !!landed?.includes('wikipedia.org/wiki/GVisor') && released.status === 200 && released.json.heldBy === null && agentAfter.includes(BROWSE_TITLE),
+      actual: { page: JSON.stringify(page).slice(0, 160), picture: String(first?.data).slice(0, 12), unacked, afterAck: view.lines.filter((line) => line.type === 'frame').length },
+      pass: JSON.stringify(page).includes(BROWSE_URL) && String(first?.data).startsWith('/9j/') && unacked === 1 && view.lines.filter((line) => line.type === 'frame').length > 1,
     }
   })
 
-  check('R5', 'Switched off again, the browser is gone', 'PATCH 200; the container is rebuilt without agent-browser and back to its 1 GiB size; the dashboard reports no browser', async () => {
+  check('R4', 'Take over: the owner watches live, the agent is paused, the owner\'s clicks and keys drive the page, and handing back frees the agent', 'input before Take over does nothing; hold is confirmed on the socket; while held the agent\'s click is denied by policy; the owner clicks the search box, types gVisor and Enter and the page lands on the gVisor article; hand back is confirmed and the agent browses again; closing the view stops the screencast', async () => {
+    await chat(dev, 'browser: open https://www.wikipedia.org/')
+    const center = /"(\d+),(\d+)"/.exec(await agentBrowser(dev, 'eval', "(r => Math.round(r.x + r.width / 2) + ',' + Math.round(r.y + r.height / 2))(document.querySelector('#searchInput').getBoundingClientRect())"))
+    const box = center ? { x: Number(center[1]), y: Number(center[2]) } : undefined
+    const view = await openLive(`/api/browsers/${dev.id}/live`, KEY)
+    await until(async () => view.lines.some((line) => line.type === 'frame'), 30_000, 'the first live frame')
+    const click = [{ type: 'input_mouse', eventType: 'mousePressed', x: box?.x ?? 0, y: box?.y ?? 0, button: 'left', clickCount: 1 }, { type: 'input_mouse', eventType: 'mouseReleased', x: box?.x ?? 0, y: box?.y ?? 0, button: 'left', clickCount: 1 }]
+    const keys = [...'gVisor'].flatMap((key) => [{ type: 'input_keyboard', eventType: 'keyDown', key, text: key, windowsVirtualKeyCode: key.toUpperCase().charCodeAt(0) }, { type: 'input_keyboard', eventType: 'keyUp', key, windowsVirtualKeyCode: key.toUpperCase().charCodeAt(0) }])
+      .concat([{ type: 'input_keyboard', eventType: 'keyDown', key: 'Enter', text: '\r', windowsVirtualKeyCode: 13 }, { type: 'input_keyboard', eventType: 'keyUp', key: 'Enter', windowsVirtualKeyCode: 13 }])
+    for (const input of [...click, ...keys]) view.send(input)
+    await sleep(3000)
+    const early = (await agentBrowser(dev, 'get', 'url')).trim().split('\n').pop()
+    view.send({ type: 'hold', held: true })
+    await until(async () => view.lines.some((line) => line.type === 'hold' && line.held === true), 10_000, 'the hold to be confirmed')
+    const agentWhileHeld = await agentBrowser(dev, 'click', '#searchInput')
+    for (const input of [...click, ...keys]) view.send(input)
+    await until(async () => (await agentBrowser(dev, 'get', 'url')).includes('/wiki/GVisor'), 30_000, 'the search to land on the gVisor article')
+    const landed = (await agentBrowser(dev, 'get', 'url')).trim().split('\n').pop()
+    view.send({ type: 'hold', held: false })
+    await until(async () => view.lines.filter((line) => line.type === 'hold').at(-1)?.held === false, 10_000, 'the hand back to be confirmed')
+    const agentAfter = await agentBrowser(dev, 'open', BROWSE_URL)
+    const frames = view.lines.filter((line) => line.type === 'frame').length
+    view.close()
+    await until(async () => /Screencasting: false/.test(await agentBrowser(dev, 'stream', 'status')), 30_000, 'the screencast to stop after the view closed')
+    return {
+      actual: { box, frames, early, agentWhileHeld: agentWhileHeld.trim().slice(0, 120), landed, holds: view.lines.filter((line) => line.type === 'hold').map((line) => line.held), agentAfter: agentAfter.trim().split('\n')[0] },
+      pass: !!box && frames >= 2 && early === 'https://www.wikipedia.org/' && /denied by policy/.test(agentWhileHeld) && !!landed?.includes('wikipedia.org/wiki/GVisor') && agentAfter.includes(BROWSE_TITLE),
+    }
+  })
+
+  check('R5', 'Switched off again, the browser is gone', 'PATCH 200; the container is rebuilt without agent-browser and back to its 1 GiB size; the live view is refused (4409)', async () => {
     const patched = await api<Agent>('PATCH', `/api/agents/${dev.id}`, { browser: false }, KEY)
     await waitReady(dev)
     const installed = await docker('exec', `ag-${dev.id}`, 'sh', '-c', 'command -v agent-browser || echo missing')
     const label = await docker('inspect', '--format', '{{index .Config.Labels "openhut.browser"}} {{.HostConfig.Memory}}', `ag-${dev.id}`)
-    const still = await api<Browser>('GET', `/api/browsers/${dev.id}`, undefined, KEY)
-    return { actual: { status: patched.status, browser: patched.json.browser, installed, label, open: still.json.open }, pass: patched.status === 200 && patched.json.browser === false && installed === 'missing' && label === 'off 1073741824' && still.json.open === false }
+    const view = await openLive(`/api/browsers/${dev.id}/live`, KEY)
+    const refused = await view.closed
+    return { actual: { status: patched.status, browser: patched.json.browser, installed, label, refused }, pass: patched.status === 200 && patched.json.browser === false && installed === 'missing' && label === 'off 1073741824' && refused.code === 4409 }
   })
 
   check(
@@ -750,17 +758,10 @@ console.log(JSON.stringify(takeTelemetry()))`
     },
   )
 
-  check('R6', 'Only the enrolled key sees or drives an agent\'s browser', 'no key: 401 on the picture, the stream, Take over and input', async () => {
-    const path = `/api/browsers/${dev.id}`
-    const stream = await fetch(`${APP}${path}/stream`)
-    await stream.body?.cancel()
-    const statuses = {
-      picture: (await api('GET', path)).status,
-      stream: stream.status,
-      hold: (await api('POST', `${path}/hold`)).status,
-      input: (await api('POST', `${path}/input`, { events: [{ type: 'key', action: 'down', key: 'a' }] })).status,
-    }
-    return { actual: statuses, pass: Object.values(statuses).every((status) => status === 401) }
+  check('R6', 'Only the enrolled key sees or drives an agent\'s browser', 'no key: the live view closes with 4401 before sending anything', async () => {
+    const view = await openLive(`/api/browsers/${dev.id}/live`, '')
+    const refused = await view.closed
+    return { actual: { ...refused, lines: view.lines.length }, pass: refused.code === 4401 && view.lines.length === 0 }
   })
 
   check(
@@ -1563,46 +1564,18 @@ async function agentBrowser(a: AgentRef, ...args: string[]) {
   return (await sh('docker', ['exec', '-u', '10000:10000', `ag-${a.id}`, 'agent-browser', ...args], { maxBuffer: 8 << 20, timeout: 90_000 }).catch((e: { stdout?: string; stderr?: string }) => ({ stdout: `${e.stdout ?? ''}${e.stderr ?? ''}` }))).stdout
 }
 
-async function openStream(path: string, key: string) {
-  const abort = new AbortController()
-  const events: { event: string; data: unknown }[] = []
-  const response = await fetch(APP + path, { headers: { authorization: `Bearer ${key}` }, signal: abort.signal })
-  const read = async () => {
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    for (;;) {
-      const chunk = await reader?.read()
-      if (!chunk || chunk.done) return
-      buffer += decoder.decode(chunk.value, { stream: true })
-      for (let end = buffer.indexOf('\n\n'); end >= 0; end = buffer.indexOf('\n\n')) {
-        const block = buffer.slice(0, end)
-        buffer = buffer.slice(end + 2)
-        const event = /^event: (.*)$/m.exec(block)?.[1]
-        const data = /^data: (.*)$/m.exec(block)?.[1]
-        if (event && data) events.push({ event, data: JSON.parse(data) })
-      }
-    }
+async function openLive(path: string, key: string, { ack = true } = {}) {
+  const lines: Record<string, unknown>[] = []
+  const ws = new WebSocket(APP.replace(/^http/, 'ws') + path, { headers: key ? { authorization: `Bearer ${key}` } : {} })
+  const send = (message: object) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(message))
+  ws.onmessage = ({ data }) => {
+    const line = JSON.parse(String(data))
+    lines.push(line)
+    if (ack && line.type === 'frame') send({ type: 'ack', seq: line.seq })
   }
-  read().catch(() => undefined)
-  return { status: response.status, events, close: () => abort.abort() }
-}
-
-async function firstJpeg(path: string, key: string) {
-  const abort = new AbortController()
-  const response = await fetch(APP + path, { headers: { authorization: `Bearer ${key}` }, signal: abort.signal })
-  const reader = response.body?.getReader()
-  let seen = Buffer.alloc(0)
-  for (let parts = []; reader && parts.length < 2 && seen.length < 8 << 20;) {
-    const chunk = await reader.read()
-    if (chunk.done) break
-    seen = Buffer.concat([seen, chunk.value])
-    parts = seen.toString('latin1').split('--openhut-frame').slice(1)
-  }
-  abort.abort()
-  const part = seen.toString('latin1').split('--openhut-frame')[1] ?? ''
-  const body = Buffer.from(part.slice(part.indexOf('\r\n\r\n') + 4), 'latin1')
-  return { status: response.status, type: response.headers.get('content-type') ?? '', bytes: Number(/content-length: (\d+)/.exec(part)?.[1] ?? 0), jpeg: body[0] === 0xff && body[1] === 0xd8 }
+  const closed = new Promise<{ code: number; reason: string }>((done) => { ws.onclose = ({ code, reason }) => done({ code, reason }) })
+  await Promise.race([new Promise((done) => { ws.onopen = done }), closed])
+  return { lines, closed, send, close: () => ws.close() }
 }
 
 async function docker(...args: string[]) {

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useMutation, useMutationState, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
 import { Agent, Grant, type CreateAgent, type UpdateAgent } from '@openhut/common/agents/agent.ts'
-import { Browser } from '@openhut/common/agents/browser.ts'
 import { Memory, type UpdateMemory } from '@openhut/common/agents/memory.ts'
 import { Skill } from '@openhut/common/agents/skill.ts'
 import { Channel, Conversation, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
@@ -244,22 +243,6 @@ function writeChannel(client: QueryClient, channel: Channel) {
   client.setQueryData<Channel[]>(channelsKey(channel.agentId), (channels) => channels && [...channels.filter((each) => each.kind !== channel.kind), channel])
 }
 
-export function useHoldBrowser(agentId: string) {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (held: boolean) => request({ schema: Browser, path: `${browserPath(agentId)}/hold`, method: held ? 'POST' : 'DELETE' }),
-    onSuccess: (browser) => client.setQueryData<Browser>(browserKey(agentId), (known) => known && { ...known, heldBy: browser.heldBy }),
-  })
-}
-
-export function browserPath(agentId: string) {
-  return on({ agentId, path: `/api/browsers/${encodeURIComponent(agentId)}` })
-}
-
-function browserKey(agentId: string) {
-  return ['browser', agentId]
-}
-
 export function useMoveAgent() {
   const client = useQueryClient()
   return useMutation({
@@ -269,7 +252,7 @@ export function useMoveAgent() {
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agent.id ? agent : each))
       void client.invalidateQueries({ queryKey: [...AGENTS_KEY, agent.id] })
       void client.resetQueries({ queryKey: ['threads', 'agent', agent.id] })
-      for (const queryKey of [channelsKey(agent.id), ['skills', agent.id], ['memory', agent.id], browserKey(agent.id), ['conversations']]) void client.invalidateQueries({ queryKey })
+      for (const queryKey of [channelsKey(agent.id), ['skills', agent.id], ['memory', agent.id], ['conversations']]) void client.invalidateQueries({ queryKey })
       void client.invalidateQueries({ queryKey: CONNECTIONS_KEY })
       void client.invalidateQueries({ queryKey: GRANTS_KEY })
     },
