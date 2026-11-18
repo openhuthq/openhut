@@ -1,4 +1,4 @@
-import { PROVIDERS, splitModelKey, type Provider, type ProviderId, type ProviderModel, type UpdateProvider } from '@openhut/common/models/provider.ts'
+import { PROVIDERS, providerInfo, splitModelKey, type Provider, type ProviderId, type ProviderModel, type UpdateProvider } from '@openhut/common/models/provider.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { record } from '../platform/events.ts'
 import { settings, type StoredCatalog } from '../platform/settings.ts'
@@ -68,7 +68,7 @@ function providerOf(id: ProviderId): Provider {
 }
 
 function catalogOf(id: ProviderId): StoredCatalog {
-  return settings.catalog(id) ?? { at: new Date(0).toISOString(), models: build({ listed: providers[id].seed, previous: undefined, limit: Infinity }) }
+  return settings.catalog(id) ?? { at: new Date(0).toISOString(), models: build({ listed: providers[id].seed, previous: undefined, firstOn: new Set(providers[id].seed.map((model) => model.id)) }) }
 }
 
 async function connect({ actor, id, key }: { actor: Caller; id: ProviderId; key: string }): Promise<void> {
@@ -83,7 +83,7 @@ async function connect({ actor, id, key }: { actor: Caller; id: ProviderId; key:
 
 async function save({ id, listed }: { id: ProviderId; listed: ListedModel[] }): Promise<void> {
   const previous = settings.catalog(id)
-  await settings.setCatalog(id, { at: new Date().toISOString(), models: build({ listed, previous: previous?.models, limit: PROVIDERS.find((each) => each.id === id)?.kind === 'key' ? FIRST_ON : Infinity }) })
+  await settings.setCatalog(id, { at: new Date().toISOString(), models: build({ listed, previous: previous?.models, firstOn: firstOn({ id, listed }) }) })
 }
 
 async function switchModels({ id, changes }: { id: ProviderId; changes: { id: string; on: boolean }[] }): Promise<void> {
@@ -96,14 +96,21 @@ async function switchModels({ id, changes }: { id: ProviderId; changes: { id: st
 }
 
 function requireConnected(id: ProviderId): void {
-  if (!providers[id].connected()) throw new HttpError(409, `${PROVIDERS.find((each) => each.id === id)?.short ?? id} isn't connected on this computer.`)
+  if (!providers[id].connected()) throw new HttpError(409, `${providerInfo(id).short} isn't connected on this computer.`)
 }
 
-function build({ listed, previous, limit }: { listed: ListedModel[]; previous: ProviderModel[] | undefined; limit: number }): ProviderModel[] {
-  const newest = new Set([...listed].sort((a, b) => (b.created ?? 0) - (a.created ?? 0)).slice(0, limit).map((model) => model.id))
+function firstOn({ id, listed }: { id: ProviderId; listed: ListedModel[] }): Set<string> {
+  const starters = new Set(providers[id].starters)
+  const picked = listed.filter((model) => starters.has(model.id))
+  if (picked.length) return new Set(picked.map((model) => model.id))
+  const limit = providerInfo(id).kind === 'key' ? FIRST_ON : Infinity
+  return new Set([...listed].sort((a, b) => (b.created ?? 0) - (a.created ?? 0)).slice(0, limit).map((model) => model.id))
+}
+
+function build({ listed, previous, firstOn }: { listed: ListedModel[]; previous: ProviderModel[] | undefined; firstOn: Set<string> }): ProviderModel[] {
   return listed.map((model) => ({
     id: model.id, name: model.name, tier: tierOf(model.id), note: model.note,
     contextLength: model.contextLength, inputPrice: model.inputPrice, outputPrice: model.outputPrice,
-    on: previous ? previous.find((each) => each.id === model.id)?.on ?? false : newest.has(model.id),
+    on: previous ? previous.find((each) => each.id === model.id)?.on ?? false : firstOn.has(model.id),
   }))
 }

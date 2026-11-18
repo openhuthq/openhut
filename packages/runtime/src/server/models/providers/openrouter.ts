@@ -12,7 +12,20 @@ const OpenRouterList = z.object({
   })),
 })
 
-export const openrouter = keyed({ id: 'openrouter', origin: config.openrouterApi, listModels })
+const STARTERS = [
+  'anthropic/claude-fable-5.2', 'anthropic/claude-haiku-5.5',
+  'openai/gpt-6.2-astra', 'openai/gpt-6.2-sol',
+  'google/gemini-4-carbon', 'google/gemini-3.8-flash',
+  'x-ai/grok-4.7',
+  'deepseek/deepseek-v4-pro-0813', 'deepseek/deepseek-v4.1-flash-1017',
+  'qwen/qwen4-max', 'qwen/qwen3.8-flash',
+  'moonshotai/kimi-k3.1-pro',
+  'z-ai/glm-5.3-prime', 'z-ai/glm-5.3-flash',
+  'mistralai/mistral-large-4-0',
+  'meta/muse-wonder', 'meta/muse-ember',
+]
+
+export const openrouter = keyed({ id: 'openrouter', origin: config.openrouterApi, listModels, starters: STARTERS })
 
 async function listModels(key: string): Promise<ListedModel[]> {
   await getJson({ id: 'openrouter', url: `${config.openrouterApi}/v1/key`, key })
