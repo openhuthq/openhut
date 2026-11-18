@@ -32,12 +32,19 @@
 - The docs screenshots in `packages/docs/public/screenshots/` still show the Fast Monkey name and monkey (seed data
   only, no real people).
 
-## The Mac app release (unverified as of 2026-11-17)
+## The desktop app release
 
 `.github/workflows/desktop.yml` builds, signs, notarizes and staples the Mac app on a `v*` tag, uploads the dmg, zip and
-`latest-mac.yml` to a draft GitHub release, then publishes it. It has never run: it needs the secrets `CSC_LINK` (the
+`latest-mac.yml` to a draft GitHub release, then a Linux job adds the AppImage and deb and publishes it. It has run since
+0.1.0 (2026-11-17), Mac builds ad-hoc signed because `CSC_LINK` isn't set yet. Notarizing needs the secrets `CSC_LINK` (the
 Developer ID Application `.p12`, base64), `CSC_KEY_PASSWORD`, `APPLE_API_KEY` (the `.p8` contents), `APPLE_API_KEY_ID`,
 `APPLE_API_ISSUER` and `APPLE_TEAM_ID` (`59SL6MZZ8F`). The tag must equal `v` + `packages/desktop/package.json`'s version.
 The packaged app checks GitHub Releases with electron-updater at start and every 6 hours (`~/Library/Logs/OpenHut/updates.log`);
 until a release exists it logs "No published versions on GitHub". The 0.1.0 → 0.1.1 update path is untested. The Developer
 ID certificate expires on 1 Feb 2027; renew it in January and re-export `CSC_LINK`.
+
+To cut a release: one PR "Release 0.1.N: …" that bumps `version` in `packages/desktop/package.json` and
+`packages/runtime/package.json` (and their `package-lock.json` entries), adds an `<article class="rel">` at the top of
+`packages/site/public/changelog.html`, and changes `OpenHut 0.1.(N-1)` in `packages/site/public/index.html`; merge it,
+then `git tag v0.1.N <merge commit> && git push origin v0.1.N`. Check `gh release list` that it's out of draft: 0.1.2
+stayed a draft although its run passed and its last step published it (cause unknown, 2026-11-18).
