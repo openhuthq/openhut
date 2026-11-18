@@ -38,6 +38,9 @@ const CONNECTORS: Record<ConnectionKind, Connector> = {
   gmail: google.connector('gmail'),
   drive: google.connector('drive'),
   google: google.connector('google'),
+  google_chat: google.connector('google_chat'),
+  google_contacts: google.connector('google_contacts'),
+  google_search: google.connector('google_search'),
 }
 
 export const connectionService = {

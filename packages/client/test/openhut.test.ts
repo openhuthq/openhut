@@ -40,7 +40,7 @@ function adminOf({ id, runtime }: { id: string; runtime: Fake }): Admin {
   return {
     object: 'admin', seat: { set: !!runtime.seat.token, mode: 'claude', updatedAt: runtime.seat.at }, codex: { set: !!runtime.codexAt, updatedAt: runtime.codexAt ?? null },
     server: { version: '0.3.0', build: 'dev', latestBuild: null, updateAvailable: false, update: null, healthy: true, agentd: true, firewall: true, running: 0, total: 0 },
-    tailnetUrl: null, google: { clientId: null, redirectUri: '' }, usageData: false, publicKey: `key-of-${id}`,
+    tailnetUrl: null, usageData: false, publicKey: `key-of-${id}`,
   }
 }
 

@@ -3,7 +3,6 @@ import { ProviderModel } from '@openhut/common/models/provider.ts'
 import { db } from './db.ts'
 import { seal, unseal } from './secrets.ts'
 
-const GoogleClient = z.object({ clientId: z.string(), clientSecret: z.string() })
 const CodexTokens = z.object({ accessToken: z.string(), refreshToken: z.string() })
 const StoredCatalog = z.object({ at: z.string(), models: z.array(ProviderModel) })
 const loaded = await db.selectFrom('install_setting').select(['name', 'value']).execute()
@@ -53,11 +52,6 @@ export const settings = {
   },
   setCatalog: (provider: string, catalog: StoredCatalog) => write(`provider_models_${provider}`, JSON.stringify(catalog)),
   forgetCatalog: (provider: string) => forget(`provider_models_${provider}`),
-  googleClient: (): GoogleClient | undefined => {
-    const sealed = rows.get('google_client')
-    return sealed ? z.parse(GoogleClient, JSON.parse(unseal(sealed))) : undefined
-  },
-  setGoogleClient: (client: GoogleClient) => write('google_client', seal(JSON.stringify(client))),
   appliedBuild: (): string | undefined => rows.get('build'),
   setAppliedBuild: (build: string) => write('build', build),
   usageData: (): boolean => rows.get('usage_data') !== 'off',
@@ -82,6 +76,5 @@ async function write(name: string, value: string): Promise<void> {
   rows.set(name, value)
 }
 
-export type GoogleClient = z.infer<typeof GoogleClient>
 export type CodexTokens = z.infer<typeof CodexTokens>
 export type StoredCatalog = z.infer<typeof StoredCatalog>

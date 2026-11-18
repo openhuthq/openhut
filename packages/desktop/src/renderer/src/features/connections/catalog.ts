@@ -58,6 +58,21 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
       gets: ['Docs: read_doc and update_doc', 'Sheets: get_values, update_values and update_formulas', 'Slides: read_presentation and update_presentation', 'Calendar: list_events, suggest_time and create_event'],
       safe: SIGNED_IN('Google'),
     },
+    {
+      name: 'google_chat', short: 'Spaces and messages', safeLine: 'Agents act as you.', eta: 'One approval', title: 'Google Chat', blurb: "Read spaces and messages and post as you, through Google's Chat MCP.",
+      gets: ['Search and read spaces, members and messages', 'Post messages as the person who connects'],
+      safe: SIGNED_IN('Google'),
+    },
+    {
+      name: 'google_contacts', short: 'Contacts and directory', safeLine: 'Read-only.', eta: 'One approval', title: 'Google Contacts', blurb: "Look people up in your contacts and your organization's directory, through Google's People MCP.",
+      gets: ['Search contacts and the directory', 'Read profiles: names, emails and phone numbers'],
+      safe: ['Read-only: agents can’t add or change contacts.', ...SIGNED_IN('Google')],
+    },
+    {
+      name: 'google_search', short: 'One search across Workspace', safeLine: 'Read-only.', eta: 'One approval', title: 'Google Search', blurb: "One search across Gmail, Drive, Calendar and Chat, through Google's Workspace MCP.",
+      gets: ['Search mail, files, events and chats at once', 'Read what it finds'],
+      safe: ['Read-only: it can find and read, not change.', ...SIGNED_IN('Google')],
+    },
   ] },
   { shelf: 'Any MCP', items: [
     {

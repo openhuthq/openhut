@@ -5,14 +5,11 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MultiSelect } from '@/components/ui/multi-select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Glyph } from '@/components/glyph'
 import { useAuthorizeConnection, useConnections, useCreateConnection } from '@/features/connections/api'
 import { uniqueName, type Integration } from '@/features/connections/catalog'
-import { GoogleClientSetup } from '@/features/connections/google-client-setup'
 import { Field } from '@/features/connections/sheet'
 import { CopyButton } from '@/components/copy-button'
 import { useComputers } from '@/features/computers/api'
-import { useAdmin } from '@/features/settings/api'
 import { Busy, PILL, SetupSheet } from '@/components/kit'
 import { fieldError, formError } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
@@ -33,9 +30,6 @@ export function ConnectSheet({ me, item }: { me: Me; item: Integration }) {
     case 'postgres': return <PostgresSheet {...props} />
     case 'convex': return <ConvexSheet {...props} />
     case 'mcp': return <McpSheet {...props} />
-    case 'gmail':
-    case 'drive':
-    case 'google': return <GoogleSheet {...props} />
     default: return <QuickSheet {...props} />
   }
 }
@@ -120,16 +114,6 @@ function McpSheet({ item, close, returned }: FlowProps) {
   </SetupSheet>
 }
 
-function GoogleSheet({ item, close, returned }: FlowProps) {
-  const admin = useAdmin()
-  const quick = useQuickConnect()
-  return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(quick.error, []) ?? admin.error?.message ?? returned}
-    foot={<><Button type="button" variant="secondary" onClick={close}>Cancel</Button>
-      <Button type="button" variant="primary" disabled={!admin.data?.google.clientId || quick.pending} onClick={() => quick.connect(item)}><Glyph name="google" size={14} />Sign in with Google</Button></>}>
-    {admin.data && !admin.data.google.clientId && <GoogleClientSetup admin={admin.data} onSaved={() => quick.connect(item)} />}
-  </SetupSheet>
-}
-
 function QuickSheet({ item, close, returned }: FlowProps) {
   const quick = useQuickConnect()
   return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(quick.error, []) ?? returned}
@@ -140,9 +124,8 @@ function QuickSheet({ item, close, returned }: FlowProps) {
 export function useQuickConnect() {
   const authorize = useAuthorizeConnection()
   const create = useCreateConnection()
-  const admin = useAdmin()
   const taken = (useConnections().data ?? []).map((connection) => connection.name)
-  const direct = (item: Integration) => QUICK.has(item.name) || (GOOGLE_KINDS.some((kind) => kind === item.name) && !!admin.data?.google.clientId)
+  const direct = (item: Integration) => QUICK.has(item.name) || GOOGLE_KINDS.some((kind) => kind === item.name)
   const connect = (item: Integration) => {
     const name = uniqueName({ title: item.title, taken })
     if (item.name === 'excalidraw') return create.mutate({ kind: 'excalidraw', name }, { onError: toastError })

@@ -50,7 +50,6 @@ export const adminService = {
         running: agents.filter((agent) => states?.[agent.id] === 'running').length, total: agents.length,
       },
       tailnetUrl: settings.tailnetUrl() ?? null,
-      google: { clientId: settings.googleClient()?.clientId ?? null, redirectUri: connectionService.redirectUrl() },
       usageData: settings.usageData(),
       publicKey: transferPublicKey,
       features: available,
@@ -149,7 +148,6 @@ export const adminService = {
     if (patch.tailnetUrl !== undefined) await setTailnetUrl(patch.tailnetUrl)
     if (patch.seatToken !== undefined) await settings.setSeatToken(patch.seatToken)
     if (patch.usageData !== undefined) await setUsage(patch.usageData)
-    if (patch.googleClientId !== undefined || patch.googleClientSecret !== undefined) await setGoogleClient(patch)
     emit({ name: 'admin.updated', actor, target: { type: 'admin', id: 'install', fields: Object.keys(patch) } })
     return adminService.status()
   },
@@ -232,9 +230,4 @@ async function setTailnetUrl(url: string | null): Promise<void> {
     throw new HttpError(400, 'Use just the address the app reaches this computer on, like https://beelink.example.ts.net, with no path.', { param: 'tailnetUrl' })
   }
   await settings.setTailnetUrl(parsed?.origin ?? null)
-}
-
-async function setGoogleClient({ googleClientId, googleClientSecret }: UpdateAdmin): Promise<void> {
-  if (!googleClientId || !googleClientSecret) throw new HttpError(400, 'Paste both the client ID and the client secret.', { param: googleClientId ? 'googleClientSecret' : 'googleClientId' })
-  await settings.setGoogleClient({ clientId: googleClientId.trim(), clientSecret: googleClientSecret.trim() })
 }
