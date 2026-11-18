@@ -51,6 +51,14 @@ test('renaming an agent cleans the name and refuses an empty one', async () => {
   await assert.rejects(agentService.update({ actor, id: 'ag_tokentst', patch: { name: '<>' } }), { status: 400 })
 })
 
+test('an agent keeps the face it was given, so every device shows the same one', async () => {
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
+  assert.equal((await agentService.get({ actor, id: 'ag_tokentst' })).face, null)
+  const face = JSON.stringify({ seed: 'face_1', body: 2 })
+  assert.equal((await agentService.update({ actor, id: 'ag_tokentst', patch: { face } })).face, face)
+  assert.equal((await agentService.get({ actor, id: 'ag_tokentst' })).face, face)
+})
+
 test('the browser is off for every agent, even on a database that kept the old browser column that defaulted to on', async () => {
   await sql`alter table agent add column if not exists browser boolean not null default true`.execute(db)
   await migrate()

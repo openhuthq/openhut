@@ -1,15 +1,15 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, LaptopIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, ServerStack01Icon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, LaptopIcon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, ServerStack01Icon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
-import { DialogTitle } from '@/components/ui/dialog'
-import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DialogClose, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
-import { ConfirmButton, useConfirming } from '@/components/confirm-button'
+import { ConfirmDialog, useConfirming } from '@/components/confirm-button'
 import { Choice, DialogCard, DRAG, GLASS, HOVER, I, MenuCard, PILL, ROW, ROW_VALUE, Section, TINY_ICON } from '@/components/kit'
 import { agentPath, type AgentDialog } from '@/app/routes'
 import { useAgents, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
@@ -89,7 +89,7 @@ function PanelTitle({ agent, naming }: { agent: Agent; naming: boolean }) {
   const toggle = running ? `Stop ${agent.name}` : `Start ${agent.name}`
   return <div ref={box} className="grid min-w-0 flex-1 gap-0.5">
     <div className="flex min-w-0 items-center gap-1"><AgentName agent={agent} editing={naming && agent.canEdit} />
-      <span className="ml-auto flex shrink-0 items-center gap-0.5">{confirming
+      {phone ? <PhoneActions agent={agent} /> : <span className="ml-auto flex shrink-0 items-center gap-0.5">{confirming
         ? <>
           <Button type="button" variant="secondary" className={PILL} autoFocus onClick={() => setConfirming(false)}>Cancel</Button>
           <Button type="button" variant="destructive" className={cn(PILL, 'ml-1')} disabled={deleteAgent.isPending} onClick={() => deleteAgent.mutate(undefined, { onError: toastError })}>Delete</Button>
@@ -97,14 +97,31 @@ function PanelTitle({ agent, naming }: { agent: Agent; naming: boolean }) {
         : <>
           <Tooltip label={toggle}><Button type="button" variant="bare" className={TINY_ICON} aria-label={toggle} disabled={!agent.canEdit || updateAgent.isPending}
             onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} className={running ? 'text-hue-amber' : 'text-hue-green'} /></Button></Tooltip>
-          {agent.canEdit && phone && <ConfirmButton variant="bare" className={cn(TINY_ICON, 'text-fail')} label={`Delete ${agent.name}`} question={`Delete ${agent.name}?`} detail="" action="Delete" onConfirm={() => deleteAgent.mutate(undefined, { onError: toastError })}><I icon={Delete02Icon} size={16} /></ConfirmButton>}
-          {agent.canEdit && !phone && <Tooltip label={`Delete ${agent.name}`}><Button type="button" variant="bare" className={cn(TINY_ICON, 'text-fail')} aria-label={`Delete ${agent.name}`} onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={16} /></Button></Tooltip>}
-        </>}</span>
+          {agent.canEdit && <Tooltip label={`Delete ${agent.name}`}><Button type="button" variant="bare" className={cn(TINY_ICON, 'text-fail')} aria-label={`Delete ${agent.name}`} onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={16} /></Button></Tooltip>}
+        </>}</span>}
     </div>
     <span className="flex items-center gap-2 text-xs text-body">{confirming ? 'Its memory goes too.' : <AgentStatus agent={agent} />}</span>
   </div>
 }
 
+
+function PhoneActions({ agent }: { agent: Agent }) {
+  const updateAgent = useUpdateAgent(agent.id)
+  const deleteAgent = useDeleteAgent(agent.id)
+  const [deleting, setDeleting] = useState(false)
+  const running = agent.wanted === 'running'
+  return <span className="ml-auto flex shrink-0 items-center gap-1">
+    {agent.canEdit && <DropdownMenu>
+      <DropdownMenuTrigger render={<Button type="button" variant="bare" className={cn(TINY_ICON, 'size-9 rounded-full')} aria-label={`More for ${agent.name}`} />}><I icon={MoreHorizontalIcon} size={20} /></DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <DropdownMenuItem disabled={updateAgent.isPending} onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} />{running ? `Stop ${agent.name}` : `Start ${agent.name}`}</DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onClick={() => setDeleting(true)}><I icon={Delete02Icon} size={16} />Delete {agent.name}…</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>}
+    <DialogClose render={<Button type="button" variant="bare" className="h-9 rounded-full px-3 text-[16px] font-semibold text-ink" />}>Done</DialogClose>
+    <ConfirmDialog open={deleting} onOpenChange={setDeleting} question={`Delete ${agent.name}?`} detail="Its chats, memory and skills go with it." action="Delete" onConfirm={() => deleteAgent.mutate(undefined, { onError: toastError })} />
+  </span>
+}
 
 function useMemoryCount(agent: Agent) {
   const memory = useMemory(agent.id).data

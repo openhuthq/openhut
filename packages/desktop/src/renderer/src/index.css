@@ -180,8 +180,13 @@
 
 @keyframes sheetup { from { transform: translateY(100%) } }
 @keyframes pushin { from { transform: translateX(100%) } }
+@keyframes toastin { from { opacity: 0; transform: translateY(-140%) } }
 
 @media (max-width: 640px) {
+  :root { --kb: 0px; --safe-bottom: env(safe-area-inset-bottom, 0px) }
+  html[data-keyboard] { --safe-bottom: 0px }
+  [data-nested][data-size] { max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 26px - var(--kb)) !important }
+  .rides-keyboard { transition: scale .4s var(--ease-spring), translate .4s var(--ease-spring), filter .4s var(--ease-spring), padding-bottom .32s cubic-bezier(.25, .9, .3, 1), margin-bottom .32s cubic-bezier(.25, .9, .3, 1), max-height .32s cubic-bezier(.25, .9, .3, 1), height .32s cubic-bezier(.25, .9, .3, 1) }
   html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none }
   body { font-size: 16px }
   :is([class*="text-[11px]"], [class*="text-[11.5px]"]):not([class*="phone:text-"]) { font-size: 12.5px; line-height: 1.4 }
@@ -194,5 +199,8 @@
   :is(button, [role=button], .press):not(:disabled):active { scale: .96 }
   .row:active { background-color: var(--picked); scale: 1 }
   .still :is(.c-body, .c-eyes) { animation: none }
+  .pushable { transition: translate .42s var(--ease-spring), filter .42s var(--ease-spring) }
+  html[data-pushed] .pushable { translate: calc(-30% * (1 - var(--drag, 0))) 0; filter: brightness(calc(.94 + .06 * var(--drag, 0))) }
+  html[data-dragging] .pushable { transition: none }
   .float { box-shadow: 0 4px 14px -2px oklch(0% 0 0 / .1), 0 1px 3px oklch(0% 0 0 / .06) }
 }

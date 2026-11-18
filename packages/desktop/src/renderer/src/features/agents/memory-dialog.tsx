@@ -8,7 +8,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
-import { DialogCard, I, SPLIT_DIALOG } from '@/components/kit'
+import { DialogCard, I, Loading, SPLIT_DIALOG } from '@/components/kit'
 import { useMemory, useUpdateMemory } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { formValues } from '@/lib/form'
@@ -32,6 +32,7 @@ export function MemoryDialog({ agent, onClose }: { agent: Agent; onClose: () => 
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" tabIndex={-1} className="-mt-1 -mr-1" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
     </div>
     <ErrorNote message={memory.error?.message} />
+    {!memory.data && !memory.error && <Loading />}
     {memory.data && <Entries agent={agent} memory={memory.data} />}
   </DialogCard>
 }

@@ -4,7 +4,7 @@ import { Creature } from '@/components/creature'
 import { PILL } from '@/components/kit'
 import { PhonePage } from '@/app/phone-page'
 import { agentPath, type Route } from '@/app/routes'
-import { useAgents } from '@/features/agents/api'
+import { useAgents, useShareLocalFaces } from '@/features/agents/api'
 import { AgentView } from '@/features/agents/agent-view'
 import { NewAgentDialog } from '@/features/agents/new-agent'
 import { Sidebar, SidebarContext, type Contact } from '@/features/agents/sidebar'
@@ -18,6 +18,7 @@ export type ShellRoute = Extract<Route, { page: 'home' } | { page: 'agent' } | {
 
 export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'settings' | 'connections' | undefined }) {
   const agents = useAgents()
+  useShareLocalFaces(agents.data)
   const threads = useThreads()
   const [collapsed, setCollapsed] = useState(false)
   const phone = useMedia(PHONE)

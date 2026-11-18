@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { ErrorNote } from '@/components/error-note'
+import { Button } from '@/components/ui/button'
 import { routeOf } from '@/app/routes'
 import { Shell, type ShellRoute } from '@/app/shell'
 import { ConnectionsView } from '@/features/connections/connections-view'
@@ -30,7 +31,10 @@ function Dashboard() {
   useEffect(() => onBack(back), [])
   useEffect(() => { void update() }, [])
   if (route.page === 'welcome') return <FirstRun />
-  if (me.error) return <ErrorNote className="mx-6 mt-[calc(16px+env(safe-area-inset-top))]" message={me.error.message} />
+  if (me.error) return <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-sidebar px-8 text-center">
+    <ErrorNote message={me.error instanceof DOMException ? 'OpenHut couldn\'t open a secure connection to your computer.' : me.error.message} />
+    <Button type="button" variant="secondary" disabled={me.isFetching} onClick={() => void me.refetch()}>{me.isFetching ? 'Trying…' : 'Try again'}</Button>
+  </div>
   if (!me.data) return null
   const close = () => navigate(background.current.path)
   return <>

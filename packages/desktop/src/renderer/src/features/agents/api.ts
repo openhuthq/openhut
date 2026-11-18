@@ -10,7 +10,7 @@ import { request } from '@/lib/api-client'
 import { openhut } from '@/lib/openhut'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
-import { saveLook } from '@/features/agents/face'
+import { localFace } from '@/features/agents/face'
 import type { Look } from '@/lib/face'
 
 const GRANT_LIST = List(Grant)
@@ -26,6 +26,20 @@ export function useAgents() {
   return useQuery({ queryKey: AGENTS_KEY, queryFn: () => openhut.agents.list() })
 }
 
+const sharedFaces = new Set<string>()
+
+export function useShareLocalFaces(agents: OpenHutAgent[] | undefined) {
+  const client = useQueryClient()
+  useEffect(() => {
+    for (const agent of agents ?? []) {
+      const face = !agent.face && agent.canEdit && agent.online && !sharedFaces.has(agent.id) ? localFace(agent.id) : null
+      if (face) sharedFaces.add(agent.id)
+      if (face) void request({ schema: Agent, of: agent.id, path: agentPath(agent.id), method: 'PATCH', body: { face } })
+        .then((saved) => client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (list) => list?.map((each) => each.id === saved.id ? { ...each, face: saved.face } : each)), () => undefined)
+    }
+  }, [agents, client])
+}
+
 export function useAgent(agentId: string) {
   return useQuery({
     queryKey: [...AGENTS_KEY, agentId],
@@ -38,8 +52,7 @@ export function useCreateAgent() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: async ({ body, look }: { body: CreateAgent; look: Look }) => {
-      const agent = await request({ schema: Agent, computer: 'local', path: '/api/agents', method: 'POST', body })
-      saveLook({ agentId: agent.id, look })
+      const agent = await request({ schema: Agent, computer: 'local', path: '/api/agents', method: 'POST', body: { ...body, face: JSON.stringify(look) } })
       return request({ schema: Agent, computer: 'local', path: agentPath(agent.id), method: 'PATCH', body: { wanted: 'running' } })
     },
     onSuccess: (agent) => {

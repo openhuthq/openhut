@@ -21,6 +21,7 @@ import { useCodexSignIn, useConnectProvider, useDisconnectProvider, useFoundNoti
 import { consequence, count, describe, matches, plural, updatedAgo } from '@/features/models/labels'
 import { open, Redirect, useOpen } from '@/lib/router'
 import { formValues } from '@/lib/form'
+import { openPage } from '@/lib/native'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -251,7 +252,7 @@ function SeatSignIn() {
   useEffect(() => {
     if (started.current) return
     started.current = true
-    mutate(undefined, { onSuccess: (signIn) => { if (signIn.url) window.open(signIn.url, '_blank') } })
+    mutate(undefined, { onSuccess: (signIn) => { if (signIn.url) openPage(signIn.url) } })
   }, [mutate])
   const signIn = start.data
   return <DialogCard className="w-[520px]" onClose={() => open()}>

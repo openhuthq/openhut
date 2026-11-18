@@ -14,6 +14,7 @@ let package = Package(
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.6.2"),
         .package(name: "CapacitorApp", path: "../../../../../node_modules/@capacitor/app"),
         .package(name: "CapacitorBarcodeScanner", path: "../../../../../node_modules/@capacitor/barcode-scanner"),
+        .package(name: "CapacitorBrowser", path: "../../../../../node_modules/@capacitor/browser"),
         .package(name: "CapacitorKeyboard", path: "../../../../../node_modules/@capacitor/keyboard"),
         .package(name: "CapacitorPreferences", path: "../../../../../node_modules/@capacitor/preferences"),
         .package(name: "CapawesomeCapacitorLiveUpdate", path: "../../../../../node_modules/@capawesome/capacitor-live-update")
@@ -26,6 +27,7 @@ let package = Package(
                 .product(name: "Cordova", package: "capacitor-swift-pm"),
                 .product(name: "CapacitorApp", package: "CapacitorApp"),
                 .product(name: "CapacitorBarcodeScanner", package: "CapacitorBarcodeScanner"),
+                .product(name: "CapacitorBrowser", package: "CapacitorBrowser"),
                 .product(name: "CapacitorKeyboard", package: "CapacitorKeyboard"),
                 .product(name: "CapacitorPreferences", package: "CapacitorPreferences"),
                 .product(name: "CapawesomeCapacitorLiveUpdate", package: "CapawesomeCapacitorLiveUpdate")

@@ -6,9 +6,9 @@ import { ICONS } from '@/components/icons'
 import { slide, TOUCH } from '@/lib/media'
 import { cn } from '@/lib/utils'
 
-const SHEET = 'phone:mx-0 phone:mb-0 phone:mt-auto phone:max-h-[calc(100dvh-env(safe-area-inset-top)-10px)] phone:w-screen phone:max-w-none phone:rounded-t-[22px] phone:rounded-b-none phone:border-0 phone:pt-3 phone:pb-[env(safe-area-inset-bottom)] phone:shadow-[0_-8px_40px_oklch(0%_0_0/.18)] phone:animate-[sheetup_.42s_var(--ease-spring)]'
-const TALL = 'phone:h-[calc(100dvh-env(safe-area-inset-top)-10px)]'
-const FITS = 'phone:h-auto'
+const SHEET = 'rides-keyboard phone:origin-top phone:data-nested-dialog-open:scale-[.94] phone:data-nested-dialog-open:-translate-y-[10px] phone:data-nested-dialog-open:brightness-90 phone:mx-0 phone:mb-(--kb) phone:mt-auto phone:max-h-[calc(100dvh-env(safe-area-inset-top)-10px-var(--kb))] phone:w-screen phone:max-w-none phone:rounded-t-[22px] phone:rounded-b-none phone:border-0 phone:pt-3 phone:pb-(--safe-bottom) phone:shadow-[0_-8px_40px_oklch(0%_0_0/.18)] phone:animate-[sheetup_.42s_var(--ease-spring)]'
+const TALL = 'phone:h-[calc(100dvh-env(safe-area-inset-top)-10px-var(--kb))]'
+const FITS = 'phone:h-fit'
 
 const popupVariants = cva('group/dialog fixed inset-0 z-50 overflow-auto border-0 bg-card p-0 text-ink', {
   variants: {
@@ -53,7 +53,7 @@ export function Dialog({ size = 'default', dismissable = true, label, onClose, o
     else if (dismissable || details.reason !== 'escape-key') onClose()
   }}>
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Backdrop className={backdropClass(size)} />
+      <DialogPrimitive.Backdrop forceRender className={backdropClass(size)} />
       <DialogPrimitive.Popup ref={popup} initialFocus={() => size === 'window' || matchMedia(TOUCH).matches ? popup.current ?? true : firstFocusable(popup.current)} data-size={size} aria-label={label} className={popupClass(size, className)}>
         {size !== 'confirm' && <Grabber popup={popup} onClose={onClose} />}
         {children}
@@ -85,6 +85,8 @@ function Grabber({ popup, onClose }: { popup: { current: HTMLDivElement | null }
     <span className="h-[5px] w-9 rounded-full bg-mid" />
   </div>
 }
+
+export const DialogClose = DialogPrimitive.Close
 
 export function DialogHeader({ className, ...props }: ComponentProps<'div'>) {
   return <div data-slot="dialog-header" className={cn('flex items-start gap-3 border-b border-hair px-5 py-[18px] group-data-[size=confirm]/dialog:border-b-0 group-data-[size=confirm]/dialog:pb-1.5 group-data-[size=sheet]/dialog:border-b-0 group-data-[size=sheet]/dialog:pb-1', className)} {...props} />

@@ -5,6 +5,7 @@ import type { OpenHutConnection } from '@openhut/client'
 import { request } from '@/lib/api-client'
 import { openhut } from '@/lib/openhut'
 import { CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
+import { isPhone } from '@/lib/native'
 import { navigate } from '@/lib/router'
 
 const EVENT_LIST = List(ConnectionEvent)
@@ -60,7 +61,10 @@ export function useCreateConnection() {
 
 export function useAuthorizeConnection() {
   return useMutation({
-    mutationFn: (body: CreateConnectionAuthorization) => request({ schema: ConnectionAuthorization, ...(body.connectionId ? { of: body.connectionId } : { computer: 'local' }), path: '/api/connection-authorizations', method: 'POST', body }),
+    mutationFn: async (body: CreateConnectionAuthorization) => {
+      if (isPhone()) throw new Error('Sign-ins finish on your Mac, so connect this app from OpenHut there. Agents on your phone can use it right after.')
+      return request({ schema: ConnectionAuthorization, ...(body.connectionId ? { of: body.connectionId } : { computer: 'local' }), path: '/api/connection-authorizations', method: 'POST', body })
+    },
     onSuccess: (authorization) => {
       if (!authorization.manifest) return location.assign(authorization.authorizationUrl)
       const form = Object.assign(document.createElement('form'), { method: 'post', action: authorization.authorizationUrl })

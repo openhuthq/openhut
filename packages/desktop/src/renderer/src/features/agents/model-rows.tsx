@@ -36,7 +36,7 @@ export function ModelRows({ agent }: { agent: Agent }) {
 export function HelperModelsSheet({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const { providers, change, locked, model } = useAgentModels(agent)
   const auto = automatic({ providers, key: model })
-  return <Dialog size="sheet" label="Helper models" onClose={onClose} className="flex flex-col">
+  return <Dialog size="sheet" label="Helper models" onClose={onClose} className="flex flex-col phone:h-fit">
     <DialogHead title="Helper models" subtitle={`Small jobs ${agent.name} does in the background. Automatic picks a fast model from the same provider as its main one, which is ${auto.name} today.`} onClose={onClose} />
     <div className="flex flex-1 flex-col gap-5 overflow-auto px-5 py-4">
       <HelperRows providers={providers} main={model} values={agent.helperModels} who={agent.name} disabled={locked} onPick={(slot, key) => change({ helperModels: { [slot]: key } })} />

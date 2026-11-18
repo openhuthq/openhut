@@ -16,7 +16,7 @@ import { CopyButton } from '@/components/copy-button'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { skillIcon } from '@/components/icons'
-import { DialogCard, I, SPLIT_DIALOG } from '@/components/kit'
+import { DialogCard, I, Loading, SPLIT_DIALOG } from '@/components/kit'
 import { agentPath } from '@/app/routes'
 import { useDeleteSkill, useSkill, useSkills, useUpdateSkill } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
@@ -65,6 +65,7 @@ export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: str
           <span className="grid min-w-0 flex-1"><span className="truncate text-[13px] font-medium">{skill.name}</span><span className="truncate text-[12px] text-mute">{skill.description || skill.path}</span></span>
           {skill.id in drafts && <span className="size-1.5 shrink-0 rounded-full bg-ink" title="Unsaved changes" aria-label="Unsaved changes" />}
         </Button>)}
+        {!skills.data && !skills.error && <Loading />}
         {skills.data && !shown.length && <p className="m-0 px-2 py-1 text-[13px] text-mute">{filter === 'builtIn' ? `${agent.name} has no built-in skills.` : `${agent.name} hasn't learned a skill yet.`}</p>}
       </nav>
     </aside>

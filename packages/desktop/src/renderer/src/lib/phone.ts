@@ -2,8 +2,9 @@ import { useSyncExternalStore } from 'react'
 import { connect, TunnelError, type Tunnel, type TunnelSocket } from '@openhut/tunnel'
 import { Access, verify } from '@openhut/common/access/access.ts'
 import type { Platform, StoredComputer } from '@openhut/client'
-import { deviceKey, isPhone, onLink, phoneName, saved, wipe, type DeviceKey } from '@/lib/native'
+import { deviceKey, isPhone, onLink, openPage, phoneName, saved, wipe, type DeviceKey } from '@/lib/native'
 import { mayRetry, type Failed } from '@/lib/backoff'
+import { fromPhone } from '@/lib/platform'
 
 export type PhoneState = { status: 'loading' | 'join' | 'paired' | 'removed'; link: { code: string } | undefined }
 type Held = { list: Access; relayUrl: string }
@@ -142,12 +143,12 @@ export const phonePlatform: Platform = {
     })
   },
   store: {
-    computers: async () => (held?.list.computers ?? []).map((each, index) => ({ id: index ? each.id : 'local', name: each.name, url: '' })),
+    computers: async () => (held?.list.computers ?? []).map((each, index) => ({ id: index ? each.id : 'local', name: fromPhone(each.name), url: '' })),
     add: () => Promise.reject(new Error('Add computers from the OpenHut app on your Mac.')),
     adopt: () => Promise.reject(new Error('Add computers from the OpenHut app on your Mac.')),
     remove: () => Promise.reject(new Error('Remove computers from the OpenHut app on your Mac.')),
   },
-  openUrl: (url) => { window.open(url, '_blank') },
+  openUrl: openPage,
   signed: {
     read: async () => held?.list,
     save: async (list) => { if (held) await keep({ ...held, list }) },

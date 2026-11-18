@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
-import { wordsFor } from '../../src/lib/platform.ts'
+import { fromPhone, wordsFor } from '../../src/lib/platform.ts'
 
 test('the app calls a Mac a Mac and anything else this computer', () => {
   assert.equal(wordsFor('darwin').thisComputer, 'This Mac')
@@ -12,6 +12,12 @@ test('the app calls a Mac a Mac and anything else this computer', () => {
   assert.equal(wordsFor('linux').badgeNote, undefined)
   assert.equal(wordsFor('win32').thisComputer, 'This computer')
   assert.equal(wordsFor('win32').showFolder, 'Show in Explorer')
+})
+
+test('a phone calls the computer it reaches yours, not this one', () => {
+  assert.equal(fromPhone('This Mac'), 'Your Mac')
+  assert.equal(fromPhone('This computer'), 'Your computer')
+  assert.equal(fromPhone('build-box'), 'build-box')
 })
 
 test('no screen hardcodes Mac words outside the platform helper', () => {

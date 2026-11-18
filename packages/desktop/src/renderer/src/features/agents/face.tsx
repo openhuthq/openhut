@@ -4,24 +4,29 @@ import { parseLook, randomLook, type Look } from '@/lib/face'
 
 const KEY = 'openhut.face.'
 
-export function lookOf(agent: Pick<Agent, 'id' | 'instructions'>): Look {
-  try {
-    const saved = parseLook(JSON.parse(localStorage.getItem(KEY + agent.id) ?? 'null'))
-    if (saved) return saved
-  } catch {
-    return randomLook({ seed: agent.id, about: agent.instructions })
-  }
-  return randomLook({ seed: agent.id, about: agent.instructions })
+type Faced = Pick<Agent, 'id' | 'instructions'> & { face?: string | null }
+
+export function lookOf(agent: Faced): Look {
+  return parsed(agent.face) ?? parsed(localFace(agent.id)) ?? randomLook({ seed: agent.id, about: agent.instructions })
 }
 
-export function saveLook({ agentId, look }: { agentId: string; look: Look }) {
+export function localFace(agentId: string): string | null {
   try {
-    localStorage.setItem(KEY + agentId, JSON.stringify(look))
+    const text = localStorage.getItem(KEY + agentId)
+    return parsed(text) ? text : null
   } catch {
-    return
+    return null
   }
 }
 
-export function Face({ agent, size, tile, className }: { agent: Pick<Agent, 'id' | 'instructions'>; size: number; tile?: boolean; className?: string }) {
+function parsed(text: string | null | undefined): Look | null {
+  try {
+    return text ? parseLook(JSON.parse(text)) : null
+  } catch {
+    return null
+  }
+}
+
+export function Face({ agent, size, tile, className }: { agent: Faced; size: number; tile?: boolean; className?: string }) {
   return <Creature look={lookOf(agent)} size={size} tile={tile} className={className} />
 }

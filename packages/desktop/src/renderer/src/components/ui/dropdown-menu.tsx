@@ -1,4 +1,5 @@
-import type { ComponentProps } from 'react'
+import type { ComponentProps, ReactElement, ReactNode } from 'react'
+import { ContextMenu } from '@base-ui/react/context-menu'
 import { Menu } from '@base-ui/react/menu'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
@@ -10,7 +11,7 @@ export const menuPopupClass = 'max-w-(--available-width) min-w-[max(var(--anchor
 
 export const PHONE_SHEET = {
   backdrop: 'fixed inset-0 z-50 hidden bg-[oklch(0%_0_0/.25)] transition-opacity duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0 phone:block',
-  positioner: 'phone:!inset-auto phone:!right-2 phone:!bottom-[calc(8px+env(safe-area-inset-bottom))] phone:!left-2 phone:!transform-none',
+  positioner: 'phone:!inset-auto phone:!right-2 phone:!bottom-[calc(8px+var(--safe-bottom)+var(--kb))] phone:!left-2 phone:!transform-none',
   popup: 'phone:max-h-[min(70dvh,var(--available-height,70dvh))] phone:w-full phone:max-w-none phone:min-w-0 phone:origin-bottom phone:overflow-auto phone:rounded-[22px] phone:p-2 phone:shadow-[0_-8px_40px_oklch(0%_0_0/.18)] phone:animate-[sheetup_.36s_var(--ease-spring)] phone:data-ending-style:translate-y-full phone:data-ending-style:scale-100',
 }
 
@@ -51,4 +52,16 @@ export const DropdownMenuEmpty = Menu.Empty
 
 export function DropdownMenuSubTrigger({ className, size, ...props }: ComponentProps<typeof Menu.SubmenuTrigger> & Pick<VariantProps<typeof menuItemVariants>, 'size'>) {
   return <Menu.SubmenuTrigger className={cn(menuItemVariants({ size }), 'data-popup-open:bg-tint', className)} {...props} />
+}
+
+export function LongPressMenu({ menu, children }: { menu: ReactNode; children: ReactElement }) {
+  return <ContextMenu.Root>
+    <ContextMenu.Trigger render={children} />
+    <ContextMenu.Portal>
+      <ContextMenu.Backdrop className={PHONE_SHEET.backdrop} />
+      <ContextMenu.Positioner className={cn('z-50 outline-none', PHONE_SHEET.positioner)}>
+        <ContextMenu.Popup className={cn(menuPopupClass, PHONE_SHEET.popup)}>{menu}</ContextMenu.Popup>
+      </ContextMenu.Positioner>
+    </ContextMenu.Portal>
+  </ContextMenu.Root>
 }
