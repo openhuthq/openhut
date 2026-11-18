@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { connect, TunnelError } from '../src/index.ts'
+import { connect, TunnelError, type TunnelSocket } from '../src/index.ts'
 import { nativeKey, newDevice, startComputer, startRelay, waitFor } from './relay.ts'
 
 test('a request and its response cross the tunnel, with only the allowed headers', async () => {
@@ -112,4 +112,90 @@ test('a handshake that never gets an answer fails as closed after the timeout an
   assert.ok(Date.now() - started < 1000)
   await gone
   server.close()
+})
+
+function inbox(socket: TunnelSocket) {
+  const got: (string | ArrayBuffer)[] = []
+  const closes: { code: number; reason: string }[] = []
+  socket.onmessage = event => got.push(event.data)
+  socket.onclose = event => closes.push(event)
+  return { got, closes }
+}
+
+test('a socket echoes text, binary and a message over 65 000 bytes across the tunnel', async () => {
+  const ctx = await startComputer()
+  const device = newDevice()
+  ctx.statuses.set(device.hex, 'client')
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  const socket = tunnel.socket('/api/browsers/agt_1/live?fps=30')
+  assert.equal(socket.binaryType, 'arraybuffer')
+  const { got } = inbox(socket)
+  const big = 'é'.repeat(100_000)
+  socket.send('hello')
+  socket.send(new Uint8Array([1, 2, 3]))
+  socket.send(big)
+  socket.send(new Uint8Array(200_000).fill(7))
+  socket.send('')
+  await waitFor(() => got.length === 5)
+  assert.equal(got[0], 'hello')
+  assert.deepEqual(new Uint8Array(got[1] as ArrayBuffer), new Uint8Array([1, 2, 3]))
+  assert.equal(got[2], big)
+  assert.deepEqual(new Uint8Array(got[3] as ArrayBuffer), new Uint8Array(200_000).fill(7))
+  assert.equal(got[4], '')
+  assert.deepEqual(ctx.sockets, ['/api/browsers/agt_1/live?fps=30'])
+  tunnel.close()
+  await ctx.close()
+})
+
+test('closing a socket on the device closes the computer\'s side, and the tunnel still works', async () => {
+  const ctx = await startComputer()
+  const device = newDevice()
+  ctx.statuses.set(device.hex, 'client')
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  const socket = tunnel.socket('/live')
+  const { closes } = inbox(socket)
+  socket.send('one')
+  socket.close()
+  assert.equal(socket.readyState, 3)
+  assert.deepEqual(closes, [{ code: 1000, reason: '' }])
+  await waitFor(() => ctx.sockets.includes('closed /live'))
+  assert.equal((await tunnel.fetch('/after')).status, 200)
+  tunnel.close()
+  await ctx.close()
+})
+
+test('the computer closing a socket reaches the device with its code and reason', async () => {
+  const ctx = await startComputer({
+    socket: async ({ send, close }) => ({ send: data => data === 'bye' ? close({ code: 4409, reason: 'The browser is off.' }) : send(data), close: () => {} })
+  })
+  const device = newDevice()
+  ctx.statuses.set(device.hex, 'client')
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  const socket = tunnel.socket('/live')
+  const { got, closes } = inbox(socket)
+  socket.send('still here')
+  socket.send('bye')
+  await waitFor(() => closes.length === 1)
+  assert.deepEqual(got, ['still here'])
+  assert.deepEqual(closes, [{ code: 4409, reason: 'The browser is off.' }])
+  assert.equal(socket.readyState, 3)
+  tunnel.close()
+  await ctx.close()
+})
+
+test('a lost tunnel closes its sockets', async () => {
+  const ctx = await startComputer()
+  const device = newDevice()
+  ctx.statuses.set(device.hex, 'client')
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  const socket = tunnel.socket('/live')
+  const { closes } = inbox(socket)
+  socket.send('ping')
+  await waitFor(() => ctx.sockets.length === 1)
+  ctx.relay.kickComputer()
+  await waitFor(() => closes.length === 1)
+  assert.equal(closes[0].code, 1006)
+  await waitFor(() => ctx.sockets.includes('closed /live'))
+  tunnel.close()
+  await ctx.close()
 })

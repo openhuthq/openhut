@@ -20,7 +20,7 @@ async function mac() {
 function setup({ relayUrl, keys }: { relayUrl: string; keys: Awaited<ReturnType<typeof mac>> }) {
   const opened: string[] = []
   const legacy: string[] = []
-  const { reach } = reacher({
+  const { reach, socket } = reacher({
     relayUrl,
     key: async () => keys.device,
     connect: (input: Parameters<typeof connect>[0]) => {
@@ -32,7 +32,7 @@ function setup({ relayUrl, keys }: { relayUrl: string; keys: Awaited<ReturnType<
       return Response.json({ legacy: true })
     },
   })
-  return { reach, opened, legacy }
+  return { reach, socket, opened, legacy }
 }
 
 test('a computer with a relay key is reached through one tunnel session with the Mac\'s device key; one without goes the old way', async () => {
@@ -65,4 +65,23 @@ test('a relay computer that is offline is offline, unless it still has its tailn
   assert.deepEqual(await (await reach({ computer: { id: 'y', name: 'Beelink', key, url: 'https://beelink.example' }, path: '/api/admin', init: {} })).json(), { legacy: true })
   assert.deepEqual(legacy, ['Beelink /api/admin'])
   await relay.close()
+})
+
+test('the live view of a relay computer opens a socket on the same tunnel session as its requests', async () => {
+  const ctx = await startComputer()
+  const keys = await mac()
+  ctx.statuses.set(keys.self.key, 'client')
+  const { reach, socket, opened } = setup({ relayUrl: ctx.relay.url, keys })
+  const office = { id: 'a1b2c3d4', name: 'Office', key: ctx.computer.key }
+  assert.equal((await reach({ computer: office, path: '/api/me', init: {} })).status, 200)
+  const live = await socket({ computer: office, path: '/api/browsers/agt_1/live?fps=30' })
+  const got: unknown[] = []
+  live.onmessage = ({ data }: { data: unknown }) => got.push(data)
+  live.send('{"type":"ack","seq":1}')
+  await waitFor(() => got.length === 1)
+  assert.deepEqual(got, ['{"type":"ack","seq":1}'])
+  assert.deepEqual(opened, [ctx.computer.id])
+  assert.deepEqual(ctx.sockets, ['/api/browsers/agt_1/live?fps=30'])
+  live.close()
+  await ctx.close()
 })

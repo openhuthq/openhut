@@ -6,7 +6,10 @@ export const FrameType = {
   responseBody: 0x12,
   responseEnd: 0x13,
   responseError: 0x14,
-  control: 0x20
+  control: 0x20,
+  socketOpen: 0x30,
+  socketMessage: 0x31,
+  socketClose: 0x32
 } as const
 
 export type FrameType = (typeof FrameType)[keyof typeof FrameType]
@@ -16,6 +19,12 @@ export const MAX_PLAINTEXT = 65_000
 export const MAX_PAYLOAD = MAX_PLAINTEXT - 5
 export const MAX_REQUEST_BODY = 1024 * 1024
 export const REQUEST_HEADERS = ['content-type', 'accept', 'last-event-id']
+export const MAX_SOCKET_MESSAGE = 1024 * 1024
+
+export type SocketMessage = string | ArrayBuffer | Uint8Array
+
+const BINARY = 1
+const MORE = 2
 
 const types = new Set<number>(Object.values(FrameType))
 
@@ -43,6 +52,41 @@ function isFrameType(type: number): type is FrameType {
 
 export function* chunks(bytes: Uint8Array): Generator<Uint8Array> {
   for (let offset = 0; offset < bytes.byteLength; offset += MAX_PAYLOAD) yield bytes.subarray(offset, offset + MAX_PAYLOAD)
+}
+
+export function* messageChunks(message: SocketMessage): Generator<Uint8Array> {
+  const binary = typeof message !== 'string'
+  const bytes = binary ? new Uint8Array(message) : new TextEncoder().encode(message)
+  const size = MAX_PAYLOAD - 1
+  for (let offset = 0; offset === 0 || offset < bytes.byteLength; offset += size) {
+    const part = bytes.subarray(offset, offset + size)
+    const chunk = new Uint8Array(1 + part.byteLength)
+    chunk[0] = (binary ? BINARY : 0) | (offset + size < bytes.byteLength ? MORE : 0)
+    chunk.set(part, 1)
+    yield chunk
+  }
+}
+
+export function messageJoiner() {
+  let parts: Uint8Array[] = []
+  let size = 0
+  return {
+    size: () => size,
+    add(chunk: Uint8Array): string | ArrayBuffer | undefined {
+      if (!chunk.byteLength) throw new Error('This message frame is empty.')
+      parts.push(Uint8Array.from(chunk.subarray(1)))
+      size += chunk.byteLength - 1
+      if (chunk[0] & MORE) return undefined
+      const bytes = new Uint8Array(size)
+      parts.reduce((offset, part) => {
+        bytes.set(part, offset)
+        return offset + part.byteLength
+      }, 0)
+      parts = []
+      size = 0
+      return chunk[0] & BINARY ? bytes.buffer : new TextDecoder().decode(bytes)
+    }
+  }
 }
 
 export function encodeJson(value: unknown): Uint8Array {

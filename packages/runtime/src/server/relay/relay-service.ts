@@ -1,10 +1,12 @@
 import { request, type Server } from 'node:http'
+import type { Socket } from 'node:net'
 import { hostname } from 'node:os'
 import { Readable, duplexPair } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
+import WebSocket, { type RawData } from 'ws'
 import * as z from 'zod/mini'
-import { connect, serve, type TunnelRequest } from '@openhut/tunnel'
+import { connect, serve, type SocketPeer, type TunnelRequest, type TunnelSocketRequest } from '@openhut/tunnel'
 import { Access, verify } from '@openhut/common/access/access.ts'
 import { accessService } from '../access/access-service.ts'
 import { invitationService } from '../access/invitation-service.ts'
@@ -30,12 +32,14 @@ export const relayService = {
       device: (key) => accessService.device(key),
       invited: (input) => invitationService.invited(input),
       handle: (input) => handle({ server, ...input }),
+      socket: (input) => socket({ server, ...input }),
     })
     if (config.join && !settings.access()) await join(config.join).catch((err: unknown) => log.error({ event: 'relay.join_failed', reason: messageOf(err) }))
     return served
   },
 
   handle,
+  socket,
   join,
 }
 
@@ -52,6 +56,20 @@ async function handle({ server, device, method, path, headers, body }: TunnelReq
     outgoing.on('error', reject)
     pipeline(Readable.fromWeb(body as NodeReadableStream<Uint8Array>), outgoing).catch(reject)
   })
+}
+
+function socket({ server, device, path, headers, send, close }: TunnelSocketRequest & { server: Server }): Promise<SocketPeer> {
+  const [inner, outer] = duplexPair()
+  server.emit('connection', tagDevice({ conn: inner, key: device }))
+  const ws = new WebSocket(`ws://openhut${path}`, { createConnection: () => outer as Socket, headers })
+  ws.on('message', (data, binary) => send(binary ? bytes(data) : new TextDecoder().decode(bytes(data))))
+  ws.on('close', (code, reason) => close({ code, reason: String(reason) }))
+  ws.on('error', () => undefined)
+  return new Promise((resolve) => ws.once('open', () => resolve({ send: (data) => ws.send(data), close: () => ws.close() })))
+}
+
+function bytes(data: RawData): Uint8Array {
+  return Array.isArray(data) ? Buffer.concat(data) : new Uint8Array(data)
 }
 
 async function join(code: string): Promise<Access | undefined> {

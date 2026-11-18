@@ -93,11 +93,12 @@ export async function startRelay(): Promise<Relay> {
   return relay
 }
 
-export async function startComputer(options: Partial<Pick<ServeInput, 'handle' | 'invited' | 'keepalive'>> = {}) {
+export async function startComputer(options: Partial<Pick<ServeInput, 'handle' | 'invited' | 'keepalive' | 'socket'>> = {}) {
   const relay = await startRelay()
   const key = generateKeyPair()
   const statuses = new Map<string, DeviceStatus>()
   const handled: string[] = []
+  const sockets: string[] = []
   const computerId = createHash('sha256').update(key.publicKey).digest('hex')
   const server = serve({
     relayUrl: relay.url,
@@ -111,6 +112,11 @@ export async function startComputer(options: Partial<Pick<ServeInput, 'handle' |
       handled.push(`${request.method} ${request.path}`)
       if (options.handle) return options.handle(request)
       return Response.json({ path: request.path, body: await new Response(request.body).text() })
+    },
+    socket: async request => {
+      sockets.push(request.path)
+      if (options.socket) return options.socket(request)
+      return { send: request.send, close: () => sockets.push(`closed ${request.path}`) }
     }
   })
   await waitFor(relay.online)
@@ -119,6 +125,7 @@ export async function startComputer(options: Partial<Pick<ServeInput, 'handle' |
     key,
     statuses,
     handled,
+    sockets,
     computer: { id: computerId, key: toHex(key.publicKey) },
     close: async () => {
       server.close()
