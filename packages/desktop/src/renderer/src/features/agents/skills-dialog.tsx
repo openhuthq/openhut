@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Tooltip } from '@/components/ui/tooltip'
+import { ConfirmIcon } from '@/components/confirm-button'
 import { CopyButton } from '@/components/copy-button'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
@@ -18,24 +20,29 @@ import { DialogCard, I, SPLIT_DIALOG } from '@/components/kit'
 import { agentPath } from '@/app/routes'
 import { useDeleteSkill, useSkill, useSkills, useUpdateSkill } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
+import { readable } from '@/features/agents/skill-text'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 type Filter = 'all' | 'learned' | 'builtIn'
 type View = 'rendered' | 'source'
+type Drafts = Record<string, string>
 
 const FILTERS: [Filter, string][] = [['all', 'All'], ['learned', 'Learned'], ['builtIn', 'Built in']]
 const VIEWS: [View, string][] = [['rendered', 'Rendered'], ['source', 'Source']]
+const PROSE = 'msg-t [&_:is(h1,h2,h3,h4)]:mt-5 [&_:is(h1,h2,h3,h4)]:mb-2 [&_:is(h1,h2,h3,h4)]:leading-snug [&_h1]:text-[17px] [&_h1]:font-semibold [&_h2]:text-[15px] [&_h2]:font-semibold [&_:is(h3,h4)]:text-[14px] [&_:is(h3,h4)]:font-semibold'
 
 export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: string | undefined; onClose: () => void }) {
   const skills = useSkills(agent.id)
   const [filter, setFilter] = useState<Filter>('learned')
+  const [drafts, setDrafts] = useState<Drafts>({})
   const all = skills.data ?? []
   const counts: Record<Filter, number> = { all: all.length, learned: all.filter((skill) => !skill.builtIn).length, builtIn: all.filter((skill) => skill.builtIn).length }
   const shown = all.filter((skill) => (filter === 'all' || skill.builtIn === (filter === 'builtIn')))
   const slug = (skill: Skill) => skill.id.slice(agent.id.length + 1)
   const selected = open ?? (shown[0] && slug(shown[0]))
+  const setDraft = (skillId: string, body: string | undefined) => setDrafts(({ [skillId]: _, ...rest }) => body === undefined ? rest : { ...rest, [skillId]: body })
   return <DialogCard onClose={onClose} className={cn(SPLIT_DIALOG, 'flex-row')}>
     <aside className="flex w-[300px] shrink-0 flex-col gap-3 border-r border-hair bg-sidebar p-4">
       <div className="flex items-center gap-2.5">
@@ -52,13 +59,14 @@ export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: str
           className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-soft aria-[current]:bg-hair">
           <SkillMark skill={skill} />
           <span className="grid min-w-0 flex-1"><span className="truncate text-[13px] font-medium">{skill.name}</span><span className="truncate text-[12px] text-mute">{skill.description || skill.path}</span></span>
+          {skill.id in drafts && <span className="size-1.5 shrink-0 rounded-full bg-ink" title="Unsaved changes" aria-label="Unsaved changes" />}
         </Button>)}
         {skills.data && !shown.length && <p className="m-0 px-2 py-1 text-[13px] text-mute">{filter === 'builtIn' ? `${agent.name} has no built-in skills.` : `${agent.name} hasn't learned a skill yet.`}</p>}
       </nav>
     </aside>
     <section className="flex min-w-0 flex-1 flex-col">
       {selected
-        ? <SkillDetail key={selected} agent={agent} skillId={`${agent.id}~${selected}`} onClose={onClose} />
+        ? <SkillDetail key={selected} agent={agent} skillId={`${agent.id}~${selected}`} draft={drafts[`${agent.id}~${selected}`]} setDraft={(body) => setDraft(`${agent.id}~${selected}`, body)} onClose={onClose} />
         : <div className="flex flex-1 justify-end p-3"><CloseButton onClose={onClose} /></div>}
     </section>
   </DialogCard>
@@ -79,56 +87,45 @@ function isBrand(name: string): name is BrandName {
   return Object.hasOwn(BRAND_ICONS, name)
 }
 
-function withoutFrontmatter(body: string) {
-  return body.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '')
-}
-
-function SkillDetail({ agent, skillId, onClose }: { agent: Agent; skillId: string; onClose: () => void }) {
+function SkillDetail({ agent, skillId, draft, setDraft, onClose }: { agent: Agent; skillId: string; draft: string | undefined; setDraft: (body: string | undefined) => void; onClose: () => void }) {
   const skill = useSkill({ skillId, agentId: agent.id })
   const updateSkill = useUpdateSkill({ skillId, agentId: agent.id })
   const deleteSkill = useDeleteSkill({ skillId, agentId: agent.id })
-  const [view, setView] = useState<View>('rendered')
-  const [draft, setDraft] = useState<string | undefined>()
-  const [confirm, setConfirm] = useState(false)
+  const [view, setView] = useState<View>(draft === undefined ? 'rendered' : 'source')
   const saved = skill.data?.body ?? ''
   const body = draft ?? saved
   const editable = !!skill.data && !skill.data.builtIn && agent.canEdit
   const changed = draft !== undefined && draft !== saved
   return <>
-    <header className="flex items-start gap-3 px-5 pt-5 pb-3">
-      <div className="grid min-w-0 flex-1 gap-1">
-        <div className="flex items-center gap-2"><h3 className="m-0 truncate text-[15px]/[22px] font-medium">{skill.data?.name ?? 'Skill'}</h3>{skill.data && !skill.data.builtIn && <Badge variant="secondary">Learned</Badge>}</div>
-        {skill.data?.description && <p className="m-0 text-[13px]/[18px] text-body">{skill.data.description}</p>}
+    <header className="grid gap-1 border-b border-hair px-5 pt-5 pb-4">
+      <div className="flex items-center gap-2">
+        <h3 className="m-0 min-w-0 truncate text-[15px]/[22px] font-medium">{skill.data?.name ?? 'Skill'}</h3>
+        {skill.data?.builtIn && <Tooltip label={`Built-in skills come with OpenHut and its connections. ${agent.name} reads them but can't change them.`}><Badge variant="secondary">Built in · read-only</Badge></Tooltip>}
+        <span className="ml-auto flex items-center gap-1">
+          <ToggleGroup aria-label="View" value={view} onPick={(value) => setView(VIEWS.find(([id]) => id === value)?.[0] ?? view)}>
+            {VIEWS.map(([id, label]) => <ToggleGroupItem key={id} value={id}>{label}</ToggleGroupItem>)}
+          </ToggleGroup>
+          {editable && <ConfirmIcon label="Delete skill" icon={Delete02Icon} danger question={`Delete ${skill.data?.name}? ${agent.name} forgets it for good.`} action="Delete" busy={deleteSkill.isPending}
+            onConfirm={(done) => deleteSkill.mutate(undefined, { onSuccess: () => { done(); setDraft(undefined); navigate(agentPath({ agentId: agent.id, dialog: 'skills' })) }, onError: toastError })} />}
+          <CloseButton onClose={onClose} />
+        </span>
       </div>
-      <ToggleGroup aria-label="View" value={view} onPick={(value) => setView(VIEWS.find(([id]) => id === value)?.[0] ?? view)}>
-        {VIEWS.map(([id, label]) => <ToggleGroupItem key={id} value={id}>{label}</ToggleGroupItem>)}
-      </ToggleGroup>
-      <CloseButton onClose={onClose} />
+      {skill.data?.description && <p className="m-0 text-[13px]/[18px] text-body">{skill.data.description}</p>}
+      {skill.data && skill.data.path !== skill.data.name && <p className="m-0 flex items-center gap-1 text-[12px] text-mute">{skill.data.path}<CopyButton text={skill.data.path} label="Copy" variant="ghost" size="xs" className="text-mute" /></p>}
     </header>
-    {skill.data && <div className="flex items-center gap-2 border-y border-hair px-5 py-1.5 text-[12px] text-mute">
-      <span className="min-w-0 truncate font-mono">{skill.data.path}</span>
-      <CopyButton text={skill.data.path} label="Copy" variant="ghost" size="sm" />
-      <span className="ml-auto font-mono">{body.length.toLocaleString('en')} / {SKILL_MAX_LENGTH.toLocaleString('en')} characters</span>
-    </div>}
-    <div className="flex min-h-0 flex-1 flex-col overflow-auto px-5 py-4">
-      <ErrorNote message={skill.error?.message ?? updateSkill.error?.message} />
-      {!skill.data && !skill.error && <p className="m-0 text-[13px] text-mute">Opening…</p>}
-      {skill.data && (view === 'rendered'
-        ? <div className="msg-t"><Markdown remarkPlugins={[remarkGfm]}>{withoutFrontmatter(body)}</Markdown></div>
-        : <Textarea aria-label="Skill" maxLength={SKILL_MAX_LENGTH} readOnly={!editable} value={body} onChange={(event) => setDraft(event.target.value)}
-          className="min-h-[340px] flex-1 resize-none rounded-lg bg-canvas font-mono text-[12.5px]/[1.7]" />)}
-      {skill.data?.builtIn && <p className="m-0 mt-3 text-[12px]/[16px] text-mute">Built-in skills come with OpenHut and its connections. {agent.name} reads them but can't change them.</p>}
-    </div>
-    <footer className="flex items-center gap-2 border-t border-hair px-5 py-3">
-      {editable && (confirm
-        ? <><span className="text-[13px] text-mute">{agent.name} forgets it for good.</span>
-          <Button type="button" variant="destructive" size="sm" disabled={deleteSkill.isPending} onClick={() => deleteSkill.mutate(undefined, { onSuccess: () => navigate(agentPath({ agentId: agent.id, dialog: 'skills' })), onError: toastError })}>Delete</Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => setConfirm(false)}>Keep it</Button></>
-        : <Button type="button" variant="danger" onClick={() => setConfirm(true)}><I icon={Delete02Icon} size={14} />Delete</Button>)}
+    <ErrorNote message={skill.error?.message ?? updateSkill.error?.message} />
+    {!skill.data && !skill.error && <p className="m-0 p-5 text-[13px] text-mute">Opening…</p>}
+    {skill.data && (view === 'rendered'
+      ? <div className="min-h-0 flex-1 overflow-auto px-5 py-4">{readable({ body, name: skill.data.name }).trim()
+        ? <div className={PROSE}><Markdown remarkPlugins={[remarkGfm]}>{readable({ body, name: skill.data.name })}</Markdown></div>
+        : <p className="m-0 text-[13px] text-mute">Nothing more than the description above.</p>}</div>
+      : <Textarea variant="editor" aria-label="Skill" maxLength={SKILL_MAX_LENGTH} readOnly={!editable} value={body} onChange={(event) => setDraft(event.target.value === saved ? undefined : event.target.value)} className="text-[12.5px]/[1.7]" />)}
+    {editable && (view === 'source' || changed) && <footer className="flex items-center gap-2 border-t border-hair px-5 py-3">
+      <span className="text-[12px] text-mute">{body.length.toLocaleString('en')} / {SKILL_MAX_LENGTH.toLocaleString('en')} characters</span>
       <span className="ml-auto flex gap-2">
-        <Button type="button" variant="secondary" onClick={onClose}>Close</Button>
-        {editable && <Button type="button" variant="primary" disabled={!changed || updateSkill.isPending} onClick={() => updateSkill.mutate(body, { onSuccess: () => setDraft(undefined), onError: toastError })}>Save</Button>}
+        {changed && <Button type="button" variant="secondary" onClick={() => setDraft(undefined)}>Discard</Button>}
+        <Button type="button" variant="primary" disabled={!changed || updateSkill.isPending} onClick={() => updateSkill.mutate(body, { onSuccess: () => setDraft(undefined), onError: toastError })}>Save</Button>
       </span>
-    </footer>
+    </footer>}
   </>
 }
