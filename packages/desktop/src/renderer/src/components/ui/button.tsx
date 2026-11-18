@@ -13,6 +13,7 @@ const variants = cva('', {
       danger: 'bg-transparent text-fail not-disabled:hover:bg-[oklch(55%_.185_27/.08)] not-disabled:hover:text-fail',
       destructive: 'bg-fail text-white not-disabled:hover:brightness-[.92]',
       send: 'grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-primary text-white',
+      text: 'inline-flex items-center gap-1 border-0 bg-transparent p-0 text-sm font-medium text-ink no-underline underline-offset-2 not-disabled:hover:underline',
       link: 'border-0 bg-transparent p-0 text-inherit underline underline-offset-2',
       bare: 'm-0 border-0 bg-transparent p-0 text-left text-inherit',
     },
@@ -37,7 +38,7 @@ const variants = cva('', {
 export type ButtonVariants = VariantProps<typeof variants>
 
 export function buttonVariants({ variant = 'ghost', size }: ButtonVariants = {}) {
-  const plain = variant === 'send' || variant === 'link' || variant === 'bare'
+  const plain = variant === 'send' || variant === 'link' || variant === 'bare' || variant === 'text'
   return cn(!plain && BUTTON, variants({ variant, size: size ?? (plain ? 'none' : 'default') }))
 }
 

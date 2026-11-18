@@ -28,7 +28,7 @@ export function UpdateStatus({ idle }: { idle: ReactNode }) {
   if (!state?.error) return state?.checking || state?.available ? <Spinner className="mt-0" /> : idle
   return <span className="inline-flex gap-1.5">
     <a href={downloadUrl(Reflect.get(window, 'openhut')?.platform)} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Download</a>
-    <Button type="button" variant="secondary" className={PILL} disabled={check.isPending} onClick={() => check.mutate()}>Check now</Button>
+    <Button type="button" variant="ghost" className={PILL} disabled={check.isPending} onClick={() => check.mutate()}>Check now</Button>
   </span>
 }
 
