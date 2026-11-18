@@ -1016,7 +1016,7 @@ const renderChat = () => {
     inner.innerHTML = `<div class="center dim">${face(a.look, 64)}<h3>${esc(a.name)} is asleep</h3><p>It won't answer here or on its channels until you start it. Its memory and chats are kept.</p><button class="abtn pri" data-act="start" style="margin-top:4px">${ic('PlayCircle', 14)}Start ${esc(a.name)}</button></div>`
     return
   }
-  if (!a.msgs.length) inner.innerHTML = `<div class="center">${face(a.look, 64)}<h3>Say hello to ${esc(a.name)}</h3><p>Ask it anything, or tell it what its job is on the right.</p></div>`
+  if (!a.msgs.length) inner.innerHTML = `<div class="center">${face(a.look, 64)}<h3>Say hello to ${esc(a.name)}</h3><p>Ask it anything, or tell it what its job is.</p></div>`
   else {
     inner.insertAdjacentHTML('beforeend', '<div class="day">Today</div>')
     a.msgs.forEach(m => inner.append(msgEl(a, m, false)))
@@ -1080,7 +1080,7 @@ const send = async text => {
   const a = current
   busy = true; syncSend()
   push(a, { role: 'u', text })
-  if (/\?\s*$/.test(text) || !a.answer) await reply(a, a.answer ? a.tools.slice(-1) : [], a.answer || `Hi! I'm ${a.name}. Tell me my job on the right, or just ask me something.`)
+  if (/\?\s*$/.test(text) || !a.answer) await reply(a, a.answer ? a.tools.slice(-1) : [], a.answer || `Hi! I'm ${a.name}. Tell me my job, or just ask me something.`)
   else { await reply(a, [['memory', 'memory']], "Got it. I'll remember that next time."); a.notes++; if (a === current) renderPanel() }
   busy = false; syncSend()
 }
