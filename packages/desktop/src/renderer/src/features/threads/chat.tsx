@@ -130,13 +130,13 @@ function NotReady({ agent }: { agent: Agent }) {
   const state = agentState(agent)
   const reason = {
     starting: 'It\'s still starting. You can type as soon as it answers.',
-    no_seat: 'It needs a Claude sign-in.',
+    no_seat: 'Its model isn\'t connected.',
     not_answering: 'It restarts on its own, or Stop and Start it from the panel.',
     stopped: '',
     missing: 'It comes back by itself within 30 seconds.',
     running: '',
   }[state]
-  return <Alert variant="warning" className="max-w-[640px]" role="status" title={agent.healthDetail || undefined}><b>{agent.name} isn't ready.</b> {reason} {state === 'no_seat' && <a href="/settings/models">Sign in to Claude</a>}</Alert>
+  return <Alert variant="warning" className="max-w-[640px]" role="status" title={agent.healthDetail || undefined}><b>{agent.name} isn't ready.</b> {reason} {state === 'no_seat' && <a href="/settings/models">Open Settings › Models</a>}</Alert>
 }
 
 function ClearChat({ agent, threadId }: { agent: Agent; threadId: string }) {
@@ -258,7 +258,7 @@ function ChatEmpty({ agent }: { agent: Agent }) {
     : {
       running: [`Say hello to ${agent.name}`, 'Ask it anything, or tell it what its job is.'],
       starting: [`Starting ${agent.name}`, 'It takes about a minute the first time. You can type as soon as it answers.'],
-      no_seat: [`${agent.name} isn't ready`, 'Sign in to Claude in Settings, then it starts answering.'],
+      no_seat: [`${agent.name} isn't ready`, 'Connect its model in Settings, then it starts answering.'],
       not_answering: [`${agent.name} isn't answering`, 'It restarts on its own, or Stop and Start it from the panel.'],
       stopped: ['', ''],
       missing: [`${agent.name} stopped unexpectedly`, 'It comes back by itself within 30 seconds.'],

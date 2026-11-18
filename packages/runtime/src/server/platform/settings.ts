@@ -1,9 +1,11 @@
 import * as z from 'zod/mini'
+import { ProviderModel } from '@openhut/common/models/provider.ts'
 import { db } from './db.ts'
 import { seal, unseal } from './secrets.ts'
 
 const GoogleClient = z.object({ clientId: z.string(), clientSecret: z.string() })
 const CodexTokens = z.object({ accessToken: z.string(), refreshToken: z.string() })
+const StoredCatalog = z.object({ at: z.string(), models: z.array(ProviderModel) })
 const loaded = await db.selectFrom('install_setting').select(['name', 'value']).execute()
 const rows = new Map(loaded.map((row) => [row.name, row.value]))
 
@@ -20,6 +22,10 @@ export const settings = {
   },
   seatAt: (): string | null => rows.get('seat_at') ?? null,
   setSeatAt: (at: string) => write('seat_at', at),
+  forgetSeat: async () => {
+    await forget('seat_token')
+    await forget('seat_at')
+  },
   codexTokens: (): CodexTokens | undefined => {
     const sealed = rows.get('codex_tokens')
     return sealed ? z.parse(CodexTokens, JSON.parse(unseal(sealed))) : undefined
@@ -30,6 +36,23 @@ export const settings = {
   },
   codexAt: (): string | null => rows.get('codex_at') ?? null,
   setCodexAt: (at: string) => write('codex_at', at),
+  forgetCodex: async () => {
+    await forget('codex_tokens')
+    await forget('codex_at')
+  },
+  providerKey: (provider: string): string => {
+    const sealed = rows.get(`provider_key_${provider}`)
+    return sealed ? unseal(sealed) : ''
+  },
+  setProviderKey: (provider: string, key: string) => write(`provider_key_${provider}`, seal(key)),
+  forgetProviderKey: (provider: string) => forget(`provider_key_${provider}`),
+  catalog: (provider: string): StoredCatalog | undefined => {
+    const stored = rows.get(`provider_models_${provider}`)
+    const parsed = z.safeParse(StoredCatalog, stored ? JSON.parse(stored) : undefined)
+    return parsed.success ? parsed.data : undefined
+  },
+  setCatalog: (provider: string, catalog: StoredCatalog) => write(`provider_models_${provider}`, JSON.stringify(catalog)),
+  forgetCatalog: (provider: string) => forget(`provider_models_${provider}`),
   googleClient: (): GoogleClient | undefined => {
     const sealed = rows.get('google_client')
     return sealed ? z.parse(GoogleClient, JSON.parse(unseal(sealed))) : undefined
@@ -61,3 +84,4 @@ async function write(name: string, value: string): Promise<void> {
 
 export type GoogleClient = z.infer<typeof GoogleClient>
 export type CodexTokens = z.infer<typeof CodexTokens>
+export type StoredCatalog = z.infer<typeof StoredCatalog>

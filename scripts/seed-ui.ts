@@ -4,9 +4,9 @@ import type { Connection } from '@openhut/common/connections/connection.ts'
 
 const APP = `http://127.0.0.1:${process.env.PORT ?? 8787}`
 const AGENTS = [
-  ['Dev', 'Answers engineering questions in the team channel. Looks up orders and schema in the Orders DB.', 'sonnet', 'running'],
-  ['Sales', 'Posts the weekly pipeline report and answers questions about deals.', 'sonnet', 'stopped'],
-  ['Support', 'Answers customers in #support. Looks the customer up before replying.', 'haiku', 'running'],
+  ['Dev', 'Answers engineering questions in the team channel. Looks up orders and schema in the Orders DB.', 'claude:sonnet', 'running'],
+  ['Sales', 'Posts the weekly pipeline report and answers questions about deals.', 'claude:sonnet', 'stopped'],
+  ['Support', 'Answers customers in #support. Looks the customer up before replying.', 'claude:haiku', 'running'],
 ]
 const orders = (
   await api<Connection>('POST', '/api/connections', { name: 'Orders DB', dsn: 'postgres://reader:sample@db.internal.example:5432/orders' })

@@ -4,11 +4,9 @@ import { pipeline } from 'node:stream/promises'
 import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
-import { settings } from '../platform/settings.ts'
 import type { GatewayAgent } from '../agents/agent-service.ts'
 import { channelService } from '../channels/channel-service.ts'
-import { seatLimits } from '../admin/seat-limits.ts'
-import { codex } from '../integrations/codex/codex.ts'
+import { providers } from '../models/providers.ts'
 
 const IDLE_MS = 120_000
 const QUIET_MS = 60_000
@@ -19,7 +17,7 @@ const TELEGRAM_PATH = /^\/(?:file\/)?bot[^/]+\/([^/]+)/
 const lastQuiet = new Map<string, number>()
 
 export type Upstream = {
-  name: 'anthropic' | 'codex' | 'telegram'
+  name: string
   origin: string
   allow: (req: { method: string; path: string }) => boolean
   credential: (agent: GatewayAgent) => Promise<string>
@@ -30,25 +28,7 @@ export type Upstream = {
 export type Outgoing = { path: string; headers: Headers }
 
 export const upstreams = new Map<string, Upstream>([
-  ['anthropic', {
-    name: 'anthropic',
-    origin: config.anthropicApi,
-    allow: ({ method, path }) => method === 'POST' && (path === '/v1/messages' || path === '/v1/messages/count_tokens'),
-    credential: async () => settings.seatToken() || refuse('No Claude seat is connected. An owner or admin connects one in Admin.'),
-    apply: ({ out, secret }) => out.headers.set('authorization', `Bearer ${secret}`),
-    observe: (headers) => seatLimits.observe(headers),
-  }],
-  ['codex', {
-    name: 'codex',
-    origin: 'https://chatgpt.com/backend-api/codex',
-    allow: ({ method, path }) => (method === 'POST' && (path === '/responses' || path === '/responses/compact')) || (method === 'GET' && path === '/models'),
-    credential: () => codex.accessToken(),
-    apply: ({ out, secret }) => {
-      out.headers.set('authorization', `Bearer ${secret}`)
-      const account = codex.accountOf(secret)
-      if (account) out.headers.set('chatgpt-account-id', account)
-    },
-  }],
+  ...Object.values(providers).map((provider): [string, Upstream] => [provider.upstream.name, provider.upstream]),
   ['telegram', {
     name: 'telegram',
     origin: config.telegramApi,
@@ -119,10 +99,6 @@ async function audit({ agent, tool, reason, outcome, started }: { agent: Gateway
     lastQuiet.set(key, started)
   }
   await db.insertInto('connection_event').values({ agent_id: agent.id, connection_id: null, tool, reason, outcome, ms: Date.now() - started }).execute()
-}
-
-function refuse(message: string): never {
-  throw new HttpError(409, message)
 }
 
 type Forward = { agent: GatewayAgent; upstream: Upstream; path: string; req: IncomingMessage; res: ServerResponse; idleMs?: number }

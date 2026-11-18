@@ -8,3 +8,4 @@ export function grantsKey(filter: { agentId: string } | { connectionId: string }
   return [...GRANTS_KEY, filter]
 }
 export const COMPUTERS_KEY = ['computers']
+export const PROVIDERS_KEY = ['providers']

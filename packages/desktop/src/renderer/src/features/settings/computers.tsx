@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { ArrowLeft01Icon, LaptopIcon, Tick02Icon, NetworkIcon, PlusSignIcon, ServerStack01Icon, SmartPhone01Icon, WifiDisconnected02Icon } from '@hugeicons/core-free-icons'
 import type { Computer, OpenHutAgent, TailnetPeer } from '@openhut/client'
 import type { Admin } from '@openhut/common/admin/admin.ts'
@@ -15,7 +15,7 @@ import { failureOf, phaseOf } from '@/features/computers/enroll-steps'
 import { Field } from '@/features/connections/sheet'
 import { HERE, useTailnet } from '@/features/settings/desktop'
 import { byEligibility, stateOf, type Peer, type PeerState } from '@/features/settings/peers'
-import { Chevron, Command, Intro, Row, Rows } from '@/features/settings/kit'
+import { Chevron, Command, Intro, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { UpdateStatus } from '@/features/settings/update-pill'
 import { formValues } from '@/lib/form'
 import { open, useOpen } from '@/lib/router'
@@ -83,20 +83,7 @@ function Mark({ icon, dot }: { icon: typeof LaptopIcon; dot?: string }) {
 function RemovableRow({ computer, admin, note, agents }: { computer: Computer; admin: Admin | undefined; note: string; agents: OpenHutAgent[] }) {
   const remove = useRemoveComputer()
   const update = useUpdateComputer()
-  const [confirming, setConfirming] = useState(false)
-  const box = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!confirming) return
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      event.stopImmediatePropagation()
-      setConfirming(false)
-    }
-    const outside = (event: PointerEvent) => { if (!(event.target instanceof Node && box.current?.contains(event.target))) setConfirming(false) }
-    window.addEventListener('keydown', escape, true)
-    window.addEventListener('pointerdown', outside, true)
-    return () => { window.removeEventListener('keydown', escape, true); window.removeEventListener('pointerdown', outside, true) }
-  }, [confirming])
+  const { confirming, setConfirming, box } = useConfirming()
   return <div ref={box}><Row icon={<ComputerMark computer={computer} />} title={computer.name} note={confirming ? 'Its agents stop and leave this list.' : note}>
     {confirming
       ? <>

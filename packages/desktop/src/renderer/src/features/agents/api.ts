@@ -1,4 +1,5 @@
-import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { useMutation, useMutationState, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
 import { Agent, Grant, type CreateAgent, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import { Browser } from '@openhut/common/agents/browser.ts'
@@ -50,9 +51,24 @@ export function useCreateAgent() {
   })
 }
 
+const RESTARTS = ['instructions', 'model', 'fallbackModel', 'helperModels', 'codeExecution', 'browser'] as const
+const RESTART_SHOWN_MS = 1800
+
+export function useRestarting(agentId: string) {
+  const pending = useMutationState({ filters: { mutationKey: ['agent-update', agentId], status: 'pending' }, select: (mutation) => mutation.state.variables }).some((variables) => typeof variables === 'object' && variables !== null && RESTARTS.some((field) => field in variables))
+  const [lingering, setLingering] = useState(false)
+  useEffect(() => {
+    if (pending) return setLingering(true)
+    const timer = setTimeout(() => setLingering(false), RESTART_SHOWN_MS)
+    return () => clearTimeout(timer)
+  }, [pending])
+  return pending || lingering
+}
+
 export function useUpdateAgent(agentId: string) {
   const client = useQueryClient()
   return useMutation({
+    mutationKey: ['agent-update', agentId],
     mutationFn: (body: UpdateAgent) => request({ schema: Agent, path: agentPath(agentId), method: 'PATCH', body }),
     onSuccess: (agent) => {
       client.setQueryData([...AGENTS_KEY, agent.id], agent)

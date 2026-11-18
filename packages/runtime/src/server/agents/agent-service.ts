@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto'
 import type { Selectable } from 'kysely'
 import * as z from 'zod/mini'
-import { ModelId, type Agent, type AgentHealth, type AgentImport, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
+import { HelperModels, type Agent, type CreateAgent, type AgentHealth, type AgentImport, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import type { Export } from '@openhut/common/admin/admin.ts'
 import type { Deleted } from '@openhut/common/api.ts'
 import { ChannelKind } from '@openhut/common/channels/channel.ts'
+import { splitModelKey } from '@openhut/common/models/provider.ts'
 import { ConnectionKind } from '@openhut/common/connections/connection.ts'
 import { db, findRow, isUniqueViolation } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
@@ -20,6 +21,8 @@ import { connectionService } from '../connections/connection-service.ts'
 import type { Caller } from '../team/identity.ts'
 import { audienceOf } from '../channels/audience.ts'
 import { SlackSecrets } from '../integrations/slack/slack.ts'
+import { resolveSlots } from '../models/model-slots.ts'
+import { providerService } from '../models/provider-service.ts'
 import { renderFiles, type RenderedChannel } from './hermes-files.ts'
 
 const MAX_AGENTS = 250
@@ -27,10 +30,11 @@ const RECONCILE_MS = 30_000
 const PROBE_MS = 3_000
 const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
-const RENDERED = ['instructions', 'model', 'codeExecution', 'browser'] as const
-const CODEX_SOON = 'Codex is coming soon.'
+const RENDERED = ['instructions', 'model', 'fallbackModel', 'helperModels', 'codeExecution', 'browser'] as const
+const DEFAULT_MODEL = 'claude:sonnet'
+const NO_HELPERS = { compress: null, title: null, review: null }
 const Moved = z.object({
-  agent: z.object({ id: z.string().check(z.regex(/^ag_[a-z0-9]{8}$/)), name: z.string(), instructions: z.string(), model: ModelId, codeExecution: z.boolean(), browser: z.boolean() }),
+  agent: z.object({ id: z.string().check(z.regex(/^ag_[a-z0-9]{8}$/)), name: z.string(), instructions: z.string(), model: z.string(), fallbackModel: z.optional(z.nullable(z.string())), helperModels: z.optional(HelperModels), codeExecution: z.boolean(), browser: z.boolean() }),
   channels: z.array(z.object({ kind: ChannelKind, status: z.enum(['connected', 'linking']), account: z.nullable(z.string()), ownerAddress: z.string(), open: z.boolean(), allowed: z.string(), secrets: z.string() })),
   threads: z.array(z.object({ title: z.string(), messages: z.string(), createdAt: z.string(), updatedAt: z.string() })),
   grants: z.array(z.object({ kind: ConnectionKind, name: z.string() })),
@@ -58,11 +62,12 @@ export const agentService = {
     return row
   },
 
-  async create({ actor, name, instructions }: { actor: Caller; name: string; instructions?: string }): Promise<Agent> {
+  async create({ actor, name, instructions, model, fallbackModel = null, helperModels = {} }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'fallbackModel' | 'helperModels'>): Promise<Agent> {
     const clean = cleanName(name)
+    requireChoices({ model, fallbackModel, helperModels, standing: { model: model ?? DEFAULT_MODEL } })
     const net = await freeNet()
     const row = await db.insertInto('agent').values({
-      id: newId('ag'), name: clean, owner_id: actor.id, model: 'sonnet', net, channel_key: seal(randomBytes(24).toString('hex')),
+      id: newId('ag'), name: clean, owner_id: actor.id, model: model ?? DEFAULT_MODEL, fallback_model: fallbackModel, helper_models: JSON.stringify({ ...NO_HELPERS, ...helperModels }), net, channel_key: seal(randomBytes(24).toString('hex')),
       instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000),
     }).returningAll().executeTakeFirstOrThrow().catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'Someone created an agent at the same moment. Try again.') : err })
     try {
@@ -78,10 +83,14 @@ export const agentService = {
 
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateAgent }): Promise<Agent> {
     const before = await agentService.requireEditable({ actor, id })
-    if (patch.model === 'codex') throw new HttpError(409, CODEX_SOON, { param: 'model' })
+    requireChoices({ model: changed(patch.model, before.model), fallbackModel: changed(patch.fallbackModel, before.fallback_model), helperModels: patch.helperModels, standing: before })
     if (patch.browser && !(await features()).browser) throw new HttpError(409, 'This computer can\'t give agents a browser. Run the agent on a Linux computer you added to use one.', { param: 'browser' })
-    const { codeExecution, browser, ...fields } = patch
-    await db.updateTable('agent').set({ ...fields, code_execution: codeExecution, web_browser: browser, name: patch.name === undefined ? undefined : cleanName(patch.name) }).where('id', '=', id).execute()
+    const { codeExecution, browser, fallbackModel, helperModels, ...fields } = patch
+    const fallback = fallbackModel === undefined && patch.model === before.fallback_model ? null : fallbackModel
+    await db.updateTable('agent').set({
+      ...fields, fallback_model: fallback, helper_models: helperModels && JSON.stringify({ ...helpersOf(before), ...helperModels }),
+      code_execution: codeExecution, web_browser: browser, name: patch.name === undefined ? undefined : cleanName(patch.name),
+    }).where('id', '=', id).execute()
     if (RENDERED.some((field) => patch[field] !== undefined)) {
       await agentService.reapply({ id }).catch(async (err: unknown) => {
         if (browser === undefined || browser === before.web_browser) throw err
@@ -112,7 +121,7 @@ export const agentService = {
       agentd.exportHome({ id }),
     ])
     const moved: Moved = {
-      agent: { id, name: row.name, instructions: row.instructions, model: row.model, codeExecution: row.code_execution, browser: row.web_browser },
+      agent: { id, name: row.name, instructions: row.instructions, model: row.model, fallbackModel: row.fallback_model, helperModels: helpersOf(row), codeExecution: row.code_execution, browser: row.web_browser },
       channels: channels.map((each) => ({ kind: each.kind, status: each.status, account: each.account, ownerAddress: each.owner_address, open: each.open, allowed: each.allowed, secrets: each.secrets && unseal(each.secrets) })),
       threads: threads.map((each) => ({ title: each.title, messages: each.messages, createdAt: new Date(each.created_at).toISOString(), updatedAt: new Date(each.updated_at).toISOString() })),
       grants,
@@ -126,10 +135,11 @@ export const agentService = {
   async importSealed({ actor, sealed }: { actor: Caller; sealed: string }): Promise<AgentImport> {
     const moved = movedFrom(sealed)
     const { agent } = moved
-    if (agent.model === 'codex') throw new HttpError(409, CODEX_SOON, { param: 'sealed' })
+    const model = splitModelKey(agent.model)
+    if (!model) throw new HttpError(400, 'This export has a model this OpenHut doesn\'t know. Update both computers and try again.', { param: 'sealed' })
     if (await db.selectFrom('agent').select('id').where('id', '=', agent.id).executeTakeFirst()) throw new HttpError(409, `${agent.name} is already on this computer.`)
     const row = await db.insertInto('agent').values({
-      id: agent.id, name: agent.name, owner_id: actor.id, instructions: agent.instructions, model: agent.model, net: await freeNet(), channel_key: seal(randomBytes(24).toString('hex')),
+      id: agent.id, name: agent.name, owner_id: actor.id, instructions: agent.instructions, model: `${model.provider}:${model.model}`, fallback_model: agent.fallbackModel ?? null, helper_models: JSON.stringify({ ...NO_HELPERS, ...agent.helperModels }), net: await freeNet(), channel_key: seal(randomBytes(24).toString('hex')),
       code_execution: agent.codeExecution, web_browser: agent.browser, wanted: 'stopped',
     }).returningAll().executeTakeFirstOrThrow()
     try {
@@ -239,6 +249,24 @@ async function freeNet(): Promise<number> {
   return net
 }
 
+function helpersOf(row: AgentRow): HelperModels {
+  const parsed = z.safeParse(HelperModels, { ...NO_HELPERS, ...JSON.parse(row.helper_models) })
+  return parsed.success ? parsed.data : NO_HELPERS
+}
+
+function changed<T>(next: T | undefined, current: T): T | undefined {
+  return next === current ? undefined : next
+}
+
+function requireChoices({ model, fallbackModel, helperModels, standing }: { model?: string; fallbackModel?: string | null; helperModels?: Partial<HelperModels>; standing: { model: string } }): void {
+  if (model) providerService.requireUsable({ key: model, param: 'model' })
+  if (fallbackModel) {
+    providerService.requireUsable({ key: fallbackModel, param: 'fallbackModel' })
+    if (fallbackModel === (model ?? standing.model)) throw new HttpError(400, 'Pick a fallback that isn\'t its main model.', { param: 'fallbackModel' })
+  }
+  for (const [slot, key] of Object.entries(helperModels ?? {})) if (key) providerService.requireUsable({ key, param: `helperModels.${slot}` })
+}
+
 function sealedFor({ publicKey, text }: { publicKey: string; text: string }): string {
   try {
     return sealFor({ publicKey, text })
@@ -278,8 +306,9 @@ async function tellAgent(id: string): Promise<void> {
 async function filesOf(row: AgentRow): Promise<AgentFiles> {
   const owner = await db.selectFrom('person').select('email').where('id', '=', row.owner_id).executeTakeFirstOrThrow()
   const channels = await db.selectFrom('channel').selectAll().where('agent_id', '=', row.id).orderBy('kind').execute()
+  const slots = resolveSlots({ model: row.model, fallback: row.fallback_model, helpers: helpersOf(row), catalog: providerService.catalog })
   return renderFiles({
-    agent: row, ownerName: owner.email, token: agentToken({ id: row.id, epoch: row.token_epoch }), channelKey: unseal(row.channel_key),
+    agent: { ...row, slots }, ownerName: owner.email, token: agentToken({ id: row.id, epoch: row.token_epoch }), channelKey: unseal(row.channel_key),
     channels: channels.map(renderedChannel), connections: await connectionService.reachable({ agent: row }),
   })
 }
@@ -323,7 +352,7 @@ async function applyRelease(): Promise<void> {
 
 function agentOf({ row, ownerName, state, health, editable }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean }): Agent {
   return {
-    id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, wanted: row.wanted,
+    id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, fallbackModel: row.fallback_model, helperModels: helpersOf(row), wanted: row.wanted,
     status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, browser: row.web_browser, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
   }
 }
@@ -345,8 +374,8 @@ async function healthOf({ row, state }: { row: AgentRow; state: string | undefin
     return { health: null, detail: '' }
   }
   const last = await probe({ row, fresh: false })
-  if (!last.detail && config.modelMode === 'claude' && row.model === 'codex' && !settings.codexTokens()) return { health: 'no_seat', detail: 'No ChatGPT account is signed in, so its model can\'t answer. An owner or admin signs one in under Admin.' }
-  if (!last.detail && config.modelMode === 'claude' && row.model !== 'codex' && !settings.seatToken()) return { health: 'no_seat', detail: 'No Claude seat is connected, so its model can\'t answer. An owner or admin connects one in Admin.' }
+  const provider = splitModelKey(row.model)?.provider ?? 'claude'
+  if (!last.detail && config.modelMode === 'claude' && !providerService.connected(provider)) return { health: 'no_seat', detail: `${providerService.get({ id: provider }).name} isn't connected on this computer, so its model can't answer. Connect it under Settings, Models.` }
   if (!last.detail) return { health: 'answering', detail: '' }
   return { health: Date.now() - last.failingSince > STARTING_MS ? 'not_answering' : 'starting', detail: last.detail }
 }

@@ -16,6 +16,7 @@ const FLAT = '[&_[data-slot=item-group]]:flex [&_[data-slot=item-group]]:flex-co
 export const GLASS = 'bg-sidebar'
 export const HOVER = 'hover:bg-hover'
 export const ROW = 'flex h-8 w-full items-center gap-2.5 rounded-md border-0 bg-transparent px-2.5 text-left text-[13px] font-normal whitespace-nowrap text-ink no-underline hover:bg-hover'
+export const ROW_VALUE = 'ml-auto inline-flex min-w-0 items-center gap-1.5 text-[13px] text-ink'
 export const PICKED = 'bg-picked hover:bg-picked'
 export const SURFACE = 'border border-solid border-hair bg-card text-ink no-underline hover:bg-[color-mix(in_oklch,var(--card),black_3.5%)]'
 export const PILL = 'h-[26px] rounded-full px-2.5 text-[12px] font-normal'
@@ -25,7 +26,7 @@ export const DRAG = '[-webkit-app-region:drag] select-none [&_a,&_button,&_input
 export const HINT = 'm-0 text-[12px]/[16px] text-mute [&_b]:font-medium [&_b]:text-body [&_code]:font-mono [&_code]:text-[11.5px] [&_code]:text-ink'
 
 export function I({ icon, size = 16, className }: { icon: IconSvgElement; size?: number; className?: string }) {
-  return <HugeiconsIcon icon={icon} size={size} strokeWidth={1.6} className={className} aria-hidden="true" />
+  return <HugeiconsIcon icon={icon} size={size} strokeWidth={1.6} className={cn('shrink-0', className)} aria-hidden="true" />
 }
 
 const TONE = {
@@ -64,8 +65,8 @@ export function DialogCard({ onClose, dismissable, className, children }: { onCl
   return <Dialog size="narrow" dismissable={dismissable} onClose={onClose} className={cn('flex flex-col gap-4 rounded-xl p-5', className)}>{children}</Dialog>
 }
 
-export function AppWindow({ label, nav, onClose, children }: { label: string; nav?: ReactNode; onClose: () => void; children: ReactNode }) {
-  return <Dialog size="window" label={label} onClose={onClose}>
+export function AppWindow({ label, nav, onClose, onEscape, children }: { label: string; nav?: ReactNode; onClose: () => void; onEscape?: () => void; children: ReactNode }) {
+  return <Dialog size="window" label={label} onClose={onClose} onEscape={onEscape}>
     <InWindow value>
       {nav}
       <section aria-label={label} className={cn('relative flex min-w-0 flex-1 flex-col text-[13px]/[18px]', FLAT)}>

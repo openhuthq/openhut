@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox'
 import { ArrowRight01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
@@ -70,4 +70,22 @@ export function AgentCheck({ agent, checked, disabled, onChange }: { agent: { id
     <Face agent={agent} size={28} />
     <span className="grid min-w-0 leading-tight"><span className="text-[13px] font-medium">{agent.name}</span><span className="truncate text-[11.5px] text-mute">{agent.instructions.split('\n')[0] || 'No instructions yet'}</span></span>
   </Check>
+}
+
+export function useConfirming() {
+  const [confirming, setConfirming] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!confirming) return
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.stopImmediatePropagation()
+      setConfirming(false)
+    }
+    const outside = (event: PointerEvent) => { if (!(event.target instanceof Node && box.current?.contains(event.target))) setConfirming(false) }
+    window.addEventListener('keydown', escape, true)
+    window.addEventListener('pointerdown', outside, true)
+    return () => { window.removeEventListener('keydown', escape, true); window.removeEventListener('pointerdown', outside, true) }
+  }, [confirming])
+  return { confirming, setConfirming, box }
 }

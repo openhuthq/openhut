@@ -9,6 +9,7 @@ import { agentPath, goneAgentPath, type AgentDialog } from '@/app/routes'
 import { useAgent, useAgents } from '@/features/agents/api'
 import { ChannelDialog } from '@/features/agents/channels'
 import { MemoryDialog } from '@/features/agents/memory-dialog'
+import { HelperModelsSheet } from '@/features/agents/model-rows'
 import { NewAgentDialog } from '@/features/agents/new-agent'
 import { DoesDialog, Panel } from '@/features/agents/panel'
 import { SkillsDialog } from '@/features/agents/skills-dialog'
@@ -47,6 +48,7 @@ function Dialogs({ agent, dialog, detail }: { agent: Agent; dialog: AgentDialog 
     case 'new': return <NewAgentDialog onClose={close} />
     case 'does': return <DoesDialog agent={agent} onClose={close} />
     case 'memory': return <MemoryDialog agent={agent} onClose={close} />
+    case 'helpers': return <HelperModelsSheet agent={agent} onClose={close} />
     case 'skills': return <SkillsDialog agent={agent} open={detail} onClose={close} />
     case 'slack':
     case 'whatsapp':

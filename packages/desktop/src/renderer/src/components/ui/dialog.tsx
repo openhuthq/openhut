@@ -40,9 +40,13 @@ export function firstFocusable(popup: HTMLElement | null) {
   return found ?? true
 }
 
-export function Dialog({ size = 'default', dismissable = true, label, onClose, className, children }: { size?: DialogSize; dismissable?: boolean; label?: string; onClose: () => void; className?: string; children: ReactNode }) {
+export function Dialog({ size = 'default', dismissable = true, label, onClose, onEscape, className, children }: { size?: DialogSize; dismissable?: boolean; label?: string; onClose: () => void; onEscape?: () => void; className?: string; children: ReactNode }) {
   const popup = useRef<HTMLDivElement>(null)
-  return <DialogPrimitive.Root open disablePointerDismissal={!dismissable} onOpenChange={(open, details) => { if (!open && (dismissable || details.reason !== 'escape-key')) onClose() }}>
+  return <DialogPrimitive.Root open disablePointerDismissal={!dismissable} onOpenChange={(open, details) => {
+    if (open) return
+    if (details.reason === 'escape-key' && onEscape) onEscape()
+    else if (dismissable || details.reason !== 'escape-key') onClose()
+  }}>
     <DialogPrimitive.Portal>
       <DialogPrimitive.Backdrop className={backdropClass(size)} />
       <DialogPrimitive.Popup ref={popup} initialFocus={() => size === 'window' ? popup.current ?? true : firstFocusable(popup.current)} data-size={size} aria-label={label} className={popupClass(size, className)}>{children}</DialogPrimitive.Popup>

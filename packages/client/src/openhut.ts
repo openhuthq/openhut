@@ -3,6 +3,7 @@ import { Admin, Export, type Subscription } from '@openhut/common/admin/admin.ts
 import { Agent, AgentImport, Grant, type CreateAgent, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import { Connection, ConnectionAuthorization, SIGN_IN_KINDS, type CreateConnection, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
 import { Me } from '@openhut/common/team/team.ts'
+import { PROVIDERS, Provider, type ProviderId } from '@openhut/common/models/provider.ts'
 
 export type StoredComputer = { id: string; name: string; url: string }
 export type Features = { whatsapp: boolean; browser: boolean }
@@ -24,6 +25,8 @@ export type OpenHutAgent = Agent & { computer: string; online: boolean }
 export type Copy = { computer: string; id: string; online: boolean }
 export type OpenHutConnection = Connection & { computers: Copy[] }
 export type Behind = Record<Subscription, string[]>
+export type ProviderRow = { computer: string; online: boolean; providers: Provider[] }
+export type MergedProvider = Provider & { computers: string[] }
 export type Moved = { agent: OpenHutAgent; ungranted: string[] }
 export type OpenHut = ReturnType<typeof createOpenHut>
 
@@ -33,6 +36,7 @@ type Call<T> = { computer: StoredComputer; path: string; schema: Schema<T>; meth
 const AGENT_LIST = List(Agent)
 const CONNECTION_LIST = List(Connection)
 const AGENT_DELETED = Deleted('agent')
+const PROVIDER_LIST = List(Provider)
 const SUBSCRIPTIONS = ['claude'] as const satisfies Subscription[]
 const POLL_MS = 5000
 
@@ -52,6 +56,7 @@ export function createOpenHut(platform: Platform) {
   const agentsSeen = new Map<string, Agent[]>()
   const connectionsSeen = new Map<string, Connection[]>()
   const adminsSeen = new Map<string, Admin>()
+  const providersSeen = new Map<string, Provider[]>()
   const homes = new Map<string, string>()
   const listeners = new Set<() => void>()
   let timer: ReturnType<typeof setInterval> | undefined
@@ -209,6 +214,37 @@ export function createOpenHut(platform: Platform) {
     },
   }
 
+  const providers = {
+    async list(): Promise<ProviderRow[]> {
+      const rows = await across({ seen: providersSeen, read: (each) => call({ computer: each, path: '/api/providers', schema: PROVIDER_LIST }).then((page) => page.data) })
+      return rows.map((row) => ({ computer: row.computer.id, online: row.online, providers: row.value ?? [] }))
+    },
+    async connect({ id, apiKey, computers: ids }: { id: ProviderId; apiKey: string; computers: string[] }): Promise<void> {
+      if (!ids.length) throw new RequestError({ message: 'Pick at least one computer to put it on.', status: 400, param: 'computers' })
+      for (const [index, target] of ids.entries()) {
+        const each = await computer(target)
+        await call({ computer: each, path: `/api/providers/${id}`, method: 'PATCH', body: { apiKey }, schema: Provider }).catch((err: unknown) => {
+          if (!index) throw err
+          throw new RequestError({ message: err instanceof RequestError ? `${each.name}: ${err.message}` : `${each.name} didn't answer.`, status: err instanceof RequestError ? err.status : 502 })
+        })
+      }
+    },
+    async refresh(id: ProviderId): Promise<void> {
+      for (const each of await holders(id)) await call({ computer: each, path: `/api/providers/${id}/refresh`, method: 'POST', schema: Provider })
+    },
+    async setModels({ id, models }: { id: ProviderId; models: { id: string; on: boolean }[] }): Promise<void> {
+      for (const each of await holders(id)) await call({ computer: each, path: `/api/providers/${id}`, method: 'PATCH', body: { models }, schema: Provider })
+    },
+    async disconnect(id: ProviderId): Promise<void> {
+      for (const each of await holders(id)) await call({ computer: each, path: `/api/providers/${id}`, method: 'DELETE', schema: Provider })
+    },
+  }
+
+  async function holders(id: ProviderId): Promise<StoredComputer[]> {
+    const rows = (await providers.list()).filter((row) => row.online && row.providers.some((each) => each.id === id && each.connected))
+    return Promise.all(rows.map((row) => computer(row.computer)))
+  }
+
   const account = {
     async me(): Promise<Me> {
       const [first] = await platform.store.computers()
@@ -232,7 +268,7 @@ export function createOpenHut(platform: Platform) {
   }
 
   async function tick() {
-    const seen = JSON.stringify(await Promise.all([agents.list(), connections.list(), account.sync().catch(() => null)]))
+    const seen = JSON.stringify(await Promise.all([agents.list(), connections.list(), providers.list(), account.sync().catch(() => null)]))
     if (seen === last) return
     last = seen
     for (const listener of listeners) listener()
@@ -242,6 +278,7 @@ export function createOpenHut(platform: Platform) {
     computers,
     agents,
     connections,
+    providers,
     account,
     fetch: async ({ computer: id, path, init }: { computer: string; path: string; init?: RequestInit }): Promise<Response> => platform.transport(await computer(id))(path, init),
     subscribe(listener: () => void): () => void {
@@ -261,6 +298,14 @@ function signedIn({ admin, kind }: { admin: Admin | undefined; kind: Subscriptio
   const state = kind === 'claude' ? admin?.seat : admin?.codex
   if (!state?.set) return ''
   return state.updatedAt ?? new Date(0).toISOString()
+}
+
+export function mergeProviders(rows: ProviderRow[]): MergedProvider[] {
+  return PROVIDERS.flatMap((info) => {
+    const have = rows.filter((row) => row.online && row.providers.some((each) => each.id === info.id && each.connected))
+    const lead = have[0]?.providers.find((each) => each.id === info.id) ?? rows.flatMap((row) => row.providers).find((each) => each.id === info.id)
+    return lead ? [{ ...lead, computers: have.map((row) => row.computer) }] : []
+  })
 }
 
 export function older({ version, than }: { version: string; than: string }): boolean {
