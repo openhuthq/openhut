@@ -879,6 +879,7 @@ async function toComputer({ req, id, path }) {
   const origin = req.headers.get('origin')
   if (!['GET', 'HEAD'].includes(req.method) && origin !== null && origin !== APP_ORIGIN) return refuse(403, 'Only the OpenHut app can change things here.')
   const target = path + new URL(req.url).search
+  if (id === LOCAL.id && !CONTAINER && await booted !== true) return refuse(502, `OpenHut's runtime didn't start. The logs are in ${LOGS}.`)
   if (id === LOCAL.id && !CONTAINER) return toSocket({ req, path: target }).catch((error) => refuse(502, `OpenHut's runtime didn't answer (${error.code ?? error.message}). Try again, or restart OpenHut.`))
   if (id === LOCAL.id && !keys.has(id) && !existsSync(join(HOME, LOCAL_KEY))) return refuse(503, `OpenHut is still being set up on ${LOCAL.name.toLowerCase()}.`)
   const computer = id === LOCAL.id ? { ...LOCAL, keyFile: LOCAL_KEY } : storedComputers().find((each) => each.id === id)
