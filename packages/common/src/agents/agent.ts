@@ -30,7 +30,6 @@ export const Agent = z.object({
   ownerId: z.string(),
   ownerName: z.string(),
   model: z.pipe(z.pipe(z.string(), z.transform((key) => LEGACY_MODELS[key] ?? key)), ModelKey),
-  fallbackModel: z._default(z.nullable(ModelKey), null),
   helperModels: z._default(HelperModels, { compress: null, title: null, review: null }),
   wanted: Wanted,
   status: AgentStatus,
@@ -54,7 +53,6 @@ export const CreateAgent = z.object({
   name: AgentName,
   instructions: z.optional(z.string().check(z.maxLength(20_000))),
   model: z.optional(ModelKey),
-  fallbackModel: z.optional(z.nullable(ModelKey)),
   helperModels: z.optional(HelperChoices),
 })
 export type CreateAgent = z.infer<typeof CreateAgent>
@@ -63,7 +61,6 @@ export const UpdateAgentFields = {
   name: z.optional(AgentName),
   instructions: z.optional(z.string().check(z.maxLength(20_000))),
   model: z.optional(ModelKey),
-  fallbackModel: z.optional(z.nullable(ModelKey)),
   helperModels: z.optional(HelperChoices),
   wanted: z.optional(Wanted),
   codeExecution: z.optional(z.boolean()),

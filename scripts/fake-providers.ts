@@ -6,18 +6,18 @@ const SIGN_IN_MS = Number(process.env.FAKE_CODEX_SIGN_IN_MS ?? 4000)
 const USER_CODE = 'WDJB-MJHT'
 const NOW = 1_763_000_000
 const OPENROUTER = [
-  ['anthropic/claude-fable-5.2', 'Anthropic: Claude Fable 5.2', 1000000, 8, 40], ['anthropic/claude-haiku-5.5', 'Anthropic: Claude Haiku 5.5', 1000000, 0.1, 0.5],
-  ['openai/gpt-6.2-astra', 'OpenAI: GPT-6.2 Astra', 1050000, 8, 40], ['openai/gpt-6.2-sol', 'OpenAI: GPT-6.2 Sol', 1050000, 2, 10],
-  ['google/gemini-4-carbon', 'Google: Gemini 4 Carbon', 1048576, 2, 10], ['google/gemini-3.8-flash', 'Google: Gemini 3.8 Flash', 1048576, 0.825, 4.125],
+  ['anthropic/claude-opus-5.5', 'Anthropic: Claude Opus 5.5', 1000000, 4, 20], ['anthropic/claude-sonnet-5.5', 'Anthropic: Claude Sonnet 5.5', 1000000, 2, 10],
+  ['openai/gpt-6.2-sol', 'OpenAI: GPT-6.2 Sol', 1050000, 2, 10], ['openai/gpt-6.1-terra', 'OpenAI: GPT-6.1 Terra', 1050000, 1, 5],
+  ['google/gemini-4-argon', 'Google: Gemini 4 Argon', 1048576, 2, 10], ['google/gemini-3.8-flash', 'Google: Gemini 3.8 Flash', 1048576, 0.825, 4.125],
   ['x-ai/grok-4.7', 'SpaceXAI: Grok 4.7', 500000, 2, 6], ['deepseek/deepseek-v4-pro-0813', 'DeepSeek: DeepSeek V4 Pro 0813', 1048576, 0.111, 4.44],
-  ['deepseek/deepseek-v4.1-flash-1017', 'DeepSeek: DeepSeek V4.1 Flash 1017', 1048576, 0.036, 0.5], ['qwen/qwen4-max', 'Qwen: Qwen4 Max', 1000000, 1.425, 4.275],
+  ['deepseek/deepseek-v4.1-flash', 'DeepSeek: DeepSeek V4.1 Flash', 1048576, 0.051, 0.567], ['qwen/qwen4-max', 'Qwen: Qwen4 Max', 1000000, 1.425, 4.275],
   ['qwen/qwen3.8-flash', 'Qwen: Qwen3.8 Flash', 1000000, 0.15, 0.47], ['moonshotai/kimi-k3.1-pro', 'MoonshotAI: Kimi K3.1 Pro', 1048576, 0.24, 8.402],
-  ['z-ai/glm-5.3-prime', 'Z.ai: GLM 5.3 Prime', 1000000, 1.68, 5.28], ['z-ai/glm-5.3-flash', 'Z.ai: GLM 5.3 Flash', 1048576, 0.04, 0.078],
-  ['mistralai/mistral-large-4-0', 'Mistral: Mistral Large 4', 1048576, 0.7, 2.1], ['meta/muse-wonder', 'Meta: Muse Wonder', 1048576, 4, 20],
-  ['meta/muse-ember', 'Meta: Muse Ember', 1048576, 0.1, 0.5], ['anthropic/claude-opus-5.5', 'Anthropic: Claude Opus 5.5', 1000000, 4, 20],
-  ['anthropic/claude-sonnet-5.5', 'Anthropic: Claude Sonnet 5.5', 1000000, 2, 10], ['openai/gpt-6.2-astra-pro', 'OpenAI: GPT-6.2 Astra Pro', 1050000, 8, 40],
-  ['openai/gpt-6.1-terra', 'OpenAI: GPT-6.1 Terra', 1050000, 1, 5], ['google/gemini-4-hydrogen', 'Google: Gemini 4 Hydrogen', 1048576, 1.5, 7.5],
-  ['x-ai/grok-4.6', 'SpaceXAI: Grok 4.6', 500000, 2, 6], ['qwen/qwen3.8-max-prime', 'Qwen: Qwen3.8 Max Prime', 1000000, 4, 12],
+  ['z-ai/glm-5.3', 'Z.ai: GLM 5.3', 1048576, 0.07, 1.4], ['z-ai/glm-5.3-flash', 'Z.ai: GLM 5.3 Flash', 1048576, 0.04, 0.078],
+  ['mistralai/mistral-large-4-0', 'Mistral: Mistral Large 4', 1048576, 0.7, 2.1], ['meta/muse-spark-1.3', 'Meta: Muse Spark 1.3', 1048576, 1.25, 4.25],
+  ['meta/muse-ember', 'Meta: Muse Ember', 1048576, 0.1, 0.5], ['anthropic/claude-fable-5.2', 'Anthropic: Claude Fable 5.2', 1000000, 8, 40],
+  ['anthropic/claude-haiku-5.5', 'Anthropic: Claude Haiku 5.5', 1000000, 0.1, 0.5], ['openai/gpt-6.2-astra', 'OpenAI: GPT-6.2 Astra', 1050000, 8, 40],
+  ['openai/gpt-6-luna', 'OpenAI: GPT-6 Luna', 1050000, 0.1, 0.5], ['google/gemini-4-carbon', 'Google: Gemini 4 Carbon', 1048576, 2, 10], ['x-ai/grok-4.6', 'SpaceXAI: Grok 4.6', 500000, 2, 6],
+  ['qwen/qwen3.8-max-prime', 'Qwen: Qwen3.8 Max Prime', 1000000, 4, 12],
 ].map(([id, name, context, input, output], index) => ({
   id, name, created: NOW + index, context_length: context, pricing: { prompt: String(Number(input) / 1e6), completion: String(Number(output) / 1e6) }, architecture: { output_modalities: ['text'] },
 }))

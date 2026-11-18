@@ -1,14 +1,32 @@
 import { fastModelOf, modelKey, splitModelKey, type Provider, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
+import type { BrandName } from '@/components/brand-icons'
+
+const LABS: Record<string, BrandName> = { anthropic: 'anthropic', openai: 'openai', google: 'gemini', 'x-ai': 'xai', deepseek: 'deepseek', qwen: 'qwen', moonshotai: 'kimi', 'z-ai': 'zai', mistralai: 'mistral', meta: 'meta' }
+
+export const labOf = (model: ProviderModel) => model.id.includes('/') ? model.id.slice(0, model.id.indexOf('/')) : ''
+
+export function glyphOf({ provider, model }: { provider: Provider; model: ProviderModel }): BrandName {
+  return provider.id === 'openrouter' ? LABS[labOf(model)] ?? 'openrouter' : provider.id
+}
+
+export function money(value: number) {
+  if (value >= 10) return `$${Math.round(value)}`
+  return value >= 1 ? `$${+value.toFixed(2)}` : `$${+value.toPrecision(2)}`
+}
+
+export function prices(model: ProviderModel) {
+  return model.inputPrice === null || model.outputPrice === null ? '' : `${money(model.inputPrice)} / ${money(model.outputPrice)}`
+}
 
 export function context(tokens: number) {
-  return tokens >= 1_000_000 ? `${tokens / 1_000_000}M` : `${Math.round(tokens / 1000)}K`
+  return tokens >= 1_000_000 ? `${+(tokens / 1_000_000).toFixed(1)}M` : `${Math.round(tokens / 1000)}K`
 }
 
 export function describe({ provider, model }: { provider: Provider; model: ProviderModel }) {
   if (provider.kind === 'subscription') return model.note ?? ''
   const bits: string[] = []
   if (model.contextLength) bits.push(`${context(model.contextLength)} context`)
-  if (model.inputPrice !== null && model.outputPrice !== null) bits.push(`$${model.inputPrice} / $${model.outputPrice} per M`)
+  if (prices(model)) bits.push(`${prices(model)} per M`)
   return bits.join(' · ')
 }
 
@@ -45,16 +63,16 @@ export function plural({ count: value, one, many }: { count: number; one: string
   return `${count(value)} ${value === 1 ? one : many}`
 }
 
-type Using = { name: string; model: string; fallbackModel: string | null; helperModels: Record<string, string | null> }
+type Using = { name: string; model: string; helperModels: Record<string, string | null> }
 
 export function consequence({ agents, id }: { agents: Using[]; id: ProviderId }) {
   const uses = (key: string | null | undefined) => !!key && splitModelKey(key)?.provider === id
   const verb = (names: string[]) => names.length === 1 ? 'uses' : 'use'
   const main = agents.filter((agent) => uses(agent.model)).map((agent) => agent.name)
-  const side = agents.filter((agent) => !uses(agent.model) && (uses(agent.fallbackModel) || Object.values(agent.helperModels).some(uses))).map((agent) => agent.name)
+  const side = agents.filter((agent) => !uses(agent.model) && Object.values(agent.helperModels).some(uses)).map((agent) => agent.name)
   const parts = [
     main.length && `${LIST.format(main)} ${verb(main)} its models, and stop${main.length === 1 ? 's' : ''} answering until you pick others.`,
-    side.length && `${LIST.format(side)} ${verb(side)} it as a fallback or helper model, and that part stops working until you pick another.`,
+    side.length && `${LIST.format(side)} ${verb(side)} it as a helper model, and that part stops working until you pick another.`,
   ].filter(Boolean)
   return parts.length ? parts.join(' ') : 'No agent uses its models yet.'
 }

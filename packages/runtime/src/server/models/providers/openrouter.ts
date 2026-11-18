@@ -3,6 +3,7 @@ import { config } from '../../platform/config.ts'
 import { getJson, keyed, listed, parse, type ListedModel } from './shared.ts'
 
 const PER_MILLION = 1_000_000
+const LAB_PREFIX = /^[^:/]+:\s+/
 const Price = z.optional(z.nullable(z.string()))
 const OpenRouterList = z.object({
   data: z.array(z.object({
@@ -13,16 +14,16 @@ const OpenRouterList = z.object({
 })
 
 const STARTERS = [
-  'anthropic/claude-fable-5.2', 'anthropic/claude-haiku-5.5',
-  'openai/gpt-6.2-astra', 'openai/gpt-6.2-sol',
-  'google/gemini-4-carbon', 'google/gemini-3.8-flash',
+  'anthropic/claude-opus-5.5', 'anthropic/claude-sonnet-5.5',
+  'openai/gpt-6.2-sol', 'openai/gpt-6.1-terra',
+  'google/gemini-4-argon', 'google/gemini-3.8-flash',
   'x-ai/grok-4.7',
-  'deepseek/deepseek-v4-pro-0813', 'deepseek/deepseek-v4.1-flash-1017',
+  'deepseek/deepseek-v4-pro-0813', 'deepseek/deepseek-v4.1-flash',
   'qwen/qwen4-max', 'qwen/qwen3.8-flash',
   'moonshotai/kimi-k3.1-pro',
-  'z-ai/glm-5.3-prime', 'z-ai/glm-5.3-flash',
+  'z-ai/glm-5.3', 'z-ai/glm-5.3-flash',
   'mistralai/mistral-large-4-0',
-  'meta/muse-wonder', 'meta/muse-ember',
+  'meta/muse-spark-1.3', 'meta/muse-ember',
 ]
 
 export const openrouter = keyed({ id: 'openrouter', origin: config.openrouterApi, listModels, starters: STARTERS })
@@ -33,7 +34,7 @@ async function listModels(key: string): Promise<ListedModel[]> {
   return list.data
     .filter((model) => model.architecture?.output_modalities?.includes('text') ?? true)
     .map((model) => listed(model.id, {
-      name: model.name || model.id, created: model.created ?? null, contextLength: model.context_length ?? null,
+      name: (model.name || model.id).replace(LAB_PREFIX, ''), created: model.created ?? null, contextLength: model.context_length ?? null,
       inputPrice: perMillion(model.pricing?.prompt), outputPrice: perMillion(model.pricing?.completion),
     }))
 }

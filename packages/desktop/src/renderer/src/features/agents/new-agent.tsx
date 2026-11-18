@@ -36,7 +36,6 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   const createAgent = useCreateAgent()
   const providers = useComputerProviders('local')
   const [picked, setPicked] = useState<string | null | undefined>(undefined)
-  const [fallback, setFallback] = useState<string | null>(null)
   const [helpers, setHelpers] = useState<HelperModels>(NO_HELPERS)
   const [typed, setTyped] = useState(NAMES[0])
   const model = picked === undefined ? firstModel(providers) : picked
@@ -74,7 +73,7 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   }
   return <DialogCard onClose={editing ? leave : onClose} className={cn(editing ? 'w-[min(600px,calc(100vw-32px))] gap-0 p-0' : 'max-h-[calc(100vh-32px)] w-[480px] items-center p-6 text-center [&_form>*]:shrink-0')}>
     {editing && <FaceEditor initial={look} onCancel={leave} onDone={(next) => { setCustom(next); setSpin(spin + 1); leave() }} />}
-    <form className={editing ? 'hidden' : 'contents'} onSubmit={(event) => createAgent.mutate({ body: { name: formValues(event)('name').trim(), ...(model && { model }), ...(fallback && { fallbackModel: fallback }), helperModels: helpers }, look })}>
+    <form className={editing ? 'hidden' : 'contents'} onSubmit={(event) => createAgent.mutate({ body: { name: formValues(event)('name').trim(), ...(model && { model }), helperModels: helpers }, look })}>
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" className="absolute top-3 right-3 rounded-full" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
       {!editing && <DialogTitle className="text-[15px]/[22px] font-medium">New agent</DialogTitle>}
       <Button type="button" variant="bare" aria-label="Other faces" title="Other faces" onClick={() => choose({ round: round + 1 })}
@@ -93,11 +92,7 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
       </div>
       <div className="flex w-full flex-col gap-2.5 text-left">
         <Setting title="Model" hint="What it thinks with.">
-          <ModelPicker providers={providers} value={model} onPick={(key) => { setPicked(key); if (key === fallback) setFallback(null) }} label="Model" title={`${typed.trim() || 'The agent'} thinks with`} className={cn(SOFT_TRIGGER, 'w-[200px]')} />
-        </Setting>
-        <Setting title="Fallback" hint="Takes over if the model is rate-limited or down.">
-          <ModelPicker providers={providers} value={fallback} exclude={model} onPick={setFallback} label="Fallback model" title={`If ${typed.trim() || 'the agent'} can’t answer, it tries`} className={cn(SOFT_TRIGGER, 'w-[200px]')}
-            none={{ name: 'No fallback', note: 'It stops answering until the model is back', icon: <I icon={Cancel01Icon} size={14} /> }} />
+          <ModelPicker providers={providers} value={model} onPick={setPicked} label="Model" title={`${typed.trim() || 'The agent'} thinks with`} className={cn(SOFT_TRIGGER, 'w-[200px]')} />
         </Setting>
       </div>
       <Collapsible className="flex w-full flex-col items-start gap-2.5">

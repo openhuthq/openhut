@@ -1,13 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Provider, ProviderModel } from '@openhut/common/models/provider.ts'
-import { automatic, consequence, context, count, plural, describe, foundNotice, matches, nameOf, updatedAgo } from '../../../src/features/models/labels.ts'
+import { automatic, consequence, context, count, plural, describe, foundNotice, glyphOf, matches, nameOf, prices, updatedAgo } from '../../../src/features/models/labels.ts'
 
 const model = (id: string, patch: Partial<ProviderModel> = {}): ProviderModel => ({ id, name: id, on: true, tier: 'big', note: null, contextLength: null, inputPrice: null, outputPrice: null, ...patch })
 const provider = (id: Provider['id'], models: ProviderModel[], kind: Provider['kind'] = 'key'): Provider => ({ id, object: 'provider', kind, name: id === 'openrouter' ? 'OpenRouter' : 'Claude subscription', connected: true, keyHint: null, updatedAt: null, models })
 
 test('context windows read as K or M', () => {
-  assert.deepEqual([context(200_000), context(1_000_000), context(256_000)], ['200K', '1M', '256K'])
+  assert.deepEqual([context(200_000), context(1_000_000), context(256_000), context(1_048_576)], ['200K', '1M', '256K', '1M'])
 })
 
 test('a key model says its context and prices; a subscription model says its note', () => {
@@ -45,12 +45,26 @@ test('counts carry thousands separators', () => {
   assert.deepEqual([count(1500), plural({ count: 1500, one: 'model', many: 'models' }), plural({ count: 1, one: 'model', many: 'models' })], ['1,500', '1,500 models', '1 model'])
 })
 
-test('disconnecting says who stops answering and who only loses a fallback or a helper', () => {
-  const agent = (name: string, model: string, fallbackModel: string | null = null, review: string | null = null) => ({ name, model, fallbackModel, helperModels: { compress: null, title: null, review } })
-  const agents = [agent('Juniper', 'openrouter:a/b'), agent('Ops', 'claude:haiku', 'openrouter:a/b'), agent('Scout', 'claude:opus', null, 'openrouter:c/d'), agent('Pepper', 'claude:opus'), agent('Maple', 'openrouter:x/y', 'openrouter:a/b')]
-  assert.equal(consequence({ agents, id: 'openrouter' }), 'Juniper and Maple use its models, and stop answering until you pick others. Ops and Scout use it as a fallback or helper model, and that part stops working until you pick another.')
-  assert.equal(consequence({ agents: [agent('Ops', 'claude:haiku', 'openrouter:a/b')], id: 'openrouter' }), 'Ops uses it as a fallback or helper model, and that part stops working until you pick another.')
+test('disconnecting says who stops answering and who only loses a helper', () => {
+  const agent = (name: string, model: string, review: string | null = null) => ({ name, model, helperModels: { compress: null, title: null, review } })
+  const agents = [agent('Juniper', 'openrouter:a/b'), agent('Ops', 'claude:haiku', 'openrouter:a/b'), agent('Scout', 'claude:opus', 'openrouter:c/d'), agent('Pepper', 'claude:opus'), agent('Maple', 'openrouter:x/y', 'openrouter:a/b')]
+  assert.equal(consequence({ agents, id: 'openrouter' }), 'Juniper and Maple use its models, and stop answering until you pick others. Ops and Scout use it as a helper model, and that part stops working until you pick another.')
+  assert.equal(consequence({ agents: [agent('Ops', 'claude:haiku', 'openrouter:a/b')], id: 'openrouter' }), 'Ops uses it as a helper model, and that part stops working until you pick another.')
   assert.equal(consequence({ agents: [agent('Juniper', 'openrouter:a/b')], id: 'openrouter' }), 'Juniper uses its models, and stops answering until you pick others.')
   assert.equal(consequence({ agents, id: 'xai' }), 'No agent uses its models yet.')
   assert.equal(consequence({ agents: [agent('Old', 'sonnet')], id: 'claude' }), 'Old uses its models, and stops answering until you pick others.')
+})
+
+test('prices keep two significant digits under a dollar and drop trailing zeros', () => {
+  assert.equal(prices(model('x', { inputPrice: 0.036, outputPrice: 8.402 })), '$0.036 / $8.4')
+  assert.equal(prices(model('x', { inputPrice: 2, outputPrice: 40 })), '$2 / $40')
+  assert.equal(prices(model('x')), '')
+})
+
+test('an OpenRouter model shows its lab\'s logo; other providers show their own', () => {
+  const router = provider('openrouter', [])
+  assert.equal(glyphOf({ provider: router, model: model('anthropic/claude-opus-5.5') }), 'anthropic')
+  assert.equal(glyphOf({ provider: router, model: model('x-ai/grok-4.7') }), 'xai')
+  assert.equal(glyphOf({ provider: router, model: model('someone/new-model') }), 'openrouter')
+  assert.equal(glyphOf({ provider: provider('claude', [], 'subscription'), model: model('opus') }), 'claude')
 })
