@@ -66,7 +66,7 @@ export function serve(input: ServeInput): { close: () => void } {
 
   const send = (session: Session, frame: Frame) => {
     if (!live(session) || !session.transport) return
-    socket?.send(envelope({ id: session.id, payload: session.transport.encrypt(encodeFrame(frame)) }))
+    socket?.send(new Uint8Array(envelope({ id: session.id, payload: session.transport.encrypt(encodeFrame(frame)) })))
   }
 
   const reply = ({ session, stream, status }: { session: Session; stream: number; status: number }) => {
@@ -161,7 +161,7 @@ export function serve(input: ServeInput): { close: () => void } {
       const { message, transport } = handshake.write()
       session.transport = transport
       session.key = toHex(transport.remoteKey)
-      socket?.send(envelope({ id, payload: message }))
+      socket?.send(new Uint8Array(envelope({ id, payload: message })))
     } catch {
       kill(id)
     }

@@ -28,6 +28,17 @@
 	<string>OpenHut scans the code another computer shows to join it.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>OpenHut unlocks this phone’s key to reach your computers.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>dev.openhut.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>openhut</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

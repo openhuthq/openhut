@@ -1,4 +1,6 @@
 import { createOpenHut, type Device, type Platform, type StoredComputer, type TailnetPeer } from '@openhut/client'
+import { isPhone } from '@/lib/native'
+import { phonePlatform } from '@/lib/phone'
 
 export type Enrollment = { peer: TailnetPeer; lines: string[]; url: string | null; startedAt: number; status: 'running' | 'failed'; error: string; retryAt: number | null; retried: boolean }
 type Failure = { error: string }
@@ -40,7 +42,7 @@ const platform: Platform = {
   appVersion: bridge?.version,
 }
 
-export const openhut = createOpenHut(platform)
+export const openhut = createOpenHut(isPhone() ? phonePlatform : platform)
 
 export const enrollments = {
   list: async (): Promise<Enrollment[]> => await bridge?.computers.enrollments() ?? [],

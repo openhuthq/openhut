@@ -1,6 +1,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { App } from '@capacitor/app'
 import { CapacitorBarcodeScanner, CapacitorBarcodeScannerTypeHint } from '@capacitor/barcode-scanner'
+import { Preferences } from '@capacitor/preferences'
 
 type DeviceKeyPlugin = {
   publicKey(): Promise<{ publicKey: string }>
@@ -31,9 +32,35 @@ export async function deviceKey(): Promise<DeviceKey | undefined> {
   }
 }
 
+export async function wipe(): Promise<void> {
+  if (!isPhone()) return
+  await plugin.wipe()
+  await Preferences.clear()
+}
+
+export const saved = {
+  get: async (key: string): Promise<string | undefined> => (await Preferences.get({ key })).value ?? undefined,
+  set: (key: string, value: string): Promise<void> => Preferences.set({ key, value }),
+}
+
+export function phoneName(): string {
+  return Capacitor.getPlatform() === 'ios' ? 'iPhone' : 'Android phone'
+}
+
 export function onBack(handler: () => void): () => void {
   if (!isPhone()) return () => {}
   const listener = App.addListener('backButton', handler)
+  return () => void listener.then((it) => it.remove())
+}
+
+export function leave(): void {
+  void App.minimizeApp()
+}
+
+export function onLink(handler: (url: string) => void): () => void {
+  if (!isPhone()) return () => {}
+  void App.getLaunchUrl().then((launch) => { if (launch?.url) handler(launch.url) })
+  const listener = App.addListener('appUrlOpen', ({ url }) => handler(url))
   return () => void listener.then((it) => it.remove())
 }
 
