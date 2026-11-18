@@ -63,7 +63,7 @@ npm run dev
 
 `npm run dev` starts the real agentd with `OPENHUT_SANDBOX=memory` (no root, no Docker), the server API on 127.0.0.1:8787
 with `.data`, the test model and the dev key `dev` enrolled, and Vite for the renderer with `/api` proxied to it with
-`Authorization: Bearer dev`. Open `http://localhost:5173`. `node scripts/seed-ui.ts` (on a fresh `.data`) fills in sample
+`Authorization: Bearer dev`. Open `http://localhost:5173`. Port 8787 taken (Docker or another checkout)? `PORT=8797 npm run dev` moves the API and Vite's proxy; Vite picks the next free port itself. `node scripts/seed-ui.ts` (on a fresh `.data`) fills in sample
 agents and connections. Agents in microVMs need the pinned Linux `claude` at `bin/claude` (gitignored): run
 `npm -w @openhut/desktop run pack-backend` once and copy `packages/desktop/dist/claude-*-linux-arm64` there. The desktop app itself: `npm -w @openhut/desktop run build && npm -w @openhut/desktop start`. It keeps
 its data in `~/Library/Application Support/OpenHut Dev`, apart from the installed app's `OpenHut`.

@@ -22,3 +22,9 @@ test('screens set inline styles only for values computed at runtime', () => {
     .flatMap((match) => [...match[1].matchAll(/([\w'-]+):/g)].map((key) => `${file} ${key[1]}`)))
   assert.deepEqual(styles.filter((style) => !DYNAMIC_STYLES.has(style.split(' ')[1])), [])
 })
+
+test('no confirm floats in a popover: a popover never holds a Cancel button', () => {
+  const dirs = ['features', 'app', 'components'].map((dir) => new URL(`../src/${dir}/`, import.meta.url))
+  const files = dirs.flatMap((dir) => readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((file) => file.endsWith('.tsx')).map((file) => ({ file, source: readFileSync(new URL(file, dir), 'utf8') })))
+  assert.deepEqual(files.filter(({ source }) => source.includes('PopoverContent') && />Cancel</.test(source)).map(({ file }) => file), [])
+})
