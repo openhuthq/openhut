@@ -76,20 +76,4 @@ export function AgentCheck({ agent, checked, disabled, onChange }: { agent: { id
   </Check>
 }
 
-export function useConfirming() {
-  const [confirming, setConfirming] = useState(false)
-  const box = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!confirming) return
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      event.stopImmediatePropagation()
-      setConfirming(false)
-    }
-    const outside = (event: PointerEvent) => { if (!(event.target instanceof Node && box.current?.contains(event.target))) setConfirming(false) }
-    window.addEventListener('keydown', escape, true)
-    window.addEventListener('pointerdown', outside, true)
-    return () => { window.removeEventListener('keydown', escape, true); window.removeEventListener('pointerdown', outside, true) }
-  }, [confirming])
-  return { confirming, setConfirming, box }
-}
+export { useConfirming } from '@/components/confirm-button'

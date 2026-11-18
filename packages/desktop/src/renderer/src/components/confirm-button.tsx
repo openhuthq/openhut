@@ -1,8 +1,7 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip } from '@/components/ui/tooltip'
-import { I, TINY_ICON } from '@/components/kit'
+import { I, PILL, TINY_ICON } from '@/components/kit'
 import { cn } from '@/lib/utils'
 import { AlertDialog } from '@/components/ui/alert-dialog'
 import { Button, type ButtonVariants } from '@/components/ui/button'
@@ -33,13 +32,29 @@ export function ConfirmDialog({ open, onOpenChange, question, detail, action, on
 }
 
 export function ConfirmIcon({ label, icon, danger, question, action, busy, onConfirm }: { label: string; icon: IconSvgElement; danger?: boolean; question: string; action: string; busy: boolean; onConfirm: (done: () => void) => void }) {
-  const [open, setOpen] = useState(false)
-  return <Popover open={open} onOpenChange={setOpen}>
-    <Tooltip label={label}><PopoverTrigger className={cn(TINY_ICON, danger && 'hover:text-fail')} aria-label={label}><I icon={icon} size={16} /></PopoverTrigger></Tooltip>
-    <PopoverContent className="w-auto flex-row items-center gap-2 rounded-lg p-1.5 pl-3 text-[13px]" align="end">
-      <span>{question}</span>
-      <Button type="button" variant="secondary" size="xs" onClick={() => setOpen(false)}>Cancel</Button>
-      <Button type="button" variant={danger ? 'destructive' : 'primary'} size="xs" disabled={busy} onClick={() => onConfirm(() => setOpen(false))}>{action}</Button>
-    </PopoverContent>
-  </Popover>
+  const { confirming, setConfirming, box } = useConfirming()
+  if (!confirming) return <Tooltip label={label}><Button type="button" variant="bare" className={cn(TINY_ICON, danger && 'hover:text-fail')} aria-label={label} onClick={() => setConfirming(true)}><I icon={icon} size={16} /></Button></Tooltip>
+  return <div ref={box} role="group" aria-label={question} className="flex min-w-0 animate-grow items-center gap-1.5">
+    <span className="min-w-0 truncate text-[12px] text-mute">{question}</span>
+    <Button type="button" variant="secondary" className={PILL} autoFocus onClick={() => setConfirming(false)}>Cancel</Button>
+    <Button type="button" variant={danger ? 'destructive' : 'primary'} className={PILL} disabled={busy} onClick={() => onConfirm(() => setConfirming(false))}>{action}</Button>
+  </div>
+}
+
+export function useConfirming() {
+  const [confirming, setConfirming] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!confirming) return
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.stopImmediatePropagation()
+      setConfirming(false)
+    }
+    const outside = (event: PointerEvent) => { if (!(event.target instanceof Node && box.current?.contains(event.target))) setConfirming(false) }
+    window.addEventListener('keydown', escape, true)
+    window.addEventListener('pointerdown', outside, true)
+    return () => { window.removeEventListener('keydown', escape, true); window.removeEventListener('pointerdown', outside, true) }
+  }, [confirming])
+  return { confirming, setConfirming, box }
 }
