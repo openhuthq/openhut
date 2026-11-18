@@ -14,6 +14,7 @@ export type ServeInput = {
   device: (key: string) => DeviceStatus
   invited: (input: { key: string; proof: string; handshakeHash: Uint8Array; hello: Hello }) => Promise<Invited | null>
   handle: (input: TunnelRequest) => Promise<Response>
+  keepalive?: { every: number; within: number }
 }
 type Incoming = { method: string; path: string; headers: Record<string, string>; parts: Uint8Array<ArrayBuffer>[]; size: number }
 type Session = {
@@ -26,6 +27,7 @@ type Session = {
 }
 
 const empty = new Uint8Array(0)
+const NodeSocket = WebSocket as unknown as new (url: string, init: { headers: Record<string, string> }) => WebSocket
 
 function envelope({ id, payload }: { id: string; payload: Uint8Array }): Uint8Array {
   const message = new Uint8Array(16 + payload.byteLength)
@@ -49,6 +51,7 @@ export function serve(input: ServeInput): { close: () => void } {
   let timer: ReturnType<typeof setTimeout> | undefined
   let attempts = 0
   let stopped = false
+  let lose = () => {}
 
   const live = (session: Session) => sessions.get(session.id) === session
 
@@ -181,18 +184,33 @@ export function serve(input: ServeInput): { close: () => void } {
   }
 
   const open = () => {
-    const current = new WebSocket(`${input.relayUrl}/v1/relay/${input.computerId}?role=computer&token=${encodeURIComponent(input.registerToken)}`)
+    const { every, within } = input.keepalive ?? { every: 30_000, within: 75_000 }
+    const current = new NodeSocket(`${input.relayUrl}/v1/relay/${input.computerId}?role=computer`, { headers: { 'x-openhut-token': input.registerToken } })
     current.binaryType = 'arraybuffer'
     socket = current
-    current.addEventListener('open', () => { attempts = 0 })
+    let ping: ReturnType<typeof setInterval> | undefined
+    const lost = () => {
+      if (socket !== current) return
+      socket = undefined
+      clearInterval(ping)
+      clearTimeout(deadline)
+      current.close()
+      for (const id of [...sessions.keys()]) drop(id)
+      if (!stopped) timer = setTimeout(open, Math.min(30_000, 250 * 2 ** attempts++))
+    }
+    let deadline = setTimeout(lost, within)
+    lose = lost
+    current.addEventListener('open', () => {
+      attempts = 0
+      ping = setInterval(() => current.send('ping'), every)
+    })
     current.addEventListener('message', event => {
+      clearTimeout(deadline)
+      deadline = setTimeout(lost, within)
       if (typeof event.data === 'string') onText(event.data)
       if (event.data instanceof ArrayBuffer) onBinary(new Uint8Array(event.data))
     })
-    current.addEventListener('close', () => {
-      for (const id of [...sessions.keys()]) drop(id)
-      if (!stopped) timer = setTimeout(open, Math.min(30_000, 250 * 2 ** attempts++))
-    })
+    current.addEventListener('close', lost)
   }
 
   open()
@@ -200,7 +218,7 @@ export function serve(input: ServeInput): { close: () => void } {
     close: () => {
       stopped = true
       clearTimeout(timer)
-      socket?.close()
+      lose()
     }
   }
 }
