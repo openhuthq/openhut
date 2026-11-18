@@ -622,6 +622,7 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
 @media (min-width:1360px){.hero-app{margin-inline:-72px}}
 @media (max-width:600px){.hero-app{padding:8px 8px 32px;border-radius:18px}}
 .hero .sun{display:none}
+#collaborate .stage{max-width:100%;overflow:hidden}
 
 @media (max-width:720px){#collaborate .scene{flex-direction:row}#collaborate .ids{width:auto}#collaborate .stage{padding:24px}}
 
@@ -1277,9 +1278,10 @@ const closeDialog = () => { dialog = null; $('.scrim', app)?.remove(); app.class
 const fit = () => {
   const avail = (p => p.clientWidth - parseFloat(getComputedStyle(p).paddingLeft) - parseFloat(getComputedStyle(p).paddingRight))(box.parentElement)
   const mobile = false
+  app.inert = avail < 640
   app.classList.toggle('mobile', mobile)
   if (mobile) { box.style.height = ''; app.style.removeProperty('--s'); app.style.width = ''; app.style.marginLeft = ''; return }
-  const w = 1180, s = Math.min(1, avail / w)
+  const w = avail >= 1000 ? 1180 : 900, s = Math.min(1, avail / w)
   app.classList.toggle('narrow', w === 900)
   app.style.width = w + 'px'; app.style.setProperty('--s', s)
   box.style.height = 740 * s + 'px'; app.style.marginLeft = (avail - w * s) / 2 + 'px'
