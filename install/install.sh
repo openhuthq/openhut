@@ -11,6 +11,8 @@ CLAUDE=2.1.311
 AGENT_BROWSER=0.43.0
 HOST_IMAGE=docker:28-dind@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac
 PREFIX=/opt/openhut
+JOIN_CODE="${OPENHUT_JOIN:-}"
+[ "${1:-}" != join ] || JOIN_CODE="${2:-}"
 say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die() { printf 'openhut: %s\n' "$*" >&2; exit 1; }
 retry() { n=0; until timeout 600 "$@"; do n=$((n+1)); [ $n -ge 4 ] && return 1; echo "  retrying: $1 ($n)"; sleep 5; done; }
@@ -23,6 +25,7 @@ serve() {
     echo "OpenHut is on 127.0.0.1:8787 only. Next: install Tailscale, sign in, run: tailscale serve --bg --https=443 http://127.0.0.1:8787"
   fi
 }
+joining() { [ -n "$JOIN_CODE" ]; }
 node_ok() { node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; }
 
 write_env() {
@@ -39,7 +42,8 @@ write_env() {
     [ -z "$IMAGE_OVERRIDE" ] || echo "AGENT_IMAGE=$IMAGE_OVERRIDE"
     echo "OPENHUT_MODEL=${OPENHUT_MODEL:-claude}"
     echo "OPENHUT_URL=$SOURCE_URL"
-    echo "OPENHUT_CLIENT_KEY_SHA256=$CLIENT_KEY"
+    [ -z "$CLIENT_KEY" ] || echo "OPENHUT_CLIENT_KEY_SHA256=$CLIENT_KEY"
+    ! joining || echo "OPENHUT_JOIN='$JOIN_CODE'"
     [ -z "$LISTEN" ] || echo "OPENHUT_HOST=$LISTEN"
   } > /etc/openhut/env.new
   mv /etc/openhut/env.new /etc/openhut/env
@@ -71,9 +75,13 @@ go_back() {
 fresh() { h=$(curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$h" | grep -q '"ok":true' &&
   [ "$(echo "$h" | sed -n 's/.*"started":\([0-9]*\).*/\1/p')" -ge "$STARTED_AFTER" ]; }
 up() { i=0; until fresh; do i=$((i+1)); [ $i -gt "$1" ] && return 1; printf .; sleep 3; done; }
-running() { echo "OpenHut is running for the app key sha256:$(printf '%s' "$CLIENT_KEY" | cut -c1-8)..."; }
+running() {
+  if joining; then echo "OpenHut is running and asking to join your computers. Check the six digits in the OpenHut app and accept it there."
+  else echo "OpenHut is running for the app key sha256:$(printf '%s' "$CLIENT_KEY" | cut -c1-8)..."; fi
+}
 
-NO_KEY="no app key: add this computer from the OpenHut app (Settings > Computers), which installs OpenHut with OPENHUT_CLIENT_KEY_SHA256 set to its key's hex SHA-256"
+NO_KEY="no app key: add this computer from the OpenHut app (Settings > Computers), which gives you the command to run here (curl -fsSL openhut.dev | sh -s -- join <code>)"
+if joining; then printf '%s' "$JOIN_CODE" | grep -Eqx "openhut://join\?[0-9A-Za-z_.~%=&:/?-]+" || die "that join code isn't one the OpenHut app gave. Copy the whole command from the app again."; fi
 if [ -n "${OPENHUT_APP_VERSION:-}" ] && [ "${MIN_APP_VERSION#@}" = "$MIN_APP_VERSION" ] &&
   [ "$(printf '%s\n%s\n' "$MIN_APP_VERSION" "$OPENHUT_APP_VERSION" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" != "$MIN_APP_VERSION" ]; then
   die "this release needs the OpenHut app $MIN_APP_VERSION or newer, and yours is $OPENHUT_APP_VERSION. Update OpenHut, then try again. Nothing changed here."
@@ -96,7 +104,7 @@ if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
   i=0; until $D info >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 30 ] && die "Docker isn't running. Start it, then run this again."; sleep 1; done
   say "OpenHut container"
   if ! $D container inspect openhut >/dev/null 2>&1; then
-    printf '%s' "${OPENHUT_CLIENT_KEY_SHA256:-}" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
+    joining || printf '%s' "${OPENHUT_CLIENT_KEY_SHA256:-}" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
     container "$HOST_IMAGE"
   elif [ "$($D container inspect -f '{{range (index .HostConfig.PortBindings "8787/tcp")}}{{.HostIp}}{{end}}' openhut 2>/dev/null)" != 127.0.0.1 ]; then
     say "Publishing OpenHut on this computer's 127.0.0.1 only (the container is kept: its data comes along)"
@@ -106,7 +114,7 @@ if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
     container openhut:kept
   fi
   $D start openhut >/dev/null
-  $D exec -e OPENHUT_CONTAINER=1 -e "OPENHUT_CLIENT_KEY_SHA256=${OPENHUT_CLIENT_KEY_SHA256:-}" -e "OPENHUT_APP_VERSION=${OPENHUT_APP_VERSION:-}" openhut sh -c "apk add -q curl && curl -fsSL $OPENHUT_URL | sh" || exit 1
+  $D exec -e OPENHUT_CONTAINER=1 -e "OPENHUT_CLIENT_KEY_SHA256=${OPENHUT_CLIENT_KEY_SHA256:-}" -e "OPENHUT_APP_VERSION=${OPENHUT_APP_VERSION:-}" -e "OPENHUT_JOIN=$JOIN_CODE" openhut sh -c "apk add -q curl && curl -fsSL $OPENHUT_URL | sh" || exit 1
   [ -n "${OPENHUT_LOCAL:-}" ] || serve
   exit 0
 fi
@@ -115,7 +123,8 @@ fi
 [ "$(id -u)" = 0 ] || die "run as root:  curl -fsSL $OPENHUT_URL | sudo sh"
 ENROLLED="$(sed -n 's/^OPENHUT_CLIENT_KEY_SHA256=//p' /etc/openhut/env 2>/dev/null || true)"
 CLIENT_KEY="${OPENHUT_CLIENT_KEY_SHA256:-$ENROLLED}"
-printf '%s' "$CLIENT_KEY" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
+JOIN_CODE="${JOIN_CODE:-$(sed -n "s/^OPENHUT_JOIN='\(.*\)'$/\1/p" /etc/openhut/env 2>/dev/null || true)}"
+joining || printf '%s' "$CLIENT_KEY" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
 if command -v flock >/dev/null 2>&1; then
   exec 9>/run/openhut-install.lock
   i=0; until flock -n 9; do
@@ -123,7 +132,7 @@ if command -v flock >/dev/null 2>&1; then
     i=$((i+1)); [ $i -ge 180 ] && die "another install or update is still running after 3 minutes; try again when it's done"; sleep 1
   done
 fi
-[ -z "$ENROLLED" ] || [ "$ENROLLED" = "$CLIENT_KEY" ] || echo "  A new app key: the app that added this computer before can't reach it anymore."
+[ -z "$ENROLLED" ] || [ -z "$CLIENT_KEY" ] || [ "$ENROLLED" = "$CLIENT_KEY" ] || echo "  A new app key: the app that added this computer before can't reach it anymore."
 if [ "$(cat "$PREFIX/BUILD" 2>/dev/null)" = "$OPENHUT_BUILD" ] && [ -f /etc/openhut/env ]; then
   say "Pairing with this computer"
   write_env

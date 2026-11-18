@@ -14,6 +14,12 @@ const X25519_PKCS8 = Buffer.from('302e020100300506032b656e04220420', 'hex')
 const SPKI_BYTES = 44
 const transferKey = createPrivateKey({ key: Buffer.concat([X25519_PKCS8, createHash('sha256').update(secret).update('transfer').digest()]), format: 'der', type: 'pkcs8' })
 export const transferPublicKey = createPublicKey(transferKey).export({ format: 'der', type: 'spki' }).toString('base64')
+const relaySecret = createHash('sha256').update(secret).update('relay').digest()
+const relayPublic = createPublicKey(createPrivateKey({ key: Buffer.concat([X25519_PKCS8, relaySecret]), format: 'der', type: 'pkcs8' })).export({ format: 'der', type: 'spki' }).subarray(-32)
+export const relayKey = { publicKey: new Uint8Array(relayPublic), secretKey: new Uint8Array(relaySecret) }
+export const relayKeyHex = relayPublic.toString('hex')
+export const computerId = createHash('sha256').update(relayPublic).digest('hex')
+export const registerToken = createHmac('sha256', secret).update('relay-register').digest('hex')
 
 export function seal(text: string): string {
   const iv = randomBytes(12)

@@ -22,13 +22,16 @@ import { mcpController } from './mcp/mcp-controller.ts'
 import { threadController } from './threads/thread-controller.ts'
 import { meController } from './team/team-controller.ts'
 import { accessController } from './access/access-controller.ts'
+import { invitationController } from './access/invitation-controller.ts'
+import { relayService } from './relay/relay-service.ts'
+import { settings } from './platform/settings.ts'
 import { listenLocally } from './team/identity.ts'
 
-if (config.installKind === 'server' && !/^[0-9a-f]{64}$/i.test(config.clientKeySha256 ?? '')) {
-  log.error({ event: 'app.no_client_key', message: 'Set OPENHUT_CLIENT_KEY_SHA256 to the hex SHA-256 of the key the OpenHut app enrolled, or OPENHUT_INSTALL_KIND=desktop for local mode. Refusing to start without either.' })
+await migrate()
+if (config.installKind === 'server' && !/^[0-9a-f]{64}$/i.test(config.clientKeySha256 ?? '') && !config.join && !settings.access()) {
+  log.error({ event: 'app.no_client_key', message: 'Set OPENHUT_JOIN to a join code from the OpenHut app, OPENHUT_CLIENT_KEY_SHA256 to the hex SHA-256 of the key the app enrolled, or OPENHUT_INSTALL_KIND=desktop for local mode. Refusing to start without one.' })
   process.exit(1)
 }
-await migrate()
 
 const app = Fastify({ logger: false, bodyLimit: 1 << 20, trustProxy: ['127.0.0.1', '::1'], forceCloseConnections: true })
 answerErrors(app)
@@ -42,6 +45,7 @@ await app.register(websocket)
 await app.register(healthController, { prefix: '/health' })
 await app.register(meController, { prefix: '/api/me' })
 await app.register(accessController, { prefix: '/api/access' })
+await app.register(invitationController, { prefix: '/api/invitations' })
 await app.register(agentController, { prefix: '/api/agents' })
 await app.register(grantController, { prefix: '/api/grants' })
 await app.register(skillController, { prefix: '/api/skills' })
@@ -73,6 +77,7 @@ process.once('SIGTERM', async () => {
 })
 emit({ name: 'app.started', properties: { at: config.installKind === 'server' ? config.port : config.socket, build: config.build, version: config.version, kind: config.installKind } })
 await startTelemetry()
+relayService.start({ server: app.server }).catch((err: unknown) => log.error({ event: 'relay.start_failed', error: messageOf(err) }))
 await gatewayServer.start().catch(async (err: unknown) => {
   log.error({ event: 'gateway.bind_failed', port: config.gatewayPort, error: messageOf(err) })
   await agentService.stopAll()

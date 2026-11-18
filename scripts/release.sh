@@ -5,7 +5,7 @@ BASE="${BASE:-https://openhut.dev}"
 OUT="${OUT:-dist}"
 if [ -z "${BUILD:-}" ]; then
   [ "$(git rev-parse --is-shallow-repository)" = false ] || { echo "release.sh needs the full git history to number the release (fetch-depth: 0)." >&2; exit 1; }
-  BUILD="$(sed -n 's/^  "version": "\([0-9]*\.[0-9]*\)\..*/\1/p' packages/runtime/package.json).$((100 + $(git rev-list --count HEAD -- install packages/runtime packages/common vendor)))"
+  BUILD="$(sed -n 's/^  "version": "\([0-9]*\.[0-9]*\)\..*/\1/p' packages/runtime/package.json).$((100 + $(git rev-list --count HEAD -- install packages/runtime packages/common packages/tunnel vendor)))"
 fi
 cleanup() { rm -f BUILD; [ ! -f install/agent-image.keep ] || mv install/agent-image.keep install/agent-image; }
 trap cleanup EXIT
@@ -16,7 +16,7 @@ if tar --version 2>/dev/null | grep -q 'GNU tar'; then ROOT='--owner=0 --group=0
 COPYFILE_DISABLE=1 tar $ROOT --no-xattrs \
   --exclude node_modules --exclude .turbo --exclude agent-image.keep \
   -czf "$OUT/openhut.tgz" BUILD package.json package-lock.json install vendor \
-  packages/runtime/package.json packages/runtime/src packages/runtime/test/agentd packages/common \
+  packages/runtime/package.json packages/runtime/src packages/runtime/test/agentd packages/common packages/tunnel/package.json packages/tunnel/src \
   packages/desktop/package.json packages/e2e/package.json packages/docs/package.json
 MIN_APP=$(sed -n "s/^export const MIN_APP_VERSION = '\(.*\)'$/\1/p" packages/common/src/admin/admin.ts)
 [ -n "$MIN_APP" ] || { echo "release.sh: no MIN_APP_VERSION in packages/common/src/admin/admin.ts" >&2; exit 1; }

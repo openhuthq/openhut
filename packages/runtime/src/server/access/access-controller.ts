@@ -9,7 +9,7 @@ export const accessController: FastifyPluginAsync = async (app) => {
     return accessService.get()
   })
 
-  app.put<{ Body: Access }>('/', PutRequest, async (req) => accessService.put({ caller: await who(req), access: req.body }))
+  app.put<{ Body: Access }>('/', PutRequest, async (req) => accessService.put({ access: req.body, local: (await who(req)).local }))
 }
 
 const PutRequest = { schema: { body: Access } }

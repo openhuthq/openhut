@@ -284,12 +284,12 @@ export function createOpenHut(platform: Platform) {
   }
 
   async function held(each: StoredComputer): Promise<Held> {
-    const { publicKey } = await call({ computer: each, path: '/api/admin', schema: Admin })
+    const { publicKey, relay } = await call({ computer: each, path: '/api/admin', schema: Admin })
     const access = await call({ computer: each, path: '/api/access', schema: Access }).catch((err: unknown) => {
       if (err instanceof RequestError && err.status === 404) return null
       throw err
     })
-    return { access, key: hexOf(Uint8Array.from(atob(publicKey), (char) => char.charCodeAt(0)).subarray(-32)) }
+    return { access, key: relay?.key ?? hexOf(Uint8Array.from(atob(publicKey), (char) => char.charCodeAt(0)).subarray(-32)) }
   }
 
   async function newest({ lists, owner }: { lists: (Access | null | undefined)[]; owner: string | undefined }): Promise<Access | undefined> {

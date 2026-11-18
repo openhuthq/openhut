@@ -17,6 +17,7 @@
   },
   "include": [
     "src/**/*.ts",
-    "test/**/*.ts"
+    "test/**/*.ts",
+    "../tunnel/src/noise-handshake.d.ts"
   ]
 }

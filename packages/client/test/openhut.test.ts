@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto'
+import { createHash, generateKeyPairSync, sign, type KeyObject } from 'node:crypto'
 import { canonical, verify, type Access, type Unsigned } from '@openhut/common/access/access.ts'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import type { Agent } from '@openhut/common/agents/agent.ts'
@@ -43,8 +43,12 @@ function adminOf({ id, runtime }: { id: string; runtime: Fake }): Admin {
   return {
     object: 'admin', seat: { set: !!runtime.seat.token, mode: 'claude', updatedAt: runtime.seat.at }, codex: { set: !!runtime.codexAt, updatedAt: runtime.codexAt ?? null },
     server: { version: '0.3.0', build: 'dev', latestBuild: null, updateAvailable: false, update: null, healthy: true, agentd: true, firewall: true, running: 0, total: 0 },
-    tailnetUrl: null, usageData: false, publicKey: keyOf(id),
+    tailnetUrl: null, usageData: false, publicKey: keyOf(id), relay: { key: noiseKeyOf(id), computerId: createHash('sha256').update(Buffer.from(noiseKeyOf(id), 'hex')).digest('hex'), url: null },
   }
+}
+
+function noiseKeyOf(id: string): string {
+  return Buffer.from(id.padEnd(32, '~')).toString('hex')
 }
 
 function keyOf(id: string): string {
@@ -309,7 +313,7 @@ test('with no list anywhere the Mac app signs version 1, with itself as the only
   assert.equal(list?.version, 1)
   assert.deepEqual(list?.clients.map((each) => [each.key, each.name]), [[MAC, 'Mo\'s Mac']])
   assert.deepEqual(list?.computers.map((each) => each.name), ['local', 'beelink'])
-  assert.equal(list?.computers[0]?.id.length, 64)
+  assert.deepEqual(list?.computers.map((each) => [each.key, each.id]), ['local', 'beelink'].map((id) => [noiseKeyOf(id), createHash('sha256').update(Buffer.from(noiseKeyOf(id), 'hex')).digest('hex')]))
   assert.ok(list && await verify(list))
   assert.deepEqual([runtimes.local.access, runtimes.beelink.access], [list, list])
   await openhut.access.sync()

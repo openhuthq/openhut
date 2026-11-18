@@ -7,6 +7,8 @@ const PackageJson = z.object({ version: z.string() })
 const PORT = Number(process.env.PORT ?? 8787)
 const DATA = process.env.OPENHUT_DATA ?? '/data/app'
 const INSTALL_KIND = z.enum(['desktop', 'server']).parse(process.env.OPENHUT_INSTALL_KIND ?? (process.env.OPENHUT_SOCKET ? 'desktop' : 'server'))
+const BUILD = fileOr(new URL('../../../../../BUILD', import.meta.url), 'dev')
+const JOIN = process.env.OPENHUT_JOIN || undefined
 
 export const config = {
   dataDir: DATA,
@@ -35,7 +37,9 @@ export const config = {
   secret: process.env.OPENHUT_SECRET,
   secretHandoff: process.env.OPENHUT_SECRET_HANDOFF,
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))).version,
-  build: fileOr(new URL('../../../../../BUILD', import.meta.url), 'dev'),
+  build: BUILD,
+  join: JOIN,
+  relayUrl: process.env.OPENHUT_RELAY_URL ?? relayOf(JOIN) ?? (BUILD === 'dev' ? undefined : 'wss://cloud.openhut.dev'),
   claudeBin: process.env.OPENHUT_CLAUDE ?? fileURLToPath(new URL('../../../../../bin/claude', import.meta.url)),
   claudeHostBin: process.env.OPENHUT_CLAUDE_HOST ?? fileURLToPath(new URL(`../../../../../bin/${process.platform === 'darwin' ? 'claude-darwin' : 'claude'}`, import.meta.url)),
   claudeVersion: process.env.OPENHUT_CLAUDE_VERSION,
@@ -46,6 +50,11 @@ delete process.env.OPENHUT_SECRET
 function installKindOf(kind: 'desktop' | 'server'): 'mac' | 'linux' | 'server' {
   if (kind === 'server') return 'server'
   return process.platform === 'darwin' ? 'mac' : 'linux'
+}
+
+function relayOf(code: string | undefined): string | undefined {
+  if (!code) return undefined
+  try { return new URL(code).searchParams.get('r') ?? undefined } catch { return undefined }
 }
 
 function fileOr(url: URL, fallback: string): string {

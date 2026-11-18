@@ -34,6 +34,7 @@ export const Admin = z.object({
   google: z.optional(z.object({ clientId: z.null(), redirectUri: z.string() })),
   usageData: z.boolean(),
   publicKey: z.string(),
+  relay: z.optional(z.object({ key: z.string(), computerId: z.string(), url: z.nullable(z.string()) })),
   features: z.optional(z.object({ whatsapp: z.boolean(), browser: z.boolean() })),
   minAppVersion: z.optional(z.string()),
 })
