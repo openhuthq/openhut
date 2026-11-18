@@ -1,14 +1,13 @@
 import { useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Cancel01Icon, Delete02Icon, Search01Icon, SparklesIcon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, Delete02Icon, SparklesIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { SKILL_MAX_LENGTH, type Skill } from '@openhut/common/agents/skill.ts'
 import { BRAND_ICONS, type BrandName } from '@/components/brand-icons'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { CopyButton } from '@/components/copy-button'
@@ -32,11 +31,9 @@ const VIEWS: [View, string][] = [['rendered', 'Rendered'], ['source', 'Source']]
 export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: string | undefined; onClose: () => void }) {
   const skills = useSkills(agent.id)
   const [filter, setFilter] = useState<Filter>('learned')
-  const [query, setQuery] = useState('')
   const all = skills.data ?? []
   const counts: Record<Filter, number> = { all: all.length, learned: all.filter((skill) => !skill.builtIn).length, builtIn: all.filter((skill) => skill.builtIn).length }
-  const needle = query.trim().toLowerCase()
-  const shown = all.filter((skill) => (filter === 'all' || skill.builtIn === (filter === 'builtIn')) && (!needle || `${skill.name} ${skill.description}`.toLowerCase().includes(needle)))
+  const shown = all.filter((skill) => (filter === 'all' || skill.builtIn === (filter === 'builtIn')))
   const slug = (skill: Skill) => skill.id.slice(agent.id.length + 1)
   const selected = open ?? (shown[0] && slug(shown[0]))
   return <DialogCard onClose={onClose} className={cn(SPLIT_DIALOG, 'flex-row')}>
@@ -45,8 +42,6 @@ export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: str
         <Face agent={agent} size={32} />
         <div className="grid min-w-0"><DialogTitle className="truncate text-[15px]/[20px] font-medium">{agent.name}'s skills</DialogTitle><span className="text-[12px] text-mute">{counts.learned} learned · {counts.builtIn} built in</span></div>
       </div>
-      <label className="relative block"><span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-mute"><I icon={Search01Icon} size={14} /></span>
-        <Input type="search" aria-label="Search skills" placeholder="Search skills" className="pl-8" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
       <ToggleGroup aria-label="Which skills" value={filter} onPick={(value) => setFilter(FILTERS.find(([id]) => id === value)?.[0] ?? filter)}>
         {FILTERS.map(([id, label]) => <ToggleGroupItem key={id} value={id}>{label}<span className="font-mono text-xs text-mute">{counts[id]}</span></ToggleGroupItem>)}
       </ToggleGroup>
@@ -58,7 +53,7 @@ export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: str
           <SkillMark skill={skill} />
           <span className="grid min-w-0 flex-1"><span className="truncate text-[13px] font-medium">{skill.name}</span><span className="truncate text-[12px] text-mute">{skill.description || skill.path}</span></span>
         </Button>)}
-        {skills.data && !shown.length && <p className="m-0 px-2 py-1 text-[13px] text-mute">{needle ? 'No skill matches.' : filter === 'builtIn' ? `${agent.name} has no built-in skills.` : `${agent.name} hasn't learned a skill yet.`}</p>}
+        {skills.data && !shown.length && <p className="m-0 px-2 py-1 text-[13px] text-mute">{filter === 'builtIn' ? `${agent.name} has no built-in skills.` : `${agent.name} hasn't learned a skill yet.`}</p>}
       </nav>
     </aside>
     <section className="flex min-w-0 flex-1 flex-col">

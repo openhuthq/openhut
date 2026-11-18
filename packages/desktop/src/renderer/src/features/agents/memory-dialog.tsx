@@ -1,10 +1,9 @@
 import { useState, type ReactNode } from 'react'
-import { Cancel01Icon, Delete02Icon, Note01Icon, PlusSignIcon, Search01Icon, UserIcon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, Delete02Icon, Note01Icon, PlusSignIcon, UserIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Memory, MemoryTarget } from '@openhut/common/agents/memory.ts'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { ErrorNote } from '@/components/error-note'
@@ -37,34 +36,29 @@ export function MemoryDialog({ agent, onClose }: { agent: Agent; onClose: () => 
 
 function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
   const update = useUpdateMemory(agent.id)
-  const [query, setQuery] = useState('')
   const [picked, setPicked] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState(false)
-  const needle = query.trim().toLowerCase()
   const all: Entry[] = KINDS.flatMap((kind) => memory[kind.target].entries.map((text, index) => ({ kind, text, index, key: `${kind.target}-${index}` })))
-  const shown = all.filter((entry) => !needle || entry.text.toLowerCase().includes(needle))
-  const selected = adding ? undefined : shown.find((entry) => entry.key === picked) ?? shown[0]
+  const selected = adding ? undefined : all.find((entry) => entry.key === picked) ?? all[0]
   const saved = KINDS.some((kind) => memory[kind.target].saved)
   const pick = (key: string) => { setPicked(key); setAdding(false); setRemoving(false) }
   const save = ({ target, list, done }: { target: MemoryTarget; list: string[]; done: () => void }) => update.mutate({ [target]: list }, { onSuccess: done, onError: toastError })
   return <div className="flex min-h-0 flex-1">
     <aside className="flex w-[340px] shrink-0 flex-col gap-3 border-r border-hair bg-sidebar p-4">
       <div className="flex gap-2">
-        <label className="relative block flex-1"><span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-mute"><I icon={Search01Icon} size={14} /></span>
-          <Input type="search" aria-label="Search memory" placeholder="Search memory" className="pl-8" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
         <Button type="button" variant="secondary" title={saved ? undefined : `${agent.name} hasn't saved any memory yet. You can add to it once it has.`} disabled={!agent.canEdit || adding || !saved} onClick={() => { setAdding(true); setRemoving(false) }}><I icon={PlusSignIcon} size={13} />Add</Button>
       </div>
       <nav aria-label="Memory entries" className="-mx-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto px-1">
         {KINDS.map((kind) => {
-          const entries = shown.filter((entry) => entry.kind === kind)
+          const entries = all.filter((entry) => entry.kind === kind)
           return <section key={kind.target} className="flex flex-col gap-0.5 not-first:mt-3">
             <h3 className="m-0 flex items-center gap-1.5 px-2 pb-1 text-[12px] font-medium text-mute"><I icon={kind.icon} size={13} />{kind.label}<span className="font-mono">{entries.length}</span></h3>
             {entries.map((entry) => <Button key={entry.key} type="button" variant="bare" aria-current={entry.key === selected?.key || undefined} onClick={() => pick(entry.key)}
               className="rounded-lg px-2 py-1.5 text-left text-[13px]/[1.45] text-ink hover:bg-soft aria-[current]:bg-hair">
               <span className="line-clamp-2 [overflow-wrap:anywhere]">{entry.text}</span>
             </Button>)}
-            {!entries.length && <p className="m-0 px-2 text-[13px] text-mute">{needle ? 'Nothing matches.' : `Nothing saved yet.`}</p>}
+            {!entries.length && <p className="m-0 px-2 text-[13px] text-mute">Nothing saved yet.</p>}
           </section>
         })}
       </nav>
@@ -97,7 +91,7 @@ function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
           <span className="ml-auto flex gap-2"><Button type="reset" variant="secondary">Revert</Button><Button type="submit" variant="primary" disabled={update.isPending}>Save</Button></span>
         </Foot>}
       </form>}
-      {!adding && !selected && <p className="m-0 p-5 text-[13px] text-mute">{all.length ? 'Nothing matches your search.' : `${agent.name} hasn't saved anything yet.`}</p>}
+      {!adding && !selected && <p className="m-0 p-5 text-[13px] text-mute">{agent.name} hasn't saved anything yet.</p>}
     </section>
   </div>
 }
