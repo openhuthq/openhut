@@ -1,10 +1,12 @@
 import { execFile, spawn } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { EXEC, errorText, isRecord } from '../util.ts'
-import type { Exec, Mount, Sandboxes, SandboxSpec, SandboxState } from './sandbox.ts'
+import type { Exec, Mount, Pull, Sandboxes, SandboxSpec, SandboxState } from './sandbox.ts'
 
 const exec = promisify(execFile)
+const PULL_LOG = '/var/log/openhut/pull.log'
 export const FIREWALL = fileURLToPath(new URL('../../../../../install/agents-firewall.sh', import.meta.url))
 
 export const gvisor: Sandboxes = {
@@ -73,6 +75,10 @@ export const gvisor: Sandboxes = {
     const rows: unknown = JSON.parse(out)
     return (Array.isArray(rows) ? rows : []).flatMap(stateOf)
   },
+
+  async progress() {
+    return pullOf(await readFile(PULL_LOG, 'utf8').catch(() => ''))
+  },
 }
 
 export function createArgs(spec: SandboxSpec): string[] {
@@ -90,6 +96,13 @@ export function createArgs(spec: SandboxSpec): string[] {
     ...spec.tmpfs.flatMap(tmpfsArgs),
     ...[spec.image, ...spec.command],
   ]
+}
+
+export function pullOf(log: string): Pull | null {
+  const last = log.slice(log.lastIndexOf('Pulling from'))
+  const total = last.match(/: Pulling fs layer/g)?.length ?? 0
+  if (!log.includes('Pulling from') || !total || /Status: (Downloaded|Image is up to date)/.test(last)) return null
+  return { done: last.match(/: Pull complete/g)?.length ?? 0, total, unit: 'layers' }
 }
 
 export async function imageReady(image: string): Promise<boolean> {

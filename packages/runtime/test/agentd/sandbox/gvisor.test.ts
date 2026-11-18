@@ -6,6 +6,7 @@ import { mkdirSync, mkdtempSync } from 'node:fs'
 import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { pullOf } from '../../../src/agentd/sandbox/gvisor.ts'
 
 const base = mkdtempSync(`${tmpdir()}/agentd-gvisor-`)
 const DATA = `${base}/data`
@@ -105,3 +106,11 @@ function ask(request: Record<string, unknown>): Promise<unknown> {
     sock.write(`${JSON.stringify(request)}\n`)
   })
 }
+
+test('pullOf counts the layers of the last pull and stops once it finished', () => {
+  const pulling = 'abc: Pulling from nousresearch/hermes-agent\na1: Pulling fs layer\na2: Pulling fs layer\na3: Pulling fs layer\na1: Pull complete\n'
+  assert.deepEqual(pullOf(pulling), { done: 1, total: 3, unit: 'layers' })
+  assert.equal(pullOf(`${pulling}a2: Pull complete\na3: Pull complete\nStatus: Downloaded newer image\n`), null)
+  assert.equal(pullOf(''), null)
+  assert.deepEqual(pullOf(`old: Pulling from x\nb: Pulling fs layer\nb: Pull complete\nStatus: Downloaded newer image\n${pulling}`), { done: 1, total: 3, unit: 'layers' })
+})

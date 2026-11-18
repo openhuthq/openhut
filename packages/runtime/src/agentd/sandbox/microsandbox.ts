@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { PassThrough, Writable } from 'node:stream'
 import { DnsBuilder, NetworkPolicy, Sandbox, SandboxNotFoundError } from 'microsandbox'
-import type { ExecHandle, SandboxHandle } from 'microsandbox'
+import type { ExecHandle, SandboxBuilder, SandboxHandle } from 'microsandbox'
 import { errorText } from '../util.ts'
-import { AGENT_API_PORT_BASE, type Sandboxes, type SandboxSpec, type SandboxState } from './sandbox.ts'
+import { AGENT_API_PORT_BASE, type Pull, type Sandboxes, type SandboxSpec, type SandboxState } from './sandbox.ts'
 
 const STOP_SECONDS = 10
 const KILL_MS = 10_000
@@ -16,6 +16,27 @@ const WINDOWS_DNS = ['1.1.1.1', '8.8.8.8']
 type Workload = { entrypoint: string[]; cmd: string[]; user: string }
 
 const nameOf = (id: string) => `ag-${id}`
+let pull: Pull | null = null
+
+async function pulled(builder: SandboxBuilder) {
+  const job = await builder.createWithPullProgress()
+  const layers = new Map<number, number>()
+  const watch = (async () => {
+    for await (const event of job) {
+      if (event.totalDownloadBytes) pull = { done: 0, total: event.totalDownloadBytes, unit: 'bytes' }
+      if (pull && event.layerIndex !== undefined && event.downloadedBytes !== undefined) {
+        layers.set(event.layerIndex, event.downloadedBytes)
+        pull = { ...pull, done: Math.min(pull.total, [...layers.values()].reduce((sum, bytes) => sum + bytes, 0)) }
+      }
+    }
+  })().catch(() => undefined)
+  try {
+    return await job.awaitSandbox()
+  } finally {
+    await watch
+    pull = null
+  }
+}
 
 function policy() {
   return NetworkPolicy.builder()
@@ -105,7 +126,7 @@ export const microsandbox: Sandboxes = {
   },
 
   async create(spec) {
-    const sandbox = await builder({ name: nameOf(spec.id), spec }).create()
+    const sandbox = await pulled(builder({ name: nameOf(spec.id), spec }))
     await sandbox.stopWithTimeout(STOP_SECONDS * 1000).catch(() => sandbox.kill())
   },
 
@@ -170,5 +191,9 @@ export const microsandbox: Sandboxes = {
       cursor = page.nextCursor
     } while (cursor)
     return states
+  },
+
+  async progress() {
+    return pull
   },
 }

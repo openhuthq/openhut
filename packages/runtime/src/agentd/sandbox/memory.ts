@@ -53,6 +53,10 @@ export const memory: Sandboxes = {
   async list() {
     return [...boxes.values()].map(({ spec, running, startedAt }) => ({ id: spec.id, running, startedAt, labels: spec.labels }))
   },
+
+  async progress() {
+    return null
+  },
 }
 
 function found(id: string) {
