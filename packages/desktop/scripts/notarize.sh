@@ -38,6 +38,10 @@ ditto -c -k --sequesterRsrc --keepParent "$app" app.zip
 notarize app.zip
 rm app.zip
 staple "$app"
+rm -rf dmg-rebuild
+(cd .. && npx electron-builder --mac dmg --arm64 --prepackaged "release/$app" -c.directories.output=release/dmg-rebuild --publish never)
+mv "dmg-rebuild/$dmg" "$dmg"
+rm -rf dmg-rebuild
 notarize "$dmg"
 staple "$dmg"
 zip=$(ls OpenHut-*-arm64.zip 2>/dev/null | head -1 || true)
@@ -62,6 +66,12 @@ cat latest-mac.yml
 
 spctl -a -vvv -t exec "$app" 2>&1 | tee /dev/stderr | grep -q "source=Notarized Developer ID"
 xcrun stapler validate "$dmg"
+mnt=$(mktemp -d)
+hdiutil attach -readonly -nobrowse -noautoopen -mountpoint "$mnt" "$dmg" >/dev/null
+inner=0
+xcrun stapler validate "$mnt/OpenHut.app" && inner=1
+hdiutil detach "$mnt" >/dev/null
+[ "$inner" = 1 ] || { echo "The app inside $dmg has no stapled ticket, so Gatekeeper needs the network to open it once it's copied out." >&2; exit 1; }
 q=$(mktemp -d)/quarantined.dmg
 cp "$dmg" "$q"
 xattr -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;$(uuidgen)" "$q"
