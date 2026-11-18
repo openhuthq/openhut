@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 const TABS: [string, string, IconSvgElement, string][] = [
   ['general', 'General', Settings02Icon, 'text-hue-slate'],
   ['computers', 'Computers', LaptopIcon, 'text-hue-blue'],
-  ['devices', 'Devices', SmartPhone01Icon, 'text-hue-green'],
+  ['phones', 'Phones', SmartPhone01Icon, 'text-hue-green'],
   ['models', 'Models', AiMagicIcon, 'text-hue-violet'],
   ['mcp', 'MCP', PlugSocketIcon, 'text-hue-teal'],
 ]
@@ -38,7 +38,7 @@ export function SettingsView({ tab, onClose }: { tab: string; onClose: () => voi
 function Tab({ tab }: { tab: string }) {
   switch (tab) {
     case 'computers': return <ComputersSettings />
-    case 'devices': return <DevicesSettings />
+    case 'phones': return <DevicesSettings />
     case 'models': return <ModelsSettings />
     case 'mcp': return <McpSettings />
     default: return <GeneralSettings />

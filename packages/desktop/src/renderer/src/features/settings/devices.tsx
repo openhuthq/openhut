@@ -1,4 +1,4 @@
-import { LaptopIcon, PlusSignIcon, SmartPhone01Icon } from '@hugeicons/core-free-icons'
+import { PlusSignIcon, SmartPhone01Icon } from '@hugeicons/core-free-icons'
 import type { Device } from '@openhut/client'
 import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
@@ -10,7 +10,6 @@ import { PairDialog, Waiting } from '@/features/settings/invite'
 import { Chevron, Intro, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { shortDate } from '@/lib/format'
 import { open, useOpen } from '@/lib/router'
-import { WORDS } from '@/lib/platform'
 import { toastError } from '@/lib/toast'
 
 export function DevicesSettings() {
@@ -23,11 +22,9 @@ export function DevicesSettings() {
 function DeviceList() {
   const devices = useDevices()
   return <>
-    <Intro>These can reach the agents on all your computers.</Intro>
+    <Intro>Phones that can talk to the agents on all your computers.</Intro>
     <Rows>
-      {devices.data?.map((device) => device.self
-        ? <Row key={device.key} icon={<I icon={LaptopIcon} size={20} className="text-hue-blue" />} title={WORDS.thisComputer} note={`The OpenHut app · added ${added(device)}`} />
-        : <DeviceRow key={device.key} device={device} />)}
+      {devices.data?.filter((device) => !device.self).map((device) => <DeviceRow key={device.key} device={device} />)}
       <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a phone" note={`Scan a code with the OpenHut app. Works when this ${HERE} is asleep too.`}><Chevron /></Row>
     </Rows>
     <ErrorNote message={devices.error?.message} />
