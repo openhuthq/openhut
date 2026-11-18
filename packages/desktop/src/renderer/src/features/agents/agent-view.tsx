@@ -42,7 +42,7 @@ export function AgentView({ agentId, dialog, detail }: { agentId: string; dialog
   const panel = open && <Panel agent={agent.data} naming={dialog === 'name'} watching={dialog === 'browser'} />
   return <>
     <Chat agent={agent.data} tools={toggle} onTitle={phone ? () => setShown(true) : undefined} />
-    {phone ? panel && <Dialog size="window" label={`${agent.data.name}'s details`} onClose={() => setShown(false)}>{panel}</Dialog> : panel}
+    {phone ? panel && <Dialog size="window" label={`${agent.data.name}'s details`} className="phone:bg-sidebar" onClose={() => setShown(false)}>{panel}</Dialog> : panel}
     <Dialogs agent={agent.data} dialog={dialog} detail={detail} />
   </>
 }

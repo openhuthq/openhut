@@ -1,16 +1,18 @@
 import { useState, type ReactNode } from 'react'
-import { Cancel01Icon, Delete02Icon, Note01Icon, PlusSignIcon, UserIcon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, Cancel01Icon, Delete02Icon, Note01Icon, PlusSignIcon, UserIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Memory, MemoryTarget } from '@openhut/common/agents/memory.ts'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
+import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
 import { DialogCard, I, SPLIT_DIALOG } from '@/components/kit'
 import { useMemory, useUpdateMemory } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { formValues } from '@/lib/form'
+import { PHONE, useMedia } from '@/lib/media'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -40,12 +42,14 @@ function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState(false)
   const all: Entry[] = KINDS.flatMap((kind) => memory[kind.target].entries.map((text, index) => ({ kind, text, index, key: `${kind.target}-${index}` })))
-  const selected = adding ? undefined : all.find((entry) => entry.key === picked) ?? all[0]
+  const phone = useMedia(PHONE)
+  const selected = adding ? undefined : all.find((entry) => entry.key === picked) ?? (phone ? undefined : all[0])
+  const open = adding || !!selected
   const saved = KINDS.some((kind) => memory[kind.target].saved)
   const pick = (key: string) => { setPicked(key); setAdding(false); setRemoving(false) }
   const save = ({ target, list, done }: { target: MemoryTarget; list: string[]; done: () => void }) => update.mutate({ [target]: list }, { onSuccess: done, onError: toastError })
   return <div className="flex min-h-0 flex-1 phone:flex-col">
-    <aside className="flex w-[340px] shrink-0 flex-col gap-3 border-r border-hair bg-sidebar p-4 phone:max-h-[45%] phone:w-full phone:border-r-0 phone:border-b">
+    <aside className={cn('flex w-[340px] shrink-0 flex-col gap-3 border-r border-hair bg-sidebar p-4 phone:w-full phone:flex-1 phone:border-r-0', open && 'phone:hidden')}>
       <div className="flex gap-2">
         <Button type="button" variant="secondary" title={saved ? undefined : `${agent.name} hasn't saved any memory yet. You can add to it once it has.`} disabled={!agent.canEdit || adding || !saved} onClick={() => { setAdding(true); setRemoving(false) }}><I icon={PlusSignIcon} size={13} />Add</Button>
       </div>
@@ -63,7 +67,8 @@ function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
         })}
       </nav>
     </aside>
-    <section className="flex min-w-0 flex-1 flex-col">
+    <section className={cn('flex min-w-0 flex-1 flex-col', !open && 'phone:hidden')}>
+      {phone && open && <Button type="button" variant="bare" className="mx-3 mt-3 -mb-2 inline-flex w-fit items-center gap-1 px-1 text-mute" onClick={() => { setPicked(null); setAdding(false); setRemoving(false) }}><I icon={ArrowLeft01Icon} size={15} />All memory</Button>}
       {adding && <form className="flex flex-1 flex-col" onSubmit={(event) => {
         const value = formValues(event)
         const target = value('kind') === 'notes' ? 'notes' : 'people'
@@ -83,7 +88,8 @@ function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
           <Textarea name="text" className="min-h-0 flex-1 resize-none text-[15px]/[1.6]" aria-label="Memory entry" required readOnly={!agent.canEdit} defaultValue={selected.text} />
         </div>
         {agent.canEdit && <Foot>
-          {removing
+          {phone ? <ConfirmButton question={`Remove this ${selected.kind.one.toLowerCase()}?`} detail={`${agent.name} forgets it for good. This can't be undone.`} action="Remove"
+            onConfirm={() => save({ target: selected.kind.target, list: memory[selected.kind.target].entries.filter((_, j) => j !== selected.index), done: () => setPicked(null) })}><I icon={Delete02Icon} size={14} />Remove</ConfirmButton> : removing
             ? <><span className="text-[13px]">{agent.name} forgets it for good. This can't be undone.</span>
               <Button type="button" variant="destructive" size="sm" disabled={update.isPending} onClick={() => save({ target: selected.kind.target, list: memory[selected.kind.target].entries.filter((_, j) => j !== selected.index), done: () => { setRemoving(false); setPicked(null) } })}>Remove</Button>
               <Button type="button" variant="secondary" size="sm" onClick={() => setRemoving(false)}>Keep it</Button></>
@@ -91,7 +97,7 @@ function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
           <span className="ml-auto flex gap-2"><Button type="reset" variant="secondary">Revert</Button><Button type="submit" variant="primary" disabled={update.isPending}>Save</Button></span>
         </Foot>}
       </form>}
-      {!adding && !selected && <p className="m-0 p-5 text-[13px] text-mute">{agent.name} hasn't saved anything yet.</p>}
+      {!adding && !selected && !phone && <p className="m-0 p-5 text-[13px] text-mute">{agent.name} hasn't saved anything yet.</p>}
     </section>
   </div>
 }

@@ -9,7 +9,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
-import { useConfirming } from '@/components/confirm-button'
+import { ConfirmButton, useConfirming } from '@/components/confirm-button'
 import { Choice, DialogCard, DRAG, GLASS, HOVER, I, MenuCard, PILL, ROW, ROW_VALUE, Section, TINY_ICON } from '@/components/kit'
 import { agentPath, type AgentDialog } from '@/app/routes'
 import { useAgents, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
@@ -23,6 +23,7 @@ import { ModelRows } from '@/features/agents/model-rows'
 import { AgentStatus } from '@/features/agents/status'
 import { HERE } from '@/features/settings/desktop'
 import { formValues } from '@/lib/form'
+import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
@@ -83,6 +84,7 @@ function PanelTitle({ agent, naming }: { agent: Agent; naming: boolean }) {
   const updateAgent = useUpdateAgent(agent.id)
   const deleteAgent = useDeleteAgent(agent.id)
   const { confirming, setConfirming, box } = useConfirming()
+  const phone = useMedia(PHONE)
   const running = agent.wanted === 'running'
   const toggle = running ? `Stop ${agent.name}` : `Start ${agent.name}`
   return <div ref={box} className="grid min-w-0 flex-1 gap-0.5">
@@ -95,7 +97,8 @@ function PanelTitle({ agent, naming }: { agent: Agent; naming: boolean }) {
         : <>
           <Tooltip label={toggle}><Button type="button" variant="bare" className={TINY_ICON} aria-label={toggle} disabled={!agent.canEdit || updateAgent.isPending}
             onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} className={running ? 'text-hue-amber' : 'text-hue-green'} /></Button></Tooltip>
-          {agent.canEdit && <Tooltip label={`Delete ${agent.name}`}><Button type="button" variant="bare" className={cn(TINY_ICON, 'text-fail')} aria-label={`Delete ${agent.name}`} onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={16} /></Button></Tooltip>}
+          {agent.canEdit && phone && <ConfirmButton variant="bare" className={cn(TINY_ICON, 'text-fail')} label={`Delete ${agent.name}`} question={`Delete ${agent.name}?`} detail="" action="Delete" onConfirm={() => deleteAgent.mutate(undefined, { onError: toastError })}><I icon={Delete02Icon} size={16} /></ConfirmButton>}
+          {agent.canEdit && !phone && <Tooltip label={`Delete ${agent.name}`}><Button type="button" variant="bare" className={cn(TINY_ICON, 'text-fail')} aria-label={`Delete ${agent.name}`} onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={16} /></Button></Tooltip>}
         </>}</span>
     </div>
     <span className="flex items-center gap-2 text-xs text-body">{confirming ? 'Its memory goes too.' : <AgentStatus agent={agent} />}</span>

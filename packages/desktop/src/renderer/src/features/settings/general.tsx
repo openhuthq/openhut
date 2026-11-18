@@ -9,6 +9,7 @@ import { useAdmin, useUpdateAdmin } from '@/features/settings/api'
 import { HERE, bytes, desktop, useMachine, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
 import { home } from '@/features/settings/home'
 import { Row, Rows } from '@/features/settings/kit'
+import { isPhone } from '@/lib/native'
 import { WORDS } from '@/lib/platform'
 import { updateNote, useAppUpdate } from '@/features/settings/update'
 import { UpdateStatus } from '@/features/settings/update-pill'
@@ -23,12 +24,12 @@ export function GeneralSettings() {
       {desktop && <PrefSwitch icon={Coffee01Icon} hue="text-hue-amber" name="keepAwake" title={`Keep this ${HERE} awake while agents run`} note={`The screen can still turn off. Agents can't answer while the ${HERE} sleeps.`} />}
       <Version />
     </Rows>
-    <Section title="Notify me when">
+    {!isPhone() && <Section title="Notify me when">
       <Rows>
         <PrefSwitch icon={Notification01Icon} hue="text-hue-amber" name="notifyReplies" title="An agent replies" note="While this window is closed or in the background." />
         <PrefSwitch icon={Alert02Icon} hue="text-hue-red" name="notifyFailures" title="An agent stops or fails" note={WORDS.badgeNote} />
       </Rows>
-    </Section>
+    </Section>}
     <Section title="Data">
       <Rows>
         {desktop && <DataFolder />}

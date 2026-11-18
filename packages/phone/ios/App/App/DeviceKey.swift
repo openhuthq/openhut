@@ -7,6 +7,7 @@ import Security
 class AppViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(DeviceKeyPlugin())
+        view.backgroundColor = .white
     }
 }
 

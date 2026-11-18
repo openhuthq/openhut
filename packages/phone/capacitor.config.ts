@@ -8,6 +8,7 @@ const config: CapacitorConfig = {
   backgroundColor: '#f7f7f7',
   loggingBehavior: 'none',
   plugins: {
+    Keyboard: { resize: 'native', resizeOnFullScreen: true },
     LiveUpdate: { publicKey: process.env.VITE_PHONE_UPDATE_KEY, readyTimeout: 10000, autoBlockRolledBackBundles: true },
   },
 }

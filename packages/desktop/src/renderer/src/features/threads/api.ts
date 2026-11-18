@@ -30,7 +30,10 @@ export function useAgentThread(agentId: string) {
 
 export function useTouchThread() {
   const client = useQueryClient()
-  return (thread: Thread) => client.setQueryData<Thread[]>(THREADS_KEY, (threads) => threads && [{ ...thread, updatedAt: new Date().toISOString() }, ...threads.filter((each) => each.id !== thread.id)])
+  return (thread: Thread) => {
+    client.setQueryData<Thread[]>(THREADS_KEY, (threads) => threads && [{ ...thread, updatedAt: new Date().toISOString() }, ...threads.filter((each) => each.id !== thread.id)])
+    void client.invalidateQueries({ queryKey: [...THREADS_KEY, 'agent', thread.agentId], refetchType: 'all' })
+  }
 }
 
 export function useClearChat(agentId: string) {

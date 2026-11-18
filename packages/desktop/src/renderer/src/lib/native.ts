@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { App } from '@capacitor/app'
+import { Keyboard } from '@capacitor/keyboard'
 import { CapacitorBarcodeScanner, CapacitorBarcodeScannerTypeHint } from '@capacitor/barcode-scanner'
 import { Preferences } from '@capacitor/preferences'
 import { LiveUpdate } from '@capawesome/capacitor-live-update'
@@ -14,6 +15,12 @@ type DeviceKeyPlugin = {
 export type DeviceKey = { publicKey: Uint8Array; agree(remote: Uint8Array): Promise<Uint8Array> }
 
 const plugin = registerPlugin<DeviceKeyPlugin>('DeviceKey')
+
+if (Capacitor.getPlatform() === 'ios') void Keyboard.setAccessoryBarVisible({ isVisible: false })
+if (Capacitor.isNativePlatform()) window.addEventListener('resize', () => {
+  const field = document.activeElement
+  if (field instanceof HTMLElement && field.matches('input, textarea')) setTimeout(() => field.scrollIntoView({ block: 'center' }), 100)
+})
 
 export function isPhone(): boolean {
   return Capacitor.isNativePlatform()
