@@ -31,7 +31,7 @@ const VALUE = 'ml-auto inline-flex min-w-0 items-center gap-1.5 text-[13px] text
 export function Panel({ agent, naming }: { agent: Agent; naming: boolean }) {
   return <aside className={cn('flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
     <div className={cn('flex items-center gap-3', DRAG)}>
-      <Face agent={agent} size={48} />
+      <Face agent={agent} size={48} tile />
       <div className="grid min-w-0 flex-1 gap-0.5"><div className="flex min-w-0 items-center gap-1"><AgentName agent={agent} editing={naming && agent.canEdit} /><HeadActions agent={agent} /></div><span className="flex items-center gap-2 text-xs text-body"><AgentStatus agent={agent} /></span></div>
     </div>
     <Button type="button" variant="bare" onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'does' }))} className={cn('group -mx-2.5 flex flex-col gap-1 rounded-lg px-2.5 py-2', HOVER)}>

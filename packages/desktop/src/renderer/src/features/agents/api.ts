@@ -10,7 +10,8 @@ import { request } from '@/lib/api-client'
 import { at, on, openhut, rememberHomes } from '@/lib/openhut'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
-import { saveLook, type Look } from '@/features/agents/face'
+import { saveLook } from '@/features/agents/face'
+import type { Look } from '@/lib/face'
 
 const GRANT_LIST = List(Grant)
 const CHANNEL_LIST = List(Channel)
