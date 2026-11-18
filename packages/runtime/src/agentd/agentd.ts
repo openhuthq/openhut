@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmodSync, chownSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { newMessages, usage, type NewMessage } from './messages.ts'
@@ -11,6 +11,7 @@ import { isSkillPath, listSkills, MAX_SKILL_BYTES, readSkill, writeSkill, type S
 import { FREE_POLICY, HELD_POLICY, live, POLICY_FILE } from './browser.ts'
 import { fenceLines, proveFence, type FenceReport } from './fence.ts'
 import { MAX_HOME_BASE64, packHome, unpackHome } from './home.ts'
+import { isHomePath, isUploadName, MAX_FILE_BASE64, readHomeFile, saveUpload } from './files.ts'
 import { FIREWALL, imageReady } from './sandbox/gvisor.ts'
 import { sandboxes } from './sandbox/index.ts'
 import type { Mount, SandboxSpec, SandboxState } from './sandbox/sandbox.ts'
@@ -33,7 +34,7 @@ const BROWSER_MEMORY_MIB = 4096
 const MAX_FPS = 30
 const BROWSER_TMP_MIB = 1024
 const TMP_MIB = 256
-const DATA = process.env.AGENTD_DATA || '/data'
+const DATA = resolve(process.env.AGENTD_DATA || '/data')
 const RESOLV = process.env.AGENTD_RESOLV || '/etc/agentd/resolv.conf'
 const WHATSAPP_BRIDGE = process.env.AGENTD_WHATSAPP_BRIDGE || '/var/lib/openhut/whatsapp-bridge'
 const AGENT_UID = 10000
@@ -97,7 +98,8 @@ function serve(sock: Socket) {
       .then((line) => {
         const req = parseRequest(JSON.parse(line))
         if (req.cmd === 'browser-live') return openLive({ sock, id: req.id, fps: req.fps, rest: buf.slice(end + 1) })
-        if (req.cmd === 'home-import') return restOf({ sock, rest: buf.slice(end + 1) }).then((tar) => enqueue(req.id, () => importHome({ id: req.id, tar })))
+        if (req.cmd === 'home-import') return restOf({ sock, rest: buf.slice(end + 1), limit: MAX_HOME_BASE64 }).then((tar) => enqueue(req.id, () => importHome({ id: req.id, tar })))
+        if (req.cmd === 'file-write') return restOf({ sock, rest: buf.slice(end + 1), limit: MAX_FILE_BASE64 }).then((body) => enqueue(req.id, async () => ({ path: saveUpload({ home: agentHome(req.id), name: req.name, body: Buffer.from(body, 'base64'), owner: AS_ROOT ? { uid: AGENT_UID, gid: AGENT_UID } : undefined }) })))
         return 'id' in req ? enqueue(req.id, () => handle(req)) : handle(req)
       })
       .then(
@@ -173,6 +175,10 @@ async function handle(req: AgentdRequest): Promise<Reply> {
       return { tar: await packHome(home(req.id)) }
     case 'home-import':
       throw new Error('send the home after the request line')
+    case 'file-write':
+      throw new Error('send the file after the request line')
+    case 'file-read':
+      return { body: readHomeFile({ home: agentHome(req.id), path: req.path })?.toString('base64') ?? null }
     case 'memory-write':
       writeMemory({ root: inHome(req.id, 'memories'), target: req.target, body: req.body })
       return { written: req.target }
@@ -221,6 +227,12 @@ function parseRequest(value: unknown): AgentdRequest {
     case 'skill-read':
     case 'skill-rm':
       return { cmd, id: agentId(value.id), path: skillPath(value.path) }
+    case 'file-write':
+      if (!isUploadName(value.name)) throw new Error('bad file name')
+      return { cmd, id: agentId(value.id), name: value.name }
+    case 'file-read':
+      if (!isHomePath(value.path)) throw new Error('bad file path')
+      return { cmd, id: agentId(value.id), path: value.path }
     case 'memory-write':
       if (!isMemoryTarget(value.target)) throw new Error('bad memory target')
       if (typeof value.body !== 'string' || Buffer.byteLength(value.body) > MAX_MEMORY_BYTES) throw new Error('missing or oversized memory')
@@ -418,15 +430,15 @@ function features() {
   return { whatsapp: existsSync(`${WHATSAPP_BRIDGE}/node_modules`), browser: box.name === 'memory' || existsSync(BROWSER_BIN) }
 }
 
-function restOf({ sock, rest }: { sock: Socket; rest: string }): Promise<string> {
+function restOf({ sock, rest, limit }: { sock: Socket; rest: string; limit: number }): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = rest
     sock.on('data', (chunk: string) => {
       body += chunk
-      if (body.length > MAX_HOME_BASE64) {
+      if (body.length > limit) {
         sock.off('end', done)
         sock.pause()
-        reject(new Error('the agent\'s home is too big to move'))
+        reject(new Error('the request is too large'))
       }
     })
     const done = () => resolve(body)
@@ -503,6 +515,10 @@ async function removeSkill(id: string, path: string) {
   if (code !== 0) throw new Error(`couldn't delete the skill (rm exited with ${code})`)
 }
 
+function agentHome(id: string) {
+  return `${realpathSync(`${DATA}/agents`)}/${id}/home`
+}
+
 function inHome(id: string, dir: 'skills' | 'memories') {
   return `${realpathSync(`${DATA}/agents`)}/${id}/${dir}`
 }
@@ -527,6 +543,8 @@ export type AgentdRequest =
   | { cmd: 'skill-read' | 'skill-rm'; id: string; path: string }
   | { cmd: 'skill-write'; id: string; path: string; body: string }
   | { cmd: 'memory-write'; id: string; target: MemoryTarget; body: string }
+  | { cmd: 'file-write'; id: string; name: string }
+  | { cmd: 'file-read'; id: string; path: string }
   | { cmd: 'usage' | 'messages'; since: number }
 
 export type AgentdReplies = {
@@ -548,6 +566,8 @@ export type AgentdReplies = {
   'memory-write': { written: MemoryTarget }
   'home-export': { tar: string }
   'home-import': { imported: string }
+  'file-write': { path: string }
+  'file-read': { body: string | null }
   usage: { usage: Record<string, number> }
   messages: { messages: NewMessage[] }
   'browser-live': undefined

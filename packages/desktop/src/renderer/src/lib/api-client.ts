@@ -6,13 +6,24 @@ type Schema<T> = { safeParse: (data: unknown) => { success: true; data: T } | { 
 export { RequestError }
 
 export async function request<T>({ schema, path, method = 'GET', body }: { schema: Schema<T>; path: string; method?: string; body?: unknown }): Promise<T> {
-  const json = body === undefined ? undefined : JSON.stringify(body)
-  const response = await fetch(path, { method, body: json, headers: json ? { 'content-type': 'application/json' } : {} })
+  const response = await fetch(path, { method, ...payloadOf(body) })
   const payload: unknown = await response.json().catch(() => null)
   if (!response.ok) throw failure(response.status, payload)
   const parsed = schema.safeParse(payload)
   if (!parsed.success) throw new RequestError({ message: "The server sent an answer this page doesn't understand. Reload the page and try again.", status: response.status })
   return parsed.data
+}
+
+export async function requestBlob(path: string): Promise<Blob> {
+  const response = await fetch(path)
+  if (!response.ok) throw failure(response.status, await response.json().catch(() => null))
+  return response.blob()
+}
+
+function payloadOf(body: unknown): RequestInit {
+  if (body instanceof Blob) return { body, headers: { 'content-type': 'application/octet-stream' } }
+  if (body === undefined) return {}
+  return { body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }
 }
 
 export function fieldError(error: Error | null, field: string) {

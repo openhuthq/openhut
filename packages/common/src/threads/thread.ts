@@ -43,3 +43,33 @@ export type ChatCall = z.infer<typeof ChatCall>
 
 export const ToolProgress = z.looseObject({ tool: z.optional(z.string()), name: z.optional(z.string()), label: z.optional(z.string()) })
 export type ToolProgress = z.infer<typeof ToolProgress>
+
+export const AGENT_HOME = '/opt/data/home'
+export const UPLOADS = `${AGENT_HOME}/uploads`
+export const MAX_FILE_BYTES = 25 << 20
+export const MAX_FILES = 10
+
+export const UploadFile = z.object({
+  name: z.string().check(z.minLength(1), z.maxLength(255)),
+  type: z.optional(z.string().check(z.maxLength(100))),
+})
+export type UploadFile = z.infer<typeof UploadFile>
+
+export const ReadFile = z.object({ path: z.string().check(z.minLength(1), z.maxLength(1024)) })
+export type ReadFile = z.infer<typeof ReadFile>
+
+export const ChatFile = z.object({
+  object: z.literal('file'),
+  name: z.string(),
+  path: z.string(),
+  size: z.number(),
+  mediaType: z.string(),
+})
+export type ChatFile = z.infer<typeof ChatFile>
+
+export function fileInHome(path: string): string | undefined {
+  const full = path.startsWith('~/') ? `${AGENT_HOME}${path.slice(1)}` : path
+  if (!full.startsWith(`${AGENT_HOME}/`) || full.length > 1024) return undefined
+  const segments = full.slice(AGENT_HOME.length + 1).split('/')
+  return segments.every((segment) => segment && segment !== '.' && segment !== '..' && !segment.includes('\0')) ? segments.join('/') : undefined
+}

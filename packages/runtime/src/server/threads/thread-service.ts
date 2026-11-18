@@ -2,8 +2,9 @@ import type { FastifyReply } from 'fastify'
 import type { Selectable } from 'kysely'
 import { createUIMessageStream, pipeUIMessageStreamToResponse, type UIMessageStreamWriter } from 'ai'
 import * as z from 'zod/mini'
-import { ChatMessage, ToolProgress, type ChatCall, type SendChat, type Thread, type ThreadWithMessages } from '@openhut/common/threads/thread.ts'
+import { AGENT_HOME, ChatMessage, fileInHome, MAX_FILES, ToolProgress, UPLOADS, type ChatCall, type ChatFile, type SendChat, type Thread, type ThreadWithMessages, type UploadFile } from '@openhut/common/threads/thread.ts'
 import type { Deleted } from '@openhut/common/api.ts'
+import { agentd } from '../platform/agentd.ts'
 import { db, findRow } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { log } from '../platform/events.ts'
@@ -21,6 +22,16 @@ const Chunk = z.object({
   choices: z.optional(z.array(z.object({ delta: z.optional(z.object({ content: z.optional(z.nullable(z.string())) })) }))),
   error: z.optional(z.object({ message: z.string() })),
 })
+const FilePart = z.object({ type: z.literal('file'), mediaType: z.string().check(z.maxLength(100)), filename: z.optional(z.string().check(z.maxLength(255))), url: z.string().check(z.maxLength(1024)) })
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+const MAX_IMAGE_BASE64 = 5_000_000
+const MAX_IMAGES_BASE64 = 8_000_000
+const MAX_NAME = 120
+const MAX_NAME_BYTES = 255
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+const JPEG = Buffer.from([0xff, 0xd8, 0xff])
+const MEDIA_TYPE = /^[\w.+-]+\/[\w.+-]+$/
+const CHAT_NOTE = `The person is talking to you in the OpenHut app. Files they attach are saved in ${UPLOADS} and listed at the end of their message. To give them a file, save it under ${AGENT_HOME} and write its full path in backticks, like \`${AGENT_HOME}/report.csv\`: the app shows it as a file they can download.`
 
 export const threadService = {
   async list({ actor }: { actor: Caller }): Promise<Thread[]> {
@@ -45,6 +56,25 @@ export const threadService = {
     await ownRow({ actor, id })
     await db.deleteFrom('thread').where('id', '=', id).execute()
     return deleted({ id, object: 'thread' })
+  },
+
+  async upload({ actor, id, file, body }: { actor: Caller; id: string; file: UploadFile; body: unknown }): Promise<ChatFile> {
+    const row = await ownRow({ actor, id })
+    await agentService.requireEditable({ actor, id: row.agent_id })
+    if (!Buffer.isBuffer(body) || !body.length) throw new HttpError(400, 'Send the file\'s bytes as the request body, with Content-Type: application/octet-stream. Empty files can\'t be attached.')
+    const { path } = await agentd.saveUpload({ id: row.agent_id, name: safeFileName(file.name), body })
+    return { object: 'file', name: path.slice(path.lastIndexOf('/') + 1), path: `${AGENT_HOME}/${path}`, size: body.length, mediaType: file.type && MEDIA_TYPE.test(file.type) ? file.type : 'application/octet-stream' }
+  },
+
+  async download({ actor, id, path, reply }: { actor: Caller; id: string; path: string; reply: FastifyReply }): Promise<FastifyReply> {
+    const row = await ownRow({ actor, id })
+    await agentService.requireEditable({ actor, id: row.agent_id })
+    const inside = fileInHome(path)
+    if (!inside) throw new HttpError(400, `Only files in the agent's home folder, ${AGENT_HOME}, can be downloaded.`, { param: 'path' })
+    const { body } = await agentd.readFile({ id: row.agent_id, path: inside })
+    if (body === null) throw new HttpError(404, 'That file isn\'t in the agent\'s home folder. It may have been moved or deleted.', { param: 'path' })
+    const name = inside.slice(inside.lastIndexOf('/') + 1)
+    return reply.header('content-type', 'application/octet-stream').header('x-content-type-options', 'nosniff').header('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`).send(Buffer.from(body, 'base64'))
   },
 
   async chat({ actor, id, body, reply }: { actor: Caller; id: string; body: SendChat; reply: FastifyReply }): Promise<void> {
@@ -76,11 +106,11 @@ export const threadService = {
   },
 }
 
-async function callAgent({ agent, session, message, signal }: { agent: AgentRow; session: string; message: { role: 'user' | 'assistant'; content: string }; signal: AbortSignal }): Promise<ReadableStream<Uint8Array>> {
+async function callAgent({ agent, session, message, signal }: { agent: AgentRow; session: string; message: OpenAiMessage; signal: AbortSignal }): Promise<ReadableStream<Uint8Array>> {
   const res = await fetch(`${agentApiUrl(agent.net)}/v1/chat/completions`, {
     method: 'POST',
     headers: { authorization: `Bearer ${unseal(agent.channel_key)}`, 'content-type': 'application/json', 'x-hermes-session-id': session },
-    body: JSON.stringify({ model: 'hermes-agent', stream: true, messages: [message] }),
+    body: JSON.stringify({ model: 'hermes-agent', stream: true, messages: [{ role: 'system', content: CHAT_NOTE }, message] }),
     signal: AbortSignal.any([signal, AbortSignal.timeout(TURN_MS)]),
   }).catch((err: unknown) => { throw new HttpError(502, signal.aborted ? 'Stopped.' : `${agent.name} isn't reachable. ${unreachable(err)}`) })
   if (!res.ok || !res.body) throw new HttpError(502, `${agent.name} answered ${res.status}: ${(await res.text()).slice(0, 300)}`)
@@ -88,7 +118,7 @@ async function callAgent({ agent, session, message, signal }: { agent: AgentRow;
 }
 
 async function relay({ agent, session, message, writer, signal }: { agent: AgentRow; session: string; message: ChatMessage; writer: UIMessageStreamWriter; signal: AbortSignal }): Promise<void> {
-  const body = await callAgent({ agent, session, message: openAiOf(message), signal })
+  const body = await callAgent({ agent, session, message: await openAiOf({ agentId: agent.id, message }), signal })
   let text = 0
   let open = false
   for await (const event of sseEvents(body)) {
@@ -136,14 +166,63 @@ function nextMessages({ stored, body }: { stored: ChatMessage[]; body: SendChat 
   const kept = body.trigger === 'regenerate-message' ? dropTrailingAnswer(stored) : stored
   const messages = body.message && body.trigger === 'submit-message' ? [...kept.filter((message) => message.id !== body.message?.id), { ...body.message, role: 'user' as const }] : kept
   if (messages.at(-1)?.role !== 'user') throw new HttpError(400, 'Send a message first.', { param: 'message' })
+  if (body.message) checkFiles(body.message)
   return messages
 }
 
 const dropTrailingAnswer = (messages: ChatMessage[]): ChatMessage[] => messages.at(-1)?.role === 'assistant' ? messages.slice(0, -1) : messages
 
-function openAiOf(message: ChatMessage): { role: 'user' | 'assistant'; content: string } {
-  const content = message.parts.map((part) => part.type === 'text' && typeof part.text === 'string' ? part.text : '').join('').trim()
-  return { role: message.role, content }
+function checkFiles(message: ChatMessage): void {
+  const parts = message.parts.filter((part) => part.type === 'file')
+  if (parts.length > MAX_FILES) throw new HttpError(400, `Attach at most ${MAX_FILES} files to one message.`, { param: 'message' })
+  if (filesOf(message).length !== parts.length) throw new HttpError(400, `Each attached file must be uploaded to this chat first, so its path is in ${UPLOADS}.`, { param: 'message' })
+}
+
+function filesOf(message: ChatMessage): FilePart[] {
+  return message.parts.flatMap((part) => {
+    const file = z.safeParse(FilePart, part).data
+    return file && file.url.startsWith(`${UPLOADS}/`) && fileInHome(file.url)?.split('/').length === 2 ? [file] : []
+  })
+}
+
+async function openAiOf({ agentId, message }: { agentId: string; message: ChatMessage }): Promise<OpenAiMessage> {
+  const text = message.parts.map((part) => part.type === 'text' && typeof part.text === 'string' ? part.text : '').join('').trim()
+  const files = filesOf(message)
+  if (!files.length) return { role: message.role, content: text }
+  const listed = [text, `Attached files:\n${files.map((file) => `- ${file.url} (${file.mediaType})`).join('\n')}`].filter(Boolean).join('\n\n')
+  const images = await imagesOf({ agentId, files })
+  return { role: message.role, content: images.length ? [{ type: 'text', text: listed }, ...images] : listed }
+}
+
+async function imagesOf({ agentId, files }: { agentId: string; files: FilePart[] }): Promise<ImagePart[]> {
+  const images: ImagePart[] = []
+  let total = 0
+  for (const file of files.filter((each) => IMAGE_TYPES.includes(each.mediaType))) {
+    const body = await agentd.readFile({ id: agentId, path: fileInHome(file.url) ?? '' }).then((reply) => reply.body, () => null)
+    const type = body && imageTypeOf(Buffer.from(body.slice(0, 16), 'base64'))
+    if (!body || !type || body.length > MAX_IMAGE_BASE64 || total + body.length > MAX_IMAGES_BASE64) continue
+    total += body.length
+    images.push({ type: 'image_url', image_url: { url: `data:${type};base64,${body}` } })
+  }
+  return images
+}
+
+export function imageTypeOf(head: Buffer): string | undefined {
+  if (head.subarray(0, 4).equals(PNG)) return 'image/png'
+  if (head.subarray(0, 3).equals(JPEG)) return 'image/jpeg'
+  if (head.toString('latin1', 0, 4) === 'GIF8') return 'image/gif'
+  if (head.toString('latin1', 0, 4) === 'RIFF' && head.toString('latin1', 8, 12) === 'WEBP') return 'image/webp'
+  return undefined
+}
+
+export function safeFileName(name: string): string {
+  const cleaned = (name.split(/[/\\]/).pop() ?? '').normalize('NFC').replace(/[^\p{L}\p{N}._ ()+,=@-]+/gu, '-').replace(/\s+/g, ' ').replace(/^[^\p{L}\p{N}_(+,=@]+/u, '').trim()
+  const chars = Array.from(cleaned || 'file')
+  const dot = chars.lastIndexOf('.')
+  const ext = dot > 0 && chars.length - dot <= 16 ? chars.slice(dot) : []
+  const stem = ext.length ? chars.slice(0, dot) : chars
+  while (stem.length > 1 && (stem.length + ext.length > MAX_NAME || Buffer.byteLength([...stem, ...ext].join('')) > MAX_NAME_BYTES)) stem.pop()
+  return [...stem, ...ext].join('')
 }
 
 const PLUMBING = ['anthropic', 'codex', 'telegram']
@@ -185,5 +264,8 @@ function threadOf(row: ThreadRow): Thread {
   return { id: row.id, object: 'thread', agentId: row.agent_id, title: row.title, createdAt: new Date(row.created_at).toISOString(), updatedAt: new Date(row.updated_at).toISOString() }
 }
 
+type FilePart = z.infer<typeof FilePart>
+type ImagePart = { type: 'image_url'; image_url: { url: string } }
+type OpenAiMessage = { role: 'user' | 'assistant'; content: string | ({ type: 'text'; text: string } | ImagePart)[] }
 type ThreadRow = Selectable<Database['thread']>
 type AgentRow = Selectable<Database['agent']>
