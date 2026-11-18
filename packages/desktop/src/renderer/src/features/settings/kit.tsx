@@ -51,7 +51,7 @@ export function Chevron() {
 export function Command({ text }: { text: string }) {
   return <div className="flex items-center gap-2 rounded-lg bg-tint py-1.5 pr-1.5 pl-3">
     <code className="no-scrollbar fade-r min-w-0 flex-1 overflow-x-auto py-1 pr-6 font-mono text-[12px]/[1.6] whitespace-pre text-ink">{home(text)}</code>
-    <CopyButton text={text} label="Copy" className={PILL} />
+    <CopyButton text={text} label="Copy" variant="ghost" className={PILL} />
   </div>
 }
 

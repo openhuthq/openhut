@@ -79,7 +79,7 @@ function ProviderRow({ provider, note }: { provider: Provider; note: string }) {
   const subscription = provider.kind === 'subscription'
   return <Row icon={<Glyph name={provider.id} size={20} />} title={providerInfo(provider.id).short} note={note}>
     {provider.connected
-      ? <><Status tone="on">{subscription ? 'Signed in' : 'Connected'}</Status><Button type="button" variant="secondary" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id) }}>Manage</Button></>
+      ? <><Status tone="on">{subscription ? 'Signed in' : 'Connected'}</Status><Button type="button" variant="ghost" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id) }}>Manage</Button></>
       : <Button type="button" variant="secondary" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id === 'claude' ? 'seat' : provider.id) }}>{subscription ? 'Sign in' : 'Add key'}</Button>}
   </Row>
 }
@@ -148,7 +148,7 @@ function CodexSignInStep({ onSignedIn }: { onSignedIn: () => void }) {
     foot={<><Button type="button" variant="secondary" onClick={cancel}>Cancel</Button>{error && <Button type="button" variant="primary" onClick={restart}>Start again</Button>}</>}>
     <div className="flex items-center gap-3 rounded-lg bg-sidebar py-3 pr-3 pl-4">
       <span className="flex-1 font-mono text-[22px] tracking-[.08em]" aria-label="Sign-in code">{signIn?.userCode ?? '····-····'}</span>
-      {signIn && <CopyButton text={signIn.userCode} label="Copy" className={PILL} />}
+      {signIn && <CopyButton text={signIn.userCode} label="Copy" variant="ghost" className={PILL} />}
     </div>
     {signIn && <a href={signIn.url} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), 'self-start')}>Open {new URL(signIn.url).host}<I icon={ArrowUpRight01Icon} size={14} /></a>}
     {!error && <span className="inline-flex items-center gap-2 text-[13px] text-mute"><Spinner className="mt-0" />{signIn ? 'Waiting for you to approve it…' : 'Getting a code…'}</span>}
@@ -188,11 +188,11 @@ function Manage({ provider, notice, clearNotice }: { provider: Provider & { comp
         {confirming
           ? <>
             <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
-            <Button type="button" variant="destructive" className={PILL} disabled={disconnect.isPending} onClick={() => { leave(provider.id); disconnect.mutate(provider.id) }}>{off}</Button>
+            <Button type="button" variant="danger" className={PILL} disabled={disconnect.isPending} onClick={() => { leave(provider.id); disconnect.mutate(provider.id) }}>{off}</Button>
           </>
           : <>
-            {!fixed && <Button type="button" variant="secondary" className={PILL} disabled={refresh.isPending} onClick={() => { clearNotice(); refresh.mutate(provider.id, { onError: toastError }) }}>{refresh.isPending ? 'Refreshing…' : 'Refresh models'}</Button>}
-            {!keepsSignedIn && <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(true)}>{off}</Button>}
+            {!fixed && <Button type="button" variant="ghost" className={PILL} disabled={refresh.isPending} onClick={() => { clearNotice(); refresh.mutate(provider.id, { onError: toastError }) }}>{refresh.isPending ? 'Refreshing…' : 'Refresh models'}</Button>}
+            {!keepsSignedIn && <Button type="button" variant="danger" className={PILL} onClick={() => setConfirming(true)}>{off}</Button>}
           </>}
       </Row></div>
       {notice && <p role="status" className="m-0 flex items-center gap-2 px-2.5 text-[13px]/[18px] text-body"><I icon={Tick02Icon} size={16} className="text-success-foreground" />{notice}</p>}
@@ -210,7 +210,7 @@ function Manage({ provider, notice, clearNotice }: { provider: Provider & { comp
           {visible.map((model) => <ModelRow key={model.id} provider={provider} model={model} onSwitch={toggle} />)}
           {!shown.length && <p className="m-0 px-2.5 py-1 text-[12px] text-mute">No model matches.</p>}
         </Rows>
-        {!query.trim() && !all && shown.length > FIRST_SHOWN && <div className="px-2.5 pt-1.5"><Button type="button" variant="secondary" className={PILL} onClick={() => setAll(true)}>Show all {count(shown.length)}</Button></div>}
+        {!query.trim() && !all && shown.length > FIRST_SHOWN && <div className="px-2.5 pt-1.5"><Button type="button" variant="text" className="text-[12px]" onClick={() => setAll(true)}>Show all {count(shown.length)}</Button></div>}
       </div>
     </div>
   </div>

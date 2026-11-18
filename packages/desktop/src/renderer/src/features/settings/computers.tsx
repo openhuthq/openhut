@@ -100,13 +100,13 @@ function RemovableRow({ computer, admin, note, agents }: { computer: Computer; a
     {confirming
       ? <>
         <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
-        <Button type="button" variant="destructive" className={PILL} disabled={remove.isPending} onClick={() => remove.mutate({ id: computer.id, agents: agents.map((agent) => agent.id) }, { onError: toastError })}>Remove</Button>
+        <Button type="button" variant="danger" className={PILL} disabled={remove.isPending} onClick={() => remove.mutate({ id: computer.id, agents: agents.map((agent) => agent.id) }, { onError: toastError })}>Remove</Button>
       </>
       : <>
         {admin?.server.updateAvailable && (update.isPending
           ? <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>
           : <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate(computer, { onError: toastError })}>{admin.server.update?.status === 'failed' ? 'Try again' : 'Update'}</Button>)}
-        <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(true)}>Remove</Button>
+        <Button type="button" variant="danger" className={PILL} onClick={() => setConfirming(true)}>Remove</Button>
       </>}
   </Row></div>
 }
@@ -120,7 +120,7 @@ function EnrollRow({ enrollment }: { enrollment: Enrollment }) {
     {failed
       ? <>
         <Button type="button" variant="secondary" className={PILL} onClick={() => start(enrollment.peer)}>Try again</Button>
-        <Button type="button" variant="secondary" className={PILL} onClick={() => dismiss(enrollment.peer.dns)}>Remove</Button>
+        <Button type="button" variant="ghost" className={PILL} onClick={() => dismiss(enrollment.peer.dns)}>Remove</Button>
       </>
       : <Spinner className="mt-0" />}
   </Row>

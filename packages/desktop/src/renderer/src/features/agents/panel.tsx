@@ -94,8 +94,8 @@ function PanelTitle({ agent, naming }: { agent: Agent; naming: boolean }) {
         </>
         : <>
           <Tooltip label={toggle}><Button type="button" variant="bare" className={TINY_ICON} aria-label={toggle} disabled={!agent.canEdit || updateAgent.isPending}
-            onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} /></Button></Tooltip>
-          {agent.canEdit && <Tooltip label={`Delete ${agent.name}`}><Button type="button" variant="bare" className={cn(TINY_ICON, 'hover:text-fail')} aria-label={`Delete ${agent.name}`} onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={16} /></Button></Tooltip>}
+            onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} className={running ? 'text-hue-amber' : 'text-hue-green'} /></Button></Tooltip>
+          {agent.canEdit && <Tooltip label={`Delete ${agent.name}`}><Button type="button" variant="bare" className={cn(TINY_ICON, 'text-fail')} aria-label={`Delete ${agent.name}`} onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={16} /></Button></Tooltip>}
         </>}</span>
     </div>
     <span className="flex items-center gap-2 text-xs text-body">{confirming ? 'Its memory goes too.' : <AgentStatus agent={agent} />}</span>

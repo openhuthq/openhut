@@ -33,7 +33,7 @@ export function ConfirmDialog({ open, onOpenChange, question, detail, action, on
 
 export function ConfirmIcon({ label, icon, danger, question, action, busy, onConfirm }: { label: string; icon: IconSvgElement; danger?: boolean; question: string; action: string; busy: boolean; onConfirm: (done: () => void) => void }) {
   const { confirming, setConfirming, box } = useConfirming()
-  if (!confirming) return <Tooltip label={label}><Button type="button" variant="bare" className={cn(TINY_ICON, danger && 'hover:text-fail')} aria-label={label} onClick={() => setConfirming(true)}><I icon={icon} size={16} /></Button></Tooltip>
+  if (!confirming) return <Tooltip label={label}><Button type="button" variant="bare" className={cn(TINY_ICON, danger && 'text-fail')} aria-label={label} onClick={() => setConfirming(true)}><I icon={icon} size={16} /></Button></Tooltip>
   return <div ref={box} role="group" aria-label={question} className="flex min-w-0 animate-grow items-center gap-1.5">
     <span className="min-w-0 truncate text-[12px] text-mute">{question}</span>
     <Button type="button" variant="secondary" className={PILL} autoFocus onClick={() => setConfirming(false)}>Cancel</Button>

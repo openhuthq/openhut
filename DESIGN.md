@@ -12,6 +12,19 @@ The old secondary was a white fill with a grey border and black text. The border
 
 Rejected: adding an accent colour so borderless accent text could carry the secondary. It rebrands a deliberately monochrome product to fix one button.
 
+### Four tiers (owner, 2026-11-18)
+
+Every labelled button is one of four tiers, loudest first. Pick by what the action does for the row or view, not by where it sits. Red is a tone over tiers 1 to 3, never a fifth tier.
+
+| Tier | `Button` | Looks like | Use for |
+|---|---|---|---|
+| 1 Primary | `variant="primary"` | ink fill, white text | the one commit of a layer: Test and connect, Add, Start again, New agent |
+| 2 Secondary | `variant="secondary"` | `--soft` grey fill | what a row needs next: Sign in, Add key, Connect, Set up, Update, Restart to update, Download, Try again, Get Tailscale; and Cancel |
+| 3 Ghost | `variant="ghost"` | surface background (transparent), ink text, soft fill on hover | actions on a row that is already done: Manage, Show folder, Check now, Refresh, Copy, I've installed it; red text (`danger`) for Remove, Disconnect |
+| 4 Text | `variant="text"` | coloured text only, no padding or fill, hover underline | a quiet way onward: Show all N, + Add, 2 connected ›, Edit beside a value |
+
+Icon-only buttons sit outside the tiers. They are ghost squares, ink by default. Delete's trash is red at rest and Stop/Start are tinted (rule 13). The test for 2 against 3 is state: a row that still needs setting up gets a secondary; once it's set up, its action drops to ghost so the rows that need you stand out. Tier 4 replaces the hand-styled `variant="bare"` text buttons (`connections-view.tsx` "N connected", `agent-connections.tsx` "+ Add"). Settings page by page: see the table under "Settings, by tier".
+
 ### Variants
 
 | Variant | `Button` | Rest | Hover | Use for | Never for |
@@ -20,7 +33,7 @@ Rejected: adding an accent colour so borderless accent text could carry the seco
 | Secondary | `variant="secondary"` | fill `--soft`, text `--ink`, no border | fill `--mid` | every other action that should look like a button: Cancel, Chat, Stop/Start, Retry, external links, labelled Copy | destructive actions |
 | Ghost | default | transparent, text `--ink` | fill `--soft` | row actions, toolbar actions, the close X | the only action in a view |
 | Danger | `variant="danger"` | transparent, text `--fail` | fill `--fail` at 8% | the trigger of a destructive action | anything not behind a confirm |
-| Danger fill | `variant="destructive"` | fill `--fail`, white text | same, slightly darker | only the final button inside a confirm dialog | everywhere else |
+| Danger fill | `variant="destructive"` | fill `--fail`, white text | same, slightly darker | only the final button of a confirm whose action loses data for good (Delete agent, Delete connection) | everywhere else |
 | Icon-only | `size="icon"` or `"icon-sm"` | square, transparent, icon in `--mute` | soft fill, icon in `--ink` (red with `danger`) | Close, Toggle sidebar, Rename, More (⋯), Send/Stop, and the one repeated action of a table row | any action without a universally known glyph |
 | Link | `a`, `variant="link"` | underlined, inherited colour | none | an action inside a sentence | standalone actions |
 | Overflow menu | `DropdownMenu` | ghost icon trigger (⋯) | `--tint` highlight | two or more rare actions in a header | a single item, or the primary |
@@ -37,17 +50,17 @@ Two sizes. 32px (default) in page headers, dialog and popover footers, empty sta
 4. Header buttons are icon + label. Row, footer and inline-form buttons are label only, except the external-link and copy icons.
 5. Icon-only is for Close, Toggle sidebar, Rename, More, Send/Stop, and a table row's single repeated action (trash to remove a person, × to take a connection off an agent), so a long table isn't a column of the same word. Each has `aria-label` and `title`.
 6. An action is red if and only if it opens a confirm, and it gets a confirm if and only if one click cannot undo it.
-7. The trigger is red text; the button inside the confirm is red fill. Red fill appears nowhere else.
+7. The trigger is red text. The button inside the confirm is red fill only when the action loses data for good (Delete an agent or a connection). An action that can be done again (Remove a computer, whose agents move back here; Disconnect a model) keeps red text on the surface's background in its confirm too, no fill (owner, 2026-11-18). Red fill appears nowhere else.
 8. A copy button confirms in place: `CopyButton` swaps its icon for a checkmark for 1.5s, no toast. Only a failed copy toasts.
 8. On the page that manages an object (agent, connection), Delete is visible in the header, last, after a separator.
 9. On a page that is not for managing the object (chat), destructive actions live in the ⋯ menu, last, after a separator, in red.
 10. A header shows at most three buttons. A fourth sends everything but the primary and one secondary into ⋯. A ⋯ menu holds at least two items.
 11. The trash icon means the thing is gone for good (Delete, Remove a person). Disconnect, Revoke and Unlink never use it.
 12. Dialog footers: Cancel (secondary) left, the committing action (primary or danger fill) rightmost.
-13. A state toggle (Stop/Start) is one secondary button named for what it will do, with a swapping icon and no colour. The status badge carries the colour.
+13. A state toggle (Stop/Start) is one button named for what it will do, with a swapping icon. As an icon in a header its glyph is tinted for what it does (owner, 2026-11-18): Stop in `--hue-amber`, Start in `--hue-green`.
 14. A button that fires a mutation is disabled while it is pending. One that waits on an outside service also changes its label to "Connecting…".
 15. Actions inside a sentence are links, never buttons.
-16. **Banned: confirming in a popover** (owner, 2026-11-18). A confirm never floats over the trigger. A small action (an icon in a header, a row's pill) confirms in place, as Settings › Computers does: the trigger turns into a grey Cancel and a red-filled action pill where it stood, the line under it says what happens, and Esc or a click elsewhere cancels (`useConfirming` and `ConfirmIcon` in `components/confirm-button.tsx`). Where the line can't fit beside the pills (the agent panel), the status line under the name says it instead. Bigger destructive actions keep the `AlertDialog`.
+16. **Banned: confirming in a popover** (owner, 2026-11-18). A confirm never floats over the trigger. A small action (an icon in a header, a row's pill) confirms in place, as Settings › Computers does: the trigger turns into a grey Cancel and a red action pill where it stood (red text, no fill, unless rule 7 calls for the fill), the line under it says what happens, and Esc or a click elsewhere cancels (`useConfirming` and `ConfirmIcon` in `components/confirm-button.tsx`). Where the line can't fit beside the pills (the agent panel), the status line under the name says it instead. Bigger destructive actions keep the `AlertDialog`.
 
 ### What changes, by page
 
@@ -75,6 +88,34 @@ Two sizes. 32px (default) in page headers, dialog and popover footers, empty sta
 | Admin | row Set up / Edit / View | `btn row` 30px | ghost `sm` 28px |
 | Admin | inline Cancel | white bordered beside a white bordered input | soft fill |
 | Admin | Update now | primary `sm` (a second primary when a form is open) | secondary `sm` |
+
+### Settings, by tier
+
+Today every Settings action is a secondary pill, so Sign in and Manage look the same. Target:
+
+| Page | Button | Today | Tier |
+|---|---|---|---|
+| General | Show folder | secondary | 3 ghost |
+| General › Updates | Check now | secondary | 3 ghost |
+| General › Updates | Download, Restart to update, Update | secondary | 2 secondary |
+| Computers | Update (computer row) | secondary | 2 secondary |
+| Computers | Remove (opens the in-place confirm) | secondary | 3 ghost, red |
+| Computers | inline confirm Cancel / Remove | secondary / destructive | 2 secondary / 3 ghost, red (no fill: a computer can be added again) |
+| Models › provider | inline confirm Cancel / Disconnect | secondary / destructive | 2 secondary / 3 ghost, red |
+| Computers | enrolment Try again / Remove | secondary / secondary | 2 secondary / 3 ghost |
+| Add a computer › Tailscale | Get Tailscale / I've installed it / Check again | secondary / ghost / secondary | 2 / 3 / 2 |
+| Add a computer › Others | Add | primary | 1 primary |
+| Models | Sign in, Add key (not set up) | secondary | 2 secondary |
+| Models | Manage (signed in or connected) | secondary | 3 ghost |
+| Models › provider | Refresh models | secondary | 3 ghost |
+| Models › provider | Disconnect / Sign out (opens confirm) | secondary | 3 ghost, red |
+| Models › provider | Show all N | secondary | 4 text |
+| Models › key form | Cancel / Test and connect | secondary / primary | 2 / 1 |
+| Models › sign-in | Copy code / Open host | secondary / secondary | 3 ghost / 2 secondary |
+| MCP | Copy (command, path) | secondary | 3 ghost |
+| Settings | Back, Close | icon | icon (ghost) |
+
+Outside Settings the same test holds: agent panel channels "Set up" is secondary until set up, then "Edit" is ghost; Connections "Connect" stays secondary; "+ Add" and "N connected ›" become text.
 
 ### Code
 
@@ -119,7 +160,7 @@ DuskBot's look (owner, 2026-11-17). Text and chrome are calm: ink text at a few 
 Owner, 2026-11-17, after a fully coloured pass read as too much.
 
 - Colour only for identity: brand logos (Slack, WhatsApp, Telegram, Gmail, Claude, OpenAI, every app in Connections), agent faces, status dots (green running, amber starting, red failing, grey off). The Claude sparkle beside a model name is a brand mark and stays.
-- Actions are plain: Stop/Start, Clear chat, Delete and every other icon button are 16px Hugeicons in ink at 1.6 stroke, 28 to 32px hit area, hover fill only. Delete turns red only on hover.
+- Actions are plain: Stop/Start, Clear chat, Delete and every other icon button are 16px Hugeicons in ink at 1.6 stroke, 28 to 32px hit area, hover fill only. Two exceptions carry colour at rest (owner, 2026-11-18): Delete's trash is `--fail` (destructive red), and Stop/Start are amber/green as in rule 13. Every other icon button stays ink.
 - Settings icons carry one soft tint each; everywhere else colour is identity only (owner, 2026-11-17). In the Settings nav and Settings rows each line icon's stroke takes one calm hue from the `--hue-*` tokens in `index.css` (about 65% of the bright brand chroma): General slate, Updates sky, Computers blue, Models violet, MCP teal; open at login green, keep awake and notifications amber, failures red, the data folder blue, usage violet. One colour per icon, no fills, no tiles. The app is light-only (`color-scheme: light`), so the hues have no dark variants yet; add them with the dark theme.
 - Everywhere else row icons are plain line icons in `--mute`: the panel's rows (Model, Runs on, Memory, Skills, Browser, Run code), the chat and the sidebar.
 
