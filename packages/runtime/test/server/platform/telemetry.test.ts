@@ -7,7 +7,7 @@ import { agentd } from '../../../src/server/platform/agentd.ts'
 import { reportActive, reportMessages, sendTelemetry } from '../../../src/server/platform/telemetry.ts'
 
 await migrate()
-const actor = { id: 'usr_telemtry', email: 'owner@acme.example' }
+const actor = { id: 'usr_telemtry' }
 const INSTANCE = '0b9c2f2e-3c1d-4b6a-9f1e-2a7d5c8e1f00'
 
 test('telemetry is off for test-model servers, so tests and the e2e run never send anything', () => {
@@ -16,7 +16,7 @@ test('telemetry is off for test-model servers, so tests and the e2e run never se
   assert.deepEqual(takeTelemetry(), [])
 })
 
-test('every event is logged, and only catalog events are queued, with only safe properties and no email', () => {
+test('every event is logged, and only catalog events are queued, with only their allowed properties', () => {
   config.telemetry = true
   const logged = mock.method(log, 'info', () => {})
   emit({ name: 'agent.created', actor, target: { type: 'agent', id: 'ag_x', name: 'Payroll bot', model: 'sonnet' } })
@@ -35,7 +35,7 @@ test('every event is logged, and only catalog events are queued, with only safe 
   ])
 })
 
-test('the daily check-in reports buckets, never an email, and a batch goes to the hub with the instance', async () => {
+test('the daily check-in reports the agent bucket, and a batch goes to the hub with the install id, version and kind', async () => {
   await db.insertInto('person').values([
     { id: 'usr_telown1', email: 'owner@acme.example', role: 'owner', removed_at: null },
     { id: 'usr_telmem1', email: 'm@acme.example', role: 'member', removed_at: null },
@@ -93,15 +93,23 @@ test('turning usage data off in Admin stops tracking and drops anything not sent
   assert.deepEqual(takeTelemetry().map(({ name }) => name), ['memory_edited'])
 })
 
-test('in local mode no event carries an email, login or username, only the anonymous instance id', async () => {
+test('an install gets one random id on first start, kept in its database, even with usage data off', async () => {
+  const { settings } = await import('../../../src/server/platform/settings.ts')
+  const { startTelemetry } = await import('../../../src/server/platform/telemetry.ts')
+  await startTelemetry()
+  const id = settings.instanceId()
+  assert.match(id ?? '', /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  await startTelemetry()
+  assert.equal(settings.instanceId(), id)
+})
+
+test('nothing sent identifies anyone: no actor, no username, only the random install id', async () => {
   config.telemetry = true
-  config.socket = '/tmp/openhut-test.sock'
-  emit({ name: 'setup.completed', actor: { id: 'usr_local1', email: 'owner@acme.example' }, target: { type: 'person', id: 'usr_local1' } })
+  emit({ name: 'setup.completed', actor: { id: 'usr_local1' }, target: { type: 'person', id: 'usr_local1' } })
+  emit({ name: 'agent.created', actor: { id: 'usr_local1' }, target: { type: 'agent', id: 'ag_1', name: 'Payroll', model: 'sonnet', email: 'x@y.example' } })
   await reportActive()
-  config.socket = undefined
   config.telemetry = false
   const sent = JSON.stringify(takeTelemetry())
   assert.match(sent, /setup_completed/)
-  assert.match(sent, /instance_active/)
-  assert.doesNotMatch(sent, /email|login|username|owner@acme/)
+  assert.doesNotMatch(sent, /usr_local1|Payroll|email|x@y/)
 })
