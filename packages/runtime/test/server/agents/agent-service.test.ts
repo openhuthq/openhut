@@ -39,14 +39,14 @@ test('an agent\'s own token is the whole check, from any address; a forged one i
 })
 
 test('revoking an agent\'s token refuses the old one at once; the new one works', async () => {
-  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
   await agentService.revokeToken({ actor, id: 'ag_tokentst' })
   assert.equal(await agentService.byToken({ token }), undefined)
   assert.equal((await agentService.byToken({ token: agentToken({ id: 'ag_tokentst', epoch: 1 }) }))?.id, 'ag_tokentst')
 })
 
 test('renaming an agent cleans the name and refuses an empty one', async () => {
-  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
   assert.equal((await agentService.update({ actor, id: 'ag_tokentst', patch: { name: '  Sales <b>bot</b> ' } })).name, 'Sales bbotb')
   await assert.rejects(agentService.update({ actor, id: 'ag_tokentst', patch: { name: '<>' } }), { status: 400 })
 })
@@ -54,12 +54,12 @@ test('renaming an agent cleans the name and refuses an empty one', async () => {
 test('the browser is off for every agent, even on a database that kept the old browser column that defaulted to on', async () => {
   await sql`alter table agent add column if not exists browser boolean not null default true`.execute(db)
   await migrate()
-  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
   assert.equal((await agentService.get({ actor, id: 'ag_tokentst' })).browser, false)
 })
 
 test('an agent moves sealed with its channels, chats, home and the grants this computer can give, and its model choices', async () => {
-  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com' }
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false }
   const id = 'ag_movetest'
   await db.insertInto('agent').values({ id, name: 'Mover', owner_id: actor.id, instructions: '# Mover', model: 'claude:haiku', fallback_model: 'claude:opus', helper_models: '{"title":"claude:sonnet"}', net: 9, channel_key: seal('k'.repeat(32)) }).execute()
   await db.insertInto('channel').values({ id: 'ch_movetest', agent_id: id, kind: 'slack', status: 'connected', account: 'Acme', owner_address: '', open: false, allowed: '', secrets: seal(JSON.stringify({ botToken: 'xoxb-1', appToken: 'xapp-1' })) }).execute()
@@ -98,7 +98,7 @@ test('an agent moves sealed with its channels, chats, home and the grants this c
 })
 
 test('model choices: only a connected, switched-on model is accepted, and a helper merges', async () => {
-  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
   const model = (id: string, on: boolean) => ({ id, name: id, on, tier: 'big' as const, note: null, contextLength: null, inputPrice: null, outputPrice: null })
   await settings.setProviderKey('openai', 'sk-test-key-for-choices')
   await settings.setCatalog('openai', { at: new Date().toISOString(), models: [model('gpt-5.5', true), model('gpt-5.5-mini', true), model('o5', false)] })
@@ -121,7 +121,7 @@ test('an older database is migrated: bare model ids get their provider, the mode
 })
 
 test('a computer without agent-browser refuses the browser switch before changing anything', async () => {
-  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com' }
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false }
   await assert.rejects(agentService.update({ actor, id: 'ag_tokentst', patch: { browser: true } }), { status: 409, param: 'browser' })
   assert.equal((await db.selectFrom('agent').select('web_browser').where('id', '=', 'ag_tokentst').executeTakeFirstOrThrow()).web_browser, false)
 })

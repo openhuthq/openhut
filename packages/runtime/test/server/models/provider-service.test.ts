@@ -36,7 +36,7 @@ const { settings } = await import('../../../src/server/platform/settings.ts')
 const { providerService } = await import('../../../src/server/models/provider-service.ts')
 await migrate()
 
-const actor = { id: 'usr_provider1', email: 'owner@example.com' }
+const actor = { id: 'usr_provider1', email: 'owner@example.com', local: false }
 const GOOD = 'sk-good-key-1234'
 const many = (count: number) => Array.from({ length: count }, (_, index) => ({ id: `gpt-${index}`, created: index }))
 

@@ -67,7 +67,7 @@ test('a forged token gets 401, and so does the old token right after a revoke', 
   const old = agentToken({ id: 'ag_brokerrv', epoch: 0 })
   const ask = (bearer: string) => fetch(`${gw}/u/anthropic/v1/messages`, { method: 'POST', headers: { authorization: `Bearer ${bearer}` }, body: '{}' })
   assert.equal((await ask(old)).status, 200)
-  await agentService.revokeToken({ actor: { id: 'usr_brokerow', email: 'broker@example.com' }, id: 'ag_brokerrv' })
+  await agentService.revokeToken({ actor: { id: 'usr_brokerow', email: 'broker@example.com', local: false }, id: 'ag_brokerrv' })
   assert.equal((await ask(old)).status, 401)
   assert.equal((await ask(agentToken({ id: 'ag_brokerrv', epoch: 1 }))).status, 200)
 })

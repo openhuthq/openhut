@@ -1,12 +1,15 @@
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as z from 'zod/mini'
 
 const PackageJson = z.object({ version: z.string() })
 const PORT = Number(process.env.PORT ?? 8787)
+const DATA = process.env.OPENHUT_DATA ?? '/data/app'
+const INSTALL_KIND = z.enum(['desktop', 'server']).parse(process.env.OPENHUT_INSTALL_KIND ?? (process.env.OPENHUT_SOCKET ? 'desktop' : 'server'))
 
 export const config = {
-  dataDir: process.env.OPENHUT_DATA ?? '/data/app',
+  dataDir: DATA,
   port: PORT,
   host: process.env.OPENHUT_HOST ?? '127.0.0.1',
   gatewayPort: Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081),
@@ -14,8 +17,8 @@ export const config = {
   telemetry: process.env.OPENHUT_MODEL !== 'test',
   cloudUrl: process.env.OPENHUT_CLOUD_URL ?? 'https://cloud.openhut.dev',
   telemetryUrl: `${process.env.OPENHUT_CLOUD_URL ?? 'https://cloud.openhut.dev'}/v1/events`,
-  socket: process.env.OPENHUT_SOCKET,
-  installKind: installKindOf(process.env.OPENHUT_SOCKET),
+  socket: process.env.OPENHUT_SOCKET ?? join(DATA, 'openhut.sock'),
+  installKind: installKindOf(INSTALL_KIND),
   clientKeySha256: process.env.OPENHUT_CLIENT_KEY_SHA256,
   modelMode: process.env.OPENHUT_MODEL === 'test' ? 'test' as const : 'claude' as const,
   agentApi: process.env.OPENHUT_AGENT_API,
@@ -40,8 +43,8 @@ export const config = {
 }
 delete process.env.OPENHUT_SECRET
 
-function installKindOf(socket: string | undefined): 'mac' | 'linux' | 'server' {
-  if (!socket) return 'server'
+function installKindOf(kind: 'desktop' | 'server'): 'mac' | 'linux' | 'server' {
+  if (kind === 'server') return 'server'
   return process.platform === 'darwin' ? 'mac' : 'linux'
 }
 

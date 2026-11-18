@@ -1,16 +1,32 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { generateKeyPairSync } from 'node:crypto'
+import { once } from 'node:events'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { adminService, isNewer, updateStatus } from '../../../src/server/admin/admin-service.ts'
 import { connectionService } from '../../../src/server/connections/connection-service.ts'
+import { config } from '../../../src/server/platform/config.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { settings } from '../../../src/server/platform/settings.ts'
 
-const actor = { id: 'usr_aaaaaaaa', email: 'owner@example.com' }
+const actor = { id: 'usr_aaaaaaaa', email: 'owner@example.com', local: false }
 await migrate()
 await db.insertInto('person').values({ id: actor.id, email: actor.email, role: 'owner' }).execute()
 const startedAt = '2026-11-13T12:00:00.000Z'
 const at = (seconds: number) => Date.parse(startedAt) + seconds * 1000
+
+test('a server install reads the latest release from the site; a desktop install never does', async (t) => {
+  const site = createServer((_req, res) => res.end('#!/bin/sh\nOPENHUT_BUILD="9.9.9"\n')).listen(0, '127.0.0.1')
+  await once(site, 'listening')
+  const { releaseUrl, installKind } = config
+  t.after(() => { site.close(); Object.assign(config, { releaseUrl, installKind }) })
+  config.releaseUrl = `http://127.0.0.1:${(site.address() as AddressInfo).port}`
+  assert.equal(config.installKind, 'server')
+  assert.equal(await adminService.latestBuild(), '9.9.9')
+  config.installKind = 'mac'
+  assert.equal(await adminService.latestBuild(), null)
+})
 
 test('a higher version is an update, and so is any other release that is not a version; never for a dev build', () => {
   assert.equal(isNewer({ latest: '0.1.10', current: '0.1.9' }), true)

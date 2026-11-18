@@ -11,8 +11,8 @@ await db.insertInto('person').values([
   { id: 'usr_memmembr', email: 'memmember@example.com', role: 'member', removed_at: null },
 ]).execute()
 await db.insertInto('agent').values({ id: 'ag_memorytt', name: 'Ops', owner_id: 'usr_memowner', instructions: '# Ops', model: 'sonnet', net: 11, channel_key: seal('k'.repeat(32)) }).execute()
-const owner = { id: 'usr_memowner', email: 'memowner@example.com', role: 'admin' as const }
-const member = { id: 'usr_memmembr', email: 'memmember@example.com', role: 'member' as const }
+const owner = { id: 'usr_memowner', email: 'memowner@example.com', local: false, role: 'admin' as const }
+const member = { id: 'usr_memmembr', email: 'memmember@example.com', local: false, role: 'member' as const }
 const files: { notes: string | null; people: string | null } = { notes: ' Late means 5 days.\n§\n\nRefunds need David. \n§\n', people: null }
 mock.method(agentd, 'ps', async () => ({ states: {} }))
 mock.method(agentd, 'memory', async () => ({ ...files }))

@@ -1,4 +1,3 @@
-import { chmodSync, rmSync } from 'node:fs'
 import Fastify from 'fastify'
 import websocket from '@fastify/websocket'
 import { config } from './platform/config.ts'
@@ -22,9 +21,10 @@ import { gatewayServer } from './gateway/gateway-server.ts'
 import { mcpController } from './mcp/mcp-controller.ts'
 import { threadController } from './threads/thread-controller.ts'
 import { meController } from './team/team-controller.ts'
+import { listenLocally } from './team/identity.ts'
 
-if (!config.socket && !/^[0-9a-f]{64}$/i.test(config.clientKeySha256 ?? '')) {
-  log.error({ event: 'app.no_client_key', message: 'Set OPENHUT_CLIENT_KEY_SHA256 to the hex SHA-256 of the key the OpenHut app enrolled, or OPENHUT_SOCKET for local mode. Refusing to start without either.' })
+if (config.installKind === 'server' && !/^[0-9a-f]{64}$/i.test(config.clientKeySha256 ?? '')) {
+  log.error({ event: 'app.no_client_key', message: 'Set OPENHUT_CLIENT_KEY_SHA256 to the hex SHA-256 of the key the OpenHut app enrolled, or OPENHUT_INSTALL_KIND=desktop for local mode. Refusing to start without either.' })
   process.exit(1)
 }
 await migrate()
@@ -59,19 +59,17 @@ await app.register(mcpController, { prefix: '/mcp' })
 
 app.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody({ status: 404, message: `There's no ${req.method} ${req.url.split('?')[0]}.` })))
 
-const pipe = process.platform === 'win32'
-if (config.socket && !pipe) rmSync(config.socket, { force: true })
-const umask = process.umask(0o177)
-await app.listen(config.socket ? { path: config.socket } : { port: config.port, host: config.host })
-process.umask(umask)
-if (config.socket && !pipe) chmodSync(config.socket, 0o600)
+if (config.installKind === 'server') await app.listen({ port: config.port, host: config.host })
+else await app.ready()
+const local = await listenLocally({ server: app.server, path: config.socket })
 process.once('SIGTERM', async () => {
   log.info({ event: 'app.stopping' })
+  local.close()
   await app.close()
   await db.destroy()
   process.exit(0)
 })
-emit({ name: 'app.started', properties: { at: config.socket ?? config.port, build: config.build, version: config.version, kind: config.installKind } })
+emit({ name: 'app.started', properties: { at: config.installKind === 'server' ? config.port : config.socket, build: config.build, version: config.version, kind: config.installKind } })
 await startTelemetry()
 await gatewayServer.start().catch(async (err: unknown) => {
   log.error({ event: 'gateway.bind_failed', port: config.gatewayPort, error: messageOf(err) })
