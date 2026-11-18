@@ -53,10 +53,11 @@ export const threadService = {
     return threadOf(row)
   },
 
-  async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'thread'>> {
+  async delete({ actor, id, uploads }: { actor: Caller; id: string; uploads: string[] }): Promise<Deleted<'thread'>> {
     const row = await ownRow({ actor, id })
     await db.deleteFrom('thread').where('id', '=', id).execute()
-    const names = [...new Set(messagesOf(row).flatMap(filesOf).flatMap((file) => uploadName(file.url) ?? []))]
+    const sent = messagesOf(row).flatMap(filesOf).map((file) => file.url)
+    const names = [...new Set([...sent, ...uploads].flatMap((path) => uploadName(path) ?? []))]
     for (let start = 0; start < names.length; start += MAX_REMOVED) {
       await agentd.removeUploads({ id: row.agent_id, names: names.slice(start, start + MAX_REMOVED) })
         .catch((err: unknown) => log.warn({ event: 'thread.uploads_kept', thread: id, agent: row.agent_id, error: messageOf(err) }))
@@ -69,7 +70,8 @@ export const threadService = {
     await agentService.requireEditable({ actor, id: row.agent_id })
     const name = uploadName(path)
     if (!name) throw new HttpError(400, `Only files uploaded to a chat, in ${UPLOADS}, can be deleted here.`, { param: 'path' })
-    await agentd.removeUploads({ id: row.agent_id, names: [name] })
+    const { removed } = await agentd.removeUploads({ id: row.agent_id, names: [name] })
+    if (!removed.length) throw new HttpError(404, 'That upload isn\'t in the agent\'s uploads folder. It may have been deleted already.', { param: 'path' })
     return deleted({ id: path, object: 'file' })
   },
 

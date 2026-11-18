@@ -5,7 +5,7 @@ import Fastify from 'fastify'
 import { isUploadName } from '../../../src/agentd/files.ts'
 import { agentd } from '../../../src/server/platform/agentd.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
-import { answerErrors } from '../../../src/server/platform/http-error.ts'
+import { answerErrors, HttpError } from '../../../src/server/platform/http-error.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { validateWithZod } from '../../../src/server/platform/validation.ts'
 import { threadController } from '../../../src/server/threads/thread-controller.ts'
@@ -112,7 +112,10 @@ const removeUploads = mock.method(agentd, 'removeUploads', async ({ names }: { i
   const removed = names.filter((name) => saved.delete(`uploads/${name}`))
   return { removed }
 })
-mock.method(agentd, 'statFiles', async ({ paths }: { id: string; paths: string[] }) => ({ files: paths.flatMap((path) => saved.has(path) ? [{ path, size: saved.get(path)?.length ?? 0 }] : []) }))
+mock.method(agentd, 'statFiles', async ({ paths }: { id: string; paths: string[] }) => {
+  if (paths.some((path) => path.split('/').length > 32)) throw new HttpError(502, 'The agent runner couldn\'t look for the files: bad file paths.')
+  return { files: paths.flatMap((path) => saved.has(path) ? [{ path, size: saved.get(path)?.length ?? 0 }] : []) }
+})
 const upload = ({ threadId, name, body, headers = as() }: { threadId: string; name: string; body: Buffer; headers?: Record<string, string> }) => app.inject({
   method: 'POST', url: `/api/threads/${threadId}/files?name=${encodeURIComponent(name)}&type=${name.endsWith('.png') ? 'image/png' : 'text/plain'}`,
   headers: { ...headers, 'content-type': 'application/octet-stream' }, payload: body,
@@ -251,6 +254,36 @@ test('a lookup reports only the mentioned files that exist in the agent\'s home'
     { object: 'file', name: 'summary.md', path: '~/out/summary.md', size: 9 },
     { object: 'file', name: 'summary.md', path: '/opt/data/home/out/summary.md', size: 9 },
   ])
+})
+
+test('a path too deep to be in the home is dropped from a lookup instead of hiding every other file', async () => {
+  const thread = await newThread('ag_chatrunn')
+  saved.set('report.csv', Buffer.from('a'))
+  const deep = `~/${Array.from({ length: 40 }, (_, index) => `d${index}`).join('/')}/x.txt`
+  const res = await app.inject({ method: 'POST', url: `/api/threads/${thread.id}/files/lookups`, headers: as(), payload: { paths: ['~/report.csv', deep] } })
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(res.json().data.map((file: { path: string }) => file.path), ['~/report.csv'])
+  assert.equal((await app.inject({ method: 'GET', url: `/api/threads/${thread.id}/files?path=${encodeURIComponent(deep)}`, headers: as() })).statusCode, 400)
+})
+
+test('deleting an upload that isn\'t there answers 404, not deleted', async () => {
+  const thread = await newThread('ag_chatrunn')
+  const res = await app.inject({ method: 'DELETE', url: `/api/threads/${thread.id}/files?path=${encodeURIComponent('/opt/data/home/uploads/never.txt')}`, headers: as() })
+  assert.equal(res.statusCode, 404)
+  assert.equal(res.json().error.message, 'That upload isn\'t in the agent\'s uploads folder. It may have been deleted already.')
+})
+
+test('clearing a chat also deletes the uploads still waiting in the composer, and only uploads', async () => {
+  const thread = await newThread('ag_chatrunn')
+  const waiting = (await upload({ threadId: thread.id, name: 'waiting.txt', body: Buffer.from('x') })).json()
+  saved.set('report.csv', Buffer.from('a'))
+  const res = await app.inject({ method: 'DELETE', url: `/api/threads/${thread.id}`, headers: as(), payload: { uploads: [waiting.path, '/opt/data/home/report.csv', '/opt/data/home/uploads/../.env'] } })
+  assert.equal(res.statusCode, 200)
+  const names: string[] = removeUploads.mock.calls.at(-1)?.arguments[0].names ?? []
+  assert.ok(names.includes('waiting.txt'))
+  assert.ok(names.every((name) => !name.includes('/') && name !== 'report.csv' && name !== '.env'))
+  assert.equal(saved.has('uploads/waiting.txt'), false)
+  assert.equal(saved.has('report.csv'), true)
 })
 
 test('clearing a chat deletes the files uploaded to it from the agent\'s home, and nothing else', async () => {

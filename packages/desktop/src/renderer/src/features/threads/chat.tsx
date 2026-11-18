@@ -61,7 +61,7 @@ function ThreadView({ thread, agent, tools }: { thread: ThreadWithMessages; agen
     attachments.clear()
   }
   const last = chat.messages.at(-1)
-  const clear = chat.messages.length > 0 && !busy && <ClearChat agent={agent} threadId={thread.id} />
+  const clear = chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
   return <ChatFiles value={files}><ChatFrame agent={agent} tools={<>{clear}{tools}</>} onFiles={attachments.add} composer={<Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
     {chat.messages.length ? <>
       <Day iso={thread.updatedAt} />
@@ -115,9 +115,11 @@ function useAttachments({ agentId, threadId }: { agentId: string; threadId: stri
   const clear = () => {
     for (const item of current.current) if (item.thumb) URL.revokeObjectURL(item.thumb)
     taken.current.clear()
+    current.current = []
     setItems([])
   }
   useEffect(() => () => {
+    taken.current.clear()
     for (const item of current.current) if (item.file) forget(item.file.path)
   }, [])
   return { items, add, uploading: items.some((each) => !each.file), remove, clear }
@@ -226,10 +228,11 @@ function NotReady({ agent }: { agent: Agent }) {
   return <Alert variant="warning" className="max-w-[640px]" role="status" title={agent.healthDetail || undefined}><b>{agent.name} isn't ready.</b> {reason} {state === 'no_seat' && <a href="/settings/models">Open Settings › Models</a>}</Alert>
 }
 
-function ClearChat({ agent, threadId }: { agent: Agent; threadId: string }) {
+function ClearChat({ agent, threadId, attachments }: { agent: Agent; threadId: string; attachments: Attachments }) {
   const clearChat = useClearChat(agent.id)
-  return <ConfirmIcon label="Clear chat" icon={EraserIcon} question="Clear this chat? Memory stays." action="Clear" busy={clearChat.isPending}
-    onConfirm={(done) => clearChat.mutate(threadId, { onSuccess: done, onError: toastError })} />
+  const uploads = attachments.items.flatMap((item) => item.file ? [item.file.path] : [])
+  return <ConfirmIcon label="Clear chat" icon={EraserIcon} question="Clear this chat? Memory stays; files you sent are deleted." action="Clear" busy={clearChat.isPending}
+    onConfirm={(done) => clearChat.mutate({ threadId, uploads }, { onSuccess: () => { attachments.clear(); done() }, onError: toastError })} />
 }
 
 function useOffline(agent: Agent) {

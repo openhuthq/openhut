@@ -48,12 +48,16 @@ export const AGENT_HOME = '/opt/data/home'
 export const UPLOADS = `${AGENT_HOME}/uploads`
 export const MAX_FILE_BYTES = 25 << 20
 export const MAX_FILES = 10
+export const MAX_HOME_DEPTH = 32
 
 export const UploadFile = z.object({
   name: z.string().check(z.minLength(1), z.maxLength(255)),
   type: z.optional(z.string().check(z.maxLength(100))),
 })
 export type UploadFile = z.infer<typeof UploadFile>
+
+export const DeleteThread = z.nullish(z.object({ uploads: z.optional(z.array(z.string().check(z.maxLength(1024))).check(z.maxLength(MAX_FILES))) }))
+export type DeleteThread = z.infer<typeof DeleteThread>
 
 export const ReadFile = z.object({ path: z.string().check(z.minLength(1), z.maxLength(1024)) })
 export type ReadFile = z.infer<typeof ReadFile>
@@ -82,5 +86,5 @@ export function fileInHome(path: string): string | undefined {
   const full = path.startsWith('~/') ? `${AGENT_HOME}${path.slice(1)}` : path
   if (!full.startsWith(`${AGENT_HOME}/`) || full.length > 1024) return undefined
   const segments = full.slice(AGENT_HOME.length + 1).split('/')
-  return segments.every((segment) => segment && segment !== '.' && segment !== '..' && !segment.includes('\0')) ? segments.join('/') : undefined
+  return segments.length <= MAX_HOME_DEPTH && segments.every((segment) => segment && segment !== '.' && segment !== '..' && !segment.includes('\0')) ? segments.join('/') : undefined
 }
