@@ -7,5 +7,5 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },
   build: { outDir: '../../dist/renderer', emptyOutDir: true },
-  server: { proxy: { '/api': { target: 'http://127.0.0.1:8787', headers: { authorization: 'Bearer dev' } } } },
+  server: { proxy: { '/api': { target: `http://127.0.0.1:${process.env.PORT ?? 8787}`, headers: { authorization: 'Bearer dev' } } } },
 })
