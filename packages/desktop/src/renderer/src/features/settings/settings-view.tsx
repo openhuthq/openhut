@@ -1,6 +1,7 @@
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiMagicIcon, LaptopIcon, PlugSocketIcon, Settings02Icon } from '@hugeicons/core-free-icons'
+import { AiMagicIcon, LaptopIcon, PlugSocketIcon, Settings02Icon, SmartPhone01Icon } from '@hugeicons/core-free-icons'
 import { ComputersSettings } from '@/features/settings/computers'
+import { DevicesSettings } from '@/features/settings/devices'
 import { GeneralSettings } from '@/features/settings/general'
 import { leave, ModelsSettings, ModelsStep, stepOf } from '@/features/settings/models'
 import { McpSettings } from '@/features/settings/mcp'
@@ -11,6 +12,7 @@ import { cn } from '@/lib/utils'
 const TABS: [string, string, IconSvgElement, string][] = [
   ['general', 'General', Settings02Icon, 'text-hue-slate'],
   ['computers', 'Computers', LaptopIcon, 'text-hue-blue'],
+  ['devices', 'Devices', SmartPhone01Icon, 'text-hue-green'],
   ['models', 'Models', AiMagicIcon, 'text-hue-violet'],
   ['mcp', 'MCP', PlugSocketIcon, 'text-hue-teal'],
 ]
@@ -36,6 +38,7 @@ export function SettingsView({ tab, onClose }: { tab: string; onClose: () => voi
 function Tab({ tab }: { tab: string }) {
   switch (tab) {
     case 'computers': return <ComputersSettings />
+    case 'devices': return <DevicesSettings />
     case 'models': return <ModelsSettings />
     case 'mcp': return <McpSettings />
     default: return <GeneralSettings />

@@ -6,6 +6,7 @@ import { createServer, type Server as NetServer } from 'node:net'
 import { userInfo } from 'node:os'
 import type { Duplex } from 'node:stream'
 import type { FastifyRequest } from 'fastify'
+import { accessService } from '../access/access-service.ts'
 import { config } from '../platform/config.ts'
 import { db, isUniqueViolation } from '../platform/db.ts'
 import { emit } from '../platform/events.ts'
@@ -64,14 +65,10 @@ export async function listenLocally({ server, path }: { server: Server; path: st
 function arrival(req: FastifyRequest): { allowed: boolean; local: boolean } {
   const conn = req.raw.socket as (Duplex & { [LOCAL]?: true; [DEVICE]?: string }) | undefined
   if (conn?.[LOCAL]) return { allowed: true, local: true }
-  if (conn?.[DEVICE] !== undefined) return { allowed: isClient(conn[DEVICE]), local: false }
+  if (conn?.[DEVICE] !== undefined) return { allowed: accessService.device(conn[DEVICE]) === 'client', local: false }
   const inner = /^Inner ([0-9a-f]{64}) (local|remote)$/.exec(req.headers.authorization ?? '')
   if (inner) return { allowed: timingSafeEqual(Buffer.from(inner[1], 'hex'), INNER), local: inner[2] === 'local' }
   return { allowed: enrolled(req.headers.authorization), local: false }
-}
-
-function isClient(_device: string): boolean {
-  return false
 }
 
 function theOwner(): Promise<Owner | undefined> {

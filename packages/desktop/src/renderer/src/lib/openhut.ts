@@ -1,4 +1,4 @@
-import { createOpenHut, type Platform, type StoredComputer, type TailnetPeer } from '@openhut/client'
+import { createOpenHut, type Device, type Platform, type StoredComputer, type TailnetPeer } from '@openhut/client'
 
 export type Enrollment = { peer: TailnetPeer; lines: string[]; url: string | null; startedAt: number; status: 'running' | 'failed'; error: string; retryAt: number | null; retried: boolean }
 type Failure = { error: string }
@@ -12,7 +12,12 @@ type Computers = {
   onEnrollments: (listener: (list: Enrollment[]) => void) => void
 }
 
-const bridge: { computers: Computers; version?: string } | undefined = Reflect.get(window, 'openhut')
+type Devices = {
+  list: () => Promise<Device[] | Failure>
+  remove: (input: { key: string }) => Promise<Device[] | Failure>
+}
+
+const bridge: { computers: Computers; devices?: Devices; version?: string } | undefined = Reflect.get(window, 'openhut')
 const BROWSER: StoredComputer[] = [{ id: 'local', name: 'This computer', url: '' }]
 
 async function answer<T extends object>(call: Promise<T | Failure> | undefined): Promise<T> {
@@ -40,4 +45,9 @@ export const enrollments = {
   list: async (): Promise<Enrollment[]> => await bridge?.computers.enrollments() ?? [],
   dismiss: (dns: string) => bridge?.computers.dismiss({ dns }),
   follow: (listener: (list: Enrollment[]) => void) => bridge?.computers.onEnrollments(listener),
+}
+
+export const devices = {
+  list: (): Promise<Device[]> => bridge?.devices ? answer(bridge.devices.list()) : openhut.access.list(),
+  remove: (key: string): Promise<Device[]> => answer(bridge?.devices?.remove({ key })),
 }
