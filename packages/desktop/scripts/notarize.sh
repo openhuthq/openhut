@@ -41,6 +41,7 @@ staple "$app"
 rm -rf dmg-rebuild
 (cd .. && npx electron-builder --mac dmg --arm64 --prepackaged "release/$app" -c.directories.output=release/dmg-rebuild --publish never)
 mv "dmg-rebuild/$dmg" "$dmg"
+codesign --verify --strict "$dmg"
 rm -rf dmg-rebuild
 notarize "$dmg"
 staple "$dmg"
@@ -70,7 +71,7 @@ mnt=$(mktemp -d)
 hdiutil attach -readonly -nobrowse -noautoopen -mountpoint "$mnt" "$dmg" >/dev/null
 inner=0
 xcrun stapler validate "$mnt/OpenHut.app" && inner=1
-hdiutil detach "$mnt" >/dev/null
+hdiutil detach "$mnt" >/dev/null || hdiutil detach -force "$mnt" >/dev/null
 [ "$inner" = 1 ] || { echo "The app inside $dmg has no stapled ticket, so Gatekeeper needs the network to open it once it's copied out." >&2; exit 1; }
 q=$(mktemp -d)/quarantined.dmg
 cp "$dmg" "$q"
