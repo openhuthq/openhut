@@ -1,5 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto'
+import { canonical, verify, type Access, type Unsigned } from '@openhut/common/access/access.ts'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Connection, ConnectionKind } from '@openhut/common/connections/connection.ts'
@@ -17,6 +19,7 @@ type Fake = {
   connections: (Connection & { secret?: string })[]
   seat: { at: string | null; token: string }
   calls: string[]
+  access?: Access
 }
 
 function fake(): Fake {
@@ -40,8 +43,21 @@ function adminOf({ id, runtime }: { id: string; runtime: Fake }): Admin {
   return {
     object: 'admin', seat: { set: !!runtime.seat.token, mode: 'claude', updatedAt: runtime.seat.at }, codex: { set: !!runtime.codexAt, updatedAt: runtime.codexAt ?? null },
     server: { version: '0.3.0', build: 'dev', latestBuild: null, updateAvailable: false, update: null, healthy: true, agentd: true, firewall: true, running: 0, total: 0 },
-    tailnetUrl: null, usageData: false, publicKey: `key-of-${id}`,
+    tailnetUrl: null, usageData: false, publicKey: keyOf(id),
   }
+}
+
+function keyOf(id: string): string {
+  return Buffer.from(id.padEnd(32, '.')).toString('base64')
+}
+
+async function putAccess({ id, runtime, list }: { id: string; runtime: Fake; list: Access }): Promise<Response> {
+  const refuse = (status: number, message: string) => Response.json({ error: { type: 'invalid_request_error', message } }, { status })
+  if (!await verify(list)) return refuse(400, 'Bad signature.')
+  if (runtime.access && runtime.access.owner !== list.owner && id !== 'local') return refuse(403, 'Another owner.')
+  if (runtime.access && runtime.access.owner === list.owner && list.version <= runtime.access.version) return refuse(409, 'Not newer.')
+  runtime.access = list
+  return Response.json(list)
 }
 
 function serve({ id, runtime }: { id: string; runtime: Fake }) {
@@ -54,7 +70,7 @@ function serve({ id, runtime }: { id: string; runtime: Fake }) {
     if (path === '/api/agents') return list(runtime.agents)
     if (path === '/api/agents/imports') {
       const sealed = JSON.parse(body.sealed)
-      if (runtime.refuseImport || sealed.for !== `key-of-${id}`) return Response.json({ error: { type: 'invalid_request_error', message: 'Not today.' } }, { status: 409 })
+      if (runtime.refuseImport || sealed.for !== keyOf(id)) return Response.json({ error: { type: 'invalid_request_error', message: 'Not today.' } }, { status: 409 })
       runtime.agents.push({ ...sealed.payload, wanted: 'stopped' })
       if (runtime.downAfterImport) runtime.up = false
       return Response.json({ object: 'agent_import', agent: { ...sealed.payload, wanted: 'stopped' }, ungranted: ['GitHub'] })
@@ -79,6 +95,8 @@ function serve({ id, runtime }: { id: string; runtime: Fake }) {
     if (provider && method === 'DELETE') delete runtime.keys[provider[1]]
     if (provider) return Response.json(providerOf({ id: provider[1], runtime }))
     if (path === '/api/admin') return Response.json(adminOf({ id, runtime }))
+    if (path === '/api/access' && method === 'PUT') return putAccess({ id, runtime, list: body })
+    if (path === '/api/access') return runtime.access ? Response.json(runtime.access) : Response.json({ error: { type: 'invalid_request_error', message: 'No list yet.' } }, { status: 404 })
     if (path === '/api/me') return Response.json({ object: 'me', user: { id: 'usr_a', object: 'person', email: 'me', joinedAt: AT }, timeZone: 'UTC' })
     if (path === '/api/admin/exports') {
       const source = runtime.connections.find((each) => each.id === body.connectionId)
@@ -87,7 +105,7 @@ function serve({ id, runtime }: { id: string; runtime: Fake }) {
     }
     if (path === '/api/admin/imports') {
       const sealed = JSON.parse(body.sealed)
-      if (sealed.for !== `key-of-${id}`) return Response.json({ error: { type: 'invalid_request_error', message: 'Not sealed for this computer.' } }, { status: 400 })
+      if (sealed.for !== keyOf(id)) return Response.json({ error: { type: 'invalid_request_error', message: 'Not sealed for this computer.' } }, { status: 400 })
       if (sealed.payload.type === 'claude') {
         runtime.seat = { token: sealed.payload.token, at: sealed.payload.at }
         return Response.json(adminOf({ id, runtime }))
@@ -102,7 +120,21 @@ function serve({ id, runtime }: { id: string; runtime: Fake }) {
   }
 }
 
-function setup(ids: string[]) {
+const MAC = 'ab'.repeat(32)
+const PHONE = 'cd'.repeat(32)
+const ownerKeys = keys()
+
+function keys() {
+  const { privateKey, publicKey } = generateKeyPairSync('ed25519')
+  return { privateKey, key: Buffer.from(publicKey.export({ format: 'jwk' }).x ?? '', 'base64url').toString('hex') }
+}
+
+function signedBy({ by, list }: { by: { privateKey: KeyObject; key: string }; list: Omit<Unsigned, 'owner' | 'object'> }): Access {
+  const unsigned: Unsigned = { object: 'access', owner: by.key, ...list }
+  return { ...unsigned, signature: sign(null, Buffer.from(canonical(unsigned)), by.privateKey).toString('hex') }
+}
+
+function setup(ids: string[], options: { owner?: boolean } = {}) {
   const runtimes = Object.fromEntries(ids.map((id) => [id, fake()]))
   const opened: string[] = []
   const stored: StoredComputer[] = ids.map((id) => ({ id, name: id, url: id === 'local' ? '' : `https://${id}.example` }))
@@ -115,6 +147,7 @@ function setup(ids: string[]) {
       remove: async () => undefined,
     },
     openUrl: (url) => { opened.push(url) },
+    owner: options.owner ? async () => ({ key: ownerKeys.key, sign: async (text) => sign(null, Buffer.from(text), ownerKeys.privateKey).toString('hex'), self: { key: MAC, name: 'Mo\'s Mac' } }) : undefined,
   }
   return { runtimes, opened, openhut: createOpenHut(platform) }
 }
@@ -268,4 +301,61 @@ test('Settings sees one row per provider: the computers that hold it, and the fi
   assert.deepEqual(merged.find((each) => each.id === 'xai')?.computers, [])
   runtimes.local.up = false
   assert.deepEqual(mergeProviders(await openhut.providers.list()).find((each) => each.id === 'openai')?.computers, ['beelink'])
+})
+
+test('with no list anywhere the Mac app signs version 1, with itself as the only client and every computer it reaches, and puts it on each', async () => {
+  const { runtimes, openhut } = setup(['local', 'beelink'], { owner: true })
+  const list = await openhut.access.sync()
+  assert.equal(list?.version, 1)
+  assert.deepEqual(list?.clients.map((each) => [each.key, each.name]), [[MAC, 'Mo\'s Mac']])
+  assert.deepEqual(list?.computers.map((each) => each.name), ['local', 'beelink'])
+  assert.equal(list?.computers[0]?.id.length, 64)
+  assert.ok(list && await verify(list))
+  assert.deepEqual([runtimes.local.access, runtimes.beelink.access], [list, list])
+  await openhut.access.sync()
+  assert.deepEqual([runtimes.local.access?.version, runtimes.beelink.access?.version], [1, 1])
+})
+
+test('a computer that was offline gets the newer list on the next sync, and a removed device stays removed', async () => {
+  const { runtimes, openhut } = setup(['local', 'beelink'], { owner: true })
+  const first = await openhut.access.sync()
+  const withPhone = signedBy({ by: ownerKeys, list: { ...first!, version: 2, clients: [...first!.clients, { key: PHONE, name: 'Mo\'s iPhone', addedAt: AT }] } })
+  runtimes.local.access = withPhone
+  runtimes.beelink.access = withPhone
+  assert.deepEqual((await openhut.access.list()).map((each) => [each.name, each.self]), [['Mo\'s Mac', true], ['Mo\'s iPhone', false]])
+  runtimes.beelink.up = false
+  assert.deepEqual((await openhut.access.remove(PHONE)).map((each) => each.key), [MAC])
+  assert.equal(runtimes.local.access?.version, 3)
+  assert.equal(runtimes.beelink.access?.version, 2)
+  runtimes.beelink.up = true
+  await openhut.access.sync()
+  assert.equal(runtimes.beelink.access?.version, 3)
+  assert.deepEqual(runtimes.beelink.access?.clients.map((each) => each.key), [MAC])
+})
+
+test('sync never sends an older list: a computer ahead is left alone and the others catch up to it', async () => {
+  const { runtimes, openhut } = setup(['local', 'beelink'], { owner: true })
+  const first = await openhut.access.sync()
+  runtimes.beelink.access = signedBy({ by: ownerKeys, list: { ...first!, version: 5 } })
+  runtimes.beelink.calls = []
+  await openhut.access.sync()
+  assert.deepEqual(runtimes.beelink.calls.filter((call) => call.startsWith('PUT')), [])
+  assert.equal(runtimes.local.access?.version, 5)
+})
+
+test('a list signed by another owner is never carried, even to the computer that takes a new owner from its socket', async () => {
+  const { runtimes, openhut } = setup(['local', 'beelink'], { owner: true })
+  runtimes.beelink.access = signedBy({ by: keys(), list: { version: 9, clients: [{ key: PHONE, name: 'Not yours', addedAt: AT }], computers: [] } })
+  await openhut.access.sync()
+  assert.equal(runtimes.local.access?.owner, ownerKeys.key)
+  assert.deepEqual(runtimes.local.access?.clients.map((each) => each.key), [MAC])
+  assert.equal(runtimes.beelink.access?.version, 9)
+})
+
+test('only the app that holds the owner key removes devices, and never itself', async () => {
+  const { openhut } = setup(['local'])
+  await assert.rejects(openhut.access.remove(PHONE), /Open the OpenHut app on your Mac/)
+  assert.equal(await openhut.access.sync(), undefined)
+  const { openhut: mac } = setup(['local'], { owner: true })
+  await assert.rejects(mac.access.remove(MAC), /can't remove itself/)
 })

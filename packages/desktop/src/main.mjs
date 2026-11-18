@@ -4,7 +4,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { createServer, request } from 'node:http'
 import { connect } from 'node:net'
 import { appendFileSync, chmodSync, cpSync, createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { cpus, homedir, totalmem } from 'node:os'
+import { cpus, homedir, hostname, totalmem } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { Readable } from 'node:stream'
 import { text } from 'node:stream/consumers'
@@ -12,6 +12,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import updater from 'electron-updater'
 import WebSocket from 'ws'
+import { deviceName, ownerKeys } from './owner-keys.mjs'
 
 const DEV = !app.isPackaged
 const MAC = process.platform === 'darwin'
@@ -85,6 +86,10 @@ const openhut = createOpenHut({
   store: { computers: async () => computers(), add: (peer) => enroll({ peer }), adopt, remove: async (id) => { forget({ id }) } },
   openUrl: (url) => shell.openExternal(url),
   appVersion: app.getVersion(),
+  owner: () => owning ??= ownerKeys({ dir: join(HOME, 'keys'), safeStorage, name: deviceName(hostname()) }).catch((error) => {
+    owning = undefined
+    throw error
+  }),
 })
 const children = new Map()
 const restarts = { agentd: 0, server: 0 }
@@ -93,6 +98,7 @@ const serverEnv = {}
 const keys = new Map()
 const watched = { threads: new Map(), strikes: new Map(), menu: '' }
 let quitting = false
+let owning
 let main
 let tray
 let blocker
@@ -171,6 +177,8 @@ handle('computers.remove', answer(forget))
 handle('computers.enrollments', () => [...enrollments.values()])
 handle('computers.dismiss', ({ dns } = {}) => { enrollments.delete(dns); shareEnrollments(); return { dns } })
 handle('mcp.commands', mcpCommands)
+handle('devices.list', answer(() => openhut.access.list()))
+handle('devices.remove', answer(({ key } = {}) => openhut.access.remove(String(key))))
 ipcMain.on('browser-live', (event, path) => void relayLive({ port: event.ports[0], path: fromApp(event) ? path : '' }))
 
 function answer(fn) {
@@ -354,7 +362,7 @@ function agentd(ask) {
 }
 
 async function poll() {
-  const [agents, list] = await Promise.all([openhut.agents.list(), openhut.computers.list()])
+  const [agents, list] = await Promise.all([openhut.agents.list(), openhut.computers.list(), openhut.access.sync().catch(() => undefined)])
   const wants = prefs()
   keepAwake(wants.keepAwake && agents.some((agent) => agent.computer === LOCAL.id && agent.status === 'running'))
   for (const agent of agents.filter((each) => each.online)) {

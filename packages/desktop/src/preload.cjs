@@ -24,6 +24,10 @@ contextBridge.exposeInMainWorld('openhut', {
     ipcRenderer.postMessage('browser-live', path, [port2])
     return { send: (line) => port1.postMessage(line), close: () => port1.close() }
   },
+  devices: {
+    list: () => ipcRenderer.invoke('devices.list'),
+    remove: (input) => ipcRenderer.invoke('devices.remove', input),
+  },
   computers: {
     list: () => ipcRenderer.invoke('computers.list'),
     add: (input) => ipcRenderer.invoke('computers.add', input),

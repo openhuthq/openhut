@@ -21,6 +21,7 @@ import { gatewayServer } from './gateway/gateway-server.ts'
 import { mcpController } from './mcp/mcp-controller.ts'
 import { threadController } from './threads/thread-controller.ts'
 import { meController } from './team/team-controller.ts'
+import { accessController } from './access/access-controller.ts'
 import { listenLocally } from './team/identity.ts'
 
 if (config.installKind === 'server' && !/^[0-9a-f]{64}$/i.test(config.clientKeySha256 ?? '')) {
@@ -40,6 +41,7 @@ app.addHook('onSend', async (_req, reply) => {
 await app.register(websocket)
 await app.register(healthController, { prefix: '/health' })
 await app.register(meController, { prefix: '/api/me' })
+await app.register(accessController, { prefix: '/api/access' })
 await app.register(agentController, { prefix: '/api/agents' })
 await app.register(grantController, { prefix: '/api/grants' })
 await app.register(skillController, { prefix: '/api/skills' })

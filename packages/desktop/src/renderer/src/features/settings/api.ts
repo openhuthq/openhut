@@ -1,9 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Admin, SeatSignIn, SeatUsage, type UpdateAdmin } from '@openhut/common/admin/admin.ts'
 import { request } from '@/lib/api-client'
+import { devices } from '@/lib/openhut'
 import { AGENTS_KEY } from '@/lib/query-keys'
 
 const ADMIN_KEY = ['admin']
+const DEVICES_KEY = ['devices']
+
+export function useDevices() {
+  return useQuery({ queryKey: DEVICES_KEY, queryFn: () => devices.list() })
+}
+
+export function useRemoveDevice() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (key: string) => devices.remove(key),
+    onSuccess: (list) => client.setQueryData(DEVICES_KEY, list),
+  })
+}
 
 export function useAdmin() {
   return useQuery({ queryKey: ADMIN_KEY, queryFn: () => request({ schema: Admin, computer: 'local', path: '/api/admin' }) })

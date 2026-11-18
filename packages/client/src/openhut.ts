@@ -1,3 +1,4 @@
+import { Access, canonical, computerId, hexOf, verify, type AccessComputer, type Client, type Unsigned } from '@openhut/common/access/access.ts'
 import { ApiError, Deleted, List } from '@openhut/common/api.ts'
 import { Admin, Export, MIN_RUNTIME_VERSION, type Subscription } from '@openhut/common/admin/admin.ts'
 import { Agent, AgentImport, Grant, type CreateAgent, type UpdateAgent } from '@openhut/common/agents/agent.ts'
@@ -21,7 +22,10 @@ export type Platform = {
   }
   openUrl: (url: string) => void
   appVersion?: string
+  owner?: () => Promise<Owner>
 }
+export type Owner = { key: string; sign: (text: string) => Promise<string>; self: { key: string; name: string } }
+export type Device = Client & { self: boolean }
 export type OpenHutAgent = Agent & { computer: string; online: boolean }
 export type Copy = { computer: string; id: string; online: boolean }
 export type OpenHutConnection = Connection & { computers: Copy[] }
@@ -33,6 +37,7 @@ export type OpenHut = ReturnType<typeof createOpenHut>
 
 type Schema<T> = { safeParse: (data: unknown) => { success: true; data: T } | { success: false } }
 type Call<T> = { computer: StoredComputer; path: string; schema: Schema<T>; method?: string; body?: unknown }
+type Held = { access: Access | null; key: string }
 
 const AGENT_LIST = List(Agent)
 const CONNECTION_LIST = List(Connection)
@@ -59,6 +64,9 @@ export function createOpenHut(platform: Platform) {
   const adminsSeen = new Map<string, Admin>()
   const providersSeen = new Map<string, Provider[]>()
   const homes = new Map<string, string>()
+  const accessSeen = new Map<string, Held>()
+  let signedLast: Access | undefined
+  let queue: Promise<unknown> = Promise.resolve()
   const listeners = new Set<() => void>()
   let timer: ReturnType<typeof setInterval> | undefined
   let last = ''
@@ -269,8 +277,86 @@ export function createOpenHut(platform: Platform) {
     },
   }
 
+  function serial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = queue.then(fn, fn)
+    queue = run.catch(() => undefined)
+    return run
+  }
+
+  async function held(each: StoredComputer): Promise<Held> {
+    const { publicKey } = await call({ computer: each, path: '/api/admin', schema: Admin })
+    const access = await call({ computer: each, path: '/api/access', schema: Access }).catch((err: unknown) => {
+      if (err instanceof RequestError && err.status === 404) return null
+      throw err
+    })
+    return { access, key: hexOf(Uint8Array.from(atob(publicKey), (char) => char.charCodeAt(0)).subarray(-32)) }
+  }
+
+  async function newest({ lists, owner }: { lists: (Access | null | undefined)[]; owner: string | undefined }): Promise<Access | undefined> {
+    const mine = lists.filter((each): each is Access => !!each && (!owner || each.owner === owner)).sort((a, b) => b.version - a.version)
+    for (const each of mine) if (await verify(each)) return each
+    return undefined
+  }
+
+  async function signed({ owner, list }: { owner: Owner; list: Unsigned }): Promise<Access> {
+    signedLast = { ...list, signature: await owner.sign(canonical(list)) }
+    return signedLast
+  }
+
+  async function reconcile({ owner, best, rows }: { owner: Owner; best: Access | undefined; rows: { computer: StoredComputer; online: boolean; value: Held | undefined }[] }): Promise<Access | undefined> {
+    if (!rows.some((row) => row.online)) return best
+    const known = await Promise.all(rows.map(async (row): Promise<AccessComputer[]> => {
+      if (row.value) return [{ id: await computerId(row.value.key), name: row.computer.name, key: row.value.key }]
+      return best?.computers.filter((each) => each.name === row.computer.name) ?? []
+    }))
+    const computers = known.flat()
+    if (best && JSON.stringify(best.computers) === JSON.stringify(computers)) return best
+    const clients = best?.clients ?? [{ ...owner.self, addedAt: new Date().toISOString() }]
+    return signed({ owner, list: { object: 'access', owner: owner.key, version: (best?.version ?? 0) + 1, clients, computers } })
+  }
+
+  async function carry({ list, rows }: { list: Access; rows: { computer: StoredComputer; online: boolean; value: Held | undefined }[] }): Promise<void> {
+    const behind = rows.filter((row) => row.online && (!row.value?.access || row.value.access.owner !== list.owner || row.value.access.version < list.version))
+    await Promise.all(behind.map(async (row) => {
+      const saved = await call({ computer: row.computer, path: '/api/access', method: 'PUT', body: list, schema: Access }).catch(() => undefined)
+      if (saved && row.value) accessSeen.set(row.computer.id, { ...row.value, access: saved })
+    }))
+  }
+
+  const access = {
+    sync: (): Promise<Access | undefined> => serial(async () => {
+      const owner = await platform.owner?.()
+      if (!owner) return undefined
+      const rows = await across({ seen: accessSeen, read: held })
+      const best = await newest({ lists: [signedLast, ...rows.map((row) => row.value?.access)], owner: owner.key })
+      const list = await reconcile({ owner, best, rows })
+      if (list) await carry({ list, rows })
+      return list
+    }),
+    async list(): Promise<Device[]> {
+      const owner = await platform.owner?.()
+      const list = owner
+        ? await access.sync()
+        : await newest({ lists: (await across({ seen: accessSeen, read: held })).map((row) => row.value?.access), owner: undefined })
+      const devices = (list?.clients ?? []).map((client) => ({ ...client, self: client.key === owner?.self.key }))
+      return devices.sort((a, b) => Number(b.self) - Number(a.self))
+    },
+    async remove(key: string): Promise<Device[]> {
+      const owner = await platform.owner?.()
+      if (!owner) throw new RequestError({ message: 'Open the OpenHut app on your Mac to remove a device. Only it can sign the list.', status: 403 })
+      if (key === owner.self.key) throw new RequestError({ message: 'This Mac can\'t remove itself.', status: 409 })
+      const list = await access.sync()
+      if (!list?.clients.some((client) => client.key === key)) throw new RequestError({ message: 'That device isn\'t on the list anymore. Refresh and try again.', status: 404 })
+      await serial(async () => {
+        const next = await signed({ owner, list: { ...list, version: list.version + 1, clients: list.clients.filter((client) => client.key !== key) } })
+        await carry({ list: next, rows: await across({ seen: accessSeen, read: held }) })
+      })
+      return access.list()
+    },
+  }
+
   async function tick() {
-    const seen = JSON.stringify(await Promise.all([agents.list(), connections.list(), providers.list(), account.sync().catch(() => null)]))
+    const seen = JSON.stringify(await Promise.all([agents.list(), connections.list(), providers.list(), account.sync().catch(() => null), access.sync().catch(() => null)]))
     if (seen === last) return
     last = seen
     for (const listener of listeners) listener()
@@ -282,6 +368,7 @@ export function createOpenHut(platform: Platform) {
     connections,
     providers,
     account,
+    access,
     fetch: async (input: Where & { path: string; init?: RequestInit }): Promise<Response> => platform.transport('of' in input ? await homeOf(input.of) : await computer(input.computer))(input.path, input.init),
     subscribe(listener: () => void): () => void {
       listeners.add(listener)
