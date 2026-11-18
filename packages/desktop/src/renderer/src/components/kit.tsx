@@ -68,7 +68,7 @@ export function DialogCard({ onClose, dismissable, className, children }: { onCl
 }
 
 export function AppWindow({ label, nav, onClose, onEscape, children }: { label: string; nav?: ReactNode; onClose: () => void; onEscape?: () => void; children: ReactNode }) {
-  return <Dialog size="window" label={label} onClose={onClose} onEscape={onEscape} className="phone:flex-col phone:bg-sidebar phone:[&>nav]:mt-3 phone:[&>nav]:mr-16 phone:[&>nav]:ml-4 phone:[&>nav]:w-auto phone:[&>nav]:shrink-0 phone:[&>nav]:flex-row phone:[&>nav]:justify-between phone:[&>nav]:overflow-x-auto phone:[&>nav]:rounded-full phone:[&>nav]:bg-soft phone:[&>nav]:p-1 phone:[&>nav_[aria-current=page]]:bg-card phone:[&>nav_[aria-current=page]]:shadow-menu phone:[&>nav_a]:rounded-full phone:[&>nav_a]:px-3 phone:[&>nav_svg]:hidden">
+  return <Dialog size="window" label={label} onClose={onClose} onEscape={onEscape} className="phone:flex-col phone:bg-sidebar phone:[&>nav]:mt-3 phone:[&>nav]:mr-16 phone:[&>nav]:ml-4 phone:[&>nav]:w-auto phone:[&>nav]:shrink-0 phone:[&>nav]:flex-row phone:[&>nav]:justify-between phone:[&>nav]:overflow-x-auto phone:[&>nav]:rounded-full phone:[&>nav]:bg-soft phone:[&>nav]:p-1 phone:[&>nav_[aria-current=page]]:bg-card phone:[&>nav_[aria-current=page]]:shadow-menu phone:[&>nav_a]:shrink-0 phone:[&>nav_a]:rounded-full phone:[&>nav_a]:px-3 phone:[&>nav_a]:whitespace-nowrap phone:[&>nav]:no-scrollbar phone:[&>nav_svg]:hidden">
     <InWindow value>
       {nav}
       <section aria-label={label} className={cn('relative flex min-w-0 flex-1 flex-col text-[13px]/[18px] phone:static', FLAT)}>

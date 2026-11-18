@@ -191,7 +191,7 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
     setEmpty(true)
   }
   const enter = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+    if (touch || event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
     event.preventDefault()
     event.currentTarget.form?.requestSubmit()
   }
@@ -210,7 +210,7 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
         <Textarea variant="composer" name="text" rows={1} aria-label="Message" placeholder={placeholderOf(agent)} disabled={!ready} autoFocus={!touch}
           className="min-h-0 flex-1 py-1.5 text-[14px]" onKeyDown={enter} onPaste={paste}
           onInput={(event) => { const box = event.currentTarget; setEmpty(!box.value.trim()); box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 240)}px` }} />
-        <Button type="submit" variant="send" className={cn(!busy && nothing && 'bg-transparent text-mute disabled:opacity-100')} aria-label={busy ? 'Stop' : 'Send'} title={busy ? 'Stop' : 'Send (Enter). Shift+Enter for a new line'} disabled={!busy && (!ready || nothing || attachments.uploading)}>{busy ? <span className="size-2.5 rounded-[2px] bg-white" /> : <I icon={ArrowUp02Icon} />}</Button>
+        <Button type="submit" variant="send" onMouseDown={(event) => event.preventDefault()} className={cn(!busy && nothing && 'bg-transparent text-mute disabled:opacity-100')} aria-label={busy ? 'Stop' : 'Send'} title={busy ? 'Stop' : 'Send (Enter). Shift+Enter for a new line'} disabled={!busy && (!ready || nothing || attachments.uploading)}>{busy ? <span className="size-2.5 rounded-[2px] bg-white" /> : <I icon={ArrowUp02Icon} />}</Button>
       </div>
     </form>
   </div>

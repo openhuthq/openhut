@@ -17,6 +17,7 @@ import { FaceEditor, stageColor, tileClass } from '@/features/agents/face-editor
 import { faceUri, randomLook, type Look } from '@/lib/face'
 import { formValues } from '@/lib/form'
 import { SOFT_TRIGGER } from '@/features/models/model-picker'
+import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
 
 const LOOKS = [['Support', 'support headset'], ['Ops', 'ops beanie'], ['Sales', 'sales shades'], ['Reports', 'report glasses'], ['Finance', 'finance tophat'], ['Triage', 'triage cap']]
@@ -34,6 +35,7 @@ function firstModel(providers: Provider[] | undefined): string | null {
 
 export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   const createAgent = useCreateAgent()
+  const touch = useMedia(TOUCH)
   const providers = useComputerProviders('local')
   const [picked, setPicked] = useState<string | null | undefined>(undefined)
   const [helpers, setHelpers] = useState<HelperModels>(NO_HELPERS)
@@ -87,7 +89,7 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
       </div>
       <Button ref={customize} type="button" variant="secondary" size="sm" className="rounded-full px-3" onClick={() => setEditing(true)}>Customize</Button>
       <div className="flex w-full items-center gap-2">
-        <Input ref={name} name="name" autoFocus required maxLength={40} defaultValue={NAMES[0]} aria-label="Name" className="h-10 rounded-lg text-center text-base font-medium" onInput={(event) => { setTyped(event.currentTarget.value); setEmpty(!event.currentTarget.value.trim()) }} />
+        <Input ref={name} name="name" autoFocus={!touch} autoComplete="off" required maxLength={40} defaultValue={NAMES[0]} aria-label="Name" className="h-10 rounded-lg text-center text-base font-medium" onInput={(event) => { setTyped(event.currentTarget.value); setEmpty(!event.currentTarget.value.trim()) }} />
         <Button type="button" variant="secondary" size="icon" aria-label="Random name" title="Random name" className="size-10 shrink-0 rounded-lg text-ink" onClick={reroll}><I icon={DiceFaces03Icon} /></Button>
       </div>
       <div className="flex w-full flex-col gap-2.5 text-left">
@@ -103,7 +105,7 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
         </CollapsibleContent>
       </Collapsible>
       <Button type="submit" variant="primary" size="lg" className="h-10 w-full justify-center" disabled={empty || createAgent.isPending}>{createAgent.isPending ? 'Creating…' : 'Create'}</Button>
-      {createAgent.error ? <p role="alert" className="m-0 text-xs text-fail">{createAgent.error.message}</p> : <span className="text-[12px]/[16px] text-mute">Its job, model and channels are on its right panel.</span>}
+      {createAgent.error ? <p role="alert" className="m-0 text-xs text-fail">{createAgent.error.message}</p> : <span className="text-[12px]/[16px] text-mute phone:hidden">Its job, model and channels are on its right panel.</span>}
     </form>
   </DialogCard>
 }

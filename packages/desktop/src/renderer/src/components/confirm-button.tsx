@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
 import { Tooltip } from '@/components/ui/tooltip'
 import { I, PILL, TINY_ICON } from '@/components/kit'
+import { PHONE, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
 import { AlertDialog } from '@/components/ui/alert-dialog'
 import { Button, type ButtonVariants } from '@/components/ui/button'
@@ -9,14 +10,15 @@ import { DialogFoot, DialogHead } from '@/components/ui/dialog'
 
 type Confirmation = { question: string; detail: string; action: string; onConfirm: () => void }
 
-export function ConfirmButton({ variant = 'danger', size, label, disabled, children, ...confirmation }: Confirmation & ButtonVariants & {
+export function ConfirmButton({ variant = 'danger', size, label, disabled, className, children, ...confirmation }: Confirmation & ButtonVariants & {
   label?: string
+  className?: string
   disabled?: boolean
   children: ReactNode
 }) {
   const [open, setOpen] = useState(false)
   return <>
-    <Button type="button" variant={variant} size={size} title={label} aria-label={label} disabled={disabled} onClick={() => setOpen(true)}>{children}</Button>
+    <Button type="button" variant={variant} size={size} className={className} title={label} aria-label={label} disabled={disabled} onClick={() => setOpen(true)}>{children}</Button>
     <ConfirmDialog open={open} onOpenChange={setOpen} {...confirmation} />
   </>
 }
@@ -33,6 +35,8 @@ export function ConfirmDialog({ open, onOpenChange, question, detail, action, on
 
 export function ConfirmIcon({ label, icon, danger, question, action, busy, onConfirm }: { label: string; icon: IconSvgElement; danger?: boolean; question: string; action: string; busy: boolean; onConfirm: (done: () => void) => void }) {
   const { confirming, setConfirming, box } = useConfirming()
+  const phone = useMedia(PHONE)
+  if (phone) return <ConfirmButton variant="bare" size="icon-sm" className={cn(TINY_ICON, danger && 'text-fail')} label={label} question={question} detail="" action={action} onConfirm={() => onConfirm(() => {})}><I icon={icon} size={16} /></ConfirmButton>
   if (!confirming) return <Tooltip label={label}><Button type="button" variant="bare" className={cn(TINY_ICON, danger && 'text-fail')} aria-label={label} onClick={() => setConfirming(true)}><I icon={icon} size={16} /></Button></Tooltip>
   return <div ref={box} role="group" aria-label={question} className="flex min-w-0 animate-grow items-center gap-1.5">
     <span className="min-w-0 truncate text-[12px] text-mute">{question}</span>

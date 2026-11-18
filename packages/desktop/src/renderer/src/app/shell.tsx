@@ -40,7 +40,7 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
   const newAgent = () => navigate(activeId ? agentPath({ agentId: activeId, dialog: 'new' }) : '/new')
   order.current = contacts.map(({ agent }) => agent.id)
   const controls = { collapsed, expand: () => setCollapsed(false), newAgent }
-  return <SidebarContext value={controls}><div className="flex h-dvh overflow-hidden bg-card pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-left">
+  return <SidebarContext value={controls}><div className="flex h-dvh overflow-hidden bg-card pt-[env(safe-area-inset-top)] phone:bg-sidebar pb-[env(safe-area-inset-bottom)] text-left">
     <Sidebar contacts={contacts} activeId={activeId} collapsed={collapsed} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} />
     {route.page === 'agent' && (phone
       ? <PhonePage key={route.agentId}><AgentView agentId={route.agentId} dialog={route.dialog} detail={route.detail} /></PhonePage>

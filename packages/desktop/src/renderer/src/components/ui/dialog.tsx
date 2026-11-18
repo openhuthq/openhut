@@ -3,7 +3,7 @@ import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { Button } from '@/components/ui/button'
 import { ICONS } from '@/components/icons'
-import { slide } from '@/lib/media'
+import { slide, TOUCH } from '@/lib/media'
 import { cn } from '@/lib/utils'
 
 const SHEET = 'phone:mx-0 phone:mb-0 phone:mt-auto phone:max-h-[calc(100dvh-env(safe-area-inset-top)-10px)] phone:w-screen phone:max-w-none phone:rounded-t-[22px] phone:rounded-b-none phone:border-0 phone:pt-3 phone:pb-[env(safe-area-inset-bottom)] phone:shadow-[0_-8px_40px_oklch(0%_0_0/.18)] phone:animate-[sheetup_.42s_var(--ease-spring)]'
@@ -16,7 +16,7 @@ const popupVariants = cva('group/dialog fixed inset-0 z-50 overflow-auto border-
       default: [SHEET, FITS, 'm-auto h-fit w-[min(880px,calc(100vw-32px))] rounded-xl shadow-dialog animate-grow'],
       narrow: [SHEET, FITS, 'm-auto h-fit w-[min(560px,calc(100vw-32px))] rounded-xl shadow-dialog animate-grow'],
       window: [SHEET, TALL, 'm-auto flex h-[min(700px,calc(100vh-96px))] max-h-[calc(100vh-32px)] w-[min(900px,calc(100vw-32px))] overflow-hidden rounded-xl shadow-dialog outline-none animate-grow'],
-      confirm: 'm-auto h-fit w-[min(440px,calc(100vw-32px))] rounded-xl shadow-dialog animate-grow',
+      confirm: 'm-auto h-fit w-[min(440px,calc(100vw-32px))] rounded-xl shadow-dialog animate-grow phone:mb-[calc(8px+env(safe-area-inset-bottom))] phone:w-[calc(100vw-16px)] phone:rounded-[22px] phone:animate-[sheetup_.42s_var(--ease-spring)]',
       sheet: [SHEET, TALL, 'my-0 mr-0 ml-auto h-dvh max-h-dvh w-[min(560px,100vw)] rounded-none border-l border-hair shadow-sheet animate-sheetin'],
     },
   },
@@ -54,7 +54,7 @@ export function Dialog({ size = 'default', dismissable = true, label, onClose, o
   }}>
     <DialogPrimitive.Portal>
       <DialogPrimitive.Backdrop className={backdropClass(size)} />
-      <DialogPrimitive.Popup ref={popup} initialFocus={() => size === 'window' ? popup.current ?? true : firstFocusable(popup.current)} data-size={size} aria-label={label} className={popupClass(size, className)}>
+      <DialogPrimitive.Popup ref={popup} initialFocus={() => size === 'window' || matchMedia(TOUCH).matches ? popup.current ?? true : firstFocusable(popup.current)} data-size={size} aria-label={label} className={popupClass(size, className)}>
         {size !== 'confirm' && <Grabber popup={popup} onClose={onClose} />}
         {children}
       </DialogPrimitive.Popup>
@@ -111,7 +111,7 @@ export function DialogFooter({ className, ...props }: ComponentProps<'div'>) {
 
 export function DialogFoot({ error, start, children }: { error?: string; start?: ReactNode; children: ReactNode }) {
   return <DialogFooter>
-    {error ? <p data-error className="m-0 min-w-0 flex-1 rounded-md bg-[color-mix(in_oklch,var(--fail)_12%,transparent)] px-3 py-2 text-ink" role="alert">{error}</p> : <span>{start}</span>}
-    <div className="flex gap-2">{children}</div>
+    {error ? <p data-error className="m-0 min-w-0 flex-1 rounded-md bg-[color-mix(in_oklch,var(--fail)_12%,transparent)] px-3 py-2 text-ink" role="alert">{error}</p> : <span className="phone:group-data-[size=confirm]/dialog:hidden">{start}</span>}
+    <div className="flex gap-2 phone:group-data-[size=confirm]/dialog:w-full phone:group-data-[size=confirm]/dialog:[&>button]:h-12 phone:group-data-[size=confirm]/dialog:[&>button]:flex-1 phone:group-data-[size=confirm]/dialog:[&>button]:rounded-xl phone:group-data-[size=confirm]/dialog:[&>button]:justify-center">{children}</div>
   </DialogFooter>
 }

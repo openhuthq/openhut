@@ -48,8 +48,8 @@ export function FaceEditor({ initial, onDone, onCancel }: { initial: Look; onDon
       <div className="grid flex-1 gap-0.5"><DialogTitle className="text-[15px]/[22px] font-medium">Customize face</DialogTitle><p className="m-0 text-[13px]/[18px] text-body">Hair, hats and extras only appear when you add them here.</p></div>
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" className="rounded-full" onClick={onCancel}><I icon={Cancel01Icon} size={15} /></Button>
     </div>
-    <div className="flex min-h-[340px] gap-5 px-5 pt-1 pb-4">
-      <div className="flex w-44 shrink-0 flex-col items-center gap-2.5">
+    <div className="flex min-h-[340px] gap-5 px-5 pt-1 pb-4 phone:min-h-0 phone:flex-col">
+      <div className="flex w-44 shrink-0 flex-col items-center gap-2.5 phone:w-full">
         <div className="grid size-44 place-items-center rounded-lg shadow-[inset_0_0_0_1px_var(--hair)]" style={{ background: stageColor(draft) }}>
           <span key={spin} className={cn('block', spin > 0 && 'animate-hop')}><Creature look={draft} size={148} label="Face preview" /></span>
         </div>
@@ -59,7 +59,7 @@ export function FaceEditor({ initial, onDone, onCancel }: { initial: Look; onDon
         </div>
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-        <div role="group" aria-label="Part" className="flex flex-wrap gap-1.5">{PARTS.map(([key, label]) => <Button key={key} type="button" variant={part === key ? 'primary' : 'ghost'} size="sm" autoFocus={key === 'body'} aria-pressed={part === key} className="text-[13px]" onClick={() => setPart(key)}>{label}</Button>)}</div>
+        <div role="group" aria-label="Part" className="no-scrollbar flex flex-wrap gap-1.5 phone:-mx-5 phone:flex-nowrap phone:overflow-x-auto phone:px-5 phone:[&>button]:shrink-0">{PARTS.map(([key, label]) => <Button key={key} type="button" variant={part === key ? 'primary' : 'ghost'} size="sm" autoFocus={key === 'body'} aria-pressed={part === key} className="text-[13px]" onClick={() => setPart(key)}>{label}</Button>)}</div>
         <div role="group" aria-label="Options" className="grid grid-cols-7 gap-1.5">{optionsFor({ part, draft }).map((option) => <Button key={option.key} type="button" variant="bare" aria-pressed={option.selected} aria-label={option.label} title={option.label} className={cn('aspect-square', tileClass(option.selected))} onClick={() => change(option.patch)}><Swatch art={option.art} /></Button>)}</div>
         {part === 'hair' && draft.hair && <div className="flex flex-col gap-2">
           <span className="text-[12px]/[16px] text-mute">Hair colour</span>

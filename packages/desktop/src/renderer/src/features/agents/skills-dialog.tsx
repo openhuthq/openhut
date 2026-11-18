@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Cancel01Icon, Delete02Icon, SparklesIcon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, Cancel01Icon, Delete02Icon, SparklesIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { SKILL_MAX_LENGTH, type Skill } from '@openhut/common/agents/skill.ts'
 import { BRAND_ICONS, type BrandName } from '@/components/brand-icons'
@@ -21,6 +21,7 @@ import { agentPath } from '@/app/routes'
 import { useDeleteSkill, useSkill, useSkills, useUpdateSkill } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { readable } from '@/features/agents/skill-text'
+import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
@@ -41,13 +42,16 @@ export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: str
   const counts: Record<Filter, number> = { all: all.length, learned: all.filter((skill) => !skill.builtIn).length, builtIn: all.filter((skill) => skill.builtIn).length }
   const shown = all.filter((skill) => (filter === 'all' || skill.builtIn === (filter === 'builtIn')))
   const slug = (skill: Skill) => skill.id.slice(agent.id.length + 1)
-  const selected = open ?? (shown[0] && slug(shown[0]))
+  const phone = useMedia(PHONE)
+  const selected = open ?? (phone ? undefined : shown[0] && slug(shown[0]))
+  const toList = () => navigate(agentPath({ agentId: agent.id, dialog: 'skills' }))
   const setDraft = (skillId: string, body: string | undefined) => setDrafts(({ [skillId]: _, ...rest }) => body === undefined ? rest : { ...rest, [skillId]: body })
   return <DialogCard onClose={onClose} className={cn(SPLIT_DIALOG, 'flex-row')}>
-    <aside className="flex w-[300px] shrink-0 flex-col gap-3 border-r border-hair bg-sidebar p-4">
+    <aside className={cn('flex w-[300px] shrink-0 flex-col gap-3 border-r border-hair bg-sidebar p-4', phone && (selected ? 'hidden' : '!max-h-none flex-1 !border-b-0'))}>
       <div className="flex items-center gap-2.5">
         <Face agent={agent} size={32} />
-        <div className="grid min-w-0"><DialogTitle className="truncate text-[15px]/[20px] font-medium">{agent.name}'s skills</DialogTitle><span className="text-[12px] text-mute">{counts.learned} learned · {counts.builtIn} built in</span></div>
+        <div className="grid min-w-0 flex-1"><DialogTitle className="truncate text-[15px]/[20px] font-medium">{agent.name}'s skills</DialogTitle><span className="text-[12px] text-mute">{counts.learned} learned · {counts.builtIn} built in</span></div>
+        {phone && <CloseButton onClose={onClose} />}
       </div>
       <ToggleGroup aria-label="Which skills" value={filter} onPick={(value) => setFilter(FILTERS.find(([id]) => id === value)?.[0] ?? filter)}>
         {FILTERS.map(([id, label]) => <ToggleGroupItem key={id} value={id}>{label}<span className="font-mono text-xs text-mute">{counts[id]}</span></ToggleGroupItem>)}
@@ -64,16 +68,16 @@ export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: str
         {skills.data && !shown.length && <p className="m-0 px-2 py-1 text-[13px] text-mute">{filter === 'builtIn' ? `${agent.name} has no built-in skills.` : `${agent.name} hasn't learned a skill yet.`}</p>}
       </nav>
     </aside>
-    <section className="flex min-w-0 flex-1 flex-col">
+    <section className={cn('flex min-w-0 flex-1 flex-col', phone && !selected && 'hidden')}>
       {selected
-        ? <SkillDetail key={selected} agent={agent} skillId={`${agent.id}~${selected}`} draft={drafts[`${agent.id}~${selected}`]} setDraft={(body) => setDraft(`${agent.id}~${selected}`, body)} onClose={onClose} />
+        ? <SkillDetail key={selected} agent={agent} skillId={`${agent.id}~${selected}`} draft={drafts[`${agent.id}~${selected}`]} setDraft={(body) => setDraft(`${agent.id}~${selected}`, body)} onClose={phone ? toList : onClose} back={phone} />
         : <div className="flex flex-1 justify-end p-3"><CloseButton onClose={onClose} /></div>}
     </section>
   </DialogCard>
 }
 
-function CloseButton({ onClose }: { onClose: () => void }) {
-  return <Button type="button" size="icon-sm" aria-label="Close" title="Close" tabIndex={-1} onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
+function CloseButton({ onClose, back }: { onClose: () => void; back?: boolean }) {
+  return <Button type="button" size="icon-sm" aria-label={back ? 'All skills' : 'Close'} title={back ? 'All skills' : 'Close'} tabIndex={-1} onClick={onClose}><I icon={back ? ArrowLeft01Icon : Cancel01Icon} size={15} /></Button>
 }
 
 function SkillMark({ skill }: { skill: Skill }) {
@@ -87,7 +91,7 @@ function isBrand(name: string): name is BrandName {
   return Object.hasOwn(BRAND_ICONS, name)
 }
 
-function SkillDetail({ agent, skillId, draft, setDraft, onClose }: { agent: Agent; skillId: string; draft: string | undefined; setDraft: (body: string | undefined) => void; onClose: () => void }) {
+function SkillDetail({ agent, skillId, draft, setDraft, onClose, back }: { agent: Agent; skillId: string; draft: string | undefined; setDraft: (body: string | undefined) => void; onClose: () => void; back: boolean }) {
   const skill = useSkill({ skillId, agentId: agent.id })
   const updateSkill = useUpdateSkill({ skillId, agentId: agent.id })
   const deleteSkill = useDeleteSkill({ skillId, agentId: agent.id })
@@ -99,6 +103,7 @@ function SkillDetail({ agent, skillId, draft, setDraft, onClose }: { agent: Agen
   return <>
     <header className="grid gap-1 border-b border-hair px-5 pt-5 pb-4">
       <div className="flex items-center gap-2">
+        {back && <CloseButton onClose={onClose} back />}
         <h3 className="m-0 min-w-0 truncate text-[15px]/[22px] font-medium">{skill.data?.name ?? 'Skill'}</h3>
         {skill.data?.builtIn && <Tooltip label={`Built-in skills come with OpenHut and its connections. ${agent.name} reads them but can't change them.`}><Badge variant="secondary">Built in · read-only</Badge></Tooltip>}
         <span className="ml-auto flex items-center gap-1">
@@ -107,7 +112,7 @@ function SkillDetail({ agent, skillId, draft, setDraft, onClose }: { agent: Agen
           </ToggleGroup>
           {editable && <ConfirmIcon label="Delete skill" icon={Delete02Icon} danger question={`Delete ${skill.data?.name}? ${agent.name} forgets it for good.`} action="Delete" busy={deleteSkill.isPending}
             onConfirm={(done) => deleteSkill.mutate(undefined, { onSuccess: () => { done(); setDraft(undefined); navigate(agentPath({ agentId: agent.id, dialog: 'skills' })) }, onError: toastError })} />}
-          <CloseButton onClose={onClose} />
+          {!back && <CloseButton onClose={onClose} />}
         </span>
       </div>
       {skill.data?.description && <p className="m-0 text-[13px]/[18px] text-body">{skill.data.description}</p>}
