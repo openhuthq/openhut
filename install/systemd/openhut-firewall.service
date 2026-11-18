@@ -3,6 +3,7 @@ Description=OpenHut agent firewall (before Docker, so no agent ever runs unprote
 Before=docker.service
 DefaultDependencies=no
 After=network-pre.target
+RequiresMountsFor=/data /opt
 
 [Service]
 Type=oneshot

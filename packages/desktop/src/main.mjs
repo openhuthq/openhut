@@ -563,10 +563,11 @@ function lastBooted() {
 function keepData() {
   const last = lastBooted()
   if (DEV || !last || last === app.getVersion() || !existsSync(join(DATA, 'app'))) return
-  if (existsSync(`${BEFORE}.version`) && readFileSync(`${BEFORE}.version`, 'utf8').trim() === last) return
+  const step = `${last}->${app.getVersion()}`
+  if (existsSync(`${BEFORE}.version`) && readFileSync(`${BEFORE}.version`, 'utf8').trim() === step) return
   rmSync(BEFORE, { recursive: true, force: true })
   cpSync(join(DATA, 'app'), BEFORE, { recursive: true })
-  writeFileSync(`${BEFORE}.version`, last)
+  writeFileSync(`${BEFORE}.version`, step)
 }
 
 function keepApp(done) {
@@ -581,14 +582,14 @@ function keepApp(done) {
 }
 
 function previousVersion() {
-  if (!MAC || DEV || !existsSync(join(PREVIOUS, 'version')) || !existsSync(BEFORE)) return ''
+  if (!MAC || DEV || !existsSync(join(PREVIOUS, 'version')) || !existsSync(`${BEFORE}.version`) || lastBooted() === app.getVersion()) return ''
   const version = readFileSync(join(PREVIOUS, 'version'), 'utf8').trim()
-  return version !== app.getVersion() && readFileSync(`${BEFORE}.version`, 'utf8').trim() === version ? version : ''
+  return readFileSync(`${BEFORE}.version`, 'utf8').trim() === `${version}->${app.getVersion()}` ? version : ''
 }
 
 function goBack(version) {
   writeFileSync(SKIPPED, app.getVersion())
-  const script = 'while kill -0 "$PID" 2>/dev/null; do sleep 0.2; done; rm -rf "$BUNDLE.coming-back" "$BUNDLE.going-back" && ditto "$PREVIOUS/OpenHut.app" "$BUNDLE.coming-back" && rm -rf "$DATA/app" && cp -R "$BEFORE" "$DATA/app" && mv "$BUNDLE" "$BUNDLE.going-back" && mv "$BUNDLE.coming-back" "$BUNDLE" && rm -rf "$BUNDLE.going-back" && printf "%s" "$VERSION" > "$DATA/booted-version" && { [ -n "$NO_OPEN" ] || open "$BUNDLE"; }'
+  const script = 'while kill -0 "$PID" 2>/dev/null; do sleep 0.2; done; rm -rf "$BUNDLE.coming-back" "$BUNDLE.going-back" && ditto "$PREVIOUS/OpenHut.app" "$BUNDLE.coming-back" && rm -rf "$DATA/app" && cp -R "$BEFORE" "$DATA/app" && rm -rf "$BEFORE" "$BEFORE.version" && mv "$BUNDLE" "$BUNDLE.going-back" && mv "$BUNDLE.coming-back" "$BUNDLE" && rm -rf "$BUNDLE.going-back" && printf "%s" "$VERSION" > "$DATA/booted-version" && { [ -n "$NO_OPEN" ] || open "$BUNDLE"; }'
   spawn('/bin/sh', ['-c', `(${script}) >> "$LOG" 2>&1`], { detached: true, stdio: 'ignore', env: { ...process.env, PID: String(process.pid), DATA, BEFORE, BUNDLE, PREVIOUS, VERSION: version, LOG: join(LOGS, 'updates.log'), NO_OPEN: TEST_HOME ? '1' : '' } }).unref()
   app.quit()
 }

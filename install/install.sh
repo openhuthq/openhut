@@ -62,6 +62,12 @@ start() {
     nohup "$PREFIX/install/host-start.sh" >> /var/log/openhut-boot.log 2>&1 9>&- &
   fi
 }
+go_back() {
+  rm -rf "$PREFIX.failed"; mv "$PREFIX" "$PREFIX.failed"; mv "$PREFIX.old" "$PREFIX"
+  if [ -d /data/app.before-update ]; then stop_app; rm -rf /data/app && cp -a /data/app.before-update /data/app; fi
+  start || true
+  rm -rf "$PREFIX.failed"
+}
 fresh() { h=$(curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$h" | grep -q '"ok":true' &&
   [ "$(echo "$h" | sed -n 's/.*"started":\([0-9]*\).*/\1/p')" -ge "$STARTED_AFTER" ]; }
 up() { i=0; until fresh; do i=$((i+1)); [ $i -gt "$1" ] && return 1; printf .; sleep 3; done; }
@@ -142,7 +148,8 @@ case "$(uname -m)" in
            NODE_SHA256=2babb9eb5264860d540849f4b064a6fbdebcdc323657d9d382ce23d313fd5e09 ;;
   *) die "unsupported CPU: $(uname -m)" ;;
 esac
-TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+TMP=$(mktemp -d)
+trap 'code=$?; rm -rf "$TMP"; if [ -n "${SWAPPED:-}" ] && [ -d "$PREFIX.old" ]; then echo "openhut: the install stopped after the swap, so the previous release is going back"; go_back; fi; exit $code' EXIT
 
 say "Packages"
 if command -v apk >/dev/null 2>&1; then
@@ -205,14 +212,15 @@ chown -R root:root "$PREFIX.new" && chmod -R go-w "$PREFIX.new"
 if [ -d /data/app ] && [ -d "$PREFIX" ]; then
   say "Saving a copy of the data in case the new release has to be undone"
   stop_app
-  rm -rf /data/app.before-update && cp -a /data/app /data/app.before-update
+  rm -rf /data/app.before-update
+  cp -a /data/app /data/app.before-update || { rm -rf /data/app.before-update; start '' || true; die "couldn't keep a copy of the data (is the disk full?), so nothing changed"; }
 fi
-rm -rf "$PREFIX.old"; [ ! -d "$PREFIX" ] || mv "$PREFIX" "$PREFIX.old"; mv "$PREFIX.new" "$PREFIX"
+rm -rf "$PREFIX.old"; [ ! -d "$PREFIX" ] || mv "$PREFIX" "$PREFIX.old"; mv "$PREFIX.new" "$PREFIX"; SWAPPED=1
 id openhut >/dev/null 2>&1 || { addgroup -S openhut >/dev/null 2>&1 && adduser -S -D -G openhut openhut >/dev/null 2>&1; } || useradd --system --user-group --no-create-home openhut
 
 say "Starting"
 write_env
-start
+start || echo "  Something didn't start cleanly; waiting for OpenHut to answer anyway."
 [ -d /run/systemd/system ] || [ -n "${OPENHUT_CONTAINER:-}" ] || echo "  No systemd here. After a reboot, run $PREFIX/install/host-start.sh (agents stay stopped until then)."
 TRIES=600
 [ -d "$PREFIX.old" ] && cmp -s "$PREFIX.old/install/agent-image" "$PREFIX/install/agent-image" && TRIES=100
@@ -221,10 +229,7 @@ if ! up "$TRIES"; then
   printf '\n'
   [ -d "$PREFIX.old" ] || die "not up after 30 min; see /var/log/openhut"
   say "The new release didn't come up. Going back to the previous one"
-  rm -rf "$PREFIX.failed"; mv "$PREFIX" "$PREFIX.failed"; mv "$PREFIX.old" "$PREFIX"
-  if [ -d /data/app.before-update ]; then stop_app; rm -rf /data/app && cp -a /data/app.before-update /data/app; fi
-  start
-  rm -rf "$PREFIX.failed"
+  go_back
   up 600 || die "the new release didn't come up, and the previous one didn't come back either; see /var/log/openhut"
   printf '\n'
   die "the new release didn't come up, so the previous one is running again"

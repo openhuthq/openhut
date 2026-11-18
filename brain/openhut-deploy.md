@@ -53,8 +53,14 @@ Decision: `decisions/one-release-for-app-and-runtime.md`. A `v*` tag runs `.gith
   `BUILD=<version>` and its tarball URL on the release) to the draft, checks every file is there, then publishes. Publishing
   is the one switch: the app feed (GitHub `latest`) and `curl openhut.dev | sh` (a 302 to the latest release's `install.sh`)
   move together.
-- **Pull a bad release:** `gh release edit vX --draft=true` (done for v0.1.2 on 2026-11-18). New installs and updates go back
-  to the previous release; anyone already on the bad one stays there (downgrades are off), so ship the fix as the next version.
+- **Pull a bad release:** `gh release edit vX --draft=true` (done for v0.1.2 on 2026-11-18), then `gh workflow run deploy.yml`
+  so openhut.dev follows (if the release before it has no `install.sh`, the deploy puts the main build back at the root). New
+  installs and updates go back to the previous release; anyone already on the bad one stays there (downgrades are off), so ship
+  the fix as the next version. Publishing a release runs the deploy itself.
+- **The version must be above what openhut.dev serves.** Servers installed from the root before the first stable release run
+  main builds numbered `0.1.1xx`, so the first tag is v0.2.0 or higher; the workflow refuses a lower one (it would never be
+  offered to them). v0.1.3 was tagged on 2026-11-18 with the old workflow, and its run was cancelled before it published an
+  unsigned build.
 - Run `npm -w @openhut/desktop run dist` locally, then `update-test.mjs --from <old .app> --feed <dir with latest-mac.yml and
   the zip>` to see an update before tagging; it uses `OPENHUT_TEST_HOME` and never touches the real app's data.
 - The Developer ID certificate expires on 1 Feb 2027; renew it in January and re-export `CSC_LINK`.

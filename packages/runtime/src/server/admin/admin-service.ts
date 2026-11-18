@@ -95,23 +95,18 @@ export const adminService = {
   },
 
   async latestBuild(): Promise<string | null> {
-    if (config.socket) return null
-    if (Date.now() - latest.at < LATEST_TTL_MS) return latest.build
-    const script = await fetch(config.releaseUrl, { headers: { accept: 'text/plain' }, signal: AbortSignal.timeout(LATEST_TIMEOUT_MS) })
-      .then((response) => response.ok ? response.text() : '').catch(() => '')
-    latest = { build: BUILD_LINE.exec(script)?.[1] ?? null, sha256: createHash('sha256').update(script).digest('hex'), at: Date.now() }
-    return latest.build
+    return (await latestRelease({ fresh: false })).build
   },
 
   async startUpdate({ actor, appVersion }: { actor: Caller; appVersion?: string | string[] }): Promise<Update> {
-    latest.at = 0
-    const to = await adminService.latestBuild()
-    if (!to || !isNewer({ latest: to, current: config.build })) throw new HttpError(409, 'This is already the latest release.')
+    const { build: to, sha256 } = await latestRelease({ fresh: true })
+    if (!to) throw new HttpError(502, `Couldn't read the latest release from ${config.releaseUrl}. Try again in a minute.`)
+    if (!isNewer({ latest: to, current: config.build })) throw new HttpError(409, 'This is already the latest release.')
     const running = await currentUpdate(await probe())
     if (running?.status === 'running') throw new HttpError(409, 'An update is already running. This page shows when it finishes.')
     const stored = { from: config.build, to, startedAt: new Date().toISOString() }
     await settings.setUpdate(JSON.stringify(stored))
-    await agentd.update({ appVersion: typeof appVersion === 'string' && SEMVER.test(appVersion) ? appVersion : undefined, sha256: latest.sha256 }).catch(async (err: unknown) => {
+    await agentd.update({ appVersion: typeof appVersion === 'string' && SEMVER.test(appVersion) ? appVersion : undefined, sha256 }).catch(async (err: unknown) => {
       await settings.setUpdate('')
       throw err
     })
@@ -192,6 +187,16 @@ export function updateStatus({ stored, build, installing, last, now }: { stored:
   if (age > UPDATE_LIMIT_MS) return { status: 'failed', reason: finished?.reason ?? 'It didn\'t finish within 45 minutes.' }
   if (finished) return { status: 'failed', reason: finished.reason ?? 'The new release didn\'t come up, so the previous one is running again.' }
   return installing || age < UPDATE_GRACE_MS ? { status: 'running', reason: null } : { status: 'failed', reason: 'The update stopped before it finished.' }
+}
+
+async function latestRelease({ fresh }: { fresh: boolean }): Promise<{ build: string | null; sha256: string }> {
+  if (config.socket) return { build: null, sha256: '' }
+  if (!fresh && Date.now() - latest.at < LATEST_TTL_MS) return latest
+  const script = await fetch(config.releaseUrl, { headers: { accept: 'text/plain' }, signal: AbortSignal.timeout(LATEST_TIMEOUT_MS) })
+    .then((response) => response.ok ? response.text() : '').catch(() => '')
+  const found = { build: BUILD_LINE.exec(script)?.[1] ?? null, sha256: createHash('sha256').update(script).digest('hex'), at: Date.now() }
+  if (found.build || !latest.build) latest = found
+  return found
 }
 
 async function probe(): Promise<{ health: Health; installing: boolean; last: LastUpdate | null }> {

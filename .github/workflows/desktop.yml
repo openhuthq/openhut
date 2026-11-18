@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   release:
@@ -33,9 +34,15 @@ jobs:
             [ -n "$(printenv "$name")" ] || { echo "::error::The repo secret $name isn't set. A release is never built without the Developer ID and notarization."; missing=1; }
           done
           [ -z "$missing" ]
-      - name: Tag matches the app version
+      - name: Tag matches the app version, and servers will see it as newer
         if: env.TAGGED == 'true'
-        run: test "$GITHUB_REF_NAME" = "v$(node -p "require('./packages/desktop/package.json').version")"
+        run: |
+          test "$GITHUB_REF_NAME" = "v$(node -p "require('./packages/desktop/package.json').version")"
+          for url in https://openhut.dev/; do
+            served=$(curl -fsSL "$url" | sed -n 's/^OPENHUT_BUILD="\(.*\)"$/\1/p')
+            [ -z "$served" ] || [ "$(printf '%s\n%s\n' "$served" "${GITHUB_REF_NAME#v}" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" = "${GITHUB_REF_NAME#v}" ] && [ "$served" != "${GITHUB_REF_NAME#v}" ] ||
+              { echo "::error::$url serves runtime build $served, and ${GITHUB_REF_NAME#v} isn't newer, so servers would never be offered this release. Use a higher version."; exit 1; }
+          done
       - name: The release isn't published yet
         if: env.TAGGED == 'true'
         run: |
@@ -131,3 +138,4 @@ jobs:
             echo "$have" | grep -qx "$want" || { echo "::error::The draft release has no $want, so it stays a draft."; exit 1; }
           done
           gh release edit "$GITHUB_REF_NAME" --draft=false
+          gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main
