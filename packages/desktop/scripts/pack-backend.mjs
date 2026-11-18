@@ -6,7 +6,8 @@ import { join } from 'node:path'
 
 const ROOT = join(import.meta.dirname, '../../..')
 const OUT = join(import.meta.dirname, '../dist/backend')
-const NATIVE = ['@electric-sql/pglite', 'microsandbox', '@microsandbox/types', `@superradcompany/microsandbox-${process.platform}-${process.arch}${process.platform === 'darwin' ? '' : '-gnu'}`]
+const LINUX = process.platform === 'linux'
+const NATIVE = LINUX ? [] : ['@electric-sql/pglite', 'microsandbox', '@microsandbox/types', `@superradcompany/microsandbox-darwin-${process.arch}`]
 
 rmSync(OUT, { recursive: true, force: true })
 
@@ -16,15 +17,20 @@ const bundle = (entry, outfile) => build({
   banner: { js: "import { createRequire as __cr } from 'node:module'; import { dirname as __dn } from 'node:path'; import { fileURLToPath as __fu } from 'node:url'; const require = __cr(import.meta.url); const __filename = __fu(import.meta.url); const __dirname = __dn(__filename);" },
 })
 
-await bundle('packages/runtime/src/agentd/agentd.ts', 'packages/runtime/src/agentd/agentd.mjs')
-await bundle('packages/runtime/src/server/app.ts', 'packages/runtime/src/server/platform/app.mjs')
 await bundle('packages/client/src/openhut.ts', 'client.mjs')
-writeFileSync(join(OUT, 'BUILD'), `${JSON.parse(readFileSync(join(import.meta.dirname, '../package.json'), 'utf8')).version}-${execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT }).toString().trim()}\n`)
-writeFileSync(join(OUT, 'packages/runtime/package.json'), JSON.stringify({ version: JSON.parse(readFileSync(join(ROOT, 'packages/runtime/package.json'), 'utf8')).version }))
-for (const path of ['install/agent-image', 'install/agent-browser', 'vendor/hermes-plugins']) cpSync(join(ROOT, path), join(OUT, path), { recursive: true })
-for (const name of NATIVE) cpSync(join(ROOT, 'node_modules', name), join(OUT, 'node_modules', name), { recursive: true, dereference: true })
 cpSync(join(import.meta.dirname, '../bin/openhut-mcp'), join(OUT, 'bin/openhut-mcp'))
-await claude()
+mkdirSync(join(OUT, 'node_modules'), { recursive: true })
+if (!LINUX) await runtime()
+
+async function runtime() {
+  await bundle('packages/runtime/src/agentd/agentd.ts', 'packages/runtime/src/agentd/agentd.mjs')
+  await bundle('packages/runtime/src/server/app.ts', 'packages/runtime/src/server/platform/app.mjs')
+  writeFileSync(join(OUT, 'BUILD'), `${JSON.parse(readFileSync(join(import.meta.dirname, '../package.json'), 'utf8')).version}-${execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT }).toString().trim()}\n`)
+  writeFileSync(join(OUT, 'packages/runtime/package.json'), JSON.stringify({ version: JSON.parse(readFileSync(join(ROOT, 'packages/runtime/package.json'), 'utf8')).version }))
+  for (const path of ['install/agent-image', 'install/agent-browser', 'vendor/hermes-plugins']) cpSync(join(ROOT, path), join(OUT, path), { recursive: true })
+  for (const name of NATIVE) cpSync(join(ROOT, 'node_modules', name), join(OUT, 'node_modules', name), { recursive: true, dereference: true })
+  await claude()
+}
 
 async function claude() {
   const installer = readFileSync(join(ROOT, 'install/install.sh'), 'utf8')
