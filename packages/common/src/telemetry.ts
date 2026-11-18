@@ -23,10 +23,12 @@ export const TELEMETRY_EVENTS = {
 
 export const BROWSER_EVENTS = ['dashboard_page_viewed'] as const
 export const TELEMETRY_MAX_BATCH = 100
+export const INSTALL_KINDS = ['mac', 'linux', 'server'] as const
 
 export type TelemetryName = keyof typeof TELEMETRY_EVENTS
 export type TelemetryEvent = { name: TelemetryName; properties: Record<string, string | number>; at: number }
-export type TelemetryBatch = { instance: string; version: string; events: TelemetryEvent[] }
+export type InstallKind = typeof INSTALL_KINDS[number]
+export type TelemetryBatch = { instance: string; version: string; kind?: InstallKind; events: TelemetryEvent[] }
 
 export const TrackEvent = z.object({ name: z.enum(BROWSER_EVENTS), properties: z.record(z.string(), z.string().check(z.maxLength(32))) })
 export type TrackEvent = z.infer<typeof TrackEvent>
@@ -58,12 +60,13 @@ export function telemetryBatch(value: unknown): TelemetryBatch | undefined {
   if (!isRecord(value) || !Array.isArray(value.events) || value.events.length > TELEMETRY_MAX_BATCH) return undefined
   const { instance, version } = value
   if (typeof instance !== 'string' || !INSTANCE.test(instance) || typeof version !== 'string' || !VERSION.test(version)) return undefined
+  const kind = INSTALL_KINDS.find((each) => each === value.kind)
   const events = value.events.flatMap((each) => {
     if (!isRecord(each) || typeof each.name !== 'string') return []
     const event = telemetryEvent({ name: each.name, properties: isRecord(each.properties) ? each.properties : {}, at: typeof each.at === 'number' ? each.at : undefined })
     return event ? [event] : []
   })
-  return { instance, version, events }
+  return kind ? { instance, version, kind, events } : { instance, version, events }
 }
 
 function patternOf(key: string): RegExp {

@@ -39,7 +39,7 @@ async function sendBatch({ instance, events }: { instance: string; events: Telem
   try {
     const response = await fetch(config.telemetryUrl, {
       method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
-      body: JSON.stringify({ instance, version: config.version, events }),
+      body: JSON.stringify({ instance, version: config.version, kind: config.installKind, events }),
     })
     if (!response.ok) throw new Error(`openhut.dev answered ${response.status}`)
   } catch (error) {
