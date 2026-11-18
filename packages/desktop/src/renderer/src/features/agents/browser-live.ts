@@ -48,8 +48,9 @@ export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTML
           if (message?.type === 'tabs') setPage(activeTab(message.tabs))
           if (message?.type === 'url' && typeof message.url === 'string') setPage((known) => ({ ...known, url: message.url as string }))
           if (message?.type === 'hold') {
-            setHeld(message.held === true)
-            setMine(message.mine === true)
+            const hold = holdOf(message)
+            setHeld(hold.held)
+            setMine(hold.mine)
           }
           if (message?.type === 'closed') setState('closed')
           if (message?.type === 'command' && typeof message.action === 'string') pending.set(String(message.id), { action: message.action, url: typeof message.url === 'string' ? message.url : '' })
@@ -79,6 +80,11 @@ export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTML
   }, [path, canvas])
   const send = (message: object) => channel.current?.send(JSON.stringify(message))
   return { state, page, held, mine, actions, error, fps: rate, hold: (held: boolean) => send({ type: 'hold', held }), mouse: (event: Mouse) => send(mouseInput(event)), key: (event: Key) => send(keyInput(event)) }
+}
+
+export function holdOf(message: Record<string, unknown>) {
+  const held = message.held === true
+  return { held, mine: typeof message.mine === 'boolean' ? message.mine : held }
 }
 
 export function mouseInput(event: Mouse) {
