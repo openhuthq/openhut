@@ -7,7 +7,7 @@ import { FirstRun } from '@/features/first-run/first-run'
 import { Join } from '@/features/join/join'
 import { useMe } from '@/features/people/api'
 import { SettingsView } from '@/features/settings/settings-view'
-import { isPhone, leave, onBack } from '@/lib/native'
+import { isPhone, leave, onBack, update } from '@/lib/native'
 import { usePhone } from '@/lib/phone'
 import { navigate, open, usePath } from '@/lib/router'
 
@@ -28,6 +28,7 @@ function Dashboard() {
   if (route.page === 'home' || route.page === 'agent') background.current = { path, route }
   const me = useMe()
   useEffect(() => onBack(back), [])
+  useEffect(() => { void update() }, [])
   if (route.page === 'welcome') return <FirstRun />
   if (me.error) return <ErrorNote className="mx-6 mt-[calc(16px+env(safe-area-inset-top))]" message={me.error.message} />
   if (!me.data) return null
