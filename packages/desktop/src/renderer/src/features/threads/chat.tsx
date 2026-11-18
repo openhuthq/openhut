@@ -28,6 +28,8 @@ import { ConfirmIcon } from '@/components/confirm-button'
 import { attachCalls, kindOf, stepsOf, type Step } from '@/features/threads/steps'
 import { on } from '@/lib/openhut'
 import { toast, toastError } from '@/lib/toast'
+import { usePhoneBack } from '@/app/phone-page'
+import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
 
 type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[] }>
@@ -37,14 +39,14 @@ type Attachment = { key: string; name: string; image: boolean; thumb?: string; f
 const ChatFiles = createContext<{ agentId: string; threadId: string; save: (path: string) => void }>({ agentId: '', threadId: '', save: () => undefined })
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i
 
-export function Chat({ agent, tools }: { agent: Agent; tools?: ReactNode }) {
+export function Chat({ agent, tools, onTitle }: { agent: Agent; tools?: ReactNode; onTitle?: () => void }) {
   const thread = useAgentThread(agent.id)
-  if (agentState(agent) === 'stopped') return <ChatFrame agent={agent} tools={tools}><Asleep agent={agent} /></ChatFrame>
-  if (!thread.data) return <ChatFrame agent={agent} tools={tools}><div className="m-auto"><ErrorNote message={thread.error?.message} /></div></ChatFrame>
-  return <ThreadView key={thread.data.id} thread={thread.data} agent={agent} tools={tools} />
+  if (agentState(agent) === 'stopped') return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><Asleep agent={agent} /></ChatFrame>
+  if (!thread.data) return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><div className="m-auto"><ErrorNote message={thread.error?.message} /></div></ChatFrame>
+  return <ThreadView key={thread.data.id} thread={thread.data} agent={agent} tools={tools} onTitle={onTitle} />
 }
 
-function ThreadView({ thread, agent, tools }: { thread: ThreadWithMessages; agent: Agent; tools: ReactNode }) {
+function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessages; agent: Agent; tools: ReactNode; onTitle?: () => void }) {
   const touch = useTouchThread()
   const transport = useMemo(() => new DefaultChatTransport<AgentMessage>({
     api: on({ agentId: agent.id, path: `${threadPath(thread.id)}/chat` }),
@@ -62,7 +64,7 @@ function ThreadView({ thread, agent, tools }: { thread: ThreadWithMessages; agen
   }
   const last = chat.messages.at(-1)
   const clear = chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
-  return <ChatFiles value={files}><ChatFrame agent={agent} tools={<>{clear}{tools}</>} onFiles={attachments.add} composer={<Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
+  return <ChatFiles value={files}><ChatFrame agent={agent} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={<Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
     {chat.messages.length ? <>
       <Day iso={thread.updatedAt} />
       {chat.messages.map((message) => <Message key={message.id} agent={agent} message={message} live={busy && message === last} />)}
@@ -127,7 +129,8 @@ function useAttachments({ agentId, threadId }: { agentId: string; threadId: stri
 
 type Attachments = ReturnType<typeof useAttachments>
 
-function ChatFrame({ agent, composer, tools, onFiles, children }: { agent: Agent; composer?: ReactNode; tools?: ReactNode; onFiles?: (files: File[]) => void; children: ReactNode }) {
+function ChatFrame({ agent, composer, tools, onTitle, onFiles, children }: { agent: Agent; composer?: ReactNode; tools?: ReactNode; onTitle?: () => void; onFiles?: (files: File[]) => void; children: ReactNode }) {
+  const back = usePhoneBack()
   const log = useRef<HTMLDivElement>(null)
   const sidebar = useContext(SidebarContext)
   const pinned = useRef(true)
@@ -145,16 +148,18 @@ function ChatFrame({ agent, composer, tools, onFiles, children }: { agent: Agent
   }
   return <section className="flex min-w-0 flex-1 flex-col bg-card" onDragOver={dragOver} onDrop={drop}>
     <title>{`${agent.name} · OpenHut`}</title>
-    <div className={cn('flex h-[52px] shrink-0 items-center gap-2 px-4', sidebar?.collapsed && 'pl-[84px]', DRAG)}>
-      {sidebar?.collapsed && <span className="mr-2 flex animate-[fadein_120ms_80ms_ease-out_backwards] items-center gap-0.5">
+    <div className={cn('still flex h-[52px] shrink-0 items-center gap-2 px-4 phone:grid phone:h-16 phone:grid-cols-[1fr_auto_1fr] phone:px-3', sidebar?.collapsed && 'pl-[84px] phone:pl-3', DRAG)}>
+      {sidebar?.collapsed && <span className="mr-2 flex phone:hidden animate-[fadein_120ms_80ms_ease-out_backwards] items-center gap-0.5">
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Show sidebar" title="Show sidebar ⌘\" onClick={sidebar.expand}><I icon={SidebarLeftIcon} size={16} /></Button>
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="New agent" title="New agent" onClick={sidebar.newAgent}><I icon={PlusSignIcon} size={16} /></Button>
       </span>}
-      <a href="/" aria-label="All agents" title="All agents" className={cn(ICON_BUTTON, '-ml-2 sm:hidden')}><I icon={ArrowLeft01Icon} size={18} /></a>
-      <Face agent={agent} size={26} /><span className="min-w-0 truncate text-[14px] font-semibold">{agent.name}</span>
-      <span className="ml-auto flex items-center gap-0.5">{tools}</span>
+      <Button type="button" variant="bare" aria-label="All agents" className={cn(ICON_BUTTON, 'float hidden size-10 justify-self-start rounded-full bg-card text-ink phone:grid')} onClick={back}><I icon={ArrowLeft01Icon} size={20} /></Button>
+      {onTitle
+        ? <Button type="button" variant="bare" className="float flex h-10 min-w-0 items-center gap-2 rounded-full bg-card pr-4 pl-1.5 text-ink" onClick={onTitle}><Face agent={agent} size={28} /><span className="truncate text-[16px] font-semibold">{agent.name}</span></Button>
+        : <><Face agent={agent} size={26} /><span className="min-w-0 truncate text-[14px] font-semibold">{agent.name}</span></>}
+      <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{tools}</span>
     </div>
-    <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 max-sm:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>
+    <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 phone:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>
       <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col justify-end gap-4">{children}</div>
     </div>
     {composer}
@@ -169,6 +174,7 @@ function Day({ iso }: { iso: string }) {
 }
 
 function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: Agent; busy: boolean; quiet: boolean; attachments: Attachments; onSend: (text: string) => void; onStop: () => void }) {
+  const touch = useMedia(TOUCH)
   const [empty, setEmpty] = useState(true)
   const picker = useRef<HTMLInputElement>(null)
   const ready = agentState(agent) === 'running'
@@ -193,14 +199,14 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
     event.preventDefault()
     attachments.add(Array.from(event.clipboardData.files))
   }
-  return <div className="shrink-0 px-8 pb-5 max-sm:px-3 max-sm:pb-3">
+  return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3">
     {!ready && !busy && !quiet && <NotReady agent={agent} />}
     <form className="mx-auto flex max-w-[640px] flex-col gap-2 rounded-xl border border-[oklch(0%_0_0/.12)] bg-card p-2 focus-within:border-mid" onSubmit={submit}>
       {attachments.items.length > 0 && <div className="flex flex-wrap gap-1.5">{attachments.items.map((each) => <FileChip key={each.key} name={each.name} image={each.image} thumb={each.thumb} busy={!each.file} onRemove={() => attachments.remove(each.key)} />)}</div>}
       <div className="flex items-end gap-1">
         <Input ref={picker} type="file" multiple hidden onChange={(event) => { attachments.add(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '' }} />
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Attach files" title="Attach files" disabled={!ready} onClick={() => picker.current?.click()}><I icon={Attachment01Icon} size={16} /></Button>
-        <Textarea variant="composer" name="text" rows={1} aria-label="Message" placeholder={placeholderOf(agent)} disabled={!ready} autoFocus
+        <Textarea variant="composer" name="text" rows={1} aria-label="Message" placeholder={placeholderOf(agent)} disabled={!ready} autoFocus={!touch}
           className="min-h-0 flex-1 py-1.5 text-[14px]" onKeyDown={enter} onPaste={paste}
           onInput={(event) => { const box = event.currentTarget; setEmpty(!box.value.trim()); box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 240)}px` }} />
         <Button type="submit" variant="send" className={cn(!busy && nothing && 'bg-transparent text-mute disabled:opacity-100')} aria-label={busy ? 'Stop' : 'Send'} title={busy ? 'Stop' : 'Send (Enter). Shift+Enter for a new line'} disabled={!busy && (!ready || nothing || attachments.uploading)}>{busy ? <span className="size-2.5 rounded-[2px] bg-white" /> : <I icon={ArrowUp02Icon} />}</Button>

@@ -11,7 +11,11 @@ import { toneOf } from '@/features/agents/status'
 import { nameOf, useComputers } from '@/features/computers/api'
 import { useConnections } from '@/features/connections/api'
 import { UpdateEverything } from '@/features/settings/update-pill'
+import { ago } from '@/lib/format'
+import { PHONE, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
+
+const ROUND = 'float phone:size-10 phone:rounded-full phone:bg-card phone:text-ink'
 
 const LIVE = { on: 'bg-pass', wait: 'animate-[blinkdot_1s_infinite] bg-amber', bad: 'bg-fail', off: 'bg-mute-2' }
 
@@ -24,24 +28,28 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
   contacts: Contact[]; activeId: string | undefined; collapsed: boolean; onCollapse: () => void; onNew: () => void
 }) {
   const computers = useComputers().data
+  const phone = useMedia(PHONE)
   const many = new Set(contacts.map(({ agent }) => agent.computer)).size > 1
-  return <aside inert={collapsed} className={cn('shrink-0 overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring)', collapsed ? 'w-0' : 'w-[280px] border-r-[0.5px]', activeId || !contacts.length ? 'max-sm:hidden' : 'max-sm:w-full max-sm:border-r-0', GLASS)}>
-    <div className={cn('flex h-full w-[280px] flex-col max-sm:w-full transition-[opacity,translate] duration-[160ms] ease-out', collapsed && '-translate-x-2 opacity-0')}>
-    <div className={cn('flex h-[56px] shrink-0 items-center gap-1.5 pr-3 pl-5', DRAG)}>
+  return <aside inert={collapsed} className={cn('still shrink-0 overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring)', collapsed ? 'w-0' : 'w-[280px] border-r-[0.5px]', contacts.length ? 'phone:w-full phone:border-r-0' : 'phone:hidden', GLASS)}>
+    <div className={cn('flex h-full w-[280px] flex-col phone:w-full transition-[opacity,translate] duration-[160ms] ease-out', collapsed && '-translate-x-2 opacity-0')}>
+    <div className={cn('flex h-[56px] shrink-0 items-center gap-1.5 pr-3 pl-5 phone:h-16 phone:px-4', DRAG)}>
+      <a href="/settings/general" aria-label="Settings" className={cn(ICON_BUTTON, ROUND, 'hidden phone:grid')}><I icon={Settings02Icon} size={20} /></a>
       <span className="ml-auto flex gap-1.5">
-        <Button type="button" variant="bare" className={cn(ICON_BUTTON, 'max-sm:hidden')} aria-label="Hide sidebar" title="Hide sidebar ⌘\" onClick={onCollapse}><I icon={SidebarLeftIcon} size={16} /></Button>
-        <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="New agent" title="New agent" onClick={onNew}><I icon={PlusSignIcon} size={16} /></Button>
+        <Button type="button" variant="bare" className={cn(ICON_BUTTON, 'phone:hidden')} aria-label="Hide sidebar" title="Hide sidebar ⌘\" onClick={onCollapse}><I icon={SidebarLeftIcon} size={16} /></Button>
+        <Button type="button" variant="bare" className={cn(ICON_BUTTON, ROUND)} aria-label="New agent" title="New agent" onClick={onNew}><I icon={PlusSignIcon} size={phone ? 20 : 16} /></Button>
       </span>
     </div>
-    <nav className="flex min-h-0 flex-col gap-1 overflow-auto px-3 pt-1">
-      {contacts.map(({ agent }) => <a key={agent.id} href={agentPath({ agentId: agent.id })} aria-current={agent.id === activeId ? 'page' : undefined}
-        className={cn('grid w-full shrink-0 grid-cols-[40px_1fr] items-center gap-3 rounded-lg px-2.5 py-2 text-left text-inherit no-underline', HOVER, agent.id === activeId && PICKED)}
+    <h1 className="m-0 hidden px-5 pt-1 pb-3 text-[32px]/[1.1] font-bold tracking-[-.02em] phone:block">Agents</h1>
+    <nav className="flex min-h-0 flex-col gap-1 overflow-auto px-3 pt-1 phone:gap-0 phone:px-2">
+      {contacts.map(({ agent, thread }) => <a key={agent.id} href={agentPath({ agentId: agent.id })} aria-current={agent.id === activeId ? 'page' : undefined}
+        className={cn('row grid w-full shrink-0 grid-cols-[40px_1fr] items-center gap-3 rounded-lg px-2.5 py-2 text-left text-inherit no-underline phone:grid-cols-[52px_1fr_auto] phone:gap-3.5 phone:rounded-2xl phone:px-3 phone:py-3', HOVER, !phone && agent.id === activeId && PICKED)}
         title={agent.online ? undefined : `${nameOf({ computers, id: agent.computer })} is offline`}>
-        <span className={cn('relative', !agent.online && 'opacity-45')}><Face agent={agent} size={40} /><Live agent={agent} className="-right-0.5 -bottom-0.5" /></span>
+        <span className={cn('relative', !agent.online && 'opacity-45')}><Face agent={agent} size={phone ? 52 : 40} /><Live agent={agent} className="-right-0.5 -bottom-0.5 phone:size-3.5" /></span>
         <span className="grid min-w-0 gap-0.5">
-          <span className={cn('truncate text-[14px] font-semibold', !agent.online && 'text-mute')}>{agent.name}</span>
+          <span className={cn('truncate text-[14px] font-semibold phone:text-[17px]', !agent.online && 'text-mute')}>{agent.name}</span>
           <span className={cn('truncate text-[13px]', agent.online ? 'text-body' : 'text-mute')}>{many && `${nameOf({ computers, id: agent.computer })} · `}{agent.online ? agent.summary || 'Say hello' : 'Offline'}</span>
         </span>
+        {thread && <span className="hidden self-start pt-1 text-[12px] text-mute tabular-nums phone:block">{ago(thread.updatedAt)}</span>}
       </a>)}
       {!contacts.length && <p className="m-0 px-2.5 py-2 text-[13px] text-mute">No agents yet</p>}
     </nav>
@@ -59,7 +67,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
 }
 
 function Gear() {
-  return <a href="/settings/general" aria-label="Settings" title="Settings ⌘," className={cn(SURFACE, 'grid size-10 shrink-0 place-items-center rounded-lg')}><I icon={Settings02Icon} size={17} /></a>
+  return <a href="/settings/general" aria-label="Settings" title="Settings ⌘," className={cn(SURFACE, 'grid phone:hidden size-10 shrink-0 place-items-center rounded-lg')}><I icon={Settings02Icon} size={17} /></a>
 }
 
 function Live({ agent, className }: { agent: OpenHutAgent; className: string }) {

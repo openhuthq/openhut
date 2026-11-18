@@ -43,7 +43,7 @@ export function ConnectionsView({ onClose }: { onClose: () => void }) {
     .filter((item) => !words || `${item.title} ${item.short}`.toLowerCase().includes(words))
   const sheet = me.data && id ? <Sheet me={me.data} id={decodeURIComponent(id)} kind={kind} connected={search.has('connected')} /> : null
   return <AppWindow label="Connections" onClose={onClose}>
-    {sheet ?? <div className="no-scrollbar fade-b flex min-h-0 flex-1 flex-col overflow-y-auto px-8 pt-[22px] pb-7 max-sm:px-5">
+    {sheet ?? <div className="no-scrollbar fade-b flex min-h-0 flex-1 flex-col overflow-y-auto px-8 pt-[22px] pb-7 phone:px-5">
       <div className="mt-[30px] flex items-center gap-3"><h2 className="m-0 text-[17px]/[24px] font-medium">{count ? 'Connections' : 'Connect apps'}</h2>
         {connections.data && <Button type="button" variant="bare" className="ml-auto inline-flex items-center gap-1 text-[12px] font-normal text-mute hover:text-ink" onClick={() => setShelf(CONNECTED)}>{count} connected<I icon={ArrowRight01Icon} size={12} /></Button>}
       </div>
@@ -61,7 +61,7 @@ export function ConnectionsView({ onClose }: { onClose: () => void }) {
             : <p className="m-0 text-[13px] text-balance text-body">Nothing yet. Pick one under All: each opens a short guide.</p>}</Loaded>
         </div>
         : <div className="mt-6 flex flex-col gap-3.5"><span className="text-[12px] text-mute">{shelf === 'All' ? 'Apps' : shelf}</span>
-          <div className="grid grid-cols-2 gap-x-8 max-sm:grid-cols-1">{shown.map((item) => {
+          <div className="grid grid-cols-2 gap-x-8 phone:grid-cols-1">{shown.map((item) => {
             const href = `/connections/new/${item.name}`
             return <div key={item.name} className="flex min-h-16 min-w-0 items-center gap-3">
               <span className="shrink-0"><Glyph name={item.name} size={24} /></span>

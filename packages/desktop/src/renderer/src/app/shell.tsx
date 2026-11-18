@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Creature } from '@/components/creature'
 import { PILL } from '@/components/kit'
+import { PhonePage } from '@/app/phone-page'
 import { agentPath, type Route } from '@/app/routes'
 import { useAgents } from '@/features/agents/api'
 import { AgentView } from '@/features/agents/agent-view'
@@ -19,6 +20,7 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
   const agents = useAgents()
   const threads = useThreads()
   const [collapsed, setCollapsed] = useState(false)
+  const phone = useMedia(PHONE)
   const order = useRef<string[]>([])
   const activeId = route.page === 'agent' ? route.agentId : undefined
   useEffect(() => track({ name: 'dashboard_page_viewed', properties: { page: overlay ?? route.page } }), [overlay, route.page])
@@ -40,7 +42,9 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
   const controls = { collapsed, expand: () => setCollapsed(false), newAgent }
   return <SidebarContext value={controls}><div className="flex h-dvh overflow-hidden bg-card text-left">
     <Sidebar contacts={contacts} activeId={activeId} collapsed={collapsed} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} />
-    {route.page === 'agent' && <AgentView key={route.agentId} agentId={route.agentId} dialog={route.dialog} detail={route.detail} />}
+    {route.page === 'agent' && (phone
+      ? <PhonePage key={route.agentId}><AgentView agentId={route.agentId} dialog={route.dialog} detail={route.detail} /></PhonePage>
+      : <AgentView key={route.agentId} agentId={route.agentId} dialog={route.dialog} detail={route.detail} />)}
     {route.page === 'home' && agents.data && <Home first={contacts[0]?.agent.id} adding={route.adding} overlaid={!!overlay} />}
     {route.page === 'missing' && <Redirect to="/" />}
   </div></SidebarContext>

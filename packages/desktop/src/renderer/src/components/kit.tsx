@@ -61,18 +61,18 @@ export function Choice({ icon, name, note, selected = false, disabled, onClick }
   </DropdownMenuItem>
 }
 
-export const SPLIT_DIALOG = 'h-[min(720px,calc(100vh-48px))] w-[min(1080px,calc(100vw-32px))] gap-0 overflow-hidden p-0 max-sm:flex-col max-sm:[&>aside]:max-h-[45%] max-sm:[&>aside]:w-full max-sm:[&>aside]:border-r-0 max-sm:[&>aside]:border-b max-sm:[&>aside]:border-hair'
+export const SPLIT_DIALOG = 'h-[min(720px,calc(100vh-48px))] w-[min(1080px,calc(100vw-32px))] gap-0 overflow-hidden p-0 phone:flex-col phone:[&>aside]:max-h-[45%] phone:[&>aside]:w-full phone:[&>aside]:border-r-0 phone:[&>aside]:border-b phone:[&>aside]:border-hair'
 
 export function DialogCard({ onClose, dismissable, className, children }: { onClose: () => void; dismissable?: boolean; className?: string; children: ReactNode }) {
   return <Dialog size="narrow" dismissable={dismissable} onClose={onClose} className={cn('flex flex-col gap-4 rounded-xl p-5', className)}>{children}</Dialog>
 }
 
 export function AppWindow({ label, nav, onClose, onEscape, children }: { label: string; nav?: ReactNode; onClose: () => void; onEscape?: () => void; children: ReactNode }) {
-  return <Dialog size="window" label={label} onClose={onClose} onEscape={onEscape} className="max-sm:flex-col max-sm:[&>nav]:w-full max-sm:[&>nav]:flex-row max-sm:[&>nav]:overflow-x-auto max-sm:[&>nav]:pr-14">
+  return <Dialog size="window" label={label} onClose={onClose} onEscape={onEscape} className="phone:flex-col phone:bg-sidebar phone:[&>nav]:mt-3 phone:[&>nav]:mr-16 phone:[&>nav]:ml-4 phone:[&>nav]:w-auto phone:[&>nav]:shrink-0 phone:[&>nav]:flex-row phone:[&>nav]:justify-between phone:[&>nav]:overflow-x-auto phone:[&>nav]:rounded-full phone:[&>nav]:bg-soft phone:[&>nav]:p-1 phone:[&>nav_[aria-current=page]]:bg-card phone:[&>nav_[aria-current=page]]:shadow-menu phone:[&>nav_a]:rounded-full phone:[&>nav_a]:px-3 phone:[&>nav_svg]:hidden">
     <InWindow value>
       {nav}
-      <section aria-label={label} className={cn('relative flex min-w-0 flex-1 flex-col text-[13px]/[18px]', FLAT)}>
-        <Button type="button" size="icon" aria-label="Close" title="Close (Esc)" className="absolute top-2.5 right-2.5 z-10 rounded-full" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
+      <section aria-label={label} className={cn('relative flex min-w-0 flex-1 flex-col text-[13px]/[18px] phone:static', FLAT)}>
+        <Button type="button" size="icon" aria-label="Close" title="Close (Esc)" className="float absolute top-2.5 right-2.5 z-10 rounded-full phone:top-[18px] phone:right-4 phone:size-9 phone:bg-card" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
         {children}
       </section>
     </InWindow>

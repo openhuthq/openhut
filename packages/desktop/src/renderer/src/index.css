@@ -174,3 +174,23 @@
 @utility fade-t { mask-image: linear-gradient(to bottom, transparent, #000 24px) }
 @utility fade-r { mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent) }
 @utility fade-y { mask-image: linear-gradient(to bottom, transparent, #000 12px, #000 calc(100% - 16px), transparent) }
+
+@media (pointer: coarse) { :focus-visible { outline: none } }
+
+@keyframes sheetup { from { transform: translateY(100%) } }
+@keyframes pushin { from { transform: translateX(100%) } }
+
+@media (max-width: 640px) {
+  html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none }
+  body { font-size: 16px }
+  :is([class*="text-[11px]"], [class*="text-[11.5px]"]):not([class*="phone:text-"]) { font-size: 12.5px; line-height: 1.4 }
+  :is([class*="text-[12px]"], [class*="text-[12.5px]"], .text-xs):not([class*="phone:text-"]) { font-size: 13.5px; line-height: 1.4 }
+  :is([class*="text-[13px]"], [class*="text-[13.5px]"]):not([class*="phone:text-"]) { font-size: 15px; line-height: 1.4 }
+  :is([class*="text-[14px]"], .text-sm, .text-base):not([class*="phone:text-"]) { font-size: 16px; line-height: 1.45 }
+  :is([class*="text-[15px]"]):not([class*="phone:text-"]) { font-size: 17px; line-height: 1.4 }
+  :is(button, a, [role=button]):not(:disabled) { transition: scale .2s cubic-bezier(.28, 1.4, .36, 1), background-color .15s ease }
+  :is(button, [role=button], .press):not(:disabled):active { scale: .96 }
+  .row:active { background-color: var(--picked); scale: 1 }
+  .still :is(.c-body, .c-eyes) { animation: none }
+  .float { box-shadow: 0 4px 14px -2px oklch(0% 0 0 / .1), 0 1px 3px oklch(0% 0 0 / .06) }
+}
