@@ -15,7 +15,7 @@ export const Route = createFileRoute('/$')({
     await docs.getPage(page.path)?.preload()
     return { path: page.path, url: page.url, title: page.data.title, description: page.data.description ?? '', icon: typeof page.data.icon === 'string' ? page.data.icon : null }
   },
-  head: ({ loaderData }) => loaderData ? { meta: [{ title: `${loaderData.title} · OpenHut docs` }, { name: 'description', content: loaderData.description }] } : {},
+  head: ({ loaderData }) => loaderData ? { meta: [{ title: `${loaderData.title} · OpenHut docs` }, { name: 'description', content: loaderData.description }, { property: 'og:title', content: `${loaderData.title} · OpenHut docs` }, { property: 'og:description', content: loaderData.description }] } : {},
 })
 
 function Page() {
