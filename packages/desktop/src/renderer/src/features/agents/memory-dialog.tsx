@@ -44,8 +44,8 @@ function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
   const saved = KINDS.some((kind) => memory[kind.target].saved)
   const pick = (key: string) => { setPicked(key); setAdding(false); setRemoving(false) }
   const save = ({ target, list, done }: { target: MemoryTarget; list: string[]; done: () => void }) => update.mutate({ [target]: list }, { onSuccess: done, onError: toastError })
-  return <div className="flex min-h-0 flex-1">
-    <aside className="flex w-[340px] shrink-0 flex-col gap-3 border-r border-hair bg-sidebar p-4">
+  return <div className="flex min-h-0 flex-1 max-sm:flex-col">
+    <aside className="flex w-[340px] shrink-0 flex-col gap-3 border-r border-hair bg-sidebar p-4 max-sm:max-h-[45%] max-sm:w-full max-sm:border-r-0 max-sm:border-b">
       <div className="flex gap-2">
         <Button type="button" variant="secondary" title={saved ? undefined : `${agent.name} hasn't saved any memory yet. You can add to it once it has.`} disabled={!agent.canEdit || adding || !saved} onClick={() => { setAdding(true); setRemoving(false) }}><I icon={PlusSignIcon} size={13} />Add</Button>
       </div>

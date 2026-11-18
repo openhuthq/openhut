@@ -1,5 +1,5 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
-import { SidebarRight01Icon } from '@hugeicons/core-free-icons'
+import { useEffect, useState } from 'react'
+import { ArrowLeft01Icon, SidebarRight01Icon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { I, ICON_BUTTON } from '@/components/kit'
@@ -17,6 +17,7 @@ import { SkillsDialog } from '@/features/agents/skills-dialog'
 import { Chat } from '@/features/threads/chat'
 import { RequestError } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
+import { PHONE, useMedia } from '@/lib/media'
 import { navigate, Redirect } from '@/lib/router'
 
 export function AgentView({ agentId, dialog, detail }: { agentId: string; dialog: AgentDialog | undefined; detail: string | undefined }) {
@@ -29,16 +30,22 @@ export function AgentView({ agentId, dialog, detail }: { agentId: string; dialog
   const { refetch } = agent
   const moved = gone && !!agents.data && !agents.isFetching && !away
   useEffect(() => { if (moved) void refetch() }, [moved, agents.dataUpdatedAt, refetch])
-  const narrow = useNarrow()
+  const narrow = useMedia(NARROW)
+  const phone = useMedia(PHONE)
   const [shown, setShown] = useState<boolean | null>(null)
   useEffect(() => setShown(null), [narrow])
   const open = shown ?? !narrow
   if (away) return <Redirect to={away} />
   if (!agent.data) return <section className="grid flex-1 place-items-center bg-card">{!gone && <ErrorNote message={agent.error?.message} />}</section>
   const toggle = narrow && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label={open ? 'Hide details' : 'Show details'} aria-pressed={open} title={open ? 'Hide details' : 'Show details'} onClick={() => setShown(!open)}><I icon={SidebarRight01Icon} size={16} /></Button>
+  const panel = open && <Panel agent={agent.data} naming={dialog === 'name'} watching={dialog === 'browser'} />
   return <>
-    <Chat agent={agent.data} tools={toggle} />
-    {open && <Panel agent={agent.data} naming={dialog === 'name'} watching={dialog === 'browser'} />}
+    {phone && open
+      ? <div className="flex min-w-0 flex-1 flex-col bg-sidebar">
+        <div className="flex h-[52px] shrink-0 items-center px-2"><Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Back to chat" title="Back to chat" onClick={() => setShown(false)}><I icon={ArrowLeft01Icon} size={18} /></Button></div>
+        {panel}
+      </div>
+      : <><Chat agent={agent.data} tools={toggle} />{panel}</>}
     <Dialogs agent={agent.data} dialog={dialog} detail={detail} />
   </>
 }
@@ -60,11 +67,3 @@ function Dialogs({ agent, dialog, detail }: { agent: Agent; dialog: AgentDialog 
 }
 
 const NARROW = '(max-width: 1100px)'
-
-function useNarrow() {
-  return useSyncExternalStore((listener) => {
-    const query = matchMedia(NARROW)
-    query.addEventListener('change', listener)
-    return () => query.removeEventListener('change', listener)
-  }, () => matchMedia(NARROW).matches)
-}
