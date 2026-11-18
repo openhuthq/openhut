@@ -1,7 +1,7 @@
 import type { WebSocket } from '@fastify/websocket'
 import type { FastifyRequest } from 'fastify'
 import { liveBrowser } from '../platform/agentd.ts'
-import { record } from '../platform/events.ts'
+import { emit } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { who } from '../team/identity.ts'
 import { agentService } from './agent-service.ts'
@@ -21,7 +21,7 @@ export const browserService = {
         const line = String(data)
         if (line.length > MAX_LINE) return socket.close(1009, 'That message is too long.')
         const held = /^\{"type":"hold","held":(true|false)\}$/.exec(line)?.[1]
-        if (held) record({ action: held === 'true' ? 'browser.held' : 'browser.released', actor, target: { type: 'agent', id: agentId, name: row.name } })
+        if (held) emit({ name: held === 'true' ? 'browser.held' : 'browser.released', actor, target: { type: 'agent', id: agentId, name: row.name } })
         live.send(line)
       })
       socket.on('close', () => live.close())

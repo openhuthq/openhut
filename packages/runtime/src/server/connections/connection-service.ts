@@ -5,7 +5,7 @@ import { config } from '../platform/config.ts'
 import { settings } from '../platform/settings.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
-import { log, record } from '../platform/events.ts'
+import { log, emit } from '../platform/events.ts'
 import { deleted } from '../platform/responses.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { newId, seal, unseal } from '../platform/secrets.ts'
@@ -68,13 +68,13 @@ export const connectionService = {
     if (id) {
       await db.updateTable('connection').set({ config: sealed, account }).where('id', '=', id).execute()
       toolCache.delete(id)
-      record({ action: 'connection.reconnected', actor, target: { type: 'connection', id, kind } })
+      emit({ name: 'connection.reconnected', actor, target: { type: 'connection', id, kind } })
       return connectionService.get({ actor, id })
     }
     const row = await db.insertInto('connection')
       .values({ id: newId('cn'), kind, name: name.trim().slice(0, 60) || kind, account, sign_in: signIn, owner_id: actor.id, config: sealed })
       .returning('id').executeTakeFirstOrThrow()
-    record({ action: 'connection.created', actor, target: { type: 'connection', id: row.id, kind } })
+    emit({ name: 'connection.created', actor, target: { type: 'connection', id: row.id, kind } })
     return connectionService.get({ actor, id: row.id })
   },
 
@@ -93,7 +93,7 @@ export const connectionService = {
     const row = await rowOf(id)
     if (row.owner_id !== actor.id) throw new HttpError(403, 'Only its owner can share a connection.')
     await db.updateTable('connection').set({ everyone }).where('id', '=', id).execute()
-    record({ action: 'connection.shared', actor, target: { type: 'connection', id, everyone } })
+    emit({ name: 'connection.shared', actor, target: { type: 'connection', id, everyone } })
     return connectionService.get({ actor, id })
   },
 
@@ -101,7 +101,7 @@ export const connectionService = {
     const row = await rowOf(id)
     await db.deleteFrom('connection').where('id', '=', id).execute()
     toolCache.delete(id)
-    record({ action: 'connection.deleted', actor, target: { type: 'connection', id, name: row.name } })
+    emit({ name: 'connection.deleted', actor, target: { type: 'connection', id, name: row.name } })
     return deleted({ id, object: 'connection' })
   },
 

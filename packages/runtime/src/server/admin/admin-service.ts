@@ -7,7 +7,7 @@ import { HttpError } from '../platform/http-error.ts'
 import { createHash } from 'node:crypto'
 import { agentd, containerStates, features, type LastUpdate } from '../platform/agentd.ts'
 import { settings } from '../platform/settings.ts'
-import { record, setUsageData } from '../platform/events.ts'
+import { emit, setUsageData } from '../platform/events.ts'
 import { newId, openSealed, sealFor, transferPublicKey } from '../platform/secrets.ts'
 import { codex } from '../integrations/codex/codex.ts'
 import { connectionService } from '../connections/connection-service.ts'
@@ -62,7 +62,7 @@ export const adminService = {
     const transfer = await transferOf({ actor, connectionId, subscription })
     const sealed = attempt(() => sealFor({ publicKey, text: JSON.stringify(transfer) }))
     if (!sealed) throw new HttpError(400, 'That public key isn\'t one an OpenHut computer gave. Send the publicKey from its GET /api/admin.', { param: 'publicKey' })
-    record({ action: 'admin.exported', actor, target: { type: 'admin', id: 'install', what: transfer.type, connectionId: connectionId ?? null } })
+    emit({ name: 'admin.exported', actor, target: { type: 'admin', id: 'install', what: transfer.type, connectionId: connectionId ?? null } })
     return { object: 'export', sealed }
   },
 
@@ -70,7 +70,7 @@ export const adminService = {
     const transfer = z.safeParse(Transfer, parseJson(attempt(() => openSealed(sealed))))
     if (!transfer.success) throw new HttpError(400, 'This wasn\'t sealed for this computer. Export it again with this computer\'s publicKey.', { param: 'sealed' })
     const { data } = transfer
-    record({ action: 'admin.imported', actor, target: { type: 'admin', id: 'install', what: data.type } })
+    emit({ name: 'admin.imported', actor, target: { type: 'admin', id: 'install', what: data.type } })
     if (data.type === 'connection') return connectionService.save({ actor, kind: data.kind, name: data.name, config: data.config, account: data.account, signIn: false })
     if (data.type === 'claude') {
       await settings.setSeatToken(data.token)
@@ -110,7 +110,7 @@ export const adminService = {
       await settings.setUpdate('')
       throw err
     })
-    record({ action: 'admin.update_started', actor, target: { type: 'admin', id: 'install', from: stored.from, to } })
+    emit({ name: 'admin.update_started', actor, target: { type: 'admin', id: 'install', from: stored.from, to } })
     return { object: 'update', status: 'running', ...stored }
   },
 
@@ -122,7 +122,7 @@ export const adminService = {
   async completeSeatSignIn({ actor, id, code }: { actor: Caller; id: string; code: string }): Promise<SeatSignIn> {
     const token = await seatSignIn.complete({ id, code })
     await adminService.update({ actor, patch: { seatToken: token } })
-    record({ action: 'admin.seat_signed_in', actor, target: { type: 'admin', id: 'install' } })
+    emit({ name: 'admin.seat_signed_in', actor, target: { type: 'admin', id: 'install' } })
     return { id, object: 'seat_sign_in', status: 'complete', url: null }
   },
 
@@ -140,7 +140,7 @@ export const adminService = {
     if (done) {
       codexSignIns.delete(id)
       await providerService.refresh({ id: 'codex' })
-      record({ action: 'admin.codex_signed_in', actor, target: { type: 'admin', id: 'install' } })
+      emit({ name: 'admin.codex_signed_in', actor, target: { type: 'admin', id: 'install' } })
     }
     return { id, object: 'codex_sign_in', status: done ? 'complete' : 'open', url: codex.signInUrl, userCode: open.userCode }
   },
@@ -150,7 +150,7 @@ export const adminService = {
     if (patch.seatToken !== undefined) await settings.setSeatToken(patch.seatToken)
     if (patch.usageData !== undefined) await setUsage(patch.usageData)
     if (patch.googleClientId !== undefined || patch.googleClientSecret !== undefined) await setGoogleClient(patch)
-    record({ action: 'admin.updated', actor, target: { type: 'admin', id: 'install', fields: Object.keys(patch) } })
+    emit({ name: 'admin.updated', actor, target: { type: 'admin', id: 'install', fields: Object.keys(patch) } })
     return adminService.status()
   },
 }

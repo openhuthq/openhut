@@ -3,7 +3,7 @@ import { agentd } from './agentd.ts'
 import { config } from './config.ts'
 import { db } from './db.ts'
 import type { TelemetryEvent } from '@openhut/common/telemetry.ts'
-import { log, setUsageData, takeTelemetry, track, usageDataOn } from './events.ts'
+import { emit, log, setUsageData, takeTelemetry, usageDataOn } from './events.ts'
 import { settings } from './settings.ts'
 
 const SEND_EVERY_MS = 60_000
@@ -13,7 +13,6 @@ const SEND_TIMEOUT_MS = 10_000
 const MAX_BATCHES_PER_SEND = 5
 const AGENT_BUCKETS: [number, string][] = [[0, '0'], [1, '1'], [5, '2-5'], [Infinity, '6+']]
 const CHANNELS = ['slack', 'whatsapp', 'telegram']
-const PEOPLE_BUCKETS: [number, string][] = [[1, '1'], [5, '2-5'], [20, '6-20'], [Infinity, '21+']]
 
 export async function startTelemetry(): Promise<void> {
   setUsageData(settings.usageData())
@@ -49,12 +48,8 @@ async function sendBatch({ instance, events }: { instance: string; events: Telem
 
 export async function reportActive(): Promise<void> {
   if (!usageDataOn()) return
-  const [agents, people, owner] = await Promise.all([
-    db.selectFrom('agent').select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirstOrThrow(),
-    db.selectFrom('person').select((eb) => eb.fn.countAll<number>().as('n')).where('removed_at', 'is', null).executeTakeFirstOrThrow(),
-    db.selectFrom('person').select('email').where('role', '=', 'owner').where('removed_at', 'is', null).executeTakeFirst(),
-  ])
-  track('instance_active', { agents: bucketOf(Number(agents.n), AGENT_BUCKETS), people: bucketOf(Number(people.n), PEOPLE_BUCKETS), owner_email: owner?.email })
+  const agents = await db.selectFrom('agent').select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirstOrThrow()
+  emit({ name: 'instance.active', properties: { agents: bucketOf(Number(agents.n), AGENT_BUCKETS) } })
 }
 
 export async function reportMessages(since: number): Promise<number> {
@@ -64,7 +59,7 @@ export async function reportMessages(since: number): Promise<number> {
   const ids = [...new Set(found.messages.map((message) => message.agentId))]
   const rows = ids.length ? await db.selectFrom('agent').select(['id', 'name']).where('id', 'in', ids).execute() : []
   const names = new Map(rows.map((row) => [row.id, row.name]))
-  for (const message of found.messages) track('message_sent', { channel: channelOf(message.source), agent_name: names.get(message.agentId) }, Math.round(message.at * 1000))
+  for (const message of found.messages) emit({ name: 'message.sent', properties: { channel: channelOf(message.source), agent_name: names.get(message.agentId) }, at: Math.round(message.at * 1000) })
   return found.messages.at(-1)?.at ?? since
 }
 

@@ -1,6 +1,6 @@
 import type { Skill, UpdateSkill } from '@openhut/common/agents/skill.ts'
 import { agentd } from '../platform/agentd.ts'
-import { record } from '../platform/events.ts'
+import { emit } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
 import type { Caller } from '../team/identity.ts'
 import { agentService } from './agent-service.ts'
@@ -28,7 +28,7 @@ export const skillService = {
     const { agentId, path } = partsOf(id)
     await agentService.requireEditable({ actor, id: agentId })
     await agentd.writeSkill({ id: agentId, path, body: patch.body })
-    record({ action: 'skill.updated', actor, target: { type: 'skill', id, agentId } })
+    emit({ name: 'skill.updated', actor, target: { type: 'skill', id, agentId } })
     return skillService.get({ actor, id })
   },
 
@@ -37,7 +37,7 @@ export const skillService = {
     await agentService.requireEditable({ actor, id: skill.agentId })
     if (skill.builtIn) throw new HttpError(400, 'Built-in skills come with Hermes and can\'t be deleted. Only skills the agent learned can.')
     await agentd.removeSkill({ id: skill.agentId, path: skill.path })
-    record({ action: 'skill.deleted', actor, target: { type: 'skill', id, agentId: skill.agentId } })
+    emit({ name: 'skill.deleted', actor, target: { type: 'skill', id, agentId: skill.agentId } })
     return { id, object: 'skill', deleted: true }
   },
 }
