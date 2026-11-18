@@ -16,7 +16,7 @@
   --hair:oklch(0% 0 0 / .08); --soft:oklch(0% 0 0 / .06); --mid:oklch(0% 0 0 / .16); --hover:oklch(0% 0 0 / .035); --picked:oklch(0% 0 0 / .08);
   --pri:#0b0b0c; --pri-hover:#26262a; --pri-ink:#ffffff;
   --pass:oklch(61.7% .208 142.85); --fail:oklch(55% .185 27); --amber:#d98314;
-  --night:#0b0b0c; --night-ink:#f4f4f5; --night-mute:#9a9aa2; --sand:#c2a678; --sun:#ffe08a; --sea:#3cc5c0;
+  --sun:#ffe08a; --sea:#3cc5c0;
   --a-side:#f7f7f7; --a-card:#ffffff; --a-ink:#0b0b0c; --a-body:oklch(32% .004 290); --a-mute:oklch(45% .0033 290); --a-mute-2:oklch(56% .0031 290);
   --a-hair:oklch(0% 0 0 / .08); --a-soft:oklch(0% 0 0 / .06); --a-mid:oklch(0% 0 0 / .16); --a-hover:oklch(0% 0 0 / .035); --a-picked:oklch(0% 0 0 / .08); --a-tint:oklch(0% 0 0 / .04);
   --hue-slate:oklch(55% .03 255); --hue-sky:oklch(62% .11 230); --hue-blue:oklch(57% .14 255); --hue-violet:oklch(55% .15 295); --hue-teal:oklch(58% .09 190); --hue-green:oklch(60% .13 150); --hue-amber:oklch(66% .12 70); --hue-red:oklch(58% .14 25);
@@ -96,8 +96,6 @@ h1,h2,h3{text-wrap:balance;font-weight:600;letter-spacing:-.03em}
 .dlsplit{position:relative;z-index:30;display:inline-flex}
 .dlsplit .split-main{border-radius:999px 0 0 999px;padding:0 16px 0 22px}
 .dlsplit .split-more{border-radius:0 999px 999px 0;padding:0 16px 0 12px;box-shadow:inset 1px 0 0 oklch(100% 0 0 / .2)}
-.cta .dl-menu{top:auto;bottom:calc(100% + 8px)}
-.cta .dlsplit .split-more{box-shadow:inset 1px 0 0 oklch(0% 0 0 / .14)}
 .dlsplit .chev{transition:rotate .2s}
 .split-more[aria-expanded=true] .chev{rotate:180deg}
 .dl-menu{position:absolute;left:0;top:calc(100% + 8px);min-width:100%;margin:0;padding:6px;list-style:none;border-radius:12px;background:#fff;color:#0b0b0c;text-align:left;box-shadow:0 0 0 1px oklch(0% 0 0 / .06),0 18px 40px -16px oklch(0% 0 0 / .3);animation:grow .16s cubic-bezier(.2,.8,.2,1)}
@@ -453,19 +451,7 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
 .byo small{font-size:12.5px;color:var(--mute)}
 .key{font:12.5px var(--mono);color:var(--mute);padding:8px 10px;border-radius:8px;background:var(--card);box-shadow:0 0 0 1px var(--hair)}
 
-.cta{position:relative;overflow:hidden;padding:120px 0 0;background:var(--night);color:var(--night-ink);text-align:center}
-.moon{position:absolute;top:48px;left:max(24px,8%);width:48px;height:48px}
-.stars{position:absolute;inset:0;opacity:.7;background:radial-gradient(1.5px 1.5px at 12% 22%,#fff6dc 98%,transparent),radial-gradient(1.2px 1.2px at 24% 48%,#fff6dc 98%,transparent),radial-gradient(1.8px 1.8px at 70% 18%,#fff6dc 98%,transparent),radial-gradient(1.2px 1.2px at 82% 40%,#fff6dc 98%,transparent),radial-gradient(1.4px 1.4px at 92% 14%,#fff6dc 98%,transparent),radial-gradient(1.2px 1.2px at 40% 12%,#fff6dc 98%,transparent)}
-.cta>.wrap{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center}
-.cta h2{font-size:clamp(32px,4.5vw,52px);line-height:1.08;letter-spacing:-.04em;max-width:16ch;margin:0 auto}
-.cta .get{margin-top:32px}
-.cta .btn.pri{background:var(--night-ink);color:var(--night)}
-.cta .btn.pri:hover{background:#fff}
-.cta .btn.sec{background:oklch(100% 0 0 / .12);color:var(--night-ink)}
-.cta .btn.sec:hover{background:oklch(100% 0 0 / .2)}
-.sand{position:relative;z-index:1;height:64px;margin-top:110px;background:var(--sand)}
-.sand::before{content:"";position:absolute;left:0;right:0;top:-23px;height:24px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 24' preserveAspectRatio='none'%3E%3Cpath d='M0 14C150 3 300 18 450 9S800 2 1000 11 1150 6 1200 9V24H0z' fill='%23c2a678'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat}
-.parade{position:absolute;left:0;right:0;top:-46px;display:flex;justify-content:center;gap:clamp(6px,2vw,22px)}
+.parade{position:absolute;left:0;right:0;bottom:clamp(20px,3vw,40px);display:flex;justify-content:center;gap:clamp(6px,2vw,22px)}
 .parade .cr{cursor:pointer}
 .foot{padding:64px 0 32px;background:var(--bg);border-top:1px solid var(--hair);color:var(--ink)}
 .foot-grid{display:grid;grid-template-columns:minmax(0,1.6fr) repeat(3,minmax(0,1fr));gap:40px 32px}
@@ -565,10 +551,12 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
 
 .v-pic{margin-bottom:12px;padding:76px 20px 32px;border-radius:18px;background:var(--img) 50% 30%/cover;box-shadow:0 0 0 1px var(--hair)}
 .v-pic .v-dev{margin:0;height:auto;min-height:168px;box-shadow:0 0 0 1px var(--hair),0 10px 28px -8px oklch(20% .05 250 / .35)}
-.v-beach{padding:clamp(20px,5vw,72px);border-radius:24px;background:url(/scenes/jobs-band.jpg) 50% 100%/cover;box-shadow:0 0 0 1px var(--hair)}
+.v-beach{position:relative;padding:clamp(20px,5vw,72px);border-radius:24px;background:url(/scenes/jobs-band.jpg) 50% 100%/cover;box-shadow:0 0 0 1px var(--hair)}
 .v-beach .v-start{padding:clamp(24px,4vw,48px);border-radius:20px;background:var(--card);box-shadow:0 0 0 1px var(--hair),0 24px 48px -16px oklch(20% .05 250 / .35)}
+.v-get,.v-get .get-row{align-items:flex-start;justify-content:flex-start}
+.v-get .v-phone{margin-inline:0;text-align:left}
 .v-beach .v-facts li{background:var(--bg-2);box-shadow:none}
-@media (max-width:600px){.v-pic{padding:40px 12px 12px}.v-beach{padding:16px 12px 64px}}
+@media (max-width:600px){.v-pic{padding:40px 12px 12px}.v-beach{padding:16px 12px 64px}.parade .cr:nth-child(n+6){display:none}}
 
 .v-bzpic{min-width:0;padding:clamp(16px,4vw,44px);border-radius:20px;background:url(/scenes/browse-band.jpg) 50% 50%/cover;box-shadow:0 0 0 1px var(--hair)}
 .v-bzpic .bz-win{box-shadow:0 0 0 1px var(--hair),0 24px 48px -16px oklch(20% .05 250 / .4)}
@@ -585,7 +573,6 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
 
 /* phones */
 .v-phone{display:none;margin-top:12px;max-width:30ch;font-size:13px;line-height:1.45;color:var(--mute);text-align:center;text-wrap:balance}
-.cta .v-phone{color:var(--night-mute)}
 .bz-bar .live{white-space:nowrap}
 #collaborate .stage{display:grid}
 #collaborate .scene{grid-area:1/1;display:flex;visibility:hidden}
@@ -607,7 +594,6 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
 @media (hover:none){
   .btn.sec:hover{background:var(--soft)}
   .btn.pri:hover{background:var(--pri)}
-  .cta .btn.pri:hover{background:var(--night-ink)}
   .pill:hover{background:var(--soft)}
   .tab:hover{background:none}
   .tab[aria-selected=true]:hover{background:var(--card)}
@@ -810,29 +796,20 @@ h3.ct{font-size:15px;font-weight:600;letter-spacing:-.01em}
         <li><b>Name your first agent and give it a job.</b></li>
         <li><b>Add it to Slack, WhatsApp or Telegram.</b></li>
       </ol>
+      <div class="get v-get">
+        <div class="get-row">
+          <div class="dl-slot" data-location="start"><a class="btn pri big" href="/download/mac">Download for Mac</a></div>
+        </div>
+      </div>
     </div>
     <ul class="v-facts">
       <li class="rv"><span class="v-big">$0</span><div><b>MIT licensed</b><span>Every feature, no seat count, no trial timer.</span></div></li>
       <li class="rv"><span class="v-logos"><svg class="lg" width="22" height="22"><use href="#lg-claude"/></svg><svg class="lg" width="22" height="22"><use href="#lg-openai"/></svg></span><div><b>Bring the AI you already pay for</b><span>Sign in with your Claude or ChatGPT plan. No extra model bill.</span></div></li>
       <li class="rv"><span class="v-logos"><svg class="lg" width="22" height="22"><use href="#lg-cursor"/></svg><svg class="lg" width="22" height="22"><use href="#lg-copilot"/></svg><svg class="lg" width="22" height="22"><use href="#lg-zed"/></svg></span><div><b>Manage it from your own assistant</b><span>Claude, Cursor, Copilot, Windsurf or Zed over MCP.</span></div></li>
     </ul>
-  </div></div></div>
+  </div><div class="parade" id="parade" aria-hidden="true"></div></div></div>
 </section>
 
-
-<section class="cta" id="cta">
-  <div class="stars" aria-hidden="true"></div>
-  <svg class="moon" viewBox="0 0 48 48" aria-hidden="true"><path d="M30 6a18 18 0 1 0 12 30A15 15 0 0 1 30 6z" fill="#fff6dc" stroke="#0b0b0b" stroke-width="2"/></svg>
-  <div class="wrap">
-    <h2>Give your team its first agent today</h2>
-    <div class="get">
-      <div class="get-row">
-        <div class="dl-slot" data-location="closing"><a class="btn pri big" href="/download/mac">Download for Mac</a></div>
-      </div>
-    </div>
-  </div>
-  <div class="sand"><div class="parade" id="parade" aria-hidden="true"></div></div>
-</section>
 </main>
 
 <footer class="foot">
@@ -1386,7 +1363,7 @@ for (const g of document.querySelectorAll('.get')) g.insertAdjacentHTML('beforee
   addEventListener('resize', fitChan); fitChan()
 }
 
-/* closing parade */
+/* beach parade */
 $('#parade').innerHTML = ['scout', 'support', 'growth', 'ops', 'sales', 'finance', 'recruit'].map(k => face(LOOKS[k], 46)).join('')
 $('#parade').addEventListener('pointerover', e => hop(e.target.closest('.cr')))
 })()
