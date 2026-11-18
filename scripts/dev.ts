@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { resolve } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -14,7 +14,7 @@ const DATA = process.env.OPENHUT_DATA ?? '.data'
 const AGENTD_DATA = `${DATA}/agentd`
 const BIN = resolve(AGENTD_DATA, 'bin')
 const SOCK = `${DATA}/agentd.sock`
-const FAKES_PORT = 18642
+const FAKES_PORT = Number(process.env.OPENHUT_FAKES_PORT ?? 18642)
 const PAIR_MS = 6000
 const PHONE = '15550001111'
 const MEMORIES = {
@@ -72,8 +72,9 @@ createServer((req, res) => {
   req.on('end', async () => {
     if (req.url?.endsWith('/models')) return res.writeHead(200, { 'content-type': 'application/json' }).end('{"object":"list","data":[{"id":"hermes-agent"}]}')
     if (req.url?.startsWith('/slack/')) return res.writeHead(200, { 'content-type': 'application/json', 'x-oauth-scopes': 'channels:read,channels:join,chat:write' }).end(JSON.stringify(fakeSlack(req.url.slice(7), new URLSearchParams(raw))))
-    const messages: { content: string }[] = JSON.parse(raw || '{}').messages ?? []
-    const last = messages.at(-1)?.content ?? ''
+    const messages: { content: string | { type: string; text?: string }[] }[] = JSON.parse(raw || '{}').messages ?? []
+    const content = messages.at(-1)?.content ?? ''
+    const last = typeof content === 'string' ? content : content.map((part) => part.text ?? `[${part.type}]`).join(' ')
     res.writeHead(200, { 'content-type': 'text/event-stream' })
     const say = async (text: string) => {
       for (const word of text.split(/(?<= )/)) {
@@ -86,7 +87,12 @@ createServer((req, res) => {
       res.write('event: hermes.tool.progress\ndata: {"tool":"call_tool","label":"postgres_query"}\n\n')
       await sleep(600)
     }
-    await say(`Fake Hermes heard: **${last}** (message ${messages.length} in this thread).`)
+    if (/^file:/i.test(last)) {
+      for (const id of readdirSync(`${AGENTD_DATA}/agents`)) writeFileSync(`${AGENTD_DATA}/agents/${id}/home/report.csv`, 'order,status\n1042,late\n1043,shipped\n')
+      await say('I saved it to `/opt/data/home/report.csv`. ')
+    }
+    if (last.includes('\n')) await say(`Fake Hermes heard:\n\n${last.split('\n').map((line) => `> ${line}`).join('\n')}`)
+    else await say(`Fake Hermes heard: **${last}** (message ${messages.length} in this thread).`)
     res.end('data: [DONE]\n\n')
   })
 }).listen(FAKES_PORT, '127.0.0.1', () => console.log(`fake Hermes and Slack APIs on :${FAKES_PORT}`))

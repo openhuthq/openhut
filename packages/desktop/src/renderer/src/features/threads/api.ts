@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
-import { Thread, ThreadWithMessages } from '@openhut/common/threads/thread.ts'
-import { request } from '@/lib/api-client'
+import { ChatFile, Thread, ThreadWithMessages } from '@openhut/common/threads/thread.ts'
+import { request, requestBlob } from '@/lib/api-client'
 import { on, onComputer, openhut } from '@/lib/openhut'
 import { THREADS_KEY } from '@/lib/query-keys'
 
@@ -41,4 +41,18 @@ export function useClearChat(agentId: string) {
 
 export function threadPath(threadId: string) {
   return `/api/threads/${encodeURIComponent(threadId)}`
+}
+
+export function uploadFile({ agentId, threadId, file }: { agentId: string; threadId: string; file: File }) {
+  const query = new URLSearchParams({ name: file.name, type: file.type })
+  return request({ schema: ChatFile, path: on({ agentId, path: `${threadPath(threadId)}/files?${query}` }), method: 'POST', body: file })
+}
+
+export async function saveFile({ agentId, threadId, path }: { agentId: string; threadId: string; path: string }) {
+  const blob = await requestBlob(on({ agentId, path: `${threadPath(threadId)}/files?${new URLSearchParams({ path })}` }))
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = path.slice(path.lastIndexOf('/') + 1)
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(link.href), 10_000)
 }
