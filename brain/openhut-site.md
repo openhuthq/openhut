@@ -39,8 +39,7 @@
   today") looked out of place as the only dark block and asked for the download twice. The beach card ("Free, open
   source, working in two minutes") is the close: its Download button sits under the three steps (tracked as
   `location: start`), the critter parade walks on its sand (five on phones), and the footer follows.
-- Changelog: 0.1.0 is the first desktop release; the older server article is labelled "Server preview" with a note on
-  what the app dropped. Check every page's inline scripts with `node --check` after editing them: a stray `})` once
+- Changelog: check every page's inline scripts with `node --check` after editing them: a stray `})` once
   left the changelog's mascots blank.
 - The rest of the page follows the app's calm: Inter headings at a few sizes, sentence case, grey pills, hairline
   cards, colour only from faces, brand marks and status dots. Bebas Neue and IBM Plex Mono are gone from the home page
@@ -59,7 +58,7 @@
 - No section snapping any more: the hero is taller than a screen and the wheel handler fought the chat's own scroll.
 - Never name a class or id `ad-*`, `ads`, `banner-ad` and the like: ad blockers hide matching elements with cosmetic filters, and the page just shows an empty box. The usage card was `ad-top`/`ad-rows` and vanished for anyone with uBlock; it is `wu-*` now.
 
-- The changelog (`public/changelog.html`, owner 2026-11-15) is one `<article class="rel">` per release, newest first, labelled with the version Admin shows (`.ver`), the date and a GitHub link. A release opens with its biggest product change as `.lead`, then `.sm` entries, one per change, each full width with no side-by-side pairs (owner, 2026-11-17): a plain headline, one short line, then a real dashboard screenshot from `public/changelog/` with a one-line caption when there is one (a tall image gets `class="tall"`). Every product change is its own entry, never a bullet list. Small changes (a connection like Excalidraw, the Slack icon, usage data) and openhut.dev's own changes aren't listed at all (owner, 2026-11-17). Add the entry in the PR that ships the change: a new version gets a new article on top, and a bigger change in the current version becomes the `.lead` while the old lead moves down to `.sm`. Product screens are real screenshots, never drawings.
+- The changelog (`public/changelog.html`, owner 2026-11-18) is highlights only, not a log of every release: one `<article class="item">` per big change, newest first, each with a date, a version pill, a plain headline, one or two lines and a real screenshot in a grey `.shot` (a dialog crop gets `class="dlg"` or `mid`). Fixes, polish and small changes stay out; it doesn't have to map exactly to releases. Its header and footer are the home page's, copied rule for rule (same `.wrap`, 68px `.nav`, links and footer columns), so moving between the two pages shifts nothing; when the home page's header or footer changes, copy it here too. Screenshots are the dev app with `seed-ui.ts` data. In a Chrome window that won't resize, the Chrome tool's `zoom` fails; set `document.documentElement.style.zoom = 1.4`, take a full screenshot with `save_to_disk` and crop it with `sips --cropToHeightWidth h w --cropOffset y x`.
 
 ## The beach (owner, 2026-11-15)
 
