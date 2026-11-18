@@ -27,26 +27,27 @@
 - The download control (owner, 2026-11-18): ONE component, a black split pill: "Download for Mac" with the Apple logo
   (or "Download for Linux" with Tux on Linux), a divider, and a chevron that opens a white menu of the builds we ship:
   macOS · Apple silicon, Linux · .deb, Linux · .AppImage, All downloads (GitHub releases). It lives once in
-  `<template id="dl-tpl">`; every `.dl-slot` (hero, closing band) is filled from it, and the slot's plain "Download for
-  Mac" link is the no-JS fallback. The closing band only recolours it (white pill) and opens the menu upward. Detection:
+  `<template id="dl-tpl">`; every `.dl-slot` (hero, the beach card) is filled from it, and the slot's plain "Download for
+  Mac" link is the no-JS fallback. Detection:
   `navigator.userAgentData.platform`, else `navigator.platform`, else the user agent; only Linux (not Android, not
   ChromeOS) switches. Clicks track `mac_download_clicked` / `linux_download_clicked {format}`; All downloads counts as
   `github_clicked`. The Worker also sends `app_downloaded {platform}` on every `/download/*` 302, so downloads from the
   docs count too. Never name a class `.split`: the sections already use it.
-- Footer (owner, 2026-11-18): off the sand, on the page background under a hairline: logo, tagline and © on the left,
-  Product / Resources / Community columns, then "MIT licensed" and the GitHub mark. The night band ends with the sand
-  and the parade, with no text on it.
+- Footer (owner, 2026-11-18): on the page background under a hairline: logo, tagline and © on the left,
+  Product / Resources / Community columns, then "MIT licensed" and the GitHub mark.
+- No closing band (owner, 2026-11-18, #165): the black night band (stars, moon, sand, "Give your team its first agent
+  today") looked out of place as the only dark block and asked for the download twice. The beach card ("Free, open
+  source, working in two minutes") is the close: its Download button sits under the three steps (tracked as
+  `location: start`), the critter parade walks on its sand (five on phones), and the footer follows.
 - Changelog: 0.1.0 is the first desktop release; the older server article is labelled "Server preview" with a note on
   what the app dropped. Check every page's inline scripts with `node --check` after editing them: a stray `})` once
   left the changelog's mascots blank.
 - The rest of the page follows the app's calm: Inter headings at a few sizes, sentence case, grey pills, hairline
   cards, colour only from faces, brand marks and status dots. Bebas Neue and IBM Plex Mono are gone from the home page
   (the docs and `/brand` still use them). Sections and their substance are unchanged: channels, shape it as you go,
-  browser, sealed and scoped, usage and cost, the night closing band with the sand strip.
+  browser, sealed and scoped, usage and cost.
 - No curl on any page (owner, 2026-11-17): the pages sell the app; Linux visitors get the Linux download. `/` still
   serves `install.sh` to curl because the app's "Add a computer" uses it. Old changelog entries keep their wording.
-- One closing block: the night band ends on the sand, and the footer (logo, one line, Docs · Changelog · Brand ·
-  GitHub) sits on the sand inside it. There is no separate white footer.
 - Never reuse a short generic class across the page and the app copy: the panel's `.sec` once turned `.btn.sec`
   into a column and stacked the GitHub icon over its label.
 - How it works (owner, 2026-11-18): the "Sealed and scoped" band is replaced by an architecture section, still
