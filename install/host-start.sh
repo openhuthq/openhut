@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 J=/opt/openhut
+if [ -f /etc/openhut/recover.sh ]; then sh /etc/openhut/recover.sh || [ $? -ne 10 ] || exec "$J/install/host-start.sh"; fi
 set -a; [ -f /etc/openhut/env ] && . /etc/openhut/env; set +a
 export RESOLVER="${RESOLVER:-1.1.1.1}" OPENHUT_MODEL="${OPENHUT_MODEL:-claude}"
 LOG=/var/log/openhut

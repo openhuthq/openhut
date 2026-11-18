@@ -1,4 +1,4 @@
-import { app, BrowserWindow, crashReporter, dialog, ipcMain, Menu, net, Notification, powerSaveBlocker, protocol, safeStorage, screen, shell, Tray, utilityProcess } from 'electron'
+import { app, autoUpdater as squirrel, BrowserWindow, crashReporter, dialog, ipcMain, Menu, net, Notification, powerSaveBlocker, protocol, safeStorage, screen, shell, Tray, utilityProcess } from 'electron'
 import { execFile, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer, request } from 'node:http'
@@ -17,8 +17,10 @@ const DEV = !app.isPackaged
 const MAC = process.platform === 'darwin'
 process.umask(0o022)
 app.setName(DEV ? 'OpenHut Dev' : 'OpenHut')
+const TEST_HOME = process.env.OPENHUT_TEST_HOME
 if (DEV) app.setPath('userData', join(app.getPath('appData'), 'OpenHut Dev'))
-app.setAppLogsPath(DEV && MAC ? join(app.getPath('home'), 'Library/Logs/OpenHut Dev') : undefined)
+if (TEST_HOME) app.setPath('userData', TEST_HOME)
+app.setAppLogsPath(TEST_HOME ? join(TEST_HOME, 'logs') : DEV && MAC ? join(app.getPath('home'), 'Library/Logs/OpenHut Dev') : undefined)
 if (!app.requestSingleInstanceLock()) app.exit(0)
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -34,6 +36,11 @@ const BRIDGE = join(HOME, 'bin/openhut-mcp')
 const ASSETS = DEV ? ROOT : join(HOME, 'assets', app.getVersion())
 const LOGS = app.getPath('logs')
 const DATA = join(HOME, 'data')
+const BEFORE = join(DATA, 'app.before-update')
+const BOOTED = join(DATA, 'booted-version')
+const PREVIOUS = join(HOME, 'previous')
+const SKIPPED = join(HOME, 'skipped-version')
+const BUNDLE = join(dirname(app.getPath('exe')), '../..')
 const SOCK = join(HOME, 'agentd.sock')
 const SERVER_SOCK = join(HOME, 'server.sock')
 const MCP_SOCK = join(HOME, 'mcp.sock')
@@ -74,7 +81,7 @@ let tray
 let blocker
 let setup
 let booted
-let downloaded = null
+const updating = { checking: false, available: null, ready: null, error: null }
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 crashReporter.start({ uploadToServer: false })
 
@@ -134,10 +141,11 @@ handle('show-folder', () => shell.openPath(HOME))
 handle('prefs', prefsNow)
 handle('set-prefs', setPrefs)
 handle('first-run', (start) => firstRun(start === true))
-handle('update.state', () => ({ current: app.getVersion(), ready: downloaded }))
+handle('update.state', updateState)
+handle('update.check', () => DEV ? updateState() : checkForUpdate())
 handle('update.install', () => {
-  if (downloaded) setImmediate(() => updater.autoUpdater.quitAndInstall())
-  return { installing: !!downloaded }
+  if (updating.ready) setImmediate(() => updater.autoUpdater.quitAndInstall())
+  return { installing: !!updating.ready }
 })
 handle('computers.list', computers)
 handle('computers.add', answer(enroll))
@@ -531,6 +539,7 @@ async function boot() {
   for (const file of readdirSync(LOGS).filter((each) => each.endsWith('.log') && !each.endsWith('.old.log'))) {
     if (statSync(join(LOGS, file)).size > MAX_LOG) renameSync(join(LOGS, file), join(LOGS, file.replace(/\.log$/, '.old.log')))
   }
+  keepData()
   assets()
   const shared = { OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_CLAUDE_HOST: MAC ? join(DATA, 'bin/claude') : join(ASSETS, 'bin/claude'), OPENHUT_CLAUDE_VERSION: claudeVersion() }
   const pinned = DEV ? {} : msb()
@@ -543,6 +552,45 @@ async function boot() {
   if (!await waitFor(async () => existsSync(SERVER_SOCK), 60)) return false
   if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   return true
+}
+
+function lastBooted() {
+  if (existsSync(BOOTED)) return readFileSync(BOOTED, 'utf8').trim()
+  const older = existsSync(dirname(ASSETS)) ? readdirSync(dirname(ASSETS)).filter((name) => name !== app.getVersion() && !name.endsWith('.tmp')) : []
+  return older.sort((a, b) => statSync(join(dirname(ASSETS), b)).mtimeMs - statSync(join(dirname(ASSETS), a)).mtimeMs)[0] ?? ''
+}
+
+function keepData() {
+  const last = lastBooted()
+  if (DEV || !last || last === app.getVersion() || !existsSync(join(DATA, 'app'))) return
+  if (existsSync(`${BEFORE}.version`) && readFileSync(`${BEFORE}.version`, 'utf8').trim() === last) return
+  rmSync(BEFORE, { recursive: true, force: true })
+  cpSync(join(DATA, 'app'), BEFORE, { recursive: true })
+  writeFileSync(`${BEFORE}.version`, last)
+}
+
+function keepApp(done) {
+  if (!MAC || DEV) return done()
+  rmSync(PREVIOUS, { recursive: true, force: true })
+  mkdirSync(PREVIOUS, { recursive: true })
+  execFile('ditto', [BUNDLE, join(PREVIOUS, 'OpenHut.app')], (error) => {
+    if (error) appendFileSync(join(LOGS, 'updates.log'), `openhut: couldn't keep a copy of ${app.getVersion()}: ${error.message}\n`)
+    else writeFileSync(join(PREVIOUS, 'version'), app.getVersion())
+    done()
+  })
+}
+
+function previousVersion() {
+  if (!MAC || DEV || !existsSync(join(PREVIOUS, 'version')) || !existsSync(BEFORE)) return ''
+  const version = readFileSync(join(PREVIOUS, 'version'), 'utf8').trim()
+  return version !== app.getVersion() && readFileSync(`${BEFORE}.version`, 'utf8').trim() === version ? version : ''
+}
+
+function goBack(version) {
+  writeFileSync(SKIPPED, app.getVersion())
+  const script = 'while kill -0 "$PID" 2>/dev/null; do sleep 0.2; done; rm -rf "$BUNDLE.coming-back" "$BUNDLE.going-back" && ditto "$PREVIOUS/OpenHut.app" "$BUNDLE.coming-back" && rm -rf "$DATA/app" && cp -R "$BEFORE" "$DATA/app" && mv "$BUNDLE" "$BUNDLE.going-back" && mv "$BUNDLE.coming-back" "$BUNDLE" && rm -rf "$BUNDLE.going-back" && printf "%s" "$VERSION" > "$DATA/booted-version" && { [ -n "$NO_OPEN" ] || open "$BUNDLE"; }'
+  spawn('/bin/sh', ['-c', `(${script}) >> "$LOG" 2>&1`], { detached: true, stdio: 'ignore', env: { ...process.env, PID: String(process.pid), DATA, BEFORE, BUNDLE, PREVIOUS, VERSION: version, LOG: join(LOGS, 'updates.log'), NO_OPEN: TEST_HOME ? '1' : '' } }).unref()
+  app.quit()
 }
 
 function assets() {
@@ -656,17 +704,44 @@ function menu() {
   app.setAboutPanelOptions({ applicationName: 'OpenHut', applicationVersion: app.getVersion(), version: '', copyright: 'Copyright © 2026 OpenHut', credits: 'openhut.dev' })
 }
 
+function updateState() {
+  return { current: app.getVersion(), ...updating }
+}
+
+function setUpdate(patch) {
+  Object.assign(updating, patch)
+  main?.webContents.send('update.changed', updateState())
+}
+
+function checkForUpdate() {
+  if (updating.ready) return updateState()
+  setUpdate({ checking: true, error: null })
+  return updater.autoUpdater.checkForUpdates().then(updateState, updateState)
+}
+
 function update() {
+  const auto = updater.autoUpdater
   const logger = new console.Console(createWriteStream(join(LOGS, 'updates.log'), { flags: 'a' }))
-  const failed = (error) => logger.error(`openhut: update failed: ${error?.stack ?? error}`)
-  updater.autoUpdater.logger = logger
-  updater.autoUpdater.on('error', failed)
-  updater.autoUpdater.on('update-downloaded', (info) => {
-    downloaded = { version: String(info?.version ?? '') }
-    main?.webContents.send('update.ready', downloaded)
+  auto.logger = logger
+  if (process.env.OPENHUT_UPDATE_FEED) auto.setFeedURL({ provider: 'generic', url: process.env.OPENHUT_UPDATE_FEED })
+  if (TEST_HOME) auto.autoRunAppAfterInstall = false
+  auto.on('error', (error) => {
+    logger.error(`openhut: update failed: ${error?.stack ?? error}`)
+    setUpdate({ checking: false, error: /code ?sign|signature|requirement/i.test(String(error?.message ?? error)) ? 'signature' : 'failed' })
   })
-  updater.autoUpdater.checkForUpdatesAndNotify().catch(failed)
-  setInterval(() => updater.autoUpdater.checkForUpdates().catch(failed), 6 * 3600_000)
+  auto.on('update-not-available', () => setUpdate({ checking: false, available: null }))
+  auto.autoDownload = false
+  auto.on('update-available', (info) => {
+    const version = String(info?.version ?? '')
+    if (existsSync(SKIPPED) && readFileSync(SKIPPED, 'utf8').trim() === version) return setUpdate({ checking: false, available: null })
+    setUpdate({ checking: false, available: version })
+    auto.downloadUpdate().catch(() => undefined)
+  })
+  const ready = () => keepApp(() => setUpdate({ checking: false, error: null, ready: { version: updating.available ?? '' } }))
+  if (MAC) squirrel.on('update-downloaded', ready)
+  else auto.on('update-downloaded', ready)
+  checkForUpdate()
+  setInterval(checkForUpdate, 6 * 3600_000)
 }
 
 function serve(req) {
@@ -690,7 +765,7 @@ async function toComputer({ req, id, path }) {
   const headers = new Headers(req.headers)
   for (const name of ['host', 'origin', 'cookie', 'connection']) headers.delete(name)
   headers.set('authorization', `Bearer ${await keyOf(computer)}`)
-  headers.set('openhut-app-version', app.getVersion())
+  headers.set('openhut-app-version', updating.ready?.version || app.getVersion())
   const res = await fetch(`${computer.url}${target}`, { method: req.method, headers, body: req.body, duplex: 'half', redirect: 'manual' }).catch(() => undefined)
   if (!res) return refuse(502, `${computer.name} isn't answering. It may be off or off your tailnet.`)
   const out = new Headers(res.headers)
@@ -781,10 +856,15 @@ app.whenReady().then(async () => {
   if (fresh) window('/welcome')
   const started = await booted
   if (started !== true) {
-    const { response } = await dialog.showMessageBox({ type: 'error', message: 'OpenHut couldn\'t start', detail: `${started || 'Its server didn\'t come up within a minute.'} The logs are in ${LOGS}.`, buttons: ['Open Logs', 'Quit'], defaultId: 0 })
-    if (response === 0) await shell.openPath(LOGS)
+    const back = previousVersion()
+    const buttons = [...(back ? [`Go back to ${back}`] : []), 'Open Logs', 'Quit']
+    const picked = TEST_HOME && process.env.OPENHUT_TEST_DIALOG ? buttons.findIndex((label) => label.startsWith(process.env.OPENHUT_TEST_DIALOG)) : -1
+    const { response } = picked >= 0 ? { response: picked } : await dialog.showMessageBox({ type: 'error', message: 'OpenHut couldn\'t start', detail: `${started || 'Its server didn\'t come up within a minute.'} The logs are in ${LOGS}.`, buttons, defaultId: 0 })
+    if (back && response === 0) return goBack(back)
+    if (buttons[response] === 'Open Logs') await shell.openPath(LOGS)
     return app.quit()
   }
+  writeFileSync(BOOTED, app.getVersion())
   if (!fresh && !hidden) window()
   watch()
   serveMcp().catch((error) => appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't serve ${MCP_SOCK}: ${error.message}\n`))

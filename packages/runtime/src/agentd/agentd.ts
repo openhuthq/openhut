@@ -14,7 +14,7 @@ import { MAX_HOME_BASE64, packHome, unpackHome } from './home.ts'
 import { FIREWALL, imageReady } from './sandbox/gvisor.ts'
 import { sandboxes } from './sandbox/index.ts'
 import type { Mount, SandboxSpec, SandboxState } from './sandbox/sandbox.ts'
-import { installing, update } from './update.ts'
+import { installing, lastUpdate, update, type LastUpdate } from './update.ts'
 import { errorText, EXEC, isRecord } from './util.ts'
 import { followPairing, PAIR_COMMAND, pending, type Pairing } from './whatsapp.ts'
 
@@ -124,7 +124,7 @@ function enqueue<T>(id: string, work: () => Promise<T>): Promise<T> {
 async function handle(req: AgentdRequest): Promise<Reply> {
   switch (req.cmd) {
     case 'health':
-      return { firewall: await firewallRecent(), image: IMAGE, imageReady: box.name === 'gvisor' ? await imageReady(IMAGE) : true, updating: await installing(), features: features() }
+      return { firewall: await firewallRecent(), image: IMAGE, imageReady: box.name === 'gvisor' ? await imageReady(IMAGE) : true, updating: await installing(), lastUpdate: lastUpdate(), features: features() }
     case 'ps':
       return { states: await containerStates() }
     case 'create':
@@ -155,7 +155,7 @@ async function handle(req: AgentdRequest): Promise<Reply> {
     case 'wa-unlink':
       return unlink(req.id)
     case 'update':
-      return box.name === 'memory' ? { updating: true } : update({ appVersion: req.appVersion })
+      return box.name === 'memory' ? { updating: true } : update({ appVersion: req.appVersion, sha256: req.sha256 })
     case 'skills':
       return listSkills(inHome(req.id, 'skills'))
     case 'skill-read':
@@ -196,7 +196,8 @@ function parseRequest(value: unknown): AgentdRequest {
       return { cmd }
     case 'update':
       if (value.appVersion !== undefined && (typeof value.appVersion !== 'string' || !/^\d+\.\d+\.\d+$/.test(value.appVersion))) throw new Error('bad app version')
-      return { cmd, appVersion: value.appVersion }
+      if (typeof value.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(value.sha256)) throw new Error('bad sha256')
+      return { cmd, appVersion: value.appVersion, sha256: value.sha256 }
     case 'usage':
     case 'messages':
       if (typeof value.since !== 'number' || !Number.isFinite(value.since)) throw new Error('bad since')
@@ -518,7 +519,7 @@ type Readiness = { ok: boolean; reason?: string }
 
 export type AgentdRequest =
   | { cmd: 'health' | 'ps' | 'fence' }
-  | { cmd: 'update'; appVersion?: string }
+  | { cmd: 'update'; appVersion?: string; sha256: string }
   | { cmd: 'create'; id: string; net: number; files: AgentFiles; browser: boolean }
   | { cmd: 'apply'; id: string; net: number; files: AgentFiles; browser: boolean; restart: boolean; force?: boolean }
   | { cmd: 'browser-live'; id: string; fps: number }
@@ -529,7 +530,7 @@ export type AgentdRequest =
   | { cmd: 'usage' | 'messages'; since: number }
 
 export type AgentdReplies = {
-  health: { firewall: boolean; image: string; imageReady: boolean; updating: boolean; features: Features }
+  health: { firewall: boolean; image: string; imageReady: boolean; updating: boolean; lastUpdate: LastUpdate | null; features: Features }
   ps: { states: Record<string, string> }
   create: { container: string }
   apply: { applied: string; restarted: boolean }

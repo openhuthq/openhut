@@ -4,7 +4,8 @@ import { ConnectionKind, type Connection } from '@openhut/common/connections/con
 import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
 import { HttpError } from '../platform/http-error.ts'
-import { agentd, containerStates, features } from '../platform/agentd.ts'
+import { createHash } from 'node:crypto'
+import { agentd, containerStates, features, type LastUpdate } from '../platform/agentd.ts'
 import { settings } from '../platform/settings.ts'
 import { record, setUsageData } from '../platform/events.ts'
 import { newId, openSealed, sealFor, transferPublicKey } from '../platform/secrets.ts'
@@ -16,7 +17,7 @@ import { seatSignIn } from './seat-sign-in.ts'
 import { seatLimits } from './seat-limits.ts'
 
 const LATEST_TTL_MS = 60_000
-const LATEST_TIMEOUT_MS = 4_000
+const LATEST_TIMEOUT_MS = 10_000
 const BUILD_LINE = /^OPENHUT_BUILD="([\w.-]+)"$/m
 const SEMVER = /^\d+\.\d+\.\d+$/
 const UPDATE_GRACE_MS = 20_000
@@ -31,7 +32,7 @@ const Transfer = z.discriminatedUnion('type', [
 type Transfer = z.infer<typeof Transfer>
 const CODEX_SIGN_IN_MS = 15 * 60_000
 const codexSignIns = new Map<string, { deviceAuthId: string; userCode: string; until: number }>()
-let latest: { build: string | null; at: number } = { build: null, at: 0 }
+let latest: { build: string | null; sha256: string; at: number } = { build: null, sha256: '', at: 0 }
 
 export const adminService = {
   async health(): Promise<Health> {
@@ -39,13 +40,13 @@ export const adminService = {
   },
 
   async status(): Promise<Admin> {
-    const [{ health, installing }, states, agents, latestBuild, available] = await Promise.all([probe(), containerStates(), db.selectFrom('agent').select('id').execute(), adminService.latestBuild(), features()])
+    const [{ health, installing, last }, states, agents, latestBuild, available] = await Promise.all([probe(), containerStates(), db.selectFrom('agent').select('id').execute(), adminService.latestBuild(), features()])
     return {
       object: 'admin',
       seat: { set: !!settings.seatToken(), mode: config.modelMode, updatedAt: settings.seatAt() },
       codex: { set: !!settings.codexTokens(), updatedAt: settings.codexAt() },
       server: {
-        version: health.version, build: health.build, latestBuild, updateAvailable: isNewer({ latest: latestBuild, current: health.build }), update: await currentUpdate({ installing }), healthy: health.ok, agentd: health.agentd, firewall: health.firewall,
+        version: health.version, build: health.build, latestBuild, updateAvailable: isNewer({ latest: latestBuild, current: health.build }), update: await currentUpdate({ installing, last }), healthy: health.ok, agentd: health.agentd, firewall: health.firewall,
         running: agents.filter((agent) => states?.[agent.id] === 'running').length, total: agents.length,
       },
       tailnetUrl: settings.tailnetUrl() ?? null,
@@ -98,7 +99,7 @@ export const adminService = {
     if (Date.now() - latest.at < LATEST_TTL_MS) return latest.build
     const script = await fetch(config.releaseUrl, { headers: { accept: 'text/plain' }, signal: AbortSignal.timeout(LATEST_TIMEOUT_MS) })
       .then((response) => response.ok ? response.text() : '').catch(() => '')
-    latest = { build: BUILD_LINE.exec(script)?.[1] ?? null, at: Date.now() }
+    latest = { build: BUILD_LINE.exec(script)?.[1] ?? null, sha256: createHash('sha256').update(script).digest('hex'), at: Date.now() }
     return latest.build
   },
 
@@ -106,11 +107,11 @@ export const adminService = {
     latest.at = 0
     const to = await adminService.latestBuild()
     if (!to || !isNewer({ latest: to, current: config.build })) throw new HttpError(409, 'This is already the latest release.')
-    const running = await currentUpdate({ installing: (await probe()).installing })
+    const running = await currentUpdate(await probe())
     if (running?.status === 'running') throw new HttpError(409, 'An update is already running. This page shows when it finishes.')
     const stored = { from: config.build, to, startedAt: new Date().toISOString() }
     await settings.setUpdate(JSON.stringify(stored))
-    await agentd.update({ appVersion: typeof appVersion === 'string' && SEMVER.test(appVersion) ? appVersion : undefined }).catch(async (err: unknown) => {
+    await agentd.update({ appVersion: typeof appVersion === 'string' && SEMVER.test(appVersion) ? appVersion : undefined, sha256: latest.sha256 }).catch(async (err: unknown) => {
       await settings.setUpdate('')
       throw err
     })
@@ -183,27 +184,31 @@ export function isNewer({ latest, current }: { latest: string | null; current: s
   return latest.localeCompare(current, 'en', { numeric: true }) > 0
 }
 
-export function updateStatus({ stored, build, installing, now }: { stored: { from: string; startedAt: string }; build: string; installing: boolean; now: number }): 'running' | 'failed' | 'done' {
+export function updateStatus({ stored, build, installing, last, now }: { stored: { from: string; to: string; startedAt: string }; build: string; installing: boolean; last?: LastUpdate | null; now: number }): { status: 'running' | 'failed' | 'done'; reason: string | null } {
   const age = now - Date.parse(stored.startedAt)
-  if (build !== stored.from) return 'done'
-  if (age > UPDATE_LIMIT_MS) return 'failed'
-  return installing || age < UPDATE_GRACE_MS ? 'running' : 'failed'
+  const finished = last && Date.parse(last.at) >= Date.parse(stored.startedAt) ? last : null
+  if (build === stored.to) return { status: 'done', reason: null }
+  if (build !== stored.from) return { status: 'failed', reason: `It installed ${build} instead of ${stored.to}.` }
+  if (age > UPDATE_LIMIT_MS) return { status: 'failed', reason: finished?.reason ?? 'It didn\'t finish within 45 minutes.' }
+  if (finished) return { status: 'failed', reason: finished.reason ?? 'The new release didn\'t come up, so the previous one is running again.' }
+  return installing || age < UPDATE_GRACE_MS ? { status: 'running', reason: null } : { status: 'failed', reason: 'The update stopped before it finished.' }
 }
 
-async function probe(): Promise<{ health: Health; installing: boolean }> {
+async function probe(): Promise<{ health: Health; installing: boolean; last: LastUpdate | null }> {
   const reply = await agentd.health().catch(() => undefined)
   const firewall = reply?.firewall ?? false
   return {
     health: { ok: !!reply && firewall, version: config.version, build: config.build, agentd: !!reply, firewall, started: config.started },
     installing: reply ? reply.updating ?? false : true,
+    last: reply?.lastUpdate ?? null,
   }
 }
 
-async function currentUpdate({ installing }: { installing: boolean }): Promise<Update | null> {
+async function currentUpdate({ installing, last }: { installing: boolean; last: LastUpdate | null }): Promise<Update | null> {
   const stored = z.safeParse(StoredUpdate, parseJson(settings.update()))
   if (!stored.success) return null
-  const status = updateStatus({ stored: stored.data, build: config.build, installing, now: Date.now() })
-  if (status !== 'done') return { object: 'update', status, ...stored.data }
+  const { status, reason } = updateStatus({ stored: stored.data, build: config.build, installing, last, now: Date.now() })
+  if (status !== 'done') return { object: 'update', status, ...stored.data, reason }
   await settings.setUpdate('')
   return null
 }

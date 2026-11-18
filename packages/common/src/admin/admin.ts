@@ -7,10 +7,12 @@ export const Update = z.object({
   from: z.string(),
   to: z.string(),
   startedAt: Timestamp,
+  reason: z.optional(z.nullable(z.string())),
 })
 export type Update = z.infer<typeof Update>
 
 export const MIN_APP_VERSION = '0.1.0'
+export const MIN_RUNTIME_VERSION = '0.1.0'
 
 export const Admin = z.object({
   object: z.literal('admin'),

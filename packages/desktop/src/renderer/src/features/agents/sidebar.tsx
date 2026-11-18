@@ -10,7 +10,7 @@ import { Face } from '@/features/agents/face'
 import { toneOf } from '@/features/agents/status'
 import { nameOf, useComputers } from '@/features/computers/api'
 import { useConnections } from '@/features/connections/api'
-import { UpdatePill } from '@/features/settings/update-pill'
+import { UpdateEverything } from '@/features/settings/update-pill'
 import { cn } from '@/lib/utils'
 
 const LIVE = { on: 'bg-pass', wait: 'animate-[blinkdot_1s_infinite] bg-amber', bad: 'bg-fail', off: 'bg-mute-2' }
@@ -46,7 +46,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
       {!contacts.length && <p className="m-0 px-2.5 py-2 text-[13px] text-mute">No agents yet</p>}
     </nav>
     <footer className="mt-auto flex flex-col items-start gap-2 px-3 pt-2 pb-3">
-      <UpdatePill />
+      <UpdateEverything />
       <div className="flex w-full items-center gap-2">
         <Gear />
         <a href="/connections" className={cn(SURFACE, 'flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg pr-3 pl-3.5 text-[13.5px] font-medium')}>

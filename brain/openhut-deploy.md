@@ -1,9 +1,12 @@
 # Deploying OpenHut
 
 ## openhut.dev (the installer site)
-- Pushing to `main` runs `.github/workflows/deploy.yml`: typecheck and unit tests, then `scripts/release.sh` and
-  `npm -w @openhut/site run deploy`, then a check that openhut.dev serves an `install.sh` whose checksum matches
-  the tarball it serves. Rerun it by hand with `gh workflow run deploy.yml`.
+- Pushing to `main` runs `.github/workflows/deploy.yml`: typecheck and unit tests, then `scripts/release.sh` builds the
+  **edge** runtime into `openhut.dev/edge` (`curl -fsSL https://openhut.dev/edge | sh`; such a server keeps updating from
+  edge), then `npm -w @openhut/site run deploy` and a check that what it serves matches. `openhut.dev/` is **stable**: once a
+  GitHub release carries `install.sh`, the Worker sends curl to the latest release's; until then the deploy keeps putting the
+  main build at the root too. Rerun it by hand with `gh workflow run deploy.yml`. internal.openhut.dev should be on edge
+  (`OPENHUT_URL=https://openhut.dev/edge` in its `/etc/openhut/env`).
 - A build is numbered `<major.minor from packages/runtime/package.json>.<100 + the commits that touch install, packages/runtime, packages/common or vendor>` (2026-11-18; it was the repo-wide commit count, so a site-only commit offered every runtime an update that restarted its agents; the +100 keeps it above the last such build, 0.1.95). The packaged desktop app writes its own `backend/BUILD` (`<app version>-<short commit>`), so an app update re-applies its agents once; its local runtime never offers installer updates (`latestBuild` is null in socket mode). Anything that drops commits (a squash or a history reset) makes new builds number lower than installed ones, so bump the minor first (0.2 after the first 2026-11-15 reset, 0.3 after the second, which squashed `main` to one commit).
 - The repo secret `CLOUDFLARE_API_TOKEN` is the account token "openhut-site GitHub Actions deploy": Workers Scripts
   write and Account Settings read on the owner's account, Workers Routes write on openhut.dev only.
@@ -32,12 +35,26 @@
 - The docs screenshots in `packages/docs/public/screenshots/` still show the Fast Monkey name and monkey (seed data
   only, no real people).
 
-## The Mac app release (unverified as of 2026-11-17)
+## Releases (the app and the server runtime together)
 
-`.github/workflows/desktop.yml` builds, signs, notarizes and staples the Mac app on a `v*` tag, uploads the dmg, zip and
-`latest-mac.yml` to a draft GitHub release, then publishes it. It has never run: it needs the secrets `CSC_LINK` (the
-Developer ID Application `.p12`, base64), `CSC_KEY_PASSWORD`, `APPLE_API_KEY` (the `.p8` contents), `APPLE_API_KEY_ID`,
-`APPLE_API_ISSUER` and `APPLE_TEAM_ID` (`59SL6MZZ8F`). The tag must equal `v` + `packages/desktop/package.json`'s version.
-The packaged app checks GitHub Releases with electron-updater at start and every 6 hours (`~/Library/Logs/OpenHut/updates.log`);
-until a release exists it logs "No published versions on GitHub". The 0.1.0 → 0.1.1 update path is untested. The Developer
-ID certificate expires on 1 Feb 2027; renew it in January and re-export `CSC_LINK`.
+Decision: `decisions/one-release-for-app-and-runtime.md`. A `v*` tag runs `.github/workflows/desktop.yml`:
+- It stops unless the secrets `CSC_LINK` (the Developer ID Application `.p12`, base64), `CSC_KEY_PASSWORD`,
+  `NOTARY_KEY_P8_BASE64`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID` are set. There is no ad-hoc fallback: v0.1.2 (2026-11-18)
+  was the first CI build, the repo had no signing secrets (0.1.0 and 0.1.1 were signed by hand on a Mac), and its ad-hoc
+  signature made Squirrel.Mac refuse it on every 0.1.1 install while the app kept saying "Up to date". It also stops if the
+  tag is already published: a published release never changes.
+- `notarize.sh` always runs (Gatekeeper on the app and a quarantined DMG) and rebuilds the zip's blockmap after re-zipping
+  the stapled app. Then the app must pass `codesign --verify -R "=<the previous release's designated requirement>"`,
+  the same check Squirrel makes, and `packages/desktop/scripts/update-test.mjs` updates a 0.0.1 build to it twice (Restart
+  button and quit) through a local feed, checking the relaunched version, its runtime and that an agent survived.
+- The `compat` job runs `scripts/compat.sh <previous tag>`: both minimums (`MIN_APP_VERSION`, `MIN_RUNTIME_VERSION`) at or
+  below the previous release, then this client against the previous runtime and the previous client against this runtime.
+- The Linux job adds the AppImage, deb and the server runtime of the same commit (`install.sh` and `openhut.tgz`, built with
+  `BUILD=<version>` and its tarball URL on the release) to the draft, checks every file is there, then publishes. Publishing
+  is the one switch: the app feed (GitHub `latest`) and `curl openhut.dev | sh` (a 302 to the latest release's `install.sh`)
+  move together.
+- **Pull a bad release:** `gh release edit vX --draft=true` (done for v0.1.2 on 2026-11-18). New installs and updates go back
+  to the previous release; anyone already on the bad one stays there (downgrades are off), so ship the fix as the next version.
+- Run `npm -w @openhut/desktop run dist` locally, then `update-test.mjs --from <old .app> --feed <dir with latest-mac.yml and
+  the zip>` to see an update before tagging; it uses `OPENHUT_TEST_HOME` and never touches the real app's data.
+- The Developer ID certificate expires on 1 Feb 2027; renew it in January and re-export `CSC_LINK`.

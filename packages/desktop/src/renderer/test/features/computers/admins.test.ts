@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import type { Computer } from '@openhut/client'
 import { adminsOf } from '../../../src/features/computers/admins.ts'
 
-const computer = (id: string, online = true): Computer => ({ id, name: id, url: '', online, features: { whatsapp: false, browser: false }, appTooOld: false })
+const computer = (id: string, online = true): Computer => ({ id, name: id, url: '', online, features: { whatsapp: false, browser: false }, appTooOld: false, runtimeTooOld: false })
 
 test('one computer that fails or never answers leaves the others\' admin in place', async () => {
   const reads: Record<string, () => Promise<string | undefined>> = {

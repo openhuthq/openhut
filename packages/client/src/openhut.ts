@@ -1,5 +1,5 @@
 import { ApiError, Deleted, List } from '@openhut/common/api.ts'
-import { Admin, Export, type Subscription } from '@openhut/common/admin/admin.ts'
+import { Admin, Export, MIN_RUNTIME_VERSION, type Subscription } from '@openhut/common/admin/admin.ts'
 import { Agent, AgentImport, Grant, type CreateAgent, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import { Connection, ConnectionAuthorization, SIGN_IN_KINDS, type CreateConnection, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
 import { Me } from '@openhut/common/team/team.ts'
@@ -7,7 +7,7 @@ import { PROVIDERS, Provider, type ProviderId } from '@openhut/common/models/pro
 
 export type StoredComputer = { id: string; name: string; url: string }
 export type Features = { whatsapp: boolean; browser: boolean }
-export type Computer = StoredComputer & { online: boolean; features: Features; appTooOld: boolean }
+export type Computer = StoredComputer & { online: boolean; features: Features; appTooOld: boolean; runtimeTooOld: boolean }
 export type TailnetPeer = { name: string; dns: string }
 export type Transport = (path: string, init?: RequestInit) => Promise<Response>
 export type Platform = {
@@ -104,17 +104,18 @@ export function createOpenHut(platform: Platform) {
       return rows.map((row) => ({
         ...row.computer, online: row.online, features: row.value?.features ?? { whatsapp: !!row.computer.url, browser: !!row.computer.url },
         appTooOld: !!platform.appVersion && !!row.value?.minAppVersion && older({ version: platform.appVersion, than: row.value.minAppVersion }),
+        runtimeTooOld: !!row.computer.url && !!row.value && older({ version: row.value.server.build, than: MIN_RUNTIME_VERSION }),
       }))
     },
     async add(peer: TailnetPeer): Promise<Computer> {
       const added = await platform.store.add(peer)
       await account.sync().catch(() => undefined)
-      return { ...added, online: true, features: { whatsapp: true, browser: true }, appTooOld: false }
+      return { ...added, online: true, features: { whatsapp: true, browser: true }, appTooOld: false, runtimeTooOld: false }
     },
     async adopt(input: { name: string; url: string; key: string }): Promise<Computer> {
       const added = await platform.store.adopt(input)
       await account.sync().catch(() => undefined)
-      return { ...added, online: true, features: { whatsapp: true, browser: true }, appTooOld: false }
+      return { ...added, online: true, features: { whatsapp: true, browser: true }, appTooOld: false, runtimeTooOld: false }
     },
     remove: (id: string): Promise<void> => platform.store.remove(id),
   }

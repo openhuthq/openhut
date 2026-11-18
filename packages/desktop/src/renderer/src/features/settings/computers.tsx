@@ -60,7 +60,15 @@ function ComputerList() {
 function noteOf({ computer, admin, count }: { computer: Computer; admin: Admin | undefined; count: number }) {
   if (!computer.online) return 'Offline'
   if (computer.appTooOld) return 'Update OpenHut to use this computer'
-  return [`Online · ${agentCount(count)}`, admin && `OpenHut ${admin.server.version}`].filter(Boolean).join(' · ')
+  if (computer.runtimeTooOld) return 'Update this computer to use it'
+  const failed = admin?.server.update?.status === 'failed' ? admin.server.update : null
+  if (failed) return `Couldn't update to ${failed.to}. ${sentence(failed.reason ?? 'The update stopped before it finished.')}`
+  return [`Online · ${agentCount(count)}`, admin && `OpenHut ${computer.id === 'local' ? admin.server.version : admin.server.build}`].filter(Boolean).join(' · ')
+}
+
+function sentence(text: string) {
+  const trimmed = text.trim()
+  return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}${/[.!?]$/.test(trimmed) ? '' : '.'}`
 }
 
 function agentCount(count: number) {
@@ -93,7 +101,7 @@ function RemovableRow({ computer, admin, note, agents }: { computer: Computer; a
       : <>
         {admin?.server.updateAvailable && (update.isPending
           ? <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>
-          : <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate(computer, { onError: toastError })}>Update</Button>)}
+          : <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate(computer, { onError: toastError })}>{admin.server.update?.status === 'failed' ? 'Try again' : 'Update'}</Button>)}
         <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(true)}>Remove</Button>
       </>}
   </Row></div>

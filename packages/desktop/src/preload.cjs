@@ -13,8 +13,9 @@ contextBridge.exposeInMainWorld('openhut', {
   mcpCommands: () => ipcRenderer.invoke('mcp.commands'),
   update: {
     state: () => ipcRenderer.invoke('update.state'),
+    check: () => ipcRenderer.invoke('update.check'),
     install: () => ipcRenderer.invoke('update.install'),
-    onReady: (listener) => ipcRenderer.on('update.ready', (_event, ready) => listener(ready)),
+    onChange: (listener) => ipcRenderer.on('update.changed', (_event, state) => listener(state)),
   },
   onChanged: (listener) => ipcRenderer.on('changed', () => listener()),
   browserLive: (path, onLine, onClose) => {

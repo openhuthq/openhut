@@ -43,6 +43,7 @@ staple "$dmg"
 zip=$(ls OpenHut-*-arm64.zip 2>/dev/null | head -1 || true)
 if [ -n "$zip" ]; then rm -f "$zip"; ditto -c -k --sequesterRsrc --keepParent "$app" "$zip"; fi
 rm -f ./*.blockmap
+[ -z "$zip" ] || node -e "require(require.resolve('app-builder-lib/out/targets/blockmap/blockmap.js', { paths: [process.cwd()] })).buildBlockMap(process.argv[1], 'gzip', process.argv[1] + '.blockmap')" "$zip"
 node - <<'JS'
 const { createHash } = require('node:crypto')
 const { readFileSync, statSync, writeFileSync } = require('node:fs')

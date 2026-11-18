@@ -3,6 +3,7 @@ set -eu
 OPENHUT_URL="${OPENHUT_URL:-https://openhut.dev}"
 OPENHUT_SHA256="@OPENHUT_SHA256@"
 OPENHUT_BUILD="@OPENHUT_BUILD@"
+OPENHUT_TGZ="@OPENHUT_TGZ@"
 MIN_APP_VERSION="@OPENHUT_MIN_APP@"
 GVISOR=20261109.0
 NODE=22.23.5
@@ -45,8 +46,13 @@ write_env() {
   . /etc/openhut/env
   umask 022
 }
+stop_app() {
+  if [ -d /run/systemd/system ]; then systemctl stop openhut.service 2>/dev/null || true
+  else pkill -f "install/supervise.sh /var/log/openhut/app.log" 2>/dev/null || true; pkill -f "^node $PREFIX/packages/.*/app\.ts" 2>/dev/null || true; sleep 1; fi
+}
 start() {
   STARTED_AFTER=$(date +%s)
+  [ ! -f "$PREFIX/install/recover.sh" ] || cp "$PREFIX/install/recover.sh" /etc/openhut/recover.sh
   if [ -d /run/systemd/system ]; then
     cp "$PREFIX"/install/systemd/*.service /etc/systemd/system/
     systemctl daemon-reload
@@ -173,7 +179,7 @@ if docker info >/dev/null 2>&1; then
 fi
 
 say "OpenHut"
-fetch "$OPENHUT_URL/openhut.tgz" "$TMP/openhut.tgz"
+fetch "$OPENHUT_TGZ" "$TMP/openhut.tgz"
 check sha256sum "$OPENHUT_SHA256" "$TMP/openhut.tgz"
 rm -rf "$PREFIX.new" && mkdir -p "$PREFIX.new/bin" && tar -xzf "$TMP/openhut.tgz" -C "$PREFIX.new" --no-same-owner
 (cd "$PREFIX.new" && retry npm ci --omit=dev --no-audit --no-fund --loglevel=error >/dev/null)
@@ -196,6 +202,11 @@ if ! printf '%s  %s\n' "$AGENT_BROWSER_SHA512" "$CACHED" | sha512sum -c - >/dev/
 fi
 tar -xzf "$CACHED" -C "$TMP" package/bin/agent-browser && cp "$TMP/package/bin/agent-browser" "$PREFIX.new/bin/agent-browser" && chmod 0755 "$PREFIX.new/bin/agent-browser"
 chown -R root:root "$PREFIX.new" && chmod -R go-w "$PREFIX.new"
+if [ -d /data/app ] && [ -d "$PREFIX" ]; then
+  say "Saving a copy of the data in case the new release has to be undone"
+  stop_app
+  rm -rf /data/app.before-update && cp -a /data/app /data/app.before-update
+fi
 rm -rf "$PREFIX.old"; [ ! -d "$PREFIX" ] || mv "$PREFIX" "$PREFIX.old"; mv "$PREFIX.new" "$PREFIX"
 id openhut >/dev/null 2>&1 || { addgroup -S openhut >/dev/null 2>&1 && adduser -S -D -G openhut openhut >/dev/null 2>&1; } || useradd --system --user-group --no-create-home openhut
 
@@ -211,6 +222,7 @@ if ! up "$TRIES"; then
   [ -d "$PREFIX.old" ] || die "not up after 30 min; see /var/log/openhut"
   say "The new release didn't come up. Going back to the previous one"
   rm -rf "$PREFIX.failed"; mv "$PREFIX" "$PREFIX.failed"; mv "$PREFIX.old" "$PREFIX"
+  if [ -d /data/app.before-update ]; then stop_app; rm -rf /data/app && cp -a /data/app.before-update /data/app; fi
   start
   rm -rf "$PREFIX.failed"
   up 600 || die "the new release didn't come up, and the previous one didn't come back either; see /var/log/openhut"

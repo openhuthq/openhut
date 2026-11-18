@@ -10,7 +10,7 @@ import { HERE, bytes, desktop, useMachine, usePrefs, useSetPrefs, type Prefs } f
 import { home } from '@/features/settings/home'
 import { Row, Rows } from '@/features/settings/kit'
 import { WORDS } from '@/lib/platform'
-import { useAppUpdate } from '@/features/settings/update'
+import { updateNote, useAppUpdate } from '@/features/settings/update'
 import { UpdateStatus } from '@/features/settings/update-pill'
 import { toastError } from '@/lib/toast'
 
@@ -41,7 +41,7 @@ export function GeneralSettings() {
 function Version() {
   const state = useAppUpdate().data
   if (!state) return null
-  return <Row icon={<I icon={CloudDownloadIcon} size={20} className="text-hue-sky" />} title={`OpenHut ${state.current}`} note={state.ready ? 'Ready to install.' : 'Updates download on their own.'}><UpdateStatus idle={<Status tone="on">Up to date</Status>} /></Row>
+  return <Row icon={<I icon={CloudDownloadIcon} size={20} className="text-hue-sky" />} title={`OpenHut ${state.current}`} note={updateNote(state)}><UpdateStatus idle={<Status tone="on">Up to date</Status>} /></Row>
 }
 
 function PrefSwitch({ icon, hue, name, title, note }: { icon: IconSvgElement; hue: string; name: keyof Prefs; title: string; note?: string }) {
