@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { CommandLineIcon, LaptopIcon, Tick02Icon, NetworkIcon, PlusSignIcon, ServerStack01Icon, SmartPhone01Icon, WifiDisconnected02Icon } from '@hugeicons/core-free-icons'
+import { LaptopIcon, Tick02Icon, PlusSignIcon, ServerStack01Icon, SmartPhone01Icon, WifiDisconnected02Icon } from '@hugeicons/core-free-icons'
 import type { Computer, OpenHutAgent, TailnetPeer } from '@openhut/client'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import { failureOf, phaseOf } from '@/features/computers/enroll-steps'
 import { Field } from '@/features/connections/sheet'
 import { HERE, useTailnet } from '@/features/settings/desktop'
 import { byEligibility, stateOf, type Peer, type PeerState } from '@/features/settings/peers'
-import { Invite } from '@/features/settings/invite'
+import { PairDialog, Waiting } from '@/features/settings/invite'
 import { joinCommand } from '@/features/settings/invitation'
 import { Chevron, Command, Intro, Row, Rows, SubPage, useConfirming } from '@/features/settings/kit'
 import { UpdateStatus } from '@/features/settings/update-pill'
@@ -30,12 +30,13 @@ const GET_TAILSCALE = 'https://tailscale.com/download'
 
 export function ComputersSettings() {
   const [step, name = ''] = (useOpen() ?? '').split(':')
-  if (step === 'add') return <AddChooser />
   if (step === 'tailscale') return <TailscaleStep />
   if (step === 'ssh') return <TurnOnSsh name={name} />
   if (step === 'others') return <Others />
-  if (step === 'command') return <WithCommand />
-  return <ComputerList />
+  return <>
+    <ComputerList />
+    {step === 'add' && <AddComputer />}
+  </>
 }
 
 function ComputerList() {
@@ -129,27 +130,13 @@ function UpdatingRow({ computer }: { computer: Computer }) {
   return <Row icon={<ComputerMark computer={computer} />} title={computer.name} note="Updating…"><Spinner className="mt-0" /></Row>
 }
 
-function AddChooser() {
-  const tailnet = useTailnet()
-  const missing = tailnet.data?.state === 'missing'
-  return <SubPage title="Add a computer" back="">
-    <Rows>
-      <Row onClick={() => open('command')} icon={<I icon={CommandLineIcon} size={20} className="text-hue-teal" />} title="With a command" note="Paste one line on any Linux computer. No Tailscale needed."><Chevron /></Row>
-      <Row onClick={() => open('tailscale')} icon={<I icon={NetworkIcon} size={20} className="text-hue-blue" />} title="Tailscale" note="Pick a computer on your tailnet. OpenHut installs itself over Tailscale SSH.">
-        {missing && <span className="text-mute">Not installed</span>}<Chevron />
-      </Row>
-      <Row onClick={() => open('others')} icon={<I icon={ServerStack01Icon} size={20} className="text-hue-slate" />} title="Others" note="A server you reach another way"><Chevron /></Row>
-    </Rows>
-  </SubPage>
-}
-
 function TailscaleStep() {
   const tailnet = useTailnet()
   const { start } = useEnroll()
   const recheck = () => void tailnet.refetch()
   const data = tailnet.data
   const add = (peer: Peer) => { start({ name: peer.name, dns: peer.dns } satisfies TailnetPeer); open() }
-  return <SubPage title="Tailscale" back="add">
+  return <SubPage title="Tailscale" back="">
     {!data && <p className="m-0 flex items-center gap-2 px-2.5 text-[13px] text-mute"><Spinner className="mt-0" />Looking at your tailnet…</p>}
     {data?.state === 'missing' && <Empty title="Install Tailscale to reach your other computers" line="OpenHut finds and sets up your other computers over Tailscale.">
       <a href={GET_TAILSCALE} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Get Tailscale</a>
@@ -201,22 +188,23 @@ function TurnOnSsh({ name }: { name: string }) {
   </SubPage>
 }
 
-function WithCommand() {
-  return <SubPage title="With a command" back="add">
-    <Invite
-      check={(device) => `Allow it only if ${device.name} shows the same numbers. Your agents can run there once it joins.`}
-      waiting={(code) => <div className="flex flex-col gap-3 px-2.5">
-        <p className="m-0 text-[13px]/[18px] text-body">Run this on the computer you want to add. It installs OpenHut there and adds it to your computers.</p>
-        <Command text={joinCommand(code)} />
-        <p className="m-0 flex items-center gap-2 text-[12px] text-mute"><Spinner className="mt-0" />Waiting for it to join. The code works once, for 5 minutes.</p>
-      </div>}
-    />
-  </SubPage>
+function AddComputer() {
+  return <PairDialog
+    title="Add a computer"
+    check={(device) => `Allow it only if ${device.name} shows the same numbers. Your agents can run there once it joins.`}
+    done={(device) => [`${device.name} can now run your agents`, 'Move an agent there from its panel, or make a new one on it.']}
+    waiting={(code) => <>
+      <p className="m-0 text-body">Run this on an always-on Linux computer. It installs OpenHut there and adds it to your computers.</p>
+      <Command text={joinCommand(code)} />
+      <Waiting>Waiting for it to join…</Waiting>
+      <p className="m-0 border-t border-hair pt-4 text-mute">You can also add one <Button type="button" variant="link" onClick={() => open('tailscale')}>over Tailscale</Button> or <Button type="button" variant="link" onClick={() => open('others')}>by its address</Button>.</p>
+    </>}
+  />
 }
 
 function Others() {
   const adopt = useAdoptComputer()
-  return <SubPage title="Others" back="add">
+  return <SubPage title="Others" back="">
     <form className="flex flex-col gap-3 px-2.5" onSubmit={(event) => {
       const field = formValues(event)
       adopt.mutate({ name: field('name').trim(), url: field('url').trim(), key: field('key').trim() }, { onSuccess: () => open() })
