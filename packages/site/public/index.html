@@ -965,7 +965,7 @@ const AGENTS = [
     answer: 'Northwind is still the warmest. Acme replied overnight and wants a call on Thursday.' },
 ]
 AGENTS.forEach(a => { a.running = true; a.msgs = a.past.map(([role, text, steps]) => ({ role, text, steps })) })
-const COMPUTERS = [{ id: 'This Mac', kind: 'laptop', line: 'Online · 3 agents · OpenHut 0.1.1', online: true, note: 'Only while this Mac is awake' }, { id: 'ops-server', kind: 'server', line: 'Online · 1 agent · OpenHut 0.1.1', online: true, note: 'Always on' }]
+const COMPUTERS = [{ id: 'This Mac', kind: 'laptop', line: 'Online · 3 agents · OpenHut 0.1.2', online: true, note: 'Only while this Mac is awake' }, { id: 'ops-server', kind: 'server', line: 'Online · 1 agent · OpenHut 0.1.2', online: true, note: 'Always on' }]
 const CATALOG = [
   ['Data', 'postgres', 'Postgres', 'Read-only access to a database.'], ['Data', 'convex', 'Convex', 'Tables, functions and logs of one deployment.'], ['Data', 'posthog', 'PostHog', 'Insights, events and flags, with your sign-in.'],
   ['Work', 'linear', 'Linear', 'Issues and projects, as the person who connects.'], ['Work', 'github', 'GitHub', 'A bot of your own that reads code, commits and opens pull requests.'], ['Work', 'excalidraw', 'Excalidraw', 'Hand-drawn diagrams agents share as a link.'],
@@ -1208,7 +1208,7 @@ const SET = {
     <div><div class="slbl">Notify me when</div><div class="srows">${srow(hue('Notification01', 'amber'), 'An agent replies', 'While this window is closed or in the background.', sw('replies', 'An agent replies'))}${srow(hue('Alert02', 'red'), 'An agent stops or fails', 'The Dock icon also shows how many agents need you.', sw('fails', 'An agent stops or fails'))}</div></div>
     <div><div class="slbl">Data</div><div class="srows">${srow(hue('Folder01', 'blue'), '~/Library/Application Support/OpenHut', '2.4 GB', '<button class="apill">Show in Finder</button>')}${srow(hue('Analytics01', 'violet'), 'Share anonymous usage data', 'Which features are used, never messages, data or your email.', sw('usage', 'Share anonymous usage data'))}</div></div>`,
   computers: () => `<p class="intro">Where your agents run. This Mac runs them while it's awake.</p>
-    <div class="srows">${COMPUTERS.map((c, i) => { const n = AGENTS.filter(a => a.on === c.id).length, note = `Online · ${n} agent${n === 1 ? '' : 's'} · OpenHut 0.1.1`
+    <div class="srows">${COMPUTERS.map((c, i) => { const n = AGENTS.filter(a => a.on === c.id).length, note = `Online · ${n} agent${n === 1 ? '' : 's'} · OpenHut 0.1.2`
       if (!i) return srow(cmark(c.kind, c.online), c.id, note, `${ic('Tick02', 14)}Current`)
       return removing === c.id
         ? srow(cmark(c.kind, c.online), c.id, 'Its agents stop and leave this list.', `<button class="apill" data-set="keep">Cancel</button><button class="apill red" data-set="remove" data-pc="${c.id}">Remove</button>`)
