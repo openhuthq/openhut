@@ -108,17 +108,19 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
       dispatch(decodeFrame(session.decrypt(bytes)))
     }
     socket.addEventListener('open', () => socket.send(first))
+    const closed = (code: number) => {
+      const offline = code === 4004
+      const error = new TunnelError({ type: offline ? 'offline' : 'closed', message: offline ? 'The computer is offline.' : 'The tunnel to the computer closed.' })
+      fail(error)
+      reject(error)
+    }
     socket.addEventListener('message', event => {
+      if (typeof event.data === 'string') return closing(event.data, closed)
       if (!(event.data instanceof ArrayBuffer)) return
       const data = event.data
       inbox = inbox.then(() => receive(data)).catch(() => socket.close())
     })
-    socket.addEventListener('close', event => {
-      const offline = event.code === 4004
-      const error = new TunnelError({ type: offline ? 'offline' : 'closed', message: offline ? 'The computer is offline.' : 'The tunnel to the computer closed.' })
-      fail(error)
-      reject(error)
-    })
+    socket.addEventListener('close', event => closed(event.code))
   })
 
   const transport = await ready
@@ -149,4 +151,17 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
   }
 
   return { fetch, digits, control, close: () => socket.close() }
+}
+
+function closing(text: string, closed: (code: number) => void): void {
+  const notice = parsed(text)
+  if (typeof notice === 'object' && notice !== null && 'type' in notice && notice.type === 'closing' && 'code' in notice && typeof notice.code === 'number') closed(notice.code)
+}
+
+function parsed(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
 }

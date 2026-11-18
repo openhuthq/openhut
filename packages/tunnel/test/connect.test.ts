@@ -89,3 +89,15 @@ test('the computer reconnects to the relay after the socket drops', async () => 
   tunnel.close()
   await ctx.close()
 })
+
+test('a closing notice from the relay is acted on at once, without waiting for the socket to close', async () => {
+  const { WebSocketServer } = await import('ws')
+  const server = new WebSocketServer({ port: 0 })
+  server.on('connection', socket => socket.send(JSON.stringify({ type: 'closing', code: 4004, reason: 'offline 0' })))
+  const { port } = server.address() as { port: number }
+  const started = Date.now()
+  await assert.rejects(connect({ relayUrl: `ws://127.0.0.1:${port}`, computer: { id: 'ab'.repeat(32), key: 'cd'.repeat(32) }, key: newDevice().key }), (error: TunnelError) => error.type === 'offline')
+  assert.ok(Date.now() - started < 1000)
+  for (const client of server.clients) client.terminate()
+  server.close()
+})
