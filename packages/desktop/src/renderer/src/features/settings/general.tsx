@@ -20,7 +20,7 @@ export function GeneralSettings() {
     <ErrorNote message={admin.error?.message} />
     <Rows>
       {desktop && <PrefSwitch icon={Login01Icon} hue="text-hue-green" name="openAtLogin" title="Open at login" note="Agents start in the background, without opening this window." />}
-      {desktop && <PrefSwitch icon={Coffee01Icon} hue="text-hue-amber" name="keepAwake" title={`Keep this ${HERE} awake while agents run`} note="The screen can still turn off. Agents can't answer while it sleeps." />}
+      {desktop && <PrefSwitch icon={Coffee01Icon} hue="text-hue-amber" name="keepAwake" title={`Keep this ${HERE} awake while agents run`} note={`The screen can still turn off. Agents can't answer while the ${HERE} sleeps.`} />}
       <Version />
     </Rows>
     <Section title="Notify me when">
