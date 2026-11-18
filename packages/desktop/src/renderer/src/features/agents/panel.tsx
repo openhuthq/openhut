@@ -9,8 +9,8 @@ import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
-import { ConfirmIcon } from '@/components/confirm-button'
-import { Choice, DialogCard, DRAG, GLASS, HOVER, I, MenuCard, ROW, ROW_VALUE, TINY_ICON } from '@/components/kit'
+import { useConfirming } from '@/components/confirm-button'
+import { Choice, DialogCard, DRAG, GLASS, HOVER, I, MenuCard, PILL, ROW, ROW_VALUE, TINY_ICON } from '@/components/kit'
 import { agentPath, type AgentDialog } from '@/app/routes'
 import { useAgents, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
 import { nameOf, useComputers, useFeatures } from '@/features/computers/api'
@@ -32,7 +32,7 @@ export function Panel({ agent, naming }: { agent: Agent; naming: boolean }) {
   return <aside className={cn('flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
     <div className={cn('flex items-center gap-3', DRAG)}>
       <Face agent={agent} size={48} tile />
-      <div className="grid min-w-0 flex-1 gap-0.5"><div className="flex min-w-0 items-center gap-1"><AgentName agent={agent} editing={naming && agent.canEdit} /><HeadActions agent={agent} /></div><span className="flex items-center gap-2 text-xs text-body"><AgentStatus agent={agent} /></span></div>
+      <PanelTitle agent={agent} naming={naming} />
     </div>
     <Button type="button" variant="bare" onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'does' }))} className={cn('group -mx-2.5 flex flex-col gap-1 rounded-lg px-2.5 py-2', HOVER)}>
       <span className="flex items-center text-[12px]/[16px] text-mute">What it does<span className="ml-auto text-mute opacity-0 group-hover:opacity-100"><I icon={PencilEdit02Icon} size={13} /></span></span>
@@ -68,17 +68,27 @@ function AgentActions({ agent }: { agent: Agent }) {
   </div>
 }
 
-function HeadActions({ agent }: { agent: Agent }) {
+function PanelTitle({ agent, naming }: { agent: Agent; naming: boolean }) {
   const updateAgent = useUpdateAgent(agent.id)
   const deleteAgent = useDeleteAgent(agent.id)
+  const { confirming, setConfirming, box } = useConfirming()
   const running = agent.wanted === 'running'
   const toggle = running ? `Stop ${agent.name}` : `Start ${agent.name}`
-  return <span className="ml-auto flex shrink-0 items-center gap-0.5">
-    <Tooltip label={toggle}><Button type="button" variant="bare" className={TINY_ICON} aria-label={toggle} disabled={!agent.canEdit || updateAgent.isPending}
-      onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} /></Button></Tooltip>
-    {agent.canEdit && <ConfirmIcon label={`Delete ${agent.name}`} icon={Delete02Icon} danger question={`Delete ${agent.name}? Its memory goes too.`} action="Delete" busy={deleteAgent.isPending}
-      onConfirm={() => deleteAgent.mutate(undefined, { onError: toastError })} />}
-  </span>
+  return <div ref={box} className="grid min-w-0 flex-1 gap-0.5">
+    <div className="flex min-w-0 items-center gap-1"><AgentName agent={agent} editing={naming && agent.canEdit} />
+      <span className="ml-auto flex shrink-0 items-center gap-0.5">{confirming
+        ? <>
+          <Button type="button" variant="secondary" className={PILL} autoFocus onClick={() => setConfirming(false)}>Cancel</Button>
+          <Button type="button" variant="destructive" className={cn(PILL, 'ml-1')} disabled={deleteAgent.isPending} onClick={() => deleteAgent.mutate(undefined, { onError: toastError })}>Delete</Button>
+        </>
+        : <>
+          <Tooltip label={toggle}><Button type="button" variant="bare" className={TINY_ICON} aria-label={toggle} disabled={!agent.canEdit || updateAgent.isPending}
+            onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} /></Button></Tooltip>
+          {agent.canEdit && <Tooltip label={`Delete ${agent.name}`}><Button type="button" variant="bare" className={cn(TINY_ICON, 'hover:text-fail')} aria-label={`Delete ${agent.name}`} onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={16} /></Button></Tooltip>}
+        </>}</span>
+    </div>
+    <span className="flex items-center gap-2 text-xs text-body">{confirming ? 'Its memory goes too.' : <AgentStatus agent={agent} />}</span>
+  </div>
 }
 
 
