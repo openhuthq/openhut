@@ -6,7 +6,7 @@ import { DialogTitle } from '@/components/ui/dialog'
 import { CopyButton } from '@/components/copy-button'
 import { Face } from '@/features/agents/face'
 import { I, PILL } from '@/components/kit'
-import { home } from '@/features/settings/desktop'
+import { home } from '@/features/settings/home'
 import { cn } from '@/lib/utils'
 
 export function Intro({ children }: { children: ReactNode }) {

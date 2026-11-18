@@ -6,4 +6,6 @@ test('a command wraps only between its arguments, keeping a quoted path with its
   assert.deepEqual(wordsOf('claude mcp add openhut-box -- "~/Library/Application Support/OpenHut Dev/bin/openhut-mcp" --computer c1'),
     ['claude', 'mcp', 'add', 'openhut-box', '-- "~/Library/Application Support/OpenHut Dev/bin/openhut-mcp"', '--computer c1'])
   assert.deepEqual(wordsOf('/opt/openhut/bin/openhut-mcp'), ['/opt/openhut/bin/openhut-mcp'])
+  assert.deepEqual(wordsOf('claude mcp add openhut -- ~/"Library/Application Support/OpenHut/bin/openhut-mcp"'),
+    ['claude', 'mcp', 'add', 'openhut', '-- ~/"Library/Application Support/OpenHut/bin/openhut-mcp"'])
 })

@@ -59,9 +59,6 @@ async function answer<T extends object>(call: Promise<T | Failure> | undefined):
   return result
 }
 
-export function home(path: string) {
-  return path.replace(/\/(Users|home)\/[^/\s"]+/g, '~')
-}
 
 export function bytes(size: number) {
   if (size >= 1 << 30) return `${(size / (1 << 30)).toFixed(2)} GB`
