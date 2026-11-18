@@ -86,8 +86,8 @@ its data in `~/Library/Application Support/OpenHut Dev`, apart from the installe
 `npm -w @openhut/desktop run dist` builds the renderer, bundles the runtime's server and agentd with esbuild into
 `packages/desktop/dist/backend` with the pinned Linux `claude` CLI for the guest (`scripts/pack-backend.mjs`; on Linux it packs only the client and the MCP bridge, since the install in Docker brings the rest), and runs electron-builder (`electron-builder.yml`): an arm64,
 macOS 14+ `release/mac-arm64/OpenHut.app`, `release/OpenHut-arm64.dmg` and the versioned zip. It signs with the Developer ID
-in the login keychain (hardened runtime, `build/entitlements.mac.plist`) and notarizes only when `APPLE_API_KEY`,
-`APPLE_API_KEY_ID` and `APPLE_API_ISSUER` are set. The packaged app runs the real model unless `OPENHUT_MODEL` is set.
+in the login keychain (hardened runtime, `build/entitlements.mac.plist`) and never notarizes (`notarize: false`): only the
+release workflow (`.github/workflows/desktop.yml`, `scripts/notarize.sh`) notarizes, staples and checks a build. The packaged app runs the real model unless `OPENHUT_MODEL` is set.
 Icon sources: `build/icon.svg`, `build/background.svg`. Gotchas: `private/brain/openhut-gotchas.md` (Mac app, Linux app).
 
 On x86_64 Linux, `npm -w @openhut/desktop run dist:linux` builds `release/OpenHut-x64.AppImage` and `release/openhut-x64.deb`;
