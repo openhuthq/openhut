@@ -22,7 +22,8 @@ import { SidebarContext } from '@/features/agents/sidebar'
 import { agentState } from '@/components/status-badge'
 import { useAgents, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
-import { saveFile, threadPath, uploadFile, useAgentThread, useClearChat, useTouchThread } from '@/features/threads/api'
+import { deleteUpload, saveFile, threadPath, uploadFile, useAgentThread, useClearChat, useHomeFiles, useThumb, useTouchThread } from '@/features/threads/api'
+import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
 import { ConfirmIcon } from '@/components/confirm-button'
 import { attachCalls, kindOf, stepsOf, type Step } from '@/features/threads/steps'
 import { on } from '@/lib/openhut'
@@ -31,9 +32,9 @@ import { cn } from '@/lib/utils'
 
 type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[] }>
 type AgentPart = AgentMessage['parts'][number]
-type Attachment = { key: string; name: string; image: boolean; file?: ChatFile }
+type Attachment = { key: string; name: string; image: boolean; thumb?: string; file?: ChatFile }
 
-const SaveFile = createContext<(path: string) => void>(() => undefined)
+const ChatFiles = createContext<{ agentId: string; threadId: string; save: (path: string) => void }>({ agentId: '', threadId: '', save: () => undefined })
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i
 
 export function Chat({ agent, tools }: { agent: Agent; tools?: ReactNode }) {
@@ -51,7 +52,7 @@ function ThreadView({ thread, agent, tools }: { thread: ThreadWithMessages; agen
   }), [thread.id, agent.id])
   const chat = useChat<AgentMessage>({ id: thread.id, messages: thread.messages.map(uiMessageOf), transport, onFinish: () => touch(thread) })
   const attachments = useAttachments({ agentId: agent.id, threadId: thread.id })
-  const save = useMemo(() => (path: string) => void saveFile({ agentId: agent.id, threadId: thread.id, path }).catch(toastError), [agent.id, thread.id])
+  const files = useMemo(() => ({ agentId: agent.id, threadId: thread.id, save: (path: string) => void saveFile({ agentId: agent.id, threadId: thread.id, path }).catch(toastError) }), [agent.id, thread.id])
   const busy = chat.status === 'submitted' || chat.status === 'streaming'
   const send = (text: string) => {
     touch(thread)
@@ -61,22 +62,28 @@ function ThreadView({ thread, agent, tools }: { thread: ThreadWithMessages; agen
   }
   const last = chat.messages.at(-1)
   const clear = chat.messages.length > 0 && !busy && <ClearChat agent={agent} threadId={thread.id} />
-  return <SaveFile value={save}><ChatFrame agent={agent} tools={<>{clear}{tools}</>} onFiles={attachments.add} composer={<Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
+  return <ChatFiles value={files}><ChatFrame agent={agent} tools={<>{clear}{tools}</>} onFiles={attachments.add} composer={<Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
     {chat.messages.length ? <>
       <Day iso={thread.updatedAt} />
       {chat.messages.map((message) => <Message key={message.id} agent={agent} message={message} live={busy && message === last} />)}
     </> : <ChatEmpty agent={agent} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     {chat.error && <Alert variant="error-outline" role="alert"><span>{chat.error.message}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Retry</Button></Alert>}
-  </ChatFrame></SaveFile>
+  </ChatFrame></ChatFiles>
 }
 
 function useAttachments({ agentId, threadId }: { agentId: string; threadId: string }) {
   const [items, setItems] = useState<Attachment[]>([])
   const taken = useRef(new Set<string>())
+  const current = useRef(items)
+  current.current = items
+  const forget = (path: string) => void deleteUpload({ agentId, threadId, path }).catch(() => undefined)
   const drop = (key: string) => {
     taken.current.delete(key)
+    const item = current.current.find((each) => each.key === key)
+    if (item?.thumb) URL.revokeObjectURL(item.thumb)
     setItems((list) => list.filter((each) => each.key !== key))
+    return item
   }
   const add = (files: File[]) => {
     for (const file of files) {
@@ -86,10 +93,14 @@ function useAttachments({ agentId, threadId }: { agentId: string; threadId: stri
         continue
       }
       const key = crypto.randomUUID()
+      const raster = RASTER.includes(file.type)
       taken.current.add(key)
-      setItems((list) => [...list, { key, name: file.name, image: file.type.startsWith('image/') }])
+      setItems((list) => [...list, { key, name: file.name, image: file.type.startsWith('image/'), thumb: raster ? URL.createObjectURL(file) : undefined }])
       uploadFile({ agentId, threadId, file }).then(
-        (saved) => setItems((list) => list.map((each) => each.key === key ? { ...each, file: saved } : each)),
+        (saved) => {
+          if (!taken.current.has(key)) return forget(saved.path)
+          setItems((list) => list.map((each) => each.key === key ? { ...each, file: saved } : each))
+        },
         (error: Error) => {
           drop(key)
           toastError(error)
@@ -97,11 +108,19 @@ function useAttachments({ agentId, threadId }: { agentId: string; threadId: stri
       )
     }
   }
+  const remove = (key: string) => {
+    const item = drop(key)
+    if (item?.file) forget(item.file.path)
+  }
   const clear = () => {
+    for (const item of current.current) if (item.thumb) URL.revokeObjectURL(item.thumb)
     taken.current.clear()
     setItems([])
   }
-  return { items, add, uploading: items.some((each) => !each.file), remove: drop, clear }
+  useEffect(() => () => {
+    for (const item of current.current) if (item.file) forget(item.file.path)
+  }, [])
+  return { items, add, uploading: items.some((each) => !each.file), remove, clear }
 }
 
 type Attachments = ReturnType<typeof useAttachments>
@@ -174,7 +193,7 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
   return <div className="shrink-0 px-8 pb-5">
     {!ready && !busy && !quiet && <NotReady agent={agent} />}
     <form className="mx-auto flex max-w-[640px] flex-col gap-2 rounded-xl border border-[oklch(0%_0_0/.12)] bg-card p-2 focus-within:border-mid" onSubmit={submit}>
-      {attachments.items.length > 0 && <div className="flex flex-wrap gap-1.5">{attachments.items.map((each) => <FileChip key={each.key} name={each.name} image={each.image} busy={!each.file} onRemove={() => attachments.remove(each.key)} />)}</div>}
+      {attachments.items.length > 0 && <div className="flex flex-wrap gap-1.5">{attachments.items.map((each) => <FileChip key={each.key} name={each.name} image={each.image} thumb={each.thumb} busy={!each.file} onRemove={() => attachments.remove(each.key)} />)}</div>}
       <div className="flex items-end gap-1">
         <Input ref={picker} type="file" multiple hidden onChange={(event) => { attachments.add(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '' }} />
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Attach files" title="Attach files" disabled={!ready} onClick={() => picker.current?.click()}><I icon={Attachment01Icon} size={16} /></Button>
@@ -219,13 +238,20 @@ function useOffline(agent: Agent) {
 }
 
 function Message({ agent, message, live }: { agent: Agent; message: AgentMessage; live: boolean }) {
-  if (message.role === 'user') return <UserMessage message={message} />
+  return message.role === 'user' ? <UserMessage message={message} /> : <AgentReply agent={agent} message={message} live={live} />
+}
+
+function AgentReply({ agent, message, live }: { agent: Agent; message: AgentMessage; live: boolean }) {
+  const { agentId, threadId } = useContext(ChatFiles)
   const blocks = blocksOf(message)
+  const paths = live ? [] : homePathsIn(blocks.flatMap((block) => block.type === 'text' ? [block.text] : []).join('\n'))
+  const found = useHomeFiles({ agentId, threadId, paths })
+  const plugins = found?.size ? [remarkGfm, linkHomeFiles(found)] : [remarkGfm]
   return <div className="grid animate-grow grid-cols-[34px_minmax(0,1fr)] gap-3">
     <span className={live ? 'talking' : undefined}><Face agent={agent} size={34} /></span>
     <div className="flex min-w-0 flex-col gap-2 pt-1.5">
       {blocks.map((block, index) => block.type === 'text'
-        ? <div key={index} className="msg-t"><Markdown remarkPlugins={[remarkGfm]} components={{ a: ChatLink, code: FileCode }}>{block.text}</Markdown></div>
+        ? <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode }}>{block.text}</Markdown></div>
         : <Steps key={index} steps={block.steps} live={live && index === blocks.length - 1} />)}
       {live && !blocks.length && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
       {!live && !blocks.length && <span className="text-[13.5px] text-mute-2 italic">No reply.</span>}
@@ -234,24 +260,30 @@ function Message({ agent, message, live }: { agent: Agent; message: AgentMessage
 }
 
 function UserMessage({ message }: { message: AgentMessage }) {
-  const save = useContext(SaveFile)
   const text = textOf(message)
   const files = message.parts.flatMap((part) => part.type === 'file' ? [part] : [])
   return <div className="flex animate-grow flex-col items-end gap-1.5">
-    {files.length > 0 && <div className="flex max-w-[78%] flex-wrap justify-end gap-1.5">{files.map((file) => <FileChip key={file.url} name={file.filename ?? nameOf(file.url)} image={file.mediaType.startsWith('image/')} onOpen={() => save(file.url)} />)}</div>}
+    {files.length > 0 && <div className="flex max-w-[78%] flex-wrap justify-end gap-1.5">{files.map((file) => <SentFile key={file.url} name={file.filename ?? nameOf(file.url)} path={file.url} mediaType={file.mediaType} />)}</div>}
     {text && <div className="max-w-[78%] rounded-[12px_12px_4px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink">{text}</div>}
   </div>
 }
 
-function FileChip({ name, image, busy, onOpen, onRemove }: { name: string; image: boolean; busy?: boolean; onOpen?: () => void; onRemove?: () => void }) {
-  const body = <>{busy ? <Spinner className="mt-0 size-3" /> : <I icon={image ? Image01Icon : File01Icon} size={14} className="shrink-0 text-mute" />}<span className="truncate">{name}</span></>
+function SentFile({ name, path, mediaType }: { name: string; path: string; mediaType: string }) {
+  const { agentId, threadId, save } = useContext(ChatFiles)
+  const thumb = useThumb({ agentId, threadId, path, mediaType })
+  return <FileChip name={name} image={mediaType.startsWith('image/')} thumb={thumb} onOpen={() => save(path)} />
+}
+
+function FileChip({ name, image, thumb, busy, onOpen, onRemove }: { name: string; image: boolean; thumb?: string; busy?: boolean; onOpen?: () => void; onRemove?: () => void }) {
+  const icon = thumb ? <img src={thumb} alt="" className="size-[18px] shrink-0 rounded-[3px] object-cover" /> : <I icon={image ? Image01Icon : File01Icon} size={14} className="shrink-0 text-mute" />
+  const body = <>{busy && !thumb ? <Spinner className="mt-0 size-3" /> : icon}<span className={cn('truncate', busy && thumb && 'text-mute')}>{name}</span>{busy && thumb && <Spinner className="mt-0 size-3" />}</>
   const chip = 'inline-flex h-7 max-w-[240px] items-center gap-1.5 rounded-md bg-soft px-2 align-middle font-sans text-[12.5px] text-ink'
   if (onOpen) return <Button type="button" variant="bare" className={cn(chip, 'cursor-pointer hover:bg-mid')} title={`Save ${name}`} onClick={onOpen}>{body}</Button>
   return <span className={chip} title={name}>{body}{onRemove && <Button type="button" variant="bare" className="-mr-1 grid size-5 shrink-0 cursor-pointer place-items-center rounded-sm text-mute hover:text-ink" aria-label={`Remove ${name}`} title="Remove" onClick={onRemove}><I icon={Cancel01Icon} size={12} /></Button>}</span>
 }
 
 function FileCode({ children, className }: { children?: ReactNode; className?: string }) {
-  const save = useContext(SaveFile)
+  const { save } = useContext(ChatFiles)
   const path = typeof children === 'string' ? homeFile(children) : undefined
   if (path) return <FileChip name={nameOf(path)} image={IMAGE.test(path)} onOpen={() => save(path)} />
   return <code className={className}>{children}</code>
@@ -342,7 +374,7 @@ function failed(step: Step) {
 }
 
 export function ChatLink({ href, children }: { href?: string; children?: ReactNode }) {
-  const save = useContext(SaveFile)
+  const { save } = useContext(ChatFiles)
   const path = href === undefined ? undefined : homeFile(href)
   if (path) return <FileChip name={nameOf(path)} image={IMAGE.test(path)} onOpen={() => save(path)} />
   const bare = href !== undefined && children === href && /^https?:\/\//.test(href)

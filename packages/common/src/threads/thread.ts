@@ -67,6 +67,17 @@ export const ChatFile = z.object({
 })
 export type ChatFile = z.infer<typeof ChatFile>
 
+export const LookUpFiles = z.object({ paths: z.array(z.string().check(z.minLength(1), z.maxLength(1024))).check(z.maxLength(50)) })
+export type LookUpFiles = z.infer<typeof LookUpFiles>
+
+export const HomeFile = z.object({ object: z.literal('file'), name: z.string(), path: z.string(), size: z.number() })
+export type HomeFile = z.infer<typeof HomeFile>
+
+export function uploadName(path: string): string | undefined {
+  const inside = path.startsWith(`${UPLOADS}/`) ? fileInHome(path)?.split('/') : undefined
+  return inside?.length === 2 ? inside[1] : undefined
+}
+
 export function fileInHome(path: string): string | undefined {
   const full = path.startsWith('~/') ? `${AGENT_HOME}${path.slice(1)}` : path
   if (!full.startsWith(`${AGENT_HOME}/`) || full.length > 1024) return undefined

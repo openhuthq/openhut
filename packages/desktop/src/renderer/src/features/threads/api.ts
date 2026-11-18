@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
-import { ChatFile, Thread, ThreadWithMessages } from '@openhut/common/threads/thread.ts'
+import { ChatFile, HomeFile, Thread, ThreadWithMessages } from '@openhut/common/threads/thread.ts'
 import { request, requestBlob } from '@/lib/api-client'
 import { on, onComputer, openhut } from '@/lib/openhut'
 import { THREADS_KEY } from '@/lib/query-keys'
+import { RASTER } from '@/features/threads/files'
 
 const THREAD_LIST = List(Thread)
+const HOME_FILES = List(HomeFile)
 
 export function useThreads() {
   return useQuery({
@@ -55,4 +57,28 @@ export async function saveFile({ agentId, threadId, path }: { agentId: string; t
   link.download = path.slice(path.lastIndexOf('/') + 1)
   link.click()
   setTimeout(() => URL.revokeObjectURL(link.href), 10_000)
+}
+
+export function deleteUpload({ agentId, threadId, path }: { agentId: string; threadId: string; path: string }) {
+  return request({ schema: Deleted('file'), path: on({ agentId, path: `${threadPath(threadId)}/files?${new URLSearchParams({ path })}` }), method: 'DELETE' })
+}
+
+export function useHomeFiles({ agentId, threadId, paths }: { agentId: string; threadId: string; paths: string[] }) {
+  return useQuery({
+    queryKey: [...THREADS_KEY, 'files', threadId, paths],
+    queryFn: async () => new Set((await request({ schema: HOME_FILES, path: on({ agentId, path: `${threadPath(threadId)}/files/lookups` }), method: 'POST', body: { paths } })).data.map((file) => file.path)),
+    enabled: paths.length > 0,
+    staleTime: 60_000,
+  }).data
+}
+
+export function useThumb({ agentId, threadId, path, mediaType }: { agentId: string; threadId: string; path: string; mediaType: string }) {
+  return useQuery({
+    queryKey: [...THREADS_KEY, 'thumb', agentId, path],
+    queryFn: async () => URL.createObjectURL(new Blob([await requestBlob(on({ agentId, path: `${threadPath(threadId)}/files?${new URLSearchParams({ path })}` }))], { type: mediaType })),
+    enabled: RASTER.includes(mediaType),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
+  }).data
 }

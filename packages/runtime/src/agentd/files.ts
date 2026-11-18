@@ -1,11 +1,11 @@
-import { closeSync, constants, existsSync, fchownSync, fstatSync, mkdirSync, openSync, readlinkSync, readSync, writeFileSync } from 'node:fs'
+import { closeSync, constants, existsSync, fchownSync, fstatSync, lstatSync, mkdirSync, openSync, readlinkSync, readSync, unlinkSync, writeFileSync } from 'node:fs'
 import { openInside } from './skills.ts'
 
 export const MAX_FILE_BYTES = 25 << 20
 export const MAX_FILE_BASE64 = Math.ceil(MAX_FILE_BYTES / 3) * 4
 export const MAX_NAME_BYTES = 255
 const UPLOADS = 'uploads'
-const NAME = /^[\p{L}\p{N}_(+,=@][\p{L}\p{N}._ ()+,=@-]{0,119}$/u
+const NAME = /^[\p{L}\p{N}_(+,=@][\p{L}\p{N}._ ()+,=@-]{0,127}$/u
 const MAX_DEPTH = 32
 const MAX_COPIES = 100
 const PROC = existsSync('/proc/self/fd')
@@ -46,6 +46,35 @@ export function saveUpload({ home, name, body, owner }: { home: string; name: st
       throw new Error(`there are already ${MAX_COPIES} files called ${name}`)
     } })
   } })
+}
+
+export function removeUploads({ home, names }: { home: string; names: string[] }): string[] {
+  try {
+    return within({ dir: home, expected: home, work: (here) => within({ dir: `${here}${UPLOADS}`, expected: `${home}/${UPLOADS}`, work: (uploads) => names.filter((name) => {
+      try {
+        if (!lstatSync(`${uploads}${name}`).isFile()) return false
+        unlinkSync(`${uploads}${name}`)
+        return true
+      } catch {
+        return false
+      }
+    }) }) })
+  } catch (e) {
+    if (isCode(e, 'ENOENT')) return []
+    throw e
+  }
+}
+
+export function statHomeFiles({ home, paths }: { home: string; paths: string[] }): { path: string; size: number }[] {
+  return paths.flatMap((path) => {
+    const fd = openInside({ root: home, file: path, flags: constants.O_RDONLY })
+    if (fd === undefined) return []
+    try {
+      return [{ path, size: fstatSync(fd).size }]
+    } finally {
+      closeSync(fd)
+    }
+  })
 }
 
 export function readHomeFile({ home, path }: { home: string; path: string }): Buffer | undefined {

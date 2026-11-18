@@ -108,6 +108,11 @@ mock.method(agentd, 'readFile', async ({ path }: { id: string; path: string }) =
   const body = saved.get(path)
   return { body: body ? body.toString('base64') : null }
 })
+const removeUploads = mock.method(agentd, 'removeUploads', async ({ names }: { id: string; names: string[] }) => {
+  const removed = names.filter((name) => saved.delete(`uploads/${name}`))
+  return { removed }
+})
+mock.method(agentd, 'statFiles', async ({ paths }: { id: string; paths: string[] }) => ({ files: paths.flatMap((path) => saved.has(path) ? [{ path, size: saved.get(path)?.length ?? 0 }] : []) }))
 const upload = ({ threadId, name, body, headers = as() }: { threadId: string; name: string; body: Buffer; headers?: Record<string, string> }) => app.inject({
   method: 'POST', url: `/api/threads/${threadId}/files?name=${encodeURIComponent(name)}&type=${name.endsWith('.png') ? 'image/png' : 'text/plain'}`,
   headers: { ...headers, 'content-type': 'application/octet-stream' }, payload: body,
@@ -220,6 +225,45 @@ test('an agent that isn\'t answering ends the turn with a sentence, not a hang',
   const res = await say(thread.id, 'hi')
   const error = res.body.split('\n\n').filter((line) => line.startsWith('data: {')).map((line) => JSON.parse(line.slice(6))).find((chunk) => chunk.type === 'error')
   assert.match(error.errorText, /^Runner isn't reachable\. Hermes isn't answering on port 8642 \(ECONNREFUSED\)\.$/)
+})
+
+test('removing a chip deletes that upload from the agent\'s uploads folder, and nothing else can be deleted that way', async () => {
+  const thread = await newThread('ag_chatrunn')
+  const file = (await upload({ threadId: thread.id, name: 'draft.txt', body: Buffer.from('x') })).json()
+  const res = await app.inject({ method: 'DELETE', url: `/api/threads/${thread.id}/files?path=${encodeURIComponent(file.path)}`, headers: as() })
+  assert.deepEqual(res.json(), { id: '/opt/data/home/uploads/draft.txt', object: 'file', deleted: true })
+  assert.deepEqual(removeUploads.mock.calls.at(-1)?.arguments[0], { id: 'ag_chatrunn', names: ['draft.txt'] })
+  assert.equal(saved.has('uploads/draft.txt'), false)
+  const calls = removeUploads.mock.callCount()
+  for (const path of ['/opt/data/home/report.csv', '/opt/data/home/uploads/../.env', '/opt/data/home/uploads/a/b.txt', '/opt/data/.env']) {
+    const refused = await app.inject({ method: 'DELETE', url: `/api/threads/${thread.id}/files?path=${encodeURIComponent(path)}`, headers: as() })
+    assert.equal(refused.statusCode, 400, path)
+  }
+  assert.equal(removeUploads.mock.callCount(), calls)
+})
+
+test('a lookup reports only the mentioned files that exist in the agent\'s home', async () => {
+  const thread = await newThread('ag_chatrunn')
+  saved.set('out/summary.md', Buffer.from('# Summary'))
+  const res = await app.inject({ method: 'POST', url: `/api/threads/${thread.id}/files/lookups`, headers: as(), payload: { paths: ['~/out/summary.md', '/opt/data/home/out/summary.md', '/opt/data/home/nope.txt', '/etc/passwd', '~/../.env'] } })
+  assert.equal(res.statusCode, 200)
+  assert.deepEqual(res.json().data, [
+    { object: 'file', name: 'summary.md', path: '~/out/summary.md', size: 9 },
+    { object: 'file', name: 'summary.md', path: '/opt/data/home/out/summary.md', size: 9 },
+  ])
+})
+
+test('clearing a chat deletes the files uploaded to it from the agent\'s home, and nothing else', async () => {
+  const thread = await newThread('ag_chatrunn')
+  const kept = (await upload({ threadId: thread.id, name: 'other.txt', body: Buffer.from('x') })).json()
+  const sent = (await upload({ threadId: thread.id, name: 'sent.txt', body: Buffer.from('x') })).json()
+  await sendParts({ threadId: thread.id, parts: [{ type: 'file', mediaType: 'text/plain', filename: sent.name, url: sent.path }, { type: 'text', text: 'read it' }] })
+  saved.set('report.csv', Buffer.from('a'))
+  assert.equal((await app.inject({ method: 'DELETE', url: `/api/threads/${thread.id}`, headers: as() })).statusCode, 200)
+  assert.deepEqual(removeUploads.mock.calls.at(-1)?.arguments[0].names.includes('sent.txt'), true)
+  assert.equal(saved.has('uploads/sent.txt'), false)
+  assert.equal(saved.has(`uploads/${kept.name}`), true)
+  assert.equal(saved.has('report.csv'), true)
 })
 
 test('clearing a chat deletes it, and the next one is a new thread with a new Hermes session', async () => {
