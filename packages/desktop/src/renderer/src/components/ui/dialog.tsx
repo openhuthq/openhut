@@ -1,20 +1,23 @@
-import { useRef, type ComponentProps, type ReactNode } from 'react'
+import { useRef, type ComponentProps, type PointerEvent, type ReactNode } from 'react'
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { Button } from '@/components/ui/button'
 import { ICONS } from '@/components/icons'
+import { slide } from '@/lib/media'
 import { cn } from '@/lib/utils'
 
-const FULL_SCREEN = 'max-sm:m-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-screen max-sm:max-w-none max-sm:rounded-none max-sm:border-0'
+const SHEET = 'phone:mx-0 phone:mb-0 phone:mt-auto phone:max-h-[calc(100dvh-env(safe-area-inset-top)-10px)] phone:w-screen phone:max-w-none phone:rounded-t-[22px] phone:rounded-b-none phone:border-0 phone:pt-3 phone:pb-[env(safe-area-inset-bottom)] phone:shadow-[0_-8px_40px_oklch(0%_0_0/.18)] phone:animate-[sheetup_.42s_var(--ease-spring)]'
+const TALL = 'phone:h-[calc(100dvh-env(safe-area-inset-top)-10px)]'
+const FITS = 'phone:h-auto'
 
 const popupVariants = cva('group/dialog fixed inset-0 z-50 overflow-auto border-0 bg-card p-0 text-ink', {
   variants: {
     size: {
-      default: [FULL_SCREEN, 'm-auto h-fit w-[min(880px,calc(100vw-32px))] rounded-xl shadow-dialog animate-grow'],
-      narrow: [FULL_SCREEN, 'm-auto h-fit w-[min(560px,calc(100vw-32px))] rounded-xl shadow-dialog animate-grow'],
-      window: [FULL_SCREEN, 'm-auto flex h-[min(700px,calc(100vh-96px))] max-h-[calc(100vh-32px)] w-[min(900px,calc(100vw-32px))] overflow-hidden rounded-xl shadow-dialog outline-none animate-grow'],
+      default: [SHEET, FITS, 'm-auto h-fit w-[min(880px,calc(100vw-32px))] rounded-xl shadow-dialog animate-grow'],
+      narrow: [SHEET, FITS, 'm-auto h-fit w-[min(560px,calc(100vw-32px))] rounded-xl shadow-dialog animate-grow'],
+      window: [SHEET, TALL, 'm-auto flex h-[min(700px,calc(100vh-96px))] max-h-[calc(100vh-32px)] w-[min(900px,calc(100vw-32px))] overflow-hidden rounded-xl shadow-dialog outline-none animate-grow'],
       confirm: 'm-auto h-fit w-[min(440px,calc(100vw-32px))] rounded-xl shadow-dialog animate-grow',
-      sheet: [FULL_SCREEN, 'my-0 mr-0 ml-auto h-dvh max-h-dvh w-[min(560px,100vw)] rounded-none border-l border-hair shadow-sheet animate-sheetin'],
+      sheet: [SHEET, TALL, 'my-0 mr-0 ml-auto h-dvh max-h-dvh w-[min(560px,100vw)] rounded-none border-l border-hair shadow-sheet animate-sheetin'],
     },
   },
   defaultVariants: { size: 'default' },
@@ -51,9 +54,36 @@ export function Dialog({ size = 'default', dismissable = true, label, onClose, o
   }}>
     <DialogPrimitive.Portal>
       <DialogPrimitive.Backdrop className={backdropClass(size)} />
-      <DialogPrimitive.Popup ref={popup} initialFocus={() => size === 'window' ? popup.current ?? true : firstFocusable(popup.current)} data-size={size} aria-label={label} className={popupClass(size, className)}>{children}</DialogPrimitive.Popup>
+      <DialogPrimitive.Popup ref={popup} initialFocus={() => size === 'window' ? popup.current ?? true : firstFocusable(popup.current)} data-size={size} aria-label={label} className={popupClass(size, className)}>
+        {size !== 'confirm' && <Grabber popup={popup} onClose={onClose} />}
+        {children}
+      </DialogPrimitive.Popup>
     </DialogPrimitive.Portal>
   </DialogPrimitive.Root>
+}
+
+function Grabber({ popup, onClose }: { popup: { current: HTMLDivElement | null }; onClose: () => void }) {
+  const start = useRef<{ y: number; at: number } | null>(null)
+  const move = (event: PointerEvent) => {
+    const sheet = popup.current
+    if (!start.current || !sheet) return
+    sheet.style.transition = 'none'
+    sheet.style.translate = `0 ${Math.max(0, event.clientY - start.current.y)}px`
+  }
+  const end = (event: PointerEvent) => {
+    const sheet = popup.current
+    if (!start.current || !sheet) return
+    const moved = event.clientY - start.current.y
+    const fast = moved / Math.max(1, event.timeStamp - start.current.at) > 0.6
+    start.current = null
+    if (moved > sheet.offsetHeight / 4 || (fast && moved > 24)) slide({ element: sheet, to: '0 100%', done: onClose })
+    else slide({ element: sheet, to: '0 0' })
+  }
+  return <div aria-hidden className="absolute top-0 left-1/2 z-20 hidden h-7 w-28 -translate-x-1/2 touch-none justify-center pt-2 phone:flex"
+    onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); start.current = { y: event.clientY, at: event.timeStamp } }}
+    onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
+    <span className="h-[5px] w-9 rounded-full bg-mid" />
+  </div>
 }
 
 export function DialogHeader({ className, ...props }: ComponentProps<'div'>) {

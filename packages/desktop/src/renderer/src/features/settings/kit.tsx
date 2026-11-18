@@ -33,7 +33,7 @@ export function Row({ icon, title, note, href, onClick, disabled, children }: { 
 }
 
 export function Rows({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-0.5">{children}</div>
+  return <div className="flex flex-col gap-0.5 empty:hidden phone:rounded-2xl phone:bg-card phone:p-1">{children}</div>
 }
 
 export function Chevron() {
