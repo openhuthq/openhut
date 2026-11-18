@@ -418,9 +418,14 @@ async function setAll({ agents, wanted }) {
 function mcpCommands() {
   const bridge = /\s/.test(BRIDGE) ? `"${BRIDGE}"` : BRIDGE
   return computers().map(({ id, name }) => {
-    const server = id === LOCAL.id ? 'openhut' : `openhut-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || id}`
+    const server = id === LOCAL.id ? 'openhut' : mcpName({ name, id })
     return { computer: id, name: server, command: `claude mcp add ${server} -- ${bridge}${id === LOCAL.id ? '' : ` --computer ${id}`}` }
   })
+}
+
+function mcpName({ name, id }) {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || id
+  return slug.includes('openhut') ? slug : `openhut-${slug}`
 }
 
 async function serveMcp() {

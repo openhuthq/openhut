@@ -26,7 +26,7 @@ export function GeneralSettings() {
     <Section title="Notify me when">
       <Rows>
         <PrefSwitch icon={Notification01Icon} hue="text-hue-amber" name="notifyReplies" title="An agent replies" note="While this window is closed or in the background." />
-        <PrefSwitch icon={Alert02Icon} hue="text-hue-red" name="notifyFailures" title="An agent stops or fails" note={WORDS.dockBadge ? 'The Dock badge counts the agents that need you.' : 'You get a notification when one stops answering.'} />
+        <PrefSwitch icon={Alert02Icon} hue="text-hue-red" name="notifyFailures" title="An agent stops or fails" note={WORDS.dockBadge ? 'The Dock icon always counts them.' : undefined} />
       </Rows>
     </Section>
     <Section title="Data">
@@ -44,7 +44,7 @@ function Version() {
   return <Row icon={<Hut className="size-5" />} title={`OpenHut ${state.current}`}><UpdateStatus idle={<Status tone="on">Up to date</Status>} /></Row>
 }
 
-function PrefSwitch({ icon, hue, name, title, note }: { icon: IconSvgElement; hue: string; name: keyof Prefs; title: string; note: string }) {
+function PrefSwitch({ icon, hue, name, title, note }: { icon: IconSvgElement; hue: string; name: keyof Prefs; title: string; note?: string }) {
   const prefs = usePrefs()
   const setPrefs = useSetPrefs()
   return <Row icon={<I icon={icon} size={20} className={hue} />} title={title} note={note}>
