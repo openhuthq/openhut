@@ -31,7 +31,7 @@ export function MemoryDialog({ agent, onClose }: { agent: Agent; onClose: () => 
       <div className="grid min-w-0 flex-1 gap-1"><DialogTitle className="text-[15px]/[22px] font-medium">{agent.name}'s memory</DialogTitle><p className="m-0 text-[13px]/[18px] text-body">{agent.name} saves these itself as it works. Changes apply from its next conversation.</p></div>
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" tabIndex={-1} className="-mt-1 -mr-1" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
     </div>
-    <ErrorNote message={memory.error?.message} />
+    <ErrorNote className="mx-5 mt-3" message={memory.error?.message} />
     {!memory.data && !memory.error && <Loading />}
     {memory.data && <Entries agent={agent} memory={memory.data} />}
   </DialogCard>
