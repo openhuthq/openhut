@@ -4,6 +4,7 @@ import { useAgents } from '@/features/agents/api'
 import { Admin } from '@openhut/common/admin/admin.ts'
 import { ApiError } from '@openhut/common/api.ts'
 import { openhut } from '@/lib/openhut'
+import { adminsOf } from '@/features/computers/admins'
 import { AGENTS_KEY, COMPUTERS_KEY, CONNECTIONS_KEY } from '@/lib/query-keys'
 
 export type ComputerAdmin = { computer: Computer; admin: Admin | undefined }
@@ -20,9 +21,11 @@ export function useFeatures(agentId: string): Features {
 }
 
 export function useComputerAdmins() {
+  const computers = useComputers().data
   return useQuery({
-    queryKey: ADMINS_KEY,
-    queryFn: async (): Promise<ComputerAdmin[]> => Promise.all((await openhut.computers.list()).map(async (computer) => ({ computer, admin: computer.online ? await adminOf(computer.id) : undefined }))),
+    queryKey: [...ADMINS_KEY, computers?.map((computer) => `${computer.id}:${computer.online}`)],
+    queryFn: (): Promise<ComputerAdmin[]> => adminsOf({ computers: computers ?? [], read: adminOf }),
+    enabled: !!computers,
   })
 }
 
