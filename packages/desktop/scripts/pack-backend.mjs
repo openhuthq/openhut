@@ -7,7 +7,7 @@ import { join } from 'node:path'
 const ROOT = join(import.meta.dirname, '../../..')
 const OUT = join(import.meta.dirname, '../dist/backend')
 const LINUX = process.platform === 'linux'
-const NATIVE = LINUX ? [] : ['@electric-sql/pglite', 'microsandbox', '@microsandbox/types', `@superradcompany/microsandbox-darwin-${process.arch}`]
+const NATIVE = LINUX ? [] : ['@electric-sql/pglite', 'microsandbox', '@microsandbox/types', `@superradcompany/microsandbox-${process.platform}-${process.arch}${process.platform === 'win32' ? '-msvc' : ''}`]
 
 rmSync(OUT, { recursive: true, force: true })
 

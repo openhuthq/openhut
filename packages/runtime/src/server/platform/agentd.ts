@@ -90,7 +90,7 @@ function send({ request, body = '', doing }: { request: Record<string, unknown>;
       try { resolve(JSON.parse(buffer)) } catch { reject(new HttpError(502, `The agent runner sent a broken reply while trying to ${doing}. Try again.`)) }
     })
     socket.on('error', (err) => reject(new HttpError(503, `The agent runner isn't reachable (${err.message}). Check that agentd is running.`)))
-    socket.end(`${JSON.stringify(request)}\n${body}`)
+    socket.write(`${JSON.stringify(request)}\n${body && `${body}\n`}`)
   })
 }
 

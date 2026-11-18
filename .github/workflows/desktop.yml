@@ -109,8 +109,51 @@ jobs:
       - name: This release and the one before it work together both ways
         run: scripts/compat.sh "$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
 
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAGGED: ${{ startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Build the installer
+        working-directory: packages/desktop
+        run: npm run dist:win
+      - name: Install it, meet the first agent in its microVM, chat, use the MCP, restart, and keep the evidence
+        working-directory: packages/desktop
+        shell: pwsh
+        run: |
+          $cwd = (Get-Location).Path
+          $node = (Get-Command node).Source
+          Set-Content e2e.cmd "@`"$node`" scripts\windows-e2e.mjs --installer release\OpenHut-Setup-x64.exe --out windows-e2e --sandbox microsandbox > windows-e2e.log 2>&1`r`n@echo %ERRORLEVEL%> windows-e2e.exit"
+          $run = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "cmd /c `"$cwd\e2e.cmd`""; CurrentDirectory = $cwd }
+          while (Get-Process -Id $run.ProcessId -ErrorAction SilentlyContinue) { Start-Sleep 5 }
+          Get-Content windows-e2e.log
+          exit [int](Get-Content windows-e2e.exit)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-e2e
+          path: |
+            packages/desktop/windows-e2e/*.png
+            packages/desktop/windows-e2e/evidence.json
+            packages/desktop/windows-e2e/home/logs/
+      - name: Add the installer to the draft release
+        if: env.TAGGED == 'true'
+        working-directory: packages/desktop/release
+        shell: bash
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "OpenHut ${GITHUB_REF_NAME#v}" --notes ""
+          gh release upload "$GITHUB_REF_NAME" OpenHut-Setup-x64.exe OpenHut-Setup-x64.exe.blockmap latest.yml --clobber
+
   linux:
-    needs: [release, compat]
+    needs: [release, compat, windows]
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -136,7 +179,7 @@ jobs:
         run: |
           have=$(gh release view "$GITHUB_REF_NAME" --json assets -q '.assets[].name')
           v="${GITHUB_REF_NAME#v}"
-          for want in OpenHut-arm64.dmg "OpenHut-$v-arm64.zip" "OpenHut-$v-arm64.zip.blockmap" latest-mac.yml OpenHut-x64.AppImage openhut-x64.deb latest-linux.yml install.sh openhut.tgz; do
+          for want in OpenHut-arm64.dmg "OpenHut-$v-arm64.zip" "OpenHut-$v-arm64.zip.blockmap" latest-mac.yml OpenHut-x64.AppImage openhut-x64.deb latest-linux.yml OpenHut-Setup-x64.exe latest.yml install.sh openhut.tgz; do
             echo "$have" | grep -qx "$want" || { echo "::error::The draft release has no $want, so it stays a draft."; exit 1; }
           done
           gh release edit "$GITHUB_REF_NAME" --draft=false
