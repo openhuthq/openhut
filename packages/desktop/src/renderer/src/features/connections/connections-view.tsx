@@ -45,7 +45,7 @@ export function ConnectionsView({ onClose }: { onClose: () => void }) {
   return <AppWindow label="Connections" onClose={onClose}>
     {sheet ?? <div className="no-scrollbar fade-b flex min-h-0 flex-1 flex-col overflow-y-auto px-8 pt-[22px] pb-7 phone:px-5">
       <div className="mt-[30px] flex items-center gap-3"><h2 className="m-0 text-[17px]/[24px] font-medium">{count ? 'Connections' : 'Connect apps'}</h2>
-        {connections.data && <Button type="button" variant="bare" className="ml-auto inline-flex items-center gap-1 text-[12px] font-normal text-mute hover:text-ink" onClick={() => setShelf(CONNECTED)}>{count} connected<I icon={ArrowRight01Icon} size={12} /></Button>}
+        {connections.data && <Button type="button" variant="text" className="ml-auto text-[12px]" onClick={() => setShelf(CONNECTED)}>{count} connected<I icon={ArrowRight01Icon} size={12} /></Button>}
       </div>
       <label className="mt-4 flex h-9 items-center gap-2 text-mute"><I icon={Search01Icon} size={16} /><Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search apps" aria-label="Search apps" className="h-9 border-0 bg-transparent px-0 text-[13px] [-webkit-appearance:none]" /></label>
       <ToggleGroup variant="pill" aria-label="Category" className="mt-2 flex flex-wrap gap-2" value={shelf} onPick={setShelf}>

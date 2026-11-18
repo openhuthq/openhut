@@ -1,7 +1,7 @@
 import { Cancel01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { OpenHutConnection } from '@openhut/client'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
@@ -12,6 +12,7 @@ import { useAddConnectionTo, useConnections } from '@/features/connections/api'
 import { connectionOf, holds } from '@/features/connections/copies'
 import { toast, toastError } from '@/lib/toast'
 import { navigate } from '@/lib/router'
+import { cn } from '@/lib/utils'
 
 export function CanUse({ agent }: { agent: Agent }) {
   const connections = useConnections()
@@ -40,7 +41,7 @@ function AddConnection({ agent, connections }: { agent: Agent; connections: Open
   const home = useAgents().data?.find((each) => each.id === agent.id)?.computer ?? 'local'
   const there = nameOf({ computers, id: home })
   return <DropdownMenu>
-    <DropdownMenuTrigger className="inline-flex items-center gap-1 border-0 bg-transparent p-0 text-xs font-medium text-ink" disabled={!agent.canEdit || createGrant.isPending}><I icon={PlusSignIcon} size={12} />Add</DropdownMenuTrigger>
+    <DropdownMenuTrigger className={cn(buttonVariants({ variant: 'text' }), 'text-xs')} disabled={!agent.canEdit || createGrant.isPending}><I icon={PlusSignIcon} size={12} />Add</DropdownMenuTrigger>
     <DropdownMenuContent align="end">
       {connections.map((connection) => {
         const missing = !connection.computers.some((copy) => copy.computer === home)
