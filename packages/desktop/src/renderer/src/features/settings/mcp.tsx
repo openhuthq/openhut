@@ -14,7 +14,7 @@ export function McpSettings() {
   const computers = useComputers().data
   const commands = useQuery({ queryKey: ['mcp-commands'], queryFn: () => desktop?.mcpCommands?.() ?? [], enabled: !!desktop })
   return <>
-    <Intro>Let Claude Code make and manage your agents. Paste a command into a terminal once, or the path into another app.</Intro>
+    <Intro>Let Claude Code or another app manage your agents.</Intro>
     {!desktop && <ErrorNote message="Open the OpenHut app on this computer to see this." />}
     <Rows>
       {commands.data?.map((each) => {
