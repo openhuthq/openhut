@@ -24,7 +24,7 @@ export function ModelsSettings() {
   const usage = useSeatUsage(signedIn)
   const holders = useComputerAdmins().data?.filter((each) => each.admin?.seat.set).map((each) => each.computer.name) ?? []
   return <>
-    <Intro>Sign in with the subscription you already pay for. Each agent then picks one.</Intro>
+    <Intro>Sign in with a subscription you already pay for. Each agent then picks its model.</Intro>
     <ErrorNote message={admin.error?.message} />
     {admin.data && <Rows>
       <Row icon={<Glyph name="claude" size={22} />} title="Claude subscription" note={holders.length ? `On ${listOf(holders)}` : 'Pro or Max'}>
@@ -34,7 +34,7 @@ export function ModelsSettings() {
         <span className="text-[12px] text-mute">Coming soon</span>
       </Row>
     </Rows>}
-    {usage.data && <Spend usage={usage.data} />}
+    {usage.data?.agents.some((agent) => agent.costUsd > 0) && <Spend usage={usage.data} />}
     {dialog === 'seat' && <SeatSignIn />}
   </>
 }
@@ -61,12 +61,10 @@ function Spend({ usage }: { usage: SeatUsage }) {
   const total = used.reduce((sum, agent) => sum + agent.costUsd, 0)
   const week = usage.windows.find((each) => each.kind === 'seven_day')
   return <Section title="Claude this week" action={<span className="text-mute">{[usageLine(usage), week && `${week.percent}% of the weekly limit`].filter(Boolean).join(' · ')}</span>}>
-    {used.length
-      ? <Rows>{used.map((agent, index) => <Row key={agent.agentId} icon={<i className="size-2.5 rounded-[3px]" style={{ background: SPEND_COLORS[index % SPEND_COLORS.length] }} />} title={agent.agentName}>
-        <span className="text-mute tabular-nums">{Math.max(1, Math.round((agent.costUsd / total) * 100))}%</span>
-        <span className="w-16 text-right font-mono text-xs tabular-nums">${agent.costUsd.toFixed(2)}</span>
-      </Row>)}</Rows>
-      : <p className="m-0 px-2.5 text-[12px]/[16px] text-mute">Not used yet.</p>}
+    <Rows>{used.map((agent, index) => <Row key={agent.agentId} icon={<i className="size-2.5 rounded-[3px]" style={{ background: SPEND_COLORS[index % SPEND_COLORS.length] }} />} title={agent.agentName}>
+      <span className="text-mute tabular-nums">{Math.max(1, Math.round((agent.costUsd / total) * 100))}%</span>
+      <span className="w-16 text-right font-mono text-xs tabular-nums">${agent.costUsd.toFixed(2)}</span>
+    </Row>)}</Rows>
   </Section>
 }
 

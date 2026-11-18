@@ -41,7 +41,7 @@ function ComputerList() {
   const agents = useAgents().data ?? []
   const enrollments = useEnrollments().data
   return <>
-    <Intro>Where your agents run.</Intro>
+    <Intro>Where your agents run</Intro>
     <ErrorNote message={computers.error?.message} />
     <Rows>
       {computers.data?.map((computer) => {

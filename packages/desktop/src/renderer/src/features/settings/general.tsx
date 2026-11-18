@@ -7,7 +7,7 @@ import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Section, Status } from '@/components/kit'
 import { useAdmin, useUpdateAdmin } from '@/features/settings/api'
 import { HERE, bytes, desktop, home, useMachine, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
-import { Intro, Row, Rows } from '@/features/settings/kit'
+import { Row, Rows } from '@/features/settings/kit'
 import { WORDS } from '@/lib/platform'
 import { Hut } from '@/components/hut'
 import { useAppUpdate } from '@/features/settings/update'
@@ -17,7 +17,6 @@ import { toastError } from '@/lib/toast'
 export function GeneralSettings() {
   const admin = useAdmin()
   return <>
-    <Intro>How OpenHut runs on this {HERE}.</Intro>
     <ErrorNote message={admin.error?.message} />
     <Rows>
       {desktop && <PrefSwitch icon={Login01Icon} hue="text-hue-green" name="openAtLogin" title="Open at login" note="Agents start in the background, without opening this window." />}
