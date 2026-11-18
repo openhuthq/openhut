@@ -16,8 +16,6 @@ export const agentd = {
     ask({ request: { cmd: 'create', id, net, files, browser }, doing: 'create the agent', schema: z.object({ container: z.string() }) }),
   apply: ({ id, net, files, browser, restart, force = false }: { id: string; net: number; files: AgentFiles; browser: boolean; restart: boolean; force?: boolean }) =>
     ask({ request: { cmd: 'apply', id, net, files, browser, restart, force }, doing: 'update the agent\'s files', schema: z.object({ applied: z.string(), restarted: z.boolean() }) }),
-  browserStill: ({ id }: { id: string }) => ask({ request: { cmd: 'browser-still', id }, doing: 'read the browser', schema: z.object({ open: z.boolean(), url: z.string(), title: z.string(), data: z.string() }) }),
-  holdBrowser: ({ id, held }: { id: string; held: boolean }) => ask({ request: { cmd: 'browser-hold', id, held }, doing: held ? 'pause the agent\'s browser' : 'hand the browser back', schema: z.object({ held: z.boolean() }) }),
   start: ({ id }: { id: string }) => ask({ request: { cmd: 'start', id }, doing: 'start the agent', schema: z.object({ started: z.string() }) }),
   stop: ({ id }: { id: string }) => ask({ request: { cmd: 'stop', id }, doing: 'stop the agent', schema: z.object({ stopped: z.string() }) }),
   remove: ({ id }: { id: string }) => ask({ request: { cmd: 'rm', id }, doing: 'delete the agent', schema: z.object({ removed: z.string() }) }),
@@ -36,7 +34,7 @@ export const agentd = {
   unlinkWhatsapp: ({ id }: { id: string }) => ask({ request: { cmd: 'wa-unlink', id }, doing: 'unlink WhatsApp', schema: z.object({ unlinked: z.string() }) }),
 }
 
-export function liveBrowser({ id, onLine, onEnd }: { id: string; onLine: (line: string) => void; onEnd: () => void }): LiveBrowser {
+export function liveBrowser({ id, fps, onLine, onEnd }: { id: string; fps: number; onLine: (line: string) => void; onEnd: () => void }): LiveBrowser {
   const socket = connect(config.agentdSocket)
   let pending = ''
   socket.setEncoding('utf8')
@@ -50,7 +48,7 @@ export function liveBrowser({ id, onLine, onEnd }: { id: string; onLine: (line: 
   })
   socket.on('error', () => socket.destroy())
   socket.on('close', onEnd)
-  socket.write(`${JSON.stringify({ cmd: 'browser-live', id })}\n`)
+  socket.write(`${JSON.stringify({ cmd: 'browser-live', id, fps })}\n`)
   return { send: (line) => socket.write(`${line}\n`), close: () => socket.destroy() }
 }
 

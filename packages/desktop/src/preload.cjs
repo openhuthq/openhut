@@ -17,6 +17,12 @@ contextBridge.exposeInMainWorld('openhut', {
     onReady: (listener) => ipcRenderer.on('update.ready', (_event, ready) => listener(ready)),
   },
   onChanged: (listener) => ipcRenderer.on('changed', () => listener()),
+  browserLive: (path, onLine, onClose) => {
+    const { port1, port2 } = new MessageChannel()
+    port1.onmessage = ({ data }) => typeof data === 'string' ? onLine(data) : onClose(data.closed, data.reason)
+    ipcRenderer.postMessage('browser-live', path, [port2])
+    return { send: (line) => port1.postMessage(line), close: () => port1.close() }
+  },
   computers: {
     list: () => ipcRenderer.invoke('computers.list'),
     add: (input) => ipcRenderer.invoke('computers.add', input),

@@ -51,6 +51,7 @@
     "vite": "8.3.4"
   },
   "dependencies": {
-    "electron-updater": "6.8.12"
+    "electron-updater": "6.8.12",
+    "ws": "8.21.0"
   }
 }
