@@ -4,6 +4,8 @@ import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, type UIMessage } from 'ai'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import type { SpecDataPart } from '@json-render/core'
+import { useJsonRenderMessage } from '@json-render/react'
 import { ArrowLeft01Icon, ArrowUp02Icon, Attachment01Icon, Cancel01Icon, Copy01Icon, EraserIcon, File01Icon, Image01Icon, PlayIcon, PlusSignIcon, SidebarLeftIcon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@openhut/client'
 import type { Agent } from '@openhut/common/agents/agent.ts'
@@ -27,6 +29,7 @@ import { deleteUpload, saveFile, threadPath, uploadFile, useAgentThread, useClea
 import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
 import { ConfirmIcon } from '@/components/confirm-button'
 import { attachCalls, kindOf, stepsOf, type Step } from '@/features/threads/steps'
+import { CardReply, MessageCard } from '@/features/threads/card'
 import { copyText } from '@/lib/clipboard'
 import { openhut } from '@/lib/openhut'
 import { toast, toastError } from '@/lib/toast'
@@ -34,7 +37,7 @@ import { usePhoneBack } from '@/app/phone-page'
 import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
 
-type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[] }>
+type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; spec: SpecDataPart }>
 type AgentPart = AgentMessage['parts'][number]
 type Attachment = { key: string; name: string; image: boolean; thumb?: string; file?: ChatFile }
 
@@ -67,14 +70,14 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   }
   const last = chat.messages.at(-1)
   const clear = chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
-  return <ChatFiles value={files}><ChatFrame agent={agent} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={<Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
+  return <ChatFiles value={files}><CardReply value={(text) => { if (!busy) send(text) }}><ChatFrame agent={agent} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={<Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
     {chat.messages.length ? <>
       <Day iso={thread.updatedAt} />
       {chat.messages.map((message) => <Message key={message.id} agent={agent} message={message} live={busy && message === last} />)}
     </> : <ChatEmpty agent={agent} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     {chat.error && <Alert variant="error-outline" role="alert"><span>{chat.error.message}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Retry</Button></Alert>}
-  </ChatFrame></ChatFiles>
+  </ChatFrame></CardReply></ChatFiles>
 }
 
 function useAttachments({ agentId, threadId }: { agentId: string; threadId: string }) {
@@ -264,15 +267,18 @@ function Message({ agent, message, live }: { agent: Agent; message: AgentMessage
 function AgentReply({ agent, message, live }: { agent: Agent; message: AgentMessage; live: boolean }) {
   const { agentId, threadId } = useContext(ChatFiles)
   const blocks = blocksOf(message)
+  const { spec, hasSpec } = useJsonRenderMessage(message.parts)
   const paths = live ? [] : homePathsIn(blocks.flatMap((block) => block.type === 'text' ? [block.text] : []).join('\n'))
   const found = useHomeFiles({ agentId, threadId, paths })
   const plugins = found?.size ? [remarkGfm, linkHomeFiles(found)] : [remarkGfm]
   return <div className="grid animate-grow grid-cols-[34px_minmax(0,1fr)] gap-3">
     <span className={live ? 'talking' : undefined}><Face agent={agent} size={34} /></span>
     <CopyMenu text={textOf(message)}><div className="flex min-w-0 flex-col gap-2 pt-1.5 pointer-coarse:select-none">
-      {blocks.map((block, index) => block.type === 'text'
-        ? <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode }}>{block.text}</Markdown></div>
-        : <Steps key={index} steps={block.steps} live={live && index === blocks.length - 1} />)}
+      {blocks.map((block, index) => {
+        if (block.type === 'text') return <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode }}>{block.text}</Markdown></div>
+        if (block.type === 'card') return hasSpec && <MessageCard key={index} spec={spec} loading={live} />
+        return <Steps key={index} steps={block.steps} live={live && index === blocks.length - 1} />
+      })}
       {live && !blocks.length && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
       {!live && !blocks.length && <span className="text-[13.5px] text-mute-2 italic">No reply.</span>}
     </div></CopyMenu>
@@ -324,7 +330,7 @@ function nameOf(path: string) {
   return path.slice(path.lastIndexOf('/') + 1)
 }
 
-type Block = { type: 'text'; text: string } | { type: 'steps'; steps: Step[] }
+type Block = { type: 'text'; text: string } | { type: 'steps'; steps: Step[] } | { type: 'card' }
 
 function blocksOf(message: AgentMessage): Block[] {
   const blocks: Block[] = []
@@ -335,6 +341,10 @@ function blocksOf(message: AgentMessage): Block[] {
   }
   for (const part of message.parts) {
     if (part.type === 'data-tool') events.push(part.data)
+    if (part.type === 'data-spec' && !blocks.some((block) => block.type === 'card')) {
+      flush()
+      blocks.push({ type: 'card' })
+    }
     if (part.type === 'text' && part.text) {
       flush()
       blocks.push({ type: 'text', text: part.text })
@@ -460,6 +470,7 @@ function uiMessageOf(message: ChatMessage): AgentMessage {
     if (part.type === 'text' && typeof part.text === 'string') return [{ type: 'text', text: part.text }]
     if (part.type === 'data-tool') return [{ type: 'data-tool', data: z.safeParse(ToolProgress, part.data).data ?? {} }]
     if (part.type === 'data-calls') return [{ type: 'data-calls', data: z.safeParse(z.array(ChatCall), part.data).data ?? [] }]
+    if (part.type === 'data-spec') return [{ type: 'data-spec', data: part.data as SpecDataPart }]
     if (part.type === 'file' && typeof part.url === 'string' && typeof part.mediaType === 'string') return [{ type: 'file', url: part.url, mediaType: part.mediaType, filename: typeof part.filename === 'string' ? part.filename : undefined }]
     return []
   }) }

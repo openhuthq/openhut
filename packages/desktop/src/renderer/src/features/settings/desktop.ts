@@ -25,8 +25,8 @@ const FIRST_RUN_POLL_MS = 500
 export const desktop: Bridge | undefined = Reflect.get(window, 'openhut')
 export const HERE = WORDS.here
 
-export function useTailnet() {
-  return useQuery({ queryKey: ['tailnet'], queryFn: async (): Promise<Tailnet> => tailnetOf(await desktop?.tailnet()), enabled: !!desktop, retry: false })
+export function useTailnet({ poll = false }: { poll?: boolean } = {}) {
+  return useQuery({ queryKey: ['tailnet'], queryFn: async (): Promise<Tailnet> => tailnetOf(await desktop?.tailnet()), enabled: !!desktop, retry: false, refetchInterval: poll ? 3000 : false })
 }
 
 export function useMachine() {

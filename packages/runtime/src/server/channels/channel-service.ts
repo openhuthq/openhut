@@ -68,6 +68,11 @@ export const channelService = {
     return TelegramSecrets.parse(JSON.parse(unseal(row.secrets))).botToken
   },
 
+  async slackToken({ agentId }: { agentId: string }): Promise<string | undefined> {
+    const row = await db.selectFrom('channel').selectAll().where('agent_id', '=', agentId).where('kind', '=', 'slack').executeTakeFirst()
+    return row && slackSecrets(row).botToken
+  },
+
   async conversations({ actor, id }: { actor: Caller; id: string }): Promise<Conversation[]> {
     const row = await rowOf(id)
     await agentService.get({ actor, id: row.agent_id })

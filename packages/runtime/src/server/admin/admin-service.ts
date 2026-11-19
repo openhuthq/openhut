@@ -49,7 +49,6 @@ export const adminService = {
         version: health.version, build: health.build, latestBuild, updateAvailable: isNewer({ latest: latestBuild, current: health.build }), update: await currentUpdate({ installing, last }), healthy: health.ok, agentd: health.agentd, firewall: health.firewall,
         running: agents.filter((agent) => states?.[agent.id] === 'running').length, total: agents.length,
       },
-      tailnetUrl: settings.tailnetUrl() ?? null,
       google: { clientId: null, redirectUri: connectionService.redirectUrl() },
       usageData: settings.usageData(),
       publicKey: transferPublicKey,
@@ -147,7 +146,6 @@ export const adminService = {
   },
 
   async update({ actor, patch }: { actor: Caller; patch: UpdateAdmin }): Promise<Admin> {
-    if (patch.tailnetUrl !== undefined) await setTailnetUrl(patch.tailnetUrl)
     if (patch.seatToken !== undefined) await settings.setSeatToken(patch.seatToken)
     if (patch.usageData !== undefined) await setUsage(patch.usageData)
     emit({ name: 'admin.updated', actor, target: { type: 'admin', id: 'install', fields: Object.keys(patch) } })
@@ -226,10 +224,3 @@ function parseJson(text: string | undefined): unknown {
   try { return JSON.parse(text ?? '') } catch { return undefined }
 }
 
-async function setTailnetUrl(url: string | null): Promise<void> {
-  const parsed = url === null ? undefined : new URL(url)
-  if (parsed && (parsed.pathname !== '/' || parsed.search || parsed.hash || parsed.username)) {
-    throw new HttpError(400, 'Use just the address the app reaches this computer on, like https://beelink.example.ts.net, with no path.', { param: 'tailnetUrl' })
-  }
-  await settings.setTailnetUrl(parsed?.origin ?? null)
-}

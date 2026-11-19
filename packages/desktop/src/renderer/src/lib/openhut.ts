@@ -7,7 +7,6 @@ type Failure = { error: string }
 type Computers = {
   list: () => Promise<StoredComputer[]>
   add: (input: { peer: TailnetPeer }) => Promise<StoredComputer | Failure>
-  adopt: (input: { name: string; url: string; key: string }) => Promise<StoredComputer | Failure>
   remove: (input: { id: string }) => Promise<{ id: string } | Failure>
   enrollments: () => Promise<Enrollment[]>
   dismiss: (input: { dns: string }) => Promise<unknown>
@@ -35,7 +34,6 @@ const platform: Platform = {
   store: {
     computers: async () => bridge ? bridge.computers.list() : BROWSER,
     add: (peer) => answer(bridge?.computers.add({ peer })),
-    adopt: (input) => answer(bridge?.computers.adopt(input)),
     remove: async (id) => { await answer(bridge?.computers.remove({ id })) },
   },
   openUrl: (url) => { window.open(url, '_blank') },

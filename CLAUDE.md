@@ -5,7 +5,7 @@ on each computer you add (`private/brain/decisions/app-aggregates-runtimes.md`).
 own process (a plain process that runs as you on a Mac or Windows PC, a gVisor sandbox in Docker on Linux), with their own Slack app and WhatsApp number. Agents reach team
 data only through the runtime's gateway, which holds every key and checks each agent's grants on every call. You manage
 it from the app or from your own AI assistant over the control MCP. No sign-in and no people: the app reaches the local
-runtime on a 0600 Unix socket, and a remote one over the tailnet with the key it enrolled when the computer was added.
+runtime on a 0600 Unix socket, and a remote one through the relay, end-to-end encrypted, after it joined with a code (Tailscale SSH only installs it).
 Scope and decisions: `private/brain/decisions/openhut-v1-scope.md`.
 
 ## Packages
@@ -32,7 +32,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
 - **`private/site`** — `@openhut/site`, openhut.dev, in the private submodule (see Private half below): `install.sh` for curl, the release tarball, the home page, the brand page
   and the built docs, served by a Cloudflare Worker with static assets (`wrangler.jsonc`, `src/worker.ts`) that
   `.github/workflows/deploy.yml` deploys on every push to `main`. The e2e run serves its releases with the same Worker
-  under `wrangler dev`. Deploys and the internal instance: `private/brain/openhut-deploy.md`.
+  under `wrangler dev`. Deploys: `private/brain/openhut-deploy.md`.
 
 `install/` is the installer of a remote runtime and what it runs on the server (firewall, systemd units, boot script); `scripts/release.sh`
 builds what `openhut.dev` serves; `vendor/` is the pinned Hermes plugin.

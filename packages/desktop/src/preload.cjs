@@ -32,7 +32,6 @@ contextBridge.exposeInMainWorld('openhut', {
   computers: {
     list: () => ipcRenderer.invoke('computers.list'),
     add: (input) => ipcRenderer.invoke('computers.add', input),
-    adopt: (input) => ipcRenderer.invoke('computers.adopt', input),
     remove: (input) => ipcRenderer.invoke('computers.remove', input),
     enrollments: () => ipcRenderer.invoke('computers.enrollments'),
     dismiss: (input) => ipcRenderer.invoke('computers.dismiss', input),

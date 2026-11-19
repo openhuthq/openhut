@@ -2,7 +2,6 @@ import type { Selectable } from 'kysely'
 import type { Deleted } from '@openhut/common/api.ts'
 import { SIGN_IN_KINDS, type Connection, type ConnectionKind, type ConnectionStatus, type ConnectionTool, type CreateConnection } from '@openhut/common/connections/connection.ts'
 import { config } from '../platform/config.ts'
-import { settings } from '../platform/settings.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { log, emit } from '../platform/events.ts'
@@ -26,7 +25,7 @@ const running = new Map<string, number>()
 const queues = new Map<string, Promise<unknown>>()
 const toolCache = new Map<string, { at: number; tools: ToolSpec[] }>()
 const redirectUrl = () => `${callbackBase()}/api/connection-authorizations/callback`
-export const callbackBase = (): string => settings.tailnetUrl() ?? `http://127.0.0.1:${config.port}`
+export const callbackBase = (): string => `http://127.0.0.1:${config.port}`
 const CONNECTORS: Record<ConnectionKind, Connector> = {
   postgres: postgres.connector,
   convex: convex.connector,

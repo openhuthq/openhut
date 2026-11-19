@@ -256,7 +256,7 @@ function main() {
 
   check(
     'A2',
-    'The runtime answers only on loopback (tailscale serve reaches it there), so the key works from nowhere else',
+    'The runtime answers only on loopback, so the key works from nowhere else',
     "with the enrolled key: from a container on the server's Docker bridge no HTTP answer at all; to the server's own LAN address, ECONNREFUSED",
     async () => {
       const bridge = await shell("ip -4 addr show docker0 | sed -n 's/.*inet \\([0-9.]*\\).*/\\1/p'")
@@ -277,9 +277,10 @@ console.log(JSON.stringify(takeTelemetry()))`
     return { actual: sent, pass: sent.some((e) => e.name === 'setup_completed') && !/email|login|username|usr_e2elocal/.test(JSON.stringify(sent)) }
   })
 
-  check('A3', 'The installer prints the next step: tailscale serve, then open it from the OpenHut app', 'install log mentions tailscale serve and no setup link', async () => {
+  check('A3', 'The installer ends saying which app key it runs for, and serves nothing beyond loopback', 'install log says it runs for the app key; no tailscale serve and no setup link', async () => {
     const log = readFileSync(`${RESULTS}/install.log`, 'utf8')
-    return { actual: { serve: log.includes('tailscale serve'), setupLink: log.includes('/setup?code=') }, pass: log.includes('tailscale serve') && !log.includes('/setup?code=') }
+    const forKey = log.includes('OpenHut is running for the app key')
+    return { actual: { forKey, serve: log.includes('tailscale serve'), setupLink: log.includes('/setup?code=') }, pass: forKey && !log.includes('tailscale serve') && !log.includes('/setup?code=') }
   })
 
   check(
