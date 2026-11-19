@@ -51,9 +51,7 @@ If the computer is on your [Tailscale](https://tailscale.com/download) tailnet, 
 sudo tailscale set --ssh
 ```
 
-The app lists the machines on your tailnet and installs OpenHut over Tailscale SSH, showing the log. If Tailscale asks you to approve the check, a link shows up; open it and approve. The app makes a key for that computer and keeps it in your keychain. The computer keeps only its hash and answers nobody else.
-
-**by its address** adds a computer you installed yourself: its address and the key it was installed with.
+The app lists the machines on your tailnet and installs OpenHut over Tailscale SSH. If Tailscale asks you to approve the check, a link shows up; open it and approve. The computer then joins through OpenHut's relay like any other, without numbers to check, since its code only went over your Tailscale SSH. Tailscale is only how it gets there.
 
 ## Each computer is its own
 

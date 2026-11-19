@@ -1,7 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { CreateConnection, CreateConnectionAuthorization, ListConnectionEvents, ListConnectionTools, UpdateConnection } from '@openhut/common/connections/connection.ts'
 import { listOf } from '../platform/responses.ts'
-import { settings } from '../platform/settings.ts'
 import { requireSignIn, who } from '../team/identity.ts'
 import { connectionAuthorizationService } from './connection-authorization-service.ts'
 import { connectionEventService } from './connection-event-service.ts'
@@ -29,7 +28,6 @@ export const connectionAuthorizationController: FastifyPluginAsync = async (app)
   app.get<{ Querystring: { state?: string; code?: string; error?: string; installation_id?: string } }>('/callback', async (req, reply) => {
     const { kind, connectionId, error, redirect } = await connectionAuthorizationService.finish(req.query)
     if (redirect) return reply.redirect(redirect)
-    if (settings.tailnetUrl()) return reply.status(error ? 400 : 200).type('text/html; charset=utf-8').send(page(error ?? 'Connected. You can close this tab and go back to OpenHut.'))
     if (!error) return reply.redirect(`/connections/${connectionId}?connected=1`)
     return reply.redirect(`${backTo({ kind, connectionId })}?error=${encodeURIComponent(error)}`)
   })
@@ -45,10 +43,6 @@ function backTo({ kind, connectionId }: { kind?: string; connectionId?: string }
   return '/connections'
 }
 
-function page(message: string): string {
-  const text = message.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`)
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>OpenHut</title></head><body style="font: 16px/1.5 system-ui, sans-serif; max-width: 32rem; margin: 20vh auto; padding: 0 16px"><p>${text}</p></body></html>`
-}
 
 const CreateRequest = { schema: { body: CreateConnection } }
 const UpdateRequest = { schema: { body: UpdateConnection } }

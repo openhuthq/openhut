@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-export function reacher({ connect, relayUrl, key, legacy }) {
+export function reacher({ connect, relayUrl, key, direct }) {
   const sessions = new Map()
   const open = (computer) => {
     if (!sessions.has(computer.id)) {
@@ -19,12 +19,11 @@ export function reacher({ connect, relayUrl, key, legacy }) {
     sessions.delete(id)
   }
   const reach = async ({ computer, path, init }) => {
-    if (!computer.key) return legacy({ computer, path, init })
+    if (!computer.key) return direct({ computer, path, init })
     try {
       return await (await open(computer)).fetch(path, init)
     } catch (error) {
       drop(computer.id)
-      if (computer.url) return legacy({ computer, path, init })
       throw new Error(error?.type === 'offline' ? `${computer.name} is offline.` : `${computer.name} isn't answering.`)
     }
   }

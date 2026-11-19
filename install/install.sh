@@ -18,14 +18,6 @@ die() { printf 'openhut: %s\n' "$*" >&2; exit 1; }
 retry() { n=0; until timeout 600 "$@"; do n=$((n+1)); [ $n -ge 4 ] && return 1; echo "  retrying: $1 ($n)"; sleep 5; done; }
 fetch() { curl -fsSL --retry 4 --retry-all-errors --connect-timeout 15 -m 900 "$1" -o "$2"; }
 check() { printf '%s  %s\n' "$2" "$3" | "$1" -c - >/dev/null || die "checksum mismatch: $3"; }
-serve() {
-  joining && return 0
-  if command -v tailscale >/dev/null 2>&1 && ${SUDO:-} timeout 300 tailscale serve --bg --https=443 http://127.0.0.1:8787 2>&1; then
-    echo "OpenHut is served to your tailnet on port 443."
-  else
-    echo "OpenHut is on 127.0.0.1:8787 only. Next: install Tailscale, sign in, run: tailscale serve --bg --https=443 http://127.0.0.1:8787"
-  fi
-}
 joining() { [ -n "$JOIN_CODE" ]; }
 node_ok() { node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; }
 
@@ -116,8 +108,7 @@ if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
     container openhut:kept
   fi
   $D start openhut >/dev/null
-  $D exec -e OPENHUT_CONTAINER=1 -e "OPENHUT_CLIENT_KEY_SHA256=${OPENHUT_CLIENT_KEY_SHA256:-}" -e "OPENHUT_APP_VERSION=${OPENHUT_APP_VERSION:-}" -e "OPENHUT_JOIN=$JOIN_CODE" openhut sh -c "apk add -q curl && curl -fsSL $OPENHUT_URL | sh" || exit 1
-  [ -n "${OPENHUT_LOCAL:-}" ] || serve
+  printf '%s\n' "$JOIN_CODE" | $D exec -i -e OPENHUT_CONTAINER=1 -e "OPENHUT_CLIENT_KEY_SHA256=${OPENHUT_CLIENT_KEY_SHA256:-}" -e "OPENHUT_APP_VERSION=${OPENHUT_APP_VERSION:-}" openhut sh -c "read -r OPENHUT_JOIN; export OPENHUT_JOIN; apk add -q curl && curl -fsSL $OPENHUT_URL | sh" || exit 1
   exit 0
 fi
 
@@ -144,7 +135,6 @@ if [ "$(cat "$PREFIX/BUILD" 2>/dev/null)" = "$OPENHUT_BUILD" ] && [ -f /etc/open
   up 100 || { printf '\n'; die "OpenHut didn't come back with the new key; see /var/log/openhut"; }
   printf '\n'
   running
-  [ -n "${OPENHUT_CONTAINER:-}" ] || serve
   exit 0
 fi
 case "$(uname -m)" in
@@ -251,4 +241,3 @@ printf '\n'
 docker image inspect "${AGENT_IMAGE:-$(cat "$PREFIX/install/agent-image")}" >/dev/null 2>&1 || echo "The agent image (about 1 GB) is still downloading; agents start once it's done."
 echo "OpenHut sends anonymous usage events to openhut.dev. Turn it off in Settings > General. Details: https://openhut.dev/docs/security"
 running
-[ -n "${OPENHUT_CONTAINER:-}" ] || serve

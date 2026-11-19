@@ -145,7 +145,6 @@ export const phonePlatform: Platform = {
   store: {
     computers: async () => (held?.list.computers ?? []).map((each, index) => ({ id: index ? each.id : 'local', name: fromPhone(each.name), url: '' })),
     add: () => Promise.reject(new Error('Add computers from the OpenHut app on your Mac.')),
-    adopt: () => Promise.reject(new Error('Add computers from the OpenHut app on your Mac.')),
     remove: () => Promise.reject(new Error('Remove computers from the OpenHut app on your Mac.')),
   },
   openUrl: openPage,

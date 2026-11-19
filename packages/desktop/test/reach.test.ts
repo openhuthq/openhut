@@ -19,7 +19,7 @@ async function mac() {
 
 function setup({ relayUrl, keys }: { relayUrl: string; keys: Awaited<ReturnType<typeof mac>> }) {
   const opened: string[] = []
-  const legacy: string[] = []
+  const direct: string[] = []
   const { reach, socket } = reacher({
     relayUrl,
     key: async () => keys.device,
@@ -27,25 +27,25 @@ function setup({ relayUrl, keys }: { relayUrl: string; keys: Awaited<ReturnType<
       opened.push(input.computer.id)
       return connect(input)
     },
-    legacy: async ({ computer, path }: { computer: { name: string }; path: string }) => {
-      legacy.push(`${computer.name} ${path}`)
-      return Response.json({ legacy: true })
+    direct: async ({ computer, path }: { computer: { name: string }; path: string }) => {
+      direct.push(`${computer.name} ${path}`)
+      return Response.json({ direct: true })
     },
   })
-  return { reach, socket, opened, legacy }
+  return { reach, socket, opened, direct }
 }
 
-test('a computer with a relay key is reached through one tunnel session with the Mac\'s device key; one without goes the old way', async () => {
+test('a computer with a relay key is reached through one tunnel session with the Mac\'s device key; one without (this computer\'s own runtime on Linux) is reached directly', async () => {
   const ctx = await startComputer()
   const keys = await mac()
   ctx.statuses.set(keys.self.key, 'client')
-  const { reach, opened, legacy } = setup({ relayUrl: ctx.relay.url, keys })
+  const { reach, opened, direct } = setup({ relayUrl: ctx.relay.url, keys })
   const office = { id: 'a1b2c3d4', name: 'Office', key: ctx.computer.key }
   for (const path of ['/api/agents', '/api/admin']) assert.deepEqual(await (await reach({ computer: office, path, init: {} })).json(), { path, body: '' })
   assert.deepEqual(opened, [ctx.computer.id])
   assert.deepEqual(ctx.handled, ['GET /api/agents', 'GET /api/admin'])
-  assert.deepEqual(await (await reach({ computer: { id: 'beef', name: 'Beelink', url: 'https://beelink.example' }, path: '/api/agents', init: {} })).json(), { legacy: true })
-  assert.deepEqual(legacy, ['Beelink /api/agents'])
+  assert.deepEqual(await (await reach({ computer: { id: 'local', name: 'This computer', url: 'http://127.0.0.1:8787' }, path: '/api/agents', init: {} })).json(), { direct: true })
+  assert.deepEqual(direct, ['This computer /api/agents'])
   ctx.relay.kickComputer()
   await waitFor(async () => {
     const answer = await reach({ computer: office, path: '/api/me', init: {} }).catch(() => undefined)
@@ -56,14 +56,12 @@ test('a computer with a relay key is reached through one tunnel session with the
   await ctx.close()
 })
 
-test('a relay computer that is offline is offline, unless it still has its tailnet address to fall back on', async () => {
+test('a relay computer that is offline is offline', async () => {
   const relay = await startRelay()
   const keys = await mac()
-  const { reach, legacy } = setup({ relayUrl: relay.url, keys })
-  const key = 'cd'.repeat(32)
-  await assert.rejects(reach({ computer: { id: 'x', name: 'Office', key }, path: '/api/admin', init: {} }), /Office is offline/)
-  assert.deepEqual(await (await reach({ computer: { id: 'y', name: 'Beelink', key, url: 'https://beelink.example' }, path: '/api/admin', init: {} })).json(), { legacy: true })
-  assert.deepEqual(legacy, ['Beelink /api/admin'])
+  const { reach, direct } = setup({ relayUrl: relay.url, keys })
+  await assert.rejects(reach({ computer: { id: 'x', name: 'Office', key: 'cd'.repeat(32) }, path: '/api/admin', init: {} }), /Office is offline/)
+  assert.deepEqual(direct, [])
   await relay.close()
 })
 

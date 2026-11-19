@@ -65,11 +65,3 @@ export function useUpdateComputer() {
     onSuccess: () => client.invalidateQueries({ queryKey: COMPUTERS_KEY }),
   })
 }
-
-export function useAdoptComputer() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (input: { name: string; url: string; key: string }) => openhut.computers.adopt(input),
-    onSuccess: () => client.invalidateQueries({ queryKey: COMPUTERS_KEY }),
-  })
-}

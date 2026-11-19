@@ -72,7 +72,6 @@ const LOCAL = { id: 'local', name: MAC ? 'This Mac' : 'This computer', url: CONT
 const LOCAL_KEY = 'keys/local.key'
 const INSTALL_URL = process.env.OPENHUT_INSTALL_URL ?? 'https://openhut.dev'
 const RELAY_URL = process.env.OPENHUT_RELAY_URL ?? 'wss://cloud.openhut.dev'
-const REMOTE_MS = 15_000
 const AUTOSTART = join(app.getPath('appData'), 'autostart/openhut.desktop')
 const DEFAULT_PREFS = { keepAwake: true, notifyReplies: true, notifyFailures: true }
 const CANVAS = '#f4f3f5'
@@ -88,12 +87,12 @@ const { createOpenHut } = await import(pathToFileURL(DEV ? join(ROOT, 'packages/
 const { connect: tunnelTo } = await import(pathToFileURL(DEV ? join(ROOT, 'packages/tunnel/src/index.ts') : join(BACKEND, 'tunnel.mjs')).href)
 const openhut = createOpenHut({
   transport: (computer) => (path, init) => serve(new Request(`${APP_ORIGIN}/c/${computer.id}${path}`, init)),
-  store: { computers: async () => computers(), add: (peer) => enroll({ peer }), adopt, remove: async (id) => { forget({ id }) } },
+  store: { computers: async () => computers(), add: (peer) => enroll({ peer }), remove: async (id) => { forget({ id }) } },
   openUrl: (url) => shell.openExternal(url),
   appVersion: app.getVersion(),
   owner,
 })
-const tunnels = reacher({ connect: tunnelTo, relayUrl: RELAY_URL, key: async () => (await owner()).device, legacy: tailnetFetch })
+const tunnels = reacher({ connect: tunnelTo, relayUrl: RELAY_URL, key: async () => (await owner()).device, direct: keyedFetch })
 const children = new Map()
 const restarts = { agentd: 0, server: 0 }
 const logs = {}
@@ -176,7 +175,6 @@ handle('update.install', () => {
 })
 handle('computers.list', computers)
 handle('computers.add', answer(enroll))
-handle('computers.adopt', answer(adopt))
 handle('computers.remove', answer(forget))
 handle('computers.enrollments', () => [...enrollments.values()])
 handle('computers.dismiss', ({ dns } = {}) => { enrollments.delete(dns); shareEnrollments(); return { dns } })
@@ -193,17 +191,18 @@ function owner() {
   })
 }
 
-async function allow({ id } = {}) {
+async function allow({ id, name } = {}) {
   const path = `/api/invitations/${encodeURIComponent(String(id))}`
   const { status, device } = await api(path)
   if (status === 'expired') throw new Error('This code expired. Make a new one.')
   if (status !== 'joined' || !/^[0-9a-f]{64}$/.test(device?.key ?? '')) throw new Error('Nothing is waiting to join with this code.')
+  const joined = { ...device, name: String(name || device.name) }
   const before = storedComputers()
-  if (device.kind === 'computer') rememberJoined(device)
+  if (joined.kind === 'computer') rememberJoined(joined)
   try {
-    await openhut.access.allow({ name: String(device.name), kind: device.kind === 'computer' ? 'computer' : 'client', key: device.key })
+    await openhut.access.allow({ name: joined.name, kind: joined.kind === 'computer' ? 'computer' : 'client', key: joined.key })
   } catch (err) {
-    if (device.kind === 'computer') writeFileSync(COMPUTERS, JSON.stringify(before, null, 2))
+    if (joined.kind === 'computer') writeFileSync(COMPUTERS, JSON.stringify(before, null, 2))
     throw err
   }
   return api(path)
@@ -213,14 +212,6 @@ function rememberJoined({ name, key }) {
   const stored = storedComputers()
   const id = stored.find((each) => each.key === key)?.id ?? randomBytes(4).toString('hex')
   writeFileSync(COMPUTERS, JSON.stringify([...stored.filter((each) => each.key !== key), { id, name: String(name), key }], null, 2))
-}
-
-async function moveToRelay(list) {
-  for (const computer of storedComputers().filter((each) => each.url && !each.key)) {
-    const admin = await answerOf({ computer: computer.id, path: '/api/admin' }).catch(() => undefined)
-    if (!admin?.relay?.key || !list?.computers.some((each) => each.key === admin.relay.key)) continue
-    writeFileSync(COMPUTERS, JSON.stringify(storedComputers().map((each) => each.id === computer.id ? { ...each, key: admin.relay.key } : each), null, 2))
-  }
 }
 
 function answer(fn) {
@@ -244,44 +235,13 @@ async function keyOf(computer) {
   return keys.get(computer.id)
 }
 
-async function remember({ name, url, key }) {
-  const others = storedComputers().filter((each) => each.url !== url)
-  const id = storedComputers().find((each) => each.url === url)?.id ?? randomBytes(4).toString('hex')
-  const keyFile = `keys/${id}.key`
-  mkdirSync(join(HOME, 'keys'), { recursive: true, mode: 0o700 })
-  writeFileSync(join(HOME, keyFile), await safeStorage.encryptStringAsync(key), { mode: 0o600 })
-  keys.set(id, key)
-  writeFileSync(COMPUTERS, JSON.stringify([...others, { id, name, url, keyFile }], null, 2))
-  return { id, name, url }
-}
-
 function forget({ id } = {}) {
   const computer = storedComputers().find((each) => each.id === id)
   if (!computer) throw new Error(id === LOCAL.id ? `${LOCAL.name} always stays in the list.` : 'That computer isn\'t in the list.')
   writeFileSync(COMPUTERS, JSON.stringify(storedComputers().filter((each) => each.id !== id), null, 2))
-  if (computer.keyFile) rmSync(join(HOME, computer.keyFile), { force: true })
   keys.delete(id)
   tunnels.drop(id)
   return { id, deleted: true }
-}
-
-function remote({ url, key, path, method = 'GET', body }) {
-  return fetch(`${url}${path}`, { method, headers: { authorization: `Bearer ${key}`, ...(body && { 'content-type': 'application/json' }) }, body: body && JSON.stringify(body), signal: AbortSignal.timeout(REMOTE_MS) })
-}
-
-function originOf(url) {
-  const parsed = new URL(String(url))
-  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && parsed.hostname === '127.0.0.1')) throw new Error('Use the https:// address the computer is served on.')
-  return parsed.origin
-}
-
-async function adopt({ name, url, key } = {}) {
-  if (!String(name ?? '').trim() || !/^\S{16,200}$/.test(String(key ?? ''))) throw new Error('Name the computer and paste the key it was installed with.')
-  const origin = originOf(url)
-  const res = await remote({ url: origin, key, path: '/api/me' }).catch(() => undefined)
-  if (!res) throw new Error(`Couldn't reach ${origin}. Check that it's on and on your tailnet.`)
-  if (!res.ok) throw new Error(`${origin} didn't accept that key (it answered ${res.status}).`)
-  return remember({ name: String(name).trim(), url: origin, key })
 }
 
 const enrollments = new Map()
@@ -321,22 +281,24 @@ async function install({ peer, dns, entry }) {
     entry.url = /https:\/\/login\.tailscale\.com\/\S+/.exec(line)?.[0] ?? entry.url
     shareEnrollments()
   }
-  const key = randomBytes(32).toString('hex')
-  const hash = createHash('sha256').update(key).digest('hex')
+  const name = peer.name || dns
+  const invitation = await api('/api/invitations', { method: 'POST' })
+  const path = `/api/invitations/${encodeURIComponent(invitation.id)}`
   say(`Installing OpenHut on ${dns} over Tailscale SSH`)
-  await tailscaleSsh({ args: ['ssh', `root@${dns}`, `curl -fsSL '${INSTALL_URL}' | OPENHUT_CLIENT_KEY_SHA256=${hash} OPENHUT_APP_VERSION=${app.getVersion()} sh`], say })
-  const url = `https://${dns}`
-  say(`Waiting for ${url} to answer`)
-  if (!await waitFor(async () => (await remote({ url, key, path: '/api/me' })).ok, 120)) throw new Error(`OpenHut is installed, but ${url} didn't answer within 2 minutes.`)
-  const set = await remote({ url, key, path: '/api/admin', method: 'PATCH', body: { tailnetUrl: url } })
-  if (!set.ok) throw new Error(`${url} didn't take its address (it answered ${set.status}).`)
-  say(`${peer.name || dns} is ready`)
-  return remember({ name: peer.name || dns, url, key })
+  await tailscaleSsh({ args: ['ssh', `root@${dns}`, `read -r code; curl -fsSL '${INSTALL_URL}' | OPENHUT_JOIN="$code" OPENHUT_APP_VERSION=${app.getVersion()} sh`], input: `${invitation.code}\n`, say })
+  say(`Waiting for ${name} to join`)
+  if (!await waitFor(async () => (await api(path)).status !== 'waiting', 120)) throw new Error(`OpenHut is installed, but ${name} didn't answer within 2 minutes.`)
+  const { device } = await api(path)
+  if (device?.kind !== 'computer') throw new Error(`Something other than ${name} used its join code.`)
+  await allow({ id: invitation.id, name })
+  say(`${name} is ready`)
+  return { id: storedComputers().find((each) => each.key === device.key)?.id, name, url: '' }
 }
 
-function tailscaleSsh({ args, say }) {
+function tailscaleSsh({ args, input, say }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(TAILSCALE, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(TAILSCALE, args, { stdio: ['pipe', 'pipe', 'pipe'] })
+    child.stdin.end(input)
     let last = ''
     for (const stream of [child.stdout, child.stderr]) {
       let rest = ''
@@ -405,8 +367,7 @@ function agentd(ask) {
 }
 
 async function poll() {
-  const [agents, list, signed] = await Promise.all([openhut.agents.list(), openhut.computers.list(), openhut.access.sync().catch(() => undefined)])
-  await moveToRelay(signed)
+  const [agents, list] = await Promise.all([openhut.agents.list(), openhut.computers.list(), openhut.access.sync().catch(() => undefined)])
   const wants = prefs()
   keepAwake(wants.keepAwake && agents.some((agent) => agent.computer === LOCAL.id && agent.status === 'running'))
   for (const agent of agents.filter((each) => each.online)) {
@@ -675,7 +636,7 @@ async function bootContainer() {
   const key = randomBytes(32).toString('hex')
   const script = await (await fetch(INSTALL_URL, { signal: AbortSignal.timeout(60_000) })).text()
   const log = createWriteStream(join(LOGS, 'install.log'), { flags: 'a' })
-  const env = { ...process.env, OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update(key).digest('hex'), OPENHUT_APP_VERSION: app.getVersion(), OPENHUT_LOCAL: '1' }
+  const env = { ...process.env, OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update(key).digest('hex'), OPENHUT_APP_VERSION: app.getVersion() }
   const child = spawn('sh', ['-s'], { env, stdio: ['pipe', 'pipe', 'pipe'] })
   for (const stream of [child.stdout, child.stderr]) stream.pipe(log, { end: false })
   child.stdin.end(script)
@@ -924,13 +885,13 @@ async function toComputer({ req, id, path }) {
   headers.set('openhut-app-version', updating.ready?.version || app.getVersion())
   const body = computer.key && !['GET', 'HEAD'].includes(req.method) ? await req.arrayBuffer() : req.body
   const res = await tunnels.reach({ computer, path: target, init: { method: req.method, headers, body } }).catch(() => undefined)
-  if (!res) return refuse(502, computer.url ? `${computer.name} isn't answering. It may be off or off your tailnet.` : `${computer.name} isn't answering. It may be off.`)
+  if (!res) return refuse(502, `${computer.name} isn't answering. It may be off.`)
   const out = new Headers(res.headers)
   for (const name of ['content-encoding', 'content-length', 'transfer-encoding', 'connection']) out.delete(name)
   return new Response([204, 304].includes(res.status) ? null : res.body, { status: res.status, headers: out })
 }
 
-async function tailnetFetch({ computer, path, init }) {
+async function keyedFetch({ computer, path, init }) {
   const headers = new Headers(init.headers)
   headers.set('authorization', `Bearer ${await keyOf(computer)}`)
   return fetch(`${computer.url}${path}`, { ...init, headers, duplex: 'half', redirect: 'manual' })
@@ -959,10 +920,7 @@ async function liveSocket(path) {
   if (id === LOCAL.id && !CONTAINER) return new WebSocket(`ws://localhost${target}`, { createConnection: () => connect(SERVER_SOCK) })
   const computer = id === LOCAL.id ? { ...LOCAL, keyFile: LOCAL_KEY } : storedComputers().find((each) => each.id === id)
   if (!computer) return undefined
-  if (computer.key) {
-    const tunneled = await tunnels.socket({ computer, path: target }).catch((error) => { if (!computer.url) throw error })
-    if (tunneled) return tunneled
-  }
+  if (computer.key) return tunnels.socket({ computer, path: target })
   return new WebSocket(`${computer.url.replace(/^http/, 'ws')}${target}`, { headers: { authorization: `Bearer ${await keyOf(computer)}`, 'openhut-app-version': app.getVersion() } })
 }
 
