@@ -4,31 +4,48 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      full:
+        description: Also notarize and run the update test (always on for a tag)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   actions: write
 
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
-  claude:
+  draft:
     runs-on: ubuntu-latest
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: The tag has a draft release for every job to upload into
+        if: startsWith(github.ref, 'refs/tags/')
+        run: gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --title "OpenHut ${GITHUB_REF_NAME#v}" --notes ""
+
+  checks:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: The pinned Linux claude the apps download on first run is on dl.openhut.dev
-        run: scripts/r2.sh claude
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx turbo run typecheck test
 
   release:
-    needs: claude
+    needs: draft
     runs-on: macos-15
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAGGED: ${{ startsWith(github.ref, 'refs/tags/') }}
+      FULL: ${{ startsWith(github.ref, 'refs/tags/') || inputs.full }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -66,7 +83,12 @@ jobs:
           fi
       - run: npm ci --no-audit --no-fund
       - uses: astral-sh/setup-uv@v6
-      - run: npx turbo run typecheck test
+      - uses: actions/cache@v4
+        with:
+          path: |
+            packages/desktop/dist/hermes-cache
+            packages/desktop/dist/claude-cache
+          key: native-runtime-${{ runner.os }}-${{ hashFiles('install/native-runtime.json', 'packages/desktop/scripts/pack-hermes.mjs') }}
       - name: Build and sign
         working-directory: packages/desktop
         env:
@@ -74,6 +96,7 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: npm run build && npm run pack-backend && npx electron-builder --mac --arm64 --publish never
       - name: Notarize, staple and check Gatekeeper
+        if: env.FULL == 'true'
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
@@ -82,6 +105,7 @@ jobs:
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: packages/desktop/scripts/notarize.sh
       - name: Signed so the release before it accepts it
+        if: env.FULL == 'true'
         working-directory: packages/desktop
         run: |
           mkdir -p previous/zip previous/app
@@ -92,6 +116,7 @@ jobs:
           mkdir -p shipped && ditto -x -k release/OpenHut-*-arm64.zip shipped
           for app in release/mac-arm64/OpenHut.app shipped/OpenHut.app; do codesign --verify --deep --strict -R "=$requirement" "$app"; done
       - name: The previous version updates to this one
+        if: env.FULL == 'true'
         working-directory: packages/desktop
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
@@ -125,7 +150,7 @@ jobs:
         run: scripts/compat.sh "$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
 
   windows:
-    needs: claude
+    needs: draft
     runs-on: windows-2022
     timeout-minutes: 60
     env:
@@ -139,6 +164,12 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - uses: astral-sh/setup-uv@v6
+      - uses: actions/cache@v4
+        with:
+          path: |
+            packages/desktop/dist/hermes-cache
+            packages/desktop/dist/claude-cache
+          key: native-runtime-${{ runner.os }}-${{ hashFiles('install/native-runtime.json', 'packages/desktop/scripts/pack-hermes.mjs') }}
       - name: Build the installer
         working-directory: packages/desktop
         run: npm run dist:win
@@ -170,7 +201,7 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" OpenHut-Setup-x64.exe OpenHut-Setup-x64.exe.blockmap latest.yml --clobber
 
   linux:
-    needs: [release, compat, windows]
+    needs: draft
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -191,6 +222,16 @@ jobs:
           BUILD="${GITHUB_REF_NAME#v}" TGZ="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/openhut.tgz" scripts/release.sh
           sh -n dist/install.sh
           gh release upload "$GITHUB_REF_NAME" dist/install.sh dist/openhut.tgz --clobber
+
+  publish:
+    needs: [checks, release, compat, windows, linux]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAGGED: ${{ startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - uses: actions/checkout@v5
       - name: Every file is there, then put them on dl.openhut.dev and publish the release
         if: env.TAGGED == 'true'
         env:
