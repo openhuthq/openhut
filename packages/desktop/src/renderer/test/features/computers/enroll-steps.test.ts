@@ -37,6 +37,7 @@ test('the percentage moves within a phase: one step per installer line, then wit
   assert.equal(percentOf({ lines: Array(40).fill('==> step'), now }), 74)
   const waiting = ['==> Starting', 'Waiting for box to join']
   assert.equal(percentOf({ lines: waiting, waitingAt: now, now }), 92)
+  assert.equal(percentOf({ lines: waiting, waitingAt: now + 900, now }), 92)
   assert.equal(percentOf({ lines: waiting, waitingAt: now - 60_000, now }), 95)
   assert.equal(percentOf({ lines: waiting, waitingAt: now - 600_000, now }), 99)
 })

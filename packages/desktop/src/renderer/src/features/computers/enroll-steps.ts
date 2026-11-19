@@ -42,7 +42,7 @@ export function percentOf({ lines, waitingAt, now }: { lines: string[]; waitingA
   const phase = phaseOf(lines)
   const at = STAGES[phase].at
   if (phase === 'Installing…') return Math.min(74, at + 3 * lines.map(clean).filter((line) => /^==>/.test(line)).length)
-  if (phase === 'Almost ready…' && waitingAt) return Math.min(99, at + Math.floor(7 * (now - waitingAt) / WAIT_MS))
+  if (phase === 'Almost ready…' && waitingAt) return Math.min(99, at + Math.floor(7 * Math.max(0, now - waitingAt) / WAIT_MS))
   return at
 }
 
