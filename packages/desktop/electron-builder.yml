@@ -2,7 +2,7 @@ appId: dev.openhut.app
 productName: OpenHut
 copyright: Copyright © 2026 OpenHut
 directories: { buildResources: build, output: release }
-files: [src/main.mjs, src/mcp-bridge.mjs, src/owner-keys.mjs, src/reach.mjs, src/preload.cjs, "src/trayTemplate*.png", dist/renderer/**, package.json]
+files: [src/main.mjs, src/mcp-bridge.mjs, src/mcp-fan-out.mjs, src/owner-keys.mjs, src/reach.mjs, src/preload.cjs, "src/trayTemplate*.png", dist/renderer/**, package.json]
 asar: true
 electronLanguages: en-US
 npmRebuild: false

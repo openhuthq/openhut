@@ -9,14 +9,14 @@ icon: growth
 
 ### Copy the command
 
-**Settings › MCP**. There's one command per computer: `openhut` for this Mac, and `openhut-<name>` for each computer you added.
+**Settings › MCP**. Copy the Claude Code or Codex command, or click **Add to Cursor**. There's one MCP, `openhut`, for this Mac and every computer you added.
 
 </Step>
 <Step>
 
 ### Run it once
 
-Paste it in your terminal. It adds OpenHut to Claude Code. There's no token and no sign-in: it runs the app's local bridge.
+Paste it in your terminal. There's no token and no sign-in: it runs the app's local bridge.
 
 </Step>
 <Step>
@@ -24,14 +24,12 @@ Paste it in your terminal. It adds OpenHut to Claude Code. There's no token and 
 ### Ask
 
 ```txt
-Make a Support agent that answers in #support and can read the Orders DB.
+Make a Support agent on hermes-agents that answers in #support and can read the Orders DB.
 ```
 
 </Step>
 </Steps>
 
-## Other MCP apps
+## Every computer
 
-**Other apps › Copy path** copies the bridge. Add it to your app as a stdio server. For another computer, add `--computer <id>` after the path, as in its Claude Code command.
-
-The commands for added computers go through this Mac, so they work while OpenHut is open here. Their keys never leave the app.
+Each tool takes an optional `computer`: a name or id from `list_computers`. Leave it out and the tool runs on this Mac. Calls to other computers go through this Mac, so they work while OpenHut is open here. Their keys never leave the app.
