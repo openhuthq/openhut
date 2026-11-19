@@ -24,12 +24,12 @@ import { DRAG, Dots, I, ICON_BUTTON } from '@/components/kit'
 import { SidebarContext } from '@/features/agents/sidebar'
 import { agentState } from '@/components/status-badge'
 import { useAgents, useUpdateAgent } from '@/features/agents/api'
-import { Face, lookOf } from '@/features/agents/face'
+import { Face } from '@/features/agents/face'
 import { deleteUpload, saveFile, threadPath, uploadFile, useAgentThread, useClearChat, useHomeFiles, useThumb, useTouchThread } from '@/features/threads/api'
 import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
 import { ConfirmIcon } from '@/components/confirm-button'
 import { attachCalls, kindOf, stepsOf, type Step } from '@/features/threads/steps'
-import { AgentColor, CardReply, MessageCard } from '@/features/threads/card'
+import { CardReply, MessageCard } from '@/features/threads/card'
 import { copyText } from '@/lib/clipboard'
 import { openhut } from '@/lib/openhut'
 import { toast, toastError } from '@/lib/toast'
@@ -276,7 +276,7 @@ function AgentReply({ agent, message, live }: { agent: Agent; message: AgentMess
     <CopyMenu text={textOf(message)}><div className="flex min-w-0 flex-col gap-2 pt-1.5 pointer-coarse:select-none">
       {blocks.map((block, index) => {
         if (block.type === 'text') return <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode }}>{block.text}</Markdown></div>
-        if (block.type === 'card') return hasSpec && <AgentColor key={index} body={lookOf(agent).body}><MessageCard spec={spec} loading={live} /></AgentColor>
+        if (block.type === 'card') return hasSpec && <MessageCard key={index} spec={spec} loading={live} />
         return <Steps key={index} steps={block.steps} live={live && index === blocks.length - 1} />
       })}
       {live && !blocks.length && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
