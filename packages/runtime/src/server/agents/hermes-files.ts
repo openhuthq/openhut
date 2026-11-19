@@ -1,16 +1,18 @@
 import type { Audience, ChannelKind } from '@openhut/common/channels/channel.ts'
+import { CARD_PROMPT } from '@openhut/common/cards/card.ts'
 import type { AgentFiles } from '../platform/agentd.ts'
 import { config } from '../platform/config.ts'
 import { agentSubnet } from '../platform/network.ts'
 import { slack } from '../integrations/slack/slack.ts'
 import { telegram } from '../integrations/telegram/telegram.ts'
 import { whatsapp } from '../integrations/whatsapp/whatsapp.ts'
-import { providers, type Route } from '../models/providers/index.ts'
+import { providers, type Route, type Setup } from '../models/providers/index.ts'
 import type { Slot, Slots } from '../models/model-slots.ts'
 
 const AUXILIARY: [keyof Slots['helpers'], string][] = [['approval', 'approval'], ['compress', 'compression'], ['title', 'title_generation'], ['review', 'background_review']]
 const EMPTY_AUTH = { version: 1, providers: {} }
 const PLAIN = /^[\w./-]+$/
+const CARDS_PLUGIN = 'openhut-ui'
 const BROWSER_NOTE = `
 ## Web browser
 
@@ -44,16 +46,22 @@ export function renderFiles({ agent, ownerName, token, channelKey, channels, con
     'approvals:\n  mode: "off"',
     'platform_toolsets:\n  api_server: [hermes-api-server, openhut]',
     'tools:\n  tool_search:\n    enabled: "off"',
+    pluginsYaml(setups),
     `mcp_servers:\n  openhut:\n    url: ${gateway}/api/v1/mcp\n    headers:\n      Authorization: "Agent ${token}"`,
     ...channels.map((channel) => yamlOf({ channel, gateway })),
   ].join('\n') + '\n'
   const env = [
-    `API_SERVER_KEY=${channelKey}`, 'API_SERVER_HOST=0.0.0.0', 'API_SERVER_PORT=8642',
+    `API_SERVER_KEY=${channelKey}`, 'API_SERVER_HOST=0.0.0.0', 'API_SERVER_PORT=8642', `OPENHUT_GATEWAY=${gateway}`, `OPENHUT_AGENT_TOKEN=${token}`,
     ...(config.modelMode === 'test' ? [] : setups.flatMap((setup) => setup.env)),
     ...channels.flatMap((channel) => envOf({ channel, token })),
   ].join('\n') + '\n'
   const auth = config.modelMode === 'claude' ? setups.find((setup) => setup.auth)?.auth ?? EMPTY_AUTH : EMPTY_AUTH
-  return { 'config.yaml': yaml, '.env': env, 'SOUL.md': `${agent.instructions}\n${connectedApps(connections)}${agent.web_browser ? BROWSER_NOTE : ''}`, 'auth.json': `${JSON.stringify(auth)}\n` }
+  return { 'config.yaml': yaml, '.env': env, 'SOUL.md': `${agent.instructions}\n${connectedApps(connections)}${agent.web_browser ? BROWSER_NOTE : ''}${CARD_PROMPT}`, 'auth.json': `${JSON.stringify(auth)}\n` }
+}
+
+function pluginsYaml(setups: Setup[]): string {
+  const settings = setups.flatMap((setup) => Object.entries(setup.pluginSettings ?? {})).map(([name, values]) => `    ${name}:\n      settings:\n${Object.entries(values).map(([key, value]) => `        ${key}: ${scalar(value)}`).join('\n')}`)
+  return [`plugins:\n  enabled: [${CARDS_PLUGIN}]\n  entries:\n    ${CARDS_PLUGIN}:\n      allow_gateway_injection: true`, ...settings].join('\n')
 }
 
 function connectedApps(connections: { name: string; kind: string }[]): string {

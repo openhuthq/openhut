@@ -1,0 +1,6 @@
+name: openhut-ui
+version: 1.0.0
+description: "OpenHut cards: a reply's ```spec card goes to Slack as Block Kit and to other chats as text; card buttons answer the agent."
+author: OpenHut
+provides_hooks:
+  - transform_llm_output

@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { CARD_PROMPT } from '@openhut/common/cards/card.ts'
 import { renderFiles, type RenderedChannel } from '../../../src/server/agents/hermes-files.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { resolveSlots } from '../../../src/server/models/model-slots.ts'
@@ -55,7 +56,8 @@ test('Claude mode: the seat plugin is the model, haiku does side tasks, and the 
   const files = renderFiles({ agent, ownerName: 'owner', token: 'ag_chantest.token', channelKey: 'k'.repeat(32), channels: [], connections: [] })
   assert.match(files['config.yaml'], /model:\n {2}default: sonnet\n {2}provider: claude-subscription-directsdk-experimental\n/)
   for (const task of ['approval', 'compression', 'title_generation', 'background_review']) assert.match(files['config.yaml'], new RegExp(`  ${task}:\\n {4}model: haiku\\n {4}provider: claude-subscription-directsdk-experimental\\n`))
-  assert.match(files['config.yaml'], /plugins:\n {2}entries:\n {4}claude-subscription-directsdk-experimental:\n {6}settings:\n {8}relay_upstream: http:\/\/10\.200\.3\.1:8081\/u\/anthropic\n/)
+  assert.match(files['config.yaml'], /plugins:\n {2}enabled: \[openhut-ui\]\n {2}entries:\n {4}openhut-ui:\n {6}allow_gateway_injection: true\n {4}claude-subscription-directsdk-experimental:\n {6}settings:\n {8}relay_upstream: "http:\/\/10\.200\.3\.1:8081\/u\/anthropic"\n/)
+  assert.equal(files['config.yaml'].match(/^plugins:/gm)?.length, 1)
   assert.doesNotMatch(files['config.yaml'], /test-llm|fallback_providers/)
   assert.match(files['.env'], /^CLAUDE_CODE_OAUTH_TOKEN=ag_chantest\.token$/m)
   assert.doesNotMatch(Object.values(files).join('\n'), /sk-ant/)
@@ -92,7 +94,7 @@ test('a helper on another provider gets that provider\'s setup, and there is no 
   t.after(() => { config.modelMode = 'test' })
   const files = renderFiles({ agent: { ...agent, slots: slots({ model: 'openai:gpt-5.5', helpers: { compress: 'claude:haiku' } }) }, ownerName: 'owner', token: 'ag_chantest.token', channelKey: 'k'.repeat(32), channels: [], connections: [] })
   assert.doesNotMatch(files['config.yaml'], /fallback_providers/)
-  assert.match(files['config.yaml'], /relay_upstream: http:\/\/10\.200\.3\.1:8081\/u\/anthropic/)
+  assert.match(files['config.yaml'], /relay_upstream: "http:\/\/10\.200\.3\.1:8081\/u\/anthropic"/)
   assert.match(files['.env'], /^CLAUDE_CODE_OAUTH_TOKEN=ag_chantest\.token$/m)
 })
 
@@ -136,10 +138,10 @@ test('Telegram open to anyone: everyone allowed', () => {
   assert.doesNotMatch(files['.env'], /TELEGRAM_ALLOWED_USERS/)
 })
 
-test('SOUL.md names the connected apps in one line, and stays the instructions alone when there are none', () => {
-  assert.equal(render([])['SOUL.md'], '# Dev\n')
+test('SOUL.md names the connected apps in one line, and adds only the card guide when there are none', () => {
+  assert.equal(render([])['SOUL.md'], `# Dev\n${CARD_PROMPT}`)
   const files = renderFiles({ agent, ownerName: 'owner', token: 't', channelKey: 'k'.repeat(32), channels: [], connections: [{ name: 'Excalidraw', kind: 'excalidraw' }, { name: 'Orders\nDB', kind: 'postgres' }] })
-  assert.equal(files['SOUL.md'], '# Dev\n\n## Connected apps\n\nThe openhut tools reach: Excalidraw, Orders DB (postgres). Call list_tools to see what each one does, and use it before doing the same work by hand.\n')
+  assert.equal(files['SOUL.md'], `# Dev\n\n## Connected apps\n\nThe openhut tools reach: Excalidraw, Orders DB (postgres). Call list_tools to see what each one does, and use it before doing the same work by hand.\n${CARD_PROMPT}`)
 })
 
 test('the gateway is the agent\'s subnet address, or the agent gateway when one is set', (t) => {

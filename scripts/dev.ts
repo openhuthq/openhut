@@ -66,6 +66,21 @@ mkdirSync(BIN, { recursive: true })
 writeFileSync(`${BIN}/tailscale`, TAILSCALE, { mode: 0o755 })
 rmSync(SOCK, { force: true })
 
+const DEMO_CARD = [
+  { op: 'add', path: '/root', value: 'card' },
+  { op: 'add', path: '/elements/card', value: { type: 'Card', props: { title: 'Deploy #142 is ready', subtitle: 'billing-api · a41c9e2' }, children: ['facts', 'latency', 'checks', 'acts'] } },
+  { op: 'add', path: '/elements/facts', value: { type: 'Fields', props: {}, children: ['f1', 'f2', 'f3'] } },
+  { op: 'add', path: '/elements/f1', value: { type: 'Field', props: { label: 'Tests', value: '312 passed' } } },
+  { op: 'add', path: '/elements/f2', value: { type: 'Field', props: { label: 'Author', value: 'Dana' } } },
+  { op: 'add', path: '/elements/f3', value: { type: 'Field', props: { label: 'Size', value: '+214 −38' } } },
+  { op: 'add', path: '/elements/latency', value: { type: 'Chart', props: { title: 'p95 latency (ms)', labels: ['staging', 'canary', 'prod'], values: [182, 176, 210] } } },
+  { op: 'add', path: '/elements/checks', value: { type: 'Table', props: { headers: ['Check', 'Result'], rows: [['Migrations', 'none'], ['Error rate', '0.02%']] } } },
+  { op: 'add', path: '/elements/acts', value: { type: 'Actions', props: {}, children: ['ok', 'no', 'logs'] } },
+  { op: 'add', path: '/elements/ok', value: { type: 'Button', props: { id: 'approve', label: 'Approve', style: 'primary' } } },
+  { op: 'add', path: '/elements/no', value: { type: 'Button', props: { id: 'reject', label: 'Reject' } } },
+  { op: 'add', path: '/elements/logs', value: { type: 'LinkButton', props: { label: 'Logs', url: 'https://example.com/ci/142' } } },
+]
+
 createServer((req, res) => {
   let raw = ''
   req.on('data', (chunk) => { raw += chunk })
@@ -86,6 +101,17 @@ createServer((req, res) => {
       await say('Running that query. ')
       res.write('event: hermes.tool.progress\ndata: {"tool":"call_tool","label":"postgres_query"}\n\n')
       await sleep(600)
+    }
+    if (/^card/i.test(last)) {
+      await say('Deploy #142 passed every check. ')
+      res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: '\n\n```spec\n' } }] })}\n\n`)
+      for (const line of DEMO_CARD) {
+        res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: `${JSON.stringify(line)}\n` } }] })}\n\n`)
+        await sleep(150)
+      }
+      res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: '```\n\n' } }] })}\n\n`)
+      await say('Approve and I\'ll roll it out.')
+      return res.end('data: [DONE]\n\n')
     }
     if (/^file:/i.test(last)) {
       for (const id of readdirSync(`${AGENTD_DATA}/agents`)) {

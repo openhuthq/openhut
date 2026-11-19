@@ -1,6 +1,7 @@
 import * as z from 'zod/mini'
 import type { Conversation } from '@openhut/common/channels/channel.ts'
 import { config } from '../../platform/config.ts'
+import { log } from '../../platform/events.ts'
 import { HttpError, messageOf } from '../../platform/http-error.ts'
 
 const Failure = z.object({ ok: z.literal(false), error: z.string() })
@@ -62,6 +63,12 @@ export const slack = {
       if (!sent.ok) failed.push(`${id}: ${sent.error}`)
     }
     return failed
+  },
+
+  async postCard({ botToken, channel, threadTs, blocks, text }: { botToken: string; channel: string; threadTs?: string; blocks: object[]; text: string }): Promise<boolean> {
+    const sent = await call({ method: 'chat.postMessage', token: botToken, params: { channel, text, blocks: JSON.stringify(blocks), ...(threadTs && { thread_ts: threadTs }) }, schema: Ok })
+    if (!sent.ok) log.warn({ event: 'slack.card_refused', error: sent.error })
+    return sent.ok
   },
 
   env({ botToken, appToken, channels }: { botToken: string; appToken: string; channels: string[] }): string[] {

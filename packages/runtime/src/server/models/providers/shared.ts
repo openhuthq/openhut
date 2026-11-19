@@ -10,7 +10,7 @@ const KEYED_PATHS = new Set(['POST /v1/chat/completions', 'POST /v1/responses', 
 
 export type ListedModel = { id: string; name: string; note: string | null; contextLength: number | null; inputPrice: number | null; outputPrice: number | null; created: number | null }
 export type Route = { provider: string; model: string; baseUrl?: string; apiKey?: string; contextLength?: number | null }
-export type Setup = { env: string[]; yaml: string; auth?: object }
+export type Setup = { env: string[]; yaml: string; auth?: object; pluginSettings?: Record<string, Record<string, string>> }
 export type Provider = {
   id: ProviderId
   seed: ListedModel[]

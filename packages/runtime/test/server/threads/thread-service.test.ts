@@ -17,6 +17,7 @@ await db.insertInto('person').values([
 ]).execute()
 await db.insertInto('agent').values([
   { id: 'ag_chatrunn', name: 'Runner', owner_id: 'usr_chatownr', instructions: '# Runner', model: 'sonnet', net: 21, channel_key: seal('k'.repeat(48)), wanted: 'running' },
+  { id: 'ag_chatcard', name: 'Carder', owner_id: 'usr_chatownr', instructions: '# Carder', model: 'sonnet', net: 23, channel_key: seal('k'.repeat(48)), wanted: 'running' },
   { id: 'ag_chatstop', name: 'Sleeper', owner_id: 'usr_chatownr', instructions: '# Sleeper', model: 'sonnet', net: 22, channel_key: seal('k'.repeat(48)) },
 ]).execute()
 
@@ -36,6 +37,7 @@ const hermes = createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'text/event-stream' })
     if (seen.body?.messages.at(-1)?.content === 'model down') return res.end(`data: ${JSON.stringify({ error: { message: 'HTTP 401: Claude Code is installed but has no usable login' } })}\n\n`)
     const chunk = (content: string) => `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content } }] })}\n\n`
+    if (seen.body?.messages.at(-1)?.content === 'card') return res.end(`${['Deploy is ready.\n\n```spec\n{"op":"add","path":"/root","value":"c"}\n', '{"op":"add","path":"/elements/c","value":{"type":"Card","props":{"title":"Deploy"}}}\n', '```\n\nApprove?'].map(chunk).join('')}data: [DONE]\n\n`)
     res.end(`: keepalive\n\n${chunk('Let me ')}${chunk('check.')}event: hermes.tool.progress\ndata: {"tool":"call_tool","label":"postgres_query"}\n\n${chunk('214 orders.')}data: [DONE]\n\n`)
   })
 })
@@ -66,12 +68,25 @@ test('a turn streams the agent\'s reply in order, with its tool use and gateway 
   assert.match(String(seen.body?.messages[0].content), /saved in \/opt\/data\/home\/uploads/)
   assert.equal(seen.body?.stream, true)
   const types = res.body.split('\n\n').filter((line) => line.startsWith('data: {')).map((line) => JSON.parse(line.slice(6)).type)
-  assert.deepEqual(types, ['start', 'text-start', 'text-delta', 'text-delta', 'text-end', 'data-tool', 'text-start', 'text-delta', 'text-end', 'data-calls', 'finish'])
+  assert.deepEqual(types, ['start', 'text-start', 'text-delta', 'text-end', 'data-tool', 'text-start', 'text-delta', 'text-end', 'data-calls', 'finish'])
   const saved = (await app.inject({ method: 'GET', url: `/api/threads/${thread.id}`, headers: as() })).json()
   assert.deepEqual(saved.messages.map((message: { role: string }) => message.role), ['user', 'assistant'])
   const answer = saved.messages[1].parts
   assert.deepEqual(answer.filter((part: { type: string }) => part.type === 'text').map((part: { text: string }) => part.text), ['Let me check.', '214 orders.'])
   assert.deepEqual(answer.find((part: { type: string }) => part.type === 'data-calls').data, [{ tool: 'postgres_query', connectionName: null, outcome: 'allowed', reason: 'count orders', ms: 12 }])
+})
+
+test('a card in the reply streams as spec parts and is saved as one card beside the text', async () => {
+  const thread = await newThread('ag_chatcard')
+  const res = await say(thread.id, 'card')
+  const chunks = res.body.split('\n\n').filter((line) => line.startsWith('data: {')).map((line) => JSON.parse(line.slice(6)))
+  assert.equal(chunks.filter((chunk) => chunk.type === 'data-spec').length, 2)
+  assert.doesNotMatch(chunks.filter((chunk) => chunk.type === 'text-delta').map((chunk) => chunk.delta).join(''), /```spec|"op"/)
+  const answer = (await app.inject({ method: 'GET', url: `/api/threads/${thread.id}`, headers: as() })).json().messages.at(-1).parts
+  assert.deepEqual(answer.filter((part: { type: string }) => part.type === 'data-spec'), [{ type: 'data-spec', data: { type: 'flat', spec: { root: 'c', elements: { c: { type: 'Card', props: { title: 'Deploy' } } } } } }])
+  assert.deepEqual(answer.map((part: { type: string }) => part.type), ['text', 'data-spec', 'text'])
+  assert.match(answer[0].text, /Deploy is ready\./)
+  assert.match(answer[2].text, /Approve\?/)
 })
 
 test('each person has one thread per agent, and Hermes keeps its history: a turn sends only the new message', async () => {
