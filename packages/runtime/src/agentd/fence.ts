@@ -13,8 +13,8 @@ const FENCE_NET = 0
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
 const PROBE_SECONDS = 6
 const TIMEOUT_MS = 30_000
-const HOST = { gvisor: `10.200.${FENCE_NET}.1`, microsandbox: 'host.microsandbox.internal', native: '127.0.0.1' }
-const LISTEN = { gvisor: '0.0.0.0', microsandbox: '127.0.0.1', native: '127.0.0.1' }
+const HOST = { gvisor: `10.200.${FENCE_NET}.1`, native: '127.0.0.1' }
+const LISTEN = { gvisor: '0.0.0.0', native: '127.0.0.1' }
 const STATUS = / =>(\d{3})\s*$/
 const CURL_ERROR = /curl: \(\d+\)[^=]*/
 const POLICY_DENIED = 'network_policy_denied'

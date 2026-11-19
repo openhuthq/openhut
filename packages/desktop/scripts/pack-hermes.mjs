@@ -30,7 +30,7 @@ export async function packHermes(out) {
   if (!existsSync(join(cache, 'hermes.py'))) await build(cache)
   rmSync(out, { recursive: true, force: true })
   cpSync(cache, out, { recursive: true, dereference: true })
-  if (!WIN) relink(join(out, 'python/bin'))
+  if (!WIN) relink(join(out, 'python'))
 }
 
 async function build(out) {
@@ -47,7 +47,10 @@ async function build(out) {
   const home = WIN ? join(python, '..') : join(python, '../..')
   rmSync(out, { recursive: true, force: true })
   cpSync(home, join(out, 'python'), { recursive: true, dereference: true })
-  if (!WIN) relink(join(out, 'python/bin'))
+  if (!WIN) {
+    relink(join(out, 'python'))
+    trim(join(out, 'python'))
+  }
   const site = WIN ? join(work, 'venv/Lib/site-packages') : join(work, 'venv/lib', readdirSync(join(work, 'venv/lib'))[0], 'site-packages')
   cpSync(site, join(out, 'site'), { recursive: true, dereference: true, filter: (path) => !/__editable__|_virtualenv|hermes_agent-.*\.dist-info/.test(path) })
   for (const name of readdirSync(src).filter((each) => !SKIP.has(each))) cpSync(join(src, name), join(out, 'hermes', name), { recursive: true, dereference: true })
@@ -61,12 +64,19 @@ async function build(out) {
 function relink(dir) {
   for (const name of readdirSync(dir)) {
     const path = join(dir, name)
-    if (!lstatSync(path).isSymbolicLink()) continue
+    const stat = lstatSync(path)
+    if (stat.isDirectory()) relink(path)
+    if (!stat.isSymbolicLink()) continue
     const target = readlinkSync(path)
     if (!isAbsolute(target)) continue
     rmSync(path)
-    symlinkSync(basename(target), path)
+    if (existsSync(join(dir, basename(target)))) symlinkSync(basename(target), path)
   }
+}
+
+function trim(python) {
+  const lib = join(python, 'lib', readdirSync(join(python, 'lib')).find((name) => /^python3\.\d+$/.test(name)) ?? '')
+  for (const path of [join(python, 'include'), join(python, 'share'), join(python, 'lib/pkgconfig'), ...['test', 'idlelib', 'tkinter', 'turtledemo', 'ensurepip'].map((name) => join(lib, name))]) rmSync(path, { recursive: true, force: true })
 }
 
 export async function packClaude(out) {

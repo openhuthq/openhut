@@ -13,7 +13,7 @@ rmSync(OUT, { recursive: true, force: true })
 
 const bundle = (entry, outfile, options = {}) => build({
   entryPoints: [join(ROOT, entry)], outfile: join(OUT, outfile), bundle: true, platform: 'node', format: 'esm', target: 'node24',
-  external: [...NATIVE, 'pg-native', 'microsandbox'], alias: { 'sodium-native': 'sodium-javascript' }, logLevel: 'warning',
+  external: [...NATIVE, 'pg-native'], alias: { 'sodium-native': 'sodium-javascript' }, logLevel: 'warning',
   banner: { js: "import { createRequire as __cr } from 'node:module'; import { dirname as __dn } from 'node:path'; import { fileURLToPath as __fu } from 'node:url'; const require = __cr(import.meta.url); const __filename = __fu(import.meta.url); const __dirname = __dn(__filename);" },
   ...options,
 })

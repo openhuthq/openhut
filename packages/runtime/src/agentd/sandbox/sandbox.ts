@@ -20,7 +20,7 @@ export type SandboxState = { id: string; running: boolean; startedAt?: string; l
 export type Pull = { done: number; total: number; unit: 'bytes' | 'layers' }
 export type Exec = { stdin: Writable | null; stdout: Readable; exit: Promise<number>; kill: () => void }
 export type Sandboxes = {
-  name: 'gvisor' | 'microsandbox' | 'memory' | 'native'
+  name: 'gvisor' | 'memory' | 'native'
   ready(): Promise<{ ok: boolean; reason?: string }>
   create(spec: SandboxSpec): Promise<void>
   start(id: string): Promise<void>
