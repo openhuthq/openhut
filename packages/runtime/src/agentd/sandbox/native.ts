@@ -3,7 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpat
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { PassThrough } from 'node:stream'
-import { installWindowsSandboxAsync, SandboxManager } from '@anthropic-ai/sandbox-runtime'
+import { installWindowsSandboxAsync, resolveSrtWin, SandboxManager, VENDORED_SRT_WIN_EXE } from '@anthropic-ai/sandbox-runtime'
 import { AGENT_API_PORT_BASE, type Exec, type Mount, type Sandboxes, type SandboxSpec, type SandboxState } from './sandbox.ts'
 
 const WIN = process.platform === 'win32'
@@ -25,7 +25,7 @@ let ready: Promise<void> | undefined
 function init() {
   ready ??= start().catch(async (e: unknown) => {
     if (!WIN) throw e
-    await installWindowsSandboxAsync({})
+    await installWindowsSandboxAsync({ srtWin: resolveSrtWin({ path: VENDORED_SRT_WIN_EXE }) })
     return start()
   })
   return ready
@@ -35,6 +35,7 @@ function start() {
   return SandboxManager.initialize({
     network: { allowedDomains: [GATEWAY], deniedDomains: [], deniedResolvedAddresses: PRIVATE },
     filesystem: { denyRead: [], allowWrite: [], denyWrite: [] },
+    ...(WIN ? { windows: { srtWin: { path: VENDORED_SRT_WIN_EXE } } } : {}),
   }, async ({ host, port }) => port === 443 && !/^[\d.:[\]]+$/.test(host))
 }
 

@@ -1,0 +1,48 @@
+name: Windows native
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**/native-*']
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/cache@v4
+        with:
+          path: |
+            packages/desktop/dist/hermes-cache
+            packages/desktop/dist/claude-cache
+          key: native-runtime-windows-${{ hashFiles('install/native-runtime.json', 'packages/desktop/scripts/pack-hermes.mjs') }}
+      - name: Build the installer
+        working-directory: packages/desktop
+        run: npm run dist:win
+      - name: Install it, meet the first agent in its sandbox, chat, use the MCP, restart, and keep the evidence
+        working-directory: packages/desktop
+        shell: pwsh
+        run: |
+          $cwd = (Get-Location).Path
+          $node = (Get-Command node).Source
+          Set-Content e2e.cmd "@`"$node`" scripts\windows-e2e.mjs --installer release\OpenHut-Setup-x64.exe --out windows-e2e --sandbox native > windows-e2e.log 2>&1`r`n@echo %ERRORLEVEL%> windows-e2e.exit"
+          $run = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "cmd /c `"$cwd\e2e.cmd`""; CurrentDirectory = $cwd }
+          while (Get-Process -Id $run.ProcessId -ErrorAction SilentlyContinue) { Start-Sleep 5 }
+          Get-Content windows-e2e.log
+          exit [int](Get-Content windows-e2e.exit)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-e2e
+          path: |
+            packages/desktop/windows-e2e/*.png
+            packages/desktop/windows-e2e/evidence.json
+            packages/desktop/windows-e2e/home/logs/
+            packages/desktop/windows-e2e/home/data/native/*/agent.log
