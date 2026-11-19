@@ -20,10 +20,11 @@ sys.exit(main())
 
 const sha256 = (body) => createHash('sha256').update(body).digest('hex')
 
-async function fetched({ url, sha }) {
+async function fetched({ url, sha, tries = 3 }) {
   const body = Buffer.from(await (await fetch(url)).arrayBuffer())
-  if (sha256(body) !== sha) throw new Error(`${url} doesn't match its pinned sha256`)
-  return body
+  if (sha256(body) === sha) return body
+  if (tries > 1) return fetched({ url, sha, tries: tries - 1 })
+  throw new Error(`${url} doesn't match its pinned sha256`)
 }
 
 export async function packHermes(out) {

@@ -30,6 +30,7 @@ export const Admin = z.object({
     running: z.number(),
     total: z.number(),
   }),
+  tailnetUrl: z.optional(z.null()),
   google: z.optional(z.object({ clientId: z.null(), redirectUri: z.string() })),
   usageData: z.boolean(),
   publicKey: z.string(),

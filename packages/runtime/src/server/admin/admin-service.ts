@@ -49,6 +49,7 @@ export const adminService = {
         version: health.version, build: health.build, latestBuild, updateAvailable: isNewer({ latest: latestBuild, current: health.build }), update: await currentUpdate({ installing, last }), healthy: health.ok, agentd: health.agentd, firewall: health.firewall,
         running: agents.filter((agent) => states?.[agent.id] === 'running').length, total: agents.length,
       },
+      tailnetUrl: null,
       google: { clientId: null, redirectUri: connectionService.redirectUrl() },
       usageData: settings.usageData(),
       publicKey: transferPublicKey,
