@@ -39,7 +39,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npx turbo run typecheck test
 
-  release:
+  macos:
     needs: draft
     runs-on: macos-15
     env:
@@ -224,7 +224,7 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" dist/install.sh dist/openhut.tgz --clobber
 
   publish:
-    needs: [checks, release, compat, windows, linux]
+    needs: [checks, macos, compat, windows, linux]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     env:
