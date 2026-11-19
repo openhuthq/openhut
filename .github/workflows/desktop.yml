@@ -176,15 +176,7 @@ jobs:
       - name: Install it, meet the first agent in its sandbox, chat, use the MCP, restart, and keep the evidence
         if: matrix.name == 'windows'
         working-directory: packages/desktop
-        shell: pwsh
-        run: |
-          $cwd = (Get-Location).Path
-          $node = (Get-Command node).Source
-          Set-Content e2e.cmd "@`"$node`" scripts\windows-e2e.mjs --installer release\OpenHut-Setup-x64.exe --out windows-e2e --sandbox native > windows-e2e.log 2>&1`r`n@echo %ERRORLEVEL%> windows-e2e.exit"
-          $run = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "cmd /c `"$cwd\e2e.cmd`""; CurrentDirectory = $cwd }
-          while (Get-Process -Id $run.ProcessId -ErrorAction SilentlyContinue) { Start-Sleep 5 }
-          Get-Content windows-e2e.log
-          exit [int](Get-Content windows-e2e.exit)
+        run: node scripts/windows-e2e.mjs --installer release/OpenHut-Setup-x64.exe --out windows-e2e --sandbox native
       - uses: actions/upload-artifact@v4
         if: always() && matrix.name == 'windows'
         with:
