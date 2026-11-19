@@ -213,9 +213,9 @@ function Adding({ name }: { name: string }) {
   const { start, dismiss } = useEnroll()
   const now = useNow(enrollment?.status === 'running')
   const hide = <Button type="button" variant="secondary" onClick={() => open()}>Hide</Button>
-  if (computer && !enrollment) return <TailscaleDialog title="Add over Tailscale" foot={<Button type="button" variant="primary" onClick={() => open()}>Done</Button>}>
-    <Scene mood="party" title={`${name} joined`} line={`Agents can run there now, even while this ${HERE} sleeps.`} />
-  </TailscaleDialog>
+  const joined = !!computer && !enrollment
+  useEffect(() => { if (joined) open() }, [joined])
+  if (joined) return null
   if (enrollment?.status === 'failed') {
     const retry = <Button type="button" variant="primary" onClick={() => start(enrollment.peer)}>Try again</Button>
     const remove = <Button type="button" variant="secondary" onClick={() => { dismiss(enrollment.peer.dns); open() }}>Remove</Button>
