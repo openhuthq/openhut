@@ -113,13 +113,18 @@ jobs:
             packages/desktop/dist/claude-cache
           key: native-runtime-${{ runner.os }}-${{ hashFiles('install/native-runtime.json', 'packages/desktop/scripts/pack-hermes.mjs') }}
 
-      - name: Build the app (signed for a release)
-        if: matrix.name == 'macos'
+      - name: Build and sign the app
+        if: matrix.name == 'macos' && env.FULL == 'true'
         working-directory: packages/desktop
         env:
-          CSC_LINK: ${{ env.FULL == 'true' && secrets.CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ env.FULL == 'true' && secrets.CSC_KEY_PASSWORD || '' }}
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.FULL == 'true' }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: npm run build && npm run pack-backend && npx electron-builder --mac --arm64 --publish never
+      - name: Build the app unsigned
+        if: matrix.name == 'macos' && env.FULL != 'true'
+        working-directory: packages/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
         run: npm run build && npm run pack-backend && npx electron-builder --mac --arm64 --publish never
       - name: Notarize, staple and check Gatekeeper
         if: matrix.name == 'macos' && env.FULL == 'true'
@@ -161,6 +166,13 @@ jobs:
         if: matrix.name == 'windows'
         working-directory: packages/desktop
         run: npm run dist:win
+      - name: Secondary Logon runs, which the sandbox starts agents through
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: |
+          Set-Service seclogon -StartupType Manual
+          Start-Service seclogon
+          Get-Service seclogon
       - name: Install it, meet the first agent in its sandbox, chat, use the MCP, restart, and keep the evidence
         if: matrix.name == 'windows'
         working-directory: packages/desktop
