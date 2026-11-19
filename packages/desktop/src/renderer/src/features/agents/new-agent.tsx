@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Cancel01Icon, DiceFaces03Icon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, DiceFaces03Icon, LaptopIcon, ServerStack01Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { Provider } from '@openhut/common/models/provider.ts'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Creature } from '@/components/creature'
-import { DialogCard, I } from '@/components/kit'
+import { Choice, DialogCard, I, MenuCard } from '@/components/kit'
 import { useAgents, useCreateAgent } from '@/features/agents/api'
+import { nameOf, runsOnNote, useComputers } from '@/features/computers/api'
 import { useComputerProviders } from '@/features/models/api'
 import { ModelPicker } from '@/features/models/model-picker'
 import { FaceEditor, stageColor, tileClass } from '@/features/agents/face-editor'
@@ -31,7 +33,9 @@ function firstModel(providers: Provider[] | undefined): string | null {
 export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   const createAgent = useCreateAgent()
   const touch = useMedia(TOUCH)
-  const providers = useComputerProviders('local')
+  const computers = useComputers().data ?? []
+  const [computer, setComputer] = useState('local')
+  const providers = useComputerProviders(computer)
   const [picked, setPicked] = useState<string | null | undefined>(undefined)
   const taken = new Set(useAgents().data?.map((agent) => agent.name))
   const fresh = NAMES.filter((each) => !taken.has(each))
@@ -73,7 +77,7 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   }
   return <DialogCard onClose={editing ? leave : onClose} className={cn(editing ? 'w-[min(600px,calc(100vw-32px))] gap-0 p-0' : 'max-h-[calc(100vh-32px)] w-[480px] items-center p-6 text-center [&_form>*]:shrink-0')}>
     {editing && <FaceEditor initial={look} onCancel={leave} onDone={(next) => { setCustom(next); setSpin(spin + 1); leave() }} />}
-    <form className={editing ? 'hidden' : 'contents'} onSubmit={(event) => createAgent.mutate({ body: { name: formValues(event)('name').trim(), ...(model && { model }) }, look })}>
+    <form className={editing ? 'hidden' : 'contents'} onSubmit={(event) => createAgent.mutate({ body: { name: formValues(event)('name').trim(), ...(model && { model }) }, look, computer })}>
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" className="absolute top-3 right-3 rounded-full" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
       {!editing && <DialogTitle className="text-[15px]/[22px] font-medium">New agent</DialogTitle>}
       <Button type="button" variant="bare" aria-label="Other faces" title="Other faces" onClick={() => choose({ round: round + 1 })}
@@ -91,6 +95,17 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
         <Button type="button" variant="secondary" size="icon" aria-label="Random name" title="Random name" className="size-10 shrink-0 rounded-lg text-ink" onClick={reroll}><I icon={DiceFaces03Icon} /></Button>
       </div>
       <div className="flex w-full flex-col gap-2.5 text-left">
+        {computers.length > 1 && <Setting title="Runs on" hint={runsOnNote(computers.find((each) => each.id === computer) ?? computers[0])}>
+          <DropdownMenu>
+            <DropdownMenuTrigger aria-label={`Runs on: ${nameOf({ computers, id: computer })}`} className={cn(SOFT_TRIGGER, 'w-[200px]')}>
+              <span className="flex min-w-0 items-center gap-2"><I icon={computer === 'local' ? LaptopIcon : ServerStack01Icon} size={15} /><span className="truncate">{nameOf({ computers, id: computer })}</span></span><I icon={UnfoldMoreIcon} size={12} className="text-mute" />
+            </DropdownMenuTrigger>
+            <MenuCard title={`${typed.trim() || 'The agent'} runs on`} align="end">
+              {computers.map((each) => <Choice key={each.id} icon={<I icon={each.id === 'local' ? LaptopIcon : ServerStack01Icon} size={15} />} name={each.name} note={runsOnNote(each)}
+                selected={each.id === computer} disabled={!each.online} onClick={() => { setComputer(each.id); setPicked(undefined) }} />)}
+            </MenuCard>
+          </DropdownMenu>
+        </Setting>}
         <Setting title="Model" hint="What it thinks with.">
           <ModelPicker providers={providers} value={model} onPick={setPicked} label="Model" title={`${typed.trim() || 'The agent'} thinks with`} className={cn(SOFT_TRIGGER, 'w-[200px]')} />
         </Setting>

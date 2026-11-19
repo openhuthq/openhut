@@ -5,6 +5,8 @@ import { Admin, Update } from '@openhut/common/admin/admin.ts'
 import { ApiError } from '@openhut/common/api.ts'
 import { openhut } from '@/lib/openhut'
 import { adminsOf } from '@/features/computers/admins'
+import { HERE } from '@/features/settings/desktop'
+import { WORDS } from '@/lib/platform'
 import { AGENTS_KEY, COMPUTERS_KEY, CONNECTIONS_KEY } from '@/lib/query-keys'
 
 export type ComputerAdmin = { computer: Computer; admin: Admin | undefined }
@@ -40,6 +42,12 @@ export function useRemoveComputer() {
       for (const queryKey of [COMPUTERS_KEY, AGENTS_KEY, CONNECTIONS_KEY]) void client.invalidateQueries({ queryKey })
     },
   })
+}
+
+export function runsOnNote(computer: Computer) {
+  if (!computer.online) return 'Offline'
+  if (computer.id !== 'local') return 'Its own sandbox · always on'
+  return `${WORDS.sandboxed ? 'Its own sandbox' : 'Runs as you'} · while this ${HERE} is awake`
 }
 
 export function nameOf({ computers, id }: { computers: Computer[] | undefined; id: string }) {

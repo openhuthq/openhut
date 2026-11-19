@@ -51,13 +51,13 @@ export function useAgent(agentId: string) {
 export function useCreateAgent() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: async ({ body, look }: { body: CreateAgent; look: Look }) => {
-      const agent = await request({ schema: Agent, computer: 'local', path: '/api/agents', method: 'POST', body: { ...body, face: JSON.stringify(look) } })
-      return request({ schema: Agent, computer: 'local', path: agentPath(agent.id), method: 'PATCH', body: { wanted: 'running' } })
+    mutationFn: async ({ body, look, computer }: { body: CreateAgent; look: Look; computer: string }) => {
+      const agent = await request({ schema: Agent, computer, path: '/api/agents', method: 'POST', body: { ...body, face: JSON.stringify(look) } })
+      return request({ schema: Agent, computer, path: agentPath(agent.id), method: 'PATCH', body: { wanted: 'running' } })
     },
-    onSuccess: (agent) => {
+    onSuccess: (agent, { computer }) => {
       client.setQueryData([...AGENTS_KEY, agent.id], agent)
-      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents && [...agents, { ...agent, computer: 'local', online: true }])
+      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents && [...agents, { ...agent, computer, online: true }])
       navigate(`/agents/${encodeURIComponent(agent.id)}`)
     },
   })

@@ -17,7 +17,7 @@ export type Frame = { type: FrameType; stream: number; payload: Uint8Array }
 
 export const MAX_PLAINTEXT = 65_000
 export const MAX_PAYLOAD = MAX_PLAINTEXT - 5
-export const MAX_REQUEST_BODY = 1024 * 1024
+export const MAX_REQUEST_BODY = 257 << 20
 export const REQUEST_HEADERS = ['content-type', 'accept', 'last-event-id']
 export const MAX_SOCKET_MESSAGE = 1024 * 1024
 

@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
+import { MAX_REQUEST_BODY } from '../src/frames.ts'
 import { connect, sixDigits, verifyProof, type Hello, type Invited, type TunnelError } from '../src/index.ts'
 import { newDevice, startComputer, waitFor } from './relay.ts'
 
@@ -14,12 +15,18 @@ async function client() {
   return { ctx, device, tunnel }
 }
 
-test('a request body over 1 MiB gets 413 without reaching the handler', async () => {
+test('a request body over the limit gets 413 without reaching the handler', async () => {
   const { ctx, tunnel } = await client()
-  const response = await tunnel.fetch('/upload', { method: 'POST', body: new Uint8Array(1024 * 1024 + 1) })
+  const response = await tunnel.fetch('/upload', { method: 'POST', body: new Uint8Array(MAX_REQUEST_BODY + 1) })
   assert.equal(response.status, 413)
   assert.deepEqual(ctx.handled, [])
-  const fits = await tunnel.fetch('/upload', { method: 'POST', body: new Uint8Array(1024 * 1024) })
+  tunnel.close()
+  await ctx.close()
+})
+
+test('a request body of several MiB, like a moved agent, reaches the handler', async () => {
+  const { ctx, tunnel } = await client()
+  const fits = await tunnel.fetch('/upload', { method: 'POST', body: new Uint8Array(5 << 20) })
   assert.equal(fits.status, 200)
   assert.deepEqual(ctx.handled, ['POST /upload'])
   tunnel.close()
