@@ -20,13 +20,6 @@ sys.exit(main())
 
 const sha256 = (body) => createHash('sha256').update(body).digest('hex')
 
-async function fetched({ url, sha, tries = 3 }) {
-  const body = Buffer.from(await (await fetch(url)).arrayBuffer())
-  if (sha256(body) === sha) return body
-  if (tries > 1) return fetched({ url, sha, tries: tries - 1 })
-  throw new Error(`${url} doesn't match its pinned sha256`)
-}
-
 export async function packHermes(out) {
   const cache = join(CACHE, 'hermes', `${PIN.hermes.tag}-${PLATFORM}`)
   if (!existsSync(join(cache, 'hermes.py'))) await build(cache)
@@ -41,9 +34,11 @@ async function build(out) {
   const work = join(tmpdir(), `openhut-hermes-${process.pid}`)
   rmSync(work, { recursive: true, force: true })
   mkdirSync(work, { recursive: true })
-  writeFileSync(join(work, 'src.tar.gz'), await fetched({ url: PIN.hermes.url, sha: PIN.hermes.sha256 }))
-  execFileSync('tar', ['-xzf', 'src.tar.gz'], { cwd: work })
-  const src = join(work, readdirSync(work).find((name) => name.startsWith('hermes-agent-')))
+  const src = join(work, 'hermes-agent')
+  execFileSync('git', ['clone', '--quiet', '--depth', '1', '--branch', PIN.hermes.tag, PIN.hermes.repo, src])
+  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: src }).toString().trim()
+  if (commit !== PIN.hermes.commit) throw new Error(`Hermes ${PIN.hermes.tag} is ${commit}, not the pinned ${PIN.hermes.commit}`)
+  rmSync(join(src, '.git'), { recursive: true, force: true })
   const env = { ...process.env, UV_PYTHON_INSTALL_DIR: join(work, 'python'), UV_PROJECT_ENVIRONMENT: join(work, 'venv'), UV_PYTHON_PREFERENCE: 'only-managed' }
   execFileSync('uv', ['python', 'install', PIN.hermes.python], { env, stdio: 'inherit' })
   execFileSync('uv', ['sync', '--frozen', '--no-dev', '--python', PIN.hermes.python, ...PIN.hermes.extras.flatMap((extra) => ['--extra', extra])], { cwd: src, env, stdio: 'inherit' })
@@ -87,20 +82,13 @@ function trim(python) {
 }
 
 export async function packClaude(out) {
-  const sha = PIN.claude.sha256[PLATFORM]
-  if (!sha) throw new Error(`no pinned Claude Code for ${PLATFORM}`)
-  const file = join(out, WIN ? 'claude.exe' : 'claude')
-  if (existsSync(file) && sha256(readFileSync(file)) === sha) return file
+  const name = WIN ? 'claude.exe' : 'claude'
+  const file = await cachedFile({ dir: 'claude', name: `${PIN.claude.version}-${PLATFORM}-${name}`, url: `https://downloads.claude.ai/claude-code-releases/${PIN.claude.version}/${PLATFORM}/${name}`, check: (body) => sha256(body) === PIN.claude.sha256[PLATFORM] })
   mkdirSync(out, { recursive: true })
-  const cached = join(CACHE, 'claude', `${PIN.claude.version}-${PLATFORM}`, WIN ? 'claude.exe' : 'claude')
-  if (!existsSync(cached) || sha256(readFileSync(cached)) !== sha) {
-    mkdirSync(join(cached, '..'), { recursive: true })
-    writeFileSync(cached, await fetched({ url: `https://downloads.claude.ai/claude-code-releases/${PIN.claude.version}/${PLATFORM}/${WIN ? 'claude.exe' : 'claude'}`, sha }))
-  }
-  cpSync(cached, file)
-  writeFileSync(`${file}.version`, PIN.claude.version)
-  if (!WIN) chmodSync(file, 0o755)
-  return file
+  cpSync(file, join(out, name))
+  writeFileSync(join(out, `${name}.version`), PIN.claude.version)
+  if (!WIN) chmodSync(join(out, name), 0o755)
+  return join(out, name)
 }
 
 async function cachedFile({ dir, name, url, check }) {
