@@ -65,6 +65,7 @@ jobs:
             exit 1
           fi
       - run: npm ci --no-audit --no-fund
+      - uses: astral-sh/setup-uv@v6
       - run: npx turbo run typecheck test
       - name: Build and sign
         working-directory: packages/desktop
@@ -137,6 +138,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - uses: astral-sh/setup-uv@v6
       - name: Build the installer
         working-directory: packages/desktop
         run: npm run dist:win
@@ -146,7 +148,7 @@ jobs:
         run: |
           $cwd = (Get-Location).Path
           $node = (Get-Command node).Source
-          Set-Content e2e.cmd "@`"$node`" scripts\windows-e2e.mjs --installer release\OpenHut-Setup-x64.exe --out windows-e2e --sandbox microsandbox > windows-e2e.log 2>&1`r`n@echo %ERRORLEVEL%> windows-e2e.exit"
+          Set-Content e2e.cmd "@`"$node`" scripts\windows-e2e.mjs --installer release\OpenHut-Setup-x64.exe --out windows-e2e --sandbox native > windows-e2e.log 2>&1`r`n@echo %ERRORLEVEL%> windows-e2e.exit"
           $run = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "cmd /c `"$cwd\e2e.cmd`""; CurrentDirectory = $cwd }
           while (Get-Process -Id $run.ProcessId -ErrorAction SilentlyContinue) { Start-Sleep 5 }
           Get-Content windows-e2e.log

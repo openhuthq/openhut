@@ -1,0 +1,22 @@
+{
+  "hermes": {
+    "tag": "v0.23.1",
+    "url": "https://github.com/NousResearch/hermes-agent/archive/refs/tags/v0.23.1.tar.gz",
+    "sha256": "52a8eb321f368576034f40595491abf9646b60c3861eee0cf45f610e5faa9bb6",
+    "python": "3.14",
+    "extras": [
+      "messaging",
+      "slack",
+      "telegram",
+      "mcp",
+      "anthropic"
+    ]
+  },
+  "claude": {
+    "version": "2.1.311",
+    "sha256": {
+      "darwin-arm64": "85d8c08707fcfd1e78ffa0204eefbc6ec9e4fe22f375fb2767ef85d957ed3161",
+      "win32-x64": "966f4b2ce962298f5dee6a942e8c47c8f97392e69e728e622319a98b259c0680"
+    }
+  }
+}

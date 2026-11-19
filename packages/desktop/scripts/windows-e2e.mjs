@@ -4,16 +4,16 @@ import { join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
 
-const { values: args } = parseArgs({ options: { installer: { type: 'string' }, out: { type: 'string', default: 'windows-e2e' }, sandbox: { type: 'string', default: 'microsandbox' } } })
+const { values: args } = parseArgs({ options: { installer: { type: 'string' }, out: { type: 'string', default: 'windows-e2e' }, sandbox: { type: 'string', default: 'native' } } })
 if (!args.installer) {
-  console.error('usage: node scripts/windows-e2e.mjs --installer <OpenHut-Setup-x64.exe> [--out <evidence folder>] [--sandbox microsandbox|memory]')
+  console.error('usage: node scripts/windows-e2e.mjs --installer <OpenHut-Setup-x64.exe> [--out <evidence folder>] [--sandbox native|memory]')
   process.exit(2)
 }
 const programs = join(process.env.LOCALAPPDATA, 'Programs')
 let exe = ''
 const home = resolve(args.out, 'home')
 const cdpPort = 9300 + Math.floor(Math.random() * 500)
-const real = args.sandbox === 'microsandbox'
+const real = args.sandbox === 'native'
 const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_MODEL: 'test', OPENHUT_SANDBOX: args.sandbox }
 const evidence = { sandbox: args.sandbox, platform: `${process.platform} ${execFileSync('cmd', ['/c', 'ver']).toString().trim()}`, steps: [] }
 mkdirSync(args.out, { recursive: true })

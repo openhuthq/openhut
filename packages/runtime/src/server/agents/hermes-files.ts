@@ -2,6 +2,7 @@ import type { Audience, ChannelKind } from '@openhut/common/channels/channel.ts'
 import type { AgentFiles } from '../platform/agentd.ts'
 import { config } from '../platform/config.ts'
 import { agentSubnet } from '../platform/network.ts'
+import { AGENT_API_PORT_BASE } from '../../agentd/sandbox/sandbox.ts'
 import { slack } from '../integrations/slack/slack.ts'
 import { telegram } from '../integrations/telegram/telegram.ts'
 import { whatsapp } from '../integrations/whatsapp/whatsapp.ts'
@@ -48,7 +49,7 @@ export function renderFiles({ agent, ownerName, token, channelKey, channels, con
     ...channels.map((channel) => yamlOf({ channel, gateway })),
   ].join('\n') + '\n'
   const env = [
-    `API_SERVER_KEY=${channelKey}`, 'API_SERVER_HOST=0.0.0.0', 'API_SERVER_PORT=8642',
+    `API_SERVER_KEY=${channelKey}`, ...(config.agentHostNet ? ['API_SERVER_HOST=127.0.0.1', `API_SERVER_PORT=${AGENT_API_PORT_BASE + agent.net}`] : ['API_SERVER_HOST=0.0.0.0', 'API_SERVER_PORT=8642']),
     ...(config.modelMode === 'test' ? [] : setups.flatMap((setup) => setup.env)),
     ...channels.flatMap((channel) => envOf({ channel, token })),
   ].join('\n') + '\n'

@@ -9,8 +9,6 @@ import { dirname, join, relative } from 'node:path'
 import { Readable } from 'node:stream'
 import { text } from 'node:stream/consumers'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { promisify } from 'node:util'
-import { zstdDecompress } from 'node:zlib'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import updater from 'electron-updater'
 import WebSocket from 'ws'
@@ -37,8 +35,10 @@ const BACKEND = DEV ? ROOT : join(process.resourcesPath, 'backend')
 const SCRIPTS = DEV
   ? { agentd: 'packages/runtime/src/agentd/agentd.ts', server: 'packages/runtime/src/server/app.ts' }
   : { agentd: 'packages/runtime/src/agentd/agentd.mjs', server: 'packages/runtime/src/server/platform/app.mjs' }
-const MSB = join(BACKEND, `node_modules/@superradcompany/microsandbox-${process.platform}-${process.arch}${WIN ? '-msvc' : ''}`)
-const GATEWAY_PORT = 8081
+const NATIVE = !CONTAINER && (process.env.OPENHUT_SANDBOX ?? 'native') === 'native'
+const RUNTIME = process.env.AGENTD_HERMES ?? join(BACKEND, DEV ? 'packages/desktop/dist/backend/runtime' : 'runtime')
+const NATIVE_CLAUDE = join(BACKEND, DEV ? 'packages/desktop/dist/backend/bin/native' : 'bin/native', WIN ? 'claude.exe' : 'claude')
+const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
 const HOME = app.getPath('userData')
 const BRIDGE = join(HOME, 'bin/openhut-mcp')
 const ASSETS = DEV ? ROOT : join(HOME, 'assets', app.getVersion())
@@ -607,7 +607,7 @@ function dockerUp() {
 }
 
 function canVirtualize() {
-  if (process.env.OPENHUT_SANDBOX === 'memory') return Promise.resolve(true)
+  if (NATIVE || process.env.OPENHUT_SANDBOX === 'memory') return Promise.resolve(true)
   if (WIN) return Promise.resolve(existsSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32\\WinHvPlatform.dll')))
   return new Promise((resolve) => execFile('sysctl', ['-n', 'kern.hv_support'], (_error, stdout) => resolve(String(stdout).trim() === '1')))
 }
@@ -642,7 +642,7 @@ async function keepSecret(hex) {
 }
 
 function claudeVersion() {
-  return DEV ? /^CLAUDE=(\S+)$/m.exec(readFileSync(join(ROOT, 'install/install.sh'), 'utf8'))[1] : readFileSync(join(BACKEND, 'bin/claude-version'), 'utf8').trim()
+  return JSON.parse(readFileSync(join(BACKEND, 'install/native-runtime.json'), 'utf8')).claude.version
 }
 
 async function boot() {
@@ -654,14 +654,14 @@ async function boot() {
   if (CONTAINER) return bootContainer()
   keepData()
   await assets()
-  const shared = { OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_CLAUDE_HOST: MAC ? join(DATA, 'bin/claude') : join(ASSETS, 'bin/claude'), OPENHUT_CLAUDE_VERSION: claudeVersion() }
-  const pinned = DEV ? {} : msb()
+  if (NATIVE && !DEV) await leaveMicrosandbox()
+  const shared = { OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_CLAUDE_HOST: NATIVE_CLAUDE, OPENHUT_CLAUDE_VERSION: claudeVersion() }
   if (!PIPES) rmSync(SOCK, { force: true })
-  start('agentd', { ...shared, ...pinned, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'microsandbox', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK, AGENTD_ASSETS: ASSETS })
+  start('agentd', { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, AGENTD_CLAUDE: NATIVE_CLAUDE, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT) })
   await waitFor(() => listening(SOCK), 30)
   if (!PIPES) rmSync(SERVER_SOCK, { force: true })
   await rootSecret()
-  start('server', Object.assign(serverEnv, { ...shared, AGENTD_SOCK: SOCK, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_AGENT_GATEWAY: `http://host.microsandbox.internal:${GATEWAY_PORT}` }))
+  start('server', Object.assign(serverEnv, { ...shared, AGENTD_SOCK: SOCK, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_AGENT_GATEWAY: `http://127.0.0.1:${GATEWAY_PORT}`, OPENHUT_AGENT_HOST_NET: '1' }))
   if (!await waitFor(() => listening(SERVER_SOCK), 60)) return false
   if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   return true
@@ -734,44 +734,16 @@ async function assets() {
   if (DEV || CONTAINER || existsSync(ASSETS)) return
   rmSync(`${ASSETS}.tmp`, { recursive: true, force: true })
   cpSync(join(BACKEND, 'vendor/hermes-plugins'), join(`${ASSETS}.tmp`, 'vendor/hermes-plugins'), { recursive: true })
-  await guestClaude(join(`${ASSETS}.tmp`, 'bin/claude'))
   renameSync(`${ASSETS}.tmp`, ASSETS)
   const older = readdirSync(dirname(ASSETS)).filter((name) => name !== app.getVersion() && !name.endsWith('.tmp'))
   for (const name of older.sort((a, b) => statSync(join(dirname(ASSETS), b)).mtimeMs - statSync(join(dirname(ASSETS), a)).mtimeMs).slice(1)) rmSync(join(dirname(ASSETS), name), { recursive: true, force: true })
 }
 
-async function guestClaude(to) {
-  const want = JSON.parse(readFileSync(join(BACKEND, 'bin/claude-linux.json'), 'utf8'))
-  const sha256 = (body) => createHash('sha256').update(body).digest('hex')
-  mkdirSync(dirname(to), { recursive: true })
-  const kept = readdirSync(dirname(ASSETS)).filter((name) => !name.endsWith('.tmp')).map((name) => join(dirname(ASSETS), name, 'bin/claude')).find((bin) => existsSync(bin) && sha256(readFileSync(bin)) === want.sha256)
-  if (kept) return cpSync(kept, to)
-  for (const url of want.urls) {
-    const body = await fetch(url, { signal: AbortSignal.timeout(900_000) })
-      .then((response) => response.ok ? counted(response) : null)
-      .then((raw) => raw && url.endsWith('.zst') ? promisify(zstdDecompress)(raw) : raw)
-      .catch((error) => appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't download ${url}: ${error.message}\n`))
-    if (body && sha256(body) === want.sha256) return writeFileSync(to, body, { mode: 0o755 })
-  }
-  throw new Error(`Couldn't download Claude Code ${want.version}, which the agents run. OpenHut gets it the first time it opens, so check the internet connection and open it again.`)
-}
-
-async function counted(response) {
-  const chunks = []
-  fetching = { done: 0, total: Number(response.headers.get('content-length')) || 0, unit: 'bytes' }
-  try {
-    for await (const chunk of response.body) {
-      chunks.push(chunk)
-      fetching = { ...fetching, done: fetching.done + chunk.length }
-    }
-    return Buffer.concat(chunks)
-  } finally {
-    fetching = null
-  }
-}
-
-function msb() {
-  return { MSB_PATH: join(MSB, WIN ? 'bin/msb.exe' : 'bin/msb'), MSB_LIBKRUNFW_PATH: join(MSB, 'lib', readdirSync(join(MSB, 'lib'))[0]) }
+async function leaveMicrosandbox() {
+  const old = join(homedir(), '.microsandbox')
+  if (!existsSync(old)) return
+  await new Promise((done) => execFile(WIN ? 'taskkill' : 'pkill', WIN ? ['/F', '/IM', 'msb.exe'] : ['-f', 'microsandbox.*/bin/msb'], () => done()))
+  rmSync(old, { recursive: true, force: true })
 }
 
 function savedBounds() {

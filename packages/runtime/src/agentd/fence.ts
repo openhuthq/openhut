@@ -10,15 +10,15 @@ export type FenceReport = { ok: boolean; sandbox: string; skipped?: string; chec
 type Probe = Omit<FenceCheck, 'got' | 'pass'>
 
 const FENCE_NET = 0
-const GATEWAY_PORT = 8081
+const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
 const PROBE_SECONDS = 6
 const TIMEOUT_MS = 30_000
-const HOST = { gvisor: `10.200.${FENCE_NET}.1`, microsandbox: 'host.microsandbox.internal' }
-const LISTEN = { gvisor: '0.0.0.0', microsandbox: '127.0.0.1' }
+const HOST = { gvisor: `10.200.${FENCE_NET}.1`, microsandbox: 'host.microsandbox.internal', native: '127.0.0.1' }
+const LISTEN = { gvisor: '0.0.0.0', microsandbox: '127.0.0.1', native: '127.0.0.1' }
 const STATUS = / =>(\d{3})\s*$/
 const CURL_ERROR = /curl: \(\d+\)[^=]*/
 const POLICY_DENIED = 'network_policy_denied'
-const CONNECT_REFUSED = /^curl: \(7\)/
+const CONNECT_REFUSED = /^curl: \(7\)|^curl: \(56\) CONNECT tunnel failed, response 403/
 const CONNECT_TIMEOUT = /^curl: \(28\) (Connection timed out|Failed to connect)/
 const UNRESOLVED = /^curl: \(6\)|Resolving timed out/
 

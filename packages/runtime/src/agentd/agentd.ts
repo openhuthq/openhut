@@ -25,7 +25,7 @@ const IMAGE = process.env.AGENT_IMAGE || readFileSync(new URL('../../../../insta
 const APP_GID = Number(process.env.APP_GID ?? 0)
 const ASSETS = process.env.AGENTD_ASSETS || dirname(fileURLToPath(new URL('../../../../package.json', import.meta.url)))
 const PLUGINS = `${ASSETS}/vendor/hermes-plugins`
-const CLAUDE_BIN = `${ASSETS}/bin/claude`
+const CLAUDE_BIN = process.env.AGENTD_CLAUDE || `${ASSETS}/bin/claude`
 const MOUNTS = createHash('sha256').update(`${PLUGINS}\n${CLAUDE_BIN}`).digest('hex').slice(0, 16)
 const BROWSER_BIN = fileURLToPath(new URL('../../../../bin/agent-browser', import.meta.url))
 const BROWSER_DIR = fileURLToPath(new URL('../../../../install/agent-browser', import.meta.url))
@@ -72,6 +72,14 @@ const queues = new Map<string, Promise<unknown>>()
 let lastFirewallCheck = { at: 0, on: false }
 let pendingFirewallCheck: Promise<Readiness> | undefined
 const box = await sandboxes()
+if (box.name === 'native') {
+  const { sweep } = await import('./sandbox/native.ts')
+  sweep()
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) process.on(signal, () => {
+    sweep()
+    process.exit(0)
+  })
+}
 
 if (!PIPE) mkdirSync(dirname(SOCK), { recursive: true })
 for (const dir of [`${DATA}/agents`, `${DATA}/agent-conf`]) mkdirSync(dir, { recursive: true, mode: 0o700 })
@@ -161,7 +169,7 @@ async function handle(req: AgentdRequest): Promise<Reply> {
     case 'wa-unlink':
       return unlink(req.id)
     case 'update':
-      return box.name === 'memory' ? { updating: true } : update({ appVersion: req.appVersion, sha256: req.sha256 })
+      return box.name === 'memory' || box.name === 'native' ? { updating: false } : update({ appVersion: req.appVersion, sha256: req.sha256 })
     case 'skills':
       return listSkills(inHome(req.id, 'skills'))
     case 'skill-read':
@@ -445,6 +453,7 @@ async function openLive({ sock, id, fps, rest }: { sock: Socket; id: string; fps
 }
 
 function features() {
+  if (box.name === 'native') return { whatsapp: false, browser: false }
   return { whatsapp: existsSync(`${WHATSAPP_BRIDGE}/node_modules`), browser: box.name === 'memory' || existsSync(BROWSER_BIN) }
 }
 
