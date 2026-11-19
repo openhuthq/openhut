@@ -4,36 +4,34 @@ description: Add an always-on Linux computer, so agents keep answering while you
 icon: recruiter
 ---
 
-<Shot src="computers" alt="Settings, Computers: This Mac, a second computer and Add a computer" />
-
-You need [Tailscale](https://tailscale.com/download) on your Mac and on the computer, signed in to the same tailnet. Nothing needs a public address.
+<Shot src="computers" alt="Settings, Your devices: This Mac, a second computer and Add a computer" />
 
 <Steps>
 <Step>
 
-### Turn on Tailscale SSH
+### Make a code
 
-On the computer, once:
+**Settings › Your devices › Add a computer**. The app shows a command with a code in it.
+
+</Step>
+<Step>
+
+### Run it on the computer
+
+On an always-on Linux computer:
 
 ```sh
-sudo tailscale set --ssh
+curl -fsSL openhut.dev | sh -s -- join '<code>'
 ```
 
-</Step>
-<Step>
-
-### Pick it
-
-**Settings › Computers › Add a computer**. The app lists the machines on your tailnet. Linux computers that are online with Tailscale SSH on can run agents.
+It installs OpenHut there and asks to join. It takes a few minutes.
 
 </Step>
 <Step>
 
-### Let it install
+### Allow it
 
-The app installs OpenHut on it over Tailscale SSH and shows the log. It takes a few minutes. If Tailscale asks you to approve the check, a link shows up; open it and approve.
-
-The app makes a key for that computer and keeps it in your keychain. The computer keeps only its hash and answers nobody else.
+Back in the app, check that the computer shows the same numbers, then **Allow** it. The computer reaches you through OpenHut's relay, end-to-end encrypted, so nothing needs a public address or an open port.
 
 </Step>
 <Step>
@@ -44,6 +42,18 @@ Open an agent, then **Runs on › Move to** the computer. Its memory, skills, ch
 
 </Step>
 </Steps>
+
+## Over Tailscale
+
+If the computer is on your [Tailscale](https://tailscale.com/download) tailnet, pick **over Tailscale** under the command instead. Turn on Tailscale SSH on the computer once:
+
+```sh
+sudo tailscale set --ssh
+```
+
+The app lists the machines on your tailnet and installs OpenHut over Tailscale SSH, showing the log. If Tailscale asks you to approve the check, a link shows up; open it and approve. The app makes a key for that computer and keeps it in your keychain. The computer keeps only its hash and answers nobody else.
+
+**by its address** adds a computer you installed yourself: its address and the key it was installed with.
 
 ## Each computer is its own
 
@@ -71,7 +81,8 @@ Plan memory for the busiest moment: every running agent can use up to 1 GB, or 4
 
 ## Troubleshooting
 
-- **The list is empty or says Tailscale isn't running.** Install Tailscale on your Mac, open it and sign in, then refresh.
+- **The code expired.** Make a new one and run the new command.
+- **Over Tailscale, the list is empty or says Tailscale isn't running.** Install Tailscale on your Mac, open it and sign in, then refresh.
 - **"Turn on Tailscale SSH first".** Run `sudo tailscale set --ssh` on that computer, then **Check again**.
 - **"Linux only".** Only Linux computers can run agents for you; other machines on your tailnet show greyed out.
-- **A computer shows Offline.** Check that it's on and on your tailnet. Its agents keep running there; the app catches up when it's back.
+- **A computer shows Offline.** Check that it's on and connected to the internet. Its agents keep running there; the app catches up when it's back.
