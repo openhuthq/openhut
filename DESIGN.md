@@ -221,8 +221,7 @@ From 0.4.0, agents on This Mac (or a Windows PC) are plain processes that run as
 3. An agent on This Mac that is connected to Slack gets one note under that line: a `--tint` box with 12.5px `--body` text, "Dev is in your team's Slack. For team use, run it on a server.", and one tier-4 text action: "Move to beelink" when a server is online (it moves the agent in place, like the menu), else "Add a computer". No dismiss and no colour; it goes away when the agent moves or Slack is disconnected. WhatsApp and Telegram are personal chats and don't show it.
 4. The sidebar doesn't change: with more than one computer each agent's line already starts with its computer ("beelink · …", "This Mac · …").
 5. Settings › Your devices puts the trade in each computer's note instead of "Online": the status dot already says online, and an offline row still says "Offline".
-6. One dialog, once, for people updating from 0.3.x (`features/first-run/notice.tsx`; finishing first run marks it seen): the hut, "Agents now run right on this Mac", two short paragraphs, then "Add a computer" (secondary, left) and "OK" (primary, right), per rule 12. Esc and × count as OK. Never shown on a fresh install, where the welcome screen says it.
-7. Never in user copy: sizes, "srt", "Seatbelt", "gVisor", "unsafe", "risk", "exposed". "Sandbox" is fine for the server side.
+6. Never in user copy: sizes, "srt", "Seatbelt", "gVisor", "unsafe", "risk", "exposed". "Sandbox" is fine for the server side.
 
 ### What changes, by page
 

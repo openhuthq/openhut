@@ -14,6 +14,7 @@ import updater from 'electron-updater'
 import WebSocket from 'ws'
 import { deviceName, ownerKeys } from './owner-keys.mjs'
 import { reacher } from './reach.mjs'
+import { fanOut } from './mcp-fan-out.mjs'
 
 const DEV = !app.isPackaged
 const MAC = process.platform === 'darwin'
@@ -54,12 +55,7 @@ const SOCK = sockAt('agentd')
 const SERVER_SOCK = sockAt('server')
 const MCP_SOCK = sockAt('mcp')
 if (MCP_BRIDGE) {
-  const computer = process.argv[process.argv.indexOf('--computer') + 1]
-  const remote = process.argv.includes('--computer') && computer !== 'local'
-  const input = createReadStream(null, { fd: 0 })
-  await (await import('./mcp-bridge.mjs')).bridge(remote
-    ? { sock: MCP_SOCK, path: `/c/${computer}/mcp`, down: 'The OpenHut app isn\'t running, and it holds the key for that computer', input }
-    : { sock: SERVER_SOCK, path: '/mcp', down: 'OpenHut isn\'t running', input })
+  await (await import('./mcp-bridge.mjs')).bridge({ sock: MCP_SOCK, path: '/mcp', down: 'OpenHut isn\'t running', input: createReadStream(null, { fd: 0 }) })
   app.exit(0)
 }
 const WINDOW_STATE = join(HOME, 'window.json')
@@ -177,7 +173,6 @@ handle('computers.add', answer(enroll))
 handle('computers.remove', answer(forget))
 handle('computers.enrollments', () => [...enrollments.values()])
 handle('computers.dismiss', ({ dns } = {}) => { enrollments.delete(dns); shareEnrollments(); return { dns } })
-handle('mcp.commands', mcpCommands)
 handle('devices.list', answer(() => openhut.access.list()))
 handle('devices.remove', answer(({ key } = {}) => openhut.access.remove(String(key))))
 handle('devices.allow', answer(allow))
@@ -463,36 +458,23 @@ async function setAll({ agents, wanted }) {
   await poll().catch(() => undefined)
 }
 
-function mcpCommands() {
-  const bridge = bridgeCommand()
-  return computers().map(({ id, name }) => {
-    const server = id === LOCAL.id ? 'openhut' : mcpName({ name, id })
-    return { computer: id, name: server, command: `claude mcp add ${server} -- ${bridge}${id === LOCAL.id ? '' : ` --computer ${id}`}` }
-  })
-}
-
 function bridgeCommand() {
-  if (WIN) return `"${process.execPath}" --mcp`
-  return /\s/.test(BRIDGE) ? `"${BRIDGE}"` : BRIDGE
-}
-
-function mcpName({ name, id }) {
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || id
-  return slug.includes('openhut') ? slug : `openhut-${slug}`
+  return WIN ? { command: process.execPath, args: ['--mcp'] } : { command: BRIDGE, args: [] }
 }
 
 async function serveMcp() {
   if (!PIPES) rmSync(MCP_SOCK, { force: true })
-  const server = createServer((req, res) => {
-    if (!/^\/c\/[\w-]+\/mcp$/.test(req.url ?? '')) return res.writeHead(404).end()
-    const body = ['GET', 'HEAD'].includes(req.method) ? undefined : Readable.toWeb(req)
-    serve(new Request(`${APP_ORIGIN}${req.url}`, { method: req.method, headers: webHeaders(req.headers), body, duplex: 'half' }))
-      .catch((error) => refuse(502, error.message))
-      .then((answer) => {
-        res.writeHead(answer.status, Object.fromEntries(answer.headers))
-        if (answer.body) Readable.fromWeb(answer.body).pipe(res)
-        else res.end()
-      })
+  const mcp = fanOut({
+    local: LOCAL.id,
+    computers: () => openhut.computers.list(),
+    post: ({ computer, msg }) => serve(new Request(`${APP_ORIGIN}/c/${computer}/mcp`, { method: 'POST', body: JSON.stringify(msg), headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' } })).catch((error) => refuse(502, error.message)),
+  })
+  const server = createServer(async (req, res) => {
+    if (req.url !== '/mcp') return res.writeHead(404).end()
+    if (req.method !== 'POST') return res.writeHead(405).end()
+    const answer = await mcp(await text(req))
+    if (!answer) return res.writeHead(202).end()
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(answer))
   })
   const umask = process.umask(0o177)
   const listening = new Promise((resolve, reject) => server.once('error', reject).listen(MCP_SOCK, resolve))
@@ -715,7 +697,7 @@ function window(path = '/agents') {
     width: 1280, height: 820, ...savedBounds(), minWidth: 900, minHeight: 600, show: false, title: 'OpenHut',
     ...(MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 18 } } : { autoHideMenuBar: true }),
     backgroundColor: CANVAS,
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-mcp=${bridgeCommand()}`, `--openhut-version=${app.getVersion()}`] },
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-mcp=${JSON.stringify(bridgeCommand())}`, `--openhut-version=${app.getVersion()}`] },
   })
   win.on('close', saveBounds)
   win.once('ready-to-show', () => win.show())
@@ -748,7 +730,7 @@ function guard(contents) {
   contents.on('will-redirect', intoApp)
   contents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith(`${APP_ORIGIN}/`)) return { action: 'allow' }
-    if (/^https?:\/\//.test(url)) shell.openExternal(url)
+    if (/^https?:\/\//.test(url) || url.startsWith('cursor://anysphere.cursor-deeplink/')) shell.openExternal(url)
     return { action: 'deny' }
   })
   contents.on('context-menu', (_event, params) => {
