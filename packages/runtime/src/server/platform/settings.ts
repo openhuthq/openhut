@@ -9,8 +9,6 @@ const loaded = await db.selectFrom('install_setting').select(['name', 'value']).
 const rows = new Map(loaded.map((row) => [row.name, row.value]))
 
 export const settings = {
-  tailnetUrl: (): string | undefined => rows.get('tailnet_url') || undefined,
-  setTailnetUrl: (url: string | null) => url ? write('tailnet_url', url) : forget('tailnet_url'),
   seatToken: (): string => {
     const sealed = rows.get('seat_token')
     return sealed ? unseal(sealed) : ''

@@ -30,7 +30,6 @@ export const Admin = z.object({
     running: z.number(),
     total: z.number(),
   }),
-  tailnetUrl: z.nullable(z.string()),
   google: z.optional(z.object({ clientId: z.null(), redirectUri: z.string() })),
   usageData: z.boolean(),
   publicKey: z.string(),
@@ -52,7 +51,6 @@ export type Health = z.infer<typeof Health>
 
 export const UpdateAdminFields = {
   seatToken: z.optional(z.string().check(z.regex(/^\S{20,}$/, 'Paste the token that `claude setup-token` printed.'), z.maxLength(2000))),
-  tailnetUrl: z.optional(z.nullable(z.url({ protocol: /^https$/ }).check(z.maxLength(200)))),
   usageData: z.optional(z.boolean()),
 }
 export const UpdateAdmin = z.object(UpdateAdminFields).check(atLeastOneField)

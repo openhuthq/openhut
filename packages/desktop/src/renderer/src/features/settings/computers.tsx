@@ -3,23 +3,21 @@ import { LaptopIcon, Tick02Icon, PlusSignIcon, ServerStack01Icon, SmartPhone01Ic
 import type { Computer, OpenHutAgent, TailnetPeer } from '@openhut/client'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { I, PILL } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
-import { useAdoptComputer, useComputerAdmins, useComputers, useRemoveComputer, useUpdateComputer } from '@/features/computers/api'
+import { useComputerAdmins, useComputers, useRemoveComputer, useUpdateComputer } from '@/features/computers/api'
 import { useEnroll, useEnrollments, type Enrollment } from '@/features/computers/enroll'
 import { failureOf, phaseOf } from '@/features/computers/enroll-steps'
-import { Field } from '@/features/connections/sheet'
 import { HERE, useTailnet } from '@/features/settings/desktop'
 import { byEligibility, stateOf, type Peer, type PeerState } from '@/features/settings/peers'
 import { PairDialog, Waiting } from '@/features/settings/invite'
 import { joinCommand } from '@/features/settings/invitation'
-import { Chevron, Command, Intro, Row, Rows, SubPage, useConfirming } from '@/features/settings/kit'
+import { Chevron, Command, Intro, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { UpdateStatus } from '@/features/settings/update-pill'
-import { formValues } from '@/lib/form'
 import { isPhone } from '@/lib/native'
 import { open, useOpen } from '@/lib/router'
 import { toastError } from '@/lib/toast'
@@ -31,12 +29,11 @@ const GET_TAILSCALE = 'https://tailscale.com/download'
 
 export function ComputersSettings() {
   const [step, name = ''] = (useOpen() ?? '').split(':')
-  if (step === 'tailscale') return <TailscaleStep />
-  if (step === 'ssh') return <TurnOnSsh name={name} />
-  if (step === 'others') return <Others />
   return <>
     <ComputerList />
     {step === 'add' && <AddComputer />}
+    {step === 'tailscale' && <TailscaleStep />}
+    {step === 'ssh' && <TurnOnSsh name={name} />}
   </>
 }
 
@@ -116,7 +113,7 @@ function RemovableRow({ computer, admin, note, agents }: { computer: Computer; a
 function EnrollRow({ enrollment }: { enrollment: Enrollment }) {
   const { start, dismiss } = useEnroll()
   const failed = enrollment.status === 'failed'
-  const note = failed ? failureOf({ error: enrollment.error, url: enrollment.url, name: enrollment.peer.name, here: HERE }).sentence : phaseOf(enrollment.lines)
+  const note = failed ? failureOf({ error: enrollment.error, url: enrollment.url, name: enrollment.peer.name }).sentence : phaseOf(enrollment.lines)
   return <Row icon={<Mark icon={ServerStack01Icon} dot={failed ? 'bg-fail' : undefined} />} title={enrollment.peer.name} note={note}>
     {failed
       ? <>
@@ -137,7 +134,7 @@ function TailscaleStep() {
   const recheck = () => void tailnet.refetch()
   const data = tailnet.data
   const add = (peer: Peer) => { start({ name: peer.name, dns: peer.dns } satisfies TailnetPeer); open() }
-  return <SubPage title="Tailscale" back="">
+  return <TailscaleDialog title="Add over Tailscale" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}>
     {!data && <p className="m-0 flex items-center gap-2 px-2.5 text-[13px] text-mute"><Spinner className="mt-0" />Looking at your tailnet…</p>}
     {data?.state === 'missing' && <Empty title="Install Tailscale to reach your other computers" line="OpenHut finds and sets up your other computers over Tailscale.">
       <a href={GET_TAILSCALE} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Get Tailscale</a>
@@ -147,28 +144,29 @@ function TailscaleStep() {
       <Button type="button" variant="secondary" className={PILL} disabled={tailnet.isFetching} onClick={recheck}>Check again</Button>
     </Empty>}
     {data?.state === 'running' && <Peers peers={data.peers} tailnet={data.tailnet} recheck={recheck} checking={tailnet.isFetching} onAdd={add} />}
-  </SubPage>
+  </TailscaleDialog>
 }
 
 function Peers({ peers, tailnet, recheck, checking, onAdd }: { peers: Peer[]; tailnet: string; recheck: () => void; checking: boolean; onAdd: (peer: Peer) => void }) {
-  const added = new Set((useComputers().data ?? []).map((computer) => computer.url.replace(/^https?:\/\//, '')))
+  const added = new Set((useComputers().data ?? []).map((computer) => computer.name))
   const enrolling = new Set(useEnrollments().data.map((each) => each.peer.dns))
   const sorted = byEligibility(peers)
   if (!sorted.some((peer) => stateOf(peer) === 'ready' || stateOf(peer) === 'ssh-off')) return <Empty title="No other computers on your tailnet yet" line="Install Tailscale on an always-on Linux computer and sign in with the same account.">
     <Button type="button" variant="secondary" className={PILL} disabled={checking} onClick={recheck}>Check again</Button>
   </Empty>
-  return <>
-    <Intro>On {tailnet || 'your tailnet'}. Linux computers that are online with Tailscale SSH on can run agents.</Intro>
+  return <div className="flex flex-col gap-1.5">
+    <p className="m-0 px-2.5 text-mute">On {tailnet || 'your tailnet'}. Linux computers that are online with Tailscale SSH on can run agents.</p>
     <Rows>{sorted.map((peer) => {
       const state = stateOf(peer)
       const note = [OS[peer.os] ?? peer.os, peer.ip].filter(Boolean).join(' · ')
       const icon = <I icon={iconOf(state)} size={20} className={state === 'ready' ? 'text-hue-blue' : 'text-mute'} />
-      if (added.has(peer.dns) || enrolling.has(peer.dns)) return <Row key={peer.name} icon={icon} title={peer.name} note={note}><span className="text-mute">{added.has(peer.dns) ? 'Added' : 'Adding…'}</span></Row>
-      if (state === 'ready') return <Row key={peer.name} onClick={() => onAdd(peer)} icon={icon} title={peer.name} note={note}><span className="text-mute">Add</span><Chevron /></Row>
-      if (state === 'ssh-off') return <Row key={peer.name} onClick={() => open(`ssh:${peer.name}`)} icon={icon} title={peer.name} note={note}><span className="text-mute">{WHY[state]}</span><Chevron /></Row>
-      return <Row key={peer.name} icon={icon} title={<span className="text-mute">{peer.name}</span>} note={note}><span className="text-mute">{WHY[state]}</span></Row>
+      const isAdded = added.has(peer.name) && state !== 'offline'
+      if (isAdded || enrolling.has(peer.dns)) return <Row key={peer.dns} icon={icon} title={peer.name} note={note}><span className="text-mute">{isAdded ? 'Added' : 'Adding…'}</span></Row>
+      if (state === 'ready') return <Row key={peer.dns} onClick={() => onAdd(peer)} icon={icon} title={peer.name} note={note}><span className="text-mute">Add</span><Chevron /></Row>
+      if (state === 'ssh-off') return <Row key={peer.dns} onClick={() => open(`ssh:${peer.name}`)} icon={icon} title={peer.name} note={note}><span className="text-mute">{WHY[state]}</span><Chevron /></Row>
+      return <Row key={peer.dns} icon={icon} title={<span className="text-mute">{peer.name}</span>} note={note}><span className="text-mute">{WHY[state]}</span></Row>
     })}</Rows>
-  </>
+  </div>
 }
 
 function Empty({ title, line, children }: { title: string; line: string; children: ReactNode }) {
@@ -182,11 +180,23 @@ function Empty({ title, line, children }: { title: string; line: string; childre
 
 function TurnOnSsh({ name }: { name: string }) {
   const tailnet = useTailnet()
-  return <SubPage title={`Turn on Tailscale SSH on ${name}`} back="tailscale">
-    <p className="m-0 px-2.5 text-[13px]/[18px] text-body">OpenHut installs itself over Tailscale SSH. Run this once on {name}, then check again.</p>
+  return <TailscaleDialog
+    title={`Turn on Tailscale SSH on ${name}`}
+    back={<Button type="button" variant="secondary" onClick={() => open('tailscale')}>Back</Button>}
+    foot={<Button type="button" variant="primary" disabled={tailnet.isFetching} onClick={() => void tailnet.refetch().then(() => open('tailscale'))}>Check again</Button>}
+  >
+    <p className="m-0 px-2.5 text-body">OpenHut installs itself over Tailscale SSH. Run this once on {name}, then check again.</p>
     <div className="px-2.5"><Command text="sudo tailscale set --ssh" /></div>
-    <div className="px-2.5"><Button type="button" variant="secondary" className={PILL} disabled={tailnet.isFetching} onClick={() => void tailnet.refetch().then(() => open('tailscale'))}>Check again</Button></div>
-  </SubPage>
+  </TailscaleDialog>
+}
+
+function TailscaleDialog({ title, back, foot, children }: { title: string; back: ReactNode; foot?: ReactNode; children: ReactNode }) {
+  const close = () => open()
+  return <Dialog size="narrow" label={title} onClose={close}>
+    <DialogHead title={title} onClose={close} />
+    <div className="flex max-h-[min(480px,calc(100vh-200px))] flex-col gap-4 overflow-y-auto px-3 py-5 text-[13px]/[18px]">{children}</div>
+    <DialogFoot start={back}>{foot}</DialogFoot>
+  </Dialog>
 }
 
 function AddComputer() {
@@ -197,26 +207,9 @@ function AddComputer() {
       <p className="m-0 text-body">Run this on an always-on Linux computer. It installs OpenHut there and adds it to your computers.</p>
       <Command text={joinCommand(code)} />
       <Waiting>Waiting for it to join…</Waiting>
-      <p className="m-0 border-t border-hair pt-4 text-mute">You can also add one <Button type="button" variant="link" onClick={() => open('tailscale')}>over Tailscale</Button> or <Button type="button" variant="link" onClick={() => open('others')}>by its address</Button>.</p>
+      <p className="m-0 border-t border-hair pt-4 text-mute">You can also add one <Button type="button" variant="link" onClick={() => open('tailscale')}>over Tailscale</Button>.</p>
     </>}
   />
-}
-
-function Others() {
-  const adopt = useAdoptComputer()
-  return <SubPage title="Others" back="">
-    <form className="flex flex-col gap-3 px-2.5" onSubmit={(event) => {
-      const field = formValues(event)
-      adopt.mutate({ name: field('name').trim(), url: field('url').trim(), key: field('key').trim() }, { onSuccess: () => open() })
-    }}>
-      <Field label="Name"><Input name="name" required placeholder="Office server" maxLength={60} autoComplete="off" /></Field>
-      <Field label="Address"><Input mono name="url" type="url" required placeholder="https://server.example.com" autoComplete="off" /></Field>
-      <Field label="Key"><Input mono name="key" type="password" required placeholder="The key it was installed with" autoComplete="off" /></Field>
-      <p className="m-0 text-[12px] text-mute">Install OpenHut on it with OPENHUT_CLIENT_KEY_SHA256 set to the key's SHA-256, then paste the key here.</p>
-      <ErrorNote message={adopt.error?.message} />
-      <div><Button type="submit" variant="primary" className={PILL} disabled={adopt.isPending}>{adopt.isPending ? 'Adding…' : 'Add'}</Button></div>
-    </form>
-  </SubPage>
 }
 
 function iconOf(state: PeerState) {

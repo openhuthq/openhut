@@ -12,7 +12,7 @@ const { createOpenHut } = await import(pathToFileURL(join(tree, 'packages/client
 const local = { id: 'local', name: 'Runtime', url: '' }
 const openhut = createOpenHut({
   transport: () => (path: string, init?: RequestInit) => fetch(`${url}${path}`, { ...init, headers: { ...Object.fromEntries(new Headers(init?.headers)), authorization: 'Bearer dev', 'openhut-app-version': appVersion } }),
-  store: { computers: async () => [local], add: async () => local, adopt: async () => local, remove: async () => undefined },
+  store: { computers: async () => [local], add: async () => local, remove: async () => undefined },
   openUrl: () => undefined,
   appVersion,
 })

@@ -17,7 +17,6 @@ export type Platform = {
   store: {
     computers: () => Promise<StoredComputer[]>
     add: (peer: TailnetPeer) => Promise<StoredComputer>
-    adopt: (input: { name: string; url: string; key: string }) => Promise<StoredComputer>
     remove: (id: string) => Promise<void>
   }
   openUrl: (url: string) => void
@@ -121,11 +120,6 @@ export function createOpenHut(platform: Platform) {
     },
     async add(peer: TailnetPeer): Promise<Computer> {
       const added = await platform.store.add(peer)
-      await account.sync().catch(() => undefined)
-      return { ...added, online: true, features: { whatsapp: true, browser: true }, appTooOld: false, runtimeTooOld: false }
-    },
-    async adopt(input: { name: string; url: string; key: string }): Promise<Computer> {
-      const added = await platform.store.adopt(input)
       await account.sync().catch(() => undefined)
       return { ...added, online: true, features: { whatsapp: true, browser: true }, appTooOld: false, runtimeTooOld: false }
     },
