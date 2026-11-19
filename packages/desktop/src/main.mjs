@@ -108,7 +108,7 @@ let blocker
 let setup
 let booted
 let fetching = null
-const updating = { checking: false, available: null, ready: null, error: null }
+const updating = { checking: false, available: null, progress: 0, ready: null, error: null }
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 crashReporter.start({ uploadToServer: false })
 
@@ -885,8 +885,12 @@ function update() {
   auto.on('update-available', (info) => {
     const version = String(info?.version ?? '')
     if (existsSync(SKIPPED) && readFileSync(SKIPPED, 'utf8').trim() === version) return setUpdate({ checking: false, available: null })
-    setUpdate({ checking: false, available: version })
+    setUpdate({ checking: false, available: version, progress: 0 })
     auto.downloadUpdate().catch(() => undefined)
+  })
+  auto.on('download-progress', (info) => {
+    const progress = Math.floor(info?.percent ?? 0)
+    if (progress !== updating.progress) setUpdate({ progress })
   })
   const ready = () => keepApp(() => setUpdate({ checking: false, error: null, ready: { version: updating.available ?? '' } }))
   if (MAC) squirrel.on('update-downloaded', ready)
