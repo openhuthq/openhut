@@ -133,7 +133,7 @@ export function serve(input: ServeInput): { close: () => void } {
   const admitted = ({ session, removed }: { session: Session; removed: Frame }) => {
     const status = input.device(session.key)
     if (status === 'client') return true
-    if (status === 'removed') send(session, removed)
+    send(session, removed)
     kill(session.id)
     return false
   }

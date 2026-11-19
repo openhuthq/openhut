@@ -72,10 +72,11 @@ test('a removed device is told it was removed, then closed', async () => {
   await ctx.close()
 })
 
-test('an unknown key gets closed without an answer', async () => {
+test('an unknown key is told it was removed, then closed', async () => {
   const ctx = await startComputer()
   const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: newDevice().key })
-  await assert.rejects(tunnel.fetch('/agents'), closed)
+  await assert.rejects(tunnel.fetch('/agents'), (error: TunnelError) => error.type === 'removed')
+  await assert.rejects(tunnel.fetch('/again'), closed)
   assert.deepEqual(ctx.handled, [])
   await ctx.close()
 })
@@ -83,7 +84,7 @@ test('an unknown key gets closed without an answer', async () => {
 test('a computer key cannot open a session as a device when device() says unknown', async () => {
   const ctx = await startComputer()
   const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: ctx.key })
-  await assert.rejects(tunnel.fetch('/agents'), closed)
+  await assert.rejects(tunnel.fetch('/agents'), (error: TunnelError) => error.type === 'removed')
   assert.deepEqual(ctx.handled, [])
   await ctx.close()
 })
@@ -159,7 +160,7 @@ test('an unknown device cannot open a socket', async () => {
   const closes: number[] = []
   socket.onclose = event => closes.push(event.code)
   await waitFor(() => closes.length === 1)
-  assert.deepEqual(closes, [1006])
+  assert.deepEqual(closes, [4403])
   assert.deepEqual(ctx.sockets, [])
   await ctx.close()
 })
