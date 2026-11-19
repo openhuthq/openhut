@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { QueryClient } from '@tanstack/react-query'
-import { UPDATE_KEY, downloadUrl, followUpdate, readyNote, updateNote, type UpdateBridge, type UpdateState } from '../../../src/features/settings/update.ts'
+import { UPDATE_KEY, downloadUrl, followUpdate, progressTitle, readyNote, updateNote, type UpdateBridge, type UpdateState } from '../../../src/features/settings/update.ts'
 
 const idle: UpdateState = { current: '0.1.1', checking: false, available: null, ready: null, error: null }
 
@@ -55,4 +55,10 @@ test('without the desktop bridge there is no update state', () => {
 test('the download link matches the platform', () => {
   assert.equal(downloadUrl('darwin'), 'https://openhut.dev/download/mac')
   assert.equal(downloadUrl('linux'), 'https://openhut.dev/download/linux')
+})
+
+test('the update card names how far the download is in plain words', () => {
+  assert.equal(progressTitle(undefined), 'Packing a few things')
+  assert.equal(progressTitle(50), 'Fixing up the hut')
+  assert.equal(progressTitle(95), 'Nearly there')
 })
