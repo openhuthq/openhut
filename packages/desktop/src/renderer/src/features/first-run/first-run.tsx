@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Clock01Icon, Key01Icon, PlayIcon, Refresh01Icon, Shield01Icon, ZapIcon } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
 import { Hut } from '@/components/hut'
@@ -14,7 +15,12 @@ export function FirstRun() {
   const [started, setStarted] = useState(false)
   const run = useFirstRun(started)
   const agentId = run.data?.agentId
-  useEffect(() => { if (agentId) navigate(`/agents/${encodeURIComponent(agentId)}`, true) }, [agentId])
+  const queries = useQueryClient()
+  useEffect(() => {
+    if (!agentId) return
+    void queries.invalidateQueries()
+    navigate(`/agents/${encodeURIComponent(agentId)}`, true)
+  }, [agentId, queries])
   return <div className="flex h-dvh flex-col bg-canvas text-ink">
     <div className="flex h-[52px] shrink-0 items-center justify-center text-[13px] font-semibold text-mute in-data-desktop:select-none in-data-desktop:[-webkit-app-region:drag]">{started ? 'OpenHut' : ''}</div>
     {started ? <Starting run={run.data} error={run.error?.message} onRetry={() => void run.refetch()} /> : <Welcome onStart={() => setStarted(true)} />}

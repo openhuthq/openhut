@@ -582,9 +582,10 @@ async function meet(run) {
   const agent = agents[0] ?? await api('/api/agents', { method: 'POST', body: { name: FIRST_AGENT } })
   await api(`/api/agents/${agent.id}`, { method: 'PATCH', body: { wanted: 'running' } })
   run.steps[3][1] = `${agent.name} is starting`
-  const ready = await waitFor(async () => (await api(`/api/agents/${agent.id}`)).health === 'answering', 300)
+  let health = ''
+  const ready = await waitFor(async () => ['answering', 'no_seat'].includes(health = (await api(`/api/agents/${agent.id}`)).health), 300)
   if (!ready) throw new Error(`${agent.name} didn't answer within 5 minutes`)
-  step(3, `${agent.name} is answering`)
+  step(3, health === 'no_seat' ? 'Connect Claude so it can answer' : `${agent.name} is answering`)
   run.agentId = agent.id
 }
 
