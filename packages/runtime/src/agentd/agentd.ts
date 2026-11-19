@@ -424,7 +424,7 @@ function specOf({ id, net, browser }: { id: string; net: number; browser: boolea
       readOnly(id, CLAUDE_SETTINGS_FILE, '.claude/settings.json'),
       { host: PLUGINS, guest: '/opt/data/plugins', readOnly: true },
       { host: CLAUDE_BIN, guest: '/usr/local/bin/claude', readOnly: true },
-      ...(existsSync(`${WHATSAPP_BRIDGE}/node_modules`) ? [{ host: WHATSAPP_BRIDGE, guest: '/opt/data/scripts/whatsapp-bridge', readOnly: true }] : []),
+      ...(box.name !== 'native' && existsSync(`${WHATSAPP_BRIDGE}/node_modules`) ? [{ host: WHATSAPP_BRIDGE, guest: '/opt/data/scripts/whatsapp-bridge', readOnly: true }] : []),
       ...(browser ? (box.name === 'native' ? [{ host: BROWSER_BIN, guest: '/usr/local/bin/agent-browser', readOnly: true }] : browserMounts(id)) : []),
     ],
     tmpfs: [{ guest: '/tmp', sizeMib: browser ? BROWSER_TMP_MIB : TMP_MIB }, ...LOCKED_TMPFS.map((guest) => ({ guest, sizeMib: 4 / 1024, readOnly: true }))],

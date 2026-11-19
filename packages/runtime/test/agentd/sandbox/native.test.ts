@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SandboxSpec } from '../../../src/agentd/sandbox/sandbox.ts'
@@ -8,7 +8,7 @@ import type { SandboxSpec } from '../../../src/agentd/sandbox/sandbox.ts'
 const data = mkdtempSync(join(tmpdir(), 'native-'))
 process.env.AGENTD_DATA = data
 process.env.AGENTD_HERMES = join(data, 'runtime')
-const { hostOf } = await import('../../../src/agentd/sandbox/native.ts')
+const { hostOf, layout } = await import('../../../src/agentd/sandbox/native.ts')
 
 const spec: SandboxSpec = {
   id: 'ag_test0001', image: 'x', cpus: 1, memoryMib: 1024, user: '1:1', entrypoint: '/opt/hermes/bin/hermes', command: ['gateway', 'run'], env: {}, labels: {}, tmpfs: [{ guest: '/tmp', sizeMib: 16 }],
@@ -29,4 +29,17 @@ test('hostOf sends Hermes to the bundled Python and /tmp to the agent own tmp', 
   assert.match(hostOf({ spec, guest: '/opt/hermes/bin/hermes' }), /runtime[\\/]python[\\/](bin[\\/]python3|python\.exe)$/)
   assert.equal(hostOf({ spec, guest: '/tmp/hermes-locks' }), join(data, 'native', 'ag_test0001', 'tmp', 'hermes-locks'))
   assert.equal(hostOf({ spec, guest: '/usr/bin/env' }), '/usr/bin/env')
+})
+
+test('laying an agent out again never deletes what its shared folders hold', () => {
+  const shared = join(data, 'plugins')
+  const home = join(data, 'home')
+  mkdirSync(shared, { recursive: true })
+  mkdirSync(home, { recursive: true })
+  writeFileSync(join(shared, 'plugin.py'), 'x')
+  const agent: SandboxSpec = { ...spec, id: 'ag_test0002', mounts: [{ host: home, guest: '/opt/data', readOnly: false }, { host: shared, guest: '/opt/data/plugins', readOnly: true }] }
+  layout(agent)
+  layout(agent)
+  assert.ok(existsSync(join(shared, 'plugin.py')))
+  assert.ok(existsSync(join(home, 'plugins', 'plugin.py')))
 })

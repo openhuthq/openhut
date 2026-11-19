@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
-import { copyFileSync, existsSync, linkSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join, resolve } from 'node:path'
 import { PassThrough } from 'node:stream'
 import type { Exec, Mount, Sandboxes, SandboxSpec, SandboxState } from './sandbox.ts'
@@ -55,7 +55,7 @@ function placeMount({ spec, mount }: { spec: SandboxSpec; mount: Mount }) {
 
 function tool({ from, to }: { from: string; to: string }) {
   if (!WIN) return link({ from, to })
-  rmSync(to, { force: true })
+  clear(to)
   try {
     linkSync(from, to)
   } catch {
@@ -64,9 +64,15 @@ function tool({ from, to }: { from: string; to: string }) {
 }
 
 function link({ from, to }: { from: string; to: string }) {
-  rmSync(to, { recursive: true, force: true })
+  clear(to)
   mkdirSync(dirname(to), { recursive: true })
-  symlinkSync(from, to, WIN ? 'junction' : undefined)
+  if (WIN) return cpSync(from, to, { recursive: true })
+  symlinkSync(from, to)
+}
+
+function clear(path: string) {
+  if (lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink()) return unlinkSync(path)
+  rmSync(path, { recursive: true, force: true })
 }
 
 function envOf(spec: SandboxSpec): Record<string, string> {
