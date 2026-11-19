@@ -177,6 +177,21 @@ jobs:
         if: matrix.name == 'windows'
         working-directory: packages/desktop
         run: node scripts/windows-e2e.mjs --installer release/OpenHut-Setup-x64.exe --out windows-e2e --sandbox native
+      - name: When the sandbox fails, ask srt-win directly, from PowerShell and from Node
+        if: failure() && matrix.name == 'windows'
+        shell: pwsh
+        run: |
+          $env:SANDBOX_RUNTIME_WIN_DEBUG = '1'
+          $exe = (Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter srt-win.exe | Select-Object -First 1).FullName
+          whoami /all | Select-String 'User Name|Mandatory|runneradmin' -Context 0,1
+          Get-Service seclogon
+          & $exe user status
+          $l = [System.Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 49995); $l.Start()
+          Write-Host '--- wfp verify from PowerShell'
+          & $exe wfp verify --target 127.0.0.1:49995; Write-Host "exit $LASTEXITCODE"
+          Write-Host '--- wfp verify from Node'
+          node -e "const r=require('child_process').spawnSync(process.argv[1],['wfp','verify','--target','127.0.0.1:49995'],{encoding:'utf8'});console.log(r.status,r.stdout,r.stderr)" $exe
+          $l.Stop()
       - uses: actions/upload-artifact@v4
         if: always() && matrix.name == 'windows'
         with:
