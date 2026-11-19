@@ -25,6 +25,7 @@ export const config = {
   modelMode: process.env.OPENHUT_MODEL === 'test' ? 'test' as const : 'claude' as const,
   agentApi: process.env.OPENHUT_AGENT_API,
   agentGateway: process.env.OPENHUT_AGENT_GATEWAY,
+  agentHostNet: process.env.OPENHUT_AGENT_HOST_NET === '1',
   slackApi: process.env.OPENHUT_SLACK_API ?? 'https://slack.com/api',
   telegramApi: process.env.OPENHUT_TELEGRAM_API ?? 'https://api.telegram.org',
   anthropicApi: process.env.OPENHUT_ANTHROPIC_API ?? (process.env.OPENHUT_MODEL === 'test' ? 'http://127.0.0.1:8081/test-anthropic' : 'https://api.anthropic.com'),

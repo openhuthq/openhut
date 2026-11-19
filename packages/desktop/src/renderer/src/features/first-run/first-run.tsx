@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Clock01Icon, Key01Icon, PlayIcon, Refresh01Icon, Shield01Icon, ZapIcon } from '@hugeicons/core-free-icons'
+import { Clock01Icon, Key01Icon, PlayIcon, Refresh01Icon, ServerStack01Icon, Shield01Icon, UserIcon } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
 import { Hut } from '@/components/hut'
 import { ErrorNote } from '@/components/error-note'
@@ -10,6 +10,7 @@ import { I } from '@/components/kit'
 import { Progress } from '@/features/settings/kit'
 import { navigate } from '@/lib/router'
 import { cn } from '@/lib/utils'
+import { NOTICE_KEY } from '@/features/first-run/notice'
 
 export function FirstRun() {
   const [started, setStarted] = useState(false)
@@ -18,6 +19,9 @@ export function FirstRun() {
   const queries = useQueryClient()
   useEffect(() => {
     if (!agentId) return
+    try {
+      localStorage.setItem(NOTICE_KEY, 'seen')
+    } catch {}
     void queries.invalidateQueries()
     navigate(`/agents/${encodeURIComponent(agentId)}`, true)
   }, [agentId, queries])
@@ -31,12 +35,12 @@ function Welcome({ onStart }: { onStart: () => void }) {
   return <Center>
     <div className="relative"><span className="absolute inset-0 scale-150 rounded-md bg-[radial-gradient(circle,#f7c94855,transparent_65%)]" /><Hut className="relative size-28" /></div>
     <Headline>Your agents. On this {HERE}.</Headline>
-    <p className="m-0 max-w-[440px] text-[14px]/[1.5] text-body">Each agent gets its own sealed computer. Chats, memory and keys stay here. There's no account to make.</p>
+    <p className="m-0 max-w-[440px] text-[14px]/[1.5] text-body">{WORDS.sandboxed ? 'Each agent runs in its own sandbox.' : `Agents run on this ${HERE}, as you, like any app you install.`} Chats, memory and keys stay here. There's no account to make.</p>
     <Button variant="primary" size="lg" className="mt-2 w-[240px] justify-center gap-2" onClick={onStart} autoFocus><I icon={PlayIcon} size={15} />Start</Button>
     <div className="mt-2 flex items-center gap-5 text-[12px] text-mute">
-      <span className="inline-flex items-center gap-1.5"><I icon={Shield01Icon} size={14} />Sealed per agent</span>
+      <span className="inline-flex items-center gap-1.5"><I icon={WORDS.sandboxed ? Shield01Icon : UserIcon} size={14} />{WORDS.sandboxed ? 'Sealed per agent' : 'Runs as you'}</span>
       <span className="inline-flex items-center gap-1.5"><I icon={Key01Icon} size={14} />Keys in the {WORDS.keychain}</span>
-      <span className="inline-flex items-center gap-1.5"><I icon={ZapIcon} size={14} />About 1 GB of memory per agent</span>
+      <span className="inline-flex items-center gap-1.5"><I icon={ServerStack01Icon} size={14} />Add a server anytime</span>
     </div>
   </Center>
 }

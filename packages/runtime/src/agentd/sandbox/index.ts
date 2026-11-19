@@ -7,7 +7,7 @@ export async function sandboxes(): Promise<Sandboxes> {
   switch (name) {
     case 'gvisor': return gvisor
     case 'memory': return memory
-    case 'microsandbox': return (await import('./microsandbox.ts')).microsandbox
-    default: throw new Error(`unknown OPENHUT_SANDBOX ${name}; use gvisor, microsandbox or memory`)
+    case 'native': return (await import('./native.ts')).native
+    default: throw new Error(`unknown OPENHUT_SANDBOX ${name}; use gvisor, native or memory`)
   }
 }

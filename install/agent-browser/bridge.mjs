@@ -7,7 +7,7 @@ let pinged = Date.now()
 
 process.stdout.on('error', () => process.exit(0))
 
-const ws = new WebSocket(`ws://127.0.0.1:9223/?pacing=ack&maxFps=${fps}`)
+const ws = new WebSocket(`ws://127.0.0.1:${process.env.AGENT_BROWSER_STREAM_PORT || 9223}/?pacing=ack&maxFps=${fps}`)
 ws.addEventListener('error', () => {
   process.stdout.write('{"type":"closed"}\n')
   process.exit(0)

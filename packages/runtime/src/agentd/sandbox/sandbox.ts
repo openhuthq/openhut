@@ -1,6 +1,8 @@
 import type { Readable, Writable } from 'node:stream'
 
 export const AGENT_API_PORT_BASE = 18600
+export const WHATSAPP_PORT_BASE = 19600
+export const BROWSER_STREAM_PORT_BASE = 20600
 export type Mount = { host: string; guest: string; readOnly: boolean }
 export type SandboxSpec = {
   id: string
@@ -20,7 +22,7 @@ export type SandboxState = { id: string; running: boolean; startedAt?: string; l
 export type Pull = { done: number; total: number; unit: 'bytes' | 'layers' }
 export type Exec = { stdin: Writable | null; stdout: Readable; exit: Promise<number>; kill: () => void }
 export type Sandboxes = {
-  name: 'gvisor' | 'microsandbox' | 'memory'
+  name: 'gvisor' | 'memory' | 'native'
   ready(): Promise<{ ok: boolean; reason?: string }>
   create(spec: SandboxSpec): Promise<void>
   start(id: string): Promise<void>

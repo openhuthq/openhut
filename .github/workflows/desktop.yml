@@ -3,39 +3,34 @@ name: Desktop app
 on:
   push:
     tags: ['v*']
+    branches-ignore: [main]
   workflow_dispatch:
+    inputs:
+      full:
+        description: Sign, notarize and run the update test (always on for a tag)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   actions: write
 
-jobs:
-  claude:
-    runs-on: ubuntu-latest
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-      - name: The pinned Linux claude the apps download on first run is on dl.openhut.dev
-        run: scripts/r2.sh claude
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
-  release:
-    needs: claude
-    runs-on: macos-15
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      TAGGED: ${{ startsWith(github.ref, 'refs/tags/') }}
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  TAGGED: ${{ startsWith(github.ref, 'refs/tags/') }}
+  FULL: ${{ startsWith(github.ref, 'refs/tags/') || inputs.full }}
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
       - name: Signing and notary secrets are set
+        if: env.FULL == 'true'
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
@@ -52,65 +47,37 @@ jobs:
         if: env.TAGGED == 'true'
         run: |
           test "$GITHUB_REF_NAME" = "v$(node -p "require('./packages/desktop/package.json').version")"
-          for url in https://openhut.dev/; do
-            served=$(curl -fsSL "$url" | sed -n 's/^OPENHUT_BUILD="\(.*\)"$/\1/p')
-            [ -z "$served" ] || [ "$(printf '%s\n%s\n' "$served" "${GITHUB_REF_NAME#v}" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" = "${GITHUB_REF_NAME#v}" ] && [ "$served" != "${GITHUB_REF_NAME#v}" ] ||
-              { echo "::error::$url serves runtime build $served, and ${GITHUB_REF_NAME#v} isn't newer, so servers would never be offered this release. Use a higher version."; exit 1; }
-          done
-      - name: The release isn't published yet
+          served=$(curl -fsSL https://openhut.dev/ | sed -n 's/^OPENHUT_BUILD="\(.*\)"$/\1/p')
+          [ -z "$served" ] || [ "$(printf '%s\n%s\n' "$served" "${GITHUB_REF_NAME#v}" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" = "${GITHUB_REF_NAME#v}" ] && [ "$served" != "${GITHUB_REF_NAME#v}" ] ||
+            { echo "::error::openhut.dev serves runtime build $served, and ${GITHUB_REF_NAME#v} isn't newer, so servers would never be offered this release. Use a higher version."; exit 1; }
+      - name: Cloudflare takes uploads past wrangler's 300 MB limit
+        if: env.TAGGED == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: scripts/r2.sh check
+      - name: The tag has an unpublished draft release for every build to upload into
         if: env.TAGGED == 'true'
         run: |
           if [ "$(gh release view "$GITHUB_REF_NAME" --json isDraft -q .isDraft 2>/dev/null)" = false ]; then
             echo "::error::$GITHUB_REF_NAME is already published, and a published release never changes. Bump the version instead."
             exit 1
           fi
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "OpenHut ${GITHUB_REF_NAME#v}" --notes ""
+
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npx turbo run typecheck test
-      - name: Build and sign
-        working-directory: packages/desktop
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: npm run build && npm run pack-backend && npx electron-builder --mac --arm64 --publish never
-      - name: Notarize, staple and check Gatekeeper
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
-          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
-        run: packages/desktop/scripts/notarize.sh
-      - name: Signed so the release before it accepts it
-        working-directory: packages/desktop
-        run: |
-          mkdir -p previous/zip previous/app
-          gh release download --repo "$GITHUB_REPOSITORY" --pattern 'OpenHut-*-arm64.zip' --dir previous/zip
-          ditto -x -k previous/zip/*.zip previous/app
-          requirement=$(codesign -d -r- previous/app/OpenHut.app 2>&1 | sed -n 's/^designated => //p')
-          echo "The previous release requires: $requirement"
-          mkdir -p shipped && ditto -x -k release/OpenHut-*-arm64.zip shipped
-          for app in release/mac-arm64/OpenHut.app shipped/OpenHut.app; do codesign --verify --deep --strict -R "=$requirement" "$app"; done
-      - name: The previous version updates to this one
-        working-directory: packages/desktop
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: |
-          npx electron-builder --mac zip --arm64 -c.extraMetadata.version=0.0.1 -c.directories.output=release-old --publish never
-          mkdir -p feed && cp release/latest-mac.yml release/OpenHut-*-arm64.zip release/OpenHut-*-arm64.zip.blockmap feed/
-          node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via button
-          node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via quit
-      - name: Upload to a draft release
-        if: env.TAGGED == 'true'
-        working-directory: packages/desktop/release
-        run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "OpenHut ${GITHUB_REF_NAME#v}" --notes ""
-          gh release upload "$GITHUB_REF_NAME" OpenHut-arm64.dmg OpenHut-*-arm64.zip OpenHut-*-arm64.zip.blockmap latest-mac.yml --clobber
 
   compat:
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -123,13 +90,18 @@ jobs:
       - name: This release and the one before it work together both ways
         run: scripts/compat.sh "$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
 
-  windows:
-    needs: claude
-    runs-on: windows-2022
+  build:
+    needs: draft
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macos, os: macos-15 }
+          - { name: windows, os: windows-2022 }
+          - { name: linux, os: ubuntu-latest }
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 60
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      TAGGED: ${{ startsWith(github.ref, 'refs/tags/') }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -137,60 +109,116 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - uses: astral-sh/setup-uv@v6
+        if: matrix.name != 'linux'
+      - uses: actions/cache@v4
+        if: matrix.name != 'linux'
+        with:
+          path: packages/desktop/dist/native-cache
+          key: native-runtime-${{ runner.os }}-${{ hashFiles('install/native-runtime.json', 'packages/desktop/scripts/pack-hermes.mjs') }}
+
+      - name: Build and sign the app
+        if: matrix.name == 'macos' && env.FULL == 'true'
+        working-directory: packages/desktop
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: npm run build && npm run pack-backend && npx electron-builder --mac --arm64 --publish never
+      - name: Build the app unsigned
+        if: matrix.name == 'macos' && env.FULL != 'true'
+        working-directory: packages/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run build && npm run pack-backend && npx electron-builder --mac --arm64 --publish never && codesign --force --deep --sign - release/mac-arm64/OpenHut.app
+      - name: Notarize, staple and check Gatekeeper
+        if: matrix.name == 'macos' && env.FULL == 'true'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: packages/desktop/scripts/notarize.sh
+      - name: Signed so the release before it accepts it
+        if: matrix.name == 'macos' && env.FULL == 'true'
+        working-directory: packages/desktop
+        run: |
+          mkdir -p previous/zip previous/app
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern 'OpenHut-*-arm64.zip' --dir previous/zip
+          ditto -x -k previous/zip/*.zip previous/app
+          requirement=$(codesign -d -r- previous/app/OpenHut.app 2>&1 | sed -n 's/^designated => //p')
+          echo "The previous release requires: $requirement"
+          mkdir -p shipped && ditto -x -k release/OpenHut-*-arm64.zip shipped
+          for app in release/mac-arm64/OpenHut.app shipped/OpenHut.app; do codesign --verify --deep --strict -R "=$requirement" "$app"; done
+      - name: The previous version updates to this one
+        if: matrix.name == 'macos' && env.FULL == 'true'
+        working-directory: packages/desktop
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          npx electron-builder --mac zip --arm64 -c.extraMetadata.version=0.0.1 -c.directories.output=release-old --publish never
+          mkdir -p feed && cp release/latest-mac.yml release/OpenHut-*-arm64.zip release/OpenHut-*-arm64.zip.blockmap feed/
+          node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via button
+          node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via quit
+      - name: Add the Mac app to the draft release
+        if: matrix.name == 'macos' && env.TAGGED == 'true'
+        working-directory: packages/desktop/release
+        run: gh release upload "$GITHUB_REF_NAME" OpenHut-arm64.dmg OpenHut-*-arm64.zip OpenHut-*-arm64.zip.blockmap latest-mac.yml --clobber
+
       - name: Build the installer
+        if: matrix.name == 'windows'
         working-directory: packages/desktop
         run: npm run dist:win
-      - name: Install it, meet the first agent in its microVM, chat, use the MCP, restart, and keep the evidence
+      - name: The WhatsApp bridge is in every stage of the build
+        if: matrix.name == 'windows'
+        shell: bash
         working-directory: packages/desktop
-        shell: pwsh
         run: |
-          $cwd = (Get-Location).Path
-          $node = (Get-Command node).Source
-          Set-Content e2e.cmd "@`"$node`" scripts\windows-e2e.mjs --installer release\OpenHut-Setup-x64.exe --out windows-e2e --sandbox microsandbox > windows-e2e.log 2>&1`r`n@echo %ERRORLEVEL%> windows-e2e.exit"
-          $run = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "cmd /c `"$cwd\e2e.cmd`""; CurrentDirectory = $cwd }
-          while (Get-Process -Id $run.ProcessId -ErrorAction SilentlyContinue) { Start-Sleep 5 }
-          Get-Content windows-e2e.log
-          exit [int](Get-Content windows-e2e.exit)
+          for dir in dist/native-cache/hermes/*/hermes/scripts/whatsapp-bridge dist/backend/runtime/hermes/scripts/whatsapp-bridge release/win-unpacked/resources/backend/runtime/hermes/scripts/whatsapp-bridge; do
+            echo "$dir: $(ls $dir 2>&1 | head -5 | tr '\n' ' ') node_modules: $(ls $dir/node_modules 2>/dev/null | wc -l)"
+          done
+      - name: Install it, meet the first agent, run five at once, chat, use the MCP, restart, and keep the evidence
+        if: matrix.name == 'windows'
+        working-directory: packages/desktop
+        run: node scripts/app-e2e.mjs --installer release/OpenHut-Setup-x64.exe --out app-e2e
+      - name: Open it, meet the first agent, run five at once, chat, use the MCP, restart, and keep the evidence
+        if: matrix.name == 'macos'
+        working-directory: packages/desktop
+        run: node scripts/app-e2e.mjs --app release/mac-arm64/OpenHut.app --out app-e2e
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && matrix.name != 'linux'
         with:
-          name: windows-e2e
+          name: ${{ matrix.name }}-e2e
           path: |
-            packages/desktop/windows-e2e/*.png
-            packages/desktop/windows-e2e/evidence.json
-            packages/desktop/windows-e2e/home/logs/
+            packages/desktop/app-e2e/*.png
+            packages/desktop/app-e2e/evidence.json
+            packages/desktop/app-e2e/home/logs/
+            packages/desktop/app-e2e/home/data/native/*/agent.log
       - name: Add the installer to the draft release
-        if: env.TAGGED == 'true'
+        if: matrix.name == 'windows' && env.TAGGED == 'true'
         working-directory: packages/desktop/release
         shell: bash
-        run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "OpenHut ${GITHUB_REF_NAME#v}" --notes ""
-          gh release upload "$GITHUB_REF_NAME" OpenHut-Setup-x64.exe OpenHut-Setup-x64.exe.blockmap latest.yml --clobber
+        run: gh release upload "$GITHUB_REF_NAME" OpenHut-Setup-x64.exe OpenHut-Setup-x64.exe.blockmap latest.yml --clobber
 
-  linux:
-    needs: [release, compat, windows]
-    runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      TAGGED: ${{ startsWith(github.ref, 'refs/tags/') }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci --no-audit --no-fund
       - name: Build the AppImage and deb, and add them to the draft release
+        if: matrix.name == 'linux'
         working-directory: packages/desktop
         run: umask 022 && npm run build && npm run pack-backend && npx electron-builder --linux --x64 --publish "$([ "$TAGGED" = true ] && echo always || echo never)"
       - name: Add the server runtime of the same commit to the draft release
-        if: env.TAGGED == 'true'
+        if: matrix.name == 'linux' && env.TAGGED == 'true'
         run: |
           BUILD="${GITHUB_REF_NAME#v}" TGZ="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/openhut.tgz" scripts/release.sh
           sh -n dist/install.sh
           gh release upload "$GITHUB_REF_NAME" dist/install.sh dist/openhut.tgz --clobber
+
+  publish:
+    needs: [checks, compat, build]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
       - name: Every file is there, then put them on dl.openhut.dev and publish the release
-        if: env.TAGGED == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

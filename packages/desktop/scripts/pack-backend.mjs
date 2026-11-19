@@ -2,11 +2,12 @@ import { build } from 'esbuild'
 import { execFileSync } from 'node:child_process'
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { packAgentBrowser, packClaude, packHermes } from './pack-hermes.mjs'
 
 const ROOT = join(import.meta.dirname, '../../..')
 const OUT = join(import.meta.dirname, '../dist/backend')
 const LINUX = process.platform === 'linux'
-const NATIVE = LINUX ? [] : ['@electric-sql/pglite', 'microsandbox', '@microsandbox/types', `@superradcompany/microsandbox-${process.platform}-${process.arch}${process.platform === 'win32' ? '-msvc' : ''}`]
+const NATIVE = LINUX ? [] : ['@electric-sql/pglite']
 
 rmSync(OUT, { recursive: true, force: true })
 
@@ -28,17 +29,10 @@ async function runtime() {
   await bundle('packages/runtime/src/server/app.ts', 'packages/runtime/src/server/platform/app.mjs')
   writeFileSync(join(OUT, 'BUILD'), `${JSON.parse(readFileSync(join(import.meta.dirname, '../package.json'), 'utf8')).version}-${execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT }).toString().trim()}\n`)
   writeFileSync(join(OUT, 'packages/runtime/package.json'), JSON.stringify({ version: JSON.parse(readFileSync(join(ROOT, 'packages/runtime/package.json'), 'utf8')).version }))
-  for (const path of ['install/agent-image', 'install/agent-browser', 'vendor/hermes-plugins']) cpSync(join(ROOT, path), join(OUT, path), { recursive: true })
+  for (const path of ['install/agent-image', 'install/agent-browser', 'install/native-runtime.json', 'vendor/hermes-plugins']) cpSync(join(ROOT, path), join(OUT, path), { recursive: true })
   for (const name of NATIVE) cpSync(join(ROOT, 'node_modules', name), join(OUT, 'node_modules', name), { recursive: true, dereference: true })
-  await claude()
+  await packHermes(join(OUT, 'runtime'))
+  await packClaude(join(OUT, 'bin/native'))
+  await packAgentBrowser(join(OUT, 'bin/native'))
 }
 
-async function claude() {
-  const installer = readFileSync(join(ROOT, 'install/install.sh'), 'utf8')
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
-  const version = /^CLAUDE=(\S+)$/m.exec(installer)[1]
-  const sha256 = new RegExp(`${arch === 'arm64' ? 'aarch64' : 'x86_64'}\\)[\\s\\S]*?CLAUDE_SHA256=(\\w+)`).exec(installer)[1]
-  mkdirSync(join(OUT, 'bin'), { recursive: true })
-  writeFileSync(join(OUT, 'bin/claude-version'), version)
-  writeFileSync(join(OUT, 'bin/claude-linux.json'), JSON.stringify({ version, sha256, urls: [`https://dl.openhut.dev/claude/${version}/linux-${arch}/claude.zst`, `https://downloads.claude.ai/claude-code-releases/${version}/linux-${arch}/claude`] }))
-}
