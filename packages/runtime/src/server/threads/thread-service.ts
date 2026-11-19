@@ -1,6 +1,7 @@
 import type { FastifyReply } from 'fastify'
 import type { Selectable } from 'kysely'
-import { createUIMessageStream, pipeUIMessageStreamToResponse, type UIMessageStreamWriter } from 'ai'
+import { createUIMessageStream, pipeUIMessageStreamToResponse, type UIMessage, type UIMessageChunk } from 'ai'
+import { applySpecPatch, pipeJsonRender, SPEC_DATA_PART_TYPE, type JsonPatch } from '@json-render/core'
 import * as z from 'zod/mini'
 import { AGENT_HOME, ChatMessage, fileInHome, MAX_FILES, ToolProgress, UPLOADS, uploadName, type ChatCall, type ChatFile, type HomeFile, type SendChat, type Thread, type ThreadWithMessages, type UploadFile } from '@openhut/common/threads/thread.ts'
 import type { Deleted } from '@openhut/common/api.ts'
@@ -18,6 +19,7 @@ import type { Caller } from '../team/identity.ts'
 const MAX_THREADS = 200
 const TURN_MS = 15 * 60_000
 const StoredMessages = z.array(ChatMessage)
+const SpecPatch = z.object({ type: z.literal('patch'), patch: z.looseObject({ op: z.string(), path: z.string() }) })
 const Chunk = z.object({
   choices: z.optional(z.array(z.object({ delta: z.optional(z.object({ content: z.optional(z.nullable(z.string())) })) }))),
   error: z.optional(z.object({ message: z.string() })),
@@ -123,14 +125,14 @@ export const threadService = {
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         writer.write({ type: 'start' })
-        await relay({ agent, session: `openhut-${id}`, message: messages[messages.length - 1], writer, signal: abort.signal })
+        for await (const chunk of joinText(pipeJsonRender(relayed({ agent, session: `openhut-${id}`, message: messages[messages.length - 1], signal: abort.signal })))) writer.write(chunk)
         const calls = await callsSince({ agentId: agent.id, after: lastCall?.id ?? '0' })
         if (calls.length) writer.write({ type: 'data-calls', data: calls })
         writer.write({ type: 'finish' })
       },
       onError: messageOf,
       onEnd: async ({ messages: answered, isAborted }) => {
-        await save({ id, messages: [...messages, ...(z.safeParse(StoredMessages, answered).data ?? [])] })
+        await save({ id, messages: [...messages, ...(z.safeParse(StoredMessages, answered.map(foldCard)).data ?? [])] })
         log.info({ event: 'agent.chat', agent: agent.id, thread: id, ms: Date.now() - started, aborted: isAborted })
       },
     })
@@ -150,7 +152,41 @@ async function callAgent({ agent, session, message, signal }: { agent: AgentRow;
   return res.body
 }
 
-async function relay({ agent, session, message, writer, signal }: { agent: AgentRow; session: string; message: ChatMessage; writer: UIMessageStreamWriter; signal: AbortSignal }): Promise<void> {
+function relayed(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal }): ReadableStream<UIMessageChunk> {
+  return new ReadableStream({
+    start: (controller) => relay({ ...input, writer: { write: (chunk) => controller.enqueue(chunk) } }).then(() => controller.close(), (err: unknown) => controller.error(err)),
+  })
+}
+
+function joinText(stream: ReadableStream<UIMessageChunk>): ReadableStream<UIMessageChunk> {
+  let pending: Extract<UIMessageChunk, { type: 'text-delta' }> | undefined
+  return stream.pipeThrough(new TransformStream<UIMessageChunk, UIMessageChunk>({
+    transform: (chunk, controller) => {
+      if (chunk.type === 'text-delta' && pending?.id === chunk.id) {
+        pending = { ...pending, delta: pending.delta + chunk.delta }
+        return
+      }
+      if (pending) controller.enqueue(pending)
+      pending = chunk.type === 'text-delta' ? chunk : undefined
+      if (!pending) controller.enqueue(chunk)
+    },
+    flush: (controller) => { if (pending) controller.enqueue(pending) },
+  }))
+}
+
+function foldCard(message: UIMessage): UIMessage {
+  const patches = message.parts.flatMap((part) => part.type === SPEC_DATA_PART_TYPE ? z.safeParse(SpecPatch, part.data).data ?? [] : [])
+  if (!patches.length) return message
+  const spec = { root: '', elements: {} }
+  for (const { patch } of patches) applySpecPatch(spec, patch as JsonPatch)
+  const first = message.parts.findIndex((part) => part.type === SPEC_DATA_PART_TYPE)
+  return { ...message, parts: message.parts.flatMap((part, index) => {
+    if (index === first) return [{ type: SPEC_DATA_PART_TYPE, data: { type: 'flat', spec } }]
+    return part.type === SPEC_DATA_PART_TYPE ? [] : [part]
+  }) }
+}
+
+async function relay({ agent, session, message, writer, signal }: { agent: AgentRow; session: string; message: ChatMessage; writer: { write: (chunk: UIMessageChunk) => void }; signal: AbortSignal }): Promise<void> {
   const body = await callAgent({ agent, session, message: await openAiOf({ agentId: agent.id, message }), signal })
   let text = 0
   let open = false

@@ -62,6 +62,8 @@
   "dependencies": {
     "@capacitor/browser": "8.0.5",
     "@capacitor/keyboard": "8.0.6",
+    "@json-render/core": "0.23.2",
+    "@json-render/react": "0.23.2",
     "electron-updater": "6.8.12",
     "ws": "8.21.0"
   }
