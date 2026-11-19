@@ -25,7 +25,7 @@ let ready: Promise<void> | undefined
 function init() {
   ready ??= start().catch(async (e: unknown) => {
     if (!WIN) throw e
-    await installWindowsSandboxAsync({ srtWin: resolveSrtWin({ path: VENDORED_SRT_WIN_EXE }) })
+    await installWindowsSandboxAsync({ srtWin: resolveSrtWin({ path: VENDORED_SRT_WIN_EXE }), skipProfileGrant: true })
     return start()
   })
   return ready
