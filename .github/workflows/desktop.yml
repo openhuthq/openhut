@@ -164,6 +164,14 @@ jobs:
         if: matrix.name == 'windows'
         working-directory: packages/desktop
         run: npm run dist:win
+      - name: The WhatsApp bridge is in every stage of the build
+        if: matrix.name == 'windows'
+        shell: bash
+        working-directory: packages/desktop
+        run: |
+          for dir in dist/native-cache/hermes/*/hermes/scripts/whatsapp-bridge dist/backend/runtime/hermes/scripts/whatsapp-bridge release/win-unpacked/resources/backend/runtime/hermes/scripts/whatsapp-bridge; do
+            echo "$dir: $(ls $dir 2>&1 | head -5 | tr '\n' ' ') node_modules: $(ls $dir/node_modules 2>/dev/null | wc -l)"
+          done
       - name: Install it, meet the first agent, run five at once, chat, use the MCP, restart, and keep the evidence
         if: matrix.name == 'windows'
         working-directory: packages/desktop

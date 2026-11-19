@@ -32,6 +32,7 @@ export async function packHermes(out) {
   rmSync(out, { recursive: true, force: true })
   cpSync(cache, out, { recursive: true, dereference: true })
   if (!WIN) relink(join(out, 'python'))
+  if (!existsSync(join(out, 'hermes/scripts/whatsapp-bridge/node_modules'))) throw new Error(`the WhatsApp bridge is missing from ${out}; delete ${cache} and pack again`)
   await packNode(join(out, 'node'))
 }
 
