@@ -25,7 +25,7 @@ export async function packHermes(out) {
   if (!existsSync(join(cache, 'hermes.py'))) await build(cache)
   rmSync(out, { recursive: true, force: true })
   cpSync(cache, out, { recursive: true, dereference: true })
-  if (!WIN) relink(join(out, 'python'))
+  if (!WIN) relink(out)
   if (!existsSync(join(out, 'hermes/scripts/whatsapp-bridge/node_modules'))) throw new Error(`the WhatsApp bridge is missing from ${out}; delete ${cache} and pack again`)
   await packNode(join(out, 'node'))
 }
@@ -55,6 +55,7 @@ async function build(out) {
   for (const name of readdirSync(src).filter((each) => !SKIP.has(each))) cpSync(join(src, name), join(out, 'hermes', name), { recursive: true, dereference: true })
   const bridge = join(out, 'hermes/scripts/whatsapp-bridge')
   execFileSync('npm', ['ci', '--omit=dev', '--omit=optional', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: bridge, stdio: 'inherit', shell: WIN })
+  rmSync(join(bridge, 'node_modules/.bin'), { recursive: true, force: true })
   writeFileSync(join(bridge, 'node_modules/.hermes-pkg-hash'), sha256(readFileSync(join(bridge, 'package.json'))).slice(0, 16))
   writeFileSync(join(out, 'hermes.py'), LAUNCHER)
   const bin = WIN ? join(out, 'python/python.exe') : join(out, 'python/bin/python3')

@@ -19,6 +19,7 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   notarize: false
   extendInfo: { LSArchitecturePriority: [arm64] }
+  signIgnore: ['\.pyc$']
   artifactName: "OpenHut-${version}-${arch}.${ext}"
 linux:
   target: [{ target: AppImage, arch: x64 }, { target: deb, arch: x64 }]
