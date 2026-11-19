@@ -10,7 +10,6 @@ import { I } from '@/components/kit'
 import { Progress } from '@/features/settings/kit'
 import { navigate } from '@/lib/router'
 import { cn } from '@/lib/utils'
-import { NOTICE_KEY } from '@/features/first-run/notice'
 
 export function FirstRun() {
   const [started, setStarted] = useState(false)
@@ -19,9 +18,6 @@ export function FirstRun() {
   const queries = useQueryClient()
   useEffect(() => {
     if (!agentId) return
-    try {
-      localStorage.setItem(NOTICE_KEY, 'seen')
-    } catch {}
     void queries.invalidateQueries()
     navigate(`/agents/${encodeURIComponent(agentId)}`, true)
   }, [agentId, queries])

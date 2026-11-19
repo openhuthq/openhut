@@ -1,4 +1,4 @@
-export type Failure = { kind: 'busy' | 'approve' | 'unreachable' | 'timeout' | 'other'; sentence: string }
+export type Failure = { kind: 'busy' | 'approve' | 'unreachable' | 'silent' | 'timeout' | 'other'; sentence: string }
 
 export function clean(line: string) {
   return line.replace(/\x1b\[[0-9;]*m/g, '').replace(/\[[0-9;]*m/g, '').replace(/^(The install stopped: )?openhut: /, '').trim()
@@ -31,6 +31,22 @@ export function failureOf({ error, url, name }: { error: string; url: string | n
   if (/another install or update is already running/i.test(text)) return { kind: 'busy', sentence: `${name} is already installing or updating. Try again in a few minutes.` }
   if (url || /login\.tailscale\.com|tailscale (ssh )?(check|auth)/i.test(text)) return { kind: 'approve', sentence: 'Approve the Tailscale sign-in in your browser, then try again.' }
   if (/refused|unreachable|no route to host|could not resolve|timed out|exited with 255/i.test(text)) return { kind: 'unreachable', sentence: `Can't reach ${name} over Tailscale. Check it's on.` }
-  if (/didn't answer within|code expired/i.test(text)) return { kind: 'timeout', sentence: `OpenHut didn't start on ${name}. Try again.` }
+  if (/didn't answer within/i.test(text)) return { kind: 'silent', sentence: `OpenHut is running on ${name} but it never asked to join. Try again, or copy the details for us.` }
+  if (/code expired/i.test(text)) return { kind: 'timeout', sentence: `OpenHut didn't start on ${name}. Try again.` }
   return { kind: 'other', sentence: "Couldn't install OpenHut. Check the computer is on and try again." }
+}
+
+const WAIT_MS = 120_000
+
+export function percentOf({ lines, waitingAt, now }: { lines: string[]; waitingAt?: number | null; now: number }) {
+  const phase = phaseOf(lines)
+  const at = STAGES[phase].at
+  if (phase === 'Installing…') return Math.min(74, at + 3 * lines.map(clean).filter((line) => /^==>/.test(line)).length)
+  if (phase === 'Almost ready…' && waitingAt) return Math.min(99, at + Math.floor(7 * Math.max(0, now - waitingAt) / WAIT_MS))
+  return at
+}
+
+export function detailsOf({ enrollment, version }: { enrollment: { peer: { name: string; dns: string }; lines: string[]; error: string; log?: string }; version: string }) {
+  const log = enrollment.log ? ['', `${enrollment.peer.name}'s log:`, enrollment.log] : []
+  return [`OpenHut ${version} adding ${enrollment.peer.dns}`, ...enrollment.lines.map(clean), enrollment.error, ...log].join('\n')
 }
