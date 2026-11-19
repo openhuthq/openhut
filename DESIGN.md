@@ -191,3 +191,48 @@ Owner, 2026-11-17, after a fully coloured pass read as too much.
 - **Pairing opens its own dialog** (owner, 2026-11-18: "much better than this thing where you have to go back"). The one exception to steps opening inside the pane: Settings › Your devices › Add a phone and › Add a computer each open a narrow dialog (560px, 12px corners) over Settings, titled with the row's name, with × and Esc closing it back to the list. It goes through three states in place, never a back arrow: waiting (a phone gets a 216px QR beside three numbered steps; a computer gets the join line with Copy, and a last line with "over Tailscale" and "by its address" links), with a spinner and "Waiting for your phone…" or "Waiting for it to join…" over "The code works once, for 5 minutes."; Allow, with "Allow "<name>"?", the six digits at 44px in two groups of three and one line on what to check (Allow closes the dialog and the new device or computer is just there in the list, like any other row: no celebration on the Mac, owner 2026-11-18; the celebration is the phone's); and expired, "This code expired" with Make a new code. Footers follow rule 12: Cancel or Don't allow on the left, the one primary (Allow, Make a new code) on the right; waiting has no primary.
 - **Channel setup** (Slack, WhatsApp, Telegram) uses the same sheet as a connection: brand logo, a 15px sentence-case title, one 13px line, flat numbered steps with one line of instruction and the action each, grey pills, and at most one muted line in the footer. No mock chats or transcripts, no mono except tokens and IDs. Who can message an agent is one field of IDs or numbers (the first is the owner); there is no "anyone" mode in the app.
 - **Connections.** DuskBot's Connect apps: 22px 32px 28px padding, a 17px/24px title 52px from the top (below the ×) with a 12px muted "N connected ›" on the right (shown at 0 too; it filters to the connected ones), a search field ("Search apps"), a search field, category chips (28px, 13px, 10px padding, 8px apart, selected one black), 12px muted group labels with 28px under them, and a two-column grid of 64px rows (24px logo, 13px medium name over one 13px muted noun line with no full stop and no "as you", a 96px grey "Connect" pill centred on the text). With more than one computer, each connection is listed once with a small chip per computer (grey dot when offline). A connection's sheet replaces the dialog's body with a back arrow; a sheet that creates something asks "Put it on" (computers with agents ticked) right under its name field.
+
+## Where agents run
+
+Status: in the code since 2026-11-19 (owner). Screens: the "Where agents run" artifact. On the Linux app the local computer is sandboxed too (`WORDS.sandboxed`), so it keeps the sandbox wording and never shows the team note or the dialog.
+
+From 0.4.0, agents on This Mac (or a Windows PC) are plain processes that run as the person: they can open what the person can open, the home network included. Agents on a Linux server each run in their own sandbox. The app says so where people look at an agent first (owner, 2026-11-19: "maybe at the agent level?"), then on the computer, at first run and once after the update. The words are calm and factual: no warning colour, no "unsafe", no "sandbox off".
+
+### Words
+
+| Where | This Mac / this PC | A server |
+|---|---|---|
+| Line under Runs on (agent panel) | Runs as you, like any app on this Mac. | Runs in its own sandbox on beelink. |
+| Runs on menu, option note | Runs as you · while this Mac is awake | Its own sandbox · always on |
+| Settings › Your devices, row note | Agents run as you · 2 agents · OpenHut 0.4.0 | Each agent in its own sandbox · 1 agent · OpenHut 0.4.0 |
+| Add a computer, row note | A Linux server gives each agent its own sandbox and keeps answering while this Mac sleeps. | |
+| Welcome | Agents run on this Mac, as you, like any app you install. Chats, memory and keys stay here. There's no account to make. | |
+| Welcome, the three marks | Runs as you · Keys in the macOS Keychain · Add a server anytime | |
+| First run, third step | Agent runtime · ready | Agent runtime and network fence · 6 of 6 checks passed (Linux app, unchanged) |
+
+"Mac" follows `WORDS.here` ("computer" on Windows and Linux).
+
+### Rules
+
+1. Every agent says where it runs and what that means, in one 12px muted line under its Runs on row. It is the only place the agent page talks about this.
+2. The Runs on menu repeats it in each option's note, so moving an agent shows the trade before it happens.
+3. An agent on This Mac that is connected to Slack gets one note under that line: a `--tint` box with 12.5px `--body` text, "Dev is in your team's Slack. For team use, run it on a server.", and one tier-4 text action: "Move to beelink" when a server is online (it moves the agent in place, like the menu), else "Add a computer". No dismiss and no colour; it goes away when the agent moves or Slack is disconnected. WhatsApp and Telegram are personal chats and don't show it.
+4. The sidebar doesn't change: with more than one computer each agent's line already starts with its computer ("beelink · …", "This Mac · …").
+5. Settings › Your devices puts the trade in each computer's note instead of "Online": the status dot already says online, and an offline row still says "Offline".
+6. One dialog, once, for people updating from 0.3.x (`features/first-run/notice.tsx`; finishing first run marks it seen): the hut, "Agents now run right on this Mac", two short paragraphs, then "Add a computer" (secondary, left) and "OK" (primary, right), per rule 12. Esc and × count as OK. Never shown on a fresh install, where the welcome screen says it.
+7. Never in user copy: sizes, "srt", "Seatbelt", "gVisor", "unsafe", "risk", "exposed". "Sandbox" is fine for the server side.
+
+### What changes, by page
+
+| Page | Control | Before | After |
+|---|---|---|---|
+| Agent panel | under Runs on | nothing | one muted line, rule 1 |
+| Agent panel | Runs on menu notes | Only while this Mac is awake / Always on | Runs as you · while this Mac is awake / Its own sandbox · always on |
+| Agent panel | agent on This Mac in Slack | nothing | tinted note with Move to beelink or Add a computer, rule 3 |
+| Settings › Your devices | This Mac note | Online · 2 agents · OpenHut 0.3.2 | Agents run as you · 2 agents · OpenHut 0.4.0 |
+| Settings › Your devices | server note | Online · 1 agent · OpenHut 0.3.2 | Each agent in its own sandbox · 1 agent · OpenHut 0.4.0 |
+| Settings › Your devices | Add a computer note | An always-on Linux computer keeps agents answering while this Mac sleeps. | A Linux server gives each agent its own sandbox and keeps answering while this Mac sleeps. |
+| Welcome | line | Each agent gets its own sealed computer. … | Agents run on this Mac, as you, like any app you install. … |
+| Welcome | marks | Sealed per agent · Keys in the Keychain · About 1 GB of memory per agent | Runs as you · Keys in the Keychain · Add a server anytime |
+| First run | third step | Agent runtime and network fence · 6 of 6 checks passed | Agent runtime · ready (Mac and Windows) |
+| After updating from 0.3.x | dialog | none | rule 6 |

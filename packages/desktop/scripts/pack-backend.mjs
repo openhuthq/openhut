@@ -2,12 +2,12 @@ import { build } from 'esbuild'
 import { execFileSync } from 'node:child_process'
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { packClaude, packHermes } from './pack-hermes.mjs'
+import { packAgentBrowser, packClaude, packHermes } from './pack-hermes.mjs'
 
 const ROOT = join(import.meta.dirname, '../../..')
 const OUT = join(import.meta.dirname, '../dist/backend')
 const LINUX = process.platform === 'linux'
-const NATIVE = LINUX ? [] : ['@electric-sql/pglite', '@anthropic-ai/sandbox-runtime', '@pondwader/socks5-server', 'commander', 'node-forge', 'zod']
+const NATIVE = LINUX ? [] : ['@electric-sql/pglite']
 
 rmSync(OUT, { recursive: true, force: true })
 
@@ -33,5 +33,6 @@ async function runtime() {
   for (const name of NATIVE) cpSync(join(ROOT, 'node_modules', name), join(OUT, 'node_modules', name), { recursive: true, dereference: true })
   await packHermes(join(OUT, 'runtime'))
   await packClaude(join(OUT, 'bin/native'))
+  await packAgentBrowser(join(OUT, 'bin/native'))
 }
 

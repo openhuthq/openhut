@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog, useConfirming } from '@/components/confirm-button'
 import { Choice, DialogCard, DRAG, GLASS, HOVER, I, MenuCard, PILL, ROW, ROW_VALUE, Section, TINY_ICON } from '@/components/kit'
 import { agentPath, type AgentDialog } from '@/app/routes'
-import { useAgents, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
+import { useAgents, useChannels, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
 import { nameOf, useComputers, useFeatures } from '@/features/computers/api'
 import { CanUse } from '@/features/agents/agent-connections'
 import { BrowserPreview } from '@/features/agents/browser'
@@ -25,6 +25,7 @@ import { HERE } from '@/features/settings/desktop'
 import { formValues } from '@/lib/form'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
+import { WORDS } from '@/lib/platform'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -145,14 +146,28 @@ function RunsOn({ agent }: { agent: Agent }) {
       <DropdownMenuTrigger className={ROW} disabled={!!move.going}><I icon={LaptopIcon} size={15} className="text-mute" />Runs on<span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="truncate">{nameOf({ computers, id })}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
       <MenuCard title={`${agent.name} runs on`}>
         {(computers ?? []).map((computer) => <Choice key={computer.id} icon={<I icon={computer.id === 'local' ? LaptopIcon : ServerStack01Icon} size={15} />} name={computer.id === id ? computer.name : `Move to ${computer.name}`}
-          note={computer.online ? computer.id === 'local' ? `Only while this ${HERE} is awake` : 'Always on' : 'Offline'}
+          note={computer.online ? computer.id === 'local' ? `${WORDS.sandboxed ? 'Its own sandbox' : 'Runs as you'} · while this ${HERE} is awake` : 'Its own sandbox · always on' : 'Offline'}
           selected={computer.id === id} disabled={computer.id === id || !computer.online || !agent.canEdit} onClick={() => move.go(computer.id)} />)}
         <DropdownMenuSeparator />
         <DropdownMenuItem className="h-8 gap-2 text-[13px]" onClick={() => navigate('/settings/devices')}><I icon={PlusSignIcon} size={14} className="text-pass" />Add a computer…</DropdownMenuItem>
       </MenuCard>
     </DropdownMenu>
-    {move.line && <p role="status" className="m-0 px-2.5 py-1 text-[12.5px]/[1.45] text-body">{move.line}</p>}
+    {move.line
+      ? <p role="status" className="m-0 px-2.5 py-1 text-[12.5px]/[1.45] text-body">{move.line}</p>
+      : <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{id !== 'local' ? `Runs in its own sandbox on ${nameOf({ computers, id })}.` : WORDS.sandboxed ? `Runs in its own sandbox on this ${HERE}.` : `Runs as you, like any app on this ${HERE}.`}</p>}
+    {id === 'local' && !WORDS.sandboxed && <TeamHint agent={agent} server={(computers ?? []).find((each) => each.id !== 'local' && each.online)} onMove={(to) => move.go(to)} />}
   </>
+}
+
+function TeamHint({ agent, server, onMove }: { agent: Agent; server: { id: string; name: string } | undefined; onMove: (to: string) => void }) {
+  const slack = useChannels(agent.id).data?.some((channel) => channel.kind === 'slack' && channel.status === 'connected')
+  if (!slack) return null
+  return <div className="mx-2.5 mt-1 mb-1 flex flex-col items-start gap-1 rounded-lg bg-tint px-3 py-2.5 text-[12.5px]/[1.45] text-body">
+    <span>{agent.name} is in your team's Slack. For team use, run it on a server.</span>
+    {server
+      ? <Button type="button" variant="text" onClick={() => onMove(server.id)}>Move to {server.name}</Button>
+      : <Button type="button" variant="text" onClick={() => navigate('/settings/devices')}>Add a computer</Button>}
+  </div>
 }
 
 const NAME = 'm-0 min-w-0 text-[18px]/[1.3] font-semibold'

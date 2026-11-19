@@ -35,7 +35,6 @@ const BACKEND = DEV ? ROOT : join(process.resourcesPath, 'backend')
 const SCRIPTS = DEV
   ? { agentd: 'packages/runtime/src/agentd/agentd.ts', server: 'packages/runtime/src/server/app.ts' }
   : { agentd: 'packages/runtime/src/agentd/agentd.mjs', server: 'packages/runtime/src/server/platform/app.mjs' }
-const NATIVE = !CONTAINER && (process.env.OPENHUT_SANDBOX ?? 'native') === 'native'
 const RUNTIME = process.env.AGENTD_HERMES ?? join(BACKEND, DEV ? 'packages/desktop/dist/backend/runtime' : 'runtime')
 const NATIVE_CLAUDE = join(BACKEND, DEV ? 'packages/desktop/dist/backend/bin/native' : 'bin/native', WIN ? 'claude.exe' : 'claude')
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
@@ -154,7 +153,7 @@ function tailnet() {
 const fromApp = (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`)
 
 function machine() {
-  const paths = [DATA, join(homedir(), '.microsandbox'), LOGS].filter((path) => existsSync(path))
+  const paths = [DATA, LOGS].filter((path) => existsSync(path))
   return new Promise((resolve) => execFile('du', ['-skc', ...paths], { timeout: 20_000 }, (_error, stdout) => {
     const total = Number.parseInt(String(stdout).trim().split('\n').at(-1) ?? '', 10) || 0
     resolve({ chip: cpus()[0]?.model ?? '', memory: totalmem(), folder: HOME, size: total * 1024 })
@@ -549,7 +548,7 @@ function watch() {
 
 function firstRun(start) {
   if (start && (!setup || setup.failed)) {
-    setup = { failed: false, agentId: '', steps: [[`Checked this ${MAC ? 'Mac' : 'computer'}`, '', 'now'], ['Starting OpenHut', '', 'next'], ['Agent runtime and network fence', '', 'next'], ['Meeting your first agent', '', 'next']] }
+    setup = { failed: false, agentId: '', steps: [[`Checked this ${MAC ? 'Mac' : 'computer'}`, '', 'now'], ['Starting OpenHut', '', 'next'], [CONTAINER ? 'Agent runtime and network fence' : 'Agent runtime', '', 'next'], ['Meeting your first agent', '', 'next']] }
     meet(setup).catch((error) => {
       const step = setup.steps.find((each) => each[2] === 'now')
       if (step) step.splice(1, 2, error.message, 'failed')
@@ -577,7 +576,7 @@ async function meet(run) {
   await waitFor(async () => (fence = await agentd({ cmd: 'fence' })).ok, 900).finally(pulling)
   const passed = (fence.checks ?? []).filter((check) => check.pass).length
   if (!fence.ok) throw new Error(fence.error ?? `the fence failed ${(fence.checks ?? []).filter((check) => !check.pass).map((check) => check.name).join(', ')}`)
-  step(2, `${passed} of ${fence.checks.length} checks passed`)
+  step(2, fence.skipped ? 'ready' : `${passed} of ${fence.checks.length} checks passed`)
   const agents = (await api('/api/agents')).data
   const agent = agents[0] ?? await api('/api/agents', { method: 'POST', body: { name: FIRST_AGENT } })
   await api(`/api/agents/${agent.id}`, { method: 'PATCH', body: { wanted: 'running' } })
@@ -648,10 +647,9 @@ async function boot() {
   if (CONTAINER) return bootContainer()
   keepData()
   await assets()
-  if (NATIVE && !DEV) await leaveMicrosandbox()
   const shared = { OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_CLAUDE_HOST: NATIVE_CLAUDE, OPENHUT_CLAUDE_VERSION: claudeVersion() }
   if (!PIPES) rmSync(SOCK, { force: true })
-  start('agentd', { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, AGENTD_CLAUDE: NATIVE_CLAUDE, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT) })
+  start('agentd', { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, AGENTD_CLAUDE: NATIVE_CLAUDE, AGENTD_BROWSER: join(dirname(NATIVE_CLAUDE), WIN ? 'agent-browser.exe' : 'agent-browser'), AGENTD_WHATSAPP_BRIDGE: join(RUNTIME, 'hermes/scripts/whatsapp-bridge'), OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT) })
   await waitFor(() => listening(SOCK), 30)
   if (!PIPES) rmSync(SERVER_SOCK, { force: true })
   await rootSecret()
@@ -731,13 +729,6 @@ async function assets() {
   renameSync(`${ASSETS}.tmp`, ASSETS)
   const older = readdirSync(dirname(ASSETS)).filter((name) => name !== app.getVersion() && !name.endsWith('.tmp'))
   for (const name of older.sort((a, b) => statSync(join(dirname(ASSETS), b)).mtimeMs - statSync(join(dirname(ASSETS), a)).mtimeMs).slice(1)) rmSync(join(dirname(ASSETS), name), { recursive: true, force: true })
-}
-
-async function leaveMicrosandbox() {
-  const old = join(homedir(), '.microsandbox')
-  if (!existsSync(old)) return
-  await new Promise((done) => execFile(WIN ? 'taskkill' : 'pkill', WIN ? ['/F', '/IM', 'msb.exe'] : ['-f', 'microsandbox.*/bin/msb'], () => done()))
-  rmSync(old, { recursive: true, force: true })
 }
 
 function savedBounds() {

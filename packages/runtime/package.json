@@ -9,7 +9,6 @@
     "test": "node --test --test-force-exit --test-concurrency=1 --import ./test/server/env.ts \"test/server/**/*.test.ts\" && node --test --test-force-exit \"test/agentd/**/*.test.ts\""
   },
   "dependencies": {
-    "@anthropic-ai/sandbox-runtime": "0.0.83",
     "@electric-sql/pglite": "0.5.8",
     "@fastify/websocket": "11.3.7",
     "@modelcontextprotocol/sdk": "1.30.1",

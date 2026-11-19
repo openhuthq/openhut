@@ -18,5 +18,23 @@
       "darwin-arm64": "85d8c08707fcfd1e78ffa0204eefbc6ec9e4fe22f375fb2767ef85d957ed3161",
       "win32-x64": "966f4b2ce962298f5dee6a942e8c47c8f97392e69e728e622319a98b259c0680"
     }
+  },
+  "node": {
+    "version": "24.22.2",
+    "sha256": {
+      "darwin-arm64": "aa9549349e47dffaa42dcf95d6e06ade8c4bdafc980979883b88767670df385a",
+      "win32-x64": "ca1bff5d8ead13c9f2ea404a176db46bd430704d5b5113734049fa365e7799e2"
+    }
+  },
+  "agentBrowser": {
+    "version": "0.43.0",
+    "package": {
+      "darwin-arm64": "cli-darwin-arm64",
+      "win32-x64": "cli-win32-x64-msvc"
+    },
+    "sha512": {
+      "darwin-arm64": "1d5e863f9f488cd9e8c25ad747fe6b54cf26b0f5b040310e36dfed582f124f351f29940729923f22ff6c7f6876661c0af31c28a8b871a5ff8ac5c160274b04c5",
+      "win32-x64": "c6193cc271e4dda881152474a5dd587b76b2da32a38116ab7600492e207d9d726fd1991b78fff08775fb8cc88a51f506135aaa26b29d68ce6ccd0ea2cfcffcfb"
+    }
   }
 }

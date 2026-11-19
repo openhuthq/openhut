@@ -2,7 +2,8 @@ import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmodSync, chownSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
-import { dirname, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { newMessages, usage, type NewMessage } from './messages.ts'
@@ -14,7 +15,7 @@ import { MAX_HOME_BASE64, packHome, unpackHome } from './home.ts'
 import { isHomePath, isUploadName, MAX_FILE_BASE64, readHomeFile, removeUploads, saveUpload, statHomeFiles } from './files.ts'
 import { FIREWALL, imageReady } from './sandbox/gvisor.ts'
 import { sandboxes } from './sandbox/index.ts'
-import type { Mount, Pull, SandboxSpec, SandboxState } from './sandbox/sandbox.ts'
+import { BROWSER_STREAM_PORT_BASE, type Mount, type Pull, type SandboxSpec, type SandboxState } from './sandbox/sandbox.ts'
 import { installing, lastUpdate, update, type LastUpdate } from './update.ts'
 import { errorText, EXEC, isRecord } from './util.ts'
 import { followPairing, PAIR_COMMAND, pending, type Pairing } from './whatsapp.ts'
@@ -27,7 +28,7 @@ const ASSETS = process.env.AGENTD_ASSETS || dirname(fileURLToPath(new URL('../..
 const PLUGINS = `${ASSETS}/vendor/hermes-plugins`
 const CLAUDE_BIN = process.env.AGENTD_CLAUDE || `${ASSETS}/bin/claude`
 const MOUNTS = createHash('sha256').update(`${PLUGINS}\n${CLAUDE_BIN}`).digest('hex').slice(0, 16)
-const BROWSER_BIN = fileURLToPath(new URL('../../../../bin/agent-browser', import.meta.url))
+const BROWSER_BIN = process.env.AGENTD_BROWSER || fileURLToPath(new URL('../../../../bin/agent-browser', import.meta.url))
 const BROWSER_DIR = fileURLToPath(new URL('../../../../install/agent-browser', import.meta.url))
 const BRIDGE = '/opt/agent-browser/bridge.mjs'
 const BROWSER_MEMORY_MIB = 4096
@@ -70,6 +71,7 @@ const MAX_LISTED = 200
 const pairings = new Map<string, Pairing>()
 const queues = new Map<string, Promise<unknown>>()
 let lastFirewallCheck = { at: 0, on: false }
+let chrome: string | undefined
 let pendingFirewallCheck: Promise<Readiness> | undefined
 const box = await sandboxes()
 if (box.name === 'native') {
@@ -297,6 +299,7 @@ function filesOf(value: unknown): AgentFiles {
 async function create({ id, net, files, browser }: { id: string; net: number; files: AgentFiles; browser: boolean }) {
   await mustHaveFirewall()
   if (browser && box.name !== 'memory' && !existsSync(BROWSER_BIN)) throw new Error("agent-browser isn't installed on this server; run the installer again")
+  if (browser && box.name === 'native') chrome ??= await installChrome()
   makeHome(id)
   writeConf(id, files)
   await box.create(specOf({ id, net, browser }))
@@ -411,7 +414,7 @@ async function outdated(id: string, browser: boolean) {
 function specOf({ id, net, browser }: { id: string; net: number; browser: boolean }): SandboxSpec {
   return {
     id, image: IMAGE, cpus: AGENT_CPUS, memoryMib: browser ? BROWSER_MEMORY_MIB : AGENT_MEMORY_MIB,
-    user: AGENT_USER, entrypoint: '/opt/hermes/bin/hermes', command: ['gateway', 'run'], env: AGENT_ENV,
+    user: AGENT_USER, entrypoint: '/opt/hermes/bin/hermes', command: ['gateway', 'run'], env: box.name === 'native' && browser ? { ...AGENT_ENV, ...nativeBrowserEnv({ id, net }) } : AGENT_ENV,
     mounts: [
       { host: RESOLV, guest: '/etc/resolv.conf', readOnly: true },
       { host: home(id), guest: '/opt/data', readOnly: false },
@@ -422,7 +425,7 @@ function specOf({ id, net, browser }: { id: string; net: number; browser: boolea
       { host: PLUGINS, guest: '/opt/data/plugins', readOnly: true },
       { host: CLAUDE_BIN, guest: '/usr/local/bin/claude', readOnly: true },
       ...(existsSync(`${WHATSAPP_BRIDGE}/node_modules`) ? [{ host: WHATSAPP_BRIDGE, guest: '/opt/data/scripts/whatsapp-bridge', readOnly: true }] : []),
-      ...(browser ? browserMounts(id) : []),
+      ...(browser ? (box.name === 'native' ? [{ host: BROWSER_BIN, guest: '/usr/local/bin/agent-browser', readOnly: true }] : browserMounts(id)) : []),
     ],
     tmpfs: [{ guest: '/tmp', sizeMib: browser ? BROWSER_TMP_MIB : TMP_MIB }, ...LOCKED_TMPFS.map((guest) => ({ guest, sizeMib: 4 / 1024, readOnly: true }))],
     labels: { 'openhut.spec': SPEC, 'openhut.browser': browser ? 'on' : 'off', 'openhut.mounts': MOUNTS },
@@ -439,12 +442,56 @@ function browserMounts(id: string): Mount[] {
   ]
 }
 
+function nativeBrowserEnv({ id, net }: { id: string; net: number }): Record<string, string> {
+  return {
+    AGENT_BROWSER_EXECUTABLE_PATH: chrome ?? '',
+    AGENT_BROWSER_ARGS: '--window-size=1280,887',
+    AGENT_BROWSER_CONFIG: `${BROWSER_DIR}/config.json`,
+    AGENT_BROWSER_PROFILE: '/opt/data/home/browser-profile',
+    AGENT_BROWSER_ACTION_POLICY: `${conf(id)}/${POLICY_FILE}`,
+    AGENT_BROWSER_STREAM_PORT: String(BROWSER_STREAM_PORT_BASE + net),
+    AGENT_BROWSER_STREAM_QUALITY: '50',
+    AGENT_BROWSER_STREAM_MAX_WIDTH: '1280',
+    AGENT_BROWSER_STREAM_MAX_HEIGHT: '800',
+    AGENT_BROWSER_NO_VERSION_CHECK: '1',
+    ...(PIPE ? {} : { AGENT_BROWSER_SOCKET_DIR: join(tmpdir(), `oh-${id}`) }),
+  }
+}
+
+const INSTALLED_CHROME = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', `${process.env.ProgramFiles}\\Google\\Chrome\\Application\\chrome.exe`, `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`]
+
+async function installChrome() {
+  const installed = INSTALLED_CHROME.find((path) => existsSync(path))
+  if (installed) return installed
+  const home = `${DATA}/browser`
+  const found = () => findChrome(`${home}/.agent-browser/browsers`)
+  if (found()) return found()
+  console.log('browser: downloading Chrome for agents, once')
+  await new Promise<void>((done, fail) => execFile(BROWSER_BIN, ['install'], { env: { ...process.env, HOME: home, USERPROFILE: home }, timeout: 15 * 60_000 }, (error) => error ? fail(error) : done()))
+  const path = found()
+  if (!path) throw new Error("Chrome didn't install for the browser; try turning Browser on again")
+  return path
+}
+
+function findChrome(dir: string, depth = 5): string | undefined {
+  if (depth < 0 || !existsSync(dir)) return undefined
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isFile() && (entry.name === 'chrome.exe' || entry.name === 'Google Chrome for Testing')) return path
+    if (entry.isDirectory()) {
+      const inner = findChrome(path, depth - 1)
+      if (inner) return inner
+    }
+  }
+  return undefined
+}
+
 async function openLive({ sock, id, fps, rest }: { sock: Socket; id: string; fps: number; rest: string }): Promise<undefined> {
   if (!(await isRunning(id))) {
     sock.end(`${JSON.stringify({ type: 'closed' })}\n`)
     return undefined
   }
-  const bridge = await box.exec({ id, command: ['node', BRIDGE, 'live', String(fps)], stdin: true })
+  const bridge = await box.exec({ id, command: ['node', box.name === 'native' ? `${BROWSER_DIR}/bridge.mjs` : BRIDGE, 'live', String(fps)], stdin: true })
   const setHeld = (held: boolean) => {
     if (existsSync(conf(id))) writeIfChanged(`${conf(id)}/${POLICY_FILE}`, held ? HELD_POLICY : FREE_POLICY)
   }
@@ -453,7 +500,6 @@ async function openLive({ sock, id, fps, rest }: { sock: Socket; id: string; fps
 }
 
 function features() {
-  if (box.name === 'native') return { whatsapp: false, browser: false }
   return { whatsapp: existsSync(`${WHATSAPP_BRIDGE}/node_modules`), browser: box.name === 'memory' || existsSync(BROWSER_BIN) }
 }
 

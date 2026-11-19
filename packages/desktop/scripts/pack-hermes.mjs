@@ -8,6 +8,7 @@ const ROOT = join(import.meta.dirname, '../../..')
 const PIN = JSON.parse(readFileSync(join(ROOT, 'install/native-runtime.json'), 'utf8'))
 const WIN = process.platform === 'win32'
 const PLATFORM = `${WIN ? 'win32' : process.platform}-${process.arch === 'arm64' ? 'arm64' : 'x64'}`
+const CACHE = join(import.meta.dirname, '../dist/native-cache')
 const SKIP = new Set(['tests', 'tests-js', 'website', 'apps', 'evals', 'web', 'ui-tui', '.github', 'docker', 'nix', 'contributors'])
 const LAUNCHER = `import os, sys
 here = os.path.dirname(os.path.abspath(__file__))
@@ -26,11 +27,12 @@ async function fetched({ url, sha }) {
 }
 
 export async function packHermes(out) {
-  const cache = join(import.meta.dirname, '../dist/hermes-cache', `${PIN.hermes.tag}-${PLATFORM}`)
+  const cache = join(CACHE, 'hermes', `${PIN.hermes.tag}-${PLATFORM}`)
   if (!existsSync(join(cache, 'hermes.py'))) await build(cache)
   rmSync(out, { recursive: true, force: true })
   cpSync(cache, out, { recursive: true, dereference: true })
   if (!WIN) relink(join(out, 'python'))
+  await packNode(join(out, 'node'))
 }
 
 async function build(out) {
@@ -54,6 +56,9 @@ async function build(out) {
   const site = WIN ? join(work, 'venv/Lib/site-packages') : join(work, 'venv/lib', readdirSync(join(work, 'venv/lib'))[0], 'site-packages')
   cpSync(site, join(out, 'site'), { recursive: true, dereference: true, filter: (path) => !/__editable__|_virtualenv|hermes_agent-.*\.dist-info/.test(path) })
   for (const name of readdirSync(src).filter((each) => !SKIP.has(each))) cpSync(join(src, name), join(out, 'hermes', name), { recursive: true, dereference: true })
+  const bridge = join(out, 'hermes/scripts/whatsapp-bridge')
+  execFileSync('npm', ['ci', '--omit=dev', '--omit=optional', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: bridge, stdio: 'inherit', shell: WIN })
+  writeFileSync(join(bridge, 'node_modules/.hermes-pkg-hash'), sha256(readFileSync(join(bridge, 'package.json'))).slice(0, 16))
   writeFileSync(join(out, 'hermes.py'), LAUNCHER)
   const bin = WIN ? join(out, 'python/python.exe') : join(out, 'python/bin/python3')
   execFileSync(bin, ['-s', '-m', 'compileall', '-q', '-j', '0', '--invalidation-mode', 'unchecked-hash', join(out, 'hermes'), join(out, 'site')], { stdio: 'inherit' })
@@ -85,7 +90,7 @@ export async function packClaude(out) {
   const file = join(out, WIN ? 'claude.exe' : 'claude')
   if (existsSync(file) && sha256(readFileSync(file)) === sha) return file
   mkdirSync(out, { recursive: true })
-  const cached = join(import.meta.dirname, '../dist/claude-cache', `${PIN.claude.version}-${PLATFORM}`, WIN ? 'claude.exe' : 'claude')
+  const cached = join(CACHE, 'claude', `${PIN.claude.version}-${PLATFORM}`, WIN ? 'claude.exe' : 'claude')
   if (!existsSync(cached) || sha256(readFileSync(cached)) !== sha) {
     mkdirSync(join(cached, '..'), { recursive: true })
     writeFileSync(cached, await fetched({ url: `https://downloads.claude.ai/claude-code-releases/${PIN.claude.version}/${PLATFORM}/${WIN ? 'claude.exe' : 'claude'}`, sha }))
@@ -94,4 +99,38 @@ export async function packClaude(out) {
   writeFileSync(`${file}.version`, PIN.claude.version)
   if (!WIN) chmodSync(file, 0o755)
   return file
+}
+
+async function cachedFile({ dir, name, url, check }) {
+  const file = join(CACHE, dir, name)
+  if (existsSync(file) && check(readFileSync(file))) return file
+  mkdirSync(join(CACHE, dir), { recursive: true })
+  const body = Buffer.from(await (await fetch(url)).arrayBuffer())
+  if (!check(body)) throw new Error(`${url} doesn't match its pinned checksum`)
+  writeFileSync(file, body)
+  return file
+}
+
+function unpacked({ file, path }) {
+  const work = join(tmpdir(), `openhut-unpack-${process.pid}-${basename(file)}`)
+  rmSync(work, { recursive: true, force: true })
+  mkdirSync(work, { recursive: true })
+  execFileSync('tar', ['-xf', file, '-C', work])
+  return join(work, path)
+}
+
+async function packNode(out) {
+  const name = `node-v${PIN.node.version}-${WIN ? 'win-x64' : PLATFORM}`
+  const file = await cachedFile({ dir: 'node', name: `${name}.${WIN ? 'zip' : 'tar.gz'}`, url: `https://nodejs.org/dist/v${PIN.node.version}/${name}.${WIN ? 'zip' : 'tar.gz'}`, check: (body) => sha256(body) === PIN.node.sha256[PLATFORM] })
+  mkdirSync(out, { recursive: true })
+  cpSync(unpacked({ file, path: join(name, WIN ? 'node.exe' : 'bin/node') }), join(out, WIN ? 'node.exe' : 'node'))
+}
+
+export async function packAgentBrowser(out) {
+  const { version, package: pkg, sha512 } = PIN.agentBrowser
+  const file = await cachedFile({ dir: 'agent-browser', name: `${pkg[PLATFORM]}-${version}.tgz`, url: `https://registry.npmjs.org/@agent-browser/${pkg[PLATFORM]}/-/${pkg[PLATFORM]}-${version}.tgz`, check: (body) => createHash('sha512').update(body).digest('hex') === sha512[PLATFORM] })
+  const name = WIN ? 'agent-browser.exe' : 'agent-browser'
+  mkdirSync(out, { recursive: true })
+  cpSync(unpacked({ file, path: `package/bin/${name}` }), join(out, name))
+  if (!WIN) chmodSync(join(out, name), 0o755)
 }

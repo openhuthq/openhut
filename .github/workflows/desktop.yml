@@ -108,9 +108,7 @@ jobs:
       - uses: actions/cache@v4
         if: matrix.name != 'linux'
         with:
-          path: |
-            packages/desktop/dist/hermes-cache
-            packages/desktop/dist/claude-cache
+          path: packages/desktop/dist/native-cache
           key: native-runtime-${{ runner.os }}-${{ hashFiles('install/native-runtime.json', 'packages/desktop/scripts/pack-hermes.mjs') }}
 
       - name: Build and sign the app
@@ -125,7 +123,7 @@ jobs:
         working-directory: packages/desktop
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npm run build && npm run pack-backend && npx electron-builder --mac --arm64 --publish never
+        run: npm run build && npm run pack-backend && npx electron-builder --mac --arm64 --publish never && codesign --force --deep --sign - release/mac-arm64/OpenHut.app
       - name: Notarize, staple and check Gatekeeper
         if: matrix.name == 'macos' && env.FULL == 'true'
         env:
@@ -166,41 +164,23 @@ jobs:
         if: matrix.name == 'windows'
         working-directory: packages/desktop
         run: npm run dist:win
-      - name: Secondary Logon runs, which the sandbox starts agents through
-        if: matrix.name == 'windows'
-        shell: pwsh
-        run: |
-          Set-Service seclogon -StartupType Manual
-          Start-Service seclogon
-          Get-Service seclogon
-      - name: Install it, meet the first agent in its sandbox, chat, use the MCP, restart, and keep the evidence
+      - name: Install it, meet the first agent, run five at once, chat, use the MCP, restart, and keep the evidence
         if: matrix.name == 'windows'
         working-directory: packages/desktop
-        run: node scripts/windows-e2e.mjs --installer release/OpenHut-Setup-x64.exe --out windows-e2e --sandbox native
-      - name: When the sandbox fails, ask srt-win directly, from PowerShell and from Node
-        if: failure() && matrix.name == 'windows'
-        shell: pwsh
-        run: |
-          $env:SANDBOX_RUNTIME_WIN_DEBUG = '1'
-          $exe = (Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter srt-win.exe | Select-Object -First 1).FullName
-          whoami /all | Select-String 'User Name|Mandatory|runneradmin' -Context 0,1
-          Get-Service seclogon
-          & $exe user status
-          $l = [System.Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 49995); $l.Start()
-          Write-Host '--- wfp verify from PowerShell'
-          & $exe wfp verify --target 127.0.0.1:49995; Write-Host "exit $LASTEXITCODE"
-          Write-Host '--- wfp verify from Node'
-          node -e "const r=require('child_process').spawnSync(process.argv[1],['wfp','verify','--target','127.0.0.1:49995'],{encoding:'utf8'});console.log(r.status,r.stdout,r.stderr)" $exe
-          $l.Stop()
+        run: node scripts/app-e2e.mjs --installer release/OpenHut-Setup-x64.exe --out app-e2e
+      - name: Open it, meet the first agent, run five at once, chat, use the MCP, restart, and keep the evidence
+        if: matrix.name == 'macos'
+        working-directory: packages/desktop
+        run: node scripts/app-e2e.mjs --app release/mac-arm64/OpenHut.app --out app-e2e
       - uses: actions/upload-artifact@v4
-        if: always() && matrix.name == 'windows'
+        if: always() && matrix.name != 'linux'
         with:
-          name: windows-e2e
+          name: ${{ matrix.name }}-e2e
           path: |
-            packages/desktop/windows-e2e/*.png
-            packages/desktop/windows-e2e/evidence.json
-            packages/desktop/windows-e2e/home/logs/
-            packages/desktop/windows-e2e/home/data/native/*/agent.log
+            packages/desktop/app-e2e/*.png
+            packages/desktop/app-e2e/evidence.json
+            packages/desktop/app-e2e/home/logs/
+            packages/desktop/app-e2e/home/data/native/*/agent.log
       - name: Add the installer to the draft release
         if: matrix.name == 'windows' && env.TAGGED == 'true'
         working-directory: packages/desktop/release

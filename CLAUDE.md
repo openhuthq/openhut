@@ -2,7 +2,7 @@
 
 Self-hosted agents: the OpenHut app (Mac and Linux) is a thin window over several runtimes, one on this computer and one
 on each computer you add (`private/brain/decisions/app-aggregates-runtimes.md`). A runtime runs many Hermes agents, each in its
-own sandbox (a process in Anthropic's sandbox-runtime on a Mac or Windows PC, gVisor in Docker on Linux), with their own Slack app and WhatsApp number. Agents reach team
+own process (a plain process that runs as you on a Mac or Windows PC, a gVisor sandbox in Docker on Linux), with their own Slack app and WhatsApp number. Agents reach team
 data only through the runtime's gateway, which holds every key and checks each agent's grants on every call. You manage
 it from the app or from your own AI assistant over the control MCP. No sign-in and no people: the app reaches the local
 runtime on a 0600 Unix socket, and a remote one over the tailnet with the key it enrolled when the computer was added.
@@ -18,7 +18,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `agents/` (agents, grants, their Hermes files), `channels/`, `connections/`, `gateway/` (the agents' MCP gateway and
   key broker on :8081), `mcp/` (the control MCP on `/mcp`, whose tools call the API in-process), `admin/`, and
   `integrations/<service>/`. `src/agentd/` is the root helper: the only process that starts agents (gVisor on Linux, native on
-  Mac and Windows: a Hermes process per agent in sandbox-runtime, or memory, `private/brain/decisions/sandbox-module.md`), on a Unix socket. Tests mirror them in `test/server/` and `test/agentd/`.
+  Mac and Windows: a plain Hermes process per agent, or memory, `private/brain/decisions/sandbox-module.md`), on a Unix socket. Tests mirror them in `test/server/` and `test/agentd/`.
 - **`packages/desktop`** — `@openhut/desktop`, the Mac and Linux app (`private/brain/decisions/desktop-app.md`): Electron main (`src/main.mjs`, starts agentd and the server,
   serves the renderer on `app://openhut`) and the React dashboard in `src/renderer` (Vite to `dist/renderer`, TanStack
   Query), which calls `/api/*` on `app://openhut`; the main process forwards it to the runtime's socket. Tailwind v4 with shared components in `src/renderer/src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`private/brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
@@ -79,13 +79,13 @@ npm run dev
 `npm run dev` starts the real agentd with `OPENHUT_SANDBOX=memory` (no root, no Docker), the server API on 127.0.0.1:8787
 with `.data`, the test model and the dev key `dev` enrolled, and Vite for the renderer with `/api` proxied to it with
 `Authorization: Bearer dev`. Open `http://localhost:5173`. Port 8787 taken (Docker or another checkout)? `PORT=8797 npm run dev` moves the API and Vite's proxy; Vite picks the next free port itself. Another checkout's `npm run dev` already running? Also set `OPENHUT_FAKES_PORT` (fake Hermes, 18642) and `OPENHUT_GATEWAY_PORT` (8081). `node scripts/seed-ui.ts` (on a fresh `.data`) fills in sample
-agents and connections. Native agents need the bundled runtime: `node -e "import('./packages/desktop/scripts/pack-hermes.mjs').then(async (m) => { await m.packHermes(process.cwd() + '/packages/desktop/dist/backend/runtime'); await m.packClaude(process.cwd() + '/packages/desktop/dist/backend/bin/native') })"` (needs `uv`). The desktop app itself: `npm -w @openhut/desktop run build && npm -w @openhut/desktop start`. It keeps
+agents and connections. Native agents need the bundled runtime: `npm -w @openhut/desktop run pack-backend` (needs `uv`). The desktop app itself: `npm -w @openhut/desktop run build && npm -w @openhut/desktop start`. It keeps
 its data in `~/Library/Application Support/OpenHut Dev`, apart from the installed app's `OpenHut`.
 
 ## Build the desktop app
 
 `npm -w @openhut/desktop run dist` builds the renderer, bundles the runtime's server and agentd with esbuild into
-`packages/desktop/dist/backend` with the Hermes runtime and Claude Code for the build's platform (`scripts/pack-hermes.mjs`, pinned in `install/native-runtime.json`; nothing downloads on first run) (`scripts/pack-backend.mjs`; on Linux it packs only the client and the MCP bridge, since the install in Docker brings the rest), and runs electron-builder (`electron-builder.yml`): an arm64,
+`packages/desktop/dist/backend` with the Hermes runtime, Node, Claude Code and agent-browser for the build's platform (`scripts/pack-hermes.mjs`, pinned in `install/native-runtime.json`; nothing downloads on first run) (`scripts/pack-backend.mjs`; on Linux it packs only the client and the MCP bridge, since the install in Docker brings the rest), and runs electron-builder (`electron-builder.yml`): an arm64,
 macOS 14+ `release/mac-arm64/OpenHut.app`, `release/OpenHut-arm64.dmg` and the versioned zip. It signs with the Developer ID
 in the login keychain (hardened runtime, `build/entitlements.mac.plist`) and never notarizes (`notarize: false`): only the
 release workflow (`.github/workflows/desktop.yml`, `scripts/notarize.sh`) notarizes, staples and checks a build. The packaged app runs the real model unless `OPENHUT_MODEL` is set.

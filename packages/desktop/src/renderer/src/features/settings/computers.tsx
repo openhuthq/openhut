@@ -14,6 +14,7 @@ import { useEnroll, useEnrollments, type Enrollment } from '@/features/computers
 import { failureOf, phaseOf } from '@/features/computers/enroll-steps'
 import { Field } from '@/features/connections/sheet'
 import { HERE, useTailnet } from '@/features/settings/desktop'
+import { WORDS } from '@/lib/platform'
 import { byEligibility, stateOf, type Peer, type PeerState } from '@/features/settings/peers'
 import { PairDialog, Waiting } from '@/features/settings/invite'
 import { joinCommand } from '@/features/settings/invitation'
@@ -57,7 +58,7 @@ function ComputerList() {
         return <RemovableRow key={computer.id} computer={computer} admin={admin} note={note} agents={agents.filter((agent) => agent.computer === computer.id)} />
       })}
       {enrollments.map((enrollment) => <EnrollRow key={enrollment.peer.dns} enrollment={enrollment} />)}
-      {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note={`An always-on Linux computer keeps agents answering while this ${HERE} sleeps.`}><Chevron /></Row>}
+      {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note={`A Linux server gives each agent its own sandbox and keeps answering while this ${HERE} sleeps.`}><Chevron /></Row>}
     </Rows>
   </>
 }
@@ -68,7 +69,7 @@ function noteOf({ computer, admin, count }: { computer: Computer; admin: Admin |
   if (computer.runtimeTooOld) return 'Update this computer to use it'
   const failed = admin?.server.update?.status === 'failed' ? admin.server.update : null
   if (failed) return `Couldn't update to ${failed.to}. ${sentence(failed.reason ?? 'The update stopped before it finished.')}`
-  return [`Online · ${agentCount(count)}`, admin && `OpenHut ${computer.id === 'local' ? admin.server.version : admin.server.build}`].filter(Boolean).join(' · ')
+  return [computer.id === 'local' && !WORDS.sandboxed ? 'Agents run as you' : 'Each agent in its own sandbox', agentCount(count), admin && `OpenHut ${computer.id === 'local' ? admin.server.version : admin.server.build}`].filter(Boolean).join(' · ')
 }
 
 function sentence(text: string) {

@@ -1,44 +1,20 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { copyFileSync, existsSync, linkSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { dirname, extname, join, resolve } from 'node:path'
 import { PassThrough } from 'node:stream'
-import { installWindowsSandboxAsync, resolveSrtWin, SandboxManager, VENDORED_SRT_WIN_EXE } from '@anthropic-ai/sandbox-runtime'
-import { AGENT_API_PORT_BASE, type Exec, type Mount, type Sandboxes, type SandboxSpec, type SandboxState } from './sandbox.ts'
+import type { Exec, Mount, Sandboxes, SandboxSpec, SandboxState } from './sandbox.ts'
 
 const WIN = process.platform === 'win32'
 const DATA = resolve(process.env.AGENTD_DATA || '/data')
 const STATE = join(DATA, 'native')
 const RUNTIME = process.env.AGENTD_HERMES || join(DATA, 'runtime')
 const PYTHON = WIN ? join(RUNTIME, 'python', 'python.exe') : join(RUNTIME, 'python', 'bin', 'python3')
-const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
-const GATEWAY = `127.0.0.1:${GATEWAY_PORT}`
 const KILL_MS = 10_000
-const PRIVATE = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '100.64.0.0/10', '169.254.0.0/16', 'fc00::/7', 'fe80::/10', 'fd7a:115c:a1e0::/48']
 const BASE_PATH = WIN ? `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32;${process.env.SystemRoot ?? 'C:\\Windows'}` : '/usr/bin:/bin:/usr/sbin:/sbin'
 
 type Saved = { spec: SandboxSpec; pid?: number; startedAt?: string }
 
 const children = new Map<string, ChildProcess>()
-let ready: Promise<void> | undefined
-
-function init() {
-  ready ??= start().catch(async (e: unknown) => {
-    if (!WIN) throw e
-    await installWindowsSandboxAsync({ srtWin: resolveSrtWin({ path: VENDORED_SRT_WIN_EXE }), skipProfileGrant: true })
-    return start()
-  })
-  return ready
-}
-
-function start() {
-  return SandboxManager.initialize({
-    network: { allowedDomains: [GATEWAY], deniedDomains: [], deniedResolvedAddresses: PRIVATE },
-    filesystem: { denyRead: [], allowWrite: [], denyWrite: [] },
-    ...(WIN ? { windows: { srtWin: { path: VENDORED_SRT_WIN_EXE } } } : {}),
-  }, async ({ host, port }) => port === 443 && !/^[\d.:[\]]+$/.test(host))
-}
-
 const dirOf = (id: string) => join(STATE, id)
 const savedOf = (id: string): Saved | undefined => existsSync(join(dirOf(id), 'spec.json')) ? JSON.parse(readFileSync(join(dirOf(id), 'spec.json'), 'utf8')) as Saved : undefined
 const save = (id: string, saved: Saved) => writeFileSync(join(dirOf(id), 'spec.json'), JSON.stringify(saved))
@@ -67,7 +43,7 @@ export function layout(spec: SandboxSpec) {
 
 function placeMount({ spec, mount }: { spec: SandboxSpec; mount: Mount }) {
   if (!existsSync(mount.host) || mount.guest === '/etc/resolv.conf') return
-  if (mount.guest.startsWith('/usr/local/bin/')) return link({ from: mount.host, to: join(binDir(spec), mount.guest.slice('/usr/local/bin/'.length)) })
+  if (mount.guest.startsWith('/usr/local/bin/')) return tool({ from: mount.host, to: join(binDir(spec), mount.guest.slice('/usr/local/bin/'.length) + extname(mount.host)) })
   const parent = spec.mounts.filter((m) => m !== mount && mount.guest.startsWith(`${m.guest}/`)).sort((a, b) => b.guest.length - a.guest.length)[0]
   if (!parent) return
   const target = join(parent.host, mount.guest.slice(parent.guest.length))
@@ -75,6 +51,16 @@ function placeMount({ spec, mount }: { spec: SandboxSpec; mount: Mount }) {
   if (statSync(mount.host).isDirectory()) return link({ from: mount.host, to: target })
   mkdirSync(dirname(target), { recursive: true })
   copyFileSync(mount.host, target)
+}
+
+function tool({ from, to }: { from: string; to: string }) {
+  if (!WIN) return link({ from, to })
+  rmSync(to, { force: true })
+  try {
+    linkSync(from, to)
+  } catch {
+    copyFileSync(from, to)
+  }
 }
 
 function link({ from, to }: { from: string; to: string }) {
@@ -85,41 +71,17 @@ function link({ from, to }: { from: string; to: string }) {
 
 function envOf(spec: SandboxSpec): Record<string, string> {
   const mapped = Object.fromEntries(Object.entries(spec.env).map(([name, value]) => [name, value.startsWith('/') ? hostOf({ spec, guest: value }) : value]))
-  return { ...mapped, PATH: [binDir(spec), dirname(PYTHON), BASE_PATH].join(WIN ? ';' : ':'), TMPDIR: join(dirOf(spec.id), 'tmp'), TEMP: join(dirOf(spec.id), 'tmp'), TMP: join(dirOf(spec.id), 'tmp'), PYTHONNOUSERSITE: '1', NO_PROXY: '', no_proxy: '', LANG: 'en_US.UTF-8' }
-}
-
-function policyOf(spec: SandboxSpec) {
-  const home = root(spec)
-  const readable = [RUNTIME, dirOf(spec.id), ...spec.mounts.filter((m) => existsSync(m.host)).map((m) => m.host)]
-  const writable = [dirOf(spec.id), ...spec.mounts.filter((m) => !m.readOnly && existsSync(m.host)).map((m) => m.host)]
-  const locked = [...spec.mounts.filter((m) => m.readOnly && home && m.guest.startsWith('/opt/data/')).map((m) => hostOf({ spec, guest: m.guest })), ...spec.tmpfs.filter((t) => t.readOnly).map((t) => hostOf({ spec, guest: t.guest }))]
-  return {
-    filesystem: { denyRead: [homedir(), DATA], allowRead: readable, allowWrite: writable, denyWrite: [RUNTIME, ...locked] },
-  }
-}
-
-function portRules(spec: SandboxSpec) {
-  const sockets = [root(spec), dirOf(spec.id)].filter((dir): dir is string => Boolean(dir) && existsSync(dir as string)).map((dir) => JSON.stringify(realpathSync(dir)))
-  const unix = `(allow system-socket (socket-domain AF_UNIX))${sockets.map((dir) => `(allow network-bind (local unix-socket (subpath ${dir})))(allow network-outbound (remote unix-socket (subpath ${dir})))`).join('')}`
-  return `${unix}(allow network-outbound (remote ip "localhost:${GATEWAY_PORT}"))(allow network-bind (local ip "localhost:*"))(allow network-inbound (local ip "localhost:*"))`
+  return { ...mapped, PATH: [binDir(spec), join(RUNTIME, 'node'), dirname(PYTHON), BASE_PATH].join(WIN ? ';' : ':'), TMPDIR: join(dirOf(spec.id), 'tmp'), TEMP: join(dirOf(spec.id), 'tmp'), TMP: join(dirOf(spec.id), 'tmp'), PYTHONNOUSERSITE: '1', LANG: 'en_US.UTF-8' }
 }
 
 function argvOf({ spec, command }: { spec: SandboxSpec; command: string[] }) {
   const [first, ...rest] = command.map((part) => part.startsWith('/') ? hostOf({ spec, guest: part }) : part)
-  const launcher = first === PYTHON ? [PYTHON, '-s', join(RUNTIME, 'hermes.py')] : [first]
-  return [...launcher, ...rest].map(quote).join(' ')
+  return first === PYTHON ? [PYTHON, '-s', join(RUNTIME, 'hermes.py'), ...rest] : [first, ...rest]
 }
 
-function quote(part: string) {
-  if (WIN) return /[\s"]/.test(part) ? `"${part.replace(/"/g, '\\"')}"` : part
-  return `'${part.replace(/'/g, `'\\''`)}'`
-}
-
-async function boxed({ spec, command }: { spec: SandboxSpec; command: string[] }) {
-  await init()
-  const wrapped = await SandboxManager.wrapWithSandboxArgv(argvOf({ spec, command }), undefined, policyOf(spec), undefined, root(spec))
-  const argv = WIN ? wrapped.argv : wrapped.argv.map((part) => part.includes('(version 1)') ? part.replace('(version 1)', `(version 1)${portRules(spec)}`) : part)
-  return spawn(argv[0], argv.slice(1), { cwd: root(spec), env: { ...envOf(spec), ...wrapped.env, ...envOf(spec), HTTPS_PROXY: wrapped.env.HTTPS_PROXY ?? '', HTTP_PROXY: wrapped.env.HTTP_PROXY ?? '' }, detached: !WIN, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+function launch({ spec, command }: { spec: SandboxSpec; command: string[] }) {
+  const [file, ...args] = argvOf({ spec, command })
+  return spawn(file, args, { cwd: root(spec) ?? dirOf(spec.id), env: envOf(spec), detached: !WIN, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
 }
 
 function alive(pid: number | undefined) {
@@ -169,11 +131,7 @@ export const native: Sandboxes = {
   name: 'native',
 
   async ready() {
-    if (!existsSync(PYTHON)) return { ok: false, reason: `the agent runtime isn't installed at ${RUNTIME}` }
-    return init().then(() => ({ ok: true }), (e: unknown) => {
-      ready = undefined
-      return { ok: false, reason: e instanceof Error ? e.message : String(e) }
-    })
+    return existsSync(PYTHON) ? { ok: true } : { ok: false, reason: `the agent runtime isn't installed at ${RUNTIME}` }
   },
 
   async create(spec) {
@@ -187,7 +145,7 @@ export const native: Sandboxes = {
     if (!saved) throw new Error(`No such container: ag-${id}`)
     if (alive(saved.pid)) return
     layout(saved.spec)
-    const child = await boxed({ spec: saved.spec, command: [saved.spec.entrypoint, ...saved.spec.command] })
+    const child = launch({ spec: saved.spec, command: [saved.spec.entrypoint, ...saved.spec.command] })
     const log = join(dirOf(id), 'agent.log')
     writeFileSync(log, '')
     child.stdout?.on('data', (chunk: Buffer) => writeFileSync(log, chunk, { flag: 'a' }))
@@ -209,7 +167,7 @@ export const native: Sandboxes = {
   async exec({ id, command, stdin }) {
     const saved = savedOf(id)
     if (!saved || !alive(saved.pid)) throw new Error(`ag-${id} is not running`)
-    const child = await boxed({ spec: saved.spec, command })
+    const child = launch({ spec: saved.spec, command })
     if (!stdin) child.stdin?.end()
     return streamed(child)
   },
@@ -219,7 +177,7 @@ export const native: Sandboxes = {
     mkdirSync(dirOf(scratch.id), { recursive: true })
     try {
       layout(scratch)
-      const result = streamed(await boxed({ spec: scratch, command: [spec.entrypoint, ...command] }))
+      const result = streamed(launch({ spec: scratch, command: [spec.entrypoint, ...command] }))
       result.stdin?.end()
       const chunks: Buffer[] = []
       result.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))

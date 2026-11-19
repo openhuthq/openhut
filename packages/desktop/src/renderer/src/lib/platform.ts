@@ -1,9 +1,9 @@
-export type Words = { here: string; thisComputer: string; keychain: string; showFolder: string; badgeNote: string | undefined }
+export type Words = { here: string; thisComputer: string; keychain: string; showFolder: string; badgeNote: string | undefined; sandboxed: boolean }
 
 export function wordsFor(platform: string): Words {
-  if (platform === 'darwin') return { here: 'Mac', thisComputer: 'This Mac', keychain: 'macOS Keychain', showFolder: 'Show in Finder', badgeNote: 'The Dock icon counts them either way.' }
-  if (platform === 'win32') return { here: 'computer', thisComputer: 'This computer', keychain: 'Windows credential store', showFolder: 'Show in Explorer', badgeNote: undefined }
-  return { here: 'computer', thisComputer: 'This computer', keychain: 'system keyring', showFolder: 'Open folder', badgeNote: undefined }
+  if (platform === 'darwin') return { here: 'Mac', thisComputer: 'This Mac', keychain: 'macOS Keychain', showFolder: 'Show in Finder', badgeNote: 'The Dock icon counts them either way.', sandboxed: false }
+  if (platform === 'win32') return { here: 'computer', thisComputer: 'This computer', keychain: 'Windows credential store', showFolder: 'Show in Explorer', badgeNote: undefined, sandboxed: false }
+  return { here: 'computer', thisComputer: 'This computer', keychain: 'system keyring', showFolder: 'Open folder', badgeNote: undefined, sandboxed: true }
 }
 
 const FROM_PHONE: Record<string, string> = { 'This Mac': 'Your Mac', 'This computer': 'Your computer' }

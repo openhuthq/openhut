@@ -2,7 +2,7 @@ import type { Audience, ChannelKind } from '@openhut/common/channels/channel.ts'
 import type { AgentFiles } from '../platform/agentd.ts'
 import { config } from '../platform/config.ts'
 import { agentSubnet } from '../platform/network.ts'
-import { AGENT_API_PORT_BASE } from '../../agentd/sandbox/sandbox.ts'
+import { AGENT_API_PORT_BASE, WHATSAPP_PORT_BASE } from '../../agentd/sandbox/sandbox.ts'
 import { slack } from '../integrations/slack/slack.ts'
 import { telegram } from '../integrations/telegram/telegram.ts'
 import { whatsapp } from '../integrations/whatsapp/whatsapp.ts'
@@ -46,7 +46,7 @@ export function renderFiles({ agent, ownerName, token, channelKey, channels, con
     'platform_toolsets:\n  api_server: [hermes-api-server, openhut]',
     'tools:\n  tool_search:\n    enabled: "off"',
     `mcp_servers:\n  openhut:\n    url: ${gateway}/api/v1/mcp\n    headers:\n      Authorization: "Agent ${token}"`,
-    ...channels.map((channel) => yamlOf({ channel, gateway })),
+    ...channels.map((channel) => yamlOf({ channel, gateway, net: agent.net })),
   ].join('\n') + '\n'
   const env = [
     `API_SERVER_KEY=${channelKey}`, ...(config.agentHostNet ? ['API_SERVER_HOST=127.0.0.1', `API_SERVER_PORT=${AGENT_API_PORT_BASE + agent.net}`] : ['API_SERVER_HOST=0.0.0.0', 'API_SERVER_PORT=8642']),
@@ -85,11 +85,11 @@ function scalar(value: string | number | null | undefined): string {
   return typeof value === 'string' && !PLAIN.test(value) ? JSON.stringify(value) : String(value)
 }
 
-function yamlOf({ channel, gateway }: { channel: RenderedChannel; gateway: string }): string {
+function yamlOf({ channel, gateway, net }: { channel: RenderedChannel; gateway: string; net: number }): string {
   switch (channel.kind) {
     case 'slack': return slack.yaml.trimEnd()
     case 'telegram': return telegram.yaml({ gateway })
-    case 'whatsapp': return whatsapp.yaml.trimEnd()
+    case 'whatsapp': return config.agentHostNet ? `${whatsapp.yaml}  bridge_port: ${WHATSAPP_PORT_BASE + net}` : whatsapp.yaml.trimEnd()
   }
 }
 

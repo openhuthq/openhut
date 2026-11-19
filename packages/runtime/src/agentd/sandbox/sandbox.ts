@@ -1,6 +1,8 @@
 import type { Readable, Writable } from 'node:stream'
 
 export const AGENT_API_PORT_BASE = 18600
+export const WHATSAPP_PORT_BASE = 19600
+export const BROWSER_STREAM_PORT_BASE = 20600
 export type Mount = { host: string; guest: string; readOnly: boolean }
 export type SandboxSpec = {
   id: string

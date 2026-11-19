@@ -13,20 +13,17 @@ const FENCE_NET = 0
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
 const PROBE_SECONDS = 6
 const TIMEOUT_MS = 30_000
-const HOST = { gvisor: `10.200.${FENCE_NET}.1`, native: '127.0.0.1' }
-const LISTEN = { gvisor: '0.0.0.0', native: '127.0.0.1' }
 const STATUS = / =>(\d{3})\s*$/
 const CURL_ERROR = /curl: \(\d+\)[^=]*/
-const POLICY_DENIED = 'network_policy_denied'
-const CONNECT_REFUSED = /^curl: \(7\)|^curl: \(56\) CONNECT tunnel failed, response 403/
+const CONNECT_REFUSED = /^curl: \(7\)/
 const CONNECT_TIMEOUT = /^curl: \(28\) (Connection timed out|Failed to connect)/
 const UNRESOLVED = /^curl: \(6\)|Resolving timed out/
 
 export async function proveFence({ box, spec, timeoutMs = TIMEOUT_MS }: { box: Sandboxes; spec: Omit<SandboxSpec, 'entrypoint' | 'command' | 'net'>; timeoutMs?: number }): Promise<FenceReport> {
-  if (box.name === 'memory') return { ok: true, sandbox: box.name, skipped: 'memory sandbox has no network', checks: [] }
-  const listener = createServer((sock) => sock.end('HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n')).listen(0, LISTEN[box.name])
+  if (box.name !== 'gvisor') return { ok: true, sandbox: box.name, skipped: `${box.name} agents run as the user, with no network fence`, checks: [] }
+  const listener = createServer((sock) => sock.end('HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n')).listen(0, '0.0.0.0')
   await once(listener, 'listening')
-  const probes = probesFor({ host: HOST[box.name], hostPort: (listener.address() as AddressInfo).port, lan: hostAddress(isPrivate, '10.0.0.1'), tailnet: hostAddress(isCgnat, '100.64.0.1') })
+  const probes = probesFor({ host: `10.200.${FENCE_NET}.1`, hostPort: (listener.address() as AddressInfo).port, lan: hostAddress(isPrivate, '10.0.0.1'), tailnet: hostAddress(isCgnat, '100.64.0.1') })
   let timer: NodeJS.Timeout | undefined
   const probe = async () => {
     await box.create({ ...spec, entrypoint: '/usr/bin/env', command: ['sleep', String(timeoutMs / 1000)], net: FENCE_NET })
@@ -63,21 +60,20 @@ export function reportOf({ sandbox, probes, out }: { sandbox: string; probes: Pr
   const answers = new Map(out.split('\n').map((line) => /^(\d+) (.*)$/.exec(line)).filter((m) => m !== null).map((m) => [Number(m[1]), m[2]]))
   const checks = probes.map((p, i) => {
     const answer = answers.get(i)
-    const { got, reached, refused } = answer === undefined ? { got: out.trim().split('\n').at(-1) || 'no answer', reached: false, refused: false } : verdict({ answer, sandbox })
+    const { got, reached, refused } = answer === undefined ? { got: out.trim().split('\n').at(-1) || 'no answer', reached: false, refused: false } : verdict(answer)
     return { ...p, got, pass: p.expect === 'allowed' ? reached : refused }
   })
   return { ok: checks.every((c) => c.pass), sandbox, checks }
 }
 
-export function verdict({ answer, sandbox }: { answer: string; sandbox: string }) {
+export function verdict(answer: string) {
   const code = Number(STATUS.exec(answer)?.[1] ?? 0)
-  if (answer.includes(POLICY_DENIED)) return { got: `HTTP ${code} ${POLICY_DENIED}`, reached: false, refused: true }
   if (code >= 100) return { got: `HTTP ${code}`, reached: true, refused: false }
   const error = CURL_ERROR.exec(answer)?.[0].trim()
   if (!error) return { got: answer.replace(STATUS, '').trim() || 'no response', reached: false, refused: false }
   const timedOut = CONNECT_TIMEOUT.test(error)
   const failed = timedOut || CONNECT_REFUSED.test(error)
-  return { got: error, reached: !failed && !UNRESOLVED.test(error), refused: sandbox === 'gvisor' ? timedOut : failed }
+  return { got: error, reached: !failed && !UNRESOLVED.test(error), refused: timedOut }
 }
 
 export function fenceLines(report: FenceReport): string[] {
