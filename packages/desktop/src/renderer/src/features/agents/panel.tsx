@@ -13,7 +13,7 @@ import { ConfirmDialog, useConfirming } from '@/components/confirm-button'
 import { Choice, DialogCard, DRAG, GLASS, HOVER, I, MenuCard, PILL, ROW, ROW_VALUE, Section, TINY_ICON } from '@/components/kit'
 import { agentPath, type AgentDialog } from '@/app/routes'
 import { useAgents, useChannels, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
-import { nameOf, useComputers, useFeatures } from '@/features/computers/api'
+import { nameOf, runsOnNote, useComputers, useFeatures } from '@/features/computers/api'
 import { CanUse } from '@/features/agents/agent-connections'
 import { BrowserPreview } from '@/features/agents/browser'
 import { ChannelRows } from '@/features/agents/channels'
@@ -146,7 +146,7 @@ function RunsOn({ agent }: { agent: Agent }) {
       <DropdownMenuTrigger className={ROW} disabled={!!move.going}><I icon={LaptopIcon} size={15} className="text-mute" />Runs on<span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="truncate">{nameOf({ computers, id })}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
       <MenuCard title={`${agent.name} runs on`}>
         {(computers ?? []).map((computer) => <Choice key={computer.id} icon={<I icon={computer.id === 'local' ? LaptopIcon : ServerStack01Icon} size={15} />} name={computer.id === id ? computer.name : `Move to ${computer.name}`}
-          note={computer.online ? computer.id === 'local' ? `${WORDS.sandboxed ? 'Its own sandbox' : 'Runs as you'} · while this ${HERE} is awake` : 'Its own sandbox · always on' : 'Offline'}
+          note={runsOnNote(computer)}
           selected={computer.id === id} disabled={computer.id === id || !computer.online || !agent.canEdit} onClick={() => move.go(computer.id)} />)}
         <DropdownMenuSeparator />
         <DropdownMenuItem className="h-8 gap-2 text-[13px]" onClick={() => navigate('/settings/devices')}><I icon={PlusSignIcon} size={14} className="text-pass" />Add a computer…</DropdownMenuItem>
