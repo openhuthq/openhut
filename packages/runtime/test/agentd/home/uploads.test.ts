@@ -3,7 +3,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import assert from 'node:assert/strict'
 import { linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { isHomePath, isUploadName, MAX_FILE_BYTES, readHomeFile, removeUploads, saveUpload, statHomeFiles } from '../../src/agentd/files.ts'
+import { isHomePath, isUploadName, MAX_FILE_BYTES, readHomeFile, removeUploads, saveUpload, statHomeFiles } from '../../../src/agentd/home/uploads.ts'
 
 const base = realpathSync(mkdtempSync(`${tmpdir()}/files-`))
 const home = `${base}/agent/home`

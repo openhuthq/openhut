@@ -71,7 +71,7 @@ export const agentService = {
       instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000),
     }).returningAll().executeTakeFirstOrThrow().catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'Someone created an agent at the same moment. Try again.') : err })
     try {
-      await agentd.create({ id: row.id, net, files: await filesOf(row), browser: row.web_browser })
+      await agentd.apply({ id: row.id, net, files: await filesOf(row), browser: row.web_browser, running: false })
     } catch (err) {
       await agentd.remove({ id: row.id }).catch(() => undefined)
       await db.deleteFrom('agent').where('id', '=', row.id).execute()
@@ -90,7 +90,7 @@ export const agentService = {
       ...fields, helper_models: helperModels && JSON.stringify({ ...helpersOf(before), ...helperModels }),
       code_execution: codeExecution, web_browser: browser, name: patch.name === undefined ? undefined : cleanName(patch.name),
     }).where('id', '=', id).execute()
-    if (RENDERED.some((field) => patch[field] !== undefined)) {
+    if (patch.wanted || RENDERED.some((field) => patch[field] !== undefined)) {
       await agentService.reapply({ id }).catch(async (err: unknown) => {
         if (browser === undefined || browser === before.web_browser) throw err
         await db.updateTable('agent').set({ web_browser: before.web_browser }).where('id', '=', id).execute()
@@ -98,7 +98,6 @@ export const agentService = {
         throw err
       })
     }
-    if (patch.wanted) await (patch.wanted === 'running' ? agentd.start({ id }) : agentd.stop({ id }))
     return agentService.get({ actor, id })
   },
 
@@ -150,7 +149,7 @@ export const agentService = {
       }
       const ungranted = await regrant({ agentId: row.id, grants: moved.grants })
       await agentd.importHome({ id: row.id, tar: moved.home })
-      await agentd.create({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser })
+      await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: false })
       emit({ name: 'agent.imported', actor, target: { type: 'agent', id: row.id, name: row.name } })
       return { object: 'agent_import', agent: await agentService.get({ actor, id: row.id }), ungranted }
     } catch (err) {
@@ -162,7 +161,7 @@ export const agentService = {
 
   async reapply({ id }: { id: string }): Promise<void> {
     const row = await rowOf(id)
-    await agentd.apply({ id, net: row.net, files: await filesOf(row), browser: row.web_browser, restart: row.wanted === 'running' })
+    await agentd.apply({ id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' })
   },
 
   async stopAll(): Promise<void> {
@@ -216,7 +215,7 @@ export const agentService = {
   async reapplyAll({ force }: { force: boolean }): Promise<string[]> {
     const failed: string[] = []
     for (const row of await db.selectFrom('agent').selectAll().execute()) {
-      await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, restart: row.wanted === 'running', force })
+      await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running', force })
         .catch((err: unknown) => failed.push(`${row.name}: ${messageOf(err)}`))
     }
     return failed
@@ -236,7 +235,7 @@ async function reconcile(): Promise<void> {
   if (!states) return
   for (const row of await db.selectFrom('agent').selectAll().where('wanted', '=', 'running').execute()) {
     if (states[row.id] === 'running') await probe({ row, fresh: true })
-    await keepRunning({ row, state: states[row.id] }).catch((err: unknown) => log.error({ event: 'reconcile.failed', agent: row.id, error: messageOf(err) }))
+    await keepRunning({ row }).catch((err: unknown) => log.error({ event: 'reconcile.failed', agent: row.id, error: messageOf(err) }))
   }
 }
 
@@ -317,20 +316,9 @@ function renderedChannel(channel: Selectable<Database['channel']>): RenderedChan
   }
 }
 
-async function keepRunning({ row, state }: { row: AgentRow; state: string | undefined }): Promise<void> {
-  if (state === undefined) {
-    await agentd.create({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser })
-    await agentd.start({ id: row.id })
-    log.info({ event: 'reconcile.recreated', agent: row.id })
-    return
-  }
-  if (state !== 'running') {
-    await agentd.start({ id: row.id })
-    log.info({ event: 'reconcile.started', agent: row.id })
-    return
-  }
-  const { restarted } = await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, restart: true })
-  if (restarted) log.info({ event: 'reconcile.restarted', agent: row.id })
+async function keepRunning({ row }: { row: AgentRow }): Promise<void> {
+  const { change } = await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: true })
+  if (change !== 'none') log.info({ event: `reconcile.${change}`, agent: row.id })
 }
 
 async function applyRelease(): Promise<void> {

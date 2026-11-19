@@ -13,6 +13,7 @@ import { telegram, TelegramSecrets } from '../integrations/telegram/telegram.ts'
 import { agentService } from '../agents/agent-service.ts'
 import type { Caller } from '../team/identity.ts'
 import { audienceOf } from './audience.ts'
+import { whatsappPairing } from './whatsapp-pairing.ts'
 
 const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram' } as const
 
@@ -27,7 +28,7 @@ export const channelService = {
     const row = await rowOf(id)
     if (row.kind !== 'whatsapp' || row.status !== 'linking') return channelOf({ row, qr: null })
     if (!(await agentService.get({ actor, id: row.agent_id })).canEdit) return channelOf({ row, qr: null })
-    const pairing = await agentd.pairWhatsapp({ id: row.agent_id })
+    const pairing = whatsappPairing.follow(row.agent_id)
     if (pairing.status === 'error') throw new HttpError(502, `WhatsApp linking stopped (${pairing.error}). Close this and link again.`)
     if (pairing.status !== 'linked') return channelOf({ row, qr: pairing.qr ?? null })
     const linked = await db.updateTable('channel').set({ status: 'connected', account: pairing.phone ? `+${pairing.phone}` : null }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
@@ -111,7 +112,10 @@ async function setupOf({ body, agentName, agentId }: { body: CreateChannel; agen
 
 async function disconnect(row: Row): Promise<void> {
   switch (row.kind) {
-    case 'whatsapp': await agentd.unlinkWhatsapp({ id: row.agent_id }); return
+    case 'whatsapp':
+      whatsappPairing.stop(row.agent_id)
+      await agentd.delete({ id: row.agent_id, paths: ['platforms/whatsapp/session'] })
+      return
     case 'slack': return
     case 'telegram': return
   }

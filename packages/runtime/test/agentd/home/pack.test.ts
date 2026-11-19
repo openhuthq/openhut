@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { packHome, unpackHome } from '../../src/agentd/home.ts'
+import { packHome, unpackHome } from '../../../src/agentd/home/pack.ts'
 
 test('an agent\'s home packs and unpacks whole, and a broken pack is refused', async () => {
   const from = mkdtempSync(`${tmpdir()}/home-from-`)

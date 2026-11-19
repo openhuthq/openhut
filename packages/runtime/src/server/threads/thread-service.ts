@@ -61,7 +61,7 @@ export const threadService = {
     const sent = messagesOf(row).flatMap(filesOf).map((file) => file.url)
     const names = [...new Set([...sent, ...uploads].flatMap((path) => uploadName(path) ?? []))]
     for (let start = 0; start < names.length; start += MAX_REMOVED) {
-      await agentd.removeUploads({ id: row.agent_id, names: names.slice(start, start + MAX_REMOVED) })
+      await agentd.delete({ id: row.agent_id, paths: names.slice(start, start + MAX_REMOVED).map(uploadPath) })
         .catch((err: unknown) => log.warn({ event: 'thread.uploads_kept', thread: id, agent: row.agent_id, error: messageOf(err) }))
     }
     return deleted({ id, object: 'thread' })
@@ -72,7 +72,7 @@ export const threadService = {
     await agentService.requireEditable({ actor, id: row.agent_id })
     const name = uploadName(path)
     if (!name) throw new HttpError(400, `Only files uploaded to a chat, in ${UPLOADS}, can be deleted here.`, { param: 'path' })
-    const { removed } = await agentd.removeUploads({ id: row.agent_id, names: [name] })
+    const { removed } = await agentd.delete({ id: row.agent_id, paths: [uploadPath(name)] })
     if (!removed.length) throw new HttpError(404, 'That upload isn\'t in the agent\'s uploads folder. It may have been deleted already.', { param: 'path' })
     return deleted({ id: path, object: 'file' })
   },
@@ -85,8 +85,8 @@ export const threadService = {
       return inside ? [{ path, inside }] : []
     })
     if (!wanted.length) return []
-    const { files } = await agentd.statFiles({ id: row.agent_id, paths: wanted.map((each) => each.inside) })
-    const sizes = new Map(files.map((file) => [file.path, file.size]))
+    const { files } = await agentd.stat({ id: row.agent_id, paths: wanted.map((each) => `home/${each.inside}`) })
+    const sizes = new Map(files.map((file) => [file.path.slice('home/'.length), file.size]))
     return wanted.flatMap(({ path, inside }) => {
       const size = sizes.get(inside)
       return size === undefined ? [] : [{ object: 'file' as const, name: inside.slice(inside.lastIndexOf('/') + 1), path, size }]
@@ -97,7 +97,8 @@ export const threadService = {
     const row = await ownRow({ actor, id })
     await agentService.requireEditable({ actor, id: row.agent_id })
     if (!Buffer.isBuffer(body) || !body.length) throw new HttpError(400, 'Send the file\'s bytes as the request body, with Content-Type: application/octet-stream. Empty files can\'t be attached.')
-    const { path } = await agentd.saveUpload({ id: row.agent_id, name: safeFileName(file.name), body })
+    const saved = await agentd.write({ id: row.agent_id, path: uploadPath(safeFileName(file.name)), body })
+    const path = saved.path.slice('home/'.length)
     return { object: 'file', name: path.slice(path.lastIndexOf('/') + 1), path: `${AGENT_HOME}/${path}`, size: body.length, mediaType: file.type && MEDIA_TYPE.test(file.type) ? file.type : 'application/octet-stream' }
   },
 
@@ -106,10 +107,10 @@ export const threadService = {
     await agentService.requireEditable({ actor, id: row.agent_id })
     const inside = fileInHome(path)
     if (!inside) throw new HttpError(400, `Only files in the agent's home folder, ${AGENT_HOME}, can be downloaded.`, { param: 'path' })
-    const { body } = await agentd.readFile({ id: row.agent_id, path: inside })
+    const body = await agentd.read({ id: row.agent_id, path: `home/${inside}` })
     if (body === null) throw new HttpError(404, 'That file isn\'t in the agent\'s home folder. It may have been moved or deleted.', { param: 'path' })
     const name = inside.slice(inside.lastIndexOf('/') + 1)
-    return reply.header('content-type', 'application/octet-stream').header('x-content-type-options', 'nosniff').header('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`).send(Buffer.from(body, 'base64'))
+    return reply.header('content-type', 'application/octet-stream').header('x-content-type-options', 'nosniff').header('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`).send(body)
   },
 
   async chat({ actor, id, body, reply }: { actor: Caller; id: string; body: SendChat; reply: FastifyReply }): Promise<void> {
@@ -267,8 +268,9 @@ async function imagesOf({ agentId, files }: { agentId: string; files: FilePart[]
   const images: ImagePart[] = []
   let total = 0
   for (const file of files.filter((each) => IMAGE_TYPES.includes(each.mediaType))) {
-    const body = await agentd.readFile({ id: agentId, path: fileInHome(file.url) ?? '' }).then((reply) => reply.body, () => null)
-    const type = body && imageTypeOf(Buffer.from(body.slice(0, 16), 'base64'))
+    const bytes = await agentd.read({ id: agentId, path: `home/${fileInHome(file.url) ?? ''}` }).catch(() => null)
+    const body = bytes?.toString('base64')
+    const type = bytes && imageTypeOf(bytes.subarray(0, 12))
     if (!body || !type || body.length > MAX_IMAGE_BASE64 || total + body.length > MAX_IMAGES_BASE64) continue
     total += body.length
     images.push({ type: 'image_url', image_url: { url: `data:${type};base64,${body}` } })
@@ -338,3 +340,7 @@ type ImagePart = { type: 'image_url'; image_url: { url: string } }
 type OpenAiMessage = { role: 'user' | 'assistant'; content: string | ({ type: 'text'; text: string } | ImagePart)[] }
 type ThreadRow = Selectable<Database['thread']>
 type AgentRow = Selectable<Database['agent']>
+
+function uploadPath(name: string): string {
+  return `home/uploads/${name}`
+}

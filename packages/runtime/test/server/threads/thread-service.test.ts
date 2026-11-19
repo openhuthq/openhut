@@ -2,7 +2,7 @@ import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import Fastify from 'fastify'
-import { isUploadName } from '../../../src/agentd/files.ts'
+import { isUploadName } from '../../../src/agentd/home/uploads.ts'
 import { agentd } from '../../../src/server/platform/agentd.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors, HttpError } from '../../../src/server/platform/http-error.ts'
@@ -115,21 +115,19 @@ test('threads need the enrolled key, and a stopped agent says so before anything
 
 const PNG = Buffer.from('89504e470d0a1a0a', 'hex')
 const saved = new Map<string, Buffer>()
-const saveUpload = mock.method(agentd, 'saveUpload', async ({ name, body }: { id: string; name: string; body: Buffer }) => {
-  saved.set(`uploads/${name}`, body)
-  return { path: `uploads/${name}` }
+const inHome = (path: string) => path.slice('home/'.length)
+const saveUpload = mock.method(agentd, 'write', async ({ path, body }: { id: string; path: string; body: Buffer | string }) => {
+  saved.set(inHome(path), Buffer.from(body))
+  return { path }
 })
-mock.method(agentd, 'readFile', async ({ path }: { id: string; path: string }) => {
-  const body = saved.get(path)
-  return { body: body ? body.toString('base64') : null }
-})
-const removeUploads = mock.method(agentd, 'removeUploads', async ({ names }: { id: string; names: string[] }) => {
-  const removed = names.filter((name) => saved.delete(`uploads/${name}`))
+mock.method(agentd, 'read', async ({ path }: { id: string; path: string }) => saved.get(inHome(path)) ?? null)
+const removeUploads = mock.method(agentd, 'delete', async ({ paths }: { id: string; paths: string[] }) => {
+  const removed = paths.filter((path) => saved.delete(inHome(path)))
   return { removed }
 })
-mock.method(agentd, 'statFiles', async ({ paths }: { id: string; paths: string[] }) => {
-  if (paths.some((path) => path.split('/').length > 32)) throw new HttpError(502, 'The agent runner couldn\'t look for the files: bad file paths.')
-  return { files: paths.flatMap((path) => saved.has(path) ? [{ path, size: saved.get(path)?.length ?? 0 }] : []) }
+mock.method(agentd, 'stat', async ({ paths }: { id: string; paths: string[] }) => {
+  if (paths.some((path) => path.split('/').length > 33)) throw new HttpError(502, 'The agent runner couldn\'t look for the files: bad paths.')
+  return { files: paths.flatMap((path) => saved.has(inHome(path)) ? [{ path, size: saved.get(inHome(path))?.length ?? 0 }] : []) }
 })
 const upload = ({ threadId, name, body, headers = as() }: { threadId: string; name: string; body: Buffer; headers?: Record<string, string> }) => app.inject({
   method: 'POST', url: `/api/threads/${threadId}/files?name=${encodeURIComponent(name)}&type=${name.endsWith('.png') ? 'image/png' : 'text/plain'}`,
@@ -250,7 +248,7 @@ test('removing a chip deletes that upload from the agent\'s uploads folder, and 
   const file = (await upload({ threadId: thread.id, name: 'draft.txt', body: Buffer.from('x') })).json()
   const res = await app.inject({ method: 'DELETE', url: `/api/threads/${thread.id}/files?path=${encodeURIComponent(file.path)}`, headers: as() })
   assert.deepEqual(res.json(), { id: '/opt/data/home/uploads/draft.txt', object: 'file', deleted: true })
-  assert.deepEqual(removeUploads.mock.calls.at(-1)?.arguments[0], { id: 'ag_chatrunn', names: ['draft.txt'] })
+  assert.deepEqual(removeUploads.mock.calls.at(-1)?.arguments[0], { id: 'ag_chatrunn', paths: ['home/uploads/draft.txt'] })
   assert.equal(saved.has('uploads/draft.txt'), false)
   const calls = removeUploads.mock.callCount()
   for (const path of ['/opt/data/home/report.csv', '/opt/data/home/uploads/../.env', '/opt/data/home/uploads/a/b.txt', '/opt/data/.env']) {
@@ -294,7 +292,7 @@ test('clearing a chat also deletes the uploads still waiting in the composer, an
   saved.set('report.csv', Buffer.from('a'))
   const res = await app.inject({ method: 'DELETE', url: `/api/threads/${thread.id}`, headers: as(), payload: { uploads: [waiting.path, '/opt/data/home/report.csv', '/opt/data/home/uploads/../.env'] } })
   assert.equal(res.statusCode, 200)
-  const names: string[] = removeUploads.mock.calls.at(-1)?.arguments[0].names ?? []
+  const names: string[] = (removeUploads.mock.calls.at(-1)?.arguments[0].paths ?? []).map((path) => path.slice('home/uploads/'.length))
   assert.ok(names.includes('waiting.txt'))
   assert.ok(names.every((name) => !name.includes('/') && name !== 'report.csv' && name !== '.env'))
   assert.equal(saved.has('uploads/waiting.txt'), false)
@@ -308,7 +306,7 @@ test('clearing a chat deletes the files uploaded to it from the agent\'s home, a
   await sendParts({ threadId: thread.id, parts: [{ type: 'file', mediaType: 'text/plain', filename: sent.name, url: sent.path }, { type: 'text', text: 'read it' }] })
   saved.set('report.csv', Buffer.from('a'))
   assert.equal((await app.inject({ method: 'DELETE', url: `/api/threads/${thread.id}`, headers: as() })).statusCode, 200)
-  assert.deepEqual(removeUploads.mock.calls.at(-1)?.arguments[0].names.includes('sent.txt'), true)
+  assert.deepEqual(removeUploads.mock.calls.at(-1)?.arguments[0].paths.includes('home/uploads/sent.txt'), true)
   assert.equal(saved.has('uploads/sent.txt'), false)
   assert.equal(saved.has(`uploads/${kept.name}`), true)
   assert.equal(saved.has('report.csv'), true)

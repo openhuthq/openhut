@@ -29,8 +29,8 @@ const BARE = new Set(['--init', '--read-only'])
 
 test('docker create gets the same flags, mounts and limits it got before the sandbox interface', async () => {
   const id = 'ag_abcd1234'
-  const reply = await ask({ cmd: 'create', id, net: 7, browser: false, files: { 'config.yaml': 'a: 1\n', '.env': 'X=1\n', 'SOUL.md': '# soul\n', 'auth.json': '{}\n' } })
-  assert.deepEqual(reply, { ok: true, container: `ag-${id}` })
+  const reply = await ask({ cmd: 'apply', id, net: 7, browser: false, running: false, files: { 'config.yaml': 'a: 1\n', '.env': 'X=1\n', 'SOUL.md': '# soul\n', 'auth.json': '{}\n' } })
+  assert.deepEqual(reply, { ok: true, applied: id, change: 'created' })
   const spec = boxes.get(id)?.spec
   assert.ok(spec)
   assert.deepEqual(flags(createArgs({ ...spec, image: DIGEST })), flags(oldCreateArgs({ id, net: 7, memory: '1g', cpus: '1', tmp: '256m' })))
@@ -39,9 +39,9 @@ test('docker create gets the same flags, mounts and limits it got before the san
 test('apply recreates a sandbox made by an older spec, like a Large one, at the one size every agent has', async () => {
   const id = 'ag_efgh5678'
   const files = { 'config.yaml': '', '.env': '', 'SOUL.md': '', 'auth.json': '' }
-  await ask({ cmd: 'create', id, net: 8, browser: false, files })
+  await ask({ cmd: 'apply', id, net: 8, browser: false, running: false, files })
   Object.assign(boxes.get(id)?.spec ?? {}, { memoryMib: 2048, cpus: 2, labels: { 'openhut.spec': '3', 'openhut.size': 'large', 'openhut.browser': 'off' } })
-  assert.deepEqual(await ask({ cmd: 'apply', id, net: 8, size: 'large', browser: false, files, restart: true }), { ok: true, applied: id, restarted: true })
+  assert.deepEqual(await ask({ cmd: 'apply', id, net: 8, size: 'large', browser: false, files, running: true }), { ok: true, applied: id, change: 'created' })
   assert.deepEqual(boxes.get(id)?.spec.labels, { 'openhut.spec': '4', 'openhut.browser': 'off', 'openhut.mounts': MOUNTS })
   assert.deepEqual([boxes.get(id)?.spec.memoryMib, boxes.get(id)?.spec.cpus], [1024, 1])
   assert.deepEqual(await ask({ cmd: 'ps' }), { ok: true, states: { ag_abcd1234: 'created', [id]: 'running' } })
@@ -52,10 +52,10 @@ test('apply recreates a sandbox made by an older spec, like a Large one, at the 
 test('apply recreates a sandbox whose mounts came from somewhere else, like the app run from another folder', async () => {
   const id = 'ag_mount123'
   const files = { 'config.yaml': '', '.env': '', 'SOUL.md': '', 'auth.json': '' }
-  await ask({ cmd: 'create', id, net: 9, browser: false, files })
-  assert.deepEqual(await ask({ cmd: 'apply', id, net: 9, browser: false, files, restart: false }), { ok: true, applied: id, restarted: false })
+  await ask({ cmd: 'apply', id, net: 9, browser: false, running: false, files })
+  assert.deepEqual(await ask({ cmd: 'apply', id, net: 9, browser: false, files, running: false }), { ok: true, applied: id, change: 'none' })
   Object.assign(boxes.get(id)?.spec.labels ?? {}, { 'openhut.mounts': 'from-a-tmp-mount' })
-  assert.deepEqual(await ask({ cmd: 'apply', id, net: 9, browser: false, files, restart: true }), { ok: true, applied: id, restarted: true })
+  assert.deepEqual(await ask({ cmd: 'apply', id, net: 9, browser: false, files, running: true }), { ok: true, applied: id, change: 'created' })
   assert.equal(boxes.get(id)?.spec.labels['openhut.mounts'], MOUNTS)
   await ask({ cmd: 'rm', id })
 })
