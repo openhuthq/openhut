@@ -1,4 +1,4 @@
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { copyFileSync, cpSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join, resolve } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -100,15 +100,23 @@ function alive(pid: number | undefined) {
   }
 }
 
-function kill({ pid, signal }: { pid: number; signal: NodeJS.Signals }) {
-  if (WIN) return void spawn('taskkill', ['/T', '/F', '/PID', String(pid)], { stdio: 'ignore', windowsHide: true })
-  try {
-    process.kill(-pid, signal)
-  } catch {
-    try {
-      process.kill(pid, signal)
-    } catch {
-      return
+export function tree(pid: number): number[] {
+  if (WIN) return [pid]
+  const rows = execFileSync('ps', ['-A', '-o', 'pid=,ppid=']).toString().trim().split('\n').map((line) => line.trim().split(/\s+/).map(Number))
+  const found = [pid]
+  for (let i = 0; i < found.length; i++) for (const [child, parent] of rows) if (parent === found[i] && !found.includes(child)) found.push(child)
+  return found
+}
+
+function kill({ pids, signal }: { pids: number[]; signal: NodeJS.Signals }) {
+  if (WIN) return void spawn('taskkill', ['/T', '/F', '/PID', String(pids[0])], { stdio: 'ignore', windowsHide: true })
+  for (const pid of pids) {
+    for (const target of [-pid, pid]) {
+      try {
+        process.kill(target, signal)
+      } catch {
+        continue
+      }
     }
   }
 }
@@ -116,16 +124,21 @@ function kill({ pid, signal }: { pid: number; signal: NodeJS.Signals }) {
 async function halt({ id, seconds }: { id: string; seconds: number }) {
   const saved = savedOf(id)
   if (!saved?.pid || !alive(saved.pid)) return
+  const pids = tree(saved.pid)
+  kill({ pids, signal: 'SIGTERM' })
+  for (const end = Date.now() + Math.min(seconds * 1000, KILL_MS); Date.now() < end && pids.some(alive);) await new Promise((r) => setTimeout(r, 200))
+  kill({ pids: pids.filter(alive), signal: 'SIGKILL' })
   closeBrowser(saved.spec)
-  kill({ pid: saved.pid, signal: 'SIGTERM' })
-  for (const end = Date.now() + Math.min(seconds * 1000, KILL_MS); Date.now() < end && alive(saved.pid);) await new Promise((r) => setTimeout(r, 200))
-  if (alive(saved.pid)) kill({ pid: saved.pid, signal: 'SIGKILL' })
   save(id, { ...saved, pid: undefined })
 }
 
 function closeBrowser(spec: SandboxSpec) {
-  const tool = join(binDir(spec), WIN ? 'agent-browser.exe' : 'agent-browser')
-  if (existsSync(tool)) spawnSync(tool, ['close', '--all'], { env: envOf(spec), timeout: 10_000, windowsHide: true })
+  const dir = spec.env.AGENT_BROWSER_SOCKET_DIR
+  if (!dir || !existsSync(dir)) return
+  for (const name of readdirSync(dir).filter((each) => each.endsWith('.pid'))) {
+    const pid = Number(readFileSync(join(dir, name), 'utf8'))
+    if (pid && alive(pid)) kill({ pids: tree(pid), signal: 'SIGKILL' })
+  }
 }
 
 function streamed(child: ChildProcess): Exec {
@@ -136,7 +149,7 @@ function streamed(child: ChildProcess): Exec {
     stdout.end()
     done(code ?? 1)
   }))
-  return { stdin: child.stdin, stdout, exit, kill: () => kill({ pid: child.pid ?? 0, signal: 'SIGKILL' }) }
+  return { stdin: child.stdin, stdout, exit, kill: () => kill({ pids: tree(child.pid ?? 0), signal: 'SIGKILL' }) }
 }
 
 export const native: Sandboxes = {
@@ -219,8 +232,11 @@ export function sweep() {
   for (const id of readdirSync(STATE)) {
     const saved = savedOf(id)
     if (!saved) continue
-    closeBrowser(saved.spec)
-    if (saved.pid && alive(saved.pid)) kill({ pid: saved.pid, signal: 'SIGKILL' })
+    if (saved.pid && alive(saved.pid)) kill({ pids: tree(saved.pid), signal: 'SIGKILL' })
     save(id, { ...saved, pid: undefined })
+  }
+  for (const id of readdirSync(STATE)) {
+    const saved = savedOf(id)
+    if (saved) closeBrowser(saved.spec)
   }
 }
