@@ -15,6 +15,17 @@ export function phaseOf(lines: string[]) {
   return phase
 }
 
+const STAGES: Record<string, { at: number; line: string }> = {
+  'Connecting…': { at: 12, line: 'Knocking on the door' },
+  'Installing…': { at: 45, line: 'Unpacking a few things' },
+  'Starting…': { at: 75, line: 'Turning on the lights' },
+  'Almost ready…': { at: 92, line: 'Almost settled in' },
+}
+
+export function stageOf(lines: string[]) {
+  return STAGES[phaseOf(lines)]
+}
+
 export function failureOf({ error, url, name }: { error: string; url: string | null; name: string }): Failure {
   const text = clean(error)
   if (/another install or update is already running/i.test(text)) return { kind: 'busy', sentence: `${name} is already installing or updating. Try again in a few minutes.` }

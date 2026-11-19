@@ -46,9 +46,9 @@ export function PairDialog({ title, waiting, check }: { title: string; waiting: 
   return body(code ? waiting(code) : !error && <p className="m-0 flex items-center gap-2 text-mute"><Spinner className="mt-0" />Making a code…</p>, null)
 }
 
-export function Waiting({ children }: { children: ReactNode }) {
+export function Waiting({ children, note = 'The code works once, for 5 minutes.' }: { children: ReactNode; note?: string }) {
   return <div className="flex flex-col gap-1">
     <p className="m-0 flex items-center gap-2"><Spinner className="mt-0" />{children}</p>
-    <p className="m-0 pl-[22px] text-[12px]/[16px] text-mute">The code works once, for 5 minutes.</p>
+    <p className="m-0 pl-[22px] text-[12px]/[16px] text-mute">{note}</p>
   </div>
 }

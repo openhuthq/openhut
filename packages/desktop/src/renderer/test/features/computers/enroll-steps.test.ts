@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { clean, failureOf, phaseOf } from '../../../src/features/computers/enroll-steps.ts'
+import { clean, failureOf, phaseOf, stageOf } from '../../../src/features/computers/enroll-steps.ts'
 
 const name = 'box'
 const kind = (error: string, url: string | null = null) => failureOf({ error, url, name }).kind
@@ -21,4 +21,11 @@ test('the installer\'s lines become one plain word for where the add is', () => 
   assert.equal(phaseOf(['Installing OpenHut on box over Tailscale SSH', '\u001b[1m==>\u001b[0m OpenHut container', '[1m==>[0m Claude Code 2.1.311']), 'Installing…')
   assert.equal(phaseOf(['==> gVisor 20261109.0', '==> Starting']), 'Starting…')
   assert.equal(phaseOf(['==> Starting', 'Waiting for box to join']), 'Almost ready…')
+})
+
+test('each phase is a step further along, in plain words', () => {
+  const lines = [[], ['==> Docker'], ['==> Starting'], ['==> Starting', 'Waiting for box to join']]
+  const stages = lines.map(stageOf)
+  assert.deepEqual(stages.map((each) => each.line), ['Knocking on the door', 'Unpacking a few things', 'Turning on the lights', 'Almost settled in'])
+  assert.deepEqual(stages.map((each) => each.at), [...stages.map((each) => each.at)].sort((a, b) => a - b))
 })
