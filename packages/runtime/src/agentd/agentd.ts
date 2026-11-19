@@ -454,7 +454,8 @@ function nativeBrowserEnv({ id, net }: { id: string; net: number }): Record<stri
     AGENT_BROWSER_STREAM_MAX_WIDTH: '1280',
     AGENT_BROWSER_STREAM_MAX_HEIGHT: '800',
     AGENT_BROWSER_NO_VERSION_CHECK: '1',
-    ...(PIPE ? {} : { AGENT_BROWSER_SOCKET_DIR: join(tmpdir(), `oh-${id}`) }),
+    AGENT_BROWSER_SESSION: id,
+    AGENT_BROWSER_SOCKET_DIR: join(tmpdir(), `oh-${id}`),
   }
 }
 
