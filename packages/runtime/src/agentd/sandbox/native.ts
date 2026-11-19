@@ -1,4 +1,4 @@
-import { execFileSync, spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { copyFileSync, cpSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join, resolve } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -133,8 +133,12 @@ async function halt({ id, seconds }: { id: string; seconds: number }) {
 }
 
 function closeBrowser(spec: SandboxSpec) {
-  const tool = join(binDir(spec), WIN ? 'agent-browser.exe' : 'agent-browser')
-  if (existsSync(tool)) spawnSync(tool, ['close', '--all'], { env: envOf(spec), timeout: 10_000, windowsHide: true })
+  const dir = spec.env.AGENT_BROWSER_SOCKET_DIR
+  if (!dir || !existsSync(dir)) return
+  for (const name of readdirSync(dir).filter((each) => each.endsWith('.pid'))) {
+    const pid = Number(readFileSync(join(dir, name), 'utf8'))
+    if (pid && alive(pid)) kill({ pids: tree(pid), signal: 'SIGKILL' })
+  }
 }
 
 function streamed(child: ChildProcess): Exec {
