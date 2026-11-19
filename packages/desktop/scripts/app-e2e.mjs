@@ -57,7 +57,10 @@ try {
   }
   await mcp(agent)
   await quit()
-  say('quit the app')
+  await sleep(3000)
+  const left = leftovers()
+  say('quit the app; no agent or browser process is left', { left })
+  if (left.length) throw new Error(`after quitting, these are still running: ${left.join('; ')}`)
   child = launch()
   page = await connect()
   const back = await until(async () => {
@@ -199,6 +202,14 @@ async function mcp(agent) {
   const listed = JSON.stringify(answers.find((each) => each.id === 3)?.result ?? {})
   say('an MCP client reached the runtime through OpenHut --mcp', { tools: tools.length, listAgentsHasJuniper: listed.includes(agent.id) })
   if (!tools.includes('list_agents') || !listed.includes(agent.id)) throw new Error(`the MCP bridge answered ${out.slice(0, 500)}`)
+}
+
+function leftovers() {
+  const backend = join(dirname(exe), WIN ? 'resources' : '../Resources', 'backend')
+  const lines = WIN
+    ? execFileSync('powershell', ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ExecutablePath)" }']).toString().split(/\r?\n/)
+    : execFileSync('ps', ['-axo', 'pid=,command=']).toString().split('\n')
+  return lines.filter((line) => line.includes(resolve(backend)) && /agent-browser|python|hermes/.test(line)).map((line) => line.trim().slice(0, 200))
 }
 
 function launch() {

@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { copyFileSync, existsSync, linkSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join, resolve } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -70,7 +70,7 @@ function link({ from, to }: { from: string; to: string }) {
 }
 
 function envOf(spec: SandboxSpec): Record<string, string> {
-  const mapped = Object.fromEntries(Object.entries(spec.env).map(([name, value]) => [name, value.startsWith('/') ? hostOf({ spec, guest: value }) : value]))
+  const mapped = Object.fromEntries(Object.entries(spec.env).map(([name, value]) => [name, value.startsWith('/') && !value.startsWith(DATA) ? hostOf({ spec, guest: value }) : value]))
   return { ...mapped, PATH: [binDir(spec), join(RUNTIME, 'node'), dirname(PYTHON), BASE_PATH].join(WIN ? ';' : ':'), TMPDIR: join(dirOf(spec.id), 'tmp'), TEMP: join(dirOf(spec.id), 'tmp'), TMP: join(dirOf(spec.id), 'tmp'), PYTHONNOUSERSITE: '1', LANG: 'en_US.UTF-8' }
 }
 
@@ -110,10 +110,16 @@ function kill({ pid, signal }: { pid: number; signal: NodeJS.Signals }) {
 async function halt({ id, seconds }: { id: string; seconds: number }) {
   const saved = savedOf(id)
   if (!saved?.pid || !alive(saved.pid)) return
+  closeBrowser(saved.spec)
   kill({ pid: saved.pid, signal: 'SIGTERM' })
   for (const end = Date.now() + Math.min(seconds * 1000, KILL_MS); Date.now() < end && alive(saved.pid);) await new Promise((r) => setTimeout(r, 200))
   if (alive(saved.pid)) kill({ pid: saved.pid, signal: 'SIGKILL' })
   save(id, { ...saved, pid: undefined })
+}
+
+function closeBrowser(spec: SandboxSpec) {
+  const tool = join(binDir(spec), WIN ? 'agent-browser.exe' : 'agent-browser')
+  if (existsSync(tool)) spawnSync(tool, ['close', '--all'], { env: envOf(spec), timeout: 10_000, windowsHide: true })
 }
 
 function streamed(child: ChildProcess): Exec {
@@ -206,7 +212,9 @@ export function sweep() {
   if (!existsSync(STATE)) return
   for (const id of readdirSync(STATE)) {
     const saved = savedOf(id)
-    if (saved?.pid && alive(saved.pid)) kill({ pid: saved.pid, signal: 'SIGKILL' })
-    if (saved) save(id, { ...saved, pid: undefined })
+    if (!saved) continue
+    closeBrowser(saved.spec)
+    if (saved.pid && alive(saved.pid)) kill({ pid: saved.pid, signal: 'SIGKILL' })
+    save(id, { ...saved, pid: undefined })
   }
 }
