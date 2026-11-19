@@ -94,7 +94,7 @@ async function firstAgent(page) {
     }
     return run.agentId ? run : null
   }, 900, 'the first agent to answer').catch((error) => { throw new Error(`${error.message}; first run was at ${JSON.stringify(last?.steps)}`) })
-  say('first run finished: the fence passed and the first agent answers in its microVM', { steps: setup.steps })
+  say('first run finished: the fence passed and the first agent answers in its sandbox', { steps: setup.steps })
   return page.eval(`fetch('/api/agents/${setup.agentId}').then((r) => r.json())`)
 }
 

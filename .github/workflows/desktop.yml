@@ -142,7 +142,7 @@ jobs:
       - name: Build the installer
         working-directory: packages/desktop
         run: npm run dist:win
-      - name: Install it, meet the first agent in its microVM, chat, use the MCP, restart, and keep the evidence
+      - name: Install it, meet the first agent in its sandbox, chat, use the MCP, restart, and keep the evidence
         working-directory: packages/desktop
         shell: pwsh
         run: |

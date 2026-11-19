@@ -412,7 +412,7 @@ async function poll() {
   for (const agent of agents.filter((each) => each.online)) {
     const strikes = needsYou(agent) ? (watched.strikes.get(agent.id) ?? 0) + 1 : 0
     watched.strikes.set(agent.id, strikes)
-    if (strikes === 2 && wants.notifyFailures) notify({ title: `${agent.name} stopped answering`, body: agent.healthDetail || 'Its virtual machine isn\'t running. OpenHut keeps trying to start it.', path: `/agents/${agent.id}` })
+    if (strikes === 2 && wants.notifyFailures) notify({ title: `${agent.name} stopped answering`, body: agent.healthDetail || 'It isn\'t running. OpenHut keeps trying to start it.', path: `/agents/${agent.id}` })
   }
   app.setBadgeCount(agents.filter((agent) => agent.online && watched.strikes.get(agent.id) >= 2).length)
   await Promise.all(list.filter((computer) => computer.online).map(async (computer) => {
@@ -565,7 +565,7 @@ async function meet(run) {
     if (state === 'done' && run.steps[index + 1]) run.steps[index + 1][2] = 'now'
   }
   const hardware = `${cpus()[0]?.model ?? 'This computer'} · ${Math.round(totalmem() / 2 ** 30)} GB`
-  if (CONTAINER ? !await dockerUp() : !await canVirtualize()) throw new Error(`${hardware}, but it can't run ${CONTAINER ? 'Docker' : 'virtual machines'}`)
+  if (CONTAINER && !await dockerUp()) throw new Error(`${hardware}, but it can't run Docker`)
   step(0, hardware)
   const downloading = follow({ run, index: 1, read: async () => fetching ?? (CONTAINER ? (await agentd({ cmd: 'progress' })).pull : null) })
   const started = await booted.finally(downloading)
@@ -604,12 +604,6 @@ function noteOf({ done, total }) {
 
 function dockerUp() {
   return new Promise((resolve) => execFile('docker', ['info'], { timeout: 20_000 }, (error) => resolve(!error)))
-}
-
-function canVirtualize() {
-  if (NATIVE || process.env.OPENHUT_SANDBOX === 'memory') return Promise.resolve(true)
-  if (WIN) return Promise.resolve(existsSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32\\WinHvPlatform.dll')))
-  return new Promise((resolve) => execFile('sysctl', ['-n', 'kern.hv_support'], (_error, stdout) => resolve(String(stdout).trim() === '1')))
 }
 
 function listening(path) {
@@ -991,10 +985,6 @@ app.whenReady().then(async () => {
   protocol.handle('app', serve)
   if (CONTAINER && !await dockerUp()) {
     await dialog.showMessageBox({ type: 'error', message: 'OpenHut needs Docker', detail: 'On Linux, OpenHut runs each agent in its own gVisor sandbox in Docker. Install Docker (sudo apt install docker.io), let your user run it (sudo usermod -aG docker $USER), sign in again, then open OpenHut.', buttons: ['Quit'] })
-    return app.quit()
-  }
-  if (WIN && !await canVirtualize()) {
-    await dialog.showMessageBox({ type: 'error', message: 'This computer can\'t run agents', detail: 'Windows Hypervisor Platform is off, and OpenHut runs each agent in its own virtual machine. Turn it on in Windows Features (or run Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform as an administrator), restart, and open OpenHut again.', buttons: ['Quit'] })
     return app.quit()
   }
   const fresh = !existsSync(CONTAINER ? join(HOME, LOCAL_KEY) : join(DATA, 'app'))

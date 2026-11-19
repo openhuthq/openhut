@@ -31,7 +31,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
   return <Center>
     <div className="relative"><span className="absolute inset-0 scale-150 rounded-md bg-[radial-gradient(circle,#f7c94855,transparent_65%)]" /><Hut className="relative size-28" /></div>
     <Headline>Your agents. On this {HERE}.</Headline>
-    <p className="m-0 max-w-[440px] text-[14px]/[1.5] text-body">Each agent gets its own sealed computer. Chats, memory and keys stay here. There's no account to make.</p>
+    <p className="m-0 max-w-[440px] text-[14px]/[1.5] text-body">Each agent runs in its own sandbox. Chats, memory and keys stay here. There's no account to make.</p>
     <Button variant="primary" size="lg" className="mt-2 w-[240px] justify-center gap-2" onClick={onStart} autoFocus><I icon={PlayIcon} size={15} />Start</Button>
     <div className="mt-2 flex items-center gap-5 text-[12px] text-mute">
       <span className="inline-flex items-center gap-1.5"><I icon={Shield01Icon} size={14} />Sealed per agent</span>
