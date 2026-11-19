@@ -10,38 +10,40 @@ const Features = z.object({ whatsapp: z.boolean(), browser: z.boolean() })
 export const LastUpdate = z.object({ exit: z.number(), at: z.string(), reason: z.nullable(z.string()) })
 export type LastUpdate = z.infer<typeof LastUpdate>
 const Failure = z.object({ ok: z.literal(false), error: z.string() })
-const Pairing = z.object({ status: z.enum(['starting', 'qr', 'linked', 'error']), qr: z.optional(z.string()), phone: z.optional(z.string()), error: z.optional(z.string()) })
+const Change = z.enum(['created', 'started', 'restarted', 'stopped', 'none'])
 
 export const agentd = {
   health: () => ask({ request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), imageReady: z.optional(z.boolean()), updating: z.optional(z.boolean()), lastUpdate: z.optional(z.nullable(LastUpdate)), features: z.optional(Features) }) }),
   ps: () => ask({ request: { cmd: 'ps' }, doing: 'list the agents', schema: z.object({ states: z.record(z.string(), z.string()) }) }),
-  create: ({ id, net, files, browser }: { id: string; net: number; files: AgentFiles; browser: boolean }) =>
-    ask({ request: { cmd: 'create', id, net, files, browser }, doing: 'create the agent', schema: z.object({ container: z.string() }) }),
-  apply: ({ id, net, files, browser, restart, force = false }: { id: string; net: number; files: AgentFiles; browser: boolean; restart: boolean; force?: boolean }) =>
-    ask({ request: { cmd: 'apply', id, net, files, browser, restart, force }, doing: 'update the agent\'s files', schema: z.object({ applied: z.string(), restarted: z.boolean() }) }),
-  start: ({ id }: { id: string }) => ask({ request: { cmd: 'start', id }, doing: 'start the agent', schema: z.object({ started: z.string() }) }),
+  apply: ({ id, net, files, browser, running, force = false }: { id: string; net: number; files: AgentFiles; browser: boolean; running: boolean; force?: boolean }) =>
+    ask({ request: { cmd: 'apply', id, net, files, browser, running, force }, doing: 'set up the agent', schema: z.object({ applied: z.string(), change: Change }) }),
   stop: ({ id }: { id: string }) => ask({ request: { cmd: 'stop', id }, doing: 'stop the agent', schema: z.object({ stopped: z.string() }) }),
   remove: ({ id }: { id: string }) => ask({ request: { cmd: 'rm', id }, doing: 'delete the agent', schema: z.object({ removed: z.string() }) }),
-  pairWhatsapp: ({ id }: { id: string }) => ask({ request: { cmd: 'wa-pair', id }, doing: 'link WhatsApp', schema: Pairing }),
   update: ({ appVersion, sha256 }: { appVersion?: string; sha256: string }) => ask({ request: { cmd: 'update', appVersion, sha256 }, doing: 'start the update', schema: z.object({ updating: z.boolean() }) }),
   skills: ({ id }: { id: string }) => ask({ request: { cmd: 'skills', id }, doing: 'list the skills', schema: z.object({ skills: z.array(z.object({ path: z.string(), head: z.string() })), bundled: z.string() }) }),
-  readSkill: ({ id, path }: { id: string; path: string }) => ask({ request: { cmd: 'skill-read', id, path }, doing: 'open the skill', schema: z.object({ body: z.string() }) }),
-  writeSkill: ({ id, path, body }: { id: string; path: string; body: string }) => ask({ request: { cmd: 'skill-write', id, path, body }, doing: 'save the skill', schema: z.object({ written: z.string() }) }),
-  removeSkill: ({ id, path }: { id: string; path: string }) => ask({ request: { cmd: 'skill-rm', id, path }, doing: 'delete the skill', schema: z.object({ removed: z.string() }) }),
-  memory: ({ id }: { id: string }) => ask({ request: { cmd: 'memory', id }, doing: 'read the memory', schema: z.object({ notes: z.nullable(z.string()), people: z.nullable(z.string()) }) }),
-  writeMemory: ({ id, target, body }: { id: string; target: 'notes' | 'people'; body: string }) => ask({ request: { cmd: 'memory-write', id, target, body }, doing: 'save the memory', schema: z.object({ written: z.string() }) }),
+  read: async ({ id, path }: { id: string; path: string }): Promise<Buffer | null> => {
+    const { body } = await ask({ request: { cmd: 'read', id, path }, doing: 'read the file', schema: z.object({ body: z.nullable(z.string()) }) })
+    return body === null ? null : Buffer.from(body, 'base64')
+  },
+  write: ({ id, path, body }: { id: string; path: string; body: Buffer | string }) =>
+    ask({ request: { cmd: 'write', id, path }, body: Buffer.from(body).toString('base64'), doing: 'save the file in the agent\'s home', schema: z.object({ path: z.string() }) }),
+  delete: ({ id, paths }: { id: string; paths: string[] }) => ask({ request: { cmd: 'delete', id, paths }, doing: 'delete the files', schema: z.object({ removed: z.array(z.string()) }) }),
+  stat: ({ id, paths }: { id: string; paths: string[] }) => ask({ request: { cmd: 'stat', id, paths }, doing: 'look for the files', schema: z.object({ files: z.array(z.object({ path: z.string(), size: z.number() })) }) }),
   exportHome: ({ id }: { id: string }) => ask({ request: { cmd: 'home-export', id }, doing: 'pack the agent\'s home', schema: z.object({ tar: z.string() }) }),
   importHome: ({ id, tar }: { id: string; tar: string }) => ask({ request: { cmd: 'home-import', id }, body: tar, doing: 'unpack the agent\'s home', schema: z.object({ imported: z.string() }) }),
-  saveUpload: ({ id, name, body }: { id: string; name: string; body: Buffer }) => ask({ request: { cmd: 'file-write', id, name }, body: body.toString('base64'), doing: 'save the file in the agent\'s home', schema: z.object({ path: z.string() }) }),
-  readFile: ({ id, path }: { id: string; path: string }) => ask({ request: { cmd: 'file-read', id, path }, doing: 'read the file', schema: z.object({ body: z.nullable(z.string()) }) }),
-  removeUploads: ({ id, names }: { id: string; names: string[] }) => ask({ request: { cmd: 'file-rm', id, names }, doing: 'delete the uploaded files', schema: z.object({ removed: z.array(z.string()) }) }),
-  statFiles: ({ id, paths }: { id: string; paths: string[] }) => ask({ request: { cmd: 'file-stat', id, paths }, doing: 'look for the files', schema: z.object({ files: z.array(z.object({ path: z.string(), size: z.number() })) }) }),
   newMessages: ({ since }: { since: number }) => ask({ request: { cmd: 'messages', since }, doing: 'look for new messages', schema: z.object({ messages: z.array(z.object({ agentId: z.string(), source: z.string(), at: z.number() })) }) }),
   usage: ({ since }: { since: number }) => ask({ request: { cmd: 'usage', since }, doing: 'read the agents\' usage', schema: z.object({ usage: z.record(z.string(), z.number()) }) }),
-  unlinkWhatsapp: ({ id }: { id: string }) => ask({ request: { cmd: 'wa-unlink', id }, doing: 'unlink WhatsApp', schema: z.object({ unlinked: z.string() }) }),
 }
 
-export function liveBrowser({ id, fps, onLine, onEnd }: { id: string; fps: number; onLine: (line: string) => void; onEnd: () => void }): LiveBrowser {
+export function liveBrowser({ id, fps, onLine, onEnd }: { id: string; fps: number; onLine: (line: string) => void; onEnd: () => void }): Stream {
+  return stream({ request: { cmd: 'browser-live', id, fps }, onLine, onEnd })
+}
+
+export function pairWhatsapp({ id, onLine, onEnd }: { id: string; onLine: (line: string) => void; onEnd: () => void }): Stream {
+  return stream({ request: { cmd: 'wa-pair', id }, onLine, onEnd })
+}
+
+function stream({ request, onLine, onEnd }: { request: Record<string, unknown>; onLine: (line: string) => void; onEnd: () => void }): Stream {
   const socket = connect(config.agentdSocket)
   let pending = ''
   socket.setEncoding('utf8')
@@ -53,9 +55,13 @@ export function liveBrowser({ id, fps, onLine, onEnd }: { id: string; fps: numbe
     }
     if (pending.length > MAX_LIVE_LINE) socket.destroy()
   })
+  socket.on('end', () => {
+    if (pending) onLine(pending)
+    pending = ''
+  })
   socket.on('error', () => socket.destroy())
   socket.on('close', onEnd)
-  socket.write(`${JSON.stringify({ cmd: 'browser-live', id, fps })}\n`)
+  socket.write(`${JSON.stringify(request)}\n`)
   return { send: (line) => socket.write(`${line}\n`), close: () => socket.destroy() }
 }
 
@@ -99,4 +105,4 @@ function send({ request, body = '', doing }: { request: Record<string, unknown>;
 }
 
 export type AgentFiles = Record<'config.yaml' | '.env' | 'SOUL.md' | 'auth.json', string>
-export type LiveBrowser = { send: (line: string) => void; close: () => void }
+export type Stream = { send: (line: string) => void; close: () => void }

@@ -15,8 +15,9 @@ const owner = { id: 'usr_memowner', email: 'memowner@example.com', local: false,
 const member = { id: 'usr_memmembr', email: 'memmember@example.com', local: false, role: 'member' as const }
 const files: { notes: string | null; people: string | null } = { notes: ' Late means 5 days.\n§\n\nRefunds need David. \n§\n', people: null }
 mock.method(agentd, 'ps', async () => ({ states: {} }))
-mock.method(agentd, 'memory', async () => ({ ...files }))
-const write = mock.method(agentd, 'writeMemory', async ({ target, body }: { target: 'notes' | 'people'; body: string }) => { files[target] = body; return { written: target } })
+const targetOf = (path: string) => (path === 'memories/MEMORY.md' ? 'notes' : 'people')
+mock.method(agentd, 'read', async ({ path }: { path: string }) => { const body = files[targetOf(path)]; return body === null ? null : Buffer.from(body) })
+const write = mock.method(agentd, 'write', async ({ path, body }: { path: string; body: Buffer | string }) => { files[targetOf(path)] = String(body); return { path } })
 
 test('memory splits Hermes\'s files into trimmed entries and reports how much of each limit is used', async () => {
   const memory = await memoryService.get({ actor: member, agentId: 'ag_memorytt' })

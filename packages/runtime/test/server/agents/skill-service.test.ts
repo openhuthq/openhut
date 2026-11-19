@@ -19,8 +19,9 @@ const files: Record<string, string> = {
 }
 mock.method(agentd, 'ps', async () => ({ states: {} }))
 mock.method(agentd, 'skills', async () => ({ skills: Object.entries(files).map(([path, head]) => ({ path, head })), bundled: 'arxiv:abc\n' }))
-mock.method(agentd, 'readSkill', async ({ path }: { path: string }) => ({ body: files[path] }))
-const write = mock.method(agentd, 'writeSkill', async ({ path, body }: { path: string; body: string }) => { files[path] = body; return { written: path } })
+const skillOf = (path: string) => path.slice('skills/'.length, -'/SKILL.md'.length)
+mock.method(agentd, 'read', async ({ path }: { path: string }) => (files[skillOf(path)] === undefined ? null : Buffer.from(files[skillOf(path)])))
+const write = mock.method(agentd, 'write', async ({ path, body }: { path: string; body: Buffer | string }) => { files[skillOf(path)] = String(body); return { path } })
 
 test('skills an agent learned come first; names and descriptions come from the front matter or the folder', async () => {
   const skills = await skillService.list({ actor: member, agentId: 'ag_skilltst' })
@@ -43,10 +44,10 @@ test('only someone who can change the agent can save a skill', async () => {
 })
 
 test('a learned skill can be deleted by someone who can change the agent; a built-in one never', async () => {
-  const remove = mock.method(agentd, 'removeSkill', async ({ path }: { path: string }) => { delete files[path]; return { removed: path } })
+  const remove = mock.method(agentd, 'delete', async ({ paths }: { paths: string[] }) => { for (const path of paths) delete files[path.slice('skills/'.length)]; return { removed: paths } })
   await assert.rejects(skillService.delete({ actor: member, id: 'ag_skilltst~late-invoices' }), { status: 403 })
   await assert.rejects(skillService.delete({ actor: owner, id: 'ag_skilltst~research~arxiv' }), { status: 400 })
   assert.equal(remove.mock.callCount(), 0)
   assert.deepEqual(await skillService.delete({ actor: owner, id: 'ag_skilltst~late-invoices' }), { id: 'ag_skilltst~late-invoices', object: 'skill', deleted: true })
-  assert.deepEqual(remove.mock.calls[0].arguments[0], { id: 'ag_skilltst', path: 'late-invoices' })
+  assert.deepEqual(remove.mock.calls[0].arguments[0], { id: 'ag_skilltst', paths: ['skills/late-invoices'] })
 })

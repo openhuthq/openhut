@@ -1,7 +1,7 @@
 import { after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,8 +11,9 @@ import { fileURLToPath } from 'node:url'
 
 const data = mkdtempSync(join(tmpdir(), 'agentd-'))
 const sock = join(data, 'agentd.sock')
+mkdirSync(join(data, 'whatsapp-bridge', 'node_modules'), { recursive: true })
 const agentd = spawn(process.execPath, [fileURLToPath(new URL('../../src/agentd/agentd.ts', import.meta.url))], {
-  env: { ...process.env, OPENHUT_SANDBOX: 'memory', AGENTD_DATA: data, AGENTD_SOCK: sock },
+  env: { ...process.env, OPENHUT_SANDBOX: 'memory', AGENTD_DATA: data, AGENTD_SOCK: sock, AGENTD_WHATSAPP_BRIDGE: join(data, 'whatsapp-bridge') },
   stdio: ['ignore', 'pipe', 'inherit'],
 })
 after(() => {
@@ -30,7 +31,7 @@ test('a person\'s hold outlasts the runtime re-applying the agent\'s files, and 
   const view = await holding(id)
   t.after(() => view.destroy())
   assert.equal(policy(id), 'deny')
-  assert.equal((await call({ cmd: 'apply', id, net: 1, files: FILES, browser: true, restart: true })).ok, true)
+  assert.equal((await call({ cmd: 'apply', id, net: 1, files: FILES, browser: true, running: true })).ok, true)
   assert.equal(policy(id), 'deny')
   view.destroy()
   await until(() => policy(id) === 'allow')
@@ -48,9 +49,40 @@ test('removing an agent while a person holds its browser leaves agentd running',
   assert.equal((await call({ cmd: 'ps' })).ok, true)
 })
 
+test('apply brings the sandbox to what was asked: created, started, left alone, restarted, stopped', async () => {
+  const id = 'ag_applyst1'
+  const apply = (more: object) => call({ cmd: 'apply', id, net: 2, files: FILES, browser: false, ...more })
+  assert.equal((await apply({ running: false })).change, 'created')
+  assert.equal((await call({ cmd: 'ps' })).states?.[id], 'created')
+  assert.equal((await apply({ running: true })).change, 'started')
+  assert.equal((await apply({ running: true })).change, 'none')
+  assert.equal((await apply({ running: true, force: true })).change, 'restarted')
+  assert.equal((await apply({ running: true, browser: true })).change, 'created')
+  assert.equal((await call({ cmd: 'ps' })).states?.[id], 'running')
+  assert.equal((await apply({ running: false, browser: true })).change, 'stopped')
+})
+
+test('WhatsApp pairing streams the bridge\'s lines, and the agent restarts when it ends', { timeout: 10_000 }, async () => {
+  const id = 'ag_pairing1'
+  assert.equal((await call({ cmd: 'apply', id, net: 3, files: FILES, browser: false, running: true })).ok, true)
+  writeFileSync(join(data, 'agents', id, 'gateway.pid'), '1')
+  const pair = connect(sock)
+  pair.end(`${JSON.stringify({ cmd: 'wa-pair', id })}\n`)
+  await once(pair, 'close')
+  await until(() => !existsSync(join(data, 'agents', id, 'gateway.pid')))
+  assert.equal((await call({ cmd: 'ps' })).states?.[id], 'running')
+})
+
+test('WhatsApp pairing on a stopped agent answers with an error', async () => {
+  const id = 'ag_pairing2'
+  await call({ cmd: 'apply', id, net: 4, files: FILES, browser: false, running: false })
+  const reply = await call({ cmd: 'wa-pair', id })
+  assert.equal(reply.ok, false)
+  assert.match(String(reply.error), /isn't running/)
+})
+
 async function holding(id: string): Promise<Socket> {
-  assert.equal((await call({ cmd: 'create', id, net: 1, files: FILES, browser: true })).ok, true)
-  assert.equal((await call({ cmd: 'start', id })).ok, true)
+  assert.equal((await call({ cmd: 'apply', id, net: 1, files: FILES, browser: true, running: true })).ok, true)
   const view = connect(sock)
   view.setEncoding('utf8')
   let lines = ''
@@ -60,7 +92,7 @@ async function holding(id: string): Promise<Socket> {
   return view
 }
 
-async function call(request: object): Promise<{ ok: boolean }> {
+async function call(request: object): Promise<{ ok: boolean; change?: string; error?: string; states?: Record<string, string> }> {
   const client = connect(sock)
   client.end(`${JSON.stringify(request)}\n`)
   let reply = ''

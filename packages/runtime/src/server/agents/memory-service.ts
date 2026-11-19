@@ -7,13 +7,14 @@ import { agentService } from './agent-service.ts'
 
 const TARGETS: MemoryTarget[] = ['notes', 'people']
 const LABEL: Record<MemoryTarget, string> = { notes: 'Notes', people: 'What it knows about people' }
+const FILE: Record<MemoryTarget, string> = { notes: 'memories/MEMORY.md', people: 'memories/USER.md' }
 const BARE_DELIMITER = /(^|\n)§(\n|$)/
 
 export const memoryService = {
   async get({ actor, agentId }: { actor: Caller; agentId: string }): Promise<Memory> {
     await agentService.get({ actor, id: agentId })
-    const files = await agentd.memory({ id: agentId })
-    return { id: agentId, object: 'memory', agentId, notes: blockOf({ target: 'notes', raw: files.notes }), people: blockOf({ target: 'people', raw: files.people }) }
+    const [notes, people] = await Promise.all(TARGETS.map((target) => agentd.read({ id: agentId, path: FILE[target] })))
+    return { id: agentId, object: 'memory', agentId, notes: blockOf({ target: 'notes', raw: notes?.toString('utf8') ?? null }), people: blockOf({ target: 'people', raw: people?.toString('utf8') ?? null }) }
   },
 
   async update({ actor, agentId, patch }: { actor: Caller; agentId: string; patch: UpdateMemory }): Promise<Memory> {
@@ -26,7 +27,7 @@ export const memoryService = {
       if (entries.some((entry) => !entry || BARE_DELIMITER.test(entry))) throw new HttpError(400, 'Each entry needs some text, and a line with only § in it can\'t be saved.', { param: target })
       const over = memoryLength(entries) - MEMORY_LIMITS[target]
       if (over > 0) throw new HttpError(400, `${LABEL[target]} are ${over.toLocaleString('en')} characters over the ${MEMORY_LIMITS[target].toLocaleString('en')} limit. Shorten or remove an entry.`, { param: target })
-      await agentd.writeMemory({ id: agentId, target, body: entries.join(MEMORY_DELIMITER) })
+      await agentd.write({ id: agentId, path: FILE[target], body: entries.join(MEMORY_DELIMITER) })
       emit({ name: 'memory.updated', actor, target: { type: 'memory', id: agentId, file: target, entries: entries.length } })
     }
     return memoryService.get({ actor, agentId })

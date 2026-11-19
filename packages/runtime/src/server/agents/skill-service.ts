@@ -21,13 +21,15 @@ export const skillService = {
     const { agentId, path } = partsOf(id)
     const found = (await skillService.list({ actor, agentId })).find((skill) => skill.id === id)
     if (!found) throw new HttpError(404, MISSING)
-    return { ...found, body: (await agentd.readSkill({ id: agentId, path })).body }
+    const body = await agentd.read({ id: agentId, path: skillFile(path) })
+    if (body === null) throw new HttpError(404, MISSING)
+    return { ...found, body: body.toString('utf8') }
   },
 
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateSkill }): Promise<Skill> {
     const { agentId, path } = partsOf(id)
     await agentService.requireEditable({ actor, id: agentId })
-    await agentd.writeSkill({ id: agentId, path, body: patch.body })
+    await agentd.write({ id: agentId, path: skillFile(path), body: patch.body })
     emit({ name: 'skill.updated', actor, target: { type: 'skill', id, agentId } })
     return skillService.get({ actor, id })
   },
@@ -36,13 +38,17 @@ export const skillService = {
     const skill = await skillService.get({ actor, id })
     await agentService.requireEditable({ actor, id: skill.agentId })
     if (skill.builtIn) throw new HttpError(400, 'Built-in skills come with Hermes and can\'t be deleted. Only skills the agent learned can.')
-    await agentd.removeSkill({ id: skill.agentId, path: skill.path })
+    await agentd.delete({ id: skill.agentId, paths: [`skills/${skill.path}`] })
     emit({ name: 'skill.deleted', actor, target: { type: 'skill', id, agentId: skill.agentId } })
     return { id, object: 'skill', deleted: true }
   },
 }
 
 const MISSING = 'That skill doesn\'t exist. The agent may have removed it.'
+
+function skillFile(path: string): string {
+  return `skills/${path}/SKILL.md`
+}
 
 function partsOf(id: string): { agentId: string; path: string } {
   const match = SKILL_ID.exec(id)

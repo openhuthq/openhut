@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { listSkills, readSkill, writeSkill } from '../../src/agentd/skills.ts'
+import { listSkills, readSkill, writeSkill } from '../../../src/agentd/home/skills.ts'
 
 const skip = process.platform !== 'linux' && 'needs /proc (Linux)'
 const base = realpathSync(mkdtempSync(`${tmpdir()}/skills-`))

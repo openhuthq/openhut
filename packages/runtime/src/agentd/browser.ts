@@ -1,12 +1,110 @@
+import { execFile } from 'node:child_process'
+import { existsSync, readdirSync } from 'node:fs'
 import type { Socket } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createInterface } from 'node:readline'
-import type { Exec } from './sandbox/sandbox.ts'
+import { fileURLToPath } from 'node:url'
+import { box, conf, DATA, writeIfChanged } from './host.ts'
+import { BROWSER_STREAM_PORT_BASE, type Exec, type Mount } from './sandbox/sandbox.ts'
 import { isRecord, jsonOrUndefined } from './util.ts'
 
 export const POLICY_FILE = 'browser-policy.json'
 export const FREE_POLICY = `${JSON.stringify({ default: 'allow' })}\n`
 export const HELD_POLICY = `${JSON.stringify({ default: 'deny', allow: ['snapshot', 'url', 'title', 'gettext', 'screenshot', 'tab_list', 'stream_status', 'wait'] })}\n`
 export const HOLD_IDLE_MS = 120_000
+export const MAX_FPS = 30
+
+const BIN = process.env.AGENTD_BROWSER || fileURLToPath(new URL('../../../../bin/agent-browser', import.meta.url))
+const DIR = fileURLToPath(new URL('../../../../install/agent-browser', import.meta.url))
+const INSTALLED_CHROME = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', `${process.env.ProgramFiles}\\Google\\Chrome\\Application\\chrome.exe`, `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`]
+let chrome: string | undefined
+
+export const browser = {
+  memoryMib: 4096,
+  tmpMib: 1024,
+
+  installed(): boolean {
+    return box.name === 'memory' || existsSync(BIN)
+  },
+
+  async prepare(): Promise<void> {
+    if (!browser.installed()) throw new Error("agent-browser isn't installed on this server; run the installer again")
+    if (box.name === 'native') chrome ??= await installChrome()
+  },
+
+  mounts(id: string): Mount[] {
+    if (box.name === 'native') return [{ host: BIN, guest: '/usr/local/bin/agent-browser', readOnly: true }]
+    return [
+      { host: BIN, guest: '/usr/local/lib/agent-browser', readOnly: true },
+      { host: DIR, guest: '/opt/agent-browser', readOnly: true },
+      { host: `${DIR}/agent-browser.sh`, guest: '/usr/local/bin/agent-browser', readOnly: true },
+      { host: `${conf(id)}/${POLICY_FILE}`, guest: `/opt/data/${POLICY_FILE}`, readOnly: true },
+    ]
+  },
+
+  env({ id, net }: { id: string; net: number }): Record<string, string> {
+    if (box.name !== 'native') return {}
+    return {
+      AGENT_BROWSER_EXECUTABLE_PATH: chrome ?? '',
+      AGENT_BROWSER_ARGS: '--window-size=1280,887',
+      AGENT_BROWSER_CONFIG: `${DIR}/config.json`,
+      AGENT_BROWSER_PROFILE: '/opt/data/home/browser-profile',
+      AGENT_BROWSER_ACTION_POLICY: `${conf(id)}/${POLICY_FILE}`,
+      AGENT_BROWSER_STREAM_PORT: String(BROWSER_STREAM_PORT_BASE + net),
+      AGENT_BROWSER_STREAM_QUALITY: '50',
+      AGENT_BROWSER_STREAM_MAX_WIDTH: '1280',
+      AGENT_BROWSER_STREAM_MAX_HEIGHT: '800',
+      AGENT_BROWSER_NO_VERSION_CHECK: '1',
+      AGENT_BROWSER_SESSION: id,
+      AGENT_BROWSER_SOCKET_DIR: join(tmpdir(), `oh-${id}`),
+    }
+  },
+
+  freeAll(ids: string[]): void {
+    for (const id of ids) writeIfChanged(`${conf(id)}/${POLICY_FILE}`, FREE_POLICY)
+  },
+
+  async open({ sock, id, fps, rest, running }: { sock: Socket; id: string; fps: number; rest: string; running: boolean }): Promise<undefined> {
+    if (!running) {
+      sock.end(`${JSON.stringify({ type: 'closed' })}\n`)
+      return undefined
+    }
+    const bridge = await box.exec({ id, command: ['node', box.name === 'native' ? `${DIR}/bridge.mjs` : '/opt/agent-browser/bridge.mjs', 'live', String(fps)], stdin: true })
+    const setHeld = (held: boolean) => {
+      if (existsSync(conf(id))) writeIfChanged(`${conf(id)}/${POLICY_FILE}`, held ? HELD_POLICY : FREE_POLICY)
+    }
+    live({ id, sock, bridge, rest, setHeld })
+    return undefined
+  },
+}
+
+async function installChrome(): Promise<string> {
+  const installed = INSTALLED_CHROME.find((path) => existsSync(path))
+  if (installed) return installed
+  const home = `${DATA}/browser`
+  const found = () => findChrome(`${home}/.agent-browser/browsers`)
+  const downloaded = found()
+  if (downloaded) return downloaded
+  console.log('browser: downloading Chrome for agents, once')
+  await new Promise<void>((done, fail) => execFile(BIN, ['install'], { env: { ...process.env, HOME: home, USERPROFILE: home }, timeout: 15 * 60_000 }, (error) => error ? fail(error) : done()))
+  const path = found()
+  if (!path) throw new Error("Chrome didn't install for the browser; try turning Browser on again")
+  return path
+}
+
+function findChrome(dir: string, depth = 5): string | undefined {
+  if (depth < 0 || !existsSync(dir)) return undefined
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isFile() && (entry.name === 'chrome.exe' || entry.name === 'Google Chrome for Testing')) return path
+    if (entry.isDirectory()) {
+      const inner = findChrome(path, depth - 1)
+      if (inner) return inner
+    }
+  }
+  return undefined
+}
 
 const PING_MS = 10_000
 const MAX_UP_LINE = 2048

@@ -19,7 +19,7 @@ const agentd = createServer({ allowHalfOpen: true }, (sock) => {
     if (req.cmd === 'home-import') homes.set(req.id, rest.split('\n')[0])
     const replies: Record<string, unknown> = {
       ps: { states: {} }, health: { firewall: true, imageReady: true }, 'home-export': { tar: homes.get(req.id) ?? '' }, 'home-import': { imported: req.id },
-      create: { container: `ag-${req.id}` }, apply: { applied: req.id, restarted: false }, rm: { removed: req.id },
+      apply: { applied: req.id, change: req.running ? 'started' : 'created' }, rm: { removed: req.id },
     }
     sock.end(JSON.stringify({ ok: true, ...(replies[req.cmd] as object) }))
   })
