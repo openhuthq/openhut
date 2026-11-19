@@ -14,7 +14,7 @@ import { invitationService } from '../access/invitation-service.ts'
 import { config } from '../platform/config.ts'
 import { emit, log } from '../platform/events.ts'
 import { messageOf } from '../platform/http-error.ts'
-import { computerId, registerToken, relayKey } from '../platform/secrets.ts'
+import { computerId, registerToken, relayKey, relayKeyHex } from '../platform/secrets.ts'
 import { settings } from '../platform/settings.ts'
 import { tagDevice } from '../team/identity.ts'
 
@@ -39,7 +39,8 @@ export const relayService = {
       handle: (input) => handle({ server, ...input }),
       socket: (input) => socket({ server, ...input }),
     })
-    if (config.join && !settings.access()) await join(config.join).catch((err: unknown) => log.error({ event: 'relay.join_failed', reason: messageOf(err) }))
+    const code = config.join
+    if (code && code !== settings.joinTried()) await settings.setJoinTried(code).then(() => join(code)).catch((err: unknown) => log.error({ event: 'relay.join_failed', reason: messageOf(err) }))
     return served
   },
 
@@ -104,7 +105,7 @@ async function joinOnce({ c, k, o, s, r }: z.infer<typeof JoinCode>): Promise<Ac
       if (message.type !== 'accepted') continue
       const access = z.safeParse(Access, message.access)
       if (!access.success || access.data.owner !== o || !await verify(access.data)) return failed('The list that came back isn\'t signed by the owner in the code.')
-      await accessService.put({ access: access.data, local: true })
+      if (accessService.holding(relayKeyHex)?.signature !== access.data.signature) await accessService.put({ access: access.data, local: true })
       emit({ name: 'relay.joined', target: { type: 'computer', id: c, version: access.data.version } })
       return access.data
     }

@@ -9,7 +9,7 @@ import { open } from '@/lib/router'
 
 type Device = NonNullable<Invitation['device']>
 
-export function PairDialog({ title, waiting, check }: { title: string; waiting: (code: string) => ReactNode; check: (device: Device) => string }) {
+export function PairDialog({ title, waiting, check, back }: { title: string; waiting: (code: string) => ReactNode; check: (device: Device) => string; back?: () => void }) {
   const create = useNewInvitation()
   const invitation = useInvitation(create.data?.id)
   const allow = useAllow()
@@ -20,7 +20,7 @@ export function PairDialog({ title, waiting, check }: { title: string; waiting: 
   const device = invitation.data?.device
   useEffect(() => { if (status === 'declined' || status === 'accepted') open() }, [status])
   const close = () => open()
-  const cancel = <Button type="button" variant="secondary" onClick={close}>Cancel</Button>
+  const cancel = back ? <Button type="button" variant="secondary" onClick={back}>Back</Button> : <Button type="button" variant="secondary" onClick={close}>Cancel</Button>
   const error = create.error?.message ?? invitation.error?.message ?? allow.error?.message ?? decline.error?.message
   const body = (children: ReactNode, foot: ReactNode, start: ReactNode = cancel) => <Dialog size="narrow" label={title} onClose={close}>
     <DialogHead title={title} onClose={close} />

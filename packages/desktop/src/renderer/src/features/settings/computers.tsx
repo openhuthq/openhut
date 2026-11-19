@@ -1,8 +1,9 @@
-import { useEffect, type ReactNode } from 'react'
-import { LaptopIcon, Tick02Icon, PlusSignIcon, ServerStack01Icon } from '@hugeicons/core-free-icons'
+import { useEffect, useState, type ReactNode } from 'react'
+import { ComputerTerminal01Icon, LaptopIcon, Tick02Icon, PlusSignIcon, ServerStack01Icon } from '@hugeicons/core-free-icons'
 import type { Computer, OpenHutAgent, TailnetPeer } from '@openhut/client'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { CopyButton } from '@/components/copy-button'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { ErrorNote } from '@/components/error-note'
@@ -13,7 +14,7 @@ import { I, PILL } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
 import { useComputerAdmins, useComputers, useRemoveComputer, useUpdateComputer } from '@/features/computers/api'
 import { useEnroll, useEnrollments, type Enrollment } from '@/features/computers/enroll'
-import { failureOf, phaseOf, stageOf } from '@/features/computers/enroll-steps'
+import { detailsOf, failureOf, percentOf, phaseOf, stageOf } from '@/features/computers/enroll-steps'
 import { HERE, useTailnet } from '@/features/settings/desktop'
 import { WORDS } from '@/lib/platform'
 import { byEligibility, stateOf, type Peer } from '@/features/settings/peers'
@@ -22,6 +23,7 @@ import { joinCommand } from '@/features/settings/invitation'
 import { Chevron, Command, Intro, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { UpdateStatus } from '@/features/settings/update-pill'
 import { isPhone } from '@/lib/native'
+import { APP_VERSION } from '@/lib/openhut'
 import { open, useOpen } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
@@ -34,6 +36,7 @@ export function ComputersSettings() {
   return <>
     <ComputerList />
     {step === 'add' && <AddComputer />}
+    {step === 'command' && <AddByCommand />}
     {step === 'tailscale' && <TailscaleStep />}
     {step === 'ssh' && <TurnOnSsh name={name} />}
     {step === 'adding' && <Adding name={name} />}
@@ -114,16 +117,11 @@ function RemovableRow({ computer, admin, note, agents }: { computer: Computer; a
 
 
 function EnrollRow({ enrollment }: { enrollment: Enrollment }) {
-  const { start, dismiss } = useEnroll()
   const failed = enrollment.status === 'failed'
-  const note = failed ? failureOf({ error: enrollment.error, url: enrollment.url, name: enrollment.peer.name }).sentence : phaseOf(enrollment.lines)
-  return <Row icon={<Mark icon={ServerStack01Icon} dot={failed ? 'bg-fail' : undefined} />} title={enrollment.peer.name} note={note}>
-    {failed
-      ? <>
-        <Button type="button" variant="secondary" className={PILL} onClick={() => start(enrollment.peer)}>Try again</Button>
-        <Button type="button" variant="ghost" className={PILL} onClick={() => dismiss(enrollment.peer.dns)}>Remove</Button>
-      </>
-      : <Spinner className="mt-0" />}
+  const now = useNow(!failed)
+  const note = failed ? failureOf({ error: enrollment.error, url: enrollment.url, name: enrollment.peer.name }).sentence : `${phaseOf(enrollment.lines)} ${percentOf({ lines: enrollment.lines, waitingAt: enrollment.waitingAt, now })}%`
+  return <Row onClick={() => open(`adding:${enrollment.peer.name}`)} icon={<Mark icon={ServerStack01Icon} dot={failed ? 'bg-fail' : undefined} />} title={enrollment.peer.name} note={note}>
+    {failed ? <Chevron /> : <Spinner className="mt-0" />}
   </Row>
 }
 
@@ -213,25 +211,32 @@ function Adding({ name }: { name: string }) {
   const enrollment = useEnrollments().data.find((each) => each.peer.name === name)
   const computer = useComputers().data?.find((each) => each.name === name)
   const { start, dismiss } = useEnroll()
+  const now = useNow(enrollment?.status === 'running')
   const hide = <Button type="button" variant="secondary" onClick={() => open()}>Hide</Button>
-  if (computer && !enrollment) return <TailscaleDialog title="Add over Tailscale" foot={<Button type="button" variant="primary" onClick={() => open()}>Done</Button>}>
-    <Scene mood="party" title={`${name} joined`} line={`Agents can run there now, even while this ${HERE} sleeps.`} />
-  </TailscaleDialog>
+  const joined = !!computer && !enrollment
+  useEffect(() => { if (joined) open() }, [joined])
+  if (joined) return null
   if (enrollment?.status === 'failed') {
     const retry = <Button type="button" variant="primary" onClick={() => start(enrollment.peer)}>Try again</Button>
-    const remove = <Button type="button" variant="secondary" onClick={() => { dismiss(enrollment.peer.dns); open('tailscale') }}>Back</Button>
-    return <TailscaleDialog title="Add over Tailscale" back={remove} foot={retry}>
+    const remove = <Button type="button" variant="secondary" onClick={() => { dismiss(enrollment.peer.dns); open() }}>Remove</Button>
+    const details = detailsOf({ enrollment, version: APP_VERSION })
+    return <TailscaleDialog title="Add over Tailscale" back={remove} foot={<><CopyButton text={details} label="Copy details" />{retry}</>}>
       <Scene mood="worried" title={`${name} didn't join`} line={failureOf({ error: enrollment.error, url: enrollment.url, name }).sentence} />
+      <details className="mx-2.5 rounded-lg border border-hair">
+        <summary className="cursor-pointer px-3 py-2 text-mute select-none">Show details</summary>
+        <pre className="m-0 max-h-40 overflow-auto border-t border-hair bg-tint px-3 py-2 font-mono text-[11px]/[1.6] whitespace-pre-wrap text-ink">{details}</pre>
+      </details>
     </TailscaleDialog>
   }
   const stage = stageOf(enrollment?.lines ?? [])
+  const percent = percentOf({ lines: enrollment?.lines ?? [], waitingAt: enrollment?.waitingAt, now })
   return <TailscaleDialog title="Add over Tailscale" back={hide} foot={<span className="text-[12px] text-mute">It keeps going if you close this.</span>}>
     <Scene mood="building" title={`Moving into ${name}`} line={enrollment?.url
       ? <>Tailscale wants you to approve this. <a href={enrollment.url} target="_blank" rel="noreferrer" className="text-ink underline underline-offset-2">Open the approval page</a></>
-      : stage.line}>
+      : <>{stage.line} · <span className="font-medium text-ink tabular-nums">{percent}%</span></>}>
       <div className="relative h-28 w-full max-w-[300px]">
-        <Meter className="absolute inset-x-0 bottom-0 h-1.5 rounded-full bg-soft" value={stage.at} aria-label="How far along" />
-        <Hut mood="building" className="absolute bottom-3 size-20 transition-[left] duration-700" style={{ left: `calc(${stage.at}% - 40px)` }} />
+        <Meter className="absolute inset-x-0 bottom-0 h-1.5 rounded-full bg-soft" value={percent} aria-label="How far along" />
+        <Hut mood="building" className="absolute bottom-3 size-20 transition-[left] duration-700" style={{ left: `calc(${percent}% - 40px)` }} />
       </div>
     </Scene>
   </TailscaleDialog>
@@ -242,20 +247,40 @@ function TailscaleDialog({ title, back, foot, children }: { title: string; back?
   return <Dialog size="narrow" label={title} onClose={close}>
     <DialogHead title={title} onClose={close} />
     <div className="flex max-h-[min(480px,calc(100vh-200px))] flex-col gap-4 overflow-y-auto px-3 py-5 text-[13px]/[18px]">{children}</div>
-    <DialogFoot start={back}>{foot}</DialogFoot>
+    {(back || foot) && <DialogFoot start={back}>{foot}</DialogFoot>}
   </Dialog>
 }
 
 function AddComputer() {
+  return <TailscaleDialog title="Add a computer">
+    <p className="m-0 px-2.5 text-body">An always-on Linux computer gives each agent its own sandbox and keeps answering while this {HERE} sleeps. How do you want to add it?</p>
+    <Rows>
+      <Row onClick={() => open('command')} icon={<I icon={ComputerTerminal01Icon} size={20} className="text-hue-blue" />} title="Run a command" note="Paste one line on the computer. Works on any Linux box you can open a terminal on."><Chevron /></Row>
+      <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Over Tailscale" note="Pick it from your tailnet and OpenHut installs itself. No terminal needed."><Chevron /></Row>
+    </Rows>
+  </TailscaleDialog>
+}
+
+function AddByCommand() {
   return <PairDialog
-    title="Add a computer"
+    title="Run a command"
+    back={() => open('add')}
     check={(device) => `Allow it only if ${device.name} shows the same numbers. Your agents can run there once it joins.`}
     waiting={(code) => <>
       <p className="m-0 text-body">Run this on an always-on Linux computer. It installs OpenHut there and adds it to your computers.</p>
       <Command text={joinCommand(code)} />
       <Waiting>Waiting for it to join…</Waiting>
-      <p className="m-0 border-t border-hair pt-4 text-mute">You can also add one <Button type="button" variant="link" onClick={() => open('tailscale')}>over Tailscale</Button>.</p>
     </>}
   />
+}
+
+function useNow(ticking: boolean) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    if (!ticking) return
+    const tick = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(tick)
+  }, [ticking])
+  return now
 }
 

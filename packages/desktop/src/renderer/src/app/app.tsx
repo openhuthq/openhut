@@ -6,8 +6,6 @@ import { routeOf } from '@/app/routes'
 import { Shell, type ShellRoute } from '@/app/shell'
 import { ConnectionsView } from '@/features/connections/connections-view'
 import { FirstRun } from '@/features/first-run/first-run'
-import { WhereAgentsRunNotice } from '@/features/first-run/notice'
-import { desktop } from '@/features/settings/desktop'
 import { Join } from '@/features/join/join'
 import { useMe } from '@/features/people/api'
 import { SettingsView } from '@/features/settings/settings-view'
@@ -44,7 +42,6 @@ function Dashboard() {
     <Shell route={route.page === 'settings' || route.page === 'connections' ? background.current.route : route} overlay={route.page === 'settings' || route.page === 'connections' ? route.page : undefined} />
     {route.page === 'settings' && <SettingsView tab={route.tab} onClose={close} />}
     {route.page === 'connections' && <ConnectionsView onClose={close} />}
-    {desktop && <WhereAgentsRunNotice />}
   </>
 }
 
