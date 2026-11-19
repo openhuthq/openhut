@@ -2,7 +2,7 @@ import { createOpenHut, type Device, type Platform, type StoredComputer, type Ta
 import { isPhone } from '@/lib/native'
 import { phonePlatform } from '@/lib/phone'
 
-export type Enrollment = { peer: TailnetPeer; lines: string[]; url: string | null; startedAt: number; status: 'running' | 'failed'; error: string; retryAt: number | null; retried: boolean }
+export type Enrollment = { peer: TailnetPeer; lines: string[]; url: string | null; startedAt: number; status: 'running' | 'failed'; error: string; retryAt: number | null; retried: boolean; waitingAt?: number | null; log?: string }
 type Failure = { error: string }
 type Computers = {
   list: () => Promise<StoredComputer[]>
@@ -28,6 +28,8 @@ async function answer<T extends object>(call: Promise<T | Failure> | undefined):
   if ('error' in result) throw new Error(result.error)
   return result
 }
+
+export const APP_VERSION = bridge?.version ?? ''
 
 const platform: Platform = {
   transport: (computer) => (path, init) => fetch(bridge ? `/c/${computer.id}${path}` : path, init),

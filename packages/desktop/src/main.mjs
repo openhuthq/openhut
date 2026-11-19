@@ -252,7 +252,7 @@ function shareEnrollments() {
 
 async function enroll({ peer, retried = false } = {}) {
   const dns = String(peer?.dns ?? '').replace(/\.$/, '')
-  const entry = { peer: { name: String(peer?.name || dns), dns }, lines: [], url: null, startedAt: Date.now(), status: 'running', error: '', retryAt: null, retried }
+  const entry = { peer: { name: String(peer?.name || dns), dns }, lines: [], url: null, startedAt: Date.now(), status: 'running', error: '', retryAt: null, retried, waitingAt: null, log: '' }
   enrollments.set(dns, entry)
   shareEnrollments()
   try {
@@ -265,6 +265,7 @@ async function enroll({ peer, retried = false } = {}) {
     const retryAt = !retried && /already running/i.test(error.message) ? Date.now() + RETRY_MS : null
     Object.assign(entry, { status: 'failed', error: error.message, retryAt })
     shareEnrollments()
+    if (!retryAt) void boxLog(dns).then((log) => { entry.log = log; shareEnrollments() })
     if (retryAt) setTimeout(() => { if (enrollments.get(dns) === entry) enroll({ peer, retried: true }).catch(() => undefined) }, RETRY_MS)
     throw error
   }
@@ -285,6 +286,7 @@ async function install({ peer, dns, entry }) {
   const path = `/api/invitations/${encodeURIComponent(invitation.id)}`
   say(`Installing OpenHut on ${dns} over Tailscale SSH`)
   await tailscaleSsh({ args: ['ssh', `root@${dns}`, `read -r code; curl -fsSL '${INSTALL_URL}' | OPENHUT_JOIN="$code" OPENHUT_APP_VERSION=${app.getVersion()} sh`], input: `${invitation.code}\n`, say })
+  entry.waitingAt = Date.now()
   say(`Waiting for ${name} to join`)
   if (!await waitFor(async () => (await api(path)).status !== 'waiting', 120)) throw new Error(`OpenHut is installed, but ${name} didn't answer within 2 minutes.`)
   const { device } = await api(path)
@@ -292,6 +294,11 @@ async function install({ peer, dns, entry }) {
   await allow({ id: invitation.id, name })
   say(`${name} is ready`)
   return { id: storedComputers().find((each) => each.key === device.key)?.id, name, url: '' }
+}
+
+function boxLog(dns) {
+  if (!TAILSCALE || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(dns)) return Promise.resolve('')
+  return new Promise((resolve) => execFile(TAILSCALE, ['ssh', `root@${dns}`, 'docker exec openhut tail -n 30 /var/log/openhut/app.log 2>/dev/null || tail -n 30 /var/log/openhut/app.log'], { timeout: 15_000 }, (_error, stdout) => resolve(String(stdout ?? '').trim())))
 }
 
 function tailscaleSsh({ args, input, say }) {

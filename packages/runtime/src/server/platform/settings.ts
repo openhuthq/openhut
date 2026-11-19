@@ -62,6 +62,8 @@ export const settings = {
   update: (): string | undefined => rows.get('update') || undefined,
   setUpdate: (record: string) => write('update', record),
   access: (): string | undefined => rows.get('access'),
+  joinTried: (): string | undefined => rows.get('join_tried'),
+  setJoinTried: (code: string) => write('join_tried', code),
   removedClients: (): string[] => z.parse(z.array(z.string()), JSON.parse(rows.get('access_removed') ?? '[]')),
   setAccess: async ({ access, removed }: { access: string; removed: string[] }) => {
     await write('access_removed', JSON.stringify(removed))

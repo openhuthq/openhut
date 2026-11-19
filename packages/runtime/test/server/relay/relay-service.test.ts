@@ -144,6 +144,46 @@ test('another computer joins with a code: it is on the relay while the owner dec
   }
 })
 
+test('a computer that already joined asks again with a new code, as when the owner removed it and adds it back', async () => {
+  const other = await startRelay()
+  const dir = mkdtempSync(join(tmpdir(), 'oh-rejoin-'))
+  const asked = async () => {
+    const invitation: Invitation = (await app.inject({ method: 'POST', url: '/api/invitations', headers: { authorization: 'Bearer test-key' } })).json()
+    const env: Record<string, string | undefined> = { ...process.env, OPENHUT_DATA: dir, OPENHUT_JOIN: invitation.code, OPENHUT_RELAY_URL: other.url, OPENHUT_INSTALL_KIND: 'server', PORT: '0', OPENHUT_GATEWAY_PORT: '0' }
+    delete env.OPENHUT_CLIENT_KEY_SHA256
+    const child = spawn(process.execPath, [new URL('../../../src/server/app.ts', import.meta.url).pathname], { env, stdio: 'ignore' })
+    let seen: Invitation = invitation
+    for (let tries = 0; tries < 150 && seen.status === 'waiting'; tries++) {
+      await sleep(100)
+      seen = (await app.inject({ url: `/api/invitations/${invitation.id}`, headers: { authorization: 'Bearer test-key' } })).json()
+    }
+    return { child, seen }
+  }
+  const first = await asked()
+  try {
+    assert.equal(first.seen.status, 'joined')
+    const second = { id: createHash('sha256').update(Buffer.from(first.seen.device!.key, 'hex')).digest('hex'), name: first.seen.device!.name, key: first.seen.device!.key }
+    const list = signed({ version: accessService.get().version + 1, clients: [PHONE], computers: [{ id: computerId, name: 'This Mac', key: relayKeyHex }, second] })
+    await accessService.put({ access: list, local: true })
+    let theirs: unknown
+    for (let tries = 0; tries < 100 && JSON.stringify(theirs) !== JSON.stringify(list); tries++) {
+      await sleep(100)
+      theirs = await viaSocket({ path: join(dir, 'openhut.sock'), url: '/api/access' }).catch(() => undefined)
+    }
+    assert.deepEqual(theirs, list)
+  } finally {
+    first.child.kill('SIGKILL')
+  }
+  await accessService.put({ access: signed({ version: accessService.get().version + 1, clients: [PHONE], computers: [{ id: computerId, name: 'This Mac', key: relayKeyHex }] }), local: true })
+  const again = await asked()
+  try {
+    assert.equal(again.seen.status, 'joined')
+  } finally {
+    again.child.kill('SIGKILL')
+    await other.close()
+  }
+})
+
 test('a device the owner removed is told so on its next request', async () => {
   const tunnel = await connect({ relayUrl: relay.url, computer, key: phone })
   assert.equal((await tunnel.fetch('/caller')).status, 200)

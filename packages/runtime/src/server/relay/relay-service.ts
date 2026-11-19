@@ -39,7 +39,8 @@ export const relayService = {
       handle: (input) => handle({ server, ...input }),
       socket: (input) => socket({ server, ...input }),
     })
-    if (config.join && !settings.access()) await join(config.join).catch((err: unknown) => log.error({ event: 'relay.join_failed', reason: messageOf(err) }))
+    const code = config.join
+    if (code && code !== settings.joinTried()) await settings.setJoinTried(code).then(() => join(code)).catch((err: unknown) => log.error({ event: 'relay.join_failed', reason: messageOf(err) }))
     return served
   },
 
