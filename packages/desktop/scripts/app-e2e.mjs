@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
 
@@ -132,8 +132,11 @@ async function answering(page, ids, what) {
 async function browsers(page, pair) {
   const features = (await page.eval("fetch('/api/admin').then((r) => r.json())")).features
   say('Browser and WhatsApp are available on this computer', { features })
-  if (!features?.browser || !features?.whatsapp) throw new Error(`expected Browser and WhatsApp, got ${JSON.stringify(features)}`)
-  for (const agent of pair) await page.eval(`fetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ browser: true }) }).then((r) => r.json())`)
+  if (!features?.browser || !features?.whatsapp) {
+    const bridge = join(dirname(exe), WIN ? 'resources' : '../Resources', 'backend/runtime/hermes/scripts/whatsapp-bridge')
+    throw new Error(`expected Browser and WhatsApp, got ${JSON.stringify(features)}; ${bridge} holds ${existsSync(bridge) ? readdirSync(bridge).join(', ') : 'nothing'}`)
+  }
+  for (const agent of pair) await page.eval(`fetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ browser: true, codeExecution: true }) }).then((r) => r.json())`)
   await answering(page, pair.map((each) => each.id), 'the two browser agents to answer')
   await Promise.all(pair.map((agent) => tool(page, agent, `browser: open https://example.com/?agent=${agent.name}`, 'Example Domain')))
   await Promise.all(pair.map((agent) => tool(page, agent, 'browser: get url', `agent=${agent.name}`)))
@@ -141,8 +144,12 @@ async function browsers(page, pair) {
 }
 
 async function tool(page, agent, text, expect) {
-  const thread = await page.eval(`fetch('/api/threads', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agentId: '${agent.id}' }) }).then((r) => r.json())`)
-  const stream = await page.eval(`fetch('/api/threads/${thread.id}/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ trigger: 'submit-message', message: { id: 'm1', role: 'user', parts: [{ type: 'text', text: ${JSON.stringify(JSON.stringify(text))} }] } }) }).then((r) => r.text())`)
+  let stream = ''
+  await until(async () => {
+    const thread = await page.eval(`fetch('/api/threads', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agentId: '${agent.id}' }) }).then((r) => r.json())`)
+    stream = await page.eval(`fetch('/api/threads/${thread.id}/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ trigger: 'submit-message', message: { id: 'm1', role: 'user', parts: [{ type: 'text', text: ${JSON.stringify(JSON.stringify(text))} }] } }) }).then((r) => r.text())`)
+    return !stream.includes("isn't reachable")
+  }, 180, `${agent.name} to come back after turning Browser on`)
   const ok = stream.includes(expect)
   say(`${agent.name} ran "${text}"`, { ok, tail: stream.slice(-300) })
   if (!ok) throw new Error(`${agent.name} ran "${text}" but the answer has no "${expect}": ${stream.slice(-600)}`)
