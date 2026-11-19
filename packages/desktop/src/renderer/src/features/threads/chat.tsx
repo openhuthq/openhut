@@ -1,16 +1,17 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
 import * as z from 'zod/mini'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, type UIMessage } from 'ai'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowLeft01Icon, ArrowUp02Icon, Attachment01Icon, Cancel01Icon, EraserIcon, File01Icon, Image01Icon, PlayIcon, PlusSignIcon, SidebarLeftIcon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, ArrowUp02Icon, Attachment01Icon, Cancel01Icon, Copy01Icon, EraserIcon, File01Icon, Image01Icon, PlayIcon, PlusSignIcon, SidebarLeftIcon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@openhut/client'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { ChatCall, fileInHome, MAX_FILE_BYTES, MAX_FILES, ToolProgress, type ChatFile, type ChatMessage, type ThreadWithMessages } from '@openhut/common/threads/thread.ts'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { DropdownMenuItem, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
@@ -26,6 +27,7 @@ import { deleteUpload, saveFile, threadPath, uploadFile, useAgentThread, useClea
 import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
 import { ConfirmIcon } from '@/components/confirm-button'
 import { attachCalls, kindOf, stepsOf, type Step } from '@/features/threads/steps'
+import { copyText } from '@/lib/clipboard'
 import { openhut } from '@/lib/openhut'
 import { toast, toastError } from '@/lib/toast'
 import { usePhoneBack } from '@/app/phone-page'
@@ -139,6 +141,13 @@ function ChatFrame({ agent, composer, tools, onTitle, onFiles, children }: { age
     const element = log.current
     if (element && pinned.current) element.scrollTop = element.scrollHeight
   })
+  useEffect(() => {
+    const element = log.current
+    if (!element) return
+    const observer = new ResizeObserver(() => { if (pinned.current) element.scrollTop = element.scrollHeight })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
   const dragOver = (event: DragEvent) => {
     if (onFiles && event.dataTransfer.types.includes('Files')) event.preventDefault()
   }
@@ -260,13 +269,13 @@ function AgentReply({ agent, message, live }: { agent: Agent; message: AgentMess
   const plugins = found?.size ? [remarkGfm, linkHomeFiles(found)] : [remarkGfm]
   return <div className="grid animate-grow grid-cols-[34px_minmax(0,1fr)] gap-3">
     <span className={live ? 'talking' : undefined}><Face agent={agent} size={34} /></span>
-    <div className="flex min-w-0 flex-col gap-2 pt-1.5">
+    <CopyMenu text={textOf(message)}><div className="flex min-w-0 flex-col gap-2 pt-1.5 pointer-coarse:select-none">
       {blocks.map((block, index) => block.type === 'text'
         ? <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode }}>{block.text}</Markdown></div>
         : <Steps key={index} steps={block.steps} live={live && index === blocks.length - 1} />)}
       {live && !blocks.length && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
       {!live && !blocks.length && <span className="text-[13.5px] text-mute-2 italic">No reply.</span>}
-    </div>
+    </div></CopyMenu>
   </div>
 }
 
@@ -275,8 +284,14 @@ function UserMessage({ message }: { message: AgentMessage }) {
   const files = message.parts.flatMap((part) => part.type === 'file' ? [part] : [])
   return <div className="flex animate-grow flex-col items-end gap-1.5">
     {files.length > 0 && <div className="flex max-w-[78%] flex-wrap justify-end gap-1.5">{files.map((file) => <SentFile key={file.url} name={file.filename ?? nameOf(file.url)} path={file.url} mediaType={file.mediaType} />)}</div>}
-    {text && <div className="max-w-[78%] rounded-[12px_12px_4px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink">{text}</div>}
+    {text && <CopyMenu text={text}><div className="max-w-[78%] rounded-[12px_12px_4px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{text}</div></CopyMenu>}
   </div>
+}
+
+function CopyMenu({ text, children }: { text: string; children: ReactElement }) {
+  const touch = useMedia(TOUCH)
+  if (!touch || !text) return children
+  return <LongPressMenu menu={<DropdownMenuItem onClick={() => void copyText(text).then((copied) => { if (copied) toast('Copied') })}><I icon={Copy01Icon} size={16} />Copy</DropdownMenuItem>}>{children}</LongPressMenu>
 }
 
 function SentFile({ name, path, mediaType }: { name: string; path: string; mediaType: string }) {

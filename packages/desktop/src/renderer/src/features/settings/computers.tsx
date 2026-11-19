@@ -20,6 +20,7 @@ import { joinCommand } from '@/features/settings/invitation'
 import { Chevron, Command, Intro, Row, Rows, SubPage, useConfirming } from '@/features/settings/kit'
 import { UpdateStatus } from '@/features/settings/update-pill'
 import { formValues } from '@/lib/form'
+import { isPhone } from '@/lib/native'
 import { open, useOpen } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
@@ -52,11 +53,11 @@ function ComputerList() {
         const admin = admins?.find((each) => each.computer.id === computer.id)?.admin
         if (admin?.server.update?.status === 'running') return <UpdatingRow key={computer.id} computer={computer} />
         const note = noteOf({ computer, admin, count: agents.filter((agent) => agent.computer === computer.id).length })
-        if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={computer.name} note={note}><UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Current</span>} /></Row>
+        if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={computer.name} note={note}>{!isPhone() && <UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Current</span>} />}</Row>
         return <RemovableRow key={computer.id} computer={computer} admin={admin} note={note} agents={agents.filter((agent) => agent.computer === computer.id)} />
       })}
       {enrollments.map((enrollment) => <EnrollRow key={enrollment.peer.dns} enrollment={enrollment} />)}
-      <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note={`An always-on Linux computer keeps agents answering while this ${HERE} sleeps.`}><Chevron /></Row>
+      {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note={`An always-on Linux computer keeps agents answering while this ${HERE} sleeps.`}><Chevron /></Row>}
     </Rows>
   </>
 }

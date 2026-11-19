@@ -14,7 +14,7 @@ import { MAX_HOME_BASE64, packHome, unpackHome } from './home.ts'
 import { isHomePath, isUploadName, MAX_FILE_BASE64, readHomeFile, removeUploads, saveUpload, statHomeFiles } from './files.ts'
 import { FIREWALL, imageReady } from './sandbox/gvisor.ts'
 import { sandboxes } from './sandbox/index.ts'
-import type { Mount, SandboxSpec, SandboxState } from './sandbox/sandbox.ts'
+import type { Mount, Pull, SandboxSpec, SandboxState } from './sandbox/sandbox.ts'
 import { installing, lastUpdate, update, type LastUpdate } from './update.ts'
 import { errorText, EXEC, isRecord } from './util.ts'
 import { followPairing, PAIR_COMMAND, pending, type Pairing } from './whatsapp.ts'
@@ -131,6 +131,8 @@ async function handle(req: AgentdRequest): Promise<Reply> {
       return { firewall: await firewallRecent(), image: IMAGE, imageReady: box.name === 'gvisor' ? await imageReady(IMAGE) : true, updating: await installing(), lastUpdate: lastUpdate(), features: features() }
     case 'ps':
       return { states: await containerStates() }
+    case 'progress':
+      return { pull: await box.progress() }
     case 'create':
       return create(req)
     case 'apply': {
@@ -204,6 +206,7 @@ function parseRequest(value: unknown): AgentdRequest {
   switch (cmd) {
     case 'health':
     case 'ps':
+    case 'progress':
     case 'fence':
       return { cmd }
     case 'update':
@@ -554,7 +557,7 @@ type Features = { whatsapp: boolean; browser: boolean }
 type Readiness = { ok: boolean; reason?: string }
 
 export type AgentdRequest =
-  | { cmd: 'health' | 'ps' | 'fence' }
+  | { cmd: 'health' | 'ps' | 'progress' | 'fence' }
   | { cmd: 'update'; appVersion?: string; sha256: string }
   | { cmd: 'create'; id: string; net: number; files: AgentFiles; browser: boolean }
   | { cmd: 'apply'; id: string; net: number; files: AgentFiles; browser: boolean; restart: boolean; force?: boolean }
@@ -572,6 +575,7 @@ export type AgentdRequest =
 export type AgentdReplies = {
   health: { firewall: boolean; image: string; imageReady: boolean; updating: boolean; lastUpdate: LastUpdate | null; features: Features }
   ps: { states: Record<string, string> }
+  progress: { pull: Pull | null }
   create: { container: string }
   apply: { applied: string; restarted: boolean }
   start: { started: string }

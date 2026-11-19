@@ -9,11 +9,16 @@ const STATES: Record<ReturnType<typeof agentState>, [Tone, string]> = {
   stopped: ['off', 'Asleep'],
   not_answering: ['bad', 'Not answering'],
   no_seat: ['bad', 'Not ready'],
-  missing: ['bad', 'Error'],
+  missing: ['bad', 'Stopped unexpectedly'],
 }
 
 export function toneOf(agent: Agent): Tone {
   return STATES[agentState(agent)][0]
+}
+
+export function troubleOf(agent: Agent): string | undefined {
+  const [tone, word] = STATES[agentState(agent)]
+  return tone === 'bad' ? word : undefined
 }
 
 export function AgentStatus({ agent }: { agent: Agent }) {

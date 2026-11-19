@@ -47,6 +47,9 @@ public class DeviceKeyPlugin: CAPPlugin, CAPBridgedPlugin {
                 let key = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: raw)
                 let secret = try key.sharedSecretFromKeyAgreement(with: Curve25519.KeyAgreement.PublicKey(rawRepresentation: remote))
                 call.resolve(["secret": self.hex(secret.withUnsafeBytes { Data($0) })])
+            } catch let error as LAError where [.userCancel, .appCancel, .systemCancel].contains(error.code) {
+                self.unlocked = nil
+                call.reject("Unlock OpenHut with Face ID to reach your agents.", "canceled")
             } catch {
                 self.unlocked = nil
                 call.reject("Couldn't agree on a secret: \(error.localizedDescription)")

@@ -11,7 +11,7 @@ export function useMedia(query: string) {
   }, () => matchMedia(query).matches)
 }
 
-const EASE = 'translate .34s cubic-bezier(.22, 1, .36, 1)'
+const EASE = 'translate .34s cubic-bezier(.22, 1, .36, 1), scale .4s cubic-bezier(.22, 1, .36, 1), filter .4s cubic-bezier(.22, 1, .36, 1), padding-bottom .32s cubic-bezier(.25, .9, .3, 1), margin-bottom .32s cubic-bezier(.25, .9, .3, 1), max-height .32s cubic-bezier(.25, .9, .3, 1), height .32s cubic-bezier(.25, .9, .3, 1)'
 
 export function slide({ element, to, done }: { element: HTMLElement; to: string; done?: () => void }) {
   element.style.transition = EASE

@@ -1,6 +1,7 @@
 import { connect } from 'node:net'
 import * as z from 'zod/mini'
 import { config } from './config.ts'
+import { log } from './events.ts'
 import { HttpError } from './http-error.ts'
 
 const TIMEOUT_MS = 180_000
@@ -89,7 +90,10 @@ function send({ request, body = '', doing }: { request: Record<string, unknown>;
     socket.on('end', () => {
       try { resolve(JSON.parse(buffer)) } catch { reject(new HttpError(502, `The agent runner sent a broken reply while trying to ${doing}. Try again.`)) }
     })
-    socket.on('error', (err) => reject(new HttpError(503, `The agent runner isn't reachable (${err.message}). Check that agentd is running.`)))
+    socket.on('error', (err) => {
+      log.error({ event: 'agentd.unreachable', error: err.message })
+      reject(new HttpError(503, 'Agents can\'t run on this computer right now because its agent runner isn\'t answering. Restart OpenHut on it.'))
+    })
     socket.write(`${JSON.stringify(request)}\n${body && `${body}\n`}`)
   })
 }

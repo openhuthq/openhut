@@ -6,6 +6,12 @@ export function wordsFor(platform: string): Words {
   return { here: 'computer', thisComputer: 'This computer', keychain: 'system keyring', showFolder: 'Open folder', badgeNote: undefined }
 }
 
+const FROM_PHONE: Record<string, string> = { 'This Mac': 'Your Mac', 'This computer': 'Your computer' }
+
+export function fromPhone(name: string): string {
+  return FROM_PHONE[name] ?? name
+}
+
 const bridge: { platform?: string } | undefined = typeof window === 'undefined' ? undefined : Reflect.get(window, 'openhut')
 const guess = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac') ? 'darwin' : 'linux'
 

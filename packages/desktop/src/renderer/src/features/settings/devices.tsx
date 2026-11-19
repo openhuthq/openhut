@@ -1,4 +1,5 @@
-import { PlusSignIcon, SmartPhone01Icon } from '@hugeicons/core-free-icons'
+import { LaptopIcon, PlusSignIcon, SmartPhone01Icon } from '@hugeicons/core-free-icons'
+import { useQuery } from '@tanstack/react-query'
 import type { Device } from '@openhut/client'
 import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
@@ -9,6 +10,7 @@ import { HERE } from '@/features/settings/desktop'
 import { PairDialog, Waiting } from '@/features/settings/invite'
 import { Chevron, Intro, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { shortDate } from '@/lib/format'
+import { devicePublicKey, isPhone } from '@/lib/native'
 import { open, useOpen } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 
@@ -21,21 +23,22 @@ export function DevicesSettings() {
 
 function DeviceList() {
   const devices = useDevices()
+  const mine = useQuery({ queryKey: ['device-key'], queryFn: devicePublicKey, enabled: isPhone(), staleTime: Infinity }).data
   return <>
     <Intro>Chat with your agents</Intro>
     <Rows>
-      {devices.data?.filter((device) => !device.self).map((device) => <DeviceRow key={device.key} device={device} />)}
-      <Row onClick={() => open('add-phone')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a phone" note={`Scan a code with the OpenHut app. Works when this ${HERE} is asleep too.`}><Chevron /></Row>
+      {devices.data?.filter((device) => !device.self).map((device) => <DeviceRow key={device.key} device={device} mine={device.key === mine} />)}
+      {!isPhone() && <Row onClick={() => open('add-phone')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a phone" note={`Scan a code with the OpenHut app. Works when this ${HERE} is asleep too.`}><Chevron /></Row>}
     </Rows>
     <ErrorNote message={devices.error?.message} />
   </>
 }
 
-function DeviceRow({ device }: { device: Device }) {
+function DeviceRow({ device, mine }: { device: Device; mine: boolean }) {
   const remove = useRemoveDevice()
   const { confirming, setConfirming, box } = useConfirming()
-  return <div ref={box}><Row icon={<I icon={SmartPhone01Icon} size={20} className="text-hue-green" />} title={device.name} note={confirming ? 'It stops reaching your agents right away.' : `Reaches the agents on all your computers · added ${added(device)}`}>
-    {confirming
+  return <div ref={box}><Row icon={<I icon={/phone/i.test(device.name) ? SmartPhone01Icon : LaptopIcon} size={20} className="text-hue-green" />} title={device.name} note={confirming ? 'It stops reaching your agents right away.' : `${mine ? 'This phone' : 'Reaches the agents on all your computers'} · added ${added(device)}`}>
+    {isPhone() ? null : confirming
       ? <>
         <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
         <Button type="button" variant="destructive" className={PILL} disabled={remove.isPending} onClick={() => remove.mutate(device.key, { onError: toastError })}>Remove</Button>

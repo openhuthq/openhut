@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { App } from '@capacitor/app'
+import { Browser } from '@capacitor/browser'
 import { Keyboard } from '@capacitor/keyboard'
 import { CapacitorBarcodeScanner, CapacitorBarcodeScannerTypeHint } from '@capacitor/barcode-scanner'
 import { Preferences } from '@capacitor/preferences'
@@ -17,10 +18,19 @@ export type DeviceKey = { publicKey: Uint8Array; agree(remote: Uint8Array): Prom
 const plugin = registerPlugin<DeviceKeyPlugin>('DeviceKey')
 
 if (Capacitor.getPlatform() === 'ios') void Keyboard.setAccessoryBarVisible({ isVisible: false })
-if (Capacitor.isNativePlatform()) window.addEventListener('resize', () => {
+if (Capacitor.isNativePlatform()) document.addEventListener('dragstart', (event) => event.preventDefault())
+if (Capacitor.getPlatform() === 'ios') {
+  void Keyboard.addListener('keyboardWillShow', ({ keyboardHeight }) => keyboard(keyboardHeight))
+  void Keyboard.addListener('keyboardWillHide', () => keyboard(0))
+}
+
+function keyboard(height: number) {
+  const root = document.documentElement
+  root.style.setProperty('--kb', `${height}px`)
+  root.toggleAttribute('data-keyboard', height > 0)
   const field = document.activeElement
-  if (field instanceof HTMLElement && field.matches('input, textarea')) setTimeout(() => field.scrollIntoView({ block: 'center' }), 100)
-})
+  if (height && field instanceof HTMLElement && field.matches('input, textarea')) setTimeout(() => field.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 320)
+}
 
 export function isPhone(): boolean {
   return Capacitor.isNativePlatform()
@@ -32,12 +42,33 @@ export async function scan(): Promise<string | undefined> {
   return ScanResult || undefined
 }
 
+if (isPhone()) document.addEventListener('click', (event) => {
+  const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href^="http"]') : null
+  if (!link || link.origin === location.origin) return
+  event.preventDefault()
+  openPage(link.href)
+})
+
+export function openPage(url: string): void {
+  if (isPhone()) void Browser.open({ url, presentationStyle: 'popover' })
+  else window.open(url, '_blank')
+}
+
+export async function devicePublicKey(): Promise<string | undefined> {
+  if (!isPhone()) return undefined
+  return (await plugin.publicKey()).publicKey
+}
+
+export class UnlockCanceled extends Error {}
+
 export async function deviceKey(): Promise<DeviceKey | undefined> {
   if (!isPhone()) return undefined
   const { publicKey } = await plugin.publicKey()
   return {
     publicKey: fromHex(publicKey),
-    agree: async (remote) => fromHex((await plugin.agree({ publicKey: toHex(remote) })).secret),
+    agree: async (remote) => fromHex((await plugin.agree({ publicKey: toHex(remote) }).catch((err: unknown) => {
+      throw Reflect.get(Object(err), 'code') === 'canceled' ? new UnlockCanceled(String(Reflect.get(Object(err), 'message'))) : err
+    })).secret),
   }
 }
 
@@ -58,7 +89,7 @@ export function phoneName(): string {
 }
 
 export function onBack(handler: () => void): () => void {
-  if (!isPhone()) return () => {}
+  if (!Capacitor.isNativePlatform()) return () => {}
   const listener = App.addListener('backButton', handler)
   return () => void listener.then((it) => it.remove())
 }

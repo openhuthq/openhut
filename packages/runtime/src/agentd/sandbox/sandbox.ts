@@ -17,6 +17,7 @@ export type SandboxSpec = {
   net?: number
 }
 export type SandboxState = { id: string; running: boolean; startedAt?: string; labels: Record<string, string> }
+export type Pull = { done: number; total: number; unit: 'bytes' | 'layers' }
 export type Exec = { stdin: Writable | null; stdout: Readable; exit: Promise<number>; kill: () => void }
 export type Sandboxes = {
   name: 'gvisor' | 'microsandbox' | 'memory'
@@ -28,4 +29,5 @@ export type Sandboxes = {
   exec(req: { id: string; command: string[]; stdin?: boolean }): Promise<Exec>
   run(req: { spec: SandboxSpec; command: string[] }): Promise<{ code: number; stdout: string }>
   list(): Promise<SandboxState[]>
+  progress(): Promise<Pull | null>
 }

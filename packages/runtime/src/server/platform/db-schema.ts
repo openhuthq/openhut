@@ -8,7 +8,7 @@ export interface Database {
   person: { id: string; email: string; role: 'owner' | 'admin' | 'member'; created_at: Timestamp; removed_at: Timestamp | null }
   agent: {
     id: string; name: string; owner_id: string; instructions: string; model: string; fallback_model: string | null; helper_models: Generated<string>; net: number
-    wanted: Generated<'running' | 'stopped'>; code_execution: Generated<boolean>; web_browser: Generated<boolean>; token_epoch: Generated<number>; channel_key: string; created_at: Timestamp
+    wanted: Generated<'running' | 'stopped'>; code_execution: Generated<boolean>; web_browser: Generated<boolean>; face: Generated<string | null>; token_epoch: Generated<number>; channel_key: string; created_at: Timestamp
   }
   channel: { id: string; agent_id: string; kind: 'slack' | 'whatsapp' | 'telegram'; status: 'connected' | 'linking'; account: string | null; owner_address: string; secrets: string; open: boolean; allowed: string; created_at: Timestamp }
   connection: {

@@ -107,6 +107,7 @@ let tray
 let blocker
 let setup
 let booted
+let fetching = null
 const updating = { checking: false, available: null, ready: null, error: null }
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 crashReporter.start({ uploadToServer: false })
@@ -560,18 +561,20 @@ function firstRun(start) {
 
 async function meet(run) {
   const step = (index, note, state = 'done') => {
-    run.steps[index].splice(1, 2, note, state)
+    run.steps[index].splice(1, 3, note, state)
     if (state === 'done' && run.steps[index + 1]) run.steps[index + 1][2] = 'now'
   }
   const hardware = `${cpus()[0]?.model ?? 'This computer'} · ${Math.round(totalmem() / 2 ** 30)} GB`
   if (CONTAINER ? !await dockerUp() : !await canVirtualize()) throw new Error(`${hardware}, but it can't run ${CONTAINER ? 'Docker' : 'virtual machines'}`)
   step(0, hardware)
-  if (await booted !== true) throw new Error(`It didn't start. The logs are in ${LOGS}.`)
+  const downloading = follow({ run, index: 1, read: async () => fetching ?? (CONTAINER ? (await agentd({ cmd: 'progress' })).pull : null) })
+  const started = await booted.finally(downloading)
+  if (started !== true) throw new Error(`It didn't start. The logs are in ${LOGS}.`)
   await api('/api/me')
   step(1, `version ${app.getVersion()}`)
-  run.steps[2][1] = 'the first time downloads about 1 GB'
   let fence = {}
-  await waitFor(async () => (fence = await agentd({ cmd: 'fence' })).ok, 900)
+  const pulling = follow({ run, index: 2, read: async () => (await agentd({ cmd: 'progress' })).pull })
+  await waitFor(async () => (fence = await agentd({ cmd: 'fence' })).ok, 900).finally(pulling)
   const passed = (fence.checks ?? []).filter((check) => check.pass).length
   if (!fence.ok) throw new Error(fence.error ?? `the fence failed ${(fence.checks ?? []).filter((check) => !check.pass).map((check) => check.name).join(', ')}`)
   step(2, `${passed} of ${fence.checks.length} checks passed`)
@@ -579,10 +582,24 @@ async function meet(run) {
   const agent = agents[0] ?? await api('/api/agents', { method: 'POST', body: { name: FIRST_AGENT } })
   await api(`/api/agents/${agent.id}`, { method: 'PATCH', body: { wanted: 'running' } })
   run.steps[3][1] = `${agent.name} is starting`
-  const ready = await waitFor(async () => (await api(`/api/agents/${agent.id}`)).health === 'answering', 300)
+  let health = ''
+  const ready = await waitFor(async () => ['answering', 'no_seat'].includes(health = (await api(`/api/agents/${agent.id}`)).health), 300)
   if (!ready) throw new Error(`${agent.name} didn't answer within 5 minutes`)
-  step(3, `${agent.name} is answering`)
+  step(3, health === 'no_seat' ? 'Connect Claude so it can answer' : `${agent.name} is answering`)
   run.agentId = agent.id
+}
+
+function follow({ run, index, read }) {
+  const tick = setInterval(() => read().then((pull) => {
+    if (!pull || run.steps[index][2] !== 'now') return
+    run.steps[index].splice(1, 3, noteOf(pull), 'now', pull.total ? Math.min(1, pull.done / pull.total) : undefined)
+  }, () => undefined), 500)
+  return () => clearInterval(tick)
+}
+
+function noteOf({ done, total }) {
+  if (!total) return 'Downloading'
+  return done >= total ? 'Setting up' : `Downloading · ${Math.floor((done / total) * 100)}%`
 }
 
 function dockerUp() {
@@ -731,12 +748,26 @@ async function guestClaude(to) {
   if (kept) return cpSync(kept, to)
   for (const url of want.urls) {
     const body = await fetch(url, { signal: AbortSignal.timeout(900_000) })
-      .then(async (response) => response.ok ? Buffer.from(await response.arrayBuffer()) : null)
+      .then((response) => response.ok ? counted(response) : null)
       .then((raw) => raw && url.endsWith('.zst') ? promisify(zstdDecompress)(raw) : raw)
       .catch((error) => appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't download ${url}: ${error.message}\n`))
     if (body && sha256(body) === want.sha256) return writeFileSync(to, body, { mode: 0o755 })
   }
   throw new Error(`Couldn't download Claude Code ${want.version}, which the agents run. OpenHut gets it the first time it opens, so check the internet connection and open it again.`)
+}
+
+async function counted(response) {
+  const chunks = []
+  fetching = { done: 0, total: Number(response.headers.get('content-length')) || 0, unit: 'bytes' }
+  try {
+    for await (const chunk of response.body) {
+      chunks.push(chunk)
+      fetching = { ...fetching, done: fetching.done + chunk.length }
+    }
+    return Buffer.concat(chunks)
+  } finally {
+    fetching = null
+  }
 }
 
 function msb() {

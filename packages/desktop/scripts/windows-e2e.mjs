@@ -76,11 +76,22 @@ try {
 }
 
 async function firstAgent(page) {
-  await page.eval('window.openhut.firstRun(true)')
+  const clicked = await page.eval(`(() => { const start = [...document.querySelectorAll('button')].find((b) => /Start/.test(b.textContent)); start?.click(); return Boolean(start) })()`)
+  if (!clicked) await page.eval('window.openhut.firstRun(true)')
   let last
+  const started = Date.now()
+  const seen = new Set()
+  evidence.firstRun = []
   const setup = await until(async () => {
     const run = last = await page.eval('window.openhut.firstRun(false)')
     if (run.failed) throw new Error(`first run failed: ${JSON.stringify(run.steps)}`)
+    const now = run.steps.find((step) => step[2] === 'now')
+    evidence.firstRun.push({ sec: Math.round((Date.now() - started) / 1000), now })
+    const phase = now ? `${now[0]} ${Math.floor((now[3] ?? 0) * 4)}` : 'done'
+    if (clicked && !seen.has(phase)) {
+      seen.add(phase)
+      await shot(page, `00-first-run-${seen.size}`)
+    }
     return run.agentId ? run : null
   }, 900, 'the first agent to answer').catch((error) => { throw new Error(`${error.message}; first run was at ${JSON.stringify(last?.steps)}`) })
   say('first run finished: the fence passed and the first agent answers in its microVM', { steps: setup.steps })

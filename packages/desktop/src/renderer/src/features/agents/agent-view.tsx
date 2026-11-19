@@ -39,11 +39,11 @@ export function AgentView({ agentId, dialog, detail }: { agentId: string; dialog
   if (away) return <Redirect to={away} />
   if (!agent.data) return <section className="grid flex-1 place-items-center bg-card">{!gone && <ErrorNote message={agent.error?.message} />}</section>
   const toggle = narrow && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label={open ? 'Hide details' : 'Show details'} aria-pressed={open} title={open ? 'Hide details' : 'Show details'} onClick={() => setShown(!open)}><I icon={phone ? InformationCircleIcon : SidebarRight01Icon} size={phone ? 20 : 16} /></Button>
+  const dialogs = <Dialogs agent={agent.data} dialog={dialog} detail={detail} />
   const panel = open && <Panel agent={agent.data} naming={dialog === 'name'} watching={dialog === 'browser'} />
   return <>
     <Chat agent={agent.data} tools={toggle} onTitle={phone ? () => setShown(true) : undefined} />
-    {phone ? panel && <Dialog size="window" label={`${agent.data.name}'s details`} className="phone:bg-sidebar" onClose={() => setShown(false)}>{panel}</Dialog> : panel}
-    <Dialogs agent={agent.data} dialog={dialog} detail={detail} />
+    {phone && panel ? <Dialog size="window" label={`${agent.data.name}'s details`} className="phone:bg-sidebar" onClose={() => setShown(false)}>{panel}{dialogs}</Dialog> : <>{panel}{dialogs}</>}
   </>
 }
 

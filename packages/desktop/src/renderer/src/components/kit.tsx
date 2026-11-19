@@ -61,7 +61,7 @@ export function Choice({ icon, name, note, selected = false, disabled, onClick }
   </DropdownMenuItem>
 }
 
-export const SPLIT_DIALOG = 'h-[min(720px,calc(100vh-48px))] w-[min(1080px,calc(100vw-32px))] gap-0 overflow-hidden p-0 phone:flex-col phone:[&>aside]:max-h-[45%] phone:[&>aside]:w-full phone:[&>aside]:border-r-0 phone:[&>aside]:border-b phone:[&>aside]:border-hair'
+export const SPLIT_DIALOG = 'h-[min(720px,calc(100vh-48px))] w-[min(1080px,calc(100vw-32px))] gap-0 overflow-hidden p-0 phone:h-[calc(100dvh-env(safe-area-inset-top)-10px-var(--kb))] phone:flex-col phone:[&>aside]:max-h-[45%] phone:[&>aside]:w-full phone:[&>aside]:border-r-0 phone:[&>aside]:border-b phone:[&>aside]:border-hair'
 
 export function DialogCard({ onClose, dismissable, className, children }: { onClose: () => void; dismissable?: boolean; className?: string; children: ReactNode }) {
   return <Dialog size="narrow" dismissable={dismissable} onClose={onClose} className={cn('flex flex-col gap-4 rounded-xl p-5', className)}>{children}</Dialog>
@@ -99,7 +99,7 @@ export function SetupSheet({ brand, title, blurb, eta, safe, error, foot, onSubm
   const inWindow = useContext(InWindow)
   const body = <>
     <div className={cn('flex items-start gap-3.5 px-5 pt-5 pb-4', inWindow && 'items-center px-8 pt-[26px] pr-14')}>
-      {inWindow && <Button type="button" size="icon-sm" aria-label="Back" title="All connections" className="-ml-2" onClick={onClose}><I icon={ArrowLeft01Icon} size={16} /></Button>}
+      {inWindow && <Button type="button" data-back size="icon-sm" aria-label="Back" title="All connections" className="-ml-2" onClick={onClose}><I icon={ArrowLeft01Icon} size={16} /></Button>}
       <Glyph name={brand} size={inWindow ? 30 : 28} />
       <div className="grid min-w-0 flex-1 gap-1">
         <div className="flex items-center gap-2"><DialogTitle className={inWindow ? 'text-[17px]/[24px] font-medium' : 'text-[15px]/[22px] font-medium'}>{title}</DialogTitle>{eta && <span className="inline-flex items-center gap-1 text-[11.5px] text-mute-2"><I icon={Clock01Icon} size={12} />{eta}</span>}</div>
@@ -135,4 +135,8 @@ export function Busy({ label }: { label: string }) {
 
 export function Dots() {
   return <span className="inline-flex gap-[3px]">{['', '[animation-delay:.16s]', '[animation-delay:.32s]'].map((delay) => <i key={delay} className={cn('size-[4px] animate-pulse rounded-full bg-ink', delay)} />)}</span>
+}
+
+export function Loading() {
+  return <p role="status" className="m-0 flex items-center gap-2 p-5 text-[13px] text-mute"><Spinner />Loading…</p>
 }

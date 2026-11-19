@@ -40,12 +40,14 @@ export const Agent = z.object({
   instructions: z.string(),
   codeExecution: z.boolean(),
   browser: z.boolean(),
+  face: z._default(z.nullable(z.string()), null),
   canEdit: z.boolean(),
   createdAt: Timestamp,
 })
 export type Agent = z.infer<typeof Agent>
 
 const AgentName = z.string().check(z.minLength(1), z.maxLength(40))
+const Face = z.string().check(z.maxLength(2000))
 
 const HelperChoices = z.object({ compress: z.optional(z.nullable(ModelKey)), title: z.optional(z.nullable(ModelKey)), review: z.optional(z.nullable(ModelKey)) })
 
@@ -54,6 +56,7 @@ export const CreateAgent = z.object({
   instructions: z.optional(z.string().check(z.maxLength(20_000))),
   model: z.optional(ModelKey),
   helperModels: z.optional(HelperChoices),
+  face: z.optional(Face),
 })
 export type CreateAgent = z.infer<typeof CreateAgent>
 
@@ -65,6 +68,7 @@ export const UpdateAgentFields = {
   wanted: z.optional(Wanted),
   codeExecution: z.optional(z.boolean()),
   browser: z.optional(z.boolean()),
+  face: z.optional(Face),
 }
 export const UpdateAgent = z.object(UpdateAgentFields).check(atLeastOneField)
 export type UpdateAgent = z.infer<typeof UpdateAgent>

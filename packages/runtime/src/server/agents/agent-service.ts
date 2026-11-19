@@ -62,12 +62,12 @@ export const agentService = {
     return row
   },
 
-  async create({ actor, name, instructions, model, helperModels = {} }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'helperModels'>): Promise<Agent> {
+  async create({ actor, name, instructions, model, helperModels = {}, face }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'helperModels' | 'face'>): Promise<Agent> {
     const clean = cleanName(name)
     requireChoices({ model, helperModels })
     const net = await freeNet()
     const row = await db.insertInto('agent').values({
-      id: newId('ag'), name: clean, owner_id: actor.id, model: model ?? DEFAULT_MODEL, helper_models: JSON.stringify({ ...NO_HELPERS, ...helperModels }), net, channel_key: seal(randomBytes(24).toString('hex')),
+      id: newId('ag'), name: clean, owner_id: actor.id, model: model ?? DEFAULT_MODEL, helper_models: JSON.stringify({ ...NO_HELPERS, ...helperModels }), net, channel_key: seal(randomBytes(24).toString('hex')), face,
       instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000),
     }).returningAll().executeTakeFirstOrThrow().catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'Someone created an agent at the same moment. Try again.') : err })
     try {
@@ -348,7 +348,7 @@ async function applyRelease(): Promise<void> {
 function agentOf({ row, ownerName, state, health, editable }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean }): Agent {
   return {
     id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, helperModels: helpersOf(row), wanted: row.wanted,
-    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, browser: row.web_browser, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
+    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, browser: row.web_browser, face: row.face, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
   }
 }
 

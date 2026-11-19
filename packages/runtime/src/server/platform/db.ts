@@ -38,6 +38,7 @@ export async function migrate(): Promise<void> {
     channel_key text not null, created_at timestamptz not null default now())`.execute(db)
   await sql`alter table agent add column if not exists code_execution boolean not null default true`.execute(db)
   await sql`alter table agent add column if not exists web_browser boolean not null default false`.execute(db)
+  await sql`alter table agent add column if not exists face text`.execute(db)
   await sql`alter table agent add column if not exists size text not null default 'standard' check (size in ('standard', 'large', 'xlarge'))`.execute(db)
   await sql`alter table agent add column if not exists token_epoch integer not null default 0`.execute(db)
   await sql`alter table agent drop constraint if exists agent_model_check`.execute(db)

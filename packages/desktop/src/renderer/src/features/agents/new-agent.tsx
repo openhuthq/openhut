@@ -6,7 +6,7 @@ import { DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Creature } from '@/components/creature'
 import { DialogCard, I } from '@/components/kit'
-import { useCreateAgent } from '@/features/agents/api'
+import { useAgents, useCreateAgent } from '@/features/agents/api'
 import { useComputerProviders } from '@/features/models/api'
 import { ModelPicker } from '@/features/models/model-picker'
 import { FaceEditor, stageColor, tileClass } from '@/features/agents/face-editor'
@@ -33,7 +33,11 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   const touch = useMedia(TOUCH)
   const providers = useComputerProviders('local')
   const [picked, setPicked] = useState<string | null | undefined>(undefined)
-  const [typed, setTyped] = useState(NAMES[0])
+  const taken = new Set(useAgents().data?.map((agent) => agent.name))
+  const fresh = NAMES.filter((each) => !taken.has(each))
+  const names = fresh.length ? fresh : NAMES
+  const [typed, setTyped] = useState(names[0])
+  const [first] = useState(names[0])
   const model = picked === undefined ? firstModel(providers) : picked
   const [round, setRound] = useState(() => Math.floor(Math.random() * 1e6))
   const [pick, setPick] = useState(0)
@@ -63,7 +67,7 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   }
   const reroll = () => {
     if (!name.current) return
-    name.current.value = NAMES[(NAMES.indexOf(name.current.value) + 1) % NAMES.length]
+    name.current.value = names[(names.indexOf(name.current.value) + 1) % names.length]
     setTyped(name.current.value)
     setEmpty(false)
   }
@@ -83,7 +87,7 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
       </div>
       <Button ref={customize} type="button" variant="secondary" size="sm" className="rounded-full px-3" onClick={() => setEditing(true)}>Customize</Button>
       <div className="flex w-full items-center gap-2">
-        <Input ref={name} name="name" autoFocus={!touch} autoComplete="off" required maxLength={40} defaultValue={NAMES[0]} aria-label="Name" className="h-10 rounded-lg text-center text-base font-medium" onInput={(event) => { setTyped(event.currentTarget.value); setEmpty(!event.currentTarget.value.trim()) }} />
+        <Input ref={name} name="name" autoFocus={!touch} autoComplete="off" enterKeyHint="go" required maxLength={40} defaultValue={first} aria-label="Name" className="h-10 rounded-lg text-center text-base font-medium" onInput={(event) => { setTyped(event.currentTarget.value); setEmpty(!event.currentTarget.value.trim()) }} />
         <Button type="button" variant="secondary" size="icon" aria-label="Random name" title="Random name" className="size-10 shrink-0 rounded-lg text-ink" onClick={reroll}><I icon={DiceFaces03Icon} /></Button>
       </div>
       <div className="flex w-full flex-col gap-2.5 text-left">
