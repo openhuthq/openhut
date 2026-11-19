@@ -5,8 +5,21 @@ URL=https://dl.openhut.dev
 FOREVER='public, max-age=31536000, immutable'
 
 put() {
-  npx -y wrangler@4.164.0 r2 object put "$BUCKET/$1" --file "$2" --remote --cache-control "$3" --content-type "${4:-application/octet-stream}" >/dev/null
+  if [ "$(wc -c < "$2")" -gt 300000000 ]; then big "$@"; else
+    npx -y wrangler@4.164.0 r2 object put "$BUCKET/$1" --file "$2" --remote --cache-control "$3" --content-type "${4:-application/octet-stream}" >/dev/null
+  fi
   echo "r2: $1"
+}
+
+big() {
+  if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
+    auth="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+    verified=$(curl -fsS -H "$auth" https://api.cloudflare.com/client/v4/user/tokens/verify || curl -fsS -H "$auth" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify")
+    AWS_ACCESS_KEY_ID=$(printf '%s' "$verified" | sed -n 's/.*"id":"\([0-9a-f]*\)".*/\1/p')
+    AWS_SECRET_ACCESS_KEY=$(printf '%s' "$CLOUDFLARE_API_TOKEN" | shasum -a 256 | cut -d' ' -f1)
+    export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+  fi
+  aws s3 cp "$2" "s3://$BUCKET/$1" --endpoint-url "https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com" --region auto --cache-control "$3" --content-type "${4:-application/octet-stream}" --only-show-errors
 }
 
 claude() {
@@ -41,6 +54,7 @@ release() {
 
 case "${1:-}" in
   claude) claude ;;
+  check) tmp=$(mktemp) && date > "$tmp" && big check/large-uploads "$tmp" 'no-store' text/plain && echo 'r2: large uploads work' ;;
   release) [ $# -eq 3 ] || { echo 'usage: scripts/r2.sh release <version> <folder with the release files>' >&2; exit 2; }; release "$2" "$3" ;;
-  *) echo 'usage: scripts/r2.sh claude | release <version> <folder>' >&2; exit 2 ;;
+  *) echo 'usage: scripts/r2.sh claude | check | release <version> <folder>' >&2; exit 2 ;;
 esac

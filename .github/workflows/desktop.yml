@@ -50,6 +50,12 @@ jobs:
           served=$(curl -fsSL https://openhut.dev/ | sed -n 's/^OPENHUT_BUILD="\(.*\)"$/\1/p')
           [ -z "$served" ] || [ "$(printf '%s\n%s\n' "$served" "${GITHUB_REF_NAME#v}" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" = "${GITHUB_REF_NAME#v}" ] && [ "$served" != "${GITHUB_REF_NAME#v}" ] ||
             { echo "::error::openhut.dev serves runtime build $served, and ${GITHUB_REF_NAME#v} isn't newer, so servers would never be offered this release. Use a higher version."; exit 1; }
+      - name: Cloudflare takes uploads past wrangler's 300 MB limit
+        if: env.TAGGED == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: scripts/r2.sh check
       - name: The tag has an unpublished draft release for every build to upload into
         if: env.TAGGED == 'true'
         run: |
