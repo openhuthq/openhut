@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -8,7 +10,7 @@ import type { SandboxSpec } from '../../../src/agentd/sandbox/sandbox.ts'
 const data = mkdtempSync(join(tmpdir(), 'native-'))
 process.env.AGENTD_DATA = data
 process.env.AGENTD_HERMES = join(data, 'runtime')
-const { hostOf, layout } = await import('../../../src/agentd/sandbox/native.ts')
+const { hostOf, layout, tree } = await import('../../../src/agentd/sandbox/native.ts')
 
 const spec: SandboxSpec = {
   id: 'ag_test0001', image: 'x', cpus: 1, memoryMib: 1024, user: '1:1', entrypoint: '/opt/hermes/bin/hermes', command: ['gateway', 'run'], env: {}, labels: {}, tmpfs: [{ guest: '/tmp', sizeMib: 16 }],
@@ -42,4 +44,14 @@ test('laying an agent out again never deletes what its shared folders hold', () 
   layout(agent)
   assert.ok(existsSync(join(shared, 'plugin.py')))
   assert.ok(existsSync(join(home, 'plugins', 'plugin.py')))
+})
+
+test('an agent process tree includes what its children started', { skip: process.platform === 'win32' }, async () => {
+  const parent = spawn('sh', ['-c', 'sleep 30 & sleep 30 & wait'], { stdio: 'ignore' })
+  await sleep(300)
+  const pids = tree(parent.pid ?? 0)
+  parent.kill('SIGKILL')
+  for (const pid of pids.slice(1)) process.kill(pid, 'SIGKILL')
+  assert.equal(pids[0], parent.pid)
+  assert.equal(pids.length, 3)
 })

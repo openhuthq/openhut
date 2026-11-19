@@ -209,7 +209,7 @@ function leftovers() {
   const lines = WIN
     ? execFileSync('powershell', ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ExecutablePath)" }']).toString().split(/\r?\n/)
     : execFileSync('ps', ['-axo', 'pid=,command=']).toString().split('\n')
-  return lines.filter((line) => line.includes(resolve(backend)) && /agent-browser|python|hermes/.test(line)).map((line) => line.trim().slice(0, 200))
+  return lines.filter((line) => line.includes(resolve(backend)) && /agent-browser|python|hermes/.test(line)).map((line) => line.trim().slice(-220))
 }
 
 function launch() {
