@@ -285,7 +285,7 @@ async function install({ peer, dns, entry }) {
   const invitation = await api('/api/invitations', { method: 'POST' })
   const path = `/api/invitations/${encodeURIComponent(invitation.id)}`
   say(`Installing OpenHut on ${dns} over Tailscale SSH`)
-  await tailscaleSsh({ args: ['ssh', `root@${dns}`, `read -r code; curl -fsSL '${INSTALL_URL}' | OPENHUT_JOIN="$code" OPENHUT_APP_VERSION=${app.getVersion()} sh`], input: `${invitation.code}\n`, say })
+  await tailscaleSsh({ args: ['ssh', `root@${dns}`, `read -r code; script=$(curl -fsSL '${INSTALL_URL}') || exit 1; printf '%s\\n' "$script" | OPENHUT_JOIN="$code" OPENHUT_APP_VERSION=${app.getVersion()} sh`], input: `${invitation.code}\n`, say })
   entry.waitingAt = Date.now()
   say(`Waiting for ${name} to join`)
   if (!await waitFor(async () => (await api(path)).status !== 'waiting', 120)) throw new Error(`OpenHut is installed, but ${name} didn't answer within 2 minutes.`)

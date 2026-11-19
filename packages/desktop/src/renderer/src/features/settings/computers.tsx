@@ -218,7 +218,7 @@ function Adding({ name }: { name: string }) {
   </TailscaleDialog>
   if (enrollment?.status === 'failed') {
     const retry = <Button type="button" variant="primary" onClick={() => start(enrollment.peer)}>Try again</Button>
-    const remove = <Button type="button" variant="secondary" onClick={() => { dismiss(enrollment.peer.dns); open('tailscale') }}>Back</Button>
+    const remove = <Button type="button" variant="secondary" onClick={() => { dismiss(enrollment.peer.dns); open() }}>Remove</Button>
     const details = detailsOf({ enrollment, version: APP_VERSION })
     return <TailscaleDialog title="Add over Tailscale" back={remove} foot={<><CopyButton text={details} label="Copy details" />{retry}</>}>
       <Scene mood="worried" title={`${name} didn't join`} line={failureOf({ error: enrollment.error, url: enrollment.url, name }).sentence} />
