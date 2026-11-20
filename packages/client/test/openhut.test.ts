@@ -28,7 +28,7 @@ function fake(): Fake {
 }
 
 function agent(name: string): Agent {
-  return { id: `ag_${name.toLowerCase()}`, object: 'agent', name, ownerId: 'usr_a', ownerName: 'me', model: 'claude:sonnet', helperModels: { compress: null, title: null, review: null }, wanted: 'running', status: 'running', health: 'answering', healthDetail: '', summary: '', net: 0, instructions: '', codeExecution: false, browser: false, face: null, canEdit: true, createdAt: AT }
+  return { id: `ag_${name.toLowerCase()}`, object: 'agent', name, ownerId: 'usr_a', ownerName: 'me', model: 'claude:sonnet', wanted: 'running', status: 'running', health: 'answering', healthDetail: '', summary: '', net: 0, instructions: '', codeExecution: false, browser: false, face: null, canEdit: true, createdAt: AT }
 }
 
 function connection({ id, kind, name, secret }: { id: string; kind: ConnectionKind; name: string; secret?: string }): Connection & { secret?: string } {
@@ -170,12 +170,11 @@ test('agents from every computer come back tagged; connections are merged by kin
   assert.deepEqual((await openhut.computers.list()).map((each) => [each.id, each.online]), [['local', true], ['beelink', false]])
 })
 
-test('agents from a computer on an older runtime still show (old model names, no helper models)', async () => {
+test('agents from a computer on an older runtime still show (old model names)', async () => {
   const { runtimes, openhut } = setup(['local', 'beelink'])
-  const { helperModels: _helpers, ...old } = agent('Juniper')
-  runtimes.beelink.agents = [{ ...old, model: 'sonnet' } as unknown as Agent]
+  runtimes.beelink.agents = [{ ...agent('Juniper'), model: 'sonnet' } as unknown as Agent]
   const [found] = await openhut.agents.list()
-  assert.deepEqual([found?.name, found?.computer, found?.model, found?.helperModels], ['Juniper', 'beelink', 'claude:sonnet', { compress: null, title: null, review: null }])
+  assert.deepEqual([found?.name, found?.computer, found?.model], ['Juniper', 'beelink', 'claude:sonnet'])
 })
 
 test('a call about an agent or a connection reaches the computer it lives on, found by listing when it is new to the app', async () => {

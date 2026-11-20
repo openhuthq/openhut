@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ArrowRight01Icon, SparklesIcon, Search01Icon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { ArrowRight01Icon, Search01Icon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import { PROVIDERS, modelKey, type Provider, type ProviderModel } from '@openhut/common/models/provider.ts'
 import { buttonVariants } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuEmpty, DropdownMenuFilter, DropdownMenuInput, DropdownMenuItem, DropdownMenuList, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -101,8 +101,6 @@ export function ModelValue({ providers, value, none }: { providers: Provider[] |
     <I icon={UnfoldMoreIcon} size={12} className="text-mute" />
   </>
 }
-
-export const SPARKLE = <I icon={SparklesIcon} size={14} />
 
 function Choice({ icon, name, note, selected = false, disabled = false, onClick }: { icon?: ReactNode; name: string; note: string; selected?: boolean; disabled?: boolean; onClick?: () => void }) {
   return <DropdownMenuItem size="tall" disabled={disabled} onClick={onClick}>

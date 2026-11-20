@@ -47,8 +47,6 @@ export const ProviderModel = z.object({
 })
 export type ProviderModel = z.infer<typeof ProviderModel>
 
-export const fastModelOf = (models: ProviderModel[]) => models.find((model) => model.on && model.tier === 'fast')
-
 export const Provider = z.object({
   id: ProviderId,
   object: z.literal('provider'),

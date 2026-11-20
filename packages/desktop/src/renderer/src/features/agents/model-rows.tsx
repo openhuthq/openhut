@@ -1,46 +1,17 @@
-import { AiMagicIcon, ArrowRight01Icon, SlidersHorizontalIcon } from '@hugeicons/core-free-icons'
-import { HELPER_TASKS, type Agent, type UpdateAgent } from '@openhut/common/agents/agent.ts'
-import { Dialog, DialogHead } from '@/components/ui/dialog'
+import { AiMagicIcon } from '@hugeicons/core-free-icons'
+import type { Agent } from '@openhut/common/agents/agent.ts'
 import { I, ROW, ROW_VALUE } from '@/components/kit'
-import { agentPath } from '@/app/routes'
 import { useAgents, useUpdateAgent } from '@/features/agents/api'
 import { useComputerProviders } from '@/features/models/api'
-import { HelperRows } from '@/features/models/helper-rows'
-import { automatic } from '@/features/models/labels'
 import { ModelPicker, ModelValue } from '@/features/models/model-picker'
 import { toastError } from '@/lib/toast'
 
-function useAgentModels(agent: Agent) {
+export function ModelRows({ agent }: { agent: Agent }) {
   const computer = useAgents().data?.find((each) => each.id === agent.id)?.computer ?? 'local'
   const providers = useComputerProviders(computer)
   const update = useUpdateAgent(agent.id)
-  const change = (patch: UpdateAgent) => update.mutate(patch, { onError: toastError })
-  const pending = update.isPending ? update.variables : undefined
-  return {
-    providers, change, locked: !agent.canEdit,
-    model: pending?.model ?? agent.model,
-  }
-}
-
-export function ModelRows({ agent }: { agent: Agent }) {
-  const { providers, change, locked, model } = useAgentModels(agent)
-  const set = HELPER_TASKS.filter((task) => agent.helperModels[task.slot]).length
-  return <>
-    <ModelPicker providers={providers} value={model} onPick={(key) => key && change({ model: key })} disabled={locked} className={ROW} label="Model" title={`${agent.name} thinks with`}>
-      <I icon={AiMagicIcon} size={15} className="text-mute" />Model<span className={ROW_VALUE}><ModelValue providers={providers} value={model} /></span>
-    </ModelPicker>
-    <a className={ROW} href={agentPath({ agentId: agent.id, dialog: 'helpers' })}><I icon={SlidersHorizontalIcon} size={15} className="text-mute" />Helper models<span className={ROW_VALUE}>{set ? `${set} of ${HELPER_TASKS.length} set` : 'Automatic'}<I icon={ArrowRight01Icon} size={12} className="text-mute" /></span></a>
-  </>
-}
-
-export function HelperModelsSheet({ agent, onClose }: { agent: Agent; onClose: () => void }) {
-  const { providers, change, locked, model } = useAgentModels(agent)
-  const auto = automatic({ providers, key: model })
-  return <Dialog size="sheet" label="Helper models" onClose={onClose} className="flex flex-col phone:h-fit">
-    <DialogHead title="Helper models" subtitle={`Small jobs ${agent.name} does in the background. Automatic picks a fast model from the same provider as its main one, which is ${auto.name} today.`} onClose={onClose} />
-    <div className="flex flex-1 flex-col gap-5 overflow-auto px-5 py-4">
-      <HelperRows providers={providers} main={model} values={agent.helperModels} who={agent.name} disabled={locked} onPick={(slot, key) => change({ helperModels: { [slot]: key } })} />
-    </div>
-    <p className="m-0 px-5 py-4 text-[12px] text-mute">Changing a model restarts {agent.name} for a few seconds.</p>
-  </Dialog>
+  const model = (update.isPending ? update.variables.model : undefined) ?? agent.model
+  return <ModelPicker providers={providers} value={model} onPick={(key) => key && update.mutate({ model: key }, { onError: toastError })} disabled={!agent.canEdit} className={ROW} label="Model" title={`${agent.name} thinks with`}>
+    <I icon={AiMagicIcon} size={15} className="text-mute" />Model<span className={ROW_VALUE}><ModelValue providers={providers} value={model} /></span>
+  </ModelPicker>
 }

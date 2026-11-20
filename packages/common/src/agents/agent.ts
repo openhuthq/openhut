@@ -12,17 +12,6 @@ export type AgentHealth = z.infer<typeof AgentHealth>
 export const Wanted = z.enum(['running', 'stopped'])
 export type Wanted = z.infer<typeof Wanted>
 
-export const HELPER_TASKS = [
-  { slot: 'compress', label: 'Summarising long chats', hint: 'Shrinks old messages when a chat gets long.' },
-  { slot: 'title', label: 'Naming chats', hint: 'Gives each new chat a short title.' },
-  { slot: 'review', label: 'Learning from chats', hint: 'Reads a chat afterwards to save skills and memory.' },
-] as const
-
-export type HelperSlot = (typeof HELPER_TASKS)[number]['slot']
-
-export const HelperModels = z.object({ compress: z.nullable(ModelKey), title: z.nullable(ModelKey), review: z.nullable(ModelKey) })
-export type HelperModels = z.infer<typeof HelperModels>
-
 export const Agent = z.object({
   id: z.string(),
   object: z.literal('agent'),
@@ -30,7 +19,6 @@ export const Agent = z.object({
   ownerId: z.string(),
   ownerName: z.string(),
   model: z.pipe(z.pipe(z.string(), z.transform((key) => LEGACY_MODELS[key] ?? key)), ModelKey),
-  helperModels: z._default(HelperModels, { compress: null, title: null, review: null }),
   wanted: Wanted,
   status: AgentStatus,
   health: z.nullable(AgentHealth),
@@ -49,13 +37,10 @@ export type Agent = z.infer<typeof Agent>
 const AgentName = z.string().check(z.minLength(1), z.maxLength(40))
 const Face = z.string().check(z.maxLength(2000))
 
-const HelperChoices = z.object({ compress: z.optional(z.nullable(ModelKey)), title: z.optional(z.nullable(ModelKey)), review: z.optional(z.nullable(ModelKey)) })
-
 export const CreateAgent = z.object({
   name: AgentName,
   instructions: z.optional(z.string().check(z.maxLength(20_000))),
   model: z.optional(ModelKey),
-  helperModels: z.optional(HelperChoices),
   face: z.optional(Face),
 })
 export type CreateAgent = z.infer<typeof CreateAgent>
@@ -64,7 +49,6 @@ export const UpdateAgentFields = {
   name: z.optional(AgentName),
   instructions: z.optional(z.string().check(z.maxLength(20_000))),
   model: z.optional(ModelKey),
-  helperModels: z.optional(HelperChoices),
   wanted: z.optional(Wanted),
   codeExecution: z.optional(z.boolean()),
   browser: z.optional(z.boolean()),

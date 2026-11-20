@@ -10,7 +10,7 @@ import { whatsapp } from '../integrations/whatsapp/whatsapp.ts'
 import { providers, type Route, type Setup } from '../models/providers/index.ts'
 import type { Slot, Slots } from '../models/model-slots.ts'
 
-const AUXILIARY: [keyof Slots['helpers'], string][] = [['approval', 'approval'], ['compress', 'compression'], ['title', 'title_generation'], ['review', 'background_review']]
+const AUXILIARY = ['approval', 'compression', 'title_generation', 'background_review']
 const EMPTY_AUTH = { version: 1, providers: {} }
 const PLAIN = /^[\w./-]+$/
 const CARDS_PLUGIN = 'openhut-ui'
@@ -39,7 +39,7 @@ export function renderFiles({ agent, ownerName, token, channelKey, channels, con
 }): AgentFiles {
   const gateway = config.agentGateway ?? `http://${agentSubnet(agent.net)}.1:${config.gatewayPort}`
   const disabled = ['browser', 'delegation', 'cronjob', ...(agent.code_execution ? [] : ['code_execution'])]
-  const setups = [...new Set([agent.slots.primary, ...Object.values(agent.slots.helpers)].map((slot) => slot.provider))].map((id) => providers[id].setup({ gateway, token }))
+  const setups = [providers[agent.slots.primary.provider].setup({ gateway, token })]
   const yaml = [
     modelYaml({ gateway, token, slots: agent.slots, setups: setups.map((setup) => setup.yaml) }),
     'terminal:\n  backend: local',
@@ -80,7 +80,8 @@ function modelYaml({ gateway, token, slots, setups }: { gateway: string; token: 
   }
   const routeOf = (slot: Slot) => providers[slot.provider].route({ gateway, token, model: slot.model, contextLength: slot.contextLength })
   const main = lines({ route: routeOf(slots.primary), model: 'default', indent: 2 })
-  const helpers = AUXILIARY.map(([slot, task]) => `  ${task}:\n${lines({ route: routeOf(slots.helpers[slot]), model: 'model', indent: 4 })}`)
+  const helper = lines({ route: routeOf(slots.primary), model: 'model', indent: 4 })
+  const helpers = AUXILIARY.map((task) => `  ${task}:\n${helper}`)
   return [`model:\n${main}`, `auxiliary:\n${helpers.join('\n')}`, ...setups.filter(Boolean)].join('\n')
 }
 
