@@ -11,7 +11,6 @@ import { openhut } from '@/lib/openhut'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
 import { localFace } from '@/features/agents/face'
-import type { Look } from '@/lib/face'
 
 const GRANT_LIST = List(Grant)
 const CHANNEL_LIST = List(Channel)
@@ -51,8 +50,8 @@ export function useAgent(agentId: string) {
 export function useCreateAgent() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: async ({ body, look, computer }: { body: CreateAgent; look: Look; computer: string }) => {
-      const agent = await request({ schema: Agent, computer, path: '/api/agents', method: 'POST', body: { ...body, face: JSON.stringify(look) } })
+    mutationFn: async ({ body, computer }: { body: CreateAgent; computer: string }) => {
+      const agent = await request({ schema: Agent, computer, path: '/api/agents', method: 'POST', body })
       return request({ schema: Agent, computer, path: agentPath(agent.id), method: 'PATCH', body: { wanted: 'running' } })
     },
     onSuccess: (agent, { computer }) => {

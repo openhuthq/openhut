@@ -5,11 +5,10 @@ import { slackCreateUrl, slackManifest } from './slack-manifest'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { avatarPng } from '@/components/creature'
 import { CopyButton } from '@/components/copy-button'
 import { Busy, HINT, I, PILL, SetupSheet, Step } from '@/components/kit'
 import { useCreateChannel } from '@/features/agents/api'
-import { lookOf } from '@/features/agents/face'
+import { slackIcon } from '@/features/agents/face'
 import { SlackChannels } from '@/features/agents/slack-channels'
 import { fieldError, formError } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
@@ -29,7 +28,7 @@ export function SlackDialog({ agent, channel, onClose }: { agent: Agent; channel
     <form id="slack-main" className="contents" onSubmit={(event) => {
       const field = formValues(event)
       if (channel) return
-      avatarPng(lookOf(agent))
+      slackIcon(agent)
         .then((icon) => createChannel.mutate({ kind: 'slack', agentId: agent.id, botToken: field('botToken'), appToken: field('appToken'), configToken: field('configToken'), icon }))
         .catch(toastError)
     }}>

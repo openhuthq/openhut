@@ -34,7 +34,10 @@ const VALUE = ROW_VALUE
 export function Panel({ agent, naming, watching }: { agent: Agent; naming: boolean; watching: boolean }) {
   return <aside className={cn('still flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] phone:w-full phone:flex-1 phone:border-l-0 border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
     <div className={cn('flex items-center gap-3', DRAG)}>
-      <Face agent={agent} size={48} tile />
+      {agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="relative shrink-0">
+        <Face agent={agent} size={48} tile />
+        <span className="absolute -right-1 -bottom-1 grid size-[22px] place-items-center rounded-full bg-card text-ink shadow-[0_0_0_1px_var(--hair),0_1px_3px_oklch(0%_0_0/.18)]"><I icon={PencilEdit02Icon} size={12} /></span>
+      </a> : <Face agent={agent} size={48} tile />}
       <PanelTitle agent={agent} naming={naming} />
     </div>
     <Button type="button" variant="bare" onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'does' }))} className={cn('group -mx-2.5 flex flex-col gap-1 rounded-lg px-2.5 py-2', HOVER)}>
@@ -90,6 +93,7 @@ function PanelTitle({ agent, naming }: { agent: Agent; naming: boolean }) {
   const toggle = running ? `Stop ${agent.name}` : `Start ${agent.name}`
   return <div ref={box} className="grid min-w-0 flex-1 gap-0.5">
     <div className="flex min-w-0 items-center gap-1"><AgentName agent={agent} editing={naming && agent.canEdit} />
+      {agent.canEdit && !naming && <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="grid size-6 shrink-0 place-items-center rounded-md text-mute hover:bg-hover hover:text-ink"><I icon={PencilEdit02Icon} size={14} /></a>}
       {phone ? <PhoneActions agent={agent} /> : <span className="ml-auto flex shrink-0 items-center gap-0.5">{confirming
         ? <>
           <Button type="button" variant="secondary" className={PILL} autoFocus onClick={() => setConfirming(false)}>Cancel</Button>
@@ -115,6 +119,7 @@ function PhoneActions({ agent }: { agent: Agent }) {
     {agent.canEdit && <DropdownMenu>
       <DropdownMenuTrigger render={<Button type="button" variant="bare" className={cn(TINY_ICON, 'size-9 rounded-full')} aria-label={`More for ${agent.name}`} />}><I icon={MoreHorizontalIcon} size={20} /></DropdownMenuTrigger>
       <DropdownMenuContent>
+        <DropdownMenuItem onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'customize' }))}><I icon={PencilEdit02Icon} size={16} />Customize</DropdownMenuItem>
         <DropdownMenuItem disabled={updateAgent.isPending} onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} />{running ? `Stop ${agent.name}` : `Start ${agent.name}`}</DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onClick={() => setDeleting(true)}><I icon={Delete02Icon} size={16} />Delete {agent.name}…</DropdownMenuItem>
       </DropdownMenuContent>

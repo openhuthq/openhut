@@ -10,6 +10,7 @@ import { agentPath, goneAgentPath, type AgentDialog } from '@/app/routes'
 import { useAgent, useAgents } from '@/features/agents/api'
 import { BrowserDialog } from '@/features/agents/browser'
 import { ChannelDialog } from '@/features/agents/channels'
+import { CustomizeDialog } from '@/features/agents/customize'
 import { MemoryDialog } from '@/features/agents/memory-dialog'
 import { NewAgentDialog } from '@/features/agents/new-agent'
 import { DoesDialog, Panel } from '@/features/agents/panel'
@@ -51,6 +52,7 @@ function Dialogs({ agent, dialog, detail }: { agent: Agent; dialog: AgentDialog 
   switch (dialog) {
     case 'new': return <NewAgentDialog onClose={close} />
     case 'does': return <DoesDialog agent={agent} onClose={close} />
+    case 'customize': return agent.canEdit ? <CustomizeDialog agent={agent} onClose={close} /> : null
     case 'memory': return <MemoryDialog agent={agent} onClose={close} />
     case 'skills': return <SkillsDialog agent={agent} open={detail} onClose={close} />
     case 'slack':
