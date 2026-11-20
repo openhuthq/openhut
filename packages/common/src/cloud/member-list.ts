@@ -1,5 +1,5 @@
-import { MemberList, MemberListBody, type Member } from './cloud.ts'
-import { check as checkSignature, concat, fromBase64, parseJson, sha256, sign, toBase64, type Bytes, type Identity } from '../vault/vault.ts'
+import { MemberList, MemberListBody, parseJson, type Member } from './cloud.ts'
+import { check as checkSignature, concat, fromBase64, sha256, sign, toBase64, type Bytes, type Identity } from '../vault/vault.ts'
 
 type Link = { list: MemberList; body: MemberListBody }
 
@@ -72,8 +72,8 @@ function changesOnlySelf({ previous, next, signer }: { previous: MemberListBody;
 }
 
 function removesExactly({ previous, next }: { previous: MemberListBody; next: MemberListBody }): boolean {
-  const after = devicesOf(next)
-  const expected = new Set([...previous.removed, ...devicesOf(previous).filter((key) => !after.includes(key))])
+  const dropped = (keysOf: (body: MemberListBody) => string[]) => keysOf(previous).filter((key) => !keysOf(next).includes(key))
+  const expected = new Set([...previous.removed, ...dropped(devicesOf), ...dropped((body) => body.invites.map((each) => each.key))])
   return next.removed.length === expected.size && next.removed.every((key) => expected.has(key))
 }
 

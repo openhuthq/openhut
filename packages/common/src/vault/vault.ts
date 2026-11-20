@@ -7,8 +7,9 @@ export type Identity = { secret: Bytes; publicKey: Bytes }
 export type Suite = { hpke: CipherSuite; enc: number; aead: 'AES-GCM'; hash: 'SHA-256'; nonce: number; tag: number }
 export type Pairing = { secret: string; fingerprint: string; hint: string }
 export type PairingSide = 'new' | 'old'
+export type PairTranscript = { secret: string; newDevice: Bytes; oldDevice: Bytes; workspace: string }
 
-export const LETTER_PURPOSES = ['workspace-key', 'account-key', 'connection-key', 'invite'] as const
+export const LETTER_PURPOSES = ['workspace-key', 'account-key', 'connection-key', 'invite', 'pairing'] as const
 export type LetterPurpose = (typeof LETTER_PURPOSES)[number]
 
 export const FORMAT = 1
@@ -157,18 +158,6 @@ export async function fingerprint(device: Bytes): Promise<string> {
   return toBase64(await sha256(concat([text.encode('openhut/device\0'), device])))
 }
 
-export function qrPayload(pairing: Pairing): string {
-  return JSON.stringify({ openhut: 'pair', secret: pairing.secret, fingerprint: pairing.fingerprint, hint: pairing.hint })
-}
-
-export function fromQr(payload: string): Pairing | null {
-  const value = parseJson(payload)
-  if (!value || typeof value !== 'object' || !('openhut' in value) || value.openhut !== 'pair') return null
-  const { secret, fingerprint, hint } = value as Record<string, unknown>
-  if (typeof secret !== 'string' || !isSecret(secret) || typeof fingerprint !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(fingerprint) || typeof hint !== 'string') return null
-  return { secret, fingerprint, hint }
-}
-
 export function longCode(secret: string): string {
   return `${secret.match(/.{5}/g)?.join('-')}-${checkSymbol(secret)}`
 }
@@ -179,13 +168,28 @@ export function fromLongCode(typed: string): string | null {
   return code.length === PAIR_DIGITS + 1 && isSecret(secret) && checkSymbol(secret) === code[PAIR_DIGITS] ? secret : null
 }
 
-export async function mac({ secret, side, bytes }: { secret: string; side: PairingSide; bytes: Bytes }): Promise<Bytes> {
-  const hmac = await subtle.importKey('raw', await derive({ key: text.encode(secret), info: 'openhut/pair' }), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-  return new Uint8Array(await subtle.sign('HMAC', hmac, concat([field(side), bytes])))
+export async function pairProof(input: PairTranscript & { side: PairingSide }): Promise<Bytes | null> {
+  const bytes = pairBytes(input)
+  return bytes && new Uint8Array(await subtle.sign('HMAC', await pairKey(input.secret), bytes))
 }
 
-export async function verify({ secret, side, bytes, tag }: { secret: string; side: PairingSide; bytes: Bytes; tag: Bytes }): Promise<boolean> {
-  return isSecret(secret) && equal({ a: await mac({ secret, side, bytes }), b: tag })
+export async function checkPairProof({ tag, ...input }: PairTranscript & { side: PairingSide; tag: Bytes }): Promise<boolean> {
+  const bytes = pairBytes(input)
+  return bytes !== null && isSecret(input.secret) && subtle.verify('HMAC', await pairKey(input.secret), tag, bytes)
+}
+
+export async function pairingWorkspace(transcript: PairTranscript): Promise<string | null> {
+  const bytes = pairBytes({ ...transcript, side: 'letter' })
+  return bytes && toBase64(new Uint8Array(await subtle.sign('HMAC', await pairKey(transcript.secret), bytes)))
+}
+
+function pairBytes({ side, newDevice, oldDevice, workspace }: PairTranscript & { side: PairingSide | 'letter' }): Bytes | null {
+  if (newDevice.length !== 64 || oldDevice.length !== 64) return null
+  return concat([text.encode('openhut/pair\0'), field(side), newDevice, oldDevice, field(workspace)])
+}
+
+async function pairKey(secret: string): Promise<CryptoKey> {
+  return subtle.importKey('raw', await derive({ key: text.encode(secret), info: 'openhut/pair' }), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'])
 }
 
 function isSecret(secret: string): boolean {
@@ -239,14 +243,6 @@ export function toBase64(bytes: Uint8Array): string {
 
 export function fromBase64(value: string): Bytes {
   return Uint8Array.from(atob(value.replaceAll('-', '+').replaceAll('_', '/')), (char) => char.charCodeAt(0))
-}
-
-export function parseJson(value: string): unknown {
-  try {
-    return JSON.parse(value)
-  } catch {
-    return null
-  }
 }
 
 function fromHex(hex: string): Bytes {

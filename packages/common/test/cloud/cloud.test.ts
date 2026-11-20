@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Base64, checkRecord, DeviceKey, Here, KeyBox, Letter, Record, recordBind, RecordBody, Signed, signRecord } from '../../src/cloud/cloud.ts'
-import { identity, lock, newKey, toBase64 } from '../../src/vault/vault.ts'
+import { Base64, checkRecord, DeviceKey, fromQr, Here, KeyBox, Letter, qrPayload, Record, recordBind, RecordBody, Signed, signRecord } from '../../src/cloud/cloud.ts'
+import { identity, lock, newKey, newPairing, toBase64 } from '../../src/vault/vault.ts'
 
 const locked = toBase64((await lock({ key: newKey(), version: 1, bind: 'record/rec_00000001', plain: new TextEncoder().encode('{ }') })) ?? new Uint8Array())
 const record = { id: 'rec_00000001', object: 'record', ver: 1, seq: 0, deleted: false, body: locked }
@@ -69,4 +69,13 @@ test('letters, key boxes and here messages carry locked bodies only, and letters
   assert.equal(Letter.safeParse({ ...letter, purpose: 'anything' }).success, false)
   assert.equal(KeyBox.safeParse({ object: 'key_box', kind: 'kit', body: locked }).success, true)
   assert.equal(Here.safeParse({ object: 'here', from, body: 'aGk' }).success, false)
+})
+
+test('a pairing goes through the QR and comes back whole, and a bad QR is refused', async () => {
+  const pairing = await newPairing({ device: (await identity()).publicKey, hint: 'mo@example.com' })
+  assert.deepEqual(fromQr(qrPayload(pairing)), pairing)
+  const payload = JSON.parse(qrPayload(pairing))
+  for (const bad of ['', 'null', '{}', JSON.stringify({ ...payload, secret: 'short' }), JSON.stringify({ ...payload, secret: pairing.secret.toLowerCase() }), JSON.stringify({ ...payload, openhut: 'other' }), JSON.stringify({ ...payload, fingerprint: 'x'.repeat(43) }), JSON.stringify({ ...payload, hint: 'h'.repeat(321) })]) {
+    assert.equal(fromQr(bad), null)
+  }
 })
