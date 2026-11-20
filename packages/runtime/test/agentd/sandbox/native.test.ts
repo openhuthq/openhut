@@ -10,7 +10,7 @@ import type { SandboxSpec } from '../../../src/agentd/sandbox/sandbox.ts'
 const data = mkdtempSync(join(tmpdir(), 'native-'))
 process.env.AGENTD_DATA = data
 process.env.AGENTD_HERMES = join(data, 'runtime')
-const { hostOf, layout, tree } = await import('../../../src/agentd/sandbox/native.ts')
+const { hostOf, layout, native, tree } = await import('../../../src/agentd/sandbox/native.ts')
 
 const spec: SandboxSpec = {
   id: 'ag_test0001', image: 'x', cpus: 1, memoryMib: 1024, user: '1:1', entrypoint: '/opt/hermes/bin/hermes', command: ['gateway', 'run'], env: {}, labels: {}, tmpfs: [{ guest: '/tmp', sizeMib: 16 }],
@@ -54,4 +54,12 @@ test('an agent process tree includes what its children started', { skip: process
   for (const pid of pids.slice(1)) process.kill(pid, 'SIGKILL')
   assert.equal(pids[0], parent.pid)
   assert.equal(pids.length, 3)
+})
+
+test('a command the computer lacks fails the run instead of crashing agentd', async () => {
+  const home = join(data, 'home-missing')
+  mkdirSync(home, { recursive: true })
+  const result = await native.run({ spec: { ...spec, id: 'ag_test0003', entrypoint: 'openhut-no-such-command', mounts: [{ host: home, guest: '/opt/data', readOnly: false }] }, command: [] })
+  assert.equal(result.code, 127)
+  assert.match(result.stdout, /ENOENT/)
 })

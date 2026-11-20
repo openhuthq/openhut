@@ -1,4 +1,5 @@
 import { closeSync, constants, existsSync, fstatSync, ftruncateSync, openSync, readdirSync, readlinkSync, readSync, realpathSync, statSync, writeSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 const SEGMENT = /^[A-Za-z0-9][\w.-]{0,63}$/
 const SKILL_FILE = 'SKILL.md'
@@ -75,7 +76,7 @@ export function openInside({ root, file, flags }: { root: string; file: string; 
   const fd = openQuietly(`${root}/${file}`, flags | constants.O_NOFOLLOW | constants.O_NONBLOCK)
   if (fd === undefined) return undefined
   const stat = fstatSync(fd)
-  if (stat.isFile() && stat.nlink === 1 && openedPath({ fd, path: `${root}/${file}`, ino: stat.ino }) === `${root}/${file}`) return fd
+  if (stat.isFile() && stat.nlink === 1 && openedPath({ fd, path: `${root}/${file}`, ino: stat.ino }) === resolve(root, file)) return fd
   closeSync(fd)
   return undefined
 }

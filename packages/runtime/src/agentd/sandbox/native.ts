@@ -145,10 +145,16 @@ function streamed(child: ChildProcess): Exec {
   const stdout = new PassThrough()
   child.stdout?.pipe(stdout, { end: false })
   child.stderr?.pipe(stdout, { end: false })
-  const exit = new Promise<number>((done) => child.on('close', (code) => {
-    stdout.end()
-    done(code ?? 1)
-  }))
+  const exit = new Promise<number>((done) => {
+    child.on('error', (error) => {
+      stdout.end(`${error.message}\n`)
+      done(127)
+    })
+    child.on('close', (code) => {
+      stdout.end()
+      done(code ?? 1)
+    })
+  })
   return { stdin: child.stdin, stdout, exit, kill: () => kill({ pids: tree(child.pid ?? 0), signal: 'SIGKILL' }) }
 }
 
@@ -175,6 +181,7 @@ export const native: Sandboxes = {
     writeFileSync(log, '')
     child.stdout?.on('data', (chunk: Buffer) => writeFileSync(log, chunk, { flag: 'a' }))
     child.stderr?.on('data', (chunk: Buffer) => writeFileSync(log, chunk, { flag: 'a' }))
+    child.on('error', (error) => writeFileSync(log, `${error.message}\n`, { flag: 'a' }))
     child.on('exit', () => children.delete(id))
     children.set(id, child)
     save(id, { ...saved, pid: child.pid, startedAt: new Date().toISOString() })
