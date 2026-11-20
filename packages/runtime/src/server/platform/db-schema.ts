@@ -17,6 +17,11 @@ export interface Database {
   }
   connection_grant: { id: string; connection_id: string; agent_id: string; created_at: Timestamp }
   thread: { id: string; agent_id: string; person_id: string; title: string; messages: Generated<string>; created_at: Timestamp; updated_at: Timestamp }
+  routine: {
+    id: string; agent_id: string; name: string; plan: string; at: Timestamp | null; cron: string | null; until: Timestamp | null; origin: string
+    next_run_at: Timestamp | null; created_at: Generated<Date>; run_id: string | null; run_status: 'open' | 'told' | 'quiet' | 'failed' | null
+    run_picked_at: Timestamp | null; run_at: Timestamp | null; run_text: string | null; failures: Generated<number>
+  }
   connection_event: {
     id: Generated<string>; at: Timestamp; agent_id: string; connection_id: string | null; tool: string; reason: string
     outcome: 'allowed' | 'denied' | 'failed'; ms: number

@@ -20,6 +20,9 @@ import { providerController } from './models/provider-controller.ts'
 import { gatewayServer } from './gateway/gateway-server.ts'
 import { mcpController } from './mcp/mcp-controller.ts'
 import { threadController } from './threads/thread-controller.ts'
+import { threadService } from './threads/thread-service.ts'
+import { routineController } from './routines/routine-controller.ts'
+import { routineService } from './routines/routine-service.ts'
 import { meController } from './team/team-controller.ts'
 import { accessController } from './access/access-controller.ts'
 import { invitationController } from './access/invitation-controller.ts'
@@ -37,6 +40,10 @@ const app = Fastify({ logger: false, bodyLimit: 1 << 20, trustProxy: ['127.0.0.1
 answerErrors(app)
 app.setValidatorCompiler(validateWithZod)
 app.addHook('preSerialization', async (req, _reply, payload) => forOlderApps({ req, payload }))
+app.addHook('onRequest', async (req) => {
+  const zone = req.headers['openhut-time-zone']
+  if (typeof zone === 'string' && zone) await routineService.setTimeZone(zone)
+})
 app.addHook('onSend', async (_req, reply) => {
   reply.header('referrer-policy', 'no-referrer').header('x-frame-options', 'DENY')
 })
@@ -52,6 +59,7 @@ await app.register(skillController, { prefix: '/api/skills' })
 await app.register(memoryController, { prefix: '/api/memories' })
 await app.register(browserController, { prefix: '/api/browsers' })
 await app.register(threadController, { prefix: '/api/threads' })
+await app.register(routineController, { prefix: '/api/routines' })
 await app.register(channelController, { prefix: '/api/channels' })
 await app.register(connectionController, { prefix: '/api/connections' })
 await app.register(connectionEventController, { prefix: '/api/connection-events' })
@@ -84,3 +92,5 @@ await gatewayServer.start().catch(async (err: unknown) => {
   process.exit(1)
 })
 await agentService.boot()
+routineService.runDashboardWith((input) => threadService.runRoutine(input))
+routineService.start()

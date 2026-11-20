@@ -8,6 +8,7 @@ import { ChannelKind } from '@openhut/common/channels/channel.ts'
 import { splitModelKey } from '@openhut/common/models/provider.ts'
 import { ConnectionKind } from '@openhut/common/connections/connection.ts'
 import { db, findRow, isUniqueViolation } from '../platform/db.ts'
+import { routineService } from '../routines/routine-service.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { config } from '../platform/config.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
@@ -37,7 +38,8 @@ const DEFAULT_MODEL = 'claude:sonnet'
 const Moved = z.object({
   agent: z.object({ id: z.string().check(z.regex(/^ag_[a-z0-9]{8}$/)), name: z.string(), instructions: z.string(), model: z.string(), codeExecution: z.boolean(), browser: z.boolean() }),
   channels: z.array(z.object({ kind: ChannelKind, status: z.enum(['connected', 'linking']), account: z.nullable(z.string()), ownerAddress: z.string(), open: z.boolean(), allowed: z.string(), secrets: z.string() })),
-  threads: z.array(z.object({ title: z.string(), messages: z.string(), createdAt: z.string(), updatedAt: z.string() })),
+  threads: z.array(z.object({ id: z.optional(z.string()), title: z.string(), messages: z.string(), createdAt: z.string(), updatedAt: z.string() })),
+  routines: z.optional(z.array(z.object({ name: z.string(), plan: z.string(), at: z.nullable(z.string()), cron: z.nullable(z.string()), until: z.nullable(z.string()), origin: z.string() }))),
   grants: z.array(z.object({ kind: ConnectionKind, name: z.string() })),
   home: z.string(),
 })
@@ -114,17 +116,19 @@ export const agentService = {
   async exportSealed({ actor, id, publicKey }: { actor: Caller; id: string; publicKey: string }): Promise<Export> {
     const row = await agentService.requireEditable({ actor, id })
     if ((await containerStates())?.[id] === 'running') throw new HttpError(409, `Stop ${row.name} first, so nothing changes while it moves.`)
-    const [channels, threads, grants, { tar }] = await Promise.all([
+    const [channels, threads, grants, routines, { tar }] = await Promise.all([
       db.selectFrom('channel').selectAll().where('agent_id', '=', id).execute(),
       db.selectFrom('thread').selectAll().where('agent_id', '=', id).execute(),
       db.selectFrom('connection_grant as g').innerJoin('connection as c', 'c.id', 'g.connection_id').select(['c.kind', 'c.name']).where('g.agent_id', '=', id).execute(),
+      routineService.exportFor({ agentId: id }),
       agentd.exportHome({ id }),
     ])
     const moved: Moved = {
       agent: { id, name: row.name, instructions: row.instructions, model: row.model, codeExecution: row.code_execution, browser: row.web_browser },
       channels: channels.map((each) => ({ kind: each.kind, status: each.status, account: each.account, ownerAddress: each.owner_address, open: each.open, allowed: each.allowed, secrets: each.secrets && unseal(each.secrets) })),
-      threads: threads.map((each) => ({ title: each.title, messages: each.messages, createdAt: new Date(each.created_at).toISOString(), updatedAt: new Date(each.updated_at).toISOString() })),
+      threads: threads.map((each) => ({ id: each.id, title: each.title, messages: each.messages, createdAt: new Date(each.created_at).toISOString(), updatedAt: new Date(each.updated_at).toISOString() })),
       grants,
+      routines,
       home: tar,
     }
     const sealed = sealedFor({ publicKey, text: JSON.stringify(moved) })
@@ -146,9 +150,13 @@ export const agentService = {
       for (const channel of moved.channels) {
         await db.insertInto('channel').values({ id: newId('ch'), agent_id: row.id, kind: channel.kind, status: channel.status, account: channel.account, owner_address: channel.ownerAddress, open: channel.open, allowed: channel.allowed, secrets: channel.secrets && seal(channel.secrets) }).execute()
       }
+      const threadIds = new Map<string, string>()
       for (const thread of moved.threads) {
-        await db.insertInto('thread').values({ id: newId('th'), agent_id: row.id, person_id: actor.id, title: thread.title, messages: thread.messages, created_at: thread.createdAt, updated_at: thread.updatedAt }).execute()
+        const threadId = newId('th')
+        if (thread.id) threadIds.set(thread.id, threadId)
+        await db.insertInto('thread').values({ id: threadId, agent_id: row.id, person_id: actor.id, title: thread.title, messages: thread.messages, created_at: thread.createdAt, updated_at: thread.updatedAt }).execute()
       }
+      await routineService.importFor({ agentId: row.id, routines: moved.routines ?? [], threads: threadIds })
       const ungranted = await regrant({ agentId: row.id, grants: moved.grants })
       await agentd.importHome({ id: row.id, tar: moved.home })
       await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: false })

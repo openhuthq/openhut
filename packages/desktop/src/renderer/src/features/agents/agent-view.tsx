@@ -15,6 +15,7 @@ import { MemoryDialog } from '@/features/agents/memory-dialog'
 import { NewAgentDialog } from '@/features/agents/new-agent'
 import { DoesDialog, Panel } from '@/features/agents/panel'
 import { SkillsDialog } from '@/features/agents/skills-dialog'
+import { RoutinesDialog } from '@/features/routines/routines-dialog'
 import { Chat } from '@/features/threads/chat'
 import { RequestError } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
@@ -54,6 +55,7 @@ function Dialogs({ agent, dialog, detail }: { agent: Agent; dialog: AgentDialog 
     case 'does': return <DoesDialog agent={agent} onClose={close} />
     case 'customize': return agent.canEdit ? <CustomizeDialog agent={agent} onClose={close} /> : null
     case 'memory': return <MemoryDialog agent={agent} onClose={close} />
+    case 'routines': return <RoutinesDialog agent={agent} open={detail} onClose={close} />
     case 'skills': return <SkillsDialog agent={agent} open={detail} onClose={close} />
     case 'slack':
     case 'whatsapp':

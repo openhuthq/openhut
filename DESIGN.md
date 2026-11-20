@@ -146,6 +146,17 @@ Status: in the code since 2026-11-14.
 - Memory is one row in the facts box ("5 entries · Manage") that opens a sheet with one list of everything the agent saved, people first.
 - Detail that belongs to one thing on a page (an agent's memory) opens in a `Sheet` (`components/ui/sheet.tsx`): the same Base UI dialog as `Dialog`, pinned to the right edge, full height, 560px, sliding in 2.5rem with a fade over 200ms and a light blurred backdrop, like shadcn's Sheet. Which sheet is open lives in the URL.
 
+## Routines
+
+Status: in the code since 2026-11-20 (owner). Screens: the "OpenHut Routines" artifact. Reviewed by UI, product, SRE, over-engineering and security reviewers to zero comments.
+
+The agent owns its routines; the person looks (owner: "preferably the user would not interact with them"). No duplication, no yapping, concise, playful.
+
+- **Panel.** One row under Skills: a clock icon, "Routines", and what's coming up ("3", "None yet"); stopped ones add "· [red dot] 1 stopped" (dot and ink text, never red text).
+- **Dialog.** The Memory dialog's split layout. Header: face and "Dev's routines", nothing else. Left: only what's coming up (no Done list), each a status circle (grey; amber spinner while running; red cross when the last run failed or it stopped), the name and one muted line: the next run ("Tomorrow at 10:00"), "Last check failed" or the stopped line. Right: the name over one line, "Weekdays at 10:00 · [brand glyph] #finance · until Dec 20"; the plan in the agent's own words beside its 28px face, no label; then, once it has run, "Last time · Today, 13:45" and what it said in the plan's column. No run history: a log is overkill. A failed run's text is neutral ("No answer in time."), with a red cross before it and ink text, since it sits beside the agent's face.
+- **Actions.** Footer: "Want it different? Tell Dev." (a link inside a sentence) and one red **Stop** that confirms in place ("Dev won't run it again."). A stopped routine says "Want it running again?" and its button is **Clear** ("Takes it off the list."). No pause, no edit form, no "who asked".
+- **Empty.** The face, "Nothing on the list yet" (20px) and "Dev adds routines here when something needs a follow-up." No example prompts: the agent sets them up, the person doesn't.
+
 ## Desktop app
 
 Status: in the code since 2026-11-17. Surface values are DuskBot's Daylight skin (`styles.css`, `[data-skin="daylight"]`), its Settings sheet (`styles/settings.css`) and Connect apps (`connect-apps.css`), translated to our tokens in `index.css`.

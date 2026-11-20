@@ -73,6 +73,12 @@ export async function migrate(): Promise<void> {
     id text primary key, agent_id text not null references agent(id) on delete cascade, person_id text not null references person(id) on delete cascade,
     title text not null, messages text not null default '[]', created_at timestamptz not null default now(), updated_at timestamptz not null default now())`.execute(db)
   await sql`create index if not exists thread_by_person on thread (person_id, updated_at desc)`.execute(db)
+  await sql`create table if not exists routine (
+    id text primary key, agent_id text not null references agent(id) on delete cascade, name text not null, plan text not null,
+    at timestamptz, cron text, until timestamptz, origin text not null, next_run_at timestamptz, created_at timestamptz not null default now(),
+    run_id text, run_status text check (run_status in ('open', 'told', 'quiet', 'failed')), run_picked_at timestamptz, run_at timestamptz, run_text text,
+    failures integer not null default 0)`.execute(db)
+  await sql`create index if not exists routine_due on routine (next_run_at) where next_run_at is not null`.execute(db)
   await sql`update agent set owner_id = o.id from person o where o.role = 'owner' and owner_id <> o.id`.execute(db)
   await sql`update connection set owner_id = o.id from person o where o.role = 'owner' and owner_id <> o.id`.execute(db)
   await sql`update thread set person_id = o.id from person o where o.role = 'owner' and person_id <> o.id`.execute(db)
