@@ -4,28 +4,46 @@ import { wordlist } from '@scure/bip39/wordlists/english.js'
 
 export type Bytes = Uint8Array<ArrayBuffer>
 export type Identity = { secret: Bytes; publicKey: Bytes }
+export type Suite = { hpke: CipherSuite; enc: number; aead: 'AES-GCM'; hash: 'SHA-256'; nonce: number; tag: number }
+export type Pairing = { secret: string; fingerprint: string; hint: string }
+export type PairingSide = 'new' | 'old'
+
+export const LETTER_PURPOSES = ['workspace-key', 'account-key', 'connection-key', 'invite'] as const
+export type LetterPurpose = (typeof LETTER_PURPOSES)[number]
 
 export const FORMAT = 1
 export const HEADER = 6
-const NONCE = 12
-const TAG = 16
-const ENC = 32
 const SIGNATURE = 64
+const KEY = 32
+const UINT32 = 0xffffffff
+const PAIR_DIGITS = 20
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ*~$=U'
 
-const suites: Record<number, { hpke: CipherSuite }> = {
-  1: { hpke: new CipherSuite({ kem: new DhkemX25519HkdfSha256(), kdf: new HkdfSha256(), aead: new Aes256Gcm() }) },
+const deviceKem = new DhkemX25519HkdfSha256()
+export const suites: Record<number, Suite> = {
+  1: { hpke: new CipherSuite({ kem: deviceKem, kdf: new HkdfSha256(), aead: new Aes256Gcm() }), enc: 32, aead: 'AES-GCM', hash: 'SHA-256', nonce: 12, tag: 16 },
 }
 export const NEWEST = 1
 
 const subtle = globalThis.crypto.subtle
 const text = new TextEncoder()
 const ED25519_PKCS8 = fromHex('302e020100300506032b657004220420')
+const SMALL_ORDER = [
+  '0000000000000000000000000000000000000000000000000000000000000000',
+  '0100000000000000000000000000000000000000000000000000000000000000',
+  '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05',
+  'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a',
+  'ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
+  'edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
+  'eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
+].map(fromHex)
 
-export function newKey(length = 32): Bytes {
+export function newKey(length = KEY): Bytes {
   return crypto.getRandomValues(new Uint8Array(length))
 }
 
-export function header({ suite = NEWEST, version }: { suite?: number; version: number }): Bytes {
+export function header({ suite = NEWEST, version }: { suite?: number; version: number }): Bytes | null {
+  if (!suites[suite] || !Number.isInteger(version) || version < 0 || version > UINT32) return null
   const bytes = new Uint8Array(HEADER)
   bytes[0] = FORMAT
   bytes[1] = suite
@@ -39,77 +57,84 @@ export function readHeader(bytes: Uint8Array): { suite: number; version: number 
 }
 
 export function isLocked(bytes: Uint8Array): boolean {
-  return readHeader(bytes) !== null && bytes.length >= HEADER + NONCE + TAG
+  const head = readHeader(bytes)
+  return head !== null && bytes.length >= HEADER + suites[head.suite].nonce + suites[head.suite].tag
 }
 
-export async function lock({ key, version, bind, plain }: { key: Bytes; version: number; bind: string; plain: Bytes }): Promise<Bytes> {
+export async function lock({ key, version, bind, plain }: { key: Bytes; version: number; bind: string; plain: Bytes }): Promise<Bytes | null> {
   const head = header({ version })
-  const nonce = newKey(NONCE)
-  const aes = await recordKey({ key, nonce, bind })
-  const sealed = await subtle.encrypt({ name: 'AES-GCM', iv: nonce, additionalData: concat(head, text.encode(bind)) }, aes, plain)
-  return concat(head, nonce, new Uint8Array(sealed))
+  if (!head || key.length !== KEY) return null
+  const suite = suites[NEWEST]
+  const nonce = newKey(suite.nonce)
+  const aes = await recordKey({ suite, key, nonce, bind })
+  const sealed = await subtle.encrypt({ name: suite.aead, iv: nonce, additionalData: concat([head, text.encode(bind)]) }, aes, plain)
+  return concat([head, nonce, new Uint8Array(sealed)])
 }
 
 export async function unlock({ keys, bind, locked }: { keys: Record<number, Bytes>; bind: string; locked: Bytes }): Promise<Bytes | null> {
   const head = readHeader(locked)
   const key = head && keys[head.version]
-  if (!key || !isLocked(locked)) return null
-  const nonce = locked.slice(HEADER, HEADER + NONCE)
-  const aes = await recordKey({ key, nonce, bind })
-  const additionalData = concat(locked.slice(0, HEADER), text.encode(bind))
-  const plain = await subtle.decrypt({ name: 'AES-GCM', iv: nonce, additionalData }, aes, locked.slice(HEADER + NONCE)).catch(() => null)
-  return plain && new Uint8Array(plain)
+  if (!head || !key || !isLocked(locked)) return null
+  const suite = suites[head.suite]
+  const nonce = locked.slice(HEADER, HEADER + suite.nonce)
+  const aes = await recordKey({ suite, key, nonce, bind }).catch(() => null)
+  const additionalData = concat([locked.slice(0, HEADER), text.encode(bind)])
+  const plain = aes && (await subtle.decrypt({ name: suite.aead, iv: nonce, additionalData }, aes, locked.slice(HEADER + suite.nonce)).catch(() => null))
+  return plain ? new Uint8Array(plain) : null
 }
 
 export async function identity(secret: Bytes = newKey()): Promise<Identity> {
-  const signing = await subtle.importKey('pkcs8', concat(ED25519_PKCS8, secret), 'Ed25519', true, ['sign'])
+  const signing = await subtle.importKey('pkcs8', concat([ED25519_PKCS8, secret]), 'Ed25519', true, ['sign'])
   const { x } = await subtle.exportKey('jwk', signing)
-  const box = await suites[NEWEST].hpke.kem.deriveKeyPair(secret)
-  const boxPublic = new Uint8Array(await suites[NEWEST].hpke.kem.serializePublicKey(box.publicKey))
-  return { secret, publicKey: concat(fromBase64(x ?? ''), boxPublic) }
+  const box = await deviceKem.deriveKeyPair(secret)
+  const boxPublic = new Uint8Array(await deviceKem.serializePublicKey(box.publicKey))
+  return { secret, publicKey: concat([fromBase64(x ?? ''), boxPublic]) }
 }
 
 export async function sign({ secret, bytes }: { secret: Bytes; bytes: Bytes }): Promise<Bytes> {
-  const key = await subtle.importKey('pkcs8', concat(ED25519_PKCS8, secret), 'Ed25519', false, ['sign'])
+  const key = await subtle.importKey('pkcs8', concat([ED25519_PKCS8, secret]), 'Ed25519', false, ['sign'])
   return new Uint8Array(await subtle.sign('Ed25519', key, bytes))
 }
 
 export async function check({ publicKey, bytes, signature }: { publicKey: Bytes; bytes: Bytes; signature: Bytes }): Promise<boolean> {
-  if (publicKey.length !== 64 || signature.length !== SIGNATURE) return false
+  if (publicKey.length !== 64 || signature.length !== SIGNATURE || smallOrder(publicKey) || smallOrder(signature)) return false
   const key = await subtle.importKey('raw', publicKey.slice(0, 32), 'Ed25519', false, ['verify']).catch(() => null)
   return key ? subtle.verify('Ed25519', key, signature, bytes) : false
 }
 
-export async function letter({ sender, to, workspace, version, plain }: { sender: Identity; to: Bytes; workspace: string; version: number; plain: Bytes }): Promise<Bytes> {
-  const head = header({ version })
-  const context = letterContext({ head, from: sender.publicKey, to, workspace })
-  const signature = await sign({ secret: sender.secret, bytes: concat(context, plain) })
-  const { hpke } = suites[NEWEST]
-  const senderKey = await hpke.kem.deriveKeyPair(sender.secret)
-  const recipientPublicKey = await hpke.kem.deserializePublicKey(to.slice(32))
-  const { ct, enc } = await hpke.seal({ recipientPublicKey, senderKey, info: context }, concat(signature, plain), context)
-  return concat(head, new Uint8Array(enc), new Uint8Array(ct))
+function smallOrder(point: Uint8Array): boolean {
+  return SMALL_ORDER.some((bad) => bad.every((byte, index) => byte === (index === 31 ? point[index] & 0x7f : point[index])))
 }
 
-export async function read({ recipient, from, workspace, body, allowed }: { recipient: Identity; from: Bytes; workspace: string; body: Bytes; allowed: Bytes[] }): Promise<Bytes | null> {
+export async function letter({ sender, to, workspace, purpose, version, plain }: { sender: Identity; to: Bytes; workspace: string; purpose: LetterPurpose; version: number; plain: Bytes }): Promise<Bytes | null> {
+  const head = header({ version })
+  if (!head) return null
+  const context = letterContext({ head, from: sender.publicKey, to, purpose, workspace })
+  const signature = await sign({ secret: sender.secret, bytes: concat([context, plain]) })
+  const senderKey = await deviceKem.deriveKeyPair(sender.secret)
+  const recipientPublicKey = await deviceKem.deserializePublicKey(to.slice(32))
+  const { ct, enc } = await suites[NEWEST].hpke.seal({ recipientPublicKey, senderKey, info: context }, concat([signature, plain]), context)
+  return concat([head, new Uint8Array(enc), new Uint8Array(ct)])
+}
+
+export async function read({ recipient, from, workspace, purpose, body, allowed }: { recipient: Identity; from: Bytes; workspace: string; purpose: LetterPurpose; body: Bytes; allowed: Bytes[] }): Promise<Bytes | null> {
   const head = readHeader(body)
-  if (!head || body.length < HEADER + ENC + SIGNATURE + TAG || from.length !== 64) return null
-  if (!allowed.some((key) => equal(key, from))) return null
-  const context = letterContext({ head: body.slice(0, HEADER), from, to: recipient.publicKey, workspace })
-  const { hpke } = suites[head.suite]
-  const recipientKey = await hpke.kem.deriveKeyPair(recipient.secret)
-  const senderPublicKey = await hpke.kem.deserializePublicKey(from.slice(32)).catch(() => null)
+  if (!head || !LETTER_PURPOSES.includes(purpose) || from.length !== 64) return null
+  const { hpke, enc, tag } = suites[head.suite]
+  if (body.length < HEADER + enc + SIGNATURE + tag || !allowed.some((key) => equal({ a: key, b: from }))) return null
+  const context = letterContext({ head: body.slice(0, HEADER), from, to: recipient.publicKey, purpose, workspace })
+  const recipientKey = await deviceKem.deriveKeyPair(recipient.secret)
+  const senderPublicKey = await deviceKem.deserializePublicKey(from.slice(32)).catch(() => null)
   if (!senderPublicKey) return null
-  const enc = body.slice(HEADER, HEADER + ENC)
-  const opened = await hpke.open({ recipientKey, senderPublicKey, enc, info: context }, body.slice(HEADER + ENC), context).catch(() => null)
+  const opened = await hpke.open({ recipientKey, senderPublicKey, enc: body.slice(HEADER, HEADER + enc), info: context }, body.slice(HEADER + enc), context).catch(() => null)
   if (!opened) return null
   const signature = new Uint8Array(opened.slice(0, SIGNATURE))
   const plain = new Uint8Array(opened.slice(SIGNATURE))
-  return (await check({ publicKey: from, bytes: concat(context, plain), signature })) ? plain : null
+  return (await check({ publicKey: from, bytes: concat([context, plain]), signature })) ? plain : null
 }
 
-function letterContext({ head, from, to, workspace }: { head: Bytes; from: Bytes; to: Bytes; workspace: string }): Bytes {
-  return concat(text.encode('openhut/letter\0'), head, from, to, text.encode(workspace))
+function letterContext({ head, from, to, purpose, workspace }: { head: Bytes; from: Bytes; to: Bytes; purpose: LetterPurpose; workspace: string }): Bytes {
+  return concat([text.encode('openhut/letter\0'), head, from, to, field(purpose), field(workspace)])
 }
 
 export async function newWords(): Promise<{ words: string[]; key: Bytes }> {
@@ -123,16 +148,52 @@ export async function fromWords(words: string[]): Promise<Bytes | null> {
   return derive({ key: new Uint8Array(mnemonicToEntropy(phrase, wordlist)), info: 'openhut/kit' })
 }
 
-export async function commit(publicKey: Bytes): Promise<{ commitment: Bytes; nonce: Bytes }> {
-  const nonce = newKey()
-  return { commitment: await sha256(concat(text.encode('openhut/commit\0'), publicKey, nonce)), nonce }
+export async function newPairing({ device, hint }: { device: Bytes; hint: string }): Promise<Pairing> {
+  const secret = Array.from(newKey(PAIR_DIGITS), (byte) => CROCKFORD[byte & 31]).join('')
+  return { secret, fingerprint: await fingerprint(device), hint }
 }
 
-export async function pairingCode({ commitment, nonce, newDevice, oldDevice }: { commitment: Bytes; nonce: Bytes; newDevice: Bytes; oldDevice: Bytes }): Promise<string | null> {
-  const expected = await sha256(concat(text.encode('openhut/commit\0'), newDevice, nonce))
-  if (!equal(expected, commitment)) return null
-  const hash = await sha256(concat(text.encode('openhut/code\0'), commitment, newDevice, oldDevice, nonce))
-  return String(new DataView(hash.buffer).getUint32(0) % 1_000_000).padStart(6, '0')
+export async function fingerprint(device: Bytes): Promise<string> {
+  return toBase64(await sha256(concat([text.encode('openhut/device\0'), device])))
+}
+
+export function qrPayload(pairing: Pairing): string {
+  return JSON.stringify({ openhut: 'pair', secret: pairing.secret, fingerprint: pairing.fingerprint, hint: pairing.hint })
+}
+
+export function fromQr(payload: string): Pairing | null {
+  const value = parseJson(payload)
+  if (!value || typeof value !== 'object' || !('openhut' in value) || value.openhut !== 'pair') return null
+  const { secret, fingerprint, hint } = value as Record<string, unknown>
+  if (typeof secret !== 'string' || !isSecret(secret) || typeof fingerprint !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(fingerprint) || typeof hint !== 'string') return null
+  return { secret, fingerprint, hint }
+}
+
+export function longCode(secret: string): string {
+  return `${secret.match(/.{5}/g)?.join('-')}-${checkSymbol(secret)}`
+}
+
+export function fromLongCode(typed: string): string | null {
+  const code = typed.toUpperCase().replace(/[\s-]/g, '').replaceAll('O', '0').replace(/[IL]/g, '1')
+  const secret = code.slice(0, PAIR_DIGITS)
+  return code.length === PAIR_DIGITS + 1 && isSecret(secret) && checkSymbol(secret) === code[PAIR_DIGITS] ? secret : null
+}
+
+export async function mac({ secret, side, bytes }: { secret: string; side: PairingSide; bytes: Bytes }): Promise<Bytes> {
+  const hmac = await subtle.importKey('raw', await derive({ key: text.encode(secret), info: 'openhut/pair' }), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  return new Uint8Array(await subtle.sign('HMAC', hmac, concat([field(side), bytes])))
+}
+
+export async function verify({ secret, side, bytes, tag }: { secret: string; side: PairingSide; bytes: Bytes; tag: Bytes }): Promise<boolean> {
+  return isSecret(secret) && equal({ a: await mac({ secret, side, bytes }), b: tag })
+}
+
+function isSecret(secret: string): boolean {
+  return secret.length === PAIR_DIGITS && [...secret].every((char) => CROCKFORD.indexOf(char) >= 0 && CROCKFORD.indexOf(char) < 32)
+}
+
+function checkSymbol(secret: string): string {
+  return CROCKFORD[[...secret].reduce((rest, char) => (rest * 32 + CROCKFORD.indexOf(char)) % 37, 0)]
 }
 
 export async function slot({ key, path }: { key: Bytes; path: string }): Promise<string> {
@@ -144,9 +205,9 @@ export async function sha256(bytes: Bytes): Promise<Bytes> {
   return new Uint8Array(await subtle.digest('SHA-256', bytes))
 }
 
-async function recordKey({ key, nonce, bind }: { key: Bytes; nonce: Bytes; bind: string }): Promise<CryptoKey> {
+async function recordKey({ suite, key, nonce, bind }: { suite: Suite; key: Bytes; nonce: Bytes; bind: string }): Promise<CryptoKey> {
   const base = await subtle.importKey('raw', key, 'HKDF', false, ['deriveKey'])
-  return subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: nonce, info: text.encode(`openhut/lock\0${bind}`) }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
+  return subtle.deriveKey({ name: 'HKDF', hash: suite.hash, salt: nonce, info: text.encode(`openhut/lock\0${bind}`) }, base, { name: suite.aead, length: 256 }, false, ['encrypt', 'decrypt'])
 }
 
 async function derive({ key, info }: { key: Bytes; info: string }): Promise<Bytes> {
@@ -154,13 +215,21 @@ async function derive({ key, info }: { key: Bytes; info: string }): Promise<Byte
   return new Uint8Array(await subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(), info: text.encode(info) }, base, 256))
 }
 
-export function concat(...parts: Uint8Array[]): Bytes {
+export function field(value: string): Bytes {
+  const bytes = text.encode(value)
+  const out = new Uint8Array(4 + bytes.length)
+  new DataView(out.buffer).setUint32(0, bytes.length)
+  out.set(bytes, 4)
+  return out
+}
+
+export function concat(parts: Uint8Array[]): Bytes {
   const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0))
   parts.reduce((offset, part) => (out.set(part, offset), offset + part.length), 0)
   return out
 }
 
-export function equal(a: Uint8Array, b: Uint8Array): boolean {
+export function equal({ a, b }: { a: Uint8Array; b: Uint8Array }): boolean {
   return a.length === b.length && a.every((byte, index) => byte === b[index])
 }
 
@@ -170,6 +239,14 @@ export function toBase64(bytes: Uint8Array): string {
 
 export function fromBase64(value: string): Bytes {
   return Uint8Array.from(atob(value.replaceAll('-', '+').replaceAll('_', '/')), (char) => char.charCodeAt(0))
+}
+
+export function parseJson(value: string): unknown {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
 }
 
 function fromHex(hex: string): Bytes {
