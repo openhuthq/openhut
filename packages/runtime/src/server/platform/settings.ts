@@ -61,6 +61,8 @@ export const settings = {
   },
   update: (): string | undefined => rows.get('update') || undefined,
   setUpdate: (record: string) => write('update', record),
+  timeZone: (): string => rows.get('time_zone') || Intl.DateTimeFormat().resolvedOptions().timeZone,
+  setTimeZone: (zone: string) => write('time_zone', zone),
   access: (): string | undefined => rows.get('access'),
   joinTried: (): string | undefined => rows.get('join_tried'),
   setJoinTried: (code: string) => write('join_tried', code),

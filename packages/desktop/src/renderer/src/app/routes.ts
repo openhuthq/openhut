@@ -1,4 +1,4 @@
-export const AGENT_DIALOGS = ['new', 'does', 'name', 'customize', 'memory', 'skills', 'slack', 'whatsapp', 'telegram', 'browser'] as const
+export const AGENT_DIALOGS = ['new', 'does', 'name', 'customize', 'memory', 'skills', 'routines', 'slack', 'whatsapp', 'telegram', 'browser'] as const
 export type AgentDialog = typeof AGENT_DIALOGS[number]
 
 export type Route =
@@ -22,7 +22,7 @@ export function routeOf(path: string): Route {
   if (section !== 'agents') return MISSING
   if (!dialog) return { page: 'agent', agentId: id, dialog: undefined, detail: undefined }
   const known = AGENT_DIALOGS.find((each) => each === dialog)
-  if (!known || (detail && known !== 'skills')) return MISSING
+  if (!known || (detail && known !== 'skills' && known !== 'routines')) return MISSING
   return { page: 'agent', agentId: id, dialog: known, detail: detail || undefined }
 }
 

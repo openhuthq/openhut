@@ -1,0 +1,31 @@
+---
+title: Routines
+description: Agents follow up on their own. They set up routines when something needs checking later, run them, and clear them when they're done.
+icon: ops
+---
+
+Ask an agent to keep at something, or just mention something that needs a follow-up:
+
+```txt
+Chase Acme on invoice 4471 until it's paid.
+```
+
+The agent sets up a **routine**: once ("Friday at 9"), repeating ("weekdays at 10") or until something happens ("until it's paid"). Each time it runs, the agent picks it up in the same chat it was asked in, with that chat's history, and tells you only when there's something to say. When it's done for good, it says so and clears the routine.
+
+## See them
+
+**Routines** on the agent's panel lists what's coming up. Open one to see the agent's plan in its own words, when it runs next, where it reports and what it said last time.
+
+There's nothing to fill in. To change a routine, tell the agent. **Stop** ends one for good.
+
+A routine that can't run three times in a row (the agent was stopped or didn't answer) stops trying and shows in red, so nothing fails quietly. **Clear** takes it off the list.
+
+## Limits
+
+- Up to 20 routines and 100 runs a day per agent, at most every 15 minutes, for up to 90 days.
+- A routine reports only to a chat the agent is in. On a WhatsApp or Telegram number anyone can message, only to yours.
+- A routine can't set up another routine.
+- Routines run while the agent is running. One that comes due while it's stopped waits and runs once when it starts again.
+- Every call a routine makes goes through the same [connections and grants](/data) as a chat.
+
+From your own AI assistant, the [control MCP](/mcp) has `list_routines` and `stop_routine`.

@@ -22,7 +22,7 @@ export function testModel({ path, body, res }: { path: string; body: unknown; re
   const toolNames = (request.tools ?? []).map((tool) => tool.function?.name ?? tool.name).filter((name) => name !== undefined)
   const callTool = toolNames.find((name) => name.endsWith('call_tool'))
   log.info({ event: 'test_llm.request', messages: messages.length, lastRole: last.role, tools: toolNames.length, callTool })
-  const reply = replyTo({ last, callTool, shell: toolNames.find((name) => name === 'terminal' || name === 'Bash') })
+  const reply = replyTo({ last, callTool, shell: toolNames.find((name) => name === 'terminal' || name === 'Bash'), schedule: toolNames.find((name) => name.endsWith('schedule_routine')) })
   const base = { id: `cmpl-${Date.now()}`, created: Math.floor(Date.now() / 1000), model: request.model ?? 'openhut-test' }
   const toolCalls = reply.tool ? [{ id: `call_${Date.now()}`, type: 'function', function: { name: reply.tool.name, arguments: reply.tool.args } }] : undefined
   const finish = reply.tool ? 'tool_calls' : 'stop'
@@ -51,8 +51,12 @@ export function testAnthropic({ req, body, res }: { req: IncomingMessage; body: 
     .end(JSON.stringify({ id: `msg_${Date.now()}`, type: 'message', role: 'assistant', model: request.model ?? 'openhut-test', content: [{ type: 'text', text }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 } }))
 }
 
-function replyTo({ last, callTool, shell }: { last: { role?: string; content?: unknown }; callTool: string | undefined; shell: string | undefined }): { content?: string; tool?: { name: string; args: string } } {
+function replyTo({ last, callTool, shell, schedule }: { last: { role?: string; content?: unknown }; callTool: string | undefined; shell: string | undefined; schedule: string | undefined }): { content?: string; tool?: { name: string; args: string } } {
   if (last.role === 'tool') return { content: `TOOL RESULT: ${asText(last.content).slice(0, 20_000)}` }
+  const routine = /\[Routine rt_\w+ · run ru_\w+\] Time for "([^"]+)"/.exec(asText(last.content))?.[1]
+  if (routine) return { content: `ROUTINE RAN: ${routine}` }
+  const wanted = /routine:\s*(\{[\s\S]+\})\s*$/i.exec(lastText(last.content))?.[1]
+  if (wanted && schedule) return { tool: { name: schedule, args: wanted } }
   const sql = /sql:\s*([\s\S]+?)\s*$/i.exec(asText(last.content))?.[1]
   if (sql && callTool) return { tool: { name: callTool, args: JSON.stringify({ reason: 'The user asked for data', name: 'postgres_query', arguments: { sql } }) } }
   const command = /browser:\s*([a-z][a-z -]*(?:\s+[^\s'"`$;&|<>\\]+)*)\s*"?\s*$/i.exec(lastText(last.content))?.[1]

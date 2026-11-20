@@ -19,6 +19,7 @@ import { BrowserPreview } from '@/features/agents/browser'
 import { ChannelRows } from '@/features/agents/channels'
 import { Face } from '@/features/agents/face'
 import { useMove } from '@/features/agents/move'
+import { RoutinesRow } from '@/features/routines/routines-dialog'
 import { ModelRows } from '@/features/agents/model-rows'
 import { AgentStatus } from '@/features/agents/status'
 import { HERE } from '@/features/settings/desktop'
@@ -48,6 +49,7 @@ export function Panel({ agent, naming, watching }: { agent: Agent; naming: boole
       <RunsOn agent={agent} />
       <Counted agent={agent} dialog="memory" icon={AiBrain01Icon} title="Memory" value={useMemoryCount(agent)} />
       <Counted agent={agent} dialog="skills" icon={BookOpen01Icon} title="Skills" value={useSkills(agent.id).data?.length} />
+      <RoutinesRow agent={agent} />
     </div>
     <BrowserRows agent={agent} watching={watching} />
     <ChannelRows agent={agent} />

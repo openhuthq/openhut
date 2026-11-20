@@ -10,11 +10,13 @@ import { connectionService, type AgentTool } from '../connections/connection-ser
 import { testAnthropic, testModel } from './test-model.ts'
 import { brokerService, upstreams } from './broker.ts'
 import { cardService } from '../cards/card-service.ts'
+import { routineService } from '../routines/routine-service.ts'
 
 const PER_AGENT = 8
 const MAX_BODY = 1 << 20
 const LIMITS = { requestTimeout: 60_000, headersTimeout: 10_000, connectionsCheckingInterval: 2_000 }
 const inFlight = new Map<string, number>()
+const RunReport = z.object({ picked: z.literal(true).optional(), said: z.string().max(200_000).optional() })
 const RenderCard = z.object({ text: z.string().max(200_000), channel: z.string().max(40), chatId: z.string().max(200).optional(), threadId: z.string().max(200).optional() })
 
 export const gatewayServer = {
@@ -47,6 +49,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const upstream = brokered && upstreams.get(brokered[1])
   if (brokered && upstream) return brokerService.forward({ agent, upstream, path: brokered[2] + url.search, req, res })
   if (path === '/api/v1/mcp') return serveMcp({ server: agentMcp(agent), req, res, body: req.method === 'POST' ? await readBody(req) : undefined })
+  if (path === '/routines/due' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: await routineService.due({ agentId: agent.id }) })
+  const run = /^\/routines\/runs\/(ru_[a-z0-9]+)$/.exec(path)
+  if (run && req.method === 'POST') return json(res, 200, await reportRun({ agentId: agent.id, runId: run[1], body: await readBody(req) }))
   if (path === '/cards/render' && req.method === 'POST') return json(res, 200, await cardService.render({ agent, ...renderRequest(await readBody(req)) }))
   if (path.startsWith('/test-llm/') && config.modelMode === 'test') return testModel({ path, body: await readBody(req), res })
   json(res, 404, errorBody({ status: 404, message: `No route ${path}.` }))
@@ -69,7 +74,30 @@ function agentMcp(agent: GatewayAgent): McpServer {
     const result = await connectionService.call({ agent, name, args, connectionId, reason: why })
     return text(result.text, result.isError)
   })
+  server.registerTool('schedule_routine', {
+    description: 'Use this whenever something needs a follow-up later: a promise you made, a reply you\'re waiting on, a date someone mentioned. Don\'t wait to be asked. Then tell the person in one line what you set up. Check list_routines first, and don\'t set up the same follow-up twice. Each run starts in the chat where you call this, with that chat\'s history.',
+    inputSchema: z.object({
+      name: z.string().min(1).max(80).describe('Starts with a verb, plain words: "Chase Acme on invoice #4471".'),
+      plan: z.string().min(1).max(2000).describe('Written to yourself: what to check, when to speak up, when to stop.'),
+      at: z.string().max(40).optional().describe('ISO time with an offset, for a one-time routine, like 2026-11-28T09:00:00+01:00.'),
+      cron: z.string().max(100).optional().describe('Minute hour day month weekday, in the owner\'s time zone, for a repeating one, like 0 10 * * 1-5. At most every 15 minutes.'),
+      until: z.string().max(40).optional().describe('ISO time; a repeating routine stops then. At most 90 days ahead, the default.'),
+    }).passthrough(),
+  }, async (input) => text(await routineService.schedule({ agentId: agent.id, input })))
+  server.registerTool('list_routines', { description: 'List your routines, one line each.' }, async () => text(await routineService.listForAgent({ agentId: agent.id })))
+  server.registerTool('cancel_routine', {
+    description: 'Use this when what you were following up on is done, or no longer needed. Tell the chat first: the routine leaves the owner\'s list.',
+    inputSchema: { id: z.string().max(40), reason: z.string().max(200).describe('Short, past tense, for the log: "Paid on Nov 26".') },
+  }, async ({ id, reason }) => text(await routineService.cancel({ agentId: agent.id, id, reason })))
   return server
+}
+
+async function reportRun({ agentId, runId, body }: { agentId: string; runId: string; body: unknown }): Promise<{ object: 'routine_run'; id: string }> {
+  const parsed = RunReport.safeParse(body)
+  if (!parsed.success || (!parsed.data.picked && parsed.data.said === undefined)) throw new HttpError(400, 'Send picked: true, or said with the reply.')
+  if (parsed.data.picked) await routineService.picked({ agentId, runId })
+  else await routineService.report({ agentId, runId, said: parsed.data.said ?? '' })
+  return { object: 'routine_run', id: runId }
 }
 
 export function toolList({ granted, app }: { granted: AgentTool[]; app: string | undefined }): string {

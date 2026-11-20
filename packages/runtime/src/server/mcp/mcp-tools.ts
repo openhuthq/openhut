@@ -4,6 +4,7 @@ import { UpdateAdminFields } from '@openhut/common/admin/admin.ts'
 import { UpdateMemory } from '@openhut/common/agents/memory.ts'
 import { ProviderId, UpdateProvider } from '@openhut/common/models/provider.ts'
 import { ListChannels } from '@openhut/common/channels/channel.ts'
+import { ListRoutines } from '@openhut/common/routines/routine.ts'
 import { CreateConnection, CreateConnectionAuthorization, ListConnectionEvents, ListConnectionTools, UpdateConnection } from '@openhut/common/connections/connection.ts'
 import { describeIssues } from '../platform/validation.ts'
 
@@ -53,6 +54,8 @@ export const MCP_TOOLS = [
     input: ListConnectionEvents,
     call: ({ api, input }) => api({ method: 'GET', url: `/api/connection-events${query(input)}` }),
   }),
+  tool({ name: 'list_routines', description: 'The routines an agent set up for itself: what it follows up on, when, and what it said last time.', input: ListRoutines, call: ({ api, input }) => api({ method: 'GET', url: `/api/routines${query(input)}` }) }),
+  tool({ name: 'stop_routine', description: 'Stop one of an agent\'s routines for good. To change one, tell the agent instead.', input: Id, call: ({ api, input }) => api({ method: 'DELETE', url: `/api/routines/${input.id}` }) }),
   tool({ name: 'get_memory', description: 'What an agent remembers: notes for itself and what it knows about people, with how full each is.', input: Id, call: ({ api, input }) => api({ method: 'GET', url: `/api/memories/${input.id}` }) }),
   tool({
     name: 'update_memory',

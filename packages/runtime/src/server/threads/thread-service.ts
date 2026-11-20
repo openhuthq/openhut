@@ -34,6 +34,10 @@ const MAX_NAME_BYTES = 255
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47])
 const JPEG = Buffer.from([0xff, 0xd8, 0xff])
 const MEDIA_TYPE = /^[\w.+-]+\/[\w.+-]+$/
+const busy = new Set<string>()
+const IDLE_POLL_MS = 1000
+const IDLE_WAIT_MS = 10 * 60_000
+const SILENT = /^\s*\[?(SILENT|NO[_ ]REPLY)\]?\s*$/i
 const CHAT_NOTE = `The person is talking to you in the OpenHut app. Files they attach are saved in ${UPLOADS} and listed at the end of their message. To give them a file, save it under ${AGENT_HOME} and write its full path in backticks, like \`${AGENT_HOME}/report.csv\`: the app shows it as a file they can download.`
 
 export const threadService = {
@@ -116,11 +120,14 @@ export const threadService = {
   },
 
   async chat({ actor, id, body, reply }: { actor: Caller; id: string; body: SendChat; reply: FastifyReply }): Promise<void> {
+    await idle(id)
     const row = await ownRow({ actor, id })
     const agent = await agentService.requireEditable({ actor, id: row.agent_id })
     const messages = nextMessages({ stored: messagesOf(row), body })
     await save({ id, messages })
     if (agent.wanted !== 'running') throw new HttpError(409, `${agent.name} is stopped. Start it and try again.`)
+    busy.add(id)
+    reply.raw.on('close', () => busy.delete(id))
     const lastCall = await db.selectFrom('connection_event').select((eb) => eb.fn.max('id').as('id')).where('agent_id', '=', agent.id).executeTakeFirst()
     const abort = new AbortController()
     reply.raw.on('close', () => abort.abort())
@@ -136,12 +143,35 @@ export const threadService = {
       onError: messageOf,
       onEnd: async ({ messages: answered, isAborted }) => {
         await save({ id, messages: [...messages, ...(z.safeParse(StoredMessages, answered.map(foldCard)).data ?? [])] })
+        busy.delete(id)
         log.info({ event: 'agent.chat', agent: agent.id, thread: id, ms: Date.now() - started, aborted: isAborted })
       },
     })
     reply.hijack()
     await pipeUIMessageStreamToResponse({ response: reply.raw, stream })
   },
+
+  async runRoutine({ agentId, threadId, text }: { agentId: string; threadId: string; text: string }): Promise<string> {
+    await idle(threadId)
+    busy.add(threadId)
+    try {
+      const agent = await findRow({ table: 'agent', id: agentId, missing: 'That agent doesn\'t exist.' })
+      let said = ''
+      await relay({ agent, session: `openhut-${threadId}`, message: { id: newId('msg'), role: 'user', parts: [{ type: 'text', text }] }, signal: AbortSignal.timeout(TURN_MS), writer: { write: (chunk) => { if (chunk.type === 'text-delta') said += chunk.delta } } })
+      if (!SILENT.test(said)) {
+        const row = await findRow({ table: 'thread', id: threadId, missing: 'That thread doesn\'t exist.' })
+        await save({ id: threadId, messages: [...messagesOf(row), { id: newId('msg'), role: 'assistant', parts: [{ type: 'text', text: said }] }] })
+      }
+      return said
+    } finally {
+      busy.delete(threadId)
+    }
+  },
+}
+
+async function idle(id: string): Promise<void> {
+  const until = Date.now() + IDLE_WAIT_MS
+  while (busy.has(id) && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, IDLE_POLL_MS))
 }
 
 async function callAgent({ agent, session, message, signal }: { agent: AgentRow; session: string; message: OpenAiMessage; signal: AbortSignal }): Promise<ReadableStream<Uint8Array>> {

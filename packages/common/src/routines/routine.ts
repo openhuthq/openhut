@@ -1,0 +1,29 @@
+import * as z from 'zod/mini'
+import { Timestamp } from '../api.ts'
+
+export const ROUTINE_NAME_MAX = 80
+export const ROUTINE_PLAN_MAX = 2000
+
+export const RunStatus = z.enum(['open', 'told', 'quiet', 'failed'])
+export type RunStatus = z.infer<typeof RunStatus>
+
+export const Routine = z.object({
+  id: z.string(),
+  object: z.literal('routine'),
+  agentId: z.string(),
+  name: z.string(),
+  plan: z.string(),
+  at: z.nullable(Timestamp),
+  cron: z.nullable(z.string()),
+  until: z.nullable(Timestamp),
+  platform: z.string(),
+  place: z.string(),
+  nextRunAt: z.nullable(Timestamp),
+  stopped: z.nullable(z.string()),
+  last: z.nullable(z.object({ status: RunStatus, at: Timestamp, text: z.nullable(z.string()) })),
+  createdAt: Timestamp,
+})
+export type Routine = z.infer<typeof Routine>
+
+export const ListRoutines = z.object({ agentId: z.string() })
+export type ListRoutines = z.infer<typeof ListRoutines>

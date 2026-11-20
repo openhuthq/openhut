@@ -841,6 +841,7 @@ async function toComputer({ req, id, path }) {
   const headers = new Headers(req.headers)
   for (const name of ['host', 'origin', 'cookie', 'connection']) headers.delete(name)
   headers.set('openhut-app-version', updating.ready?.version || app.getVersion())
+  headers.set('openhut-time-zone', Intl.DateTimeFormat().resolvedOptions().timeZone)
   const body = computer.key && !['GET', 'HEAD'].includes(req.method) ? await req.arrayBuffer() : req.body
   const res = await tunnels.reach({ computer, path: target, init: { method: req.method, headers, body } }).catch(() => undefined)
   if (!res) return refuse(502, `${computer.name} isn't answering. It may be off.`)
