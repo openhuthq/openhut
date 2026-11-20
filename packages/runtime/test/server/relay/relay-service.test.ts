@@ -102,9 +102,9 @@ test('a listed device\'s socket through the relay opens a real WebSocket on the 
   tunnel.close()
 })
 
-test('a key the list doesn\'t hold gets closed without an answer', async () => {
+test('a key the list doesn\'t hold is told it was removed', async () => {
   const tunnel = await connect({ relayUrl: relay.url, computer, key: generateKeyPair() })
-  await assert.rejects(tunnel.fetch('/caller'), (error: TunnelError) => error.type === 'closed')
+  await assert.rejects(tunnel.fetch('/caller'), (error: TunnelError) => error.type === 'removed')
 })
 
 test('another computer joins with a code: it is on the relay while the owner decides, the owner adds it, it gets the same signed list, and the phone reaches it through the relay', async () => {
@@ -126,7 +126,7 @@ test('another computer joins with a code: it is on the relay while the owner dec
     const second = { id: createHash('sha256').update(Buffer.from(joined.device!.key, 'hex')).digest('hex'), name: joined.device!.name, key: joined.device!.key }
     await waitFor(other.online)
     const early = await connect({ relayUrl: other.url, computer: second, key: phone })
-    await assert.rejects(early.fetch('/api/me'), (error: TunnelError) => error.type === 'closed')
+    await assert.rejects(early.fetch('/api/me'), (error: TunnelError) => error.type === 'removed')
     const list = signed({ version: 2, clients: [PHONE], computers: [{ id: computerId, name: 'This Mac', key: relayKeyHex }, second] })
     await accessService.put({ access: list, local: true })
     let theirs: unknown
