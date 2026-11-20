@@ -30,9 +30,11 @@ export function conf(id: string): string {
   return `${DATA}/agent-conf/${id}`
 }
 
-export function writeIfChanged(path: string, body: string): void {
-  if (!existsSync(path) || readFileSync(path, 'utf8') !== body) writeFileSync(path, body)
+export function writeIfChanged(path: string, body: string): boolean {
+  const changed = !existsSync(path) || readFileSync(path, 'utf8') !== body
+  if (changed) writeFileSync(path, body)
   own({ path, uid: 0, gid: AGENT_UID, mode: 0o640 })
+  return changed
 }
 
 export function own({ path, uid, gid, mode }: { path: string; uid: number; gid: number; mode: number }): void {

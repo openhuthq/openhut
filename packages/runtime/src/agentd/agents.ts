@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { browser, POLICY_FILE, policyOf } from './browser.ts'
 import { firewall } from './firewall.ts'
 import { AGENT_UID, AGENT_USER, ASSETS, box, conf, DATA, home, ID, IMAGE, own, RESOLV, TMP_MIB, writeIfChanged } from './host.ts'
@@ -32,7 +32,8 @@ const AGENT_ENV = {
 
 export const agents = {
   async apply({ id, net, files, browser: on, running, force }: Desired): Promise<{ applied: string; change: Change }> {
-    writeConf(id, files)
+    const soulChanged = writeConf(id, files)
+    if (soulChanged) await refreshPrompts({ id, net, browser: on })
     const made = await sandboxOf(id)
     if (!made || outdated({ made, browser: on })) {
       await firewall.require()
@@ -161,9 +162,16 @@ function writeConf(id: string, files: AgentFiles) {
   const dir = conf(id)
   mkdirSync(dir, { recursive: true })
   own({ path: dir, uid: 0, gid: AGENT_UID, mode: 0o750 })
-  for (const name of FILES) writeIfChanged(`${dir}/${name}`, files[name])
+  const changed = FILES.filter((name) => writeIfChanged(`${dir}/${name}`, files[name]))
   writeIfChanged(`${dir}/${CLAUDE_SETTINGS_FILE}`, CLAUDE_SETTINGS)
   writeIfChanged(`${dir}/${POLICY_FILE}`, policyOf(id))
+  return changed.includes('SOUL.md')
+}
+
+async function refreshPrompts({ id, net, browser: on }: { id: string; net: number; browser: boolean }) {
+  if (!existsSync(`${home(id)}/state.db`)) return
+  const { code, stdout } = await box.run({ spec: specOf({ id, net, browser: on }), command: ['sessions', 'refresh-prompts'] })
+  if (code !== 0) console.error(`${id}: hermes sessions refresh-prompts exited with ${code}: ${stdout.trim()}`)
 }
 
 function makeHome(id: string) {
