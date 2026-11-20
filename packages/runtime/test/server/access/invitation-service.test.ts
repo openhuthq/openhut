@@ -84,7 +84,7 @@ test('a joined device shows the same digits on both sides, can\'t reach a route 
   assert.deepEqual(await look(invitation.id), { object: 'invitation', id: invitation.id, status: 'joined', expiresAt: invitation.expiresAt, device: { name: 'Mo\'s iPhone', kind: 'client', key: toHex(key.publicKey) }, digits: tunnel.digits })
   assert.deepEqual(await messages(await join(invitation.secret)), [])
   assert.equal((await look(invitation.id)).device?.key, toHex(key.publicKey))
-  await assert.rejects(tunnel.fetch('/api/agents'), (error: TunnelError) => error.type === 'closed')
+  await assert.rejects(tunnel.fetch('/api/agents'), (error: TunnelError) => error.type === 'removed')
 })
 
 test('the owner declining tells the device and ends the session', async () => {
