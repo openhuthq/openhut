@@ -93,6 +93,7 @@ export const agents = {
   },
 
   async removeInside({ id, guest }: { id: string; guest: string }): Promise<void> {
+    if (box.name === 'native') return rmSync(`${home(id)}/${guest}`, { recursive: true, force: true })
     const spec: SandboxSpec = {
       id, image: IMAGE, cpus: 1, memoryMib: TMP_MIB, user: AGENT_USER, entrypoint: 'rm', command: [], env: {},
       mounts: [{ host: home(id), guest: '/opt/data', readOnly: false }], tmpfs: [], labels: {},

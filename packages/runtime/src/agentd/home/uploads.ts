@@ -1,4 +1,5 @@
 import { closeSync, constants, existsSync, fchownSync, fstatSync, lstatSync, mkdirSync, openSync, readlinkSync, readSync, unlinkSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { openInside } from './skills.ts'
 
 export const MAX_FILE_BYTES = 25 << 20
@@ -111,7 +112,7 @@ function withCwd<T>({ dir, expected, work }: { dir: string; expected: string; wo
   const before = process.cwd()
   try {
     process.chdir(dir)
-    if (process.cwd() !== expected) throw moved()
+    if (process.cwd() !== resolve(expected)) throw moved()
     return work('./')
   } finally {
     try {

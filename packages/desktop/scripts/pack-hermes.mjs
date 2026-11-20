@@ -10,9 +10,10 @@ const WIN = process.platform === 'win32'
 const PLATFORM = `${WIN ? 'win32' : process.platform}-${process.arch === 'arm64' ? 'arm64' : 'x64'}`
 const CACHE = join(import.meta.dirname, '../dist/native-cache')
 const SKIP = new Set(['tests', 'tests-js', 'website', 'apps', 'evals', 'web', 'ui-tui', '.github', 'docker', 'nix', 'contributors'])
-const LAUNCHER = `import os, sys
+const LAUNCHER = `import os, site, sys
 here = os.path.dirname(os.path.abspath(__file__))
-sys.path[:0] = [os.path.join(here, 'hermes'), os.path.join(here, 'site')]
+sys.path.insert(0, os.path.join(here, 'hermes'))
+site.addsitedir(os.path.join(here, 'site'))
 sys.argv[0] = 'hermes'
 from hermes_cli.main import main
 sys.exit(main())
@@ -25,6 +26,7 @@ export async function packHermes(out) {
   if (!existsSync(join(cache, 'hermes.py'))) await build(cache)
   rmSync(out, { recursive: true, force: true })
   cpSync(cache, out, { recursive: true, dereference: true })
+  writeFileSync(join(out, 'hermes.py'), LAUNCHER)
   if (!WIN) relink(out)
   if (!existsSync(join(out, 'hermes/scripts/whatsapp-bridge/node_modules'))) throw new Error(`the WhatsApp bridge is missing from ${out}; delete ${cache} and pack again`)
   await packNode(join(out, 'node'))
