@@ -30,7 +30,17 @@ const TELEMETRY_OF: Record<string, (event: AppEvent) => [string, Record<string, 
 const LISTENERS: ((event: AppEvent) => void)[] = [logEvent, queueTelemetry]
 
 export function emit(event: AppEvent): void {
-  for (const listener of LISTENERS) listener(event)
+  for (const listener of LISTENERS) {
+    try {
+      listener(event)
+    } catch (error) {
+      log.error({ event: 'event.listener_failed', name: event.name, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+}
+
+export function listen(listener: (event: AppEvent) => void): void {
+  LISTENERS.push(listener)
 }
 
 function logEvent({ name, actor, target, properties }: AppEvent): void {

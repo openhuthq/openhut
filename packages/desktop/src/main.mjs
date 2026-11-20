@@ -103,6 +103,8 @@ let setup
 let booted
 let fetching = null
 const updating = { checking: false, available: null, progress: 0, ready: null, error: null }
+const UPDATE_EVERY_MS = 30 * 60_000
+let updateCheck = { at: 0, quiet: false }
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 crashReporter.start({ uploadToServer: false })
 
@@ -773,8 +775,15 @@ function setUpdate(patch) {
 
 function checkForUpdate() {
   if (updating.ready) return updateState()
+  updateCheck = { at: Date.now(), quiet: false }
   setUpdate({ checking: true, error: null })
   return updater.autoUpdater.checkForUpdates().then(updateState, updateState)
+}
+
+function checkQuietly() {
+  if (updating.ready || updating.available || Date.now() - updateCheck.at < UPDATE_EVERY_MS) return
+  updateCheck = { at: Date.now(), quiet: true }
+  updater.autoUpdater.checkForUpdates().catch(() => undefined)
 }
 
 function update() {
@@ -785,6 +794,7 @@ function update() {
   if (TEST_HOME) auto.autoRunAppAfterInstall = false
   auto.on('error', (error) => {
     logger.error(`openhut: update failed: ${error?.stack ?? error}`)
+    if (updateCheck.quiet) return
     setUpdate({ checking: false, error: /code ?sign|signature|requirement/i.test(String(error?.message ?? error)) ? 'signature' : 'failed' })
   })
   auto.on('update-not-available', () => setUpdate({ checking: false, available: null }))
@@ -792,6 +802,7 @@ function update() {
   auto.on('update-available', (info) => {
     const version = String(info?.version ?? '')
     if (existsSync(SKIPPED) && readFileSync(SKIPPED, 'utf8').trim() === version) return setUpdate({ checking: false, available: null })
+    updateCheck.quiet = false
     setUpdate({ checking: false, available: version, progress: 0 })
     auto.downloadUpdate().catch(() => undefined)
   })
@@ -803,7 +814,8 @@ function update() {
   if (MAC) squirrel.on('update-downloaded', ready)
   else auto.on('update-downloaded', ready)
   checkForUpdate()
-  setInterval(checkForUpdate, 6 * 3600_000)
+  setInterval(checkQuietly, UPDATE_EVERY_MS)
+  app.on('browser-window-focus', checkQuietly)
 }
 
 function serve(req) {
@@ -861,7 +873,7 @@ async function relayLive({ port, path }) {
 }
 
 async function liveSocket(path) {
-  const [, id = LOCAL.id, target] = /^(?:\/c\/([\w-]+))?(\/api\/browsers\/[\w-]+\/live(?:\?fps=\d+)?)$/.exec(path) ?? []
+  const [, id = LOCAL.id, target] = /^(?:\/c\/([\w-]+))?(\/api\/(?:browsers\/[\w-]+\/live(?:\?fps=\d+)?|events))$/.exec(path) ?? []
   if (!target) return undefined
   if (id === LOCAL.id && !CONTAINER) return new WebSocket(`ws://localhost${target}`, { createConnection: () => connect(SERVER_SOCK) })
   const computer = id === LOCAL.id ? { ...LOCAL, keyFile: LOCAL_KEY } : storedComputers().find((each) => each.id === id)

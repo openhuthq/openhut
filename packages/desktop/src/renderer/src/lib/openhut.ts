@@ -43,6 +43,7 @@ const platform: Platform = {
 }
 
 export const openhut = createOpenHut(isPhone() ? phonePlatform : platform)
+export const storedComputers = (): Promise<StoredComputer[]> => (isPhone() ? phonePlatform : platform).store.computers()
 
 export const enrollments = {
   list: async (): Promise<Enrollment[]> => await bridge?.computers.enrollments() ?? [],

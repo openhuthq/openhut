@@ -16,6 +16,7 @@ import { settings } from '../platform/settings.ts'
 import { agentd, containerStates, features, type AgentFiles } from '../platform/agentd.ts'
 import { agentApiUrl } from '../platform/network.ts'
 import { log, emit } from '../platform/events.ts'
+import { liveService } from '../platform/live-service.ts'
 import { deleted } from '../platform/responses.ts'
 import { connectionService } from '../connections/connection-service.ts'
 import type { Caller } from '../team/identity.ts'
@@ -27,6 +28,7 @@ import { renderFiles, type RenderedChannel } from './hermes-files.ts'
 
 const MAX_AGENTS = 250
 const RECONCILE_MS = 30_000
+const HEALTH_MS = 5_000
 const PROBE_MS = 3_000
 const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
@@ -97,6 +99,7 @@ export const agentService = {
         throw err
       })
     }
+    emit({ name: 'agent.updated', actor, target: { type: 'agent', id, fields: Object.keys(patch) } })
     return agentService.get({ actor, id })
   },
 
@@ -224,7 +227,19 @@ export const agentService = {
     await applyRelease().catch((err: unknown) => log.error({ event: 'build.apply_failed', error: messageOf(err) }))
     await reconcileSafely()
     setInterval(() => void reconcileSafely(), RECONCILE_MS)
+    setInterval(() => void watchHealth().catch((err: unknown) => log.warn({ event: 'health.watch_failed', error: messageOf(err) })), HEALTH_MS)
   },
+}
+
+async function watchHealth(): Promise<void> {
+  if (!liveService.followed()) return healths.clear()
+  const states = await containerStates()
+  if (!states) return
+  for (const row of await db.selectFrom('agent').selectAll().execute()) {
+    const seen = `${statusOf(states[row.id])}:${(await healthOf({ row, state: states[row.id] })).health}`
+    if (healths.has(row.id) && healths.get(row.id) !== seen) emit({ name: 'agent.health_changed', target: { type: 'agent', id: row.id, health: seen } })
+    healths.set(row.id, seen)
+  }
 }
 
 const reconcileSafely = () => reconcile().catch((err: unknown) => log.error({ event: 'reconcile.failed', error: messageOf(err) }))
@@ -343,6 +358,7 @@ function statusOf(state: string | undefined): AgentStatus {
 }
 
 const probes = new Map<string, Probe>()
+const healths = new Map<string, string>()
 
 async function healthOf({ row, state }: { row: AgentRow; state: string | undefined }): Promise<Health> {
   if (state !== 'running') {

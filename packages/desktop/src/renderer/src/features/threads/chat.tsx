@@ -62,6 +62,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   const attachments = useAttachments({ agentId: agent.id, threadId: thread.id })
   const files = useMemo(() => ({ agentId: agent.id, threadId: thread.id, save: (path: string) => void saveFile({ agentId: agent.id, threadId: thread.id, path }).catch(toastError) }), [agent.id, thread.id])
   const busy = chat.status === 'submitted' || chat.status === 'streaming'
+  useEffect(() => { if (!busy) chat.setMessages(thread.messages.map(uiMessageOf)) }, [thread.messages])
   const send = (text: string) => {
     touch(thread)
     const files = attachments.items.flatMap(({ file }) => file ? [{ type: 'file' as const, mediaType: file.mediaType, filename: file.name, url: file.path }] : [])
