@@ -300,7 +300,8 @@ function stoppedOf(row: RoutineRow): string | null {
 }
 
 function runText(row: RoutineRow): string {
-  return `[Routine ${row.id} · run ${row.run_id}] Time for "${row.name}". Your plan: ${row.plan}\nIf there's nothing worth telling, reply [SILENT]. When this is done for good, say so in one line, then call cancel_routine.`
+  const end = row.cron ? ' When this is done for good, say so in one line, then call cancel_routine.' : ' This runs once and ends by itself.'
+  return `[Routine ${row.id} · run ${row.run_id}] Time for "${row.name}". Your plan: ${row.plan}\nIf there's nothing worth telling, reply [SILENT].${end}`
 }
 
 function originOf(row: RoutineRow): Stored {

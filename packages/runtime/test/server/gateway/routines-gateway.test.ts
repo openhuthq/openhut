@@ -54,6 +54,7 @@ test('a routine scheduled over MCP with the plugin\'s origin runs through due, p
   assert.equal(due.data.length, 1)
   assert.deepEqual(due.data[0].origin, origin)
   assert.match(due.data[0].text, /^\[Routine rt_[a-z0-9]+ · run ru_[a-z0-9]+\] Time for "Remind Mo"/)
+  assert.match(due.data[0].text, /then call cancel_routine\.$/)
   const runUrl = `${base}/routines/runs/${due.data[0].runId}`
   assert.equal((await fetch(runUrl, { method: 'POST', headers, body: JSON.stringify({}) })).status, 400)
   assert.equal((await fetch(runUrl, { method: 'POST', headers, body: JSON.stringify({ picked: true }) })).status, 200)

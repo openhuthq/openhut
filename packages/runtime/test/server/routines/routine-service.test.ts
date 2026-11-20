@@ -56,6 +56,8 @@ test('a dashboard routine runs in its thread, says what it found, and a once rou
   assert.equal(runs.length, 1)
   assert.equal(runs[0].threadId, 'th_rtnchat1')
   assert.match(runs[0].text, /^\[Routine rt_[a-z0-9]+ · run ru_[a-z0-9]+\] Time for "Check Acme paid"\. Your plan: Look at Stripe\./)
+  assert.match(runs[0].text, /This runs once and ends by itself\.$/)
+  assert.doesNotMatch(runs[0].text, /cancel_routine/)
   assert.equal(await rowOf(id), undefined)
 })
 
