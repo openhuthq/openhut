@@ -35,7 +35,7 @@ export const Agent = z.object({
 export type Agent = z.infer<typeof Agent>
 
 const AgentName = z.string().check(z.minLength(1), z.maxLength(40))
-const Face = z.string().check(z.maxLength(2000))
+const Face = z.string().check(z.maxLength(60_000))
 
 export const CreateAgent = z.object({
   name: AgentName,
