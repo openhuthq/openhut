@@ -36,7 +36,6 @@ export function Panel({ agent, naming, watching }: { agent: Agent; naming: boole
     <div className={cn('flex items-center gap-3', DRAG)}>
       {agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="relative shrink-0">
         <Face agent={agent} size={48} tile />
-        <span className="absolute -right-1 -bottom-1 grid size-[22px] place-items-center rounded-full bg-card text-ink shadow-[0_0_0_1px_var(--hair),0_1px_3px_oklch(0%_0_0/.18)]"><I icon={PencilEdit02Icon} size={12} /></span>
       </a> : <Face agent={agent} size={48} tile />}
       <PanelTitle agent={agent} naming={naming} />
     </div>
