@@ -32,6 +32,7 @@ export const channelService = {
     if (pairing.status === 'error') throw new HttpError(502, `WhatsApp linking stopped (${pairing.error}). Close this and link again.`)
     if (pairing.status !== 'linked') return channelOf({ row, qr: pairing.qr ?? null })
     const linked = await db.updateTable('channel').set({ status: 'connected', account: pairing.phone ? `+${pairing.phone}` : null }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
+    emit({ name: 'channel.linked', actor, target: { type: 'channel', id, kind: linked.kind, agentId: linked.agent_id } })
     return channelOf({ row: linked, qr: null })
   },
 

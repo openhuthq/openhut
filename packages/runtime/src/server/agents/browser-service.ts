@@ -3,6 +3,7 @@ import type { FastifyRequest } from 'fastify'
 import { liveBrowser } from '../platform/agentd.ts'
 import { emit } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
+import { sameOrigin } from '../platform/live-service.ts'
 import { who } from '../team/identity.ts'
 import { agentService } from './agent-service.ts'
 
@@ -29,14 +30,4 @@ export const browserService = {
       socket.close(4000 + (error instanceof HttpError ? error.status : 500), messageOf(error).slice(0, MAX_REASON))
     }
   },
-}
-
-function sameOrigin(req: FastifyRequest): boolean {
-  const origin = req.headers.origin
-  if (!origin) return true
-  try {
-    return new URL(origin).host === req.headers.host
-  } catch {
-    return false
-  }
 }

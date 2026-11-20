@@ -45,7 +45,7 @@ const CONNECTION_LIST = List(Connection)
 const AGENT_DELETED = Deleted('agent')
 const PROVIDER_LIST = List(Provider)
 const SUBSCRIPTIONS = ['claude'] as const satisfies Subscription[]
-const POLL_MS = 5000
+const POLL_MS = 60_000
 
 export class RequestError extends Error {
   readonly status: number

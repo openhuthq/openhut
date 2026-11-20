@@ -8,7 +8,7 @@ import type { Deleted } from '@openhut/common/api.ts'
 import { agentd } from '../platform/agentd.ts'
 import { db, findRow } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
-import { log } from '../platform/events.ts'
+import { emit, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { agentApiUrl } from '../platform/network.ts'
 import { deleted } from '../platform/responses.ts'
@@ -52,12 +52,14 @@ export const threadService = {
     const existing = await db.selectFrom('thread').selectAll().where('agent_id', '=', agentId).where('person_id', '=', actor.id).orderBy('created_at').executeTakeFirst()
     if (existing) return threadOf(existing)
     const row = await db.insertInto('thread').values({ id: newId('th'), agent_id: agentId, person_id: actor.id, title: agent.name }).returningAll().executeTakeFirstOrThrow()
+    emit({ name: 'thread.created', actor, target: { type: 'thread', id: row.id, agentId } })
     return threadOf(row)
   },
 
   async delete({ actor, id, uploads }: { actor: Caller; id: string; uploads: string[] }): Promise<Deleted<'thread'>> {
     const row = await ownRow({ actor, id })
     await db.deleteFrom('thread').where('id', '=', id).execute()
+    emit({ name: 'thread.deleted', actor, target: { type: 'thread', id, agentId: row.agent_id } })
     const sent = messagesOf(row).flatMap(filesOf).map((file) => file.url)
     const names = [...new Set([...sent, ...uploads].flatMap((path) => uploadName(path) ?? []))]
     for (let start = 0; start < names.length; start += MAX_REMOVED) {
@@ -310,6 +312,7 @@ async function callsSince({ agentId, after }: { agentId: string; after: string }
 
 async function save({ id, messages }: { id: string; messages: ChatMessage[] }): Promise<void> {
   await db.updateTable('thread').set({ messages: JSON.stringify(messages), updated_at: new Date() }).where('id', '=', id).execute()
+  emit({ name: 'thread.updated', target: { type: 'thread', id } })
 }
 
 async function ownRow({ actor, id }: { actor: Caller; id: string }): Promise<ThreadRow> {

@@ -1,5 +1,5 @@
-import { Capacitor } from '@capacitor/core'
 import { useEffect, useRef, useState, type RefObject } from 'react'
+import { openChannel, type Channel } from '../../lib/live-socket.ts'
 
 const RETRY_MS = 3000
 const ACTIONS_SHOWN = 12
@@ -10,8 +10,6 @@ const KEY_CODES: Record<string, number> = {
 }
 const CTRL_OR_META = 2 | 4
 
-type Channel = { send: (line: string) => void; close: () => void }
-type Bridge = { browserLive?: (path: string, onLine: (line: string) => void, onClose: (code: number, reason: string) => void) => Channel }
 export type Mouse = { action: keyof typeof MOUSE_EVENTS; x: number; y: number; button?: 'left' | 'middle' | 'right'; deltaX?: number; deltaY?: number; modifiers?: number }
 export type Key = { action: 'down' | 'up'; key: string; code?: string; modifiers?: number }
 export type Action = { action: string; url: string; at: number }
@@ -105,23 +103,6 @@ export function keyInput(event: Key) {
     type: 'input_keyboard', eventType: event.action === 'down' ? 'keyDown' : 'keyUp', key: event.key, code: event.code ?? '', text,
     windowsVirtualKeyCode: code, modifiers: event.modifiers ?? 0,
   }
-}
-
-function openChannel({ computer, path, onLine, onClose }: { computer: string; path: string; onLine: (line: string) => void; onClose: (code: number, reason: string) => void }): Channel {
-  const bridge: Bridge | undefined = Reflect.get(window, 'openhut')
-  if (bridge?.browserLive) return bridge.browserLive(`/c/${computer}${path}`, onLine, onClose)
-  if (Capacitor.isNativePlatform()) {
-    const opening = import('@/lib/phone').then(({ phoneSocket }) => phoneSocket({ computer, path }))
-    opening.then((socket) => {
-      socket.onmessage = ({ data }) => onLine(String(data))
-      socket.onclose = ({ code, reason }) => onClose(code, reason)
-    }, () => onClose(1006, ''))
-    return { send: (line) => void opening.then((socket) => socket.send(line), () => undefined), close: () => void opening.then((socket) => socket.close(), () => undefined) }
-  }
-  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${path}`)
-  ws.onmessage = ({ data }) => onLine(String(data))
-  ws.onclose = ({ code, reason }) => onClose(code, reason)
-  return { send: (line) => ws.readyState === WebSocket.OPEN && ws.send(line), close: () => ws.close() }
 }
 
 export function viewWidthOf(metadata: unknown): number | undefined {
