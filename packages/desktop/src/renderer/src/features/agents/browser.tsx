@@ -56,7 +56,8 @@ export function BrowserDialog({ agent, onClose }: { agent: Agent; onClose: () =>
   }, [mine])
   const point = (event: MouseEvent<HTMLElement> | WheelEvent<HTMLElement>) => {
     const box = (canvas.current ?? event.currentTarget).getBoundingClientRect()
-    const scale = canvas.current?.width ? canvas.current.width / box.width : 1
+    const width = Number(canvas.current?.dataset.viewWidth) || canvas.current?.width
+    const scale = width ? width / box.width : 1
     return { x: Math.max(0, Math.round((event.clientX - box.left) * scale)), y: Math.max(0, Math.round((event.clientY - box.top) * scale)), left: event.clientX - box.left, top: event.clientY - box.top }
   }
   const touched = () => {

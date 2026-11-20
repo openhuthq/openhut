@@ -42,7 +42,7 @@ export function useLive({ computer, path, canvas }: { computer: string; path: st
           const message = parse(line)
           if (message?.type === 'frame' && typeof message.data === 'string') {
             const ack = () => open.send(JSON.stringify({ type: 'ack', seq: message.seq }))
-            void paint({ canvas: canvas.current, data: message.data }).finally(ack)
+            void paint({ canvas: canvas.current, data: message.data, viewWidth: viewWidthOf(message.metadata) }).finally(ack)
             frames.current += 1
             setState('live')
             setError(undefined)
@@ -124,8 +124,14 @@ function openChannel({ computer, path, onLine, onClose }: { computer: string; pa
   return { send: (line) => ws.readyState === WebSocket.OPEN && ws.send(line), close: () => ws.close() }
 }
 
-async function paint({ canvas, data }: { canvas: HTMLCanvasElement | null; data: string }) {
+export function viewWidthOf(metadata: unknown): number | undefined {
+  const width = typeof metadata === 'object' && metadata !== null ? Reflect.get(metadata, 'deviceWidth') : undefined
+  return typeof width === 'number' && width > 0 ? width : undefined
+}
+
+async function paint({ canvas, data, viewWidth }: { canvas: HTMLCanvasElement | null; data: string; viewWidth?: number }) {
   if (!canvas) return
+  if (viewWidth) canvas.dataset.viewWidth = String(viewWidth)
   const bitmap = await createImageBitmap(new Blob([Uint8Array.from(atob(data), (char) => char.charCodeAt(0))], { type: 'image/jpeg' }))
   if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) Object.assign(canvas, { width: bitmap.width, height: bitmap.height })
   canvas.getContext('2d')?.drawImage(bitmap, 0, 0)
