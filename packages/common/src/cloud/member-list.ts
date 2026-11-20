@@ -45,11 +45,12 @@ async function follows({ previous, next }: { previous: Link; next: Link }): Prom
   const a = previous.body
   const b = next.body
   if (b.workspace !== a.workspace || b.version !== a.version + 1 || b.previous !== (await anchorOf(previous.list))) return false
-  if (!wellFormed(b) || !removesExactly({ previous: a, next: b })) return false
+  if (!wellFormed(b)) return false
   const by = next.list.by
   const invite = a.invites.find((each) => each.key === by)
+  const signer = invite ? undefined : a.members.find((member) => member.devices.includes(by))
+  if (!tracksRemoved({ previous: a, next: b, owner: signer?.role === 'owner' })) return false
   if (invite) return joins({ previous: a, next: b, invite })
-  const signer = a.members.find((member) => member.devices.includes(by))
   if (!signer) return false
   if (signer.role === 'owner') return true
   if (signer.role === 'admin') return same(ownerOf(a), ownerOf(b))
@@ -71,10 +72,13 @@ function changesOnlySelf({ previous, next, signer }: { previous: MemberListBody;
   return same(others(previous), others(next)) && same(previous.invites, next.invites)
 }
 
-function removesExactly({ previous, next }: { previous: MemberListBody; next: MemberListBody }): boolean {
+function tracksRemoved({ previous, next, owner }: { previous: MemberListBody; next: MemberListBody; owner: boolean }): boolean {
   const dropped = (keysOf: (body: MemberListBody) => string[]) => keysOf(previous).filter((key) => !keysOf(next).includes(key))
-  const expected = new Set([...previous.removed, ...dropped(devicesOf), ...dropped((body) => body.invites.map((each) => each.key))])
-  return next.removed.length === expected.size && next.removed.every((key) => expected.has(key))
+  const gone = [...dropped(devicesOf), ...dropped((body) => body.invites.map((each) => each.key))]
+  const allowed = new Set([...previous.removed, ...gone])
+  const removed = new Set(next.removed)
+  if (!gone.every((key) => removed.has(key)) || !next.removed.every((key) => allowed.has(key))) return false
+  return owner || removed.size === allowed.size
 }
 
 function wellFormed(body: MemberListBody): boolean {

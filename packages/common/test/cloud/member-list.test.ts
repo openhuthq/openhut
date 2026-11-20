@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { MemberListBody } from '../../src/cloud/cloud.ts'
 import { anchorOf, check, signList } from '../../src/cloud/member-list.ts'
-import { fromBase64, identity, sign, toBase64 } from '../../src/vault/vault.ts'
+import { fromBase64, identity, newKey, sign, toBase64 } from '../../src/vault/vault.ts'
 
 const [moMac, saraMac, saraPhone, anaMac, invite, eve] = await Promise.all(Array.from({ length: 6 }, () => identity()))
 const key = (who: { publicKey: Uint8Array }) => toBase64(who.publicKey)
@@ -164,4 +164,32 @@ test('a used or cancelled invite key goes on removed, so nobody can add it as a 
   assert.equal(await check({ anchor, chain: [v1, joined, await v3(reissued, moMac)] }), null)
   assert.equal(await check({ anchor, chain: [v1, await next({ ...first, invites: [] })] }), null)
   assert.ok(await check({ anchor, chain: [v1, await next({ ...first, invites: [], removed: [key(invite)] })] }))
+})
+
+test('after an admin fills removed to its cap, only the owner may prune it, and then removes a device', async () => {
+  const adminMac = await identity()
+  const admin = { email: 'al@example.com', role: 'admin' as const, devices: [key(adminMac)] }
+  const base = { ...first, members: [...withSara([key(saraMac), key(saraPhone)]), admin] }
+  const junk = Array.from({ length: 250 }, (_, i) => ({ email: `f${i}@x.io`, role: 'member' as const, devices: Array.from({ length: 20 }, () => toBase64(newKey(64))) }))
+  const chain = [v1, await next(base)]
+  const add = async (body: Omit<MemberListBody, 'version' | 'previous'>, signer: typeof moMac) => {
+    const list = await signList({ signer, body: { ...body, version: chain.length + 1, previous: await anchorOf(chain[chain.length - 1]) } })
+    return { list, ok: await check({ anchor, chain: [...chain, list] }) }
+  }
+  chain.push((await add({ ...base, members: [...base.members, ...junk] }, adminMac)).list)
+  const churned = await add({ ...base, removed: junk.flatMap((member) => member.devices) }, adminMac)
+  const full = churned.ok?.removed ?? []
+  assert.equal(full.length, 5000)
+  chain.push(churned.list)
+  const withoutPhone = { ...base, members: [...withSara([key(saraMac)]), admin] }
+  assert.equal((await add({ ...withoutPhone, removed: [...full, key(saraPhone)] }, moMac)).ok, null)
+  for (const signer of [adminMac, saraMac]) assert.equal((await add({ ...base, removed: full.slice(1) }, signer)).ok, null)
+  assert.equal((await add({ ...base, members: [...withSara([key(saraMac), key(saraPhone), full[0]]), admin], removed: full.slice(1) }, saraMac)).ok, null)
+  assert.equal((await add({ ...base, removed: [...full.slice(1), key(eve)] }, moMac)).ok, null)
+  assert.equal((await add({ ...withoutPhone, removed: [] }, moMac)).ok, null)
+  const pruned = await add({ ...withoutPhone, removed: [key(saraPhone)] }, moMac)
+  assert.deepEqual(pruned.ok?.removed, [key(saraPhone)])
+  chain.push(pruned.list)
+  assert.ok((await add({ ...withoutPhone, members: [first.members[0], admin], removed: [key(saraPhone), key(saraMac)] }, adminMac)).ok)
+  assert.ok((await add({ ...withoutPhone, members: [...withSara([key(saraMac), full[0]]), admin], removed: [key(saraPhone)] }, saraMac)).ok)
 })
