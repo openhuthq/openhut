@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Provider, ProviderModel } from '@openhut/common/models/provider.ts'
-import { automatic, consequence, context, count, plural, describe, foundNotice, glyphOf, matches, nameOf, prices, updatedAgo } from '../../../src/features/models/labels.ts'
+import { consequence, context, count, plural, describe, foundNotice, glyphOf, matches, nameOf, prices, updatedAgo } from '../../../src/features/models/labels.ts'
 
 const model = (id: string, patch: Partial<ProviderModel> = {}): ProviderModel => ({ id, name: id, on: true, tier: 'big', note: null, contextLength: null, inputPrice: null, outputPrice: null, ...patch })
 const provider = (id: Provider['id'], models: ProviderModel[], kind: Provider['kind'] = 'key'): Provider => ({ id, object: 'provider', kind, name: id === 'openrouter' ? 'OpenRouter' : 'Claude subscription', connected: true, keyHint: null, updatedAt: null, models })
@@ -17,10 +17,8 @@ test('a key model says its context and prices; a subscription model says its not
   assert.equal(describe({ provider: provider('claude', [], 'subscription'), model: model('opus', { note: 'Most capable' }) }), 'Most capable')
 })
 
-test('Automatic is the first switched-on fast model of the same provider, else the main model', () => {
-  const providers = [provider('openrouter', [model('a/big'), model('b/off-mini', { tier: 'fast', on: false }), model('c/flash', { tier: 'fast', name: 'Flash' })])]
-  assert.deepEqual(automatic({ providers, key: 'openrouter:a/big' }), { key: 'openrouter:c/flash', name: 'Flash', same: false })
-  assert.deepEqual(automatic({ providers: [provider('openrouter', [model('a/big')])], key: 'openrouter:a/big' }), { key: 'openrouter:a/big', name: 'a/big', same: true })
+test('an unknown model is named by its id', () => {
+  const providers = [provider('openrouter', [model('a/big')])]
   assert.equal(nameOf({ providers, key: 'xai:unknown' }), 'unknown')
 })
 
@@ -45,11 +43,10 @@ test('counts carry thousands separators', () => {
   assert.deepEqual([count(1500), plural({ count: 1500, one: 'model', many: 'models' }), plural({ count: 1, one: 'model', many: 'models' })], ['1,500', '1,500 models', '1 model'])
 })
 
-test('disconnecting says who stops answering and who only loses a helper', () => {
-  const agent = (name: string, model: string, review: string | null = null) => ({ name, model, helperModels: { compress: null, title: null, review } })
-  const agents = [agent('Juniper', 'openrouter:a/b'), agent('Ops', 'claude:haiku', 'openrouter:a/b'), agent('Scout', 'claude:opus', 'openrouter:c/d'), agent('Pepper', 'claude:opus'), agent('Maple', 'openrouter:x/y', 'openrouter:a/b')]
-  assert.equal(consequence({ agents, id: 'openrouter' }), 'Juniper and Maple use its models, and stop answering until you pick others. Ops and Scout use it as a helper model, and that part stops working until you pick another.')
-  assert.equal(consequence({ agents: [agent('Ops', 'claude:haiku', 'openrouter:a/b')], id: 'openrouter' }), 'Ops uses it as a helper model, and that part stops working until you pick another.')
+test('disconnecting says who stops answering', () => {
+  const agent = (name: string, model: string) => ({ name, model })
+  const agents = [agent('Juniper', 'openrouter:a/b'), agent('Pepper', 'claude:opus'), agent('Maple', 'openrouter:x/y')]
+  assert.equal(consequence({ agents, id: 'openrouter' }), 'Juniper and Maple use its models, and stop answering until you pick others.')
   assert.equal(consequence({ agents: [agent('Juniper', 'openrouter:a/b')], id: 'openrouter' }), 'Juniper uses its models, and stops answering until you pick others.')
   assert.equal(consequence({ agents, id: 'xai' }), 'No agent uses its models yet.')
   assert.equal(consequence({ agents: [agent('Old', 'sonnet')], id: 'claude' }), 'Old uses its models, and stops answering until you pick others.')

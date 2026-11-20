@@ -85,7 +85,7 @@ test('an agent moves sealed with its channels, chats, home and the grants this c
   await db.deleteFrom('connection').where('id', '=', 'cn_githubxx').execute()
 
   const bundle = JSON.parse(openSealed(sealed))
-  assert.deepEqual([bundle.agent.model, 'fallbackModel' in bundle.agent, bundle.agent.helperModels.title], ['claude:haiku', false, 'claude:sonnet'])
+  assert.deepEqual([bundle.agent.model, 'fallbackModel' in bundle.agent, 'helperModels' in bundle.agent], ['claude:haiku', false, false])
   const older = sealFor({ publicKey: transferPublicKey, text: JSON.stringify({ ...bundle, agent: { ...bundle.agent, model: 'haiku', size: 'large' } }) })
   const moved = await agentService.importSealed({ actor, sealed: older })
   assert.deepEqual([moved.agent.id, moved.agent.name, moved.agent.model, moved.agent.wanted], [id, 'Mover', 'claude:haiku', 'stopped'])
@@ -105,7 +105,7 @@ test('an agent moves sealed with its channels, chats, home and the grants this c
   assert.deepEqual([arrived.agent.model, 'fallbackModel' in arrived.agent], ['codex:gpt-5.5', false])
 })
 
-test('model choices: only a connected, switched-on model is accepted, and a helper merges', async () => {
+test('model choices: only a connected, switched-on model is accepted', async () => {
   const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
   const model = (id: string, on: boolean) => ({ id, name: id, on, tier: 'big' as const, note: null, contextLength: null, inputPrice: null, outputPrice: null })
   await settings.setProviderKey('openai', 'sk-test-key-for-choices')
@@ -113,10 +113,8 @@ test('model choices: only a connected, switched-on model is accepted, and a help
   const id = 'ag_tokentst'
   await assert.rejects(agentService.update({ actor, id, patch: { model: 'xai:grok-5' } }), { status: 409, param: 'model', message: /isn't connected on this computer/ })
   await assert.rejects(agentService.update({ actor, id, patch: { model: 'openai:o5' } }), { status: 409, message: /switched off/ })
-  const picked = await agentService.update({ actor, id, patch: { model: 'openai:gpt-5.5', helperModels: { title: 'openai:gpt-5.5-mini' } } })
-  assert.deepEqual([picked.model, picked.helperModels], ['openai:gpt-5.5', { compress: null, title: 'openai:gpt-5.5-mini', review: null }])
-  const more = await agentService.update({ actor, id, patch: { helperModels: { review: 'claude:opus', title: null } } })
-  assert.deepEqual(more.helperModels, { compress: null, title: null, review: 'claude:opus' })
+  const picked = await agentService.update({ actor, id, patch: { model: 'openai:gpt-5.5' } })
+  assert.equal(picked.model, 'openai:gpt-5.5')
 })
 
 test('an older database is migrated: bare model ids get their provider, the model check is gone', async () => {

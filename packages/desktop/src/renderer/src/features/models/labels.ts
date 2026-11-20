@@ -1,4 +1,4 @@
-import { fastModelOf, modelKey, splitModelKey, type Provider, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
+import { splitModelKey, type Provider, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
 import type { BrandName } from '@/components/brand-icons'
 
 const LABS: Record<string, BrandName> = { anthropic: 'anthropic', openai: 'openai', google: 'gemini', 'x-ai': 'xai', deepseek: 'deepseek', qwen: 'qwen', moonshotai: 'kimi', 'z-ai': 'zai', mistralai: 'mistral', meta: 'meta' }
@@ -42,13 +42,6 @@ export function nameOf({ providers, key }: { providers: Provider[] | undefined; 
   return model?.name ?? split?.model ?? key
 }
 
-export function automatic({ providers, key }: { providers: Provider[] | undefined; key: string }) {
-  const { split, provider } = find({ providers, key })
-  const fast = provider && fastModelOf(provider.models)
-  if (!split || !fast || !provider) return { key, name: nameOf({ providers, key }), same: true }
-  return { key: modelKey({ provider: provider.id, model: fast.id }), name: fast.name, same: false }
-}
-
 export function matches({ model, query }: { model: ProviderModel; query: string }) {
   const needle = query.trim().toLowerCase()
   return !needle || `${model.name} ${model.id}`.toLowerCase().includes(needle)
@@ -63,18 +56,14 @@ export function plural({ count: value, one, many }: { count: number; one: string
   return `${count(value)} ${value === 1 ? one : many}`
 }
 
-type Using = { name: string; model: string; helperModels: Record<string, string | null> }
+type Using = { name: string; model: string }
 
 export function consequence({ agents, id }: { agents: Using[]; id: ProviderId }) {
   const uses = (key: string | null | undefined) => !!key && splitModelKey(key)?.provider === id
   const verb = (names: string[]) => names.length === 1 ? 'uses' : 'use'
   const main = agents.filter((agent) => uses(agent.model)).map((agent) => agent.name)
-  const side = agents.filter((agent) => !uses(agent.model) && Object.values(agent.helperModels).some(uses)).map((agent) => agent.name)
-  const parts = [
-    main.length && `${LIST.format(main)} ${verb(main)} its models, and stop${main.length === 1 ? 's' : ''} answering until you pick others.`,
-    side.length && `${LIST.format(side)} ${verb(side)} it as a helper model, and that part stops working until you pick another.`,
-  ].filter(Boolean)
-  return parts.length ? parts.join(' ') : 'No agent uses its models yet.'
+  if (!main.length) return 'No agent uses its models yet.'
+  return `${LIST.format(main)} ${verb(main)} its models, and stop${main.length === 1 ? 's' : ''} answering until you pick others.`
 }
 
 export function foundNotice({ provider }: { provider: Provider | undefined }) {

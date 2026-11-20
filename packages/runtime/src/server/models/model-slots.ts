@@ -1,25 +1,13 @@
-import { fastModelOf, splitModelKey, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
-import type { HelperModels, HelperSlot } from '@openhut/common/agents/agent.ts'
+import { splitModelKey, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
 
 const DEFAULT_SLOT: Slot = { provider: 'claude', model: 'sonnet', contextLength: null }
 
 export type Slot = { provider: ProviderId; model: string; contextLength: number | null }
-export type Slots = { primary: Slot; helpers: Record<HelperSlot | 'approval', Slot> }
+export type Slots = { primary: Slot }
 export type Catalog = (provider: ProviderId) => ProviderModel[]
 
-export function resolveSlots({ model, helpers, catalog }: { model: string; helpers: Partial<HelperModels>; catalog: Catalog }): Slots {
-  const primary = slotOf({ key: model, catalog }) ?? DEFAULT_SLOT
-  const automatic = autoFor({ primary, catalog })
-  const helper = (key: string | null | undefined) => (key ? slotOf({ key, catalog }) : undefined) ?? automatic
-  return {
-    primary,
-    helpers: { compress: helper(helpers.compress), title: helper(helpers.title), review: helper(helpers.review), approval: automatic },
-  }
-}
-
-export function autoFor({ primary, catalog }: { primary: Slot; catalog: Catalog }): Slot {
-  const fast = fastModelOf(catalog(primary.provider))
-  return fast ? { provider: primary.provider, model: fast.id, contextLength: fast.contextLength } : primary
+export function resolveSlots({ model, catalog }: { model: string; catalog: Catalog }): Slots {
+  return { primary: slotOf({ key: model, catalog }) ?? DEFAULT_SLOT }
 }
 
 function slotOf({ key, catalog }: { key: string; catalog: Catalog }): Slot | undefined {

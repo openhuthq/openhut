@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { Selectable } from 'kysely'
 import * as z from 'zod/mini'
-import { HelperModels, type Agent, type CreateAgent, type AgentHealth, type AgentImport, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
+import { type Agent, type CreateAgent, type AgentHealth, type AgentImport, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import type { Export } from '@openhut/common/admin/admin.ts'
 import type { Deleted } from '@openhut/common/api.ts'
 import { ChannelKind } from '@openhut/common/channels/channel.ts'
@@ -30,11 +30,10 @@ const RECONCILE_MS = 30_000
 const PROBE_MS = 3_000
 const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
-const RENDERED = ['instructions', 'model', 'helperModels', 'codeExecution', 'browser'] as const
+const RENDERED = ['instructions', 'model', 'codeExecution', 'browser'] as const
 const DEFAULT_MODEL = 'claude:sonnet'
-const NO_HELPERS = { compress: null, title: null, review: null }
 const Moved = z.object({
-  agent: z.object({ id: z.string().check(z.regex(/^ag_[a-z0-9]{8}$/)), name: z.string(), instructions: z.string(), model: z.string(), helperModels: z.optional(HelperModels), codeExecution: z.boolean(), browser: z.boolean() }),
+  agent: z.object({ id: z.string().check(z.regex(/^ag_[a-z0-9]{8}$/)), name: z.string(), instructions: z.string(), model: z.string(), codeExecution: z.boolean(), browser: z.boolean() }),
   channels: z.array(z.object({ kind: ChannelKind, status: z.enum(['connected', 'linking']), account: z.nullable(z.string()), ownerAddress: z.string(), open: z.boolean(), allowed: z.string(), secrets: z.string() })),
   threads: z.array(z.object({ title: z.string(), messages: z.string(), createdAt: z.string(), updatedAt: z.string() })),
   grants: z.array(z.object({ kind: ConnectionKind, name: z.string() })),
@@ -62,12 +61,12 @@ export const agentService = {
     return row
   },
 
-  async create({ actor, name, instructions, model, helperModels = {}, face }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'helperModels' | 'face'>): Promise<Agent> {
+  async create({ actor, name, instructions, model, face }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'face'>): Promise<Agent> {
     const clean = cleanName(name)
-    requireChoices({ model, helperModels })
+    requireModel(model)
     const net = await freeNet()
     const row = await db.insertInto('agent').values({
-      id: newId('ag'), name: clean, owner_id: actor.id, model: model ?? DEFAULT_MODEL, helper_models: JSON.stringify({ ...NO_HELPERS, ...helperModels }), net, channel_key: seal(randomBytes(24).toString('hex')), face,
+      id: newId('ag'), name: clean, owner_id: actor.id, model: model ?? DEFAULT_MODEL, net, channel_key: seal(randomBytes(24).toString('hex')), face,
       instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000),
     }).returningAll().executeTakeFirstOrThrow().catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'Someone created an agent at the same moment. Try again.') : err })
     try {
@@ -83,11 +82,11 @@ export const agentService = {
 
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateAgent }): Promise<Agent> {
     const before = await agentService.requireEditable({ actor, id })
-    requireChoices({ model: changed(patch.model, before.model), helperModels: patch.helperModels })
+    requireModel(changed(patch.model, before.model))
     if (patch.browser && !(await features()).browser) throw new HttpError(409, 'This computer can\'t give agents a browser. Run the agent on a Linux computer you added to use one.', { param: 'browser' })
-    const { codeExecution, browser, helperModels, ...fields } = patch
+    const { codeExecution, browser, ...fields } = patch
     await db.updateTable('agent').set({
-      ...fields, helper_models: helperModels && JSON.stringify({ ...helpersOf(before), ...helperModels }),
+      ...fields,
       code_execution: codeExecution, web_browser: browser, name: patch.name === undefined ? undefined : cleanName(patch.name),
     }).where('id', '=', id).execute()
     if (patch.wanted || RENDERED.some((field) => patch[field] !== undefined)) {
@@ -119,7 +118,7 @@ export const agentService = {
       agentd.exportHome({ id }),
     ])
     const moved: Moved = {
-      agent: { id, name: row.name, instructions: row.instructions, model: row.model, helperModels: helpersOf(row), codeExecution: row.code_execution, browser: row.web_browser },
+      agent: { id, name: row.name, instructions: row.instructions, model: row.model, codeExecution: row.code_execution, browser: row.web_browser },
       channels: channels.map((each) => ({ kind: each.kind, status: each.status, account: each.account, ownerAddress: each.owner_address, open: each.open, allowed: each.allowed, secrets: each.secrets && unseal(each.secrets) })),
       threads: threads.map((each) => ({ title: each.title, messages: each.messages, createdAt: new Date(each.created_at).toISOString(), updatedAt: new Date(each.updated_at).toISOString() })),
       grants,
@@ -137,7 +136,7 @@ export const agentService = {
     if (!model) throw new HttpError(400, 'This export has a model this OpenHut doesn\'t know. Update both computers and try again.', { param: 'sealed' })
     if (await db.selectFrom('agent').select('id').where('id', '=', agent.id).executeTakeFirst()) throw new HttpError(409, `${agent.name} is already on this computer.`)
     const row = await db.insertInto('agent').values({
-      id: agent.id, name: agent.name, owner_id: actor.id, instructions: agent.instructions, model: `${model.provider}:${model.model}`, helper_models: JSON.stringify({ ...NO_HELPERS, ...agent.helperModels }), net: await freeNet(), channel_key: seal(randomBytes(24).toString('hex')),
+      id: agent.id, name: agent.name, owner_id: actor.id, instructions: agent.instructions, model: `${model.provider}:${model.model}`, net: await freeNet(), channel_key: seal(randomBytes(24).toString('hex')),
       code_execution: agent.codeExecution, web_browser: agent.browser, wanted: 'stopped',
     }).returningAll().executeTakeFirstOrThrow()
     try {
@@ -247,18 +246,12 @@ async function freeNet(): Promise<number> {
   return net
 }
 
-function helpersOf(row: AgentRow): HelperModels {
-  const parsed = z.safeParse(HelperModels, { ...NO_HELPERS, ...JSON.parse(row.helper_models) })
-  return parsed.success ? parsed.data : NO_HELPERS
-}
-
 function changed<T>(next: T | undefined, current: T): T | undefined {
   return next === current ? undefined : next
 }
 
-function requireChoices({ model, helperModels }: { model?: string; helperModels?: Partial<HelperModels> }): void {
+function requireModel(model: string | undefined): void {
   if (model) providerService.requireUsable({ key: model, param: 'model' })
-  for (const [slot, key] of Object.entries(helperModels ?? {})) if (key) providerService.requireUsable({ key, param: `helperModels.${slot}` })
 }
 
 function sealedFor({ publicKey, text }: { publicKey: string; text: string }): string {
@@ -300,7 +293,7 @@ async function tellAgent(id: string): Promise<void> {
 async function filesOf(row: AgentRow): Promise<AgentFiles> {
   const owner = await db.selectFrom('person').select('email').where('id', '=', row.owner_id).executeTakeFirstOrThrow()
   const channels = await db.selectFrom('channel').selectAll().where('agent_id', '=', row.id).orderBy('kind').execute()
-  const slots = resolveSlots({ model: row.model, helpers: helpersOf(row), catalog: providerService.catalog })
+  const slots = resolveSlots({ model: row.model, catalog: providerService.catalog })
   return renderFiles({
     agent: { ...row, slots }, ownerName: owner.email, token: agentToken({ id: row.id, epoch: row.token_epoch }), channelKey: unseal(row.channel_key),
     channels: channels.map(renderedChannel), connections: await connectionService.reachable({ agent: row }),
@@ -335,7 +328,7 @@ async function applyRelease(): Promise<void> {
 
 function agentOf({ row, ownerName, state, health, editable }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean }): Agent {
   return {
-    id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, helperModels: helpersOf(row), wanted: row.wanted,
+    id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, wanted: row.wanted,
     status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, browser: row.web_browser, face: row.face, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
   }
 }
