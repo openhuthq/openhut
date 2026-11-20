@@ -1,5 +1,6 @@
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiMagicIcon, LaptopIcon, PlugSocketIcon, Settings02Icon } from '@hugeicons/core-free-icons'
+import { AiMagicIcon, CloudIcon, LaptopIcon, PlugSocketIcon, Settings02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
+import { CloudDevices, CloudSettings, PeopleSettings } from '@/features/cloud/cloud'
 import { ComputersSettings } from '@/features/settings/computers'
 import { DevicesSettings } from '@/features/settings/devices'
 import { GeneralSettings } from '@/features/settings/general'
@@ -12,7 +13,9 @@ import { cn } from '@/lib/utils'
 
 const TABS: [string, string, IconSvgElement, string][] = [
   ['general', 'General', Settings02Icon, 'text-hue-slate'],
-  ['devices', 'Your devices', LaptopIcon, 'text-hue-blue'],
+  ['cloud', 'Cloud', CloudIcon, 'text-hue-blue'],
+  ['people', 'People', UserGroupIcon, 'text-hue-amber'],
+  ['devices', 'Devices', LaptopIcon, 'text-hue-blue'],
   ['models', 'Models', AiMagicIcon, 'text-hue-violet'],
   ['mcp', 'MCP', PlugSocketIcon, 'text-hue-teal'],
 ]
@@ -40,6 +43,8 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
 
 function Tab({ tab }: { tab: string }) {
   switch (tab) {
+    case 'cloud': return <CloudSettings />
+    case 'people': return <PeopleSettings />
     case 'devices': return <YourDevices />
     case 'models': return <ModelsSettings />
     case 'mcp': return <McpSettings />
@@ -51,6 +56,6 @@ function YourDevices() {
   const step = (useOpen() ?? '').split(':')[0]
   return <>
     <ComputersSettings />
-    {!['tailscale', 'ssh', 'others'].includes(step) && <DevicesSettings />}
+    {!['tailscale', 'ssh', 'others'].includes(step) && <><DevicesSettings /><CloudDevices /></>}
   </>
 }

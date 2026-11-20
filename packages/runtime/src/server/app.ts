@@ -27,6 +27,8 @@ import { meController } from './team/team-controller.ts'
 import { accessController } from './access/access-controller.ts'
 import { invitationController } from './access/invitation-controller.ts'
 import { relayService } from './relay/relay-service.ts'
+import { cloudController } from './cloud/cloud-controller.ts'
+import { cloudService } from './cloud/cloud-service.ts'
 import { settings } from './platform/settings.ts'
 import { listenLocally } from './team/identity.ts'
 
@@ -69,6 +71,7 @@ await app.register(providerController, { prefix: '/api/providers' })
 await app.register(adminController, { prefix: '/api/admin' })
 await app.register(eventsController, { prefix: '/api/events' })
 await app.register(updateController, { prefix: '/api/updates' })
+await app.register(cloudController, { prefix: '/api/cloud' })
 await app.register(mcpController, { prefix: '/mcp' })
 
 app.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody({ status: 404, message: `There's no ${req.method} ${req.url.split('?')[0]}.` })))
@@ -94,3 +97,4 @@ await gatewayServer.start().catch(async (err: unknown) => {
 await agentService.boot()
 routineService.runDashboardWith((input) => threadService.runRoutine(input))
 routineService.start()
+cloudService.connect()

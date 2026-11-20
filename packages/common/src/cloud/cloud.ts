@@ -148,3 +148,58 @@ export function parseJson(value: string): unknown {
     return null
   }
 }
+
+export const PROOFS = ['session', 'refresh', 'delete', 'restore'] as const
+export type Proof = (typeof PROOFS)[number]
+
+export function proofBytes({ proof, parts }: { proof: Proof; parts: string[] }): Bytes {
+  return concat([new TextEncoder().encode(`openhut/${proof}\0`), ...parts.map(field)])
+}
+
+export async function signProof({ signer, proof, parts }: { signer: Identity; proof: Proof; parts: string[] }): Promise<string> {
+  return toBase64(await sign({ secret: signer.secret, bytes: proofBytes({ proof, parts }) }))
+}
+
+export async function checkProof({ device, proof, parts, signature }: { device: string; proof: Proof; parts: string[]; signature: string }): Promise<boolean> {
+  if (!DeviceKey.safeParse(device).success || !Signature.safeParse(signature).success) return false
+  return check({ publicKey: fromBase64(device), bytes: proofBytes({ proof, parts }), signature: fromBase64(signature) })
+}
+
+export const CreateCloudSession = z.discriminatedUnion('grantType', [
+  z.object({
+    grantType: z.literal('authorization_code'), authorization: z.string().check(z.maxLength(2000)), code: z.string().check(z.maxLength(2000)),
+    codeVerifier: z.string().check(z.maxLength(200)), deviceKey: DeviceKey, signature: Signature,
+  }),
+  z.object({ grantType: z.literal('refresh'), session: z.string().check(z.maxLength(2000)), signedAt: z.number().check(z.int()), signature: Signature }),
+])
+export type CreateCloudSession = z.infer<typeof CreateCloudSession>
+
+export const CloudSession = z.object({ object: z.literal('cloud_session'), token: z.string(), sub: z.string(), email: Email, expiresAt: Timestamp })
+export type CloudSession = z.infer<typeof CloudSession>
+
+export const SignedRequest = z.object({ signedAt: z.number().check(z.int()), signature: Signature })
+export type SignedRequest = z.infer<typeof SignedRequest>
+
+export const CLOUD_STATUSES = ['off', 'on', 'offline'] as const
+export const Cloud = z.object({
+  object: z.literal('cloud'),
+  status: z.enum(CLOUD_STATUSES),
+  email: z.nullable(Email),
+  device: z.nullable(DeviceKey),
+  workspace: z.nullable(z.object({ id: Id, version: Version, members: z.array(Member) })),
+  keyStore: z.enum(['keychain', 'file']),
+  kit: z.nullable(z.object({ savedAt: Timestamp })),
+})
+export type Cloud = z.infer<typeof Cloud>
+
+export const CreateCloudAuthorization = z.object({ returnTo: z.optional(z.string().check(z.maxLength(100))) })
+export type CreateCloudAuthorization = z.infer<typeof CreateCloudAuthorization>
+
+export const CloudAuthorization = z.object({ object: z.literal('cloud_authorization'), authorizationUrl: z.string() })
+export type CloudAuthorization = z.infer<typeof CloudAuthorization>
+
+export const RecoveryKit = z.object({ object: z.literal('recovery_kit'), words: z.array(z.string()), ask: z.array(z.number().check(z.int())) })
+export type RecoveryKit = z.infer<typeof RecoveryKit>
+
+export const ConfirmRecoveryKit = z.object({ words: z.array(z.string().check(z.maxLength(40))).check(z.maxLength(12)) })
+export type ConfirmRecoveryKit = z.infer<typeof ConfirmRecoveryKit>
