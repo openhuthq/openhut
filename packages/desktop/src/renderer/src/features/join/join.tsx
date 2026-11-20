@@ -99,7 +99,7 @@ export function Join({ removed, link, paired }: { removed: boolean; link: { code
       <Center>
         <div className="relative"><span className="absolute inset-0 scale-150 rounded-md bg-[radial-gradient(circle,#f7c94855,transparent_65%)]" /><Hut className="relative size-28" /></div>
         <h1 className="m-0 text-[24px]/[1.25] font-semibold">Your agents, on your phone</h1>
-        <p className="m-0 max-w-[300px] text-[15px]/[1.5] text-body">Open OpenHut on your Mac, go to Settings → Your devices → Add a phone, and scan the code.</p>
+        <p className="m-0 max-w-[300px] text-[15px]/[1.5] text-body">Open OpenHut on your Mac, go to Settings → Devices → Add a phone, and scan the code.</p>
       </Center>
       {error && <ErrorNote className="mx-6 mb-4" message={error} />}
       <Foot><Button variant="primary" size="lg" className="w-full justify-center gap-2" onClick={scanCode}><I icon={QrCodeScanIcon} size={17} />Scan the code</Button></Foot>
