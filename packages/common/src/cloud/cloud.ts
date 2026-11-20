@@ -1,6 +1,6 @@
 import * as z from 'zod/mini'
 import { Timestamp } from '../api.ts'
-import { check, concat, field, fromBase64, isLocked, LETTER_PURPOSES, sign, toBase64, type Bytes, type Identity } from '../vault/vault.ts'
+import { check, concat, field, fromBase64, isLocked, LETTER_PURPOSES, sign, toBase64, type Bytes, type Identity, type Pairing } from '../vault/vault.ts'
 
 const base64 = /^[A-Za-z0-9_-]*$/
 
@@ -124,3 +124,27 @@ export type KeyBox = z.infer<typeof KeyBox>
 
 export const Here = z.object({ object: z.literal('here'), from: DeviceKey, body: Locked })
 export type Here = z.infer<typeof Here>
+
+export const PairingQr = z.object({
+  openhut: z.literal('pair'),
+  secret: z.string().check(z.regex(/^[0-9A-HJKMNP-TV-Z]{20}$/)),
+  fingerprint: canonical({ length: 43, message: 'Send the fingerprint as 32 bytes of base64url.' }),
+  hint: z.string().check(z.maxLength(320)),
+})
+
+export function qrPayload(pairing: Pairing): string {
+  return JSON.stringify({ openhut: 'pair', secret: pairing.secret, fingerprint: pairing.fingerprint, hint: pairing.hint })
+}
+
+export function fromQr(payload: string): Pairing | null {
+  const parsed = PairingQr.safeParse(parseJson(payload))
+  return parsed.success ? { secret: parsed.data.secret, fingerprint: parsed.data.fingerprint, hint: parsed.data.hint } : null
+}
+
+export function parseJson(value: string): unknown {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}

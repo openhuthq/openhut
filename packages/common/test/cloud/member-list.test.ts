@@ -66,7 +66,7 @@ test('a member may add her own device but not change anyone else', async () => {
 })
 
 test('an invite key may add only its own person, with its role, and is used up', async () => {
-  const joined = { ...first, members: [...first.members, { email: 'ana@example.com', role: 'member' as const, devices: [key(anaMac)] }], invites: [] }
+  const joined = { ...first, members: [...first.members, { email: 'ana@example.com', role: 'member' as const, devices: [key(anaMac)] }], invites: [], removed: [key(invite)] }
   assert.ok(await check({ anchor, chain: [v1, await next(joined, invite)] }))
   const asAdmin = { ...joined, members: [...first.members, { email: 'ana@example.com', role: 'admin' as const, devices: [key(anaMac)] }] }
   assert.equal(await check({ anchor, chain: [v1, await next(asAdmin, invite)] }), null)
@@ -130,7 +130,7 @@ test('one signing key cannot sit under two members or two invites', async () => 
 })
 
 test('the invite key cannot join as the new device itself', async () => {
-  const joined = { ...first, members: [...first.members, { ...ana, devices: [key(invite)] }], invites: [] }
+  const joined = { ...first, members: [...first.members, { ...ana, devices: [key(invite)] }], invites: [], removed: [key(invite)] }
   assert.equal(await check({ anchor, chain: [v1, await next(joined, invite)] }), null)
   assert.ok(await check({ anchor, chain: [v1, await next({ ...joined, members: [...first.members, ana] }, invite)] }))
 })
@@ -150,4 +150,18 @@ test('signed member-list bytes must be the canonical JSON of the list, signed un
   }
   const unlabelled = { ...v1, signature: toBase64(await sign({ secret: moMac.secret, bytes: fromBase64(v1.bytes) })) }
   assert.equal(await check({ anchor, chain: [unlabelled] }), null)
+})
+
+test('a used or cancelled invite key goes on removed, so nobody can add it as a device or issue it again', async () => {
+  const joined = await next({ ...first, members: [...first.members, ana], invites: [], removed: [key(invite)] }, invite)
+  assert.ok(await check({ anchor, chain: [v1, joined] }))
+  assert.equal(await check({ anchor, chain: [v1, await next({ ...first, members: [...first.members, ana], invites: [] }, invite)] }), null)
+  const previous = await anchorOf(joined)
+  const v3 = (body: Omit<MemberListBody, 'version' | 'previous'>, signer: typeof moMac) => signList({ signer, body: { ...body, version: 3, previous } })
+  const asDevice = { ...first, members: [...first.members, { ...ana, devices: [key(anaMac), key(invite)] }], invites: [], removed: [key(invite)] }
+  assert.equal(await check({ anchor, chain: [v1, joined, await v3(asDevice, anaMac)] }), null)
+  const reissued = { ...first, members: [...first.members, ana], invites: [{ email: 'bo@example.com', role: 'member' as const, key: key(invite) }], removed: [key(invite)] }
+  assert.equal(await check({ anchor, chain: [v1, joined, await v3(reissued, moMac)] }), null)
+  assert.equal(await check({ anchor, chain: [v1, await next({ ...first, invites: [] })] }), null)
+  assert.ok(await check({ anchor, chain: [v1, await next({ ...first, invites: [], removed: [key(invite)] })] }))
 })
