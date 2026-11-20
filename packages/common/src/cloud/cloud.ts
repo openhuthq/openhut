@@ -1,12 +1,17 @@
 import * as z from 'zod/mini'
 import { Timestamp } from '../api.ts'
-import { fromBase64, isLocked } from '../vault/vault.ts'
+import { check, concat, field, fromBase64, isLocked, LETTER_PURPOSES, sign, toBase64, type Bytes, type Identity } from '../vault/vault.ts'
 
 const base64 = /^[A-Za-z0-9_-]*$/
 
 function bytesOf(value: string): Uint8Array | null {
   if (!base64.test(value) || value.length % 4 === 1) return null
-  return fromBase64(value)
+  const bytes = fromBase64(value)
+  return toBase64(bytes) === value ? bytes : null
+}
+
+function canonical({ length, message }: { length: number; message: string }) {
+  return z.string().check(z.length(length), z.refine((value) => bytesOf(value) !== null, message))
 }
 
 export const Base64 = z.string().check(z.maxLength(1_000_000), z.refine((value) => bytesOf(value) !== null, 'Send bytes as unpadded base64url.'))
@@ -17,8 +22,9 @@ export const Locked = z.string().check(
     return bytes !== null && isLocked(bytes)
   }, 'Send the body locked by the vault, as base64url.'),
 )
-export const DeviceKey = z.string().check(z.regex(/^[A-Za-z0-9_-]{86}$/, 'Send a device key as 64 bytes of base64url.'))
-const Signature = z.string().check(z.regex(/^[A-Za-z0-9_-]{86}$/, 'Send an Ed25519 signature as 64 bytes of base64url.'))
+export const DeviceKey = canonical({ length: 86, message: 'Send a device key as 64 bytes of base64url.' })
+const Signature = canonical({ length: 86, message: 'Send an Ed25519 signature as 64 bytes of base64url.' })
+const Version = z.number().check(z.int(), z.minimum(1), z.maximum(0xffffffff))
 const Id = z.string().check(z.regex(/^[A-Za-z0-9_-]{8,64}$/, 'Send an id of 8 to 64 base64url characters.'))
 const Email = z.string().check(z.maxLength(320), z.regex(/^[^\sA-Z@]+@[^\sA-Z@]+$/, 'Send the email in lowercase.'))
 
@@ -29,7 +35,7 @@ export type RecordKind = z.infer<typeof RecordKind>
 export const Record = z.object({
   id: Id,
   object: z.literal('record'),
-  ver: z.number().check(z.int(), z.minimum(1)),
+  ver: Version,
   seq: z.number().check(z.int(), z.minimum(0)),
   deleted: z.boolean(),
   body: Locked,
@@ -38,6 +44,26 @@ export type Record = z.infer<typeof Record>
 
 export const Signed = z.object({ bytes: Base64, by: DeviceKey, signature: Signature })
 export type Signed = z.infer<typeof Signed>
+
+export function recordBind({ workspace, id, kind }: { workspace: string; id: string; kind: RecordKind }): string {
+  return `workspace/${workspace}/record/${id}/${kind}`
+}
+
+export async function signRecord({ signer, bind, bytes }: { signer: Identity; bind: string; bytes: Bytes }): Promise<Signed> {
+  const signature = await sign({ secret: signer.secret, bytes: recordMessage({ bind, bytes }) })
+  return { bytes: toBase64(bytes), by: toBase64(signer.publicKey), signature: toBase64(signature) }
+}
+
+export async function checkRecord({ signed, bind }: { signed: Signed; bind: string }): Promise<Bytes | null> {
+  if (!Signed.safeParse(signed).success) return null
+  const bytes = fromBase64(signed.bytes)
+  const valid = await check({ publicKey: fromBase64(signed.by), bytes: recordMessage({ bind, bytes }), signature: fromBase64(signed.signature) })
+  return valid ? bytes : null
+}
+
+function recordMessage({ bind, bytes }: { bind: string; bytes: Bytes }): Bytes {
+  return concat([new TextEncoder().encode('openhut/record\0'), field(bind), bytes])
+}
 
 export const RecordBody = z.object({
   change: Id,
@@ -53,6 +79,7 @@ export const Letter = z.object({
   to: DeviceKey,
   from: DeviceKey,
   workspace: Id,
+  purpose: z.enum(LETTER_PURPOSES),
   body: Locked,
 })
 export type Letter = z.infer<typeof Letter>
@@ -69,7 +96,7 @@ export type PendingInvite = z.infer<typeof PendingInvite>
 
 export const MemberListBody = z.object({
   workspace: Id,
-  version: z.number().check(z.int(), z.minimum(1)),
+  version: Version,
   previous: z.nullable(Base64),
   members: z.array(Member).check(z.minLength(1), z.maxLength(500)),
   invites: z.array(PendingInvite).check(z.maxLength(100)),

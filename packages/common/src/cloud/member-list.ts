@@ -1,11 +1,13 @@
 import { MemberList, MemberListBody, type Member } from './cloud.ts'
-import { check as checkSignature, fromBase64, sha256, sign, toBase64, type Identity } from '../vault/vault.ts'
+import { check as checkSignature, concat, fromBase64, parseJson, sha256, sign, toBase64, type Bytes, type Identity } from '../vault/vault.ts'
 
 type Link = { list: MemberList; body: MemberListBody }
 
+const LABEL = new TextEncoder().encode('openhut/member-list\0')
+
 export async function signList({ signer, body }: { signer: Identity; body: MemberListBody }): Promise<MemberList> {
-  const bytes = new TextEncoder().encode(JSON.stringify(body))
-  const signature = await sign({ secret: signer.secret, bytes })
+  const bytes = new TextEncoder().encode(JSON.stringify(MemberListBody.safeParse(body).data ?? body))
+  const signature = await sign({ secret: signer.secret, bytes: labelled(bytes) })
   return { object: 'member_list', bytes: toBase64(bytes), by: toBase64(signer.publicKey), signature: toBase64(signature) }
 }
 
@@ -28,18 +30,22 @@ export async function check({ anchor, chain }: { anchor: string; chain: MemberLi
 async function open(list: MemberList): Promise<Link | null> {
   if (!MemberList.safeParse(list).success) return null
   const bytes = fromBase64(list.bytes)
-  const signed = await checkSignature({ publicKey: fromBase64(list.by), bytes, signature: fromBase64(list.signature) })
+  const signed = await checkSignature({ publicKey: fromBase64(list.by), bytes: labelled(bytes), signature: fromBase64(list.signature) })
   if (!signed) return null
-  const json = parseJson(new TextDecoder().decode(bytes))
-  const body = MemberListBody.safeParse(json)
-  return body.success ? { list, body: body.data } : null
+  const text = new TextDecoder().decode(bytes)
+  const body = MemberListBody.safeParse(parseJson(text))
+  return body.success && JSON.stringify(body.data) === text ? { list, body: body.data } : null
+}
+
+function labelled(bytes: Bytes): Bytes {
+  return concat([LABEL, bytes])
 }
 
 async function follows({ previous, next }: { previous: Link; next: Link }): Promise<boolean> {
   const a = previous.body
   const b = next.body
   if (b.workspace !== a.workspace || b.version !== a.version + 1 || b.previous !== (await anchorOf(previous.list))) return false
-  if (!wellFormed(b) || !keepsRemoved({ previous: a, next: b })) return false
+  if (!wellFormed(b) || !removesExactly({ previous: a, next: b })) return false
   const by = next.list.by
   const invite = a.invites.find((each) => each.key === by)
   if (invite) return joins({ previous: a, next: b, invite })
@@ -53,7 +59,7 @@ async function follows({ previous, next }: { previous: Link; next: Link }): Prom
 function joins({ previous, next, invite }: { previous: MemberListBody; next: MemberListBody; invite: MemberListBody['invites'][number] }): boolean {
   const joined = next.members.find((member) => member.email === invite.email)
   if (!joined || previous.members.some((member) => member.email === invite.email)) return false
-  if (joined.role !== invite.role || joined.devices.length !== 1) return false
+  if (joined.role !== invite.role || joined.devices.length !== 1 || half(joined.devices[0]) === half(invite.key)) return false
   const others = next.members.filter((member) => member !== joined)
   return same(others, previous.members) && same(next.invites, previous.invites.filter((each) => each !== invite))
 }
@@ -65,18 +71,28 @@ function changesOnlySelf({ previous, next, signer }: { previous: MemberListBody;
   return same(others(previous), others(next)) && same(previous.invites, next.invites)
 }
 
-function keepsRemoved({ previous, next }: { previous: MemberListBody; next: MemberListBody }): boolean {
-  const before = previous.members.flatMap((member) => member.devices)
-  const after = new Set(next.members.flatMap((member) => member.devices))
-  const removed = new Set(next.removed)
-  return previous.removed.every((key) => removed.has(key)) && before.every((key) => after.has(key) || removed.has(key)) && [...after].every((key) => !removed.has(key))
+function removesExactly({ previous, next }: { previous: MemberListBody; next: MemberListBody }): boolean {
+  const after = devicesOf(next)
+  const expected = new Set([...previous.removed, ...devicesOf(previous).filter((key) => !after.includes(key))])
+  return next.removed.length === expected.size && next.removed.every((key) => expected.has(key))
 }
 
 function wellFormed(body: MemberListBody): boolean {
-  const emails = body.members.map((member) => member.email)
-  const devices = body.members.flatMap((member) => member.devices)
+  const keys = [...devicesOf(body), ...body.invites.map((each) => each.key), ...body.removed].map(half)
   const owners = body.members.filter((member) => member.role === 'owner')
-  return owners.length === 1 && new Set(emails).size === emails.length && new Set(devices).size === devices.length
+  return owners.length === 1 && unique(body.members.map((member) => member.email)) && unique(keys)
+}
+
+function devicesOf(body: MemberListBody): string[] {
+  return body.members.flatMap((member) => member.devices)
+}
+
+function half(key: string): string {
+  return toBase64(fromBase64(key).subarray(0, 32))
+}
+
+function unique(values: string[]): boolean {
+  return new Set(values).size === values.length
 }
 
 function ownerOf(body: MemberListBody): Member | undefined {
@@ -85,12 +101,4 @@ function ownerOf(body: MemberListBody): Member | undefined {
 
 function same(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
-}
-
-function parseJson(value: string): unknown {
-  try {
-    return JSON.parse(value)
-  } catch {
-    return null
-  }
 }
