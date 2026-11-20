@@ -44,6 +44,7 @@ export const config = {
   claudeBin: process.env.OPENHUT_CLAUDE ?? fileURLToPath(new URL('../../../../../bin/claude', import.meta.url)),
   claudeHostBin: process.env.OPENHUT_CLAUDE_HOST ?? fileURLToPath(new URL(`../../../../../bin/${process.platform === 'darwin' ? 'claude-darwin' : 'claude'}`, import.meta.url)),
   claudeVersion: process.env.OPENHUT_CLAUDE_VERSION,
+  hermesRuntime: process.env.AGENTD_HERMES,
   started: Math.floor(Date.now() / 1000),
 }
 delete process.env.OPENHUT_SECRET

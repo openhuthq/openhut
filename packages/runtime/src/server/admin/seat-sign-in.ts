@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { SeatSignIn } from '@openhut/common/admin/admin.ts'
@@ -17,6 +18,20 @@ const LINK = /\x1b\]8;[^;]*;(https:\/\/claude\.(?:com|ai)\/[^\x1b\x07\s]*oauth\/
 const TOKEN = /sk-ant-oat01-[\w-]{20,}/
 const FAILED = /OAuth error[^\n]*|wasn't accepted[^\n]*/i
 const MAX_OPEN = 3
+const WIN_PTY = `import os, sys, threading
+sys.path.insert(0, os.environ['OPENHUT_SITE'])
+from winpty import PtyProcess
+p = PtyProcess.spawn([os.environ['OPENHUT_CLAUDE_BIN'], 'setup-token'], dimensions=(60, 4000))
+def feed():
+    while d := os.read(0, 4096):
+        p.write(d.decode('utf-8', 'replace'))
+threading.Thread(target=feed, daemon=True).start()
+while True:
+    try: d = p.read(4096)
+    except EOFError: break
+    sys.stdout.buffer.write(d.encode('utf-8'))
+    sys.stdout.buffer.flush()
+`
 const MAC_PTY = 'log_user 1; set timeout -1; fconfigure stdin -blocking 0 -translation binary; spawn -noecho sh -c $env(OPENHUT_RUN); fileevent stdin readable { set d [read stdin]; if {[eof stdin]} { exit 0 }; send -- $d }; expect eof'
 const open = new Map<string, OpenSignIn>()
 
@@ -26,14 +41,16 @@ export const seatSignIn = {
     const dir = mkdtempSync(join(tmpdir(), 'openhut-seat-'))
     const run = `stty cols 4000 rows 60; exec '${config.claudeHostBin}' setup-token`
     const env = { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: dir, CLAUDE_CONFIG_DIR: dir, BROWSER: '/bin/true', TERM: 'xterm-256color', DISABLE_AUTOUPDATER: '1' }
-    const proc = process.platform === 'darwin'
-      ? spawn('/usr/bin/expect', ['-c', MAC_PTY], { cwd: dir, env: { ...env, OPENHUT_RUN: run } })
-      : spawn('script', ['-qfec', run, '/dev/null'], { cwd: dir, env })
+    const proc = terminal({ dir, env, run })
     for (const id of [...open.keys()].slice(0, Math.max(0, open.size - MAX_OPEN + 1))) close(id)
     const signIn: OpenSignIn = { id: newToken('seat'), proc, dir, out: '', state: '' }
     proc.stdout.on('data', (chunk: Buffer) => { signIn.out += chunk.toString('utf8') })
     proc.stderr.on('data', (chunk: Buffer) => { signIn.out += chunk.toString('utf8') })
     proc.on('exit', () => close(signIn.id))
+    proc.on('error', (error) => {
+      signIn.out += `\n${error.message}`
+      close(signIn.id)
+    })
     open.set(signIn.id, signIn)
     setTimeout(() => close(signIn.id), OPEN_MS).unref()
     const url = await waitFor({ signIn, ms: PROMPT_MS, find: (out) => signInLink(out) })
@@ -64,6 +81,14 @@ export const seatSignIn = {
     const reason = FAILED.exec(said)?.[0]?.replace(/Press Enter to retry\.?/, '').trim()
     throw new HttpError(400, reason ? `Claude said: ${reason} Press Set up again for a new code.` : 'Claude didn\'t answer within 2 minutes. Press Set up again for a new code.', { param: 'code' })
   },
+}
+
+function terminal({ dir, env, run }: { dir: string; env: Record<string, string>; run: string }): ChildProcessWithoutNullStreams {
+  if (process.platform === 'darwin') return spawn('/usr/bin/expect', ['-c', MAC_PTY], { cwd: dir, env: { ...env, OPENHUT_RUN: run } })
+  if (process.platform !== 'win32') return spawn('script', ['-qfec', run, '/dev/null'], { cwd: dir, env })
+  if (!config.hermesRuntime) throw new HttpError(503, 'This build doesn\'t say where its agent runtime is, so it can\'t run the Claude sign-in.')
+  const system = { SystemRoot: process.env.SystemRoot ?? 'C:\\Windows', USERPROFILE: dir, APPDATA: dir, LOCALAPPDATA: dir, TEMP: dir, TMP: dir }
+  return spawn(join(config.hermesRuntime, 'python', 'python.exe'), ['-s', '-c', WIN_PTY], { cwd: dir, env: { ...env, ...system, OPENHUT_SITE: join(config.hermesRuntime, 'site'), OPENHUT_CLAUDE_BIN: config.claudeHostBin } })
 }
 
 async function hostClaude(): Promise<void> {
@@ -111,12 +136,14 @@ function waitFor({ signIn, ms, find }: { signIn: OpenSignIn; ms: number; find: (
       clearTimeout(timer)
       signIn.proc.stdout.off('data', check)
       signIn.proc.off('exit', exited)
+      signIn.proc.off('error', exited)
       resolve(value)
     }
     const exited = () => done(find(signIn.out))
     const timer = setTimeout(() => done(undefined), ms)
     signIn.proc.stdout.on('data', check)
     signIn.proc.on('exit', exited)
+    signIn.proc.on('error', exited)
     check()
   })
 }
@@ -125,8 +152,9 @@ function close(id: string): void {
   const signIn = open.get(id)
   if (!signIn) return
   open.delete(id)
-  signIn.proc.kill()
-  rmSync(signIn.dir, { recursive: true, force: true })
+  if (process.platform === 'win32' && signIn.proc.pid) spawn('taskkill', ['/pid', String(signIn.proc.pid), '/t', '/f']).on('error', () => {})
+  else signIn.proc.kill()
+  rm(signIn.dir, { recursive: true, force: true, maxRetries: 20 }).catch((error: Error) => log.warn({ event: 'seat.cleanup_failed', error: error.message }))
 }
 
 type OpenSignIn = { id: string; proc: ChildProcessWithoutNullStreams; dir: string; out: string; state: string }
