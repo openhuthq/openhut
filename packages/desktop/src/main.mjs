@@ -603,7 +603,7 @@ async function boot() {
   await waitFor(() => listening(SOCK), 30)
   if (!PIPES) rmSync(SERVER_SOCK, { force: true })
   await rootSecret()
-  start('server', Object.assign(serverEnv, { ...shared, AGENTD_SOCK: SOCK, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_AGENT_GATEWAY: `http://127.0.0.1:${GATEWAY_PORT}`, OPENHUT_AGENT_HOST_NET: '1' }))
+  start('server', Object.assign(serverEnv, { ...shared, AGENTD_SOCK: SOCK, AGENTD_HERMES: RUNTIME, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_AGENT_GATEWAY: `http://127.0.0.1:${GATEWAY_PORT}`, OPENHUT_AGENT_HOST_NET: '1' }))
   if (!await waitFor(() => listening(SERVER_SOCK), 60)) return false
   if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   return true
