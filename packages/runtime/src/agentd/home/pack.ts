@@ -2,11 +2,13 @@ import { spawn } from 'node:child_process'
 import { lchownSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
+const CACHE = 'tools'
 export const MAX_HOME_BYTES = 100 << 20
 export const MAX_HOME_BASE64 = Math.ceil(MAX_HOME_BYTES / 3) * 4
 
 export async function packHome(dir: string): Promise<string> {
-  return (await tar({ args: ['-czf', '-', '-C', dir, '.'] })).toString('base64')
+  const entries = readdirSync(dir).filter((name) => name !== CACHE).map((name) => `./${name}`)
+  return (await tar({ args: ['-czf', '-', '-C', dir, ...(entries.length ? entries : ['.'])] })).toString('base64')
 }
 
 export async function unpackHome({ dir, tar: packed, owner }: { dir: string; tar: string; owner?: { uid: number; gid: number } }): Promise<void> {
