@@ -7,7 +7,7 @@ import { migrate, db } from '../../../src/server/platform/db.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { seal, unseal } from '../../../src/server/platform/secrets.ts'
 import { keysService } from '../../../src/server/cloud/keys-service.ts'
-import { fromBase64, toBase64 } from '@openhut/common/vault/vault.ts'
+import { fromBase64, newKey, toBase64 } from '@openhut/common/vault/vault.ts'
 import { anchorOf, check } from '@openhut/common/cloud/member-list.ts'
 
 await migrate()
@@ -43,15 +43,17 @@ test('the 12 words rebuild the account key, and a used kit is retired for a new 
   assert.equal(toBase64(again?.key ?? new Uint8Array()), stored().account.key)
 })
 
-test('a signed-out Mac unlocks with the 12 words: the kit box opens the account key, the workspace box its key, and the account key signs this Mac in', async () => {
+test('a signed-out Mac unlocks with the 12 words: the kit box opens the account key, the first workspace box it opens gives the key, and the account key signs this Mac in', async () => {
   const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   const kit = await keysService.newKit()
   await keysService.saveKit(kit.box)
-  const saved = { kit: keysService.kitBox() ?? '', workspace: await keysService.workspaceBox(account), chain: [account.list] }
+  const mine = { ...await keysService.workspaceBox(account), chain: [account.list] }
+  const foreign = { ...mine, id: 'another_ws', key: (await keysService.workspaceBox({ ...account, key: toBase64(newKey()) })).key }
+  const saved = { kit: keysService.kitBox() ?? '', workspaces: [foreign, mine] }
   await keysService.setLocked({ sub: 'dev-mo', email: 'mo@example.com' })
   const typo = [...kit.words].reverse()
   assert.equal(await keysService.restore({ words: typo, ...saved }), null)
-  assert.equal(await keysService.restore({ words: kit.words, ...saved, workspace: { ...saved.workspace, id: 'another_ws' } }), null)
+  assert.equal(await keysService.restore({ words: kit.words, ...saved, workspaces: [foreign, { ...mine, id: 'renamed_ws' }] }), null)
   const restored = await keysService.restore({ words: kit.words, ...saved })
   assert.equal(restored?.key, account.key)
   assert.equal(restored?.workspace.key, account.workspace.key)
@@ -60,12 +62,31 @@ test('a signed-out Mac unlocks with the 12 words: the kit box opens the account 
   assert.ok(body?.members[0].devices.includes(toBase64((await keysService.device()).publicKey)))
 })
 
+test('key boxes are signed by the account key, and a box another account key made isn’t mine', async () => {
+  const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
+  const box = await keysService.workspaceBox(account)
+  const workspace = `workspace/${account.workspace.id}`
+  assert.equal(await keysService.boxIsMine({ account, name: workspace, box: { body: box.key, by: box.by, signature: box.signature } }), true)
+  const other = { ...account, key: toBase64(newKey()) }
+  const theirs = await keysService.workspaceBox(other)
+  assert.equal(await keysService.boxIsMine({ account, name: workspace, box: { body: theirs.key, by: theirs.by, signature: theirs.signature } }), false)
+  assert.equal(await keysService.boxIsMine({ account, name: workspace, box: { body: theirs.key, by: box.by, signature: box.signature } }), false)
+  const kit = await keysService.signBox({ account, name: 'kit', body: box.key })
+  assert.equal(await keysService.boxIsMine({ account, name: 'kit', box: kit }), true)
+  assert.equal(await keysService.boxIsMine({ account, name: 'passkey', box: kit }), false)
+  assert.equal(await keysService.boxIsMine({ account: other, name: 'kit', box: kit }), false)
+})
+
 test('signing in with another Google account is refused, and the first account keeps its keys and kit', async () => {
   const mo = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   const kit = keysService.kit()
   await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error & { status?: number }) => err.status === 409 && /signed in to mo@example\.com\. Sign in with that account\./.test(err.message))
   assert.deepEqual(keysService.account(), mo)
   assert.deepEqual(keysService.kit(), kit)
+  const box = keysService.kitBox()
+  await keysService.setKit(undefined)
+  await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error) => /signed in to mo@example\.com\. Sign in with that account and save a recovery kit first\./.test(err.message))
+  await keysService.setKit(kit && box ? { box, savedAt: kit.savedAt } : undefined)
 })
 
 test('a copied Mac sees its keys belong to another machine before anything reads the account or session', async () => {

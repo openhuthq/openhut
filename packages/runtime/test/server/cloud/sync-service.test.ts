@@ -15,7 +15,7 @@ createSocket({ allowHalfOpen: true }, (sock) => sock.setEncoding('utf8').once('d
   sock.end(JSON.stringify({ ok: true, ...replies[req.cmd] }))
 })).listen(process.env.AGENTD_SOCK).unref()
 
-const room = { records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>) }
+const room = { records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>), limit: Infinity, refused: 0 }
 const sockets = new Set<WebSocket>()
 const store = (record: Omit<Record, 'seq' | 'object'>): Record => {
   const saved = { ...record, object: 'record' as const, seq: ++room.seq }
@@ -34,6 +34,11 @@ const server = createServer(async (req, res) => {
   const id = /\/records\/([^/]+)$/.exec(url.pathname)?.[1]
   if (!id || req.method !== 'PUT') return reply(404, {})
   await room.beforePut?.(id)
+  if (room.limit <= 0) {
+    room.refused++
+    return reply(429, { error: { type: 'rate_limit_error', message: 'Too many requests.' } })
+  }
+  room.limit--
   const body = JSON.parse(Buffer.concat(chunks).toString()) as { ver: number; deleted: boolean; body: string }
   if (body.ver !== (room.records.get(id)?.ver ?? 0) + 1) return reply(409, { error: { type: 'invalid_request_error', message: 'stale' } })
   room.puts.set(id, (room.puts.get(id) ?? 0) + 1)
@@ -69,8 +74,8 @@ const helpdeskId = await slot({ key, path: 'agent/ag_helpdesk' })
 const members = keysService.members()?.members ?? []
 const me = await keysService.device()
 
-async function until(check: () => boolean | Promise<boolean>, what: string): Promise<void> {
-  for (let i = 0; i < 300; i++) {
+async function until(check: () => boolean | Promise<boolean>, what: string, tries = 300): Promise<void> {
+  for (let i = 0; i < tries; i++) {
     if (await check()) return
     await sleep(50)
   }
@@ -82,16 +87,16 @@ const nameInRoom = async () => {
   return opened?.kind === 'agent' ? opened.value?.name : undefined
 }
 const helpdesk = (name: string): AgentValue => ({ id: 'ag_helpdesk', name, instructions: '# Helpdesk', model: 'claude:sonnet', face: null, codeExecution: true, wanted: 'stopped' })
-const remote = async ({ name, ver = (room.records.get(helpdeskId)?.ver ?? 0) + 1, signer = me }: { name: string; ver?: number; signer?: Identity }) => {
-  const sealed = await sealRecord({ workspace, key, version: 1, signer, id: helpdeskId, ver, kind: 'agent', ref: 'ag_helpdesk', value: helpdesk(name) })
+const remote = async ({ name, id = helpdeskId, ver = (room.records.get(id)?.ver ?? 0) + 1, signer = me }: { name: string; id?: string; ver?: number; signer?: Identity }) => {
+  const sealed = await sealRecord({ workspace, key, version: 1, signer, id, ver, kind: 'agent', ref: 'ag_helpdesk', value: helpdesk(name) })
   assert.ok(sealed)
-  return { id: helpdeskId, ...sealed }
+  return { id, ...sealed }
 }
 
 test('first sign-in uploads everything once; an edit made offline goes out once on reconnect', async () => {
   syncService.connect()
-  await until(() => room.records.size === 4 && syncService.status().at !== null, 'the first backup')
-  assert.deepEqual([...room.puts.values()], [1, 1, 1, 1])
+  await until(() => room.records.size === 5 && syncService.status().at !== null, 'the first backup and its head')
+  assert.deepEqual([...room.puts.values()], [1, 1, 1, 1, 1])
   assert.equal(await nameInRoom(), 'Helpdesk')
   assert.equal(JSON.stringify([...room.records.values()]).includes('Helpdesk'), false)
 
@@ -112,6 +117,7 @@ test('a remote change applies here', async () => {
   await until(async () => await nameHere() === 'Support', 'the remote change')
   await sleep(600)
   assert.equal(room.records.get(helpdeskId)?.ver, 3)
+  assert.equal(syncService.status().done <= syncService.status().total, true)
 })
 
 test('the same race ends the same on both sides: the room’s first write wins', async () => {
@@ -137,4 +143,56 @@ test('an evil room’s forged, replayed, reordered or old records change nothing
   room.records.set(helpdeskId, { ...(room.records.get(helpdeskId) as Record), ver: ver + 1 })
   push(store(await remote({ name: 'After a gap', ver: ver + 2 })))
   await until(async () => await nameHere() === 'After a gap', 'a valid change after the lies')
+})
+
+test('a record placed at another record’s slot is dropped', async () => {
+  const usageSlot = await slot({ key, path: 'setting/usage_data' })
+  const usage = room.records.get(usageSlot) as Record
+  push(store(await remote({ name: 'Wrong slot', id: usageSlot })))
+  await sleep(800)
+  assert.equal(await nameHere(), 'After a gap')
+  room.records.set(usageSlot, usage)
+})
+
+test('a value that doesn’t fit is never reported backed up, and the backup is retried once it is fixed', async () => {
+  const at = syncService.status().at
+  await db.insertInto('agent').values({ id: 'ag_toolong1', name: 'x'.repeat(41), owner_id: actor.id, instructions: '', model: 'claude:sonnet', net: 9, channel_key: seal('k'.repeat(32)) }).execute()
+  syncService.send()
+  await until(() => syncService.status().state === 'failed', 'the backup to fail')
+  assert.equal(syncService.status().at, at)
+  await db.updateTable('agent').set({ name: 'Fits now' }).where('id', '=', 'ag_toolong1').execute()
+  await until(() => syncService.status().state === 'idle' && syncService.status().at !== at, 'the retry to back it up', 400)
+})
+
+test('200 agents back up in full through a rate limit: failed while any is unsent, retried with backoff, never Up to date early', async () => {
+  for (let i = 0; i < 200; i++) {
+    await db.insertInto('agent').values({ id: `ag_bulk${String(i).padStart(4, '0')}`, name: `Bulk ${i}`, owner_id: actor.id, instructions: '', model: 'claude:sonnet', net: 10 + i, channel_key: seal('k'.repeat(32)) }).execute()
+  }
+  const at = syncService.status().at
+  room.limit = 120
+  syncService.send()
+  await until(() => syncService.status().state === 'failed', 'the rate limit to stop the backup')
+  assert.equal(syncService.status().at, at)
+  assert.ok(room.refused > 0)
+  room.limit = Infinity
+  await until(() => syncService.status().state === 'idle' && syncService.status().at !== at, 'the retry to finish', 600)
+  const bulk = await Promise.all(Array.from({ length: 200 }, (_, i) => slot({ key, path: `agent/ag_bulk${String(i).padStart(4, '0')}` })))
+  assert.equal(bulk.every((id) => room.records.has(id)), true)
+})
+
+test('a full restore checks the signed head and says so plainly when the cloud leaves records out', async () => {
+  const omitted = await slot({ key, path: 'agent/ag_bulk0007' })
+  const kept = room.records.get(omitted) as Record
+  room.records.delete(omitted)
+  await syncService.reset({ restoring: true })
+  syncService.connect()
+  await until(() => syncService.status().problem !== null, 'the head check')
+  assert.match(syncService.status().problem ?? '', /^OpenHut Cloud sent an incomplete or older backup: 1 of \d+ agents and settings are missing or out of date\.$/)
+  await until(() => syncService.status().state === 'idle', 'the restore to end')
+  room.records.set(omitted, kept)
+  await syncService.reset({ restoring: true })
+  syncService.connect()
+  await until(() => syncService.status().state === 'idle', 'a clean restore')
+  await sleep(300)
+  assert.equal(syncService.status().problem, null)
 })

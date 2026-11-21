@@ -6,7 +6,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { WebSocketServer } from 'ws'
 import Fastify from 'fastify'
 
-const seen: { state?: string; deviceKey?: string; members?: unknown; email: string; kit?: unknown; lists: unknown[]; workspaces: unknown[] } = { email: 'mo@example.com', lists: [], workspaces: [] }
+const seen: { state?: string; deviceKey?: string; members?: unknown; email: string; kit?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [] }
 const cloud = createServer(async (req, res) => {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
@@ -17,7 +17,10 @@ const cloud = createServer(async (req, res) => {
     return reply(200, { id: 'sealed-authorization', object: 'oauth_authorization', provider: 'google', authorizationUrl: 'https://accounts.example/auth', expiresAt: new Date().toISOString() })
   }
   if (req.url === '/v1/sessions') return reply(body.deviceKey === seen.deviceKey ? 200 : 400, { object: 'cloud_session', token: 'session-token', sub: `dev-${seen.email}`, email: seen.email, expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
-  if (req.url === '/v1/key-boxes/kit' && req.method === 'PUT') return reply(200, seen.kit = { object: 'key_box', kind: 'kit', body: body.body })
+  if (req.url === '/v1/key-boxes/kit' && req.method === 'PUT') {
+    seen.kit = { object: 'key_box', kind: 'kit', body: body.body, by: body.by, signature: body.signature }
+    return seen.failKit ? reply(502, {}) : reply(200, seen.kit)
+  }
   if (req.url === '/v1/key-boxes/kit') return seen.kit ? reply(200, seen.kit) : reply(404, {})
   if (req.url === '/v1/workspaces' && req.method === 'POST') return reply(200, seen.workspaces[0] = body)
   if (req.url === '/v1/workspaces') return reply(200, { object: 'list', data: seen.workspaces })
@@ -45,7 +48,7 @@ answerErrors(app)
 app.setValidatorCompiler(validateWithZod)
 await app.register(cloudController, { prefix: '/api/cloud' })
 const headers = { authorization: 'Bearer test-key' }
-const status = async () => (await app.inject({ method: 'GET', url: '/api/cloud', headers })).json() as { status: string; email: string | null; workspace: { members: { email: string; role: string }[] } | null; kit: { savedAt: string } | null; signInError: string | null; keptAccount: string | null; device: string }
+const status = async () => (await app.inject({ method: 'GET', url: '/api/cloud', headers })).json() as { status: string; email: string | null; workspace: { members: { email: string; role: string }[] } | null; kit: { savedAt: string; differs: boolean } | null; signInError: string | null; keptAccount: string | null; device: string }
 const signIn = async (email: string) => {
   seen.email = email
   await app.inject({ method: 'POST', url: '/api/cloud/sessions', headers })
@@ -107,4 +110,30 @@ test('a downloaded kit is saved at once, a second account gets its sentence and 
   const back = await until('on')
   assert.equal(back.email, 'mo@example.com')
   assert.equal(seen.lists.length, 2)
+  assert.ok(back.kit?.savedAt)
+})
+
+test('a new kit the cloud kept but didn’t confirm leaves this Mac with no kit, not the retired one', async () => {
+  assert.ok((await status()).kit)
+  seen.failKit = true
+  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 502)
+  seen.failKit = false
+  assert.equal((await status()).kit, null)
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })).json().keptAccount, null)
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })).statusCode, 409)
+})
+
+test('signed in, the Mac compares its kit box with the cloud’s: another box clears the local kit and warns until a new kit is made', async () => {
+  await signIn('mo@example.com')
+  await until('on')
+  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 200)
+  const theirs = seen.kit as { signature: string }
+  seen.kit = { object: 'key_box', kind: 'kit', body: (seen.workspaces[0] as { key: string }).key, by: (await status()).device, signature: theirs.signature }
+  await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })
+  await signIn('mo@example.com')
+  let kit = (await until('on')).kit
+  for (let i = 0; i < 50 && !kit?.differs; i++, await sleep(50)) kit = (await status()).kit
+  assert.equal(kit?.differs, true)
+  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 200)
+  assert.equal((await status()).kit?.differs, false)
 })

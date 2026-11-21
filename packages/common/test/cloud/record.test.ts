@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { openRecord, sealRecord, type AgentValue, type Synced } from '../../src/cloud/record.ts'
-import type { Member, Record } from '../../src/cloud/cloud.ts'
-import { identity, newKey, toBase64 } from '../../src/vault/vault.ts'
+import { recordBind, signRecord, type Member, type Record } from '../../src/cloud/cloud.ts'
+import { identity, lock, newKey, toBase64 } from '../../src/vault/vault.ts'
 
 const workspace = 'ws_record_test'
 const key = newKey()
@@ -17,6 +17,13 @@ async function sealed({ id = 'rec_00000001', ver = 1, kind = 'agent', ref = help
   assert.ok(made)
   return { id, object: 'record', seq: 1, ...made }
 }
+async function forged({ id = 'rec_00000001', kind = 'agent', ref = helpdesk.id, value = helpdesk as unknown }: { id?: string; kind?: Synced; ref?: string; value?: unknown }): Promise<Record> {
+  const bytes = new TextEncoder().encode(JSON.stringify({ change: toBase64(newKey(12)), kind, counter: 1, ref, value }))
+  const signed = await signRecord({ signer: mo, bind: recordBind({ workspace, id, kind: kind as 'agent' }), bytes })
+  const locked = await lock({ key, version: 1, bind: `workspace/${workspace}/record/${id}`, plain: new TextEncoder().encode(JSON.stringify(signed)) })
+  assert.ok(locked)
+  return { id, object: 'record', seq: 1, ver: 1, deleted: false, body: toBase64(locked) }
+}
 const open = (record: Record) => openRecord({ workspace, keys: { 1: key }, record, members })
 
 test('an agent record round-trips, and its name is in no byte the room stores', async () => {
@@ -29,9 +36,24 @@ test('an agent record round-trips, and its name is in no byte the room stores', 
 test('only the closed list of fields applies: grants and sandbox are dropped, unknown kinds refused', async () => {
   const opened = await open(await sealed({ value: { ...helpdesk, grants: ['Orders DB'], sandbox: 'none', net: 7 } }))
   assert.deepEqual(opened?.value, helpdesk)
-  assert.equal(await open(await sealed({ kind: 'grants' as Synced })), null)
-  assert.equal(await open(await sealed({ value: { ...helpdesk, model: 'evil' } })), null)
-  assert.equal(await open(await sealed({ ref: 'ag_someother' })), null)
+  assert.equal(await open(await forged({ kind: 'grants' as Synced })), null)
+  assert.equal(await open(await forged({ value: { ...helpdesk, model: 'evil' } })), null)
+  assert.equal(await open(await forged({ ref: 'ag_someother' })), null)
+})
+
+test('sealing refuses a value outside the schema, so nothing is backed up that a restore would drop', async () => {
+  const seal = (value: unknown, ref = helpdesk.id) => sealRecord({ workspace, key, version: 1, signer: mo, id: 'rec_00000001', ver: 1, kind: 'agent', ref, value })
+  assert.equal(await seal({ ...helpdesk, name: 'x'.repeat(41) }), null)
+  assert.equal(await seal({ ...helpdesk, instructions: 'x'.repeat(20_001) }), null)
+  assert.equal(await seal(helpdesk, 'ag_someother'), null)
+  assert.ok(await seal({ ...helpdesk, name: 'x'.repeat(40) }))
+  assert.ok(await seal(null))
+})
+
+test('a head lists the latest version of every record and round-trips', async () => {
+  const value = { records: [['rec_00000001', 3], ['rec_00000002', 1]] }
+  assert.deepEqual((await open(await sealed({ kind: 'head', ref: 'head', value })))?.value, value)
+  assert.equal(await sealRecord({ workspace, key, version: 1, signer: mo, id: 'rec_00000009', ver: 1, kind: 'head', ref: 'other', value }), null)
 })
 
 test('changes from devices not on the list, and admin-only kinds from members, are dropped', async () => {
@@ -56,7 +78,7 @@ test('a room that swaps, replays or lies about a record is caught', async () => 
 
 test('a connection key travels only sealed to device keys, never plain', async () => {
   const connection = { id: 'con_orders01', kind: 'postgres', name: 'Orders DB', keys: [{ to: toBase64(mo.publicKey), body: 'postgres://user:secret@db' }] }
-  assert.equal(await open(await sealed({ kind: 'connection', ref: connection.id, value: connection })), null)
+  assert.equal(await open(await forged({ kind: 'connection', ref: connection.id, value: connection })), null)
   const letter = (await sealed()).body
   const opened = await open(await sealed({ kind: 'connection', ref: connection.id, value: { ...connection, keys: [{ to: toBase64(mo.publicKey), body: letter }] } }))
   assert.equal(opened?.kind, 'connection')

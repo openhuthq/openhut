@@ -32,8 +32,8 @@ export function useCloud() {
 }
 
 function pollOf(cloud: Cloud | undefined): number | false {
+  if (cloud?.status === 'offline' || cloud?.backup.state === 'failed') return OFFLINE_POLL_MS
   if (cloud?.backup.state !== 'idle' && cloud) return BUSY_POLL_MS
-  if (cloud?.status === 'offline') return OFFLINE_POLL_MS
   return cloud?.status === 'on' && justBackedUp(cloud) ? BUSY_POLL_MS * 5 : false
 }
 

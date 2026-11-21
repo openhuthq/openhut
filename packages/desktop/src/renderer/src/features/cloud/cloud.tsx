@@ -1,5 +1,5 @@
 import { CloudUploadIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
-import type { Backup } from '@openhut/common/cloud/cloud.ts'
+import type { Backup, Cloud } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Status } from '@/components/kit'
@@ -39,8 +39,8 @@ export function CloudSettings() {
       {data.status === 'on' ? <Status tone="on">On</Status> : <Status tone="wait">Offline</Status>}
     </div>
     <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
-      <div className="flex items-center gap-3 px-4 py-3"><I icon={CloudUploadIcon} size={18} className="text-hue-blue" /><span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Backup</span><span className="text-[12px] text-mute">{backupNote(data.backup)}</span></span></div>
-      <div className="flex items-center gap-3 px-4 py-3"><I icon={SquareLock02Icon} size={18} className="text-hue-amber" /><span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Only your devices can read it</span><span className="text-[12px] text-mute">{data.kit ? `Recovery kit saved ${shortDate.format(new Date(data.kit.savedAt))}` : 'No recovery kit'}{data.keyStore === 'file' && ' · Keys in a file only you can read'}</span></span><Button type="button" variant="secondary" className={PILL} onClick={() => open('kit')}>{data.kit ? 'Make a new kit' : 'Save a kit'}</Button></div>
+      <div className="flex items-center gap-3 px-4 py-3"><I icon={CloudUploadIcon} size={18} className="text-hue-blue" /><span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Backup</span><span className={data.backup.problem || data.backup.state === 'failed' ? 'text-[12px] text-fail' : 'text-[12px] text-mute'}>{backupNote({ ...data.backup, offline: data.status === 'offline' })}</span></span></div>
+      <div className="flex items-center gap-3 px-4 py-3"><I icon={SquareLock02Icon} size={18} className="text-hue-amber" /><span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Only your devices can read it</span><span className={data.kit?.differs ? 'text-[12px] text-fail' : 'text-[12px] text-mute'}>{kitNote(data.kit)}{data.keyStore === 'file' && ' · Keys in a file only you can read'}</span></span><Button type="button" variant="secondary" className={PILL} onClick={() => open('kit')}>{data.kit ? 'Make a new kit' : 'Save a kit'}</Button></div>
     </div>
     <div className="flex items-center gap-4 px-1">
       <span className="grid flex-1 gap-0.5"><span className="text-[13.5px] font-semibold">Sign out</span><span className="text-[12.5px] text-body">Your agents keep running on this {HERE}.</span></span>
@@ -74,10 +74,18 @@ export function CloudDevices() {
   return <Row icon={<I icon={SquareLock02Icon} size={20} className="text-mute" />} title="Chat from your other computers" note="Needs OpenHut Cloud"><TurnOn short pending={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })} /></Row>
 }
 
-function backupNote({ state, done, total, at }: Backup): string {
+function backupNote({ state, done, total, at, problem, offline }: Backup & { offline: boolean }): string {
+  if (problem) return problem
   if (state === 'backing_up') return `Backing up · ${done} of ${total}`
   if (state === 'restoring') return 'Restoring…'
+  if (state === 'failed') return `Couldn’t back up ${total - done} of ${total} · Trying again`
+  if (offline) return at ? `Last backup ${ago(at)} ago` : `Agents and settings, locked on this ${HERE} first`
   return at ? `Up to date · ${ago(at)} ago` : `Agents and settings, locked on this ${HERE} first`
+}
+
+function kitNote(kit: Cloud['kit']): string {
+  if (kit?.differs) return `Your key boxes in OpenHut Cloud aren’t the ones this ${HERE} saved. Make a new kit.`
+  return kit ? `Recovery kit saved ${shortDate.format(new Date(kit.savedAt))}` : 'No recovery kit'
 }
 
 function Google() {

@@ -23,12 +23,12 @@ export const Locked = z.string().check(
   }, 'Send the body locked by the vault, as base64url.'),
 )
 export const DeviceKey = canonical({ length: 86, message: 'Send a device key as 64 bytes of base64url.' })
-const Signature = canonical({ length: 86, message: 'Send an Ed25519 signature as 64 bytes of base64url.' })
+export const Signature = canonical({ length: 86, message: 'Send an Ed25519 signature as 64 bytes of base64url.' })
 const Version = z.number().check(z.int(), z.minimum(1), z.maximum(0xffffffff))
 const Id = z.string().check(z.regex(/^[A-Za-z0-9_-]{8,64}$/, 'Send an id of 8 to 64 base64url characters.'))
 const Email = z.string().check(z.maxLength(320), z.regex(/^[^\sA-Z@]+@[^\sA-Z@]+$/, 'Send the email in lowercase.'))
 
-export const RECORD_KINDS = ['agent', 'instructions', 'memory', 'skill', 'routine', 'connection', 'channel', 'thread', 'message', 'setting'] as const
+export const RECORD_KINDS = ['agent', 'instructions', 'memory', 'skill', 'routine', 'connection', 'channel', 'thread', 'message', 'setting', 'head'] as const
 export const RecordKind = z.enum(RECORD_KINDS)
 export type RecordKind = z.infer<typeof RecordKind>
 
@@ -112,7 +112,7 @@ export const Invite = z.object({
 export type Invite = z.infer<typeof Invite>
 
 export const KEY_BOX_KINDS = ['passkey', 'kit'] as const
-export const KeyBox = z.object({ object: z.literal('key_box'), kind: z.enum(KEY_BOX_KINDS), body: Locked })
+export const KeyBox = z.object({ object: z.literal('key_box'), kind: z.enum(KEY_BOX_KINDS), body: Locked, by: z.optional(DeviceKey), signature: z.optional(Signature), savedAt: z.optional(Timestamp) })
 export type KeyBox = z.infer<typeof KeyBox>
 
 export const Here = z.object({ object: z.literal('here'), from: DeviceKey, body: Locked })
@@ -142,7 +142,7 @@ export function parseJson(value: string): unknown {
   }
 }
 
-export const PROOFS = ['session', 'refresh', 'delete', 'restore'] as const
+export const PROOFS = ['session', 'refresh', 'delete', 'restore', 'key-box'] as const
 export type Proof = (typeof PROOFS)[number]
 
 export function proofBytes({ proof, parts }: { proof: Proof; parts: string[] }): Bytes {
@@ -175,12 +175,13 @@ export type SignedRequest = z.infer<typeof SignedRequest>
 
 export const CLOUD_STATUSES = ['off', 'on', 'offline', 'locked'] as const
 export const Backup = z.object({
-  state: z.enum(['idle', 'backing_up', 'restoring']),
+  state: z.enum(['idle', 'backing_up', 'restoring', 'failed']),
   done: z.number(),
   total: z.number(),
   current: z.nullable(z.string()),
   at: z.nullable(Timestamp),
   agent: z.nullable(z.string()),
+  problem: z.nullable(z.string()),
 })
 export type Backup = z.infer<typeof Backup>
 
@@ -191,7 +192,7 @@ export const Cloud = z.object({
   device: z.nullable(DeviceKey),
   workspace: z.nullable(z.object({ id: Id, version: Version, members: z.array(Member) })),
   keyStore: z.enum(['keychain', 'file']),
-  kit: z.nullable(z.object({ savedAt: Timestamp })),
+  kit: z.nullable(z.object({ savedAt: Timestamp, differs: z.boolean() })),
   backup: Backup,
   signInError: z.nullable(z.string()),
   keptAccount: z.nullable(Email),
