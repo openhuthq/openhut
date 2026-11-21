@@ -170,7 +170,7 @@ export const threadService = {
     return value?.agentId ?? (await db.selectFrom('thread').select('agent_id').where('messages', 'like', `%"${id}"%`).executeTakeFirst())?.agent_id ?? ''
   },
 
-  async applySynced({ id, value, author }: { id: string; value: MessageValue | null; author?: string | null }): Promise<void> {
+  async applySynced({ id, value, author, later }: { id: string; value: MessageValue | null; author?: string | null; later?: (id: string) => boolean }): Promise<void> {
     const agentId = await threadService.agentOfMessage({ id, value })
     const agent = await db.selectFrom('agent').selectAll().where('id', '=', agentId).executeTakeFirst()
     const owner = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirst()
@@ -179,7 +179,7 @@ export const threadService = {
     if (!found && !value) return
     const thread = found?.id ?? (await db.insertInto('thread').values({ id: newId('th'), agent_id: agentId, person_id: owner.id, title: agent.name }).returning('id').executeTakeFirstOrThrow()).id
     const stored = await storedOf(thread)
-    const messages = value ? merged({ stored, added: [authored({ message: value.message, author: value.message.role === 'user' ? author : null })] }) : stored.filter((message) => message.id !== id)
+    const messages = value ? merged({ stored, added: [authored({ message: value.message, author: value.message.role === 'user' ? author : null })], later }) : stored.filter((message) => message.id !== id)
     await save({ id: thread, messages })
     const asks = value?.message.role === 'user' && messages.at(-1)?.id === value.message.id && agent.wanted === 'running'
     if (asks && runsHere({ row: agent, me: await keysService.deviceKey() })) void answerFor({ thread, agent }).catch((err: unknown) => log.warn({ event: 'thread.answer_failed', thread, error: messageOf(err) }))
@@ -236,11 +236,17 @@ function track({ thread, answer, chunk }: { thread: string; answer: MessageValue
   emit({ name: 'thread.streamed', target: { type: 'stream', id: thread } })
 }
 
-function merged({ stored, added, after }: { stored: ChatMessage[]; added: ChatMessage[]; after?: string }): ChatMessage[] {
+function merged({ stored, added, after, later = () => false }: { stored: ChatMessage[]; added: ChatMessage[]; after?: string; later?: (id: string) => boolean }): ChatMessage[] {
   const kept = stored.map((message) => added.find((each) => each.id === message.id) ?? message)
   const fresh = added.filter((message) => !stored.some((each) => each.id === message.id))
   const at = after === undefined ? -1 : kept.findIndex((message) => message.id === after)
-  return at < 0 ? [...kept, ...fresh] : [...kept.slice(0, at + 1), ...fresh, ...kept.slice(at + 1)]
+  if (at >= 0) return [...kept.slice(0, at + 1), ...fresh, ...kept.slice(at + 1)]
+  for (const message of fresh) {
+    let place = kept.length
+    while (place > 0 && later(kept[place - 1]?.id ?? '')) place--
+    kept.splice(place, 0, message)
+  }
+  return kept
 }
 
 function authored({ message, author }: { message: ChatMessage; author: string | null | undefined }): ChatMessage {

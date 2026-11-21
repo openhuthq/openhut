@@ -163,7 +163,7 @@ function RunsOn({ agent }: { agent: Agent }) {
       <MenuCard title={`${agent.name} runs on`}>
         {!agent.runsHere && <Choice icon={<I icon={LaptopIcon} size={15} />} name={elsewhereOf(agent)} selected disabled />}
         {(computers ?? []).map((computer) => !agent.runsHere && computer.id === id
-          ? <Choice key={computer.id} icon={<I icon={LaptopIcon} size={15} />} name="Run it here" disabled={!agent.canEdit || update.isPending} onClick={() => update.mutate({ runsHere: true }, { onError: toastError })} />
+          ? agent.canManage && <Choice key={computer.id} icon={<I icon={LaptopIcon} size={15} />} name="Run it here" disabled={!agent.canEdit || update.isPending} onClick={() => update.mutate({ runsHere: true }, { onError: toastError })} />
           : <Choice key={computer.id} icon={<I icon={computer.id === 'local' ? LaptopIcon : ServerStack01Icon} size={15} />} name={computer.id === id ? computer.name : `Move to ${computer.name}`}
           note={runsOnNote(computer)}
           selected={computer.id === id} disabled={computer.id === id || !computer.online || !agent.canEdit || !agent.canManage} onClick={() => move.go(computer.id)} />)}
@@ -196,15 +196,15 @@ function Access({ agent }: { agent: Agent }) {
 }
 
 function noteOf({ agent, computers, id }: { agent: Agent; computers: Computer[] | undefined; id: string }): string {
-  if (agent.runsNowhere) return 'No computer runs it now. Run it here to start it.'
-  if (!agent.runsHere) return 'Runs on your other computer. Chats sync here.'
+  if (agent.runsNowhere) return `No computer runs it now. ${agent.canManage ? 'Run it here to start it.' : `Ask an admin to run ${agent.name} on their computer.`}`
+  if (!agent.runsHere) return `Runs on ${agent.runsOnName ?? 'your other computer'}. Chats sync here.`
   if (id !== 'local') return `Runs in its own sandbox on ${nameOf({ computers, id })}.`
   if (WORDS.sandboxed) return `Runs in its own sandbox on this ${HERE}.`
   return `Runs as you, like any app on this ${HERE}.`
 }
 
 function elsewhereOf(agent: Agent): string {
-  return agent.runsNowhere ? 'No computer' : 'Another computer'
+  return agent.runsNowhere ? 'No computer' : agent.runsOnName ?? 'Another computer'
 }
 
 function TeamHint({ agent, server, onMove }: { agent: Agent; server: { id: string; name: string } | undefined; onMove: (to: string) => void }) {

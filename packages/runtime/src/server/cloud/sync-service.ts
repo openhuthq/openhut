@@ -3,7 +3,7 @@ import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
 import { CloudWorkspace, parseJson, Record, type Backup, type SetHere } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, keyVersionOf } from '@openhut/common/cloud/member-list.ts'
-import { FileValue, openRecord, sealRecord, SYNCED, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
+import { FileValue, openRecord, sealRecord, SYNCED, type AgentValue, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
 import { fromBase64, readHeader, slot, toBase64 } from '@openhut/common/vault/vault.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { cloud } from '../platform/cloud.ts'
@@ -13,16 +13,15 @@ import { HttpError, messageOf } from '../platform/http-error.ts'
 import { keysService, type Sent as Outgoing } from './keys-service.ts'
 import { presence } from './presence.ts'
 import { bodyOf, roomKeys, type Call } from './room-keys.ts'
+import { forgetUpload } from './sync-files.ts'
 import { syncKinds, type Context, type Local } from './sync-kinds.ts'
+import { DELETED, DROPPED, SEQ, droppedSince, hashItem, rowKey, rowsById, saveRow, seqName, seqOf, type Row } from './sync-rows.ts'
 
 const THROTTLE_MS = 300
 const RETRY_MS = 1000
 const RETRY_MAX_MS = 60_000
 const HEAD_MS = 2000
 const HEAD = 'head'
-const DELETED = 'deleted'
-const DROPPED = 'dropped'
-const SEQ = 'cloud_seq'
 const HERE = process.platform === 'darwin' ? 'Mac' : 'computer'
 const KEPT = [401, 409, 429]
 const TOMBSTONED: Synced[] = ['agent', 'message', 'connection']
@@ -39,6 +38,7 @@ const KINDS_OF: [RegExp, Synced[]][] = [
 const Page = z.object({ data: z.array(Record), hasMore: z.boolean() })
 const Requests = z.object({ data: z.array(z.object({ device: z.string(), email: z.string(), at: z.string() })) })
 const GONE = [4001, 4003, 4010]
+const Missing = z.object({ error: z.object({ param: z.literal('file') }) })
 const Message = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready') }), z.object({ type: z.literal('members') }), z.object({ type: z.literal('letter') }), z.object({ type: z.literal('workspace') }), z.object({ type: z.literal('record'), record: Record }),
   z.object({ type: z.literal('request') }), z.object({ type: z.literal('deleted') }),
@@ -46,10 +46,9 @@ const Message = z.discriminatedUnion('type', [
 ])
 
 type Item = Local & { id: string }
-type Row = { id: string; kind: string; ref: string; ver: number; hash: string; signer: string | null; agent_id: string | null }
 type Sent = 'sent' | 'later' | 'refused'
 type State = {
-  ws: string; home: boolean; socket: ReconnectingWebSocket | undefined; ready: boolean; timer: NodeJS.Timeout | undefined; headTimer: NodeJS.Timeout | undefined; keyTimer?: NodeJS.Timeout; failures: number
+  ws: string; home: boolean; call: Call; socket: ReconnectingWebSocket | undefined; ready: boolean; timer: NodeJS.Timeout | undefined; headTimer: NodeJS.Timeout | undefined; keyTimer?: NodeJS.Timeout; failures: number
   wanted: [string, number][] | null; refused: Map<string, { kind: Synced; hash: string; name: string }>; dirty: Set<Synced>; backup: Backup; name: string | null
   requests: { device: string; email: string; at: string }[]; leaving?: boolean; log: { seq: number; hash: string }; echo: Map<string, number>
 }
@@ -183,7 +182,7 @@ function homeState(): State | undefined {
 }
 
 function open(home: boolean, ws: string): void {
-  const s: State = { ws, home, socket: undefined, ready: false, timer: undefined, headTimer: undefined, failures: 0, wanted: null, refused: new Map(), dirty: new Set(), name: null, requests: [], log: { seq: 0, hash: '' }, echo: new Map(), backup: home ? backup : { ...backup, state: 'idle', at: null, problem: null } }
+  const s: State = { ws, home, call: (input) => room(s, input), socket: undefined, ready: false, timer: undefined, headTimer: undefined, failures: 0, wanted: null, refused: new Map(), dirty: new Set(), name: null, requests: [], log: { seq: 0, hash: '' }, echo: new Map(), backup: home ? backup : { ...backup, state: 'idle', at: null, problem: null } }
   states.set(ws, s)
   const socket = new ReconnectingWebSocket(cloud.roomUrl(ws), [], { WebSocket: globalThis.WebSocket })
   s.socket = socket
@@ -221,9 +220,9 @@ function heard(s: State, text: string): void {
     presence.ready(s.ws)
     void run(async () => {
       await named(s)
-      await roomKeys.refresh({ ws: s.ws, call: caller(s) })
+      await roomKeys.refresh({ ws: s.ws, call: s.call })
       await asked(s)
-      await catchUp(s)
+      await catchUp(s, await droppedSince({ s }))
     })
     send(s)
   }
@@ -233,7 +232,7 @@ function heard(s: State, text: string): void {
   if (message?.type === 'members' || message?.type === 'letter') void run(async () => {
     const keyless = syncService.waiting(s.ws)
     const before = roomKeys.members(s.ws)
-    const { changed } = await roomKeys.refresh({ ws: s.ws, call: caller(s) })
+    const { changed } = await roomKeys.refresh({ ws: s.ws, call: s.call })
     if (message.type === 'members') await rotateIfLeft({ s, before })
     if (message.type === 'members') await asked(s)
     if (keyless && !syncService.waiting(s.ws)) await named(s).then(() => catchUp(s))
@@ -252,11 +251,11 @@ async function named(s: State): Promise<void> {
   s.name = await roomKeys.openName({ ws: s.ws, locked: CloudWorkspace.safeParse(reply.json).data?.name ?? null }) ?? s.name
 }
 
-async function catchUp(s: State): Promise<void> {
+async function catchUp(s: State, from: number | null = null): Promise<void> {
   if (!await contextOf(s)) return
   try {
     const records: Record[] = []
-    for (let after = await seqOf(s), more = true; more;) {
+    for (let after = Math.min(from ?? Infinity, await seqOf(s)), more = true; more;) {
       const page = Page.safeParse((await room(s, { method: 'GET', path: `/records?after=${after}` })).json)
       if (!page.success) throw new HttpError(502, 'OpenHut Cloud sent records this computer can’t read.')
       records.push(...page.data.data)
@@ -274,13 +273,14 @@ async function applyAll(s: State, all: Record[]): Promise<void> {
   if (!ctx) return
   const rows = await rowsById(s)
   const opened: [Record, Opened][] = []
-  const dropped: Record[] = []
+  const dropped: [Record, Opened | null][] = []
   let records = all
   for (const [index, record] of all.entries()) {
-    if ((rows.get(record.id)?.ver ?? 0) >= record.ver) continue
+    const row = rows.get(record.id)
+    if ((row?.ver ?? 0) > record.ver || (row?.ver === record.ver && row.hash !== DROPPED)) continue
     const newer = () => !ctx || (readHeader(fromBase64(record.body))?.version ?? 0) > ctx.version
     if (newer()) {
-      await roomKeys.refresh({ ws: s.ws, call: caller(s) })
+      await roomKeys.refresh({ ws: s.ws, call: s.call })
       ctx = await contextOf(s)
     }
     if (!ctx || newer()) {
@@ -291,40 +291,42 @@ async function applyAll(s: State, all: Record[]): Promise<void> {
     }
     const open = await openSafely({ s, record, ctx })
     if (open) opened.push([record, open])
-    else dropped.push(record)
+    else dropped.push([record, null])
   }
   const after = await contextOf(s) ?? ctx
   if (!after) return
   opened.sort(([, a], [, b]) => FIRST.indexOf(b.kind) - FIRST.indexOf(a.kind))
   const restoring = s.backup.state === 'restoring'
   if (restoring) Object.assign(s.backup, { done: 0, total: opened.filter(([, open]) => open.kind === 'agent' && open.value).length })
-  const expected = new Map<string, unknown>()
+  const seqs = new Map([...rows.values()].filter((row) => row.kind === 'message').map((row) => [row.ref, row.seq]))
+  const failed = new Set<string>()
   const applied: [Record, Opened][] = []
   for (const [record, open] of opened) {
     if (!open.hidden && !(await syncKinds.allowed({ open, ctx: after, row: rows.get(record.id) }))) {
-      dropped.push(record)
+      dropped.push([record, open])
       continue
     }
     if (open.kind === 'agent' && open.value) s.backup.current = open.value.name
     if (open.kind === 'file' && !open.hidden) await saveRow(s, { ...rowOf({ record, open }), hash: DROPPED })
-    const applying = open.hidden ? syncKinds.hide({ open, ctx: after }) : syncKinds.apply({ open, ctx: after })
-    expected.set(record.id, await applying.catch((err: unknown) => log.warn({ event: 'cloud.apply_failed', record: record.id, error: messageOf(err) })))
+    const later = (ref: string) => (seqs.get(ref) ?? Infinity) > record.seq
+    await (open.hidden ? syncKinds.hide({ open, ctx: after }) : syncKinds.apply({ open, ctx: after, later })).catch((err: unknown) => {
+      failed.add(record.id)
+      log.warn({ event: 'cloud.apply_failed', record: record.id, error: messageOf(err) })
+    })
+    if (open.kind === 'message') seqs.set(open.ref, record.seq)
     applied.push([record, open])
     if (restoring && open.kind === 'agent' && open.value) Object.assign(s.backup, { done: s.backup.done + 1, agent: open.ref })
   }
-  const locals = new Map<Synced, Map<string, Item>>()
-  for (const kind of new Set(applied.map(([, open]) => open.kind))) {
-    const mine = kind !== 'file' ? await localsOf({ s, kind, ctx: after }).catch(() => null) : null
-    locals.set(kind, new Map((mine ?? []).map((each) => [each.id, each])))
-  }
+  const connections = applied.some(([, open]) => open.kind === 'connection') ? new Map((await localsOf({ s, kind: 'connection', ctx: after }).catch(() => null) ?? []).map((each) => [each.id, each])) : undefined
   for (const [record, open] of applied.filter(([, each]) => each.kind !== 'file' || each.hidden)) {
-    const local = locals.get(open.kind)?.get(record.id)
-    await saveRow(s, { ...rowOf({ record, open }), hash: open.hidden ? DELETED : hashItem(local ?? { value: null }) })
+    const value = open.kind === 'connection' ? connections?.get(record.id) ?? { value: null } : { value: open.value, owner: open.owner }
+    const hash = failed.has(record.id) ? rows.get(record.id)?.hash ?? DELETED : hashItem(value)
+    await saveRow(s, { ...rowOf({ record, open }), hash: open.hidden ? DELETED : hash })
   }
-  for (const record of dropped) {
+  for (const [record, open] of dropped) {
     const row = rows.get(record.id)
     log.warn({ event: 'cloud.record_dropped', record: record.id, seq: record.seq })
-    await saveRow(s, { id: record.id, kind: row?.kind ?? DROPPED, ref: row?.ref ?? '', ver: record.ver, hash: DROPPED, signer: row?.signer ?? null, agent_id: row?.agent_id ?? null })
+    await saveRow(s, { id: record.id, kind: row?.kind ?? DROPPED, ref: row?.ref ?? '', ver: record.ver, seq: record.seq, hash: DROPPED, signer: row?.signer ?? null, agent_id: row?.agent_id ?? (open && rowOf({ record, open }).agent_id) })
   }
   if (dropped.length) send(s)
   const head = opened.map(([, open]) => open).find((open) => open.kind === 'head')
@@ -334,6 +336,8 @@ async function applyAll(s: State, all: Record[]): Promise<void> {
   if (last && last.seq > await seqOf(s)) await db.insertInto('install_setting').values({ name: seqName(s), value: String(last.seq) }).onConflict((oc) => oc.column('name').doUpdateSet({ value: String(last.seq) })).execute()
   for (const record of records) if (s.echo.has(record.id)) s.echo.set(record.id, Math.max(s.echo.get(record.id) ?? 0, record.ver))
   s.log = { seq: await seqOf(s), hash: logHash({ s, rows: await rowsById(s) }) }
+  const retry = await droppedSince({ s, agents: applied.flatMap(([, open]) => open.kind === 'agent' && open.value ? [open.ref] : []) })
+  if (retry !== null) await catchUp(s, retry)
 }
 
 function logHash({ s, rows }: { s: State; rows: Map<string, Row> }): string {
@@ -349,12 +353,12 @@ function logHash({ s, rows }: { s: State; rows: Map<string, Row> }): string {
 
 function rowOf({ record, open }: { record: Record; open: Opened }): Omit<Row, 'hash'> {
   const agentId = open.value && 'agentId' in open.value ? open.value.agentId : null
-  return { id: record.id, kind: open.kind, ref: open.ref, ver: record.ver, signer: open.by, agent_id: agentId }
+  return { id: record.id, kind: open.kind, ref: open.ref, ver: record.ver, seq: record.seq, signer: open.by, agent_id: agentId }
 }
 
 async function openSafely({ s, record, ctx }: { s: State; record: Record; ctx: Context }): Promise<Opened | null> {
   const open = () => openRecord({ workspace: ctx.workspace, keys: ctx.keys, record, members: roomKeys.members(s.ws)?.members ?? [], own: ctx.own && { key: ctx.own, email: ctx.email } })
-  const opened = await open() ?? ((await roomKeys.refresh({ ws: s.ws, call: caller(s) })).changed ? await open() : null)
+  const opened = await open() ?? ((await roomKeys.refresh({ ws: s.ws, call: s.call })).changed ? await open() : null)
   return opened && record.id === await slot({ key: ctx.slotKey, path: `${opened.kind}/${opened.ref}` }) ? opened : null
 }
 
@@ -366,7 +370,7 @@ async function checkHead(s: State, records: [string, number][]): Promise<void> {
 }
 
 async function flush(s: State): Promise<void> {
-  if (s.ready && await roomKeys.rekey({ ws: s.ws, call: caller(s) })) return schedule({ s, ms: RETRY_MS * 2 })
+  if (s.ready && await roomKeys.rekey({ ws: s.ws, call: s.call })) return schedule({ s, ms: RETRY_MS * 2 })
   const ctx = await contextOf(s)
   if (!s.ready || !ctx) return
   const kinds = SYNCED.filter((kind) => s.dirty.delete(kind))
@@ -405,14 +409,13 @@ async function flush(s: State): Promise<void> {
 }
 
 function nameOf(item: Item): string {
-  const name = item.kind === 'agent' && item.value && typeof item.value === 'object' && 'name' in item.value ? String(item.value.name) : ''
-  return name || `A ${item.kind}`
+  return item.kind === 'agent' ? (item.value as AgentValue).name : `A ${item.kind}`
 }
 
 async function unsent({ s, kinds, ctx }: { s: State; kinds: Synced[]; ctx: Context }): Promise<Item[]> {
   const rows = await rowsById(s)
   const me = toBase64(ctx.me.publicKey)
-  const runners = new Map(kinds.includes('message') ? (await agentService.synced({ workspace: ctx.home ? null : ctx.workspace, owner: ctx.email })).map((agent) => [agent.id, agent.runsOn]) : [])
+  const runners = new Map(kinds.includes('message') || kinds.includes('file') ? (await agentService.synced({ workspace: ctx.home ? null : ctx.workspace, owner: ctx.email })).map((agent) => [agent.id, agent.runsOn]) : [])
   const changed: Item[] = []
   for (const kind of kinds) {
     const mine = await localsOf({ s, kind, ctx }).catch((err: unknown) => { log.warn({ event: 'cloud.locals_failed', kind, error: messageOf(err) }) })
@@ -423,7 +426,7 @@ async function unsent({ s, kinds, ctx }: { s: State; kinds: Synced[]; ctx: Conte
     for (const each of [...mine, ...gone]) {
       const row = rows.get(each.id)
       const runsHere = each.agentId !== undefined && runners.get(each.agentId) === me
-      if (kind === 'message' && !writable({ item: each, row, me, runsHere, live: each.agentId === undefined || runners.has(each.agentId) })) continue
+      if ((kind === 'message' || kind === 'file') && !writable({ item: each, row, me, runsHere, live: each.agentId === undefined || runners.has(each.agentId) })) continue
       const resign = kind === 'message' && each.assistant && runsHere && !!row && row.signer !== me
       if (resign || ![row?.hash, s.refused.get(each.id)?.hash].includes(hashItem(each))) changed.push(each)
     }
@@ -434,7 +437,7 @@ async function unsent({ s, kinds, ctx }: { s: State; kinds: Synced[]; ctx: Conte
 function writable({ item, row, me, runsHere, live }: { item: Item; row: Row | undefined; me: string; runsHere: boolean; live: boolean }): boolean {
   if (item.value === null) return live && (!row?.signer || row.signer === me || runsHere)
   if (item.assistant) return runsHere
-  return !row?.signer || row.signer === me
+  return !row?.signer || row.signer === me || (item.kind === 'file' && runsHere)
 }
 
 async function writeHead(s: State): Promise<void> {
@@ -455,6 +458,11 @@ async function put({ s, item, ver, ctx }: { s: State; item: Item; ver: number; c
   if (!sealed) return 'refused'
   const file = item.kind === 'file' ? FileValue.safeParse(value).data?.blob : undefined
   const reply = await room(s, { method: 'PUT', path: `/records/${item.id}`, body: { ...sealed, file } })
+  if (reply.status === 409 && file && Missing.safeParse(reply.json).success) {
+    forgetUpload(file)
+    await item.wire?.()
+    return 'later'
+  }
   if (reply.status === 409) {
     await catchUp(s)
     return 'sent'
@@ -462,7 +470,7 @@ async function put({ s, item, ver, ctx }: { s: State; item: Item; ver: number; c
   if (reply.status >= 400 && reply.status < 500 && !KEPT.includes(reply.status)) return 'refused'
   if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud refused a backup (HTTP ${reply.status}).`)
   if (!s.echo.has(item.id)) s.echo.set(item.id, ver - 1)
-  await saveRow(s, { id: item.id, kind: item.kind, ref: item.ref, ver, hash: hashItem(item), signer: toBase64(ctx.me.publicKey), agent_id: item.agentId ?? null })
+  await saveRow(s, { id: item.id, kind: item.kind, ref: item.ref, ver, seq: Record.safeParse(reply.json).data?.seq ?? 0, hash: hashItem(item), signer: toBase64(ctx.me.publicKey), agent_id: item.agentId ?? null })
   return 'sent'
 }
 
@@ -540,41 +548,7 @@ async function post({ ws, letter, token }: { ws: string; letter: Outgoing; token
   if (status !== 200) log.warn({ event: 'cloud.letter_failed', status })
 }
 
-function caller(s: State): Call {
-  return (input) => room(s, input)
-}
-
 async function room(s: State, { method, path, body }: { method: 'GET' | 'PUT' | 'POST' | 'DELETE'; path: string; body?: unknown }): Promise<{ status: number; json: unknown }> {
   if (!keysService.account()) throw new HttpError(409, 'Turn on OpenHut Cloud first.')
   return cloud.room({ method, workspace: s.ws, path, token: await keysService.token(), body })
-}
-
-async function rowsById(s: State): Promise<Map<string, Row>> {
-  const rows = await db.selectFrom('cloud_record').select(['id', 'kind', 'ref', 'ver', 'hash', 'signer', 'agent_id']).where('workspace', '=', rowKey(s)).execute()
-  return new Map(rows.map((row) => [row.id, row]))
-}
-
-async function saveRow(s: State, row: Row): Promise<void> {
-  const values = { ...row, workspace: rowKey(s) }
-  await db.insertInto('cloud_record').values(values).onConflict((oc) => oc.column('id').doUpdateSet(values)).execute()
-}
-
-function rowKey(s: State): string {
-  return s.home ? '' : s.ws
-}
-
-function seqName(s: State): string {
-  return s.home ? SEQ : `${SEQ}:${s.ws}`
-}
-
-async function seqOf(s: State): Promise<number> {
-  return Number((await db.selectFrom('install_setting').select('value').where('name', '=', seqName(s)).executeTakeFirst())?.value ?? 0)
-}
-
-function hashItem(item: { value: unknown; owner?: string }): string {
-  return item.owner && item.value !== null ? fingerprint([item.owner, item.value]) : fingerprint(item.value)
-}
-
-function fingerprint(value: unknown): string {
-  return value === null ? DELETED : createHash('sha256').update(JSON.stringify(value)).digest('base64url')
 }

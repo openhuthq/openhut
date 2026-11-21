@@ -75,8 +75,8 @@ export const commands = {
   },
   write: {
     body: MAX_FILE_BASE64,
-    parse: (v: Fields) => ({ id: agentId(v.id), path: pathOf({ value: v.path, kinds: WRITABLE }), create: v.create === true }),
-    run: async ({ id, path, body, create }: { id: string; path: string; body: string; create: boolean }) => ({ path: agentHome.write({ id, path, create, body: Buffer.from(body, 'base64') }) }),
+    parse: (v: Fields) => ({ id: agentId(v.id), path: pathOf({ value: v.path, kinds: WRITABLE }), create: v.create === true, replace: v.replace === true }),
+    run: async ({ id, path, body, create, replace }: { id: string; path: string; body: string; create: boolean; replace: boolean }) => ({ path: agentHome.write({ id, path, create, replace, body: Buffer.from(body, 'base64') }) }),
   },
   delete: {
     parse: (v: Fields) => ({ id: agentId(v.id), paths: pathsOf({ value: v.paths, kinds: REMOVABLE }) }),
