@@ -29,7 +29,6 @@ const cloud = createServer(async (req, res) => {
     if (seen.dropKit) return req.socket.destroy()
     return seen.failKit ? reply(502, {}) : reply(200, seen.kit)
   }
-  if (req.url === '/v1/signers') return reply(200, { object: 'signer', key: body.next })
   if (req.url === '/v1/key-boxes/passkey' && req.method === 'DELETE') return reply(200, { object: 'key_box', kind: 'passkey', deleted: true, passkey: seen.passkey = undefined })
   if (req.url === '/v1/key-boxes/kit' && req.method === 'DELETE') return seen.failDelete ? reply(500, {}) : reply(200, { kind: 'kit', deleted: !(seen.kit = undefined) })
   if (req.url === '/v1/key-boxes/kit-confirmed' && req.method === 'PUT') return reply(200, seen.confirmed = { object: 'key_box', kind: 'kit-confirmed', body: body.body, by: body.by, signature: body.signature, savedAt: new Date(Number(body.savedAt)).toISOString() })

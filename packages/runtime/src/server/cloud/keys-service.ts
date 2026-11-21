@@ -194,14 +194,13 @@ export const keysService = {
     return locked ? unlock({ keys: { 1: prf }, bind: bind({ sub: locked.sub, name: 'passkey' }), locked: fromBase64(box) }) : null
   },
 
-  async change(remove: string[]): Promise<{ list: MemberList; next: Account; letters: Sent[]; handover: { next: string; by: string; signature: string } }> {
+  async change(remove: string[]): Promise<{ list: MemberList; next: Account; letters: Sent[] }> {
     const account = keysService.mustBeOn()
     const body = bodyOf(account.list)
     const me = toBase64((await keysService.device()).publicKey)
     await notYoung(account)
     const mine = body?.members.find((member) => member.email === account.email)
-    const oldSigner = await accountDevice(fromBase64(account.key))
-    const oldKit = toBase64(oldSigner.publicKey)
+    const oldKit = toBase64((await accountDevice(fromBase64(account.key))).publicKey)
     if (!body || !mine || remove.some((device) => device === me || device === oldKit || !mine.devices.includes(device))) throw new HttpError(400, 'Pick one of your other devices to remove.', { param: 'device' })
     const key = newKey()
     const kit = toBase64((await accountDevice(key)).publicKey)
@@ -226,7 +225,7 @@ export const keysService = {
         if (member.email === account.email && !body.runtimes?.includes(device)) letters.push(await sealTo({ to: device, purpose: 'account-key', workspace: workspace.id, plain: key }))
       }
     }
-    return { list, next, letters, handover: { next: kit, by: oldKit, signature: await signProof({ signer: oldSigner, proof: 'key-box', parts: [account.sub, 'signer', kit] }) } }
+    return { list, next, letters }
   },
 
   mustBeOn(): Account {
@@ -249,8 +248,9 @@ export const keysService = {
   forgetHere: async (): Promise<void> => keyStore.write({ device: toBase64(newKey()), machine }),
 
   async removedHere(): Promise<void> {
-    const account = (await keyStore.read()).account
-    if (account) await keyStore.write({ device: toBase64(newKey()), machine, locked: account.key ? { sub: account.sub, email: account.email } : undefined })
+    const { account, locked } = await keyStore.read()
+    const who = account?.key ? { sub: account.sub, email: account.email } : locked
+    if (account || locked) await keyStore.write({ device: toBase64(newKey()), machine, locked: who })
   },
 }
 
