@@ -15,7 +15,7 @@ import { HERE } from '@/features/settings/desktop'
 import { Chevron, Row, Rows } from '@/features/settings/kit'
 import { isPhone } from '@/lib/native'
 import { navigate } from '@/lib/router'
-import { toastError } from '@/lib/toast'
+import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 function Unlock({ cloud }: { cloud: Cloud }) {
@@ -29,7 +29,7 @@ function Unlock({ cloud }: { cloud: Cloud }) {
     <div className="w-[380px] rounded-lg border border-hair bg-card p-1 text-left">
       <Rows><Row onClick={() => setKit(true)} icon={<Mascot kind="kit" size={30} />} title="Use my recovery kit" note="The 12 words you saved"><Chevron /></Row></Rows>
     </div>
-    <Button type="button" variant="link" className="text-[12px] text-mute" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out, keep this {HERE} as it is</Button>
+    <Button type="button" variant="text" className="text-[12px] font-normal text-mute" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out, keep this {HERE} as it is</Button>
   </Window>
 }
 
@@ -63,7 +63,7 @@ function KitEntry({ onBack }: { onBack: () => void }) {
       </label>)}</div>
       <Button type="submit" variant="primary" disabled={words.some((word) => !word) || unlock.isPending} className="mt-2 h-10 w-[460px] justify-center text-[14px]">{unlock.isPending ? 'Unlocking…' : 'Unlock'}</Button>
       <ErrorNote message={unlock.error?.message} />
-      <Button type="button" variant="link" className="text-[12px] text-mute" onClick={onBack}>Try another way</Button>
+      <Button type="button" variant="text" className="text-[12px] font-normal text-mute" onClick={onBack}>Back</Button>
     </form>
   </Window>
 }
@@ -74,13 +74,15 @@ export function CloudGate({ children }: { children: ReactNode }) {
   const [landing, setLanding] = useState(false)
   const restoring = cloud?.backup.state === 'restoring'
   const agent = cloud?.backup.agent
+  const problem = cloud?.backup.problem
   useEffect(() => {
     if (restoring) return setLanding(true)
     if (!landing) return
     setLanding(false)
     void queries.invalidateQueries()
+    if (problem) toast(problem)
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
-  }, [restoring, landing, agent, queries])
+  }, [restoring, landing, agent, problem, queries])
   if (isPhone() || !cloud) return children
   if (cloud.status === 'locked') return <Unlock cloud={cloud} />
   if (restoring || landing) return <Restoring cloud={cloud} />
@@ -88,10 +90,13 @@ export function CloudGate({ children }: { children: ReactNode }) {
 }
 
 function Restoring({ cloud }: { cloud: Cloud }) {
+  const queries = useQueryClient()
   const agents = useAgents().data ?? []
   const { done, total, current } = cloud.backup
+  useEffect(() => void queries.invalidateQueries({ queryKey: ['agents'] }), [done, queries])
+  const slots = Array.from({ length: Math.min(total, 3) }, (_, index) => agents[index])
   return <Window>
-    <div className="flex h-16 items-center gap-3">{agents.slice(0, 3).map((each, index) => <span key={each.id} className={cn(index >= done && 'opacity-25')}><Face agent={each} size={64} /></span>)}</div>
+    <div className="flex h-16 items-center gap-3">{total === 0 ? <Hut mood="key" className="size-16" /> : slots.map((each, index) => each ? <Face key={each.id} agent={each} size={64} /> : <span key={index} className="size-16 rounded-full bg-soft" />)}</div>
     <h1 className="m-0 mt-2 text-[22px]/[1.25] font-semibold">Bringing your agents back</h1>
     <p className="m-0 text-[14px] text-body">{current ? `Restoring ${current} · ${Math.min(done + 1, total)} of ${total}` : 'Unlocking your backup…'}</p>
   </Window>

@@ -37,7 +37,7 @@ const STARTING_MS = 180_000
 const RENDERED = ['instructions', 'model', 'codeExecution', 'browser'] as const
 const DEFAULT_MODEL = 'claude:sonnet'
 const Moved = z.object({
-  agent: z.object({ id: z.string().check(z.regex(/^ag_[a-z0-9]{8}$/)), name: z.string(), instructions: z.string(), model: z.string(), codeExecution: z.boolean(), browser: z.boolean() }),
+  agent: z.object({ id: z.string().check(z.regex(/^ag_[a-z0-9]{8}$/)), name: z.string().check(z.minLength(1), z.maxLength(40)), instructions: z.string().check(z.maxLength(20_000)), model: z.string().check(z.maxLength(200)), codeExecution: z.boolean(), browser: z.boolean() }),
   channels: z.array(z.object({ kind: ChannelKind, status: z.enum(['connected', 'linking']), account: z.nullable(z.string()), ownerAddress: z.string(), open: z.boolean(), allowed: z.string(), secrets: z.string() })),
   threads: z.array(z.object({ id: z.optional(z.string()), title: z.string(), messages: z.string(), createdAt: z.string(), updatedAt: z.string() })),
   routines: z.optional(z.array(z.object({ name: z.string(), plan: z.string(), at: z.nullable(z.string()), cron: z.nullable(z.string()), until: z.nullable(z.string()), origin: z.string() }))),

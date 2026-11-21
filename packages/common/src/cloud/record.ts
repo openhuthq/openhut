@@ -31,16 +31,22 @@ export const ConnectionValue = z.object({
 })
 export type ConnectionValue = z.infer<typeof ConnectionValue>
 
-export const SYNCED = ['agent', 'setting', 'connection'] as const
+export const HeadValue = z.object({
+  records: z.array(z.tuple([z.string().check(z.regex(/^[A-Za-z0-9_-]{8,64}$/)), z.number().check(z.int(), z.minimum(1))])).check(z.maxLength(50_000)),
+})
+export type HeadValue = z.infer<typeof HeadValue>
+
+export const SYNCED = ['agent', 'setting', 'connection', 'head'] as const
 export type Synced = (typeof SYNCED)[number]
 export type Opened =
   | { kind: 'agent'; ref: string; value: AgentValue | null; by: string }
   | { kind: 'setting'; ref: string; value: SettingValue | null; by: string }
   | { kind: 'connection'; ref: string; value: ConnectionValue | null; by: string }
+  | { kind: 'head'; ref: string; value: HeadValue | null; by: string }
 export type Sealed = { ver: number; deleted: boolean; body: string }
 
 const ADMIN_ONLY: Synced[] = ['setting', 'connection']
-const VALUES = { agent: AgentValue, setting: SettingValue, connection: ConnectionValue }
+const VALUES = { agent: AgentValue, setting: SettingValue, connection: ConnectionValue, head: HeadValue }
 const Body = z.object({
   change: z.string().check(z.length(16)),
   kind: z.enum(SYNCED),
@@ -53,12 +59,15 @@ const words = new TextDecoder()
 
 export function refOf(opened: Opened): string | null {
   if (!opened.value) return null
+  if (opened.kind === 'head') return 'head'
   return opened.kind === 'setting' ? opened.value.name : opened.value.id
 }
 
 export async function sealRecord({ workspace, key, version, signer, id, ver, kind, ref, value }: {
   workspace: string; key: Bytes; version: number; signer: Identity; id: string; ver: number; kind: Synced; ref: string; value: unknown
 }): Promise<Sealed | null> {
+  const parsed = value === null ? null : VALUES[kind].safeParse(value).data
+  if (parsed === undefined || (parsed !== null && refOf({ kind, ref, value: parsed, by: '' } as Opened) !== ref)) return null
   const bytes = text.encode(JSON.stringify({ change: toBase64(newKey(12)), kind, counter: ver, ref, value }))
   const signed = await signRecord({ signer, bind: recordBind({ workspace, id, kind }), bytes })
   const locked = await lock({ key, version, bind: lockBind({ workspace, id }), plain: text.encode(JSON.stringify(signed)) })

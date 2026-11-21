@@ -3,7 +3,7 @@ import { createHash, randomInt } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as z from 'zod/mini'
-import { MemberList, MemberListBody, parseJson, signProof } from '@openhut/common/cloud/cloud.ts'
+import { checkProof, MemberList, MemberListBody, parseJson, signProof } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, check, signList } from '@openhut/common/cloud/member-list.ts'
 import { concat, equal, fromBase64, fromWords, identity, lock, newKey, newWords, slot, toBase64, unlock, type Bytes, type Identity } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
@@ -59,30 +59,51 @@ export const keysService = {
     return next.token
   },
 
-  async workspaceBox(account: Account): Promise<{ id: string; key: string }> {
-    const plain = concat([fromBase64(account.workspace.key), fromBase64(await anchorOf(firstOf(account)))])
-    const box = await lock({ key: fromBase64(account.key), version: 1, bind: `account/${account.sub}/workspace/${account.workspace.id}`, plain })
-    return { id: account.workspace.id, key: toBase64(box ?? new Uint8Array()) }
+  async workspaceBox(account: Account): Promise<{ id: string; key: string; by: string; signature: string }> {
+    const box = toBase64(await lock({ key: fromBase64(account.key), version: 1, bind: workspaceBind({ account, id: account.workspace.id }), plain: await workspacePlain(account) }) ?? new Uint8Array())
+    const { by, signature } = await keysService.signBox({ account, name: `workspace/${account.workspace.id}`, body: box })
+    return { id: account.workspace.id, key: box, by, signature }
   },
 
-  async restore({ words, kit, workspace, chain }: { words: string[]; kit: string; workspace: { id: string; key: string }; chain: MemberList[] }): Promise<Account | null> {
+  async signBox({ account, name, body }: { account: Account; name: string; body: string }): Promise<{ body: string; by: string; signature: string }> {
+    const signer = await accountDevice(fromBase64(account.key))
+    return { body, by: toBase64(signer.publicKey), signature: await signProof({ signer, proof: 'key-box', parts: [account.sub, name, body] }) }
+  },
+
+  async boxIsMine({ account, name, box }: { account: Account; name: string; box: { body: string; by?: string; signature?: string } }): Promise<boolean> {
+    const by = toBase64((await accountDevice(fromBase64(account.key))).publicKey)
+    if (box.by !== by || !box.signature) return false
+    if (!await checkProof({ device: by, proof: 'key-box', parts: [account.sub, name, box.body], signature: box.signature })) return false
+    if (name === 'kit') return true
+    const plain = await unlock({ keys: { 1: fromBase64(account.key) }, bind: workspaceBind({ account, id: account.workspace.id }), locked: fromBase64(box.body) })
+    return Boolean(plain && equal({ a: plain, b: await workspacePlain(account) }))
+  },
+
+  async setKit(kit: { box: string; savedAt: string } | undefined): Promise<void> {
+    await save({ ...await keys(), kit })
+  },
+
+  async relock(locked: { sub: string; email: string }): Promise<void> {
+    const current = await keys()
+    await save({ device: current.device, machine, session: current.session, locked })
+  },
+
+  async restore({ words, kit, workspaces }: { words: string[]; kit: string; workspaces: { id: string; key: string; chain: MemberList[] }[] }): Promise<Account | null> {
     const current = await keys()
     const kitKey = await fromWords(words)
     if (!kitKey || !current.locked) return null
     const { sub, email } = current.locked
     const key = await unlock({ keys: { 1: kitKey }, bind: `account/${sub}/kit`, locked: fromBase64(kit) })
-    const plain = key && await unlock({ keys: { 1: key }, bind: `account/${sub}/workspace/${workspace.id}`, locked: fromBase64(workspace.key) })
-    const body = plain && chain[0] && await check({ anchor: toBase64(plain.slice(32)), chain })
-    const last = chain.at(-1)
-    if (!key || !plain || !body || !last || body.workspace !== workspace.id) return null
-    const device = toBase64((await identity(fromBase64(current.device))).publicKey)
-    const members = body.members.map((member) => member.email === email && !member.devices.includes(device) ? { ...member, devices: [...member.devices, device] } : member)
-    const list = await signList({ signer: await accountDevice(key), body: { ...body, version: body.version + 1, previous: await anchorOf(last), members } })
-    return { sub, email, key: toBase64(key), workspace: { id: workspace.id, key: toBase64(plain.slice(0, 32)), version: body.keyVersion ?? 1 }, list, first: chain[0] }
+    if (!key) return null
+    for (const workspace of workspaces) {
+      const account = await restoreFrom({ key, workspace, sub, email, device: current.device })
+      if (account) return account
+    }
+    return null
   },
 
-  async adopt(account: Account): Promise<void> {
-    await save({ device: (await keys()).device, machine, account, session: stored?.session })
+  async adopt({ account, kit }: { account: Account; kit?: { box: string; savedAt: string } }): Promise<void> {
+    await save({ device: (await keys()).device, machine, account, kit, session: stored?.session })
   },
 
   async advance(lists: MemberList[]): Promise<MemberListBody | null> {
@@ -102,7 +123,7 @@ export const keysService = {
 
   ownedBy({ sub }: { sub: string }): void {
     const other = stored?.account ?? stored?.locked
-    if (other && other.sub !== sub) throw new HttpError(409, `This ${process.platform === 'darwin' ? 'Mac' : 'computer'} is signed in to ${other.email}. Sign in with that account.`)
+    if (other && other.sub !== sub) throw new HttpError(409, `This ${process.platform === 'darwin' ? 'Mac' : 'computer'} is signed in to ${other.email}. ${stored?.account && !stored.kit ? 'Sign in with that account and save a recovery kit first.' : 'Sign in with that account.'}`)
   },
 
   async open({ sub, email }: { sub: string; email: string }): Promise<Account> {
@@ -149,6 +170,26 @@ export const keysService = {
     await save({ ...current, kit: { box: next.box, savedAt: new Date().toISOString() } })
     return { key, kit: { words: next.words } }
   },
+}
+
+async function restoreFrom({ key, workspace, sub, email, device }: { key: Bytes; workspace: { id: string; key: string; chain: MemberList[] }; sub: string; email: string; device: string }): Promise<Account | null> {
+  const { chain } = workspace
+  const plain = await unlock({ keys: { 1: key }, bind: `account/${sub}/workspace/${workspace.id}`, locked: fromBase64(workspace.key) })
+  const body = plain && chain[0] && await check({ anchor: toBase64(plain.slice(32)), chain })
+  const last = chain.at(-1)
+  if (!plain || !body || !last || body.workspace !== workspace.id) return null
+  const me = toBase64((await identity(fromBase64(device))).publicKey)
+  const members = body.members.map((member) => member.email === email && !member.devices.includes(me) ? { ...member, devices: [...member.devices, me] } : member)
+  const list = await signList({ signer: await accountDevice(key), body: { ...body, version: body.version + 1, previous: await anchorOf(last), members } })
+  return { sub, email, key: toBase64(key), workspace: { id: workspace.id, key: toBase64(plain.slice(0, 32)), version: body.keyVersion ?? 1 }, list, first: chain[0] }
+}
+
+async function workspacePlain(account: Account): Promise<Bytes> {
+  return concat([fromBase64(account.workspace.key), fromBase64(await anchorOf(firstOf(account)))])
+}
+
+function workspaceBind({ account, id }: { account: Account; id: string }): string {
+  return `account/${account.sub}/workspace/${id}`
 }
 
 async function kitFor(account: Account): Promise<{ words: string[]; box: string }> {
