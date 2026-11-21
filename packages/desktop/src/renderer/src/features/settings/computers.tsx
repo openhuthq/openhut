@@ -255,7 +255,7 @@ function AddComputer() {
   return <TailscaleDialog title="Add a computer">
     <p className="m-0 px-2.5 text-body">An always-on Linux computer gives each agent its own sandbox and keeps answering while this {HERE} sleeps. How do you want to add it?</p>
     <Rows>
-      <Row onClick={() => open('command')} icon={<I icon={ComputerTerminal01Icon} size={20} className="text-hue-blue" />} title="Run a command" note="Paste one line on the computer. Works on any Linux box you can open a terminal on."><Chevron /></Row>
+      <Row onClick={() => open('command')} icon={<I icon={ComputerTerminal01Icon} size={20} className="text-hue-blue" />} title="Run a command (easiest)" note="Paste one line on the computer. Traffic goes through the OpenHut Cloud relay, end-to-end encrypted, so OpenHut can't read it."><Chevron /></Row>
       <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Over Tailscale" note="Pick it from your tailnet and OpenHut installs itself. No terminal needed."><Chevron /></Row>
     </Rows>
   </TailscaleDialog>
