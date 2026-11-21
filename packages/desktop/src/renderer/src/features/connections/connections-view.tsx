@@ -91,7 +91,7 @@ function Row({ connection, agents, computers }: { connection: OpenHutConnection;
     <a href={`/connections/${connection.id}`} className="flex min-w-0 flex-1 items-center gap-3 text-ink no-underline">
       <Glyph name={connection.kind} size={26} />
       <ItemContent stacked><ItemTitle className="flex items-center gap-2">{connection.name}{connection.kind === 'postgres' && <Badge variant="tag">read-only</Badge>}{connection.status === 'failing' && <Badge variant="warning">failing</Badge>}</ItemTitle>
-        <ItemDescription className="text-[13px]">{[titleOf(connection.kind), connection.account].filter(Boolean).join(' · ')}</ItemDescription></ItemContent>
+        <ItemDescription className="text-[13px]">{[titleOf(connection.kind), connection.account, connection.changedBy && `changed by ${connection.changedBy}`, !connection.keyHere && 'key on your admins’ computers'].filter(Boolean).join(' · ')}</ItemDescription></ItemContent>
       {computers && <span className="flex shrink-0 flex-wrap gap-1">{connection.computers.map((copy) => <span key={copy.computer} title={copy.online ? undefined : 'Offline'}
         className={cn('inline-flex h-5 items-center gap-1 rounded-md bg-soft px-1.5 text-[11.5px]', copy.online ? 'text-ink' : 'text-mute-2')}><i className={cn('size-1.5 rounded-full', copy.online ? 'bg-pass' : 'bg-mute-2')} />{nameOf({ computers, id: copy.computer })}</span>)}</span>}
     </a>

@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { UnlockCloud } from '@openhut/common/cloud/cloud.ts'
+import { AddRuntime, RuntimeInvite, UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { requireSignIn } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
 
@@ -17,7 +17,13 @@ export const cloudController: FastifyPluginAsync = async (app) => {
   app.delete('/account', SignedIn, async () => cloudService.forget())
 
   app.post<{ Body: UnlockCloud }>('/unlock', UnlockRequest, async (req) => cloudService.unlock(req.body))
+
+  app.post<{ Body: AddRuntime }>('/runtimes', AddRuntimeRequest, async (req) => cloudService.addRuntime(req.body))
+
+  app.post<{ Body: RuntimeInvite }>('/join', JoinRequest, async (req) => cloudService.join(req.body))
 }
 
 const SignedIn = { onRequest: requireSignIn }
 const UnlockRequest = { onRequest: requireSignIn, schema: { body: UnlockCloud } }
+const AddRuntimeRequest = { onRequest: requireSignIn, schema: { body: AddRuntime } }
+const JoinRequest = { onRequest: requireSignIn, schema: { body: RuntimeInvite } }

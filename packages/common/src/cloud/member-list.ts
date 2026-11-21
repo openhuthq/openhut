@@ -47,6 +47,7 @@ async function follows({ previous, next }: { previous: Link; next: Link }): Prom
   if (b.workspace !== a.workspace || b.version !== a.version + 1 || b.previous !== (await anchorOf(previous.list))) return false
   if (!wellFormed(b) || keyVersionOf(b) < keyVersionOf(a)) return false
   const by = next.list.by
+  if (runtimesOf(a).includes(by) || !runtimesOf(a).every((key) => runtimesOf(b).includes(key) || !devicesOf(b).includes(key))) return false
   const invite = a.invites.find((each) => each.key === by)
   const signer = invite ? undefined : a.members.find((member) => member.devices.includes(by))
   if (!tracksRemoved({ previous: a, next: b, owner: signer?.role === 'owner' })) return false
@@ -85,7 +86,11 @@ function tracksRemoved({ previous, next, owner }: { previous: MemberListBody; ne
 function wellFormed(body: MemberListBody): boolean {
   const keys = [...devicesOf(body), ...body.invites.map((each) => each.key), ...body.removed].map(half)
   const owners = body.members.filter((member) => member.role === 'owner')
-  return owners.length === 1 && unique(body.members.map((member) => member.email)) && unique(keys)
+  return owners.length === 1 && unique(body.members.map((member) => member.email)) && unique(keys) && runtimesOf(body).every((key) => devicesOf(body).includes(key))
+}
+
+function runtimesOf(body: MemberListBody): string[] {
+  return body.runtimes ?? []
 }
 
 export function keyVersionOf(body: MemberListBody): number {

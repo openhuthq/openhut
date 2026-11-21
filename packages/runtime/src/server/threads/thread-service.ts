@@ -5,6 +5,7 @@ import { applySpecPatch, pipeJsonRender, SPEC_DATA_PART_TYPE, type JsonPatch } f
 import * as z from 'zod/mini'
 import { AGENT_HOME, ChatMessage, fileInHome, MAX_FILES, ToolProgress, UPLOADS, uploadName, type ChatCall, type ChatFile, type HomeFile, type SendChat, type Thread, type ThreadWithMessages, type UploadFile } from '@openhut/common/threads/thread.ts'
 import type { Deleted } from '@openhut/common/api.ts'
+import type { MessageValue } from '@openhut/common/cloud/record.ts'
 import { agentd } from '../platform/agentd.ts'
 import { db, findRow } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
@@ -13,7 +14,8 @@ import { HttpError, messageOf } from '../platform/http-error.ts'
 import { agentApiUrl } from '../platform/network.ts'
 import { deleted } from '../platform/responses.ts'
 import { newId, unseal } from '../platform/secrets.ts'
-import { agentService, unreachable } from '../agents/agent-service.ts'
+import { agentService, runsHere, unreachable } from '../agents/agent-service.ts'
+import { keysService } from '../cloud/keys-service.ts'
 import type { Caller } from '../team/identity.ts'
 
 const MAX_THREADS = 200
@@ -35,6 +37,7 @@ const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47])
 const JPEG = Buffer.from([0xff, 0xd8, 0xff])
 const MEDIA_TYPE = /^[\w.+-]+\/[\w.+-]+$/
 const busy = new Set<string>()
+const live = new Map<string, MessageValue>()
 const IDLE_POLL_MS = 1000
 const IDLE_WAIT_MS = 10 * 60_000
 const SILENT = /^\s*\[?(SILENT|NO[_ ]REPLY)\]?\s*$/i
@@ -126,29 +129,55 @@ export const threadService = {
     const messages = nextMessages({ stored: messagesOf(row), body })
     await save({ id, messages })
     if (agent.wanted !== 'running') throw new HttpError(409, `${agent.name} is stopped. Start it and try again.`)
+    if (!runsHere({ row: agent, me: await keysService.deviceKey() })) return elsewhere(reply)
     busy.add(id)
     reply.raw.on('close', () => busy.delete(id))
     const lastCall = await db.selectFrom('connection_event').select((eb) => eb.fn.max('id').as('id')).where('agent_id', '=', agent.id).executeTakeFirst()
     const abort = new AbortController()
     reply.raw.on('close', () => abort.abort())
     const started = Date.now()
+    const answer: MessageValue = { agentId: agent.id, message: { id: newId('msg'), role: 'assistant', parts: [] } }
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
-        writer.write({ type: 'start' })
-        for await (const chunk of joinText(pipeJsonRender(relayed({ agent, session: `openhut-${id}`, message: messages[messages.length - 1], signal: abort.signal })))) writer.write(chunk)
+        writer.write({ type: 'start', messageId: answer.message.id })
+        const tap = (chunk: UIMessageChunk) => track({ thread: id, answer, chunk })
+        for await (const chunk of joinText(pipeJsonRender(relayed({ agent, session: `openhut-${id}`, message: messages[messages.length - 1], signal: abort.signal, tap })))) writer.write(chunk)
         const calls = await callsSince({ agentId: agent.id, after: lastCall?.id ?? '0' })
         if (calls.length) writer.write({ type: 'data-calls', data: calls })
         writer.write({ type: 'finish' })
       },
       onError: messageOf,
       onEnd: async ({ messages: answered, isAborted }) => {
-        await save({ id, messages: [...messages, ...(z.safeParse(StoredMessages, answered.map(foldCard)).data ?? [])] })
+        live.delete(id)
+        await save({ id, messages: merged({ stored: await storedOf(id), added: z.safeParse(StoredMessages, answered.map(foldCard)).data ?? [] }) })
         busy.delete(id)
         log.info({ event: 'agent.chat', agent: agent.id, thread: id, ms: Date.now() - started, aborted: isAborted })
       },
     })
     reply.hijack()
     await pipeUIMessageStreamToResponse({ response: reply.raw, stream })
+  },
+
+  async synced(): Promise<MessageValue[]> {
+    const rows = await db.selectFrom('thread').select(['id', 'agent_id', 'messages']).orderBy('created_at').execute()
+    const saved = rows.flatMap((row) => (z.safeParse(StoredMessages, parseJson(row.messages)).data ?? []).map((message) => ({ agentId: row.agent_id, message })))
+    const streaming = [...live.values()]
+    return [...saved.filter((each) => !streaming.some((open) => open.message.id === each.message.id)), ...streaming]
+  },
+
+  async applySynced({ id, value }: { id: string; value: MessageValue | null }): Promise<void> {
+    const agentId = value?.agentId ?? (await db.selectFrom('thread').select('agent_id').where('messages', 'like', `%"${id}"%`).executeTakeFirst())?.agent_id ?? ''
+    const agent = await db.selectFrom('agent').selectAll().where('id', '=', agentId).executeTakeFirst()
+    const owner = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirst()
+    if (!agent || !owner) return
+    const found = await db.selectFrom('thread').select('id').where('agent_id', '=', agentId).where('person_id', '=', owner.id).orderBy('created_at').executeTakeFirst()
+    if (!found && !value) return
+    const thread = found?.id ?? (await db.insertInto('thread').values({ id: newId('th'), agent_id: agentId, person_id: owner.id, title: agent.name }).returning('id').executeTakeFirstOrThrow()).id
+    const stored = await storedOf(thread)
+    const messages = value ? merged({ stored, added: [value.message] }) : stored.filter((message) => message.id !== id)
+    await save({ id: thread, messages })
+    const asks = value?.message.role === 'user' && messages.at(-1)?.id === value.message.id && agent.wanted === 'running'
+    if (asks && runsHere({ row: agent, me: await keysService.deviceKey() })) void answerFor({ thread, agent }).catch((err: unknown) => log.warn({ event: 'thread.answer_failed', thread, error: messageOf(err) }))
   },
 
   async runRoutine({ agentId, threadId, text }: { agentId: string; threadId: string; text: string }): Promise<string> {
@@ -169,6 +198,47 @@ export const threadService = {
   },
 }
 
+function elsewhere(reply: FastifyReply): Promise<void> {
+  const stream = createUIMessageStream({ execute: ({ writer }) => { writer.write({ type: 'start' }); writer.write({ type: 'finish' }) } })
+  reply.hijack()
+  return Promise.resolve(pipeUIMessageStreamToResponse({ response: reply.raw, stream }))
+}
+
+async function answerFor({ thread, agent }: { thread: string; agent: AgentRow }): Promise<void> {
+  await idle(thread)
+  busy.add(thread)
+  const answer: MessageValue = { agentId: agent.id, message: { id: newId('msg'), role: 'assistant', parts: [] } }
+  try {
+    const last = (await storedOf(thread)).at(-1)
+    if (last?.role !== 'user') return
+    await relay({ agent, session: `openhut-${thread}`, message: last, signal: AbortSignal.timeout(TURN_MS), writer: { write: (chunk) => track({ thread, answer, chunk }) } })
+  } finally {
+    live.delete(thread)
+    if (answer.message.parts.length) await save({ id: thread, messages: merged({ stored: await storedOf(thread), added: [answer.message] }) })
+    busy.delete(thread)
+  }
+}
+
+function track({ thread, answer, chunk }: { thread: string; answer: MessageValue; chunk: UIMessageChunk }): void {
+  const parts = answer.message.parts
+  if (chunk.type === 'text-start') parts.push({ type: 'text', text: '' })
+  const last = parts.at(-1)
+  if (chunk.type !== 'text-delta' || !last) return
+  last.text = `${String(last.text ?? '')}${chunk.delta}`
+  live.set(thread, answer)
+  emit({ name: 'thread.streamed', target: { type: 'stream', id: thread } })
+}
+
+function merged({ stored, added }: { stored: ChatMessage[]; added: ChatMessage[] }): ChatMessage[] {
+  const kept = stored.map((message) => added.find((each) => each.id === message.id) ?? message)
+  return [...kept, ...added.filter((message) => !stored.some((each) => each.id === message.id))]
+}
+
+async function storedOf(id: string): Promise<ChatMessage[]> {
+  const row = await db.selectFrom('thread').select('messages').where('id', '=', id).executeTakeFirst()
+  return z.safeParse(StoredMessages, parseJson(row?.messages ?? '[]')).data ?? []
+}
+
 async function idle(id: string): Promise<void> {
   const until = Date.now() + IDLE_WAIT_MS
   while (busy.has(id) && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, IDLE_POLL_MS))
@@ -185,9 +255,9 @@ async function callAgent({ agent, session, message, signal }: { agent: AgentRow;
   return res.body
 }
 
-function relayed(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal }): ReadableStream<UIMessageChunk> {
+function relayed({ tap, ...input }: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; tap: (chunk: UIMessageChunk) => void }): ReadableStream<UIMessageChunk> {
   return new ReadableStream({
-    start: (controller) => relay({ ...input, writer: { write: (chunk) => controller.enqueue(chunk) } }).then(() => controller.close(), (err: unknown) => controller.error(err)),
+    start: (controller) => relay({ ...input, writer: { write: (chunk) => { controller.enqueue(chunk); tap(chunk) } } }).then(() => controller.close(), (err: unknown) => controller.error(err)),
   })
 }
 

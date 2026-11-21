@@ -7,7 +7,7 @@ const rows: string[] = []
 let pass = 0
 let total = 0
 
-for (const phase of ['main', 'after-upgrade', 'after-restart', 'update-broken', 'update']) {
+for (const phase of ['main', 'cloud', 'after-upgrade', 'after-restart', 'update-broken', 'update']) {
   const file = `${RESULTS}/e2e-${phase}.json`
   if (!existsSync(file)) {
     rows.push(`| ${phase} | (phase did not run) | | | **FAIL** |`)

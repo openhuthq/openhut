@@ -28,11 +28,11 @@ function fake(): Fake {
 }
 
 function agent(name: string): Agent {
-  return { id: `ag_${name.toLowerCase()}`, object: 'agent', name, ownerId: 'usr_a', ownerName: 'me', model: 'claude:sonnet', wanted: 'running', status: 'running', health: 'answering', healthDetail: '', summary: '', net: 0, instructions: '', codeExecution: false, browser: false, face: null, canEdit: true, createdAt: AT }
+  return { id: `ag_${name.toLowerCase()}`, object: 'agent', name, ownerId: 'usr_a', ownerName: 'me', model: 'claude:sonnet', wanted: 'running', status: 'running', health: 'answering', healthDetail: '', summary: '', net: 0, instructions: '', codeExecution: false, browser: false, face: null, canEdit: true, runsHere: true, changedBy: null, createdAt: AT }
 }
 
 function connection({ id, kind, name, secret }: { id: string; kind: ConnectionKind; name: string; secret?: string }): Connection & { secret?: string } {
-  return { id, object: 'connection', kind, name, account: '', signIn: !secret, ownerId: 'usr_a', ownerName: 'me', everyone: false, usable: true, canDelete: true, agents: 0, status: 'connected', lastSuccessAt: null, createdAt: AT, secret }
+  return { id, object: 'connection', kind, name, account: '', signIn: !secret, ownerId: 'usr_a', ownerName: 'me', everyone: false, usable: true, canDelete: true, agents: 0, status: 'connected', lastSuccessAt: null, keyHere: true, changedBy: null, createdAt: AT, secret }
 }
 
 function providerOf({ id, runtime }: { id: string; runtime: Fake }) {

@@ -17,6 +17,7 @@ import { DoesDialog, Panel } from '@/features/agents/panel'
 import { SkillsDialog } from '@/features/agents/skills-dialog'
 import { RoutinesDialog } from '@/features/routines/routines-dialog'
 import { Chat } from '@/features/threads/chat'
+import { MoveHere } from '@/features/cloud/live'
 import { RequestError } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
 import { PHONE, useMedia } from '@/lib/media'
@@ -44,6 +45,7 @@ export function AgentView({ agentId, dialog, detail }: { agentId: string; dialog
   const panel = open && <Panel agent={agent.data} naming={dialog === 'name'} watching={dialog === 'browser'} />
   return <>
     <Chat agent={agent.data} tools={toggle} onTitle={phone ? () => setShown(true) : undefined} />
+    <MoveHere agent={agent.data} />
     {phone && panel ? <Dialog size="window" label={`${agent.data.name}'s details`} className="phone:bg-sidebar" onClose={() => setShown(false)}>{panel}{dialogs}</Dialog> : <>{panel}{dialogs}</>}
   </>
 }

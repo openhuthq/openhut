@@ -18,7 +18,7 @@ export const agentd = {
   apply: ({ id, net, files, browser, running, force = false }: { id: string; net: number; files: AgentFiles; browser: boolean; running: boolean; force?: boolean }) =>
     ask({ request: { cmd: 'apply', id, net, files, browser, running, force }, doing: 'set up the agent', schema: z.object({ applied: z.string(), change: Change }) }),
   stop: ({ id }: { id: string }) => ask({ request: { cmd: 'stop', id }, doing: 'stop the agent', schema: z.object({ stopped: z.string() }) }),
-  remove: ({ id }: { id: string }) => ask({ request: { cmd: 'rm', id }, doing: 'delete the agent', schema: z.object({ removed: z.string() }) }),
+  remove: ({ id, trash = false }: { id: string; trash?: boolean }) => ask({ request: { cmd: 'rm', id, trash }, doing: 'delete the agent', schema: z.object({ removed: z.string() }) }),
   update: ({ appVersion, sha256 }: { appVersion?: string; sha256: string }) => ask({ request: { cmd: 'update', appVersion, sha256 }, doing: 'start the update', schema: z.object({ updating: z.boolean() }) }),
   skills: ({ id }: { id: string }) => ask({ request: { cmd: 'skills', id }, doing: 'list the skills', schema: z.object({ skills: z.array(z.object({ path: z.string(), head: z.string() })), bundled: z.string() }) }),
   read: async ({ id, path }: { id: string; path: string }): Promise<Buffer | null> => {

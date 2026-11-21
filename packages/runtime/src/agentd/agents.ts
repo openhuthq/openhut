@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import { browser, POLICY_FILE, policyOf } from './browser.ts'
 import { firewall } from './firewall.ts'
 import { AGENT_UID, AGENT_USER, ASSETS, box, conf, DATA, home, ID, IMAGE, own, RESOLV, TMP_MIB, writeIfChanged } from './host.ts'
@@ -11,6 +11,8 @@ const PLUGINS = `${ASSETS}/vendor/hermes-plugins`
 const CLAUDE_BIN = process.env.AGENTD_CLAUDE || `${ASSETS}/bin/claude`
 const MOUNTS = createHash('sha256').update(`${PLUGINS}\n${CLAUDE_BIN}`).digest('hex').slice(0, 16)
 const SPEC = '4'
+const TRASH = `${DATA}/trash`
+const TRASH_MS = 30 * 24 * 60 * 60_000
 const AGENT_MEMORY_MIB = 1024
 const AGENT_CPUS = 1
 const CLAUDE_SETTINGS_FILE = 'claude-settings.json'
@@ -67,10 +69,16 @@ export const agents = {
     await start(id)
   },
 
-  async remove(id: string): Promise<{ removed: string }> {
+  async remove(id: string, trash = false): Promise<{ removed: string }> {
     await box.remove(id)
+    if (trash) {
+      const kept = `${TRASH}/${Date.now()}-${id}`
+      mkdirSync(kept, { recursive: true, mode: 0o700 })
+      for (const [from, name] of [[home(id), 'home'], [conf(id), 'conf']]) if (existsSync(from)) renameSync(from, `${kept}/${name}`)
+    }
     rmSync(home(id), { recursive: true, force: true })
     rmSync(conf(id), { recursive: true, force: true })
+    for (const old of existsSync(TRASH) ? readdirSync(TRASH) : []) if (Date.now() - Number(old.split('-')[0]) > TRASH_MS) rmSync(`${TRASH}/${old}`, { recursive: true, force: true })
     return { removed: id }
   },
 

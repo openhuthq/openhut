@@ -149,7 +149,7 @@ function RunsOn({ agent }: { agent: Agent }) {
   const move = useMove(home)
   return <>
     <DropdownMenu>
-      <DropdownMenuTrigger className={ROW} disabled={!!move.going}><I icon={LaptopIcon} size={15} className="text-mute" />Runs on<span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="truncate">{nameOf({ computers, id })}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
+      <DropdownMenuTrigger className={ROW} disabled={!!move.going}><I icon={LaptopIcon} size={15} className="text-mute" />Runs on<span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="truncate">{agent.runsHere ? nameOf({ computers, id }) : 'Another computer'}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
       <MenuCard title={`${agent.name} runs on`}>
         {(computers ?? []).map((computer) => <Choice key={computer.id} icon={<I icon={computer.id === 'local' ? LaptopIcon : ServerStack01Icon} size={15} />} name={computer.id === id ? computer.name : `Move to ${computer.name}`}
           note={runsOnNote(computer)}
@@ -160,7 +160,7 @@ function RunsOn({ agent }: { agent: Agent }) {
     </DropdownMenu>
     {move.line
       ? <p role="status" className="m-0 px-2.5 py-1 text-[12.5px]/[1.45] text-body">{move.line}</p>
-      : <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{id !== 'local' ? `Runs in its own sandbox on ${nameOf({ computers, id })}.` : WORDS.sandboxed ? `Runs in its own sandbox on this ${HERE}.` : `Runs as you, like any app on this ${HERE}.`}</p>}
+      : <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{!agent.runsHere ? 'Runs on your other computer; its chats and memory sync here.' : id !== 'local' ? `Runs in its own sandbox on ${nameOf({ computers, id })}.` : WORDS.sandboxed ? `Runs in its own sandbox on this ${HERE}.` : `Runs as you, like any app on this ${HERE}.`}</p>}
     {id === 'local' && !WORDS.sandboxed && <TeamHint agent={agent} server={(computers ?? []).find((each) => each.id !== 'local' && each.online)} onMove={(to) => move.go(to)} />}
   </>
 }
@@ -211,7 +211,7 @@ export function DoesDialog({ agent, onClose }: { agent: Agent; onClose: () => vo
         className="min-h-[220px] rounded-lg font-sans text-[14px]/[1.55]" />
       {updateAgent.error && <p role="alert" className="m-0 text-xs text-fail">{updateAgent.error.message}</p>}
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 text-[13px] text-mute"><I icon={SparklesIcon} size={13} />Plain words are fine. {agent.name} reads this before every reply.</span>
+        <span className="inline-flex items-center gap-1.5 text-[13px] text-mute"><I icon={SparklesIcon} size={13} />{agent.changedBy ? `Last changed by ${agent.changedBy}.` : `Plain words are fine. ${agent.name} reads this before every reply.`}</span>
         <span className="ml-auto flex gap-2"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" variant="primary" disabled={!agent.canEdit || updateAgent.isPending}>Save</Button></span>
       </div>
     </form>

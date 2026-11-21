@@ -62,8 +62,8 @@ export const commands = {
     run: ({ id }: { id: string }) => agents.stop(id),
   },
   rm: {
-    parse: (v: Fields) => ({ id: agentId(v.id) }),
-    run: ({ id }: { id: string }) => agents.remove(id),
+    parse: (v: Fields) => ({ id: agentId(v.id), trash: v.trash === true }),
+    run: ({ id, trash }: { id: string; trash: boolean }) => agents.remove(id, trash),
   },
   skills: {
     parse: (v: Fields) => ({ id: agentId(v.id) }),

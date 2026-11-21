@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto'
 import * as z from 'zod/mini'
-import { KeyBox, MemberList, signProof, type Cloud, type CloudAuthorization, type RecoveryKit } from '@openhut/common/cloud/cloud.ts'
-import { toBase64 } from '@openhut/common/vault/vault.ts'
+import { KeyBox, Letter, MemberList, signProof, type Cloud, type CloudAuthorization, type RecoveryKit, type RuntimeInvite } from '@openhut/common/cloud/cloud.ts'
+import { anchorOf, check } from '@openhut/common/cloud/member-list.ts'
+import { concat, fromBase64, letter, read, toBase64 } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
@@ -14,6 +15,7 @@ const HERE = process.platform === 'darwin' ? 'Mac' : 'computer'
 const SIGNED_IN = 'You’re signed in. You can go back to OpenHut.'
 const Workspaces = z.object({ data: z.array(z.object({ id: z.string(), key: z.string(), by: z.optional(z.string()), signature: z.optional(z.string()) })) })
 const Lists = z.object({ data: z.array(MemberList) })
+const Letters = z.object({ data: z.array(Letter) })
 const pending = new Map<string, { verifier: string; authorization: string; at: number }>()
 let signInError: string | null = null
 let boxesDiffer = false
@@ -126,9 +128,46 @@ export const cloudService = {
     return cloudService.status()
   },
 
+  async addRuntime({ device }: { device: string }): Promise<RuntimeInvite> {
+    const account = keysService.account()
+    const me = keysService.members()?.members.find((member) => member.email === account?.email)
+    if (!account || !keysService.session()) throw new HttpError(409, 'Turn on OpenHut Cloud on this computer first.')
+    if (!me || me.role === 'member') throw new HttpError(403, 'Only an owner or admin can add a computer that runs agents.')
+    const token = await keysService.token()
+    const list = await keysService.addDevice(device)
+    if (list) {
+      const put = await cloud.room({ method: 'PUT', workspace: account.workspace.id, path: '/members', token, body: list })
+      if (put.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t add that computer (HTTP ${put.status}). Try again.`)
+      await keysService.advance([list])
+    }
+    const signer = await keysService.device()
+    const plain = concat([fromBase64(account.workspace.key), fromBase64(await anchorOf(account.first ?? account.list))])
+    const body = await letter({ sender: signer, to: fromBase64(device), workspace: account.workspace.id, purpose: 'workspace-key', version: account.workspace.version, plain })
+    const sent = body && await cloud.room({ method: 'POST', workspace: account.workspace.id, path: '/letters', token, body: { to: device, purpose: 'workspace-key', body: toBase64(body) } })
+    if (sent?.status !== 200) throw new HttpError(502, 'OpenHut Cloud didn’t take the key for that computer. Try again.')
+    return { object: 'runtime_invite', workspace: account.workspace.id, email: account.email, from: toBase64(signer.publicKey) }
+  },
+
+  async join({ workspace, email, from }: Omit<RuntimeInvite, 'object'>): Promise<Cloud> {
+    if (keysService.account()) throw new HttpError(409, 'This computer is already on OpenHut Cloud.')
+    const session = await keysService.deviceSession(workspace)
+    const token = session.token
+    const device = await keysService.device()
+    const found = Letters.safeParse((await cloud.room({ method: 'GET', workspace, path: '/letters', token })).json).data?.data.find((each) => each.from === from && each.purpose === 'workspace-key')
+    const plain = found && await read({ recipient: device, from: fromBase64(from), workspace, purpose: 'workspace-key', body: fromBase64(found.body), allowed: [fromBase64(from)] })
+    const chain = Lists.safeParse((await cloud.room({ method: 'GET', workspace, path: '/member-lists?after=0', token })).json).data?.data ?? []
+    const body = plain && chain[0] && await check({ anchor: toBase64(plain.slice(32)), chain })
+    if (!found || !plain || !body || !body.members.some((member) => member.email === email && member.devices.includes(toBase64(device.publicKey)))) throw new HttpError(400, 'This computer couldn’t open the workspace key it was sent. Add it again from your Mac.')
+    await cloud.room({ method: 'DELETE', workspace, path: `/letters/${found.id}`, token })
+    await syncService.reset({ restoring: false })
+    await keysService.joinAsRuntime({ session, workspace: { id: workspace, key: toBase64(plain.slice(0, 32)), version: body.keyVersion ?? 1 }, chain })
+    syncService.connect()
+    return cloudService.status()
+  },
+
   connect(): void {
     syncService.connect()
-    if (keysService.account() && keysService.session()) checkBoxes().catch((err: unknown) => log.warn({ event: 'cloud.box_check_failed', error: messageOf(err) }))
+    if (keysService.account()?.key && keysService.session()) checkBoxes().catch((err: unknown) => log.warn({ event: 'cloud.box_check_failed', error: messageOf(err) }))
   },
 }
 

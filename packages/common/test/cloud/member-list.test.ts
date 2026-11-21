@@ -207,3 +207,16 @@ test('only an owner or admin moves the key version, and never back', async () =>
   const down = await signList({ signer: moMac, body: { ...first, version: 2, previous: await anchorOf(bumped), keyVersion: 2 } })
   assert.equal(await check({ anchor: await anchorOf(bumped), chain: [bumped, down] }), null)
 })
+
+test('a runtime device is listed for records only: it can never sign a member list, and it stays a runtime', async () => {
+  const server = await identity()
+  const withServer = { ...first, members: [{ ...first.members[0], devices: [key(moMac), key(server)] }, first.members[1]], runtimes: [key(server)] }
+  const v2 = await next(withServer)
+  assert.deepEqual(await check({ anchor, chain: [v1, v2] }), { ...withServer, version: 2, previous: anchor })
+  const v2Anchor = await anchorOf(v2)
+  const third = (body: MemberListBody, signer = moMac) => signList({ signer, body: { ...body, version: 3, previous: v2Anchor } })
+  const evicted = { ...withServer, members: [{ email: 'eve@example.com', role: 'owner' as const, devices: [key(eve)] }, { ...withServer.members[0], role: 'admin' as const }, first.members[1]] }
+  assert.equal(await check({ anchor, chain: [v1, v2, await third(evicted, server)] }), null)
+  assert.equal(await check({ anchor, chain: [v1, v2, await third({ ...withServer, runtimes: [] })] }), null)
+  assert.equal(await check({ anchor, chain: [v1, await next({ ...first, runtimes: [key(server)] })] }), null)
+})

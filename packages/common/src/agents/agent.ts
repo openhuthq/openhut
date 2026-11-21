@@ -30,6 +30,8 @@ export const Agent = z.object({
   browser: z.boolean(),
   face: z._default(z.nullable(z.string()), null),
   canEdit: z.boolean(),
+  runsHere: z._default(z.boolean(), true),
+  changedBy: z._default(z.nullable(z.string()), null),
   createdAt: Timestamp,
 })
 export type Agent = z.infer<typeof Agent>
@@ -53,6 +55,7 @@ export const UpdateAgentFields = {
   codeExecution: z.optional(z.boolean()),
   browser: z.optional(z.boolean()),
   face: z.optional(Face),
+  runsHere: z.optional(z.literal(true)),
 }
 export const UpdateAgent = z.object(UpdateAgentFields).check(atLeastOneField)
 export type UpdateAgent = z.infer<typeof UpdateAgent>

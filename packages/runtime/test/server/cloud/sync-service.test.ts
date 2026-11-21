@@ -6,20 +6,23 @@ import { createServer as createSocket } from 'node:net'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { MemberList, Record } from '@openhut/common/cloud/cloud.ts'
-import { openRecord, sealRecord, type AgentValue } from '@openhut/common/cloud/record.ts'
-import { fromBase64, identity, slot, type Identity } from '@openhut/common/vault/vault.ts'
+import { openRecord, sealRecord, type AgentValue, type ConnectionValue } from '@openhut/common/cloud/record.ts'
+import { fromBase64, identity, read, slot, toBase64, type Identity } from '@openhut/common/vault/vault.ts'
 
+const applied: string[] = []
 createSocket({ allowHalfOpen: true }, (sock) => sock.setEncoding('utf8').once('data', (line: string) => {
   const req = JSON.parse(line.split('\n')[0] ?? '{}') as { cmd: string; id: string; running?: boolean }
-  const replies: { [cmd: string]: object } = { ps: { states: {} }, health: { imageReady: true }, apply: { applied: req.id, change: 'none' }, rm: { removed: req.id } }
+  if (req.cmd === 'apply') applied.push(line)
+  const replies: { [cmd: string]: object } = { ps: { states: {} }, health: { firewall: true, imageReady: true }, apply: { applied: req.id, change: 'none' }, rm: { removed: req.id }, read: { body: null }, stat: { files: [] }, write: { path: 'home/x' } }
   sock.end(JSON.stringify({ ok: true, ...replies[req.cmd] }))
 })).listen(process.env.AGENTD_SOCK).unref()
 
-const room = { records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>), limit: Infinity, refused: 0 }
+const room = { log: [] as Record[], records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>), limit: Infinity, refused: 0 }
 const sockets = new Set<WebSocket>()
 const store = (record: Omit<Record, 'seq' | 'object'>): Record => {
   const saved = { ...record, object: 'record' as const, seq: ++room.seq }
   room.records.set(saved.id, saved)
+  room.log.push(saved)
   return saved
 }
 const push = (record: Record) => { for (const ws of sockets) ws.send(JSON.stringify({ type: 'record', record })) }
@@ -61,6 +64,11 @@ const { seal } = await import('../../../src/server/platform/secrets.ts')
 const { agentService } = await import('../../../src/server/agents/agent-service.ts')
 const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
 const { syncService } = await import('../../../src/server/cloud/sync-service.ts')
+const { connectionService } = await import('../../../src/server/connections/connection-service.ts')
+const { threadController } = await import('../../../src/server/threads/thread-controller.ts')
+const { answerErrors } = await import('../../../src/server/platform/http-error.ts')
+const { validateWithZod } = await import('../../../src/server/platform/validation.ts')
+const Fastify = (await import('fastify')).default
 await migrate()
 const actor = { id: 'usr_syncowner', email: 'mo@example.com', local: true }
 await db.insertInto('person').values({ id: actor.id, email: actor.email, role: 'owner', removed_at: null }).execute()
@@ -95,8 +103,8 @@ const remote = async ({ name, id = helpdeskId, ver = (room.records.get(id)?.ver 
 
 test('first sign-in uploads everything once; an edit made offline goes out once on reconnect', async () => {
   syncService.connect()
-  await until(() => room.records.size === 5 && syncService.status().at !== null, 'the first backup and its head')
-  assert.deepEqual([...room.puts.values()], [1, 1, 1, 1, 1])
+  await until(() => room.records.size === 6 && syncService.status().at !== null, 'the first backup and its head')
+  assert.deepEqual([...room.puts.values()], [1, 1, 1, 1, 1, 1])
   assert.equal(await nameInRoom(), 'Helpdesk')
   assert.equal(JSON.stringify([...room.records.values()]).includes('Helpdesk'), false)
 
@@ -195,4 +203,83 @@ test('a full restore checks the signed head and says so plainly when the cloud l
   await until(() => syncService.status().state === 'idle', 'a clean restore')
   await sleep(300)
   assert.equal(syncService.status().problem, null)
+})
+
+test('a streamed reply arrives in the room in order, as one record growing version by version', async () => {
+  const hermes = createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' })
+    const words = ['Order ', '4471 ', 'shipped ', 'Monday.']
+    const next = (i: number) => {
+      if (i === words.length) return res.end('data: [DONE]\n\n')
+      res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: words[i] } }] })}\n\n`)
+      setTimeout(() => next(i + 1), 450)
+    }
+    next(0)
+  }).listen(18649, '127.0.0.1')
+  await db.updateTable('agent').set({ wanted: 'running' }).where('id', '=', 'ag_helpdesk').execute()
+  const app = Fastify()
+  answerErrors(app)
+  app.setValidatorCompiler(validateWithZod)
+  await app.register(threadController, { prefix: '/api/threads' })
+  const headers = { authorization: 'Bearer test-key' }
+  const thread = (await app.inject({ method: 'POST', url: '/api/threads', headers, payload: { agentId: 'ag_helpdesk' } })).json()
+  const from = room.log.length
+  const res = await app.inject({ method: 'POST', url: `/api/threads/${thread.id}/chat`, headers, payload: { trigger: 'submit-message', message: { id: 'msg_question', role: 'user', parts: [{ type: 'text', text: 'Where is order 4471?' }] } } })
+  assert.equal(res.statusCode, 200)
+  await syncService.settled()
+  await sleep(800)
+  hermes.close()
+  await app.close()
+  const said: { ver: number; text: string }[] = []
+  for (const record of room.log.slice(from)) {
+    const opened = await openRecord({ workspace, keys: { 1: key }, record, members })
+    if (opened?.kind === 'message' && opened.value?.message.role === 'assistant') said.push({ ver: record.ver, text: opened.value.message.parts.map((part) => String(part.text ?? '')).join('') })
+  }
+  assert.ok(said.length >= 3, `the reply went out in ${said.length} steps`)
+  assert.deepEqual(said.map((each) => each.ver), said.map((_, i) => i + 1))
+  for (let i = 1; i < said.length; i++) assert.ok(said[i].text.startsWith(said[i - 1].text), `step ${i} grows the one before`)
+  assert.equal(said.at(-1)?.text, 'Order 4471 shipped Monday.')
+})
+
+test('a connection key round-trips sealed to this runtime’s device key and is never written unlocked', async () => {
+  const secret = `s3cret-${Date.now()}`
+  const made = await connectionService.create({ actor, kind: 'postgres', name: 'Orders DB', dsn: `postgres://app:${secret}@db.internal/orders` })
+  const id = await slot({ key, path: `connection/${made.id}` })
+  await until(() => room.records.has(id), 'the connection to sync')
+  assert.equal(JSON.stringify(room.log).includes(secret), false)
+  const opened = await openRecord({ workspace, keys: { 1: key }, record: room.records.get(id) as Record, members })
+  const value = opened?.value as ConnectionValue
+  assert.deepEqual(value.keys.map((each) => each.to), [members[0].devices[0]])
+  const plain = await read({ recipient: me, from: me.publicKey, workspace, purpose: 'connection-key', body: fromBase64(value.keys[0].body), allowed: [me.publicKey] })
+  assert.match(new TextDecoder().decode(plain ?? new Uint8Array()), new RegExp(secret))
+  await db.updateTable('connection').set({ config: '', name: 'Lost' }).where('id', '=', made.id).execute()
+  const again = await sealRecord({ workspace, key, version: 1, signer: me, id, ver: (room.records.get(id)?.ver ?? 0) + 1, kind: 'connection', ref: made.id, value })
+  assert.ok(again)
+  push(store({ id, ...again }))
+  await until(async () => (await db.selectFrom('connection').select('name').where('id', '=', made.id).executeTakeFirstOrThrow()).name === 'Orders DB', 'the connection to come back')
+  const row = await db.selectFrom('connection').select('config').where('id', '=', made.id).executeTakeFirstOrThrow()
+  assert.equal(row.config.includes(secret), false)
+  assert.equal((connectionService.unsealed(row.config) as { dsn: string }).dsn, `postgres://app:${secret}@db.internal/orders`)
+})
+
+test('the cloud keys stay in the server process: no agent file Hermes gets holds them', async () => {
+  await agentService.update({ actor, id: 'ag_helpdesk', patch: { instructions: '# Helpdesk\n\nBe kind.' } })
+  assert.ok(applied.length > 0)
+  for (const line of applied) for (const secret of [toBase64(me.secret), account.workspace.key, account.key]) assert.equal(line.includes(secret), false)
+})
+
+test('a restore applies an agent before its messages, even when the agent was edited after them', async () => {
+  const late = { ...helpdesk('Late'), id: 'ag_lateedit' }
+  const seal = async ({ kind, ref, value }: { kind: 'agent' | 'message'; ref: string; value: unknown }) => {
+    const id = await slot({ key, path: `${kind}/${ref}` })
+    const sealed = await sealRecord({ workspace, key, version: 1, signer: me, id, ver: 1, kind, ref, value })
+    assert.ok(sealed)
+    return { id, ...sealed }
+  }
+  store(await seal({ kind: 'message', ref: 'msg_late0001', value: { agentId: late.id, message: { id: 'msg_late0001', role: 'user', parts: [{ type: 'text', text: 'Before the rename' }] } } }))
+  push(store(await seal({ kind: 'agent', ref: late.id, value: late })))
+  await until(async () => {
+    const thread = await db.selectFrom('thread').select('messages').where('agent_id', '=', late.id).executeTakeFirst()
+    return Boolean(thread?.messages.includes('Before the rename'))
+  }, 'the earlier message to land in the agent’s thread')
 })
