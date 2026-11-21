@@ -211,6 +211,18 @@ export async function slot({ key, path }: { key: Bytes; path: string }): Promise
   return toBase64(new Uint8Array(await subtle.sign('HMAC', hmac, text.encode(path))))
 }
 
+export async function lockInvite({ secret, workspace, plain }: { secret: Bytes; workspace: string; plain: Bytes }): Promise<Bytes | null> {
+  return lock({ key: await inviteKey(secret), version: 1, bind: `invite/${workspace}`, plain })
+}
+
+export async function openInvite({ secret, workspace, locked }: { secret: Bytes; workspace: string; locked: Bytes }): Promise<Bytes | null> {
+  return unlock({ keys: { 1: await inviteKey(secret) }, bind: `invite/${workspace}`, locked })
+}
+
+async function inviteKey(secret: Bytes): Promise<Bytes> {
+  return fromBase64(await slot({ key: secret, path: 'invite' }))
+}
+
 export async function sha256(bytes: Bytes): Promise<Bytes> {
   return new Uint8Array(await subtle.digest('SHA-256', bytes))
 }

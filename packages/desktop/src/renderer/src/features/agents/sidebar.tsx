@@ -9,6 +9,9 @@ import { Glyph } from '@/components/glyph'
 import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
 import { BackupCard } from '@/features/cloud/backup-card'
 import { Switcher } from '@/features/cloud/switcher'
+import { useWorkspaces } from '@/features/cloud/workspaces'
+import { nameOf as personName } from '@/features/cloud/api'
+import { PersonFace } from '@/components/custom/person-face'
 import { agentPath } from '@/app/routes'
 import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
@@ -37,17 +40,18 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
   const computers = useComputers().data
   const phone = useMedia(PHONE)
   const many = new Set(contacts.map(({ agent }) => agent.computer)).size > 1
+  const { active, email } = useWorkspaces()
   return <aside inert={collapsed} className={cn('pushable still shrink-0 overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring)', collapsed ? 'w-0' : 'w-[280px] border-r-[0.5px]', contacts.length ? 'phone:w-full phone:border-r-0' : 'phone:hidden', GLASS)}>
     <div className={cn('flex h-full w-[280px] flex-col phone:w-full transition-[opacity,translate] duration-[160ms] ease-out', collapsed && '-translate-x-2 opacity-0')}>
     <div className={cn('flex h-[56px] shrink-0 items-center gap-1.5 pr-3 pl-5 phone:h-16 phone:px-4', DRAG)}>
       <a href="/settings/general" aria-label="Settings" className={cn(ICON_BUTTON, ROUND, 'hidden phone:grid')}><I icon={Settings02Icon} size={20} /></a>
-      <span className="-ml-2.5 min-w-0 phone:hidden"><Switcher /></span>
+      <span className="-ml-2.5 min-w-0 phone:ml-0"><Switcher /></span>
       <span className="ml-auto flex gap-1.5">
         <Button type="button" variant="bare" className={cn(ICON_BUTTON, 'phone:hidden')} aria-label="Hide sidebar" title="Hide sidebar ⌘\" onClick={onCollapse}><I icon={SidebarLeftIcon} size={16} /></Button>
         <Button type="button" variant="bare" className={cn(ICON_BUTTON, ROUND)} aria-label="New agent" title="New agent" onClick={onNew}><I icon={PlusSignIcon} size={phone ? 20 : 16} /></Button>
       </span>
     </div>
-    <h1 className="m-0 hidden px-5 pt-1 pb-3 text-[32px]/[1.1] font-bold tracking-[-.02em] phone:block">Agents</h1>
+    {!active && <h1 className="m-0 hidden px-5 pt-1 pb-3 text-[32px]/[1.1] font-bold tracking-[-.02em] phone:block">Agents</h1>}
     <nav className="flex min-h-0 flex-col gap-1 overflow-auto px-3 pt-1 phone:gap-0 phone:px-2">
       {(team ? [['Shared', contacts.filter(({ agent }) => agent.shared)], ['Private', contacts.filter(({ agent }) => !agent.shared)]] as const : [['', contacts]] as const).map(([label, group]) => group.length > 0 && <div key={label} className="flex flex-col gap-1 phone:gap-0">
       {label && <span className="px-2.5 pt-3 pb-1 text-[11.5px] font-medium text-mute">{label}</span>}
@@ -68,10 +72,11 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
       <BackupCard />
       <UpdateEverything />
       <div className="flex w-full items-center gap-2">
-        <Gear />
+        {active && email && <a href="/settings/cloud" aria-label="Your account" title={email} className={cn(SURFACE, 'grid size-10 shrink-0 place-items-center rounded-lg')}><PersonFace name={personName(email)} email={email} size={26} /></a>}
         <a href="/connections" className={cn(SURFACE, 'flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg pr-3 pl-3.5 text-[13.5px] font-medium')}>
           <ConnectedMarks />
         </a>
+        <Gear />
       </div>
     </footer>
     </div>

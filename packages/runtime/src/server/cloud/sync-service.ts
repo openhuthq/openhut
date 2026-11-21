@@ -100,7 +100,7 @@ export const syncService = {
     return { ...backup, problem: backup.problem ?? (stuck ? `${stuck.name} can’t be backed up: it doesn’t fit what OpenHut Cloud keeps.` : null) }
   },
 
-  name: (ws: string): string | null => states.get(ws)?.name ?? null,
+  name: (ws: string): string => states.get(ws)?.name ?? defaultName(ws),
 
   async refreshName(ws: string): Promise<void> {
     const s = states.get(ws)
@@ -140,6 +140,12 @@ export const syncService = {
   },
 
   settled: (): Promise<void> => queue,
+}
+
+function defaultName(ws: string): string {
+  const owner = roomKeys.members(ws)?.members.find((member) => member.role === 'owner')?.email ?? ''
+  const first = (owner.split('@')[0] ?? '').split(/[._+-]/)[0] ?? ''
+  return `${first.charAt(0).toUpperCase()}${first.slice(1)}’s workspace`
 }
 
 function homeState(): State | undefined {
@@ -197,7 +203,7 @@ function heard(s: State, text: string): void {
     const { changed } = await roomKeys.refresh({ ws: s.ws, call: caller(s) })
     if (message.type === 'members') await rotateIfLeft({ s, before })
     if (message.type === 'members') await asked(s)
-    if (keyless && !syncService.waiting(s.ws)) await catchUp(s)
+    if (keyless && !syncService.waiting(s.ws)) await named(s).then(() => catchUp(s))
     if (changed) send(s, keyless ? SYNCED : ['connection'])
   })
   if (message?.type === 'record') void run(async () => message.record.seq === await seqOf(s) + 1 ? applyAll(s, [message.record]) : catchUp(s))
@@ -210,7 +216,7 @@ function run(step: () => Promise<void>): Promise<void> {
 
 async function named(s: State): Promise<void> {
   const reply = await room(s, { method: 'GET', path: '' })
-  s.name = CloudWorkspace.safeParse(reply.json).data?.name ?? s.name
+  s.name = await roomKeys.openName({ ws: s.ws, locked: CloudWorkspace.safeParse(reply.json).data?.name ?? null }) ?? s.name
 }
 
 async function catchUp(s: State): Promise<void> {
@@ -424,7 +430,7 @@ async function contextOf(s: State): Promise<Context | null> {
   if (!account || !found?.workspace.key) return null
   const members = roomKeys.members(s.ws)?.members ?? []
   const signer = await keysService.accountDeviceKey()
-  const runtimes = s.home ? members.filter((member) => member.role !== 'member').flatMap((member) => member.devices).filter((device) => device !== signer) : []
+  const runtimes = s.home ? (members.find((member) => member.email === account.email)?.devices ?? []).filter((device) => device !== signer) : []
   const { id: workspace, key, version, old, slot: slotKey } = found.workspace
   const role = roomKeys.roleIn(s.ws)
   const keys = Object.fromEntries([...Object.entries(old ?? {}), [String(version), key]].map(([each, value]) => [Number(each), fromBase64(value)]))

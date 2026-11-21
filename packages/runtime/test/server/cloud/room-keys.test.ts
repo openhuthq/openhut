@@ -1,12 +1,31 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import type { Letter, MemberList, MemberListBody } from '@openhut/common/cloud/cloud.ts'
+import { anchorOf, check, signList } from '@openhut/common/cloud/member-list.ts'
+import { identity, letter, newKey, toBase64, type Identity } from '@openhut/common/vault/vault.ts'
 import { migrate } from '../../../src/server/platform/db.ts'
 import { accountDevice, keysService } from '../../../src/server/cloud/keys-service.ts'
 import { roomKeys } from '../../../src/server/cloud/room-keys.ts'
-import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
-import { identity, letter, newKey, toBase64 } from '@openhut/common/vault/vault.ts'
 
 await migrate()
+const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
+await keysService.setSession({ token: 't', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
+const me = await keysService.device()
+const anchor = await anchorOf(account.list)
+const DAY = 24 * 60 * 60_000
+const homeChain: MemberList[] = [account.list]
+
+async function next({ signer, change }: { signer: Identity; change: (body: MemberListBody) => Partial<MemberListBody> }): Promise<MemberList> {
+  const body = roomKeys.members()
+  const room = roomKeys.room()
+  assert.ok(body && room)
+  return signList({ signer, body: { ...body, version: body.version + 1, previous: await anchorOf(room.list), at: (body.at ?? 0) + 4 * DAY, ...change(body) } })
+}
+
+async function keyLetter({ id, sender, plain }: { id: string; sender: Identity; plain: object }): Promise<Letter> {
+  const body = await letter({ sender, to: me.publicKey, workspace: account.workspace.id, purpose: 'workspace-key', version: 1, plain: new TextEncoder().encode(JSON.stringify({ ...plain, anchor })) })
+  return { id, object: 'letter', to: toBase64(me.publicKey), from: toBase64(sender.publicKey), workspace: account.workspace.id, purpose: 'workspace-key', body: toBase64(body ?? new Uint8Array()) }
+}
 
 test('a member list that lands while an account-key letter is being taken keeps the new account key', async () => {
   const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
@@ -22,6 +41,7 @@ test('a member list that lands while an account-key letter is being taken keeps 
   const devices = [...mine.devices.filter((each) => each !== oldKit), toBase64(macA.publicKey), kit]
   const second = await signList({ signer: me, body: { ...body, version: 2, previous: await anchorOf(account.list), at, members: [{ ...mine, devices, kit }], removed: [...body.removed, oldKit], added: { ...Object.fromEntries(Object.entries(body.added ?? {}).filter(([each]) => each !== oldKit)), [toBase64(macA.publicKey)]: at, [kit]: at } } })
   assert.ok(await roomKeys.advance({ lists: [second] }))
+  homeChain.push(second)
   const phone = await identity()
   const third = await signList({ signer: me, body: { ...body, version: 3, previous: await anchorOf(second), at, members: [{ ...mine, devices: [...devices, toBase64(phone.publicKey)], kit }], removed: [...body.removed, oldKit], added: { ...Object.fromEntries(Object.entries(body.added ?? {}).filter(([each]) => each !== oldKit)), [toBase64(macA.publicKey)]: at, [kit]: at, [toBase64(phone.publicKey)]: at } } })
   const sealed = await letter({ sender: macA, to: me.publicKey, workspace: account.workspace.id, purpose: 'account-key', version: 1, plain: key })
@@ -29,6 +49,82 @@ test('a member list that lands while an account-key letter is being taken keeps 
   const advanced = roomKeys.advance({ lists: [third] })
   assert.deepEqual(await roomKeys.takeLetters({ found }), ['let_1'])
   assert.ok(await advanced)
+  homeChain.push(third)
   assert.equal(keysService.account()?.key, toBase64(key))
   assert.equal(roomKeys.members()?.version, 3)
+})
+
+test('an admin’s workspace-key letter can’t plant an own key or change the slot key, and old keys are kept; my own device’s letter can pin the own key', async () => {
+  const sara = await identity()
+  const saraKey = toBase64(sara.publicKey)
+  const ownBefore = toBase64(await roomKeys.own() ?? new Uint8Array())
+  const firstKey = account.workspace.key
+  const v2 = await next({ signer: me, change: (body) => ({ members: [...body.members, { email: 'sara@example.com', role: 'admin', devices: [saraKey] }], added: { ...body.added, [saraKey]: (body.at ?? 0) + 4 * DAY } }) })
+  assert.ok(await roomKeys.advance({ lists: [v2] }))
+  homeChain.push(v2)
+  const v3 = await next({ signer: sara, change: () => ({ keyVersion: 2 }) })
+  assert.ok(await roomKeys.advance({ lists: [v3] }))
+  homeChain.push(v3)
+  const evil = toBase64(newKey())
+  const done = await roomKeys.takeLetters({ found: [await keyLetter({ id: 'evil', sender: sara, plain: { key: toBase64(newKey()), version: 2, own: evil, slot: toBase64(newKey()), old: {} } })] })
+  assert.deepEqual(done, ['evil'])
+  const workspace = roomKeys.room()?.workspace
+  assert.equal(workspace?.version, 2)
+  assert.equal(toBase64(await roomKeys.own() ?? new Uint8Array()), ownBefore)
+  assert.notEqual(ownBefore, evil)
+  assert.equal(workspace?.slot, firstKey)
+  assert.equal(workspace?.old?.['1'], firstKey)
+
+  const laptop = await identity()
+  const laptopKey = toBase64(laptop.publicKey)
+  const v4 = await next({ signer: me, change: (body) => ({ keyVersion: 3, members: body.members.map((member) => member.email === 'mo@example.com' ? { ...member, devices: [...member.devices, laptopKey] } : member), added: { ...body.added, [laptopKey]: (body.at ?? 0) + 4 * DAY } }) })
+  assert.ok(await roomKeys.advance({ lists: [v4] }))
+  homeChain.push(v4)
+  const pinned = toBase64(newKey())
+  await roomKeys.takeLetters({ found: [await keyLetter({ id: 'mine', sender: laptop, plain: { key: toBase64(newKey()), version: 3, own: pinned } })] })
+  assert.equal(toBase64(await roomKeys.own() ?? new Uint8Array()), pinned)
+  assert.equal(roomKeys.room()?.workspace.old?.['2'], workspace?.key)
+})
+
+test('in a team room this Mac lists the account key as its own device, so the 12 words bring the team room back on a fresh Mac', async () => {
+  const boss = await identity()
+  const bossKey = toBase64(boss.publicKey)
+  const ws = 'TeamRoom0001'
+  const at = Date.now() - 1000
+  const v1 = await signList({ signer: boss, body: { workspace: ws, version: 1, previous: null, members: [{ email: 'boss@example.com', role: 'owner', devices: [bossKey] }], invites: [], removed: [], at, added: { [bossKey]: at } } })
+  const mine = toBase64(me.publicKey)
+  const v2 = await signList({ signer: boss, body: { workspace: ws, version: 2, previous: await anchorOf(v1), members: [{ email: 'boss@example.com', role: 'owner', devices: [bossKey] }, { email: 'mo@example.com', role: 'member', devices: [mine] }], invites: [], removed: [], at: at + 1, added: { [bossKey]: at, [mine]: at + 1 } } })
+  await roomKeys.addTeam({ ws, list: v2, first: v1 })
+  const puts: MemberList[] = []
+  await roomKeys.refresh({ ws, call: async ({ method, path, body }) => {
+    if (method === 'PUT' && path === '/members') puts.push(body as MemberList)
+    return { status: 200, json: { object: 'list', data: [] } }
+  } })
+  const v3 = puts[0]
+  assert.ok(v3)
+  const kit = await keysService.accountDeviceKey()
+  const listed = await check({ anchor: await anchorOf(v1), chain: [v1, v2, v3] })
+  assert.deepEqual(listed?.members.find((member) => member.email === 'mo@example.com')?.devices, [mine, kit])
+
+  const teamKey = toBase64(newKey())
+  const sealed = await letter({ sender: boss, to: me.publicKey, workspace: ws, purpose: 'workspace-key', version: 1, plain: new TextEncoder().encode(JSON.stringify({ key: teamKey, version: 1, anchor: await anchorOf(v1) })) })
+  await roomKeys.takeLetters({ ws, found: [{ id: 'welcome', object: 'letter', to: mine, from: bossKey, workspace: ws, purpose: 'workspace-key', body: toBase64(sealed ?? new Uint8Array()) }] })
+  const team = roomKeys.room(ws)
+  assert.equal(team?.workspace.key, teamKey)
+  const current = keysService.account()
+  assert.ok(current && team)
+  const words = await keysService.newKit()
+  await keysService.setKit({ box: words.box, savedAt: new Date().toISOString() })
+  const workspaces = [{ ...await keysService.workspaceBox({ account: current }), chain: homeChain }, { ...await keysService.workspaceBox({ account: current, room: team }), chain: [v1, v2, v3] }]
+  await keysService.setSession(undefined)
+  await keysService.forget()
+  await keysService.setLocked({ sub: 'dev-mo', email: 'mo@example.com' })
+  const restored = await keysService.restore({ words: words.words, kit: words.box, workspaces })
+  const back = restored?.teams?.[0]
+  assert.equal(restored?.workspace.id, account.workspace.id)
+  assert.equal(back?.workspace.key, teamKey)
+  const fresh = toBase64((await keysService.device()).publicKey)
+  assert.notEqual(fresh, mine)
+  const after = back && await check({ anchor: await anchorOf(v1), chain: [v1, v2, v3, back.list] })
+  assert.deepEqual(after?.members.find((member) => member.email === 'mo@example.com')?.devices, [mine, kit, fresh])
 })

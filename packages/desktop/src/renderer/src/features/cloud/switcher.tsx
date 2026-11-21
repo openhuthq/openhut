@@ -7,14 +7,14 @@ import { Input } from '@/components/ui/input'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { HOVER, I } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
-import { chooseWorkspace, peopleNote, useCreateWorkspace, useWorkspaces, workspaceName } from '@/features/cloud/workspaces'
+import { chooseWorkspace, peopleNote, useCreateWorkspace, useWorkspaces } from '@/features/cloud/workspaces'
 import { navigate, open } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
 const LOGO = { 22: 'size-[22px] text-[13px]', 24: 'size-6 text-[14px]', 36: 'size-9 text-[21px]' }
 
 export function WorkspaceLogo({ workspace, size = 24 }: { workspace: CloudWorkspaceView; size?: keyof typeof LOGO }) {
-  const name = workspaceName(workspace)
+  const { name } = workspace
   if (workspace.members.length === 1 && workspace.home) return <PersonFace name={name} email={workspace.members[0]?.email ?? name} size={size} />
   return <span className={cn('grid shrink-0 place-items-center rounded-md bg-hue-violet leading-none font-bold text-white', LOGO[size])}>{name.charAt(0).toLowerCase()}</span>
 }
@@ -25,14 +25,14 @@ export function Switcher() {
   return <DropdownMenu>
     <DropdownMenuTrigger className={cn('flex min-w-0 items-center gap-2 rounded-lg border-0 bg-transparent px-2 py-1.5 text-ink data-popup-open:bg-picked', HOVER)}>
       <WorkspaceLogo workspace={active} />
-      <span className="truncate text-[14px] font-semibold">{workspaceName(active)}</span>
+      <span className="truncate text-[14px] font-semibold">{active.name}</span>
       <I icon={ArrowDown01Icon} size={14} className="shrink-0 text-mute" />
     </DropdownMenuTrigger>
     <DropdownMenuContent className="flex w-[260px] flex-col gap-0.5 rounded-xl p-1.5 shadow-menu">
       <span className="px-2.5 pt-1 pb-1 text-[11.5px] text-mute">{email}</span>
       {all.map((workspace) => <DropdownMenuItem key={workspace.id} onClick={() => { chooseWorkspace(workspace.id); navigate('/') }} className={cn('h-auto gap-2.5 rounded-lg px-2.5 py-2', workspace.id === active.id && 'bg-soft')}>
         <WorkspaceLogo workspace={workspace} size={22} />
-        <span className="grid flex-1 leading-tight"><span className="text-[13px] font-medium">{workspaceName(workspace)}</span><span className="text-[11.5px] text-mute">{peopleNote(workspace)}</span></span>
+        <span className="grid flex-1 leading-tight"><span className="text-[13px] font-medium">{workspace.name}</span><span className="text-[11.5px] text-mute">{peopleNote(workspace)}</span></span>
         {workspace.id === active.id && <I icon={Tick02Icon} size={14} />}
       </DropdownMenuItem>)}
       <DropdownMenuSeparator />

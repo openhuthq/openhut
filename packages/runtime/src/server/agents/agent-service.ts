@@ -194,9 +194,11 @@ export const agentService = {
     return row && { runsOn: row.runs_on ?? await keysService.deviceKey(), codeExecution: row.code_execution, owner: row.owner }
   },
 
-  async applySynced({ id, value, by, author, workspace, me }: { id: string; value: AgentValue | null; by: string | null; author?: { email: string; role: string }; workspace?: string | null; me?: string }): Promise<void> {
-    const row = await db.selectFrom('agent').select(['id', 'instructions', 'changed_by', 'owner', 'runs_on', 'code_execution', 'workspace']).where('id', '=', id).executeTakeFirst()
-    const limited = row && author?.role === 'member' && (row.owner ?? me) !== author.email
+  async applySynced({ id, value, author, workspace, me, mine = [] }: { id: string; value: AgentValue | null; author: { email: string; role: string; device?: string }; workspace: string | null; me: string; mine?: string[] }): Promise<void> {
+    const row = await db.selectFrom('agent').select(['id', 'instructions', 'changed_by', 'owner', 'runs_on', 'code_execution', 'shared', 'workspace']).where('id', '=', id).executeTakeFirst()
+    if (row && !writable({ row, author, workspace, me })) return
+    const byOwner = !row || (row.owner ?? me) === author.email
+    const limited = row && author.role === 'member' && !byOwner
     if (!value) {
       if (limited) return
       const chats = await db.selectFrom('thread').selectAll().where('agent_id', '=', id).execute()
@@ -206,10 +208,12 @@ export const agentService = {
       return emit({ name: 'agent.synced', target: { type: 'agent', id } })
     }
     const unassigned = !!row?.runs_on && !listed({ device: row.runs_on, workspace: row.workspace })
-    const kept = limited ? { runs_on: unassigned ? value.runsOn ?? null : row.runs_on, code_execution: row.code_execution, owner: row.owner } : { runs_on: value.runsOn ?? null, code_execution: value.codeExecution, owner: value.owner && value.owner !== me ? value.owner : null }
-    const changedBy = !row || row.instructions !== value.instructions ? by : row.changed_by
+    const placed = value.runsOn && (author.email === me || !mine.includes(value.runsOn)) ? value.runsOn : row ? row.runs_on : author.device ?? null
+    const kept = limited ? { runs_on: unassigned ? placed : row.runs_on, code_execution: row.code_execution } : { runs_on: placed, code_execution: value.codeExecution }
+    const owned = byOwner ? { owner: value.owner && value.owner !== me ? value.owner : null, shared: Boolean(value.shared) } : { owner: row.owner, shared: row.shared }
+    const changedBy = !row || row.instructions !== value.instructions ? author.email : row.changed_by
     const former = kept.runs_on !== null && settings.formerDevices().includes(kept.runs_on)
-    const fields = { name: value.name, instructions: value.instructions, model: value.model, face: value.face, wanted: value.wanted, shared: Boolean(value.shared), changed_by: changedBy, ...kept, ...former && { runs_on: null }, ...workspace !== undefined && { workspace } }
+    const fields = { name: value.name, instructions: value.instructions, model: value.model, face: value.face, wanted: value.wanted, changed_by: changedBy, workspace, ...kept, ...owned, ...former && { runs_on: null } }
     if (row) await db.updateTable('agent').set(fields).where('id', '=', id).execute()
     else {
       const owner = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirstOrThrow()
@@ -220,13 +224,19 @@ export const agentService = {
   },
 
   async dropWorkspace(workspace: string | null): Promise<void> {
-    const rows = await db.selectFrom('agent').select('id').where((eb) => workspace ? eb('workspace', '=', workspace) : eb('workspace', 'is', null)).execute()
-    for (const row of rows) await agentService.applySynced({ id: row.id, value: null, by: null })
+    const me = keysService.account()?.email ?? ''
+    const rows = await db.selectFrom('agent').select(['id', 'owner']).where((eb) => workspace ? eb('workspace', '=', workspace) : eb('workspace', 'is', null)).execute()
+    for (const row of rows) await agentService.applySynced({ id: row.id, value: null, author: { email: row.owner ?? me, role: 'owner' }, workspace, me })
   },
 
-  async hideSynced({ id, owner, me }: { id: string; owner: string; me: string }): Promise<void> {
-    const row = await db.selectFrom('agent').select(['owner']).where('id', '=', id).executeTakeFirst()
-    if (row && (row.owner ?? me) === owner) await agentService.applySynced({ id, value: null, by: owner })
+  async hideSynced({ id, owner, workspace, me }: { id: string; owner: string; workspace: string | null; me: string }): Promise<void> {
+    const row = await db.selectFrom('agent').select(['owner', 'shared', 'workspace']).where('id', '=', id).executeTakeFirst()
+    if (row && row.workspace === workspace && (row.owner ?? me) === owner) await agentService.applySynced({ id, value: null, author: { email: owner, role: 'owner' }, workspace, me })
+  },
+
+  async writableBy({ id, author, workspace, me }: { id: string; author: { email: string }; workspace: string | null; me: string }): Promise<boolean> {
+    const row = await db.selectFrom('agent').select(['owner', 'shared', 'workspace']).where('id', '=', id).executeTakeFirst()
+    return Boolean(row && writable({ row, author, workspace, me }))
   },
 
   async reapply({ id }: { id: string }): Promise<void> {
@@ -428,6 +438,10 @@ export function runsHere({ row, me }: { row: Pick<AgentRow, 'runs_on'>; me: stri
 function canManage(row: Pick<AgentRow, 'workspace' | 'owner'>): boolean {
   const role = roomKeys.roleIn(row.workspace ?? undefined)
   return !row.owner || row.owner === keysService.account()?.email || role === undefined || role !== 'member'
+}
+
+function writable({ row, author, workspace, me }: { row: Pick<AgentRow, 'owner' | 'shared' | 'workspace'>; author: { email: string }; workspace: string | null; me: string }): boolean {
+  return row.workspace === workspace && (row.shared || (row.owner ?? me) === author.email)
 }
 
 function requireRole({ row, patch }: { row: AgentRow; patch: UpdateAgent }): void {

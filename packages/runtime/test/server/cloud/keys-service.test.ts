@@ -35,8 +35,8 @@ test('a signed-out Mac unlocks with the 12 words: the kit box opens the account 
   const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   const kit = await keysService.newKit()
   await keysService.setKit({ box: kit.box, savedAt: new Date().toISOString() })
-  const mine = { ...await keysService.workspaceBox(account), chain: [account.list] }
-  const foreign = { ...mine, id: 'another_ws', key: (await keysService.workspaceBox({ ...account, key: toBase64(newKey()) })).key }
+  const mine = { ...await keysService.workspaceBox({ account }), chain: [account.list] }
+  const foreign = { ...mine, id: 'another_ws', key: (await keysService.workspaceBox({ account: { ...account, key: toBase64(newKey()) } })).key }
   const saved = { kit: keysService.kitState().saved?.box ?? '', workspaces: [foreign, mine] }
   await keysService.setSession(undefined)
   await keysService.forget()
@@ -54,11 +54,11 @@ test('a signed-out Mac unlocks with the 12 words: the kit box opens the account 
 
 test('key boxes are signed by the account key, and a box another account key made isn’t mine', async () => {
   const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
-  const box = await keysService.workspaceBox(account)
+  const box = await keysService.workspaceBox({ account })
   const workspace = `workspace/${account.workspace.id}`
   assert.equal(await keysService.boxIsMine({ account, name: workspace, box: { body: box.key, by: box.by, signature: box.signature } }), true)
   const other = { ...account, key: toBase64(newKey()) }
-  const theirs = await keysService.workspaceBox(other)
+  const theirs = await keysService.workspaceBox({ account: other })
   assert.equal(await keysService.boxIsMine({ account, name: workspace, box: { body: theirs.key, by: theirs.by, signature: theirs.signature } }), false)
   assert.equal(await keysService.boxIsMine({ account, name: workspace, box: { body: theirs.key, by: box.by, signature: box.signature } }), false)
   const savedAt = Date.now()

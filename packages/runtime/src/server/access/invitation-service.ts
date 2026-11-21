@@ -3,8 +3,8 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { sixDigits, verifyProof, type Decision, type Hello, type Invited } from '@openhut/tunnel'
 import type { Invitation } from '@openhut/common/access/invitation.ts'
 import { InviteLetter, OpenedInvite, parseJson, type Cloud, type CloudInvite, type CloudInvitePreview, type CreateCloudInvite } from '@openhut/common/cloud/cloud.ts'
-import { fromBase64, identity, read, type Identity } from '@openhut/common/vault/vault.ts'
-import { cloudService, putList } from '../cloud/cloud-service.ts'
+import { fromBase64, identity, openInvite, read, type Identity } from '@openhut/common/vault/vault.ts'
+import { cloudService, mustBeOn, putList } from '../cloud/cloud-service.ts'
 import { keysService } from '../cloud/keys-service.ts'
 import { inviteId, roomKeys } from '../cloud/room-keys.ts'
 import { syncService } from '../cloud/sync-service.ts'
@@ -54,8 +54,7 @@ export const invitationService = {
   },
 
   async inviteToCloud({ workspace, email, role }: CreateCloudInvite): Promise<CloudInvite> {
-    if (!keysService.session() || !roomKeys.room(workspace)) throw new HttpError(409, 'Turn on OpenHut Cloud and open this workspace first.')
-    const made = await roomKeys.invite({ ws: workspace, email, role, name: syncService.name(workspace) ?? defaultName(workspace) })
+    const made = await roomKeys.invite({ ws: mustBeOn(workspace), email, role, name: syncService.name(workspace) })
     await putList({ workspace, list: made.list })
     const posted = await cloud.room({ method: 'POST', workspace, path: '/invites', token: await keysService.token(), body: { id: made.id, email, role, key: made.key, body: made.body } })
     if (posted.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t keep the invite (HTTP ${posted.status}). Try again.`)
@@ -64,16 +63,17 @@ export const invitationService = {
   },
 
   async previewCloudInvite({ link }: { link: string }): Promise<CloudInvitePreview> {
-    const { ws, letter } = await openInvite(link)
+    const { ws, letter } = await readInvite(link)
     return { object: 'cloud_invite_preview', workspace: ws, name: letter.name, from: letter.from, email: letter.email, role: letter.role }
   },
 
   async joinCloud({ link }: { link: string }): Promise<Cloud> {
-    const { ws, card, invite, letter } = await openInvite(link)
+    const { ws, card, invite, letter } = await readInvite(link)
     const list = await roomKeys.joinList({ card, chain: invite.memberLists, anchor: letter.anchor, ws })
     const first = invite.memberLists[0]
     const put = await cloud.room({ method: 'PUT', workspace: ws, path: '/members', token: await keysService.token(), body: list })
-    if (put.status !== 200) throw new HttpError(put.status === 404 || put.status === 410 ? put.status : 502, REFUSED[put.status] ?? `OpenHut Cloud didn’t let you join (HTTP ${put.status}). Try again.`)
+    const status = put.status === 409 ? 404 : put.status
+    if (status !== 200) throw new HttpError(REFUSED[status] ? status : 502, REFUSED[status] ?? `OpenHut Cloud didn’t let you join (HTTP ${status}). Try again.`)
     if (first) await roomKeys.addTeam({ ws, list, first })
     cloudService.connect()
     return cloudService.status()
@@ -90,29 +90,34 @@ export const invitationService = {
   },
 }
 
-async function openInvite(link: string): Promise<Opened> {
+async function readInvite(link: string): Promise<Opened> {
   const parsed = LINK.exec(link)
   const ws = parsed?.[1]
   const secret = parsed?.[2]
   if (!ws || !secret) throw new HttpError(400, 'That isn’t an OpenHut invite link. Copy the whole link and try again.', { param: 'link' })
   if (!keysService.account() || !keysService.session()) throw new HttpError(409, 'Sign in to OpenHut Cloud to join.')
-  if (roomKeys.room(ws)) throw new HttpError(409, 'You’re already in this workspace.')
+  if (roomKeys.room(ws)) throw new HttpError(409, 'You’re already in this workspace.', { param: 'link' })
   const card = await identity(fromBase64(secret))
-  const reply = await cloud.room({ method: 'GET', workspace: ws, path: `/invites/${await inviteId(card.publicKey)}`, token: await keysService.token() })
-  const refused = REFUSED[reply.status] ?? (reply.status === 403 ? messageIn(reply.json) : undefined)
-  if (refused) throw new HttpError(reply.status === 403 ? 403 : reply.status, refused)
-  const invite = OpenedInvite.safeParse(reply.json).data
-  if (reply.status !== 200 || !invite) throw new HttpError(502, `OpenHut Cloud didn’t send the invite (HTTP ${reply.status}). Try again.`)
-  const plain = await read({ recipient: card, from: fromBase64(invite.from), workspace: ws, purpose: 'invite', body: fromBase64(invite.body), allowed: [fromBase64(invite.from)] })
+  const id = await inviteId(card.publicKey)
+  const invite = await fetchInvite({ ws, id })
+  for (let page = invite; page.hasMore && page.memberLists.length;) {
+    page = await fetchInvite({ ws, id, after: invite.memberLists.length })
+    invite.memberLists.push(...page.memberLists)
+  }
+  const sealed = await read({ recipient: card, from: fromBase64(invite.from), workspace: ws, purpose: 'invite', body: fromBase64(invite.body), allowed: [fromBase64(invite.from)] })
+  const plain = sealed && await openInvite({ secret: card.secret, workspace: ws, locked: sealed })
   const letter = plain && InviteLetter.safeParse(parseJson(new TextDecoder().decode(plain))).data
   if (!letter || letter.email !== invite.email || letter.workspace !== ws) throw new HttpError(400, 'This invite doesn’t check out. Ask for a new link.')
   return { ws, card, invite, letter }
 }
 
-function defaultName(workspace: string): string {
-  const owner = roomKeys.members(workspace)?.members.find((member) => member.role === 'owner')?.email ?? ''
-  const first = (owner.split('@')[0] ?? '').split(/[._+-]/)[0] ?? ''
-  return `${first.charAt(0).toUpperCase()}${first.slice(1)}’s workspace`
+async function fetchInvite({ ws, id, after = 0 }: { ws: string; id: string; after?: number }): Promise<OpenedInvite> {
+  const reply = await cloud.room({ method: 'GET', workspace: ws, path: `/invites/${id}?after=${after}`, token: await keysService.token() })
+  const message = reply.status === 403 ? messageIn(reply.json) : REFUSED[reply.status]
+  if (message) throw new HttpError(reply.status, message, { param: /This invite is for (\S+?)\. /.exec(message)?.[1] })
+  const invite = OpenedInvite.safeParse(reply.json).data
+  if (reply.status !== 200 || !invite) throw new HttpError(502, `OpenHut Cloud didn’t send the invite (HTTP ${reply.status}). Try again.`)
+  return invite
 }
 
 function messageIn(json: unknown): string {

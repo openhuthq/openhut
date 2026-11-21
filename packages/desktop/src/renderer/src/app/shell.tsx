@@ -7,7 +7,12 @@ import { agentPath, type Route } from '@/app/routes'
 import { useAgents, useShareLocalFaces } from '@/features/agents/api'
 import { AgentView } from '@/features/agents/agent-view'
 import { NewAgentDialog } from '@/features/agents/new-agent'
+import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
+import { Hut } from '@/components/hut'
+import { nameOf } from '@/features/cloud/api'
+import { Switcher } from '@/features/cloud/switcher'
 import { inWorkspace, useWorkspaces } from '@/features/cloud/workspaces'
+import { HERE } from '@/features/settings/desktop'
 import { Sidebar, SidebarContext, type Contact } from '@/features/agents/sidebar'
 import { useThreads } from '@/features/threads/api'
 import { PHONE, useMedia } from '@/lib/media'
@@ -49,17 +54,25 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
     {route.page === 'agent' && (phone
       ? <PhonePage key={route.agentId}><AgentView agentId={route.agentId} dialog={route.dialog} detail={route.detail} /></PhonePage>
       : <AgentView key={route.agentId} agentId={route.agentId} dialog={route.dialog} detail={route.detail} />)}
-    {route.page === 'home' && agents.data && <Home first={contacts[0]?.agent.id} adding={route.adding} overlaid={!!overlay} />}
+    {route.page === 'home' && agents.data && <Home first={contacts[0]?.agent.id} adding={route.adding} overlaid={!!overlay} waiting={active?.waiting ? active : undefined} />}
     {route.page === 'missing' && <Redirect to="/" />}
   </div></SidebarContext>
 }
 
-function Home({ first, adding, overlaid }: { first: string | undefined; adding: boolean; overlaid: boolean }) {
+function Home({ first, adding, overlaid, waiting }: { first: string | undefined; adding: boolean; overlaid: boolean; waiting: CloudWorkspaceView | undefined }) {
   const phone = useMedia(PHONE)
   if (first && phone) return adding ? <NewAgentDialog onClose={() => navigate('/')} /> : null
   if (first && overlaid) return <AgentView key={first} agentId={first} dialog={undefined} detail={undefined} />
   if (first) return <Redirect to={agentPath({ agentId: first, dialog: adding ? 'new' : undefined })} />
-  return <section className="flex flex-1 flex-col items-center justify-center gap-2 bg-card px-8 pb-12 text-center">
+  const owner = waiting?.members.find((member) => member.role === 'owner')?.email
+  if (waiting) return <section className="relative flex flex-1 flex-col items-center justify-center gap-2 bg-card px-8 pb-12 text-center">
+    <span className="absolute top-3 left-3 hidden phone:block"><Switcher /></span>
+    <Hut mood="looking" className="size-[84px]" />
+    <h1 className="mt-2 mb-0 text-[20px]/[1.3] font-semibold text-ink">Almost in</h1>
+    <p className="m-0 text-[14px]/[1.5] text-body">{nameOf(owner ?? '')}’s {HERE} lets you in as soon as it’s on.</p>
+  </section>
+  return <section className="relative flex flex-1 flex-col items-center justify-center gap-2 bg-card px-8 pb-12 text-center">
+    <span className="absolute top-3 left-3 hidden phone:block"><Switcher /></span>
     <Creature id="first-agent" size={64} />
     <h1 className="mt-2 mb-0 text-[20px]/[1.3] font-semibold text-ink">Make your first agent</h1>
     <p className="m-0 text-[14px]/[1.5] text-body">Tell it its job and where to talk to it.</p>

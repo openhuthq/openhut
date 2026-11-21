@@ -5,6 +5,7 @@ directories: { buildResources: build, output: release }
 files: [src/main.mjs, src/mcp-bridge.mjs, src/mcp-fan-out.mjs, src/owner-keys.mjs, src/reach.mjs, src/preload.cjs, "src/trayTemplate*.png", dist/renderer/**, package.json]
 asar: true
 electronLanguages: en-US
+protocols: [{ name: OpenHut, schemes: [openhut] }]
 npmRebuild: false
 afterPack: scripts/after-pack.cjs
 extraResources: [{ from: dist/backend, to: backend }, { from: dist/backend/node_modules, to: backend/node_modules }]

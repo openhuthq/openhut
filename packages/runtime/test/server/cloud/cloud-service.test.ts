@@ -94,7 +94,7 @@ test('a Not me whose signer handover fails once is kept and finished later: Make
   await keysService.setSession({ token: 'session-token', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
   const kitOf = async () => toBase64((await accountDevice(fromBase64(keysService.account()?.key ?? ''))).publicKey)
   const oldKit = await kitOf()
-  const box = await keysService.workspaceBox(first)
+  const box = await keysService.workspaceBox({ account: first })
   account.boxes.set(`workspace/${box.id}`, { body: box.key, by: box.by, signature: box.signature })
   await cloudService.newKit()
   account.boxes.set('passkey', { body: 'old-passkey', by: oldKit, signature: 'signed' })

@@ -29,6 +29,7 @@ if (TEST_HOME) app.setPath('userData', TEST_HOME)
 app.setAppLogsPath(TEST_HOME ? join(TEST_HOME, 'logs') : DEV && MAC ? join(app.getPath('home'), 'Library/Logs/OpenHut Dev') : undefined)
 const MCP_BRIDGE = process.argv.includes('--mcp')
 if (!MCP_BRIDGE && !app.requestSingleInstanceLock()) app.exit(0)
+if (!MCP_BRIDGE && !DEV) app.setAsDefaultProtocolClient('openhut')
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '../../..')
@@ -101,6 +102,8 @@ let tray
 let blocker
 let setup
 let booted
+let linked = joinPath(process.argv.find((arg) => arg.startsWith('openhut:')))
+let opened = false
 let fetching = null
 const updating = { checking: false, available: null, progress: 0, ready: null, error: null }
 const UPDATE_EVERY_MS = 30 * 60_000
@@ -745,6 +748,20 @@ function saveBounds() {
   if (main && !main.isDestroyed()) writeFileSync(WINDOW_STATE, JSON.stringify(main.getNormalBounds()))
 }
 
+function joinPath(url) {
+  try {
+    const { protocol, hostname, hash } = new URL(url ?? '')
+    return protocol === 'openhut:' && hostname === 'join' && hash.length > 1 ? `/join${hash}` : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function openLink(url) {
+  linked = joinPath(url)
+  if (linked && opened) show(linked)
+}
+
 function show(path) {
   const win = main && !main.isDestroyed() ? main : window()
   if (win.isMinimized()) win.restore()
@@ -948,6 +965,10 @@ async function serveRenderer(req) {
   return new Response(res.body, { status: res.status, headers })
 }
 
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  openLink(url)
+})
 app.on('web-contents-created', (_event, contents) => guard(contents))
 app.on('window-all-closed', () => MAC || app.quit())
 app.on('before-quit', (event) => {
@@ -993,10 +1014,15 @@ app.whenReady().then(async () => {
     return app.quit()
   }
   writeFileSync(BOOTED, app.getVersion())
-  if (!fresh && !hidden) window()
+  if (!fresh && (!hidden || linked)) window(linked)
+  opened = true
   watch()
   serveMcp().catch((error) => appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't serve ${MCP_SOCK}: ${error.message}\n`))
   if (!DEV) update()
   app.on('activate', () => show())
-  app.on('second-instance', () => show())
+  app.on('second-instance', (_event, argv) => {
+    const url = argv.find((arg) => arg.startsWith('openhut:'))
+    if (url) openLink(url)
+    else show()
+  })
 })
