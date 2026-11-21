@@ -1,8 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify'
 import * as z from 'zod/mini'
-import { AddPasskey, AddRuntime, AllowDevice, ApproveDevice, ChangeRole, CreateWorkspace, DeleteWorkspace, DeviceKey, RenameWorkspace, RuntimeInvite, UnlockCloud } from '@openhut/common/cloud/cloud.ts'
+import { AddPasskey, AddRuntime, AllowDevice, ApproveDevice, ChangeRole, CreateWorkspace, DeleteWorkspace, DeviceKey, RenameWorkspace, RuntimeInvite, SetHere, UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { requireSignIn } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
+import { syncService } from './sync-service.ts'
 
 export const cloudController: FastifyPluginAsync = async (app) => {
   app.get('/', SignedIn, async () => cloudService.status())
@@ -37,6 +38,10 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.delete('/', SignedIn, async () => cloudService.deleteData())
 
+  app.get('/presence', SignedIn, async () => syncService.presence())
+
+  app.post<{ Body: SetHere }>('/here', HereRequest, async (req) => syncService.here(req.body).then(() => syncService.presence()))
+
   app.post('/requests', SignedIn, async () => cloudService.ask())
 
   app.delete('/requests', SignedIn, async () => cloudService.cancelAsk())
@@ -67,4 +72,5 @@ const RenameRequest = { onRequest: requireSignIn, schema: { body: RenameWorkspac
 const RoleRequest = { onRequest: requireSignIn, schema: { body: ChangeRole } }
 const CreateRequest = { onRequest: requireSignIn, schema: { body: CreateWorkspace } }
 const DeleteRequest = { onRequest: requireSignIn, schema: { body: DeleteWorkspace } }
+const HereRequest = { onRequest: requireSignIn, schema: { body: SetHere } }
 const ApproveRequest = { onRequest: requireSignIn, schema: { body: ApproveDevice } }

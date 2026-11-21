@@ -17,7 +17,7 @@ import { NeedsCloud } from '@/features/cloud/sign-in'
 import { useApprove, useDeny, useInvite, useRemoveMember, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
 import { ago } from '@/lib/format'
 import { copyText } from '@/lib/clipboard'
-import { showDone } from '@/features/cloud/unlock'
+import { notify } from '@/components/custom/toast'
 import { open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
@@ -60,7 +60,7 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
   const next = member.role === 'admin' ? 'member' : 'admin'
   const owner = workspace.role === 'owner' && !workspace.own
   const removed = () => {
-    showDone({ title: `${name} removed`, note: 'They can’t open anything new. Keys changed.' })
+    notify({ title: `${name} removed`, note: 'They can’t open anything new. Keys changed.' })
   }
   return <div className="flex items-center gap-3 px-4 py-3">
     <PersonFace name={name} email={member.email} size={40} />

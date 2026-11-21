@@ -139,6 +139,19 @@ export type KeyBox = z.infer<typeof KeyBox>
 export const Here = z.object({ object: z.literal('here'), from: DeviceKey, body: Locked })
 export type Here = z.infer<typeof Here>
 
+export const HERE_FIELDS = ['name', 'instructions', 'face'] as const
+export const HereField = z.enum(HERE_FIELDS)
+export type HereField = z.infer<typeof HereField>
+export const SetHere = z.object({ agent: z.nullable(z.string().check(z.maxLength(40))), field: z.nullable(HereField), typing: z.boolean() })
+export type SetHere = z.infer<typeof SetHere>
+export const Presence = z.object({
+  object: z.literal('presence'),
+  since: z.nullable(z.number()),
+  people: z.array(z.object({ email: z.string(), agentId: z.string(), field: z.nullable(HereField), typing: z.boolean(), since: z.number() })),
+  mismatch: z.array(z.object({ workspace: z.string(), email: z.string() })),
+})
+export type Presence = z.infer<typeof Presence>
+
 export const PairingQr = z.object({
   openhut: z.literal('pair'),
   secret: z.string().check(z.regex(/^[0-9A-HJKMNP-TV-Z]{20}$/)),

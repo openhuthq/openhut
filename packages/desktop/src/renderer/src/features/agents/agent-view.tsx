@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { InformationCircleIcon, SidebarRight01Icon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
+import type { HereField } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { I, ICON_BUTTON } from '@/components/kit'
@@ -18,6 +19,7 @@ import { SkillsDialog } from '@/features/agents/skills-dialog'
 import { RoutinesDialog } from '@/features/routines/routines-dialog'
 import { Chat } from '@/features/threads/chat'
 import { MoveHere } from '@/features/cloud/live'
+import { Here } from '@/features/cloud/presence'
 import { RequestError } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
 import { PHONE, useMedia } from '@/lib/media'
@@ -47,6 +49,7 @@ export function AgentView({ agentId, dialog, detail }: { agentId: string; dialog
     <div className="relative flex min-w-0 flex-1">
       <Chat agent={agent.data} tools={toggle} onTitle={phone ? () => setShown(true) : undefined} />
       <MoveHere agent={agent.data} />
+      <Here agentId={agent.data.id} field={FIELDS[dialog ?? ''] ?? null} />
     </div>
     {phone && panel ? <Dialog size="window" label={`${agent.data.name}'s details`} className="phone:bg-sidebar" onClose={() => setShown(false)}>{panel}{dialogs}</Dialog> : <>{panel}{dialogs}</>}
   </>
@@ -70,3 +73,4 @@ function Dialogs({ agent, dialog, detail }: { agent: Agent; dialog: AgentDialog 
 }
 
 const NARROW = '(max-width: 1100px)'
+const FIELDS: Record<string, HereField> = { does: 'instructions', name: 'name', customize: 'face' }

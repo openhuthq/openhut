@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
-import { CloudWorkspace, parseJson, Record, type Backup } from '@openhut/common/cloud/cloud.ts'
-import { keyVersionOf } from '@openhut/common/cloud/member-list.ts'
+import { CloudWorkspace, parseJson, Record, type Backup, type SetHere } from '@openhut/common/cloud/cloud.ts'
+import { anchorOf, keyVersionOf } from '@openhut/common/cloud/member-list.ts'
 import { FileValue, openRecord, sealRecord, SYNCED, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
 import { fromBase64, readHeader, slot, toBase64 } from '@openhut/common/vault/vault.ts'
 import { agentService } from '../agents/agent-service.ts'
@@ -11,7 +11,8 @@ import { db } from '../platform/db.ts'
 import { emit, listen, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { keysService, type Sent as Outgoing } from './keys-service.ts'
-import { roomKeys, type Call } from './room-keys.ts'
+import { presence } from './presence.ts'
+import { bodyOf, roomKeys, type Call } from './room-keys.ts'
 import { syncKinds, type Context, type Local } from './sync-kinds.ts'
 
 const THROTTLE_MS = 300
@@ -41,6 +42,7 @@ const GONE = [4001, 4003, 4010]
 const Message = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready') }), z.object({ type: z.literal('members') }), z.object({ type: z.literal('letter') }), z.object({ type: z.literal('workspace') }), z.object({ type: z.literal('record'), record: Record }),
   z.object({ type: z.literal('request') }), z.object({ type: z.literal('deleted') }),
+  z.object({ type: z.literal('here'), from: z.string(), at: z.number(), body: z.string() }), z.object({ type: z.literal('gone'), from: z.string() }),
 ])
 
 type Item = Local & { id: string }
@@ -49,7 +51,7 @@ type Sent = 'sent' | 'later' | 'refused'
 type State = {
   ws: string; home: boolean; socket: ReconnectingWebSocket | undefined; ready: boolean; timer: NodeJS.Timeout | undefined; headTimer: NodeJS.Timeout | undefined; keyTimer?: NodeJS.Timeout; failures: number
   wanted: [string, number][] | null; refused: Map<string, { kind: Synced; hash: string; name: string }>; dirty: Set<Synced>; backup: Backup; name: string | null
-  requests: { device: string; email: string; at: string }[]; leaving?: boolean
+  requests: { device: string; email: string; at: string }[]; leaving?: boolean; log: { seq: number; hash: string }; echo: Map<string, number>
 }
 export type Gone = { name: string; why: 'removed' | 'deleted' }
 
@@ -57,6 +59,28 @@ let queue: Promise<void> = Promise.resolve()
 const states = new Map<string, State>()
 const backup: Backup = { ...IDLE }
 const gone: Gone[] = []
+
+presence.wire({
+  rooms: () => [...states.values()].filter((s) => s.ready).map((s) => s.ws),
+  roomOf: async (agent) => {
+    const row = await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', agent).executeTakeFirst()
+    const ws = row?.shared ? row.workspace ?? keysService.account()?.workspace.id : undefined
+    return ws && states.has(ws) ? ws : null
+  },
+  context: async (ws) => {
+    const s = states.get(ws)
+    const ctx = s?.ready ? await contextOf(s) : null
+    const list = roomKeys.room(ws)?.list
+    if (!s || !ctx || !list) return null
+    return { workspace: ws, key: ctx.key, version: ctx.version, keys: ctx.keys, me: toBase64(ctx.me.publicKey), members: ctx.members, email: ctx.email, seq: s.log.seq, log: s.log.hash, list: bodyOf(list)?.version ?? 0, listHash: await anchorOf(list) }
+  },
+  send: ({ ws, text }) => {
+    const s = states.get(ws)
+    if (!s?.ready || !s.socket) return false
+    s.socket.send(text)
+    return true
+  },
+})
 
 listen((event) => {
   const kinds = KINDS_OF.find(([pattern]) => pattern.test(event.name))?.[1]
@@ -71,6 +95,7 @@ export const syncService = {
   },
 
   disconnect(): void {
+    presence.forget()
     for (const s of states.values()) {
       s.socket?.close()
       clearTimeout(s.timer)
@@ -140,6 +165,10 @@ export const syncService = {
   },
 
   settled: (): Promise<void> => queue,
+
+  here: (next: SetHere): Promise<void> => presence.set(next),
+
+  presence: () => presence.view(),
 }
 
 function defaultName(ws: string): string {
@@ -154,7 +183,7 @@ function homeState(): State | undefined {
 }
 
 function open(home: boolean, ws: string): void {
-  const s: State = { ws, home, socket: undefined, ready: false, timer: undefined, headTimer: undefined, failures: 0, wanted: null, refused: new Map(), dirty: new Set(), name: null, requests: [], backup: home ? backup : { ...backup, state: 'idle', at: null, problem: null } }
+  const s: State = { ws, home, socket: undefined, ready: false, timer: undefined, headTimer: undefined, failures: 0, wanted: null, refused: new Map(), dirty: new Set(), name: null, requests: [], log: { seq: 0, hash: '' }, echo: new Map(), backup: home ? backup : { ...backup, state: 'idle', at: null, problem: null } }
   states.set(ws, s)
   const socket = new ReconnectingWebSocket(cloud.roomUrl(ws), [], { WebSocket: globalThis.WebSocket })
   s.socket = socket
@@ -164,6 +193,7 @@ function open(home: boolean, ws: string): void {
   socket.addEventListener('message', (event) => heard(s, String(event.data)))
   socket.addEventListener('close', (event) => {
     s.ready = false
+    presence.closed(ws)
     if (GONE.includes(event.code)) void run(() => checkRemoved(s))
   })
 }
@@ -184,8 +214,11 @@ function schedule({ s, ms }: { s: State; ms: number }): void {
 
 function heard(s: State, text: string): void {
   const message = Message.safeParse(parseJson(text)).data
+  if (message?.type === 'here') void presence.heard({ ws: s.ws, from: message.from, at: message.at, body: message.body })
+  if (message?.type === 'gone') presence.gone({ ws: s.ws, from: message.from })
   if (message?.type === 'ready') {
     s.ready = true
+    presence.ready(s.ws)
     void run(async () => {
       await named(s)
       await roomKeys.refresh({ ws: s.ws, call: caller(s) })
@@ -299,6 +332,19 @@ async function applyAll(s: State, all: Record[]): Promise<void> {
   if (s.wanted) await checkHead(s, s.wanted)
   const last = records.at(-1)
   if (last && last.seq > await seqOf(s)) await db.insertInto('install_setting').values({ name: seqName(s), value: String(last.seq) }).onConflict((oc) => oc.column('name').doUpdateSet({ value: String(last.seq) })).execute()
+  for (const record of records) if (s.echo.has(record.id)) s.echo.set(record.id, Math.max(s.echo.get(record.id) ?? 0, record.ver))
+  s.log = { seq: await seqOf(s), hash: logHash({ s, rows: await rowsById(s) }) }
+}
+
+function logHash({ s, rows }: { s: State; rows: Map<string, Row> }): string {
+  const lines: string[] = []
+  for (const [id, row] of rows) {
+    const seen = s.echo.get(id)
+    if (seen !== undefined && seen >= row.ver) s.echo.delete(id)
+    const ver = seen ?? row.ver
+    if (ver > 0) lines.push(`${id}:${ver}`)
+  }
+  return createHash('sha256').update(lines.sort().join('\n')).digest('base64url')
 }
 
 function rowOf({ record, open }: { record: Record; open: Opened }): Omit<Row, 'hash'> {
@@ -415,6 +461,7 @@ async function put({ s, item, ver, ctx }: { s: State; item: Item; ver: number; c
   }
   if (reply.status >= 400 && reply.status < 500 && !KEPT.includes(reply.status)) return 'refused'
   if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud refused a backup (HTTP ${reply.status}).`)
+  if (!s.echo.has(item.id)) s.echo.set(item.id, ver - 1)
   await saveRow(s, { id: item.id, kind: item.kind, ref: item.ref, ver, hash: hashItem(item), signer: toBase64(ctx.me.publicKey), agent_id: item.agentId ?? null })
   return 'sent'
 }
@@ -464,6 +511,7 @@ async function drop({ ws, why }: { ws: string; why: Gone['why'] | null }): Promi
   s?.socket?.close()
   for (const timer of [s?.timer, s?.keyTimer, s?.headTimer]) clearTimeout(timer)
   states.delete(ws)
+  presence.closed(ws)
   await roomKeys.dropRoom(ws)
   if (!own) await agentService.dropWorkspace(home ? null : ws)
   await db.deleteFrom('cloud_record').where('workspace', '=', home ? '' : ws).execute()

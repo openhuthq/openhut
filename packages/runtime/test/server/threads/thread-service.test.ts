@@ -235,6 +235,21 @@ test('a model that can\'t sign in ends the turn with a plain sentence, not the p
   assert.equal(error.errorText, 'Runner isn\'t ready: its Claude seat isn\'t signed in. An owner or admin connects the seat in Admin, then try again.')
 })
 
+test('several people chat with one shared agent: each message says who wrote it, messages that waited go together, and each one is answered', async () => {
+  const { threadService } = await import('../../../src/server/threads/thread-service.ts')
+  await db.insertInto('agent').values({ id: 'ag_chatteam', name: 'Team', owner_id: 'usr_chatownr', instructions: '# Team', model: 'sonnet', net: 24, channel_key: seal('k'.repeat(48)), wanted: 'stopped', shared: true }).execute()
+  const thread = await newThread('ag_chatteam')
+  const asks = (id: string, text: string, author: string) => threadService.applySynced({ id, author, value: { agentId: 'ag_chatteam', message: { id, role: 'user', parts: [{ type: 'text', text }], metadata: { author: 'forged@example.com' } } } })
+  const saved = async () => (await app.inject({ method: 'GET', url: `/api/threads/${thread.id}`, headers: as() })).json().messages as { id: string; role: string; metadata?: { author: string } }[]
+  await asks('m_ana', 'Is 4471 shipped?', 'ana@example.com')
+  await asks('m_sara', 'Check order 4471 for Lena', 'sara@example.com')
+  await db.updateTable('agent').set({ wanted: 'running' }).where('id', '=', 'ag_chatteam').execute()
+  await asks('m_mo', 'And tell her in the support channel', 'mo@example.com')
+  for (let tries = 0; tries < 100 && (await saved()).at(-1)?.role !== 'assistant'; tries++) await new Promise((resolve) => setTimeout(resolve, 50))
+  assert.equal(seen.body?.messages.at(-1)?.content, 'ana@example.com wrote:\nIs 4471 shipped?\n\nsara@example.com wrote:\nCheck order 4471 for Lena\n\nmo@example.com wrote:\nAnd tell her in the support channel')
+  assert.deepEqual((await saved()).map((message) => [message.role, message.metadata?.author]), [['user', 'ana@example.com'], ['user', 'sara@example.com'], ['user', 'mo@example.com'], ['assistant', undefined]])
+})
+
 test('an agent that isn\'t answering ends the turn with a sentence, not a hang', async () => {
   await new Promise((resolve) => hermes.close(resolve))
   const thread = await newThread('ag_chatrunn')

@@ -22,6 +22,9 @@ import { ErrorNote } from '@/components/error-note'
 import { STEP_ICONS } from '@/components/icons'
 import { DRAG, Dots, I, ICON_BUTTON } from '@/components/kit'
 import { OfflineChip } from '@/features/cloud/live'
+import { Faces, typed, Typing } from '@/features/cloud/presence'
+import { PersonFace } from '@/components/custom/person-face'
+import { nameOf as personName, useCloud } from '@/features/cloud/api'
 import { SidebarContext } from '@/features/agents/sidebar'
 import { agentState } from '@/components/status-badge'
 import { useAgents, useUpdateAgent } from '@/features/agents/api'
@@ -174,7 +177,7 @@ function ChatFrame({ agent, composer, tools, onTitle, onFiles, children }: { age
       {onTitle
         ? <Button type="button" variant="bare" className="float flex h-10 min-w-0 items-center gap-2 rounded-full bg-card pr-4 pl-1.5 text-ink" onClick={onTitle}><Face agent={agent} size={28} /><span className="truncate text-[16px] font-semibold">{agent.name}</span></Button>
         : <><Face agent={agent} size={26} /><span className="min-w-0 truncate text-[14px] font-semibold">{agent.name}</span></>}
-      <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1"><OfflineChip className="mr-1.5 phone:hidden" />{tools}</span>
+      <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{agent.shared && <span className="mr-2"><Faces agentId={agent.id} size={26} /></span>}<OfflineChip className="mr-1.5 phone:hidden" />{tools}</span>
     </div>
     <OfflineChip className="mx-auto hidden phone:flex" />
     <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 phone:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>
@@ -203,6 +206,7 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
     if (busy) return onStop()
     if (!(box instanceof HTMLTextAreaElement) || attachments.uploading || (!box.value.trim() && !attachments.items.length)) return
     onSend(box.value.trim())
+    typed('')
     box.value = ''
     box.style.height = ''
     setEmpty(true)
@@ -219,6 +223,7 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
   }
   return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3">
     {!ready && !busy && !quiet && <NotReady agent={agent} />}
+    {agent.shared && <Typing agentId={agent.id} />}
     <form className="mx-auto flex max-w-[640px] flex-col gap-2 rounded-xl border border-[oklch(0%_0_0/.12)] bg-card p-2 focus-within:border-mid" onSubmit={submit}>
       {attachments.items.length > 0 && <div className="flex flex-wrap gap-1.5">{attachments.items.map((each) => <FileChip key={each.key} name={each.name} image={each.image} thumb={each.thumb} busy={!each.file} onRemove={() => attachments.remove(each.key)} />)}</div>}
       <div className="flex items-end gap-1">
@@ -226,7 +231,7 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Attach files" title="Attach files" disabled={!ready} onClick={() => picker.current?.click()}><I icon={Attachment01Icon} size={16} /></Button>
         <Textarea variant="composer" name="text" rows={1} aria-label="Message" placeholder={placeholderOf(agent)} disabled={!ready} autoFocus={!touch}
           className="min-h-0 flex-1 py-1.5 text-[14px]" onKeyDown={enter} onPaste={paste}
-          onInput={(event) => { const box = event.currentTarget; setEmpty(!box.value.trim()); box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 240)}px` }} />
+          onInput={(event) => { const box = event.currentTarget; setEmpty(!box.value.trim()); if (agent.shared) typed(box.value); box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 240)}px` }} />
         <Button type="submit" variant="send" onMouseDown={(event) => event.preventDefault()} className={cn(!busy && nothing && 'bg-transparent text-mute disabled:opacity-100')} aria-label={busy ? 'Stop' : 'Send'} title={busy ? 'Stop' : 'Send (Enter). Shift+Enter for a new line'} disabled={!busy && (!ready || nothing || attachments.uploading)}>{busy ? <span className="size-2.5 rounded-[2px] bg-white" /> : <I icon={ArrowUp02Icon} />}</Button>
       </div>
     </form>
@@ -290,9 +295,20 @@ function AgentReply({ agent, message, live }: { agent: Agent; message: AgentMess
   </div>
 }
 
+const Authored = z.object({ author: z.string() })
+
 function UserMessage({ message }: { message: AgentMessage }) {
   const text = textOf(message)
   const files = message.parts.flatMap((part) => part.type === 'file' ? [part] : [])
+  const author = z.safeParse(Authored, message.metadata).data?.author
+  const me = useCloud().data?.email
+  if (author && me && author !== me) return <div className="flex animate-grow gap-3">
+    <PersonFace name={personName(author)} email={author} size={28} />
+    <span className="grid min-w-0 gap-1"><span className="text-[12px] text-mute">{personName(author)}</span>
+      {files.length > 0 && <span className="flex flex-wrap gap-1.5">{files.map((file) => <SentFile key={file.url} name={file.filename ?? nameOf(file.url)} path={file.url} mediaType={file.mediaType} />)}</span>}
+      {text && <CopyMenu text={text}><span className="max-w-[420px] rounded-[4px_12px_12px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{text}</span></CopyMenu>}
+    </span>
+  </div>
   return <div className="flex animate-grow flex-col items-end gap-1.5">
     {files.length > 0 && <div className="flex max-w-[78%] flex-wrap justify-end gap-1.5">{files.map((file) => <SentFile key={file.url} name={file.filename ?? nameOf(file.url)} path={file.url} mediaType={file.mediaType} />)}</div>}
     {text && <CopyMenu text={text}><div className="max-w-[78%] rounded-[12px_12px_4px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{text}</div></CopyMenu>}
@@ -471,7 +487,7 @@ function Details({ text }: { text: string }) {
 }
 
 function uiMessageOf(message: ChatMessage): AgentMessage {
-  return { id: message.id, role: message.role, parts: message.parts.flatMap((part): AgentPart[] => {
+  return { id: message.id, role: message.role, metadata: message.metadata, parts: message.parts.flatMap((part): AgentPart[] => {
     if (part.type === 'text' && typeof part.text === 'string') return [{ type: 'text', text: part.text }]
     if (part.type === 'data-tool') return [{ type: 'data-tool', data: z.safeParse(ToolProgress, part.data).data ?? {} }]
     if (part.type === 'data-calls') return [{ type: 'data-calls', data: z.safeParse(z.array(ChatCall), part.data).data ?? [] }]
