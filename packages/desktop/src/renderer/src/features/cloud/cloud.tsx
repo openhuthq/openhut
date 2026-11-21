@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Status } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
-import { nameOf, useCloud, useSignIn, useSignOut } from '@/features/cloud/api'
+import { ConfirmButton } from '@/components/confirm-button'
+import { nameOf, useCloud, useForget, useSignIn, useSignOut } from '@/features/cloud/api'
 import { CloudOff, NeedsCloud, SaveKit, TurnOn } from '@/features/cloud/sign-in'
 import { HERE } from '@/features/settings/desktop'
 import { Row } from '@/features/settings/kit'
@@ -17,11 +18,19 @@ const ROLE = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 export function CloudSettings() {
   const cloud = useCloud()
   const signOut = useSignOut()
+  const forget = useForget()
   const kitOpen = useOpen() === 'kit'
   const error = new URLSearchParams(useSearch()).get('error') ?? cloud.error?.message
   const data = cloud.data
   if (!data) return <ErrorNote message={error} />
-  if (data.status === 'off') return <><CloudOff /><ErrorNote message={error ?? undefined} /></>
+  if (data.status === 'off') return <>
+    <CloudOff />
+    <ErrorNote message={error ?? data.signInError ?? undefined} />
+    {data.keptAccount && <div className="flex items-center gap-4 px-1">
+      <span className="grid flex-1 gap-0.5"><span className="text-[13.5px] font-semibold">{data.keptAccount}</span><span className="text-[12.5px] text-body">Its keys stay on this {HERE} after sign-out.</span></span>
+      <ConfirmButton variant="secondary" className={PILL} disabled={forget.isPending} question={`Forget ${data.keptAccount} on this ${HERE}?`} detail={`This removes its keys from this ${HERE} only. Its backup stays in OpenHut Cloud, and your recovery words still restore it here or on another ${HERE}.`} action="Forget" onConfirm={() => forget.mutate(undefined, { onError: toastError })}>Forget on this {HERE}</ConfirmButton>
+    </div>}
+  </>
   const email = data.email ?? ''
   return <>
     <div className="flex items-center gap-3.5 px-1">

@@ -18,7 +18,7 @@ test('keys are stored only sealed, in a file only you can read when there is no 
   assert.equal(keysService.keyStore(), 'file')
   await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   const kit = await keysService.newKit()
-  assert.equal(await keysService.confirmKit(kit.ask.map((index) => kit.words[index])), true)
+  await keysService.saveKit(kit.box)
   const raw = readFileSync(FILE, 'utf8')
   assert.equal(statSync(FILE).mode & 0o777, 0o600)
   const { device, account } = stored()
@@ -32,8 +32,7 @@ test('keys are stored only sealed, in a file only you can read when there is no 
 test('the 12 words rebuild the account key, and a used kit is retired for a new one', async () => {
   await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   const kit = await keysService.newKit()
-  assert.equal(await keysService.confirmKit(['wrong', 'words']), false)
-  assert.equal(await keysService.confirmKit(kit.ask.map((index) => kit.words[index])), true)
+  await keysService.saveKit(kit.box)
   const typo = [...kit.words]
   typo[3] = typo[3] === 'abandon' ? 'ability' : 'abandon'
   assert.equal(await keysService.fromKit(typo), null)
@@ -47,7 +46,7 @@ test('the 12 words rebuild the account key, and a used kit is retired for a new 
 test('a signed-out Mac unlocks with the 12 words: the kit box opens the account key, the workspace box its key, and the account key signs this Mac in', async () => {
   const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   const kit = await keysService.newKit()
-  await keysService.confirmKit(kit.ask.map((index) => kit.words[index]))
+  await keysService.saveKit(kit.box)
   const saved = { kit: keysService.kitBox() ?? '', workspace: await keysService.workspaceBox(account), chain: [account.list] }
   await keysService.setLocked({ sub: 'dev-mo', email: 'mo@example.com' })
   const typo = [...kit.words].reverse()
