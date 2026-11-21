@@ -6,7 +6,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { WebSocketServer } from 'ws'
 import Fastify from 'fastify'
 
-const seen: { state?: string; deviceKey?: string; members?: unknown; email: string; kit?: unknown; passkey?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [] }
+const seen: { state?: string; deviceKey?: string; members?: unknown; email: string; kit?: unknown; passkey?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean; dropKit?: boolean; refuseBox?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [] }
 const cloud = createServer(async (req, res) => {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
@@ -19,17 +19,18 @@ const cloud = createServer(async (req, res) => {
   if (req.url === '/v1/sessions') return reply(body.deviceKey === seen.deviceKey ? 200 : 400, { object: 'cloud_session', token: 'session-token', sub: `dev-${seen.email}`, email: seen.email, expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
   if (req.url === '/v1/key-boxes/kit' && req.method === 'PUT') {
     seen.kit = { object: 'key_box', kind: 'kit', body: body.body, by: body.by, signature: body.signature, savedAt: new Date(Number(body.savedAt)).toISOString() }
+    if (seen.dropKit) return req.socket.destroy()
     return seen.failKit ? reply(502, {}) : reply(200, seen.kit)
   }
   if (req.url === '/v1/key-boxes/kit') return seen.kit ? reply(200, seen.kit) : reply(404, {})
   if (req.url === '/v1/key-boxes' && req.method === 'DELETE') {
     if (seen.kit) return reply(409, { error: { type: 'invalid_request_error', message: 'kit' } })
-    Object.assign(seen, { workspaces: [], members: undefined })
+    Object.assign(seen, { workspaces: [], members: undefined, lists: [] })
     return reply(200, { object: 'list', data: [] })
   }
   if (req.url === '/v1/key-boxes/passkey' && req.method === 'PUT') return reply(200, seen.passkey = { object: 'key_box', kind: 'passkey', body: body.body, by: body.by, signature: body.signature })
   if (req.url === '/v1/key-boxes/passkey' && req.method === 'GET') return seen.passkey ? reply(200, seen.passkey) : reply(404, {})
-  if (req.url === '/v1/workspaces' && req.method === 'POST') return reply(200, seen.workspaces[0] = body)
+  if (req.url === '/v1/workspaces' && req.method === 'POST') return seen.refuseBox ? reply(403, {}) : reply(200, seen.workspaces[0] = body)
   if (req.url === '/v1/workspaces') return reply(200, { object: 'list', data: seen.workspaces })
   if (req.url?.includes('/member-lists')) return reply(200, { object: 'list', data: seen.lists })
   if (req.url?.endsWith('/members') && req.method === 'GET') return seen.members ? reply(200, seen.members) : reply(404, { error: { type: 'invalid_request_error', message: 'none' } })
@@ -49,6 +50,7 @@ const { validateWithZod } = await import('../../../src/server/platform/validatio
 const { answerErrors } = await import('../../../src/server/platform/http-error.ts')
 const { cloudController } = await import('../../../src/server/cloud/cloud-controller.ts')
 const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
+const { cloudService } = await import('../../../src/server/cloud/cloud-service.ts')
 await migrate()
 
 const app = Fastify()
@@ -155,6 +157,43 @@ test('signed in, the Mac compares its kit box with the cloud’s: another box cl
   assert.equal(kit?.differs, true)
   assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 200)
   assert.equal((await status()).kit?.differs, false)
+})
+
+test('a kit save whose answer is lost stays unconfirmed: never adopted, Forget refused, and a new kit confirms', async () => {
+  seen.dropKit = true
+  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 502)
+  seen.dropKit = false
+  assert.ok(seen.kit)
+  assert.deepEqual([keysService.kitPending(), (await status()).kit], [true, null])
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })).json().keptAccount, null)
+  assert.equal(keysService.kitPending(), true)
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })).statusCode, 409)
+  await signIn('ana@example.com')
+  await until('on')
+  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 200)
+  assert.equal(keysService.kitPending(), false)
+  assert.ok((await status()).kit?.savedAt)
+})
+
+test('after Start over on another Mac, this Mac locks and asks for the new kit instead of looping on Make a new kit', async () => {
+  const theirs = { id: 'ws_theirs', key: 'dGhlaXJz', by: 'b', signature: 's' }
+  const kept = seen.kit as { body: string; signature: string }
+  seen.kit = { object: 'key_box', kind: 'kit', body: kept.body, by: (await status()).device, signature: kept.signature }
+  seen.workspaces = [theirs]
+  cloudService.connect()
+  const locked = await until('locked')
+  assert.deepEqual([locked.status, locked.kitInCloud, keysService.account()], ['locked', true, undefined])
+  seen.kit = undefined
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/key-boxes', headers })).statusCode, 200)
+  await until('on')
+  Object.assign(seen, { workspaces: [theirs], refuseBox: true })
+  cloudService.connect()
+  const relocked = await until('locked')
+  assert.deepEqual([relocked.status, relocked.kitInCloud, keysService.account()], ['locked', false, undefined])
+  seen.refuseBox = false
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/key-boxes', headers })).statusCode, 200)
+  await until('on')
+  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 200)
 })
 
 test('a passkey’s PRF output locks the account key in the room; on a new Mac the same PRF unlocks it and a different one doesn’t', async () => {
