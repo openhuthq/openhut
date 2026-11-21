@@ -23,7 +23,6 @@ const pending = new Map<string, { verifier: string; authorization: string; at: n
 let signInError: string | null = null
 let boxesDiffer = false
 let checkedAt = 0
-let unconfirmed: string | undefined
 let boxes: Promise<unknown> = Promise.resolve()
 let passkeySaved = false
 let pairing: { secret: string; reply: CloudPairing; workspaces: string[]; timer: NodeJS.Timeout } | undefined
@@ -118,15 +117,12 @@ export const cloudService = {
       if (!keysService.session() || !account) throw new HttpError(409, 'Turn on OpenHut Cloud before making a recovery kit.')
       if (keysService.kit()) await rotate(await keysService.change([]))
       const { words, box, ask } = await keysService.newKit()
-      await keysService.setKit(undefined)
       const token = await keysService.token()
       const kept = KeyBox.safeParse((await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token })).json).data
       const savedAt = Math.max(Date.now(), (Date.parse(kept?.savedAt ?? '') || 0) + 1)
+      await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString(), confirmed: false })
       const saved = await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token, body: await keysService.signBox({ account: keysService.account() ?? account, name: 'kit', body: box, savedAt }) })
-      if (saved.status !== 200) {
-        unconfirmed = box
-        throw new HttpError(502, `OpenHut Cloud didn’t keep your kit (HTTP ${saved.status}). Try again.`)
-      }
+      if (saved.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t keep your kit (HTTP ${saved.status}). Try again.`)
       await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString() })
       boxesDiffer = false
       return { object: 'recovery_kit' as const, words, ask }
@@ -296,15 +292,23 @@ async function compareBoxes(): Promise<void> {
   const cloudKit = KeyBox.safeParse(kit.json).data
   const mine = keysService.kitBox()
   const kitMine = cloudKit && await keysService.boxIsMine({ account, name: 'kit', box: cloudKit })
-  if (cloudKit && kitMine && cloudKit.body !== mine && cloudKit.body !== unconfirmed) await keysService.setKit({ box: cloudKit.body, savedAt: cloudKit.savedAt ?? new Date().toISOString() })
-  if (cloudKit && !kitMine && mine) await keysService.setKit(undefined)
   const box = Workspaces.safeParse(workspaces.json).data?.data.find((each) => each.id === account.workspace.id)
+  if (cloudKit && !kitMine && !box) return lockOut(account)
+  if (cloudKit && kitMine && cloudKit.body !== mine && !keysService.kitPending()) await keysService.setKit({ box: cloudKit.body, savedAt: cloudKit.savedAt ?? new Date().toISOString() })
+  if (cloudKit && !kitMine && mine) await keysService.setKit(undefined)
   const boxMine = box && await keysService.boxIsMine({ account, name: `workspace/${account.workspace.id}`, box: { body: box.key, by: box.by, signature: box.signature } })
-  const reboxed = boxMine || (await cloud.account({ method: 'POST', path: '/v1/workspaces', token, body: await keysService.workspaceBox(account) })).status === 200
+  const reboxed = boxMine ? 200 : (await cloud.account({ method: 'POST', path: '/v1/workspaces', token, body: await keysService.workspaceBox(account) })).status
+  if (reboxed === 403 && !box) return lockOut(account)
   const passkey = KeyBox.safeParse((await cloud.account({ method: 'GET', path: '/v1/key-boxes/passkey', token })).json).data
   passkeySaved = Boolean(passkey && await keysService.boxIsMine({ account, name: 'passkey', box: passkey }))
   const kitOk = cloudKit ? kitMine : !mine || (await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token, body: await keysService.signBox({ account, name: 'kit', body: mine, savedAt: Date.now() }) })).status === 200
-  boxesDiffer = !reboxed || !kitOk
+  boxesDiffer = reboxed !== 200 || !kitOk
+}
+
+async function lockOut({ sub, email }: Account): Promise<void> {
+  syncService.disconnect()
+  await keysService.relock({ sub, email })
+  boxesDiffer = false
 }
 
 async function boxesOf(token: string): Promise<{ id: string; key: string; chain: MemberList[] }[]> {

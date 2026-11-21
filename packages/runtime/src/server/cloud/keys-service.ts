@@ -16,7 +16,7 @@ const ROW = 'cloud_keys'
 const FILE = join(config.dataDir, 'cloud-keys.sealed')
 const REFRESH_EARLY_MS = 5 * 60_000
 const HERE = process.platform === 'darwin' ? 'Mac' : 'computer'
-const KIT = z.object({ box: z.string(), savedAt: z.string() })
+const KIT = z.object({ box: z.string(), savedAt: z.string(), confirmed: z.optional(z.boolean()) })
 const Keys = z.object({ key: z.string(), version: z.number(), old: z.optional(z.record(z.string(), z.string())), slot: z.optional(z.string()) })
 const Secret = z.object({ ...Keys.shape, anchor: z.string() })
 const Stored = z.object({
@@ -54,7 +54,8 @@ export const keysService = {
   account: (): Account | undefined => stored?.account,
   locked: (): { sub: string; email: string } | undefined => stored?.locked,
   members: (): MemberListBody | undefined => bodyOf(stored?.account?.list),
-  kitBox: (): string | undefined => stored?.kit?.box,
+  kitBox: (): string | undefined => kitOf(stored)?.box,
+  kitPending: (): boolean => stored?.kit?.confirmed === false,
 
   async setLocked(locked: { sub: string; email: string } | undefined): Promise<void> {
     await save({ ...await keys(), locked })
@@ -120,7 +121,7 @@ export const keysService = {
     return Boolean(plain && equal({ a: plain, b: await secretOf(account) }))
   },
 
-  async setKit(kit: { box: string; savedAt: string } | undefined): Promise<void> {
+  async setKit(kit: { box: string; savedAt: string; confirmed?: boolean } | undefined): Promise<void> {
     await save({ ...await keys(), kit })
   },
 
@@ -160,7 +161,10 @@ export const keysService = {
     return body
   },
   session: (): Session | undefined => stored?.session,
-  kit: (): { savedAt: string } | null => stored?.kit ? { savedAt: stored.kit.savedAt } : null,
+  kit: (): { savedAt: string } | null => {
+    const kit = kitOf(stored)
+    return kit ? { savedAt: kit.savedAt } : null
+  },
 
   async setSession(session: Session | undefined): Promise<void> {
     await save({ ...await keys(), session })
@@ -168,7 +172,7 @@ export const keysService = {
 
   ownedBy({ sub }: { sub: string }): void {
     const other = stored?.account ?? stored?.locked
-    if (other && other.sub !== sub) throw new HttpError(409, `This ${process.platform === 'darwin' ? 'Mac' : 'computer'} keeps the keys of ${other.email}. ${stored?.account && !stored.kit ? 'Sign in with that account and save a recovery kit first.' : 'Sign in with that account, or forget it below.'}`)
+    if (other && other.sub !== sub) throw new HttpError(409, `This ${process.platform === 'darwin' ? 'Mac' : 'computer'} keeps the keys of ${other.email}. ${stored?.account && !kitOf(stored) ? 'Sign in with that account and save a recovery kit first.' : 'Sign in with that account, or forget it below.'}`)
   },
 
   async open({ sub, email }: { sub: string; email: string }): Promise<Account> {
@@ -197,13 +201,13 @@ export const keysService = {
     await save({ ...await keys(), kit: { box, savedAt: new Date().toISOString() } })
   },
 
-  keptAccount: (): string | null => stored?.account && stored.kit ? stored.account.email : null,
+  keptAccount: (): string | null => stored?.account && kitOf(stored) ? stored.account.email : null,
 
   async forget(): Promise<void> {
     const current = await keys()
     if (current.session) throw new HttpError(409, 'Sign out of OpenHut Cloud first.')
     if (!current.account) return
-    if (!current.kit) throw new HttpError(409, `Save a recovery kit for ${current.account.email} first. Without one, nobody can open its backup again.`)
+    if (!kitOf(current)) throw new HttpError(409, `Save a recovery kit for ${current.account.email} first. Without one, nobody can open its backup again.`)
     await save({ device: toBase64(newKey()), machine })
   },
 
@@ -349,6 +353,10 @@ async function kitFor(account: Account): Promise<{ words: string[]; box: string 
 
 async function accountDevice(key: Bytes): Promise<Identity> {
   return identity(fromBase64(await slot({ key, path: 'account-device' })))
+}
+
+function kitOf(keys: Stored | undefined): Stored['kit'] {
+  return keys?.kit?.confirmed === false ? undefined : keys?.kit
 }
 
 function firstOf(account: Account): MemberList {

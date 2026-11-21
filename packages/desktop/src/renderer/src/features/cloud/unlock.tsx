@@ -68,10 +68,10 @@ function NoKitYet() {
   return <div className="flex w-[380px] flex-col items-center gap-3">
     <p className="m-0 text-[13px] text-body">Save a recovery kit on the {HERE} you signed in on first. Then come back here.</p>
     <Button type="button" variant="secondary" className={PILL} disabled={cloud.isFetching} onClick={() => void cloud.refetch()}>{cloud.isFetching ? 'Checking…' : 'Check again'}</Button>
-    <div ref={box} className="flex items-center gap-2">
+    <div ref={box} className="flex flex-wrap items-center justify-center gap-2">
       {confirming
         ? <>
-          <span className="text-[12px] text-mute">Start over with a new, empty backup?</span>
+          <span className="w-full text-[12px] text-mute">Start over with a new, empty backup? Your other {HERE}s will need the new kit’s words.</span>
           <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
           <Button type="button" variant="danger" className={PILL} disabled={startOver.isPending} onClick={() => startOver.mutate(undefined, { onError: toastError })}>Start over</Button>
         </>
@@ -141,7 +141,10 @@ function KitEntry({ onBack }: { onBack: () => void }) {
     const typed = input.value.toLowerCase().split(/\s+/)
     const parts = typed.filter(Boolean)
     setWords((all) => all.map((word, i) => i === index ? parts[0] ?? '' : i > index && i < index + parts.length ? parts[i - index] : word))
-    if (typed.length > 1) input.form?.querySelectorAll('input')[Math.min(index + Math.max(parts.length, 1), 11)]?.focus()
+    const next = typed.length > 1 ? input.form?.querySelectorAll('input')[Math.min(index + Math.max(parts.length, 1), 11)] : undefined
+    if (!next || next === input) return
+    next.focus()
+    next.select()
   }
   const paste = (event: ClipboardEvent<HTMLInputElement>) => {
     const pasted = event.clipboardData.getData('text').toLowerCase().replace(/\d+\./g, ' ').split(/\s+/).filter(Boolean)
@@ -151,7 +154,7 @@ function KitEntry({ onBack }: { onBack: () => void }) {
   }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    unlock.mutate({ words })
+    unlock.mutate({ words }, { onError: () => setWords((all) => all.map(() => '')) })
   }
   return <Window>
     <form onSubmit={submit} className="flex flex-col items-center gap-4">
