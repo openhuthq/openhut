@@ -4,11 +4,10 @@ import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Status } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
-import { ConfirmButton } from '@/components/confirm-button'
 import { nameOf, useCloud, useForget, useSignIn, useSignOut } from '@/features/cloud/api'
 import { CloudOff, NeedsCloud, SaveKit, TurnOn } from '@/features/cloud/sign-in'
 import { HERE } from '@/features/settings/desktop'
-import { Row } from '@/features/settings/kit'
+import { Row, useConfirming } from '@/features/settings/kit'
 import { ago, shortDate } from '@/lib/format'
 import { open, useOpen, useSearch } from '@/lib/router'
 import { toastError } from '@/lib/toast'
@@ -18,7 +17,6 @@ const ROLE = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 export function CloudSettings() {
   const cloud = useCloud()
   const signOut = useSignOut()
-  const forget = useForget()
   const kitOpen = useOpen() === 'kit'
   const error = new URLSearchParams(useSearch()).get('error') ?? cloud.error?.message
   const data = cloud.data
@@ -26,10 +24,7 @@ export function CloudSettings() {
   if (data.status === 'off') return <>
     <CloudOff />
     <ErrorNote message={error ?? data.signInError ?? undefined} />
-    {data.keptAccount && <div className="flex items-center gap-4 px-1">
-      <span className="grid flex-1 gap-0.5"><span className="text-[13.5px] font-semibold">{data.keptAccount}</span><span className="text-[12.5px] text-body">Its keys stay on this {HERE} after sign-out.</span></span>
-      <ConfirmButton variant="secondary" className={PILL} disabled={forget.isPending} question={`Forget ${data.keptAccount} on this ${HERE}?`} detail={`This removes its keys from this ${HERE} only. Its backup stays in OpenHut Cloud, and your recovery words still restore it here or on another ${HERE}.`} action="Forget" onConfirm={() => forget.mutate(undefined, { onError: toastError })}>Forget on this {HERE}</ConfirmButton>
-    </div>}
+    {data.keptAccount && <KeptAccount email={data.keptAccount} />}
   </>
   const email = data.email ?? ''
   return <>
@@ -49,6 +44,19 @@ export function CloudSettings() {
     <ErrorNote message={error ?? undefined} />
     {kitOpen && <SaveKit />}
   </>
+}
+
+function KeptAccount({ email }: { email: string }) {
+  const forget = useForget()
+  const { confirming, setConfirming, box } = useConfirming()
+  return <div ref={box}><Row icon={<PersonFace name={nameOf(email)} email={email} size={32} />} title={nameOf(email)} note={confirming ? `Removes its keys from this ${HERE}. Your recovery words bring it back.` : email}>
+    {confirming
+      ? <>
+        <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
+        <Button type="button" variant="danger" className={PILL} disabled={forget.isPending} onClick={() => forget.mutate(undefined, { onError: toastError })}>Forget</Button>
+      </>
+      : <Button type="button" variant="danger" className={PILL} onClick={() => setConfirming(true)}>Forget</Button>}
+  </Row></div>
 }
 
 export function PeopleSettings() {
@@ -84,7 +92,7 @@ function backupNote({ state, done, total, at, problem, offline }: Backup & { off
 }
 
 function kitNote(kit: Cloud['kit']): string {
-  if (kit?.differs) return `Your key boxes in OpenHut Cloud aren’t the ones this ${HERE} saved. Make a new kit.`
+  if (kit?.differs) return `Your recovery kit in OpenHut Cloud isn’t the one this ${HERE} saved. Make a new kit.`
   return kit ? `Recovery kit saved ${shortDate.format(new Date(kit.savedAt))}` : 'No recovery kit'
 }
 

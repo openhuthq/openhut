@@ -4,15 +4,15 @@ import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { agentPath } from '@/app/routes'
 import { ErrorNote } from '@/components/error-note'
 import { Hut } from '@/components/hut'
-import { DRAG } from '@/components/kit'
+import { DRAG, PILL } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAgents } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
-import { nameOf, useCloud, useSignOut, useUnlock } from '@/features/cloud/api'
+import { nameOf, useCloud, useSignOut, useStartOver, useUnlock } from '@/features/cloud/api'
 import { Mascot } from '@/features/cloud/sign-in'
 import { HERE } from '@/features/settings/desktop'
-import { Chevron, Row, Rows } from '@/features/settings/kit'
+import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { isPhone } from '@/lib/native'
 import { navigate } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
@@ -26,11 +26,32 @@ function Unlock({ cloud }: { cloud: Cloud }) {
     <Hut mood="key" className="size-[84px]" />
     <h1 className="m-0 text-[24px]/[1.2] font-semibold tracking-[-.01em]">Welcome back, {nameOf(cloud.email ?? '')}</h1>
     <span className="mt-1 text-[13px] text-body">Unlock to bring everything to this {HERE}.</span>
-    <div className="w-[380px] rounded-lg border border-hair bg-card p-1 text-left">
-      <Rows><Row onClick={() => setKit(true)} icon={<Mascot kind="kit" size={30} />} title="Use my recovery kit" note="The 12 words you saved"><Chevron /></Row></Rows>
-    </div>
+    {cloud.kitInCloud
+      ? <div className="w-[380px] rounded-lg border border-hair bg-card p-1 text-left">
+        <Rows><Row onClick={() => setKit(true)} icon={<Mascot kind="kit" size={30} />} title="Use my recovery kit" note="The 12 words you saved"><Chevron /></Row></Rows>
+      </div>
+      : <NoKitYet />}
     <Button type="button" variant="text" className="text-[12px] font-normal text-mute" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out, keep this {HERE} as it is</Button>
   </Window>
+}
+
+function NoKitYet() {
+  const cloud = useCloud()
+  const startOver = useStartOver()
+  const { confirming, setConfirming, box } = useConfirming()
+  return <div className="flex w-[380px] flex-col items-center gap-3">
+    <p className="m-0 text-[13px] text-body">Save a recovery kit on the {HERE} you signed in on first. Then come back here.</p>
+    <Button type="button" variant="secondary" className={PILL} disabled={cloud.isFetching} onClick={() => void cloud.refetch()}>{cloud.isFetching ? 'Checking…' : 'Check again'}</Button>
+    <div ref={box} className="flex items-center gap-2">
+      {confirming
+        ? <>
+          <span className="text-[12px] text-mute">Start over with a new, empty backup?</span>
+          <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
+          <Button type="button" variant="danger" className={PILL} disabled={startOver.isPending} onClick={() => startOver.mutate(undefined, { onError: toastError })}>Start over</Button>
+        </>
+        : <Button type="button" variant="text" className="text-[12px] font-normal text-mute" onClick={() => setConfirming(true)}>Start over</Button>}
+    </div>
+  </div>
 }
 
 function KitEntry({ onBack }: { onBack: () => void }) {

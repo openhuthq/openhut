@@ -18,6 +18,8 @@ const HEAD_MS = 2000
 const HEAD = 'head'
 const DELETED = 'deleted'
 const SEQ = 'cloud_seq'
+const HERE = process.platform === 'darwin' ? 'Mac' : 'computer'
+const KEPT = [401, 409, 429]
 const TOMBSTONED: Synced[] = ['agent', 'message', 'connection']
 const FIRST: Synced[] = ['connection', 'setting', 'agent']
 const KINDS_OF: [RegExp, Synced[]][] = [
@@ -34,6 +36,7 @@ const Message = z.discriminatedUnion('type', [z.object({ type: z.literal('ready'
 
 type Item = Local & { id: string }
 type Row = Omit<Local, 'value' | 'wire'> & { id: string; ver: number; hash: string }
+type Sent = 'sent' | 'later' | 'refused'
 
 let socket: ReconnectingWebSocket | undefined
 let ready = false
@@ -41,6 +44,8 @@ let queue: Promise<void> = Promise.resolve()
 let timer: NodeJS.Timeout | undefined
 let headTimer: NodeJS.Timeout | undefined
 let failures = 0
+let wanted: [string, number][] | null = null
+const refused = new Map<string, { kind: Synced; hash: string; name: string }>()
 const dirty = new Set<Synced>()
 const backup: Backup = { state: 'idle', done: 0, total: 0, current: null, at: null, agent: null, problem: null }
 
@@ -78,6 +83,8 @@ export const syncService = {
       await db.deleteFrom('install_setting').where('name', '=', SEQ).execute()
     })
     Object.assign(backup, { state: restoring ? 'restoring' : 'idle', done: 0, total: 0, current: null, at: null, agent: null, problem: null })
+    wanted = null
+    refused.clear()
   },
 
   ready: (): boolean => ready,
@@ -100,7 +107,10 @@ export const syncService = {
     }, ms)
   },
 
-  status: (): Backup => ({ ...backup }),
+  status: (): Backup => {
+    const stuck = refused.values().next().value
+    return { ...backup, problem: backup.problem ?? (stuck ? `${stuck.name} can’t be backed up: it doesn’t fit what OpenHut Cloud keeps.` : null) }
+  },
 
   settled: (): Promise<void> => queue,
 }
@@ -166,7 +176,8 @@ async function applyAll(records: Record[]): Promise<void> {
     await saveRow({ id: record.id, kind: open.kind, ref: open.ref, ver: record.ver, hash: hashOf(local ?? null) })
   }
   const head = opened.map(([, open]) => open).find((open) => open.kind === 'head')
-  if (restoring && head?.kind === 'head' && head.value) await checkHead(head.value.records)
+  if ((restoring || wanted) && head?.kind === 'head' && head.value) wanted = head.value.records
+  if (wanted) await checkHead(wanted)
   const last = records.at(-1)
   if (last && last.seq > await seqOf()) await db.insertInto('install_setting').values({ name: SEQ, value: String(last.seq) }).onConflict((oc) => oc.column('name').doUpdateSet({ value: String(last.seq) })).execute()
 }
@@ -180,7 +191,8 @@ async function openSafely({ record, ctx }: { record: Record; ctx: Context }): Pr
 async function checkHead(records: [string, number][]): Promise<void> {
   const rows = await rowsById()
   const missing = records.filter(([id, ver]) => (rows.get(id)?.ver ?? 0) < ver).length
-  backup.problem = missing ? `OpenHut Cloud sent an incomplete or older backup: ${missing} of ${records.length} agents and settings are missing or out of date.` : null
+  backup.problem = missing ? `${missing} of ${records.length} agents and settings didn’t come back. Open OpenHut on your other ${HERE} so it backs them up again.` : null
+  if (!missing) wanted = null
 }
 
 async function flush(): Promise<void> {
@@ -189,15 +201,19 @@ async function flush(): Promise<void> {
   const kinds = SYNCED.filter((kind) => dirty.delete(kind))
   const changed = await unsent({ kinds, ctx })
   if (!changed.length) {
-    if (backup.state === 'failed') Object.assign(backup, { state: 'idle', at: new Date().toISOString() })
+    if (backup.state === 'failed' && !refused.size) Object.assign(backup, { state: 'idle', at: new Date().toISOString() })
     return
   }
-  Object.assign(backup, { state: 'backing_up', done: 0, total: changed.length, current: null })
+  const stuck = [...refused.keys()].filter((id) => !changed.some((each) => each.id === id)).length
+  Object.assign(backup, { state: 'backing_up', done: 0, total: changed.length + stuck, current: null })
   const later = new Set<string>()
   try {
     for (const item of changed) {
-      if (!await put({ item, ver: ((await rowsById()).get(item.id)?.ver ?? 0) + 1, ctx })) later.add(item.id)
-      backup.done++
+      const sent = await put({ item, ver: ((await rowsById()).get(item.id)?.ver ?? 0) + 1, ctx })
+      if (sent === 'later') later.add(item.id)
+      if (sent === 'refused') refused.set(item.id, { kind: item.kind, hash: hashOf(item.value), name: nameOf(item) })
+      else backup.done++
+      if (sent === 'sent') refused.delete(item.id)
     }
   } catch (err) {
     log.warn({ event: 'cloud.backup_failed', error: messageOf(err) })
@@ -213,7 +229,12 @@ async function flush(): Promise<void> {
   clearTimeout(headTimer)
   if (changed.some((each) => each.kind !== 'message')) await writeHead()
   else headTimer = setTimeout(() => void run(writeHead), HEAD_MS)
-  Object.assign(backup, { state: 'idle', at: new Date().toISOString() })
+  Object.assign(backup, refused.size ? { state: 'failed' } : { state: 'idle', at: new Date().toISOString() })
+}
+
+function nameOf(item: Item): string {
+  const name = item.kind === 'agent' && item.value && typeof item.value === 'object' && 'name' in item.value ? String(item.value.name) : ''
+  return name || `A ${item.kind}`
 }
 
 async function unsent({ kinds, ctx }: { kinds: Synced[]; ctx: Context }): Promise<Item[]> {
@@ -223,8 +244,9 @@ async function unsent({ kinds, ctx }: { kinds: Synced[]; ctx: Context }): Promis
     const mine = await localsOf({ kind, ctx }).catch((err: unknown) => { log.warn({ event: 'cloud.locals_failed', kind, error: messageOf(err) }) })
     if (!mine) continue
     const ids = new Set(mine.map((each) => each.id))
+    for (const [id, each] of refused) if (each.kind === kind && !ids.has(id)) refused.delete(id)
     const gone = TOMBSTONED.includes(kind) ? [...rows.values()].filter((row) => row.kind === kind && row.hash !== DELETED && !ids.has(row.id)).map((row) => ({ ...row, value: null })) : []
-    changed.push(...[...mine, ...gone].filter((each) => rows.get(each.id)?.hash !== hashOf(each.value)))
+    changed.push(...[...mine, ...gone].filter((each) => ![rows.get(each.id)?.hash, refused.get(each.id)?.hash].includes(hashOf(each.value))))
   }
   return changed
 }
@@ -238,19 +260,20 @@ async function writeHead(): Promise<void> {
   await put({ item: { id, kind: HEAD, ref: HEAD, value: { records } }, ver: (rows.get(id)?.ver ?? 0) + 1, ctx }).catch((err: unknown) => log.warn({ event: 'cloud.head_failed', error: messageOf(err) }))
 }
 
-async function put({ item, ver, ctx }: { item: Item; ver: number; ctx: Context }): Promise<boolean> {
+async function put({ item, ver, ctx }: { item: Item; ver: number; ctx: Context }): Promise<Sent> {
   const value = item.value === null || !item.wire ? item.value : await item.wire()
-  if (value === undefined) return false
+  if (value === undefined) return 'later'
   const sealed = await sealRecord({ workspace: ctx.workspace, key: ctx.key, version: ctx.version, signer: ctx.me, id: item.id, ver, kind: item.kind, ref: item.ref, value })
-  if (!sealed) throw new HttpError(400, `This ${item.kind} can’t be backed up: it doesn’t fit what OpenHut Cloud keeps.`)
+  if (!sealed) return 'refused'
   const reply = await room({ method: 'PUT', path: `/records/${item.id}`, body: sealed })
   if (reply.status === 409) {
     await catchUp()
-    return true
+    return 'sent'
   }
+  if (reply.status >= 400 && reply.status < 500 && !KEPT.includes(reply.status)) return 'refused'
   if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud refused a backup (HTTP ${reply.status}).`)
   await saveRow({ id: item.id, kind: item.kind, ref: item.ref, ver, hash: hashOf(item.value) })
-  return true
+  return 'sent'
 }
 
 async function localsOf({ kind, ctx }: { kind: Synced; ctx: Context }): Promise<Item[] | null> {

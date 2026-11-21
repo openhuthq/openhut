@@ -34,9 +34,9 @@ export function BackupCard() {
   return <div className="flex w-full flex-col gap-2 rounded-xl border border-hair bg-card px-3.5 py-3 shadow-[0_2px_8px_oklch(0%_0_0/.06)]" role="status">
     <span className="flex items-center gap-2 text-[13px] font-medium">
       {icon}{failed ? 'Couldn’t back up' : busy ? 'Backing up' : 'Backed up'}
-      <span className="ml-auto text-[12px] font-normal text-mute tabular-nums">{busy ? `${percent}%` : failed ? 'Trying again' : 'Just now'}</span>
+      <span className="ml-auto text-[12px] font-normal text-mute tabular-nums">{busy ? `${percent}%` : failed ? (backup.problem ? '' : 'Trying again') : 'Just now'}</span>
     </span>
     <Meter value={percent} done={!busy && !failed} aria-label="Backup" />
-    <span className="text-[11.5px] text-mute">{busy || failed ? `${done} of ${total} agents and settings` : 'Only your devices can read it.'}</span>
+    <span className="text-[11.5px] text-mute">{failed ? `${total - done} of ${total} not backed up yet` : busy ? `${done} of ${total} agents and settings` : 'Only your devices can read it.'}</span>
   </div>
 }

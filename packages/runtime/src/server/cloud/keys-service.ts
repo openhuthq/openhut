@@ -99,15 +99,17 @@ export const keysService = {
     return { id: account.workspace.id, key: box, by, signature }
   },
 
-  async signBox({ account, name, body }: { account: Account; name: string; body: string }): Promise<{ body: string; by: string; signature: string }> {
+  async signBox({ account, name, body, savedAt }: { account: Account; name: string; body: string; savedAt?: number }): Promise<{ body: string; by: string; signature: string; savedAt?: number }> {
     const signer = await accountDevice(fromBase64(account.key))
-    return { body, by: toBase64(signer.publicKey), signature: await signProof({ signer, proof: 'key-box', parts: [account.sub, name, body] }) }
+    return { body, by: toBase64(signer.publicKey), signature: await signProof({ signer, proof: 'key-box', parts: boxParts({ account, name, body, savedAt }) }), savedAt }
   },
 
-  async boxIsMine({ account, name, box }: { account: Account; name: string; box: { body: string; by?: string; signature?: string } }): Promise<boolean> {
+  async boxIsMine({ account, name, box }: { account: Account; name: string; box: { body: string; by?: string; signature?: string; savedAt?: string } }): Promise<boolean> {
     const by = toBase64((await accountDevice(fromBase64(account.key))).publicKey)
-    if (box.by !== by || !box.signature) return false
-    if (!await checkProof({ device: by, proof: 'key-box', parts: [account.sub, name, box.body], signature: box.signature })) return false
+    const { signature } = box
+    if (box.by !== by || !signature) return false
+    const signed = (savedAt?: number) => checkProof({ device: by, proof: 'key-box', parts: boxParts({ account, name, body: box.body, savedAt }), signature })
+    if (!(box.savedAt && await signed(Date.parse(box.savedAt))) && !await signed()) return false
     if (name === 'kit') return true
     const plain = await unlock({ keys: { 1: fromBase64(account.key) }, bind: workspaceBind({ account, id: account.workspace.id }), locked: fromBase64(box.body) })
     return Boolean(plain && equal({ a: plain, b: await workspacePlain(account) }))
@@ -157,7 +159,7 @@ export const keysService = {
 
   ownedBy({ sub }: { sub: string }): void {
     const other = stored?.account ?? stored?.locked
-    if (other && other.sub !== sub) throw new HttpError(409, `This ${process.platform === 'darwin' ? 'Mac' : 'computer'} is signed in to ${other.email}. ${stored?.account && !stored.kit ? 'Sign in with that account and save a recovery kit first.' : 'Sign in with that account.'}`)
+    if (other && other.sub !== sub) throw new HttpError(409, `This ${process.platform === 'darwin' ? 'Mac' : 'computer'} keeps the keys of ${other.email}. ${stored?.account && !stored.kit ? 'Sign in with that account and save a recovery kit first.' : 'Sign in with that account, or forget it below.'}`)
   },
 
   async open({ sub, email }: { sub: string; email: string }): Promise<Account> {
@@ -220,6 +222,10 @@ async function restoreFrom({ key, workspace, sub, email, device }: { key: Bytes;
 
 async function workspacePlain(account: Account): Promise<Bytes> {
   return concat([fromBase64(account.workspace.key), fromBase64(await anchorOf(firstOf(account)))])
+}
+
+function boxParts({ account, name, body, savedAt }: { account: Account; name: string; body: string; savedAt?: number }): string[] {
+  return savedAt === undefined ? [account.sub, name, body] : [account.sub, name, body, String(savedAt)]
 }
 
 function workspaceBind({ account, id }: { account: Account; id: string }): string {

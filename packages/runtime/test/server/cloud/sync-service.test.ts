@@ -17,7 +17,7 @@ createSocket({ allowHalfOpen: true }, (sock) => sock.setEncoding('utf8').once('d
   sock.end(JSON.stringify({ ok: true, ...replies[req.cmd] }))
 })).listen(process.env.AGENTD_SOCK).unref()
 
-const room = { log: [] as Record[], records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>), limit: Infinity, refused: 0 }
+const room = { log: [] as Record[], records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>), limit: Infinity, refused: 0, reject: new Set<string>(), rejected: 0 }
 const sockets = new Set<WebSocket>()
 const store = (record: Omit<Record, 'seq' | 'object'>): Record => {
   const saved = { ...record, object: 'record' as const, seq: ++room.seq }
@@ -37,6 +37,10 @@ const server = createServer(async (req, res) => {
   const id = /\/records\/([^/]+)$/.exec(url.pathname)?.[1]
   if (!id || req.method !== 'PUT') return reply(404, {})
   await room.beforePut?.(id)
+  if (room.reject.has(id)) {
+    room.rejected++
+    return reply(400, { error: { type: 'invalid_request_error', message: 'That record doesn’t fit.' } })
+  }
   if (room.limit <= 0) {
     room.refused++
     return reply(429, { error: { type: 'rate_limit_error', message: 'Too many requests.' } })
@@ -169,7 +173,39 @@ test('a value that doesn’t fit is never reported backed up, and the backup is 
   await until(() => syncService.status().state === 'failed', 'the backup to fail')
   assert.equal(syncService.status().at, at)
   await db.updateTable('agent').set({ name: 'Fits now' }).where('id', '=', 'ag_toolong1').execute()
+  syncService.send()
   await until(() => syncService.status().state === 'idle' && syncService.status().at !== at, 'the retry to back it up', 400)
+})
+
+test('a record the cloud can never take is skipped and named, the rest and the head still go, and it isn’t retried until it changes', async () => {
+  const insert = (id: string, name: string, model: string, net: number) => db.insertInto('agent').values({ id, name, owner_id: actor.id, instructions: '', model, net, channel_key: seal('k'.repeat(32)) }).execute()
+  await insert('ag_badmodel', 'Sales', 'openrouter:a b', 240)
+  await insert('ag_rejected', 'Refused', 'claude:sonnet', 241)
+  await insert('ag_later001', 'Later', 'claude:sonnet', 242)
+  const [sales, rejected, later, head] = await Promise.all(['agent/ag_badmodel', 'agent/ag_rejected', 'agent/ag_later001', 'head/head'].map((path) => slot({ key, path })))
+  const headVer = room.records.get(head)?.ver ?? 0
+  room.reject.add(rejected)
+  syncService.send()
+  await until(() => room.records.has(later) && (room.records.get(head)?.ver ?? 0) > headVer && syncService.status().state === 'failed', 'the later agent and the head to go out')
+  assert.equal(room.records.has(sales), false)
+  assert.match(syncService.status().problem ?? '', /^(Sales|Refused) can’t be backed up: it doesn’t fit what OpenHut Cloud keeps\.$/)
+  assert.equal(room.rejected, 1)
+  const failing = () => syncService.status().total - syncService.status().done
+  assert.equal(failing(), 2)
+  await agentService.update({ actor, id: 'ag_later001', patch: { name: 'Later still' } })
+  await until(async () => (await openRecord({ workspace, keys: { 1: key }, record: room.records.get(later) as Record, members }))?.value !== null && room.records.get(later)?.ver === 2, 'the next edit to go out')
+  await sleep(300)
+  assert.deepEqual([syncService.status().state, failing()], ['failed', 2])
+  syncService.send()
+  await sleep(800)
+  syncService.send()
+  await sleep(800)
+  assert.equal(room.rejected, 1)
+  room.reject.clear()
+  await db.updateTable('agent').set({ model: 'claude:sonnet' }).where('id', '=', 'ag_badmodel').execute()
+  await db.updateTable('agent').set({ name: 'Taken now' }).where('id', '=', 'ag_rejected').execute()
+  syncService.send()
+  await until(() => syncService.status().state === 'idle' && syncService.status().problem === null && room.records.has(sales) && room.records.has(rejected), 'both to back up once they change')
 })
 
 test('200 agents back up in full through a rate limit: failed while any is unsent, retried with backoff, never Up to date early', async () => {
@@ -195,8 +231,10 @@ test('a full restore checks the signed head and says so plainly when the cloud l
   await syncService.reset({ restoring: true })
   syncService.connect()
   await until(() => syncService.status().problem !== null, 'the head check')
-  assert.match(syncService.status().problem ?? '', /^OpenHut Cloud sent an incomplete or older backup: 1 of \d+ agents and settings are missing or out of date\.$/)
+  assert.match(syncService.status().problem ?? '', /^1 of \d+ agents and settings didn’t come back\. Open OpenHut on your other (Mac|computer) so it backs them up again\.$/)
   await until(() => syncService.status().state === 'idle', 'the restore to end')
+  push(store({ ...kept }))
+  await until(() => syncService.status().problem === null, 'the problem to clear once the missing record arrives')
   room.records.set(omitted, kept)
   await syncService.reset({ restoring: true })
   syncService.connect()

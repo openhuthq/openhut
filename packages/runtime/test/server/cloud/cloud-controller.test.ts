@@ -18,10 +18,15 @@ const cloud = createServer(async (req, res) => {
   }
   if (req.url === '/v1/sessions') return reply(body.deviceKey === seen.deviceKey ? 200 : 400, { object: 'cloud_session', token: 'session-token', sub: `dev-${seen.email}`, email: seen.email, expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
   if (req.url === '/v1/key-boxes/kit' && req.method === 'PUT') {
-    seen.kit = { object: 'key_box', kind: 'kit', body: body.body, by: body.by, signature: body.signature }
+    seen.kit = { object: 'key_box', kind: 'kit', body: body.body, by: body.by, signature: body.signature, savedAt: new Date(Number(body.savedAt)).toISOString() }
     return seen.failKit ? reply(502, {}) : reply(200, seen.kit)
   }
   if (req.url === '/v1/key-boxes/kit') return seen.kit ? reply(200, seen.kit) : reply(404, {})
+  if (req.url === '/v1/key-boxes' && req.method === 'DELETE') {
+    if (seen.kit) return reply(409, { error: { type: 'invalid_request_error', message: 'kit' } })
+    Object.assign(seen, { workspaces: [], members: undefined })
+    return reply(200, { object: 'list', data: [] })
+  }
   if (req.url === '/v1/workspaces' && req.method === 'POST') return reply(200, seen.workspaces[0] = body)
   if (req.url === '/v1/workspaces') return reply(200, { object: 'list', data: seen.workspaces })
   if (req.url?.includes('/member-lists')) return reply(200, { object: 'list', data: seen.lists })
@@ -41,6 +46,7 @@ const { migrate } = await import('../../../src/server/platform/db.ts')
 const { validateWithZod } = await import('../../../src/server/platform/validation.ts')
 const { answerErrors } = await import('../../../src/server/platform/http-error.ts')
 const { cloudController } = await import('../../../src/server/cloud/cloud-controller.ts')
+const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
 await migrate()
 
 const app = Fastify()
@@ -48,7 +54,7 @@ answerErrors(app)
 app.setValidatorCompiler(validateWithZod)
 await app.register(cloudController, { prefix: '/api/cloud' })
 const headers = { authorization: 'Bearer test-key' }
-const status = async () => (await app.inject({ method: 'GET', url: '/api/cloud', headers })).json() as { status: string; email: string | null; workspace: { members: { email: string; role: string }[] } | null; kit: { savedAt: string; differs: boolean } | null; signInError: string | null; keptAccount: string | null; device: string }
+const status = async () => (await app.inject({ method: 'GET', url: '/api/cloud', headers })).json() as { status: string; email: string | null; workspace: { members: { email: string; role: string }[] } | null; kit: { savedAt: string; differs: boolean } | null; signInError: string | null; keptAccount: string | null; kitInCloud: boolean; device: string }
 const signIn = async (email: string) => {
   seen.email = email
   await app.inject({ method: 'POST', url: '/api/cloud/sessions', headers })
@@ -96,10 +102,10 @@ test('a downloaded kit is saved at once, a second account gets its sentence and 
   await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })
   assert.equal((await status()).keptAccount, 'mo@example.com')
 
-  assert.match(await signIn('sara@example.com'), /signed in to mo@example\.com/)
+  assert.match(await signIn('sara@example.com'), /keeps the keys of mo@example\.com\. Sign in with that account, or forget it below\./)
   const refused = await status()
   assert.equal(refused.status, 'off')
-  assert.match(refused.signInError ?? '', /signed in to mo@example\.com/)
+  assert.match(refused.signInError ?? '', /keeps the keys of mo@example\.com/)
   const forgot = (await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })).json() as { keptAccount: string | null; signInError: string | null; device: string }
   assert.deepEqual([forgot.keptAccount, forgot.signInError], [null, null])
   assert.notEqual(forgot.device, refused.device)
@@ -136,4 +142,42 @@ test('signed in, the Mac compares its kit box with the cloud’s: another box cl
   assert.equal(kit?.differs, true)
   assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 200)
   assert.equal((await status()).kit?.differs, false)
+})
+
+test('a kit made on another Mac is adopted with its date at sign-out, so Forget leaves words that still restore', async () => {
+  const account = keysService.account()
+  assert.ok(account)
+  const fresh = await keysService.newKit()
+  const savedAt = Date.parse((seen.kit as { savedAt: string }).savedAt) + 60_000
+  seen.kit = { object: 'key_box', kind: 'kit', ...await keysService.signBox({ account, name: 'kit', body: fresh.box, savedAt }), savedAt: new Date(savedAt).toISOString() }
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })).json().keptAccount, 'mo@example.com')
+  assert.deepEqual([keysService.kitBox(), keysService.kit()?.savedAt], [fresh.box, new Date(savedAt).toISOString()])
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })).statusCode, 200)
+  await signIn('mo@example.com')
+  assert.equal((await status()).status, 'locked')
+  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/unlock', headers, payload: { words: fresh.words } })).statusCode, 200)
+  assert.equal((await until('on')).email, 'mo@example.com')
+})
+
+test('an account with a workspace box and no kit can start over from Welcome back; once a kit exists it can’t', async () => {
+  await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })).statusCode, 200)
+  const stale = { id: 'ws_lostmac1', key: 'c3RhbGU', by: 'b', signature: 's' }
+  Object.assign(seen, { kit: undefined, members: undefined, workspaces: [stale], lists: [] })
+  await signIn('ana@example.com')
+  const locked = await status()
+  assert.deepEqual([locked.status, locked.kitInCloud], ['locked', false])
+  const started = await app.inject({ method: 'DELETE', url: '/api/cloud/key-boxes', headers })
+  assert.equal(started.statusCode, 200)
+  assert.deepEqual([started.json().email, started.json().kit], ['ana@example.com', null])
+  assert.equal((await until('on')).status, 'on')
+  assert.notEqual((seen.workspaces[0] as { id: string }).id, stale.id)
+  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 200)
+  await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })).statusCode, 200)
+  await signIn('ana@example.com')
+  assert.deepEqual([(await status()).status, (await status()).kitInCloud], ['locked', true])
+  const refused = await app.inject({ method: 'DELETE', url: '/api/cloud/key-boxes', headers })
+  assert.deepEqual([refused.statusCode, refused.json().error.message], [409, 'Your recovery kit is in OpenHut Cloud now. Type its words to unlock.'])
+  assert.ok(seen.kit)
 })
