@@ -5,6 +5,7 @@ import { createServer } from 'node:http'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { WebSocketServer } from 'ws'
 import Fastify from 'fastify'
+import { fromBase64, lock, newWords, toBase64 } from '@openhut/common/vault/vault.ts'
 
 const seen: { state?: string; deviceKey?: string; members?: unknown; email: string; kit?: unknown; passkey?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean; dropKit?: boolean; refuseBox?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [] }
 const cloud = createServer(async (req, res) => {
@@ -22,6 +23,9 @@ const cloud = createServer(async (req, res) => {
     if (seen.dropKit) return req.socket.destroy()
     return seen.failKit ? reply(502, {}) : reply(200, seen.kit)
   }
+  if (req.url === '/v1/signers') return reply(200, { object: 'signer', key: body.next })
+  if (req.url === '/v1/key-boxes/kit' && req.method === 'DELETE') return reply(200, { object: 'key_box', kind: 'kit', deleted: true, kit: seen.kit = undefined })
+  if (req.url === '/v1/key-boxes/passkey' && req.method === 'DELETE') return reply(200, { object: 'key_box', kind: 'passkey', deleted: true, passkey: seen.passkey = undefined })
   if (req.url === '/v1/key-boxes/kit') return seen.kit ? reply(200, seen.kit) : reply(404, {})
   if (req.url === '/v1/key-boxes' && req.method === 'DELETE') {
     if (seen.kit) return reply(409, { error: { type: 'invalid_request_error', message: 'kit' } })
@@ -217,7 +221,8 @@ test('a passkey’s PRF output locks the account key in the room; on a new Mac t
 test('a kit made on another Mac is adopted with its date at sign-out, so Forget leaves words that still restore', async () => {
   const account = keysService.account()
   assert.ok(account)
-  const fresh = await keysService.newKit()
+  const { words, key } = await newWords()
+  const fresh = { words, box: toBase64(await lock({ key, version: 1, bind: `account/${account.sub}/kit`, plain: fromBase64(account.key) }) ?? new Uint8Array()) }
   const savedAt = Date.parse((seen.kit as { savedAt: string }).savedAt) + 60_000
   seen.kit = { object: 'key_box', kind: 'kit', ...await keysService.signBox({ account, name: 'kit', body: fresh.box, savedAt }), savedAt: new Date(savedAt).toISOString() }
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })).json().keptAccount, 'ana@example.com')

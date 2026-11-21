@@ -1,4 +1,5 @@
 export const shortDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
+export const shortDateTime = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
 export function ago(iso: string) {
   const seconds = Math.max(1, Math.round((Date.now() - Date.parse(iso)) / 1000))

@@ -1,13 +1,13 @@
 import { createHash, randomBytes } from 'node:crypto'
 import * as z from 'zod/mini'
-import { fromQr, KeyBox, Letter, MemberList, MemberListBody, parseJson, qrPayload, signProof, type AllowedDevice, type Cloud, type CloudAuthorization, type CloudPairing, type RecoveryKit, type RuntimeInvite, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
+import { fromQr, KeyBox, Letter, MemberList, qrPayload, signProof, type AllowedDevice, type Cloud, type CloudAuthorization, type CloudPairing, type RecoveryKit, type RuntimeInvite, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { addedOf, check } from '@openhut/common/cloud/member-list.ts'
-import { fingerprint, fromBase64, fromLongCode, letter, longCode, newPairing, read, toBase64 } from '@openhut/common/vault/vault.ts'
+import { fingerprint, fromBase64, fromLongCode, letter, longCode, newPairing, toBase64 } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { callbackBase } from '../connections/connection-service.ts'
-import { keysService, readSecret, type Account, type Sent } from './keys-service.ts'
+import { bodyOf, keysService, openLetter, readSecret, type Account, type Sent } from './keys-service.ts'
 import { syncService } from './sync-service.ts'
 
 const PENDING_MS = 15 * 60_000
@@ -26,6 +26,7 @@ let checkedAt = 0
 let boxes: Promise<unknown> = Promise.resolve()
 let passkeySaved = false
 let pairing: { secret: string; reply: CloudPairing; workspaces: string[]; timer: NodeJS.Timeout } | undefined
+let queued: Sent[] = []
 
 export const cloudService = {
   async status(): Promise<Cloud> {
@@ -35,12 +36,12 @@ export const cloudService = {
     const members = keysService.members()
     const locked = !account ? keysService.locked() : undefined
     if (on && Date.now() - checkedAt > CHECK_MS) checkSoon()
-    const here = toBase64((await keysService.device()).publicKey)
+    const here = await keysService.deviceKey()
     const mine = members?.members.find((member) => member.email === account?.email)
-    const devices = on && members && mine ? mine.devices.filter((key) => key !== mine.kit && !members.runtimes?.includes(key)).map((key) => ({ key, here: key === here, addedAt: addedOf(members, key) ? new Date(addedOf(members, key)).toISOString() : null })) : []
+    const devices = on && members && mine ? mine.devices.filter((key) => key !== mine.kit).map((key) => ({ key, here: key === here, addedAt: addedOf(members, key) ? new Date(addedOf(members, key)).toISOString() : null, name: members.names?.[key] ?? null, kind: members.runtimes?.includes(key) ? 'server' as const : 'mac' as const })) : []
     return {
       object: 'cloud', status: locked ? 'locked' : on ? (syncService.ready() ? 'on' : 'offline') : 'off', email: locked?.email ?? (on && account ? account.email : null),
-      device: toBase64((await keysService.device()).publicKey),
+      device: here,
       workspace: on && account && members ? { id: account.workspace.id, version: members.version, members: members.members } : null,
       keyStore: keysService.keyStore(), kit: on ? kitOf() : null, kitInCloud: locked && session ? await kitInCloud() : Boolean(keysService.kit()), backup: syncService.status(),
       signInError, keptAccount: on ? null : keysService.keptAccount(), devices, passkey: on && passkeySaved, needsSignIn: Boolean(locked && !session),
@@ -132,28 +133,27 @@ export const cloudService = {
 
   async newKit(): Promise<RecoveryKit> {
     return serial(async () => {
-      const account = keysService.account()
-      if (!keysService.session() || !account) throw new HttpError(409, 'Turn on OpenHut Cloud before making a recovery kit.')
-      if (keysService.kit()) await rotate(await keysService.change([]))
+      keysService.mustBeOn()
+      if (keysService.kit()) await rotate({ changed: await keysService.change([]), drop: ['passkey'] })
       const { words, box, ask } = await keysService.newKit()
       const token = await keysService.token()
       const kept = KeyBox.safeParse((await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token })).json).data
       const savedAt = Math.max(Date.now(), (Date.parse(kept?.savedAt ?? '') || 0) + 1)
       await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString(), confirmed: false })
-      const saved = await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token, body: await keysService.signBox({ account: keysService.account() ?? account, name: 'kit', body: box, savedAt }) })
+      const saved = await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token, body: await keysService.signBox({ account: keysService.mustBeOn(), name: 'kit', body: box, savedAt }) })
+      boxesDiffer = saved.status === 403
       if (saved.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t keep your kit (HTTP ${saved.status}). Try again.`)
       await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString() })
-      boxesDiffer = false
       return { object: 'recovery_kit' as const, words, ask }
     })
   },
 
   async startOver(): Promise<Cloud> {
-    const locked = keysService.locked()
-    if (!locked || keysService.account()) throw new HttpError(409, 'This computer isn’t waiting to unlock. Sign in to OpenHut Cloud first.')
+    const locked = mustBeLocked()
     const token = await keysService.token()
     const cleared = await cloud.account({ method: 'DELETE', path: '/v1/key-boxes', token })
     if (cleared.status === 409) throw new HttpError(409, 'Your recovery kit is in OpenHut Cloud now. Type its words to unlock.')
+    if (cleared.status === 403) throw new HttpError(403, `Your keys are on another device. Unlock with your iPhone or another ${HERE}.`)
     if (cleared.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t start over (HTTP ${cleared.status}). Try again.`)
     await syncService.reset({ restoring: false })
     const account = await keysService.open(locked)
@@ -166,7 +166,7 @@ export const cloudService = {
   },
 
   async unlock(body: UnlockCloud): Promise<Cloud> {
-    if (!keysService.locked() || !keysService.session()) throw new HttpError(409, 'This computer isn’t waiting to unlock. Sign in to OpenHut Cloud first.')
+    mustBeLocked()
     const token = await keysService.token()
     const kind = 'words' in body ? 'kit' : 'passkey'
     const box = KeyBox.safeParse((await cloud.account({ method: 'GET', path: `/v1/key-boxes/${kind}`, token })).json).data
@@ -182,8 +182,7 @@ export const cloudService = {
   },
 
   async startPairing(): Promise<CloudPairing> {
-    const locked = keysService.locked()
-    if (!locked || !keysService.session()) throw new HttpError(409, 'This computer isn’t waiting to unlock. Sign in to OpenHut Cloud first.')
+    const locked = mustBeLocked()
     stopPairing()
     const workspaces = (await boxesOf(await keysService.token())).map((box) => box.id)
     const made = await newPairing({ device: (await keysService.device()).publicKey, hint: locked.email })
@@ -194,8 +193,7 @@ export const cloudService = {
   },
 
   async allow({ code }: { code: string }): Promise<AllowedDevice> {
-    const account = keysService.account()
-    if (!account?.key || !keysService.session()) throw new HttpError(409, 'Turn on OpenHut Cloud on this computer first.')
+    const account = keysService.mustBeOn()
     const qr = fromQr(code)
     const secret = qr?.secret ?? fromLongCode(code)
     if (!secret) throw new HttpError(400, 'That code isn’t right. Check each character and try again.', { param: 'code' })
@@ -204,21 +202,20 @@ export const cloudService = {
     const devices: string[] = []
     for (const { device } of waiting) if (!qr || await fingerprint(fromBase64(device)) === qr.fingerprint) devices.push(device)
     if (!devices.length) throw new HttpError(409, `That ${HERE} isn’t waiting for a code. Keep OpenHut open on its code screen and try again.`)
-    await send({ letters: await Promise.all(devices.map((to) => keysService.pairingLetter({ to, secret }))), token })
+    if ((await send({ letters: await Promise.all(devices.map((to) => keysService.pairingLetter({ to, secret }))), token })).length) throw new HttpError(502, 'OpenHut Cloud didn’t take the key for that Mac. Try again.')
     return { object: 'pairing_allowed', devices }
   },
 
   async addPasskey({ prf }: { prf: string }): Promise<Cloud> {
-    if (!keysService.account()?.key || !keysService.session()) throw new HttpError(409, 'Turn on OpenHut Cloud on this computer first.')
     const saved = await cloud.account({ method: 'PUT', path: '/v1/key-boxes/passkey', token: await keysService.token(), body: await keysService.passkeyBox(fromBase64(prf)) })
+    boxesDiffer ||= saved.status === 403
     if (saved.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t keep your passkey (HTTP ${saved.status}). Try again.`)
     passkeySaved = true
     return cloudService.status()
   },
 
   async notMe({ device }: { device: string }): Promise<Cloud> {
-    if (!keysService.account()?.key || !keysService.session()) throw new HttpError(409, 'Turn on OpenHut Cloud on this computer first.')
-    await rotate(await keysService.change([device]))
+    await rotate({ changed: await keysService.change([device]), drop: ['kit', 'passkey'] })
     return cloudService.status()
   },
 
@@ -247,7 +244,7 @@ export const cloudService = {
     const token = session.token
     const device = await keysService.device()
     const found = Letters.safeParse((await cloud.room({ method: 'GET', workspace, path: '/letters', token })).json).data?.data.find((each) => each.from === from && each.purpose === 'workspace-key')
-    const plain = found && await read({ recipient: device, from: fromBase64(from), workspace, purpose: 'workspace-key', body: fromBase64(found.body), allowed: [fromBase64(from)] })
+    const plain = found && await openLetter({ found, workspace })
     const chain = Lists.safeParse((await cloud.room({ method: 'GET', workspace, path: '/member-lists?after=0', token })).json).data?.data ?? []
     const secret = plain && readSecret(plain)
     const body = secret && chain[0] && await check({ anchor: secret.anchor, chain })
@@ -302,7 +299,9 @@ function serial<T>(step: () => Promise<T>): Promise<T> {
 
 function checkSoon(): void {
   checkedAt = Date.now()
-  if (keysService.account()?.key && keysService.session()) checkBoxes().catch(warnCheck)
+  if (!keysService.account()?.key || !keysService.session()) return
+  checkBoxes().catch(warnCheck)
+  if (queued.length) void keysService.token().then(async (token) => { queued = await send({ letters: queued, token }) }, warnCheck)
 }
 
 function warnCheck(err: unknown): void {
@@ -378,8 +377,13 @@ async function checkPairing(): Promise<void> {
 }
 
 function listedUnder({ account, device }: { account: Account; device: string }): boolean {
-  const body = MemberListBody.safeParse(parseJson(new TextDecoder().decode(fromBase64(account.list.bytes)))).data
-  return Boolean(body?.members.some((member) => member.email === account.email && member.devices.includes(device)))
+  return Boolean(bodyOf(account.list)?.members.some((member) => member.email === account.email && member.devices.includes(device)))
+}
+
+function mustBeLocked(): { sub: string; email: string } {
+  const locked = keysService.locked()
+  if (!locked || keysService.account() || !keysService.session()) throw new HttpError(409, 'This computer isn’t waiting to unlock. Sign in to OpenHut Cloud first.')
+  return locked
 }
 
 function stopPairing(): void {
@@ -387,29 +391,35 @@ function stopPairing(): void {
   pairing = undefined
 }
 
-async function send({ letters, token }: { letters: Sent[]; token: string }): Promise<void> {
+async function send({ letters, token }: { letters: Sent[]; token: string }): Promise<Sent[]> {
   const workspace = keysService.account()?.workspace.id ?? ''
+  const failed: Sent[] = []
   for (const each of letters) {
-    const sent = await cloud.room({ method: 'POST', workspace, path: '/letters', token, body: each })
-    if (sent.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t take a key for another device (HTTP ${sent.status}). Try again.`)
+    const { status } = await cloud.room({ method: 'POST', workspace, path: '/letters', token, body: each }).catch(() => ({ status: 0 }))
+    if (status === 0 || status === 429 || status >= 500) failed.push(each)
   }
+  if (failed.length) log.warn({ event: 'cloud.letters_queued', count: failed.length })
+  return failed
 }
 
-async function rotate({ list, next, letters, handover }: Awaited<ReturnType<typeof keysService.change>>): Promise<void> {
+async function rotate({ changed: { list, next, letters, handover }, drop }: { changed: Awaited<ReturnType<typeof keysService.change>>; drop: ('kit' | 'passkey')[] }): Promise<void> {
   const token = await keysService.token()
   const put = await cloud.room({ method: 'PUT', workspace: next.workspace.id, path: '/members', token, body: list })
   if (put.status === 409) throw new HttpError(409, 'Your devices changed on another computer just now. Try again.')
   if (put.status !== 200) throw new HttpError(put.status === 403 ? 403 : 502, `OpenHut Cloud refused the change (HTTP ${put.status}).`)
   await keysService.adopt({ account: next })
-  await send({ letters, token })
-  await cloud.account({ method: 'POST', path: '/v1/signers', token, body: handover })
-  await cloud.account({ method: 'POST', path: '/v1/workspaces', token, body: await keysService.workspaceBox(next) })
-  for (const kind of ['kit', 'passkey']) {
-    const { by, signature } = await keysService.signBox({ account: next, name: `delete/${kind}`, body: '' })
-    await cloud.account({ method: 'DELETE', path: `/v1/key-boxes/${kind}`, token, body: { by, signature } })
-  }
-  boxesDiffer = false
   passkeySaved = false
+  queued = await send({ letters, token })
+  const steps = [
+    () => cloud.account({ method: 'POST', path: '/v1/signers', token, body: handover }),
+    async () => cloud.account({ method: 'POST', path: '/v1/workspaces', token, body: await keysService.workspaceBox(next) }),
+    ...drop.map((kind) => async () => cloud.account({ method: 'DELETE', path: `/v1/key-boxes/${kind}`, token, body: await keysService.signBox({ account: next, name: `delete/${kind}`, body: '' }) })),
+  ]
+  for (const step of steps) {
+    const { status } = await step()
+    boxesDiffer = status !== 200
+    if (boxesDiffer) throw new HttpError(502, `Your keys changed, but OpenHut Cloud didn’t move your recovery kit over (HTTP ${status}). Make a new kit.`)
+  }
 }
 
 function page(sentence: string): string {

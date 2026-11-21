@@ -163,7 +163,7 @@ export function longCode(secret: string): string {
 }
 
 export function fromLongCode(typed: string): string | null {
-  const code = typed.toUpperCase().replace(/[\s-]/g, '').replaceAll('O', '0').replace(/[IL]/g, '1')
+  const code = typed.toUpperCase().replace(/[\s\-·]/g, '').replaceAll('O', '0').replace(/[IL]/g, '1')
   const secret = code.slice(0, PAIR_DIGITS)
   return code.length === PAIR_DIGITS + 1 && isSecret(secret) && checkSymbol(secret) === code[PAIR_DIGITS] ? secret : null
 }

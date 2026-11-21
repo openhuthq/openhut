@@ -3,6 +3,7 @@ import { AllowedDevice, Cloud, CloudAuthorization, CloudPairing, RecoveryKit, ty
 import { request } from '@/lib/api-client'
 import { WORDS } from '@/lib/platform'
 import { navigate } from '@/lib/router'
+import { toast, toastError } from '@/lib/toast'
 
 const CLOUD_KEY = ['cloud']
 const SIGN_IN_KEY = ['cloud-sign-in']
@@ -89,11 +90,18 @@ export function useAllow() {
   return useMutation({ mutationFn: (code: string) => request({ schema: AllowedDevice, computer: 'local', path: '/api/cloud/devices', method: 'POST', body: { code } }) })
 }
 
-export function useNotMe() {
+export const REMOVE_DETAIL = 'It can’t open anything new, and every key changes. Do this only if it’s lost, sold or not yours.'
+
+export function useRemoveMac() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (key: string) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/devices/${encodeURIComponent(key)}`, method: 'DELETE' }),
-    onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
+    onSuccess: (cloud) => {
+      client.setQueryData(CLOUD_KEY, cloud)
+      toast('Mac removed. Your old recovery kit stopped working. Save a new one.')
+      navigate('/settings/cloud?open=kit')
+    },
+    onError: toastError,
   })
 }
 

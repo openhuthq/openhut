@@ -5,9 +5,10 @@ import { createServer } from 'node:http'
 import { createServer as createSocket } from 'node:net'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { WebSocketServer, type WebSocket } from 'ws'
-import type { MemberList, Record } from '@openhut/common/cloud/cloud.ts'
+import type { Letter, MemberList, Record } from '@openhut/common/cloud/cloud.ts'
+import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
 import { openRecord, sealRecord, type AgentValue, type ConnectionValue } from '@openhut/common/cloud/record.ts'
-import { fromBase64, identity, read, slot, toBase64, type Identity } from '@openhut/common/vault/vault.ts'
+import { fromBase64, identity, letter, newKey, read, slot, toBase64, type Identity } from '@openhut/common/vault/vault.ts'
 
 const applied: string[] = []
 createSocket({ allowHalfOpen: true }, (sock) => sock.setEncoding('utf8').once('data', (line: string) => {
@@ -17,7 +18,7 @@ createSocket({ allowHalfOpen: true }, (sock) => sock.setEncoding('utf8').once('d
   sock.end(JSON.stringify({ ok: true, ...replies[req.cmd] }))
 })).listen(process.env.AGENTD_SOCK).unref()
 
-const room = { log: [] as Record[], records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>), limit: Infinity, refused: 0, reject: new Set<string>(), rejected: 0 }
+const room = { log: [] as Record[], records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>), limit: Infinity, refused: 0, reject: new Set<string>(), rejected: 0, letters: [] as Letter[] }
 const sockets = new Set<WebSocket>()
 const store = (record: Omit<Record, 'seq' | 'object'>): Record => {
   const saved = { ...record, object: 'record' as const, seq: ++room.seq }
@@ -34,6 +35,8 @@ const server = createServer(async (req, res) => {
   if (room.down) return reply(503, {})
   if (url.pathname.endsWith('/member-lists')) return reply(200, { object: 'list', data: room.lists.slice(Number(url.searchParams.get('after'))), hasMore: false })
   if (url.pathname.endsWith('/records')) return reply(200, { object: 'list', data: [...room.records.values()].filter((each) => each.seq > Number(url.searchParams.get('after'))).sort((a, b) => a.seq - b.seq), hasMore: false })
+  if (url.pathname.endsWith('/letters')) return reply(200, { object: 'list', data: room.letters })
+  if (url.pathname.includes('/letters/')) return reply(200, { deleted: true, left: room.letters = room.letters.filter((each) => !url.pathname.endsWith(each.id)) })
   const id = /\/records\/([^/]+)$/.exec(url.pathname)?.[1]
   if (!id || req.method !== 'PUT') return reply(404, {})
   await room.beforePut?.(id)
@@ -344,4 +347,27 @@ test('a member who isn’t the owner gets no readable Private agent; flipping to
   }, 'the flip to Shared to reach the room readable with the workspace key')
   await agentService.update({ actor, id: 'ag_private1', patch: { shared: false } })
   await until(async () => (await openRecord({ workspace, keys: { 1: key }, record: record(), members }))?.hidden === true, 'the flip back to Private to lock it again')
+})
+
+test('a record locked with a key this Mac hasn’t taken yet waits at its seq, then applies once the letter with the key arrives', async () => {
+  const before = await nameHere()
+  const next = keysService.members()
+  assert.ok(next)
+  const v2 = await signList({ signer: me, body: { ...next, version: next.version + 1, previous: await anchorOf(room.lists.at(-1) as MemberList), at: Math.max(Date.now(), next.at ?? 0), keyVersion: 2 } })
+  room.lists.push(v2)
+  const fresh = newKey()
+  const sealed = await sealRecord({ workspace, key: fresh, version: 2, signer: me, id: helpdeskId, ver: (room.records.get(helpdeskId)?.ver ?? 0) + 1, kind: 'agent', ref: 'ag_helpdesk', value: helpdesk('Under the new key') })
+  assert.ok(sealed)
+  const seq = async () => Number((await db.selectFrom('install_setting').select('value').where('name', '=', 'cloud_seq').executeTakeFirst())?.value ?? 0)
+  const waiting = store({ id: helpdeskId, ...sealed })
+  push(waiting)
+  await sleep(1000)
+  assert.equal(await nameHere(), before)
+  assert.ok(await seq() < waiting.seq)
+  const plain = new TextEncoder().encode(JSON.stringify({ key: toBase64(fresh), version: 2, old: { 1: account.workspace.key }, slot: account.workspace.key, anchor: await anchorOf(account.list) }))
+  const body = await letter({ sender: me, to: me.publicKey, workspace, purpose: 'workspace-key', version: 1, plain })
+  room.letters.push({ id: 'letter-v2', object: 'letter', to: toBase64(me.publicKey), from: toBase64(me.publicKey), workspace, purpose: 'workspace-key', body: toBase64(body ?? new Uint8Array()) })
+  await until(async () => await nameHere() === 'Under the new key', 'the waiting record to apply after the key letter')
+  assert.ok(await seq() >= waiting.seq)
+  assert.deepEqual(room.letters, [])
 })

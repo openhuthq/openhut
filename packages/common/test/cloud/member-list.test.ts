@@ -275,3 +275,40 @@ test('a device younger than 3 days cannot remove an older one; after 3 days, or 
   const withoutNew = { members: [mo, first.members[1]], removed: [key(anaMac)], at: joined + 60_000, added: start.body.added }
   assert.ok(await check({ anchor: start.anchor, chain: [start.list, v2, await v3(withoutNew, moMac)] }))
 })
+
+test('a device younger than 3 days may only add devices to its own person or drop itself', async () => {
+  const start = await dated()
+  const mo = start.body.members[0]
+  const joined = T + DAY
+  const v2 = await after(start)({ members: [{ ...mo, devices: [...mo.devices, key(anaMac)] }, first.members[1]], at: joined, added: { ...start.body.added, [key(anaMac)]: joined } }, eve)
+  const body2 = await check({ anchor: start.anchor, chain: [start.list, v2] })
+  assert.ok(body2)
+  const v3 = after({ body: body2, list: v2 })
+  const at = joined + 60_000
+  const young = body2.members[0]
+  const ok: Partial<MemberListBody>[] = [
+    { members: [{ ...young, devices: [...young.devices, key(saraPhone)] }, first.members[1]], at, added: { ...body2.added, [key(saraPhone)]: at }, names: { [key(saraPhone)]: 'Mo’s iMac' } },
+    { members: [{ ...young, devices: mo.devices }, first.members[1]], removed: [key(anaMac)], at, added: start.body.added },
+  ]
+  for (const change of ok) assert.ok(await check({ anchor: start.anchor, chain: [start.list, v2, await v3(change, anaMac)] }))
+  const refused: Partial<MemberListBody>[] = [
+    { members: [{ ...young, role: 'admin' }, { ...first.members[1], role: 'owner' }], at },
+    { members: [young, { ...first.members[1], role: 'admin' }], at },
+    { keyVersion: 2, at },
+    { members: [{ ...young, devices: [...young.devices, key(saraPhone)] }, first.members[1]], runtimes: [key(saraPhone)], at, added: { ...body2.added, [key(saraPhone)]: at } },
+    { members: [{ ...young, kit: key(anaMac) }, first.members[1]], at },
+    { members: [...body2.members, { email: 'evil@example.com', role: 'member', devices: [key(saraPhone)] }], at, added: { ...body2.added, [key(saraPhone)]: at } },
+    { invites: [{ email: 'evil@example.com', role: 'admin', key: key(invite) }], at },
+  ]
+  for (const change of refused) assert.equal(await check({ anchor: start.anchor, chain: [start.list, v2, await v3(change, anaMac)] }), null, JSON.stringify(Object.keys(change)))
+  assert.ok(await check({ anchor: start.anchor, chain: [start.list, v2, await v3({ keyVersion: 2, at: joined + 3 * DAY + 1 }, anaMac)] }))
+})
+
+test('the first device of a workspace is never young, and a device name never changes once listed', async () => {
+  const start = await dated()
+  const v2 = after(start)
+  assert.ok(await check({ anchor: start.anchor, chain: [start.list, await v2({ keyVersion: 2, at: T + 1000 }, moMac)] }))
+  const named = await v2({ at: T + 1000, names: { [key(moMac)]: 'Mo’s MacBook Air' } }, moMac)
+  assert.equal(await check({ anchor: start.anchor, chain: [start.list, named] }), null)
+  assert.equal(await check({ anchor: start.anchor, chain: [start.list, await v2({ at: T + 1000, names: { [key(anaMac)]: 'Not listed' } }, moMac)] }), null)
+})

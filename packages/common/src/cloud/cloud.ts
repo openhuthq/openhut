@@ -97,6 +97,7 @@ export const MemberListBody = z.object({
   runtimes: z.optional(z.array(DeviceKey).check(z.maxLength(100))),
   at: z.optional(z.number().check(z.int(), z.minimum(0))),
   added: z.optional(z.record(DeviceKey, z.number().check(z.int(), z.minimum(0)))),
+  names: z.optional(z.record(DeviceKey, z.string().check(z.maxLength(64)))),
 })
 export type MemberListBody = z.infer<typeof MemberListBody>
 
@@ -236,7 +237,7 @@ export const Cloud = z.object({
   backup: Backup,
   signInError: z.nullable(z.string()),
   keptAccount: z.nullable(Email),
-  devices: z.array(z.object({ key: DeviceKey, here: z.boolean(), addedAt: z.nullable(Timestamp) })),
+  devices: z.array(z.object({ key: DeviceKey, here: z.boolean(), addedAt: z.nullable(Timestamp), name: z.nullable(z.string()), kind: z.enum(['mac', 'server']) })),
   passkey: z.boolean(),
   needsSignIn: z.boolean(),
   workspaces: z._default(z.array(CloudWorkspaceView), []),
