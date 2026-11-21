@@ -1,7 +1,7 @@
 import { after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -47,6 +47,18 @@ test('removing an agent while a person holds its browser leaves agentd running',
   await sleep(500)
   assert.equal(agentd.exitCode, null)
   assert.equal((await call({ cmd: 'ps' })).ok, true)
+})
+
+test('a delete that came by sync keeps the agent in a 30-day trash; old trash is purged', async () => {
+  const id = 'ag_trashme1'
+  assert.equal((await call({ cmd: 'apply', id, net: 3, files: FILES, browser: false, running: false })).ok, true)
+  mkdirSync(join(data, 'trash', `${Date.now() - 31 * 24 * 60 * 60_000}-ag_oldtrash`), { recursive: true })
+  assert.equal((await call({ cmd: 'rm', id, trash: true })).ok, true)
+  const kept = readdirSync(join(data, 'trash'))
+  assert.equal(kept.length, 1)
+  assert.match(kept[0], /-ag_trashme1$/)
+  assert.equal(existsSync(join(data, 'trash', kept[0], 'conf', 'SOUL.md')), true)
+  assert.equal((await call({ cmd: 'ps' })).states?.[id], undefined)
 })
 
 test('apply brings the sandbox to what was asked: created, started, left alone, restarted, stopped', async () => {

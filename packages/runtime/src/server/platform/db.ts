@@ -83,4 +83,7 @@ export async function migrate(): Promise<void> {
   await sql`update connection set owner_id = o.id from person o where o.role = 'owner' and owner_id <> o.id`.execute(db)
   await sql`update thread set person_id = o.id from person o where o.role = 'owner' and person_id <> o.id`.execute(db)
   await sql`create table if not exists cloud_record (id text primary key, kind text not null, ref text not null, ver integer not null, hash text not null)`.execute(db)
+  await sql`alter table agent add column if not exists runs_on text`.execute(db)
+  await sql`alter table agent add column if not exists changed_by text`.execute(db)
+  await sql`alter table connection add column if not exists changed_by text`.execute(db)
 }

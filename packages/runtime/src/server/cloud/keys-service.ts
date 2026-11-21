@@ -3,7 +3,7 @@ import { createHash, randomInt } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as z from 'zod/mini'
-import { checkProof, MemberList, MemberListBody, parseJson, signProof } from '@openhut/common/cloud/cloud.ts'
+import { checkProof, MemberList, MemberListBody, parseJson, signProof, type CloudSession } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, check, signList } from '@openhut/common/cloud/member-list.ts'
 import { concat, equal, fromBase64, fromWords, identity, lock, newKey, newWords, slot, toBase64, unlock, type Bytes, type Identity } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
@@ -39,6 +39,13 @@ export const keysService = {
     return identity(fromBase64((await keys()).device))
   },
 
+  deviceKey: async (): Promise<string> => toBase64((await keysService.device()).publicKey),
+
+  async accountDeviceKey(): Promise<string | null> {
+    const key = stored?.account?.key
+    return key ? toBase64((await accountDevice(fromBase64(key))).publicKey) : null
+  },
+
   account: (): Account | undefined => stored?.account,
   locked: (): { sub: string; email: string } | undefined => stored?.locked,
   members: (): MemberListBody | undefined => bodyOf(stored?.account?.list),
@@ -54,9 +61,36 @@ export const keysService = {
     if (Date.parse(session.expiresAt) - Date.now() > REFRESH_EARLY_MS) return session.token
     const signedAt = Date.now()
     const signature = await signProof({ signer: await keysService.device(), proof: 'refresh', parts: [session.token, String(signedAt)] })
-    const next = await cloud.session({ grantType: 'refresh', session: session.token, signedAt, signature })
+    const runtime = stored?.account && !stored.account.key ? stored.account.workspace.id : undefined
+    const next = await cloud.session({ grantType: 'refresh', session: session.token, signedAt, signature }).catch((err: unknown) => {
+      if (!runtime) throw err
+      return keysService.deviceSession(runtime)
+    })
     await keysService.setSession({ token: next.token, expiresAt: next.expiresAt })
     return next.token
+  },
+
+  async deviceSession(workspace: string): Promise<CloudSession> {
+    const device = await keysService.device()
+    const signedAt = Date.now()
+    const signature = await signProof({ signer: device, proof: 'device', parts: [workspace, String(signedAt)] })
+    return cloud.deviceSession({ workspace, device: toBase64(device.publicKey), signedAt, signature })
+  },
+
+  async addDevice(device: string): Promise<MemberList | null> {
+    const account = (await keys()).account
+    const body = bodyOf(account?.list)
+    if (!account || !body) return null
+    if (body.members.some((member) => member.devices.includes(device))) return null
+    const members = body.members.map((member) => member.email === account.email ? { ...member, devices: [...member.devices, device] } : member)
+    return signList({ signer: await keysService.device(), body: { ...body, version: body.version + 1, previous: await anchorOf(account.list), members, runtimes: [...body.runtimes ?? [], device] } })
+  },
+
+  async joinAsRuntime({ session, workspace, chain }: { session: CloudSession; workspace: { id: string; key: string; version: number }; chain: MemberList[] }): Promise<void> {
+    const list = chain.at(-1)
+    if (!list || !chain[0]) throw new HttpError(502, 'OpenHut Cloud sent no member list.')
+    const account = { sub: session.sub, email: session.email, key: '', workspace, list, first: chain[0] }
+    await save({ device: (await keys()).device, machine, account, session: { token: session.token, expiresAt: session.expiresAt } })
   },
 
   async workspaceBox(account: Account): Promise<{ id: string; key: string; by: string; signature: string }> {

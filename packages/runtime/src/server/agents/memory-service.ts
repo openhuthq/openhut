@@ -1,3 +1,4 @@
+import type { MemoryValue } from '@openhut/common/cloud/record.ts'
 import { Memory, MEMORY_DELIMITER, MEMORY_LIMITS, memoryLength, type MemoryBlock, type MemoryTarget, type UpdateMemory } from '@openhut/common/agents/memory.ts'
 import { agentd } from '../platform/agentd.ts'
 import { emit } from '../platform/events.ts'
@@ -31,6 +32,24 @@ export const memoryService = {
       emit({ name: 'memory.updated', actor, target: { type: 'memory', id: agentId, file: target, entries: entries.length } })
     }
     return memoryService.get({ actor, agentId })
+  },
+
+  async synced({ agentIds }: { agentIds: string[] }): Promise<MemoryValue[]> {
+    const values: MemoryValue[] = []
+    for (const id of agentIds) {
+      const notes = await agentd.read({ id, path: FILE.notes })
+      const people = await agentd.read({ id, path: FILE.people })
+      values.push({ agentId: id, notes: notes?.toString('utf8') ?? null, people: people?.toString('utf8') ?? null })
+    }
+    return values
+  },
+
+  async applySynced(value: MemoryValue): Promise<void> {
+    for (const target of TARGETS) {
+      const text = value[target]
+      if (text !== null) await agentd.write({ id: value.agentId, path: FILE[target], body: text })
+    }
+    emit({ name: 'memory.synced', target: { type: 'memory', id: value.agentId } })
   },
 }
 

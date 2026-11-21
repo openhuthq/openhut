@@ -25,6 +25,8 @@ export const Connection = z.object({
   agents: z.number(),
   status: ConnectionStatus,
   lastSuccessAt: z.nullable(Timestamp),
+  keyHere: z._default(z.boolean(), true),
+  changedBy: z._default(z.nullable(z.string()), null),
   createdAt: Timestamp,
 })
 export type Connection = z.infer<typeof Connection>

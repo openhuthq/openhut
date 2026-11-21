@@ -38,6 +38,7 @@ write_env() {
     [ -z "$CLIENT_KEY" ] || echo "OPENHUT_CLIENT_KEY_SHA256=$CLIENT_KEY"
     ! joining || echo "OPENHUT_JOIN='$JOIN_CODE'"
     [ -z "$LISTEN" ] || echo "OPENHUT_HOST=$LISTEN"
+    [ -z "${OPENHUT_CLOUD_URL:-}" ] || echo "OPENHUT_CLOUD_URL=$OPENHUT_CLOUD_URL"
   } > /etc/openhut/env.new
   mv /etc/openhut/env.new /etc/openhut/env
   . /etc/openhut/env

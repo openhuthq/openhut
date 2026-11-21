@@ -28,7 +28,7 @@ const Version = z.number().check(z.int(), z.minimum(1), z.maximum(0xffffffff))
 const Id = z.string().check(z.regex(/^[A-Za-z0-9_-]{8,64}$/, 'Send an id of 8 to 64 base64url characters.'))
 const Email = z.string().check(z.maxLength(320), z.regex(/^[^\sA-Z@]+@[^\sA-Z@]+$/, 'Send the email in lowercase.'))
 
-export const RECORD_KINDS = ['agent', 'instructions', 'memory', 'skill', 'routine', 'connection', 'channel', 'thread', 'message', 'setting', 'head'] as const
+export const RECORD_KINDS = ['agent', 'instructions', 'memory', 'skill', 'routine', 'connection', 'channel', 'thread', 'message', 'setting', 'head', 'file'] as const
 export const RecordKind = z.enum(RECORD_KINDS)
 export type RecordKind = z.infer<typeof RecordKind>
 
@@ -94,6 +94,7 @@ export const MemberListBody = z.object({
   invites: z.array(PendingInvite).check(z.maxLength(100)),
   removed: z.array(DeviceKey).check(z.maxLength(5000)),
   keyVersion: z.optional(Version),
+  runtimes: z.optional(z.array(DeviceKey).check(z.maxLength(100))),
 })
 export type MemberListBody = z.infer<typeof MemberListBody>
 
@@ -142,7 +143,7 @@ export function parseJson(value: string): unknown {
   }
 }
 
-export const PROOFS = ['session', 'refresh', 'delete', 'restore', 'key-box'] as const
+export const PROOFS = ['session', 'refresh', 'delete', 'restore', 'key-box', 'device'] as const
 export type Proof = (typeof PROOFS)[number]
 
 export function proofBytes({ proof, parts }: { proof: Proof; parts: string[] }): Bytes {
@@ -172,6 +173,15 @@ export type CloudSession = z.infer<typeof CloudSession>
 
 export const SignedRequest = z.object({ signedAt: z.number().check(z.int()), signature: Signature })
 export type SignedRequest = z.infer<typeof SignedRequest>
+
+export const DeviceSession = z.object({ device: DeviceKey, signedAt: z.number().check(z.int()), signature: Signature })
+export type DeviceSession = z.infer<typeof DeviceSession>
+
+export const AddRuntime = z.object({ device: DeviceKey })
+export type AddRuntime = z.infer<typeof AddRuntime>
+
+export const RuntimeInvite = z.object({ object: z.literal('runtime_invite'), workspace: Id, email: Email, from: DeviceKey })
+export type RuntimeInvite = z.infer<typeof RuntimeInvite>
 
 export const CLOUD_STATUSES = ['off', 'on', 'offline', 'locked'] as const
 export const Backup = z.object({

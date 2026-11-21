@@ -129,10 +129,14 @@ export function createOpenHut(platform: Platform) {
   const agents = {
     async list(): Promise<OpenHutAgent[]> {
       const rows = await across({ seen: agentsSeen, read: (each) => call({ computer: each, path: '/api/agents', schema: AGENT_LIST }).then((page) => page.data) })
-      return rows.flatMap((row) => (row.value ?? []).map((agent) => {
-        homes.set(agent.id, row.computer.id)
-        return { ...agent, computer: row.computer.id, online: row.online }
-      }))
+      const copies = rows.flatMap((row) => (row.value ?? []).map((agent) => ({ ...agent, computer: row.computer.id, online: row.online })))
+      const picked = new Map<string, OpenHutAgent>()
+      for (const agent of copies) {
+        const found = picked.get(agent.id)
+        if (!found || (agent.runsHere && agent.online && !(found.runsHere && found.online))) picked.set(agent.id, agent)
+      }
+      for (const agent of picked.values()) homes.set(agent.id, agent.computer)
+      return [...picked.values()]
     },
     async create({ computer: id, ...body }: CreateAgent & { computer: string }): Promise<OpenHutAgent> {
       const agent = await call({ computer: await computer(id), path: '/api/agents', method: 'POST', body, schema: Agent })

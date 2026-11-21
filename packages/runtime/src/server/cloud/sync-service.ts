@@ -2,40 +2,52 @@ import { createHash } from 'node:crypto'
 import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
 import { MemberList, parseJson, Record, type Backup } from '@openhut/common/cloud/cloud.ts'
-import { openRecord, sealRecord, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
-import { PROVIDERS } from '@openhut/common/models/provider.ts'
+import { openRecord, sealRecord, SYNCED, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
 import { fromBase64, slot } from '@openhut/common/vault/vault.ts'
-import { agentService } from '../agents/agent-service.ts'
 import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
-import { listen, log, setUsageData } from '../platform/events.ts'
+import { listen, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
-import { settings } from '../platform/settings.ts'
-import { routineService } from '../routines/routine-service.ts'
 import { keysService } from './keys-service.ts'
+import { syncKinds, type Context, type Local } from './sync-kinds.ts'
 
-const DEBOUNCE_MS = 300
+const THROTTLE_MS = 300
 const RETRY_MS = 1000
 const RETRY_MAX_MS = 60_000
+const HEAD_MS = 2000
 const HEAD = 'head'
 const DELETED = 'deleted'
 const SEQ = 'cloud_seq'
-const SYNCED_EVENT = /^(agent|setting|provider|admin)\./
+const TOMBSTONED: Synced[] = ['agent', 'message', 'connection']
+const FIRST: Synced[] = ['connection', 'setting', 'agent']
+const KINDS_OF: [RegExp, Synced[]][] = [
+  [/^agent\./, ['agent']],
+  [/^(setting|provider|admin)\./, ['setting']],
+  [/^thread\.streamed$/, ['message']],
+  [/^thread\./, ['message', 'file', 'memory']],
+  [/^memory\.updated$/, ['memory']],
+  [/^connection\./, ['connection']],
+]
 const Page = z.object({ data: z.array(Record), hasMore: z.boolean() })
 const Lists = z.object({ data: z.array(MemberList) })
 const Message = z.discriminatedUnion('type', [z.object({ type: z.literal('ready') }), z.object({ type: z.literal('members') }), z.object({ type: z.literal('record'), record: Record })])
 
-type Local = { id: string; kind: Synced; ref: string; value: unknown }
-type Row = Omit<Local, 'value'> & { ver: number; hash: string }
+type Item = Local & { id: string }
+type Row = Omit<Local, 'value' | 'wire'> & { id: string; ver: number; hash: string }
 
 let socket: ReconnectingWebSocket | undefined
 let ready = false
 let queue: Promise<void> = Promise.resolve()
 let timer: NodeJS.Timeout | undefined
+let headTimer: NodeJS.Timeout | undefined
 let failures = 0
+const dirty = new Set<Synced>()
 const backup: Backup = { state: 'idle', done: 0, total: 0, current: null, at: null, agent: null, problem: null }
 
-listen((event) => { if (SYNCED_EVENT.test(event.name)) syncService.send() })
+listen((event) => {
+  const kinds = KINDS_OF.find(([pattern]) => pattern.test(event.name))?.[1]
+  if (kinds) syncService.send(kinds)
+})
 
 export const syncService = {
   connect(): void {
@@ -53,19 +65,39 @@ export const syncService = {
     socket?.close()
     socket = undefined
     ready = false
+    clearTimeout(timer)
+    clearTimeout(headTimer)
+    timer = undefined
+    dirty.clear()
   },
 
   async reset({ restoring }: { restoring: boolean }): Promise<void> {
     syncService.disconnect()
-    await db.deleteFrom('cloud_record').execute()
-    await db.deleteFrom('install_setting').where('name', '=', SEQ).execute()
+    await run(async () => {
+      await db.deleteFrom('cloud_record').execute()
+      await db.deleteFrom('install_setting').where('name', '=', SEQ).execute()
+    })
     Object.assign(backup, { state: restoring ? 'restoring' : 'idle', done: 0, total: 0, current: null, at: null, agent: null, problem: null })
   },
 
   ready: (): boolean => ready,
 
-  send(): void {
-    later(DEBOUNCE_MS)
+  send(kinds: readonly Synced[] = SYNCED): void {
+    if (!socket) return
+    for (const kind of kinds) dirty.add(kind)
+    timer ??= setTimeout(() => {
+      timer = undefined
+      void run(flush)
+    }, THROTTLE_MS)
+  },
+
+  retry(ms: number): void {
+    if (!socket) return
+    clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = undefined
+      void run(flush)
+    }, ms)
   },
 
   status: (): Backup => ({ ...backup }),
@@ -78,16 +110,10 @@ function heard(text: string): void {
   if (message?.type === 'ready') {
     ready = true
     void run(catchUp)
-    void run(flush)
+    syncService.send()
   }
-  if (message?.type === 'members') void run(async () => { await refreshMembers() })
+  if (message?.type === 'members') void run(async () => { if (await refreshMembers()) syncService.send(['connection']) })
   if (message?.type === 'record') void run(async () => message.record.seq === await seqOf() + 1 ? applyAll([message.record]) : catchUp())
-}
-
-function later(ms: number): void {
-  if (!socket) return
-  clearTimeout(timer)
-  timer = setTimeout(() => void run(flush), ms)
 }
 
 function run(step: () => Promise<void>): Promise<void> {
@@ -112,21 +138,32 @@ async function catchUp(): Promise<void> {
 }
 
 async function applyAll(records: Record[]): Promise<void> {
+  const ctx = await contextOf()
   const rows = await rowsById()
   const opened: [Record, Opened][] = []
   for (const record of records.filter((each) => (rows.get(each.id)?.ver ?? 0) < each.ver)) {
-    const open = await openSafely(record)
+    const open = ctx && await openSafely({ record, ctx })
     if (open) opened.push([record, open])
     else log.warn({ event: 'cloud.record_dropped', record: record.id, seq: record.seq })
   }
+  const after = await contextOf() ?? ctx
+  opened.sort(([, a], [, b]) => FIRST.indexOf(b.kind) - FIRST.indexOf(a.kind))
   const restoring = backup.state === 'restoring'
   if (restoring) Object.assign(backup, { done: 0, total: opened.filter(([, open]) => open.kind === 'agent' && open.value).length })
+  const expected = new Map<string, unknown>()
   for (const [record, open] of opened) {
     if (open.kind === 'agent' && open.value) backup.current = open.value.name
-    await applyLocal(open).catch((err: unknown) => log.warn({ event: 'cloud.apply_failed', record: record.id, error: messageOf(err) }))
-    const now = (await locals()).find((each) => each.id === record.id)
-    await saveRow({ id: record.id, kind: open.kind, ref: open.ref, ver: record.ver, hash: hashOf(now?.value ?? null) })
+    expected.set(record.id, after && await syncKinds.apply({ open, ctx: after }).catch((err: unknown) => log.warn({ event: 'cloud.apply_failed', record: record.id, error: messageOf(err) })))
     if (restoring && open.kind === 'agent' && open.value) Object.assign(backup, { done: backup.done + 1, agent: open.ref })
+  }
+  const locals = new Map<Synced, Map<string, unknown>>()
+  for (const kind of new Set(opened.map(([, open]) => open.kind))) {
+    const mine = after && kind !== 'file' ? await localsOf({ kind, ctx: after }).catch(() => null) : null
+    locals.set(kind, new Map((mine ?? []).map((each) => [each.id, each.value])))
+  }
+  for (const [record, open] of opened) {
+    const local = open.kind === 'file' ? expected.get(record.id) : locals.get(open.kind)?.get(record.id)
+    await saveRow({ id: record.id, kind: open.kind, ref: open.ref, ver: record.ver, hash: hashOf(local ?? null) })
   }
   const head = opened.map(([, open]) => open).find((open) => open.kind === 'head')
   if (restoring && head?.kind === 'head' && head.value) await checkHead(head.value.records)
@@ -134,12 +171,10 @@ async function applyAll(records: Record[]): Promise<void> {
   if (last && last.seq > await seqOf()) await db.insertInto('install_setting').values({ name: SEQ, value: String(last.seq) }).onConflict((oc) => oc.column('name').doUpdateSet({ value: String(last.seq) })).execute()
 }
 
-async function openSafely(record: Record): Promise<Opened | null> {
-  const account = keysService.account()
-  if (!account) return null
-  const open = () => openRecord({ workspace: account.workspace.id, keys: { [account.workspace.version]: fromBase64(account.workspace.key) }, record, members: keysService.members()?.members ?? [] })
+async function openSafely({ record, ctx }: { record: Record; ctx: Context }): Promise<Opened | null> {
+  const open = () => openRecord({ workspace: ctx.workspace, keys: { [ctx.version]: ctx.key }, record, members: keysService.members()?.members ?? [] })
   const opened = await open() ?? (await refreshMembers() ? await open() : null)
-  return opened && record.id === await slotOf(`${opened.kind}/${opened.ref}`) ? opened : null
+  return opened && record.id === await slot({ key: ctx.key, path: `${opened.kind}/${opened.ref}` }) ? opened : null
 }
 
 async function checkHead(records: [string, number][]): Promise<void> {
@@ -148,88 +183,96 @@ async function checkHead(records: [string, number][]): Promise<void> {
   backup.problem = missing ? `OpenHut Cloud sent an incomplete or older backup: ${missing} of ${records.length} agents and settings are missing or out of date.` : null
 }
 
-async function applyLocal(open: Opened): Promise<void> {
-  if (open.kind === 'agent') return agentService.applySynced({ id: open.ref, value: open.value })
-  if (open.kind !== 'setting' || !open.value) return
-  const setting = open.value
-  if (setting.name === 'time_zone') return routineService.setTimeZone(setting.value)
-  if (setting.name === 'usage_data') {
-    await settings.setUsageData(setting.value)
-    return setUsageData(setting.value)
-  }
-  for (const { provider, at, models } of setting.value) await settings.setCatalog(provider, { at, models })
-}
-
-async function unsent(): Promise<Local[]> {
-  const rows = await rowsById()
-  const mine = await locals()
-  const ids = new Set(mine.map((each) => each.id))
-  const gone = [...rows.values()].filter((row) => row.kind === 'agent' && row.hash !== DELETED && !ids.has(row.id)).map((row) => ({ ...row, value: null }))
-  return [...mine, ...gone].filter((each) => rows.get(each.id)?.hash !== hashOf(each.value))
-}
-
 async function flush(): Promise<void> {
-  if (!ready) return
-  const changed = await unsent()
+  const ctx = await contextOf()
+  if (!ready || !ctx) return
+  const kinds = SYNCED.filter((kind) => dirty.delete(kind))
+  const changed = await unsent({ kinds, ctx })
   if (!changed.length) {
     if (backup.state === 'failed') Object.assign(backup, { state: 'idle', at: new Date().toISOString() })
     return
   }
   Object.assign(backup, { state: 'backing_up', done: 0, total: changed.length, current: null })
+  const later = new Set<string>()
   try {
     for (const item of changed) {
-      await put({ item, ver: ((await rowsById()).get(item.id)?.ver ?? 0) + 1 })
+      if (!await put({ item, ver: ((await rowsById()).get(item.id)?.ver ?? 0) + 1, ctx })) later.add(item.id)
       backup.done++
     }
   } catch (err) {
     log.warn({ event: 'cloud.backup_failed', error: messageOf(err) })
   }
-  const tried = new Set(changed.map((each) => each.id))
-  if ((await unsent()).some((each) => tried.has(each.id))) {
+  const tried = new Set(changed.map((each) => each.id).filter((id) => !later.has(id)))
+  if ((await unsent({ kinds, ctx })).some((each) => tried.has(each.id))) {
+    for (const kind of kinds) dirty.add(kind)
     backup.state = 'failed'
     failures++
-    return later(Math.min(RETRY_MAX_MS, RETRY_MS * 2 ** (failures - 1)))
+    return syncService.retry(Math.min(RETRY_MAX_MS, RETRY_MS * 2 ** (failures - 1)))
   }
   failures = 0
-  await writeHead().catch((err: unknown) => log.warn({ event: 'cloud.head_failed', error: messageOf(err) }))
+  clearTimeout(headTimer)
+  if (changed.some((each) => each.kind !== 'message')) await writeHead()
+  else headTimer = setTimeout(() => void run(writeHead), HEAD_MS)
   Object.assign(backup, { state: 'idle', at: new Date().toISOString() })
 }
 
-async function writeHead(): Promise<void> {
+async function unsent({ kinds, ctx }: { kinds: Synced[]; ctx: Context }): Promise<Item[]> {
   const rows = await rowsById()
-  const id = await slotOf(`${HEAD}/${HEAD}`)
-  const records = [...rows.values()].filter((row) => row.kind !== HEAD).map((row): [string, number] => [row.id, row.ver])
-  await put({ item: { id, kind: HEAD, ref: HEAD, value: { records } }, ver: (rows.get(id)?.ver ?? 0) + 1 })
+  const changed: Item[] = []
+  for (const kind of kinds) {
+    const mine = await localsOf({ kind, ctx }).catch((err: unknown) => { log.warn({ event: 'cloud.locals_failed', kind, error: messageOf(err) }) })
+    if (!mine) continue
+    const ids = new Set(mine.map((each) => each.id))
+    const gone = TOMBSTONED.includes(kind) ? [...rows.values()].filter((row) => row.kind === kind && row.hash !== DELETED && !ids.has(row.id)).map((row) => ({ ...row, value: null })) : []
+    changed.push(...[...mine, ...gone].filter((each) => rows.get(each.id)?.hash !== hashOf(each.value)))
+  }
+  return changed
 }
 
-async function put({ item, ver }: { item: Local; ver: number }): Promise<void> {
-  const account = keysService.account()
-  if (!account) return
-  const sealed = await sealRecord({
-    workspace: account.workspace.id, key: fromBase64(account.workspace.key), version: account.workspace.version, signer: await keysService.device(), id: item.id, ver, kind: item.kind, ref: item.ref, value: item.value,
-  })
+async function writeHead(): Promise<void> {
+  const ctx = await contextOf()
+  if (!ready || !ctx) return
+  const rows = await rowsById()
+  const id = await slot({ key: ctx.key, path: `${HEAD}/${HEAD}` })
+  const records = [...rows.values()].filter((row) => row.kind !== HEAD && row.hash !== DELETED).map((row): [string, number] => [row.id, row.ver])
+  await put({ item: { id, kind: HEAD, ref: HEAD, value: { records } }, ver: (rows.get(id)?.ver ?? 0) + 1, ctx }).catch((err: unknown) => log.warn({ event: 'cloud.head_failed', error: messageOf(err) }))
+}
+
+async function put({ item, ver, ctx }: { item: Item; ver: number; ctx: Context }): Promise<boolean> {
+  const value = item.value === null || !item.wire ? item.value : await item.wire()
+  if (value === undefined) return false
+  const sealed = await sealRecord({ workspace: ctx.workspace, key: ctx.key, version: ctx.version, signer: ctx.me, id: item.id, ver, kind: item.kind, ref: item.ref, value })
   if (!sealed) throw new HttpError(400, `This ${item.kind} can’t be backed up: it doesn’t fit what OpenHut Cloud keeps.`)
   const reply = await room({ method: 'PUT', path: `/records/${item.id}`, body: sealed })
-  if (reply.status === 409) return catchUp()
+  if (reply.status === 409) {
+    await catchUp()
+    return true
+  }
   if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud refused a backup (HTTP ${reply.status}).`)
   await saveRow({ id: item.id, kind: item.kind, ref: item.ref, ver, hash: hashOf(item.value) })
+  return true
 }
 
-async function locals(): Promise<Local[]> {
+async function localsOf({ kind, ctx }: { kind: Synced; ctx: Context }): Promise<Item[] | null> {
   const account = keysService.account()
-  if (!account) return []
-  const admin = keysService.members()?.members.some((member) => member.email === account.email && member.role !== 'member')
-  const items: Omit<Local, 'id'>[] = (await agentService.synced()).map((value) => ({ kind: 'agent', ref: value.id, value }))
-  if (admin) items.push(
-    { kind: 'setting', ref: 'time_zone', value: { name: 'time_zone', value: settings.timeZone() } },
-    { kind: 'setting', ref: 'usage_data', value: { name: 'usage_data', value: settings.usageData() } },
-    { kind: 'setting', ref: 'models', value: { name: 'models', value: PROVIDERS.flatMap(({ id }) => { const catalog = settings.catalog(id); return catalog ? [{ provider: id, ...catalog }] : [] }) } },
-  )
-  return Promise.all(items.map(async (item) => ({ ...item, id: await slotOf(`${item.kind}/${item.ref}`) })))
+  const admin = Boolean(account && ctx.members.some((member) => member.email === account.email && member.role !== 'member'))
+  const items = await syncKinds.locals({ kind, admin, ctx })
+  return items && Promise.all(items.map(async (item) => ({ ...item, id: await slot({ key: ctx.key, path: `${item.kind}/${item.ref}` }) })))
 }
 
-async function slotOf(path: string): Promise<string> {
-  return slot({ key: fromBase64(keysService.account()?.workspace.key ?? ''), path })
+async function contextOf(): Promise<Context | null> {
+  const account = keysService.account()
+  if (!account) return null
+  const members = keysService.members()?.members ?? []
+  const signer = await keysService.accountDeviceKey()
+  const runtimes = members.filter((member) => member.role !== 'member').flatMap((member) => member.devices).filter((device) => device !== signer)
+  const workspace = account.workspace.id
+  return {
+    workspace, key: fromBase64(account.workspace.key), version: account.workspace.version, me: await keysService.device(), members, runtimes,
+    putFile: async ({ hash, body }) => cloud.putFile({ workspace, hash, body, token: await keysService.token() }),
+    getFile: async (hash) => cloud.getFile({ workspace, hash, token: await keysService.token() }),
+    again: () => syncService.send(['file']),
+  }
 }
 
 async function refreshMembers(): Promise<boolean> {

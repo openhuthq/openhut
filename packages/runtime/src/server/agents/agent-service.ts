@@ -27,6 +27,7 @@ import { SlackSecrets } from '../integrations/slack/slack.ts'
 import { resolveSlots } from '../models/model-slots.ts'
 import { providerService } from '../models/provider-service.ts'
 import { renderFiles, type RenderedChannel } from './hermes-files.ts'
+import { keysService } from '../cloud/keys-service.ts'
 
 const MAX_AGENTS = 250
 const RECONCILE_MS = 30_000
@@ -50,14 +51,15 @@ export const agentService = {
   async list({ actor }: { actor: Caller }): Promise<Agent[]> {
     const [rows, states] = await Promise.all([db.selectFrom('agent').selectAll().orderBy('created_at').execute(), containerStates()])
     const owners = new Map((await db.selectFrom('person').select(['id', 'email']).execute()).map((person) => [person.id, person.email]))
-    return Promise.all(rows.map(async (row) => agentOf({ row, ownerName: owners.get(row.owner_id), state: states?.[row.id], health: await healthOf({ row, state: states?.[row.id] }), editable: row.owner_id === actor.id })))
+    const me = await meIfNeeded(rows)
+    return Promise.all(rows.map(async (row) => agentOf({ row, ownerName: owners.get(row.owner_id), state: states?.[row.id], health: await healthOf({ row, state: states?.[row.id] }), editable: row.owner_id === actor.id, here: runsHere({ row, me }) })))
   },
 
   async get({ actor, id }: { actor: Caller; id: string }): Promise<Agent> {
     const row = await rowOf(id)
     const owner = await db.selectFrom('person').select('email').where('id', '=', row.owner_id).executeTakeFirst()
     const state = (await containerStates())?.[id]
-    return agentOf({ row, ownerName: owner?.email, state, health: await healthOf({ row, state }), editable: row.owner_id === actor.id })
+    return agentOf({ row, ownerName: owner?.email, state, health: await healthOf({ row, state }), editable: row.owner_id === actor.id, here: runsHere({ row, me: await meIfNeeded([row]) }) })
   },
 
   async requireEditable({ actor, id }: { actor: Caller; id: string }): Promise<AgentRow> {
@@ -89,12 +91,13 @@ export const agentService = {
     const before = await agentService.requireEditable({ actor, id })
     requireModel(changed(patch.model, before.model))
     if (patch.browser && !(await features()).browser) throw new HttpError(409, 'This computer can\'t give agents a browser. Run the agent on a Linux computer you added to use one.', { param: 'browser' })
-    const { codeExecution, browser, ...fields } = patch
+    const { codeExecution, browser, runsHere: moveHere, ...fields } = patch
     await db.updateTable('agent').set({
       ...fields,
       code_execution: codeExecution, web_browser: browser, name: patch.name === undefined ? undefined : cleanName(patch.name),
+      runs_on: moveHere ? await keysService.deviceKey() : undefined, changed_by: patch.instructions === undefined ? undefined : null,
     }).where('id', '=', id).execute()
-    if (patch.wanted || RENDERED.some((field) => patch[field] !== undefined)) {
+    if (patch.wanted || moveHere || RENDERED.some((field) => patch[field] !== undefined)) {
       await agentService.reapply({ id }).catch(async (err: unknown) => {
         if (browser === undefined || browser === before.web_browser) throw err
         await db.updateTable('agent').set({ web_browser: before.web_browser }).where('id', '=', id).execute()
@@ -172,17 +175,19 @@ export const agentService = {
 
   async synced(): Promise<AgentValue[]> {
     const rows = await db.selectFrom('agent').selectAll().orderBy('created_at').execute()
-    return rows.map((row) => ({ id: row.id, name: row.name, instructions: row.instructions, model: row.model, face: row.face, codeExecution: row.code_execution, wanted: row.wanted }))
+    const me = await keysService.deviceKey()
+    return rows.map((row) => ({ id: row.id, name: row.name, instructions: row.instructions, model: row.model, face: row.face, codeExecution: row.code_execution, wanted: row.wanted, runsOn: row.runs_on ?? me }))
   },
 
-  async applySynced({ id, value }: { id: string; value: AgentValue | null }): Promise<void> {
-    const row = await db.selectFrom('agent').select('id').where('id', '=', id).executeTakeFirst()
+  async applySynced({ id, value, by }: { id: string; value: AgentValue | null; by: string | null }): Promise<void> {
+    const row = await db.selectFrom('agent').select(['id', 'instructions', 'changed_by']).where('id', '=', id).executeTakeFirst()
     if (!value) {
-      if (row) await agentd.remove({ id })
+      if (row) await agentd.remove({ id, trash: true })
       await db.deleteFrom('agent').where('id', '=', id).execute()
       return
     }
-    const fields = { name: value.name, instructions: value.instructions, model: value.model, face: value.face, code_execution: value.codeExecution, wanted: value.wanted }
+    const changedBy = !row || row.instructions !== value.instructions ? by : row.changed_by
+    const fields = { name: value.name, instructions: value.instructions, model: value.model, face: value.face, code_execution: value.codeExecution, wanted: value.wanted, runs_on: value.runsOn ?? null, changed_by: changedBy }
     if (row) await db.updateTable('agent').set(fields).where('id', '=', id).execute()
     else {
       const owner = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirstOrThrow()
@@ -193,7 +198,7 @@ export const agentService = {
 
   async reapply({ id }: { id: string }): Promise<void> {
     const row = await rowOf(id)
-    await agentd.apply({ id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' })
+    await agentd.apply({ id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' && runsHere({ row, me: await meIfNeeded([row]) }) })
   },
 
   async stopAll(): Promise<void> {
@@ -246,8 +251,10 @@ export const agentService = {
 
   async reapplyAll({ force }: { force: boolean }): Promise<string[]> {
     const failed: string[] = []
-    for (const row of await db.selectFrom('agent').selectAll().execute()) {
-      await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running', force })
+    const rows = await db.selectFrom('agent').selectAll().execute()
+    const me = await meIfNeeded(rows)
+    for (const row of rows) {
+      await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' && runsHere({ row, me }), force })
         .catch((err: unknown) => failed.push(`${row.name}: ${messageOf(err)}`))
     }
     return failed
@@ -277,7 +284,9 @@ const reconcileSafely = () => reconcile().catch((err: unknown) => log.error({ ev
 async function reconcile(): Promise<void> {
   const states = await containerStates()
   if (!states) return
-  for (const row of await db.selectFrom('agent').selectAll().where('wanted', '=', 'running').execute()) {
+  const rows = await db.selectFrom('agent').selectAll().where('wanted', '=', 'running').execute()
+  const me = await meIfNeeded(rows)
+  for (const row of rows.filter((each) => runsHere({ row: each, me }))) {
     if (states[row.id] === 'running') await probe({ row, fresh: true })
     await keepRunning({ row }).catch((err: unknown) => log.error({ event: 'reconcile.failed', agent: row.id, error: messageOf(err) }))
   }
@@ -371,10 +380,18 @@ async function applyRelease(): Promise<void> {
   if (force) log.info({ event: 'build.applied', from: previous, to: config.build })
 }
 
-function agentOf({ row, ownerName, state, health, editable }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean }): Agent {
+async function meIfNeeded(rows: AgentRow[]): Promise<string | null> {
+  return rows.some((row) => row.runs_on) ? keysService.deviceKey() : null
+}
+
+export function runsHere({ row, me }: { row: Pick<AgentRow, 'runs_on'>; me: string | null }): boolean {
+  return !row.runs_on || row.runs_on === me
+}
+
+function agentOf({ row, ownerName, state, health, editable, here }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean; here: boolean }): Agent {
   return {
     id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, wanted: row.wanted,
-    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, browser: row.web_browser, face: row.face, canEdit: editable, createdAt: new Date(row.created_at).toISOString(),
+    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, browser: row.web_browser, face: row.face, canEdit: editable, runsHere: here, changedBy: row.changed_by, createdAt: new Date(row.created_at).toISOString(),
   }
 }
 

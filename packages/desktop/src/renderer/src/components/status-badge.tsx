@@ -25,6 +25,7 @@ function badge(svg: IconSvgElement) {
 }
 
 export function agentState(agent: Agent) {
+  if (!agent.runsHere && agent.wanted === 'running') return 'running'
   if (agent.status !== 'running' || agent.health === null || agent.health === 'answering') return agent.status
   return agent.health
 }

@@ -2,17 +2,25 @@ import * as z from 'zod/mini'
 import { Wanted } from '../agents/agent.ts'
 import { ConnectionKind } from '../connections/connection.ts'
 import { ModelKey, ProviderId, ProviderModel } from '../models/provider.ts'
+import { ChatMessage, fileInHome, AGENT_HOME } from '../threads/thread.ts'
 import { checkRecord, DeviceKey, Locked, parseJson, recordBind, Signed, signRecord, type Member, type Record as CloudRecord } from './cloud.ts'
 import { fromBase64, lock, newKey, toBase64, unlock, type Bytes, type Identity } from '../vault/vault.ts'
 
+const AgentId = z.string().check(z.regex(/^ag_[a-z0-9]{8}$/))
+const Hash = z.string().check(z.regex(/^[A-Za-z0-9_-]{43}$/))
+const PICTURE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/
+const Face = z.string().check(z.maxLength(60_000), z.refine((face) => PICTURE.test(face) || face.startsWith('{'), 'A face is a look or a PNG, JPEG or WebP picture.'))
+const MemoryText = z.nullable(z.string().check(z.maxLength(10_000)))
+
 export const AgentValue = z.object({
-  id: z.string().check(z.regex(/^ag_[a-z0-9]{8}$/)),
+  id: AgentId,
   name: z.string().check(z.minLength(1), z.maxLength(40)),
   instructions: z.string().check(z.maxLength(20_000)),
   model: ModelKey,
-  face: z.nullable(z.string().check(z.maxLength(60_000))),
+  face: z.nullable(Face),
   codeExecution: z.boolean(),
   wanted: Wanted,
+  runsOn: z.optional(DeviceKey),
 })
 export type AgentValue = z.infer<typeof AgentValue>
 
@@ -24,9 +32,11 @@ export const SettingValue = z.discriminatedUnion('name', [
 export type SettingValue = z.infer<typeof SettingValue>
 
 export const ConnectionValue = z.object({
-  id: z.string().check(z.regex(/^con_[a-z0-9]{8}$/)),
+  id: z.string().check(z.regex(/^cn_[a-z0-9]{8}$/)),
   kind: ConnectionKind,
   name: z.string().check(z.maxLength(100)),
+  account: z.string().check(z.maxLength(200)),
+  signIn: z.boolean(),
   keys: z.array(z.object({ to: DeviceKey, body: Locked })).check(z.maxLength(50)),
 })
 export type ConnectionValue = z.infer<typeof ConnectionValue>
@@ -36,22 +46,40 @@ export const HeadValue = z.object({
 })
 export type HeadValue = z.infer<typeof HeadValue>
 
-export const SYNCED = ['agent', 'setting', 'connection', 'head'] as const
+export const MessageValue = z.object({ agentId: AgentId, message: ChatMessage })
+export type MessageValue = z.infer<typeof MessageValue>
+
+export const MemoryValue = z.object({ agentId: AgentId, notes: MemoryText, people: MemoryText })
+export type MemoryValue = z.infer<typeof MemoryValue>
+
+export const FileValue = z.object({
+  agentId: AgentId,
+  path: z.string().check(z.refine((path) => fileInHome(`${AGENT_HOME}/${path}`) === path, 'Send a path inside the agent\'s home.')),
+  size: z.number().check(z.int(), z.minimum(0), z.maximum(32 << 20)),
+  sha: Hash,
+  chunks: z.array(Hash).check(z.maxLength(32)),
+})
+export type FileValue = z.infer<typeof FileValue>
+
+export const SYNCED = ['agent', 'setting', 'connection', 'message', 'memory', 'file', 'head'] as const
 export type Synced = (typeof SYNCED)[number]
 export type Opened =
   | { kind: 'agent'; ref: string; value: AgentValue | null; by: string }
   | { kind: 'setting'; ref: string; value: SettingValue | null; by: string }
   | { kind: 'connection'; ref: string; value: ConnectionValue | null; by: string }
+  | { kind: 'message'; ref: string; value: MessageValue | null; by: string }
+  | { kind: 'memory'; ref: string; value: MemoryValue | null; by: string }
+  | { kind: 'file'; ref: string; value: FileValue | null; by: string }
   | { kind: 'head'; ref: string; value: HeadValue | null; by: string }
 export type Sealed = { ver: number; deleted: boolean; body: string }
 
 const ADMIN_ONLY: Synced[] = ['setting', 'connection']
-const VALUES = { agent: AgentValue, setting: SettingValue, connection: ConnectionValue, head: HeadValue }
+const VALUES = { agent: AgentValue, setting: SettingValue, connection: ConnectionValue, message: MessageValue, memory: MemoryValue, file: FileValue, head: HeadValue }
 const Body = z.object({
   change: z.string().check(z.length(16)),
   kind: z.enum(SYNCED),
   counter: z.number().check(z.int(), z.minimum(1)),
-  ref: z.string().check(z.minLength(1), z.maxLength(64)),
+  ref: z.string().check(z.minLength(1), z.maxLength(1100)),
   value: z.unknown(),
 })
 const text = new TextEncoder()
@@ -59,8 +87,14 @@ const words = new TextDecoder()
 
 export function refOf(opened: Opened): string | null {
   if (!opened.value) return null
-  if (opened.kind === 'head') return 'head'
-  return opened.kind === 'setting' ? opened.value.name : opened.value.id
+  switch (opened.kind) {
+    case 'head': return 'head'
+    case 'setting': return opened.value.name
+    case 'message': return opened.value.message.id
+    case 'memory': return opened.value.agentId
+    case 'file': return `${opened.value.agentId}/${opened.value.path}`
+    default: return opened.value.id
+  }
 }
 
 export async function sealRecord({ workspace, key, version, signer, id, ver, kind, ref, value }: {

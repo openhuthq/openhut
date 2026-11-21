@@ -11,6 +11,7 @@ redact() { sed -E 's/(code=)[0-9a-f]+/\1<redacted>/'; }
 in_host() { docker exec openhut-host "$@"; }
 run_phase() { docker exec -e OPENHUT_E2E_KEY="$KEY" openhut-host node --test-force-exit --test-reporter=spec /opt/openhut/packages/e2e/src/e2e.ts "$1"; }
 tree_sha() { { git rev-parse HEAD; git diff HEAD --binary; git ls-files -o --exclude-standard -z | xargs -0 shasum -a 256; } | shasum -a 256 | cut -d' ' -f1; }
+stop_cloud() { [ -z "${CLOUD:-}" ] || kill -INT "$CLOUD" 2>/dev/null; CLOUD=; }
 stop_mirror() { [ -z "${MIRROR:-}" ] && return; kill -INT "$MIRROR" 2>/dev/null; i=0; while curl -fs -o /dev/null http://127.0.0.1:8099/ && [ $i -lt 50 ]; do i=$((i+1)); sleep 0.2; done; MIRROR=; }
 mirror() {
   stop_mirror
@@ -26,8 +27,13 @@ rm -rf "$R" && mkdir -p "$R"
 KEY=$(openssl rand -hex 32) && KEY_SHA256=$(printf %s "$KEY" | shasum -a 256 | cut -c1-64) || fail "app key"
 tree_sha > "$R/tree.sha256"
 BUILD=e2e-1 BASE=http://host.docker.internal:8099 ./scripts/release.sh || fail "release"
-trap stop_mirror EXIT
+trap 'stop_mirror; stop_cloud' EXIT
 mirror dist
+curl -fs -o /dev/null http://127.0.0.1:8790/ && fail ":8790 already answers; stop the cloud an earlier run left behind"
+(cd private/cloud && WRANGLER_SEND_METRICS=false exec npm run dev -- --ip 0.0.0.0 --port 8790 --inspector-port 0 --persist-to "../../$R/cloud-state" \
+  --show-interactive-dev-session=false --log-level warn) >>"$R/cloud.log" 2>&1 &
+CLOUD=$!
+i=0; until curl -s -o /dev/null http://127.0.0.1:8790/; do i=$((i+1)); [ $i -gt 150 ] && fail "cloud on :8790"; sleep 0.2; done
 
 docker rm -f openhut-host openhut-lan >/dev/null 2>&1
 docker run --rm --privileged -v openhut-docker:/var/lib/docker --entrypoint sh "$HOST_IMAGE" -c '
@@ -52,13 +58,16 @@ docker network connect --ip 10.99.0.2 fm-lan10 openhut-host && docker network co
 in_host timeout 300 apk add -q curl || fail "curl"
 
 echo "--- install: curl -fsSL http://host.docker.internal:8099 | OPENHUT_MODEL=test OPENHUT_CLIENT_KEY_SHA256=<the app key's hash> sh"
-in_host sh -c "curl -fsSL http://host.docker.internal:8099 | OPENHUT_MODEL=test OPENHUT_CLIENT_KEY_SHA256=$KEY_SHA256 sh" 2>&1 | redact | tee "$R/install.log"
+in_host sh -c "curl -fsSL http://host.docker.internal:8099 | OPENHUT_MODEL=test OPENHUT_CLOUD_URL=http://host.docker.internal:8790 OPENHUT_CLIENT_KEY_SHA256=$KEY_SHA256 sh" 2>&1 | redact | tee "$R/install.log"
 grep -q "OpenHut is running" "$R/install.log" || fail "install"
 copy_test() { in_host mkdir -p /opt/openhut/packages/e2e/src && docker cp packages/e2e/src/e2e.ts openhut-host:/opt/openhut/packages/e2e/src/e2e.ts >/dev/null &&
   in_host chown -R root:root /opt/openhut/packages/e2e; }
 copy_test || fail "copy test"
 
 run_phase main; main=$?
+
+echo "--- cloud: a runtime on this Mac signs in to the local room, adds the server as a runtime device and shares a connection key with it"
+RESULTS="$R" OPENHUT_E2E_KEY="$KEY" REMOTE_CONTAINER=openhut-host node --test --test-force-exit --test-reporter=spec packages/e2e/src/cloud.ts; cloud=$?
 
 echo "--- re-add: the app adds this computer again with a new key; the same build pairs instead of reinstalling, then the first key is added back"
 KEY2=$(openssl rand -hex 32) && KEY2_SHA256=$(printf %s "$KEY2" | shasum -a 256 | cut -c1-64) || fail "second app key"
@@ -103,5 +112,5 @@ run_phase update; update=$?
 for f in boot agentd app; do in_host sh -c "grep -v -e ExperimentalWarning -e trace-warnings /var/log/openhut/$f.log" > "$R/$f.log" 2>&1; done
 [ "$(tree_sha)" = "$(cat "$R/tree.sha256")" ] && tree=same || tree=changed
 node packages/e2e/src/report.ts "$tree" > "$R/e2e-report.md"; report=$?
-echo "main=$main after-upgrade=$upgrade after-restart=$after update-broken=$broken update=$update report=$report -> $R/e2e-report.md"
-[ $main -eq 0 ] && [ $upgrade -eq 0 ] && [ $after -eq 0 ] && [ $broken -eq 0 ] && [ $update -eq 0 ] && [ $report -eq 0 ]
+echo "main=$main cloud=$cloud after-upgrade=$upgrade after-restart=$after update-broken=$broken update=$update report=$report -> $R/e2e-report.md"
+[ $main -eq 0 ] && [ $cloud -eq 0 ] && [ $upgrade -eq 0 ] && [ $after -eq 0 ] && [ $broken -eq 0 ] && [ $update -eq 0 ] && [ $report -eq 0 ]

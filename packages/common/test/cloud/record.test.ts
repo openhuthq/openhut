@@ -77,9 +77,26 @@ test('a room that swaps, replays or lies about a record is caught', async () => 
 })
 
 test('a connection key travels only sealed to device keys, never plain', async () => {
-  const connection = { id: 'con_orders01', kind: 'postgres', name: 'Orders DB', keys: [{ to: toBase64(mo.publicKey), body: 'postgres://user:secret@db' }] }
+  const connection = { id: 'cn_orders01', kind: 'postgres', name: 'Orders DB', account: 'db · orders', signIn: false, keys: [{ to: toBase64(mo.publicKey), body: 'postgres://user:secret@db' }] }
   assert.equal(await open(await forged({ kind: 'connection', ref: connection.id, value: connection })), null)
   const letter = (await sealed()).body
   const opened = await open(await sealed({ kind: 'connection', ref: connection.id, value: { ...connection, keys: [{ to: toBase64(mo.publicKey), body: letter }] } }))
   assert.equal(opened?.kind, 'connection')
+})
+
+test('a synced face is a look or a raster picture, never SVG or HTML', async () => {
+  const face = async (value: string) => (await open(await sealed({ value: { ...helpdesk, face: value } })))?.value
+  assert.notEqual(await face('data:image/png;base64,iVBORw0KGgo='), undefined)
+  assert.notEqual(await face('{"seed":"x"}'), undefined)
+  assert.equal(await open(await forged({ value: { ...helpdesk, face: 'data:image/svg+xml;base64,PHN2Zz4=' } })), null)
+  assert.equal(await open(await forged({ value: { ...helpdesk, face: '<img src=x onerror=alert(1)>' } })), null)
+})
+
+test('messages, memory and files are closed kinds too: a file path can’t leave the agent’s home', async () => {
+  const message = { agentId: helpdesk.id, message: { id: 'msg_1', role: 'assistant', parts: [{ type: 'text', text: 'Hi' }] } }
+  assert.deepEqual((await open(await sealed({ kind: 'message', ref: 'msg_1', value: message })))?.value, message)
+  const file = { agentId: helpdesk.id, path: 'uploads/report.csv', size: 3, sha: 'a'.repeat(43), chunks: ['b'.repeat(43)] }
+  assert.deepEqual((await open(await sealed({ kind: 'file', ref: `${helpdesk.id}/${file.path}`, value: file })))?.value, file)
+  assert.equal(await open(await forged({ kind: 'file', ref: `${helpdesk.id}/../../etc/passwd`, value: { ...file, path: '../../etc/passwd' } })), null)
+  assert.equal(await open(await forged({ kind: 'memory', ref: helpdesk.id, value: { agentId: helpdesk.id, notes: 'x'.repeat(20_000), people: null } })), null)
 })
