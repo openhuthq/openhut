@@ -5,6 +5,7 @@ import { config } from './config.ts'
 import { HttpError } from './http-error.ts'
 
 const CloudError = z.object({ error: z.object({ message: z.string() }) })
+const held = new Set<string>()
 
 export const cloud = {
   authorization: (body: CreateOAuthAuthorization): Promise<OAuthAuthorization> => post({ path: '/v1/oauth-authorizations', body, reply: OAuthAuthorization }),
@@ -13,7 +14,15 @@ export const cloud = {
   deviceSession: ({ workspace, ...body }: DeviceSession & { workspace: string }): Promise<CloudSession> => post({ path: `/v1/workspaces/${workspace}/sessions`, body, reply: CloudSession }),
   roomUrl: (workspace: string): string => `${config.cloudUrl.replace(/^http/, 'ws')}/v1/workspaces/${workspace}`,
 
-  room: ({ workspace, path, ...rest }: Call & { workspace: string }): Promise<Reply> => call({ ...rest, path: `/v1/workspaces/${workspace}${path}` }),
+  room: async ({ workspace, path, ...rest }: Call & { workspace: string }): Promise<Reply> => {
+    if (held.has(workspace) && rest.method === 'POST' && path === '/letters') throw new HttpError(409, 'This workspace’s history doesn’t match another member’s, so no keys go out until it does. Check with your team.')
+    return call({ ...rest, path: `/v1/workspaces/${workspace}${path}` })
+  },
+
+  hold({ workspace, on }: { workspace: string; on: boolean }): void {
+    if (on) held.add(workspace)
+    else held.delete(workspace)
+  },
   account: call,
 
   async putFile({ workspace, hash, token, body }: { workspace: string; hash: string; token: string; body: Uint8Array }): Promise<number> {

@@ -16,6 +16,7 @@ import { useAgents, useChannels, useDeleteAgent, useMemory, useSkills, useUpdate
 import type { Computer } from '@openhut/client'
 import { nameOf, runsOnNote, useComputers, useFeatures } from '@/features/computers/api'
 import { ChangedBy, useChangedByOther } from '@/features/cloud/live'
+import { EditLock, FieldBox, useHolder } from '@/features/cloud/presence'
 import { CanUse } from '@/features/agents/agent-connections'
 import { BrowserPreview } from '@/features/agents/browser'
 import { ChannelRows } from '@/features/agents/channels'
@@ -40,15 +41,15 @@ export function Panel({ agent, naming, watching }: { agent: Agent; naming: boole
   const skills = useSkills(agent.id).data?.length
   return <aside className={cn('still flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] phone:w-full phone:flex-1 phone:border-l-0 border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
     <div className={cn('flex items-center gap-3', DRAG)}>
-      {agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="relative shrink-0">
+      <FieldBox agentId={agent.id} field="face" className="shrink-0">{agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="relative block shrink-0">
         <Face agent={agent} size={48} tile />
-      </a> : <Face agent={agent} size={48} tile />}
-      <PanelTitle agent={agent} naming={naming} />
+      </a> : <Face agent={agent} size={48} tile />}</FieldBox>
+      <FieldBox agentId={agent.id} field="name" className="grid min-w-0 flex-1"><PanelTitle agent={agent} naming={naming} /></FieldBox>
     </div>
-    <Button type="button" variant="bare" onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'does' }))} className={cn('group -mx-2.5 flex flex-col gap-1 rounded-lg px-2.5 py-2', HOVER)}>
+    <FieldBox agentId={agent.id} field="instructions" className="-mx-2.5"><Button type="button" variant="bare" onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'does' }))} className={cn('group flex w-full flex-col gap-1 rounded-lg px-2.5 py-2', HOVER)}>
       <span className="flex items-center text-[12px]/[16px] text-mute">What it does<span className="ml-auto text-mute opacity-0 group-hover:opacity-100"><I icon={PencilEdit02Icon} size={13} /></span></span>
-      <span className={cn('line-clamp-2 text-[13px]/[1.45]', agent.summary ? 'text-ink' : 'text-body')}>{agent.summary || `Tell ${agent.name} what its job is.`}</span>
-    </Button>
+      <span className={cn('line-clamp-2 text-left text-[13px]/[1.45]', agent.summary ? 'text-ink' : 'text-body')}>{agent.summary || `Tell ${agent.name} what its job is.`}</span>
+    </Button></FieldBox>
     <div className="-mx-2.5 flex flex-col gap-px">
       <ModelRows agent={agent} />
       <RunsOn agent={agent} />
@@ -246,16 +247,23 @@ function AgentName({ agent, editing }: { agent: Agent; editing: boolean }) {
 export function DoesDialog({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const updateAgent = useUpdateAgent(agent.id)
   const changedByOther = useChangedByOther(agent.changedBy)
+  const { locked } = useHolder({ agentId: agent.id, field: 'instructions' })
+  const [draft, setDraft] = useState<string | null>(null)
+  const box = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (locked && box.current) box.current.value = agent.instructions
+  }, [locked, agent.instructions])
   return <DialogCard onClose={onClose} className="w-[560px]">
     <form className="contents" onSubmit={(event) => updateAgent.mutate({ instructions: formValues(event)('instructions') }, { onSuccess: onClose })}>
       <div className="flex items-center gap-3"><Face agent={agent} size={40} /><DialogTitle className="text-[18px] font-semibold">What {agent.name} does</DialogTitle></div>
-      <Textarea autoFocus name="instructions" aria-label="Instructions" maxLength={20000} readOnly={!agent.canEdit} defaultValue={agent.instructions} rows={9} placeholder={`What does ${agent.name} do? Who does it answer, and what must it never do?`}
-        className="min-h-[220px] rounded-lg font-sans text-[14px]/[1.55]" />
+      <Textarea ref={box} autoFocus name="instructions" aria-label="Instructions" maxLength={20000} readOnly={!agent.canEdit || locked} defaultValue={agent.instructions} rows={9} placeholder={`What does ${agent.name} do? Who does it answer, and what must it never do?`}
+        onInput={(event) => setDraft(event.currentTarget.value === agent.instructions ? null : event.currentTarget.value)}
+        className={cn('min-h-[220px] rounded-lg font-sans text-[14px]/[1.55]', locked && 'bg-soft text-body')} />
       {updateAgent.error && <p role="alert" className="m-0 text-xs text-fail">{updateAgent.error.message}</p>}
-      <div className="flex items-center gap-2">
+      {locked ? <EditLock agentId={agent.id} field="instructions" draft={draft} onClose={onClose} /> : <div className="flex items-center gap-2">
         <span className="inline-flex items-center gap-1.5 text-[13px] text-mute"><I icon={SparklesIcon} size={13} />{agent.changedBy && changedByOther ? <ChangedBy email={agent.changedBy} /> : `Plain words are fine. ${agent.name} reads this before every reply.`}</span>
         <span className="ml-auto flex gap-2"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" variant="primary" disabled={!agent.canEdit || updateAgent.isPending}>Save</Button></span>
-      </div>
+      </div>}
     </form>
   </DialogCard>
 }

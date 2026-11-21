@@ -89,7 +89,7 @@ export const syncKinds = {
         return agentService.applySynced({ id: open.ref, value: open.value, author: { ...author, device: open.by }, workspace: workspaceOf(ctx), me: ctx.email, mine: devices })
       }
       case 'setting': return open.value && ctx.home && mine ? applySetting(open.value) : undefined
-      case 'message': return threadService.applySynced({ id: open.ref, value: open.value })
+      case 'message': return threadService.applySynced({ id: open.ref, value: open.value, author: by })
       case 'memory': return open.value && memoryService.applySynced(open.value)
       case 'file': return open.value ? applyFile({ value: open.value, ctx, owner: open.owner }) : undefined
       case 'head': return undefined

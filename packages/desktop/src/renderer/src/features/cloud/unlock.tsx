@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
-import { Cancel01Icon, FingerPrintIcon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
+import { Alert02Icon, Cancel01Icon, FingerPrintIcon } from '@hugeicons/core-free-icons'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { agentPath } from '@/app/routes'
 import { ConfirmButton } from '@/components/confirm-button'
 import { DeviceIcon } from '@/components/custom/device'
+import { PersonFace } from '@/components/custom/person-face'
+import { AMBER, notify, Tinted, Toast, Toasts } from '@/components/custom/toast'
 import { ErrorNote } from '@/components/error-note'
 import { Hut } from '@/components/hut'
 import { DRAG, I, PILL } from '@/components/kit'
@@ -16,40 +18,18 @@ import { QrCode } from '@/features/agents/qr-code'
 import { nameOf, REMOVE_DETAIL, useCloud, useRemoveMac, usePairing, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useStartOver, useUnlock } from '@/features/cloud/api'
 import { Mascot } from '@/features/cloud/sign-in'
 import { chooseWorkspace, useAsk, useCancelAsk } from '@/features/cloud/workspaces'
+import { Mismatch } from '@/features/cloud/presence'
 import { Spinner } from '@/components/ui/spinner'
 import { HERE } from '@/features/settings/desktop'
 import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { isPhone } from '@/lib/native'
 import { navigate } from '@/lib/router'
 import { shortDateTime } from '@/lib/format'
-import { toast, toastError } from '@/lib/toast'
+import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 const SEEN_KEY = 'openhut.seen-devices'
 const ALERT_MS = 3 * 24 * 60 * 60_000
-const DONE_MS = 6000
-type Done = { title: string; note: string }
-let done: Done | null = null
-const doneListeners = new Set<() => void>()
-
-export function showDone(next: Done): void {
-  done = next
-  for (const listener of doneListeners) listener()
-  setTimeout(() => {
-    if (done !== next) return
-    done = null
-    for (const listener of doneListeners) listener()
-  }, DONE_MS)
-}
-
-function DoneToast() {
-  const shown = useSyncExternalStore((listener) => { doneListeners.add(listener); return () => { doneListeners.delete(listener) } }, () => done)
-  if (!shown) return null
-  return <div role="status" className="fixed top-14 right-[294px] z-50 flex w-[380px] max-w-[calc(100%-32px)] items-center gap-3 rounded-[18px] border border-hair bg-card p-2.5 pr-3 shadow-[0_8px_24px_oklch(0%_0_0/.10)]">
-    <span className="grid size-9 shrink-0 place-items-center text-[#12a150]"><I icon={Tick02Icon} size={20} /></span>
-    <span className="grid min-w-0 flex-1 gap-px text-[13px]"><span className="font-semibold">{shown.title}</span><span className="truncate text-mute">{shown.note}</span></span>
-  </div>
-}
 
 function Unlock({ cloud }: { cloud: Cloud }) {
   const [way, setWay] = useState<'kit' | 'code' | 'admin' | null>(null)
@@ -168,14 +148,12 @@ export function NewMacAlert({ cloud }: { cloud: Cloud }) {
     try { localStorage.setItem(SEEN_KEY, JSON.stringify(next)) } catch { return }
   }
   const thing = fresh.kind === 'server' ? 'computer' : 'Mac'
-  return <div role="alert" className="fixed top-14 right-[294px] z-50 flex w-[380px] max-w-[calc(100%-32px)] items-center gap-3 rounded-[18px] border border-hair bg-card p-2.5 pr-3 shadow-[0_8px_24px_oklch(0%_0_0/.10)]">
-    <span className="grid size-9 shrink-0 place-items-center"><DeviceIcon kind={fresh.kind} /></span>
-    <span className="grid min-w-0 flex-1 gap-px text-[13px]"><span className="font-semibold">New {thing} added</span>{fresh.name && <span className="truncate text-mute">{fresh.name}</span>}<span className="text-mute">{when}</span></span>
+  return <Toast alert lead={<DeviceIcon kind={fresh.kind} />} title={`New ${thing} added`} note={fresh.name ? `${fresh.name} · ${when}` : when}>
     {cloud.youngUntil
       ? <span className="w-[104px] shrink-0 text-right text-[12px]/[1.3] text-mute">Remove it from an older device</span>
       : <ConfirmButton variant="secondary" className="shrink-0 rounded-xl px-3.5 text-[12.5px] text-fail" disabled={remove.isPending} question={`Remove ${fresh.name ?? `this ${thing}`}?`} detail={`Added ${when}. ${REMOVE_DETAIL}`} action="Remove" onConfirm={() => remove.mutate(fresh.key)}>Not me</ConfirmButton>}
     <Button type="button" variant="text" className="shrink-0 px-1 text-mute" aria-label="It's mine" title="It's mine" onClick={dismiss}><I icon={Cancel01Icon} size={14} /></Button>
-  </div>
+  </Toast>
 }
 
 function readSeen(): string[] {
@@ -241,13 +219,28 @@ export function CloudGate({ children }: { children: ReactNode }) {
     if (!landing) return
     setLanding(false)
     void queries.invalidateQueries()
-    if (problem) toast(problem)
+    notify(problem ? { lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: 'Not everything came back', note: problem } : { title: 'Your agents are back', note: `Restored from your cloud backup on this ${HERE}.` })
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
   if (isPhone() || !cloud) return children
   if (cloud.status === 'locked') return <Unlock cloud={cloud} />
   if (restoring || landing) return <Restoring cloud={cloud} />
-  return <>{children}<NewMacAlert cloud={cloud} /><DoneToast /><GoneNotice cloud={cloud} /></>
+  return <>{children}<Toasts><NewMacAlert cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
+}
+
+function Joins({ cloud }: { cloud: Cloud }) {
+  const known = useRef<Map<string, string[]> | null>(null)
+  useEffect(() => {
+    const now = new Map(cloud.workspaces.map((workspace) => [workspace.id, workspace.members.map((member) => member.email)]))
+    const before = known.current
+    known.current = now
+    if (!before) return
+    for (const workspace of cloud.workspaces) {
+      const was = before.get(workspace.id)
+      for (const email of was ? workspace.members.map((member) => member.email).filter((each) => !was.includes(each) && each !== cloud.email) : []) notify({ lead: <PersonFace name={nameOf(email)} email={email} size={26} />, title: `${nameOf(email)} joined ${workspace.name}`, note: email })
+    }
+  }, [cloud.workspaces, cloud.email])
+  return null
 }
 
 function GoneNotice({ cloud }: { cloud: Cloud }) {
@@ -259,7 +252,7 @@ function GoneNotice({ cloud }: { cloud: Cloud }) {
     if (!last) return
     const home = cloud.workspaces.find((each) => each.home)
     if (home) chooseWorkspace(home.id)
-    showDone({ title: last.why === 'deleted' ? `${last.name} was deleted` : `You were removed from ${last.name}`, note: `Its agents stopped on this ${HERE}.` })
+    notify({ title: last.why === 'deleted' ? `${last.name} was deleted` : `You were removed from ${last.name}`, note: `Its agents stopped on this ${HERE}.` })
   }, [cloud.gone, cloud.workspaces])
   return null
 }

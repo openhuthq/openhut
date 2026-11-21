@@ -12,6 +12,7 @@ import { Switcher } from '@/features/cloud/switcher'
 import { useWorkspaces } from '@/features/cloud/workspaces'
 import { nameOf as personName } from '@/features/cloud/api'
 import { PersonFace } from '@/components/custom/person-face'
+import { Faces } from '@/features/cloud/presence'
 import { agentPath } from '@/app/routes'
 import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
@@ -60,7 +61,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
         title={agent.online ? undefined : `${nameOf({ computers, id: agent.computer })} is offline`}>
         <span className={cn('relative', !agent.online && 'opacity-45')}><Face agent={agent} size={phone ? 52 : 40} /><Live agent={agent} className="-right-0.5 -bottom-0.5 phone:size-3.5" /></span>
         <span className="grid min-w-0 gap-0.5">
-          <span className={cn('truncate text-[14px] font-semibold phone:text-[17px]', !agent.online && 'text-mute')}>{agent.name}</span>
+          <span className="flex min-w-0 items-center gap-2"><span className={cn('truncate text-[14px] font-semibold phone:text-[17px]', !agent.online && 'text-mute')}>{agent.name}</span>{agent.shared && <span className="ml-auto shrink-0"><Faces agentId={agent.id} size={18} /></span>}</span>
           <span className={cn('truncate text-[13px]', agent.online ? 'text-body' : 'text-mute', agent.online && troubleOf(agent) && 'text-fail')}>{many && `${nameOf({ computers, id: agent.computer })} · `}{agent.online ? troubleOf(agent) ?? (agent.summary || 'Say hello') : 'Offline'}</span>
         </span>
         {thread && <span className="hidden self-start pt-1 text-[12px] text-mute tabular-nums phone:block">{ago(thread.updatedAt)}</span>}

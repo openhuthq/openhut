@@ -41,7 +41,8 @@ const live = new Map<string, MessageValue>()
 const IDLE_POLL_MS = 1000
 const IDLE_WAIT_MS = 10 * 60_000
 const SILENT = /^\s*\[?(SILENT|NO[_ ]REPLY)\]?\s*$/i
-const CHAT_NOTE = `The person is talking to you in the OpenHut app. Files they attach are saved in ${UPLOADS} and listed at the end of their message. To give them a file, save it under ${AGENT_HOME} and write its full path in backticks, like \`${AGENT_HOME}/report.csv\`: the app shows it as a file they can download.`
+const Authored = z.object({ metadata: z.object({ author: z.string() }) })
+const CHAT_NOTE = `The person is talking to you in the OpenHut app. When several people share you, each message starts with who wrote it. Files they attach are saved in ${UPLOADS} and listed at the end of their message. To give them a file, save it under ${AGENT_HOME} and write its full path in backticks, like \`${AGENT_HOME}/report.csv\`: the app shows it as a file they can download.`
 
 export const threadService = {
   async list({ actor }: { actor: Caller }): Promise<Thread[]> {
@@ -126,7 +127,7 @@ export const threadService = {
     await idle(id)
     const row = await ownRow({ actor, id })
     const agent = await agentService.requireEditable({ actor, id: row.agent_id })
-    const messages = nextMessages({ stored: messagesOf(row), body })
+    const messages = nextMessages({ stored: messagesOf(row), body, author: keysService.account()?.email })
     await save({ id, messages })
     if (agent.wanted !== 'running') throw new HttpError(409, `${agent.name} is stopped. Start it and try again.`)
     if (!runsHere({ row: agent, me: await keysService.deviceKey() })) return elsewhere(reply)
@@ -141,7 +142,7 @@ export const threadService = {
       execute: async ({ writer }) => {
         writer.write({ type: 'start', messageId: answer.message.id })
         const tap = (chunk: UIMessageChunk) => track({ thread: id, answer, chunk })
-        for await (const chunk of joinText(pipeJsonRender(relayed({ agent, session: `openhut-${id}`, message: messages[messages.length - 1], signal: abort.signal, tap })))) writer.write(chunk)
+        for await (const chunk of joinText(pipeJsonRender(relayed({ agent, session: `openhut-${id}`, message: together({ messages, shared: agent.shared }), signal: abort.signal, tap })))) writer.write(chunk)
         const calls = await callsSince({ agentId: agent.id, after: lastCall?.id ?? '0' })
         if (calls.length) writer.write({ type: 'data-calls', data: calls })
         writer.write({ type: 'finish' })
@@ -149,7 +150,7 @@ export const threadService = {
       onError: messageOf,
       onEnd: async ({ messages: answered, isAborted }) => {
         live.delete(id)
-        await save({ id, messages: merged({ stored: await storedOf(id), added: z.safeParse(StoredMessages, answered.map(foldCard)).data ?? [] }) })
+        await save({ id, messages: merged({ stored: await storedOf(id), added: z.safeParse(StoredMessages, answered.map(foldCard)).data ?? [], after: messages.at(-1)?.id }) })
         busy.delete(id)
         log.info({ event: 'agent.chat', agent: agent.id, thread: id, ms: Date.now() - started, aborted: isAborted })
       },
@@ -169,7 +170,7 @@ export const threadService = {
     return value?.agentId ?? (await db.selectFrom('thread').select('agent_id').where('messages', 'like', `%"${id}"%`).executeTakeFirst())?.agent_id ?? ''
   },
 
-  async applySynced({ id, value }: { id: string; value: MessageValue | null }): Promise<void> {
+  async applySynced({ id, value, author }: { id: string; value: MessageValue | null; author?: string | null }): Promise<void> {
     const agentId = await threadService.agentOfMessage({ id, value })
     const agent = await db.selectFrom('agent').selectAll().where('id', '=', agentId).executeTakeFirst()
     const owner = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirst()
@@ -178,7 +179,7 @@ export const threadService = {
     if (!found && !value) return
     const thread = found?.id ?? (await db.insertInto('thread').values({ id: newId('th'), agent_id: agentId, person_id: owner.id, title: agent.name }).returning('id').executeTakeFirstOrThrow()).id
     const stored = await storedOf(thread)
-    const messages = value ? merged({ stored, added: [value.message] }) : stored.filter((message) => message.id !== id)
+    const messages = value ? merged({ stored, added: [authored({ message: value.message, author: value.message.role === 'user' ? author : null })] }) : stored.filter((message) => message.id !== id)
     await save({ id: thread, messages })
     const asks = value?.message.role === 'user' && messages.at(-1)?.id === value.message.id && agent.wanted === 'running'
     if (asks && runsHere({ row: agent, me: await keysService.deviceKey() })) void answerFor({ thread, agent }).catch((err: unknown) => log.warn({ event: 'thread.answer_failed', thread, error: messageOf(err) }))
@@ -212,13 +213,15 @@ async function answerFor({ thread, agent }: { thread: string; agent: AgentRow })
   await idle(thread)
   busy.add(thread)
   const answer: MessageValue = { agentId: agent.id, message: { id: newId('msg'), role: 'assistant', parts: [] } }
+  let asked: string | undefined
   try {
-    const last = (await storedOf(thread)).at(-1)
-    if (last?.role !== 'user') return
-    await relay({ agent, session: `openhut-${thread}`, message: last, signal: AbortSignal.timeout(TURN_MS), writer: { write: (chunk) => track({ thread, answer, chunk }) } })
+    const stored = await storedOf(thread)
+    asked = stored.at(-1)?.role === 'user' ? stored.at(-1)?.id : undefined
+    if (!asked) return
+    await relay({ agent, session: `openhut-${thread}`, message: together({ messages: stored, shared: agent.shared }), signal: AbortSignal.timeout(TURN_MS), writer: { write: (chunk) => track({ thread, answer, chunk }) } })
   } finally {
     live.delete(thread)
-    if (answer.message.parts.length) await save({ id: thread, messages: merged({ stored: await storedOf(thread), added: [answer.message] }) })
+    if (answer.message.parts.length) await save({ id: thread, messages: merged({ stored: await storedOf(thread), added: [answer.message], after: asked }) })
     busy.delete(thread)
   }
 }
@@ -233,9 +236,28 @@ function track({ thread, answer, chunk }: { thread: string; answer: MessageValue
   emit({ name: 'thread.streamed', target: { type: 'stream', id: thread } })
 }
 
-function merged({ stored, added }: { stored: ChatMessage[]; added: ChatMessage[] }): ChatMessage[] {
+function merged({ stored, added, after }: { stored: ChatMessage[]; added: ChatMessage[]; after?: string }): ChatMessage[] {
   const kept = stored.map((message) => added.find((each) => each.id === message.id) ?? message)
-  return [...kept, ...added.filter((message) => !stored.some((each) => each.id === message.id))]
+  const fresh = added.filter((message) => !stored.some((each) => each.id === message.id))
+  const at = after === undefined ? -1 : kept.findIndex((message) => message.id === after)
+  return at < 0 ? [...kept, ...fresh] : [...kept.slice(0, at + 1), ...fresh, ...kept.slice(at + 1)]
+}
+
+function authored({ message, author }: { message: ChatMessage; author: string | null | undefined }): ChatMessage {
+  const { metadata: _, ...rest } = message
+  return author ? { ...rest, metadata: { author } } : rest
+}
+
+function together({ messages, shared }: { messages: ChatMessage[]; shared: boolean }): ChatMessage {
+  const start = messages.findLastIndex((message) => message.role !== 'user') + 1
+  const asked = messages.slice(start)
+  const last = messages[messages.length - 1]
+  if (asked.length < 2 && !shared) return last
+  return { ...last, parts: asked.flatMap((message, index) => {
+    const author = z.safeParse(Authored, message).data?.metadata.author
+    const label = shared && author ? `${author} wrote:\n` : ''
+    return [{ type: 'text', text: `${index ? '\n\n' : ''}${label}` }, ...message.parts]
+  }) }
 }
 
 async function storedOf(id: string): Promise<ChatMessage[]> {
@@ -338,9 +360,9 @@ async function* sseEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<{ na
   }
 }
 
-function nextMessages({ stored, body }: { stored: ChatMessage[]; body: SendChat }): ChatMessage[] {
+function nextMessages({ stored, body, author }: { stored: ChatMessage[]; body: SendChat; author: string | undefined }): ChatMessage[] {
   const kept = body.trigger === 'regenerate-message' ? dropTrailingAnswer(stored) : stored
-  const messages = body.message && body.trigger === 'submit-message' ? [...kept.filter((message) => message.id !== body.message?.id), { ...body.message, role: 'user' as const }] : kept
+  const messages = body.message && body.trigger === 'submit-message' ? [...kept.filter((message) => message.id !== body.message?.id), authored({ message: { ...body.message, role: 'user' }, author })] : kept
   if (messages.at(-1)?.role !== 'user') throw new HttpError(400, 'Send a message first.', { param: 'message' })
   if (body.message) checkFiles(body.message)
   return messages
