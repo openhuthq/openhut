@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 const skip = process.platform !== 'linux' && 'needs /proc (Linux)'
@@ -32,6 +32,17 @@ test('memory: reads a saved file, rewrites it in place, never creates a missing 
   agentHome.write({ id, path: 'memories/MEMORY.md', body: Buffer.from('Depot closes at 18:00') })
   assert.equal(readFileSync(`${root}/memories/MEMORY.md`, 'utf8'), 'Depot closes at 18:00')
   assert.throws(() => agentHome.write({ id, path: 'memories/USER.md', body: Buffer.from('x') }), /not saved/)
+})
+
+test('a synced upload replaces the file of that name in place and keeps the old copy in the trash', () => {
+  mkdirSync(`${root}/home`, { recursive: true })
+  assert.equal(agentHome.write({ id, path: 'home/uploads/report.txt', body: Buffer.from('version one') }), 'home/uploads/report.txt')
+  assert.equal(agentHome.write({ id, path: 'home/uploads/report.txt', body: Buffer.from('version two') }), 'home/uploads/report-2.txt')
+  assert.equal(agentHome.write({ id, path: 'home/uploads/report.txt', body: Buffer.from('version three'), replace: true }), 'home/uploads/report.txt')
+  assert.equal(readFileSync(`${root}/home/uploads/report.txt`, 'utf8'), 'version three')
+  assert.deepEqual(readdirSync(`${root}/home/uploads`).sort(), ['report-2.txt', 'report.txt'])
+  const kept = readdirSync(`${data}/trash`).find((each) => each.endsWith(id))
+  assert.equal(readFileSync(`${data}/trash/${kept}/home/uploads/report.txt`, 'utf8'), 'version one')
 })
 
 test('a skill is rewritten in place, and an empty body is refused', { skip }, () => {

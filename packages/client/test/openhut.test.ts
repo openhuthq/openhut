@@ -28,7 +28,7 @@ function fake(): Fake {
 }
 
 function agent(name: string): Agent {
-  return { id: `ag_${name.toLowerCase()}`, object: 'agent', name, ownerId: 'usr_a', ownerName: 'me', model: 'claude:sonnet', wanted: 'running', status: 'running', health: 'answering', healthDetail: '', summary: '', net: 0, instructions: '', codeExecution: false, browser: false, face: null, canEdit: true, runsHere: true, runsNowhere: false, changedBy: null, workspace: null, shared: false, owner: null, canManage: true, createdAt: AT }
+  return { id: `ag_${name.toLowerCase()}`, object: 'agent', name, ownerId: 'usr_a', ownerName: 'me', model: 'claude:sonnet', wanted: 'running', status: 'running', health: 'answering', healthDetail: '', summary: '', net: 0, instructions: '', codeExecution: false, browser: false, face: null, canEdit: true, runsHere: true, runsNowhere: false, runsOnName: null, changedBy: null, workspace: null, shared: false, owner: null, canManage: true, createdAt: AT }
 }
 
 function connection({ id, kind, name, secret }: { id: string; kind: ConnectionKind; name: string; secret?: string }): Connection & { secret?: string } {

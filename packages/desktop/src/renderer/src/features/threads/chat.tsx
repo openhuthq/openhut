@@ -82,7 +82,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
       {shown.map((message) => <Message key={message.id} agent={agent} message={message} live={busy && message === last} />)}
     </> : <ChatEmpty agent={agent} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
-    {!agent.runsHere && chat.status !== 'submitted' && last?.role === 'user' && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. Run it here to get an answer.` : `Sent to your other computer. ${agent.name} answers when it’s on.`}</p>}
+    {!agent.runsHere && chat.status !== 'submitted' && last?.role === 'user' && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
     {chat.error && <Alert variant="error-outline" role="alert"><span>{chat.error.message}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Retry</Button></Alert>}
   </ChatFrame></CardReply></ChatFiles>
 }

@@ -13,11 +13,13 @@ import { fromBase64, identity, letter, lock, newKey, read, slot, toBase64, type 
 
 const applied: string[] = []
 const calls: string[] = []
+const homeFiles = new Map<string, string>()
+const asked: number[] = []
 createSocket({ allowHalfOpen: true }, (sock) => sock.setEncoding('utf8').once('data', (line: string) => {
-  const req = JSON.parse(line.split('\n')[0] ?? '{}') as { cmd: string; id: string; running?: boolean }
+  const req = JSON.parse(line.split('\n')[0] ?? '{}') as { cmd: string; id: string; running?: boolean; path?: string; paths?: string[] }
   if (req.cmd === 'apply') applied.push(line)
   calls.push(line)
-  const replies: { [cmd: string]: object } = { ps: { states: {} }, health: { firewall: true, imageReady: true }, apply: { applied: req.id, change: 'none' }, rm: { removed: req.id }, read: { body: null }, stat: { files: [] }, write: { path: 'home/x' } }
+  const replies: { [cmd: string]: object } = { ps: { states: {} }, health: { firewall: true, imageReady: true }, apply: { applied: req.id, change: 'none' }, rm: { removed: req.id }, read: { body: req.path && homeFiles.has(req.path) ? Buffer.from(homeFiles.get(req.path) ?? '').toString('base64') : null }, stat: { files: (req.paths ?? []).flatMap((path) => homeFiles.has(path) ? [{ path, size: Buffer.byteLength(homeFiles.get(path) ?? '') }] : []) }, write: { path: req.path } }
   sock.end(JSON.stringify({ ok: true, ...replies[req.cmd] }))
 })).listen(process.env.AGENTD_SOCK).unref()
 
@@ -37,8 +39,10 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '', 'http://room')
   if (room.down) return reply(503, {})
   if (url.pathname.endsWith('/member-lists')) return reply(200, { object: 'list', data: room.lists.slice(Number(url.searchParams.get('after'))), hasMore: false })
+  if (url.pathname.endsWith('/records')) asked.push(Number(url.searchParams.get('after')))
   if (url.pathname.endsWith('/records')) return reply(200, { object: 'list', data: [...room.records.values()].filter((each) => each.seq > Number(url.searchParams.get('after'))).sort((a, b) => a.seq - b.seq), hasMore: false })
   const file = /\/files\/([^/]+)$/.exec(url.pathname)?.[1]
+  if (file && req.method === 'PUT') return reply(200, { id: file, size: room.files.set(file, Buffer.concat(chunks)).get(file)?.length })
   const blob = file && room.files.get(file)
   if (file) return blob ? res.writeHead(200).end(Buffer.from(blob)) : reply(404, {})
   if (url.pathname.endsWith('/letters')) return reply(200, { object: 'list', data: room.letters })
@@ -55,7 +59,8 @@ const server = createServer(async (req, res) => {
     return reply(429, { error: { type: 'rate_limit_error', message: 'Too many requests.' } })
   }
   room.limit--
-  const body = JSON.parse(Buffer.concat(chunks).toString()) as { ver: number; deleted: boolean; body: string }
+  const { file: names, ...body } = JSON.parse(Buffer.concat(chunks).toString()) as { ver: number; deleted: boolean; body: string; file?: string }
+  if (names && !room.files.has(names)) return reply(409, { error: { type: 'invalid_request_error', message: 'Upload it again.', param: 'file' } })
   if (body.ver !== (room.records.get(id)?.ver ?? 0) + 1) return reply(409, { error: { type: 'invalid_request_error', message: 'stale' } })
   room.puts.set(id, (room.puts.get(id) ?? 0) + 1)
   const saved = store({ id, ...body })
@@ -104,6 +109,7 @@ const key = fromBase64(account.workspace.key)
 const helpdeskId = await slot({ key, path: 'agent/ag_helpdesk' })
 const members = roomKeys.members()?.members ?? []
 const me = await keysService.device()
+const lastList = () => JSON.parse(Buffer.from((room.lists.at(-1) as MemberList).bytes, 'base64').toString()) as MemberListBody
 
 async function until(check: () => boolean | Promise<boolean>, what: string, tries = 300): Promise<void> {
   for (let i = 0; i < tries; i++) {
@@ -500,9 +506,12 @@ test('members can’t move an agent or turn on code execution, nobody but the ru
   assert.equal((await messages()).includes('Rewritten'), false)
   assert.equal(calls.slice(writes).some((line) => line.includes('"cmd":"write"') && line.includes('memories/')), false)
 
-  await db.updateTable('agent').set({ runs_on: toBase64((await identity()).publicKey) }).where('id', '=', 'ag_helpdesk').execute()
-  await put({ kind: 'agent', ref: base.id, value: { ...base, name: 'Sara named it', runsOn: toBase64(sara.publicKey) }, signer: sara })
-  await until(async () => (await here()).runs_on === toBase64(sara.publicKey), 'a member to claim an agent whose computer left the list')
+  const gone = toBase64((await identity()).publicKey)
+  await db.updateTable('agent').set({ runs_on: gone }).where('id', '=', 'ag_helpdesk').execute()
+  await overwritten(await put({ kind: 'agent', ref: base.id, value: { ...base, name: 'Sara named it', runsOn: toBase64(sara.publicKey) }, signer: sara }), 'this computer’s copy to replace a member’s claim')
+  assert.equal((await here()).runs_on, gone)
+  await put({ kind: 'agent', ref: base.id, value: { ...base, name: 'Sara named it', runsOn: toBase64(laptop.publicKey) }, signer: laptop })
+  await until(async () => (await here()).runs_on === toBase64(laptop.publicKey), 'the owner’s own device to claim an agent whose computer left the list')
   await db.updateTable('agent').set({ runs_on: null }).where('id', '=', 'ag_helpdesk').execute()
 })
 
@@ -522,7 +531,61 @@ test('a file whose download fails is tried again, and only marked as here once i
   await sleep(500)
   assert.equal(await row(), 'dropped')
   room.files.set(value.blob, locked)
-  await until(async () => calls.slice(writes).some((line) => line.includes('home/uploads/report.csv')) && await row() !== 'dropped', 'the retry to bring the file', 400)
+  await until(async () => calls.slice(writes).some((line) => line.includes('home/uploads/report.csv') && line.includes('"replace":true')) && await row() !== 'dropped', 'the retry to bring the file, replacing any copy of that name', 400)
+})
+
+test('a file the cloud cleared before its record arrived is uploaded again, and a member’s same-name file never replaces the runner’s', async () => {
+  const thread = await db.selectFrom('thread').select(['id', 'messages']).where('agent_id', '=', 'ag_helpdesk').executeTakeFirstOrThrow()
+  const message = { id: 'msg_upload01', role: 'user', parts: [{ type: 'file', url: '/opt/data/home/uploads/gc.txt', mediaType: 'text/plain' }] }
+  const id = await slot({ key, path: 'file/ag_helpdesk/uploads/gc.txt' })
+  homeFiles.set('home/uploads/gc.txt', 'kept through a long sleep')
+  room.beforePut = async (each) => {
+    if (each !== id) return
+    room.beforePut = undefined
+    room.files.clear()
+  }
+  await db.updateTable('thread').set({ messages: JSON.stringify([...JSON.parse(thread.messages) as unknown[], message]) }).where('id', '=', thread.id).execute()
+  syncService.send()
+  await until(() => room.records.has(id), 'the file record to land after a second upload')
+  const opened = async () => {
+    const now = roomKeys.room(workspace)?.workspace
+    const open = await openRecord({ workspace, keys: { 1: key, ...now && { [now.version]: fromBase64(now.key) } }, record: room.records.get(id) as Record, members: roomKeys.members()?.members ?? [] })
+    return open?.kind === 'file' ? open.value : null
+  }
+  const mine = await opened()
+  assert.ok(mine && room.files.has(mine.blob), 'the record names a file the room has')
+
+  const nia = await identity()
+  const current = lastList()
+  const at = Math.max(Date.now(), current.at ?? 0)
+  room.lists.push(await signList({ signer: me, body: { ...current, version: current.version + 1, previous: await anchorOf(room.lists.at(-1) as MemberList), at, members: [...current.members, { email: 'nia@example.com', role: 'member', devices: [toBase64(nia.publicKey)] }], added: { ...current.added, [toBase64(nia.publicKey)]: at } } }))
+  const theirs = new TextEncoder().encode('a different file with the same name')
+  const locked = await lock({ key, version: 1, bind: `workspace/${workspace}/file`, plain: theirs })
+  assert.ok(locked)
+  const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('base64url')
+  room.files.set(hash(locked), locked)
+  const ver = (room.records.get(id)?.ver ?? 0) + 1
+  const sealed = await sealRecord({ workspace, key, version: 1, signer: nia, id, ver, kind: 'file', ref: 'ag_helpdesk/uploads/gc.txt', value: { ...mine, size: theirs.length, sha: hash(theirs), blob: hash(locked) } })
+  assert.ok(sealed)
+  const writes = calls.length
+  push(store({ id, ...sealed }))
+  await until(() => (room.records.get(id)?.ver ?? 0) === ver + 1, 'the runner’s file to go back over a member’s')
+  assert.equal((await opened())?.sha, mine.sha)
+  assert.equal(calls.slice(writes).some((line) => line.includes('"cmd":"write"')), false)
+})
+
+test('a download still pending when the connection comes back is fetched again from its seq', async () => {
+  const plain = new TextEncoder().encode('never uploaded')
+  const value = { agentId: 'ag_helpdesk', path: 'uploads/later.txt', size: plain.length, sha: createHash('sha256').update(plain).digest('base64url'), blob: 'x'.repeat(43) }
+  const id = await slot({ key, path: 'file/ag_helpdesk/uploads/later.txt' })
+  const sealed = await sealRecord({ workspace, key, version: 1, signer: me, id, ver: 1, kind: 'file', ref: 'ag_helpdesk/uploads/later.txt', value })
+  assert.ok(sealed)
+  const saved = store({ id, ...sealed })
+  push(saved)
+  await until(async () => (await db.selectFrom('cloud_record').select('hash').where('id', '=', id).executeTakeFirst())?.hash === 'dropped', 'the download to wait for its file')
+  asked.length = 0
+  for (const ws of sockets) ws.terminate()
+  await until(() => asked.some((after) => after < saved.seq), 'the reconnect to fetch again from before the pending file')
 })
 
 test('a synced delete keeps the agent’s chats in the trash and never wipes their records from the room', async () => {
@@ -551,6 +614,40 @@ test('after Forget, an agent that ran on this computer’s old key still runs he
   await agentService.applySynced({ id: 'ag_lateedit', value: { ...helpdesk('Late'), id: 'ag_lateedit', runsOn: old }, author: { email: 'mo@example.com', role: 'owner' }, workspace: null, me: 'mo@example.com' })
   assert.equal(await runsOn(), null)
   assert.equal((await agentService.get({ actor, id: 'ag_lateedit' })).runsHere, true)
+
+  const lateId = await slot({ key, path: 'agent/ag_lateedit' })
+  const late = (await agentService.synced({ workspace: null, owner: 'mo@example.com' })).find((agent) => agent.id === 'ag_lateedit') as AgentValue
+  const put = async ({ kind, ref, value, signer = me }: { kind: 'agent' | 'message'; ref: string; value: unknown; signer?: Identity }) => {
+    const id = await slot({ key, path: `${kind}/${ref}` })
+    const sealed = await sealRecord({ workspace, key, version: 1, signer, id, ver: (room.records.get(id)?.ver ?? 0) + 1, kind, ref, value })
+    assert.ok(sealed)
+    push(store({ id, ...sealed }))
+    return id
+  }
+  const inRoom = async () => {
+    const now = roomKeys.room(workspace)?.workspace
+    const opened = await openRecord({ workspace, keys: { 1: key, ...now && { [now.version]: fromBase64(now.key) } }, record: room.records.get(lateId) as Record, members: roomKeys.members()?.members ?? [] })
+    return opened?.kind === 'agent' ? opened.value?.runsOn : undefined
+  }
+  await put({ kind: 'agent', ref: 'ag_lateedit', value: { ...late, runsOn: old } })
+  await until(async () => await inRoom() === toBase64(me.publicKey), 'this computer to send the record back naming its new key')
+
+  const fresh = await identity()
+  const current = lastList()
+  const at = Math.max(Date.now(), current.at ?? 0)
+  room.lists.push(await signList({ signer: me, body: { ...current, version: current.version + 1, previous: await anchorOf(room.lists.at(-1) as MemberList), at, members: current.members.map((member) => member.email === 'mo@example.com' ? { ...member, devices: [...member.devices, toBase64(fresh.publicKey)] } : member), added: { ...current.added, [toBase64(fresh.publicKey)]: at } } }))
+  const gone = toBase64((await identity()).publicKey)
+  await db.updateTable('agent').set({ runs_on: gone }).where('id', '=', 'ag_lateedit').execute()
+  syncService.send(['agent'])
+  await until(async () => await inRoom() === gone, 'the room to name a key that left, as the other computers saw it before the fix')
+  const reply = (id: string, text: string) => ({ agentId: 'ag_lateedit', message: { id, role: 'assistant', parts: [{ type: 'text', text }] } })
+  const dropped = await put({ kind: 'message', ref: 'msg_fresh001', value: reply('msg_fresh001', 'Answered before the fix'), signer: fresh })
+  await until(async () => (await db.selectFrom('cloud_record').select('hash').where('id', '=', dropped).executeTakeFirst())?.hash === 'dropped', 'a reply from the new key to be dropped while the agent names the old one')
+  const thread = async () => (await db.selectFrom('thread').select('messages').where('agent_id', '=', 'ag_lateedit').executeTakeFirstOrThrow()).messages
+  await put({ kind: 'agent', ref: 'ag_lateedit', value: { ...late, runsOn: toBase64(fresh.publicKey) }, signer: fresh })
+  await until(async () => (await thread()).includes('Answered before the fix'), 'the dropped reply to come back once the agent names the new key')
+  await put({ kind: 'message', ref: 'msg_fresh002', value: reply('msg_fresh002', 'Answered after the fix'), signer: fresh })
+  await until(async () => (await thread()).includes('Answered after the fix'), 'a new reply signed by the new key to apply')
 })
 
 test('presence: a Here goes out locked at one size, others show until they leave or the socket drops, a Private agent sends nothing, typing is throttled, and a forked list stops letters', async () => {

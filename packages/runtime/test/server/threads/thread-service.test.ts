@@ -9,7 +9,7 @@ import { answerErrors, HttpError } from '../../../src/server/platform/http-error
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { validateWithZod } from '../../../src/server/platform/validation.ts'
 import { threadController } from '../../../src/server/threads/thread-controller.ts'
-import { imageTypeOf, safeFileName, shownCall } from '../../../src/server/threads/thread-service.ts'
+import { imageTypeOf, safeFileName, shownCall, threadService } from '../../../src/server/threads/thread-service.ts'
 
 await migrate()
 await db.insertInto('person').values([
@@ -341,4 +341,13 @@ test('the agent\'s own model and channel calls through the broker are not shown 
   assert.equal(shownCall('telegram POST /bot…/sendMessage'), false)
   assert.equal(shownCall('postgres_query'), true)
   assert.equal(shownCall('github_create_pull_request'), true)
+})
+
+test('a synced message goes in the room’s order: before a local message the room hasn’t placed yet, after the ones it has', async () => {
+  const message = (id: string, text: string) => ({ id, value: { agentId: 'ag_chatstop', message: { id, role: 'user' as const, parts: [{ type: 'text', text }] } } })
+  await threadService.applySynced(message('msg_order001', 'First in the room'))
+  await threadService.applySynced(message('msg_order003', 'Mine, not in the room yet'))
+  await threadService.applySynced({ ...message('msg_order002', 'Theirs, placed before mine'), later: (id) => id === 'msg_order003' })
+  const thread = await db.selectFrom('thread').select('messages').where('agent_id', '=', 'ag_chatstop').executeTakeFirstOrThrow()
+  assert.deepEqual((JSON.parse(thread.messages) as { id: string }[]).map((each) => each.id).filter((id) => id.startsWith('msg_order')), ['msg_order001', 'msg_order002', 'msg_order003'])
 })

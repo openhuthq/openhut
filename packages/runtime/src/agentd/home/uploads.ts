@@ -1,4 +1,5 @@
-import { closeSync, constants, existsSync, fchownSync, fstatSync, lstatSync, mkdirSync, openSync, readlinkSync, readSync, unlinkSync, writeFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
+import { closeSync, constants, existsSync, fchownSync, fstatSync, lstatSync, mkdirSync, openSync, readlinkSync, readSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { openInside } from './skills.ts'
 
@@ -28,6 +29,22 @@ export function saveUpload({ home, name, body, owner }: { home: string; name: st
   const saved = saveNew({ root: home, dir: UPLOADS, names, body, owner })
   if (!saved) throw new Error(`there are already ${MAX_COPIES} files called ${name}`)
   return `${UPLOADS}/${saved}`
+}
+
+export function replaceUpload({ home, name, body, owner, trash }: { home: string; name: string; body: Buffer; owner?: Owner; trash: string }): string {
+  const part = `.openhut-${randomBytes(8).toString('hex')}.part`
+  if (!saveNew({ root: home, dir: UPLOADS, names: [part], body, owner })) throw new Error('the new copy could not be written')
+  within({ dir: home, expected: home, work: (here) => within({ dir: `${here}${UPLOADS}`, expected: `${home}/${UPLOADS}`, work: (uploads) => {
+    try {
+      lstatSync(`${uploads}${name}`)
+      mkdirSync(trash, { recursive: true, mode: 0o700 })
+      renameSync(`${uploads}${name}`, `${trash}/${name}`)
+    } catch (e) {
+      if (!isCode(e, 'ENOENT')) throw e
+    }
+    renameSync(`${uploads}${part}`, `${uploads}${name}`)
+  } }) })
+  return `${UPLOADS}/${name}`
 }
 
 export function saveNew({ root, dir, names, body, owner }: { root: string; dir: string; names: string[]; body: Buffer; owner?: Owner }): string | undefined {

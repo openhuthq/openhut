@@ -32,6 +32,7 @@ export const Agent = z.object({
   canEdit: z.boolean(),
   runsHere: z._default(z.boolean(), true),
   runsNowhere: z._default(z.boolean(), false),
+  runsOnName: z._default(z.nullable(z.string()), null),
   changedBy: z._default(z.nullable(z.string()), null),
   workspace: z._default(z.nullable(z.string()), null),
   shared: z._default(z.boolean(), false),

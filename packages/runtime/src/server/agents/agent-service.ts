@@ -195,7 +195,7 @@ export const agentService = {
   },
 
   async applySynced({ id, value, author, workspace, me, mine = [] }: { id: string; value: AgentValue | null; author: { email: string; role: string; device?: string }; workspace: string | null; me: string; mine?: string[] }): Promise<void> {
-    const row = await db.selectFrom('agent').select(['id', 'instructions', 'changed_by', 'owner', 'runs_on', 'code_execution', 'shared', 'workspace']).where('id', '=', id).executeTakeFirst()
+    const row = await db.selectFrom('agent').select(['id', 'instructions', 'changed_by', 'owner', 'runs_on', 'shared', 'workspace']).where('id', '=', id).executeTakeFirst()
     if (row && !writable({ row, author, workspace, me })) return
     const byOwner = !row || (row.owner ?? me) === author.email
     const limited = row && author.role === 'member' && !byOwner
@@ -207,9 +207,8 @@ export const agentService = {
       await db.deleteFrom('agent').where('id', '=', id).execute()
       return emit({ name: 'agent.synced', target: { type: 'agent', id } })
     }
-    const unassigned = !!row?.runs_on && !listed({ device: row.runs_on, workspace: row.workspace })
     const placed = value.runsOn && (author.email === me || !mine.includes(value.runsOn)) ? value.runsOn : row ? row.runs_on : author.device ?? null
-    const kept = limited ? { runs_on: unassigned ? placed : row.runs_on, code_execution: row.code_execution } : { runs_on: placed, code_execution: value.codeExecution }
+    const kept = { runs_on: placed, code_execution: value.codeExecution }
     const owned = byOwner ? { owner: value.owner && value.owner !== me ? value.owner : null, shared: Boolean(value.shared) } : { owner: row.owner, shared: row.shared }
     const changedBy = !row || row.instructions !== value.instructions ? author.email : row.changed_by
     const former = kept.runs_on !== null && settings.formerDevices().includes(kept.runs_on)
@@ -454,9 +453,16 @@ function requireRole({ row, patch }: { row: AgentRow; patch: UpdateAgent }): voi
 function agentOf({ row, ownerName, state, health, editable, here }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean; here: boolean }): Agent {
   return {
     id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, wanted: row.wanted,
-    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, browser: row.web_browser, face: row.face, canEdit: editable, runsHere: here, runsNowhere: !here && !!row.runs_on && !listed({ device: row.runs_on, workspace: row.workspace }), changedBy: row.changed_by,
+    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, browser: row.web_browser, face: row.face, canEdit: editable, runsHere: here, runsNowhere: !here && !!row.runs_on && !listed({ device: row.runs_on, workspace: row.workspace }), runsOnName: here ? null : runnerName(row), changedBy: row.changed_by,
     workspace: row.workspace, shared: row.shared, owner: row.owner, canManage: canManage(row), createdAt: new Date(row.created_at).toISOString(),
   }
+}
+
+function runnerName(row: Pick<AgentRow, 'runs_on' | 'workspace'>): string | null {
+  const list = roomKeys.members(row.workspace ?? undefined)
+  const member = list?.members.find((each) => row.runs_on && each.devices.includes(row.runs_on))
+  if (!member || !row.runs_on || member.email === keysService.account()?.email) return null
+  return list?.names?.[row.runs_on] ?? `${member.email}’s computer`
 }
 
 function statusOf(state: string | undefined): AgentStatus {
