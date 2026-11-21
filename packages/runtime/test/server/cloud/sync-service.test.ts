@@ -171,9 +171,13 @@ test('a record placed at another record’s slot is dropped, then overwritten wi
   push(store(await remote({ name: 'Wrong slot', id: usageSlot })))
   await until(() => (room.records.get(usageSlot)?.ver ?? 0) === ver + 2, 'the setting to be backed up over it')
   assert.equal(await nameHere(), 'After a gap')
+  await until(() => syncService.status().state === 'idle', 'the overwrite’s backup to finish')
+  await sleep(500)
+  await syncService.settled()
 })
 
 test('a value that doesn’t fit is never reported backed up, and the backup is retried once it is fixed', async () => {
+  await syncService.settled()
   const at = syncService.status().at
   await db.insertInto('agent').values({ id: 'ag_toolong1', name: 'x'.repeat(41), owner_id: actor.id, instructions: '', model: 'claude:sonnet', net: 9, channel_key: seal('k'.repeat(32)), shared: true }).execute()
   syncService.send()
