@@ -83,6 +83,13 @@ presence.wire({
     s.socket.send(text)
     return true
   },
+  catchUp: (ws) => {
+    const s = states.get(ws)
+    if (s?.ready) void run(async () => {
+      await roomKeys.refresh({ ws, call: s.call })
+      await catchUp(s)
+    })
+  },
 })
 
 listen((event) => {
@@ -242,6 +249,8 @@ function heard(s: State, text: string): void {
   if (message?.type === 'members' || message?.type === 'letter') void run(async () => {
     const keyless = syncService.waiting(s.ws)
     const { changed } = await roomKeys.refresh({ ws: s.ws, call: s.call })
+    const list = roomKeys.members(s.ws)
+    if (message.type === 'members' && list) presence.members({ ws: s.ws, emails: list.members.map((member) => member.email) })
     if (message.type === 'members') await asked(s)
     if (keyless && !syncService.waiting(s.ws)) await named(s).then(() => catchUp(s))
     if (changed) send(s, keyless ? SYNCED : ['connection'])

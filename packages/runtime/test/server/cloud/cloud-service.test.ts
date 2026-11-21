@@ -5,7 +5,7 @@ import { createServer } from 'node:http'
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64, identity, newKey, toBase64 } from '@openhut/common/vault/vault.ts'
 
-const account = { signer: undefined as string | undefined, boxes: new Map<string, { body: string; by: string; signature: string }>(), hideWorkspaces: false, failBoxes: 0, refuseLetters: false }
+const account = { signer: undefined as string | undefined, boxes: new Map<string, { body: string; by: string; signature: string }>(), hideWorkspaces: false, failBoxes: 0, refuseLetters: false, names: [] as string[], refuseName: false }
 let authorization = ''
 const cloud = createServer(async (req, res) => {
   const chunks: Buffer[] = []
@@ -41,6 +41,10 @@ const cloud = createServer(async (req, res) => {
     return reply(200, { object: 'key_box', kind, deleted: true })
   }
   if (/^\/v1\/workspaces\/[^/]+\/members$/.test(req.url ?? '') && req.method === 'PUT') account.signer = (JSON.parse(Buffer.from(body.bytes ?? '', 'base64url').toString()) as { members: { kit?: string }[] }).members[0]?.kit
+  if (/^\/v1\/workspaces\/[^/]+$/.test(req.url ?? '') && req.method === 'PATCH') {
+    account.names.push(body.name ?? '')
+    return account.refuseName ? reply(400, { error: { type: 'invalid_request_error', message: 'Send the name locked.' } }) : reply(200, body)
+  }
   if (/^\/v1\/workspaces\/[^/]+\/letters$/.test(req.url ?? '') && req.method === 'GET' && account.refuseLetters) return reply(403, { error: { type: 'permission_error', message: 'Not a member.' } })
   if (/^\/v1\/workspaces\/[^/]+\/(members|letters)$/.test(req.url ?? '') && req.method !== 'GET') return reply(200, body)
   reply(404, { error: { type: 'invalid_request_error', message: 'none' } })
@@ -117,6 +121,17 @@ test('a stored move another Mac’s rotation made stale is refused and dropped, 
   await cloudService.changeKeys({ workspace: account0.workspace.id })
   assert.deepEqual(keysService.moves(), [])
   assert.equal(account.signer, toBase64((await accountDevice(fromBase64(keysService.account()?.key ?? ''))).publicKey))
+})
+
+test('a new workspace sends its name locked, and a name the cloud refuses is an error, not a workspace with the default name', async () => {
+  const made = await cloudService.create({ name: 'Support' })
+  const sent = account.names.at(-1) ?? ''
+  assert.notEqual(sent, 'Support')
+  assert.equal(sent.includes('Support'), false)
+  assert.equal(await roomKeys.openName({ ws: made.id, locked: sent }), 'Support')
+  account.refuseName = true
+  await assert.rejects(cloudService.create({ name: 'Sales' }), (err: Error & { status?: number }) => err.status === 502 && /didn’t name the workspace \(HTTP 400\)/.test(err.message))
+  account.refuseName = false
 })
 
 test('a locked Mac whose device key was removed stops pairing at once, gets a new device key, and asks to sign in again', async () => {

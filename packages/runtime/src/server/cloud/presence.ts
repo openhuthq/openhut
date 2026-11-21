@@ -11,7 +11,7 @@ const TYPING_LIFE_MS = 8000
 const TICK_MS = 1000
 
 export type HereContext = { workspace: string; key: Bytes; version: number; keys: Record<number, Bytes>; me: string; members: Member[]; email: string; seq: number; log: string; list: number; listHash: string }
-export type HereIo = { rooms: () => string[]; roomOf: (agent: string) => Promise<string | null>; context: (ws: string) => Promise<HereContext | null>; send: (input: { ws: string; text: string }) => boolean }
+export type HereIo = { rooms: () => string[]; roomOf: (agent: string) => Promise<string | null>; context: (ws: string) => Promise<HereContext | null>; send: (input: { ws: string; text: string }) => boolean; catchUp: (ws: string) => void }
 type Seen = { email: string; agent: string | null; field: HereField | null; typing: boolean; since: number; heardAt: number; typingAt: number; sentAt: number }
 type State = Pick<SetHere, 'agent' | 'field' | 'typing'>
 type Last = { state: State; at: number }
@@ -21,6 +21,7 @@ let mine: SetHere & { ws: string | null; postedAt: number; since: number | null 
 const sent = new Map<string, Last>()
 const seen = new Map<string, Map<string, Seen>>()
 const suspects = new Map<string, number>()
+const behind = new Map<string, { list: number; seq: number }>()
 const mismatched = new Map<string, Set<string>>()
 
 let ticking: Promise<void> = Promise.resolve()
@@ -41,11 +42,18 @@ export const presence = {
   },
 
   ready(ws: string): void {
+    if (mine.ws === ws) mine.since = null
     stale(ws)
   },
 
   closed(ws: string): void {
+    if (mine.ws === ws) mine.since = null
     if (seen.delete(ws)) changed()
+  },
+
+  members({ ws, emails }: { ws: string; emails: string[] }): void {
+    const left = [...mismatched.get(ws) ?? []].filter((email) => !emails.includes(email))
+    for (const email of left) flag({ ws, email, on: false })
   },
 
   gone({ ws, from }: { ws: string; from: string }): void {
@@ -82,6 +90,7 @@ export const presence = {
   forget(): void {
     seen.clear()
     sent.clear()
+    behind.clear()
     for (const ws of mismatched.keys()) cloud.hold({ workspace: ws, on: false })
     mismatched.clear()
     changed()
@@ -92,13 +101,25 @@ function compare({ ws, from, email, value, ctx }: { ws: string; from: string; em
   const forked = value.list === ctx.list && value.listHash !== ctx.listHash
   const split = value.seq === ctx.seq && value.log !== ctx.log
   const key = `${ws}/${from}`
-  const confirmed = forked || (split && suspects.get(key) === value.seq)
+  const ahead = value.list > ctx.list || value.seq > ctx.seq
+  const earlier = behind.get(key)
+  const lagging = ahead && Boolean(earlier && (ctx.list < earlier.list || ctx.seq < earlier.seq))
+  const confirmed = forked || lagging || (split && suspects.get(key) === value.seq)
   if (split) suspects.set(key, value.seq)
   else suspects.delete(key)
+  if (ahead) {
+    behind.set(key, { list: value.list, seq: value.seq })
+    io?.catchUp(ws)
+  } else behind.delete(key)
+  if (confirmed) flag({ ws, email, on: true })
+  else if (!split && value.list === ctx.list) flag({ ws, email, on: false })
+}
+
+function flag({ ws, email, on }: { ws: string; email: string; on: boolean }): void {
   const emails = mismatched.get(ws) ?? new Set<string>()
   const was = emails.size
-  if (confirmed) emails.add(email)
-  else if (!split && value.list === ctx.list) emails.delete(email)
+  if (on) emails.add(email)
+  else emails.delete(email)
   if (emails.size) mismatched.set(ws, emails)
   else mismatched.delete(ws)
   if (Boolean(was) !== Boolean(emails.size)) cloud.hold({ workspace: ws, on: emails.size > 0 })

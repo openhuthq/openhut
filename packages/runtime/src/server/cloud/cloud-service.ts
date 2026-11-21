@@ -147,7 +147,8 @@ export const cloudService = {
       await roomKeys.dropRoom(id)
       throw new HttpError(502, `OpenHut Cloud didn’t make the workspace (HTTP ${made.status}). Try again.`)
     }
-    await cloud.room({ method: 'PATCH', workspace: id, path: '', token, body: { name: await roomKeys.lockName({ ws: id, name }) } })
+    const named = await cloud.room({ method: 'PATCH', workspace: id, path: '', token, body: { name: await roomKeys.lockName({ ws: id, name }) } })
+    if (named.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t name the workspace (HTTP ${named.status}). Try again.`)
     syncService.connect()
     await syncService.refreshName(id)
     const view = (await cloudService.status()).workspaces.find((each) => each.id === id)

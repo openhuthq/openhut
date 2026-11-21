@@ -23,7 +23,7 @@ createSocket({ allowHalfOpen: true }, (sock) => sock.setEncoding('utf8').once('d
   sock.end(JSON.stringify({ ok: true, ...replies[req.cmd] }))
 })).listen(process.env.AGENTD_SOCK).unref()
 
-const room = { log: [] as Record[], records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>), limit: Infinity, refused: 0, reject: new Set<string>(), rejected: 0, letters: [] as Letter[], files: new Map<string, Uint8Array>(), heres: [] as string[], gone: undefined as undefined | { ws: string; status: number; json: unknown } }
+const room = { log: [] as Record[], records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>), limit: Infinity, refused: 0, reject: new Set<string>(), rejected: 0, letters: [] as Letter[], files: new Map<string, Uint8Array>(), heres: [] as string[], gone: undefined as undefined | { ws: string; status: number; json: unknown }, onReady: undefined as undefined | ((ws: WebSocket) => void) }
 const sockets = new Set<WebSocket>()
 const store = (record: Omit<Record, 'seq' | 'object'>): Record => {
   const saved = { ...record, object: 'record' as const, seq: ++room.seq }
@@ -79,6 +79,7 @@ new WebSocketServer({ server }).on('connection', (ws) => {
     }
     sockets.add(ws)
     ws.send(JSON.stringify({ type: 'ready', version: 1 }))
+    room.onReady?.(ws)
   })
   ws.on('close', () => sockets.delete(ws))
 })
@@ -681,7 +682,7 @@ test('after Forget, an agent that ran on this computer’s old key still runs he
   await until(async () => (await thread()).includes('Answered after the fix'), 'a new reply signed by the new key to apply')
 })
 
-test('presence: a Here goes out locked at one size, others show until they leave or the socket drops, a Private agent sends nothing, typing is throttled, and a forked list stops letters', async () => {
+test('presence: a Here goes out locked at one size, others show until they leave or the socket drops, a Private agent sends nothing, typing is throttled, a forked or withheld list or log stops letters until it agrees or the person leaves, and the lock has one holder after a room restart', async () => {
   const { cloud } = await import('../../../src/server/platform/cloud.ts')
   await db.insertInto('agent').values({ id: 'ag_together', name: 'Together', owner_id: actor.id, instructions: '# Together', model: 'claude:sonnet', net: 246, channel_key: seal('k'.repeat(32)), shared: true }).execute()
   const ana = await identity()
@@ -697,11 +698,17 @@ test('presence: a Here goes out locked at one size, others show until they leave
     return { version: found?.version ?? 1, keys: Object.fromEntries([...Object.entries(found?.old ?? {}), [String(found?.version), found?.key ?? '']].map(([version, value]) => [Number(version), fromBase64(value)])) }
   }
   const mine = async (body: string | undefined) => openHere({ workspace, keys: keys().keys, from: toBase64(me.publicKey), body: body ?? '' })
-  const asLena = async (value: Partial<HereValue>) => {
+  const lenaHere = async (value: Partial<HereValue>) => {
     const { version, keys: all } = keys()
-    const body = await lockHere({ workspace, key: all[version], version, from: anaKey, value: { agent: 'ag_together', field: 'instructions', typing: true, at: Date.now(), seq: 0, log: '', list: 0, listHash: '', ...value } })
+    return lockHere({ workspace, key: all[version], version, from: anaKey, value: { agent: 'ag_together', field: 'instructions', typing: true, at: Date.now(), seq: 0, log: '', list: 0, listHash: '', ...value } })
+  }
+  const asLena = async (value: Partial<HereValue>) => {
+    const body = await lenaHere(value)
+    await sleep(2)
     for (const ws of sockets) ws.send(JSON.stringify({ type: 'here', from: anaKey, at: Date.now(), body }))
   }
+  const mismatch = () => syncService.presence().mismatch.some((each) => each.email === 'lena@example.com')
+  const letters = () => cloud.room({ method: 'POST', workspace, path: '/letters', token: 'session', body: {} })
   const people = () => syncService.presence().people
 
   await syncService.here({ agent: 'ag_together', field: 'instructions', typing: false })
@@ -731,7 +738,41 @@ test('presence: a Here goes out locked at one size, others show until they leave
   await until(() => syncService.presence().mismatch.length === 0, 'the mismatch to clear when the lists agree')
   assert.equal((await cloud.room({ method: 'POST', workspace, path: '/letters', token: 'session', body: {} })).status, 200)
 
+  const listNow = { list: next.version, listHash: await anchorOf(room.lists.at(-1) as MemberList) }
+  const askedBefore = asked.length
+  await asLena({ ...listNow, seq: room.seq + 5 })
+  await until(() => asked.length > askedBefore, 'a catch-up when Lena’s log is ahead of mine')
+  assert.equal(mismatch(), false, 'one Here ahead is only behind')
+  await asLena({ ...listNow, seq: room.seq + 6 })
+  await until(mismatch, 'a mismatch when the cloud still withholds the log tail on Lena’s next Here')
+  await assert.rejects(letters(), /history doesn’t match/)
+  await asLena({ ...listNow, seq: 0 })
+  await until(() => !mismatch(), 'the mismatch to clear once Lena isn’t ahead')
+  assert.equal((await letters()).status, 200)
+
   await until(() => people().length === 1, 'Lena back')
+  await syncService.here({ agent: 'ag_together', field: 'instructions', typing: false })
+  await until(() => syncService.presence().since !== null, 'my place on the field')
+  const restart = Date.now()
+  const waiting = await lenaHere({ typing: false })
+  room.onReady = (ws) => {
+    room.onReady = undefined
+    ws.send(JSON.stringify({ type: 'here', from: anaKey, at: Date.now(), body: waiting }))
+  }
+  for (const ws of sockets) ws.terminate()
+  await until(() => (syncService.presence().since ?? 0) >= restart, 'my place on the field to come from the room again after the restart', 600)
+  const lena = people().find((each) => each.email === 'lena@example.com')
+  assert.ok(lena && lena.since < (syncService.presence().since ?? 0), 'Lena got back on the field first, so she holds the lock on every computer')
+
+  await asLena({ list: next.version + 1, listHash: 'y'.repeat(43) })
+  await asLena({ list: next.version + 1, listHash: 'y'.repeat(43) })
+  await until(mismatch, 'a mismatch when the cloud withholds the newer member list Lena has')
+  const withLena = lastList()
+  const at2 = Math.max(Date.now(), withLena.at ?? 0)
+  room.lists.push(await signList({ signer: me, body: { ...withLena, version: withLena.version + 1, previous: await anchorOf(room.lists.at(-1) as MemberList), at: at2, members: withLena.members.filter((member) => member.email !== 'lena@example.com'), removed: [...withLena.removed, anaKey], added: Object.fromEntries(Object.entries(withLena.added ?? {}).filter(([device]) => device !== anaKey)) } }))
+  for (const ws of sockets) ws.send(JSON.stringify({ type: 'members' }))
+  await until(() => !mismatch(), 'the mismatch to clear once Lena is off the member list')
+
   for (const ws of sockets) ws.terminate()
   await until(() => people().length === 0, 'presence to clear when the socket drops')
 })
