@@ -3,6 +3,7 @@ import type { Selectable } from 'kysely'
 import * as z from 'zod/mini'
 import { type Agent, type CreateAgent, type AgentHealth, type AgentImport, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import type { Export } from '@openhut/common/admin/admin.ts'
+import type { AgentValue } from '@openhut/common/cloud/record.ts'
 import type { Deleted } from '@openhut/common/api.ts'
 import { ChannelKind } from '@openhut/common/channels/channel.ts'
 import { splitModelKey } from '@openhut/common/models/provider.ts'
@@ -167,6 +168,27 @@ export const agentService = {
       await db.deleteFrom('agent').where('id', '=', row.id).execute()
       throw err
     }
+  },
+
+  async synced(): Promise<AgentValue[]> {
+    const rows = await db.selectFrom('agent').selectAll().orderBy('created_at').execute()
+    return rows.map((row) => ({ id: row.id, name: row.name, instructions: row.instructions, model: row.model, face: row.face, codeExecution: row.code_execution, wanted: row.wanted }))
+  },
+
+  async applySynced({ id, value }: { id: string; value: AgentValue | null }): Promise<void> {
+    const row = await db.selectFrom('agent').select('id').where('id', '=', id).executeTakeFirst()
+    if (!value) {
+      if (row) await agentd.remove({ id })
+      await db.deleteFrom('agent').where('id', '=', id).execute()
+      return
+    }
+    const fields = { name: value.name, instructions: value.instructions, model: value.model, face: value.face, code_execution: value.codeExecution, wanted: value.wanted }
+    if (row) await db.updateTable('agent').set(fields).where('id', '=', id).execute()
+    else {
+      const owner = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirstOrThrow()
+      await db.insertInto('agent').values({ id, ...fields, owner_id: owner.id, net: await freeNet(), channel_key: seal(randomBytes(24).toString('hex')) }).execute()
+    }
+    await agentService.reapply({ id })
   },
 
   async reapply({ id }: { id: string }): Promise<void> {

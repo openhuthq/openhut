@@ -193,3 +193,12 @@ test('after an admin fills removed to its cap, only the owner may prune it, and 
   assert.ok((await add({ ...withoutPhone, members: [first.members[0], admin], removed: [key(saraPhone), key(saraMac)] }, adminMac)).ok)
   assert.ok((await add({ ...withoutPhone, members: [...withSara([key(saraMac), full[0]]), admin], removed: [key(saraPhone)] }, saraMac)).ok)
 })
+
+test('only an owner or admin moves the key version, and never back', async () => {
+  const { version: _v, previous: _p, ...rest } = first
+  assert.equal((await check({ anchor, chain: [v1, await next({ ...rest, keyVersion: 2 })] }))?.keyVersion, 2)
+  assert.equal(await check({ anchor, chain: [v1, await next({ ...rest, keyVersion: 2 }, saraMac)] }), null)
+  const bumped = await signList({ signer: moMac, body: { ...first, keyVersion: 3 } })
+  const down = await signList({ signer: moMac, body: { ...first, version: 2, previous: await anchorOf(bumped), keyVersion: 2 } })
+  assert.equal(await check({ anchor: await anchorOf(bumped), chain: [bumped, down] }), null)
+})

@@ -7,6 +7,7 @@ import { DropdownMenuItem, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { Glyph } from '@/components/glyph'
 import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
+import { BackupCard } from '@/features/cloud/backup-card'
 import { agentPath } from '@/app/routes'
 import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
@@ -59,6 +60,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
       {!contacts.length && <p className="m-0 px-2.5 py-2 text-[13px] text-mute">No agents yet</p>}
     </nav>
     <footer className="mt-auto flex flex-col items-start gap-2 px-3 pt-2 pb-3">
+      <BackupCard />
       <UpdateEverything />
       <div className="flex w-full items-center gap-2">
         <Gear />

@@ -65,14 +65,6 @@ function recordMessage({ bind, bytes }: { bind: string; bytes: Bytes }): Bytes {
   return concat([new TextEncoder().encode('openhut/record\0'), field(bind), bytes])
 }
 
-export const RecordBody = z.object({
-  change: Id,
-  kind: RecordKind,
-  counter: z.number().check(z.int(), z.minimum(1)),
-  value: z.unknown(),
-})
-export type RecordBody = z.infer<typeof RecordBody>
-
 export const Letter = z.object({
   id: Id,
   object: z.literal('letter'),
@@ -101,6 +93,7 @@ export const MemberListBody = z.object({
   members: z.array(Member).check(z.minLength(1), z.maxLength(500)),
   invites: z.array(PendingInvite).check(z.maxLength(100)),
   removed: z.array(DeviceKey).check(z.maxLength(5000)),
+  keyVersion: z.optional(Version),
 })
 export type MemberListBody = z.infer<typeof MemberListBody>
 
@@ -180,7 +173,17 @@ export type CloudSession = z.infer<typeof CloudSession>
 export const SignedRequest = z.object({ signedAt: z.number().check(z.int()), signature: Signature })
 export type SignedRequest = z.infer<typeof SignedRequest>
 
-export const CLOUD_STATUSES = ['off', 'on', 'offline'] as const
+export const CLOUD_STATUSES = ['off', 'on', 'offline', 'locked'] as const
+export const Backup = z.object({
+  state: z.enum(['idle', 'backing_up', 'restoring']),
+  done: z.number(),
+  total: z.number(),
+  current: z.nullable(z.string()),
+  at: z.nullable(Timestamp),
+  agent: z.nullable(z.string()),
+})
+export type Backup = z.infer<typeof Backup>
+
 export const Cloud = z.object({
   object: z.literal('cloud'),
   status: z.enum(CLOUD_STATUSES),
@@ -189,6 +192,7 @@ export const Cloud = z.object({
   workspace: z.nullable(z.object({ id: Id, version: Version, members: z.array(Member) })),
   keyStore: z.enum(['keychain', 'file']),
   kit: z.nullable(z.object({ savedAt: Timestamp })),
+  backup: Backup,
 })
 export type Cloud = z.infer<typeof Cloud>
 
@@ -203,3 +207,6 @@ export type RecoveryKit = z.infer<typeof RecoveryKit>
 
 export const ConfirmRecoveryKit = z.object({ words: z.array(z.string().check(z.maxLength(40))).check(z.maxLength(12)) })
 export type ConfirmRecoveryKit = z.infer<typeof ConfirmRecoveryKit>
+
+export const UnlockCloud = z.object({ words: z.array(z.string().check(z.maxLength(40))).check(z.length(12)) })
+export type UnlockCloud = z.infer<typeof UnlockCloud>

@@ -1,0 +1,84 @@
+import * as z from 'zod/mini'
+import { Wanted } from '../agents/agent.ts'
+import { ConnectionKind } from '../connections/connection.ts'
+import { ModelKey, ProviderId, ProviderModel } from '../models/provider.ts'
+import { checkRecord, DeviceKey, Locked, parseJson, recordBind, Signed, signRecord, type Member, type Record as CloudRecord } from './cloud.ts'
+import { fromBase64, lock, newKey, toBase64, unlock, type Bytes, type Identity } from '../vault/vault.ts'
+
+export const AgentValue = z.object({
+  id: z.string().check(z.regex(/^ag_[a-z0-9]{8}$/)),
+  name: z.string().check(z.minLength(1), z.maxLength(40)),
+  instructions: z.string().check(z.maxLength(20_000)),
+  model: ModelKey,
+  face: z.nullable(z.string().check(z.maxLength(60_000))),
+  codeExecution: z.boolean(),
+  wanted: Wanted,
+})
+export type AgentValue = z.infer<typeof AgentValue>
+
+export const SettingValue = z.discriminatedUnion('name', [
+  z.object({ name: z.literal('time_zone'), value: z.string().check(z.maxLength(64)) }),
+  z.object({ name: z.literal('usage_data'), value: z.boolean() }),
+  z.object({ name: z.literal('models'), value: z.array(z.object({ provider: ProviderId, at: z.string().check(z.maxLength(40)), models: z.array(ProviderModel).check(z.maxLength(2000)) })).check(z.maxLength(10)) }),
+])
+export type SettingValue = z.infer<typeof SettingValue>
+
+export const ConnectionValue = z.object({
+  id: z.string().check(z.regex(/^con_[a-z0-9]{8}$/)),
+  kind: ConnectionKind,
+  name: z.string().check(z.maxLength(100)),
+  keys: z.array(z.object({ to: DeviceKey, body: Locked })).check(z.maxLength(50)),
+})
+export type ConnectionValue = z.infer<typeof ConnectionValue>
+
+export const SYNCED = ['agent', 'setting', 'connection'] as const
+export type Synced = (typeof SYNCED)[number]
+export type Opened =
+  | { kind: 'agent'; ref: string; value: AgentValue | null; by: string }
+  | { kind: 'setting'; ref: string; value: SettingValue | null; by: string }
+  | { kind: 'connection'; ref: string; value: ConnectionValue | null; by: string }
+export type Sealed = { ver: number; deleted: boolean; body: string }
+
+const ADMIN_ONLY: Synced[] = ['setting', 'connection']
+const VALUES = { agent: AgentValue, setting: SettingValue, connection: ConnectionValue }
+const Body = z.object({
+  change: z.string().check(z.length(16)),
+  kind: z.enum(SYNCED),
+  counter: z.number().check(z.int(), z.minimum(1)),
+  ref: z.string().check(z.minLength(1), z.maxLength(64)),
+  value: z.unknown(),
+})
+const text = new TextEncoder()
+const words = new TextDecoder()
+
+export function refOf(opened: Opened): string | null {
+  if (!opened.value) return null
+  return opened.kind === 'setting' ? opened.value.name : opened.value.id
+}
+
+export async function sealRecord({ workspace, key, version, signer, id, ver, kind, ref, value }: {
+  workspace: string; key: Bytes; version: number; signer: Identity; id: string; ver: number; kind: Synced; ref: string; value: unknown
+}): Promise<Sealed | null> {
+  const bytes = text.encode(JSON.stringify({ change: toBase64(newKey(12)), kind, counter: ver, ref, value }))
+  const signed = await signRecord({ signer, bind: recordBind({ workspace, id, kind }), bytes })
+  const locked = await lock({ key, version, bind: lockBind({ workspace, id }), plain: text.encode(JSON.stringify(signed)) })
+  return locked && { ver, deleted: value === null, body: toBase64(locked) }
+}
+
+export async function openRecord({ workspace, keys, record, members }: { workspace: string; keys: Record<number, Bytes>; record: CloudRecord; members: Member[] }): Promise<Opened | null> {
+  const plain = await unlock({ keys, bind: lockBind({ workspace, id: record.id }), locked: fromBase64(record.body) })
+  const signed = plain && Signed.safeParse(parseJson(words.decode(plain))).data
+  const author = signed && members.find((member) => member.devices.includes(signed.by))
+  if (!signed || !author) return null
+  const head = Body.safeParse(parseJson(words.decode(fromBase64(signed.bytes)))).data
+  if (!head || (ADMIN_ONLY.includes(head.kind) && author.role === 'member')) return null
+  const bytes = await checkRecord({ signed, bind: recordBind({ workspace, id: record.id, kind: head.kind }) })
+  const value = head.value === null ? null : VALUES[head.kind].safeParse(head.value).data
+  const opened = { kind: head.kind, ref: head.ref, value: value ?? null, by: signed.by } as Opened
+  const fits = value !== undefined && head.counter === record.ver && record.deleted === (value === null) && (value === null || refOf(opened) === head.ref)
+  return bytes && fits ? opened : null
+}
+
+function lockBind({ workspace, id }: { workspace: string; id: string }): string {
+  return `workspace/${workspace}/record/${id}`
+}

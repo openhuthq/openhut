@@ -1,4 +1,5 @@
-import { LaptopIcon, SquareLock02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
+import { CloudUploadIcon, LaptopIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
+import type { Backup } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Status } from '@/components/kit'
@@ -8,7 +9,7 @@ import { CloudOff, NeedsCloud, SaveKit, TurnOn } from '@/features/cloud/sign-in'
 import { HERE } from '@/features/settings/desktop'
 import { WORDS } from '@/lib/platform'
 import { Intro, Row, Rows } from '@/features/settings/kit'
-import { shortDate } from '@/lib/format'
+import { ago, shortDate } from '@/lib/format'
 import { open, useOpen, useSearch } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 
@@ -30,7 +31,7 @@ export function CloudSettings() {
       {data.status === 'on' ? <Status tone="on">On</Status> : <Status tone="wait">Offline</Status>}
     </div>
     <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
-      <div className="flex items-center gap-3 px-4 py-3"><I icon={UserGroupIcon} size={18} className="text-hue-blue" /><span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Your workspace</span><span className="text-[12px] text-mute">{data.workspace?.members.length === 1 ? 'Just you' : `${data.workspace?.members.length ?? 0} people`} · nothing syncs yet</span></span></div>
+      <div className="flex items-center gap-3 px-4 py-3"><I icon={CloudUploadIcon} size={18} className="text-hue-blue" /><span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Backup</span><span className="text-[12px] text-mute">{backupNote(data.backup)}</span></span></div>
       <div className="flex items-center gap-3 px-4 py-3"><I icon={SquareLock02Icon} size={18} className="text-hue-amber" /><span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Only your devices can read it</span><span className="text-[12px] text-mute">{data.kit ? `Recovery kit saved ${shortDate.format(new Date(data.kit.savedAt))}` : 'No recovery kit'}</span></span><Button type="button" variant="secondary" className={PILL} onClick={() => open('kit')}>{data.kit ? 'Make a new kit' : 'Save a kit'}</Button></div>
     </div>
     <div className="flex items-center gap-4 px-1">
@@ -72,6 +73,12 @@ export function CloudDevices() {
         : <Row icon={<I icon={LaptopIcon} size={20} className="text-hue-green" />} title={WORDS.thisComputer} note={`In your workspace. ${store}`}><span className="text-[12px] text-mute">You're on it now</span></Row>}
     </Rows>
   </>
+}
+
+function backupNote({ state, done, total, at }: Backup): string {
+  if (state === 'backing_up') return `Backing up · ${done} of ${total}`
+  if (state === 'restoring') return 'Restoring…'
+  return at ? `Up to date · ${ago(at)} ago` : `Agents and settings, locked on this ${HERE} first`
 }
 
 function Google() {

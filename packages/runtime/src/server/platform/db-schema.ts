@@ -26,4 +26,5 @@ export interface Database {
     id: Generated<string>; at: Timestamp; agent_id: string; connection_id: string | null; tool: string; reason: string
     outcome: 'allowed' | 'denied' | 'failed'; ms: number
   }
+  cloud_record: { id: string; kind: string; ref: string; ver: number; hash: string }
 }

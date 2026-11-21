@@ -4,9 +4,29 @@ import { request } from '@/lib/api-client'
 
 const CLOUD_KEY = ['cloud']
 const OFFLINE_POLL_MS = 5000
+const BUSY_POLL_MS = 700
+const SHOW_DONE_MS = 60_000
 
 export function useCloud() {
-  return useQuery({ queryKey: CLOUD_KEY, queryFn: () => request({ schema: Cloud, computer: 'local', path: '/api/cloud' }), refetchInterval: (query) => query.state.data?.status === 'offline' ? OFFLINE_POLL_MS : false })
+  return useQuery({ queryKey: CLOUD_KEY, queryFn: () => request({ schema: Cloud, computer: 'local', path: '/api/cloud' }), refetchInterval: (query) => pollOf(query.state.data) })
+}
+
+function pollOf(cloud: Cloud | undefined): number | false {
+  if (cloud?.backup.state !== 'idle' && cloud) return BUSY_POLL_MS
+  if (cloud?.status === 'offline') return OFFLINE_POLL_MS
+  return cloud?.status === 'on' && justBackedUp(cloud) ? BUSY_POLL_MS * 5 : false
+}
+
+export function justBackedUp(cloud: Cloud): boolean {
+  return Boolean(cloud.backup.at && Date.now() - Date.parse(cloud.backup.at) < SHOW_DONE_MS)
+}
+
+export function useUnlock() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (words: string[]) => request({ schema: Cloud, computer: 'local', path: '/api/cloud/unlock', method: 'POST', body: { words } }),
+    onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
+  })
 }
 
 export function useSignIn() {

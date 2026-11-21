@@ -1,6 +1,7 @@
 import * as z from 'zod/mini'
 import { ProviderModel } from '@openhut/common/models/provider.ts'
 import { db } from './db.ts'
+import { emit } from './events.ts'
 import { seal, unseal } from './secrets.ts'
 
 const CodexTokens = z.object({ accessToken: z.string(), refreshToken: z.string() })
@@ -76,12 +77,14 @@ export const settings = {
 async function forget(name: string): Promise<void> {
   await db.deleteFrom('install_setting').where('name', '=', name).execute()
   rows.delete(name)
+  emit({ name: 'setting.updated', target: { type: 'setting', id: name } })
 }
 
 async function write(name: string, value: string): Promise<void> {
   await db.insertInto('install_setting').values({ name, value })
     .onConflict((oc) => oc.column('name').doUpdateSet({ value })).execute()
   rows.set(name, value)
+  emit({ name: 'setting.updated', target: { type: 'setting', id: name } })
 }
 
 export type CodexTokens = z.infer<typeof CodexTokens>

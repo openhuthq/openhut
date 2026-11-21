@@ -10,8 +10,8 @@ const meterVariants = cva('overflow-hidden', {
   defaultVariants: { size: 'sm' },
 })
 
-export function Meter({ className, size, full = false, ...props }: ComponentProps<typeof MeterPrimitive.Root> & VariantProps<typeof meterVariants> & { full?: boolean }) {
+export function Meter({ className, size, full = false, done = false, ...props }: ComponentProps<typeof MeterPrimitive.Root> & VariantProps<typeof meterVariants> & { full?: boolean; done?: boolean }) {
   return <MeterPrimitive.Root className={cn(meterVariants({ size }), className)} {...props}>
-    <MeterPrimitive.Indicator className={cn('block h-full', full ? 'bg-fail' : 'bg-ink', size !== 'xs' && 'rounded-[3px]')} />
+    <MeterPrimitive.Indicator className={cn('block h-full', full ? 'bg-fail' : done ? 'bg-success' : 'bg-ink', size !== 'xs' && 'rounded-[3px]')} />
   </MeterPrimitive.Root>
 }
