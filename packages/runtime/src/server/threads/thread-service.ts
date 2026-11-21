@@ -163,7 +163,7 @@ export const threadService = {
   async synced(): Promise<MessageValue[]> {
     const rows = await db.selectFrom('thread').select(['id', 'agent_id', 'messages']).orderBy('created_at').execute()
     const saved = rows.flatMap((row) => (z.safeParse(StoredMessages, parseJson(row.messages)).data ?? []).map((message, index, all) => ({ agentId: row.agent_id, message, after: message.role === 'assistant' ? all[index - 1]?.id : undefined })))
-    const streaming = [...live.values()]
+    const streaming = [...live.values()].map((open) => structuredClone(open))
     return [...saved.filter((each) => !streaming.some((open) => open.message.id === each.message.id)), ...streaming]
   },
 
@@ -180,7 +180,7 @@ export const threadService = {
     if (!found && !value) return
     const thread = found?.id ?? (await db.insertInto('thread').values({ id: newId('th'), agent_id: agentId, person_id: owner.id, title: agent.name }).returning('id').executeTakeFirstOrThrow()).id
     const stored = await storedOf(thread)
-    const messages = value ? merged({ stored, added: [authored({ message: value.message, author: value.message.role === 'user' ? author : null })], after: value.after, later }) : stored.filter((message) => message.id !== id)
+    const messages = value ? merged({ stored, added: [authored({ message: value.message, author: value.message.role === 'user' ? author : null })], after: value.message.role === 'assistant' ? value.after : undefined, later }) : stored.filter((message) => message.id !== id)
     await save({ id: thread, messages })
     const asks = value?.message.role === 'user' && messages.at(-1)?.id === value.message.id && agent.wanted === 'running'
     if (asks && runsHere({ row: agent, me: await keysService.deviceKey() })) void answerFor({ thread, agent }).catch((err: unknown) => log.warn({ event: 'thread.answer_failed', thread, error: messageOf(err) }))
