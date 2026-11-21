@@ -28,12 +28,12 @@ export function MemoryDialog({ agent, onClose }: { agent: Agent; onClose: () => 
   return <DialogCard onClose={onClose} className={cn(SPLIT_DIALOG, 'flex-col')}>
     <div className="flex items-start gap-3 border-b border-hair px-5 pt-5 pb-4">
       <Face agent={agent} size={40} />
-      <div className="grid min-w-0 flex-1 gap-1"><DialogTitle className="text-[15px]/[22px] font-medium">{agent.name}'s memory</DialogTitle><p className="m-0 text-[13px]/[18px] text-body">{agent.name} saves these itself as it works. Changes apply from its next conversation.</p></div>
+      <div className="grid min-w-0 flex-1 gap-1"><DialogTitle className="text-[15px]/[22px] font-medium">{agent.name}'s memory</DialogTitle><p className="m-0 text-[13px]/[18px] text-body">{agent.runsHere ? `${agent.name} saves these itself as it works. Changes apply from its next conversation.` : 'Runs on your other computer.'}</p></div>
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" tabIndex={-1} className="-mt-1 -mr-1" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
     </div>
     <ErrorNote className="mx-5 mt-3" message={memory.error?.message} />
     {!memory.data && !memory.error && <Loading />}
-    {memory.data && <Entries agent={agent} memory={memory.data} />}
+    {memory.data && <Entries agent={{ ...agent, canEdit: agent.canEdit && agent.runsHere }} memory={memory.data} />}
   </DialogCard>
 }
 

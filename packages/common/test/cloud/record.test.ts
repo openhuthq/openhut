@@ -95,7 +95,7 @@ test('a synced face is a look or a raster picture, never SVG or HTML', async () 
 test('messages, memory and files are closed kinds too: a file path can’t leave the agent’s home', async () => {
   const message = { agentId: helpdesk.id, message: { id: 'msg_1', role: 'assistant', parts: [{ type: 'text', text: 'Hi' }] } }
   assert.deepEqual((await open(await sealed({ kind: 'message', ref: 'msg_1', value: message })))?.value, message)
-  const file = { agentId: helpdesk.id, path: 'uploads/report.csv', size: 3, sha: 'a'.repeat(43), chunks: ['b'.repeat(43)] }
+  const file = { agentId: helpdesk.id, path: 'uploads/report.csv', size: 3, sha: 'a'.repeat(43), blob: 'b'.repeat(43) }
   assert.deepEqual((await open(await sealed({ kind: 'file', ref: `${helpdesk.id}/${file.path}`, value: file })))?.value, file)
   assert.equal(await open(await forged({ kind: 'file', ref: `${helpdesk.id}/../../etc/passwd`, value: { ...file, path: '../../etc/passwd' } })), null)
   assert.equal(await open(await forged({ kind: 'memory', ref: helpdesk.id, value: { agentId: helpdesk.id, notes: 'x'.repeat(20_000), people: null } })), null)

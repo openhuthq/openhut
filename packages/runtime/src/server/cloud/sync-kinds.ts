@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto'
-import type { Member } from '@openhut/common/cloud/cloud.ts'
-import type { FileValue, MessageValue, Opened, Synced } from '@openhut/common/cloud/record.ts'
+import * as z from 'zod/mini'
+import { parseJson, type Member } from '@openhut/common/cloud/cloud.ts'
+import type { AgentValue, FileValue, Opened, Synced } from '@openhut/common/cloud/record.ts'
 import { PROVIDERS } from '@openhut/common/models/provider.ts'
 import { fileInHome, uploadName, type ChatMessage } from '@openhut/common/threads/thread.ts'
-import { concat, fromBase64, letter, lock, read, toBase64, unlock, type Bytes, type Identity } from '@openhut/common/vault/vault.ts'
+import { fromBase64, letter, lock, read, toBase64, unlock, type Bytes, type Identity } from '@openhut/common/vault/vault.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { memoryService } from '../agents/memory-service.ts'
 import { connectionService } from '../connections/connection-service.ts'
@@ -14,37 +15,42 @@ import { settings } from '../platform/settings.ts'
 import { routineService } from '../routines/routine-service.ts'
 import { threadService } from '../threads/thread-service.ts'
 
-export type Local = { kind: Synced; ref: string; value: unknown; wire?: () => Promise<unknown>; owner?: string }
+export type Local = { kind: Synced; ref: string; value: unknown; wire?: () => Promise<unknown>; owner?: string; agentId?: string; assistant?: boolean }
 export type Context = {
-  workspace: string; home: boolean; key: Bytes; version: number; keys: Record<number, Bytes>; slotKey: Bytes; me: Identity; members: Member[]; runtimes: string[]; own: Bytes | null; email: string
+  workspace: string; home: boolean; key: Bytes; version: number; keys: Record<number, Bytes>; slotKey: Bytes; me: Identity; members: Member[]; runtimes: string[]; own: Bytes | null; email: string; admin: boolean
   putFile: (input: { hash: string; body: Bytes }) => Promise<number>; getFile: (hash: string) => Promise<Bytes | null>; again: () => void
+  landed: (input: { kind: Synced; ref: string; value: unknown; owner: string | undefined }) => void
 }
+export type Row = { signer: string | null; agent_id: string | null }
 
-const CHUNK = 1 << 20
 const MAX_FILE = 32 << 20
 const STAT_BATCH = 50
+const AGAIN_MS = 30_000
+const RETRY_MS = 2000
+const RETRY_MAX_MS = 5 * 60_000
+const Config = z.record(z.string(), z.unknown())
 const CODE_PATH = /`([^`\n]{1,1024})`/g
 const text = new TextEncoder()
 const words = new TextDecoder()
 const shas = new Map<string, string>()
-const uploaded = new Map<string, string[]>()
+const uploaded = new Map<string, string>()
 type Owned = Map<string, string | undefined>
 const uploading = new Set<string>()
-const downloading = new Set<string>()
+const downloading = new Map<string, FileValue>()
 
 export const syncKinds = {
-  async locals({ kind, admin, ctx }: { kind: Synced; admin: boolean; ctx: Context }): Promise<Local[] | null> {
+  async locals({ kind, ctx }: { kind: Synced; ctx: Context }): Promise<Local[] | null> {
     const me = toBase64(ctx.me.publicKey)
     const agents = await agentService.synced({ workspace: ctx.home ? null : ctx.workspace, owner: ctx.email })
     const owned: Owned = new Map(agents.map((agent) => [agent.id, agent.shared ? undefined : agent.owner]))
     switch (kind) {
       case 'agent': return agents.map((value) => ({ kind, ref: value.id, value, owner: owned.get(value.id) }))
-      case 'setting': return admin && ctx.home ? settingLocals() : null
-      case 'connection': return admin && ctx.home ? connectionLocals(ctx) : null
-      case 'message': return (await threadService.synced()).filter((value) => owned.has(value.agentId)).map((value) => ({ kind, ref: value.message.id, value, owner: owned.get(value.agentId) }))
+      case 'setting': return ctx.admin && ctx.home ? settingLocals() : null
+      case 'connection': return ctx.admin && ctx.home ? connectionLocals(ctx) : null
+      case 'message': return (await threadService.synced()).filter((value) => owned.has(value.agentId)).map((value) => ({ kind, ref: value.message.id, value, owner: owned.get(value.agentId), agentId: value.agentId, assistant: value.message.role === 'assistant' }))
       case 'memory': {
         const here = agents.filter((agent) => agent.runsOn === me).map((agent) => agent.id)
-        return (await memoryService.synced({ agentIds: here })).map((value) => ({ kind, ref: value.agentId, value, owner: owned.get(value.agentId) }))
+        return (await memoryService.synced({ agentIds: here })).map((value) => ({ kind, ref: value.agentId, value, owner: owned.get(value.agentId), agentId: value.agentId }))
       }
       case 'file': return fileLocals({ ctx, owned })
       case 'head': return null
@@ -54,6 +60,20 @@ export const syncKinds = {
   async hide({ open, ctx }: { open: Opened; ctx: Context }): Promise<undefined> {
     if (open.kind === 'agent' && open.owner && open.owner !== ctx.email) await agentService.hideSynced({ id: open.ref, owner: open.owner, me: ctx.email })
     return undefined
+  },
+
+  async allowed({ open, ctx, row }: { open: Opened; ctx: Context; row: Row | undefined }): Promise<boolean> {
+    const runner = async (id: string) => (await agentService.placement({ id }))?.runsOn
+    switch (open.kind) {
+      case 'agent': return !open.value || agentAllowed({ value: open.value, by: open.by, ctx })
+      case 'memory': return await runner(open.value?.agentId ?? open.ref) === open.by
+      case 'message': {
+        const runsOn = await runner(open.value?.agentId ?? row?.agent_id ?? '')
+        if (open.value?.message.role === 'assistant') return runsOn === open.by
+        return !row?.signer || row.signer === open.by || (!open.value && runsOn === open.by)
+      }
+      default: return true
+    }
   },
 
   async apply({ open, ctx }: { open: Opened; ctx: Context }): Promise<unknown> {
@@ -72,11 +92,21 @@ export const syncKinds = {
         if (!value) return connectionService.applySynced({ id: open.ref, value: null, by })
         const mine = value.keys.find((each) => each.to === toBase64(ctx.me.publicKey))
         const plain = mine && await read({ recipient: ctx.me, from: fromBase64(open.by), workspace: ctx.workspace, purpose: 'connection-key', body: fromBase64(mine.body), allowed: ctx.runtimes.map(fromBase64) })
-        const config = plain ? objectOf(words.decode(plain)) : null
+        const config = plain ? Config.safeParse(parseJson(words.decode(plain))).data ?? null : null
         return connectionService.applySynced({ id: value.id, value: { id: value.id, kind: value.kind, name: value.name, account: value.account, signIn: value.signIn, config }, by })
       }
     }
   },
+}
+
+async function agentAllowed({ value, by, ctx }: { value: AgentValue; by: string; ctx: Context }): Promise<boolean> {
+  const author = ctx.members.find((each) => each.devices.includes(by))
+  const current = await agentService.placement({ id: value.id })
+  const limited = author?.role === 'member' && (current?.owner ?? (current ? ctx.email : author.email)) !== author.email
+  const listed = (device: string | undefined) => device !== undefined && ctx.members.some((each) => each.devices.includes(device))
+  const claim = value.runsOn === by && !listed(current?.runsOn)
+  if (value.runsOn !== current?.runsOn && (!listed(value.runsOn) || (limited && !claim))) return false
+  return !limited || value.codeExecution === (current?.codeExecution ?? false)
 }
 
 function settingLocals(): Local[] {
@@ -120,7 +150,7 @@ async function fileLocals({ ctx, owned }: { ctx: Context; owned: Owned }): Promi
         if (!sha) continue
         const value = { agentId, path, size: file.size, sha }
         const owner = owned.get(agentId)
-        locals.push({ kind: 'file', ref, value, owner, wire: async () => wireFile({ value, ctx, owner }) })
+        locals.push({ kind: 'file', ref, value, owner, agentId, wire: async () => wireFile({ value, ctx, owner }) })
       }
     }
   }
@@ -137,19 +167,24 @@ function pathsIn(message: ChatMessage): string[] {
 async function hashFile({ agentId, path, size }: { agentId: string; path: string; size: number }): Promise<string | null> {
   const body = await agentd.read({ id: agentId, path: `home/${path}` }).catch(() => null)
   if (!body || body.length !== size) return null
-  const sha = createHash('sha256').update(body).digest('base64url')
+  const sha = hashOf(body)
   shas.set(`${agentId}/${path}:${size}`, sha)
   return sha
 }
 
-async function wireFile({ value, ctx, owner }: { value: Omit<FileValue, 'chunks'>; ctx: Context; owner: string | undefined }): Promise<FileValue | undefined> {
+async function wireFile({ value, ctx, owner }: { value: Omit<FileValue, 'blob'>; ctx: Context; owner: string | undefined }): Promise<FileValue | undefined> {
   const cached = `${value.sha}:${owner ?? ''}`
-  const chunks = uploaded.get(cached)
-  if (chunks) return { ...value, chunks }
+  const blob = uploaded.get(cached)
+  if (blob) return { ...value, blob }
   if (uploading.has(cached)) return undefined
   uploading.add(cached)
-  void upload({ value, ctx, owner }).then((hashes) => uploaded.set(cached, hashes), (err: unknown) => log.warn({ event: 'cloud.file_upload_failed', error: messageOf(err) }))
-    .finally(() => { uploading.delete(cached); ctx.again() })
+  void upload({ value, ctx, owner }).then((hash) => {
+    uploaded.set(cached, hash)
+    ctx.again()
+  }, (err: unknown) => {
+    log.warn({ event: 'cloud.file_upload_failed', error: messageOf(err) })
+    setTimeout(ctx.again, AGAIN_MS)
+  }).finally(() => uploading.delete(cached))
   return undefined
 }
 
@@ -160,61 +195,56 @@ function fileKey({ ctx, owner }: { ctx: Context; owner: string | undefined }): {
   return { keys: Object.fromEntries([...Object.keys(ctx.keys), String(ctx.version)].map((version) => [Number(version), own])), key: own, bind: `${fileBind(ctx.workspace)}/own/${owner}` }
 }
 
-async function upload({ value, ctx, owner }: { value: Omit<FileValue, 'chunks'>; ctx: Context; owner: string | undefined }): Promise<string[]> {
+async function upload({ value, ctx, owner }: { value: Omit<FileValue, 'blob'>; ctx: Context; owner: string | undefined }): Promise<string> {
   const locking = fileKey({ ctx, owner })
   if (!locking) throw new HttpError(409, 'This computer can’t lock that private file.')
   const body = await agentd.read({ id: value.agentId, path: `home/${value.path}` })
-  if (!body || createHash('sha256').update(body).digest('base64url') !== value.sha) throw new HttpError(409, 'The file changed while it was being backed up.')
-  const hashes: string[] = []
-  for (let start = 0; start < body.length || !hashes.length; start += CHUNK) {
-    const locked = await lock({ key: locking.key, version: ctx.version, bind: locking.bind, plain: new Uint8Array(body.subarray(start, start + CHUNK)) })
-    if (!locked) throw new HttpError(500, 'This computer couldn’t lock a file.')
-    const hash = hashOf(locked)
-    const status = await ctx.putFile({ hash, body: locked })
-    if (status !== 200) throw new HttpError(502, `OpenHut Cloud refused a file (HTTP ${status}).`)
-    hashes.push(hash)
-  }
-  return hashes
+  if (!body || hashOf(body) !== value.sha) throw new HttpError(409, 'The file changed while it was being backed up.')
+  const locked = await lock({ key: locking.key, version: ctx.version, bind: locking.bind, plain: new Uint8Array(body) })
+  if (!locked) throw new HttpError(500, 'This computer couldn’t lock a file.')
+  const hash = hashOf(locked)
+  const status = await ctx.putFile({ hash, body: locked })
+  if (status !== 200) throw new HttpError(502, `OpenHut Cloud refused a file (HTTP ${status}).`)
+  return hash
 }
 
-function applyFile({ value, ctx, owner }: { value: FileValue; ctx: Context; owner: string | undefined }): Omit<FileValue, 'chunks'> {
-  const { chunks, ...local } = value
+function applyFile({ value, ctx, owner }: { value: FileValue; ctx: Context; owner: string | undefined }): undefined {
+  const { blob, ...local } = value
   const ref = `${value.agentId}/${value.path}`
-  uploaded.set(`${value.sha}:${owner ?? ''}`, chunks)
-  if (shas.get(`${ref}:${value.size}`) === value.sha) return local
-  downloading.add(ref)
-  void download({ value, ctx, owner }).catch((err: unknown) => log.warn({ event: 'cloud.file_download_failed', error: messageOf(err) })).finally(() => downloading.delete(ref))
-  return local
+  uploaded.set(`${value.sha}:${owner ?? ''}`, blob)
+  if (shas.get(`${ref}:${value.size}`) === value.sha) ctx.landed({ kind: 'file', ref, value: local, owner })
+  else fetchFile({ value, ctx, owner, wait: RETRY_MS })
+  return undefined
+}
+
+function fetchFile({ value, ctx, owner, wait }: { value: FileValue; ctx: Context; owner: string | undefined; wait: number }): void {
+  const { blob: _, ...local } = value
+  const ref = `${value.agentId}/${value.path}`
+  downloading.set(ref, value)
+  download({ value, ctx, owner }).then(() => {
+    if (downloading.get(ref) === value) downloading.delete(ref)
+    ctx.landed({ kind: 'file', ref, value: local, owner })
+  }, (err: unknown) => {
+    log.warn({ event: 'cloud.file_download_failed', error: messageOf(err), retryInMs: wait })
+    if (downloading.get(ref) === value) setTimeout(() => { if (downloading.get(ref) === value) fetchFile({ value, ctx, owner, wait: Math.min(RETRY_MAX_MS, wait * 2) }) }, wait)
+  })
 }
 
 async function download({ value, ctx, owner }: { value: FileValue; ctx: Context; owner: string | undefined }): Promise<void> {
-  const parts: Bytes[] = []
   const locking = fileKey({ ctx, owner })
-  for (const hash of value.chunks) {
-    const locked = await ctx.getFile(hash)
-    const plain = locked && locking && hashOf(locked) === hash ? await unlock({ keys: locking.keys, bind: locking.bind, locked }) : null
-    if (!plain) throw new HttpError(502, 'OpenHut Cloud sent a file this computer can’t open.')
-    parts.push(plain)
-  }
-  const body = Buffer.from(concat(parts))
-  if (body.length !== value.size || createHash('sha256').update(body).digest('base64url') !== value.sha) throw new HttpError(502, 'A synced file didn’t match its fingerprint.')
+  const locked = await ctx.getFile(value.blob)
+  const plain = locked && locking && hashOf(locked) === value.blob ? await unlock({ keys: locking.keys, bind: locking.bind, locked }) : null
+  if (!plain) throw new HttpError(502, 'OpenHut Cloud sent a file this computer can’t open.')
+  const body = Buffer.from(plain)
+  if (body.length !== value.size || hashOf(body) !== value.sha) throw new HttpError(502, 'A synced file didn’t match its fingerprint.')
   await agentd.write({ id: value.agentId, path: `home/${value.path}`, body })
   shas.set(`${value.agentId}/${value.path}:${value.size}`, value.sha)
 }
 
-export function hashOf(bytes: Uint8Array): string {
+function hashOf(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('base64url')
 }
 
 function fileBind(workspace: string): string {
   return `workspace/${workspace}/file`
-}
-
-function objectOf(json: string): Record<string, unknown> | null {
-  try {
-    const value: unknown = JSON.parse(json)
-    return typeof value === 'object' && value !== null ? { ...value } : null
-  } catch {
-    return null
-  }
 }

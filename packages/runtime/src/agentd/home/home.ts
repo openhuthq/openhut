@@ -1,7 +1,7 @@
 import { closeSync, constants, ftruncateSync, writeSync } from 'node:fs'
 import { AGENT_OWNER, realHome } from '../host.ts'
 import { isSkillPath, listSkills, MAX_SKILL_BYTES, openInside, readInside } from './skills.ts'
-import { isHomePath, isUploadName, readHomeFile, removeUploads, saveUpload, statHomeFiles } from './uploads.ts'
+import { isHomePath, isUploadName, readHomeFile, removeUploads, saveNew, saveUpload, statHomeFiles } from './uploads.ts'
 
 const MEMORY_FILES = new Set(['MEMORY.md', 'USER.md'])
 const MAX_MEMORY_BYTES = 64_000
@@ -46,7 +46,7 @@ export const agentHome = {
     }
   },
 
-  write({ id, path, body }: { id: string; path: string; body: Buffer }): string {
+  write({ id, path, body, create = false }: { id: string; path: string; body: Buffer; create?: boolean }): string {
     const root = realHome(id)
     switch (agentHome.kindOf(path)) {
       case 'skill':
@@ -55,6 +55,7 @@ export const agentHome = {
         return path
       case 'memory':
         if (body.length > MAX_MEMORY_BYTES) throw new Error('oversized memory')
+        if (create && saveNew({ root, dir: 'memories', names: [path.slice('memories/'.length)], body, owner: AGENT_OWNER })) return path
         overwrite({ root, path, body, gone: 'the agent has not saved that memory yet' })
         return path
       case 'upload':

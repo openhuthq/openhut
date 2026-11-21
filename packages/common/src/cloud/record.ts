@@ -59,7 +59,7 @@ export const FileValue = z.object({
   path: z.string().check(z.refine((path) => fileInHome(`${AGENT_HOME}/${path}`) === path, 'Send a path inside the agent\'s home.')),
   size: z.number().check(z.int(), z.minimum(0), z.maximum(32 << 20)),
   sha: Hash,
-  chunks: z.array(Hash).check(z.maxLength(32)),
+  blob: Hash,
 })
 export type FileValue = z.infer<typeof FileValue>
 

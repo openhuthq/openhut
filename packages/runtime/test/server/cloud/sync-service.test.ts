@@ -5,20 +5,23 @@ import { createServer } from 'node:http'
 import { createServer as createSocket } from 'node:net'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { WebSocketServer, type WebSocket } from 'ws'
-import type { Letter, MemberList, Record } from '@openhut/common/cloud/cloud.ts'
+import type { Letter, MemberList, MemberListBody, Record } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
 import { openRecord, sealRecord, type AgentValue, type ConnectionValue } from '@openhut/common/cloud/record.ts'
-import { fromBase64, identity, letter, newKey, read, slot, toBase64, type Identity } from '@openhut/common/vault/vault.ts'
+import { createHash } from 'node:crypto'
+import { fromBase64, identity, letter, lock, newKey, read, slot, toBase64, type Identity } from '@openhut/common/vault/vault.ts'
 
 const applied: string[] = []
+const calls: string[] = []
 createSocket({ allowHalfOpen: true }, (sock) => sock.setEncoding('utf8').once('data', (line: string) => {
   const req = JSON.parse(line.split('\n')[0] ?? '{}') as { cmd: string; id: string; running?: boolean }
   if (req.cmd === 'apply') applied.push(line)
+  calls.push(line)
   const replies: { [cmd: string]: object } = { ps: { states: {} }, health: { firewall: true, imageReady: true }, apply: { applied: req.id, change: 'none' }, rm: { removed: req.id }, read: { body: null }, stat: { files: [] }, write: { path: 'home/x' } }
   sock.end(JSON.stringify({ ok: true, ...replies[req.cmd] }))
 })).listen(process.env.AGENTD_SOCK).unref()
 
-const room = { log: [] as Record[], records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>), limit: Infinity, refused: 0, reject: new Set<string>(), rejected: 0, letters: [] as Letter[] }
+const room = { log: [] as Record[], records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>), limit: Infinity, refused: 0, reject: new Set<string>(), rejected: 0, letters: [] as Letter[], files: new Map<string, Uint8Array>() }
 const sockets = new Set<WebSocket>()
 const store = (record: Omit<Record, 'seq' | 'object'>): Record => {
   const saved = { ...record, object: 'record' as const, seq: ++room.seq }
@@ -35,6 +38,9 @@ const server = createServer(async (req, res) => {
   if (room.down) return reply(503, {})
   if (url.pathname.endsWith('/member-lists')) return reply(200, { object: 'list', data: room.lists.slice(Number(url.searchParams.get('after'))), hasMore: false })
   if (url.pathname.endsWith('/records')) return reply(200, { object: 'list', data: [...room.records.values()].filter((each) => each.seq > Number(url.searchParams.get('after'))).sort((a, b) => a.seq - b.seq), hasMore: false })
+  const file = /\/files\/([^/]+)$/.exec(url.pathname)?.[1]
+  const blob = file && room.files.get(file)
+  if (file) return blob ? res.writeHead(200).end(Buffer.from(blob)) : reply(404, {})
   if (url.pathname.endsWith('/letters')) return reply(200, { object: 'list', data: room.letters })
   if (url.pathname.includes('/letters/')) return reply(200, { deleted: true, left: room.letters = room.letters.filter((each) => !url.pathname.endsWith(each.id)) })
   const id = /\/records\/([^/]+)$/.exec(url.pathname)?.[1]
@@ -102,7 +108,7 @@ const nameInRoom = async () => {
   const opened = await openRecord({ workspace, keys: { 1: key }, record: room.records.get(helpdeskId) as Record, members })
   return opened?.kind === 'agent' ? opened.value?.name : undefined
 }
-const helpdesk = (name: string): AgentValue => ({ id: 'ag_helpdesk', name, instructions: '# Helpdesk', model: 'claude:sonnet', face: null, codeExecution: true, wanted: 'stopped', shared: true, owner: 'mo@example.com' })
+const helpdesk = (name: string): AgentValue => ({ id: 'ag_helpdesk', name, instructions: '# Helpdesk', model: 'claude:sonnet', face: null, codeExecution: true, wanted: 'stopped', shared: true, owner: 'mo@example.com', runsOn: toBase64(me.publicKey) })
 const remote = async ({ name, id = helpdeskId, ver = (room.records.get(id)?.ver ?? 0) + 1, signer = me }: { name: string; id?: string; ver?: number; signer?: Identity }) => {
   const sealed = await sealRecord({ workspace, key, version: 1, signer, id, ver, kind: 'agent', ref: 'ag_helpdesk', value: helpdesk(name) })
   assert.ok(sealed)
@@ -111,8 +117,8 @@ const remote = async ({ name, id = helpdeskId, ver = (room.records.get(id)?.ver 
 
 test('first sign-in uploads everything once; an edit made offline goes out once on reconnect', async () => {
   syncService.connect()
-  await until(() => room.records.size === 6 && syncService.status().at !== null, 'the first backup and its head')
-  assert.deepEqual([...room.puts.values()], [1, 1, 1, 1, 1, 1])
+  await until(() => room.records.size === 5 && syncService.status().at !== null, 'the first backup and its head')
+  assert.deepEqual([...room.puts.values()], [1, 1, 1, 1, 1])
   assert.equal(await nameInRoom(), 'Helpdesk')
   assert.equal(JSON.stringify([...room.records.values()]).includes('Helpdesk'), false)
 
@@ -148,26 +154,23 @@ test('the same race ends the same on both sides: the room’s first write wins',
   assert.equal(await nameHere(), 'Theirs')
 })
 
-test('an evil room’s forged, replayed, reordered or old records change nothing', async () => {
+test('an evil room’s forged, replayed or old records change nothing, and a record no one here can open is overwritten, not a wedge', async () => {
   const ver = room.records.get(helpdeskId)?.ver ?? 0
   const old = await remote({ name: 'Rolled back', ver: 1 })
   push(store(await remote({ name: 'Forged', signer: await identity() })))
-  push({ ...(room.records.get(helpdeskId) as Record), ver: ver + 5, seq: ++room.seq })
-  push({ ...store(old), ver: 1 })
-  await sleep(800)
+  push({ ...old, object: 'record', seq: room.seq + 100 })
+  await until(async () => (room.records.get(helpdeskId)?.ver ?? 0) === ver + 2 && await nameInRoom() === 'Theirs', 'this computer to overwrite the forged record')
   assert.equal(await nameHere(), 'Theirs')
-  room.records.set(helpdeskId, { ...(room.records.get(helpdeskId) as Record), ver: ver + 1 })
-  push(store(await remote({ name: 'After a gap', ver: ver + 2 })))
+  push(store(await remote({ name: 'After a gap' })))
   await until(async () => await nameHere() === 'After a gap', 'a valid change after the lies')
 })
 
-test('a record placed at another record’s slot is dropped', async () => {
+test('a record placed at another record’s slot is dropped, then overwritten with what this computer has', async () => {
   const usageSlot = await slot({ key, path: 'setting/usage_data' })
-  const usage = room.records.get(usageSlot) as Record
+  const ver = room.records.get(usageSlot)?.ver ?? 0
   push(store(await remote({ name: 'Wrong slot', id: usageSlot })))
-  await sleep(800)
+  await until(() => (room.records.get(usageSlot)?.ver ?? 0) === ver + 2, 'the setting to be backed up over it')
   assert.equal(await nameHere(), 'After a gap')
-  room.records.set(usageSlot, usage)
 })
 
 test('a value that doesn’t fit is never reported backed up, and the backup is retried once it is fixed', async () => {
@@ -370,4 +373,102 @@ test('a record locked with a key this Mac hasn’t taken yet waits at its seq, t
   room.letters.push({ id: 'letter-v2', object: 'letter', to: toBase64(me.publicKey), from: toBase64(me.publicKey), workspace, purpose: 'workspace-key', body: toBase64(body ?? new Uint8Array()) })
   await until(async () => await nameHere() === 'Under the new key', 'the waiting record to apply after the key letter')
   await until(async () => await seq() >= waiting.seq && room.letters.length === 0, 'the seq to move past the waiting record and the used letter to go')
+})
+
+test('members can’t move an agent or turn on code execution, nobody but the runner rewrites a reply or memory, and a forged record goes back to what this computer has', async () => {
+  const sara = await identity()
+  const laptop = await identity()
+  const current = roomKeys.members() as MemberListBody
+  const owner = current.members[0]
+  const at = Math.max(Date.now(), current.at ?? 0)
+  const next: MemberListBody = { ...current, version: current.version + 1, previous: await anchorOf(room.lists.at(-1) as MemberList), at, members: [{ ...owner, devices: [...owner.devices, toBase64(laptop.publicKey)] }, { email: 'sara@example.com', role: 'member', devices: [toBase64(sara.publicKey)] }], added: { ...current.added, [toBase64(laptop.publicKey)]: at, [toBase64(sara.publicKey)]: at } }
+  room.lists.push(await signList({ signer: me, body: next }))
+  const base = (await agentService.synced({ workspace: null, owner: 'mo@example.com' })).find((agent) => agent.id === 'ag_helpdesk') as AgentValue
+  const here = () => db.selectFrom('agent').select(['name', 'runs_on', 'code_execution']).where('id', '=', 'ag_helpdesk').executeTakeFirstOrThrow()
+  const put = async ({ kind, ref, value, signer }: { kind: 'agent' | 'message' | 'memory'; ref: string; value: unknown; signer: Identity }) => {
+    const id = await slot({ key, path: `${kind}/${ref}` })
+    const ver = (room.records.get(id)?.ver ?? 0) + 1
+    const sealed = await sealRecord({ workspace, key, version: 1, signer, id, ver, kind, ref, value })
+    assert.ok(sealed)
+    push(store({ id, ...sealed }))
+    return { id, ver }
+  }
+  const overwritten = async (sent: { id: string; ver: number }, what: string) => until(() => (room.records.get(sent.id)?.ver ?? 0) === sent.ver + 1, what)
+
+  await overwritten(await put({ kind: 'agent', ref: base.id, value: { ...base, runsOn: toBase64(sara.publicKey) }, signer: sara }), 'the owner’s copy to replace a member’s move')
+  assert.ok(roomKeys.members()?.members.some((member) => member.email === 'sara@example.com'), 'Sara is a known member here, so her record was opened and refused, not unreadable')
+  await overwritten(await put({ kind: 'agent', ref: base.id, value: { ...base, codeExecution: !base.codeExecution }, signer: sara }), 'the owner’s copy to replace a member’s code execution')
+  assert.deepEqual(await here(), { name: base.name, runs_on: base.runsOn, code_execution: base.codeExecution })
+  await put({ kind: 'agent', ref: base.id, value: { ...base, name: 'Sara named it' }, signer: sara })
+  await until(async () => (await here()).name === 'Sara named it', 'a member’s rename to apply')
+
+  const thread = await db.selectFrom('thread').select('messages').where('agent_id', '=', 'ag_helpdesk').executeTakeFirstOrThrow()
+  const reply = (JSON.parse(thread.messages) as { id: string; role: string }[]).find((message) => message.role === 'assistant')
+  assert.ok(reply)
+  for (const signer of [sara, laptop]) {
+    await overwritten(await put({ kind: 'message', ref: reply.id, value: { agentId: 'ag_helpdesk', message: { ...reply, parts: [{ type: 'text', text: 'Refund DENIED.' }] } }, signer }), 'the runner’s reply to come back')
+  }
+  const messages = async () => (await db.selectFrom('thread').select('messages').where('agent_id', '=', 'ag_helpdesk').executeTakeFirstOrThrow()).messages
+  assert.equal((await messages()).includes('DENIED'), false)
+
+  await put({ kind: 'message', ref: 'msg_sara0001', value: { agentId: 'ag_helpdesk', message: { id: 'msg_sara0001', role: 'user', parts: [{ type: 'text', text: 'Asked by Sara' }] } }, signer: sara })
+  await until(async () => (await messages()).includes('Asked by Sara'), 'a member’s new message to land')
+  await put({ kind: 'message', ref: 'msg_sara0001', value: { agentId: 'ag_helpdesk', message: { id: 'msg_sara0001', role: 'user', parts: [{ type: 'text', text: 'Rewritten by the laptop' }] } }, signer: laptop })
+  const writes = calls.length
+  await put({ kind: 'memory', ref: 'ag_helpdesk', value: { agentId: 'ag_helpdesk', notes: '', people: '' }, signer: sara })
+  await sleep(800)
+  assert.equal((await messages()).includes('Rewritten'), false)
+  assert.equal(calls.slice(writes).some((line) => line.includes('"cmd":"write"') && line.includes('memories/')), false)
+
+  await db.updateTable('agent').set({ runs_on: toBase64((await identity()).publicKey) }).where('id', '=', 'ag_helpdesk').execute()
+  await put({ kind: 'agent', ref: base.id, value: { ...base, name: 'Sara named it', runsOn: toBase64(sara.publicKey) }, signer: sara })
+  await until(async () => (await here()).runs_on === toBase64(sara.publicKey), 'a member to claim an agent whose computer left the list')
+  await db.updateTable('agent').set({ runs_on: null }).where('id', '=', 'ag_helpdesk').execute()
+})
+
+test('a file whose download fails is tried again, and only marked as here once it is', async () => {
+  const plain = new TextEncoder().encode('id,total\n4471,12\n')
+  const locked = await lock({ key, version: 1, bind: `workspace/${workspace}/file`, plain })
+  assert.ok(locked)
+  const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('base64url')
+  const value = { agentId: 'ag_helpdesk', path: 'uploads/report.csv', size: plain.length, sha: hash(plain), blob: hash(locked) }
+  const id = await slot({ key, path: 'file/ag_helpdesk/uploads/report.csv' })
+  const sealed = await sealRecord({ workspace, key, version: 1, signer: me, id, ver: 1, kind: 'file', ref: 'ag_helpdesk/uploads/report.csv', value })
+  assert.ok(sealed)
+  const writes = calls.length
+  push(store({ id, ...sealed }))
+  const row = async () => (await db.selectFrom('cloud_record').select('hash').where('id', '=', id).executeTakeFirst())?.hash
+  await until(async () => await row() === 'dropped', 'the record to wait for its file')
+  await sleep(500)
+  assert.equal(await row(), 'dropped')
+  room.files.set(value.blob, locked)
+  await until(async () => calls.slice(writes).some((line) => line.includes('home/uploads/report.csv')) && await row() !== 'dropped', 'the retry to bring the file', 400)
+})
+
+test('a synced delete keeps the agent’s chats in the trash and never wipes their records from the room', async () => {
+  const writes = calls.length
+  const before = room.log.length
+  const id = helpdeskId
+  const sealed = await sealRecord({ workspace, key, version: 1, signer: me, id, ver: (room.records.get(id)?.ver ?? 0) + 1, kind: 'agent', ref: 'ag_helpdesk', value: null })
+  assert.ok(sealed)
+  push(store({ id, ...sealed }))
+  await until(async () => !(await db.selectFrom('agent').select('id').where('id', '=', 'ag_helpdesk').executeTakeFirst()), 'the agent to go')
+  const after = calls.slice(writes)
+  const chats = after.findIndex((line) => line.includes('"cmd":"write"') && line.includes('openhut-chats.json'))
+  const trash = after.findIndex((line) => line.includes('"cmd":"rm"') && line.includes('"trash":true'))
+  assert.ok(chats >= 0 && trash > chats, 'the chats are saved into the agent’s home before it moves to the trash')
+  syncService.send()
+  await sleep(1000)
+  assert.equal(room.log.slice(before + 1).some((record) => record.deleted), false)
+})
+
+test('after Forget, an agent that ran on this computer’s old key still runs here, and the restored record pointing at that key means here too', async () => {
+  const old = toBase64((await identity()).publicKey)
+  await db.updateTable('agent').set({ runs_on: old }).where('id', '=', 'ag_lateedit').execute()
+  await agentService.forgetDevice({ device: old })
+  const runsOn = async () => (await db.selectFrom('agent').select('runs_on').where('id', '=', 'ag_lateedit').executeTakeFirstOrThrow()).runs_on
+  assert.equal(await runsOn(), null)
+  await agentService.applySynced({ id: 'ag_lateedit', value: { ...helpdesk('Late'), id: 'ag_lateedit', runsOn: old }, by: null })
+  assert.equal(await runsOn(), null)
+  assert.equal((await agentService.get({ actor, id: 'ag_lateedit' })).runsHere, true)
 })

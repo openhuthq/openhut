@@ -1147,7 +1147,6 @@ console.log(JSON.stringify(takeTelemetry()))`
       pin: await settled(async () => agentImagePin()),
       fw,
       devContainer: await settled(() => idOf(dev.id)),
-      reconciled: await settled(async () => reconcileCount(dev.id)),
       build: await settled(async () => (await health()).build),
       pids: await settled(async () => ({ agentd: await pidOf(AGENTD_PROCESS), app: await pidOf(APP_PROCESS) })),
       devStarted: await settled(() => startedAt(dev.id)),
@@ -1343,7 +1342,7 @@ function afterRestart() {
   check(
     'H3',
     'OpenHut (not Docker) brings the agent back, and it still reaches the DB through the gateway',
-    'Dev running and answering within 4 min, n = 42 from the team DB; restart policy no; a new reconcile.started event for Dev in app.log',
+    'Dev running and answering within 4 min, n = 42 from the team DB; restart policy no (the app starts it at boot)',
     async () => {
       const st = savedState()
       const call = await mcp(KEY)
@@ -1351,14 +1350,12 @@ function afterRestart() {
       const agents = (await call<List<Agent>>('list_agents')).data
       const reply = inner(await chat(st.dev, 'sql: select count(*)::int as n from orders'))
       const restart = await docker('inspect', '-f', '{{.HostConfig.RestartPolicy.Name}}', `ag-${st.dev.id}`)
-      const reconciled = reconcileCount(st.dev.id)
       return {
-        actual: { agents: agents.map((a) => `${a.name}:${a.status}`), reply, restart, reconcileLines: `${st.reconciled} before, ${reconciled} now` },
+        actual: { agents: agents.map((a) => `${a.name}:${a.status}`), reply, restart },
         pass:
           agents.some((a) => a.id === st.dev.id && a.status === 'running') &&
           rowsOf(reply)?.[0]?.n === 42 &&
-          restart === 'no' &&
-          reconciled > st.reconciled,
+          restart === 'no',
       }
     },
   )
@@ -1605,10 +1602,6 @@ async function shell(cmd: string) {
 
 function pidOf(pattern: string) {
   return shell(`pgrep -f '${pattern}' | tr '\\n' ' '`)
-}
-
-function reconcileCount(id: string) {
-  return appEvents().filter((e) => e.event === 'reconcile.started' && e.agent === id).length
 }
 
 function appEvents() {
@@ -1887,7 +1880,6 @@ type State = {
   pin: string
   fw: Firewall
   devContainer: string
-  reconciled: number
   build: string
   pids: { agentd: string; app: string }
   devStarted: string

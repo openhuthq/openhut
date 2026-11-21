@@ -24,17 +24,23 @@ export function isHomePath(value: unknown): value is string {
 }
 
 export function saveUpload({ home, name, body, owner }: { home: string; name: string; body: Buffer; owner?: Owner }): string {
-  return within({ dir: home, expected: home, work: (here) => {
+  const names = Array.from({ length: MAX_COPIES }, (_, i) => i === 0 ? name : numbered({ name, copy: i + 1 }))
+  const saved = saveNew({ root: home, dir: UPLOADS, names, body, owner })
+  if (!saved) throw new Error(`there are already ${MAX_COPIES} files called ${name}`)
+  return `${UPLOADS}/${saved}`
+}
+
+export function saveNew({ root, dir, names, body, owner }: { root: string; dir: string; names: string[]; body: Buffer; owner?: Owner }): string | undefined {
+  return within({ dir: root, expected: root, work: (here) => {
     try {
-      mkdirSync(`${here}${UPLOADS}`, { mode: 0o700 })
+      mkdirSync(`${here}${dir}`, { mode: 0o700 })
     } catch (e) {
       if (!isCode(e, 'EEXIST')) throw e
     }
-    return within({ dir: `${here}${UPLOADS}`, expected: `${home}/${UPLOADS}`, work: (uploads) => {
-      if (owner) chownDir({ dir: uploads, owner })
-      for (let copy = 1; copy <= MAX_COPIES; copy++) {
-        const saved = copy === 1 ? name : numbered({ name, copy })
-        const fd = createQuietly(`${uploads}${saved}`)
+    return within({ dir: `${here}${dir}`, expected: `${root}/${dir}`, work: (inside) => {
+      if (owner) chownDir({ dir: inside, owner })
+      for (const name of names) {
+        const fd = createQuietly(`${inside}${name}`)
         if (fd === undefined) continue
         try {
           writeFileSync(fd, body)
@@ -42,9 +48,9 @@ export function saveUpload({ home, name, body, owner }: { home: string; name: st
         } finally {
           closeSync(fd)
         }
-        return `${UPLOADS}/${saved}`
+        return name
       }
-      throw new Error(`there are already ${MAX_COPIES} files called ${name}`)
+      return undefined
     } })
   } })
 }
