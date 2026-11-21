@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
-import { createServer as createSocket } from 'node:net'
+import { createServer as createSocket, type AddressInfo } from 'node:net'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { signProof, type Letter, type MemberList, type MemberListBody, type Record } from '@openhut/common/cloud/cloud.ts'
@@ -88,6 +88,7 @@ await once(server, 'listening')
 const address = server.address()
 process.env.OPENHUT_CLOUD_URL = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`
 
+const { config } = await import('../../../src/server/platform/config.ts')
 const { db, migrate } = await import('../../../src/server/platform/db.ts')
 const { seal } = await import('../../../src/server/platform/secrets.ts')
 const { agentService } = await import('../../../src/server/agents/agent-service.ts')
@@ -282,7 +283,9 @@ test('a streamed reply arrives in the room in order, as one record growing versi
       setTimeout(() => next(i + 1), 450)
     }
     next(0)
-  }).listen(18649, '127.0.0.1')
+  }).listen(0, '127.0.0.1')
+  await once(hermes, 'listening')
+  config.agentApi = `http://127.0.0.1:${(hermes.address() as AddressInfo).port}`
   await db.updateTable('agent').set({ wanted: 'running' }).where('id', '=', 'ag_helpdesk').execute()
   const app = Fastify()
   answerErrors(app)
