@@ -1,7 +1,7 @@
 import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { createCipheriv, createDecipheriv, createHmac, createPublicKey, hkdfSync, verify } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, createHmac, createPublicKey, hkdfSync, verify } from 'node:crypto'
 import * as vault from '../../src/vault/vault.ts'
 
 const vectors = JSON.parse(readFileSync(new URL('./vectors.json', import.meta.url), 'utf8'))
@@ -284,13 +284,35 @@ test('slots are a keyed hash of the path', async () => {
   assert.notEqual(await vault.slot({ key: vault.newKey(), path }), slot)
 })
 
-test('a device shows 4 words from its key and the admin’s nonce: the vector matches, and another key or nonce gives other words', async () => {
-  const { device, nonce, words } = v1.deviceWords
-  assert.deepEqual(await vault.deviceWords({ device: bytes(device), nonce: bytes(nonce) }), words)
+test('a device shows 4 words from its key, the admin’s nonce and the secret it committed to: the vector matches an independent SHA-256, and another key, nonce or secret gives other words', async () => {
+  const { device, reveal, commit, nonce, words } = v1.deviceWords
+  const sha = (...parts: Uint8Array[]) => createHash('sha256').update(Buffer.concat(parts)).digest('hex')
+  assert.equal(sha(utf8('openhut/ask\0'), bytes(device), bytes(reveal)), commit)
+  assert.equal(hex(await vault.askCommit({ device: bytes(device), reveal: bytes(reveal) })), commit)
+  assert.deepEqual(await vault.deviceWords({ device: bytes(device), nonce: bytes(nonce), reveal: bytes(reveal) }), words)
   const other = (await vault.identity()).publicKey
-  assert.notDeepEqual(await vault.deviceWords({ device: other, nonce: bytes(nonce) }), words)
-  assert.notDeepEqual(await vault.deviceWords({ device: bytes(device), nonce: vault.newKey(16) }), words)
+  assert.notDeepEqual(await vault.deviceWords({ device: other, nonce: bytes(nonce), reveal: bytes(reveal) }), words)
+  assert.notDeepEqual(await vault.deviceWords({ device: bytes(device), nonce: vault.newKey(16), reveal: bytes(reveal) }), words)
+  assert.notDeepEqual(await vault.deviceWords({ device: bytes(device), nonce: bytes(nonce), reveal: vault.newKey() }), words)
   assert.ok(words.every((word: string) => /^[a-z]{3,8}$/.test(word)))
+})
+
+test('a cloud that swaps the device can’t steer the 4 words: it picks the nonce it shows before the secret is revealed, and its own device’s secret is committed before the admin’s nonce, so a bounded search finds no match', async () => {
+  const real = (await vault.identity()).publicKey
+  const swapped = (await vault.identity()).publicKey
+  const swappedSecret = vault.newKey()
+  const swappedCommit = await vault.askCommit({ device: swapped, reveal: swappedSecret })
+  const adminNonce = vault.newKey(16)
+  const shown = (await vault.deviceWords({ device: swapped, nonce: adminNonce, reveal: swappedSecret })).join(' ')
+  const tries = Array.from({ length: 4096 }, () => vault.newKey(16))
+  const secret = vault.newKey()
+  const steered = await Promise.all(tries.map(async (picked) => (await vault.deviceWords({ device: real, nonce: picked, reveal: secret })).join(' ')))
+  assert.ok(!steered.includes(shown))
+  const devices = await Promise.all(Array.from({ length: 256 }, async () => (await vault.identity()).publicKey))
+  const substituted = await Promise.all(devices.map(async (device) => (await vault.deviceWords({ device, nonce: adminNonce, reveal: swappedSecret })).join(' ')))
+  assert.ok(!substituted.includes(shown))
+  const reopened = await Promise.all(tries.slice(0, 256).map(async (other) => hex(await vault.askCommit({ device: swapped, reveal: other }))))
+  assert.ok(!reopened.includes(hex(swappedCommit)))
 })
 
 test('an invite letter locks with a key from the link secret: the vector matches, and another secret or workspace opens nothing', async (t) => {

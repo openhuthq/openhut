@@ -158,8 +158,12 @@ export async function fingerprint(device: Bytes): Promise<string> {
   return toBase64(await sha256(concat([text.encode('openhut/device\0'), device])))
 }
 
-export async function deviceWords({ device, nonce }: { device: Bytes; nonce: Bytes }): Promise<string[]> {
-  const hash = await sha256(concat([text.encode('openhut/device-words\0'), device, nonce]))
+export async function askCommit({ device, reveal }: { device: Bytes; reveal: Bytes }): Promise<Bytes> {
+  return sha256(concat([text.encode('openhut/ask\0'), device, reveal]))
+}
+
+export async function deviceWords({ device, nonce, reveal }: { device: Bytes; nonce: Bytes; reveal: Bytes }): Promise<string[]> {
+  const hash = await sha256(concat([text.encode('openhut/words\0'), device, nonce, reveal]))
   const bits = Math.floor([...hash.subarray(0, 6)].reduce((all, byte) => all * 256 + byte, 0) / 16)
   return [3, 2, 1, 0].map((at) => wordlist[Math.floor(bits / 2048 ** at) % 2048] ?? '')
 }

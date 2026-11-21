@@ -207,7 +207,7 @@ test('taking letters returns the used, stale, unreadable and strangers’ letter
   assert.equal(keysService.account()?.workspace.version, 2)
 })
 
-test('the 4 words need the admin’s nonce; removing someone from a team drops them without a key change; Change keys rotates, and the removed member can’t read anything written after', async () => {
+test('the 4 words need the admin’s nonce and the device’s revealed secret; removing someone from a team drops them without a key change; Change keys rotates, and the removed member can’t read anything written after', async () => {
   await keysService.setSession(undefined)
   await keysService.relock({ sub: 'dev-mo', email: 'mo@example.com' })
   await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
@@ -222,10 +222,13 @@ test('the 4 words need the admin’s nonce; removing someone from a team drops t
   const v2 = await signList({ signer: await keysService.device(), body: { ...body, version: 2, previous: await anchorOf(team.list), at, members: [...body.members, { email: 'sara@example.com', role: 'admin', devices: [key(sara)] }, { email: 'ana@example.com', role: 'member', devices: [key(ana)] }], added: { ...body.added, [key(sara)]: at, [key(ana)]: at } } })
   assert.ok(await roomKeys.advance({ lists: [v2], ws }))
   const nonce = newKey(16)
-  const words = await deviceWords({ device: anaMac.publicKey, nonce })
-  await assert.rejects(roomKeys.approve({ ws, email: 'ana@example.com', device: key(anaMac), words: ['tiger', 'salt', 'brown', 'lake'], nonce: toBase64(nonce) }), (err: Error & { status?: number }) => err.status === 400)
-  await assert.rejects(roomKeys.approve({ ws, email: 'ana@example.com', device: key(anaMac), words, nonce: toBase64(newKey(16)) }), (err: Error & { status?: number }) => err.status === 400)
-  const approved = await roomKeys.approve({ ws, email: 'ana@example.com', device: key(anaMac), words, nonce: toBase64(nonce) })
+  const reveal = newKey()
+  const words = await deviceWords({ device: anaMac.publicKey, nonce, reveal })
+  const approve = (input: { words: string[]; nonce: Uint8Array; reveal: Uint8Array }) => roomKeys.approve({ ws, email: 'ana@example.com', device: key(anaMac), words: input.words, nonce: toBase64(input.nonce), reveal: toBase64(input.reveal) })
+  await assert.rejects(approve({ words: ['tiger', 'salt', 'brown', 'lake'], nonce, reveal }), (err: Error & { status?: number }) => err.status === 400)
+  await assert.rejects(approve({ words, nonce: newKey(16), reveal }), (err: Error & { status?: number }) => err.status === 400)
+  await assert.rejects(approve({ words, nonce, reveal: newKey() }), (err: Error & { status?: number }) => err.status === 400)
+  const approved = await approve({ words, nonce, reveal })
   assert.deepEqual(bodyOf(approved.list)?.members.find((member) => member.email === 'ana@example.com')?.devices, [key(ana), key(anaMac)])
   assert.ok(await roomKeys.advance({ lists: [approved.list], ws }))
   const anaKey = roomKeys.room(ws)?.workspace.key ?? ''
