@@ -7,6 +7,8 @@ import { migrate, db } from '../../../src/server/platform/db.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { seal, unseal } from '../../../src/server/platform/secrets.ts'
 import { keysService } from '../../../src/server/cloud/keys-service.ts'
+import { keyStore } from '../../../src/server/cloud/key-store.ts'
+import { roomKeys } from '../../../src/server/cloud/room-keys.ts'
 import { fromBase64, identity, letter, lock, newKey, newPairing, pairingWorkspace, read, slot, toBase64, unlock } from '@openhut/common/vault/vault.ts'
 import { anchorOf, check, signList } from '@openhut/common/cloud/member-list.ts'
 
@@ -15,7 +17,7 @@ const FILE = join(config.dataDir, 'cloud-keys.sealed')
 const stored = () => JSON.parse(unseal(readFileSync(FILE, 'utf8'))) as { device: string; machine: string; account: { key: string; workspace: { key: string } } }
 
 test('keys are stored only sealed, in a file only you can read when there is no keychain', async () => {
-  assert.equal(keysService.keyStore(), 'file')
+  assert.equal(keyStore.kind(), 'file')
   await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   const kit = await keysService.newKit()
   await keysService.setKit({ box: kit.box, savedAt: new Date().toISOString() })
@@ -35,7 +37,7 @@ test('a signed-out Mac unlocks with the 12 words: the kit box opens the account 
   await keysService.setKit({ box: kit.box, savedAt: new Date().toISOString() })
   const mine = { ...await keysService.workspaceBox(account), chain: [account.list] }
   const foreign = { ...mine, id: 'another_ws', key: (await keysService.workspaceBox({ ...account, key: toBase64(newKey()) })).key }
-  const saved = { kit: keysService.kitBox() ?? '', workspaces: [foreign, mine] }
+  const saved = { kit: keysService.kitState().saved?.box ?? '', workspaces: [foreign, mine] }
   await keysService.setSession(undefined)
   await keysService.forget()
   await keysService.setLocked({ sub: 'dev-mo', email: 'mo@example.com' })
@@ -70,11 +72,11 @@ test('key boxes are signed by the account key, and a box another account key mad
 test('signing in with another Google account is refused, and the first account keeps its keys and kit', async () => {
   const mo = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   await keysService.setKit({ box: (await keysService.newKit()).box, savedAt: new Date().toISOString() })
-  const kit = keysService.kit()
+  const kit = keysService.kitState().saved
   await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error & { status?: number }) => err.status === 409 && /keeps the keys of mo@example\.com\. Sign in with that account, or forget it below\./.test(err.message))
   assert.deepEqual(keysService.account(), mo)
-  assert.deepEqual(keysService.kit(), kit)
-  const box = keysService.kitBox()
+  assert.deepEqual(keysService.kitState().saved, kit)
+  const box = keysService.kitState().saved?.box
   await keysService.setKit(undefined)
   await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error) => /keeps the keys of mo@example\.com\. Sign in with that account and save a recovery kit first\./.test(err.message))
   await keysService.setKit(kit && box ? { box, savedAt: kit.savedAt } : undefined)
@@ -120,12 +122,12 @@ test('Not me removes the device in one list version with a new workspace key and
   const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   await keysService.setSession({ token: 't', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
   const [stolen, phone] = await Promise.all([identity(), identity()])
-  const body = keysService.members()
+  const body = roomKeys.members()
   assert.ok(body)
   const at = Date.now()
   const mine = body.members[0]
   const added = await signList({ signer: await keysService.device(), body: { ...body, version: 2, previous: await anchorOf(account.list), at, members: [{ ...mine, devices: [...mine.devices, toBase64(stolen.publicKey), toBase64(phone.publicKey)] }], added: { ...body.added, [toBase64(stolen.publicKey)]: at, [toBase64(phone.publicKey)]: at } } })
-  assert.ok(await keysService.advance([added]))
+  assert.ok(await roomKeys.advance({ lists: [added] }))
   const oldKey = fromBase64(account.workspace.key)
   const { list, next, letters, handover } = await keysService.change([toBase64(stolen.publicKey)])
   const after = await check({ anchor: await anchorOf(account.list), chain: [account.list, added, list] })
@@ -153,15 +155,15 @@ test('Not me also drops runtimes added at or after the removed device, so a runt
   const account = keysService.mustBeOn()
   const [kept, stolen, planted] = await Promise.all([identity(), identity(), identity()])
   const [k, s, p] = [kept, stolen, planted].map((each) => toBase64(each.publicKey))
-  const body = keysService.members()
+  const body = roomKeys.members()
   assert.ok(body)
   const t1 = Math.max(Date.now(), body.at ?? 0) + 1000
   const grow = async ({ signer, at, device, runtime }: { signer: Awaited<ReturnType<typeof identity>>; at: number; device: string; runtime: boolean }) => {
-    const now = keysService.members()
+    const now = roomKeys.members()
     const me = now?.members.find((member) => member.email === account.email)
     assert.ok(now && me)
     const list = await signList({ signer, body: { ...now, version: now.version + 1, previous: await anchorOf(keysService.account()?.list ?? account.list), at, members: now.members.map((member) => member === me ? { ...me, devices: [...me.devices, device] } : member), runtimes: runtime ? [...now.runtimes ?? [], device] : now.runtimes, added: { ...now.added, [device]: at } } })
-    assert.ok(await keysService.advance([list]))
+    assert.ok(await roomKeys.advance({ lists: [list] }))
   }
   await grow({ signer: await keysService.device(), at: t1, device: k, runtime: true })
   await grow({ signer: await keysService.device(), at: t1 + 1, device: s, runtime: false })
@@ -180,13 +182,13 @@ test('taking letters returns the used, stale, unreadable and strangers’ letter
   const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   await keysService.setSession({ token: 't', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
   const [other, stranger] = await Promise.all([identity(), identity()])
-  const body = keysService.members()
+  const body = roomKeys.members()
   assert.ok(body)
   const me = (await keysService.device()).publicKey
   const t1 = Math.max(Date.now(), body.at ?? 0) + 1000
   const v2 = await signList({ signer: await keysService.device(), body: { ...body, version: 2, previous: await anchorOf(account.list), at: t1, members: [{ ...body.members[0], devices: [...body.members[0].devices, toBase64(other.publicKey)] }], added: { ...body.added, [toBase64(other.publicKey)]: t1 } } })
   const v3 = await signList({ signer: other, body: { ...body, version: 3, previous: await anchorOf(v2), at: t1 + 4 * 24 * 60 * 60_000, keyVersion: 2, members: [{ ...body.members[0], devices: [...body.members[0].devices, toBase64(other.publicKey)] }], added: { ...body.added, [toBase64(other.publicKey)]: t1 } } })
-  assert.ok(await keysService.advance([v2, v3]))
+  assert.ok(await roomKeys.advance({ lists: [v2, v3] }))
   const anchor = await anchorOf(account.list)
   const sent = async ({ id, sender, version }: { id: string; sender: typeof other; version: number }) => {
     const plain = new TextEncoder().encode(JSON.stringify({ key: toBase64(newKey()), version, anchor }))
@@ -194,7 +196,7 @@ test('taking letters returns the used, stale, unreadable and strangers’ letter
     return { id, object: 'letter' as const, to: toBase64(me), from: toBase64(sender.publicKey), workspace: account.workspace.id, purpose: 'workspace-key' as const, body: toBase64(body ?? new Uint8Array()) }
   }
   const garbage = { ...await sent({ id: 'garbage', sender: other, version: 2 }), body: toBase64(newKey(80)) }
-  const done = await keysService.takeLetters([await sent({ id: 'old', sender: other, version: 1 }), await sent({ id: 'future', sender: other, version: 3 }), garbage, await sent({ id: 'stranger', sender: stranger, version: 2 }), await sent({ id: 'used', sender: other, version: 2 })])
+  const done = await roomKeys.takeLetters({ found: [await sent({ id: 'old', sender: other, version: 1 }), await sent({ id: 'future', sender: other, version: 3 }), garbage, await sent({ id: 'stranger', sender: stranger, version: 2 }), await sent({ id: 'used', sender: other, version: 2 })] })
   assert.deepEqual(done.sort(), ['garbage', 'old', 'stranger', 'used'])
   assert.equal(keysService.account()?.workspace.version, 2)
 })
@@ -203,7 +205,7 @@ test('a copied Mac sees its keys belong to another machine before anything reads
   await keysService.setSession({ token: 'original-session', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
   const before = stored()
   writeFileSync(FILE, seal(JSON.stringify({ ...before, machine: 'another-mac' })), { mode: 0o600 })
-  const probe = `const { keysService } = await import(${JSON.stringify(new URL('../../../src/server/cloud/keys-service.ts', import.meta.url).pathname)}); const { toBase64 } = await import('@openhut/common/vault/vault.ts'); const early = { account: keysService.account() ?? null, session: keysService.session() ?? null, kit: keysService.kit() }; console.log(JSON.stringify({ ...early, device: toBase64((await keysService.device()).publicKey) })); process.exit(0)`
+  const probe = `const { keysService } = await import(${JSON.stringify(new URL('../../../src/server/cloud/keys-service.ts', import.meta.url).pathname)}); const { toBase64 } = await import('@openhut/common/vault/vault.ts'); const early = { account: keysService.account() ?? null, session: keysService.session() ?? null, kit: keysService.kitState().saved }; console.log(JSON.stringify({ ...early, device: toBase64((await keysService.device()).publicKey) })); process.exit(0)`
   const out = execFileSync(process.execPath, ['--input-type=module', '-e', probe], { env: process.env, encoding: 'utf8', cwd: new URL('.', import.meta.url).pathname })
   const after = JSON.parse(out.trim().split('\n').at(-1) ?? '') as { device: string; account: unknown; session: unknown; kit: unknown }
   assert.deepEqual([after.account, after.session, after.kit], [null, null, null])

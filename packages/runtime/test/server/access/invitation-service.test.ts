@@ -37,7 +37,8 @@ const { invitationController } = await import('../../../src/server/access/invita
 const { migrate } = await import('../../../src/server/platform/db.ts')
 const { answerErrors } = await import('../../../src/server/platform/http-error.ts')
 const { validateWithZod } = await import('../../../src/server/platform/validation.ts')
-const { inviteId, keysService } = await import('../../../src/server/cloud/keys-service.ts')
+const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
+const { inviteId } = await import('../../../src/server/cloud/room-keys.ts')
 const { computerId, relayKeyHex } = await import('../../../src/server/platform/secrets.ts')
 const { relayService } = await import('../../../src/server/relay/relay-service.ts')
 

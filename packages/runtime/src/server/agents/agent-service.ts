@@ -28,6 +28,7 @@ import { resolveSlots } from '../models/model-slots.ts'
 import { providerService } from '../models/provider-service.ts'
 import { renderFiles, type RenderedChannel } from './hermes-files.ts'
 import { keysService } from '../cloud/keys-service.ts'
+import { roomKeys } from '../cloud/room-keys.ts'
 
 const MAX_AGENTS = 250
 const RECONCILE_MS = 30_000
@@ -72,7 +73,7 @@ export const agentService = {
     const clean = cleanName(name)
     requireModel(model)
     const team = workspace && workspace !== keysService.account()?.workspace.id ? workspace : null
-    if (team && !keysService.room(team)) throw new HttpError(400, 'This computer isn’t in that workspace.', { param: 'workspace' })
+    if (team && !roomKeys.room(team)) throw new HttpError(400, 'This computer isn’t in that workspace.', { param: 'workspace' })
     const net = await freeNet()
     const row = await db.insertInto('agent').values({
       id: newId('ag'), name: clean, owner_id: actor.id, model: model ?? DEFAULT_MODEL, net, channel_key: seal(randomBytes(24).toString('hex')), face, workspace: team,
@@ -402,7 +403,7 @@ export function runsHere({ row, me }: { row: Pick<AgentRow, 'runs_on'>; me: stri
 }
 
 function canManage(row: Pick<AgentRow, 'workspace' | 'owner'>): boolean {
-  const role = keysService.roleIn(row.workspace ?? undefined)
+  const role = roomKeys.roleIn(row.workspace ?? undefined)
   return !row.owner || row.owner === keysService.account()?.email || role === undefined || role !== 'member'
 }
 
