@@ -47,7 +47,7 @@ export const cloudService = {
     const here = await keysService.deviceKey()
     const mine = members?.members.find((member) => member.email === account?.email)
     const young = on && members ? youngUntil(members, here) : 0
-    const devices = on && members && mine ? mine.devices.filter((key) => key !== mine.kit).map((key) => ({ key, here: key === here, addedAt: addedOf(members, key) ? new Date(addedOf(members, key)).toISOString() : null, name: members.names?.[key] ?? null, kind: members.runtimes?.includes(key) ? 'server' as const : 'mac' as const })) : []
+    const devices = on && members && mine ? mine.devices.filter((key) => key !== mine.kit).map((key) => ({ key, here: key === here, addedAt: addedOf(members, key) ? new Date(addedOf(members, key)).toISOString() : null, name: members.names?.[key] ?? null, kind: members.runtimes?.includes(key) ? 'server' as const : 'mac' as const })).sort((a, b) => (a.addedAt ?? '').localeCompare(b.addedAt ?? '')) : []
     return {
       object: 'cloud', status: locked ? 'locked' : on ? (syncService.ready() ? 'on' : 'offline') : 'off', email: locked?.email ?? (on && account ? account.email : null),
       device: here,
@@ -165,10 +165,10 @@ export const cloudService = {
         : syncService.change({ ws, emails: [account.email] })
       await done.catch((err: unknown) => log.warn({ event: 'cloud.leave_failed', error: messageOf(err) }))
     }
-    const home = await cloud.room({ method: 'DELETE', workspace: account.workspace.id, path: '', token, body: await keysService.deleteProof(account.workspace.id) })
-    if (home.status !== 200 && home.status !== 404) throw new HttpError(502, `OpenHut Cloud didn’t delete your workspace (HTTP ${home.status}). Try again.`)
     const wiped = await cloud.account({ method: 'DELETE', path: '/v1/account', token, body: proof })
     if (wiped.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t delete your keys (HTTP ${wiped.status}). Try again.`)
+    const home = await cloud.room({ method: 'DELETE', workspace: account.workspace.id, path: '', token, body: await keysService.deleteProof(account.workspace.id) })
+    if (home.status !== 200 && home.status !== 404) throw new HttpError(502, `OpenHut Cloud didn’t delete your workspace (HTTP ${home.status}). Try again.`)
     await syncService.reset({ restoring: false })
     await keysService.forgetHere()
     return cloudService.status()
@@ -549,7 +549,9 @@ async function checkPairing(): Promise<void> {
   if (Date.now() > Date.parse(now.reply.expiresAt) || !keysService.locked()) return stopPairing()
   const token = await keysService.token()
   for (const workspace of now.workspaces) {
-    const found = Letters.safeParse((await cloud.room({ method: 'GET', workspace, path: '/letters', token })).json).data?.data ?? []
+    const got = await cloud.room({ method: 'GET', workspace, path: '/letters', token })
+    if (got.status === 403) return removed()
+    const found = Letters.safeParse(got.json).data?.data ?? []
     for (const each of found.filter((one) => one.purpose === 'pairing')) {
       const key = await keysService.readPairing({ secret: now.secret, workspace, found: each })
       const boxes = await boxesOf(token)
@@ -560,6 +562,12 @@ async function checkPairing(): Promise<void> {
       }
     }
   }
+}
+
+async function removed(): Promise<void> {
+  stopPairing()
+  await keysService.removedHere()
+  throw new HttpError(403, `This ${HERE} was removed from your account. Sign in again to add it back.`)
 }
 
 function listedUnder({ account, device }: { account: Account; device: string }): boolean {
@@ -616,11 +624,10 @@ async function send({ letters, token }: { letters: Queued[]; token: string }): P
   return failed
 }
 
-async function rotate({ changed: { list, next, letters, handover }, drop }: { changed: Awaited<ReturnType<typeof keysService.change>>; drop: ('kit' | 'kit-confirmed' | 'passkey')[] }): Promise<void> {
+async function rotate({ changed: { list, next, letters }, drop }: { changed: Awaited<ReturnType<typeof keysService.change>>; drop: ('kit' | 'kit-confirmed' | 'passkey')[] }): Promise<void> {
   const token = await keysService.token()
   await finishMoves(token)
   const moves: Move[] = [
-    { method: 'POST', path: '/v1/signers', body: handover },
     { method: 'POST', path: '/v1/workspaces', body: await keysService.workspaceBox({ account: next }) },
     ...await Promise.all(drop.map(async (kind): Promise<Move> => ({ method: 'DELETE', path: `/v1/key-boxes/${kind}`, body: await keysService.signBox({ account: next, name: `delete/${kind}`, body: '' }) }))),
   ]
@@ -634,9 +641,11 @@ async function rotate({ changed: { list, next, letters, handover }, drop }: { ch
 }
 
 async function finishMoves(token: string): Promise<void> {
+  const signer = await keysService.accountDeviceKey()
   for (const move of keysService.moves()) {
     const { status } = await cloud.account({ ...move, token }).catch(() => ({ status: 0 }))
-    boxesDiffer = status !== 200 && !(status === 404 && move.method === 'DELETE')
+    const stale = (status === 403 || status === 409) && z.safeParse(z.object({ by: z.string() }), move.body).data?.by !== signer
+    boxesDiffer = status !== 200 && !(status === 404 && move.method === 'DELETE') && !stale
     if (boxesDiffer) throw new HttpError(502, `Your keys changed, but OpenHut Cloud didn’t move your recovery kit over yet (HTTP ${status}). OpenHut tries again every minute, or make a new kit.`)
     await keysService.setMoves(keysService.moves().slice(1))
   }

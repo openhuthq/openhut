@@ -43,7 +43,7 @@ export function CloudSettings() {
     </div>
     <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
       <div className="flex items-center gap-3 px-4 py-3"><I icon={CloudUploadIcon} size={18} className="text-hue-blue" /><span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Backup</span><span className={data.backup.problem || data.backup.state === 'failed' ? 'text-[12px] text-fail' : 'text-[12px] text-mute'}>{backupNote({ ...data.backup, offline: data.status === 'offline' })}</span></span></div>
-      <div className="flex items-center gap-3 px-4 py-3"><I icon={SquareLock02Icon} size={18} className="text-hue-amber" /><span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Only your devices can read it</span><span className={data.kit?.differs ? 'text-[12px] text-fail' : 'text-[12px] text-mute'}>{kitNote(data.kit)}{data.keyStore === 'file' && ' · Keys in a file only you can read'}</span></span><Button type="button" variant="secondary" className={PILL} onClick={() => open('kit')}>{data.kit ? 'Make a new kit' : 'Save a kit'}</Button></div>
+      <div className="flex items-center gap-3 px-4 py-3"><I icon={SquareLock02Icon} size={18} className="text-hue-amber" /><span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Only your devices can read it</span><span className={data.kit?.differs ? 'text-[12px] text-fail' : 'text-[12px] text-mute'}>{kitNote(data.kit)}{data.keyStore === 'file' && ' · Keys in a file only you can read'}</span></span>{!data.youngUntil && <Button type="button" variant="secondary" className={PILL} onClick={() => open('kit')}>{data.kit ? 'Make a new kit' : 'Save a kit'}</Button>}</div>
       {helper?.passkeys && helper.prf && <div className="flex items-center gap-3 px-4 py-3"><I icon={FingerPrintIcon} size={18} className="text-hue-green" /><span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Passkey</span><span className="text-[12px] text-mute">{data.passkey ? `Touch ID unlocks a new ${HERE}` : `Unlock a new ${HERE} with Touch ID`}</span></span>{!data.passkey && !data.youngUntil && <Button type="button" variant="secondary" className={PILL} disabled={addPasskey.isPending} onClick={() => addPasskey.mutate(email, { onError: toastError })}>Add a passkey</Button>}</div>}
     </div>
     <div className="flex items-center gap-4 px-1">
@@ -93,13 +93,15 @@ function KeptAccount({ email }: { email: string }) {
   </Row></div>
 }
 
+const addedAt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })
+
 export function CloudDevices() {
   const cloud = useCloud().data
   const signIn = useSignIn()
   const remove = useRemoveMac()
   if (cloud?.status === 'on' || cloud?.status === 'offline') return <>
     {cloud.rotate.length > 0 && <RotateConnections rotate={cloud.rotate} />}
-    {cloud.devices.map((device) => <Row key={device.key} icon={<DeviceIcon kind={device.kind} />} title={device.name ?? (device.kind === 'server' ? 'Computer that runs agents' : 'Mac')} note={device.here ? `This ${HERE}` : device.addedAt && `Added ${shortDateTime.format(new Date(device.addedAt))}`}>
+    {cloud.devices.map((device) => <Row key={device.key} icon={<DeviceIcon kind={device.kind} />} title={device.name ?? (device.kind === 'server' ? 'Computer that runs agents' : 'Mac')} note={[device.here && `This ${HERE}`, device.addedAt && `Added ${addedAt.format(new Date(device.addedAt))}`].filter(Boolean).join(' · ')}>
       {!device.here && !isPhone() && !cloud.youngUntil && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${device.name ?? 'this device'}?`} detail={device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))}. ${REMOVE_DETAIL}` : REMOVE_DETAIL} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
     </Row>)}
     {cloud.youngUntil && <p className="m-0 px-1 text-[12.5px] text-mute">This {HERE} was added less than 3 days ago. You can remove devices from it after {shortDate.format(new Date(cloud.youngUntil))}.</p>}

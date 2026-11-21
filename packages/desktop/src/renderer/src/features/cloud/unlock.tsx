@@ -171,7 +171,9 @@ export function NewMacAlert({ cloud }: { cloud: Cloud }) {
   return <div role="alert" className="fixed top-14 right-[294px] z-50 flex w-[380px] max-w-[calc(100%-32px)] items-center gap-3 rounded-[18px] border border-hair bg-card p-2.5 pr-3 shadow-[0_8px_24px_oklch(0%_0_0/.10)]">
     <span className="grid size-9 shrink-0 place-items-center"><DeviceIcon kind={fresh.kind} /></span>
     <span className="grid min-w-0 flex-1 gap-px text-[13px]"><span className="font-semibold">New {thing} added</span>{fresh.name && <span className="truncate text-mute">{fresh.name}</span>}<span className="text-mute">{when}</span></span>
-    <ConfirmButton variant="secondary" className="shrink-0 rounded-xl px-3.5 text-[12.5px] text-fail" disabled={remove.isPending} question={`Remove ${fresh.name ?? `this ${thing}`}?`} detail={`Added ${when}. ${REMOVE_DETAIL}`} action="Remove" onConfirm={() => remove.mutate(fresh.key)}>Not me</ConfirmButton>
+    {cloud.youngUntil
+      ? <span className="w-[104px] shrink-0 text-right text-[12px]/[1.3] text-mute">Remove it from an older device</span>
+      : <ConfirmButton variant="secondary" className="shrink-0 rounded-xl px-3.5 text-[12.5px] text-fail" disabled={remove.isPending} question={`Remove ${fresh.name ?? `this ${thing}`}?`} detail={`Added ${when}. ${REMOVE_DETAIL}`} action="Remove" onConfirm={() => remove.mutate(fresh.key)}>Not me</ConfirmButton>}
     <Button type="button" variant="text" className="shrink-0 px-1 text-mute" aria-label="It's mine" title="It's mine" onClick={dismiss}><I icon={Cancel01Icon} size={14} /></Button>
   </div>
 }

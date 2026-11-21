@@ -3,9 +3,9 @@ import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
-import { fromBase64, identity, toBase64 } from '@openhut/common/vault/vault.ts'
+import { fromBase64, identity, newKey, toBase64 } from '@openhut/common/vault/vault.ts'
 
-const account = { signer: undefined as string | undefined, boxes: new Map<string, { body: string; by: string; signature: string }>(), hideWorkspaces: false, failSigners: 0 }
+const account = { signer: undefined as string | undefined, boxes: new Map<string, { body: string; by: string; signature: string }>(), hideWorkspaces: false, failBoxes: 0, refuseLetters: false }
 let authorization = ''
 const cloud = createServer(async (req, res) => {
   const chunks: Buffer[] = []
@@ -13,6 +13,7 @@ const cloud = createServer(async (req, res) => {
   const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) as Record<string, string> : {}
   const reply = (status: number, json: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(json))
   const keep = (name: string, box: { body: string; by: string; signature: string }) => {
+    if (account.failBoxes-- > 0) return reply(503, { error: { type: 'api_error', message: 'busy' } })
     if (account.signer && account.signer !== box.by) return reply(403, { error: { type: 'permission_error', message: 'Only your account key can replace your key boxes.' } })
     account.signer ??= box.by
     account.boxes.set(name, box)
@@ -39,12 +40,8 @@ const cloud = createServer(async (req, res) => {
     account.boxes.delete(kind)
     return reply(200, { object: 'key_box', kind, deleted: true })
   }
-  if (req.url === '/v1/signers') {
-    if (account.failSigners-- > 0) return reply(503, { error: { type: 'api_error', message: 'busy' } })
-    if (body.by !== account.signer && body.next !== account.signer) return reply(403, { error: { type: 'permission_error', message: 'Only your current account key can hand your key boxes to a new one.' } })
-    account.signer = body.next
-    return reply(200, { object: 'signer', key: body.next })
-  }
+  if (/^\/v1\/workspaces\/[^/]+\/members$/.test(req.url ?? '') && req.method === 'PUT') account.signer = (JSON.parse(Buffer.from(body.bytes ?? '', 'base64url').toString()) as { members: { kit?: string }[] }).members[0]?.kit
+  if (/^\/v1\/workspaces\/[^/]+\/letters$/.test(req.url ?? '') && req.method === 'GET' && account.refuseLetters) return reply(403, { error: { type: 'permission_error', message: 'Not a member.' } })
   if (/^\/v1\/workspaces\/[^/]+\/(members|letters)$/.test(req.url ?? '') && req.method !== 'GET') return reply(200, body)
   reply(404, { error: { type: 'invalid_request_error', message: 'none' } })
 })
@@ -86,7 +83,7 @@ test('when both Macs sign in at once, the one whose workspace box the cloud refu
   assert.deepEqual([...account.boxes.keys()], ['workspace/ws_firstmac'])
 })
 
-test('a Not me whose signer handover fails once is kept and finished later: Make a new kit then works and the old boxes are gone', async () => {
+test('a Not me whose first move fails once is kept and finished later: Make a new kit then works and the old boxes are gone', async () => {
   await keysService.setLocked(undefined)
   Object.assign(account, { signer: undefined, hideWorkspaces: false })
   account.boxes.clear()
@@ -99,21 +96,49 @@ test('a Not me whose signer handover fails once is kept and finished later: Make
   await cloudService.newKit()
   account.boxes.set('passkey', { body: 'old-passkey', by: oldKit, signature: 'signed' })
   assert.equal(account.signer, oldKit)
-  const stolen = await identity()
-  const body = roomKeys.members()
-  assert.ok(body)
-  const at = Date.now()
-  const mine = body.members[0]
-  await roomKeys.advance({ lists: [await signList({ signer: await keysService.device(), body: { ...body, version: 2, previous: await anchorOf(first.list), at, members: [{ ...mine, devices: [...mine.devices, toBase64(stolen.publicKey)] }], added: { ...body.added, [toBase64(stolen.publicKey)]: at } } })] })
-  account.failSigners = 1
-  await assert.rejects(cloudService.notMe({ device: toBase64(stolen.publicKey) }), (err: Error & { status?: number }) => err.status === 502 && /tries again/.test(err.message))
-  assert.equal(account.signer, oldKit)
-  assert.deepEqual(keysService.moves().map((move) => `${move.method} ${move.path}`), ['POST /v1/signers', 'POST /v1/workspaces', 'DELETE /v1/key-boxes/kit', 'DELETE /v1/key-boxes/kit-confirmed', 'DELETE /v1/key-boxes/passkey'])
-  const kit = await cloudService.newKit()
+  await addStolen()
+  account.failBoxes = 1
+  await assert.rejects(cloudService.notMe({ device: stolen }), (err: Error & { status?: number }) => err.status === 502 && /tries again/.test(err.message))
   const newKit = await kitOf()
+  assert.equal(account.signer, newKit, 'the signer is the kit on the new list, with no handover')
+  assert.deepEqual(keysService.moves().map((move) => `${move.method} ${move.path}`), ['POST /v1/workspaces', 'DELETE /v1/key-boxes/kit', 'DELETE /v1/key-boxes/kit-confirmed', 'DELETE /v1/key-boxes/passkey'])
+  const kit = await cloudService.newKit()
   assert.equal(kit.words.length, 12)
   assert.notEqual(newKit, oldKit)
-  assert.equal(account.signer, newKit)
   assert.deepEqual(keysService.moves(), [])
   assert.deepEqual([...account.boxes].map(([name, each]) => [name, each.by]).sort(), [['kit', newKit], ['kit-confirmed', newKit], [`workspace/${box.id}`, newKit]])
 })
+
+test('a stored move another Mac’s rotation made stale is refused and dropped, so it doesn’t block Not me', async () => {
+  const account0 = keysService.account()
+  assert.ok(account0)
+  const stale = await keysService.signBox({ account: { ...account0, key: toBase64(newKey()) }, name: 'delete/kit', body: '' })
+  await keysService.setMoves([{ method: 'DELETE', path: '/v1/key-boxes/kit', body: stale }])
+  await addStolen()
+  const done = await cloudService.notMe({ device: stolen })
+  assert.equal(done.devices.some((each) => each.key === stolen), false)
+  assert.deepEqual(keysService.moves(), [])
+  assert.equal(account.signer, toBase64((await accountDevice(fromBase64(keysService.account()?.key ?? ''))).publicKey))
+})
+
+test('a locked Mac whose device key was removed stops pairing at once, gets a new device key, and asks to sign in again', async () => {
+  const before = await keysService.deviceKey()
+  await keysService.relock({ sub: 'dev-sara', email: 'sara@example.com' })
+  account.refuseLetters = true
+  await assert.rejects(cloudService.startPairing(), (err: Error & { status?: number }) => err.status === 403 && /removed from your account\. Sign in again/.test(err.message))
+  const after = await cloudService.status()
+  assert.deepEqual([after.status, after.needsSignIn, after.email], ['locked', true, 'sara@example.com'])
+  assert.notEqual(after.device, before)
+  account.refuseLetters = false
+})
+
+let stolen = ''
+async function addStolen(): Promise<void> {
+  const current = keysService.account()
+  const body = roomKeys.members()
+  assert.ok(current && body)
+  stolen = toBase64((await identity()).publicKey)
+  const at = Date.now()
+  const mine = body.members[0]
+  await roomKeys.advance({ lists: [await signList({ signer: await keysService.device(), body: { ...body, version: body.version + 1, previous: await anchorOf(current.list), at, members: [{ ...mine, devices: [...mine.devices, stolen] }], added: { ...body.added, [stolen]: at } } })] })
+}

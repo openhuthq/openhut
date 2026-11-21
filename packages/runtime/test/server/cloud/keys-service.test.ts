@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { migrate, db } from '../../../src/server/platform/db.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { seal, unseal } from '../../../src/server/platform/secrets.ts'
-import { keysService } from '../../../src/server/cloud/keys-service.ts'
+import { accountDevice, keysService } from '../../../src/server/cloud/keys-service.ts'
 import { keyStore } from '../../../src/server/cloud/key-store.ts'
 import { bodyOf, roomKeys } from '../../../src/server/cloud/room-keys.ts'
 import { deviceWords, fromBase64, identity, letter, lock, newKey, newPairing, pairingWorkspace, read, slot, toBase64, unlock } from '@openhut/common/vault/vault.ts'
@@ -129,13 +129,13 @@ test('Not me removes the device in one list version with a new workspace key and
   const added = await signList({ signer: await keysService.device(), body: { ...body, version: 2, previous: await anchorOf(account.list), at, members: [{ ...mine, devices: [...mine.devices, toBase64(stolen.publicKey), toBase64(phone.publicKey)] }], added: { ...body.added, [toBase64(stolen.publicKey)]: at, [toBase64(phone.publicKey)]: at } } })
   assert.ok(await roomKeys.advance({ lists: [added] }))
   const oldKey = fromBase64(account.workspace.key)
-  const { list, next, letters, handover } = await keysService.change([toBase64(stolen.publicKey)])
+  const { list, next, letters } = await keysService.change([toBase64(stolen.publicKey)])
   const after = await check({ anchor: await anchorOf(account.list), chain: [account.list, added, list] })
   assert.ok(after)
   assert.equal(after.keyVersion, 2)
   assert.ok(after.removed.includes(toBase64(stolen.publicKey)))
-  assert.ok(after.removed.includes(handover.by))
-  assert.equal(after.members[0].kit, handover.next)
+  assert.ok(after.removed.includes(mine.kit ?? ''))
+  assert.equal(after.members[0].kit, toBase64((await accountDevice(fromBase64(next.key))).publicKey))
   assert.notEqual(next.key, account.key)
   assert.deepEqual(next.workspace.old, { 1: account.workspace.key })
   assert.equal(letters.some((each) => each.to === toBase64(stolen.publicKey)), false)
