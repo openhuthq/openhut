@@ -27,7 +27,7 @@ export const keysService = {
 
   account: (): Account | undefined => stored()?.account,
   locked: (): { sub: string; email: string } | undefined => stored()?.locked,
-  kitState: (): { saved: { box: string; savedAt: string } | null; pending: boolean } => ({ saved: kitOf(stored()) ?? null, pending: stored()?.kit?.confirmed === false }),
+  kitState: (): { saved: { box: string; savedAt: string } | null; pending: string | null } => ({ saved: kitOf(stored()) ?? null, pending: stored()?.kit?.confirmed === false ? stored()?.kit?.box ?? null : null }),
 
   setLocked: async (locked: { sub: string; email: string } | undefined): Promise<void> => keyStore.write({ ...await keyStore.read(), locked }),
 
@@ -88,7 +88,7 @@ export const keysService = {
     if (box.by !== by || !signature) return false
     const signed = (savedAt?: number) => checkProof({ device: by, proof: 'key-box', parts: boxParts({ account, name, body: box.body, savedAt }), signature })
     if (!(box.savedAt && await signed(Date.parse(box.savedAt))) && !await signed()) return false
-    if (name === 'kit') return true
+    if (name === 'kit' || name === 'kit-confirmed') return true
     const plain = await unlock({ keys: { 1: fromBase64(account.key) }, bind: bind({ sub: account.sub, name: `workspace/${account.workspace.id}` }), locked: fromBase64(box.body) })
     return Boolean(plain && equal({ a: plain, b: await secretOf({ room: account, own: true }) }))
   },
