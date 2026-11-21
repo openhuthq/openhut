@@ -100,6 +100,10 @@ const room = (id: string) => `/api/cloud/workspaces/${encodeURIComponent(id)}`
 
 export const useRemoveMember = () => useCloudCall(({ id, email }: { id: string; email: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/members/${encodeURIComponent(email)}`, method: 'DELETE' }))
 
+export const useRemoveDevice = () => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/devices/${encodeURIComponent(device)}`, method: 'DELETE' }))
+
+export const useChangeKeys = () => useCloudCall((id: string) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/keys`, method: 'POST' }))
+
 export const useDeleteWorkspace = () => useCloudCall(({ id, name }: { id: string; name: string }) => request({ schema: Cloud, computer: 'local', path: room(id), method: 'DELETE', body: { name } }))
 
 export const useApprove = () => useCloudCall(({ id, device, words }: { id: string; device: string; words: string[] }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}/approvals`, method: 'POST', body: { words } }))

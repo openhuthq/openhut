@@ -51,7 +51,8 @@ async function follows({ previous, next }: { previous: Link; next: Link }): Prom
   if (runtimesOf(a).includes(by) || !runtimesOf(a).every((key) => runtimesOf(b).includes(key) || !devicesOf(b).includes(key))) return false
   const invite = a.invites.find((each) => each.key === by)
   const signer = invite ? undefined : a.members.find((member) => member.devices.includes(by))
-  if (!tracksRemoved({ previous: a, next: b, owner: signer?.role === 'owner' })) return false
+  const back = invite ? b.members.find((member) => member.email === invite.email)?.devices.find((key) => a.removed.includes(key)) : undefined
+  if (!tracksRemoved({ previous: a, next: b, owner: signer?.role === 'owner', back })) return false
   if (signer?.role !== 'owner' && signer?.role !== 'admin' && keyVersionOf(b) !== keyVersionOf(a)) return false
   if (invite) return joins({ previous: a, next: b, invite })
   if (!signer) return false
@@ -83,6 +84,11 @@ export function youngUntil(body: MemberListBody, key: string): number {
   return since > 0 && mine.some((each) => addedOf(body, each) < since) ? since + YOUNG_MS : 0
 }
 
+export function newUntil(body: MemberListBody, key: string): number {
+  const since = addedOf(body, key)
+  return since > 0 && devicesOf(body).some((each) => addedOf(body, each) < since) ? since + YOUNG_MS : 0
+}
+
 function youngMay({ previous: a, next: b, signer, by }: { previous: MemberListBody; next: MemberListBody; signer: Member; by: string }): boolean {
   const devices = b.members.find((member) => member.email === signer.email)?.devices ?? []
   return onlyDevices({ previous: a, next: b, signer, devices }) && signer.devices.every((key) => key === by || devices.includes(key)) && a.removed.every((key) => b.removed.includes(key))
@@ -110,10 +116,10 @@ function changesOnlySelf({ previous, next, signer }: { previous: MemberListBody;
   return same(others(previous), others(next)) && same(previous.invites, next.invites)
 }
 
-function tracksRemoved({ previous, next, owner }: { previous: MemberListBody; next: MemberListBody; owner: boolean }): boolean {
+function tracksRemoved({ previous, next, owner, back }: { previous: MemberListBody; next: MemberListBody; owner: boolean; back?: string }): boolean {
   const dropped = (keysOf: (body: MemberListBody) => string[]) => keysOf(previous).filter((key) => !keysOf(next).includes(key))
   const gone = [...dropped(devicesOf), ...dropped((body) => body.invites.map((each) => each.key))]
-  const allowed = new Set([...previous.removed, ...gone])
+  const allowed = new Set([...previous.removed, ...gone].filter((key) => key !== back))
   const removed = new Set(next.removed)
   if (!gone.every((key) => removed.has(key)) || !next.removed.every((key) => allowed.has(key))) return false
   return owner || removed.size === allowed.size

@@ -2,9 +2,11 @@ import * as z from 'zod/mini'
 import { Letter, MemberList, MemberListBody, parseJson, type Role } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, check, keyVersionOf, signList, youngUntil } from '@openhut/common/cloud/member-list.ts'
 import { deviceWords, fromBase64, identity, letter, lock, lockInvite, newKey, sha256, slot, toBase64, unlock, type Bytes, type Identity } from '@openhut/common/vault/vault.ts'
+import { cloud } from '../platform/cloud.ts'
+import { log } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
-import { keyStore, Keys, type Account, type Room, type Stored } from './key-store.ts'
-import { accountDevice, deviceName, keysService, openLetter, sealTo, type Sent } from './keys-service.ts'
+import { keyStore, Keys, type Account, type Outgoing, type Room, type Stored } from './key-store.ts'
+import { accountDevice, deviceName, keysService, notYoungIn, openLetter, sealTo, type Sent } from './keys-service.ts'
 
 const INVITE_MS = 48 * 60 * 60_000
 const KEEP_REMOVED = 1000
@@ -57,7 +59,11 @@ export const roomKeys = {
     const now = keyStore.current()
     const fresh = roomKeys.room(room.workspace.id)
     if (!body || !last || !now || !fresh || fresh.list.bytes !== room.list.bytes) return null
-    await keyStore.write(withRoom(now, { workspace: fresh.workspace, list: last, first: fresh.first }))
+    const pending = now.rotating?.find((each) => each.room.workspace.id === fresh.workspace.id)
+    const landed = pending && lists.some((list) => list.bytes === pending.room.list.bytes)
+    const settled = pending && (bodyOf(pending.room.list)?.version ?? 0) <= body.version
+    const workspace = landed ? pending.room.workspace : fresh.workspace
+    await keyStore.write({ ...withRoom(now, { workspace, list: last, first: fresh.first }), rotating: settled ? now.rotating?.filter((each) => each !== pending) : now.rotating, outbox: landed ? [...now.outbox ?? [], ...pending.letters] : now.outbox })
     return body
   },
 
@@ -84,13 +90,18 @@ export const roomKeys = {
     if (target.role === 'owner') throw new HttpError(403, 'The owner stays the owner. Hand the workspace over first.')
     if (role === 'owner' && (mine !== 'owner' || roomKeys.isOwn(ws))) throw new HttpError(403, mine === 'owner' ? 'Your own workspace stays yours. Make a new workspace for the team, then hand that one over.' : 'Only the owner can hand the workspace over.')
     const me = keyStore.current()?.account?.email
-    const members = body.members.map((member) => member === target ? { ...member, role } : role === 'owner' && member.email === me ? { ...member, role: 'admin' as const } : member)
+    const roleAfter = (member: MemberListBody['members'][number]): Role => {
+      if (member === target) return role
+      if (role === 'owner' && member.email === me) return 'admin'
+      return member.role
+    }
+    const members = body.members.map((member) => ({ ...member, role: roleAfter(member) }))
     return signList({ signer: await keysService.device(), body: { ...await nextOf({ list: room.list, body }), members } })
   },
 
   isOwn: (ws: string): boolean => Boolean(keyStore.current()?.account?.key) && keyStore.current()?.account?.workspace.id === ws,
 
-  async teamChange({ ws, emails = [], devices = [] }: { ws: string; emails?: string[]; devices?: string[] }): Promise<{ list: MemberList; room: Room; letters: Sent[] }> {
+  async teamChange({ ws, emails = [], devices = [], rotate = false }: { ws: string; emails?: string[]; devices?: string[]; rotate?: boolean }): Promise<{ list: MemberList; room: Room; letters: Sent[] }> {
     const account = keyStore.current()?.account
     const room = roomKeys.room(ws)
     const body = bodyOf(room?.list)
@@ -101,8 +112,10 @@ export const roomKeys = {
     if (emails.some((email) => email !== account.email && (mine === 'member' || body.members.find((member) => member.email === email)?.role === 'owner'))) throw new HttpError(403, 'Only an owner or admin can remove people, and nobody can remove the owner.')
     if (leaving && mine === 'owner') throw new HttpError(403, 'Make someone else the owner first.')
     if (leaving && roomKeys.isOwn(ws)) throw new HttpError(403, 'This is your own workspace. Delete your cloud data in Settings, Cloud instead.')
+    if (rotate && mine === 'member') throw new HttpError(403, 'Only an owner or admin can change the keys.')
     const gone = [...body.members.filter((member) => emails.includes(member.email)).flatMap((member) => member.devices), ...devices.filter((device) => body.members.some((member) => member.devices.includes(device)))]
-    const rotate = !leaving && mine !== 'member'
+    if (devices.some((device) => !body.members.some((member) => member.email === account.email && member.devices.includes(device))) && mine === 'member') throw new HttpError(403, 'Only an owner or admin can remove someone else’s device.')
+    if (gone.length && !leaving) notYoungIn({ body, device: me })
     const base = await nextOf({ list: room.list, body })
     const members = body.members.filter((member) => !emails.includes(member.email)).map((member) => ({ ...member, devices: member.devices.filter((device) => !gone.includes(device)) }))
     const kept = <T>(map: Record<string, T> = {}) => Object.fromEntries(Object.entries(map).filter(([device]) => !gone.includes(device)))
@@ -118,15 +131,15 @@ export const roomKeys = {
     return { list, room: next, letters }
   },
 
-  async approve({ ws, email, device, words }: { ws: string; email: string; device: string; words: string[] }): Promise<{ list: MemberList; letter: Sent }> {
+  async approve({ ws, email, device, words, nonce, name }: { ws: string; email: string; device: string; words: string[]; nonce: string; name?: string | null }): Promise<{ list: MemberList; letter: Sent }> {
     const { room, body } = adminRoom({ ws, sentence: 'Only an owner or admin can let a new device in.' })
     const target = body.members.find((member) => member.email === email)
     if (!room.workspace.key) throw new HttpError(409, 'This computer is still waiting for the workspace key.')
     if (!target || body.members.some((member) => member.devices.includes(device))) throw new HttpError(409, `${email} isn’t waiting with that device anymore.`)
-    const expected = await deviceWords(fromBase64(device))
+    const expected = await deviceWords({ device: fromBase64(device), nonce: fromBase64(nonce) })
     if (words.map((word) => word.trim().toLowerCase()).join(' ') !== expected.join(' ')) throw new HttpError(400, 'Those aren’t the 4 words on their screen. Ask them to read them again.', { param: 'words' })
     const base = await nextOf({ list: room.list, body })
-    const list = await signList({ signer: await keysService.device(), body: { ...base, members: body.members.map((member) => member === target ? { ...member, devices: [...member.devices, device] } : member), added: { ...body.added, [device]: base.at ?? 0 } } })
+    const list = await signList({ signer: await keysService.device(), body: { ...base, members: body.members.map((member) => member === target ? { ...member, devices: [...member.devices, device] } : member), added: { ...body.added, [device]: base.at ?? 0 }, ...name && { names: { ...body.names, [device]: name.slice(0, 64) } } } })
     return { list, letter: await sealTo({ to: device, purpose: 'workspace-key', workspace: ws, plain: await secretOf({ room, own: false }) }) }
   },
 
@@ -174,7 +187,34 @@ export const roomKeys = {
     return keyStore.write({ device: current.device, machine: keyStore.machine, session: current.session, locked: current.locked ?? { sub: account.sub, email: account.email } })
   },
 
-  setRoom: async (room: Room): Promise<void> => keyStore.write(withRoom(await keyStore.read(), room)),
+  async setRoom(room: Room): Promise<void> {
+    const current = await keyStore.read()
+    await keyStore.write({ ...withRoom(current, room), rotating: current.rotating?.filter((each) => each.room.workspace.id !== room.workspace.id) })
+  },
+
+  async post(letters: Outgoing[] = []): Promise<number> {
+    const current = await keyStore.read()
+    const all = [...current.outbox ?? [], ...letters]
+    if (letters.length) await keyStore.write({ ...current, outbox: all })
+    if (!all.length || !current.session) return 0
+    const token = await keysService.token()
+    const failed: Outgoing[] = []
+    for (const { workspace, ...each } of all) {
+      const { status } = await cloud.room({ method: 'POST', workspace, path: '/letters', token, body: each }).catch(() => ({ status: 0 }))
+      if ([0, 401, 429].includes(status) || status >= 500) failed.push({ ...each, workspace })
+    }
+    if (failed.length) log.warn({ event: 'cloud.letters_queued', count: failed.length })
+    const now = await keyStore.read()
+    await keyStore.write({ ...now, outbox: [...failed, ...(now.outbox ?? []).filter((each) => !all.includes(each))] })
+    return failed.filter((each) => letters.some((sent) => sent.body === each.body)).length
+  },
+
+  async setRotating(pending: { room: Room; letters: Outgoing[] } | { ws: string }): Promise<void> {
+    const current = await keyStore.read()
+    const ws = 'ws' in pending ? pending.ws : pending.room.workspace.id
+    const rest = (current.rotating ?? []).filter((each) => each.room.workspace.id !== ws)
+    await keyStore.write({ ...current, rotating: 'ws' in pending ? rest : [...rest, pending] })
+  },
 
   async keepLink({ ws, email, link }: { ws: string; email: string; link: string }): Promise<void> {
     const current = await keyStore.read()
@@ -189,7 +229,7 @@ export const roomKeys = {
     if (!body || !last || !invite || body.workspace !== ws) throw new HttpError(400, 'This invite doesn’t check out. Ask for a new link.')
     const me = await keysService.deviceKey()
     const next = await nextOf({ list: last, body })
-    return signList({ signer: card, body: { ...next, members: [...body.members, { email: account.email, role: invite.role, devices: [me] }], invites: body.invites.filter((each) => each !== invite), removed: [...body.removed, invite.key], added: { ...body.added, [me]: next.at ?? 0 } } })
+    return signList({ signer: card, body: { ...next, members: [...body.members, { email: account.email, role: invite.role, devices: [me] }], invites: body.invites.filter((each) => each !== invite), removed: [...body.removed.filter((key) => key !== me), invite.key], added: { ...body.added, [me]: next.at ?? 0 }, names: { ...body.names, [me]: deviceName() } } })
   },
 
   async addTeam({ ws, list, first }: { ws: string; list: MemberList; first: MemberList }): Promise<void> {

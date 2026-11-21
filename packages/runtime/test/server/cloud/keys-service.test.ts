@@ -113,10 +113,10 @@ test('a new Mac reads its pairing letter only with the code it shows, and while 
   assert.equal(account.list.by, devices[1])
   await keysService.adopt({ account })
   await keysService.setSession({ token: 't', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
-  await assert.rejects(keysService.change([devices[0]]), (err: Error & { status?: number }) => err.status === 403 && /added less than 3 days ago/.test(err.message))
+  await assert.rejects(keysService.dropDevices([devices[0]]), (err: Error & { status?: number }) => err.status === 403 && /added less than 3 days ago/.test(err.message))
 })
 
-test('Not me removes the device in one list version with a new workspace key and account key; the removed Mac gets no letter and can’t read what comes after', async () => {
+test('Not me drops the device from the member list in one version and changes no key; Change keys makes a new workspace key and account key that the removed Mac never gets', async () => {
   await keysService.setSession(undefined)
   await keysService.relock({ sub: 'dev-mo', email: 'mo@example.com' })
   const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
@@ -128,18 +128,26 @@ test('Not me removes the device in one list version with a new workspace key and
   const mine = body.members[0]
   const added = await signList({ signer: await keysService.device(), body: { ...body, version: 2, previous: await anchorOf(account.list), at, members: [{ ...mine, devices: [...mine.devices, toBase64(stolen.publicKey), toBase64(phone.publicKey)] }], added: { ...body.added, [toBase64(stolen.publicKey)]: at, [toBase64(phone.publicKey)]: at } } })
   assert.ok(await roomKeys.advance({ lists: [added] }))
+  await assert.rejects(keysService.dropDevices([mine.kit ?? '']), (err: Error & { status?: number }) => err.status === 400)
+  const dropped = await keysService.dropDevices([toBase64(stolen.publicKey)])
+  const without = await check({ anchor: await anchorOf(account.list), chain: [account.list, added, dropped] })
+  assert.ok(without)
+  assert.equal(without.keyVersion ?? 1, 1)
+  assert.ok(without.removed.includes(toBase64(stolen.publicKey)))
+  assert.equal(without.members[0].kit, mine.kit)
+  assert.ok(await roomKeys.advance({ lists: [dropped] }))
+  assert.equal(keysService.account()?.key, account.key)
   const oldKey = fromBase64(account.workspace.key)
-  const { list, next, letters } = await keysService.change([toBase64(stolen.publicKey)])
-  const after = await check({ anchor: await anchorOf(account.list), chain: [account.list, added, list] })
+  const { list, next, letters } = await keysService.change()
+  const after = await check({ anchor: await anchorOf(account.list), chain: [account.list, added, dropped, list] })
   assert.ok(after)
   assert.equal(after.keyVersion, 2)
-  assert.ok(after.removed.includes(toBase64(stolen.publicKey)))
   assert.ok(after.removed.includes(mine.kit ?? ''))
   assert.equal(after.members[0].kit, toBase64((await accountDevice(fromBase64(next.key))).publicKey))
   assert.notEqual(next.key, account.key)
   assert.deepEqual(next.workspace.old, { 1: account.workspace.key })
   assert.equal(letters.some((each) => each.to === toBase64(stolen.publicKey)), false)
-  const locked = await lock({ key: fromBase64(next.workspace.key), version: 2, bind: 'workspace/ws/record/after', plain: new TextEncoder().encode('made after Not me') })
+  const locked = await lock({ key: fromBase64(next.workspace.key), version: 2, bind: 'workspace/ws/record/after', plain: new TextEncoder().encode('made after Change keys') })
   assert.ok(locked)
   assert.equal(await unlock({ keys: { 1: oldKey, 2: oldKey }, bind: 'workspace/ws/record/after', locked }), null)
   const toPhone = letters.find((each) => each.to === toBase64(phone.publicKey) && each.purpose === 'workspace-key')
@@ -147,11 +155,11 @@ test('Not me removes the device in one list version with a new workspace key and
   const plain = await read({ recipient: phone, from: (await keysService.device()).publicKey, workspace: account.workspace.id, purpose: 'workspace-key', body: fromBase64(toPhone.body), allowed: [(await keysService.device()).publicKey] })
   const secret = plain && JSON.parse(new TextDecoder().decode(plain)) as { key: string; version: number }
   assert.equal(secret?.version, 2)
-  assert.deepEqual(new TextDecoder().decode(await unlock({ keys: { 2: fromBase64(secret?.key ?? '') }, bind: 'workspace/ws/record/after', locked }) ?? new Uint8Array()), 'made after Not me')
+  assert.deepEqual(new TextDecoder().decode(await unlock({ keys: { 2: fromBase64(secret?.key ?? '') }, bind: 'workspace/ws/record/after', locked }) ?? new Uint8Array()), 'made after Change keys')
   assert.ok(letters.some((each) => each.to === toBase64(phone.publicKey) && each.purpose === 'account-key'))
 })
 
-test('Not me also drops runtimes added at or after the removed device, so a runtime it planted gets no key', async () => {
+test('Not me also drops runtimes added at or after the removed device, so a runtime it planted is cut off too', async () => {
   const account = keysService.mustBeOn()
   const [kept, stolen, planted] = await Promise.all([identity(), identity(), identity()])
   const [k, s, p] = [kept, stolen, planted].map((each) => toBase64(each.publicKey))
@@ -168,12 +176,10 @@ test('Not me also drops runtimes added at or after the removed device, so a runt
   await grow({ signer: await keysService.device(), at: t1, device: k, runtime: true })
   await grow({ signer: await keysService.device(), at: t1 + 1, device: s, runtime: false })
   await grow({ signer: stolen, at: t1 + 4 * 24 * 60 * 60_000, device: p, runtime: true })
-  const { list, letters } = await keysService.change([s])
+  const list = await keysService.dropDevices([s])
   const body2 = JSON.parse(new TextDecoder().decode(fromBase64(list.bytes))) as { removed: string[]; runtimes: string[] }
   assert.deepEqual([body2.removed.includes(s), body2.removed.includes(p), body2.removed.includes(k)], [true, true, false])
   assert.deepEqual(body2.runtimes, [k])
-  assert.equal(letters.some((each) => each.to === p || each.to === s), false)
-  assert.ok(letters.some((each) => each.to === k && each.purpose === 'workspace-key'))
 })
 
 test('taking letters returns the used, stale, unreadable and strangers’ letters to delete, and keeps one for a newer key', async () => {
@@ -201,7 +207,7 @@ test('taking letters returns the used, stale, unreadable and strangers’ letter
   assert.equal(keysService.account()?.workspace.version, 2)
 })
 
-test('removing someone from a team rotates its key in the same list version; the removed member can’t read anything written after, the others can', async () => {
+test('the 4 words need the admin’s nonce; removing someone from a team drops them without a key change; Change keys rotates, and the removed member can’t read anything written after', async () => {
   await keysService.setSession(undefined)
   await keysService.relock({ sub: 'dev-mo', email: 'mo@example.com' })
   await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
@@ -215,13 +221,19 @@ test('removing someone from a team rotates its key in the same list version; the
   const at = Math.max(Date.now(), body.at ?? 0)
   const v2 = await signList({ signer: await keysService.device(), body: { ...body, version: 2, previous: await anchorOf(team.list), at, members: [...body.members, { email: 'sara@example.com', role: 'admin', devices: [key(sara)] }, { email: 'ana@example.com', role: 'member', devices: [key(ana)] }], added: { ...body.added, [key(sara)]: at, [key(ana)]: at } } })
   assert.ok(await roomKeys.advance({ lists: [v2], ws }))
-  await assert.rejects(roomKeys.approve({ ws, email: 'ana@example.com', device: key(anaMac), words: ['tiger', 'salt', 'brown', 'lake'] }), (err: Error & { status?: number }) => err.status === 400)
-  const approved = await roomKeys.approve({ ws, email: 'ana@example.com', device: key(anaMac), words: await deviceWords(anaMac.publicKey) })
+  const nonce = newKey(16)
+  const words = await deviceWords({ device: anaMac.publicKey, nonce })
+  await assert.rejects(roomKeys.approve({ ws, email: 'ana@example.com', device: key(anaMac), words: ['tiger', 'salt', 'brown', 'lake'], nonce: toBase64(nonce) }), (err: Error & { status?: number }) => err.status === 400)
+  await assert.rejects(roomKeys.approve({ ws, email: 'ana@example.com', device: key(anaMac), words, nonce: toBase64(newKey(16)) }), (err: Error & { status?: number }) => err.status === 400)
+  const approved = await roomKeys.approve({ ws, email: 'ana@example.com', device: key(anaMac), words, nonce: toBase64(nonce) })
   assert.deepEqual(bodyOf(approved.list)?.members.find((member) => member.email === 'ana@example.com')?.devices, [key(ana), key(anaMac)])
   assert.ok(await roomKeys.advance({ lists: [approved.list], ws }))
   const anaKey = roomKeys.room(ws)?.workspace.key ?? ''
-  const { list, room, letters } = await roomKeys.teamChange({ ws, emails: ['ana@example.com'] })
-  const after = await check({ anchor: await anchorOf(team.list), chain: [team.list, v2, approved.list, list] })
+  const cut = await roomKeys.teamChange({ ws, emails: ['ana@example.com'] })
+  assert.deepEqual([bodyOf(cut.list)?.keyVersion ?? 1, cut.letters.length, cut.room.workspace.key], [1, 0, anaKey])
+  assert.ok(await roomKeys.advance({ lists: [cut.list], ws }))
+  const { list, room, letters } = await roomKeys.teamChange({ ws, rotate: true })
+  const after = await check({ anchor: await anchorOf(team.list), chain: [team.list, v2, approved.list, cut.list, list] })
   assert.equal(after?.keyVersion, 2)
   assert.deepEqual(after?.members.map((member) => member.email), ['mo@example.com', 'sara@example.com'])
   assert.ok([key(ana), key(anaMac)].every((device) => after?.removed.includes(device)))

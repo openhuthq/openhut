@@ -5,7 +5,7 @@ import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { agentPath } from '@/app/routes'
 import { ConfirmButton } from '@/components/confirm-button'
 import { DeviceIcon } from '@/components/custom/device'
-import { PersonFace } from '@/components/custom/person-face'
+import { PersonFace, PersonFaces } from '@/components/custom/person-face'
 import { AMBER, notify, Tinted, Toast, Toasts } from '@/components/custom/toast'
 import { ErrorNote } from '@/components/error-note'
 import { Hut } from '@/components/hut'
@@ -61,7 +61,7 @@ function Unlock({ cloud }: { cloud: Cloud }) {
       <Rows>
         <Row onClick={() => setWay('code')} icon={<Mascot kind="phone" size={30} />} title="Use my iPhone or another Mac" note="Scan a code with it"><Chevron /></Row>
         {cloud.kitInCloud && <Row onClick={() => setWay('kit')} icon={<Mascot kind="kit" size={30} />} title="Use my recovery kit" note="The 12 words you saved"><Chevron /></Row>}
-        <Row onClick={() => setWay('admin')} icon={<Mascot kind="team" size={30} />} title="Ask an admin" note="Get your team workspaces back"><Chevron /></Row>
+        {cloud.canAsk && <Row onClick={() => setWay('admin')} icon={<Mascot kind="team" size={30} />} title="Ask an admin" note="Get your team workspaces back"><Chevron /></Row>}
       </Rows>
     </div>
     {!cloud.kitInCloud && <NoKitYet />}
@@ -80,26 +80,31 @@ function AdminWait({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
     ask.mutate()
   }, [asking, ask])
   const back = () => cancel.mutate(undefined, { onSettled: onBack })
-  const names = (asking?.admins ?? []).map(nameOf)
-  const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names.at(-1)}` : names[0] ?? 'an admin'
+  const rooms = asking?.rooms ?? []
   return <Window>
-    <Mascot kind="team" size={84} />
-    {asking?.denied
-      ? <>
-        <h1 className="m-0 text-[22px]/[1.25] font-semibold">Not let in</h1>
-        <p className="m-0 max-w-[420px] text-[14px] text-body">{who} denied this {HERE}, or the request expired after a day.</p>
-        <Button type="button" variant="primary" className={PILL} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Ask again</Button>
-      </>
-      : <>
-        <h1 className="m-0 text-[22px]/[1.25] font-semibold">{asking ? `Waiting for ${who}` : 'Asking an admin…'}</h1>
+    {asking?.denied && <>
+      <h1 className="m-0 text-[22px]/[1.25] font-semibold">Not approved</h1>
+      <p className="m-0 max-w-[420px] text-[14px] text-body">An admin denied this {HERE}, or the request expired after a day.</p>
+      <Button type="button" variant="primary" className={PILL} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Ask again</Button>
+    </>}
+    {!asking?.denied && !ask.isError && <>
+      {rooms.length === 0 && <h1 className="m-0 text-[22px]/[1.25] font-semibold">Asking an admin…</h1>}
+      {rooms.map((room, index) => <div key={index} className="flex flex-col items-center gap-3">
+        <PersonFaces people={room.admins.map((email) => ({ name: nameOf(email), email }))} size={56} />
+        <h1 className="m-0 text-[22px]/[1.25] font-semibold">Waiting for {who(room.admins)}</h1>
         <p className="m-0 text-[14px] text-body">When they call, read them these 4 words.</p>
-        <div className="mt-1 flex gap-2">{(asking?.words ?? ['', '', '', '']).map((word, index) => <span key={index} className="min-w-[72px] rounded-lg border border-hair bg-card px-3.5 py-2 text-[17px] font-semibold">{word || '…'}</span>)}</div>
-        <Spinner className="mt-1" />
-        <p className="m-0 max-w-[420px] text-[12px] text-mute">You get your team workspaces back. Your own agents stay locked until you use your recovery kit or another {HERE}.</p>
-      </>}
+        <div className="flex gap-2">{(room.words ?? ['', '', '', '']).map((word, at) => <span key={at} className="min-w-[72px] rounded-lg border border-hair bg-card px-3.5 py-2 text-[17px] font-semibold">{word || '…'}</span>)}</div>
+      </div>)}
+      <Spinner className="mt-1" />
+    </>}
     <ErrorNote message={ask.error?.message} />
     <Button type="button" variant="text" className="text-[12px] font-normal text-mute underline" disabled={cancel.isPending} onClick={back}>Try another way</Button>
   </Window>
+}
+
+function who(admins: string[]): string {
+  const names = admins.map(nameOf)
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names.at(-1)}` : names[0] ?? 'an admin'
 }
 
 function NoKitYet() {
@@ -222,7 +227,8 @@ export function CloudGate({ children }: { children: ReactNode }) {
     notify(problem ? { lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: 'Not everything came back', note: problem } : { title: 'Your agents are back', note: `Restored from your cloud backup on this ${HERE}.` })
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
-  if (isPhone() || !cloud) return children
+  if (!cloud) return children
+  if (isPhone()) return <>{children}<GoneNotice cloud={cloud} /></>
   if (cloud.status === 'locked') return <Unlock cloud={cloud} />
   if (restoring || landing) return <Restoring cloud={cloud} />
   return <>{children}<Toasts><NewMacAlert cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
@@ -252,7 +258,7 @@ function GoneNotice({ cloud }: { cloud: Cloud }) {
     if (!last) return
     const home = cloud.workspaces.find((each) => each.home)
     if (home) chooseWorkspace(home.id)
-    notify({ title: last.why === 'deleted' ? `${last.name} was deleted` : `You were removed from ${last.name}`, note: `Its agents stopped on this ${HERE}.` })
+    notify({ lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: last.why === 'deleted' ? `${last.name} was deleted` : `You were removed from ${last.name}`, note: `Its agents moved to the trash on this ${HERE}.` })
   }, [cloud.gone, cloud.workspaces])
   return null
 }

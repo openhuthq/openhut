@@ -228,6 +228,10 @@ export const agentService = {
     for (const row of rows) await agentService.applySynced({ id: row.id, value: null, author: { email: row.owner ?? me, role: 'owner' }, workspace, me })
   },
 
+  async keepWorkspace(workspace: string): Promise<void> {
+    await db.updateTable('agent').set({ workspace: null, owner: null, shared: false }).where('workspace', '=', workspace).execute()
+  },
+
   async hideSynced({ id, owner, workspace, me }: { id: string; owner: string; workspace: string | null; me: string }): Promise<void> {
     const row = await db.selectFrom('agent').select(['owner', 'shared', 'workspace']).where('id', '=', id).executeTakeFirst()
     if (row && row.workspace === workspace && (row.owner ?? me) === owner) await agentService.applySynced({ id, value: null, author: { email: owner, role: 'owner' }, workspace, me })

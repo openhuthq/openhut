@@ -5,7 +5,7 @@ import { createServer } from 'node:http'
 import { createServer as createSocket } from 'node:net'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { WebSocketServer, type WebSocket } from 'ws'
-import type { Letter, MemberList, MemberListBody, Record } from '@openhut/common/cloud/cloud.ts'
+import { signProof, type Letter, type MemberList, type MemberListBody, type Record } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
 import { lockHere, openHere, openRecord, sealRecord, type AgentValue, type ConnectionValue, type HereValue } from '@openhut/common/cloud/record.ts'
 import { createHash } from 'node:crypto'
@@ -23,7 +23,7 @@ createSocket({ allowHalfOpen: true }, (sock) => sock.setEncoding('utf8').once('d
   sock.end(JSON.stringify({ ok: true, ...replies[req.cmd] }))
 })).listen(process.env.AGENTD_SOCK).unref()
 
-const room = { log: [] as Record[], records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>), limit: Infinity, refused: 0, reject: new Set<string>(), rejected: 0, letters: [] as Letter[], files: new Map<string, Uint8Array>(), heres: [] as string[] }
+const room = { log: [] as Record[], records: new Map<string, Record>(), seq: 0, lists: [] as MemberList[], puts: new Map<string, number>(), down: false, beforePut: undefined as undefined | ((id: string) => Promise<void>), limit: Infinity, refused: 0, reject: new Set<string>(), rejected: 0, letters: [] as Letter[], files: new Map<string, Uint8Array>(), heres: [] as string[], gone: undefined as undefined | { ws: string; status: number; json: unknown } }
 const sockets = new Set<WebSocket>()
 const store = (record: Omit<Record, 'seq' | 'object'>): Record => {
   const saved = { ...record, object: 'record' as const, seq: ++room.seq }
@@ -38,6 +38,7 @@ const server = createServer(async (req, res) => {
   const reply = (status: number, json: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(json))
   const url = new URL(req.url ?? '', 'http://room')
   if (room.down) return reply(503, {})
+  if (room.gone && url.pathname.includes(`/${room.gone.ws}/`)) return reply(room.gone.status, room.gone.json)
   if (url.pathname.endsWith('/member-lists')) return reply(200, { object: 'list', data: room.lists.slice(Number(url.searchParams.get('after'))), hasMore: false })
   if (url.pathname.endsWith('/records')) asked.push(Number(url.searchParams.get('after')))
   if (url.pathname.endsWith('/records')) return reply(200, { object: 'list', data: [...room.records.values()].filter((each) => each.seq > Number(url.searchParams.get('after'))).sort((a, b) => a.seq - b.seq), hasMore: false })
@@ -91,6 +92,7 @@ const { seal } = await import('../../../src/server/platform/secrets.ts')
 const { agentService } = await import('../../../src/server/agents/agent-service.ts')
 const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
 const { roomKeys } = await import('../../../src/server/cloud/room-keys.ts')
+const { keyStore } = await import('../../../src/server/cloud/key-store.ts')
 const { syncService } = await import('../../../src/server/cloud/sync-service.ts')
 const { connectionService } = await import('../../../src/server/connections/connection-service.ts')
 const { threadController } = await import('../../../src/server/threads/thread-controller.ts')
@@ -703,4 +705,68 @@ test('presence: a Here goes out locked at one size, others show until they leave
   await until(() => people().length === 1, 'Lena back')
   for (const ws of sockets) ws.terminate()
   await until(() => people().length === 0, 'presence to clear when the socket drops')
+})
+
+let nets = 230
+const agentRow = (id: string, workspace: string | null) => db.insertInto('agent').values({ id, name: id, owner_id: actor.id, instructions: '', model: 'claude:sonnet', net: nets++, channel_key: seal('k'.repeat(32)), shared: true, workspace }).execute()
+const agentHere = async (id: string) => Boolean(await db.selectFrom('agent').select('id').where('id', '=', id).executeTakeFirst())
+const tell = (message: object) => { for (const ws of sockets) ws.send(JSON.stringify(message)) }
+
+test('a delete notice not signed by an admin on the list, or a bare 404, does nothing; a signed one moves only that workspace’s agents to the trash', async () => {
+  const team = await roomKeys.createTeam()
+  const ws = team.workspace.id
+  syncService.connect()
+  await agentRow('ag_teamcopy', ws)
+  await agentRow('ag_mydiary', null)
+  const signedAt = Date.now()
+  const stranger = await identity()
+  const signed = async (signer: Identity, at = signedAt) => signProof({ signer, proof: 'delete', parts: [ws, String(at)] })
+  const notice = { by: toBase64(me.publicKey), signedAt, signature: await signed(me) }
+  const forged = [
+    { status: 404, json: {} },
+    { status: 410, json: { error: { message: 'deleted' } } },
+    { status: 410, json: { deleted: { ...notice, signature: await signed(stranger) } } },
+    { status: 410, json: { deleted: { ...notice, signedAt: signedAt + 1 } } },
+    { status: 410, json: { deleted: { by: toBase64(stranger.publicKey), signedAt, signature: await signed(stranger) } } },
+  ]
+  for (const gone of forged) {
+    room.gone = { ws, ...gone }
+    tell({ type: 'deleted' })
+    await sleep(300)
+    await syncService.settled()
+    assert.ok(roomKeys.room(ws), JSON.stringify(gone))
+    assert.ok(await agentHere('ag_teamcopy'))
+  }
+  const writes = calls.length
+  room.gone = { ws, status: 410, json: { deleted: notice } }
+  tell({ type: 'deleted' })
+  await until(async () => !roomKeys.room(ws) && !await agentHere('ag_teamcopy'), 'the deleted workspace to go')
+  assert.equal(await agentHere('ag_mydiary'), true)
+  assert.ok(calls.slice(writes).some((line) => line.includes('"cmd":"rm"') && line.includes('ag_teamcopy') && line.includes('"trash":true')))
+  assert.ok(syncService.gone().some((each) => each.why === 'deleted'))
+  room.gone = undefined
+})
+
+test('on a Mac let in by an admin the team stays keyed by its id: its agents land with the team’s id, and a removal trashes only them, never the Mac’s own diary', async () => {
+  const team = await roomKeys.createTeam()
+  const ws = team.workspace.id
+  const current = await keyStore.read()
+  assert.ok(current.account)
+  syncService.disconnect()
+  await keyStore.write({ ...current, account: { sub: current.account.sub, email: current.account.email, key: '', ...team } })
+  room.records.clear()
+  syncService.connect()
+  await until(() => sockets.size > 0, 'the team socket')
+  const teamKey = fromBase64(team.workspace.key)
+  const id = await slot({ key: teamKey, path: 'agent/ag_teamonly' })
+  const sealed = await sealRecord({ workspace: ws, key: teamKey, version: 1, signer: me, id, ver: 1, kind: 'agent', ref: 'ag_teamonly', value: { ...helpdesk('Team only'), id: 'ag_teamonly' } })
+  assert.ok(sealed)
+  push(store({ id, ...sealed }))
+  await until(async () => await agentHere('ag_teamonly'), 'the team agent to land')
+  assert.equal((await db.selectFrom('agent').select('workspace').where('id', '=', 'ag_teamonly').executeTakeFirstOrThrow()).workspace, ws)
+  room.gone = { ws, status: 403, json: {} }
+  tell({ type: 'deleted' })
+  await until(async () => !await agentHere('ag_teamonly'), 'the team agent to go')
+  assert.equal(await agentHere('ag_mydiary'), true)
+  room.gone = undefined
 })

@@ -54,6 +54,10 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string; email: string } }>('/workspaces/:id/members/:email', SignedIn, async (req) => cloudService.remove({ workspace: req.params.id, email: req.params.email }))
 
+  app.delete<{ Params: { id: string; key: string } }>('/workspaces/:id/devices/:key', DeviceRequest, async (req) => cloudService.removeDevice({ workspace: req.params.id, device: req.params.key }))
+
+  app.post<{ Params: { id: string } }>('/workspaces/:id/keys', SignedIn, async (req) => cloudService.changeKeys({ workspace: req.params.id }))
+
   app.post<{ Params: { id: string; device: string }; Body: ApproveDevice }>('/workspaces/:id/requests/:device/approvals', ApproveRequest, async (req) => cloudService.approve({ workspace: req.params.id, device: req.params.device, words: req.body.words }))
 
   app.delete<{ Params: { id: string; device: string } }>('/workspaces/:id/requests/:device', SignedIn, async (req) => cloudService.deny({ workspace: req.params.id, device: req.params.device }))
@@ -67,6 +71,7 @@ const AddRuntimeRequest = { onRequest: requireSignIn, schema: { body: AddRuntime
 const JoinRequest = { onRequest: requireSignIn, schema: { body: RuntimeInvite } }
 const AllowRequest = { onRequest: requireSignIn, schema: { body: AllowDevice } }
 const NotMeRequest = { onRequest: requireSignIn, schema: { params: z.object({ key: DeviceKey }) } }
+const DeviceRequest = { onRequest: requireSignIn, schema: { params: z.object({ id: z.string(), key: DeviceKey }) } }
 const PasskeyRequest = { onRequest: requireSignIn, schema: { body: AddPasskey } }
 const RenameRequest = { onRequest: requireSignIn, schema: { body: RenameWorkspace } }
 const RoleRequest = { onRequest: requireSignIn, schema: { body: ChangeRole } }

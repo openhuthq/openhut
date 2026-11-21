@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ErrorNote } from '@/components/error-note'
-import { I, PILL, Status } from '@/components/kit'
+import { I, PILL, Section, Status } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { DeviceIcon } from '@/components/custom/device'
 import { ConfirmButton } from '@/components/confirm-button'
@@ -13,7 +13,7 @@ import { nameOf, REMOVE_DETAIL, useAddPasskey, useAllow, useCloud, useForget, us
 import { markSeen } from '@/features/cloud/unlock'
 import { CloudOff, SaveKit, TurnOn } from '@/features/cloud/sign-in'
 import { HERE } from '@/features/settings/desktop'
-import { Chevron, Row, useConfirming } from '@/features/settings/kit'
+import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { isPhone, scan } from '@/lib/native'
 import { ago, shortDate, shortDateTime } from '@/lib/format'
 import { navigate, open, useOpen, useSearch } from '@/lib/router'
@@ -51,33 +51,41 @@ export function CloudSettings() {
       <Button type="button" variant="secondary" className={PILL} disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
     </div>
     <ErrorNote message={error ?? undefined} />
-    {data.workspaces.some((each) => each.own) && <DeleteData />}
+    {data.workspaces.some((each) => each.own) && <DeleteData cloud={data} />}
     {kitOpen && <SaveKit />}
   </>
 }
 
-function DeleteData() {
-  const remove = useDeleteData()
-  const { confirming, setConfirming, box } = useConfirming()
-  return <section ref={box} className="mt-4 flex flex-col gap-2.5">
+function DeleteData({ cloud }: { cloud: Cloud }) {
+  const opened = useOpen() === 'delete-data'
+  const shared = cloud.workspaces.find((each) => !each.own && each.role === 'owner' && each.members.length > 1)
+  const joined = cloud.workspaces.filter((each) => !each.own).map((each) => each.name)
+  return <section className="mt-4 flex flex-col gap-2.5">
     <span className="px-1 text-[13.5px] font-semibold">Danger zone</span>
     <div className="flex items-center gap-4 px-1 py-1">
-      <span className="grid flex-1 gap-0.5"><span className="text-[13.5px] font-semibold">{confirming ? 'Delete your cloud data for good?' : 'Delete your cloud data'}</span><span className="text-[12.5px] text-body">{confirming ? `Your workspace, its backup and your keys leave OpenHut Cloud. You leave the workspaces you joined. This ${HERE} keeps its agents.` : `Backups and sync stop for good. Your ${HERE}s keep their copy.`}</span></span>
-      {confirming
-        ? <span className="flex gap-2"><Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button><Button type="button" variant="danger" className={`${PILL} bg-[oklch(55%_0.2_25)] text-white not-disabled:hover:bg-[oklch(50%_0.2_25)] not-disabled:hover:text-white`} disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete'}</Button></span>
-        : <Button type="button" variant="danger" className="h-8 shrink-0 rounded-md border border-hair px-3 text-[12.5px]" onClick={() => setConfirming(true)}>Delete cloud data</Button>}
+      <span className="grid flex-1 gap-0.5"><span className="text-[13.5px] font-semibold">Delete your cloud data</span><span className="text-[12.5px] text-body">{shared ? `Hand over or delete ${shared.name} first.` : `Backups and sync stop for good. Your ${HERE}s keep their copy.`}</span></span>
+      <Button type="button" variant="danger" disabled={Boolean(shared)} className="h-8 shrink-0 rounded-md border border-hair px-3 text-[12.5px]" onClick={() => open('delete-data')}>Delete cloud data</Button>
     </div>
+    {opened && !shared && <DeleteDataConfirm joined={joined} />}
   </section>
+}
+
+function DeleteDataConfirm({ joined }: { joined: string[] }) {
+  const remove = useDeleteData()
+  const close = () => open()
+  const leave = joined.length ? `, and you leave ${joined.join(', ')}` : ''
+  return <Dialog size="narrow" label="Delete your cloud data?" onClose={close}>
+    <DialogHead title="Delete your cloud data?" onClose={close} />
+    <div className="px-5 py-5 text-[13px]/[18px] text-body">Your backup and keys leave OpenHut Cloud{leave}. This {HERE} keeps its agents.</div>
+    <DialogFoot error={remove.error?.message} start={<Button type="button" variant="secondary" onClick={close}>Cancel</Button>}><Button type="button" variant="destructive" disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: close })}>{remove.isPending ? 'Deleting…' : 'Delete'}</Button></DialogFoot>
+  </Dialog>
 }
 
 function RotateConnections({ rotate }: { rotate: Cloud['rotate'] }) {
   const done = useRotated()
-  return <div className="flex flex-col gap-2 rounded-lg border border-[oklch(80%_0.1_60)] bg-[oklch(97%_0.03_60)] px-4 py-3 text-[13px]">
-    <span className="flex items-center gap-2 font-semibold"><I icon={Key01Icon} size={16} className="text-[oklch(50%_0.12_50)]" />Connections to rotate</span>
-    <span className="text-body">The device you removed could read these keys. Make a new key at each service, then paste it into the connection.</span>
-    <span className="flex flex-col">{rotate.map((each) => <Button key={each.id} type="button" variant="ghost" className="h-8 justify-between px-1 text-[13px]" onClick={() => navigate('/connections')}><span>{each.name}</span><span className="text-[12px] text-mute">{each.kind}</span></Button>)}</span>
-    <span className="flex justify-end"><Button type="button" variant="secondary" className={PILL} disabled={done.isPending} onClick={() => done.mutate(undefined, { onError: toastError })}>Done</Button></span>
-  </div>
+  return <Section title="Connections to rotate" action={<Button type="button" variant="ghost" className={PILL} disabled={done.isPending} onClick={() => done.mutate(undefined, { onError: toastError })}>Done</Button>}>
+    <Rows>{rotate.map((each) => <Row key={each.id} icon={<I icon={Key01Icon} size={18} className="text-hue-amber" />} title={each.name} note={`The device you removed could read this ${each.kind} key. Make a new one at the service.`} onClick={() => navigate('/connections')}><Chevron /></Row>)}</Rows>
+  </Section>
 }
 
 function KeptAccount({ email }: { email: string }) {
