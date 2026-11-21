@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, LaptopIcon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, ServerStack01Icon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { SquareLock02Icon, UserGroupIcon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, LaptopIcon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, ServerStack01Icon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogClose, DialogTitle } from '@/components/ui/dialog'
@@ -20,6 +20,7 @@ import { ChannelRows } from '@/features/agents/channels'
 import { Face } from '@/features/agents/face'
 import { useMove } from '@/features/agents/move'
 import { RoutinesRow } from '@/features/routines/routines-dialog'
+import { useWorkspaces, workspaceName } from '@/features/cloud/workspaces'
 import { ModelRows } from '@/features/agents/model-rows'
 import { AgentStatus } from '@/features/agents/status'
 import { HERE } from '@/features/settings/desktop'
@@ -47,6 +48,7 @@ export function Panel({ agent, naming, watching }: { agent: Agent; naming: boole
     <div className="-mx-2.5 flex flex-col gap-px">
       <ModelRows agent={agent} />
       <RunsOn agent={agent} />
+      <Access agent={agent} />
       <Counted agent={agent} dialog="memory" icon={AiBrain01Icon} title="Memory" value={useMemoryCount(agent)} />
       <Counted agent={agent} dialog="skills" icon={BookOpen01Icon} title="Skills" value={useSkills(agent.id).data?.length} />
       <RoutinesRow agent={agent} />
@@ -76,7 +78,7 @@ function BrowserRows({ agent, watching }: { agent: Agent; watching: boolean }) {
 function AgentActions({ agent }: { agent: Agent }) {
   const updateAgent = useUpdateAgent(agent.id)
   const change = (patch: Parameters<typeof updateAgent.mutate>[0]) => updateAgent.mutate(patch, { onError: toastError })
-  const locked = !agent.canEdit || updateAgent.isPending
+  const locked = !agent.canEdit || !agent.canManage || updateAgent.isPending
   return <div className="mt-auto flex flex-col pt-2">
     <span className={LABEL}>Computer</span>
     <div className="-mx-2.5 flex flex-col gap-px">
@@ -103,7 +105,7 @@ function PanelTitle({ agent, naming }: { agent: Agent; naming: boolean }) {
         : <>
           <Tooltip label={toggle}><Button type="button" variant="bare" className={TINY_ICON} aria-label={toggle} disabled={!agent.canEdit || updateAgent.isPending}
             onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} className={running ? 'text-hue-amber' : 'text-hue-green'} /></Button></Tooltip>
-          {agent.canEdit && <Tooltip label={`Delete ${agent.name}`}><Button type="button" variant="bare" className={cn(TINY_ICON, 'text-fail')} aria-label={`Delete ${agent.name}`} onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={16} /></Button></Tooltip>}
+          {agent.canEdit && agent.canManage && <Tooltip label={`Delete ${agent.name}`}><Button type="button" variant="bare" className={cn(TINY_ICON, 'text-fail')} aria-label={`Delete ${agent.name}`} onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={16} /></Button></Tooltip>}
         </>}</span>}
     </div>
     <span className="flex items-center gap-2 text-xs text-body">{confirming ? 'Its memory goes too.' : <AgentStatus agent={agent} />}</span>
@@ -122,7 +124,7 @@ function PhoneActions({ agent }: { agent: Agent }) {
       <DropdownMenuContent>
         <DropdownMenuItem onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'customize' }))}><I icon={PencilEdit02Icon} size={16} />Customize</DropdownMenuItem>
         <DropdownMenuItem disabled={updateAgent.isPending} onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} />{running ? `Stop ${agent.name}` : `Start ${agent.name}`}</DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onClick={() => setDeleting(true)}><I icon={Delete02Icon} size={16} />Delete {agent.name}…</DropdownMenuItem>
+        {agent.canManage && <DropdownMenuItem variant="destructive" onClick={() => setDeleting(true)}><I icon={Delete02Icon} size={16} />Delete {agent.name}…</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>}
     <DialogClose render={<Button type="button" variant="bare" className="h-9 rounded-full px-3 text-[16px] font-semibold text-ink" />}>Done</DialogClose>
@@ -153,7 +155,7 @@ function RunsOn({ agent }: { agent: Agent }) {
       <MenuCard title={`${agent.name} runs on`}>
         {(computers ?? []).map((computer) => <Choice key={computer.id} icon={<I icon={computer.id === 'local' ? LaptopIcon : ServerStack01Icon} size={15} />} name={computer.id === id ? computer.name : `Move to ${computer.name}`}
           note={runsOnNote(computer)}
-          selected={computer.id === id} disabled={computer.id === id || !computer.online || !agent.canEdit} onClick={() => move.go(computer.id)} />)}
+          selected={computer.id === id} disabled={computer.id === id || !computer.online || !agent.canEdit || !agent.canManage} onClick={() => move.go(computer.id)} />)}
         <DropdownMenuSeparator />
         <DropdownMenuItem className="h-8 gap-2 text-[13px]" onClick={() => navigate('/settings/devices')}><I icon={PlusSignIcon} size={14} className="text-pass" />Add a computer…</DropdownMenuItem>
       </MenuCard>
@@ -162,6 +164,26 @@ function RunsOn({ agent }: { agent: Agent }) {
       ? <p role="status" className="m-0 px-2.5 py-1 text-[12.5px]/[1.45] text-body">{move.line}</p>
       : <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{!agent.runsHere ? 'Runs on your other computer; its chats and memory sync here.' : id !== 'local' ? `Runs in its own sandbox on ${nameOf({ computers, id })}.` : WORDS.sandboxed ? `Runs in its own sandbox on this ${HERE}.` : `Runs as you, like any app on this ${HERE}.`}</p>}
     {id === 'local' && !WORDS.sandboxed && <TeamHint agent={agent} server={(computers ?? []).find((each) => each.id !== 'local' && each.online)} onMove={(to) => move.go(to)} />}
+  </>
+}
+
+function Access({ agent }: { agent: Agent }) {
+  const { all, email } = useWorkspaces()
+  const home = useAgents().data?.find((each) => each.id === agent.id)
+  const update = useUpdateAgent(agent.id)
+  const workspace = all.find((each) => agent.workspace ? each.id === agent.workspace : each.home)
+  if (!workspace || (home?.computer ?? 'local') !== 'local') return null
+  const mine = !agent.owner || agent.owner === email
+  const pick = (shared: boolean) => update.mutate({ shared }, { onError: toastError })
+  return <>
+    <DropdownMenu>
+      <DropdownMenuTrigger className={ROW} disabled={update.isPending}><I icon={agent.shared ? UserGroupIcon : SquareLock02Icon} size={15} className="text-mute" />Access<span className={VALUE}>{agent.shared ? 'Shared' : 'Private'}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
+      <MenuCard title={`Who can use ${agent.name}`}>
+        <Choice icon={<I icon={SquareLock02Icon} size={15} />} name="Private" note="Only you" selected={!agent.shared} disabled={!agent.shared || !mine} onClick={() => pick(false)} />
+        <Choice icon={<I icon={UserGroupIcon} size={15} />} name="Shared" note={`Everyone in ${workspaceName(workspace)} can use and edit it`} selected={agent.shared} disabled={agent.shared || !agent.canManage} onClick={() => pick(true)} />
+      </MenuCard>
+    </DropdownMenu>
+    <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{agent.shared ? `Locked with ${workspaceName(workspace)}’s key. Only its people’s devices can read it.` : 'Locked with your own key. Only your devices can read it.'}</p>
   </>
 }
 

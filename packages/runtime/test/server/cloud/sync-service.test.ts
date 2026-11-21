@@ -76,7 +76,7 @@ const Fastify = (await import('fastify')).default
 await migrate()
 const actor = { id: 'usr_syncowner', email: 'mo@example.com', local: true }
 await db.insertInto('person').values({ id: actor.id, email: actor.email, role: 'owner', removed_at: null }).execute()
-await db.insertInto('agent').values({ id: 'ag_helpdesk', name: 'Helpdesk', owner_id: actor.id, instructions: '# Helpdesk', model: 'claude:sonnet', net: 3, channel_key: seal('k'.repeat(32)) }).execute()
+await db.insertInto('agent').values({ id: 'ag_helpdesk', name: 'Helpdesk', owner_id: actor.id, instructions: '# Helpdesk', model: 'claude:sonnet', net: 3, channel_key: seal('k'.repeat(32)), shared: true }).execute()
 const account = await keysService.open({ sub: 'dev-mo', email: actor.email })
 await keysService.setSession({ token: 'session', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
 room.lists.push(account.list)
@@ -98,7 +98,7 @@ const nameInRoom = async () => {
   const opened = await openRecord({ workspace, keys: { 1: key }, record: room.records.get(helpdeskId) as Record, members })
   return opened?.kind === 'agent' ? opened.value?.name : undefined
 }
-const helpdesk = (name: string): AgentValue => ({ id: 'ag_helpdesk', name, instructions: '# Helpdesk', model: 'claude:sonnet', face: null, codeExecution: true, wanted: 'stopped' })
+const helpdesk = (name: string): AgentValue => ({ id: 'ag_helpdesk', name, instructions: '# Helpdesk', model: 'claude:sonnet', face: null, codeExecution: true, wanted: 'stopped', shared: true, owner: 'mo@example.com' })
 const remote = async ({ name, id = helpdeskId, ver = (room.records.get(id)?.ver ?? 0) + 1, signer = me }: { name: string; id?: string; ver?: number; signer?: Identity }) => {
   const sealed = await sealRecord({ workspace, key, version: 1, signer, id, ver, kind: 'agent', ref: 'ag_helpdesk', value: helpdesk(name) })
   assert.ok(sealed)
@@ -168,7 +168,7 @@ test('a record placed at another record’s slot is dropped', async () => {
 
 test('a value that doesn’t fit is never reported backed up, and the backup is retried once it is fixed', async () => {
   const at = syncService.status().at
-  await db.insertInto('agent').values({ id: 'ag_toolong1', name: 'x'.repeat(41), owner_id: actor.id, instructions: '', model: 'claude:sonnet', net: 9, channel_key: seal('k'.repeat(32)) }).execute()
+  await db.insertInto('agent').values({ id: 'ag_toolong1', name: 'x'.repeat(41), owner_id: actor.id, instructions: '', model: 'claude:sonnet', net: 9, channel_key: seal('k'.repeat(32)), shared: true }).execute()
   syncService.send()
   await until(() => syncService.status().state === 'failed', 'the backup to fail')
   assert.equal(syncService.status().at, at)
@@ -178,7 +178,7 @@ test('a value that doesn’t fit is never reported backed up, and the backup is 
 })
 
 test('a record the cloud can never take is skipped and named, the rest and the head still go, and it isn’t retried until it changes', async () => {
-  const insert = (id: string, name: string, model: string, net: number) => db.insertInto('agent').values({ id, name, owner_id: actor.id, instructions: '', model, net, channel_key: seal('k'.repeat(32)) }).execute()
+  const insert = (id: string, name: string, model: string, net: number) => db.insertInto('agent').values({ id, name, owner_id: actor.id, instructions: '', model, net, channel_key: seal('k'.repeat(32)), shared: true }).execute()
   await insert('ag_badmodel', 'Sales', 'openrouter:a b', 240)
   await insert('ag_rejected', 'Refused', 'claude:sonnet', 241)
   await insert('ag_later001', 'Later', 'claude:sonnet', 242)
@@ -210,7 +210,7 @@ test('a record the cloud can never take is skipped and named, the rest and the h
 
 test('200 agents back up in full through a rate limit: failed while any is unsent, retried with backoff, never Up to date early', async () => {
   for (let i = 0; i < 200; i++) {
-    await db.insertInto('agent').values({ id: `ag_bulk${String(i).padStart(4, '0')}`, name: `Bulk ${i}`, owner_id: actor.id, instructions: '', model: 'claude:sonnet', net: 10 + i, channel_key: seal('k'.repeat(32)) }).execute()
+    await db.insertInto('agent').values({ id: `ag_bulk${String(i).padStart(4, '0')}`, name: `Bulk ${i}`, owner_id: actor.id, instructions: '', model: 'claude:sonnet', net: 10 + i, channel_key: seal('k'.repeat(32)), shared: true }).execute()
   }
   const at = syncService.status().at
   room.limit = 120
@@ -320,4 +320,28 @@ test('a restore applies an agent before its messages, even when the agent was ed
     const thread = await db.selectFrom('thread').select('messages').where('agent_id', '=', late.id).executeTakeFirst()
     return Boolean(thread?.messages.includes('Before the rename'))
   }, 'the earlier message to land in the agent’s thread')
+})
+
+test('a member who isn’t the owner gets no readable Private agent; flipping to Shared makes it readable for everyone', async () => {
+  await db.insertInto('agent').values({ id: 'ag_private1', name: 'Payroll', owner_id: actor.id, instructions: '# Payroll', model: 'claude:sonnet', net: 245, channel_key: seal('k'.repeat(32)) }).execute()
+  syncService.send()
+  const id = await slot({ key, path: 'agent/ag_private1' })
+  const record = () => room.records.get(id) as Record
+  await until(() => room.records.has(id), 'the private agent to back up')
+  const asMember = await openRecord({ workspace, keys: { 1: key }, record: record(), members })
+  assert.deepEqual([asMember?.value, asMember?.hidden, asMember?.owner], [null, true, 'mo@example.com'])
+  assert.equal(JSON.stringify(record()).includes('Payroll'), false)
+  const own = await keysService.own()
+  assert.ok(own)
+  const asOwner = await openRecord({ workspace, keys: { 1: key }, record: record(), members, own: { key: own, email: 'mo@example.com' } })
+  assert.equal(asOwner?.kind === 'agent' && asOwner.value?.name, 'Payroll')
+  const forged = await openRecord({ workspace, keys: { 1: key }, record: record(), members, own: { key: own, email: 'ana@example.com' } })
+  assert.equal(forged?.value, null)
+  await agentService.update({ actor, id: 'ag_private1', patch: { shared: true } })
+  await until(async () => {
+    const opened = await openRecord({ workspace, keys: { 1: key }, record: record(), members })
+    return opened?.kind === 'agent' && opened.value?.name === 'Payroll' && opened.value.shared === true
+  }, 'the flip to Shared to reach the room readable with the workspace key')
+  await agentService.update({ actor, id: 'ag_private1', patch: { shared: false } })
+  await until(async () => (await openRecord({ workspace, keys: { 1: key }, record: record(), members }))?.hidden === true, 'the flip back to Private to lock it again')
 })

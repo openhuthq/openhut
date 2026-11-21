@@ -7,6 +7,7 @@ export type Route =
   | { page: 'connections' }
   | { page: 'settings'; tab: string }
   | { page: 'welcome' }
+  | { page: 'join' }
   | { page: 'missing' }
 
 const MISSING: Route = { page: 'missing' }
@@ -16,6 +17,7 @@ export function routeOf(path: string): Route {
   if (section === 'connections') return { page: 'connections' }
   if (section === 'settings') return { page: 'settings', tab: id || 'general' }
   if (section === 'welcome' && !id) return { page: 'welcome' }
+  if (section === 'join' && !id) return { page: 'join' }
   if (rest.length) return MISSING
   if (section === '' || (section === 'agents' && !id)) return { page: 'home', adding: false }
   if (section === 'new' && !id) return { page: 'home', adding: true }

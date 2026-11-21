@@ -103,16 +103,32 @@ export type MemberListBody = z.infer<typeof MemberListBody>
 export const MemberList = z.object({ object: z.literal('member_list'), ...Signed.shape })
 export type MemberList = z.infer<typeof MemberList>
 
+export const InviteRole = z.enum(['admin', 'member'])
 export const Invite = z.object({
   id: Id,
   object: z.literal('invite'),
   workspace: Id,
   email: Email,
-  role: z.enum(['admin', 'member']),
+  role: InviteRole,
+  key: DeviceKey,
+  from: DeviceKey,
   body: Locked,
   expiresAt: Timestamp,
 })
 export type Invite = z.infer<typeof Invite>
+
+export const NewInvite = z.object({ id: Id, email: Email, role: InviteRole, key: DeviceKey, body: Locked })
+export type NewInvite = z.infer<typeof NewInvite>
+
+export const OpenedInvite = z.object({ ...Invite.shape, memberLists: z.array(MemberList).check(z.maxLength(200)) })
+export type OpenedInvite = z.infer<typeof OpenedInvite>
+
+export const WorkspaceName = z.string().check(z.trim(), z.minLength(1, 'Give the workspace a name.'), z.maxLength(60, 'Keep the name under 60 characters.'))
+export const RenameWorkspace = z.object({ name: WorkspaceName })
+export type RenameWorkspace = z.infer<typeof RenameWorkspace>
+
+export const CloudWorkspace = z.object({ id: Id, object: z.literal('workspace'), name: z.nullable(z.string()) })
+export type CloudWorkspace = z.infer<typeof CloudWorkspace>
 
 export const KEY_BOX_KINDS = ['passkey', 'kit'] as const
 export const KeyBox = z.object({ object: z.literal('key_box'), kind: z.enum(KEY_BOX_KINDS), body: Locked, by: z.optional(DeviceKey), signature: z.optional(Signature), savedAt: z.optional(Timestamp) })
@@ -197,6 +213,17 @@ export const Backup = z.object({
 })
 export type Backup = z.infer<typeof Backup>
 
+export const CloudWorkspaceView = z.object({
+  id: Id,
+  name: z.nullable(z.string()),
+  home: z.boolean(),
+  role: Role,
+  waiting: z.boolean(),
+  members: z.array(Member),
+  invites: z.array(z.object({ email: Email, role: InviteRole, link: z.nullable(z.string()) })),
+})
+export type CloudWorkspaceView = z.infer<typeof CloudWorkspaceView>
+
 export const Cloud = z.object({
   object: z.literal('cloud'),
   status: z.enum(CLOUD_STATUSES),
@@ -212,6 +239,7 @@ export const Cloud = z.object({
   devices: z.array(z.object({ key: DeviceKey, here: z.boolean(), addedAt: z.nullable(Timestamp) })),
   passkey: z.boolean(),
   needsSignIn: z.boolean(),
+  workspaces: z._default(z.array(CloudWorkspaceView), []),
 })
 export type Cloud = z.infer<typeof Cloud>
 
@@ -236,3 +264,21 @@ export type AllowDevice = z.infer<typeof AllowDevice>
 
 export const AllowedDevice = z.object({ object: z.literal('pairing_allowed'), devices: z.array(DeviceKey) })
 export type AllowedDevice = z.infer<typeof AllowedDevice>
+
+export const CreateCloudInvite = z.object({ workspace: Id, email: z.pipe(z.string().check(z.trim(), z.toLowerCase()), Email), role: InviteRole })
+export type CreateCloudInvite = z.infer<typeof CreateCloudInvite>
+
+export const CloudInvite = z.object({ object: z.literal('cloud_invite'), id: z.string(), workspace: Id, email: Email, role: InviteRole, link: z.string(), expiresAt: Timestamp })
+export type CloudInvite = z.infer<typeof CloudInvite>
+
+export const InviteLink = z.object({ link: z.string().check(z.maxLength(2000)) })
+export type InviteLink = z.infer<typeof InviteLink>
+
+export const CloudInvitePreview = z.object({ object: z.literal('cloud_invite_preview'), workspace: Id, name: z.string(), from: Email, email: Email, role: InviteRole })
+export type CloudInvitePreview = z.infer<typeof CloudInvitePreview>
+
+export const InviteLetter = z.object({ workspace: Id, name: z.string().check(z.maxLength(200)), from: Email, email: Email, role: InviteRole, anchor: Base64, expiresAt: Timestamp })
+export type InviteLetter = z.infer<typeof InviteLetter>
+
+export const ChangeRole = z.object({ role: InviteRole })
+export type ChangeRole = z.infer<typeof ChangeRole>

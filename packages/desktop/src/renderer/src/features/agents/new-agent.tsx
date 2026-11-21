@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu
 import { Input } from '@/components/ui/input'
 import { Choice, DialogCard, I, MenuCard } from '@/components/kit'
 import { useAgents, useCreateAgent } from '@/features/agents/api'
+import { useWorkspaces } from '@/features/cloud/workspaces'
 import { nameOf, runsOnNote, useComputers } from '@/features/computers/api'
 import { useComputerProviders } from '@/features/models/api'
 import { ModelPicker } from '@/features/models/model-picker'
@@ -29,6 +30,7 @@ function firstModel(providers: Provider[] | undefined): string | null {
 
 export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   const createAgent = useCreateAgent()
+  const { active } = useWorkspaces()
   const touch = useMedia(TOUCH)
   const computers = useComputers().data ?? []
   const [computer, setComputer] = useState('local')
@@ -51,7 +53,7 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   return <DialogCard onClose={onClose} className="max-h-[calc(100vh-32px)] w-[480px] items-center p-6 text-center [&_form>*]:shrink-0">
     <form className="contents" onSubmit={(event) => {
       const field = formValues(event)
-      createAgent.mutate({ body: { name: field('name').trim(), face: field('face'), ...(model && { model }) }, computer })
+      createAgent.mutate({ body: { name: field('name').trim(), face: field('face'), ...(model && { model }), ...(computer === 'local' && active && !active.home && { workspace: active.id }) }, computer })
     }}>
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" className="absolute top-3 right-3 rounded-full" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
       <DialogTitle className="text-[15px]/[22px] font-medium">New agent</DialogTitle>

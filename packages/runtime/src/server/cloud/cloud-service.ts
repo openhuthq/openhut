@@ -44,7 +44,26 @@ export const cloudService = {
       workspace: on && account && members ? { id: account.workspace.id, version: members.version, members: members.members } : null,
       keyStore: keysService.keyStore(), kit: on ? kitOf() : null, kitInCloud: locked && session ? await kitInCloud() : Boolean(keysService.kit()), backup: syncService.status(),
       signInError, keptAccount: on ? null : keysService.keptAccount(), devices, passkey: on && passkeySaved, needsSignIn: Boolean(locked && !session),
+      workspaces: on && account ? keysService.rooms().map(({ workspace: { id, key } }) => {
+        const body = keysService.members(id)
+        const invites = (body?.invites ?? []).map((each) => ({ email: each.email, role: each.role, link: keysService.link({ ws: id, email: each.email }) ?? null }))
+        return { id, name: syncService.name(id), home: id === account.workspace.id, role: keysService.roleIn(id) ?? 'member', waiting: !key, members: body?.members ?? [], invites }
+      }) : [],
     }
+  },
+
+  async rename({ workspace, name }: { workspace: string; name: string }): Promise<Cloud> {
+    const reply = await cloud.room({ method: 'PATCH', workspace: mustBeOn(workspace), path: '', token: await keysService.token(), body: { name } })
+    if (reply.status === 403) throw new HttpError(403, 'Only an owner or admin can rename the workspace.')
+    if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t rename the workspace (HTTP ${reply.status}). Try again.`)
+    await syncService.refreshName(workspace)
+    return cloudService.status()
+  },
+
+  async setRole({ workspace, email, role }: { workspace: string; email: string; role: 'admin' | 'member' }): Promise<Cloud> {
+    const list = await keysService.withRole({ ws: mustBeOn(workspace), email, role })
+    await putList({ workspace, list })
+    return cloudService.status()
   },
 
   async start(): Promise<CloudAuthorization> {
@@ -245,6 +264,18 @@ export const cloudService = {
     syncService.connect()
     checkSoon()
   },
+}
+
+function mustBeOn(workspace: string): string {
+  if (!keysService.session() || !keysService.room(workspace)) throw new HttpError(409, 'Turn on OpenHut Cloud and open this workspace first.')
+  return workspace
+}
+
+export async function putList({ workspace, list }: { workspace: string; list: MemberList }): Promise<void> {
+  const put = await cloud.room({ method: 'PUT', workspace, path: '/members', token: await keysService.token(), body: list })
+  if (put.status === 409) throw new HttpError(409, 'Someone changed this workspace a moment ago. Try again.')
+  if (put.status !== 200) throw new HttpError(put.status === 403 ? 403 : 502, `OpenHut Cloud refused the change (HTTP ${put.status}).`)
+  await keysService.advance([list], workspace)
 }
 
 function kitOf(): { savedAt: string; differs: boolean } | null {

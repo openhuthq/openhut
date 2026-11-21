@@ -10,15 +10,13 @@ import { PersonFace } from '@/components/custom/person-face'
 import { ConfirmButton } from '@/components/confirm-button'
 import { nameOf, useAddPasskey, useAllow, useCloud, useForget, useNotMe, usePasskeys, useSignIn, useSignOut } from '@/features/cloud/api'
 import { markSeen } from '@/features/cloud/unlock'
-import { CloudOff, NeedsCloud, SaveKit, TurnOn } from '@/features/cloud/sign-in'
+import { CloudOff, SaveKit, TurnOn } from '@/features/cloud/sign-in'
 import { HERE } from '@/features/settings/desktop'
 import { Chevron, Row, useConfirming } from '@/features/settings/kit'
 import { isPhone, scan } from '@/lib/native'
 import { ago, shortDate } from '@/lib/format'
 import { open, useOpen, useSearch } from '@/lib/router'
 import { toastError } from '@/lib/toast'
-
-const ROLE = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 
 export function CloudSettings() {
   const cloud = useCloud()
@@ -66,22 +64,6 @@ function KeptAccount({ email }: { email: string }) {
       </>
       : <Button type="button" variant="danger" className={PILL} onClick={() => setConfirming(true)}>Forget</Button>}
   </Row></div>
-}
-
-export function PeopleSettings() {
-  const cloud = useCloud().data
-  if (!cloud) return null
-  if (cloud.status === 'off' || !cloud.workspace) return <NeedsCloud title="Work on agents with your team" />
-  const members = cloud.workspace.members
-  return <section className="flex flex-col gap-2.5">
-    <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
-      {members.map((member) => <div key={member.email} className="flex items-center gap-3 px-4 py-3">
-        <PersonFace name={nameOf(member.email)} email={member.email} size={40} />
-        <span className="grid min-w-0 flex-1 gap-px"><span className="flex items-center gap-2 text-[13.5px] font-medium">{nameOf(member.email)}{member.email === cloud.email && <span className="text-[12px] font-normal text-mute">You</span>}</span><span className="truncate text-[12px] text-mute">{member.email}</span></span>
-        <span className="text-[13px] text-body">{ROLE[member.role]}</span>
-      </div>)}
-    </div>
-  </section>
 }
 
 export function CloudDevices() {

@@ -29,7 +29,7 @@ export const cloud = {
   },
 }
 
-type Call = { method: 'GET' | 'PUT' | 'POST' | 'DELETE'; path: string; token: string; body?: unknown }
+type Call = { method: 'GET' | 'PUT' | 'POST' | 'PATCH' | 'DELETE'; path: string; token: string; body?: unknown }
 type Reply = { status: number; json: unknown }
 
 async function call({ method, path, token, body }: Call): Promise<Reply> {
