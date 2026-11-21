@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { CloudUploadIcon, FingerPrintIcon, LaptopIcon, PlusSignIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
+import { CloudUploadIcon, FingerPrintIcon, PlusSignIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import type { Backup, Cloud } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
@@ -7,14 +7,15 @@ import { Input } from '@/components/ui/input'
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Status } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
+import { DeviceIcon } from '@/components/custom/device'
 import { ConfirmButton } from '@/components/confirm-button'
-import { nameOf, useAddPasskey, useAllow, useCloud, useForget, useNotMe, usePasskeys, useSignIn, useSignOut } from '@/features/cloud/api'
+import { nameOf, REMOVE_DETAIL, useAddPasskey, useAllow, useCloud, useForget, usePasskeys, useRemoveMac, useSignIn, useSignOut } from '@/features/cloud/api'
 import { markSeen } from '@/features/cloud/unlock'
 import { CloudOff, SaveKit, TurnOn } from '@/features/cloud/sign-in'
 import { HERE } from '@/features/settings/desktop'
 import { Chevron, Row, useConfirming } from '@/features/settings/kit'
 import { isPhone, scan } from '@/lib/native'
-import { ago, shortDate } from '@/lib/format'
+import { ago, shortDate, shortDateTime } from '@/lib/format'
 import { open, useOpen, useSearch } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 
@@ -69,12 +70,12 @@ function KeptAccount({ email }: { email: string }) {
 export function CloudDevices() {
   const cloud = useCloud().data
   const signIn = useSignIn()
-  const notMe = useNotMe()
+  const remove = useRemoveMac()
   if (cloud?.status === 'on' || cloud?.status === 'offline') return <>
-    {cloud.devices.map((device) => <Row key={device.key} icon={<I icon={LaptopIcon} size={20} className="text-hue-blue" />} title={device.here ? `This ${HERE}` : 'Mac'} note={device.addedAt ? `On your OpenHut Cloud · added ${shortDate.format(new Date(device.addedAt))}, ${new Date(device.addedAt).toLocaleTimeString([], { timeStyle: 'short' })}` : 'On your OpenHut Cloud'}>
-      {!device.here && !isPhone() && <ConfirmButton variant="secondary" className={PILL} disabled={notMe.isPending} question="Remove this device?" detail="It can't open anything new, and every key changes. Do this if it's lost, sold or not yours." action="Remove" onConfirm={() => notMe.mutate(device.key, { onError: toastError })}>Remove</ConfirmButton>}
+    {cloud.devices.map((device) => <Row key={device.key} icon={<DeviceIcon kind={device.kind} />} title={device.name ?? (device.kind === 'server' ? 'Computer that runs agents' : 'Mac')} note={device.here ? `This ${HERE}` : device.addedAt && `Added ${shortDateTime.format(new Date(device.addedAt))}`}>
+      {!device.here && !isPhone() && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${device.name ?? 'this device'}?`} detail={REMOVE_DETAIL} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
     </Row>)}
-    <Row onClick={() => open('add-mac')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-blue" />} title={isPhone() ? 'Add a Mac' : 'Add a phone or Mac'} note="Unlock OpenHut on a new Mac with this one"><Chevron /></Row>
+    <Row onClick={() => open('add-mac')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-blue" />} title="Add a Mac" note="Unlock OpenHut on your new Mac with this one."><Chevron /></Row>
   </>
   if (cloud?.status !== 'off' || isPhone()) return null
   return <Row icon={<I icon={SquareLock02Icon} size={20} className="text-mute" />} title="Chat from your other computers" note="Needs OpenHut Cloud"><TurnOn short pending={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })} /></Row>
@@ -107,12 +108,11 @@ export function AddMac() {
     event.preventDefault()
     send(String(new FormData(event.currentTarget).get('code') ?? ''))
   }
-  const title = isPhone() ? 'Add a Mac' : 'Add a phone or Mac'
-  return <Dialog size="narrow" label={title} onClose={close}>
-    <DialogHead title={title} onClose={close} />
+  return <Dialog size="narrow" label="Add a Mac" onClose={close}>
+    <DialogHead title="Add a Mac" onClose={close} />
     <form id="add-mac" onSubmit={submit} className="flex flex-col gap-4 px-5 py-5 text-[13px]/[18px]">
       {added ? <p className="m-0 text-body">Added. The new {HERE} is unlocking now and gets your agents, chats and keys.</p> : <>
-        <p className="m-0 text-body">On the new {HERE}, pick Use my iPhone or another Mac. {isPhone() ? 'Scan the code it shows.' : 'Type the code it shows, or paste the text of its QR code.'}</p>
+        <p className="m-0 text-body">On the new Mac, pick Use my iPhone or another Mac. Then {isPhone() ? 'scan' : 'type'} the code it shows.</p>
         {isPhone() && <Button type="button" variant="primary" className="h-10 justify-center" onClick={() => void scan().then((text) => { if (text) send(text) }, toastError)}>Scan the code</Button>}
         <Input name="code" aria-label="Code" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-X" autoFocus={!isPhone()} autoComplete="off" spellCheck={false} className="font-mono" />
         <div className="flex gap-2.5 rounded-lg bg-[oklch(97%_0.03_60)] px-3.5 py-3 text-[oklch(40%_0.1_50)]"><I icon={SquareLock02Icon} size={16} className="mt-px shrink-0" /><span>Add only a {HERE} in front of you that's yours. If someone asked you to do this, on a call, by email or in chat, it's a scam.</span></div>

@@ -1,10 +1,11 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash, randomInt } from 'node:crypto'
+import { hostname } from 'node:os'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as z from 'zod/mini'
 import { checkProof, MemberList, MemberListBody, parseJson, signProof, type CloudSession, type Letter, type Role } from '@openhut/common/cloud/cloud.ts'
-import { addedOf, anchorOf, check, keyVersionOf, signList, YOUNG_MS } from '@openhut/common/cloud/member-list.ts'
+import { anchorOf, check, keyVersionOf, signList, youngUntil } from '@openhut/common/cloud/member-list.ts'
 import { equal, fromBase64, fromWords, identity, letter, lock, newKey, newWords, pairingWorkspace, read, sha256, slot, toBase64, unlock, type Bytes, type Identity, type LetterPurpose } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { config } from '../platform/config.ts'
@@ -44,9 +45,7 @@ let stored = await load()
 export const keysService = {
   keyStore: (): 'keychain' | 'file' => keychain ? 'keychain' : 'file',
 
-  async device(): Promise<Identity> {
-    return identity(fromBase64((await keys()).device))
-  },
+  device: async (): Promise<Identity> => identity(fromBase64((await keys()).device)),
 
   deviceKey: async (): Promise<string> => toBase64((await keysService.device()).publicKey),
 
@@ -73,9 +72,7 @@ export const keysService = {
   kitBox: (): string | undefined => kitOf(stored)?.box,
   kitPending: (): boolean => stored?.kit?.confirmed === false,
 
-  async setLocked(locked: { sub: string; email: string } | undefined): Promise<void> {
-    await save({ ...await keys(), locked })
-  },
+  setLocked: async (locked: { sub: string; email: string } | undefined): Promise<void> => save({ ...await keys(), locked }),
 
   async token(): Promise<string> {
     const session = stored?.session
@@ -105,7 +102,8 @@ export const keysService = {
     if (!account || !body) return null
     if (body.members.some((member) => member.devices.includes(device))) return null
     const members = body.members.map((member) => member.email === account.email ? { ...member, devices: [...member.devices, device] } : member)
-    return signList({ signer: await keysService.device(), body: { ...await nextOf({ list: account.list, body }), members, runtimes: [...body.runtimes ?? [], device], added: { ...body.added, [device]: Date.now() } } })
+    const base = await nextOf({ list: account.list, body })
+    return signList({ signer: await keysService.device(), body: { ...base, members, runtimes: [...body.runtimes ?? [], device], added: { ...body.added, [device]: base.at ?? 0 } } })
   },
 
   async joinAsRuntime({ session, workspace, chain }: { session: CloudSession; workspace: Account['workspace']; chain: MemberList[] }): Promise<void> {
@@ -116,7 +114,7 @@ export const keysService = {
   },
 
   async workspaceBox(account: Account): Promise<{ id: string; key: string; by: string; signature: string }> {
-    const box = toBase64(await lock({ key: fromBase64(account.key), version: 1, bind: workspaceBind({ account, id: account.workspace.id }), plain: await secretOf({ room: account, own: true }) }) ?? new Uint8Array())
+    const box = toBase64(await lock({ key: fromBase64(account.key), version: 1, bind: bind({ sub: account.sub, name: `workspace/${account.workspace.id}` }), plain: await secretOf({ room: account, own: true }) }) ?? new Uint8Array())
     const { by, signature } = await keysService.signBox({ account, name: `workspace/${account.workspace.id}`, body: box })
     return { id: account.workspace.id, key: box, by, signature }
   },
@@ -133,23 +131,18 @@ export const keysService = {
     const signed = (savedAt?: number) => checkProof({ device: by, proof: 'key-box', parts: boxParts({ account, name, body: box.body, savedAt }), signature })
     if (!(box.savedAt && await signed(Date.parse(box.savedAt))) && !await signed()) return false
     if (name === 'kit') return true
-    const plain = await unlock({ keys: { 1: fromBase64(account.key) }, bind: workspaceBind({ account, id: account.workspace.id }), locked: fromBase64(box.body) })
+    const plain = await unlock({ keys: { 1: fromBase64(account.key) }, bind: bind({ sub: account.sub, name: `workspace/${account.workspace.id}` }), locked: fromBase64(box.body) })
     return Boolean(plain && equal({ a: plain, b: await secretOf({ room: account, own: true }) }))
   },
 
-  async setKit(kit: { box: string; savedAt: string; confirmed?: boolean } | undefined): Promise<void> {
-    await save({ ...await keys(), kit })
-  },
+  setKit: async (kit: { box: string; savedAt: string; confirmed?: boolean } | undefined): Promise<void> => save({ ...await keys(), kit }),
 
-  async relock(locked: { sub: string; email: string }): Promise<void> {
-    const current = await keys()
-    await save({ device: current.device, machine, session: current.session, locked })
-  },
+  relock: async (locked: { sub: string; email: string }): Promise<void> => save({ device: (await keys()).device, machine, session: stored?.session, locked }),
 
   async restore({ words, kit, workspaces }: { words: string[]; kit: string; workspaces: Boxed[] }): Promise<Account | null> {
     const kitKey = await fromWords(words)
     const sub = stored?.locked?.sub
-    const key = kitKey && sub && await unlock({ keys: { 1: kitKey }, bind: `account/${sub}/kit`, locked: fromBase64(kit) })
+    const key = kitKey && sub && await unlock({ keys: { 1: kitKey }, bind: bind({ sub, name: 'kit' }), locked: fromBase64(kit) })
     return key ? keysService.restoreWith({ key, workspaces }) : null
   },
 
@@ -164,9 +157,7 @@ export const keysService = {
     return null
   },
 
-  async adopt({ account, kit }: { account: Account; kit?: { box: string; savedAt: string } }): Promise<void> {
-    await save({ device: (await keys()).device, machine, account, kit, session: stored?.session })
-  },
+  adopt: async ({ account, kit }: { account: Account; kit?: { box: string; savedAt: string } }): Promise<void> => save({ device: (await keys()).device, machine, account, kit, session: stored?.session }),
 
   async advance(lists: MemberList[], ws?: string): Promise<MemberListBody | null> {
     const current = await keys()
@@ -179,7 +170,7 @@ export const keysService = {
   },
 
   async invite({ ws, email, role, name }: { ws: string; email: string; role: 'admin' | 'member'; name: string }): Promise<{ list: MemberList; id: string; key: string; body: string; link: string; expiresAt: string }> {
-    const account = mustOwn()
+    const account = keysService.mustBeOn()
     const room = keysService.room(ws)
     const body = bodyOf(room?.list)
     const mine = keysService.roleIn(ws)
@@ -213,7 +204,7 @@ export const keysService = {
   },
 
   async joinList({ card, chain, anchor, ws }: { card: Identity; chain: MemberList[]; anchor: string; ws: string }): Promise<MemberList> {
-    const account = mustOwn()
+    const account = keysService.mustBeOn()
     const body = await check({ anchor, chain })
     const last = chain.at(-1)
     const invite = body?.invites.find((each) => each.key === toBase64(card.publicKey) && each.email === account.email)
@@ -235,18 +226,13 @@ export const keysService = {
     return Promise.all(devices.map((to) => sealTo({ to, purpose: 'workspace-key', workspace: ws, plain })))
   },
   session: (): Session | undefined => stored?.session,
-  kit: (): { savedAt: string } | null => {
-    const kit = kitOf(stored)
-    return kit ? { savedAt: kit.savedAt } : null
-  },
+  kit: (): { savedAt: string } | null => kitOf(stored) ?? null,
 
-  async setSession(session: Session | undefined): Promise<void> {
-    await save({ ...await keys(), session })
-  },
+  setSession: async (session: Session | undefined): Promise<void> => save({ ...await keys(), session }),
 
   ownedBy({ sub }: { sub: string }): void {
     const other = stored?.account ?? stored?.locked
-    if (other && other.sub !== sub) throw new HttpError(409, `This ${process.platform === 'darwin' ? 'Mac' : 'computer'} keeps the keys of ${other.email}. ${stored?.account && !kitOf(stored) ? 'Sign in with that account and save a recovery kit first.' : 'Sign in with that account, or forget it below.'}`)
+    if (other && other.sub !== sub) throw new HttpError(409, `This ${HERE} keeps the keys of ${other.email}. ${stored?.account && !kitOf(stored) ? 'Sign in with that account and save a recovery kit first.' : 'Sign in with that account, or forget it below.'}`)
   },
 
   async open({ sub, email }: { sub: string; email: string }): Promise<Account> {
@@ -259,7 +245,7 @@ export const keysService = {
     const kit = toBase64((await accountDevice(key)).publicKey)
     const devices = [toBase64(device.publicKey), kit]
     const at = Date.now()
-    const list = await signList({ signer: device, body: { workspace: id, version: 1, previous: null, members: [{ email, role: 'owner', devices, kit }], invites: [], removed: [], at, added: Object.fromEntries(devices.map((each) => [each, at])) } })
+    const list = await signList({ signer: device, body: { workspace: id, version: 1, previous: null, members: [{ email, role: 'owner', devices, kit }], invites: [], removed: [], at, added: Object.fromEntries(devices.map((each) => [each, at])), names: { [devices[0]]: deviceName() } } })
     const account = { sub, email, key: toBase64(key), workspace: { id, key: toBase64(newKey()), version: 1 }, list, first: list }
     await save({ device: current.device, machine, account, session: current.session })
     return account
@@ -268,11 +254,10 @@ export const keysService = {
   async newKit(): Promise<{ words: string[]; box: string; ask: number[] }> {
     const account = (await keys()).account
     if (!account) throw new HttpError(409, 'Turn on OpenHut Cloud before making a recovery kit.')
-    return { ...await kitFor(account), ask: pick() }
-  },
-
-  async saveKit(box: string): Promise<void> {
-    await save({ ...await keys(), kit: { box, savedAt: new Date().toISOString() } })
+    await notYoung(account)
+    const { words, key } = await newWords()
+    const box = await lock({ key, version: 1, bind: bind({ sub: account.sub, name: 'kit' }), plain: fromBase64(account.key) })
+    return { words, box: toBase64(box ?? new Uint8Array()), ask: [randomInt(0, 6), randomInt(6, 12)] }
   },
 
   keptAccount: (): string | null => stored?.account && kitOf(stored) ? stored.account.email : null,
@@ -286,7 +271,7 @@ export const keysService = {
   },
 
   async pairingLetter({ to, secret }: { to: string; secret: string }): Promise<Sent> {
-    const account = mustOwn()
+    const account = keysService.mustBeOn()
     const workspace = await pairingWorkspace({ secret, newDevice: fromBase64(to), oldDevice: (await keysService.device()).publicKey, workspace: account.workspace.id })
     return sealTo({ to, purpose: 'pairing', workspace: workspace ?? '', plain: fromBase64(account.key) })
   },
@@ -294,37 +279,40 @@ export const keysService = {
   async readPairing({ secret, workspace, found }: { secret: string; workspace: string; found: Letter }): Promise<Bytes | null> {
     const me = await keysService.device()
     const context = await pairingWorkspace({ secret, newDevice: me.publicKey, oldDevice: fromBase64(found.from), workspace })
-    return context ? read({ recipient: me, from: fromBase64(found.from), workspace: context, purpose: 'pairing', body: fromBase64(found.body), allowed: [fromBase64(found.from)] }) : null
+    return context ? openLetter({ found, workspace: context }) : null
   },
 
   async passkeyBox(prf: Bytes): Promise<{ body: string; by: string; signature: string; savedAt?: number }> {
-    const account = mustOwn()
-    const body = await lock({ key: prf, version: 1, bind: `account/${account.sub}/passkey`, plain: fromBase64(account.key) })
+    const account = keysService.mustBeOn()
+    const body = await lock({ key: prf, version: 1, bind: bind({ sub: account.sub, name: 'passkey' }), plain: fromBase64(account.key) })
     if (!body) throw new HttpError(400, 'Your passkey didn’t give a key OpenHut can use. Keep your recovery kit.')
     return keysService.signBox({ account, name: 'passkey', body: toBase64(body), savedAt: Date.now() })
   },
 
-  secret: async (): Promise<Bytes> => secretOf({ room: mustOwn(), own: true }),
+  secret: async (): Promise<Bytes> => secretOf({ room: keysService.mustBeOn(), own: true }),
 
-  fromPasskey: async ({ prf, box }: { prf: Bytes; box: string }): Promise<Bytes | null> => stored?.locked ? unlock({ keys: { 1: prf }, bind: `account/${stored.locked.sub}/passkey`, locked: fromBase64(box) }) : null,
+  fromPasskey: async ({ prf, box }: { prf: Bytes; box: string }): Promise<Bytes | null> => stored?.locked ? unlock({ keys: { 1: prf }, bind: bind({ sub: stored.locked.sub, name: 'passkey' }), locked: fromBase64(box) }) : null,
 
   async change(remove: string[]): Promise<{ list: MemberList; next: Account; letters: Sent[]; handover: { next: string; by: string; signature: string } }> {
-    const account = mustOwn()
+    const account = keysService.mustBeOn()
     const body = bodyOf(account.list)
     const me = toBase64((await keysService.device()).publicKey)
+    await notYoung(account)
     const mine = body?.members.find((member) => member.email === account.email)
     const oldSigner = await accountDevice(fromBase64(account.key))
     const oldKit = toBase64(oldSigner.publicKey)
     if (!body || !mine || remove.some((device) => device === me || device === oldKit || !mine.devices.includes(device))) throw new HttpError(400, 'Pick one of your other devices to remove.', { param: 'device' })
     const key = newKey()
     const kit = toBase64((await accountDevice(key)).publicKey)
-    const gone = [...remove, oldKit].filter((device) => mine.devices.includes(device))
+    const since = Math.min(...remove.map((device) => body.added?.[device] ?? 0))
+    const planted = mine.devices.filter((device) => remove.length && body.runtimes?.includes(device) && (body.added?.[device] ?? 0) >= since)
+    const gone = [...remove, ...planted, oldKit].filter((device, index, all) => mine.devices.includes(device) && all.indexOf(device) === index)
     const base = await nextOf({ list: account.list, body })
     const members = body.members.map((member) => member === mine ? { ...member, devices: [...member.devices.filter((device) => !gone.includes(device)), kit], kit } : member)
-    const added = Object.fromEntries(Object.entries({ ...body.added, [kit]: base.at ?? 0 }).filter(([device]) => !gone.includes(device)))
+    const kept = <T>(map: Record<string, T> = {}) => Object.fromEntries(Object.entries(map).filter(([device]) => !gone.includes(device)))
     const keyVersion = keyVersionOf(body) + 1
-    const list = await signList({ signer: await keysService.device(), body: { ...base, members, keyVersion, removed: [...body.removed, ...gone], added } })
-    if (!await check({ anchor: await anchorOf(account.list), chain: [account.list, list] })) throw new HttpError(403, `This ${HERE} was added less than 3 days ago, so it can’t remove an older device or change your keys yet. Do it from an older device, or wait until ${new Date(addedOf(body, me) + YOUNG_MS).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
+    const list = await signList({ signer: await keysService.device(), body: { ...base, members, keyVersion, removed: [...body.removed, ...gone], runtimes: body.runtimes?.filter((device) => !gone.includes(device)), added: { ...kept(body.added), [kit]: base.at ?? 0 }, names: body.names && kept(body.names) } })
+    if (!await check({ anchor: await anchorOf(account.list), chain: [account.list, list] })) throw new HttpError(409, 'Your devices changed on another computer just now. Try again.')
     const { workspace } = account
     const own = workspace.own ?? toBase64(await keysService.own() ?? newKey())
     const next = { ...account, key: toBase64(key), list, workspace: { ...workspace, key: toBase64(newKey()), version: keyVersion, old: { ...workspace.old, [workspace.version]: workspace.key }, slot: workspace.slot ?? workspace.key, own } }
@@ -347,26 +335,27 @@ export const keysService = {
     const home = room?.workspace.id === current.account?.workspace.id
     let account: Account | undefined = current.account
     if (!account || !room || !body) return []
-    const me = await keysService.device()
-    const used: string[] = []
+    const done: string[] = []
     for (const each of found) {
       const sender = body.members.find((member) => member.devices.includes(each.from))
-      const plain: Bytes | null | undefined = sender && await read({ recipient: me, from: fromBase64(each.from), workspace: body.workspace, purpose: each.purpose, body: fromBase64(each.body), allowed: [fromBase64(each.from)] })
-      if (!sender || !plain) continue
-      const secret = each.purpose === 'workspace-key' && sender.role !== 'member' ? readSecret(plain) : null
+      const plain: Bytes | null | undefined = sender && await openLetter({ found: each, workspace: body.workspace })
+      const secret = sender && plain && each.purpose === 'workspace-key' && sender.role !== 'member' ? readSecret(plain) : null
+      const kit = sender && plain && home && each.purpose === 'account-key' && account.key && sender.email === account.email ? toBase64((await accountDevice(plain)).publicKey) : null
       if (secret && secret.anchor === await anchorOf(firstOf(room)) && secret.version === keyVersionOf(body) && secret.version > room.workspace.version) {
         const { anchor: _anchor, ...fresh } = secret
         room = { ...room, workspace: { ...room.workspace, ...fresh } }
-        used.push(each.id)
-      }
-      const kit = home && each.purpose === 'account-key' && account.key && sender.email === account.email ? toBase64((await accountDevice(plain)).publicKey) : null
-      if (kit && body.members.find((member) => member.email === account?.email)?.kit === kit) {
-        account = { ...account, key: toBase64(plain) }
-        used.push(each.id)
-      }
+      } else if (plain && kit && body.members.find((member) => member.email === account?.email)?.kit === kit) account = { ...account, key: toBase64(plain) }
+      else if ((secret && secret.version > keyVersionOf(body)) || (kit && !body.removed.includes(kit))) continue
+      done.push(each.id)
     }
-    if (used.length) await save({ ...withRoom({ ...current, account }, room), kit: account.key === current.account?.key ? current.kit : undefined })
-    return used
+    if (done.length) await save({ ...withRoom({ ...current, account }, room), kit: account.key === current.account?.key ? current.kit : undefined })
+    return done
+  },
+
+  mustBeOn(): Account {
+    const account = stored?.account
+    if (!account?.key || !stored?.session) throw new HttpError(409, 'Turn on OpenHut Cloud on this computer first.')
+    return account
   },
 
   async removedHere(): Promise<void> {
@@ -375,15 +364,23 @@ export const keysService = {
   },
 }
 
-function mustOwn(): Account {
-  const account = stored?.account
-  if (!account?.key) throw new HttpError(409, 'Turn on OpenHut Cloud on this computer first.')
-  return account
+async function notYoung(account: Account): Promise<void> {
+  const body = bodyOf(account.list)
+  const until = body ? youngUntil(body, await keysService.deviceKey()) : 0
+  if (until > Date.now()) throw new HttpError(403, `This ${HERE} was added less than 3 days ago, so it can’t remove an older device or change your keys yet. Do it from an older device, or wait until ${new Date(until).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
+}
+
+export const openLetter = async ({ found, workspace }: { found: Letter; workspace: string }): Promise<Bytes | null> =>
+  read({ recipient: await keysService.device(), from: fromBase64(found.from), workspace, purpose: found.purpose, body: fromBase64(found.body), allowed: [fromBase64(found.from)] })
+
+function deviceName(): string {
+  const name = process.platform === 'darwin' ? spawnSync('scutil', ['--get', 'ComputerName'], { encoding: 'utf8' }).stdout : ''
+  return (name || hostname()).trim().slice(0, 64)
 }
 
 async function restoreFrom({ key, workspace, sub, email, device }: { key: Bytes; workspace: Boxed; sub: string; email: string; device: string }): Promise<Account | null> {
   const { chain } = workspace
-  const plain = await unlock({ keys: { 1: key }, bind: `account/${sub}/workspace/${workspace.id}`, locked: fromBase64(workspace.key) })
+  const plain = await unlock({ keys: { 1: key }, bind: bind({ sub, name: `workspace/${workspace.id}` }), locked: fromBase64(workspace.key) })
   const secret = plain && readSecret(plain)
   const body = secret && chain[0] && await check({ anchor: secret.anchor, chain })
   const last = chain.at(-1)
@@ -391,7 +388,7 @@ async function restoreFrom({ key, workspace, sub, email, device }: { key: Bytes;
   const me = toBase64((await identity(fromBase64(device))).publicKey)
   const at = Date.now()
   const members = body.members.map((member) => member.email === email && !member.devices.includes(me) ? { ...member, devices: [...member.devices, me] } : member)
-  const list = await signList({ signer: await accountDevice(key), body: { ...body, version: body.version + 1, previous: await anchorOf(last), members, at, added: { ...body.added, [me]: at } } })
+  const list = await signList({ signer: await accountDevice(key), body: { ...body, version: body.version + 1, previous: await anchorOf(last), members, at, added: { ...body.added, [me]: at }, names: { ...body.names, [me]: deviceName() } } })
   const { anchor: _anchor, ...keys } = secret
   return { sub, email, key: toBase64(key), workspace: { id: workspace.id, ...keys }, list, first: chain[0] }
 }
@@ -431,14 +428,8 @@ function boxParts({ account, name, body, savedAt }: { account: Account; name: st
   return savedAt === undefined ? [account.sub, name, body] : [account.sub, name, body, String(savedAt)]
 }
 
-function workspaceBind({ account, id }: { account: Account; id: string }): string {
-  return `account/${account.sub}/workspace/${id}`
-}
-
-async function kitFor(account: Account): Promise<{ words: string[]; box: string }> {
-  const { words, key } = await newWords()
-  const box = await lock({ key, version: 1, bind: bindOf(account), plain: fromBase64(account.key) })
-  return { words, box: toBase64(box ?? new Uint8Array()) }
+function bind({ sub, name }: { sub: string; name: string }): string {
+  return `account/${sub}/${name}`
 }
 
 async function accountDevice(key: Bytes): Promise<Identity> {
@@ -453,17 +444,8 @@ function firstOf(room: Room): MemberList {
   return room.first ?? room.list
 }
 
-function bodyOf(list: MemberList | undefined): MemberListBody | undefined {
+export function bodyOf(list: MemberList | undefined): MemberListBody | undefined {
   return list && MemberListBody.safeParse(parseJson(new TextDecoder().decode(fromBase64(list.bytes)))).data
-}
-
-function bindOf(account: Account): string {
-  return `account/${account.sub}/kit`
-}
-
-function pick(): number[] {
-  const first = randomInt(0, 6)
-  return [first, randomInt(6, 12)]
 }
 
 async function keys(): Promise<Stored> {

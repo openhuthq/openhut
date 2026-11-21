@@ -6,6 +6,7 @@ import { I, PILL } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { useUpdateAgent } from '@/features/agents/api'
 import { useCloud } from '@/features/cloud/api'
+import { markSeen } from '@/features/cloud/unlock'
 import { useComputers } from '@/features/computers/api'
 import { request } from '@/lib/api-client'
 import { toastError } from '@/lib/toast'
@@ -55,6 +56,7 @@ async function join(computer: string): Promise<void> {
   const remote = await request({ schema: Cloud, computer, path: '/api/cloud' })
   if (remote.status !== 'off' || !remote.device) return
   const invite = await request({ schema: RuntimeInvite, computer: 'local', path: '/api/cloud/runtimes', method: 'POST', body: { device: remote.device } })
+  markSeen([remote.device])
   await request({ schema: Cloud, computer, path: '/api/cloud/join', method: 'POST', body: invite })
 }
 

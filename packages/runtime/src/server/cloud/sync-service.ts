@@ -4,7 +4,7 @@ import * as z from 'zod/mini'
 import { CloudWorkspace, Letter, MemberList, parseJson, Record, type Backup } from '@openhut/common/cloud/cloud.ts'
 import { keyVersionOf } from '@openhut/common/cloud/member-list.ts'
 import { openRecord, sealRecord, SYNCED, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
-import { fromBase64, slot } from '@openhut/common/vault/vault.ts'
+import { fromBase64, readHeader, slot } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
 import { listen, log } from '../platform/events.ts'
@@ -42,7 +42,7 @@ type Item = Local & { id: string }
 type Row = Omit<Local, 'value' | 'wire' | 'owner'> & { id: string; ver: number; hash: string }
 type Sent = 'sent' | 'later' | 'refused'
 type State = {
-  ws: string; home: boolean; socket: ReconnectingWebSocket | undefined; ready: boolean; timer: NodeJS.Timeout | undefined; headTimer: NodeJS.Timeout | undefined; failures: number
+  ws: string; home: boolean; socket: ReconnectingWebSocket | undefined; ready: boolean; timer: NodeJS.Timeout | undefined; headTimer: NodeJS.Timeout | undefined; keyTimer?: NodeJS.Timeout; failures: number
   wanted: [string, number][] | null; refused: Map<string, { kind: Synced; hash: string; name: string }>; dirty: Set<Synced>; backup: Backup; name: string | null
 }
 
@@ -66,6 +66,7 @@ export const syncService = {
     for (const s of states.values()) {
       s.socket?.close()
       clearTimeout(s.timer)
+      clearTimeout(s.keyTimer)
       clearTimeout(s.headTimer)
     }
     states.clear()
@@ -191,17 +192,32 @@ async function catchUp(s: State): Promise<void> {
   }
 }
 
-async function applyAll(s: State, records: Record[]): Promise<void> {
-  const ctx = await contextOf(s)
+async function applyAll(s: State, all: Record[]): Promise<void> {
+  let ctx = await contextOf(s)
   if (!ctx) return
   const rows = await rowsById(s)
   const opened: [Record, Opened][] = []
-  for (const record of records.filter((each) => (rows.get(each.id)?.ver ?? 0) < each.ver)) {
+  let records = all
+  for (const [index, record] of all.entries()) {
+    if ((rows.get(record.id)?.ver ?? 0) >= record.ver) continue
+    const newer = () => !ctx || (readHeader(fromBase64(record.body))?.version ?? 0) > ctx.version
+    if (newer()) {
+      await refreshMembers(s)
+      await rekey(s)
+      ctx = await contextOf(s)
+    }
+    if (!ctx || newer()) {
+      records = all.slice(0, index)
+      log.warn({ event: 'cloud.record_waiting', record: record.id, seq: record.seq })
+      s.keyTimer ??= setTimeout(() => void run(async () => { s.keyTimer = undefined; await catchUp(s) }), RETRY_MS * 5)
+      break
+    }
     const open = await openSafely({ s, record, ctx })
     if (open) opened.push([record, open])
     else log.warn({ event: 'cloud.record_dropped', record: record.id, seq: record.seq })
   }
   const after = await contextOf(s) ?? ctx
+  if (!after) return
   opened.sort(([, a], [, b]) => FIRST.indexOf(b.kind) - FIRST.indexOf(a.kind))
   const restoring = s.backup.state === 'restoring'
   if (restoring) Object.assign(s.backup, { done: 0, total: opened.filter(([, open]) => open.kind === 'agent' && open.value).length })

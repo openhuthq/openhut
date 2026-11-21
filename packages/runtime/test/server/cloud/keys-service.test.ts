@@ -18,7 +18,7 @@ test('keys are stored only sealed, in a file only you can read when there is no 
   assert.equal(keysService.keyStore(), 'file')
   await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   const kit = await keysService.newKit()
-  await keysService.saveKit(kit.box)
+  await keysService.setKit({ box: kit.box, savedAt: new Date().toISOString() })
   const raw = readFileSync(FILE, 'utf8')
   assert.equal(statSync(FILE).mode & 0o777, 0o600)
   const { device, account } = stored()
@@ -32,7 +32,7 @@ test('keys are stored only sealed, in a file only you can read when there is no 
 test('a signed-out Mac unlocks with the 12 words: the kit box opens the account key, the first workspace box it opens gives the key, and the account key signs this Mac in', async () => {
   const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   const kit = await keysService.newKit()
-  await keysService.saveKit(kit.box)
+  await keysService.setKit({ box: kit.box, savedAt: new Date().toISOString() })
   const mine = { ...await keysService.workspaceBox(account), chain: [account.list] }
   const foreign = { ...mine, id: 'another_ws', key: (await keysService.workspaceBox({ ...account, key: toBase64(newKey()) })).key }
   const saved = { kit: keysService.kitBox() ?? '', workspaces: [foreign, mine] }
@@ -69,7 +69,7 @@ test('key boxes are signed by the account key, and a box another account key mad
 
 test('signing in with another Google account is refused, and the first account keeps its keys and kit', async () => {
   const mo = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
-  await keysService.saveKit((await keysService.newKit()).box)
+  await keysService.setKit({ box: (await keysService.newKit()).box, savedAt: new Date().toISOString() })
   const kit = keysService.kit()
   await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error & { status?: number }) => err.status === 409 && /keeps the keys of mo@example\.com\. Sign in with that account, or forget it below\./.test(err.message))
   assert.deepEqual(keysService.account(), mo)
@@ -110,6 +110,7 @@ test('a new Mac reads its pairing letter only with the code it shows, and while 
   assert.deepEqual(joined?.members[0].devices, [...devices, toBase64(me)])
   assert.equal(account.list.by, devices[1])
   await keysService.adopt({ account })
+  await keysService.setSession({ token: 't', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
   await assert.rejects(keysService.change([devices[0]]), (err: Error & { status?: number }) => err.status === 403 && /added less than 3 days ago/.test(err.message))
 })
 
@@ -117,6 +118,7 @@ test('Not me removes the device in one list version with a new workspace key and
   await keysService.setSession(undefined)
   await keysService.relock({ sub: 'dev-mo', email: 'mo@example.com' })
   const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
+  await keysService.setSession({ token: 't', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
   const [stolen, phone] = await Promise.all([identity(), identity()])
   const body = keysService.members()
   assert.ok(body)
@@ -145,6 +147,56 @@ test('Not me removes the device in one list version with a new workspace key and
   assert.equal(secret?.version, 2)
   assert.deepEqual(new TextDecoder().decode(await unlock({ keys: { 2: fromBase64(secret?.key ?? '') }, bind: 'workspace/ws/record/after', locked }) ?? new Uint8Array()), 'made after Not me')
   assert.ok(letters.some((each) => each.to === toBase64(phone.publicKey) && each.purpose === 'account-key'))
+})
+
+test('Not me also drops runtimes added at or after the removed device, so a runtime it planted gets no key', async () => {
+  const account = keysService.mustBeOn()
+  const [kept, stolen, planted] = await Promise.all([identity(), identity(), identity()])
+  const [k, s, p] = [kept, stolen, planted].map((each) => toBase64(each.publicKey))
+  const body = keysService.members()
+  assert.ok(body)
+  const t1 = Math.max(Date.now(), body.at ?? 0) + 1000
+  const grow = async ({ signer, at, device, runtime }: { signer: Awaited<ReturnType<typeof identity>>; at: number; device: string; runtime: boolean }) => {
+    const now = keysService.members()
+    const me = now?.members.find((member) => member.email === account.email)
+    assert.ok(now && me)
+    const list = await signList({ signer, body: { ...now, version: now.version + 1, previous: await anchorOf(keysService.account()?.list ?? account.list), at, members: now.members.map((member) => member === me ? { ...me, devices: [...me.devices, device] } : member), runtimes: runtime ? [...now.runtimes ?? [], device] : now.runtimes, added: { ...now.added, [device]: at } } })
+    assert.ok(await keysService.advance([list]))
+  }
+  await grow({ signer: await keysService.device(), at: t1, device: k, runtime: true })
+  await grow({ signer: await keysService.device(), at: t1 + 1, device: s, runtime: false })
+  await grow({ signer: stolen, at: t1 + 4 * 24 * 60 * 60_000, device: p, runtime: true })
+  const { list, letters } = await keysService.change([s])
+  const body2 = JSON.parse(new TextDecoder().decode(fromBase64(list.bytes))) as { removed: string[]; runtimes: string[] }
+  assert.deepEqual([body2.removed.includes(s), body2.removed.includes(p), body2.removed.includes(k)], [true, true, false])
+  assert.deepEqual(body2.runtimes, [k])
+  assert.equal(letters.some((each) => each.to === p || each.to === s), false)
+  assert.ok(letters.some((each) => each.to === k && each.purpose === 'workspace-key'))
+})
+
+test('taking letters returns the used, stale, unreadable and strangers’ letters to delete, and keeps one for a newer key', async () => {
+  await keysService.setSession(undefined)
+  await keysService.relock({ sub: 'dev-mo', email: 'mo@example.com' })
+  const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
+  await keysService.setSession({ token: 't', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
+  const [other, stranger] = await Promise.all([identity(), identity()])
+  const body = keysService.members()
+  assert.ok(body)
+  const me = (await keysService.device()).publicKey
+  const t1 = Math.max(Date.now(), body.at ?? 0) + 1000
+  const v2 = await signList({ signer: await keysService.device(), body: { ...body, version: 2, previous: await anchorOf(account.list), at: t1, members: [{ ...body.members[0], devices: [...body.members[0].devices, toBase64(other.publicKey)] }], added: { ...body.added, [toBase64(other.publicKey)]: t1 } } })
+  const v3 = await signList({ signer: other, body: { ...body, version: 3, previous: await anchorOf(v2), at: t1 + 4 * 24 * 60 * 60_000, keyVersion: 2, members: [{ ...body.members[0], devices: [...body.members[0].devices, toBase64(other.publicKey)] }], added: { ...body.added, [toBase64(other.publicKey)]: t1 } } })
+  assert.ok(await keysService.advance([v2, v3]))
+  const anchor = await anchorOf(account.list)
+  const sent = async ({ id, sender, version }: { id: string; sender: typeof other; version: number }) => {
+    const plain = new TextEncoder().encode(JSON.stringify({ key: toBase64(newKey()), version, anchor }))
+    const body = await letter({ sender, to: me, workspace: account.workspace.id, purpose: 'workspace-key', version: 1, plain })
+    return { id, object: 'letter' as const, to: toBase64(me), from: toBase64(sender.publicKey), workspace: account.workspace.id, purpose: 'workspace-key' as const, body: toBase64(body ?? new Uint8Array()) }
+  }
+  const garbage = { ...await sent({ id: 'garbage', sender: other, version: 2 }), body: toBase64(newKey(80)) }
+  const done = await keysService.takeLetters([await sent({ id: 'old', sender: other, version: 1 }), await sent({ id: 'future', sender: other, version: 3 }), garbage, await sent({ id: 'stranger', sender: stranger, version: 2 }), await sent({ id: 'used', sender: other, version: 2 })])
+  assert.deepEqual(done.sort(), ['garbage', 'old', 'stranger', 'used'])
+  assert.equal(keysService.account()?.workspace.version, 2)
 })
 
 test('a copied Mac sees its keys belong to another machine before anything reads the account or session', async () => {
