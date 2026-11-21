@@ -1,5 +1,5 @@
-import { useEffect, useState, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
-import { Cancel01Icon, FingerPrintIcon } from '@hugeicons/core-free-icons'
+import { useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
+import { Cancel01Icon, FingerPrintIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { agentPath } from '@/app/routes'
@@ -15,6 +15,8 @@ import { Face } from '@/features/agents/face'
 import { QrCode } from '@/features/agents/qr-code'
 import { nameOf, REMOVE_DETAIL, useCloud, useRemoveMac, usePairing, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useStartOver, useUnlock } from '@/features/cloud/api'
 import { Mascot } from '@/features/cloud/sign-in'
+import { chooseWorkspace, useAsk, useCancelAsk } from '@/features/cloud/workspaces'
+import { Spinner } from '@/components/ui/spinner'
 import { HERE } from '@/features/settings/desktop'
 import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { isPhone } from '@/lib/native'
@@ -25,9 +27,32 @@ import { cn } from '@/lib/utils'
 
 const SEEN_KEY = 'openhut.seen-devices'
 const ALERT_MS = 3 * 24 * 60 * 60_000
+const DONE_MS = 6000
+type Done = { title: string; note: string }
+let done: Done | null = null
+const doneListeners = new Set<() => void>()
+
+export function showDone(next: Done): void {
+  done = next
+  for (const listener of doneListeners) listener()
+  setTimeout(() => {
+    if (done !== next) return
+    done = null
+    for (const listener of doneListeners) listener()
+  }, DONE_MS)
+}
+
+function DoneToast() {
+  const shown = useSyncExternalStore((listener) => { doneListeners.add(listener); return () => { doneListeners.delete(listener) } }, () => done)
+  if (!shown) return null
+  return <div role="status" className="fixed top-14 right-[294px] z-50 flex w-[380px] max-w-[calc(100%-32px)] items-center gap-3 rounded-[18px] border border-hair bg-card p-2.5 pr-3 shadow-[0_8px_24px_oklch(0%_0_0/.10)]">
+    <span className="grid size-9 shrink-0 place-items-center text-[#12a150]"><I icon={Tick02Icon} size={20} /></span>
+    <span className="grid min-w-0 flex-1 gap-px text-[13px]"><span className="font-semibold">{shown.title}</span><span className="truncate text-mute">{shown.note}</span></span>
+  </div>
+}
 
 function Unlock({ cloud }: { cloud: Cloud }) {
-  const [way, setWay] = useState<'kit' | 'code' | null>(null)
+  const [way, setWay] = useState<'kit' | 'code' | 'admin' | null>(null)
   const signOut = useSignOut()
   const signIn = useSignIn()
   const helper = usePasskeys()
@@ -42,6 +67,7 @@ function Unlock({ cloud }: { cloud: Cloud }) {
   </Window>
   if (way === 'kit') return <KitEntry onBack={() => setWay(null)} />
   if (way === 'code') return <CodeEntry onBack={() => setWay(null)} />
+  if (way === 'admin' || cloud.asking) return <AdminWait cloud={cloud} onBack={() => setWay(null)} />
   const canPasskey = Boolean(helper?.passkeys && helper.prf)
   return <Window>
     <Hut mood="key" className="size-[84px]" />
@@ -55,10 +81,44 @@ function Unlock({ cloud }: { cloud: Cloud }) {
       <Rows>
         <Row onClick={() => setWay('code')} icon={<Mascot kind="phone" size={30} />} title="Use my iPhone or another Mac" note="Scan a code with it"><Chevron /></Row>
         {cloud.kitInCloud && <Row onClick={() => setWay('kit')} icon={<Mascot kind="kit" size={30} />} title="Use my recovery kit" note="The 12 words you saved"><Chevron /></Row>}
+        <Row onClick={() => setWay('admin')} icon={<Mascot kind="team" size={30} />} title="Ask an admin" note="Get your team workspaces back"><Chevron /></Row>
       </Rows>
     </div>
     {!cloud.kitInCloud && <NoKitYet />}
     {leave}
+  </Window>
+}
+
+function AdminWait({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
+  const ask = useAsk()
+  const cancel = useCancelAsk()
+  const asking = cloud.asking
+  const asked = useRef(false)
+  useEffect(() => {
+    if (asking || asked.current) return
+    asked.current = true
+    ask.mutate()
+  }, [asking, ask])
+  const back = () => cancel.mutate(undefined, { onSettled: onBack })
+  const names = (asking?.admins ?? []).map(nameOf)
+  const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names.at(-1)}` : names[0] ?? 'an admin'
+  return <Window>
+    <Mascot kind="team" size={84} />
+    {asking?.denied
+      ? <>
+        <h1 className="m-0 text-[22px]/[1.25] font-semibold">Not let in</h1>
+        <p className="m-0 max-w-[420px] text-[14px] text-body">{who} denied this {HERE}, or the request expired after a day.</p>
+        <Button type="button" variant="primary" className={PILL} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Ask again</Button>
+      </>
+      : <>
+        <h1 className="m-0 text-[22px]/[1.25] font-semibold">{asking ? `Waiting for ${who}` : 'Asking an admin…'}</h1>
+        <p className="m-0 text-[14px] text-body">When they call, read them these 4 words.</p>
+        <div className="mt-1 flex gap-2">{(asking?.words ?? ['', '', '', '']).map((word, index) => <span key={index} className="min-w-[72px] rounded-lg border border-hair bg-card px-3.5 py-2 text-[17px] font-semibold">{word || '…'}</span>)}</div>
+        <Spinner className="mt-1" />
+        <p className="m-0 max-w-[420px] text-[12px] text-mute">You get your team workspaces back. Your own agents stay locked until you use your recovery kit or another {HERE}.</p>
+      </>}
+    <ErrorNote message={ask.error?.message} />
+    <Button type="button" variant="text" className="text-[12px] font-normal text-mute underline" disabled={cancel.isPending} onClick={back}>Try another way</Button>
   </Window>
 }
 
@@ -185,7 +245,21 @@ export function CloudGate({ children }: { children: ReactNode }) {
   if (isPhone() || !cloud) return children
   if (cloud.status === 'locked') return <Unlock cloud={cloud} />
   if (restoring || landing) return <Restoring cloud={cloud} />
-  return <>{children}<NewMacAlert cloud={cloud} /></>
+  return <>{children}<NewMacAlert cloud={cloud} /><DoneToast /><GoneNotice cloud={cloud} /></>
+}
+
+function GoneNotice({ cloud }: { cloud: Cloud }) {
+  const seen = useRef(cloud.gone.length)
+  useEffect(() => {
+    const fresh = cloud.gone.slice(seen.current)
+    seen.current = cloud.gone.length
+    const last = fresh.at(-1)
+    if (!last) return
+    const home = cloud.workspaces.find((each) => each.home)
+    if (home) chooseWorkspace(home.id)
+    showDone({ title: last.why === 'deleted' ? `${last.name} was deleted` : `You were removed from ${last.name}`, note: `Its agents stopped on this ${HERE}.` })
+  }, [cloud.gone, cloud.workspaces])
+  return null
 }
 
 function Restoring({ cloud }: { cloud: Cloud }) {

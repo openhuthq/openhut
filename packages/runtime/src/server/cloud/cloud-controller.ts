@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import * as z from 'zod/mini'
-import { AddPasskey, AddRuntime, AllowDevice, ChangeRole, DeviceKey, RenameWorkspace, RuntimeInvite, UnlockCloud } from '@openhut/common/cloud/cloud.ts'
+import { AddPasskey, AddRuntime, AllowDevice, ApproveDevice, ChangeRole, CreateWorkspace, DeleteWorkspace, DeviceKey, RenameWorkspace, RuntimeInvite, UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { requireSignIn } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
 
@@ -35,6 +35,24 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.patch<{ Params: { id: string }; Body: RenameWorkspace }>('/workspaces/:id', RenameRequest, async (req) => cloudService.rename({ workspace: req.params.id, name: req.body.name }))
 
+  app.delete('/', SignedIn, async () => cloudService.deleteData())
+
+  app.post('/requests', SignedIn, async () => cloudService.ask())
+
+  app.delete('/requests', SignedIn, async () => cloudService.cancelAsk())
+
+  app.delete('/rotations', SignedIn, async () => cloudService.rotated())
+
+  app.post<{ Body: CreateWorkspace }>('/workspaces', CreateRequest, async (req) => cloudService.create(req.body))
+
+  app.delete<{ Params: { id: string }; Body: DeleteWorkspace }>('/workspaces/:id', DeleteRequest, async (req) => cloudService.deleteWorkspace({ workspace: req.params.id, name: req.body.name }))
+
+  app.delete<{ Params: { id: string; email: string } }>('/workspaces/:id/members/:email', SignedIn, async (req) => cloudService.remove({ workspace: req.params.id, email: req.params.email }))
+
+  app.post<{ Params: { id: string; device: string }; Body: ApproveDevice }>('/workspaces/:id/requests/:device/approvals', ApproveRequest, async (req) => cloudService.approve({ workspace: req.params.id, device: req.params.device, words: req.body.words }))
+
+  app.delete<{ Params: { id: string; device: string } }>('/workspaces/:id/requests/:device', SignedIn, async (req) => cloudService.deny({ workspace: req.params.id, device: req.params.device }))
+
   app.patch<{ Params: { id: string; email: string }; Body: ChangeRole }>('/workspaces/:id/members/:email', RoleRequest, async (req) => cloudService.setRole({ workspace: req.params.id, email: req.params.email, role: req.body.role }))
 }
 
@@ -47,3 +65,6 @@ const NotMeRequest = { onRequest: requireSignIn, schema: { params: z.object({ ke
 const PasskeyRequest = { onRequest: requireSignIn, schema: { body: AddPasskey } }
 const RenameRequest = { onRequest: requireSignIn, schema: { body: RenameWorkspace } }
 const RoleRequest = { onRequest: requireSignIn, schema: { body: ChangeRole } }
+const CreateRequest = { onRequest: requireSignIn, schema: { body: CreateWorkspace } }
+const DeleteRequest = { onRequest: requireSignIn, schema: { body: DeleteWorkspace } }
+const ApproveRequest = { onRequest: requireSignIn, schema: { body: ApproveDevice } }

@@ -1,9 +1,13 @@
-import { ArrowDown01Icon, Link01Icon, Tick02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
+import { type FormEvent } from 'react'
+import { ArrowDown01Icon, Link01Icon, PlusSignIcon, Tick02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { HOVER, I } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
-import { chooseWorkspace, peopleNote, useWorkspaces, workspaceName } from '@/features/cloud/workspaces'
+import { chooseWorkspace, peopleNote, useCreateWorkspace, useWorkspaces, workspaceName } from '@/features/cloud/workspaces'
 import { navigate, open } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
@@ -33,7 +37,25 @@ export function Switcher() {
       </DropdownMenuItem>)}
       <DropdownMenuSeparator />
       {active.role !== 'member' && <DropdownMenuItem className="h-8 gap-2.5 px-2.5 text-[13px]" onClick={() => navigate('/settings/people?open=invite')}><I icon={UserGroupIcon} size={15} className="text-mute" />Invite people</DropdownMenuItem>}
+      {all.some((each) => each.own) && <DropdownMenuItem className="h-8 gap-2.5 px-2.5 text-[13px]" onClick={() => open('new-workspace')}><I icon={PlusSignIcon} size={15} className="text-mute" />Create another team</DropdownMenuItem>}
       <DropdownMenuItem className="h-8 gap-2.5 px-2.5 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />Join with a link</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
+}
+
+export function CreateWorkspaceDialog() {
+  const create = useCreateWorkspace()
+  const close = () => open()
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    create.mutate(String(new FormData(event.currentTarget).get('name') ?? '').trim(), { onSuccess: () => { close(); navigate('/settings/people') } })
+  }
+  return <Dialog size="narrow" label="Create a team" onClose={close}>
+    <DialogHead title="Create a team" onClose={close} />
+    <form id="new-workspace" onSubmit={submit} className="flex flex-col gap-3 px-5 py-5 text-[13px]/[18px]">
+      <span className="text-body">A new workspace for agents you share. Your own workspace stays yours.</span>
+      <Input name="name" required maxLength={60} autoFocus placeholder="Team name" aria-label="Team name" className="h-9 text-[13px]" />
+    </form>
+    <DialogFoot error={create.error?.message} start={<Button type="button" variant="secondary" onClick={close}>Cancel</Button>}><Button type="submit" form="new-workspace" variant="primary" disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create'}</Button></DialogFoot>
+  </Dialog>
 }

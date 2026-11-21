@@ -8,8 +8,8 @@ import { config } from '../../../src/server/platform/config.ts'
 import { seal, unseal } from '../../../src/server/platform/secrets.ts'
 import { keysService } from '../../../src/server/cloud/keys-service.ts'
 import { keyStore } from '../../../src/server/cloud/key-store.ts'
-import { roomKeys } from '../../../src/server/cloud/room-keys.ts'
-import { fromBase64, identity, letter, lock, newKey, newPairing, pairingWorkspace, read, slot, toBase64, unlock } from '@openhut/common/vault/vault.ts'
+import { bodyOf, roomKeys } from '../../../src/server/cloud/room-keys.ts'
+import { deviceWords, fromBase64, identity, letter, lock, newKey, newPairing, pairingWorkspace, read, slot, toBase64, unlock } from '@openhut/common/vault/vault.ts'
 import { anchorOf, check, signList } from '@openhut/common/cloud/member-list.ts'
 
 await migrate()
@@ -199,6 +199,65 @@ test('taking letters returns the used, stale, unreadable and strangers’ letter
   const done = await roomKeys.takeLetters({ found: [await sent({ id: 'old', sender: other, version: 1 }), await sent({ id: 'future', sender: other, version: 3 }), garbage, await sent({ id: 'stranger', sender: stranger, version: 2 }), await sent({ id: 'used', sender: other, version: 2 })] })
   assert.deepEqual(done.sort(), ['garbage', 'old', 'stranger', 'used'])
   assert.equal(keysService.account()?.workspace.version, 2)
+})
+
+test('removing someone from a team rotates its key in the same list version; the removed member can’t read anything written after, the others can', async () => {
+  await keysService.setSession(undefined)
+  await keysService.relock({ sub: 'dev-mo', email: 'mo@example.com' })
+  await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
+  await keysService.setSession({ token: 't', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
+  const team = await roomKeys.createTeam()
+  const ws = team.workspace.id
+  const [sara, ana, anaMac] = await Promise.all([identity(), identity(), identity()])
+  const key = (each: typeof sara) => toBase64(each.publicKey)
+  const body = bodyOf(team.list)
+  assert.ok(body)
+  const at = Math.max(Date.now(), body.at ?? 0)
+  const v2 = await signList({ signer: await keysService.device(), body: { ...body, version: 2, previous: await anchorOf(team.list), at, members: [...body.members, { email: 'sara@example.com', role: 'admin', devices: [key(sara)] }, { email: 'ana@example.com', role: 'member', devices: [key(ana)] }], added: { ...body.added, [key(sara)]: at, [key(ana)]: at } } })
+  assert.ok(await roomKeys.advance({ lists: [v2], ws }))
+  await assert.rejects(roomKeys.approve({ ws, email: 'ana@example.com', device: key(anaMac), words: ['tiger', 'salt', 'brown', 'lake'] }), (err: Error & { status?: number }) => err.status === 400)
+  const approved = await roomKeys.approve({ ws, email: 'ana@example.com', device: key(anaMac), words: await deviceWords(anaMac.publicKey) })
+  assert.deepEqual(bodyOf(approved.list)?.members.find((member) => member.email === 'ana@example.com')?.devices, [key(ana), key(anaMac)])
+  assert.ok(await roomKeys.advance({ lists: [approved.list], ws }))
+  const anaKey = roomKeys.room(ws)?.workspace.key ?? ''
+  const { list, room, letters } = await roomKeys.teamChange({ ws, emails: ['ana@example.com'] })
+  const after = await check({ anchor: await anchorOf(team.list), chain: [team.list, v2, approved.list, list] })
+  assert.equal(after?.keyVersion, 2)
+  assert.deepEqual(after?.members.map((member) => member.email), ['mo@example.com', 'sara@example.com'])
+  assert.ok([key(ana), key(anaMac)].every((device) => after?.removed.includes(device)))
+  assert.equal(letters.some((each) => each.to === key(ana) || each.to === key(anaMac)), false)
+  const locked = await lock({ key: fromBase64(room.workspace.key), version: 2, bind: `workspace/${ws}/record/after`, plain: new TextEncoder().encode('written after Ana left') })
+  assert.ok(locked)
+  assert.equal(await unlock({ keys: { 1: fromBase64(anaKey) }, bind: `workspace/${ws}/record/after`, locked }), null)
+  const toSara = letters.find((each) => each.to === key(sara))
+  assert.ok(toSara)
+  const plain = await read({ recipient: sara, from: (await keysService.device()).publicKey, workspace: ws, purpose: 'workspace-key', body: fromBase64(toSara.body), allowed: [(await keysService.device()).publicKey] })
+  const secret = plain && JSON.parse(new TextDecoder().decode(plain)) as { key: string; version: number; own?: string }
+  assert.equal(secret?.version, 2)
+  assert.equal(secret?.own, undefined)
+  assert.equal(new TextDecoder().decode(await unlock({ keys: { 2: fromBase64(secret?.key ?? '') }, bind: `workspace/${ws}/record/after`, locked }) ?? new Uint8Array()), 'written after Ana left')
+  await roomKeys.setRoom(room)
+  await assert.rejects(roomKeys.teamChange({ ws, emails: ['mo@example.com'] }), (err: Error) => err.message === 'Make someone else the owner first.')
+  await assert.rejects(roomKeys.withRole({ ws: keysService.account()?.workspace.id ?? '', email: 'mo@example.com', role: 'owner' }))
+  const handed = bodyOf(await roomKeys.withRole({ ws, email: 'sara@example.com', role: 'owner' }))
+  assert.deepEqual(handed?.members.map((member) => member.role), ['admin', 'owner'])
+})
+
+test('the owner prunes old tombstones when it signs, so an honest list never reaches the cap', async () => {
+  const me = await keysService.device()
+  const team = await roomKeys.createTeam()
+  const body = bodyOf(team.list)
+  assert.ok(body)
+  const removed = Array.from({ length: 1200 }, () => toBase64(newKey(64)))
+  const stuffed = await signList({ signer: me, body: { ...body, version: 2, previous: await anchorOf(team.list), removed } })
+  await roomKeys.addTeam({ ws: team.workspace.id, list: stuffed, first: team.list })
+  const sara = await identity()
+  const at = Math.max(Date.now(), body.at ?? 0)
+  const v2 = await signList({ signer: me, body: { ...bodyOf(stuffed) ?? body, version: 3, previous: await anchorOf(stuffed), at, members: [...body.members, { email: 'sara@example.com', role: 'member', devices: [toBase64(sara.publicKey)] }], added: { ...body.added, [toBase64(sara.publicKey)]: at } } })
+  await roomKeys.addTeam({ ws: team.workspace.id, list: v2, first: team.list })
+  const next = bodyOf(await roomKeys.withRole({ ws: team.workspace.id, email: 'sara@example.com', role: 'admin' }))
+  assert.equal(next?.removed.length, 500)
+  assert.deepEqual(next?.removed, removed.slice(-500))
 })
 
 test('a copied Mac sees its keys belong to another machine before anything reads the account or session', async () => {

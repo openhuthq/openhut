@@ -75,7 +75,7 @@ export const invitationService = {
     const put = await cloud.room({ method: 'PUT', workspace: ws, path: '/members', token: await keysService.token(), body: list })
     if (put.status !== 200) throw new HttpError(put.status === 404 || put.status === 410 ? put.status : 502, REFUSED[put.status] ?? `OpenHut Cloud didn’t let you join (HTTP ${put.status}). Try again.`)
     if (first) await roomKeys.addTeam({ ws, list, first })
-    syncService.connect()
+    cloudService.connect()
     return cloudService.status()
   },
 

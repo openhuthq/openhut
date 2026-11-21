@@ -79,7 +79,8 @@ function dated({ previous: a, next: b }: { previous: MemberListBody; next: Membe
 
 export function youngUntil(body: MemberListBody, key: string): number {
   const since = addedOf(body, key)
-  return since > 0 && devicesOf(body).some((each) => addedOf(body, each) < since) ? since + YOUNG_MS : 0
+  const mine = body.members.find((member) => member.devices.includes(key))?.devices ?? []
+  return since > 0 && mine.some((each) => addedOf(body, each) < since) ? since + YOUNG_MS : 0
 }
 
 function youngMay({ previous: a, next: b, signer, by }: { previous: MemberListBody; next: MemberListBody; signer: Member; by: string }): boolean {

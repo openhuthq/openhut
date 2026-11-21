@@ -206,7 +206,7 @@ export const keysService = {
     const members = body.members.map((member) => member === mine ? { ...member, devices: [...member.devices.filter((device) => !gone.includes(device)), kit], kit } : member)
     const kept = <T>(map: Record<string, T> = {}) => Object.fromEntries(Object.entries(map).filter(([device]) => !gone.includes(device)))
     const keyVersion = keyVersionOf(body) + 1
-    const list = await signList({ signer: await keysService.device(), body: { ...base, members, keyVersion, removed: [...body.removed, ...gone], runtimes: body.runtimes?.filter((device) => !gone.includes(device)), added: { ...kept(body.added), [kit]: base.at ?? 0 }, names: body.names && kept(body.names) } })
+    const list = await signList({ signer: await keysService.device(), body: { ...base, members, keyVersion, removed: [...base.removed, ...gone], runtimes: body.runtimes?.filter((device) => !gone.includes(device)), added: { ...kept(body.added), [kit]: base.at ?? 0 }, names: body.names && kept(body.names) } })
     if (!await check({ anchor: await anchorOf(account.list), chain: [account.list, list] })) throw new HttpError(409, 'Your devices changed on another computer just now. Try again.')
     const { workspace } = account
     const own = workspace.own ?? toBase64(await roomKeys.own() ?? newKey())
@@ -229,6 +229,19 @@ export const keysService = {
     return account
   },
 
+  async deleteProof(ws: string): Promise<{ signedAt: number; signature: string }> {
+    const signedAt = Date.now()
+    return { signedAt, signature: await signProof({ signer: await keysService.device(), proof: 'delete', parts: [ws, String(signedAt)] }) }
+  },
+
+  async accountProof(): Promise<{ by: string; signature: string }> {
+    const account = keysService.mustBeOn()
+    const signer = await accountDevice(fromBase64(account.key))
+    return { by: toBase64(signer.publicKey), signature: await signProof({ signer, proof: 'key-box', parts: [account.sub, 'delete-account', ''] }) }
+  },
+
+  forgetHere: async (): Promise<void> => keyStore.write({ device: toBase64(newKey()), machine }),
+
   async removedHere(): Promise<void> {
     const account = (await keyStore.read()).account
     if (account) await keyStore.write({ device: toBase64(newKey()), machine, locked: account.key ? { sub: account.sub, email: account.email } : undefined })
@@ -244,7 +257,7 @@ export async function notYoung(account: Account): Promise<void> {
 export const openLetter = async ({ found, workspace }: { found: Letter; workspace: string }): Promise<Bytes | null> =>
   read({ recipient: await keysService.device(), from: fromBase64(found.from), workspace, purpose: found.purpose, body: fromBase64(found.body), allowed: [fromBase64(found.from)] })
 
-function deviceName(): string {
+export function deviceName(): string {
   const name = process.platform === 'darwin' ? spawnSync('scutil', ['--get', 'ComputerName'], { encoding: 'utf8' }).stdout : ''
   return (name || hostname()).trim().slice(0, 64)
 }

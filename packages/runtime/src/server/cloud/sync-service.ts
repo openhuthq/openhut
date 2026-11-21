@@ -2,14 +2,15 @@ import { createHash } from 'node:crypto'
 import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
 import { CloudWorkspace, parseJson, Record, type Backup } from '@openhut/common/cloud/cloud.ts'
+import { keyVersionOf } from '@openhut/common/cloud/member-list.ts'
 import { FileValue, openRecord, sealRecord, SYNCED, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
 import { fromBase64, readHeader, slot, toBase64 } from '@openhut/common/vault/vault.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
-import { listen, log } from '../platform/events.ts'
+import { emit, listen, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
-import { keysService } from './keys-service.ts'
+import { keysService, type Sent as Outgoing } from './keys-service.ts'
 import { roomKeys, type Call } from './room-keys.ts'
 import { syncKinds, type Context, type Local } from './sync-kinds.ts'
 
@@ -35,8 +36,11 @@ const KINDS_OF: [RegExp, Synced[]][] = [
   [/^connection\./, ['connection']],
 ]
 const Page = z.object({ data: z.array(Record), hasMore: z.boolean() })
+const Requests = z.object({ data: z.array(z.object({ device: z.string(), email: z.string(), at: z.string() })) })
+const GONE = [4001, 4003, 4010]
 const Message = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready') }), z.object({ type: z.literal('members') }), z.object({ type: z.literal('letter') }), z.object({ type: z.literal('workspace') }), z.object({ type: z.literal('record'), record: Record }),
+  z.object({ type: z.literal('request') }), z.object({ type: z.literal('deleted') }),
 ])
 
 type Item = Local & { id: string }
@@ -45,11 +49,14 @@ type Sent = 'sent' | 'later' | 'refused'
 type State = {
   ws: string; home: boolean; socket: ReconnectingWebSocket | undefined; ready: boolean; timer: NodeJS.Timeout | undefined; headTimer: NodeJS.Timeout | undefined; keyTimer?: NodeJS.Timeout; failures: number
   wanted: [string, number][] | null; refused: Map<string, { kind: Synced; hash: string; name: string }>; dirty: Set<Synced>; backup: Backup; name: string | null
+  requests: { device: string; email: string; at: string }[]; leaving?: boolean
 }
+export type Gone = { name: string; why: 'removed' | 'deleted' }
 
 let queue: Promise<void> = Promise.resolve()
 const states = new Map<string, State>()
 const backup: Backup = { ...IDLE }
+const gone: Gone[] = []
 
 listen((event) => {
   const kinds = KINDS_OF.find(([pattern]) => pattern.test(event.name))?.[1]
@@ -102,6 +109,36 @@ export const syncService = {
 
   waiting: (ws: string): boolean => !roomKeys.room(ws)?.workspace.key,
 
+  requests: (ws: string): State['requests'] => states.get(ws)?.requests ?? [],
+
+  gone: (): Gone[] => gone,
+
+  async refreshRequests(ws: string): Promise<void> {
+    const s = states.get(ws)
+    if (s) await asked(s)
+  },
+
+  async change({ ws, emails, devices }: { ws: string; emails?: string[]; devices?: string[] }): Promise<void> {
+    const { list, room: next, letters } = await roomKeys.teamChange({ ws, emails, devices })
+    const token = await keysService.token()
+    const leaving = Boolean(emails?.includes(keysService.account()?.email ?? ''))
+    syncService.leaving({ ws, on: leaving })
+    const put = await cloud.room({ method: 'PUT', workspace: ws, path: '/members', token, body: list })
+    if (put.status !== 200) syncService.leaving({ ws, on: false })
+    if (put.status === 409) throw new HttpError(409, 'Someone changed this workspace a moment ago. Try again.')
+    if (put.status !== 200) throw new HttpError(put.status === 403 ? 403 : 502, `OpenHut Cloud refused the change (HTTP ${put.status}).`)
+    if (leaving) return drop({ ws, why: null })
+    await roomKeys.setRoom(next)
+    for (const each of letters) await post({ ws, letter: each, token })
+  },
+
+  drop: (ws: string): Promise<void> => drop({ ws, why: null }),
+
+  leaving({ ws, on }: { ws: string; on: boolean }): void {
+    const s = states.get(ws)
+    if (s) s.leaving = on
+  },
+
   settled: (): Promise<void> => queue,
 }
 
@@ -111,7 +148,7 @@ function homeState(): State | undefined {
 }
 
 function open(home: boolean, ws: string): void {
-  const s: State = { ws, home, socket: undefined, ready: false, timer: undefined, headTimer: undefined, failures: 0, wanted: null, refused: new Map(), dirty: new Set(), name: null, backup: home ? backup : { ...backup, state: 'idle', at: null, problem: null } }
+  const s: State = { ws, home, socket: undefined, ready: false, timer: undefined, headTimer: undefined, failures: 0, wanted: null, refused: new Map(), dirty: new Set(), name: null, requests: [], backup: home ? backup : { ...backup, state: 'idle', at: null, problem: null } }
   states.set(ws, s)
   const socket = new ReconnectingWebSocket(cloud.roomUrl(ws), [], { WebSocket: globalThis.WebSocket })
   s.socket = socket
@@ -121,7 +158,7 @@ function open(home: boolean, ws: string): void {
   socket.addEventListener('message', (event) => heard(s, String(event.data)))
   socket.addEventListener('close', (event) => {
     s.ready = false
-    if (home && (event.code === 4001 || event.code === 4003)) void run(() => checkRemoved(s))
+    if (GONE.includes(event.code)) void run(() => checkRemoved(s))
   })
 }
 
@@ -146,14 +183,20 @@ function heard(s: State, text: string): void {
     void run(async () => {
       await named(s)
       await roomKeys.refresh({ ws: s.ws, call: caller(s) })
+      await asked(s)
       await catchUp(s)
     })
     send(s)
   }
   if (message?.type === 'workspace') void run(() => named(s))
+  if (message?.type === 'request') void run(() => asked(s))
+  if (message?.type === 'deleted' && !s.leaving) void run(() => drop({ ws: s.ws, why: 'deleted' }))
   if (message?.type === 'members' || message?.type === 'letter') void run(async () => {
     const keyless = syncService.waiting(s.ws)
+    const before = roomKeys.members(s.ws)
     const { changed } = await roomKeys.refresh({ ws: s.ws, call: caller(s) })
+    if (message.type === 'members') await rotateIfLeft({ s, before })
+    if (message.type === 'members') await asked(s)
     if (keyless && !syncService.waiting(s.ws)) await catchUp(s)
     if (changed) send(s, keyless ? SYNCED : ['connection'])
   })
@@ -398,10 +441,49 @@ async function contextOf(s: State): Promise<Context | null> {
 }
 
 async function checkRemoved(s: State): Promise<void> {
-  if (!keysService.account()) return
-  if ((await room(s, { method: 'GET', path: '/member-lists?after=0' })).status !== 403) return
+  if (!keysService.account() || !states.has(s.ws) || s.leaving) return
+  const { status } = await room(s, { method: 'GET', path: '/member-lists?after=0' })
+  if (status !== 403 && status !== 404) return
+  if (!s.home || !roomKeys.isOwn(s.ws)) return drop({ ws: s.ws, why: status === 404 ? 'deleted' : 'removed' })
   syncService.disconnect()
+  if (status === 404) return keysService.forgetHere()
   await keysService.removedHere()
+}
+
+async function drop({ ws, why }: { ws: string; why: Gone['why'] | null }): Promise<void> {
+  const s = states.get(ws)
+  const home = s?.home ?? keysService.account()?.workspace.id === ws
+  const own = roomKeys.isOwn(ws)
+  if (why) gone.push({ name: s?.name ?? 'A workspace', why })
+  s?.socket?.close()
+  for (const timer of [s?.timer, s?.keyTimer, s?.headTimer]) clearTimeout(timer)
+  states.delete(ws)
+  await roomKeys.dropRoom(ws)
+  if (!own) await agentService.dropWorkspace(home ? null : ws)
+  await db.deleteFrom('cloud_record').where('workspace', '=', home ? '' : ws).execute()
+  await db.deleteFrom('install_setting').where('name', '=', home ? SEQ : `${SEQ}:${ws}`).execute()
+  if (home && !own) syncService.connect()
+  emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
+}
+
+async function asked(s: State): Promise<void> {
+  const before = JSON.stringify(s.requests)
+  s.requests = Requests.safeParse((await room(s, { method: 'GET', path: '/requests' })).json).data?.data ?? []
+  if (JSON.stringify(s.requests) !== before) emit({ name: 'cloud.changed', target: { type: 'cloud', id: s.ws } })
+}
+
+async function rotateIfLeft({ s, before }: { s: State; before: ReturnType<typeof roomKeys.members> }): Promise<void> {
+  const after = roomKeys.members(s.ws)
+  const role = roomKeys.roleIn(s.ws)
+  const left = before && after && before.members.flatMap((member) => member.devices).some((device) => !after.members.some((member) => member.devices.includes(device)))
+  if (!left || !after || !before || keyVersionOf(after) !== keyVersionOf(before) || !role || role === 'member' || !keysService.account()?.key) return
+  await syncService.change({ ws: s.ws }).catch((err: unknown) => log.warn({ event: 'cloud.rotate_failed', error: messageOf(err) }))
+  emit({ name: 'cloud.changed', target: { type: 'cloud', id: s.ws } })
+}
+
+async function post({ ws, letter, token }: { ws: string; letter: Outgoing; token: string }): Promise<void> {
+  const { status } = await cloud.room({ method: 'POST', workspace: ws, path: '/letters', token, body: letter }).catch(() => ({ status: 0 }))
+  if (status !== 200) log.warn({ event: 'cloud.letter_failed', status })
 }
 
 function caller(s: State): Call {

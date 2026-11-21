@@ -283,3 +283,14 @@ test('slots are a keyed hash of the path', async () => {
   assert.equal(await vault.slot({ key: bytes(key), path }), slot)
   assert.notEqual(await vault.slot({ key: vault.newKey(), path }), slot)
 })
+
+test('a device shows 4 words from its key: the same key gives the same words, another key other words', async () => {
+  const a = (await vault.identity()).publicKey
+  const b = (await vault.identity()).publicKey
+  const words = await vault.deviceWords(a)
+  assert.equal(words.length, 4)
+  assert.ok(words.every((word) => /^[a-z]{3,8}$/.test(word)))
+  assert.deepEqual(await vault.deviceWords(a), words)
+  assert.notDeepEqual(await vault.deviceWords(b), words)
+  assert.deepEqual(await vault.deviceWords(new Uint8Array(32)), ['bird', 'flush', 'salmon', 'gesture'])
+})

@@ -162,7 +162,7 @@ export function parseJson(value: string): unknown {
   }
 }
 
-export const PROOFS = ['session', 'refresh', 'delete', 'restore', 'key-box', 'device'] as const
+export const PROOFS = ['session', 'refresh', 'delete', 'key-box', 'device'] as const
 export type Proof = (typeof PROOFS)[number]
 
 export function proofBytes({ proof, parts }: { proof: Proof; parts: string[] }): Bytes {
@@ -218,10 +218,12 @@ export const CloudWorkspaceView = z.object({
   id: Id,
   name: z.nullable(z.string()),
   home: z.boolean(),
+  own: z._default(z.boolean(), false),
   role: Role,
   waiting: z.boolean(),
   members: z.array(Member),
   invites: z.array(z.object({ email: Email, role: InviteRole, link: z.nullable(z.string()) })),
+  requests: z._default(z.array(z.object({ device: DeviceKey, email: Email, at: Timestamp })), []),
 })
 export type CloudWorkspaceView = z.infer<typeof CloudWorkspaceView>
 
@@ -242,6 +244,9 @@ export const Cloud = z.object({
   youngUntil: z._default(z.nullable(Timestamp), null),
   needsSignIn: z.boolean(),
   workspaces: z._default(z.array(CloudWorkspaceView), []),
+  asking: z._default(z.nullable(z.object({ words: z.array(z.string()), admins: z.array(Email), denied: z.boolean() })), null),
+  rotate: z._default(z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() })), []),
+  gone: z._default(z.array(z.object({ name: z.string(), why: z.enum(['removed', 'deleted']) })), []),
 })
 export type Cloud = z.infer<typeof Cloud>
 
@@ -282,5 +287,14 @@ export type CloudInvitePreview = z.infer<typeof CloudInvitePreview>
 export const InviteLetter = z.object({ workspace: Id, name: z.string().check(z.maxLength(200)), from: Email, email: Email, role: InviteRole, anchor: Base64, expiresAt: Timestamp })
 export type InviteLetter = z.infer<typeof InviteLetter>
 
-export const ChangeRole = z.object({ role: InviteRole })
+export const ChangeRole = z.object({ role: Role })
 export type ChangeRole = z.infer<typeof ChangeRole>
+
+export const CreateWorkspace = z.object({ name: RenameWorkspace.shape.name })
+export type CreateWorkspace = z.infer<typeof CreateWorkspace>
+
+export const DeleteWorkspace = z.object({ name: z.string().check(z.maxLength(200)) })
+export type DeleteWorkspace = z.infer<typeof DeleteWorkspace>
+
+export const ApproveDevice = z.object({ words: z.array(z.string().check(z.maxLength(20))).check(z.length(4)) })
+export type ApproveDevice = z.infer<typeof ApproveDevice>

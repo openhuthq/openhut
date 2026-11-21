@@ -16,6 +16,7 @@ const FILTERS: Record<string, QueryFilters[]> = {
   routine: [{ queryKey: ['routines'] }],
   provider: [{ queryKey: PROVIDERS_KEY }],
   admin: [{ queryKey: COMPUTERS_KEY }],
+  cloud: [{ queryKey: ['cloud'] }],
 }
 const EVERYTHING = Object.values(FILTERS).flat()
 const OFFLINE = [{ queryKey: COMPUTERS_KEY }, { queryKey: AGENTS_KEY }]
