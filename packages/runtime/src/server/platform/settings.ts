@@ -19,6 +19,8 @@ export const settings = {
     await write('seat_at', new Date().toISOString())
   },
   seatAt: (): string | null => rows.get('seat_at') ?? null,
+  formerDevices: (): string[] => z.safeParse(z.array(z.string()), JSON.parse(rows.get('former_devices') ?? '[]')).data ?? [],
+  setFormerDevices: (devices: string[]) => write('former_devices', JSON.stringify(devices.slice(-20))),
   setSeatAt: (at: string) => write('seat_at', at),
   forgetSeat: async () => {
     await forget('seat_token')

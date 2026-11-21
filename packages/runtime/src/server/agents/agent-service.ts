@@ -184,6 +184,11 @@ export const agentService = {
     return rows.map((row) => ({ id: row.id, name: row.name, instructions: row.instructions, model: row.model, face: row.face, codeExecution: row.code_execution, wanted: row.wanted, runsOn: row.runs_on ?? me, shared: row.shared, owner: row.owner ?? owner }))
   },
 
+  async forgetDevice({ device }: { device: string }): Promise<void> {
+    await settings.setFormerDevices([...settings.formerDevices(), device])
+    await db.updateTable('agent').set({ runs_on: null }).where('runs_on', '=', device).execute()
+  },
+
   async placement({ id }: { id: string }): Promise<{ runsOn: string; codeExecution: boolean; owner: string | null } | undefined> {
     const row = await db.selectFrom('agent').select(['runs_on', 'code_execution', 'owner']).where('id', '=', id).executeTakeFirst()
     return row && { runsOn: row.runs_on ?? await keysService.deviceKey(), codeExecution: row.code_execution, owner: row.owner }
@@ -203,7 +208,8 @@ export const agentService = {
     const unassigned = !!row?.runs_on && !listed({ device: row.runs_on, workspace: row.workspace })
     const kept = limited ? { runs_on: unassigned ? value.runsOn ?? null : row.runs_on, code_execution: row.code_execution, owner: row.owner } : { runs_on: value.runsOn ?? null, code_execution: value.codeExecution, owner: value.owner && value.owner !== me ? value.owner : null }
     const changedBy = !row || row.instructions !== value.instructions ? by : row.changed_by
-    const fields = { name: value.name, instructions: value.instructions, model: value.model, face: value.face, wanted: value.wanted, shared: Boolean(value.shared), changed_by: changedBy, ...kept, ...workspace !== undefined && { workspace } }
+    const former = kept.runs_on !== null && settings.formerDevices().includes(kept.runs_on)
+    const fields = { name: value.name, instructions: value.instructions, model: value.model, face: value.face, wanted: value.wanted, shared: Boolean(value.shared), changed_by: changedBy, ...kept, ...former && { runs_on: null }, ...workspace !== undefined && { workspace } }
     if (row) await db.updateTable('agent').set(fields).where('id', '=', id).execute()
     else {
       const owner = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirstOrThrow()

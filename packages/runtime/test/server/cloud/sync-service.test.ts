@@ -461,3 +461,14 @@ test('a synced delete keeps the agent’s chats in the trash and never wipes the
   await sleep(1000)
   assert.equal(room.log.slice(before + 1).some((record) => record.deleted), false)
 })
+
+test('after Forget, an agent that ran on this computer’s old key still runs here, and the restored record pointing at that key means here too', async () => {
+  const old = toBase64((await identity()).publicKey)
+  await db.updateTable('agent').set({ runs_on: old }).where('id', '=', 'ag_lateedit').execute()
+  await agentService.forgetDevice({ device: old })
+  const runsOn = async () => (await db.selectFrom('agent').select('runs_on').where('id', '=', 'ag_lateedit').executeTakeFirstOrThrow()).runs_on
+  assert.equal(await runsOn(), null)
+  await agentService.applySynced({ id: 'ag_lateedit', value: { ...helpdesk('Late'), id: 'ag_lateedit', runsOn: old }, by: null })
+  assert.equal(await runsOn(), null)
+  assert.equal((await agentService.get({ actor, id: 'ag_lateedit' })).runsHere, true)
+})

@@ -11,6 +11,7 @@ import { keyStore, type Account } from './key-store.ts'
 import { keysService, openLetter, type Sent } from './keys-service.ts'
 import { bodyOf, readSecret, roomKeys } from './room-keys.ts'
 import { syncService } from './sync-service.ts'
+import { agentService } from '../agents/agent-service.ts'
 
 const PENDING_MS = 15 * 60_000
 const CHECK_MS = 60_000
@@ -119,7 +120,9 @@ export const cloudService = {
   },
 
   async forget(): Promise<Cloud> {
+    const former = await keysService.deviceKey()
     await keysService.forget()
+    await agentService.forgetDevice({ device: former })
     signInError = null
     return cloudService.status()
   },
