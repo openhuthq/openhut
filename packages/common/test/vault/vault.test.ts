@@ -265,6 +265,19 @@ test('the pairing vector matches, and its proofs derive with plain node:crypto',
   assert.equal(createHmac('sha256', key).update(transcript).digest('hex'), newProof)
 })
 
+test('two sides with different keys get different codes, so a key the cloud swaps in reads nothing', async () => {
+  const [mac, phone, cloud] = await Promise.all([vault.identity(), vault.identity(), vault.identity()])
+  const { secret } = await vault.newPairing({ device: mac.publicKey, hint: '' })
+  const pair = { secret, newDevice: mac.publicKey, oldDevice: phone.publicKey, workspace: 'ws_00000001' }
+  const real = must(await vault.pairingWorkspace(pair))
+  for (const swapped of [{ newDevice: cloud.publicKey }, { oldDevice: cloud.publicKey }, { secret: (await vault.newPairing({ device: mac.publicKey, hint: '' })).secret }]) {
+    assert.notEqual(must(await vault.pairingWorkspace({ ...pair, ...swapped })), real)
+  }
+  const key = vault.newKey()
+  const toCloud = must(await vault.letter({ sender: phone, to: cloud.publicKey, workspace: must(await vault.pairingWorkspace({ ...pair, newDevice: cloud.publicKey })), purpose: 'pairing', version: 1, plain: key }))
+  assert.equal(await vault.read({ recipient: cloud, from: phone.publicKey, workspace: real, purpose: 'pairing', body: toCloud, allowed: [phone.publicKey] }), null)
+})
+
 test('slots are a keyed hash of the path', async () => {
   const { key, path, slot } = v1.slot
   assert.equal(await vault.slot({ key: bytes(key), path }), slot)

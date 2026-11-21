@@ -80,7 +80,7 @@ export const ROLES = ['owner', 'admin', 'member'] as const
 export const Role = z.enum(ROLES)
 export type Role = z.infer<typeof Role>
 
-export const Member = z.object({ email: Email, role: Role, devices: z.array(DeviceKey).check(z.maxLength(20)) })
+export const Member = z.object({ email: Email, role: Role, devices: z.array(DeviceKey).check(z.maxLength(20)), kit: z.optional(DeviceKey) })
 export type Member = z.infer<typeof Member>
 
 export const PendingInvite = z.object({ email: Email, role: z.enum(['admin', 'member']), key: DeviceKey })
@@ -95,6 +95,8 @@ export const MemberListBody = z.object({
   removed: z.array(DeviceKey).check(z.maxLength(5000)),
   keyVersion: z.optional(Version),
   runtimes: z.optional(z.array(DeviceKey).check(z.maxLength(100))),
+  at: z.optional(z.number().check(z.int(), z.minimum(0))),
+  added: z.optional(z.record(DeviceKey, z.number().check(z.int(), z.minimum(0)))),
 })
 export type MemberListBody = z.infer<typeof MemberListBody>
 
@@ -207,6 +209,9 @@ export const Cloud = z.object({
   backup: Backup,
   signInError: z.nullable(z.string()),
   keptAccount: z.nullable(Email),
+  devices: z.array(z.object({ key: DeviceKey, here: z.boolean(), addedAt: z.nullable(Timestamp) })),
+  passkey: z.boolean(),
+  needsSignIn: z.boolean(),
 })
 export type Cloud = z.infer<typeof Cloud>
 
@@ -216,5 +221,18 @@ export type CloudAuthorization = z.infer<typeof CloudAuthorization>
 export const RecoveryKit = z.object({ object: z.literal('recovery_kit'), words: z.array(z.string()), ask: z.array(z.number().check(z.int())) })
 export type RecoveryKit = z.infer<typeof RecoveryKit>
 
-export const UnlockCloud = z.object({ words: z.array(z.string().check(z.maxLength(40))).check(z.length(12)) })
+const Prf = canonical({ length: 43, message: 'Send the passkey’s PRF output as 32 bytes of base64url.' })
+export const UnlockCloud = z.union([z.object({ words: z.array(z.string().check(z.maxLength(40))).check(z.length(12)) }), z.object({ prf: Prf })])
 export type UnlockCloud = z.infer<typeof UnlockCloud>
+
+export const AddPasskey = z.object({ prf: Prf })
+export type AddPasskey = z.infer<typeof AddPasskey>
+
+export const CloudPairing = z.object({ object: z.literal('pairing'), qr: z.string(), code: z.string(), expiresAt: Timestamp })
+export type CloudPairing = z.infer<typeof CloudPairing>
+
+export const AllowDevice = z.object({ code: z.string().check(z.maxLength(1000)) })
+export type AllowDevice = z.infer<typeof AllowDevice>
+
+export const AllowedDevice = z.object({ object: z.literal('pairing_allowed'), devices: z.array(DeviceKey) })
+export type AllowedDevice = z.infer<typeof AllowedDevice>

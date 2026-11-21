@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
-import { MemberList, parseJson, Record, type Backup } from '@openhut/common/cloud/cloud.ts'
+import { Letter, MemberList, parseJson, Record, type Backup } from '@openhut/common/cloud/cloud.ts'
+import { keyVersionOf } from '@openhut/common/cloud/member-list.ts'
 import { openRecord, sealRecord, SYNCED, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
 import { fromBase64, slot } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
@@ -32,6 +33,7 @@ const KINDS_OF: [RegExp, Synced[]][] = [
 ]
 const Page = z.object({ data: z.array(Record), hasMore: z.boolean() })
 const Lists = z.object({ data: z.array(MemberList) })
+const Letters = z.object({ data: z.array(Letter) })
 const Message = z.discriminatedUnion('type', [z.object({ type: z.literal('ready') }), z.object({ type: z.literal('members') }), z.object({ type: z.literal('record'), record: Record })])
 
 type Item = Local & { id: string }
@@ -63,7 +65,10 @@ export const syncService = {
       keysService.token().then((token) => socket?.send(JSON.stringify({ type: 'hello', token })), (err: unknown) => log.warn({ event: 'cloud.refresh_failed', error: messageOf(err) }))
     })
     socket.addEventListener('message', (event) => heard(String(event.data)))
-    socket.addEventListener('close', () => { ready = false })
+    socket.addEventListener('close', (event) => {
+      ready = false
+      if (event.code === 4001 || event.code === 4003) void run(checkRemoved)
+    })
   },
 
   disconnect(): void {
@@ -122,7 +127,11 @@ function heard(text: string): void {
     void run(catchUp)
     syncService.send()
   }
-  if (message?.type === 'members') void run(async () => { if (await refreshMembers()) syncService.send(['connection']) })
+  if (message?.type === 'members') void run(async () => {
+    if (!await refreshMembers()) return
+    await rekey()
+    syncService.send(['connection'])
+  })
   if (message?.type === 'record') void run(async () => message.record.seq === await seqOf() + 1 ? applyAll([message.record]) : catchUp())
 }
 
@@ -183,9 +192,9 @@ async function applyAll(records: Record[]): Promise<void> {
 }
 
 async function openSafely({ record, ctx }: { record: Record; ctx: Context }): Promise<Opened | null> {
-  const open = () => openRecord({ workspace: ctx.workspace, keys: { [ctx.version]: ctx.key }, record, members: keysService.members()?.members ?? [] })
+  const open = () => openRecord({ workspace: ctx.workspace, keys: ctx.keys, record, members: keysService.members()?.members ?? [] })
   const opened = await open() ?? (await refreshMembers() ? await open() : null)
-  return opened && record.id === await slot({ key: ctx.key, path: `${opened.kind}/${opened.ref}` }) ? opened : null
+  return opened && record.id === await slot({ key: ctx.slotKey, path: `${opened.kind}/${opened.ref}` }) ? opened : null
 }
 
 async function checkHead(records: [string, number][]): Promise<void> {
@@ -196,6 +205,7 @@ async function checkHead(records: [string, number][]): Promise<void> {
 }
 
 async function flush(): Promise<void> {
+  if (ready && await rekey()) return syncService.retry(RETRY_MS * 2)
   const ctx = await contextOf()
   if (!ready || !ctx) return
   const kinds = SYNCED.filter((kind) => dirty.delete(kind))
@@ -255,7 +265,7 @@ async function writeHead(): Promise<void> {
   const ctx = await contextOf()
   if (!ready || !ctx) return
   const rows = await rowsById()
-  const id = await slot({ key: ctx.key, path: `${HEAD}/${HEAD}` })
+  const id = await slot({ key: ctx.slotKey, path: `${HEAD}/${HEAD}` })
   const records = [...rows.values()].filter((row) => row.kind !== HEAD && row.hash !== DELETED).map((row): [string, number] => [row.id, row.ver])
   await put({ item: { id, kind: HEAD, ref: HEAD, value: { records } }, ver: (rows.get(id)?.ver ?? 0) + 1, ctx }).catch((err: unknown) => log.warn({ event: 'cloud.head_failed', error: messageOf(err) }))
 }
@@ -280,7 +290,7 @@ async function localsOf({ kind, ctx }: { kind: Synced; ctx: Context }): Promise<
   const account = keysService.account()
   const admin = Boolean(account && ctx.members.some((member) => member.email === account.email && member.role !== 'member'))
   const items = await syncKinds.locals({ kind, admin, ctx })
-  return items && Promise.all(items.map(async (item) => ({ ...item, id: await slot({ key: ctx.key, path: `${item.kind}/${item.ref}` }) })))
+  return items && Promise.all(items.map(async (item) => ({ ...item, id: await slot({ key: ctx.slotKey, path: `${item.kind}/${item.ref}` }) })))
 }
 
 async function contextOf(): Promise<Context | null> {
@@ -289,13 +299,34 @@ async function contextOf(): Promise<Context | null> {
   const members = keysService.members()?.members ?? []
   const signer = await keysService.accountDeviceKey()
   const runtimes = members.filter((member) => member.role !== 'member').flatMap((member) => member.devices).filter((device) => device !== signer)
-  const workspace = account.workspace.id
+  const { id: workspace, key, version, old, slot: slotKey } = account.workspace
+  const keys = Object.fromEntries([...Object.entries(old ?? {}), [String(version), key]].map(([each, value]) => [Number(each), fromBase64(value)]))
   return {
-    workspace, key: fromBase64(account.workspace.key), version: account.workspace.version, me: await keysService.device(), members, runtimes,
+    workspace, key: fromBase64(key), version, keys, slotKey: fromBase64(slotKey ?? key), me: await keysService.device(), members, runtimes,
     putFile: async ({ hash, body }) => cloud.putFile({ workspace, hash, body, token: await keysService.token() }),
     getFile: async (hash) => cloud.getFile({ workspace, hash, token: await keysService.token() }),
     again: () => syncService.send(['file']),
   }
+}
+
+async function rekey(): Promise<boolean> {
+  const behind = async () => {
+    const account = keysService.account()
+    const body = keysService.members()
+    const kit = body?.members.find((member) => member.email === account?.email)?.kit
+    return Boolean(account && body && (keyVersionOf(body) > account.workspace.version || (kit && account.key && kit !== await keysService.accountDeviceKey())))
+  }
+  if (!await behind()) return false
+  const found = Letters.safeParse((await room({ method: 'GET', path: '/letters' })).json).data?.data ?? []
+  for (const id of await keysService.takeLetters(found)) await room({ method: 'DELETE', path: `/letters/${id}` })
+  return behind()
+}
+
+async function checkRemoved(): Promise<void> {
+  if (!keysService.account()) return
+  if ((await room({ method: 'GET', path: '/member-lists?after=0' })).status !== 403) return
+  syncService.disconnect()
+  await keysService.removedHere()
 }
 
 async function refreshMembers(): Promise<boolean> {
@@ -303,7 +334,7 @@ async function refreshMembers(): Promise<boolean> {
   return Boolean(await keysService.advance(Lists.safeParse(reply.json).data?.data ?? []))
 }
 
-async function room({ method, path, body }: { method: 'GET' | 'PUT'; path: string; body?: unknown }): Promise<{ status: number; json: unknown }> {
+async function room({ method, path, body }: { method: 'GET' | 'PUT' | 'DELETE'; path: string; body?: unknown }): Promise<{ status: number; json: unknown }> {
   const account = keysService.account()
   if (!account) throw new HttpError(409, 'Turn on OpenHut Cloud first.')
   return cloud.room({ method, workspace: account.workspace.id, path, token: await keysService.token(), body })

@@ -28,6 +28,11 @@ contextBridge.exposeInMainWorld('openhut', {
     remove: (input) => ipcRenderer.invoke('devices.remove', input),
     allow: (input) => ipcRenderer.invoke('devices.allow', input),
   },
+  passkey: {
+    status: () => ipcRenderer.invoke('passkey.status'),
+    create: (input) => ipcRenderer.invoke('passkey.create', input),
+    open: () => ipcRenderer.invoke('passkey.open'),
+  },
   computers: {
     list: () => ipcRenderer.invoke('computers.list'),
     add: (input) => ipcRenderer.invoke('computers.add', input),

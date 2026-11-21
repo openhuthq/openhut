@@ -220,3 +220,58 @@ test('a runtime device is listed for records only: it can never sign a member li
   assert.equal(await check({ anchor, chain: [v1, v2, await third({ ...withServer, runtimes: [] })] }), null)
   assert.equal(await check({ anchor, chain: [v1, await next({ ...first, runtimes: [key(server)] })] }), null)
 })
+
+const DAY = 24 * 60 * 60_000
+const T = 1_800_000_000_000
+type Signed = Awaited<ReturnType<typeof signList>>
+const dated = async () => {
+  const kit = key(eve)
+  const body: MemberListBody = { workspace: 'ws_00000002', version: 1, previous: null, members: [{ email: 'mo@example.com', role: 'owner', devices: [key(moMac), kit], kit }, first.members[1]], invites: [], removed: [], at: T, added: { [key(moMac)]: T, [kit]: T, [key(saraMac)]: T } }
+  const list = await signList({ signer: moMac, body })
+  return { body, list, anchor: await anchorOf(list) }
+}
+const after = (from: { body: MemberListBody; list: Signed }) => async (change: Partial<MemberListBody>, signer: typeof moMac) =>
+  signList({ signer, body: { ...from.body, ...change, version: from.body.version + 1, previous: await anchorOf(from.list) } })
+
+test('the kit key may only add one device to its own person, never remove or change anything else', async () => {
+  const start = await dated()
+  const v2 = after(start)
+  const at = T + 1000
+  const mo = start.body.members[0]
+  assert.ok(await check({ anchor: start.anchor, chain: [start.list, await v2({ members: [{ ...mo, devices: [...mo.devices, key(anaMac)] }, first.members[1]], at, added: { ...start.body.added, [key(anaMac)]: at } }, eve)] }))
+  const changes: Partial<MemberListBody>[] = [
+    { members: [{ ...mo, devices: [key(eve), key(anaMac)] }, first.members[1]], removed: [key(moMac)], at, added: { [key(eve)]: T, [key(anaMac)]: at, [key(saraMac)]: T } },
+    { members: [{ ...mo, devices: [...mo.devices, key(anaMac), key(saraPhone)] }, first.members[1]], at, added: { ...start.body.added, [key(anaMac)]: at, [key(saraPhone)]: at } },
+    { members: [mo, { ...first.members[1], devices: [key(saraMac), key(anaMac)] }], at, added: { ...start.body.added, [key(anaMac)]: at } },
+    { members: [{ ...mo, devices: [...mo.devices, key(anaMac)] }, { ...first.members[1], role: 'admin' }], at, added: { ...start.body.added, [key(anaMac)]: at } },
+    { keyVersion: 2, at },
+  ]
+  for (const change of changes) assert.equal(await check({ anchor: start.anchor, chain: [start.list, await v2(change, eve)] }), null)
+})
+
+test('a new device carries the time of the list that added it, and the time never goes back', async () => {
+  const start = await dated()
+  const v2 = after(start)
+  const mo = start.body.members[0]
+  const withAna = { members: [{ ...mo, devices: [...mo.devices, key(anaMac)] }, first.members[1]] }
+  assert.ok(await check({ anchor: start.anchor, chain: [start.list, await v2({ ...withAna, at: T + 5, added: { ...start.body.added, [key(anaMac)]: T + 5 } }, moMac)] }))
+  for (const change of [{ at: T + 5, added: { ...start.body.added, [key(anaMac)]: T - 10 * DAY } }, { at: T + 5, added: start.body.added }, { at: T - 1, added: { ...start.body.added, [key(anaMac)]: T - 1 } }, { at: undefined, added: undefined }]) {
+    assert.equal(await check({ anchor: start.anchor, chain: [start.list, await v2({ ...withAna, ...change }, moMac)] }), null)
+  }
+  assert.equal(await check({ anchor: start.anchor, chain: [start.list, await v2({ at: T + 5, added: { ...start.body.added, [key(moMac)]: T + 5 } }, moMac)] }), null)
+})
+
+test('a device younger than 3 days cannot remove an older one; after 3 days, or the other way round, it can', async () => {
+  const start = await dated()
+  const mo = start.body.members[0]
+  const joined = T + DAY
+  const v2 = await after(start)({ members: [{ ...mo, devices: [...mo.devices, key(anaMac)] }, first.members[1]], at: joined, added: { ...start.body.added, [key(anaMac)]: joined } }, eve)
+  const body2 = await check({ anchor: start.anchor, chain: [start.list, v2] })
+  assert.ok(body2)
+  const v3 = after({ body: body2, list: v2 })
+  const withoutOld = (at: number) => ({ members: [{ ...mo, devices: [key(eve), key(anaMac)] }, first.members[1]], removed: [key(moMac)], at, added: { [key(eve)]: T, [key(saraMac)]: T, [key(anaMac)]: joined } })
+  assert.equal(await check({ anchor: start.anchor, chain: [start.list, v2, await v3(withoutOld(joined + DAY), anaMac)] }), null)
+  assert.ok(await check({ anchor: start.anchor, chain: [start.list, v2, await v3(withoutOld(joined + 3 * DAY + 1), anaMac)] }))
+  const withoutNew = { members: [mo, first.members[1]], removed: [key(anaMac)], at: joined + 60_000, added: start.body.added }
+  assert.ok(await check({ anchor: start.anchor, chain: [start.list, v2, await v3(withoutNew, moMac)] }))
+})

@@ -16,7 +16,7 @@ import { threadService } from '../threads/thread-service.ts'
 
 export type Local = { kind: Synced; ref: string; value: unknown; wire?: () => Promise<unknown> }
 export type Context = {
-  workspace: string; key: Bytes; version: number; me: Identity; members: Member[]; runtimes: string[]
+  workspace: string; key: Bytes; version: number; keys: Record<number, Bytes>; slotKey: Bytes; me: Identity; members: Member[]; runtimes: string[]
   putFile: (input: { hash: string; body: Bytes }) => Promise<number>; getFile: (hash: string) => Promise<Bytes | null>; again: () => void
 }
 
@@ -170,7 +170,7 @@ async function download({ value, ctx }: { value: FileValue; ctx: Context }): Pro
   const parts: Bytes[] = []
   for (const hash of value.chunks) {
     const locked = await ctx.getFile(hash)
-    const plain = locked && hashOf(locked) === hash ? await unlock({ keys: { [ctx.version]: ctx.key }, bind: fileBind(ctx.workspace), locked }) : null
+    const plain = locked && hashOf(locked) === hash ? await unlock({ keys: ctx.keys, bind: fileBind(ctx.workspace), locked }) : null
     if (!plain) throw new HttpError(502, 'OpenHut Cloud sent a file this computer can’t open.')
     parts.push(plain)
   }

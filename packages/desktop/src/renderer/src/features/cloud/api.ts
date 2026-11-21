@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Cloud, CloudAuthorization, RecoveryKit } from '@openhut/common/cloud/cloud.ts'
+import { AllowedDevice, Cloud, CloudAuthorization, CloudPairing, RecoveryKit, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { request } from '@/lib/api-client'
+import { WORDS } from '@/lib/platform'
 import { navigate } from '@/lib/router'
 
 const CLOUD_KEY = ['cloud']
@@ -9,6 +10,7 @@ const OFFLINE_POLL_MS = 5000
 const BUSY_POLL_MS = 700
 const SHOW_DONE_MS = 60_000
 const ON_POLL_MS = 10_000
+const PAIRING_POLL_MS = 2000
 
 export function useCloud() {
   const client = useQueryClient()
@@ -32,6 +34,7 @@ export function useCloud() {
 }
 
 function pollOf(cloud: Cloud | undefined): number | false {
+  if (cloud?.status === 'locked') return PAIRING_POLL_MS
   if (cloud?.status === 'offline' || cloud?.backup.state === 'failed') return OFFLINE_POLL_MS
   if (cloud?.backup.state !== 'idle' && cloud) return BUSY_POLL_MS
   if (cloud?.status !== 'on') return false
@@ -42,10 +45,54 @@ export function justBackedUp(cloud: Cloud): boolean {
   return Boolean(cloud.backup.at && Date.now() - Date.parse(cloud.backup.at) < SHOW_DONE_MS)
 }
 
+type PasskeyReply = { prf?: string; error?: string; passkeys?: boolean; message?: string }
+type PasskeyBridge = { status: () => Promise<PasskeyReply>; create: (input: { email: string }) => Promise<PasskeyReply>; open: () => Promise<PasskeyReply> }
+const passkey: PasskeyBridge | undefined = Reflect.get(window, 'openhut')?.passkey
+
 export function useUnlock() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (words: string[]) => request({ schema: Cloud, computer: 'local', path: '/api/cloud/unlock', method: 'POST', body: { words } }),
+    mutationFn: (body: UnlockCloud) => request({ schema: Cloud, computer: 'local', path: '/api/cloud/unlock', method: 'POST', body }),
+    onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
+  })
+}
+
+export function usePasskeys() {
+  return useQuery({ queryKey: ['passkey-helper'], queryFn: async () => passkey ? await passkey.status() : { error: 'missing' }, staleTime: Infinity }).data
+}
+
+export async function passkeyPrf(create?: { email: string }): Promise<string> {
+  const reply = create ? await passkey?.create(create) : await passkey?.open()
+  if (reply?.prf) return reply.prf
+  if (reply?.error === 'no-prf') throw new Error('Your password manager can’t unlock OpenHut. Keep your recovery kit.')
+  throw new Error(reply?.error === 'canceled' ? 'Cancelled.' : `Your passkey isn’t on this ${WORDS.here}.`)
+}
+
+export function usePasskeyUnlock() {
+  const unlock = useUnlock()
+  return useMutation({ mutationFn: async () => unlock.mutateAsync({ prf: await passkeyPrf() }) })
+}
+
+export function useAddPasskey() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async (email: string) => request({ schema: Cloud, computer: 'local', path: '/api/cloud/passkeys', method: 'POST', body: { prf: await passkeyPrf({ email }) } }),
+    onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
+  })
+}
+
+export function usePairing(enabled: boolean) {
+  return useQuery({ queryKey: ['cloud-pairing'], queryFn: () => request({ schema: CloudPairing, computer: 'local', path: '/api/cloud/pairings', method: 'POST' }), enabled, staleTime: 14 * 60_000, refetchInterval: 14 * 60_000, retry: false })
+}
+
+export function useAllow() {
+  return useMutation({ mutationFn: (code: string) => request({ schema: AllowedDevice, computer: 'local', path: '/api/cloud/devices', method: 'POST', body: { code } }) })
+}
+
+export function useNotMe() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (key: string) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/devices/${encodeURIComponent(key)}`, method: 'DELETE' }),
     onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
   })
 }
