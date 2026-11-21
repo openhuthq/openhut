@@ -11,6 +11,7 @@ import { keysService, type Account } from './keys-service.ts'
 import { syncService } from './sync-service.ts'
 
 const PENDING_MS = 15 * 60_000
+const CHECK_MS = 60_000
 const HERE = process.platform === 'darwin' ? 'Mac' : 'computer'
 const SIGNED_IN = 'You’re signed in. You can go back to OpenHut.'
 const Workspaces = z.object({ data: z.array(z.object({ id: z.string(), key: z.string(), by: z.optional(z.string()), signature: z.optional(z.string()) })) })
@@ -19,6 +20,9 @@ const Letters = z.object({ data: z.array(Letter) })
 const pending = new Map<string, { verifier: string; authorization: string; at: number }>()
 let signInError: string | null = null
 let boxesDiffer = false
+let checkedAt = 0
+let unconfirmed: string | undefined
+let boxes: Promise<unknown> = Promise.resolve()
 
 export const cloudService = {
   async status(): Promise<Cloud> {
@@ -27,11 +31,12 @@ export const cloudService = {
     const on = Boolean(account && session)
     const members = keysService.members()
     const locked = session && !account ? keysService.locked() : undefined
+    if (on && Date.now() - checkedAt > CHECK_MS) checkSoon()
     return {
       object: 'cloud', status: locked ? 'locked' : on ? (syncService.ready() ? 'on' : 'offline') : 'off', email: locked?.email ?? (on && account ? account.email : null),
       device: toBase64((await keysService.device()).publicKey),
       workspace: on && account && members ? { id: account.workspace.id, version: members.version, members: members.members } : null,
-      keyStore: keysService.keyStore(), kit: on ? kitOf() : null, backup: syncService.status(),
+      keyStore: keysService.keyStore(), kit: on ? kitOf() : null, kitInCloud: locked ? await kitInCloud() : Boolean(keysService.kit()), backup: syncService.status(),
       signInError, keptAccount: on ? null : keysService.keptAccount(),
     }
   },
@@ -92,6 +97,7 @@ export const cloudService = {
   },
 
   async signOut(): Promise<Cloud> {
+    if (keysService.account()?.key && keysService.session()) await checkBoxes().catch(warnCheck)
     await keysService.setSession(undefined)
     await keysService.setLocked(undefined)
     syncService.disconnect()
@@ -99,15 +105,40 @@ export const cloudService = {
   },
 
   async newKit(): Promise<RecoveryKit> {
-    const account = keysService.account()
-    if (!keysService.session() || !account) throw new HttpError(409, 'Turn on OpenHut Cloud before making a recovery kit.')
-    const { words, box, ask } = await keysService.newKit()
-    await keysService.setKit(undefined)
-    const saved = await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token: await keysService.token(), body: await keysService.signBox({ account, name: 'kit', body: box }) })
-    if (saved.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t keep your kit (HTTP ${saved.status}). Try again.`)
-    await keysService.saveKit(box)
-    boxesDiffer = false
-    return { object: 'recovery_kit', words, ask }
+    return serial(async () => {
+      const account = keysService.account()
+      if (!keysService.session() || !account) throw new HttpError(409, 'Turn on OpenHut Cloud before making a recovery kit.')
+      const { words, box, ask } = await keysService.newKit()
+      await keysService.setKit(undefined)
+      const token = await keysService.token()
+      const kept = KeyBox.safeParse((await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token })).json).data
+      const savedAt = Math.max(Date.now(), (Date.parse(kept?.savedAt ?? '') || 0) + 1)
+      const saved = await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token, body: await keysService.signBox({ account, name: 'kit', body: box, savedAt }) })
+      if (saved.status !== 200) {
+        unconfirmed = box
+        throw new HttpError(502, `OpenHut Cloud didn’t keep your kit (HTTP ${saved.status}). Try again.`)
+      }
+      await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString() })
+      boxesDiffer = false
+      return { object: 'recovery_kit' as const, words, ask }
+    })
+  },
+
+  async startOver(): Promise<Cloud> {
+    const locked = keysService.locked()
+    if (!locked || keysService.account()) throw new HttpError(409, 'This computer isn’t waiting to unlock. Sign in to OpenHut Cloud first.')
+    const token = await keysService.token()
+    const cleared = await cloud.account({ method: 'DELETE', path: '/v1/key-boxes', token })
+    if (cleared.status === 409) throw new HttpError(409, 'Your recovery kit is in OpenHut Cloud now. Type its words to unlock.')
+    if (cleared.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t start over (HTTP ${cleared.status}). Try again.`)
+    await syncService.reset({ restoring: false })
+    const account = await keysService.open(locked)
+    if (!await openRoom({ account, token })) {
+      await keysService.relock(locked)
+      throw new HttpError(409, `Your other ${HERE} started over a moment ago. Check again.`)
+    }
+    cloudService.connect()
+    return cloudService.status()
   },
 
   async unlock({ words }: { words: string[] }): Promise<Cloud> {
@@ -167,7 +198,7 @@ export const cloudService = {
 
   connect(): void {
     syncService.connect()
-    if (keysService.account()?.key && keysService.session()) checkBoxes().catch((err: unknown) => log.warn({ event: 'cloud.box_check_failed', error: messageOf(err) }))
+    checkSoon()
   },
 }
 
@@ -183,7 +214,30 @@ async function accountExists(token: string): Promise<boolean> {
   return listed.data.length > 0 || (await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token })).status === 200
 }
 
-async function checkBoxes(): Promise<void> {
+async function kitInCloud(): Promise<boolean> {
+  return (await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token: await keysService.token() }).catch(() => ({ status: 0 }))).status !== 404
+}
+
+function serial<T>(step: () => Promise<T>): Promise<T> {
+  const next = boxes.then(step)
+  boxes = next.catch(() => undefined)
+  return next
+}
+
+function checkSoon(): void {
+  checkedAt = Date.now()
+  if (keysService.account()?.key && keysService.session()) checkBoxes().catch(warnCheck)
+}
+
+function warnCheck(err: unknown): void {
+  log.warn({ event: 'cloud.box_check_failed', error: messageOf(err) })
+}
+
+function checkBoxes(): Promise<void> {
+  return serial(compareBoxes)
+}
+
+async function compareBoxes(): Promise<void> {
   const account = keysService.account()
   if (!account) return
   const token = await keysService.token()
@@ -193,11 +247,12 @@ async function checkBoxes(): Promise<void> {
   const cloudKit = KeyBox.safeParse(kit.json).data
   const mine = keysService.kitBox()
   const kitMine = cloudKit && await keysService.boxIsMine({ account, name: 'kit', box: cloudKit })
-  if (cloudKit && mine && cloudKit.body !== mine) await keysService.setKit(undefined)
+  if (cloudKit && kitMine && cloudKit.body !== mine && cloudKit.body !== unconfirmed) await keysService.setKit({ box: cloudKit.body, savedAt: cloudKit.savedAt ?? new Date().toISOString() })
+  if (cloudKit && !kitMine && mine) await keysService.setKit(undefined)
   const box = Workspaces.safeParse(workspaces.json).data?.data.find((each) => each.id === account.workspace.id)
   const boxMine = box && await keysService.boxIsMine({ account, name: `workspace/${account.workspace.id}`, box: { body: box.key, by: box.by, signature: box.signature } })
   const reboxed = boxMine || (await cloud.account({ method: 'POST', path: '/v1/workspaces', token, body: await keysService.workspaceBox(account) })).status === 200
-  const kitOk = cloudKit ? kitMine : !mine || (await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token, body: await keysService.signBox({ account, name: 'kit', body: mine }) })).status === 200
+  const kitOk = cloudKit ? kitMine : !mine || (await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token, body: await keysService.signBox({ account, name: 'kit', body: mine, savedAt: Date.now() }) })).status === 200
   boxesDiffer = !reboxed || !kitOk
 }
 

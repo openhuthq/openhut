@@ -71,8 +71,10 @@ test('key boxes are signed by the account key, and a box another account key mad
   const theirs = await keysService.workspaceBox(other)
   assert.equal(await keysService.boxIsMine({ account, name: workspace, box: { body: theirs.key, by: theirs.by, signature: theirs.signature } }), false)
   assert.equal(await keysService.boxIsMine({ account, name: workspace, box: { body: theirs.key, by: box.by, signature: box.signature } }), false)
-  const kit = await keysService.signBox({ account, name: 'kit', body: box.key })
+  const savedAt = Date.now()
+  const kit = { ...await keysService.signBox({ account, name: 'kit', body: box.key, savedAt }), savedAt: new Date(savedAt).toISOString() }
   assert.equal(await keysService.boxIsMine({ account, name: 'kit', box: kit }), true)
+  assert.equal(await keysService.boxIsMine({ account, name: 'kit', box: { ...kit, savedAt: new Date(savedAt + 1).toISOString() } }), false)
   assert.equal(await keysService.boxIsMine({ account, name: 'passkey', box: kit }), false)
   assert.equal(await keysService.boxIsMine({ account: other, name: 'kit', box: kit }), false)
 })
@@ -80,12 +82,12 @@ test('key boxes are signed by the account key, and a box another account key mad
 test('signing in with another Google account is refused, and the first account keeps its keys and kit', async () => {
   const mo = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   const kit = keysService.kit()
-  await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error & { status?: number }) => err.status === 409 && /signed in to mo@example\.com\. Sign in with that account\./.test(err.message))
+  await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error & { status?: number }) => err.status === 409 && /keeps the keys of mo@example\.com\. Sign in with that account, or forget it below\./.test(err.message))
   assert.deepEqual(keysService.account(), mo)
   assert.deepEqual(keysService.kit(), kit)
   const box = keysService.kitBox()
   await keysService.setKit(undefined)
-  await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error) => /signed in to mo@example\.com\. Sign in with that account and save a recovery kit first\./.test(err.message))
+  await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error) => /keeps the keys of mo@example\.com\. Sign in with that account and save a recovery kit first\./.test(err.message))
   await keysService.setKit(kit && box ? { box, savedAt: kit.savedAt } : undefined)
 })
 

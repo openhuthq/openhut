@@ -203,6 +203,7 @@ export const Cloud = z.object({
   workspace: z.nullable(z.object({ id: Id, version: Version, members: z.array(Member) })),
   keyStore: z.enum(['keychain', 'file']),
   kit: z.nullable(z.object({ savedAt: Timestamp, differs: z.boolean() })),
+  kitInCloud: z.boolean(),
   backup: Backup,
   signInError: z.nullable(z.string()),
   keptAccount: z.nullable(Email),
