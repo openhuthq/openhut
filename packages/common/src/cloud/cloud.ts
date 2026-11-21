@@ -239,6 +239,7 @@ export const Cloud = z.object({
   keptAccount: z.nullable(Email),
   devices: z.array(z.object({ key: DeviceKey, here: z.boolean(), addedAt: z.nullable(Timestamp), name: z.nullable(z.string()), kind: z.enum(['mac', 'server']) })),
   passkey: z.boolean(),
+  youngUntil: z._default(z.nullable(Timestamp), null),
   needsSignIn: z.boolean(),
   workspaces: z._default(z.array(CloudWorkspaceView), []),
 })

@@ -19,12 +19,14 @@ const Stored = z.object({
   machine: z.string(),
   account: z.optional(z.object({ sub: z.string(), email: z.string(), key: z.string(), ...Room.shape, teams: z.optional(z.array(Room)), links: z.optional(z.record(z.string(), z.string())) })),
   kit: z.optional(KIT),
+  moves: z.optional(z.array(z.object({ method: z.enum(['POST', 'DELETE']), path: z.string(), body: z.unknown() }))),
   locked: z.optional(z.object({ sub: z.string(), email: z.string() })),
   session: z.optional(z.object({ token: z.string(), expiresAt: z.string() })),
 })
 export type Stored = z.infer<typeof Stored>
 export type Account = NonNullable<Stored['account']>
 export type Session = NonNullable<Stored['session']>
+export type Move = NonNullable<Stored['moves']>[number]
 export type Room = z.infer<typeof Room>
 
 const keychain = Boolean(config.secret)

@@ -1,9 +1,11 @@
-import { test } from 'node:test'
+import { after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
+import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
+import { fromBase64, identity, toBase64 } from '@openhut/common/vault/vault.ts'
 
-const account = { signer: undefined as string | undefined, boxes: new Map<string, { body: string; by: string; signature: string }>(), hideWorkspaces: false }
+const account = { signer: undefined as string | undefined, boxes: new Map<string, { body: string; by: string; signature: string }>(), hideWorkspaces: false, failSigners: 0 }
 let authorization = ''
 const cloud = createServer(async (req, res) => {
   const chunks: Buffer[] = []
@@ -26,10 +28,24 @@ const cloud = createServer(async (req, res) => {
     return reply(200, { object: 'list', data })
   }
   if (req.url === '/v1/workspaces') return keep(`workspace/${body.id}`, { body: body.key ?? '', by: body.by ?? '', signature: body.signature ?? '' })
-  if (req.url === '/v1/key-boxes/kit' && req.method === 'GET') {
-    const kit = account.boxes.get('kit')
-    return kit ? reply(200, { object: 'key_box', kind: 'kit', ...kit }) : reply(404, { error: { type: 'invalid_request_error', message: 'none' } })
+  const kind = /^\/v1\/key-boxes\/(kit|kit-confirmed|passkey)$/.exec(req.url ?? '')?.[1]
+  if (kind && req.method === 'GET') {
+    const box = account.boxes.get(kind)
+    return box ? reply(200, { object: 'key_box', kind, ...box }) : reply(404, { error: { type: 'invalid_request_error', message: 'none' } })
   }
+  if (kind && req.method === 'PUT') return keep(kind, { body: body.body ?? '', by: body.by ?? '', signature: body.signature ?? '' })
+  if (kind && req.method === 'DELETE') {
+    if (body.by !== account.signer) return reply(403, { error: { type: 'permission_error', message: 'Only your account key can delete your key boxes.' } })
+    account.boxes.delete(kind)
+    return reply(200, { object: 'key_box', kind, deleted: true })
+  }
+  if (req.url === '/v1/signers') {
+    if (account.failSigners-- > 0) return reply(503, { error: { type: 'api_error', message: 'busy' } })
+    if (body.by !== account.signer && body.next !== account.signer) return reply(403, { error: { type: 'permission_error', message: 'Only your current account key can hand your key boxes to a new one.' } })
+    account.signer = body.next
+    return reply(200, { object: 'signer', key: body.next })
+  }
+  if (/^\/v1\/workspaces\/[^/]+\/(members|letters)$/.test(req.url ?? '') && req.method !== 'GET') return reply(200, body)
   reply(404, { error: { type: 'invalid_request_error', message: 'none' } })
 })
 cloud.listen(0, '127.0.0.1')
@@ -39,8 +55,10 @@ process.env.OPENHUT_CLOUD_URL = `http://127.0.0.1:${typeof address === 'object' 
 
 const { migrate } = await import('../../../src/server/platform/db.ts')
 const { cloudService } = await import('../../../src/server/cloud/cloud-service.ts')
-const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
+const { accountDevice, keysService } = await import('../../../src/server/cloud/keys-service.ts')
+const { roomKeys } = await import('../../../src/server/cloud/room-keys.ts')
 await migrate()
+after(() => cloud.close())
 
 async function signIn(): Promise<string> {
   await cloudService.start()
@@ -66,5 +84,36 @@ test('when both Macs sign in at once, the one whose workspace box the cloud refu
   assert.equal(keysService.account(), undefined)
   assert.equal(keysService.locked()?.email, 'sara@example.com')
   assert.deepEqual([...account.boxes.keys()], ['workspace/ws_firstmac'])
-  cloud.close()
+})
+
+test('a Not me whose signer handover fails once is kept and finished later: Make a new kit then works and the old boxes are gone', async () => {
+  await keysService.setLocked(undefined)
+  Object.assign(account, { signer: undefined, hideWorkspaces: false })
+  account.boxes.clear()
+  const first = await keysService.open({ sub: 'dev-sara', email: 'sara@example.com' })
+  await keysService.setSession({ token: 'session-token', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
+  const kitOf = async () => toBase64((await accountDevice(fromBase64(keysService.account()?.key ?? ''))).publicKey)
+  const oldKit = await kitOf()
+  const box = await keysService.workspaceBox(first)
+  account.boxes.set(`workspace/${box.id}`, { body: box.key, by: box.by, signature: box.signature })
+  await cloudService.newKit()
+  account.boxes.set('passkey', { body: 'old-passkey', by: oldKit, signature: 'signed' })
+  assert.equal(account.signer, oldKit)
+  const stolen = await identity()
+  const body = roomKeys.members()
+  assert.ok(body)
+  const at = Date.now()
+  const mine = body.members[0]
+  await roomKeys.advance({ lists: [await signList({ signer: await keysService.device(), body: { ...body, version: 2, previous: await anchorOf(first.list), at, members: [{ ...mine, devices: [...mine.devices, toBase64(stolen.publicKey)] }], added: { ...body.added, [toBase64(stolen.publicKey)]: at } } })] })
+  account.failSigners = 1
+  await assert.rejects(cloudService.notMe({ device: toBase64(stolen.publicKey) }), (err: Error & { status?: number }) => err.status === 502 && /tries again/.test(err.message))
+  assert.equal(account.signer, oldKit)
+  assert.deepEqual(keysService.moves().map((move) => `${move.method} ${move.path}`), ['POST /v1/signers', 'POST /v1/workspaces', 'DELETE /v1/key-boxes/kit', 'DELETE /v1/key-boxes/kit-confirmed', 'DELETE /v1/key-boxes/passkey'])
+  const kit = await cloudService.newKit()
+  const newKit = await kitOf()
+  assert.equal(kit.words.length, 12)
+  assert.notEqual(newKit, oldKit)
+  assert.equal(account.signer, newKit)
+  assert.deepEqual(keysService.moves(), [])
+  assert.deepEqual([...account.boxes].map(([name, each]) => [name, each.by]).sort(), [['kit', newKit], ['kit-confirmed', newKit], [`workspace/${box.id}`, newKit]])
 })

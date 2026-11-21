@@ -6,7 +6,7 @@ import { anchorOf, check, keyVersionOf, signList, youngUntil } from '@openhut/co
 import { equal, fromBase64, fromWords, identity, letter, lock, newKey, newWords, pairingWorkspace, read, slot, toBase64, unlock, type Bytes, type Identity, type LetterPurpose } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { HttpError } from '../platform/http-error.ts'
-import { keyStore, type Account, type Session, type Stored } from './key-store.ts'
+import { keyStore, type Account, type Move, type Session, type Stored } from './key-store.ts'
 import { bodyOf, nextOf, readSecret, roomKeys, secretOf } from './room-keys.ts'
 
 const REFRESH_EARLY_MS = 5 * 60_000
@@ -115,7 +115,10 @@ export const keysService = {
     return null
   },
 
-  adopt: async ({ account, kit }: { account: Account; kit?: { box: string; savedAt: string } }): Promise<void> => keyStore.write({ device: (await keyStore.read()).device, machine, account, kit, session: stored()?.session }),
+  adopt: async ({ account, kit, moves }: { account: Account; kit?: { box: string; savedAt: string }; moves?: Move[] }): Promise<void> => keyStore.write({ device: (await keyStore.read()).device, machine, account, kit, moves, session: stored()?.session }),
+
+  moves: (): Move[] => stored()?.moves ?? [],
+  setMoves: async (moves: Move[]): Promise<void> => keyStore.write({ ...await keyStore.read(), moves: moves.length ? moves : undefined }),
 
   session: (): Session | undefined => stored()?.session,
 
@@ -232,7 +235,7 @@ export const keysService = {
   },
 }
 
-async function notYoung(account: Account): Promise<void> {
+export async function notYoung(account: Account): Promise<void> {
   const body = bodyOf(account.list)
   const until = body ? youngUntil(body, await keysService.deviceKey()) : 0
   if (until > Date.now()) throw new HttpError(403, `This ${HERE} was added less than 3 days ago, so it can’t remove an older device or change your keys yet. Do it from an older device, or wait until ${new Date(until).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
