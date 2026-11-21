@@ -83,7 +83,7 @@ test('when both Macs sign in at once, the one whose workspace box the cloud refu
   assert.deepEqual([...account.boxes.keys()], ['workspace/ws_firstmac'])
 })
 
-test('a Not me whose first move fails once is kept and finished later: Make a new kit then works and the old boxes are gone', async () => {
+test('a Change keys whose first move fails once is kept and finished later: Make a new kit then works and the old boxes are gone', async () => {
   await keysService.setLocked(undefined)
   Object.assign(account, { signer: undefined, hideWorkspaces: false })
   account.boxes.clear()
@@ -98,7 +98,7 @@ test('a Not me whose first move fails once is kept and finished later: Make a ne
   assert.equal(account.signer, oldKit)
   await addStolen()
   account.failBoxes = 1
-  await assert.rejects(cloudService.notMe({ device: stolen }), (err: Error & { status?: number }) => err.status === 502 && /tries again/.test(err.message))
+  await assert.rejects(cloudService.changeKeys({ workspace: first.workspace.id }), (err: Error & { status?: number }) => err.status === 502 && /tries again/.test(err.message))
   const newKit = await kitOf()
   assert.equal(account.signer, newKit, 'the signer is the kit on the new list, with no handover')
   assert.deepEqual(keysService.moves().map((move) => `${move.method} ${move.path}`), ['POST /v1/workspaces', 'DELETE /v1/key-boxes/kit', 'DELETE /v1/key-boxes/kit-confirmed', 'DELETE /v1/key-boxes/passkey'])
@@ -109,14 +109,12 @@ test('a Not me whose first move fails once is kept and finished later: Make a ne
   assert.deepEqual([...account.boxes].map(([name, each]) => [name, each.by]).sort(), [['kit', newKit], ['kit-confirmed', newKit], [`workspace/${box.id}`, newKit]])
 })
 
-test('a stored move another Mac’s rotation made stale is refused and dropped, so it doesn’t block Not me', async () => {
+test('a stored move another Mac’s rotation made stale is refused and dropped, so it doesn’t block Change keys', async () => {
   const account0 = keysService.account()
   assert.ok(account0)
   const stale = await keysService.signBox({ account: { ...account0, key: toBase64(newKey()) }, name: 'delete/kit', body: '' })
   await keysService.setMoves([{ method: 'DELETE', path: '/v1/key-boxes/kit', body: stale }])
-  await addStolen()
-  const done = await cloudService.notMe({ device: stolen })
-  assert.equal(done.devices.some((each) => each.key === stolen), false)
+  await cloudService.changeKeys({ workspace: account0.workspace.id })
   assert.deepEqual(keysService.moves(), [])
   assert.equal(account.signer, toBase64((await accountDevice(fromBase64(keysService.account()?.key ?? ''))).publicKey))
 })

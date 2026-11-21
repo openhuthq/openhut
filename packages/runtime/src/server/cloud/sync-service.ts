@@ -1,16 +1,16 @@
 import { createHash } from 'node:crypto'
 import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
-import { CloudWorkspace, parseJson, Record, type Backup, type SetHere } from '@openhut/common/cloud/cloud.ts'
-import { anchorOf, keyVersionOf } from '@openhut/common/cloud/member-list.ts'
+import { checkProof, CloudWorkspace, DeleteNotice, DeviceRequest, parseJson, Record, signProof, type Backup, type SetHere } from '@openhut/common/cloud/cloud.ts'
+import { anchorOf, newUntil } from '@openhut/common/cloud/member-list.ts'
 import { FileValue, openRecord, sealRecord, SYNCED, type AgentValue, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
-import { fromBase64, readHeader, slot, toBase64 } from '@openhut/common/vault/vault.ts'
+import { fromBase64, newKey, readHeader, slot, toBase64 } from '@openhut/common/vault/vault.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
 import { emit, listen, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
-import { keysService, type Sent as Outgoing } from './keys-service.ts'
+import { keysService } from './keys-service.ts'
 import { presence } from './presence.ts'
 import { bodyOf, roomKeys, type Call } from './room-keys.ts'
 import { forgetUpload } from './sync-files.ts'
@@ -36,7 +36,11 @@ const KINDS_OF: [RegExp, Synced[]][] = [
   [/^connection\./, ['connection']],
 ]
 const Page = z.object({ data: z.array(Record), hasMore: z.boolean() })
-const Requests = z.object({ data: z.array(z.object({ device: z.string(), email: z.string(), at: z.string() })) })
+const Requests = z.object({ data: z.array(DeviceRequest) })
+const Gone = z.object({ deleted: DeleteNotice })
+const Newer = z.object({ data: z.array(z.unknown()) })
+const NAME = 'cloud_name'
+const CHANGED = 'Someone changed this workspace a moment ago. Try again.'
 const GONE = [4001, 4003, 4010]
 const Missing = z.object({ error: z.object({ param: z.literal('file') }) })
 const Message = z.discriminatedUnion('type', [
@@ -50,7 +54,7 @@ type Sent = 'sent' | 'later' | 'refused'
 type State = {
   ws: string; home: boolean; call: Call; socket: ReconnectingWebSocket | undefined; ready: boolean; timer: NodeJS.Timeout | undefined; headTimer: NodeJS.Timeout | undefined; keyTimer?: NodeJS.Timeout; failures: number
   wanted: [string, number][] | null; refused: Map<string, { kind: Synced; hash: string; name: string }>; dirty: Set<Synced>; backup: Backup; name: string | null
-  requests: { device: string; email: string; at: string }[]; leaving?: boolean; log: { seq: number; hash: string }; echo: Map<string, number>
+  requests: DeviceRequest[]; leaving?: boolean; log: { seq: number; hash: string }; echo: Map<string, number>
 }
 export type Gone = { name: string; why: 'removed' | 'deleted' }
 
@@ -90,7 +94,7 @@ export const syncService = {
   connect(): void {
     const account = keysService.account()
     if (!account || !keysService.session()) return
-    for (const room of roomKeys.rooms()) if (!states.has(room.workspace.id)) open(room.workspace.id === account.workspace.id, room.workspace.id)
+    for (const room of roomKeys.rooms()) if (!states.has(room.workspace.id)) open(roomKeys.isOwn(room.workspace.id), room.workspace.id)
   },
 
   disconnect(): void {
@@ -142,18 +146,23 @@ export const syncService = {
     if (s) await asked(s)
   },
 
-  async change({ ws, emails, devices }: { ws: string; emails?: string[]; devices?: string[] }): Promise<void> {
-    const { list, room: next, letters } = await roomKeys.teamChange({ ws, emails, devices })
+  async change({ ws, emails, devices, rotate = false }: { ws: string; emails?: string[]; devices?: string[]; rotate?: boolean }): Promise<void> {
+    const { list, room: next, letters } = await roomKeys.teamChange({ ws, emails, devices, rotate })
     const token = await keysService.token()
     const leaving = Boolean(emails?.includes(keysService.account()?.email ?? ''))
+    const outgoing = letters.map((each) => ({ ...each, workspace: ws }))
+    if (rotate) await roomKeys.setRotating({ room: next, letters: outgoing })
     syncService.leaving({ ws, on: leaving })
-    const put = await cloud.room({ method: 'PUT', workspace: ws, path: '/members', token, body: list })
-    if (put.status !== 200) syncService.leaving({ ws, on: false })
-    if (put.status === 409) throw new HttpError(409, 'Someone changed this workspace a moment ago. Try again.')
-    if (put.status !== 200) throw new HttpError(put.status === 403 ? 403 : 502, `OpenHut Cloud refused the change (HTTP ${put.status}).`)
+    const put = await cloud.room({ method: 'PUT', workspace: ws, path: '/members', token, body: list }).catch(() => ({ status: 0 }))
+    if (put.status !== 200) {
+      syncService.leaving({ ws, on: false })
+      if (rotate && (put.status === 403 || put.status === 409)) await roomKeys.setRotating({ ws })
+      throw await refusal({ ws, status: put.status })
+    }
     if (leaving) return drop({ ws, why: null })
+    if (!rotate) return void await roomKeys.advance({ lists: [list], ws })
     await roomKeys.setRoom(next)
-    for (const each of letters) await post({ ws, letter: each, token })
+    await roomKeys.post(outgoing)
   },
 
   drop: (ws: string): Promise<void> => drop({ ws, why: null }),
@@ -219,21 +228,20 @@ function heard(s: State, text: string): void {
     s.ready = true
     presence.ready(s.ws)
     void run(async () => {
-      await named(s)
       await roomKeys.refresh({ ws: s.ws, call: s.call })
+      await named(s)
       await asked(s)
       await catchUp(s, await droppedSince({ s }))
+      await roomKeys.post()
     })
     send(s)
   }
   if (message?.type === 'workspace') void run(() => named(s))
   if (message?.type === 'request') void run(() => asked(s))
-  if (message?.type === 'deleted' && !s.leaving) void run(() => drop({ ws: s.ws, why: 'deleted' }))
+  if (message?.type === 'deleted' && !s.leaving) void run(() => checkRemoved(s))
   if (message?.type === 'members' || message?.type === 'letter') void run(async () => {
     const keyless = syncService.waiting(s.ws)
-    const before = roomKeys.members(s.ws)
     const { changed } = await roomKeys.refresh({ ws: s.ws, call: s.call })
-    if (message.type === 'members') await rotateIfLeft({ s, before })
     if (message.type === 'members') await asked(s)
     if (keyless && !syncService.waiting(s.ws)) await named(s).then(() => catchUp(s))
     if (changed) send(s, keyless ? SYNCED : ['connection'])
@@ -249,6 +257,7 @@ function run(step: () => Promise<void>): Promise<void> {
 async function named(s: State): Promise<void> {
   const reply = await room(s, { method: 'GET', path: '' })
   s.name = await roomKeys.openName({ ws: s.ws, locked: CloudWorkspace.safeParse(reply.json).data?.name ?? null }) ?? s.name
+  if (s.name) await db.insertInto('install_setting').values({ name: `${NAME}:${s.ws}`, value: s.name }).onConflict((oc) => oc.column('name').doUpdateSet({ value: s.name ?? '' })).execute()
 }
 
 async function catchUp(s: State, from: number | null = null): Promise<void> {
@@ -503,49 +512,69 @@ async function contextOf(s: State): Promise<Context | null> {
 
 async function checkRemoved(s: State): Promise<void> {
   if (!keysService.account() || !states.has(s.ws) || s.leaving) return
-  const { status } = await room(s, { method: 'GET', path: '/member-lists?after=0' })
-  if (status !== 403 && status !== 404) return
-  if (!s.home || !roomKeys.isOwn(s.ws)) return drop({ ws: s.ws, why: status === 404 ? 'deleted' : 'removed' })
+  const { status, json } = await room(s, { method: 'GET', path: '/member-lists?after=0' })
+  const deleted = status === 410 && await signedDelete({ ws: s.ws, json })
+  if (status !== 403 && !deleted) {
+    if (status === 404 || status === 410) log.warn({ event: 'cloud.delete_unsigned', workspace: s.ws, status })
+    return
+  }
+  if (!roomKeys.isOwn(s.ws)) return drop({ ws: s.ws, why: deleted ? 'deleted' : 'removed' })
   syncService.disconnect()
-  if (status === 404) return keysService.forgetHere()
+  if (deleted) return keysService.forgetHere()
   await keysService.removedHere()
+}
+
+async function signedDelete({ ws, json }: { ws: string; json: unknown }): Promise<boolean> {
+  const notice = Gone.safeParse(json).data?.deleted
+  const body = roomKeys.members(ws)
+  const signer = notice && body?.members.find((member) => member.devices.includes(notice.by))
+  if (!notice || !body || !signer || signer.role === 'member' || body.runtimes?.includes(notice.by) || newUntil(body, notice.by) > notice.signedAt) return false
+  return checkProof({ device: notice.by, proof: 'delete', parts: [ws, String(notice.signedAt)], signature: notice.signature })
+}
+
+export async function refusal({ ws, status }: { ws: string; status: number }): Promise<HttpError> {
+  if (status === 409) return new HttpError(409, CHANGED)
+  if (status !== 403) return new HttpError(502, `OpenHut Cloud didn’t take the change (HTTP ${status}). Try again.`)
+  const newer = await cloud.room({ method: 'GET', workspace: ws, path: `/member-lists?after=${roomKeys.members(ws)?.version ?? 0}`, token: await keysService.token() }).catch(() => null)
+  if (newer?.status === 403 || (Newer.safeParse(newer?.json).data?.data.length ?? 0) > 0) return new HttpError(409, CHANGED)
+  return new HttpError(403, 'OpenHut Cloud refused the change (HTTP 403).')
 }
 
 async function drop({ ws, why }: { ws: string; why: Gone['why'] | null }): Promise<void> {
   const s = states.get(ws)
-  const home = s?.home ?? keysService.account()?.workspace.id === ws
   const own = roomKeys.isOwn(ws)
-  if (why) gone.push({ name: s?.name ?? 'A workspace', why })
+  const saved = await db.selectFrom('install_setting').select('value').where('name', '=', `${NAME}:${ws}`).executeTakeFirst()
+  if (why) gone.push({ name: s?.name ?? saved?.value ?? defaultName(ws), why })
   s?.socket?.close()
   for (const timer of [s?.timer, s?.keyTimer, s?.headTimer]) clearTimeout(timer)
   states.delete(ws)
   presence.closed(ws)
   await roomKeys.dropRoom(ws)
-  if (!own) await agentService.dropWorkspace(home ? null : ws)
-  await db.deleteFrom('cloud_record').where('workspace', '=', home ? '' : ws).execute()
-  await db.deleteFrom('install_setting').where('name', '=', home ? SEQ : `${SEQ}:${ws}`).execute()
-  if (home && !own) syncService.connect()
+  if (!own) await agentService.dropWorkspace(ws)
+  await db.deleteFrom('cloud_record').where('workspace', '=', own ? '' : ws).execute()
+  await db.deleteFrom('install_setting').where('name', 'in', [own ? SEQ : `${SEQ}:${ws}`, `${NAME}:${ws}`]).execute()
+  if (!own) syncService.connect()
   emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
 }
 
 async function asked(s: State): Promise<void> {
   const before = JSON.stringify(s.requests)
-  s.requests = Requests.safeParse((await room(s, { method: 'GET', path: '/requests' })).json).data?.data ?? []
+  const found = Requests.safeParse((await room(s, { method: 'GET', path: '/requests' })).json).data?.data ?? []
+  const admin = roomKeys.roleIn(s.ws) !== 'member' && !syncService.waiting(s.ws)
+  const fresh = admin ? found.filter((each) => !each.nonce) : []
+  for (const each of fresh) {
+    const nonce = toBase64(newKey(16))
+    const me = await keysService.device()
+    await room(s, { method: 'PUT', path: `/requests/${encodeURIComponent(each.device)}/nonce`, body: { nonce, by: toBase64(me.publicKey), signature: await signProof({ signer: me, proof: 'words', parts: [s.ws, each.device, nonce] }) } })
+  }
+  const all = fresh.length ? Requests.safeParse((await room(s, { method: 'GET', path: '/requests' })).json).data?.data ?? [] : found
+  s.requests = await Promise.all(all.map(async (each) => ({ ...each, nonce: each.nonce && await nonceOk({ ws: s.ws, device: each.device, nonce: each.nonce }) ? each.nonce : null })))
   if (JSON.stringify(s.requests) !== before) emit({ name: 'cloud.changed', target: { type: 'cloud', id: s.ws } })
 }
 
-async function rotateIfLeft({ s, before }: { s: State; before: ReturnType<typeof roomKeys.members> }): Promise<void> {
-  const after = roomKeys.members(s.ws)
-  const role = roomKeys.roleIn(s.ws)
-  const left = before && after && before.members.flatMap((member) => member.devices).some((device) => !after.members.some((member) => member.devices.includes(device)))
-  if (!left || !after || !before || keyVersionOf(after) !== keyVersionOf(before) || !role || role === 'member' || !keysService.account()?.key) return
-  await syncService.change({ ws: s.ws }).catch((err: unknown) => log.warn({ event: 'cloud.rotate_failed', error: messageOf(err) }))
-  emit({ name: 'cloud.changed', target: { type: 'cloud', id: s.ws } })
-}
-
-async function post({ ws, letter, token }: { ws: string; letter: Outgoing; token: string }): Promise<void> {
-  const { status } = await cloud.room({ method: 'POST', workspace: ws, path: '/letters', token, body: letter }).catch(() => ({ status: 0 }))
-  if (status !== 200) log.warn({ event: 'cloud.letter_failed', status })
+async function nonceOk({ ws, device, nonce }: { ws: string; device: string; nonce: NonNullable<DeviceRequest['nonce']> }): Promise<boolean> {
+  const signer = roomKeys.members(ws)?.members.find((member) => member.devices.includes(nonce.by))
+  return Boolean(signer && signer.role !== 'member') && checkProof({ device: nonce.by, proof: 'words', parts: [ws, device, nonce.nonce], signature: nonce.signature })
 }
 
 async function room(s: State, { method, path, body }: { method: 'GET' | 'PUT' | 'POST' | 'DELETE'; path: string; body?: unknown }): Promise<{ status: number; json: unknown }> {

@@ -176,7 +176,7 @@ export function parseJson(value: string): unknown {
   }
 }
 
-export const PROOFS = ['session', 'refresh', 'delete', 'key-box', 'device'] as const
+export const PROOFS = ['session', 'refresh', 'delete', 'key-box', 'device', 'words'] as const
 export type Proof = (typeof PROOFS)[number]
 
 export function proofBytes({ proof, parts }: { proof: Proof; parts: string[] }): Bytes {
@@ -228,6 +228,18 @@ export const Backup = z.object({
 })
 export type Backup = z.infer<typeof Backup>
 
+export const WordsNonce = z.object({ nonce: Base64, by: DeviceKey, signature: Signature })
+export type WordsNonce = z.infer<typeof WordsNonce>
+
+export const AskAdmin = z.object({ name: z.string().check(z.maxLength(64)), os: z.string().check(z.maxLength(32)) })
+export type AskAdmin = z.infer<typeof AskAdmin>
+
+export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null), nonce: z._default(z.nullable(WordsNonce), null) })
+export type DeviceRequest = z.infer<typeof DeviceRequest>
+
+export const DeleteNotice = z.object({ by: DeviceKey, signedAt: z.number(), signature: Signature })
+export type DeleteNotice = z.infer<typeof DeleteNotice>
+
 export const CloudWorkspaceView = z.object({
   id: Id,
   name: z.string(),
@@ -237,7 +249,8 @@ export const CloudWorkspaceView = z.object({
   waiting: z.boolean(),
   members: z.array(Member),
   invites: z.array(z.object({ email: Email, role: InviteRole, link: z.nullable(z.string()) })),
-  requests: z._default(z.array(z.object({ device: DeviceKey, email: Email, at: Timestamp })), []),
+  requests: z._default(z.array(DeviceRequest), []),
+  names: z._default(z.record(z.string(), z.string()), {}),
 })
 export type CloudWorkspaceView = z.infer<typeof CloudWorkspaceView>
 
@@ -258,7 +271,8 @@ export const Cloud = z.object({
   youngUntil: z._default(z.nullable(Timestamp), null),
   needsSignIn: z.boolean(),
   workspaces: z._default(z.array(CloudWorkspaceView), []),
-  asking: z._default(z.nullable(z.object({ words: z.array(z.string()), admins: z.array(Email), denied: z.boolean() })), null),
+  asking: z._default(z.nullable(z.object({ rooms: z.array(z.object({ admins: z.array(Email), words: z.nullable(z.array(z.string())) })), denied: z.boolean() })), null),
+  canAsk: z._default(z.boolean(), false),
   rotate: z._default(z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() })), []),
   gone: z._default(z.array(z.object({ name: z.string(), why: z.enum(['removed', 'deleted']) })), []),
 })

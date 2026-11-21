@@ -284,15 +284,13 @@ test('slots are a keyed hash of the path', async () => {
   assert.notEqual(await vault.slot({ key: vault.newKey(), path }), slot)
 })
 
-test('a device shows 4 words from its key: the same key gives the same words, another key other words', async () => {
-  const a = (await vault.identity()).publicKey
-  const b = (await vault.identity()).publicKey
-  const words = await vault.deviceWords(a)
-  assert.equal(words.length, 4)
-  assert.ok(words.every((word) => /^[a-z]{3,8}$/.test(word)))
-  assert.deepEqual(await vault.deviceWords(a), words)
-  assert.notDeepEqual(await vault.deviceWords(b), words)
-  assert.deepEqual(await vault.deviceWords(new Uint8Array(32)), ['bird', 'flush', 'salmon', 'gesture'])
+test('a device shows 4 words from its key and the admin’s nonce: the vector matches, and another key or nonce gives other words', async () => {
+  const { device, nonce, words } = v1.deviceWords
+  assert.deepEqual(await vault.deviceWords({ device: bytes(device), nonce: bytes(nonce) }), words)
+  const other = (await vault.identity()).publicKey
+  assert.notDeepEqual(await vault.deviceWords({ device: other, nonce: bytes(nonce) }), words)
+  assert.notDeepEqual(await vault.deviceWords({ device: bytes(device), nonce: vault.newKey(16) }), words)
+  assert.ok(words.every((word: string) => /^[a-z]{3,8}$/.test(word)))
 })
 
 test('an invite letter locks with a key from the link secret: the vector matches, and another secret or workspace opens nothing', async (t) => {

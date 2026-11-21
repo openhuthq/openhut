@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { randomInt } from 'node:crypto'
 import { hostname } from 'node:os'
-import { checkProof, MemberList, signProof, type CloudSession, type Letter } from '@openhut/common/cloud/cloud.ts'
+import { checkProof, MemberList, signProof, type CloudSession, type Letter, type MemberListBody } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, check, keyVersionOf, signList, youngUntil } from '@openhut/common/cloud/member-list.ts'
 import { equal, fromBase64, fromWords, identity, letter, lock, newKey, newWords, pairingWorkspace, read, slot, toBase64, unlock, type Bytes, type Identity, type LetterPurpose } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
@@ -194,19 +194,33 @@ export const keysService = {
     return locked ? unlock({ keys: { 1: prf }, bind: bind({ sub: locked.sub, name: 'passkey' }), locked: fromBase64(box) }) : null
   },
 
-  async change(remove: string[]): Promise<{ list: MemberList; next: Account; letters: Sent[] }> {
+  async dropDevices(remove: string[]): Promise<MemberList> {
+    const account = keysService.mustBeOn()
+    const body = bodyOf(account.list)
+    const me = await keysService.deviceKey()
+    await notYoung(account)
+    const mine = body?.members.find((member) => member.email === account.email)
+    if (!body || !mine || !remove.length || remove.some((device) => device === me || device === mine.kit || !mine.devices.includes(device))) throw new HttpError(400, 'Pick one of your other devices to remove.', { param: 'device' })
+    const since = Math.min(...remove.map((device) => body.added?.[device] ?? 0))
+    const planted = mine.devices.filter((device) => body.runtimes?.includes(device) && (body.added?.[device] ?? 0) >= since)
+    const gone = [...new Set([...remove, ...planted])]
+    const kept = <T>(map: Record<string, T> = {}) => Object.fromEntries(Object.entries(map).filter(([device]) => !gone.includes(device)))
+    const base = await nextOf({ list: account.list, body })
+    const members = body.members.map((member) => member === mine ? { ...member, devices: member.devices.filter((device) => !gone.includes(device)) } : member)
+    return signList({ signer: await keysService.device(), body: { ...base, members, removed: [...base.removed, ...gone], runtimes: body.runtimes?.filter((device) => !gone.includes(device)), added: kept(body.added), names: body.names && kept(body.names) } })
+  },
+
+  async change(): Promise<{ list: MemberList; next: Account; letters: Sent[] }> {
     const account = keysService.mustBeOn()
     const body = bodyOf(account.list)
     const me = toBase64((await keysService.device()).publicKey)
     await notYoung(account)
     const mine = body?.members.find((member) => member.email === account.email)
     const oldKit = toBase64((await accountDevice(fromBase64(account.key))).publicKey)
-    if (!body || !mine || remove.some((device) => device === me || device === oldKit || !mine.devices.includes(device))) throw new HttpError(400, 'Pick one of your other devices to remove.', { param: 'device' })
+    if (!body || !mine) throw new HttpError(409, 'Turn on OpenHut Cloud on this computer first.')
     const key = newKey()
     const kit = toBase64((await accountDevice(key)).publicKey)
-    const since = Math.min(...remove.map((device) => body.added?.[device] ?? 0))
-    const planted = mine.devices.filter((device) => remove.length && body.runtimes?.includes(device) && (body.added?.[device] ?? 0) >= since)
-    const gone = [...remove, ...planted, oldKit].filter((device, index, all) => mine.devices.includes(device) && all.indexOf(device) === index)
+    const gone = mine.devices.includes(oldKit) ? [oldKit] : []
     const base = await nextOf({ list: account.list, body })
     const members = body.members.map((member) => member === mine ? { ...member, devices: [...member.devices.filter((device) => !gone.includes(device)), kit], kit } : member)
     const kept = <T>(map: Record<string, T> = {}) => Object.fromEntries(Object.entries(map).filter(([device]) => !gone.includes(device)))
@@ -256,12 +270,22 @@ export const keysService = {
 
 export async function notYoung(account: Account): Promise<void> {
   const body = bodyOf(account.list)
-  const until = body ? youngUntil(body, await keysService.deviceKey()) : 0
+  if (body) notYoungIn({ body, device: await keysService.deviceKey() })
+}
+
+export function notYoungIn({ body, device }: { body: MemberListBody; device: string }): void {
+  const until = youngUntil(body, device)
   if (until > Date.now()) throw new HttpError(403, `This ${HERE} was added less than 3 days ago, so it can’t remove an older device or change your keys yet. Do it from an older device, or wait until ${new Date(until).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
 }
 
 export const openLetter = async ({ found, workspace }: { found: Letter; workspace: string }): Promise<Bytes | null> =>
   read({ recipient: await keysService.device(), from: fromBase64(found.from), workspace, purpose: found.purpose, body: fromBase64(found.body), allowed: [fromBase64(found.from)] })
+
+export function deviceOs(): string {
+  if (process.platform !== 'darwin') return process.platform === 'win32' ? 'Windows' : 'Linux'
+  const version = spawnSync('sw_vers', ['-productVersion'], { encoding: 'utf8' }).stdout.trim().split('.')[0]
+  return version ? `macOS ${version}` : 'macOS'
+}
 
 export function deviceName(): string {
   const name = process.platform === 'darwin' ? spawnSync('scutil', ['--get', 'ComputerName'], { encoding: 'utf8' }).stdout : ''

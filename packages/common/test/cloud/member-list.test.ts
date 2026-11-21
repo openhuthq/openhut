@@ -327,3 +327,17 @@ test('the first device of a workspace is never young, and a device name never ch
   assert.equal(await check({ anchor: start.anchor, chain: [start.list, named] }), null)
   assert.equal(await check({ anchor: start.anchor, chain: [start.list, await v2({ at: T + 1000, names: { [key(anaMac)]: 'Not listed' } }, moMac)] }), null)
 })
+
+test('someone who left can rejoin with the same device on a new invite, and only then: the key leaves removed in the join list', async () => {
+  const gone = await next({ ...first, members: [first.members[0]], removed: [key(saraMac)] }, saraMac)
+  const body = await check({ anchor, chain: [v1, gone] })
+  assert.ok(body)
+  const asked = await identity()
+  const invited = await signList({ signer: moMac, body: { ...body, version: 3, previous: await anchorOf(gone), invites: [...body.invites, { email: 'sara@example.com', role: 'member', key: key(asked) }] } })
+  const previous = await anchorOf(invited)
+  const join = (removed: string[], signer = asked) => signList({ signer, body: { ...body, version: 4, previous, members: [...body.members, { email: 'sara@example.com', role: 'member', devices: [key(saraMac)] }], removed } })
+  assert.ok(await check({ anchor, chain: [v1, gone, invited, await join([key(asked)])] }))
+  assert.equal(await check({ anchor, chain: [v1, gone, invited, await join([key(saraMac), key(asked)])] }), null)
+  assert.equal(await check({ anchor, chain: [v1, gone, invited, await join([key(asked)], saraMac)] }), null)
+  assert.equal(await check({ anchor, chain: [v1, gone, await signList({ signer: saraMac, body: { ...body, version: 3, previous: await anchorOf(gone), members: [...body.members, { email: 'sara@example.com', role: 'member', devices: [key(saraMac)] }], removed: [] } })] }), null)
+})

@@ -91,7 +91,7 @@ export function useAllow() {
   return useMutation({ mutationFn: (code: string) => request({ schema: AllowedDevice, computer: 'local', path: '/api/cloud/devices', method: 'POST', body: { code } }) })
 }
 
-export const REMOVE_DETAIL = 'It can’t open anything new, and every key changes. Do this only if it’s lost, sold or not yours.'
+export const REMOVE_DETAIL = 'It can’t get anything new from OpenHut Cloud. Do this only if it’s lost, sold or not yours.'
 
 export function useRemoveMac() {
   const client = useQueryClient()
@@ -99,8 +99,7 @@ export function useRemoveMac() {
     mutationFn: (key: string) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/devices/${encodeURIComponent(key)}`, method: 'DELETE' }),
     onSuccess: (cloud) => {
       client.setQueryData(CLOUD_KEY, cloud)
-      notify({ title: 'Mac removed', note: 'It can’t open anything new. Keys changed. Save a new recovery kit.' })
-      navigate('/settings/cloud?open=kit')
+      notify({ title: 'Mac removed', note: 'It can’t get anything new from OpenHut Cloud.' })
     },
     onError: toastError,
   })
