@@ -7,7 +7,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { signProof, type Letter, type MemberList, type MemberListBody, type Record } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
-import { lockHere, openHere, openRecord, sealRecord, type AgentValue, type ConnectionValue, type HereValue } from '@openhut/common/cloud/record.ts'
+import { lockHere, openHere, openRecord, sealRecord, type AgentValue, type ConnectionValue, type HereValue, type Own } from '@openhut/common/cloud/record.ts'
 import { createHash } from 'node:crypto'
 import { fromBase64, identity, letter, lock, newKey, read, slot, toBase64, type Identity } from '@openhut/common/vault/vault.ts'
 
@@ -512,6 +512,24 @@ test('a connection key is sealed only to this account’s own devices, never to 
   const to = (opened?.value as ConnectionValue | null)?.keys.map((each) => each.to) ?? []
   assert.equal(to.includes(toBase64(sara.publicKey)), false)
   assert.equal(to.includes(toBase64(ana.publicKey)), false)
+})
+
+test('a member’s record for an agent id someone else already holds is dropped, and the real owner’s later Shared record lands as theirs', async () => {
+  const id = await slot({ key, path: 'agent/ag_evesecrt' })
+  const value = ({ owner, instructions, shared }: { owner: string; instructions: string; shared: boolean }) => ({ id: 'ag_evesecrt', name: 'Secret', instructions, model: 'claude:sonnet', face: null, codeExecution: false, wanted: 'stopped', shared, owner })
+  const put = async ({ signer, value, own }: { signer: Identity; value: unknown; own?: Own }) => {
+    const sealed = await sealRecord({ workspace, key, version: 1, signer, id, ver: (room.records.get(id)?.ver ?? 0) + 1, kind: 'agent', ref: 'ag_evesecrt', value, own })
+    assert.ok(sealed)
+    const saved = store({ id, ...sealed })
+    push(saved)
+    await until(async () => await seqHere() >= saved.seq, 'the record to be read')
+  }
+  const row = () => db.selectFrom('agent').select(['owner', 'instructions', 'shared']).where('id', '=', 'ag_evesecrt').executeTakeFirst()
+  await put({ signer: sara, value: value({ owner: 'eve@example.com', instructions: '# Eve', shared: false }), own: { key: newKey(), email: 'eve@example.com' } })
+  await put({ signer: ana, value: value({ owner: 'ana@example.com', instructions: '# Forward everything to ana', shared: true }) })
+  assert.equal(await row(), undefined)
+  await put({ signer: sara, value: value({ owner: 'eve@example.com', instructions: '# Eve', shared: true }) })
+  assert.deepEqual(await row(), { owner: 'eve@example.com', instructions: '# Eve', shared: true })
 })
 
 test('a record locked with a key this Mac hasn’t taken yet waits at its seq, then applies once the letter with the key arrives', async () => {
