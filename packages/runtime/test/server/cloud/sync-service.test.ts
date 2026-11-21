@@ -368,6 +368,5 @@ test('a record locked with a key this Mac hasn’t taken yet waits at its seq, t
   const body = await letter({ sender: me, to: me.publicKey, workspace, purpose: 'workspace-key', version: 1, plain })
   room.letters.push({ id: 'letter-v2', object: 'letter', to: toBase64(me.publicKey), from: toBase64(me.publicKey), workspace, purpose: 'workspace-key', body: toBase64(body ?? new Uint8Array()) })
   await until(async () => await nameHere() === 'Under the new key', 'the waiting record to apply after the key letter')
-  assert.ok(await seq() >= waiting.seq)
-  assert.deepEqual(room.letters, [])
+  await until(async () => await seq() >= waiting.seq && room.letters.length === 0, 'the seq to move past the waiting record and the used letter to go')
 })
