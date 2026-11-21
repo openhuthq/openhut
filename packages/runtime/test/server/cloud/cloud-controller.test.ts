@@ -45,14 +45,15 @@ test('/api/cloud is off until sign-in, and off again after sign-out', async () =
 
   assert.equal((await app.inject({ method: 'GET', url: '/api/cloud' })).statusCode, 401)
   assert.equal((await status()).status, 'off')
-  const started = await app.inject({ method: 'POST', url: '/api/cloud/sessions', headers, payload: { returnTo: 'http://localhost:5173' } })
+  const started = await app.inject({ method: 'POST', url: '/api/cloud/sessions', headers, })
   assert.equal(started.json().authorizationUrl, 'https://accounts.example/auth')
   assert.equal((await status()).status, 'off')
 
   const forged = await app.inject({ method: 'GET', url: '/api/cloud/callback?state=forged&code=c' })
-  assert.match(forged.headers.location ?? '', /^\/settings\/cloud\?error=/)
+  assert.match(forged.body, /This sign-in expired\. Go back to OpenHut and try again\./)
   const back = await app.inject({ method: 'GET', url: `/api/cloud/callback?state=${seen.state}&code=c` })
-  assert.equal(back.headers.location, 'http://localhost:5173/settings/cloud?open=kit')
+  assert.match(back.headers['content-type'] ?? '', /^text\/html/)
+  assert.match(back.body, /You’re signed in\. You can go back to OpenHut\./)
   for (let i = 0; i < 50 && (await status()).status !== 'on'; i++) await sleep(50)
   const on = await status()
   assert.equal(on.status, 'on')

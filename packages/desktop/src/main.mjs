@@ -605,10 +605,28 @@ async function boot() {
   await waitFor(() => listening(SOCK), 30)
   if (!PIPES) rmSync(SERVER_SOCK, { force: true })
   await rootSecret()
+  serverEnv.PORT = String(await signInCallbacks())
   start('server', Object.assign(serverEnv, { ...shared, AGENTD_SOCK: SOCK, AGENTD_HERMES: RUNTIME, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_AGENT_GATEWAY: `http://127.0.0.1:${GATEWAY_PORT}`, OPENHUT_AGENT_HOST_NET: '1' }))
   if (!await waitFor(() => listening(SERVER_SOCK), 60)) return false
   if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   return true
+}
+
+let callbacks
+function signInCallbacks() {
+  callbacks ??= new Promise((resolve, reject) => {
+    const server = createServer((req, res) => {
+      if (req.method !== 'GET' || !req.url?.startsWith('/api/cloud/callback?')) return res.writeHead(404).end()
+      const forward = request({ socketPath: SERVER_SOCK, path: req.url, method: 'GET' }, (answer) => {
+        res.writeHead(answer.statusCode ?? 502, answer.headers)
+        answer.pipe(res)
+      })
+      forward.on('error', () => res.writeHead(502).end())
+      forward.end()
+    })
+    server.once('error', reject).listen(0, '127.0.0.1', () => resolve(server.address().port))
+  })
+  return callbacks
 }
 
 async function bootContainer() {

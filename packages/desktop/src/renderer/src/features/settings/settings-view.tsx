@@ -1,6 +1,6 @@
 import type { IconSvgElement } from '@hugeicons/react'
 import { AiMagicIcon, CloudIcon, LaptopIcon, PlugSocketIcon, Settings02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
-import { CloudDevices, CloudSettings, PeopleSettings } from '@/features/cloud/cloud'
+import { CloudSettings, PeopleSettings } from '@/features/cloud/cloud'
 import { ComputersSettings } from '@/features/settings/computers'
 import { DevicesSettings } from '@/features/settings/devices'
 import { GeneralSettings } from '@/features/settings/general'
@@ -56,6 +56,6 @@ function YourDevices() {
   const step = (useOpen() ?? '').split(':')[0]
   return <>
     <ComputersSettings />
-    {!['tailscale', 'ssh', 'others'].includes(step) && <><DevicesSettings /><CloudDevices /></>}
+    {!['tailscale', 'ssh', 'others'].includes(step) && <DevicesSettings />}
   </>
 }
