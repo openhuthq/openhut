@@ -1,9 +1,11 @@
 import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import Fastify from 'fastify'
 import { isUploadName } from '../../../src/agentd/home/uploads.ts'
 import { agentd } from '../../../src/server/platform/agentd.ts'
+import { config } from '../../../src/server/platform/config.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors, HttpError } from '../../../src/server/platform/http-error.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
@@ -41,7 +43,8 @@ const hermes = createServer((req, res) => {
     res.end(`: keepalive\n\n${chunk('Let me ')}${chunk('check.')}event: hermes.tool.progress\ndata: {"tool":"call_tool","label":"postgres_query"}\n\n${chunk('214 orders.')}data: [DONE]\n\n`)
   })
 })
-await new Promise<void>((resolve) => hermes.listen(18649, '127.0.0.1', resolve))
+await new Promise<void>((resolve) => hermes.listen(0, '127.0.0.1', resolve))
+config.agentApi = `http://127.0.0.1:${(hermes.address() as AddressInfo).port}`
 
 const app = Fastify()
 answerErrors(app)
