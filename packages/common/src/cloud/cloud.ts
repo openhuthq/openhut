@@ -131,7 +131,7 @@ export type RenameWorkspace = z.infer<typeof RenameWorkspace>
 export const CloudWorkspace = z.object({ id: Id, object: z.literal('workspace'), name: z.nullable(z.string()) })
 export type CloudWorkspace = z.infer<typeof CloudWorkspace>
 
-export const KEY_BOX_KINDS = ['passkey', 'kit'] as const
+export const KEY_BOX_KINDS = ['passkey', 'kit', 'kit-confirmed'] as const
 export const KeyBox = z.object({ object: z.literal('key_box'), kind: z.enum(KEY_BOX_KINDS), body: Locked, by: z.optional(DeviceKey), signature: z.optional(Signature), savedAt: z.optional(Timestamp) })
 export type KeyBox = z.infer<typeof KeyBox>
 

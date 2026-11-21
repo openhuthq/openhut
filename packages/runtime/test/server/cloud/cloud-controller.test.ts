@@ -7,7 +7,7 @@ import { WebSocketServer } from 'ws'
 import Fastify from 'fastify'
 import { fromBase64, lock, newWords, toBase64 } from '@openhut/common/vault/vault.ts'
 
-const seen: { state?: string; deviceKey?: string; members?: unknown; email: string; kit?: unknown; passkey?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean; dropKit?: boolean; refuseBox?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [] }
+const seen: { state?: string; deviceKey?: string; members?: unknown; email: string; kit?: unknown; passkey?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean; dropKit?: boolean; refuseBox?: boolean; confirmed?: unknown; cut?: boolean; down?: boolean; failDelete?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [] }
 const cloud = createServer(async (req, res) => {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
@@ -18,14 +18,22 @@ const cloud = createServer(async (req, res) => {
     return reply(200, { id: 'sealed-authorization', object: 'oauth_authorization', provider: 'google', authorizationUrl: 'https://accounts.example/auth', expiresAt: new Date().toISOString() })
   }
   if (req.url === '/v1/sessions') return reply(body.deviceKey === seen.deviceKey ? 200 : 400, { object: 'cloud_session', token: 'session-token', sub: `dev-${seen.email}`, email: seen.email, expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
+  if (seen.down && req.url?.startsWith('/v1/key-boxes/kit')) return req.socket.destroy()
+  if (req.url === '/v1/key-boxes/kit' && req.method === 'PUT' && seen.cut) {
+    seen.down = true
+    return req.socket.destroy()
+  }
   if (req.url === '/v1/key-boxes/kit' && req.method === 'PUT') {
     seen.kit = { object: 'key_box', kind: 'kit', body: body.body, by: body.by, signature: body.signature, savedAt: new Date(Number(body.savedAt)).toISOString() }
     if (seen.dropKit) return req.socket.destroy()
     return seen.failKit ? reply(502, {}) : reply(200, seen.kit)
   }
   if (req.url === '/v1/signers') return reply(200, { object: 'signer', key: body.next })
-  if (req.url === '/v1/key-boxes/kit' && req.method === 'DELETE') return reply(200, { object: 'key_box', kind: 'kit', deleted: true, kit: seen.kit = undefined })
   if (req.url === '/v1/key-boxes/passkey' && req.method === 'DELETE') return reply(200, { object: 'key_box', kind: 'passkey', deleted: true, passkey: seen.passkey = undefined })
+  if (req.url === '/v1/key-boxes/kit' && req.method === 'DELETE') return seen.failDelete ? reply(500, {}) : reply(200, { kind: 'kit', deleted: !(seen.kit = undefined) })
+  if (req.url === '/v1/key-boxes/kit-confirmed' && req.method === 'PUT') return reply(200, seen.confirmed = { object: 'key_box', kind: 'kit-confirmed', body: body.body, by: body.by, signature: body.signature, savedAt: new Date(Number(body.savedAt)).toISOString() })
+  if (req.url === '/v1/key-boxes/kit-confirmed' && req.method === 'DELETE') return reply(200, { kind: 'kit-confirmed', deleted: !(seen.confirmed = undefined) })
+  if (req.url === '/v1/key-boxes/kit-confirmed') return seen.confirmed ? reply(200, seen.confirmed) : reply(404, {})
   if (req.url === '/v1/key-boxes/kit') return seen.kit ? reply(200, seen.kit) : reply(404, {})
   if (req.url === '/v1/key-boxes' && req.method === 'DELETE') {
     if (seen.kit) return reply(409, { error: { type: 'invalid_request_error', message: 'kit' } })
@@ -73,6 +81,10 @@ const until = async (want: string) => {
   return status()
 }
 after(() => cloud.close())
+const kitOf = async (account: { sub: string; key: string }) => {
+  const { words, key } = await newWords()
+  return { words, box: toBase64(await lock({ key, version: 1, bind: `account/${account.sub}/kit`, plain: fromBase64(account.key) }) ?? new Uint8Array()) }
+}
 
 test('/api/cloud is off until sign-in, and off again after sign-out', async () => {
   assert.equal((await app.inject({ method: 'GET', url: '/api/cloud' })).statusCode, 401)
@@ -105,7 +117,7 @@ test('a downloaded kit is saved at once, a second account gets its sentence and 
   const kit = (await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).json() as { words: string[] }
   assert.equal(kit.words.length, 12)
   assert.ok((await status()).kit?.savedAt)
-  assert.ok(seen.kit)
+  assert.equal((seen.confirmed as { body: string }).body, (seen.kit as { body: string }).body)
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })).statusCode, 409)
   await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })
   assert.equal((await status()).keptAccount, 'mo@example.com')
@@ -163,20 +175,57 @@ test('signed in, the Mac compares its kit box with the cloud’s: another box cl
   assert.equal((await status()).kit?.differs, false)
 })
 
-test('a kit save whose answer is lost stays unconfirmed: never adopted, Forget refused, and a new kit confirms', async () => {
+test('a kit save whose answer is lost is taken back from the cloud, so the account’s other Mac never adopts words nobody saw', async () => {
   seen.dropKit = true
   assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 502)
-  seen.dropKit = false
-  assert.ok(seen.kit)
-  assert.deepEqual([keysService.kitState().pending, (await status()).kit], [true, null])
+  assert.deepEqual([seen.kit, keysService.kitState().pending, (await status()).kit], [undefined, null, null])
+  seen.failDelete = true
+  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 502)
+  Object.assign(seen, { dropKit: false, failDelete: false })
+  const unseen = seen.kit as { body: string }
+  assert.deepEqual([keysService.kitState().pending, (seen.confirmed as { body: string } | undefined)?.body === unseen.body], [unseen.body, false])
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })).json().keptAccount, null)
-  assert.equal(keysService.kitState().pending, true)
+  assert.deepEqual([seen.kit, keysService.kitState().pending], [undefined, null])
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })).statusCode, 409)
+
+  await signIn('ana@example.com')
+  await until('on')
+  const account = keysService.account()
+  assert.ok(account)
+  const made = await kitOf(account)
+  const savedAt = Date.now()
+  seen.kit = { object: 'key_box', kind: 'kit', ...await keysService.signBox({ account, name: 'kit', body: made.box, savedAt }), savedAt: new Date(savedAt).toISOString() }
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })).json().keptAccount, null)
+  assert.deepEqual([keysService.kitState().saved, keysService.kitState().pending], [null, null])
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })).statusCode, 409)
   await signIn('ana@example.com')
   await until('on')
-  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 200)
-  assert.equal(keysService.kitState().pending, false)
-  assert.ok((await status()).kit?.savedAt)
+  seen.confirmed = { object: 'key_box', kind: 'kit-confirmed', ...await keysService.signBox({ account, name: 'kit-confirmed', body: made.box, savedAt }), savedAt: new Date(savedAt).toISOString() }
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })).json().keptAccount, 'ana@example.com')
+  assert.equal(keysService.kitState().saved?.box, made.box)
+  await signIn('ana@example.com')
+  await until('on')
+})
+
+test('a kit stuck unconfirmed on a Mac that crashed mid-save gives way to the kit another Mac saves, so Forget works and its words restore', async () => {
+  seen.cut = true
+  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 502)
+  Object.assign(seen, { cut: false, down: false })
+  assert.ok(keysService.kitState().pending)
+  assert.notEqual((seen.kit as { body: string }).body, keysService.kitState().pending)
+  const account = keysService.account()
+  assert.ok(account)
+  const theirs = await kitOf(account)
+  const savedAt = Date.now()
+  seen.kit = { object: 'key_box', kind: 'kit', ...await keysService.signBox({ account, name: 'kit', body: theirs.box, savedAt }), savedAt: new Date(savedAt).toISOString() }
+  seen.confirmed = { object: 'key_box', kind: 'kit-confirmed', ...await keysService.signBox({ account, name: 'kit-confirmed', body: theirs.box, savedAt }), savedAt: new Date(savedAt).toISOString() }
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })).json().keptAccount, 'ana@example.com')
+  assert.deepEqual([keysService.kitState().pending, keysService.kitState().saved?.box], [null, theirs.box])
+  assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })).statusCode, 200)
+  await signIn('ana@example.com')
+  assert.equal((await status()).status, 'locked')
+  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/unlock', headers, payload: { words: theirs.words } })).statusCode, 200)
+  assert.equal((await until('on')).kit?.savedAt, new Date(savedAt).toISOString())
 })
 
 test('after Start over on another Mac, this Mac locks and asks for the new kit instead of looping on Make a new kit', async () => {
@@ -221,10 +270,10 @@ test('a passkey’s PRF output locks the account key in the room; on a new Mac t
 test('a kit made on another Mac is adopted with its date at sign-out, so Forget leaves words that still restore', async () => {
   const account = keysService.account()
   assert.ok(account)
-  const { words, key } = await newWords()
-  const fresh = { words, box: toBase64(await lock({ key, version: 1, bind: `account/${account.sub}/kit`, plain: fromBase64(account.key) }) ?? new Uint8Array()) }
+  const fresh = await kitOf(account)
   const savedAt = Date.parse((seen.kit as { savedAt: string }).savedAt) + 60_000
   seen.kit = { object: 'key_box', kind: 'kit', ...await keysService.signBox({ account, name: 'kit', body: fresh.box, savedAt }), savedAt: new Date(savedAt).toISOString() }
+  seen.confirmed = { object: 'key_box', kind: 'kit-confirmed', ...await keysService.signBox({ account, name: 'kit-confirmed', body: fresh.box, savedAt }), savedAt: new Date(savedAt).toISOString() }
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })).json().keptAccount, 'ana@example.com')
   assert.deepEqual([keysService.kitState().saved?.box, keysService.kitState().saved?.savedAt], [fresh.box, new Date(savedAt).toISOString()])
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })).statusCode, 200)

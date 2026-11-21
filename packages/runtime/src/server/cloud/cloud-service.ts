@@ -142,10 +142,17 @@ export const cloudService = {
       const kept = KeyBox.safeParse((await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token })).json).data
       const savedAt = Math.max(Date.now(), (Date.parse(kept?.savedAt ?? '') || 0) + 1)
       await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString(), confirmed: false })
-      const saved = await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token, body: await keysService.signBox({ account: keysService.mustBeOn(), name: 'kit', body: box, savedAt }) })
-      boxesDiffer = saved.status === 403
-      if (saved.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t keep your kit (HTTP ${saved.status}). Try again.`)
+      const signer = keysService.mustBeOn()
+      try {
+        const saved = await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token, body: await keysService.signBox({ account: signer, name: 'kit', body: box, savedAt }) })
+        boxesDiffer = saved.status === 403
+        if (saved.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t keep your kit (HTTP ${saved.status}). Try again.`)
+      } catch (err) {
+        await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token }).then((got) => dropPending({ account: signer, token, cloudKit: KeyBox.safeParse(got.json).data })).catch(warnCheck)
+        throw err
+      }
       await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString() })
+      await confirmKit({ account: signer, token, body: box, savedAt }).catch(warnCheck)
       return { object: 'recovery_kit' as const, words, ask }
     })
   },
@@ -180,7 +187,7 @@ export const cloudService = {
       : await keysService.fromPasskey({ prf: fromBase64(body.prf), box: box.body }).then((key) => key && keysService.restoreWith({ key, workspaces }))
     if (!account && 'words' in body) throw new HttpError(400, 'Those aren’t the words of your recovery kit. Check each word and try again.', { param: 'words' })
     if (!account) throw new HttpError(400, `Your passkey isn’t on this ${HERE}.`)
-    return joinWith(account)
+    return joinWith({ account, typed: 'words' in body })
   },
 
   async startPairing(): Promise<CloudPairing> {
@@ -217,7 +224,7 @@ export const cloudService = {
   },
 
   async notMe({ device }: { device: string }): Promise<Cloud> {
-    await rotate({ changed: await keysService.change([device]), drop: ['kit', 'passkey'] })
+    await rotate({ changed: await keysService.change([device]), drop: ['kit', 'kit-confirmed', 'passkey'] })
     return cloudService.status()
   },
 
@@ -321,12 +328,14 @@ async function compareBoxes(): Promise<void> {
   const kit = await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token })
   const workspaces = await cloud.account({ method: 'GET', path: '/v1/workspaces', token })
   if (![200, 404].includes(kit.status) || workspaces.status !== 200) return
-  const cloudKit = KeyBox.safeParse(kit.json).data
+  const cloudKit = await dropPending({ account, token, cloudKit: KeyBox.safeParse(kit.json).data })
   const mine = keysService.kitState().saved?.box
   const kitMine = cloudKit && await keysService.boxIsMine({ account, name: 'kit', box: cloudKit })
   const box = Workspaces.safeParse(workspaces.json).data?.data.find((each) => each.id === account.workspace.id)
   if (cloudKit && !kitMine && !box) return lockOut(account)
-  if (cloudKit && kitMine && cloudKit.body !== mine && !keysService.kitState().pending) await keysService.setKit({ box: cloudKit.body, savedAt: cloudKit.savedAt ?? new Date().toISOString() })
+  const marker = cloudKit && kitMine ? await markerOf({ account, token, kit: cloudKit }) : undefined
+  if (cloudKit && marker?.confirmed && cloudKit.body !== mine) await keysService.setKit({ box: cloudKit.body, savedAt: cloudKit.savedAt ?? new Date().toISOString() })
+  if (marker && !marker.confirmed && mine && cloudKit?.body === mine) await confirmKit({ account, token, body: mine, savedAt: Math.max(Date.now(), marker.savedAt + 1) })
   if (cloudKit && !kitMine && mine) await keysService.setKit(undefined)
   const boxMine = box && await keysService.boxIsMine({ account, name: `workspace/${account.workspace.id}`, box: { body: box.key, by: box.by, signature: box.signature } })
   const reboxed = boxMine ? 200 : (await cloud.account({ method: 'POST', path: '/v1/workspaces', token, body: await keysService.workspaceBox(account) })).status
@@ -335,6 +344,33 @@ async function compareBoxes(): Promise<void> {
   passkeySaved = Boolean(passkey && await keysService.boxIsMine({ account, name: 'passkey', box: passkey }))
   const kitOk = cloudKit ? kitMine : !mine || (await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token, body: await keysService.signBox({ account, name: 'kit', body: mine, savedAt: Date.now() }) })).status === 200
   boxesDiffer = reboxed !== 200 || !kitOk
+}
+
+async function dropPending({ account, token, cloudKit }: { account: Account; token: string; cloudKit: KeyBox | undefined }): Promise<KeyBox | undefined> {
+  const pending = keysService.kitState().pending
+  if (!pending) return cloudKit
+  if (cloudKit?.body === pending && !await deleteBoxes({ account, token, kinds: ['kit', 'kit-confirmed'] })) return cloudKit
+  await keysService.setKit(undefined)
+  return cloudKit?.body === pending ? undefined : cloudKit
+}
+
+async function markerOf({ account, token, kit }: { account: Account; token: string; kit: KeyBox }): Promise<{ confirmed: boolean; savedAt: number }> {
+  const marker = KeyBox.safeParse((await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit-confirmed', token })).json).data
+  return { confirmed: Boolean(marker && marker.body === kit.body && await keysService.boxIsMine({ account, name: 'kit-confirmed', box: marker })), savedAt: Date.parse(marker?.savedAt ?? '') || 0 }
+}
+
+async function confirmKit({ account, token, body, savedAt }: { account: Account; token: string; body: string; savedAt: number }): Promise<void> {
+  await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit-confirmed', token, body: await keysService.signBox({ account, name: 'kit-confirmed', body, savedAt }) })
+}
+
+async function deleteBoxes({ account, token, kinds }: { account: Account; token: string; kinds: string[] }): Promise<boolean> {
+  let deleted = true
+  for (const kind of kinds) {
+    const { by, signature } = await keysService.signBox({ account, name: `delete/${kind}`, body: '' })
+    const gone = await cloud.account({ method: 'DELETE', path: `/v1/key-boxes/${kind}`, token, body: { by, signature } })
+    deleted &&= gone.status === 200 || gone.status === 404
+  }
+  return deleted
 }
 
 async function lockOut({ sub, email }: Account): Promise<void> {
@@ -348,14 +384,15 @@ async function boxesOf(token: string): Promise<{ id: string; key: string; chain:
   return Promise.all(boxes.map(async (box) => ({ ...box, chain: Lists.safeParse((await cloud.room({ method: 'GET', workspace: box.id, path: '/member-lists?after=0', token })).json).data?.data ?? [] })))
 }
 
-async function joinWith(account: Account): Promise<Cloud> {
+async function joinWith({ account, typed }: { account: Account; typed: boolean }): Promise<Cloud> {
   stopPairing()
   const token = await keysService.token()
   const joined = await cloud.room({ method: 'PUT', workspace: account.workspace.id, path: '/members', token, body: account.list })
   if (joined.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t add this computer (HTTP ${joined.status}). Try again.`)
   const kit = KeyBox.safeParse((await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token })).json).data
+  const kept = kit && (typed || (await markerOf({ account, token, kit })).confirmed)
   await syncService.reset({ restoring: true })
-  await keysService.adopt({ account, kit: kit && { box: kit.body, savedAt: kit.savedAt ?? new Date().toISOString() } })
+  await keysService.adopt({ account, kit: kit && kept ? { box: kit.body, savedAt: kit.savedAt ?? new Date().toISOString() } : undefined })
   cloudService.connect()
   return cloudService.status()
 }
@@ -371,7 +408,7 @@ async function checkPairing(): Promise<void> {
       const key = await keysService.readPairing({ secret: now.secret, workspace, found: each })
       const account = key && await keysService.restoreWith({ key, workspaces: (await boxesOf(token)).filter((box) => box.id === workspace) })
       if (account && listedUnder({ account, device: each.from })) {
-        await joinWith(account)
+        await joinWith({ account, typed: false })
         return
       }
     }
@@ -404,7 +441,7 @@ async function send({ letters, token }: { letters: Sent[]; token: string }): Pro
   return failed
 }
 
-async function rotate({ changed: { list, next, letters, handover }, drop }: { changed: Awaited<ReturnType<typeof keysService.change>>; drop: ('kit' | 'passkey')[] }): Promise<void> {
+async function rotate({ changed: { list, next, letters, handover }, drop }: { changed: Awaited<ReturnType<typeof keysService.change>>; drop: ('kit' | 'kit-confirmed' | 'passkey')[] }): Promise<void> {
   const token = await keysService.token()
   const put = await cloud.room({ method: 'PUT', workspace: next.workspace.id, path: '/members', token, body: list })
   if (put.status === 409) throw new HttpError(409, 'Your devices changed on another computer just now. Try again.')
