@@ -12,12 +12,18 @@ export const cloud = {
   session: (body: CreateCloudSession): Promise<CloudSession> => post({ path: '/v1/sessions', body, reply: CloudSession }),
   roomUrl: (workspace: string): string => `${config.cloudUrl.replace(/^http/, 'ws')}/v1/workspaces/${workspace}`,
 
-  async room({ method, workspace, path, token, body }: { method: 'GET' | 'PUT' | 'POST' | 'DELETE'; workspace: string; path: string; token: string; body?: unknown }): Promise<{ status: number; json: unknown }> {
-    const response = await fetch(`${config.cloudUrl}/v1/workspaces/${workspace}${path}`, {
-      method, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(20_000),
-    }).catch((error: unknown) => unreachable(error))
-    return { status: response.status, json: await response.json().catch(() => undefined) }
-  },
+  room: ({ workspace, path, ...rest }: Call & { workspace: string }): Promise<Reply> => call({ ...rest, path: `/v1/workspaces/${workspace}${path}` }),
+  account: call,
+}
+
+type Call = { method: 'GET' | 'PUT' | 'POST' | 'DELETE'; path: string; token: string; body?: unknown }
+type Reply = { status: number; json: unknown }
+
+async function call({ method, path, token, body }: Call): Promise<Reply> {
+  const response = await fetch(`${config.cloudUrl}${path}`, {
+    method, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(20_000),
+  }).catch((error: unknown) => unreachable(error))
+  return { status: response.status, json: await response.json().catch(() => undefined) }
 }
 
 async function post<T>({ path, body, reply }: { path: string; body: unknown; reply: z.ZodMiniType<T> }): Promise<T> {

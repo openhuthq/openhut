@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { routeOf } from '@/app/routes'
 import { Shell, type ShellRoute } from '@/app/shell'
+import { CloudGate } from '@/features/cloud/unlock'
 import { ConnectionsView } from '@/features/connections/connections-view'
 import { FirstRun } from '@/features/first-run/first-run'
 import { Join } from '@/features/join/join'
@@ -38,11 +39,11 @@ function Dashboard() {
   </div>
   if (!me.data) return <div className="grid h-dvh place-items-center bg-sidebar"><span className="animate-[fadein_.3s_1s_both]"><Spinner className="size-5" /></span></div>
   const close = () => navigate(background.current.path)
-  return <>
+  return <CloudGate>
     <Shell route={route.page === 'settings' || route.page === 'connections' ? background.current.route : route} overlay={route.page === 'settings' || route.page === 'connections' ? route.page : undefined} />
     {route.page === 'settings' && <SettingsView tab={route.tab} onClose={close} />}
     {route.page === 'connections' && <ConnectionsView onClose={close} />}
-  </>
+  </CloudGate>
 }
 
 function back() {

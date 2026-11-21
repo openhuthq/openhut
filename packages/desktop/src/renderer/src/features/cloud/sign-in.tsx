@@ -134,7 +134,7 @@ function Smile({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
   </g>
 }
 
-function Mascot({ kind, size }: { kind: 'kit' | 'backup' | 'sync' | 'team'; size: number }) {
+export function Mascot({ kind, size }: { kind: 'kit' | 'backup' | 'sync' | 'team'; size: number }) {
   const line = { stroke: INK, strokeWidth: 4, strokeLinejoin: 'round' as const }
   return <svg width={size} height={size} viewBox="0 0 100 100" className="shrink-0" aria-hidden>
     {kind === 'kit' && <><rect x={18} y={20} width={50} height={62} rx={7} fill="#fbe3c8" {...line} /><Smile x={43} y={42} /><path d="M30 62h26M30 70h18" stroke={INK} strokeWidth={3} strokeLinecap="round" opacity={0.35} /><circle cx={74} cy={38} r={10} fill="#f7c948" {...line} /><path d="M74 48v28m0-8h7m-7-8h6" stroke={INK} strokeWidth={4} strokeLinecap="round" fill="none" /></>}

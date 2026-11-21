@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { ConfirmRecoveryKit, CreateCloudAuthorization } from '@openhut/common/cloud/cloud.ts'
+import { ConfirmRecoveryKit, CreateCloudAuthorization, UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { requireSignIn } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
 
@@ -15,8 +15,11 @@ export const cloudController: FastifyPluginAsync = async (app) => {
   app.post('/kits', SignedIn, async () => cloudService.newKit())
 
   app.post<{ Body: ConfirmRecoveryKit }>('/kits/confirm', ConfirmRequest, async (req) => cloudService.confirmKit(req.body))
+
+  app.post<{ Body: UnlockCloud }>('/unlock', UnlockRequest, async (req) => cloudService.unlock(req.body))
 }
 
 const SignedIn = { onRequest: requireSignIn }
 const StartRequest = { onRequest: requireSignIn, schema: { body: CreateCloudAuthorization } }
 const ConfirmRequest = { onRequest: requireSignIn, schema: { body: ConfirmRecoveryKit } }
+const UnlockRequest = { onRequest: requireSignIn, schema: { body: UnlockCloud } }

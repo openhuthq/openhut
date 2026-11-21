@@ -45,11 +45,12 @@ async function follows({ previous, next }: { previous: Link; next: Link }): Prom
   const a = previous.body
   const b = next.body
   if (b.workspace !== a.workspace || b.version !== a.version + 1 || b.previous !== (await anchorOf(previous.list))) return false
-  if (!wellFormed(b)) return false
+  if (!wellFormed(b) || keyVersionOf(b) < keyVersionOf(a)) return false
   const by = next.list.by
   const invite = a.invites.find((each) => each.key === by)
   const signer = invite ? undefined : a.members.find((member) => member.devices.includes(by))
   if (!tracksRemoved({ previous: a, next: b, owner: signer?.role === 'owner' })) return false
+  if (signer?.role !== 'owner' && signer?.role !== 'admin' && keyVersionOf(b) !== keyVersionOf(a)) return false
   if (invite) return joins({ previous: a, next: b, invite })
   if (!signer) return false
   if (signer.role === 'owner') return true
@@ -85,6 +86,10 @@ function wellFormed(body: MemberListBody): boolean {
   const keys = [...devicesOf(body), ...body.invites.map((each) => each.key), ...body.removed].map(half)
   const owners = body.members.filter((member) => member.role === 'owner')
   return owners.length === 1 && unique(body.members.map((member) => member.email)) && unique(keys)
+}
+
+export function keyVersionOf(body: MemberListBody): number {
+  return body.keyVersion ?? 1
 }
 
 function devicesOf(body: MemberListBody): string[] {

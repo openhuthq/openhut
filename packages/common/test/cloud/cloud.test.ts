@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Base64, checkRecord, DeviceKey, fromQr, Here, KeyBox, Letter, qrPayload, Record, recordBind, RecordBody, Signed, signRecord } from '../../src/cloud/cloud.ts'
+import { Base64, checkRecord, DeviceKey, fromQr, Here, KeyBox, Letter, qrPayload, Record, recordBind, RecordKind, Signed, signRecord } from '../../src/cloud/cloud.ts'
 import { identity, lock, newKey, newPairing, toBase64 } from '../../src/vault/vault.ts'
 
 const locked = toBase64((await lock({ key: newKey(), version: 1, bind: 'record/rec_00000001', plain: new TextEncoder().encode('{ }') })) ?? new Uint8Array())
@@ -27,10 +27,9 @@ test('a record version fits in the uint32 of the header', () => {
 })
 
 test('a record body names one of the closed list of kinds', () => {
-  const body = { change: 'chg_00000001', kind: 'instructions', counter: 1, value: 'Answer billing questions.' }
-  assert.equal(RecordBody.safeParse(body).success, true)
-  assert.equal(RecordBody.safeParse({ ...body, kind: 'grants' }).success, false)
-  assert.equal(RecordBody.safeParse({ ...body, kind: '__proto__' }).success, false)
+  assert.equal(RecordKind.safeParse('instructions').success, true)
+  assert.equal(RecordKind.safeParse('grants').success, false)
+  assert.equal(RecordKind.safeParse('__proto__').success, false)
 })
 
 test('bytes have one spelling: a base64url alias of a key, signature or body is refused', async () => {
