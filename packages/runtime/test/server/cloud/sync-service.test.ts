@@ -98,6 +98,7 @@ const { keyStore } = await import('../../../src/server/cloud/key-store.ts')
 const { syncService } = await import('../../../src/server/cloud/sync-service.ts')
 const { connectionService } = await import('../../../src/server/connections/connection-service.ts')
 const { threadController } = await import('../../../src/server/threads/thread-controller.ts')
+const { threadService } = await import('../../../src/server/threads/thread-service.ts')
 const { answerErrors } = await import('../../../src/server/platform/http-error.ts')
 const { validateWithZod } = await import('../../../src/server/platform/validation.ts')
 const Fastify = (await import('fastify')).default
@@ -310,6 +311,45 @@ test('a streamed reply arrives in the room in order, as one record growing versi
   for (let i = 1; i < said.length; i++) assert.ok(said[i].text.startsWith(said[i - 1].text), `step ${i} grows the one before`)
   assert.equal(said.at(-1)?.text, 'Order 4471 shipped Monday.')
   assert.ok(said.every((each) => each.after === 'msg_question'), 'every step names the question it answers')
+})
+
+test('the last words of a reply that land while its record is on the way to the room still reach the room', async () => {
+  let ended = () => {}
+  const done = new Promise<void>((resolve) => { ended = resolve })
+  const hermes = createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' })
+    const words = ['Refund ', 'sent ', 'to ', 'the ', 'card.']
+    const next = (i: number) => {
+      if (i === words.length) {
+        ended()
+        return res.end('data: [DONE]\n\n')
+      }
+      res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: words[i] } }] })}\n\n`)
+      setTimeout(() => next(i + 1), 300)
+    }
+    next(0)
+  }).listen(0, '127.0.0.1')
+  await once(hermes, 'listening')
+  config.agentApi = `http://127.0.0.1:${(hermes.address() as AddressInfo).port}`
+  const question = await slot({ key, path: 'message/msg_refund' })
+  let held = ''
+  room.beforePut = async (id) => {
+    if (held || id === question || id === helpdeskId) return
+    held = id
+    await done
+    await sleep(300)
+  }
+  await threadService.applySynced({ id: 'msg_refund', value: { agentId: 'ag_helpdesk', message: { id: 'msg_refund', role: 'user', parts: [{ type: 'text', text: 'Did my refund go out?' }] } }, author: 'sara@example.com' })
+  await until(async () => {
+    await syncService.settled()
+    const record = room.records.get(held)
+    const opened = record && await openRecord({ workspace, keys: { 1: key }, record, members })
+    return opened?.kind === 'message' && opened.value?.message.parts.map((part) => String(part.text ?? '')).join('') === 'Refund sent to the card.'
+  }, 'the full reply in the room')
+  const first = await openRecord({ workspace, keys: { 1: key }, record: room.log.find((each) => each.id === held) as Record, members })
+  assert.ok(first?.kind === 'message' && first.value?.message.parts.map((part) => String(part.text ?? '')).join('') !== 'Refund sent to the card.', 'the first write went out while the reply was still streaming')
+  room.beforePut = undefined
+  hermes.close()
 })
 
 test('a connection key round-trips sealed to this runtime’s device key and is never written unlocked', async () => {

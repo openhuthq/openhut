@@ -473,6 +473,7 @@ async function writeHead(s: State): Promise<void> {
 
 async function put({ s, item, ver, ctx }: { s: State; item: Item; ver: number; ctx: Context }): Promise<Sent> {
   if (item.owner && item.value !== null && (!ctx.own || item.owner !== ctx.email)) return 'later'
+  const hash = hashItem(item)
   const value = item.value === null || !item.wire ? item.value : await item.wire()
   if (value === undefined) return 'later'
   const own = item.owner && ctx.own && item.value !== null ? { key: ctx.own, email: item.owner } : undefined
@@ -492,7 +493,7 @@ async function put({ s, item, ver, ctx }: { s: State; item: Item; ver: number; c
   if (reply.status >= 400 && reply.status < 500 && !KEPT.includes(reply.status)) return 'refused'
   if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud refused a backup (HTTP ${reply.status}).`)
   if (!s.echo.has(item.id)) s.echo.set(item.id, ver - 1)
-  await saveRow(s, { id: item.id, kind: item.kind, ref: item.ref, ver, seq: Record.safeParse(reply.json).data?.seq ?? 0, hash: hashItem(item), signer: toBase64(ctx.me.publicKey), agent_id: item.agentId ?? null })
+  await saveRow(s, { id: item.id, kind: item.kind, ref: item.ref, ver, seq: Record.safeParse(reply.json).data?.seq ?? 0, hash, signer: toBase64(ctx.me.publicKey), agent_id: item.agentId ?? null })
   return 'sent'
 }
 
