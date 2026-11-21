@@ -3,7 +3,7 @@ import { createHash, randomInt } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as z from 'zod/mini'
-import { MemberList, MemberListBody, parseJson, signProof, type RecoveryKit } from '@openhut/common/cloud/cloud.ts'
+import { MemberList, MemberListBody, parseJson, signProof } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, check, signList } from '@openhut/common/cloud/member-list.ts'
 import { concat, equal, fromBase64, fromWords, identity, lock, newKey, newWords, slot, toBase64, unlock, type Bytes, type Identity } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
@@ -22,7 +22,6 @@ const Stored = z.object({
   account: z.optional(z.object({ sub: z.string(), email: z.string(), key: z.string(), workspace: z.object({ id: z.string(), key: z.string(), version: z.number() }), list: MemberList, first: z.optional(MemberList) })),
   kit: z.optional(KIT),
   locked: z.optional(z.object({ sub: z.string(), email: z.string() })),
-  pending: z.optional(z.object({ box: z.string(), words: z.array(z.string()), ask: z.array(z.number()) })),
   session: z.optional(z.object({ token: z.string(), expiresAt: z.string() })),
 })
 type Stored = z.infer<typeof Stored>
@@ -120,33 +119,35 @@ export const keysService = {
     return account
   },
 
-  async newKit(): Promise<RecoveryKit> {
-    const current = await keys()
-    if (!current.account) return { object: 'recovery_kit', words: [], ask: [] }
-    const { words, box } = await kitFor(current.account)
-    const ask = pick()
-    await save({ ...current, pending: { box, words, ask } })
-    return { object: 'recovery_kit', words, ask }
+  async newKit(): Promise<{ words: string[]; box: string; ask: number[] }> {
+    const account = (await keys()).account
+    if (!account) throw new HttpError(409, 'Turn on OpenHut Cloud before making a recovery kit.')
+    return { ...await kitFor(account), ask: pick() }
   },
 
-  async confirmKit(answers: string[]): Promise<boolean> {
-    const current = await keys()
-    const pending = current.pending
-    const right = pending && pending.ask.length === answers.length && pending.ask.every((index, i) => pending.words[index] === answers[i]?.trim().toLowerCase())
-    if (!pending || !right) return false
-    await save({ ...current, pending: undefined, kit: { box: pending.box, savedAt: new Date().toISOString() } })
-    return true
+  async saveKit(box: string): Promise<void> {
+    await save({ ...await keys(), kit: { box, savedAt: new Date().toISOString() } })
   },
 
-  async fromKit(words: string[]): Promise<{ key: Bytes; kit: RecoveryKit } | null> {
+  keptAccount: (): string | null => stored?.account && stored.kit ? stored.account.email : null,
+
+  async forget(): Promise<void> {
+    const current = await keys()
+    if (current.session) throw new HttpError(409, 'Sign out of OpenHut Cloud first.')
+    if (!current.account) return
+    if (!current.kit) throw new HttpError(409, `Save a recovery kit for ${current.account.email} first. Without one, nobody can open its backup again.`)
+    await save({ device: toBase64(newKey()), machine })
+  },
+
+  async fromKit(words: string[]): Promise<{ key: Bytes; kit: { words: string[] } } | null> {
     const current = await keys()
     const kitKey = await fromWords(words)
     if (!kitKey || !current.account || !current.kit) return null
     const key = await unlock({ keys: { 1: kitKey }, bind: bindOf(current.account), locked: fromBase64(current.kit.box) })
     if (!key || !equal({ a: key, b: fromBase64(current.account.key) })) return null
     const next = await kitFor(current.account)
-    await save({ ...current, pending: undefined, kit: { box: next.box, savedAt: new Date().toISOString() } })
-    return { key, kit: { object: 'recovery_kit', words: next.words, ask: [] } }
+    await save({ ...current, kit: { box: next.box, savedAt: new Date().toISOString() } })
+    return { key, kit: { words: next.words } }
   },
 }
 

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Cloud, CloudAuthorization, RecoveryKit } from '@openhut/common/cloud/cloud.ts'
 import { request } from '@/lib/api-client'
 import { navigate } from '@/lib/router'
+import { toast } from '@/lib/toast'
 
 const CLOUD_KEY = ['cloud']
 const SIGN_IN_KEY = ['cloud-sign-in']
@@ -16,6 +17,10 @@ export function useCloud() {
     queryKey: CLOUD_KEY,
     queryFn: async () => {
       const cloud = await request({ schema: Cloud, computer: 'local', path: '/api/cloud' })
+      if (cloud.status === 'off' && cloud.signInError && client.getQueryData(SIGN_IN_KEY)) {
+        client.setQueryData(SIGN_IN_KEY, false)
+        toast(cloud.signInError)
+      }
       if (cloud.status !== 'off' && client.getQueryData(SIGN_IN_KEY)) {
         client.setQueryData(SIGN_IN_KEY, false)
         if (cloud.status !== 'locked') navigate(cloud.kit ? '/settings/cloud' : '/settings/cloud?open=kit', true)
@@ -64,13 +69,17 @@ export function useSignOut() {
 }
 
 export function useNewKit() {
-  return useMutation({ mutationFn: () => request({ schema: RecoveryKit, computer: 'local', path: '/api/cloud/kits', method: 'POST' }) })
-}
-
-export function useConfirmKit() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (words: string[]) => request({ schema: Cloud, computer: 'local', path: '/api/cloud/kits/confirm', method: 'POST', body: { words } }),
+    mutationFn: () => request({ schema: RecoveryKit, computer: 'local', path: '/api/cloud/kits', method: 'POST' }),
+    onSuccess: () => client.invalidateQueries({ queryKey: CLOUD_KEY }),
+  })
+}
+
+export function useForget() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => request({ schema: Cloud, computer: 'local', path: '/api/cloud/account', method: 'DELETE' }),
     onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
   })
 }

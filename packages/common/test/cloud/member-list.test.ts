@@ -30,6 +30,11 @@ test('the anchored list checks', async () => {
   assert.equal(await check({ anchor: toBase64(new Uint8Array(32)), chain: [v1] }), null)
 })
 
+test('a first list that already removes someone fails check', async () => {
+  const genesis = await signList({ signer: moMac, body: { ...first, removed: [key(eve)] } })
+  assert.equal(await check({ anchor: await anchorOf(genesis), chain: [genesis] }), null)
+})
+
 test('a list with one changed email or role fails check', async () => {
   for (const change of [{ email: 'eve@example.com' }, { role: 'admin' }]) {
     const body = JSON.parse(new TextDecoder().decode(fromBase64(v1.bytes)))

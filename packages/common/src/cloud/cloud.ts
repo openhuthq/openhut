@@ -193,6 +193,8 @@ export const Cloud = z.object({
   keyStore: z.enum(['keychain', 'file']),
   kit: z.nullable(z.object({ savedAt: Timestamp })),
   backup: Backup,
+  signInError: z.nullable(z.string()),
+  keptAccount: z.nullable(Email),
 })
 export type Cloud = z.infer<typeof Cloud>
 
@@ -201,9 +203,6 @@ export type CloudAuthorization = z.infer<typeof CloudAuthorization>
 
 export const RecoveryKit = z.object({ object: z.literal('recovery_kit'), words: z.array(z.string()), ask: z.array(z.number().check(z.int())) })
 export type RecoveryKit = z.infer<typeof RecoveryKit>
-
-export const ConfirmRecoveryKit = z.object({ words: z.array(z.string().check(z.maxLength(40))).check(z.maxLength(12)) })
-export type ConfirmRecoveryKit = z.infer<typeof ConfirmRecoveryKit>
 
 export const UnlockCloud = z.object({ words: z.array(z.string().check(z.maxLength(40))).check(z.length(12)) })
 export type UnlockCloud = z.infer<typeof UnlockCloud>

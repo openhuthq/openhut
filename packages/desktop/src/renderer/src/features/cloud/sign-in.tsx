@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { CloudIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import type { RecoveryKit } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
@@ -9,7 +9,7 @@ import { ErrorNote } from '@/components/error-note'
 import { Creature } from '@/components/creature'
 import { Hut } from '@/components/hut'
 import { I, PILL } from '@/components/kit'
-import { useCloud, useConfirmKit, useNewKit, useSignIn } from '@/features/cloud/api'
+import { useCloud, useNewKit, useSignIn } from '@/features/cloud/api'
 import { open } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import team from './team.png'
@@ -111,14 +111,13 @@ function KitWords({ kit, onSaved }: { kit: RecoveryKit; onSaved: () => void }) {
 }
 
 function ConfirmKit({ kit, onBack, onDone }: { kit: RecoveryKit; onBack: () => void; onDone: () => void }) {
-  const confirm = useConfirmKit()
-  const busy = useRef(false)
+  const [wrong, setWrong] = useState(false)
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (busy.current) return
-    busy.current = true
     const form = new FormData(event.currentTarget)
-    confirm.mutate(kit.ask.map((index) => String(form.get(`word-${index}`) ?? '')), { onSuccess: onDone, onSettled: () => { busy.current = false } })
+    const right = kit.ask.every((index) => String(form.get(`word-${index}`) ?? '').trim().toLowerCase() === kit.words[index])
+    if (right) onDone()
+    setWrong(!right)
   }
   return <Dialog size="narrow" label="Check your recovery words" dismissable={false} onClose={() => open()}>
     <form onSubmit={submit}>
@@ -126,9 +125,9 @@ function ConfirmKit({ kit, onBack, onDone }: { kit: RecoveryKit; onBack: () => v
       <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
         <p className="m-0 text-body">Type two of them, so we know the kit is saved.</p>
         {kit.ask.map((index, i) => <label key={index} className="flex flex-col gap-1.5"><span className="font-medium">Word {index + 1}</span><Input name={`word-${index}`} className="font-mono" autoComplete="off" spellCheck={false} autoFocus={i === 0} required /></label>)}
-        <ErrorNote message={confirm.error?.message} />
+        <ErrorNote message={wrong ? 'Those words don’t match your kit. Check the numbers and try again.' : undefined} />
       </div>
-      <DialogFoot start={<Button type="button" variant="secondary" onClick={onBack}>Back</Button>}><Button type="submit" variant="primary" disabled={confirm.isPending}>Done</Button></DialogFoot>
+      <DialogFoot start={<Button type="button" variant="secondary" onClick={onBack}>Back</Button>}><Button type="submit" variant="primary">Done</Button></DialogFoot>
     </form>
   </Dialog>
 }

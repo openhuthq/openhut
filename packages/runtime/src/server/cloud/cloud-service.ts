@@ -13,6 +13,7 @@ const SIGNED_IN = 'You’re signed in. You can go back to OpenHut.'
 const Workspaces = z.object({ data: z.array(z.object({ id: z.string(), key: z.string() })) })
 const Lists = z.object({ data: z.array(MemberList) })
 const pending = new Map<string, { verifier: string; authorization: string; at: number }>()
+let signInError: string | null = null
 
 export const cloudService = {
   async status(): Promise<Cloud> {
@@ -26,6 +27,7 @@ export const cloudService = {
       device: toBase64((await keysService.device()).publicKey),
       workspace: on && account && members ? { id: account.workspace.id, version: members.version, members: members.members } : null,
       keyStore: keysService.keyStore(), kit: on ? keysService.kit() : null, backup: syncService.status(),
+      signInError, keptAccount: on ? null : keysService.keptAccount(),
     }
   },
 
@@ -39,13 +41,18 @@ export const cloudService = {
     })
     for (const [key, value] of pending) if (Date.now() - value.at > PENDING_MS) pending.delete(key)
     pending.set(state, { verifier, authorization: id, at: Date.now() })
+    signInError = null
     return { object: 'cloud_authorization', authorizationUrl }
   },
 
   async finish({ state, code, error }: { state?: string; code?: string; error?: string }): Promise<string> {
     const started = pending.get(state ?? '')
     pending.delete(state ?? '')
-    if (!started || !code) return page(error ? 'Sign-in was cancelled. You can go back to OpenHut.' : 'This sign-in expired. Go back to OpenHut and try again.')
+    if (!started) return page('This sign-in expired. Go back to OpenHut and try again.')
+    if (!code) {
+      signInError = error ? 'Sign-in was cancelled.' : 'Google didn’t finish the sign-in. Try again.'
+      return page(`${signInError} You can go back to OpenHut.`)
+    }
     try {
       const device = await keysService.device()
       const signature = await signProof({ signer: device, proof: 'session', parts: [started.authorization, code] })
@@ -65,8 +72,15 @@ export const cloudService = {
       syncService.connect()
       return page(SIGNED_IN)
     } catch (err) {
-      return page(`${messageOf(err)} Go back to OpenHut and try again.`)
+      signInError = messageOf(err)
+      return page(`${signInError} Go back to OpenHut.`)
     }
+  },
+
+  async forget(): Promise<Cloud> {
+    await keysService.forget()
+    signInError = null
+    return cloudService.status()
   },
 
   async signOut(): Promise<Cloud> {
@@ -78,14 +92,11 @@ export const cloudService = {
 
   async newKit(): Promise<RecoveryKit> {
     if (!keysService.session()) throw new HttpError(409, 'Turn on OpenHut Cloud before making a recovery kit.')
-    return keysService.newKit()
-  },
-
-  async confirmKit({ words }: { words: string[] }): Promise<Cloud> {
-    if (!await keysService.confirmKit(words)) throw new HttpError(400, 'Those words don’t match your kit. Check the numbers and try again.', { param: 'words' })
-    const saved = await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token: await keysService.token(), body: { body: keysService.kitBox() } })
+    const { words, box, ask } = await keysService.newKit()
+    const saved = await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token: await keysService.token(), body: { body: box } })
     if (saved.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t keep your kit (HTTP ${saved.status}). Try again.`)
-    return cloudService.status()
+    await keysService.saveKit(box)
+    return { object: 'recovery_kit', words, ask }
   },
 
   async unlock({ words }: { words: string[] }): Promise<Cloud> {

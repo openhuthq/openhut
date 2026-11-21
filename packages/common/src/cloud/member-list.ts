@@ -18,7 +18,7 @@ export async function anchorOf(list: MemberList): Promise<string> {
 export async function check({ anchor, chain }: { anchor: string; chain: MemberList[] }): Promise<MemberListBody | null> {
   if (chain.length === 0) return null
   let previous = await open(chain[0])
-  if (!previous || !wellFormed(previous.body) || (await anchorOf(chain[0])) !== anchor) return null
+  if (!previous || !wellFormed(previous.body) || (previous.body.previous === null && previous.body.removed.length > 0) || (await anchorOf(chain[0])) !== anchor) return null
   for (const list of chain.slice(1)) {
     const next = await open(list)
     if (!next || !(await follows({ previous, next }))) return null
