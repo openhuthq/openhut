@@ -4,7 +4,7 @@ import * as z from 'zod/mini'
 import { checkProof, CloudWorkspace, DeleteNotice, DeviceRequest, parseJson, Record, signProof, type Backup, type SetHere } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, newUntil } from '@openhut/common/cloud/member-list.ts'
 import { FileValue, openRecord, sealRecord, SYNCED, type AgentValue, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
-import { fromBase64, newKey, readHeader, slot, toBase64 } from '@openhut/common/vault/vault.ts'
+import { askCommit, fromBase64, newKey, readHeader, slot, toBase64 } from '@openhut/common/vault/vault.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
@@ -151,6 +151,10 @@ export const syncService = {
   async refreshRequests(ws: string): Promise<void> {
     const s = states.get(ws)
     if (s) await asked(s)
+  },
+
+  refreshTeams(): void {
+    for (const s of states.values()) if (!s.home) void run(() => roomKeys.refresh({ ws: s.ws, call: s.call }).then(() => undefined))
   },
 
   async change({ ws, emails, devices, rotate = false }: { ws: string; emails?: string[]; devices?: string[]; rotate?: boolean }): Promise<void> {
@@ -559,7 +563,7 @@ async function drop({ ws, why }: { ws: string; why: Gone['why'] | null }): Promi
   states.delete(ws)
   presence.closed(ws)
   await roomKeys.dropRoom(ws)
-  if (!own) await agentService.dropWorkspace(ws)
+  if (!own) await (why === 'removed' ? agentService.keepWorkspace(ws) : agentService.dropWorkspace(ws))
   await db.deleteFrom('cloud_record').where('workspace', '=', own ? '' : ws).execute()
   await db.deleteFrom('install_setting').where('name', 'in', [own ? SEQ : `${SEQ}:${ws}`, `${NAME}:${ws}`]).execute()
   if (!own) syncService.connect()
@@ -570,20 +574,22 @@ async function asked(s: State): Promise<void> {
   const before = JSON.stringify(s.requests)
   const found = Requests.safeParse((await room(s, { method: 'GET', path: '/requests' })).json).data?.data ?? []
   const admin = roomKeys.roleIn(s.ws) !== 'member' && !syncService.waiting(s.ws)
-  const fresh = admin ? found.filter((each) => !each.nonce) : []
+  const fresh = admin ? found.filter((each) => !each.nonce && each.commit) : []
   for (const each of fresh) {
     const nonce = toBase64(newKey(16))
     const me = await keysService.device()
-    await room(s, { method: 'PUT', path: `/requests/${encodeURIComponent(each.device)}/nonce`, body: { nonce, by: toBase64(me.publicKey), signature: await signProof({ signer: me, proof: 'words', parts: [s.ws, each.device, nonce] }) } })
+    await room(s, { method: 'PUT', path: `/requests/${encodeURIComponent(each.device)}/nonce`, body: { nonce, by: toBase64(me.publicKey), signature: await signProof({ signer: me, proof: 'words', parts: [s.ws, each.device, each.commit ?? '', nonce] }) } })
   }
   const all = fresh.length ? Requests.safeParse((await room(s, { method: 'GET', path: '/requests' })).json).data?.data ?? [] : found
-  s.requests = await Promise.all(all.map(async (each) => ({ ...each, nonce: each.nonce && await nonceOk({ ws: s.ws, device: each.device, nonce: each.nonce }) ? each.nonce : null })))
+  s.requests = await Promise.all(all.map(async (each) => await wordsReady({ ws: s.ws, request: each }) ? each : { ...each, nonce: null, reveal: null }))
   if (JSON.stringify(s.requests) !== before) emit({ name: 'cloud.changed', target: { type: 'cloud', id: s.ws } })
 }
 
-async function nonceOk({ ws, device, nonce }: { ws: string; device: string; nonce: NonNullable<DeviceRequest['nonce']> }): Promise<boolean> {
-  const signer = roomKeys.members(ws)?.members.find((member) => member.devices.includes(nonce.by))
-  return Boolean(signer && signer.role !== 'member') && checkProof({ device: nonce.by, proof: 'words', parts: [ws, device, nonce.nonce], signature: nonce.signature })
+async function wordsReady({ ws, request: { device, commit, nonce, reveal } }: { ws: string; request: DeviceRequest }): Promise<boolean> {
+  const signer = nonce && roomKeys.members(ws)?.members.find((member) => member.devices.includes(nonce.by))
+  if (!commit || !nonce || !reveal || !signer || signer.role === 'member') return false
+  const opened = toBase64(await askCommit({ device: fromBase64(device), reveal: fromBase64(reveal) })) === commit
+  return opened && checkProof({ device: nonce.by, proof: 'words', parts: [ws, device, commit, nonce.nonce], signature: nonce.signature })
 }
 
 async function room(s: State, { method, path, body }: { method: 'GET' | 'PUT' | 'POST' | 'DELETE'; path: string; body?: unknown }): Promise<{ status: number; json: unknown }> {

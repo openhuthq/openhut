@@ -67,12 +67,14 @@
     },
     "deviceWords": {
       "device": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "reveal": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+      "commit": "6a64522989cdf6817d8006404ab090af45b7165612daaec08f7b1b57b7b5402e",
       "nonce": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
       "words": [
-        "panda",
-        "clown",
-        "coyote",
-        "exist"
+        "banana",
+        "cost",
+        "glove",
+        "anger"
       ]
     }
   }

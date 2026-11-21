@@ -820,7 +820,7 @@ test('a delete notice not signed by an admin on the list, or a bare 404, does no
   room.gone = undefined
 })
 
-test('on a Mac let in by an admin the team stays keyed by its id: its agents land with the team’s id, and a removal trashes only them, never the Mac’s own diary', async () => {
+test('on a Mac let in by an admin the team stays keyed by its id: its agents land with the team’s id, and a bare 403 from the cloud keeps them here as local, private agents, never trashed', async () => {
   const team = await roomKeys.createTeam()
   const ws = team.workspace.id
   const current = await keyStore.read()
@@ -837,9 +837,14 @@ test('on a Mac let in by an admin the team stays keyed by its id: its agents lan
   push(store({ id, ...sealed }))
   await until(async () => await agentHere('ag_teamonly'), 'the team agent to land')
   assert.equal((await db.selectFrom('agent').select('workspace').where('id', '=', 'ag_teamonly').executeTakeFirstOrThrow()).workspace, ws)
-  room.gone = { ws, status: 403, json: {} }
+  const writes = calls.length
+  room.gone = { ws, status: 403, json: { error: { type: 'permission_error', message: 'forged' } } }
   tell({ type: 'deleted' })
-  await until(async () => !await agentHere('ag_teamonly'), 'the team agent to go')
+  await until(() => !roomKeys.room(ws), 'the team room to go')
+  const kept = await db.selectFrom('agent').select(['workspace', 'owner', 'shared']).where('id', '=', 'ag_teamonly').executeTakeFirstOrThrow()
+  assert.deepEqual(kept, { workspace: null, owner: null, shared: false })
   assert.equal(await agentHere('ag_mydiary'), true)
+  assert.equal(calls.slice(writes).some((line) => line.includes('"cmd":"rm"')), false)
+  assert.ok(syncService.gone().some((each) => each.why === 'removed'))
   room.gone = undefined
 })

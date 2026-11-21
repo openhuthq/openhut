@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import * as z from 'zod/mini'
 import { type CloudWorkspaceView, fromQr, KeyBox, Letter, MemberList, qrPayload, signProof, type AllowedDevice, type Role, type Cloud, type CloudAuthorization, type CloudPairing, type RecoveryKit, type RuntimeInvite, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { addedOf, check, newUntil, youngUntil } from '@openhut/common/cloud/member-list.ts'
-import { deviceWords, fingerprint, fromBase64, fromLongCode, letter, longCode, newPairing, toBase64 } from '@openhut/common/vault/vault.ts'
+import { askCommit, deviceWords, fingerprint, fromBase64, fromLongCode, letter, longCode, newKey, newPairing, toBase64, type Bytes } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
 import { log } from '../platform/events.ts'
@@ -23,7 +23,7 @@ const Workspaces = z.object({ data: z.array(z.object({ id: z.string(), key: z.st
 const Lists = z.object({ data: z.array(MemberList) })
 const Letters = z.object({ data: z.array(Letter) })
 const Waiting = z.object({ data: z.array(z.object({ device: z.string() })) })
-const Asked = z.object({ data: z.array(z.object({ device: z.string(), nonce: z.nullable(z.object({ nonce: z.string() })) })) })
+const Asked = z.object({ data: z.array(z.object({ device: z.string(), nonce: z.nullable(z.object({ nonce: z.string() })), reveal: z.nullable(z.string()) })) })
 const ROTATE = 'cloud_rotate'
 const Teams = z.object({ data: z.array(z.object({ id: z.string() })) })
 const ASK_POLL_MS = 2000
@@ -34,7 +34,7 @@ let checkedAt = 0
 let boxes: Promise<unknown> = Promise.resolve()
 let passkeySaved = false
 let pairing: { secret: string; reply: CloudPairing; workspaces: string[]; timer: NodeJS.Timeout } | undefined
-let asking: { rooms: { id: string; admins: string[]; words: string[] | null }[]; settled: string[]; approved: boolean; timer: NodeJS.Timeout } | undefined
+let asking: { rooms: { id: string; admins: string[]; secret: Bytes; words: string[] | null }[]; settled: string[]; approved: boolean; timer: NodeJS.Timeout } | undefined
 const Rotate = z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() }))
 
 export const cloudService = {
@@ -76,17 +76,19 @@ export const cloudService = {
     stopAsking()
     const token = await keysService.token()
     const teams = await teamsOf(token)
-    const rooms: { id: string; admins: string[]; words: null }[] = []
+    const me = fromBase64(await keysService.deviceKey())
+    const rooms: { id: string; admins: string[]; secret: Bytes; words: null }[] = []
     let refused: string | null = null
     for (const { id } of teams) {
       const lists = Lists.safeParse((await cloud.room({ method: 'GET', workspace: id, path: '/member-lists?after=0', token })).json).data?.data ?? []
       const body = bodyOf(lists.at(-1))
       const others = body?.members.filter((member) => member.role !== 'member' && member.email !== keysService.locked()?.email) ?? []
       if (!others.length) continue
-      const asked = await cloud.room({ method: 'POST', workspace: id, path: '/requests', token, body: { name: deviceName(), os: deviceOs() } })
+      const secret = newKey()
+      const asked = await cloud.room({ method: 'POST', workspace: id, path: '/requests', token, body: { name: deviceName(), os: deviceOs(), commit: toBase64(await askCommit({ device: me, reveal: secret })) } })
       if (asked.status !== 200) refused = z.safeParse(z.object({ error: z.object({ message: z.string() }) }), asked.json).data?.error.message ?? `OpenHut Cloud didn’t take the request (HTTP ${asked.status}).`
       if (asked.status !== 200) continue
-      rooms.push({ id, admins: others.map((member) => member.email), words: null })
+      rooms.push({ id, admins: others.map((member) => member.email), secret, words: null })
     }
     if (!rooms.length) throw new HttpError(409, refused ?? 'None of your team workspaces has an admin who can let this Mac in. Pick another way.')
     asking = { rooms, settled: [], approved: false, timer: setInterval(() => void checkAsked().catch((err: unknown) => log.warn({ event: 'cloud.ask_failed', error: messageOf(err) })), ASK_POLL_MS) }
@@ -105,8 +107,8 @@ export const cloudService = {
   async approve({ workspace, device, words }: { workspace: string; device: string; words: string[] }): Promise<Cloud> {
     const asked = syncService.requests(mustBeOn(workspace)).find((each) => each.device === device)
     if (!asked) throw new HttpError(404, 'That device isn’t waiting anymore. It was let in, denied, or it expired.')
-    if (!asked.nonce) throw new HttpError(409, 'Their 4 words aren’t ready yet. Wait a moment and try again.')
-    const { list, letter: sealed } = await roomKeys.approve({ ws: workspace, email: asked.email, device, words, nonce: asked.nonce.nonce, name: asked.name })
+    if (!asked.nonce || !asked.reveal) throw new HttpError(409, 'Their 4 words aren’t ready yet. Wait a moment and try again.')
+    const { list, letter: sealed } = await roomKeys.approve({ ws: workspace, email: asked.email, device, words, nonce: asked.nonce.nonce, reveal: asked.reveal, name: asked.name })
     await putList({ workspace, list })
     await roomKeys.post([{ ...sealed, workspace }])
     await syncService.refreshRequests(workspace)
@@ -626,11 +628,17 @@ async function checkAsked(): Promise<void> {
     const mine = (Asked.safeParse((await cloud.room({ method: 'GET', workspace, path: '/requests', token })).json).data?.data ?? []).find((each) => each.device === me)
     const room = now.rooms.find((each) => each.id === workspace)
     if (!mine) now.settled.push(workspace)
-    else if (room && mine.nonce) room.words = await deviceWords({ device: fromBase64(me), nonce: fromBase64(mine.nonce.nonce) })
+    else if (room && mine.nonce && !room.words) room.words = await reveal({ workspace, token, me, room, nonce: mine.nonce.nonce, sent: mine.reveal })
   }
   if (now.settled.length < now.rooms.length) return
   if (now.approved) return stopAsking()
   clearInterval(now.timer)
+}
+
+async function reveal({ workspace, token, me, room, nonce, sent }: { workspace: string; token: string; me: string; room: { secret: Bytes }; nonce: string; sent: string | null }): Promise<string[] | null> {
+  const secret = toBase64(room.secret)
+  const put = sent === secret ? { status: 200 } : await cloud.room({ method: 'PUT', workspace, path: `/requests/${encodeURIComponent(me)}/reveal`, token, body: { reveal: secret } })
+  return put.status === 200 ? deviceWords({ device: fromBase64(me), nonce: fromBase64(nonce), reveal: room.secret }) : null
 }
 
 function stopAsking(): void {
@@ -656,6 +664,7 @@ async function rotate({ changed: { list, next, letters }, drop }: { changed: Awa
   await keysService.adopt({ account: next, moves })
   passkeySaved = false
   await roomKeys.post(letters.map((each) => ({ ...each, workspace: next.workspace.id })))
+  syncService.refreshTeams()
   await finishMoves(token)
 }
 

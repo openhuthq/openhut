@@ -84,14 +84,15 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
 }
 
 function Request({ workspace, request, name, mine, admin }: { workspace: CloudWorkspaceView; request: DeviceRequest; name: string; mine: boolean; admin: boolean }) {
-  const { device, at, nonce } = request
+  const { device, at, nonce, reveal } = request
+  const ready = Boolean(nonce && reveal)
   const [words, setWords] = useState(['', '', '', ''])
   const [expected, setExpected] = useState<string[] | null>(null)
   const approve = useApprove()
   const deny = useDeny()
   useEffect(() => {
-    if (nonce) void deviceWords({ device: fromBase64(device), nonce: fromBase64(nonce.nonce) }).then(setExpected)
-  }, [device, nonce])
+    if (nonce && reveal) void deviceWords({ device: fromBase64(device), nonce: fromBase64(nonce.nonce), reveal: fromBase64(reveal) }).then(setExpected)
+  }, [device, nonce, reveal])
   const matches = Boolean(expected) && words.map((word) => word.trim().toLowerCase()).join(' ') === expected?.join(' ')
   const set = (input: HTMLInputElement, index: number) => {
     const typed = input.value.toLowerCase().split(/\s+/)
@@ -109,8 +110,8 @@ function Request({ workspace, request, name, mine, admin }: { workspace: CloudWo
       <span className="text-[13px] font-medium">{mine ? `${title} asked to join as you` : `New ${title} wants in`}</span>
       <span className="text-[12px] text-mute"><DeviceMeta device={{ kind: 'mac', name: title, os: request.os ?? undefined, when: `${ago(at)} ago` }} /></span>
       {admin && !mine && <>
-        <span className="text-[12px] text-body">{nonce ? `Call ${name} and type the 4 words on their screen` : 'The words show once their Mac is ready.'}</span>
-        <span className="flex flex-wrap items-center gap-1.5">{words.map((word, index) => <Input key={index} value={word} disabled={!nonce} aria-label={`Word ${index + 1}`} autoComplete="off" spellCheck={false} onChange={(event) => set(event.target, index)} className="h-7 w-[72px] px-2 text-[12.5px]" />)}</span>
+        <span className="text-[12px] text-body">{ready ? `Call ${name} and type the 4 words on their screen` : 'The words show once their Mac is ready.'}</span>
+        <span className="flex flex-wrap items-center gap-1.5">{words.map((word, index) => <Input key={index} value={word} disabled={!ready} aria-label={`Word ${index + 1}`} autoComplete="off" spellCheck={false} onChange={(event) => set(event.target, index)} className="h-7 w-[72px] px-2 text-[12.5px]" />)}</span>
       </>}
       {mine && <span className="text-[12px] text-body">If it isn’t yours, deny it. Nobody gets in without the 4 words.</span>}
     </span>

@@ -131,12 +131,12 @@ export const roomKeys = {
     return { list, room: next, letters }
   },
 
-  async approve({ ws, email, device, words, nonce, name }: { ws: string; email: string; device: string; words: string[]; nonce: string; name?: string | null }): Promise<{ list: MemberList; letter: Sent }> {
+  async approve({ ws, email, device, words, nonce, reveal, name }: { ws: string; email: string; device: string; words: string[]; nonce: string; reveal: string; name?: string | null }): Promise<{ list: MemberList; letter: Sent }> {
     const { room, body } = adminRoom({ ws, sentence: 'Only an owner or admin can let a new device in.' })
     const target = body.members.find((member) => member.email === email)
     if (!room.workspace.key) throw new HttpError(409, 'This computer is still waiting for the workspace key.')
     if (!target || body.members.some((member) => member.devices.includes(device))) throw new HttpError(409, `${email} isn’t waiting with that device anymore.`)
-    const expected = await deviceWords({ device: fromBase64(device), nonce: fromBase64(nonce) })
+    const expected = await deviceWords({ device: fromBase64(device), nonce: fromBase64(nonce), reveal: fromBase64(reveal) })
     if (words.map((word) => word.trim().toLowerCase()).join(' ') !== expected.join(' ')) throw new HttpError(400, 'Those aren’t the 4 words on their screen. Ask them to read them again.', { param: 'words' })
     const base = await nextOf({ list: room.list, body })
     const list = await signList({ signer: await keysService.device(), body: { ...base, members: body.members.map((member) => member === target ? { ...member, devices: [...member.devices, device] } : member), added: { ...body.added, [device]: base.at ?? 0 }, ...name && { names: { ...body.names, [device]: name.slice(0, 64) } } } })

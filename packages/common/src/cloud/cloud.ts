@@ -231,10 +231,12 @@ export type Backup = z.infer<typeof Backup>
 export const WordsNonce = z.object({ nonce: Base64, by: DeviceKey, signature: Signature })
 export type WordsNonce = z.infer<typeof WordsNonce>
 
-export const AskAdmin = z.object({ name: z.string().check(z.maxLength(64)), os: z.string().check(z.maxLength(32)) })
+export const AskAdmin = z.object({ name: z.string().check(z.maxLength(64)), os: z.string().check(z.maxLength(32)), commit: Base64 })
 export type AskAdmin = z.infer<typeof AskAdmin>
 
-export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null), nonce: z._default(z.nullable(WordsNonce), null) })
+export const AskReveal = z.object({ reveal: Base64 })
+
+export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null), commit: z._default(z.nullable(Base64), null), nonce: z._default(z.nullable(WordsNonce), null), reveal: z._default(z.nullable(Base64), null) })
 export type DeviceRequest = z.infer<typeof DeviceRequest>
 
 export const DeleteNotice = z.object({ by: DeviceKey, signedAt: z.number(), signature: Signature })
