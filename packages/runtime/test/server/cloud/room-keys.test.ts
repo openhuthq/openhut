@@ -27,7 +27,7 @@ async function keyLetter({ id, sender, plain }: { id: string; sender: Identity; 
   return { id, object: 'letter', to: toBase64(me.publicKey), from: toBase64(sender.publicKey), workspace: account.workspace.id, purpose: 'workspace-key', body: toBase64(body ?? new Uint8Array()) }
 }
 
-test('a member list that lands while an account-key letter is being taken keeps the new account key', async () => {
+test('a member list that lands while an account-key letter is being taken keeps the new account key, and so does a home room saved from a copy read before the letter', async () => {
   const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   const me = await keysService.device()
   const macA = await identity()
@@ -46,12 +46,17 @@ test('a member list that lands while an account-key letter is being taken keeps 
   const third = await signList({ signer: me, body: { ...body, version: 3, previous: await anchorOf(second), at, members: [{ ...mine, devices: [...devices, toBase64(phone.publicKey)], kit }], removed: [...body.removed, oldKit], added: { ...Object.fromEntries(Object.entries(body.added ?? {}).filter(([each]) => each !== oldKit)), [toBase64(macA.publicKey)]: at, [kit]: at, [toBase64(phone.publicKey)]: at } } })
   const sealed = await letter({ sender: macA, to: me.publicKey, workspace: account.workspace.id, purpose: 'account-key', version: 1, plain: key })
   const found = [{ id: 'let_1', object: 'letter' as const, workspace: account.workspace.id, to: toBase64(me.publicKey), from: toBase64(macA.publicKey), purpose: 'account-key' as const, body: toBase64(sealed ?? new Uint8Array()), createdAt: new Date().toISOString() }]
+  const stale = roomKeys.room()
   const advanced = roomKeys.advance({ lists: [third] })
   assert.deepEqual(await roomKeys.takeLetters({ found }), ['let_1'])
   assert.ok(await advanced)
   homeChain.push(third)
   assert.equal(keysService.account()?.key, toBase64(key))
   assert.equal(roomKeys.members()?.version, 3)
+  const latest = roomKeys.room()
+  assert.ok(stale && latest)
+  await roomKeys.setRoom({ ...stale, list: latest.list })
+  assert.equal(keysService.account()?.key, toBase64(key))
 })
 
 test('an admin’s workspace-key letter can’t plant an own key or change the slot key, and old keys are kept; my own device’s letter can pin the own key', async () => {
