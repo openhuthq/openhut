@@ -14,7 +14,7 @@ import { I, PILL } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { nameOf, useCloud } from '@/features/cloud/api'
 import { NeedsCloud } from '@/features/cloud/sign-in'
-import { useApprove, useDeny, useInvite, useRemoveMember, useSetRole, useWorkspaces, workspaceName } from '@/features/cloud/workspaces'
+import { useApprove, useDeny, useInvite, useRemoveMember, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
 import { ago } from '@/lib/format'
 import { copyText } from '@/lib/clipboard'
 import { showDone } from '@/features/cloud/unlock'
@@ -33,7 +33,7 @@ export function PeopleSettings() {
   const count = active.members.length + active.invites.length
   return <section className="flex flex-col gap-2.5">
     <div className="flex items-center gap-2 px-1">
-      <span className="text-[13px] font-medium">{workspaceName(active)}</span>
+      <span className="text-[13px] font-medium">{active.name}</span>
       <span className="ml-auto text-[12px] text-mute">{count} {count === 1 ? 'person' : 'people'}</span>
       {admin && <InviteButton workspace={active} />}
     </div>
@@ -44,7 +44,7 @@ export function PeopleSettings() {
       </div>)}
       {active.invites.map((invite) => <div key={invite.email} className="flex items-center gap-3 px-4 py-3">
         <span className="opacity-40"><PersonFace name={nameOf(invite.email)} email={invite.email} size={40} /></span>
-        <span className="grid min-w-0 flex-1 gap-px"><span className="text-[13.5px] font-medium">{nameOf(invite.email)}</span><span className="truncate text-[12px] text-mute">{invite.email} · invited as {ROLE[invite.role].toLowerCase()}</span></span>
+        <span className="grid min-w-0 flex-1 gap-px"><span className="text-[13.5px] font-medium">{nameOf(invite.email)}</span><span className="truncate text-[12px] text-mute">{invite.email}</span></span>
         <span className="text-[13px] text-body">Invited</span>
         {invite.link && <Button type="button" variant="ghost" className={PILL} onClick={() => void copy(invite.link ?? '')}>Copy link</Button>}
       </div>)}
@@ -70,7 +70,7 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
       <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label="More" title="More" disabled={setRole.isPending || remove.isPending} />}><I icon={MoreHorizontalIcon} size={16} /></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="flex w-[200px] flex-col gap-0.5 rounded-xl p-1.5 text-[13px] shadow-menu">
         <DropdownMenuItem className="h-8 px-2.5" onClick={() => setRole.mutate({ id: workspace.id, email: member.email, role: next }, { onError: toastError })}>{next === 'admin' ? 'Make admin' : 'Make member'}</DropdownMenuItem>
-        {owner && <DropdownMenuItem className="h-8 px-2.5" onClick={() => setRole.mutate({ id: workspace.id, email: member.email, role: 'owner' }, { onSuccess: () => toast(`${name} owns ${workspaceName(workspace)} now. You’re an admin.`), onError: toastError })}>Make owner</DropdownMenuItem>}
+        {owner && <DropdownMenuItem className="h-8 px-2.5" onClick={() => setRole.mutate({ id: workspace.id, email: member.email, role: 'owner' }, { onSuccess: () => toast(`${name} owns ${workspace.name} now. You’re an admin.`), onError: toastError })}>Make owner</DropdownMenuItem>}
         <DropdownMenuItem className="h-8 px-2.5 text-fail" onClick={() => setRemoving(true)}>Remove from workspace</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu> : <span className="w-7" />}
@@ -131,7 +131,7 @@ function InviteButton({ workspace }: { workspace: CloudWorkspaceView }) {
         </div>
         <Button type="submit" variant="secondary" className="h-8 w-full gap-1.5" disabled={invite.isPending}><I icon={Link01Icon} size={14} />{invite.isPending ? 'Making the link…' : 'Copy invite link'}</Button>
         <ErrorNote message={invite.error?.message} />
-        <span className="text-[12px] text-mute">It works once, for 48 hours, and only for this email. Send it yourself. Your agents stay private until you share them.</span>
+        <span className="text-[12px] text-mute">Your agents stay private until you share them.</span>
       </form>
     </PopoverContent>
   </Popover>

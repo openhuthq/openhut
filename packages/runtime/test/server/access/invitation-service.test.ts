@@ -6,7 +6,7 @@ import { createServer } from 'node:http'
 import Fastify from 'fastify'
 import type { MemberList, MemberListBody } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, check, signList } from '@openhut/common/cloud/member-list.ts'
-import { identity, letter, toBase64 } from '@openhut/common/vault/vault.ts'
+import { identity, letter, lockInvite, toBase64, type Identity } from '@openhut/common/vault/vault.ts'
 import { connect, generateKeyPair, toHex, type Tunnel, type TunnelError } from '@openhut/tunnel'
 import { startRelay, waitFor } from '@openhut/tunnel/test/relay.ts'
 import { canonical, type Access, type Unsigned } from '@openhut/common/access/access.ts'
@@ -14,13 +14,15 @@ import type { Invitation } from '@openhut/common/access/invitation.ts'
 
 const relay = await startRelay()
 process.env.OPENHUT_RELAY_URL = relay.url
-const room = { invites: new Map<string, { status: number; json: unknown }>(), puts: [] as MemberList[], putStatus: 200 }
+const room = { invites: new Map<string, { status: number; json: unknown }>(), puts: [] as MemberList[], putStatus: 200, asked: [] as string[] }
 const fake = createServer(async (req, res) => {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
   const reply = (status: number, json: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(json))
-  const invite = /\/invites\/([^/]+)$/.exec(req.url ?? '')?.[1]
-  const found = invite ? room.invites.get(invite) : undefined
+  const url = new URL(req.url ?? '', 'http://room')
+  const invite = /\/invites\/([^/]+)$/.exec(url.pathname)?.[1]
+  if (invite) room.asked.push(url.search)
+  const found = invite ? room.invites.get(invite + (url.searchParams.get('after') === '0' ? '' : url.search)) : undefined
   if (found) return reply(found.status, found.json)
   if (invite) return reply(404, { error: { type: 'invalid_request_error', message: 'gone' } })
   if (req.method === 'PUT' && req.url?.endsWith('/members')) {
@@ -156,18 +158,19 @@ test('the device is accepted as soon as the list holds its key, with that list, 
 
 const WS = 'TeamWorkspace01'
 
-async function teamInvite({ email = 'ana@example.com' }: { email?: string } = {}) {
-  const mo = await identity()
-  const card = await identity()
+async function teamInvite({ email = 'ana@example.com', mo, card }: { email?: string; mo?: Identity; card?: Identity } = {}) {
+  mo ??= await identity()
+  card ??= await identity()
   const at = Date.now()
   const genesis: MemberListBody = { workspace: WS, version: 1, previous: null, members: [{ email: 'mo@example.com', role: 'owner', devices: [toBase64(mo.publicKey)] }], invites: [], removed: [], at, added: { [toBase64(mo.publicKey)]: at } }
   const first = await signList({ signer: mo, body: genesis })
   const second = await signList({ signer: mo, body: { ...genesis, version: 2, previous: await anchorOf(first), invites: [{ email, role: 'member', key: toBase64(card.publicKey) }] } })
-  const plain = new TextEncoder().encode(JSON.stringify({ workspace: WS, name: 'Activepieces', from: 'mo@example.com', email, role: 'member', anchor: await anchorOf(first), expiresAt: new Date(at + 48 * 3600_000).toISOString() }))
+  const plain = await lockInvite({ secret: card.secret, workspace: WS, plain: new TextEncoder().encode(JSON.stringify({ workspace: WS, name: 'Activepieces', from: 'mo@example.com', email, role: 'member', anchor: await anchorOf(first), expiresAt: new Date(at + 48 * 3600_000).toISOString() })) })
+  assert.ok(plain)
   const body = toBase64(await letter({ sender: mo, to: card.publicKey, workspace: WS, purpose: 'invite', version: 1, plain }) ?? new Uint8Array())
   const id = await inviteId(card.publicKey)
   room.invites.set(id, { status: 200, json: { id, object: 'invite', workspace: WS, email, role: 'member', key: toBase64(card.publicKey), from: toBase64(mo.publicKey), body, expiresAt: new Date(at + 48 * 3600_000).toISOString(), memberLists: [first, second] } })
-  return { id, first, second, link: `https://openhut.dev/join#${WS}.${toBase64(card.secret)}` }
+  return { id, first, second, mo, card, link: `https://openhut.dev/join#${WS}.${toBase64(card.secret)}` }
 }
 
 const cloudJoin = async (path: 'previews' | 'joins', link: string) => {
@@ -190,8 +193,45 @@ test('a used, expired or wrong-email cloud invite is refused with a sentence', a
   const other = await teamInvite({ email: 'ana.k@example.com' })
   room.invites.set(other.id, { status: 403, json: { error: { type: 'permission_error', message: 'This invite is for ana.k@example.com. You’re signed in as ana@example.com.' } } })
   const wrong = await cloudJoin('joins', other.link)
-  assert.deepEqual([wrong.status, wrong.body.error.message], [403, 'This invite is for ana.k@example.com. You’re signed in as ana@example.com.'])
+  assert.deepEqual([wrong.status, wrong.body.error.message, wrong.body.error.param], [403, 'This invite is for ana.k@example.com. You’re signed in as ana@example.com.', 'ana.k@example.com'])
   assert.equal(room.puts.length, 0)
+})
+
+test('a cloud that swaps in its own workspace behind a real link, knowing only the card’s public key, is refused', async () => {
+  const real = await teamInvite()
+  const evil = await identity()
+  const fakeCard = await identity()
+  const forged = await teamInvite({ mo: evil, card: fakeCard })
+  const sealedToReal = await letter({ sender: evil, to: real.card.publicKey, workspace: WS, purpose: 'invite', version: 1, plain: new TextEncoder().encode(JSON.stringify({ workspace: WS, name: 'Mo’s workspace', from: 'mo@example.com', email: 'ana@example.com', role: 'member', anchor: await anchorOf(forged.first), expiresAt: new Date(Date.now() + 3600_000).toISOString() })) })
+  const forgedJson = room.invites.get(forged.id)?.json as { [name: string]: unknown }
+  room.invites.set(real.id, { status: 200, json: { ...forgedJson, id: real.id, key: toBase64(real.card.publicKey), from: toBase64(evil.publicKey), body: toBase64(sealedToReal ?? new Uint8Array()) } })
+  const puts = room.puts.length
+  const preview = await cloudJoin('previews', real.link)
+  assert.deepEqual([preview.status, preview.body.error.message], [400, 'This invite doesn’t check out. Ask for a new link.'])
+  assert.equal((await cloudJoin('joins', real.link)).status, 400)
+  assert.equal(room.puts.length, puts)
+})
+
+test('a member list longer than one page comes in pages, so the join signs the latest version', async () => {
+  const invite = await teamInvite()
+  const json = room.invites.get(invite.id)?.json as { [name: string]: unknown }
+  room.invites.set(invite.id, { status: 200, json: { ...json, memberLists: [invite.first], hasMore: true } })
+  room.invites.set(`${invite.id}?after=1`, { status: 200, json: { ...json, memberLists: [invite.second], hasMore: false } })
+  const puts = room.puts.length
+  room.putStatus = 409
+  await cloudJoin('joins', invite.link)
+  room.putStatus = 200
+  const put = room.puts.at(-1)
+  assert.equal(room.puts.length, puts + 1)
+  assert.ok(put && await check({ anchor: await anchorOf(invite.first), chain: [invite.first, invite.second, put] }))
+})
+
+test('losing a join race reads as a used link, not a server error', async () => {
+  const invite = await teamInvite()
+  room.putStatus = 409
+  const lost = await cloudJoin('joins', invite.link)
+  room.putStatus = 200
+  assert.deepEqual([lost.status, lost.body.error.message], [404, 'This invite link no longer works. It was used already, or it was taken back. Ask for a new one.'])
 })
 
 test('joining reads the sealed invite, signs the join with the link’s key and waits for an admin to send the workspace key', async () => {

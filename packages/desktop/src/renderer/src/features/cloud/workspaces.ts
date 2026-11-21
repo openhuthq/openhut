@@ -4,19 +4,14 @@ import type { OpenHutAgent } from '@openhut/client'
 import { Cloud, CloudInvite, CloudInvitePreview, CloudWorkspaceView, type CreateCloudInvite, type Role } from '@openhut/common/cloud/cloud.ts'
 import { request } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
-import { nameOf, useCloud } from '@/features/cloud/api'
+import { useCloud } from '@/features/cloud/api'
 
 const ACTIVE_KEY = 'openhut.workspace'
 const CHANGED = 'openhut:workspace'
 const CLOUD_KEY = ['cloud']
 
-export function workspaceName(workspace: CloudWorkspaceView): string {
-  const owner = workspace.members.find((member) => member.role === 'owner')
-  return workspace.name ?? `${nameOf(owner?.email ?? '')}’s workspace`
-}
-
 export function peopleNote(workspace: CloudWorkspaceView): string {
-  if (workspace.waiting) return 'Waiting for a key…'
+  if (workspace.waiting) return 'Joining…'
   return workspace.members.length === 1 ? 'Just you' : `${workspace.members.length} people`
 }
 
@@ -59,7 +54,7 @@ export function useInvite() {
   })
 }
 
-export function useInvitePreview(link: string, enabled: boolean) {
+export function useInvitePreview({ link, enabled }: { link: string; enabled: boolean }) {
   return useQuery({ queryKey: ['cloud-invite', link], queryFn: () => request({ schema: CloudInvitePreview, computer: 'local', path: '/api/invitations/cloud/previews', method: 'POST', body: { link } }), enabled, retry: false, staleTime: Infinity })
 }
 

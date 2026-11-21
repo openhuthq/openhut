@@ -5,7 +5,7 @@ import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ErrorNote } from '@/components/error-note'
 import { WorkspaceLogo } from '@/features/cloud/switcher'
-import { useDeleteWorkspace, useRemoveMember, useRename, useWorkspaces, workspaceName } from '@/features/cloud/workspaces'
+import { useDeleteWorkspace, useRemoveMember, useRename, useWorkspaces } from '@/features/cloud/workspaces'
 import { navigate, open, useOpen } from '@/lib/router'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
@@ -16,7 +16,7 @@ export function WorkspaceSettings() {
   const { active } = useWorkspaces()
   const rename = useRename()
   if (!active) return null
-  const name = workspaceName(active)
+  const { name } = active
   const save = (value: string) => {
     if (value.trim() && value.trim() !== name) rename.mutate({ id: active.id, name: value }, { onSuccess: () => toast('Workspace renamed') })
   }
@@ -49,7 +49,7 @@ export function WorkspaceDanger() {
 }
 
 function DangerZone({ workspace }: { workspace: CloudWorkspaceView }) {
-  const name = workspaceName(workspace)
+  const name = workspace.name
   const owner = workspace.role === 'owner'
   const rows: [string, string, string, string, boolean][] = [
     [`Leave ${name}`, owner ? 'Make someone else the owner first.' : 'For good. What you made stays with the workspace.', 'Leave', 'leave', owner],
@@ -67,7 +67,7 @@ function DangerZone({ workspace }: { workspace: CloudWorkspaceView }) {
 }
 
 function LeaveConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
-  const name = workspaceName(workspace)
+  const name = workspace.name
   const leave = useRemoveMember()
   const { email } = useWorkspaces()
   const close = () => open()
@@ -80,7 +80,7 @@ function LeaveConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
 }
 
 function DeleteConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
-  const name = workspaceName(workspace)
+  const name = workspace.name
   const [typed, setTyped] = useState('')
   const remove = useDeleteWorkspace()
   const close = () => open()

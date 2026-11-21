@@ -58,7 +58,7 @@ export const syncKinds = {
   },
 
   async hide({ open, ctx }: { open: Opened; ctx: Context }): Promise<undefined> {
-    if (open.kind === 'agent' && open.owner && open.owner !== ctx.email) await agentService.hideSynced({ id: open.ref, owner: open.owner, me: ctx.email })
+    if (open.kind === 'agent' && open.owner && open.owner !== ctx.email) await agentService.hideSynced({ id: open.ref, owner: open.owner, workspace: workspaceOf(ctx), me: ctx.email })
     return undefined
   },
 
@@ -78,25 +78,42 @@ export const syncKinds = {
 
   async apply({ open, ctx }: { open: Opened; ctx: Context }): Promise<unknown> {
     const author = ctx.members.find((member) => member.devices.includes(open.by))
-    const by = author?.email ?? null
+    if (!author) return undefined
+    const agentId = await agentOf(open)
+    if (agentId && !await agentService.writableBy({ id: agentId, author, workspace: workspaceOf(ctx), me: ctx.email })) return undefined
+    const mine = author.email === ctx.email
+    const by = author.email
     switch (open.kind) {
-      case 'agent': return agentService.applySynced({ id: open.ref, value: open.value, by, author, workspace: ctx.home ? null : ctx.workspace, me: ctx.email })
-      case 'setting': return open.value && ctx.home ? applySetting(open.value) : undefined
+      case 'agent': {
+        const devices = [toBase64(ctx.me.publicKey), ...ctx.members.find((member) => member.email === ctx.email)?.devices ?? []]
+        return agentService.applySynced({ id: open.ref, value: open.value, author: { ...author, device: open.by }, workspace: workspaceOf(ctx), me: ctx.email, mine: devices })
+      }
+      case 'setting': return open.value && ctx.home && mine ? applySetting(open.value) : undefined
       case 'message': return threadService.applySynced({ id: open.ref, value: open.value })
       case 'memory': return open.value && memoryService.applySynced(open.value)
       case 'file': return open.value ? applyFile({ value: open.value, ctx, owner: open.owner }) : undefined
       case 'head': return undefined
       case 'connection': {
-        if (!ctx.home) return undefined
+        if (!ctx.home || !mine) return undefined
         const value = open.value
         if (!value) return connectionService.applySynced({ id: open.ref, value: null, by })
-        const mine = value.keys.find((each) => each.to === toBase64(ctx.me.publicKey))
-        const plain = mine && await read({ recipient: ctx.me, from: fromBase64(open.by), workspace: ctx.workspace, purpose: 'connection-key', body: fromBase64(mine.body), allowed: ctx.runtimes.map(fromBase64) })
+        const sealed = value.keys.find((each) => each.to === toBase64(ctx.me.publicKey))
+        const plain = sealed && await read({ recipient: ctx.me, from: fromBase64(open.by), workspace: ctx.workspace, purpose: 'connection-key', body: fromBase64(sealed.body), allowed: ctx.runtimes.map(fromBase64) })
         const config = plain ? Config.safeParse(parseJson(words.decode(plain))).data ?? null : null
         return connectionService.applySynced({ id: value.id, value: { id: value.id, kind: value.kind, name: value.name, account: value.account, signIn: value.signIn, config }, by })
       }
     }
   },
+}
+
+function workspaceOf(ctx: Context): string | null {
+  return ctx.home ? null : ctx.workspace
+}
+
+async function agentOf(open: Opened): Promise<string | undefined> {
+  if (open.kind === 'message') return threadService.agentOfMessage({ id: open.ref, value: open.value })
+  if (open.kind === 'memory' || open.kind === 'file') return open.value?.agentId
+  return undefined
 }
 
 async function agentAllowed({ value, by, ctx }: { value: AgentValue; by: string; ctx: Context }): Promise<boolean> {

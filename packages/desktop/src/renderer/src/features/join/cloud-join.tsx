@@ -1,16 +1,12 @@
-import { useSyncExternalStore, type FormEvent } from 'react'
-import { AiMagicIcon } from '@hugeicons/core-free-icons'
+import { useEffect, useSyncExternalStore, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Hut } from '@/components/hut'
-import { I } from '@/components/kit'
 import { RequestError } from '@/lib/api-client'
 import { nameOf, useCloud, useSignIn } from '@/features/cloud/api'
 import { Window } from '@/features/cloud/unlock'
-import { chooseWorkspace, useInvitePreview, useJoin } from '@/features/cloud/workspaces'
-import { HERE } from '@/features/settings/desktop'
-import { Row, Rows } from '@/features/settings/kit'
+import { chooseWorkspace, useInvitePreview, useJoin, useWorkspaces } from '@/features/cloud/workspaces'
 import { navigate, open } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 
@@ -24,28 +20,35 @@ function useHash() {
 }
 
 export function CloudJoin() {
-  const link = `${LINK}${useHash()}`
+  const hash = useHash()
+  const link = `${LINK}${hash}`
   const cloud = useCloud().data
   const signIn = useSignIn()
+  const { all } = useWorkspaces()
   const on = cloud?.status === 'on' || cloud?.status === 'offline'
-  const preview = useInvitePreview(link, on)
+  const joined = all.find((each) => each.id === hash.slice(1).split('.')[0])
+  const preview = useInvitePreview({ link, enabled: on && !joined })
   const join = useJoin()
-  const back = <Button type="button" variant="secondary" className="mt-2 h-10 w-[300px] justify-center" onClick={() => navigate('/', true)}>Back to OpenHut</Button>
-  if (!cloud) return null
+  useEffect(() => {
+    if (!joined) return
+    chooseWorkspace(joined.id)
+    navigate('/', true)
+  }, [joined])
+  if (!cloud || joined) return null
   if (!on) return <Window>
     <Hut mood="party" className="size-[84px]" />
     <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Join your team</h1>
-    <p className="m-0 max-w-[420px] text-[14px] text-body">Sign in with the email the invite was sent to. The workspace key comes sealed, and only this {HERE} can open it.</p>
+    <p className="m-0 max-w-[420px] text-[14px] text-body">Sign in with the email the invite was sent to.</p>
     <Button type="button" variant="primary" className="mt-2 h-10 w-[300px] justify-center gap-2" disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}><Google />Continue with Google</Button>
   </Window>
   const error = preview.error ?? join.error
   if (error) {
-    const wrong = error instanceof RequestError && error.status === 403
+    const { title, body } = refusal({ error, email: cloud.email })
     return <Window>
       <Hut mood="worried" className="size-[84px]" />
-      <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">{wrong ? 'This invite is for another email' : error instanceof RequestError && [404, 410].includes(error.status) ? 'This invite link no longer works' : 'This invite didn’t open'}</h1>
-      <p className="m-0 max-w-[420px] text-[14px] text-body">{error.message}</p>
-      {back}
+      <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">{title}</h1>
+      <p className="m-0 max-w-[420px] text-[14px] text-body">{body}</p>
+      <Button type="button" variant="secondary" className="mt-2 h-10 w-[300px] justify-center" onClick={() => navigate('/', true)}>Back to OpenHut</Button>
     </Window>
   }
   const invite = preview.data
@@ -58,10 +61,16 @@ export function CloudJoin() {
     <Hut mood="party" className="size-[84px]" />
     <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Join {invite.name}</h1>
     <p className="m-0 max-w-[420px] text-[14px] text-body">{nameOf(invite.from)} invited you as {invite.role === 'admin' ? 'an admin' : 'a member'}.</p>
-    <div className="mt-1 w-[300px] rounded-lg border border-hair bg-card p-1.5 text-left"><Rows><Row icon={<I icon={AiMagicIcon} size={20} className="text-hue-violet" />} title="Shared agents" note="Ready once you join" /></Rows></div>
     <Button type="button" variant="primary" className="mt-2 h-10 w-[300px] justify-center" disabled={join.isPending} onClick={() => join.mutate(link, { onSuccess: done })}>{join.isPending ? 'Joining…' : 'Join workspace'}</Button>
     <span className="inline-flex items-center gap-1.5 text-[12px] text-mute"><Google />Signed in as {cloud.email}</span>
   </Window>
+}
+
+function refusal({ error, email }: { error: Error; email: string | null }): { title: string; body: string } {
+  const status = error instanceof RequestError ? error.status : 0
+  if (status === 403) return { title: 'This invite is for another email', body: `It’s for ${error instanceof RequestError && error.param ? error.param : 'another email'}. You’re signed in as ${email ?? 'someone else'}.` }
+  if (status === 404 || status === 410) return { title: 'This invite link no longer works', body: 'It was used already or it expired. Ask for a new one.' }
+  return { title: 'This invite didn’t open', body: error.message }
 }
 
 export function JoinLinkDialog() {

@@ -121,12 +121,13 @@ export type Invite = z.infer<typeof Invite>
 export const NewInvite = z.object({ id: Id, email: Email, role: InviteRole, key: DeviceKey, body: Locked })
 export type NewInvite = z.infer<typeof NewInvite>
 
-export const OpenedInvite = z.object({ ...Invite.shape, memberLists: z.array(MemberList).check(z.maxLength(200)) })
+export const OpenedInvite = z.object({ ...Invite.shape, memberLists: z.array(MemberList).check(z.maxLength(200)), hasMore: z.optional(z.boolean()) })
 export type OpenedInvite = z.infer<typeof OpenedInvite>
 
 export const WorkspaceName = z.string().check(z.trim(), z.minLength(1, 'Give the workspace a name.'), z.maxLength(60, 'Keep the name under 60 characters.'))
 export const RenameWorkspace = z.object({ name: WorkspaceName })
 export type RenameWorkspace = z.infer<typeof RenameWorkspace>
+export const LockedName = z.object({ name: Locked.check(z.maxLength(1024)) })
 
 export const CloudWorkspace = z.object({ id: Id, object: z.literal('workspace'), name: z.nullable(z.string()) })
 export type CloudWorkspace = z.infer<typeof CloudWorkspace>
@@ -216,7 +217,7 @@ export type Backup = z.infer<typeof Backup>
 
 export const CloudWorkspaceView = z.object({
   id: Id,
-  name: z.nullable(z.string()),
+  name: z.string(),
   home: z.boolean(),
   own: z._default(z.boolean(), false),
   role: Role,

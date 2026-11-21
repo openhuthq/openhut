@@ -6,7 +6,7 @@ import { anchorOf, check, keyVersionOf, signList, youngUntil } from '@openhut/co
 import { equal, fromBase64, fromWords, identity, letter, lock, newKey, newWords, pairingWorkspace, read, slot, toBase64, unlock, type Bytes, type Identity, type LetterPurpose } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { HttpError } from '../platform/http-error.ts'
-import { keyStore, type Account, type Move, type Session, type Stored } from './key-store.ts'
+import { keyStore, type Account, type Move, type Room, type Session, type Stored } from './key-store.ts'
 import { bodyOf, nextOf, readSecret, roomKeys, secretOf } from './room-keys.ts'
 
 const REFRESH_EARLY_MS = 5 * 60_000
@@ -71,10 +71,11 @@ export const keysService = {
     await keyStore.write({ device: (await keyStore.read()).device, machine, account, session: { token: session.token, expiresAt: session.expiresAt } })
   },
 
-  async workspaceBox(account: Account): Promise<{ id: string; key: string; by: string; signature: string }> {
-    const box = toBase64(await lock({ key: fromBase64(account.key), version: 1, bind: bind({ sub: account.sub, name: `workspace/${account.workspace.id}` }), plain: await secretOf({ room: account, own: true }) }) ?? new Uint8Array())
-    const { by, signature } = await keysService.signBox({ account, name: `workspace/${account.workspace.id}`, body: box })
-    return { id: account.workspace.id, key: box, by, signature }
+  async workspaceBox({ account, room = account }: { account: Account; room?: Room }): Promise<{ id: string; key: string; by: string; signature: string }> {
+    const name = `workspace/${room.workspace.id}`
+    const box = toBase64(await lock({ key: fromBase64(account.key), version: 1, bind: bind({ sub: account.sub, name }), plain: await boxedSecret({ account, room }) }) ?? new Uint8Array())
+    const { by, signature } = await keysService.signBox({ account, name, body: box })
+    return { id: room.workspace.id, key: box, by, signature }
   },
 
   async signBox({ account, name, body, savedAt }: { account: Account; name: string; body: string; savedAt?: number }): Promise<{ body: string; by: string; signature: string; savedAt?: number }> {
@@ -82,15 +83,15 @@ export const keysService = {
     return { body, by: toBase64(signer.publicKey), signature: await signProof({ signer, proof: 'key-box', parts: boxParts({ account, name, body, savedAt }) }), savedAt }
   },
 
-  async boxIsMine({ account, name, box }: { account: Account; name: string; box: { body: string; by?: string; signature?: string; savedAt?: string } }): Promise<boolean> {
+  async boxIsMine({ account, room = account, name, box }: { account: Account; room?: Room; name: string; box: { body: string; by?: string; signature?: string; savedAt?: string } }): Promise<boolean> {
     const by = toBase64((await accountDevice(fromBase64(account.key))).publicKey)
     const { signature } = box
     if (box.by !== by || !signature) return false
     const signed = (savedAt?: number) => checkProof({ device: by, proof: 'key-box', parts: boxParts({ account, name, body: box.body, savedAt }), signature })
     if (!(box.savedAt && await signed(Date.parse(box.savedAt))) && !await signed()) return false
     if (name === 'kit' || name === 'kit-confirmed') return true
-    const plain = await unlock({ keys: { 1: fromBase64(account.key) }, bind: bind({ sub: account.sub, name: `workspace/${account.workspace.id}` }), locked: fromBase64(box.body) })
-    return Boolean(plain && equal({ a: plain, b: await secretOf({ room: account, own: true }) }))
+    const plain = await unlock({ keys: { 1: fromBase64(account.key) }, bind: bind({ sub: account.sub, name: `workspace/${room.workspace.id}` }), locked: fromBase64(box.body) })
+    return Boolean(plain && equal({ a: plain, b: await boxedSecret({ account, room }) }))
   },
 
   setKit: async (kit: { box: string; savedAt: string; confirmed?: boolean } | undefined): Promise<void> => keyStore.write({ ...await keyStore.read(), kit }),
@@ -108,11 +109,16 @@ export const keysService = {
     const current = await keyStore.read()
     if (!current.locked) return null
     const { sub, email } = current.locked
-    for (const workspace of workspaces) {
-      const account = await restoreFrom({ key, workspace, sub, email, device: current.device })
-      if (account) return account
+    let account: Account | null = null
+    for (const workspace of workspaces) account ??= await restoreFrom({ key, workspace, sub, email, device: current.device })
+    if (!account) return null
+    const home = account.workspace.id
+    const teams: Room[] = []
+    for (const workspace of workspaces.filter((each) => each.id !== home)) {
+      const team = await restoreTeam({ key, workspace, sub, email, device: current.device })
+      if (team) teams.push(team)
     }
-    return null
+    return teams.length ? { ...account, teams } : account
   },
 
   adopt: async ({ account, kit, moves }: { account: Account; kit?: { box: string; savedAt: string }; moves?: Move[] }): Promise<void> => keyStore.write({ device: (await keyStore.read()).device, machine, account, kit, moves, session: stored()?.session }),
@@ -266,15 +272,37 @@ async function restoreFrom({ key, workspace, sub, email, device }: { key: Bytes;
   const { chain } = workspace
   const plain = await unlock({ keys: { 1: key }, bind: bind({ sub, name: `workspace/${workspace.id}` }), locked: fromBase64(workspace.key) })
   const secret = plain && readSecret(plain)
-  const body = secret && chain[0] && await check({ anchor: secret.anchor, chain })
+  const body = secret && !secret.team && chain[0] && await check({ anchor: secret.anchor, chain })
   const last = chain.at(-1)
   if (!secret || !body || !last || body.workspace !== workspace.id) return null
   const me = toBase64((await identity(fromBase64(device))).publicKey)
   const at = Date.now()
   const members = body.members.map((member) => member.email === email && !member.devices.includes(me) ? { ...member, devices: [...member.devices, me] } : member)
   const list = await signList({ signer: await accountDevice(key), body: { ...body, version: body.version + 1, previous: await anchorOf(last), members, at, added: { ...body.added, [me]: at }, names: { ...body.names, [me]: deviceName() } } })
-  const { anchor: _anchor, ...keys } = secret
+  const { anchor: _anchor, team: _team, ...keys } = secret
   return { sub, email, key: toBase64(key), workspace: { id: workspace.id, ...keys }, list, first: chain[0] }
+}
+
+async function restoreTeam({ key, workspace, sub, email, device }: { key: Bytes; workspace: Boxed; sub: string; email: string; device: string }): Promise<Room | null> {
+  const { chain } = workspace
+  const plain = await unlock({ keys: { 1: key }, bind: bind({ sub, name: `workspace/${workspace.id}` }), locked: fromBase64(workspace.key) })
+  const secret = plain && readSecret(plain)
+  const body = secret?.team && chain[0] && await check({ anchor: secret.anchor, chain })
+  const last = chain.at(-1)
+  const signer = await accountDevice(key)
+  const mine = body ? body.members.find((member) => member.email === email) : undefined
+  if (!secret || !body || !last || !chain[0] || body.workspace !== workspace.id || !mine?.devices.includes(toBase64(signer.publicKey))) return null
+  const me = toBase64((await identity(fromBase64(device))).publicKey)
+  const base = await nextOf({ list: last, body })
+  const fresh = !mine.devices.includes(me)
+  const members = body.members.map((member) => member === mine && fresh ? { ...member, devices: [...member.devices, me] } : member)
+  const list = await signList({ signer, body: { ...base, members, ...fresh && { added: { ...body.added, [me]: base.at ?? 0 }, names: { ...body.names, [me]: deviceName() } } } })
+  const { anchor: _anchor, team: _team, ...keys } = secret
+  return { workspace: { id: workspace.id, ...keys }, list, first: chain[0] }
+}
+
+async function boxedSecret({ account, room }: { account: Account; room: Room }): Promise<Bytes> {
+  return secretOf({ room, own: true, team: room.workspace.id !== account.workspace.id })
 }
 
 export async function sealTo({ to, purpose, workspace, plain }: { to: string; purpose: LetterPurpose; workspace: string; plain: Bytes }): Promise<Sent> {

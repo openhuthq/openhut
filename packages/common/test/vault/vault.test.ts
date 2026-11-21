@@ -294,3 +294,14 @@ test('a device shows 4 words from its key: the same key gives the same words, an
   assert.notDeepEqual(await vault.deviceWords(b), words)
   assert.deepEqual(await vault.deviceWords(new Uint8Array(32)), ['bird', 'flush', 'salmon', 'gesture'])
 })
+
+test('an invite letter locks with a key from the link secret: the vector matches, and another secret or workspace opens nothing', async (t) => {
+  const { secret, workspace, nonce, key, plain, locked } = v1.invite
+  assert.equal(hex(vault.fromBase64(await vault.slot({ key: bytes(secret), path: 'invite' }))), key)
+  fixRandom(t, bytes(nonce))
+  assert.equal(hex(must(await vault.lockInvite({ secret: bytes(secret), workspace, plain: bytes(plain) }))), locked)
+  t.mock.restoreAll()
+  assert.equal(hex(must(await vault.openInvite({ secret: bytes(secret), workspace, locked: bytes(locked) }))), plain)
+  assert.equal(await vault.openInvite({ secret: vault.newKey(), workspace, locked: bytes(locked) }), null)
+  assert.equal(await vault.openInvite({ secret: bytes(secret), workspace: 'ws_00000002', locked: bytes(locked) }), null)
+})

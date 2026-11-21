@@ -22,7 +22,7 @@ import { ChannelRows } from '@/features/agents/channels'
 import { Face } from '@/features/agents/face'
 import { useMove } from '@/features/agents/move'
 import { RoutinesRow } from '@/features/routines/routines-dialog'
-import { useWorkspaces, workspaceName } from '@/features/cloud/workspaces'
+import { useWorkspaces } from '@/features/cloud/workspaces'
 import { ModelRows } from '@/features/agents/model-rows'
 import { AgentStatus } from '@/features/agents/status'
 import { HERE } from '@/features/settings/desktop'
@@ -185,16 +185,13 @@ function Access({ agent }: { agent: Agent }) {
   if (!workspace || (home?.computer ?? 'local') !== 'local') return null
   const mine = !agent.owner || agent.owner === email
   const pick = (shared: boolean) => update.mutate({ shared }, { onError: toastError })
-  return <>
-    <DropdownMenu>
+  return <DropdownMenu>
       <DropdownMenuTrigger className={ROW} disabled={update.isPending}><I icon={agent.shared ? UserGroupIcon : SquareLock02Icon} size={15} className="text-mute" />Access<span className={VALUE}>{agent.shared ? 'Shared' : 'Private'}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
       <MenuCard title={`Who can use ${agent.name}`}>
         <Choice icon={<I icon={SquareLock02Icon} size={15} />} name="Private" note="Only you" selected={!agent.shared} disabled={!agent.shared || !mine} onClick={() => pick(false)} />
-        <Choice icon={<I icon={UserGroupIcon} size={15} />} name="Shared" note={`Everyone in ${workspaceName(workspace)} can use and edit it`} selected={agent.shared} disabled={agent.shared || !agent.canManage} onClick={() => pick(true)} />
+        <Choice icon={<I icon={UserGroupIcon} size={15} />} name="Shared" note={`Everyone in ${workspace.name} can use and edit it`} selected={agent.shared} disabled={agent.shared || !agent.canManage} onClick={() => pick(true)} />
       </MenuCard>
     </DropdownMenu>
-    <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{agent.shared ? `Locked with ${workspaceName(workspace)}’s key. Only its people’s devices can read it.` : 'Locked with your own key. Only your devices can read it.'}</p>
-  </>
 }
 
 function noteOf({ agent, computers, id }: { agent: Agent; computers: Computer[] | undefined; id: string }): string {

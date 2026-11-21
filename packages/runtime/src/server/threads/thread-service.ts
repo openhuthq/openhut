@@ -165,8 +165,12 @@ export const threadService = {
     return [...saved.filter((each) => !streaming.some((open) => open.message.id === each.message.id)), ...streaming]
   },
 
+  async agentOfMessage({ id, value }: { id: string; value: MessageValue | null }): Promise<string> {
+    return value?.agentId ?? (await db.selectFrom('thread').select('agent_id').where('messages', 'like', `%"${id}"%`).executeTakeFirst())?.agent_id ?? ''
+  },
+
   async applySynced({ id, value }: { id: string; value: MessageValue | null }): Promise<void> {
-    const agentId = value?.agentId ?? (await db.selectFrom('thread').select('agent_id').where('messages', 'like', `%"${id}"%`).executeTakeFirst())?.agent_id ?? ''
+    const agentId = await threadService.agentOfMessage({ id, value })
     const agent = await db.selectFrom('agent').selectAll().where('id', '=', agentId).executeTakeFirst()
     const owner = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirst()
     if (!agent || !owner) return
