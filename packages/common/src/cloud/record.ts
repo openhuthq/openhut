@@ -48,7 +48,7 @@ export const HeadValue = z.object({
 })
 export type HeadValue = z.infer<typeof HeadValue>
 
-export const MessageValue = z.object({ agentId: AgentId, message: ChatMessage })
+export const MessageValue = z.object({ agentId: AgentId, message: ChatMessage, after: z.optional(z.string().check(z.maxLength(100))) })
 export type MessageValue = z.infer<typeof MessageValue>
 
 export const MemoryValue = z.object({ agentId: AgentId, notes: MemoryText, people: MemoryText })
