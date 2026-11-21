@@ -313,7 +313,7 @@ export async function secretOf({ room, own, team = false }: { room: Room; own: b
 function withRoom(current: Stored, room: Room): Stored {
   const account = current.account
   if (!account) return current
-  if (room.workspace.id === account.workspace.id) return { ...current, account: { ...account, ...room } }
+  if (room.workspace.id === account.workspace.id) return { ...current, account: { ...account, workspace: room.workspace, list: room.list, first: room.first ?? account.first } }
   return { ...current, account: { ...account, teams: [...(account.teams ?? []).filter((each) => each.workspace.id !== room.workspace.id), room] } }
 }
 

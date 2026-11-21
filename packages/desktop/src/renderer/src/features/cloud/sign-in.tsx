@@ -10,6 +10,8 @@ import { Creature } from '@/components/creature'
 import { Hut } from '@/components/hut'
 import { I, PILL } from '@/components/kit'
 import { useCloud, useNewKit, useSignIn } from '@/features/cloud/api'
+import { HERE } from '@/features/settings/desktop'
+import { shortDate } from '@/lib/format'
 import { open } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import team from './team.png'
@@ -66,13 +68,17 @@ function Features() {
 }
 
 export function SaveKit() {
-  const kit = useCloud().data?.kit
+  const cloud = useCloud().data
+  const kit = cloud?.kit
+  const saved = Boolean(kit && !kit.differs)
+  const young = cloud?.youngUntil
   const make = useNewKit()
   const [shown, setShown] = useState<RecoveryKit>()
+  const [replaced, setReplaced] = useState(false)
   const [checking, setChecking] = useState(false)
-  const create = () => make.mutate(undefined, { onSuccess: (made) => { download(made); setShown(made) }, onError: toastError })
+  const create = () => make.mutate(undefined, { onSuccess: (made) => { download(made); setReplaced(Boolean(kit)); setShown(made) }, onError: toastError })
   if (shown && checking) return <ConfirmKit kit={shown} onBack={() => setChecking(false)} onDone={() => open()} />
-  if (shown) return <KitWords kit={shown} onSaved={() => setChecking(true)} />
+  if (shown) return <KitWords kit={shown} replaced={replaced} onSaved={() => setChecking(true)} />
   return <Dialog size="narrow" label="Save a way back in" dismissable={false} onClose={() => open()}>
     <DialogHead title="Save a way back in" />
     <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
@@ -80,12 +86,13 @@ export function SaveKit() {
       <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
         <div className="flex items-center gap-3 px-4 py-3.5">
           <Mascot kind="kit" size={24} />
-          <span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Recovery kit</span><span className="text-[12px] text-mute">{kit ? 'Saved. Keep it offline.' : '12 words. Keep them offline.'}</span></span>
-          <Button type="button" variant="secondary" className={PILL} disabled={make.isPending} onClick={create}>{kit ? 'Make a new kit' : 'Download'}</Button>
+          <span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Recovery kit</span><span className="text-[12px] text-mute">{saved ? 'Saved. Keep it offline.' : '12 words. Keep them offline.'}</span></span>
+          {!young && <Button type="button" variant="secondary" className={PILL} disabled={make.isPending} onClick={create}>{saved ? 'Make a new kit' : 'Download'}</Button>}
         </div>
       </div>
+      {young && <p className="m-0 text-[12px] text-mute">This {HERE} was added less than 3 days ago, so it can’t make a kit yet. Make one from an older device, or wait until {shortDate.format(new Date(young))}.</p>}
     </div>
-    <DialogFoot start={<span className="text-[12px] text-mute">{kit ? 'You can get back in on a new Mac.' : 'Save it to continue.'}</span>}><Button type="button" variant="primary" disabled={!kit} onClick={() => open()}>Continue</Button></DialogFoot>
+    <DialogFoot start={<span className="text-[12px] text-mute">{(saved || !young) && (saved ? 'You can get back in on a new Mac.' : 'Save it to continue.')}</span>}><Button type="button" variant="primary" disabled={!saved && !young} onClick={() => open()}>Continue</Button></DialogFoot>
   </Dialog>
 }
 
@@ -99,11 +106,12 @@ function download(kit: RecoveryKit) {
   URL.revokeObjectURL(link.href)
 }
 
-function KitWords({ kit, onSaved }: { kit: RecoveryKit; onSaved: () => void }) {
+function KitWords({ kit, replaced, onSaved }: { kit: RecoveryKit; replaced: boolean; onSaved: () => void }) {
   return <Dialog size="narrow" label="Save your recovery words" onClose={() => open()}>
     <DialogHead title="Save your recovery words" onClose={() => open()} />
     <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
       <p className="m-0 text-body">They unlock your cloud on a new Mac. We can't reset them.</p>
+      {replaced && <p className="m-0 font-medium text-ink">Your old recovery words stop working now.</p>}
       <div className="grid grid-cols-3 gap-2">{kit.words.map((word, index) => <span key={index} className="flex items-center gap-2 rounded-lg border border-hair bg-card px-3 py-2 font-mono text-[13px]"><span className="w-4 text-right text-[11px] text-mute">{index + 1}</span>{word}</span>)}</div>
     </div>
     <DialogFoot start={<CopyButton text={numbered(kit)} label="Copy" />}><Button type="button" variant="primary" onClick={onSaved}>I saved them</Button></DialogFoot>
