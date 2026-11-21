@@ -20,6 +20,7 @@ export const memoryService = {
 
   async update({ actor, agentId, patch }: { actor: Caller; agentId: string; patch: UpdateMemory }): Promise<Memory> {
     await agentService.requireEditable({ actor, id: agentId })
+    if (!(await agentService.get({ actor, id: agentId })).runsHere) throw new HttpError(409, 'This agent runs on your other computer, so its memory changes there.')
     const current = await memoryService.get({ actor, agentId })
     for (const target of TARGETS) {
       const entries = patch[target]?.map((entry) => entry.trim())
@@ -39,7 +40,7 @@ export const memoryService = {
     for (const id of agentIds) {
       const notes = await agentd.read({ id, path: FILE.notes })
       const people = await agentd.read({ id, path: FILE.people })
-      values.push({ agentId: id, notes: notes?.toString('utf8') ?? null, people: people?.toString('utf8') ?? null })
+      if (notes?.length || people?.length) values.push({ agentId: id, notes: notes?.toString('utf8') ?? null, people: people?.toString('utf8') ?? null })
     }
     return values
   },
@@ -47,7 +48,7 @@ export const memoryService = {
   async applySynced(value: MemoryValue): Promise<void> {
     for (const target of TARGETS) {
       const text = value[target]
-      if (text !== null) await agentd.write({ id: value.agentId, path: FILE[target], body: text })
+      if (text !== null) await agentd.write({ id: value.agentId, path: FILE[target], body: text, create: true })
     }
     emit({ name: 'memory.synced', target: { type: 'memory', id: value.agentId } })
   },

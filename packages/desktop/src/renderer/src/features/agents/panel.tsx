@@ -13,7 +13,9 @@ import { ConfirmDialog, useConfirming } from '@/components/confirm-button'
 import { Choice, DialogCard, DRAG, GLASS, HOVER, I, MenuCard, PILL, ROW, ROW_VALUE, Section, TINY_ICON } from '@/components/kit'
 import { agentPath, type AgentDialog } from '@/app/routes'
 import { useAgents, useChannels, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
+import type { Computer } from '@openhut/client'
 import { nameOf, runsOnNote, useComputers, useFeatures } from '@/features/computers/api'
+import { ChangedBy, useChangedByOther } from '@/features/cloud/live'
 import { CanUse } from '@/features/agents/agent-connections'
 import { BrowserPreview } from '@/features/agents/browser'
 import { ChannelRows } from '@/features/agents/channels'
@@ -34,6 +36,8 @@ import { cn } from '@/lib/utils'
 const VALUE = ROW_VALUE
 
 export function Panel({ agent, naming, watching }: { agent: Agent; naming: boolean; watching: boolean }) {
+  const memory = useMemoryCount(agent)
+  const skills = useSkills(agent.id).data?.length
   return <aside className={cn('still flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] phone:w-full phone:flex-1 phone:border-l-0 border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
     <div className={cn('flex items-center gap-3', DRAG)}>
       {agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="relative shrink-0">
@@ -49,8 +53,10 @@ export function Panel({ agent, naming, watching }: { agent: Agent; naming: boole
       <ModelRows agent={agent} />
       <RunsOn agent={agent} />
       <Access agent={agent} />
-      <Counted agent={agent} dialog="memory" icon={AiBrain01Icon} title="Memory" value={useMemoryCount(agent)} />
-      <Counted agent={agent} dialog="skills" icon={BookOpen01Icon} title="Skills" value={useSkills(agent.id).data?.length} />
+      {agent.runsHere && <>
+        <Counted agent={agent} dialog="memory" icon={AiBrain01Icon} title="Memory" value={memory} />
+        <Counted agent={agent} dialog="skills" icon={BookOpen01Icon} title="Skills" value={skills} />
+      </>}
       <RoutinesRow agent={agent} />
     </div>
     <BrowserRows agent={agent} watching={watching} />
@@ -149,11 +155,15 @@ function RunsOn({ agent }: { agent: Agent }) {
   const id = home?.computer ?? 'local'
   const live = home?.online ?? true
   const move = useMove(home)
+  const update = useUpdateAgent(agent.id)
   return <>
     <DropdownMenu>
-      <DropdownMenuTrigger className={ROW} disabled={!!move.going}><I icon={LaptopIcon} size={15} className="text-mute" />Runs on<span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="truncate">{agent.runsHere ? nameOf({ computers, id }) : 'Another computer'}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
+      <DropdownMenuTrigger className={ROW} disabled={!!move.going}><I icon={LaptopIcon} size={15} className="text-mute" />Runs on<span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="truncate">{agent.runsHere ? nameOf({ computers, id }) : elsewhereOf(agent)}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
       <MenuCard title={`${agent.name} runs on`}>
-        {(computers ?? []).map((computer) => <Choice key={computer.id} icon={<I icon={computer.id === 'local' ? LaptopIcon : ServerStack01Icon} size={15} />} name={computer.id === id ? computer.name : `Move to ${computer.name}`}
+        {!agent.runsHere && <Choice icon={<I icon={LaptopIcon} size={15} />} name={elsewhereOf(agent)} selected disabled />}
+        {(computers ?? []).map((computer) => !agent.runsHere && computer.id === id
+          ? <Choice key={computer.id} icon={<I icon={LaptopIcon} size={15} />} name="Run it here" disabled={!agent.canEdit || update.isPending} onClick={() => update.mutate({ runsHere: true }, { onError: toastError })} />
+          : <Choice key={computer.id} icon={<I icon={computer.id === 'local' ? LaptopIcon : ServerStack01Icon} size={15} />} name={computer.id === id ? computer.name : `Move to ${computer.name}`}
           note={runsOnNote(computer)}
           selected={computer.id === id} disabled={computer.id === id || !computer.online || !agent.canEdit || !agent.canManage} onClick={() => move.go(computer.id)} />)}
         <DropdownMenuSeparator />
@@ -162,7 +172,7 @@ function RunsOn({ agent }: { agent: Agent }) {
     </DropdownMenu>
     {move.line
       ? <p role="status" className="m-0 px-2.5 py-1 text-[12.5px]/[1.45] text-body">{move.line}</p>
-      : <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{!agent.runsHere ? 'Runs on your other computer; its chats and memory sync here.' : id !== 'local' ? `Runs in its own sandbox on ${nameOf({ computers, id })}.` : WORDS.sandboxed ? `Runs in its own sandbox on this ${HERE}.` : `Runs as you, like any app on this ${HERE}.`}</p>}
+      : <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{noteOf({ agent, computers, id })}</p>}
     {id === 'local' && !WORDS.sandboxed && <TeamHint agent={agent} server={(computers ?? []).find((each) => each.id !== 'local' && each.online)} onMove={(to) => move.go(to)} />}
   </>
 }
@@ -185,6 +195,18 @@ function Access({ agent }: { agent: Agent }) {
     </DropdownMenu>
     <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{agent.shared ? `Locked with ${workspaceName(workspace)}’s key. Only its people’s devices can read it.` : 'Locked with your own key. Only your devices can read it.'}</p>
   </>
+}
+
+function noteOf({ agent, computers, id }: { agent: Agent; computers: Computer[] | undefined; id: string }): string {
+  if (agent.runsNowhere) return 'No computer runs it now. Run it here to start it.'
+  if (!agent.runsHere) return 'Runs on your other computer. Chats sync here.'
+  if (id !== 'local') return `Runs in its own sandbox on ${nameOf({ computers, id })}.`
+  if (WORDS.sandboxed) return `Runs in its own sandbox on this ${HERE}.`
+  return `Runs as you, like any app on this ${HERE}.`
+}
+
+function elsewhereOf(agent: Agent): string {
+  return agent.runsNowhere ? 'No computer' : 'Another computer'
 }
 
 function TeamHint({ agent, server, onMove }: { agent: Agent; server: { id: string; name: string } | undefined; onMove: (to: string) => void }) {
@@ -226,6 +248,7 @@ function AgentName({ agent, editing }: { agent: Agent; editing: boolean }) {
 
 export function DoesDialog({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const updateAgent = useUpdateAgent(agent.id)
+  const changedByOther = useChangedByOther(agent.changedBy)
   return <DialogCard onClose={onClose} className="w-[560px]">
     <form className="contents" onSubmit={(event) => updateAgent.mutate({ instructions: formValues(event)('instructions') }, { onSuccess: onClose })}>
       <div className="flex items-center gap-3"><Face agent={agent} size={40} /><DialogTitle className="text-[18px] font-semibold">What {agent.name} does</DialogTitle></div>
@@ -233,7 +256,7 @@ export function DoesDialog({ agent, onClose }: { agent: Agent; onClose: () => vo
         className="min-h-[220px] rounded-lg font-sans text-[14px]/[1.55]" />
       {updateAgent.error && <p role="alert" className="m-0 text-xs text-fail">{updateAgent.error.message}</p>}
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 text-[13px] text-mute"><I icon={SparklesIcon} size={13} />{agent.changedBy ? `Last changed by ${agent.changedBy}.` : `Plain words are fine. ${agent.name} reads this before every reply.`}</span>
+        <span className="inline-flex items-center gap-1.5 text-[13px] text-mute"><I icon={SparklesIcon} size={13} />{agent.changedBy && changedByOther ? <ChangedBy email={agent.changedBy} /> : `Plain words are fine. ${agent.name} reads this before every reply.`}</span>
         <span className="ml-auto flex gap-2"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" variant="primary" disabled={!agent.canEdit || updateAgent.isPending}>Save</Button></span>
       </div>
     </form>

@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto'
 import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
 import { CloudWorkspace, parseJson, Record, type Backup } from '@openhut/common/cloud/cloud.ts'
-import { openRecord, sealRecord, SYNCED, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
-import { fromBase64, readHeader, slot } from '@openhut/common/vault/vault.ts'
+import { FileValue, openRecord, sealRecord, SYNCED, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
+import { fromBase64, readHeader, slot, toBase64 } from '@openhut/common/vault/vault.ts'
+import { agentService } from '../agents/agent-service.ts'
 import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
 import { listen, log } from '../platform/events.ts'
@@ -18,11 +19,13 @@ const RETRY_MAX_MS = 60_000
 const HEAD_MS = 2000
 const HEAD = 'head'
 const DELETED = 'deleted'
+const DROPPED = 'dropped'
 const SEQ = 'cloud_seq'
 const HERE = process.platform === 'darwin' ? 'Mac' : 'computer'
 const KEPT = [401, 409, 429]
 const TOMBSTONED: Synced[] = ['agent', 'message', 'connection']
 const FIRST: Synced[] = ['connection', 'setting', 'agent']
+const IDLE: Backup = { state: 'idle', done: 0, total: 0, current: null, at: null, agent: null, problem: null }
 const KINDS_OF: [RegExp, Synced[]][] = [
   [/^agent\./, ['agent', 'message', 'memory', 'file']],
   [/^(setting|provider|admin)\./, ['setting']],
@@ -37,7 +40,7 @@ const Message = z.discriminatedUnion('type', [
 ])
 
 type Item = Local & { id: string }
-type Row = Omit<Local, 'value' | 'wire' | 'owner'> & { id: string; ver: number; hash: string }
+type Row = { id: string; kind: string; ref: string; ver: number; hash: string; signer: string | null; agent_id: string | null }
 type Sent = 'sent' | 'later' | 'refused'
 type State = {
   ws: string; home: boolean; socket: ReconnectingWebSocket | undefined; ready: boolean; timer: NodeJS.Timeout | undefined; headTimer: NodeJS.Timeout | undefined; keyTimer?: NodeJS.Timeout; failures: number
@@ -46,7 +49,7 @@ type State = {
 
 let queue: Promise<void> = Promise.resolve()
 const states = new Map<string, State>()
-const backup: Backup = { state: 'idle', done: 0, total: 0, current: null, at: null, agent: null, problem: null }
+const backup: Backup = { ...IDLE }
 
 listen((event) => {
   const kinds = KINDS_OF.find(([pattern]) => pattern.test(event.name))?.[1]
@@ -76,7 +79,7 @@ export const syncService = {
       await db.deleteFrom('cloud_record').execute()
       await db.deleteFrom('install_setting').where('name', 'like', `${SEQ}%`).execute()
     })
-    Object.assign(backup, { state: restoring ? 'restoring' : 'idle', done: 0, total: 0, current: null, at: null, agent: null, problem: null })
+    Object.assign(backup, IDLE, { state: restoring ? 'restoring' : 'idle' })
   },
 
   ready: (): boolean => homeState()?.ready ?? false,
@@ -189,6 +192,7 @@ async function applyAll(s: State, all: Record[]): Promise<void> {
   if (!ctx) return
   const rows = await rowsById(s)
   const opened: [Record, Opened][] = []
+  const dropped: Record[] = []
   let records = all
   for (const [index, record] of all.entries()) {
     if ((rows.get(record.id)?.ver ?? 0) >= record.ver) continue
@@ -205,7 +209,7 @@ async function applyAll(s: State, all: Record[]): Promise<void> {
     }
     const open = await openSafely({ s, record, ctx })
     if (open) opened.push([record, open])
-    else log.warn({ event: 'cloud.record_dropped', record: record.id, seq: record.seq })
+    else dropped.push(record)
   }
   const after = await contextOf(s) ?? ctx
   if (!after) return
@@ -213,26 +217,44 @@ async function applyAll(s: State, all: Record[]): Promise<void> {
   const restoring = s.backup.state === 'restoring'
   if (restoring) Object.assign(s.backup, { done: 0, total: opened.filter(([, open]) => open.kind === 'agent' && open.value).length })
   const expected = new Map<string, unknown>()
+  const applied: [Record, Opened][] = []
   for (const [record, open] of opened) {
+    if (!open.hidden && !(await syncKinds.allowed({ open, ctx: after, row: rows.get(record.id) }))) {
+      dropped.push(record)
+      continue
+    }
     if (open.kind === 'agent' && open.value) s.backup.current = open.value.name
-    const applied = open.hidden ? syncKinds.hide({ open, ctx: after }) : syncKinds.apply({ open, ctx: after })
-    expected.set(record.id, await applied.catch((err: unknown) => log.warn({ event: 'cloud.apply_failed', record: record.id, error: messageOf(err) })))
+    if (open.kind === 'file' && !open.hidden) await saveRow(s, { ...rowOf({ record, open }), hash: DROPPED })
+    const applying = open.hidden ? syncKinds.hide({ open, ctx: after }) : syncKinds.apply({ open, ctx: after })
+    expected.set(record.id, await applying.catch((err: unknown) => log.warn({ event: 'cloud.apply_failed', record: record.id, error: messageOf(err) })))
+    applied.push([record, open])
     if (restoring && open.kind === 'agent' && open.value) Object.assign(s.backup, { done: s.backup.done + 1, agent: open.ref })
   }
   const locals = new Map<Synced, Map<string, Item>>()
-  for (const kind of new Set(opened.map(([, open]) => open.kind))) {
+  for (const kind of new Set(applied.map(([, open]) => open.kind))) {
     const mine = kind !== 'file' ? await localsOf({ s, kind, ctx: after }).catch(() => null) : null
     locals.set(kind, new Map((mine ?? []).map((each) => [each.id, each])))
   }
-  for (const [record, open] of opened) {
-    const local = open.kind === 'file' ? { value: expected.get(record.id) ?? null, owner: open.owner } : locals.get(open.kind)?.get(record.id)
-    await saveRow(s, { id: record.id, kind: open.kind, ref: open.ref, ver: record.ver, hash: open.hidden ? DELETED : hashItem(local ?? { value: null }) })
+  for (const [record, open] of applied.filter(([, each]) => each.kind !== 'file' || each.hidden)) {
+    const local = locals.get(open.kind)?.get(record.id)
+    await saveRow(s, { ...rowOf({ record, open }), hash: open.hidden ? DELETED : hashItem(local ?? { value: null }) })
   }
+  for (const record of dropped) {
+    const row = rows.get(record.id)
+    log.warn({ event: 'cloud.record_dropped', record: record.id, seq: record.seq })
+    await saveRow(s, { id: record.id, kind: row?.kind ?? DROPPED, ref: row?.ref ?? '', ver: record.ver, hash: DROPPED, signer: row?.signer ?? null, agent_id: row?.agent_id ?? null })
+  }
+  if (dropped.length) send(s)
   const head = opened.map(([, open]) => open).find((open) => open.kind === 'head')
   if ((restoring || s.wanted) && head?.kind === 'head' && head.value) s.wanted = head.value.records
   if (s.wanted) await checkHead(s, s.wanted)
   const last = records.at(-1)
   if (last && last.seq > await seqOf(s)) await db.insertInto('install_setting').values({ name: seqName(s), value: String(last.seq) }).onConflict((oc) => oc.column('name').doUpdateSet({ value: String(last.seq) })).execute()
+}
+
+function rowOf({ record, open }: { record: Record; open: Opened }): Omit<Row, 'hash'> {
+  const agentId = open.value && 'agentId' in open.value ? open.value.agentId : null
+  return { id: record.id, kind: open.kind, ref: open.ref, ver: record.ver, signer: open.by, agent_id: agentId }
 }
 
 async function openSafely({ s, record, ctx }: { s: State; record: Record; ctx: Context }): Promise<Opened | null> {
@@ -294,16 +316,30 @@ function nameOf(item: Item): string {
 
 async function unsent({ s, kinds, ctx }: { s: State; kinds: Synced[]; ctx: Context }): Promise<Item[]> {
   const rows = await rowsById(s)
+  const me = toBase64(ctx.me.publicKey)
+  const runners = new Map(kinds.includes('message') ? (await agentService.synced({ workspace: ctx.home ? null : ctx.workspace, owner: ctx.email })).map((agent) => [agent.id, agent.runsOn]) : [])
   const changed: Item[] = []
   for (const kind of kinds) {
     const mine = await localsOf({ s, kind, ctx }).catch((err: unknown) => { log.warn({ event: 'cloud.locals_failed', kind, error: messageOf(err) }) })
     if (!mine) continue
     const ids = new Set(mine.map((each) => each.id))
     for (const [id, each] of s.refused) if (each.kind === kind && !ids.has(id)) s.refused.delete(id)
-    const gone = TOMBSTONED.includes(kind) ? [...rows.values()].filter((row) => row.kind === kind && row.hash !== DELETED && !ids.has(row.id)).map((row) => ({ ...row, value: null })) : []
-    changed.push(...[...mine, ...gone].filter((each) => ![rows.get(each.id)?.hash, s.refused.get(each.id)?.hash].includes(hashItem(each))))
+    const gone: Item[] = TOMBSTONED.includes(kind) ? [...rows.values()].filter((row) => row.kind === kind && row.hash !== DELETED && !ids.has(row.id)).map((row) => ({ id: row.id, kind, ref: row.ref, value: null, agentId: row.agent_id ?? undefined })) : []
+    for (const each of [...mine, ...gone]) {
+      const row = rows.get(each.id)
+      const runsHere = each.agentId !== undefined && runners.get(each.agentId) === me
+      if (kind === 'message' && !writable({ item: each, row, me, runsHere, live: each.agentId === undefined || runners.has(each.agentId) })) continue
+      const resign = kind === 'message' && each.assistant && runsHere && !!row && row.signer !== me
+      if (resign || ![row?.hash, s.refused.get(each.id)?.hash].includes(hashItem(each))) changed.push(each)
+    }
   }
   return changed
+}
+
+function writable({ item, row, me, runsHere, live }: { item: Item; row: Row | undefined; me: string; runsHere: boolean; live: boolean }): boolean {
+  if (item.value === null) return live && (!row?.signer || row.signer === me || runsHere)
+  if (item.assistant) return runsHere
+  return !row?.signer || row.signer === me
 }
 
 async function writeHead(s: State): Promise<void> {
@@ -311,7 +347,7 @@ async function writeHead(s: State): Promise<void> {
   if (!s.ready || !ctx) return
   const rows = await rowsById(s)
   const id = await slot({ key: ctx.slotKey, path: `${HEAD}/${HEAD}` })
-  const records = [...rows.values()].filter((row) => row.kind !== HEAD && row.hash !== DELETED).map((row): [string, number] => [row.id, row.ver])
+  const records = [...rows.values()].filter((row) => row.kind !== HEAD && row.hash !== DELETED && row.hash !== DROPPED).map((row): [string, number] => [row.id, row.ver])
   await put({ s, item: { id, kind: HEAD, ref: HEAD, value: { records } }, ver: (rows.get(id)?.ver ?? 0) + 1, ctx }).catch((err: unknown) => log.warn({ event: 'cloud.head_failed', error: messageOf(err) }))
 }
 
@@ -322,20 +358,20 @@ async function put({ s, item, ver, ctx }: { s: State; item: Item; ver: number; c
   const own = item.owner && ctx.own && item.value !== null ? { key: ctx.own, email: item.owner } : undefined
   const sealed = await sealRecord({ workspace: ctx.workspace, key: ctx.key, version: ctx.version, signer: ctx.me, id: item.id, ver, kind: item.kind, ref: item.ref, value, own })
   if (!sealed) return 'refused'
-  const reply = await room(s, { method: 'PUT', path: `/records/${item.id}`, body: sealed })
+  const file = item.kind === 'file' ? FileValue.safeParse(value).data?.blob : undefined
+  const reply = await room(s, { method: 'PUT', path: `/records/${item.id}`, body: { ...sealed, file } })
   if (reply.status === 409) {
     await catchUp(s)
     return 'sent'
   }
   if (reply.status >= 400 && reply.status < 500 && !KEPT.includes(reply.status)) return 'refused'
   if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud refused a backup (HTTP ${reply.status}).`)
-  await saveRow(s, { id: item.id, kind: item.kind, ref: item.ref, ver, hash: hashItem(item) })
+  await saveRow(s, { id: item.id, kind: item.kind, ref: item.ref, ver, hash: hashItem(item), signer: toBase64(ctx.me.publicKey), agent_id: item.agentId ?? null })
   return 'sent'
 }
 
 async function localsOf({ s, kind, ctx }: { s: State; kind: Synced; ctx: Context }): Promise<Item[] | null> {
-  const role = roomKeys.roleIn(s.ws)
-  const items = await syncKinds.locals({ kind, admin: Boolean(role && role !== 'member'), ctx })
+  const items = await syncKinds.locals({ kind, ctx })
   return items && Promise.all(items.map(async (item) => ({ ...item, id: await slot({ key: ctx.slotKey, path: `${item.kind}/${item.ref}` }) })))
 }
 
@@ -347,12 +383,17 @@ async function contextOf(s: State): Promise<Context | null> {
   const signer = await keysService.accountDeviceKey()
   const runtimes = s.home ? members.filter((member) => member.role !== 'member').flatMap((member) => member.devices).filter((device) => device !== signer) : []
   const { id: workspace, key, version, old, slot: slotKey } = found.workspace
+  const role = roomKeys.roleIn(s.ws)
   const keys = Object.fromEntries([...Object.entries(old ?? {}), [String(version), key]].map(([each, value]) => [Number(each), fromBase64(value)]))
   return {
     workspace, home: s.home, key: fromBase64(key), version, keys, slotKey: fromBase64(slotKey ?? key), me: await keysService.device(), members, runtimes, own: await roomKeys.own(s.ws), email: account.email,
+    admin: Boolean(role && role !== 'member'),
     putFile: async ({ hash, body }) => cloud.putFile({ workspace, hash, body, token: await keysService.token() }),
     getFile: async (hash) => cloud.getFile({ workspace, hash, token: await keysService.token() }),
     again: () => send(s, ['file']),
+    landed: ({ kind, ref, value, owner }) => void run(async () => {
+      await db.updateTable('cloud_record').set({ hash: hashItem({ value, owner }) }).where('workspace', '=', rowKey(s)).where('id', '=', await slot({ key: fromBase64(slotKey ?? key), path: `${kind}/${ref}` })).execute()
+    }),
   }
 }
 
@@ -373,8 +414,8 @@ async function room(s: State, { method, path, body }: { method: 'GET' | 'PUT' | 
 }
 
 async function rowsById(s: State): Promise<Map<string, Row>> {
-  const rows = await db.selectFrom('cloud_record').select(['id', 'kind', 'ref', 'ver', 'hash']).where('workspace', '=', rowKey(s)).execute()
-  return new Map(rows.map((row) => [row.id, { ...row, kind: row.kind as Synced }]))
+  const rows = await db.selectFrom('cloud_record').select(['id', 'kind', 'ref', 'ver', 'hash', 'signer', 'agent_id']).where('workspace', '=', rowKey(s)).execute()
+  return new Map(rows.map((row) => [row.id, row]))
 }
 
 async function saveRow(s: State, row: Row): Promise<void> {
@@ -395,9 +436,9 @@ async function seqOf(s: State): Promise<number> {
 }
 
 function hashItem(item: { value: unknown; owner?: string }): string {
-  return item.owner && item.value !== null ? hashOf([item.owner, item.value]) : hashOf(item.value)
+  return item.owner && item.value !== null ? fingerprint([item.owner, item.value]) : fingerprint(item.value)
 }
 
-function hashOf(value: unknown): string {
+function fingerprint(value: unknown): string {
   return value === null ? DELETED : createHash('sha256').update(JSON.stringify(value)).digest('base64url')
 }

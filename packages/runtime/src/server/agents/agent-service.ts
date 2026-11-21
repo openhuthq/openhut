@@ -184,16 +184,24 @@ export const agentService = {
     return rows.map((row) => ({ id: row.id, name: row.name, instructions: row.instructions, model: row.model, face: row.face, codeExecution: row.code_execution, wanted: row.wanted, runsOn: row.runs_on ?? me, shared: row.shared, owner: row.owner ?? owner }))
   },
 
+  async placement({ id }: { id: string }): Promise<{ runsOn: string; codeExecution: boolean; owner: string | null } | undefined> {
+    const row = await db.selectFrom('agent').select(['runs_on', 'code_execution', 'owner']).where('id', '=', id).executeTakeFirst()
+    return row && { runsOn: row.runs_on ?? await keysService.deviceKey(), codeExecution: row.code_execution, owner: row.owner }
+  },
+
   async applySynced({ id, value, by, author, workspace, me }: { id: string; value: AgentValue | null; by: string | null; author?: { email: string; role: string }; workspace?: string | null; me?: string }): Promise<void> {
-    const row = await db.selectFrom('agent').select(['id', 'instructions', 'changed_by', 'owner', 'runs_on', 'code_execution']).where('id', '=', id).executeTakeFirst()
+    const row = await db.selectFrom('agent').select(['id', 'instructions', 'changed_by', 'owner', 'runs_on', 'code_execution', 'workspace']).where('id', '=', id).executeTakeFirst()
     const limited = row && author?.role === 'member' && (row.owner ?? me) !== author.email
     if (!value) {
       if (limited) return
+      const chats = await db.selectFrom('thread').selectAll().where('agent_id', '=', id).execute()
+      if (row && chats.length) await agentd.write({ id, path: 'home/uploads/openhut-chats.json', body: JSON.stringify(chats) }).catch((err: unknown) => log.warn({ event: 'agent.chats_not_kept', agent: id, error: messageOf(err) }))
       if (row) await agentd.remove({ id, trash: true })
       await db.deleteFrom('agent').where('id', '=', id).execute()
       return emit({ name: 'agent.synced', target: { type: 'agent', id } })
     }
-    const kept = limited ? { runs_on: row.runs_on, code_execution: row.code_execution, owner: row.owner } : { runs_on: value.runsOn ?? null, code_execution: value.codeExecution, owner: value.owner && value.owner !== me ? value.owner : null }
+    const unassigned = !!row?.runs_on && !listed({ device: row.runs_on, workspace: row.workspace })
+    const kept = limited ? { runs_on: unassigned ? value.runsOn ?? null : row.runs_on, code_execution: row.code_execution, owner: row.owner } : { runs_on: value.runsOn ?? null, code_execution: value.codeExecution, owner: value.owner && value.owner !== me ? value.owner : null }
     const changedBy = !row || row.instructions !== value.instructions ? by : row.changed_by
     const fields = { name: value.name, instructions: value.instructions, model: value.model, face: value.face, wanted: value.wanted, shared: Boolean(value.shared), changed_by: changedBy, ...kept, ...workspace !== undefined && { workspace } }
     if (row) await db.updateTable('agent').set(fields).where('id', '=', id).execute()
@@ -398,6 +406,10 @@ async function meIfNeeded(rows: AgentRow[]): Promise<string | null> {
   return rows.some((row) => row.runs_on) ? keysService.deviceKey() : null
 }
 
+function listed({ device, workspace }: { device: string; workspace: string | null }): boolean {
+  return roomKeys.members(workspace ?? undefined)?.members.some((member) => member.devices.includes(device)) ?? true
+}
+
 export function runsHere({ row, me }: { row: Pick<AgentRow, 'runs_on'>; me: string | null }): boolean {
   return !row.runs_on || row.runs_on === me
 }
@@ -417,7 +429,7 @@ function requireRole({ row, patch }: { row: AgentRow; patch: UpdateAgent }): voi
 function agentOf({ row, ownerName, state, health, editable, here }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean; here: boolean }): Agent {
   return {
     id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, wanted: row.wanted,
-    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, browser: row.web_browser, face: row.face, canEdit: editable, runsHere: here, changedBy: row.changed_by,
+    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, browser: row.web_browser, face: row.face, canEdit: editable, runsHere: here, runsNowhere: !here && !!row.runs_on && !listed({ device: row.runs_on, workspace: row.workspace }), changedBy: row.changed_by,
     workspace: row.workspace, shared: row.shared, owner: row.owner, canManage: canManage(row), createdAt: new Date(row.created_at).toISOString(),
   }
 }

@@ -61,6 +61,19 @@ test('a delete that came by sync keeps the agent in a 30-day trash; old trash is
   assert.equal((await call({ cmd: 'ps' })).states?.[id], undefined)
 })
 
+test('sync may create the two memory files on a fresh home; any other write still needs the file to exist', async () => {
+  const id = 'ag_freshmem'
+  assert.equal((await call({ cmd: 'apply', id, net: 4, files: FILES, browser: false, running: false })).ok, true)
+  const notes = Buffer.from('Lena prefers email.').toString('base64')
+  assert.equal((await call({ cmd: 'write', id, path: 'memories/MEMORY.md' }, notes)).ok, false)
+  assert.equal((await call({ cmd: 'write', id, path: 'memories/MEMORY.md', create: true }, notes)).ok, true)
+  assert.equal((await call({ cmd: 'read', id, path: 'memories/MEMORY.md' })).body, notes)
+  assert.equal((await call({ cmd: 'write', id, path: 'memories/OTHER.md', create: true }, notes)).ok, false)
+  const again = Buffer.from('Lena prefers phone.').toString('base64')
+  assert.equal((await call({ cmd: 'write', id, path: 'memories/MEMORY.md', create: true }, again)).ok, true)
+  assert.equal((await call({ cmd: 'read', id, path: 'memories/MEMORY.md' })).body, again)
+})
+
 test('apply brings the sandbox to what was asked: created, started, left alone, restarted, stopped', async () => {
   const id = 'ag_applyst1'
   const apply = (more: object) => call({ cmd: 'apply', id, net: 2, files: FILES, browser: false, ...more })
@@ -104,9 +117,9 @@ async function holding(id: string): Promise<Socket> {
   return view
 }
 
-async function call(request: object): Promise<{ ok: boolean; change?: string; error?: string; states?: Record<string, string> }> {
+async function call(request: object, body?: string): Promise<{ ok: boolean; change?: string; error?: string; states?: Record<string, string>; body?: string | null }> {
   const client = connect(sock)
-  client.end(`${JSON.stringify(request)}\n`)
+  client.end(`${JSON.stringify(request)}\n${body === undefined ? '' : `${body}\n`}`)
   let reply = ''
   for await (const chunk of client) reply += chunk
   return JSON.parse(reply)

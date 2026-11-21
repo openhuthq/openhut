@@ -64,7 +64,10 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Deploy cloud.openhut.dev
-        run: npm --prefix private/cloud run deploy
+        run: |
+          cd private/cloud
+          npx wrangler r2 bucket info openhut-files > /dev/null 2>&1 || npx wrangler r2 bucket create openhut-files
+          npm run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Check that openhut.dev serves this release

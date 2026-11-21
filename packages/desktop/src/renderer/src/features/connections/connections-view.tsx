@@ -13,6 +13,7 @@ import { Glyph } from '@/components/glyph'
 import { Loaded } from '@/components/loaded'
 import { useAgents } from '@/features/agents/api'
 import { nameOf, useComputers } from '@/features/computers/api'
+import { ChangedBy, useChangedByOther } from '@/features/cloud/live'
 import { useConnections } from '@/features/connections/api'
 import { SHELVES, integration, titleOf } from '@/features/connections/catalog'
 import { ConnectSheet, useQuickConnect } from '@/features/connections/connect-sheets'
@@ -87,11 +88,12 @@ function Sheet({ me, id, kind, connected }: { me: Me; id: string; kind: string; 
 }
 
 function Row({ connection, agents, computers }: { connection: OpenHutConnection; agents: OpenHutAgent[]; computers: Computer[] | undefined }) {
+  const changedByOther = useChangedByOther(connection.changedBy)
   return <Item size="sm" className={cn('py-2.5', !connection.usable && 'opacity-60')}>
     <a href={`/connections/${connection.id}`} className="flex min-w-0 flex-1 items-center gap-3 text-ink no-underline">
       <Glyph name={connection.kind} size={26} />
       <ItemContent stacked><ItemTitle className="flex items-center gap-2">{connection.name}{connection.kind === 'postgres' && <Badge variant="tag">read-only</Badge>}{connection.status === 'failing' && <Badge variant="warning">failing</Badge>}</ItemTitle>
-        <ItemDescription className="text-[13px]">{[titleOf(connection.kind), connection.account, connection.changedBy && `changed by ${connection.changedBy}`, !connection.keyHere && 'key on your admins’ computers'].filter(Boolean).join(' · ')}</ItemDescription></ItemContent>
+        <ItemDescription className="flex flex-wrap items-center gap-x-1.5 text-[13px]">{[titleOf(connection.kind), connection.account, !connection.keyHere && 'Key on an admin’s computer'].filter(Boolean).join(' · ')}{connection.changedBy && changedByOther && <><span aria-hidden>·</span><ChangedBy email={connection.changedBy} /></>}</ItemDescription></ItemContent>
       {computers && <span className="flex shrink-0 flex-wrap gap-1">{connection.computers.map((copy) => <span key={copy.computer} title={copy.online ? undefined : 'Offline'}
         className={cn('inline-flex h-5 items-center gap-1 rounded-md bg-soft px-1.5 text-[11.5px]', copy.online ? 'text-ink' : 'text-mute-2')}><i className={cn('size-1.5 rounded-full', copy.online ? 'bg-pass' : 'bg-mute-2')} />{nameOf({ computers, id: copy.computer })}</span>)}</span>}
     </a>

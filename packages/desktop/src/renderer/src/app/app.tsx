@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { routeOf } from '@/app/routes'
 import { Shell, type ShellRoute } from '@/app/shell'
-import { OfflineChip, useJoinRuntimes } from '@/features/cloud/live'
+import { useJoinRuntimes } from '@/features/cloud/live'
 import { CloudGate } from '@/features/cloud/unlock'
 import { ConnectionsView } from '@/features/connections/connections-view'
 import { FirstRun } from '@/features/first-run/first-run'
@@ -47,7 +47,6 @@ function Dashboard() {
     <Shell route={route.page === 'settings' || route.page === 'connections' ? background.current.route : route} overlay={route.page === 'settings' || route.page === 'connections' ? route.page : undefined} />
     {route.page === 'settings' && <SettingsView tab={route.tab} onClose={close} />}
     {route.page === 'connections' && <ConnectionsView onClose={close} />}
-    <OfflineChip />
     <JoinRuntimes />
     {opened === 'join-link' && <JoinLinkDialog />}
   </CloudGate>

@@ -25,8 +25,8 @@ export const agentd = {
     const { body } = await ask({ request: { cmd: 'read', id, path }, doing: 'read the file', schema: z.object({ body: z.nullable(z.string()) }) })
     return body === null ? null : Buffer.from(body, 'base64')
   },
-  write: ({ id, path, body }: { id: string; path: string; body: Buffer | string }) =>
-    ask({ request: { cmd: 'write', id, path }, body: Buffer.from(body).toString('base64'), doing: 'save the file in the agent\'s home', schema: z.object({ path: z.string() }) }),
+  write: ({ id, path, body, create }: { id: string; path: string; body: Buffer | string; create?: boolean }) =>
+    ask({ request: { cmd: 'write', id, path, create }, body: Buffer.from(body).toString('base64'), doing: 'save the file in the agent\'s home', schema: z.object({ path: z.string() }) }),
   delete: ({ id, paths }: { id: string; paths: string[] }) => ask({ request: { cmd: 'delete', id, paths }, doing: 'delete the files', schema: z.object({ removed: z.array(z.string()) }) }),
   stat: ({ id, paths }: { id: string; paths: string[] }) => ask({ request: { cmd: 'stat', id, paths }, doing: 'look for the files', schema: z.object({ files: z.array(z.object({ path: z.string(), size: z.number() })) }) }),
   exportHome: ({ id }: { id: string }) => ask({ request: { cmd: 'home-export', id }, doing: 'pack the agent\'s home', schema: z.object({ tar: z.string() }) }),
