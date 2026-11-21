@@ -137,7 +137,7 @@ export const threadService = {
     const abort = new AbortController()
     reply.raw.on('close', () => abort.abort())
     const started = Date.now()
-    const answer: MessageValue = { agentId: agent.id, message: { id: newId('msg'), role: 'assistant', parts: [] } }
+    const answer: MessageValue = { agentId: agent.id, message: { id: newId('msg'), role: 'assistant', parts: [] }, after: messages.at(-1)?.id }
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         writer.write({ type: 'start', messageId: answer.message.id })
@@ -161,7 +161,7 @@ export const threadService = {
 
   async synced(): Promise<MessageValue[]> {
     const rows = await db.selectFrom('thread').select(['id', 'agent_id', 'messages']).orderBy('created_at').execute()
-    const saved = rows.flatMap((row) => (z.safeParse(StoredMessages, parseJson(row.messages)).data ?? []).map((message) => ({ agentId: row.agent_id, message })))
+    const saved = rows.flatMap((row) => (z.safeParse(StoredMessages, parseJson(row.messages)).data ?? []).map((message, index, all) => ({ agentId: row.agent_id, message, after: message.role === 'assistant' ? all[index - 1]?.id : undefined })))
     const streaming = [...live.values()]
     return [...saved.filter((each) => !streaming.some((open) => open.message.id === each.message.id)), ...streaming]
   },
@@ -179,7 +179,7 @@ export const threadService = {
     if (!found && !value) return
     const thread = found?.id ?? (await db.insertInto('thread').values({ id: newId('th'), agent_id: agentId, person_id: owner.id, title: agent.name }).returning('id').executeTakeFirstOrThrow()).id
     const stored = await storedOf(thread)
-    const messages = value ? merged({ stored, added: [authored({ message: value.message, author: value.message.role === 'user' ? author : null })], later }) : stored.filter((message) => message.id !== id)
+    const messages = value ? merged({ stored, added: [authored({ message: value.message, author: value.message.role === 'user' ? author : null })], after: value.after, later }) : stored.filter((message) => message.id !== id)
     await save({ id: thread, messages })
     const asks = value?.message.role === 'user' && messages.at(-1)?.id === value.message.id && agent.wanted === 'running'
     if (asks && runsHere({ row: agent, me: await keysService.deviceKey() })) void answerFor({ thread, agent }).catch((err: unknown) => log.warn({ event: 'thread.answer_failed', thread, error: messageOf(err) }))
@@ -218,6 +218,7 @@ async function answerFor({ thread, agent }: { thread: string; agent: AgentRow })
     const stored = await storedOf(thread)
     asked = stored.at(-1)?.role === 'user' ? stored.at(-1)?.id : undefined
     if (!asked) return
+    answer.after = asked
     await relay({ agent, session: `openhut-${thread}`, message: together({ messages: stored, shared: agent.shared }), signal: AbortSignal.timeout(TURN_MS), writer: { write: (chunk) => track({ thread, answer, chunk }) } })
   } finally {
     live.delete(thread)

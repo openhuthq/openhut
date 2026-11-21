@@ -296,15 +296,16 @@ test('a streamed reply arrives in the room in order, as one record growing versi
   await sleep(800)
   hermes.close()
   await app.close()
-  const said: { ver: number; text: string }[] = []
+  const said: { ver: number; text: string; after?: string }[] = []
   for (const record of room.log.slice(from)) {
     const opened = await openRecord({ workspace, keys: { 1: key }, record, members })
-    if (opened?.kind === 'message' && opened.value?.message.role === 'assistant') said.push({ ver: record.ver, text: opened.value.message.parts.map((part) => String(part.text ?? '')).join('') })
+    if (opened?.kind === 'message' && opened.value?.message.role === 'assistant') said.push({ ver: record.ver, text: opened.value.message.parts.map((part) => String(part.text ?? '')).join(''), after: opened.value.after })
   }
   assert.ok(said.length >= 3, `the reply went out in ${said.length} steps`)
   assert.deepEqual(said.map((each) => each.ver), said.map((_, i) => i + 1))
   for (let i = 1; i < said.length; i++) assert.ok(said[i].text.startsWith(said[i - 1].text), `step ${i} grows the one before`)
   assert.equal(said.at(-1)?.text, 'Order 4471 shipped Monday.')
+  assert.ok(said.every((each) => each.after === 'msg_question'), 'every step names the question it answers')
 })
 
 test('a connection key round-trips sealed to this runtime’s device key and is never written unlocked', async () => {
@@ -348,6 +349,34 @@ test('a restore applies an agent before its messages, even when the agent was ed
     const thread = await db.selectFrom('thread').select('messages').where('agent_id', '=', late.id).executeTakeFirst()
     return Boolean(thread?.messages.includes('Before the rename'))
   }, 'the earlier message to land in the agent’s thread')
+})
+
+test('a fresh restore orders a chat as the live Macs do: an answer rewritten after a later question, or re-signed after Forget, stays under its question', async () => {
+  const agent = { ...helpdesk('Ordered'), id: 'ag_ordered1' }
+  const put = async ({ kind, ref, value }: { kind: 'agent' | 'message'; ref: string; value: unknown }) => {
+    const id = await slot({ key, path: `${kind}/${ref}` })
+    const sealed = await sealRecord({ workspace, key, version: 1, signer: me, id, ver: (room.records.get(id)?.ver ?? 0) + 1, kind, ref, value })
+    assert.ok(sealed)
+    return store({ id, ...sealed })
+  }
+  const message = ({ id, role, after }: { id: string; role: 'user' | 'assistant'; after?: string }) => put({ kind: 'message', ref: id, value: { agentId: agent.id, message: { id, role, parts: [{ type: 'text', text: id }] }, after } })
+  const from = room.seq
+  await put({ kind: 'agent', ref: agent.id, value: agent })
+  await message({ id: 'msg_ordq1', role: 'user' })
+  await message({ id: 'msg_ordr1', role: 'assistant', after: 'msg_ordq1' })
+  await message({ id: 'msg_ordq2', role: 'user' })
+  await message({ id: 'msg_ordr2', role: 'assistant', after: 'msg_ordq2' })
+  await message({ id: 'msg_ordr1', role: 'assistant', after: 'msg_ordq1' })
+  await message({ id: 'msg_ordr2', role: 'assistant', after: 'msg_ordq2' })
+  await message({ id: 'msg_ordq4', role: 'user' })
+  await message({ id: 'msg_ordr4', role: 'assistant', after: 'msg_ordq4' })
+  await message({ id: 'msg_ordq5', role: 'user' })
+  await message({ id: 'msg_ordr4', role: 'assistant', after: 'msg_ordq4' })
+  await message({ id: 'msg_ordr5', role: 'assistant', after: 'msg_ordq5' })
+  for (const record of [...room.records.values()].filter((each) => each.seq > from).sort((a, b) => a.seq - b.seq)) push(record)
+  const order = async () => (JSON.parse((await db.selectFrom('thread').select('messages').where('agent_id', '=', agent.id).executeTakeFirst())?.messages ?? '[]') as { id: string }[]).map((each) => each.id)
+  await until(async () => (await order()).length === 8, 'every restored message to land')
+  assert.deepEqual(await order(), ['msg_ordq1', 'msg_ordr1', 'msg_ordq2', 'msg_ordr2', 'msg_ordq4', 'msg_ordr4', 'msg_ordq5', 'msg_ordr5'])
 })
 
 test('a member who isn’t the owner gets no readable Private agent; flipping to Shared makes it readable for everyone', async () => {
