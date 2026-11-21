@@ -38,7 +38,10 @@ export const roomKeys = {
     if (!current.account || !room || !lists.length) return null
     const body = await check({ anchor: await anchorOf(room.list), chain: [room.list, ...lists] })
     const last = lists.at(-1)
-    if (body && last) await keyStore.write(withRoom(current, { ...room, list: last }))
+    const now = keyStore.current()
+    const fresh = roomKeys.room(room.workspace.id)
+    if (!body || !last || !now || !fresh || fresh.list.bytes !== room.list.bytes) return null
+    await keyStore.write(withRoom(now, { workspace: fresh.workspace, list: last, first: fresh.first }))
     return body
   },
 
@@ -113,7 +116,12 @@ export const roomKeys = {
       else if ((secret && secret.version > keyVersionOf(body)) || (kit && !body.removed.includes(kit))) continue
       done.push(each.id)
     }
-    if (done.length) await keyStore.write({ ...withRoom({ ...current, account }, room), kit: account.key === current.account?.key ? current.kit : undefined })
+    const now = keyStore.current()
+    const fresh = roomKeys.room(room.workspace.id)
+    if (!done.length || !now?.account || !fresh || now.account.sub !== account.sub) return done
+    const key = account.key === current.account?.key ? now.account.key : account.key
+    const workspace = fresh.workspace.version > room.workspace.version ? fresh.workspace : room.workspace
+    await keyStore.write({ ...withRoom({ ...now, account: { ...now.account, key } }, { workspace, list: fresh.list, first: fresh.first }), kit: key === now.account.key ? now.kit : undefined })
     return done
   },
 
