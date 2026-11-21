@@ -178,6 +178,21 @@ handle('computers.dismiss', ({ dns } = {}) => { enrollments.delete(dns); shareEn
 handle('devices.list', answer(() => openhut.access.list()))
 handle('devices.remove', answer(({ key } = {}) => openhut.access.remove(String(key))))
 handle('devices.allow', answer(allow))
+handle('passkey.status', () => passkey(['status']))
+handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
+handle('passkey.open', () => passkey(['open']))
+
+function passkey(args) {
+  const helper = join(app.isPackaged ? join(process.resourcesPath, 'passkey') : join(HERE, '..', 'native', 'passkey', 'build'), 'OpenHut Passkey.app', 'Contents', 'MacOS', 'passkey')
+  if (process.platform !== 'darwin' || !existsSync(helper)) return { error: 'missing' }
+  return new Promise((resolve) => execFile(helper, args, { timeout: 180_000 }, (_error, stdout) => {
+    try {
+      resolve(JSON.parse(String(stdout)))
+    } catch {
+      resolve({ error: 'failed' })
+    }
+  }))
+}
 ipcMain.on('browser-live', (event, path) => void relayLive({ port: event.ports[0], path: fromApp(event) ? path : '' }))
 
 function owner() {

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { Device } from '@openhut/client'
 import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
-import { CloudDevices } from '@/features/cloud/cloud'
+import { AddMac, CloudDevices } from '@/features/cloud/cloud'
 import { I, PILL } from '@/components/kit'
 import { QrCode } from '@/features/agents/qr-code'
 import { useDevices, useRemoveDevice } from '@/features/settings/api'
@@ -19,6 +19,7 @@ export function DevicesSettings() {
   return <>
     <DeviceList />
     {useOpen() === 'add-phone' && <AddPhone />}
+    {useOpen() === 'add-mac' && <AddMac />}
   </>
 }
 
@@ -30,7 +31,7 @@ function DeviceList() {
     <Rows>
       {devices.data?.filter((device) => !device.self).map((device) => <DeviceRow key={device.key} device={device} mine={device.key === mine} />)}
       {!isPhone() && <Row onClick={() => open('add-phone')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a phone" note={`Scan a code with the OpenHut app. Works when this ${HERE} is asleep too.`}><Chevron /></Row>}
-      {!isPhone() && <CloudDevices />}
+      <CloudDevices />
     </Rows>
     <ErrorNote message={devices.error?.message} />
   </>

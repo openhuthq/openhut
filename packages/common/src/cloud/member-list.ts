@@ -4,6 +4,7 @@ import { check as checkSignature, concat, fromBase64, sha256, sign, toBase64, ty
 type Link = { list: MemberList; body: MemberListBody }
 
 const LABEL = new TextEncoder().encode('openhut/member-list\0')
+export const YOUNG_MS = 3 * 24 * 60 * 60_000
 
 export async function signList({ signer, body }: { signer: Identity; body: MemberListBody }): Promise<MemberList> {
   const bytes = new TextEncoder().encode(JSON.stringify(MemberListBody.safeParse(body).data ?? body))
@@ -45,7 +46,7 @@ async function follows({ previous, next }: { previous: Link; next: Link }): Prom
   const a = previous.body
   const b = next.body
   if (b.workspace !== a.workspace || b.version !== a.version + 1 || b.previous !== (await anchorOf(previous.list))) return false
-  if (!wellFormed(b) || keyVersionOf(b) < keyVersionOf(a)) return false
+  if (!wellFormed(b) || keyVersionOf(b) < keyVersionOf(a) || !dated({ previous: a, next: b })) return false
   const by = next.list.by
   if (runtimesOf(a).includes(by) || !runtimesOf(a).every((key) => runtimesOf(b).includes(key) || !devicesOf(b).includes(key))) return false
   const invite = a.invites.find((each) => each.key === by)
@@ -54,6 +55,8 @@ async function follows({ previous, next }: { previous: Link; next: Link }): Prom
   if (signer?.role !== 'owner' && signer?.role !== 'admin' && keyVersionOf(b) !== keyVersionOf(a)) return false
   if (invite) return joins({ previous: a, next: b, invite })
   if (!signer) return false
+  if (youngRemovesOlder({ previous: a, next: b, by })) return false
+  if (signer.kit === by) return kitAdds({ previous: a, next: b, signer })
   if (signer.role === 'owner') return true
   if (signer.role === 'admin') return same(ownerOf(a), ownerOf(b))
   return changesOnlySelf({ previous: a, next: b, signer })
@@ -65,6 +68,29 @@ function joins({ previous, next, invite }: { previous: MemberListBody; next: Mem
   if (joined.role !== invite.role || joined.devices.length !== 1 || half(joined.devices[0]) === half(invite.key)) return false
   const others = next.members.filter((member) => member !== joined)
   return same(others, previous.members) && same(next.invites, previous.invites.filter((each) => each !== invite))
+}
+
+function dated({ previous: a, next: b }: { previous: MemberListBody; next: MemberListBody }): boolean {
+  if (a.at !== undefined && (b.at === undefined || b.at < a.at)) return false
+  const fresh = devicesOf(b).filter((key) => !devicesOf(a).includes(key))
+  return devicesOf(a).filter((key) => devicesOf(b).includes(key)).every((key) => addedOf(b, key) === addedOf(a, key)) && fresh.every((key) => b.added?.[key] === b.at)
+}
+
+function youngRemovesOlder({ previous: a, next: b, by }: { previous: MemberListBody; next: MemberListBody; by: string }): boolean {
+  const since = addedOf(a, by)
+  const dropped = devicesOf(a).filter((key) => !devicesOf(b).includes(key))
+  return since > 0 && (b.at ?? 0) - since < YOUNG_MS && dropped.some((key) => addedOf(a, key) < since)
+}
+
+function kitAdds({ previous: a, next: b, signer }: { previous: MemberListBody; next: MemberListBody; signer: Member }): boolean {
+  const fresh = b.members.find((member) => member.email === signer.email)?.devices.filter((key) => !signer.devices.includes(key)) ?? []
+  const expected = { ...a, members: a.members.map((member) => member === signer ? { ...member, devices: [...member.devices, ...fresh] } : member) }
+  const rest = ({ version: _v, previous: _p, at: _at, added: _added, ...body }: MemberListBody) => body
+  return fresh.length === 1 && same(rest(expected), rest(b))
+}
+
+export function addedOf(body: MemberListBody, key: string): number {
+  return body.added?.[key] ?? 0
 }
 
 function changesOnlySelf({ previous, next, signer }: { previous: MemberListBody; next: MemberListBody; signer: Member }): boolean {
@@ -86,7 +112,9 @@ function tracksRemoved({ previous, next, owner }: { previous: MemberListBody; ne
 function wellFormed(body: MemberListBody): boolean {
   const keys = [...devicesOf(body), ...body.invites.map((each) => each.key), ...body.removed].map(half)
   const owners = body.members.filter((member) => member.role === 'owner')
-  return owners.length === 1 && unique(body.members.map((member) => member.email)) && unique(keys) && runtimesOf(body).every((key) => devicesOf(body).includes(key))
+  const kits = body.members.every((member) => !member.kit || member.devices.includes(member.kit))
+  const added = Object.keys(body.added ?? {}).every((key) => devicesOf(body).includes(key))
+  return owners.length === 1 && kits && added && unique(body.members.map((member) => member.email)) && unique(keys) && runtimesOf(body).every((key) => devicesOf(body).includes(key))
 }
 
 function runtimesOf(body: MemberListBody): string[] {

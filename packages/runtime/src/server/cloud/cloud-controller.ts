@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { AddRuntime, RuntimeInvite, UnlockCloud } from '@openhut/common/cloud/cloud.ts'
+import * as z from 'zod/mini'
+import { AddPasskey, AddRuntime, AllowDevice, DeviceKey, RuntimeInvite, UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { requireSignIn } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
 
@@ -23,9 +24,20 @@ export const cloudController: FastifyPluginAsync = async (app) => {
   app.post<{ Body: AddRuntime }>('/runtimes', AddRuntimeRequest, async (req) => cloudService.addRuntime(req.body))
 
   app.post<{ Body: RuntimeInvite }>('/join', JoinRequest, async (req) => cloudService.join(req.body))
+
+  app.post('/pairings', SignedIn, async () => cloudService.startPairing())
+
+  app.post<{ Body: AllowDevice }>('/devices', AllowRequest, async (req) => cloudService.allow(req.body))
+
+  app.delete<{ Params: { key: string } }>('/devices/:key', NotMeRequest, async (req) => cloudService.notMe({ device: req.params.key }))
+
+  app.post<{ Body: AddPasskey }>('/passkeys', PasskeyRequest, async (req) => cloudService.addPasskey(req.body))
 }
 
 const SignedIn = { onRequest: requireSignIn }
 const UnlockRequest = { onRequest: requireSignIn, schema: { body: UnlockCloud } }
 const AddRuntimeRequest = { onRequest: requireSignIn, schema: { body: AddRuntime } }
 const JoinRequest = { onRequest: requireSignIn, schema: { body: RuntimeInvite } }
+const AllowRequest = { onRequest: requireSignIn, schema: { body: AllowDevice } }
+const NotMeRequest = { onRequest: requireSignIn, schema: { params: z.object({ key: DeviceKey }) } }
+const PasskeyRequest = { onRequest: requireSignIn, schema: { body: AddPasskey } }

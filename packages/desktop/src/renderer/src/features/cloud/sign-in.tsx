@@ -142,9 +142,10 @@ function Smile({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
   </g>
 }
 
-export function Mascot({ kind, size }: { kind: 'kit' | 'backup' | 'sync' | 'team'; size: number }) {
+export function Mascot({ kind, size }: { kind: 'phone' | 'kit' | 'backup' | 'sync' | 'team'; size: number }) {
   const line = { stroke: INK, strokeWidth: 4, strokeLinejoin: 'round' as const }
   return <svg width={size} height={size} viewBox="0 0 100 100" className="shrink-0" aria-hidden>
+    {kind === 'phone' && <><rect x={28} y={10} width={44} height={80} rx={11} fill="#19B3B1" {...line} /><rect x={35} y={20} width={30} height={54} rx={5} fill="#fbe3c8" /><Smile x={50} y={45} /><circle cx={50} cy={82} r={2.5} fill={INK} /></>}
     {kind === 'kit' && <><rect x={18} y={20} width={50} height={62} rx={7} fill="#fbe3c8" {...line} /><Smile x={43} y={42} /><path d="M30 62h26M30 70h18" stroke={INK} strokeWidth={3} strokeLinecap="round" opacity={0.35} /><circle cx={74} cy={38} r={10} fill="#f7c948" {...line} /><path d="M74 48v28m0-8h7m-7-8h6" stroke={INK} strokeWidth={4} strokeLinecap="round" fill="none" /></>}
     {kind === 'backup' && <><path d="M28 74h46a16 16 0 0 0 0-32a22 22 0 0 0-42-4a18 18 0 0 0-4 36z" fill="#fff" {...line} /><Smile x={51} y={56} /></>}
     {kind === 'sync' && <><rect x={12} y={26} width={54} height={38} rx={6} fill="#3d8fdc" {...line} /><rect x={18} y={32} width={42} height={26} rx={3} fill="#fbe3c8" /><Smile x={39} y={45} s={0.8} /><path d="M6 72h66" {...line} strokeLinecap="round" /><rect x={66} y={40} width={24} height={42} rx={6} fill="#19B3B1" {...line} /><Smile x={78} y={60} s={0.55} /></>}
