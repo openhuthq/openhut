@@ -30,6 +30,7 @@ const owner = generateKeyPairSync('ed25519')
 const ownerKey = Buffer.from(owner.publicKey.export({ format: 'jwk' }).x ?? '', 'base64url').toString('hex')
 const phone = generateKeyPair()
 const PHONE = toHex(phone.publicKey)
+const MAC = toHex(generateKeyPair().publicKey)
 const AT = '2026-11-18T09:00:00.000Z'
 const computer = { id: computerId, key: relayKeyHex }
 let release = () => {}
@@ -60,8 +61,8 @@ function signed({ version, clients, computers = [] }: { version: number; clients
   return { ...unsigned, signature: sign(null, Buffer.from(canonical(unsigned)), owner.privateKey).toString('hex') }
 }
 
-await accessService.put({ access: signed({ version: 1, clients: [PHONE], computers: [{ id: computerId, name: 'This Mac', key: relayKeyHex }] }), local: true })
-const served = await relayService.start({ server: app.server })
+await accessService.put({ access: signed({ version: 1, clients: [MAC, PHONE], computers: [{ id: computerId, name: 'This Mac', key: relayKeyHex }] }), local: true })
+await relayService.start({ server: app.server })
 await waitFor(relay.online)
 
 test('a listed device\'s request through the relay reaches the route as the owner, never local, and its body arrives', async () => {
@@ -262,7 +263,7 @@ function viaSocket({ path, url }: { path: string; url: string }): Promise<unknow
 }
 
 test.after(async () => {
-  served?.close()
+  relayService.stop()
   await app.close()
   await relay.close()
 })

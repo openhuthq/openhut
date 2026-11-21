@@ -17,6 +17,7 @@ import type { Caller } from '../team/identity.ts'
 import { accessService } from './access-service.ts'
 
 const LIFETIME_MS = 5 * 60_000
+const RELAY_GRACE_MS = 60_000
 const POLL_MS = 250
 const invitations = new Map<string, Open>()
 const LINK = /#([A-Za-z0-9_-]{8,64})\.([A-Za-z0-9_-]{43})\s*$/
@@ -39,6 +40,10 @@ export const invitationService = {
     for (const [name, value] of [['c', computerId], ['k', relayKeyHex], ['o', owner], ['s', open.secret], ['r', config.relayUrl]]) code.searchParams.set(name, value)
     emit({ name: 'invitation.created', actor, target: { type: 'invitation', id: open.id } })
     return { ...shown(open), code: code.href }
+  },
+
+  waiting(): boolean {
+    return [...invitations.values()].some((open) => Date.now() < open.expiresAt + RELAY_GRACE_MS)
   },
 
   get(id: string): Invitation {

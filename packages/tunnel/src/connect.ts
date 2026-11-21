@@ -58,10 +58,10 @@ function queue<T>() {
   }
 }
 
-export async function connect(input: { relayUrl: string; computer: { id: string; key: string }; key: DeviceKey; invitation?: Invitation; timeout?: number }): Promise<Tunnel> {
+export async function connect(input: { relayUrl: string; computer: { id: string; key: string }; key: DeviceKey; url?: string; invitation?: Invitation; timeout?: number }): Promise<Tunnel> {
   const handshake = initiator({ key: input.key, remote: fromHex(input.computer.key) })
   const first = await handshake.write()
-  const socket = new WebSocket(`${input.relayUrl}/v1/relay/${input.computer.id}?role=device`)
+  const socket = new WebSocket(input.url ?? `${input.relayUrl}/v1/relay/${input.computer.id}?role=device`)
   socket.binaryType = 'arraybuffer'
   const streams = new Map<number, Pending>()
   const sockets = new Map<number, OpenSocket>()
@@ -126,9 +126,13 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
       }
       dispatch(decodeFrame(session.decrypt(bytes)))
     }
-    socket.addEventListener('open', () => socket.send(new Uint8Array(first)))
+    let opened = false
+    socket.addEventListener('open', () => {
+      opened = true
+      socket.send(new Uint8Array(first))
+    })
     const closed = (code: number) => {
-      const offline = code === 4004
+      const offline = code === 4004 || !opened
       const error = new TunnelError({ type: offline ? 'offline' : 'closed', message: offline ? 'The computer is offline.' : 'The tunnel to the computer closed.', code })
       fail(error)
       reject(error)
@@ -140,6 +144,7 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
       inbox = inbox.then(() => receive(data)).catch(() => socket.close())
     })
     socket.addEventListener('close', event => closed(event.code))
+    socket.addEventListener('error', () => { if (!opened) closed(1006) })
     late = setTimeout(() => {
       const error = new TunnelError({ type: 'closed', message: 'The computer didn\'t answer in time.' })
       fail(error)

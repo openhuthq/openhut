@@ -7,16 +7,17 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import WebSocket, { type RawData } from 'ws'
 import * as z from 'zod/mini'
-import { connect, serve, TunnelError, type SocketPeer, type TunnelRequest, type TunnelSocketRequest } from '@openhut/tunnel'
+import { connect, serve, sessions, TunnelError, type Handlers, type SocketPeer, type TunnelRequest, type TunnelSocketRequest } from '@openhut/tunnel'
 import { Access, verify } from '@openhut/common/access/access.ts'
 import { accessService } from '../access/access-service.ts'
 import { invitationService } from '../access/invitation-service.ts'
 import { config } from '../platform/config.ts'
-import { emit, log } from '../platform/events.ts'
+import { emit, listen, log } from '../platform/events.ts'
 import { messageOf } from '../platform/http-error.ts'
 import { computerId, registerToken, relayKey, relayKeyHex } from '../platform/secrets.ts'
 import { settings } from '../platform/settings.ts'
 import { tagDevice } from '../team/identity.ts'
+import { tailnetLink, type TailnetLink } from './tailnet-link.ts'
 
 const NULL_BODY = new Set([204, 205, 304])
 const HOP_BY_HOP = new Set(['connection', 'keep-alive', 'transfer-encoding'])
@@ -25,28 +26,72 @@ const JOIN_WINDOW_MS = 5 * 60_000
 const FIRST_RETRY_MS = 2_000
 const MAX_RETRY_MS = 30_000
 const CLOSED_BY_COMPUTER = 4003
+const SYNC_MS = 60_000
+
+let relay: { close: () => void } | undefined
+let tailnet: TailnetLink | undefined
+let handlers: Handlers | undefined
 
 export const relayService = {
-  async start({ server }: { server: Server }): Promise<{ close: () => void } | undefined> {
-    if (!config.relayUrl) return undefined
-    const served = serve({
-      relayUrl: config.relayUrl,
-      computerId,
-      registerToken,
-      key: relayKey,
+  async start({ server }: { server: Server }): Promise<void> {
+    handlers = {
       device: (key) => accessService.device(key),
       invited: (input) => invitationService.invited(input),
       handle: (input) => handle({ server, ...input }),
       socket: (input) => socket({ server, ...input }),
-    })
+    }
+    if (config.tailnetPort) await listenOnTailnet(handlers)
+    listen(({ name }) => { if (/^(invitation|access)\./.test(name)) relayService.sync() })
+    setInterval(relayService.sync, SYNC_MS).unref()
+    relayService.sync()
     const code = config.join
-    if (code && code !== settings.joinTried()) await settings.setJoinTried(code).then(() => join(code)).catch((err: unknown) => log.error({ event: 'relay.join_failed', reason: messageOf(err) }))
-    return served
+    if (code && config.relayUrl && code !== settings.joinTried()) await settings.setJoinTried(code).then(() => join(code)).catch((err: unknown) => log.error({ event: 'relay.join_failed', reason: messageOf(err) }))
+  },
+
+  sync(): void {
+    if (!handlers || !config.relayUrl) return
+    const wanted = needed()
+    if (wanted && !relay) {
+      relay = serve({ relayUrl: config.relayUrl, computerId, registerToken, key: relayKey, ...handlers })
+      log.info({ event: 'relay.on' })
+    }
+    if (!wanted && relay) {
+      relay.close()
+      relay = undefined
+      log.info({ event: 'relay.off' })
+    }
+  },
+
+  stop(): void {
+    relay?.close()
+    relay = undefined
+    tailnet?.close()
+    tailnet = undefined
+    handlers = undefined
+  },
+
+  state(): { relay: boolean; tailnet: { port: number; open: number } | null } {
+    return { relay: !!relay, tailnet: tailnet?.state() ?? null }
   },
 
   handle,
   socket,
   join,
+}
+
+function needed(): boolean {
+  if (config.join || invitationService.waiting()) return true
+  if (settings.removedClients().length) return true
+  return (settings.access() ? accessService.get().clients.length : 0) > 1
+}
+
+async function listenOnTailnet(input: Handlers): Promise<void> {
+  try {
+    tailnet = await tailnetLink({ host: config.host, port: config.tailnetPort, open: sessions({ ...input, key: relayKey, strangers: 'drop' }) })
+    log.info({ event: 'relay.tailnet_listening', port: config.tailnetPort })
+  } catch (err) {
+    log.error({ event: 'relay.tailnet_failed', port: config.tailnetPort, reason: messageOf(err) })
+  }
 }
 
 async function handle({ server, device, method, path, headers, body }: TunnelRequest & { server: Server }): Promise<Response> {

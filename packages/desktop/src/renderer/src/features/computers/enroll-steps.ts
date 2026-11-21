@@ -31,6 +31,7 @@ export function failureOf({ error, url, name }: { error: string; url: string | n
   if (/another install or update is already running/i.test(text)) return { kind: 'busy', sentence: `${name} is already installing or updating. Try again in a few minutes.` }
   if (url || /login\.tailscale\.com|tailscale (ssh )?(check|auth)/i.test(text)) return { kind: 'approve', sentence: 'Approve the Tailscale sign-in in your browser, then try again.' }
   if (/refused|unreachable|no route to host|could not resolve|timed out|exited with 255/i.test(text)) return { kind: 'unreachable', sentence: `Can't reach ${name} over Tailscale. Check it's on.` }
+  if (/can't reach port|port \d+ is taken|too old to share|didn't open port|didn't say its key|can't find .* on your tailnet/i.test(text)) return { kind: 'other', sentence: sentenceOf(text) }
   if (/didn't answer within/i.test(text)) return { kind: 'silent', sentence: `OpenHut is running on ${name} but it never asked to join. Try again, or copy the details for us.` }
   if (/code expired/i.test(text)) return { kind: 'timeout', sentence: `OpenHut didn't start on ${name}. Try again.` }
   return { kind: 'other', sentence: "Couldn't install OpenHut. Check the computer is on and try again." }
@@ -49,4 +50,9 @@ export function percentOf({ lines, waitingAt, now }: { lines: string[]; waitingA
 export function detailsOf({ enrollment, version }: { enrollment: { peer: { name: string; dns: string }; lines: string[]; error: string; log?: string }; version: string }) {
   const log = enrollment.log ? ['', `${enrollment.peer.name}'s log:`, enrollment.log] : []
   return [`OpenHut ${version} adding ${enrollment.peer.dns}`, ...enrollment.lines.map(clean), enrollment.error, ...log].join('\n')
+}
+
+function sentenceOf(text: string) {
+  const line = text.replace(/^The install stopped: /, '')
+  return `${line.charAt(0).toUpperCase()}${line.slice(1)}`
 }

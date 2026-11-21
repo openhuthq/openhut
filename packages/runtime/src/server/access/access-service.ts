@@ -1,5 +1,6 @@
 import * as z from 'zod/mini'
 import { Access, verify } from '@openhut/common/access/access.ts'
+import { emit } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { settings } from '../platform/settings.ts'
 
@@ -20,6 +21,7 @@ export const accessService = {
     const kept = new Set(access.clients.map((client) => client.key))
     const removed = [...new Set([...settings.removedClients(), ...(now?.clients ?? []).map((client) => client.key)])].filter((key) => !kept.has(key))
     await settings.setAccess({ access: JSON.stringify(access), removed })
+    emit({ name: 'access.updated', target: { type: 'access', id: access.owner, version: access.version } })
     return access
   },
 
