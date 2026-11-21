@@ -70,6 +70,7 @@ const { db, migrate } = await import('../../../src/server/platform/db.ts')
 const { seal } = await import('../../../src/server/platform/secrets.ts')
 const { agentService } = await import('../../../src/server/agents/agent-service.ts')
 const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
+const { roomKeys } = await import('../../../src/server/cloud/room-keys.ts')
 const { syncService } = await import('../../../src/server/cloud/sync-service.ts')
 const { connectionService } = await import('../../../src/server/connections/connection-service.ts')
 const { threadController } = await import('../../../src/server/threads/thread-controller.ts')
@@ -86,7 +87,7 @@ room.lists.push(account.list)
 const workspace = account.workspace.id
 const key = fromBase64(account.workspace.key)
 const helpdeskId = await slot({ key, path: 'agent/ag_helpdesk' })
-const members = keysService.members()?.members ?? []
+const members = roomKeys.members()?.members ?? []
 const me = await keysService.device()
 
 async function until(check: () => boolean | Promise<boolean>, what: string, tries = 300): Promise<void> {
@@ -334,7 +335,7 @@ test('a member who isn’t the owner gets no readable Private agent; flipping to
   const asMember = await openRecord({ workspace, keys: { 1: key }, record: record(), members })
   assert.deepEqual([asMember?.value, asMember?.hidden, asMember?.owner], [null, true, 'mo@example.com'])
   assert.equal(JSON.stringify(record()).includes('Payroll'), false)
-  const own = await keysService.own()
+  const own = await roomKeys.own()
   assert.ok(own)
   const asOwner = await openRecord({ workspace, keys: { 1: key }, record: record(), members, own: { key: own, email: 'mo@example.com' } })
   assert.equal(asOwner?.kind === 'agent' && asOwner.value?.name, 'Payroll')
@@ -351,7 +352,7 @@ test('a member who isn’t the owner gets no readable Private agent; flipping to
 
 test('a record locked with a key this Mac hasn’t taken yet waits at its seq, then applies once the letter with the key arrives', async () => {
   const before = await nameHere()
-  const next = keysService.members()
+  const next = roomKeys.members()
   assert.ok(next)
   const v2 = await signList({ signer: me, body: { ...next, version: next.version + 1, previous: await anchorOf(room.lists.at(-1) as MemberList), at: Math.max(Date.now(), next.at ?? 0), keyVersion: 2 } })
   room.lists.push(v2)

@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto'
 import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
-import { CloudWorkspace, Letter, MemberList, parseJson, Record, type Backup } from '@openhut/common/cloud/cloud.ts'
-import { keyVersionOf } from '@openhut/common/cloud/member-list.ts'
+import { CloudWorkspace, parseJson, Record, type Backup } from '@openhut/common/cloud/cloud.ts'
 import { openRecord, sealRecord, SYNCED, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
 import { fromBase64, readHeader, slot } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
@@ -10,6 +9,7 @@ import { db } from '../platform/db.ts'
 import { listen, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { keysService } from './keys-service.ts'
+import { roomKeys, type Call } from './room-keys.ts'
 import { syncKinds, type Context, type Local } from './sync-kinds.ts'
 
 const THROTTLE_MS = 300
@@ -32,8 +32,6 @@ const KINDS_OF: [RegExp, Synced[]][] = [
   [/^connection\./, ['connection']],
 ]
 const Page = z.object({ data: z.array(Record), hasMore: z.boolean() })
-const Lists = z.object({ data: z.array(MemberList) })
-const Letters = z.object({ data: z.array(Letter) })
 const Message = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready') }), z.object({ type: z.literal('members') }), z.object({ type: z.literal('letter') }), z.object({ type: z.literal('workspace') }), z.object({ type: z.literal('record'), record: Record }),
 ])
@@ -59,7 +57,7 @@ export const syncService = {
   connect(): void {
     const account = keysService.account()
     if (!account || !keysService.session()) return
-    for (const room of keysService.rooms()) if (!states.has(room.workspace.id)) open(room.workspace.id === account.workspace.id, room.workspace.id)
+    for (const room of roomKeys.rooms()) if (!states.has(room.workspace.id)) open(room.workspace.id === account.workspace.id, room.workspace.id)
   },
 
   disconnect(): void {
@@ -99,7 +97,7 @@ export const syncService = {
     if (s) await named(s)
   },
 
-  waiting: (ws: string): boolean => !keysService.room(ws)?.workspace.key,
+  waiting: (ws: string): boolean => !roomKeys.room(ws)?.workspace.key,
 
   settled: (): Promise<void> => queue,
 }
@@ -125,15 +123,11 @@ function open(home: boolean, ws: string): void {
 }
 
 function send(s: State, kinds: readonly Synced[] = SYNCED): void {
-  if (!s.socket) return
   for (const kind of kinds) s.dirty.add(kind)
-  s.timer ??= setTimeout(() => {
-    s.timer = undefined
-    void run(() => flush(s))
-  }, THROTTLE_MS)
+  if (!s.timer) schedule({ s, ms: THROTTLE_MS })
 }
 
-function retry(s: State, ms: number): void {
+function schedule({ s, ms }: { s: State; ms: number }): void {
   if (!s.socket) return
   clearTimeout(s.timer)
   s.timer = setTimeout(() => {
@@ -148,17 +142,15 @@ function heard(s: State, text: string): void {
     s.ready = true
     void run(async () => {
       await named(s)
-      await refreshMembers(s)
-      await rekey(s)
+      await roomKeys.refresh({ ws: s.ws, call: caller(s) })
       await catchUp(s)
     })
     send(s)
   }
   if (message?.type === 'workspace') void run(() => named(s))
   if (message?.type === 'members' || message?.type === 'letter') void run(async () => {
-    const changed = await refreshMembers(s)
     const keyless = syncService.waiting(s.ws)
-    await rekey(s)
+    const { changed } = await roomKeys.refresh({ ws: s.ws, call: caller(s) })
     if (keyless && !syncService.waiting(s.ws)) await catchUp(s)
     if (changed) send(s, keyless ? SYNCED : ['connection'])
   })
@@ -202,8 +194,7 @@ async function applyAll(s: State, all: Record[]): Promise<void> {
     if ((rows.get(record.id)?.ver ?? 0) >= record.ver) continue
     const newer = () => !ctx || (readHeader(fromBase64(record.body))?.version ?? 0) > ctx.version
     if (newer()) {
-      await refreshMembers(s)
-      await rekey(s)
+      await roomKeys.refresh({ ws: s.ws, call: caller(s) })
       ctx = await contextOf(s)
     }
     if (!ctx || newer()) {
@@ -245,8 +236,8 @@ async function applyAll(s: State, all: Record[]): Promise<void> {
 }
 
 async function openSafely({ s, record, ctx }: { s: State; record: Record; ctx: Context }): Promise<Opened | null> {
-  const open = () => openRecord({ workspace: ctx.workspace, keys: ctx.keys, record, members: keysService.members(s.ws)?.members ?? [], own: ctx.own && { key: ctx.own, email: ctx.email } })
-  const opened = await open() ?? (await refreshMembers(s) ? await open() : null)
+  const open = () => openRecord({ workspace: ctx.workspace, keys: ctx.keys, record, members: roomKeys.members(s.ws)?.members ?? [], own: ctx.own && { key: ctx.own, email: ctx.email } })
+  const opened = await open() ?? ((await roomKeys.refresh({ ws: s.ws, call: caller(s) })).changed ? await open() : null)
   return opened && record.id === await slot({ key: ctx.slotKey, path: `${opened.kind}/${opened.ref}` }) ? opened : null
 }
 
@@ -258,7 +249,7 @@ async function checkHead(s: State, records: [string, number][]): Promise<void> {
 }
 
 async function flush(s: State): Promise<void> {
-  if (s.ready && await rekey(s)) return retry(s, RETRY_MS * 2)
+  if (s.ready && await roomKeys.rekey({ ws: s.ws, call: caller(s) })) return schedule({ s, ms: RETRY_MS * 2 })
   const ctx = await contextOf(s)
   if (!s.ready || !ctx) return
   const kinds = SYNCED.filter((kind) => s.dirty.delete(kind))
@@ -287,7 +278,7 @@ async function flush(s: State): Promise<void> {
     for (const kind of kinds) s.dirty.add(kind)
     progress.state = 'failed'
     s.failures++
-    return retry(s, Math.min(RETRY_MAX_MS, RETRY_MS * 2 ** (s.failures - 1)))
+    return schedule({ s, ms: Math.min(RETRY_MAX_MS, RETRY_MS * 2 ** (s.failures - 1)) })
   }
   s.failures = 0
   clearTimeout(s.headTimer)
@@ -343,40 +334,26 @@ async function put({ s, item, ver, ctx }: { s: State; item: Item; ver: number; c
 }
 
 async function localsOf({ s, kind, ctx }: { s: State; kind: Synced; ctx: Context }): Promise<Item[] | null> {
-  const role = keysService.roleIn(s.ws)
+  const role = roomKeys.roleIn(s.ws)
   const items = await syncKinds.locals({ kind, admin: Boolean(role && role !== 'member'), ctx })
   return items && Promise.all(items.map(async (item) => ({ ...item, id: await slot({ key: ctx.slotKey, path: `${item.kind}/${item.ref}` }) })))
 }
 
 async function contextOf(s: State): Promise<Context | null> {
   const account = keysService.account()
-  const found = keysService.room(s.ws)
+  const found = roomKeys.room(s.ws)
   if (!account || !found?.workspace.key) return null
-  const members = keysService.members(s.ws)?.members ?? []
+  const members = roomKeys.members(s.ws)?.members ?? []
   const signer = await keysService.accountDeviceKey()
   const runtimes = s.home ? members.filter((member) => member.role !== 'member').flatMap((member) => member.devices).filter((device) => device !== signer) : []
   const { id: workspace, key, version, old, slot: slotKey } = found.workspace
   const keys = Object.fromEntries([...Object.entries(old ?? {}), [String(version), key]].map(([each, value]) => [Number(each), fromBase64(value)]))
   return {
-    workspace, home: s.home, key: fromBase64(key), version, keys, slotKey: fromBase64(slotKey ?? key), me: await keysService.device(), members, runtimes, own: await keysService.own(s.ws), email: account.email,
+    workspace, home: s.home, key: fromBase64(key), version, keys, slotKey: fromBase64(slotKey ?? key), me: await keysService.device(), members, runtimes, own: await roomKeys.own(s.ws), email: account.email,
     putFile: async ({ hash, body }) => cloud.putFile({ workspace, hash, body, token: await keysService.token() }),
     getFile: async (hash) => cloud.getFile({ workspace, hash, token: await keysService.token() }),
     again: () => send(s, ['file']),
   }
-}
-
-async function rekey(s: State): Promise<boolean> {
-  const behind = async () => {
-    const account = keysService.account()
-    const found = keysService.room(s.ws)
-    const body = keysService.members(s.ws)
-    const kit = s.home ? body?.members.find((member) => member.email === account?.email)?.kit : undefined
-    return Boolean(account && found && body && (keyVersionOf(body) > found.workspace.version || (kit && account.key && kit !== await keysService.accountDeviceKey())))
-  }
-  if (!await behind()) return false
-  const found = Letters.safeParse((await room(s, { method: 'GET', path: '/letters' })).json).data?.data ?? []
-  for (const id of await keysService.takeLetters(found, s.ws)) await room(s, { method: 'DELETE', path: `/letters/${id}` })
-  return behind()
 }
 
 async function checkRemoved(s: State): Promise<void> {
@@ -386,20 +363,8 @@ async function checkRemoved(s: State): Promise<void> {
   await keysService.removedHere()
 }
 
-async function refreshMembers(s: State): Promise<boolean> {
-  const before = keysService.members(s.ws)
-  const reply = await room(s, { method: 'GET', path: `/member-lists?after=${before?.version ?? 0}` })
-  const after = await keysService.advance(Lists.safeParse(reply.json).data?.data ?? [], s.ws)
-  if (before && after) await welcome({ s, before, after })
-  return Boolean(after)
-}
-
-async function welcome({ s, before, after }: { s: State; before: { members: { email: string }[] }; after: { members: { email: string; role: string; devices: string[] }[] } }): Promise<void> {
-  const email = keysService.account()?.email
-  const mine = after.members.find((member) => member.email === email)
-  if (!mine || mine.role === 'member' || !keysService.account()?.key) return
-  const fresh = after.members.filter((member) => member.email !== email && !before.members.some((each) => each.email === member.email)).flatMap((member) => member.devices)
-  for (const letter of await keysService.welcomeLetters({ ws: s.ws, devices: fresh })) await room(s, { method: 'POST', path: '/letters', body: letter })
+function caller(s: State): Call {
+  return (input) => room(s, input)
 }
 
 async function room(s: State, { method, path, body }: { method: 'GET' | 'PUT' | 'POST' | 'DELETE'; path: string; body?: unknown }): Promise<{ status: number; json: unknown }> {

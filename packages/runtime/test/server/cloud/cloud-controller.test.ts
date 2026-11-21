@@ -168,14 +168,14 @@ test('a kit save whose answer is lost stays unconfirmed: never adopted, Forget r
   assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 502)
   seen.dropKit = false
   assert.ok(seen.kit)
-  assert.deepEqual([keysService.kitPending(), (await status()).kit], [true, null])
+  assert.deepEqual([keysService.kitState().pending, (await status()).kit], [true, null])
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })).json().keptAccount, null)
-  assert.equal(keysService.kitPending(), true)
+  assert.equal(keysService.kitState().pending, true)
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })).statusCode, 409)
   await signIn('ana@example.com')
   await until('on')
   assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })).statusCode, 200)
-  assert.equal(keysService.kitPending(), false)
+  assert.equal(keysService.kitState().pending, false)
   assert.ok((await status()).kit?.savedAt)
 })
 
@@ -226,7 +226,7 @@ test('a kit made on another Mac is adopted with its date at sign-out, so Forget 
   const savedAt = Date.parse((seen.kit as { savedAt: string }).savedAt) + 60_000
   seen.kit = { object: 'key_box', kind: 'kit', ...await keysService.signBox({ account, name: 'kit', body: fresh.box, savedAt }), savedAt: new Date(savedAt).toISOString() }
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })).json().keptAccount, 'ana@example.com')
-  assert.deepEqual([keysService.kitBox(), keysService.kit()?.savedAt], [fresh.box, new Date(savedAt).toISOString()])
+  assert.deepEqual([keysService.kitState().saved?.box, keysService.kitState().saved?.savedAt], [fresh.box, new Date(savedAt).toISOString()])
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })).statusCode, 200)
   await signIn('ana@example.com')
   assert.equal((await status()).status, 'locked')

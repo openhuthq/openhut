@@ -7,7 +7,9 @@ import { cloud } from '../platform/cloud.ts'
 import { log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { callbackBase } from '../connections/connection-service.ts'
-import { bodyOf, keysService, openLetter, readSecret, type Account, type Sent } from './keys-service.ts'
+import { keyStore, type Account } from './key-store.ts'
+import { keysService, openLetter, type Sent } from './keys-service.ts'
+import { bodyOf, readSecret, roomKeys } from './room-keys.ts'
 import { syncService } from './sync-service.ts'
 
 const PENDING_MS = 15 * 60_000
@@ -33,7 +35,7 @@ export const cloudService = {
     const account = keysService.account()
     const session = keysService.session()
     const on = Boolean(account && session)
-    const members = keysService.members()
+    const members = roomKeys.members()
     const locked = !account ? keysService.locked() : undefined
     if (on && Date.now() - checkedAt > CHECK_MS) checkSoon()
     const here = await keysService.deviceKey()
@@ -43,12 +45,12 @@ export const cloudService = {
       object: 'cloud', status: locked ? 'locked' : on ? (syncService.ready() ? 'on' : 'offline') : 'off', email: locked?.email ?? (on && account ? account.email : null),
       device: here,
       workspace: on && account && members ? { id: account.workspace.id, version: members.version, members: members.members } : null,
-      keyStore: keysService.keyStore(), kit: on ? kitOf() : null, kitInCloud: locked && session ? await kitInCloud() : Boolean(keysService.kit()), backup: syncService.status(),
-      signInError, keptAccount: on ? null : keysService.keptAccount(), devices, passkey: on && passkeySaved, needsSignIn: Boolean(locked && !session),
-      workspaces: on && account ? keysService.rooms().map(({ workspace: { id, key } }) => {
-        const body = keysService.members(id)
-        const invites = (body?.invites ?? []).map((each) => ({ email: each.email, role: each.role, link: keysService.link({ ws: id, email: each.email }) ?? null }))
-        return { id, name: syncService.name(id), home: id === account.workspace.id, role: keysService.roleIn(id) ?? 'member', waiting: !key, members: body?.members ?? [], invites }
+      keyStore: keyStore.kind(), kit: on ? kitOf() : null, kitInCloud: locked && session ? await kitInCloud() : Boolean(keysService.kitState().saved), backup: syncService.status(),
+      signInError, keptAccount: on ? null : (keysService.kitState().saved ? keysService.account()?.email ?? null : null), devices, passkey: on && passkeySaved, needsSignIn: Boolean(locked && !session),
+      workspaces: on && account ? roomKeys.rooms().map(({ workspace: { id, key } }) => {
+        const body = roomKeys.members(id)
+        const invites = (body?.invites ?? []).map((each) => ({ email: each.email, role: each.role, link: roomKeys.link({ ws: id, email: each.email }) ?? null }))
+        return { id, name: syncService.name(id), home: id === account.workspace.id, role: roomKeys.roleIn(id) ?? 'member', waiting: !key, members: body?.members ?? [], invites }
       }) : [],
     }
   },
@@ -62,7 +64,7 @@ export const cloudService = {
   },
 
   async setRole({ workspace, email, role }: { workspace: string; email: string; role: 'admin' | 'member' }): Promise<Cloud> {
-    const list = await keysService.withRole({ ws: mustBeOn(workspace), email, role })
+    const list = await roomKeys.withRole({ ws: mustBeOn(workspace), email, role })
     await putList({ workspace, list })
     return cloudService.status()
   },
@@ -134,7 +136,7 @@ export const cloudService = {
   async newKit(): Promise<RecoveryKit> {
     return serial(async () => {
       keysService.mustBeOn()
-      if (keysService.kit()) await rotate({ changed: await keysService.change([]), drop: ['passkey'] })
+      if (keysService.kitState().saved) await rotate({ changed: await keysService.change([]), drop: ['passkey'] })
       const { words, box, ask } = await keysService.newKit()
       const token = await keysService.token()
       const kept = KeyBox.safeParse((await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token })).json).data
@@ -221,7 +223,7 @@ export const cloudService = {
 
   async addRuntime({ device }: { device: string }): Promise<RuntimeInvite> {
     const account = keysService.account()
-    const me = keysService.members()?.members.find((member) => member.email === account?.email)
+    const me = roomKeys.members()?.members.find((member) => member.email === account?.email)
     if (!account || !keysService.session()) throw new HttpError(409, 'Turn on OpenHut Cloud on this computer first.')
     if (!me || me.role === 'member') throw new HttpError(403, 'Only an owner or admin can add a computer that runs agents.')
     const token = await keysService.token()
@@ -229,7 +231,7 @@ export const cloudService = {
     if (list) {
       const put = await cloud.room({ method: 'PUT', workspace: account.workspace.id, path: '/members', token, body: list })
       if (put.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t add that computer (HTTP ${put.status}). Try again.`)
-      await keysService.advance([list])
+      await roomKeys.advance({ lists: [list] })
     }
     const signer = await keysService.device()
     const body = await letter({ sender: signer, to: fromBase64(device), workspace: account.workspace.id, purpose: 'workspace-key', version: account.workspace.version, plain: await keysService.secret() })
@@ -264,7 +266,7 @@ export const cloudService = {
 }
 
 function mustBeOn(workspace: string): string {
-  if (!keysService.session() || !keysService.room(workspace)) throw new HttpError(409, 'Turn on OpenHut Cloud and open this workspace first.')
+  if (!keysService.session() || !roomKeys.room(workspace)) throw new HttpError(409, 'Turn on OpenHut Cloud and open this workspace first.')
   return workspace
 }
 
@@ -272,11 +274,11 @@ export async function putList({ workspace, list }: { workspace: string; list: Me
   const put = await cloud.room({ method: 'PUT', workspace, path: '/members', token: await keysService.token(), body: list })
   if (put.status === 409) throw new HttpError(409, 'Someone changed this workspace a moment ago. Try again.')
   if (put.status !== 200) throw new HttpError(put.status === 403 ? 403 : 502, `OpenHut Cloud refused the change (HTTP ${put.status}).`)
-  await keysService.advance([list], workspace)
+  await roomKeys.advance({ lists: [list], ws: workspace })
 }
 
 function kitOf(): { savedAt: string; differs: boolean } | null {
-  const kit = keysService.kit()
+  const kit = keysService.kitState().saved
   return kit || boxesDiffer ? { savedAt: kit?.savedAt ?? new Date(0).toISOString(), differs: boxesDiffer } : null
 }
 
@@ -320,11 +322,11 @@ async function compareBoxes(): Promise<void> {
   const workspaces = await cloud.account({ method: 'GET', path: '/v1/workspaces', token })
   if (![200, 404].includes(kit.status) || workspaces.status !== 200) return
   const cloudKit = KeyBox.safeParse(kit.json).data
-  const mine = keysService.kitBox()
+  const mine = keysService.kitState().saved?.box
   const kitMine = cloudKit && await keysService.boxIsMine({ account, name: 'kit', box: cloudKit })
   const box = Workspaces.safeParse(workspaces.json).data?.data.find((each) => each.id === account.workspace.id)
   if (cloudKit && !kitMine && !box) return lockOut(account)
-  if (cloudKit && kitMine && cloudKit.body !== mine && !keysService.kitPending()) await keysService.setKit({ box: cloudKit.body, savedAt: cloudKit.savedAt ?? new Date().toISOString() })
+  if (cloudKit && kitMine && cloudKit.body !== mine && !keysService.kitState().pending) await keysService.setKit({ box: cloudKit.body, savedAt: cloudKit.savedAt ?? new Date().toISOString() })
   if (cloudKit && !kitMine && mine) await keysService.setKit(undefined)
   const boxMine = box && await keysService.boxIsMine({ account, name: `workspace/${account.workspace.id}`, box: { body: box.key, by: box.by, signature: box.signature } })
   const reboxed = boxMine ? 200 : (await cloud.account({ method: 'POST', path: '/v1/workspaces', token, body: await keysService.workspaceBox(account) })).status

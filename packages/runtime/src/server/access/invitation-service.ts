@@ -5,7 +5,8 @@ import type { Invitation } from '@openhut/common/access/invitation.ts'
 import { InviteLetter, OpenedInvite, parseJson, type Cloud, type CloudInvite, type CloudInvitePreview, type CreateCloudInvite } from '@openhut/common/cloud/cloud.ts'
 import { fromBase64, identity, read, type Identity } from '@openhut/common/vault/vault.ts'
 import { cloudService, putList } from '../cloud/cloud-service.ts'
-import { inviteId, keysService } from '../cloud/keys-service.ts'
+import { keysService } from '../cloud/keys-service.ts'
+import { inviteId, roomKeys } from '../cloud/room-keys.ts'
 import { syncService } from '../cloud/sync-service.ts'
 import { cloud } from '../platform/cloud.ts'
 import { config } from '../platform/config.ts'
@@ -53,12 +54,12 @@ export const invitationService = {
   },
 
   async inviteToCloud({ workspace, email, role }: CreateCloudInvite): Promise<CloudInvite> {
-    if (!keysService.session() || !keysService.room(workspace)) throw new HttpError(409, 'Turn on OpenHut Cloud and open this workspace first.')
-    const made = await keysService.invite({ ws: workspace, email, role, name: syncService.name(workspace) ?? defaultName(workspace) })
+    if (!keysService.session() || !roomKeys.room(workspace)) throw new HttpError(409, 'Turn on OpenHut Cloud and open this workspace first.')
+    const made = await roomKeys.invite({ ws: workspace, email, role, name: syncService.name(workspace) ?? defaultName(workspace) })
     await putList({ workspace, list: made.list })
     const posted = await cloud.room({ method: 'POST', workspace, path: '/invites', token: await keysService.token(), body: { id: made.id, email, role, key: made.key, body: made.body } })
     if (posted.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t keep the invite (HTTP ${posted.status}). Try again.`)
-    await keysService.keepLink({ ws: workspace, email, link: made.link })
+    await roomKeys.keepLink({ ws: workspace, email, link: made.link })
     return { object: 'cloud_invite', id: made.id, workspace, email, role, link: made.link, expiresAt: made.expiresAt }
   },
 
@@ -69,11 +70,11 @@ export const invitationService = {
 
   async joinCloud({ link }: { link: string }): Promise<Cloud> {
     const { ws, card, invite, letter } = await openInvite(link)
-    const list = await keysService.joinList({ card, chain: invite.memberLists, anchor: letter.anchor, ws })
+    const list = await roomKeys.joinList({ card, chain: invite.memberLists, anchor: letter.anchor, ws })
     const first = invite.memberLists[0]
     const put = await cloud.room({ method: 'PUT', workspace: ws, path: '/members', token: await keysService.token(), body: list })
     if (put.status !== 200) throw new HttpError(put.status === 404 || put.status === 410 ? put.status : 502, REFUSED[put.status] ?? `OpenHut Cloud didn’t let you join (HTTP ${put.status}). Try again.`)
-    if (first) await keysService.addTeam({ ws, list, first })
+    if (first) await roomKeys.addTeam({ ws, list, first })
     syncService.connect()
     return cloudService.status()
   },
@@ -95,7 +96,7 @@ async function openInvite(link: string): Promise<Opened> {
   const secret = parsed?.[2]
   if (!ws || !secret) throw new HttpError(400, 'That isn’t an OpenHut invite link. Copy the whole link and try again.', { param: 'link' })
   if (!keysService.account() || !keysService.session()) throw new HttpError(409, 'Sign in to OpenHut Cloud to join.')
-  if (keysService.room(ws)) throw new HttpError(409, 'You’re already in this workspace.')
+  if (roomKeys.room(ws)) throw new HttpError(409, 'You’re already in this workspace.')
   const card = await identity(fromBase64(secret))
   const reply = await cloud.room({ method: 'GET', workspace: ws, path: `/invites/${await inviteId(card.publicKey)}`, token: await keysService.token() })
   const refused = REFUSED[reply.status] ?? (reply.status === 403 ? messageIn(reply.json) : undefined)
@@ -109,7 +110,7 @@ async function openInvite(link: string): Promise<Opened> {
 }
 
 function defaultName(workspace: string): string {
-  const owner = keysService.members(workspace)?.members.find((member) => member.role === 'owner')?.email ?? ''
+  const owner = roomKeys.members(workspace)?.members.find((member) => member.role === 'owner')?.email ?? ''
   const first = (owner.split('@')[0] ?? '').split(/[._+-]/)[0] ?? ''
   return `${first.charAt(0).toUpperCase()}${first.slice(1)}’s workspace`
 }
