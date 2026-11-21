@@ -51,7 +51,7 @@ export const syncKinds = {
   async allowed({ open, ctx, row }: { open: Opened; ctx: Context; row: Row | undefined }): Promise<boolean> {
     const runner = async (id: string) => (await agentService.placement({ id }))?.runsOn
     switch (open.kind) {
-      case 'agent': return !open.value || agentAllowed({ value: open.value, by: open.by, ctx })
+      case 'agent': return !open.value || agentAllowed({ value: open.value, by: open.by, ctx, row })
       case 'memory': return await runner(open.value?.agentId ?? open.ref) === open.by
       case 'message': {
         const runsOn = await runner(open.value?.agentId ?? row?.agent_id ?? '')
@@ -103,9 +103,12 @@ async function agentOf(open: Opened): Promise<string | undefined> {
   return undefined
 }
 
-async function agentAllowed({ value, by, ctx }: { value: AgentValue; by: string; ctx: Context }): Promise<boolean> {
+async function agentAllowed({ value, by, ctx, row }: { value: AgentValue; by: string; ctx: Context; row: Row | undefined }): Promise<boolean> {
   const author = ctx.members.find((each) => each.devices.includes(by))
   const current = await agentService.placement({ id: value.id })
+  const first = row?.signer
+  const before = first ? ctx.members.find((each) => each.devices.includes(first)) : undefined
+  if (!current && before && before.email !== author?.email) return false
   const limited = author?.role === 'member' && (current?.owner ?? (current ? ctx.email : author.email)) !== author.email
   const listed = ctx.members.some((each) => value.runsOn !== undefined && each.devices.includes(value.runsOn))
   if (value.runsOn !== current?.runsOn && (!listed || limited)) return false

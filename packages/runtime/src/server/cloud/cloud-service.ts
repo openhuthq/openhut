@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import * as z from 'zod/mini'
 import { type CloudWorkspaceView, fromQr, KeyBox, Letter, MemberList, qrPayload, signProof, type AllowedDevice, type Role, type Cloud, type CloudAuthorization, type CloudPairing, type RecoveryKit, type RuntimeInvite, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
-import { addedOf, check, newUntil, youngUntil } from '@openhut/common/cloud/member-list.ts'
+import { addedOf, bodyOf, check, newUntil, youngUntil } from '@openhut/common/cloud/member-list.ts'
 import { askCommit, deviceWords, fingerprint, fromBase64, fromLongCode, letter, longCode, newKey, newPairing, toBase64, type Bytes } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
@@ -9,8 +9,8 @@ import { log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { callbackBase, connectionService } from '../connections/connection-service.ts'
 import { keyStore, type Account, type Move, type Room } from './key-store.ts'
-import { deviceName, deviceOs, keysService, notYoung, openLetter } from './keys-service.ts'
-import { bodyOf, readSecret, roomKeys } from './room-keys.ts'
+import { deviceName, deviceOs, keysService, notYoung, openLetter, readSecret } from './keys-service.ts'
+import { roomKeys } from './room-keys.ts'
 import { refusal, syncService } from './sync-service.ts'
 import { agentService } from '../agents/agent-service.ts'
 
@@ -20,7 +20,7 @@ const PAIRING_POLL_MS = 2000
 const HERE = process.platform === 'darwin' ? 'Mac' : 'computer'
 const SIGNED_IN = 'You’re signed in. You can go back to OpenHut.'
 const Workspaces = z.object({ data: z.array(z.object({ id: z.string(), key: z.string(), by: z.optional(z.string()), signature: z.optional(z.string()) })) })
-const Lists = z.object({ data: z.array(MemberList) })
+const Lists = z.object({ data: z.array(MemberList), hasMore: z.optional(z.boolean()) })
 const Letters = z.object({ data: z.array(Letter) })
 const Waiting = z.object({ data: z.array(z.object({ device: z.string() })) })
 const Asked = z.object({ data: z.array(z.object({ device: z.string(), nonce: z.nullable(z.object({ nonce: z.string() })), reveal: z.nullable(z.string()) })) })
@@ -80,7 +80,7 @@ export const cloudService = {
     const rooms: { id: string; admins: string[]; secret: Bytes; words: null }[] = []
     let refused: string | null = null
     for (const { id } of teams) {
-      const lists = Lists.safeParse((await cloud.room({ method: 'GET', workspace: id, path: '/member-lists?after=0', token })).json).data?.data ?? []
+      const lists = await chainOf({ workspace: id, token })
       const body = bodyOf(lists.at(-1))
       const others = body?.members.filter((member) => member.role !== 'member' && member.email !== keysService.locked()?.email) ?? []
       if (!others.length) continue
@@ -413,7 +413,7 @@ export const cloudService = {
     const device = await keysService.device()
     const found = Letters.safeParse((await cloud.room({ method: 'GET', workspace, path: '/letters', token })).json).data?.data.find((each) => each.from === from && each.purpose === 'workspace-key')
     const plain = found && await openLetter({ found, workspace })
-    const chain = Lists.safeParse((await cloud.room({ method: 'GET', workspace, path: '/member-lists?after=0', token })).json).data?.data ?? []
+    const chain = await chainOf({ workspace, token })
     const secret = plain && readSecret(plain)
     const body = secret && chain[0] && await check({ anchor: secret.anchor, chain })
     if (!found || !secret || !body || !body.members.some((member) => member.email === email && member.devices.includes(toBase64(device.publicKey)))) throw new HttpError(400, 'This computer couldn’t open the workspace key it was sent. Add it again from your Mac.')
@@ -551,7 +551,17 @@ async function lockOut({ sub, email }: Account): Promise<void> {
 
 async function boxesOf(token: string): Promise<{ id: string; key: string; chain: MemberList[] }[]> {
   const boxes = Workspaces.safeParse((await cloud.account({ method: 'GET', path: '/v1/workspaces', token })).json).data?.data ?? []
-  return Promise.all(boxes.map(async (box) => ({ ...box, chain: Lists.safeParse((await cloud.room({ method: 'GET', workspace: box.id, path: '/member-lists?after=0', token })).json).data?.data ?? [] })))
+  return Promise.all(boxes.map(async (box) => ({ ...box, chain: await chainOf({ workspace: box.id, token }) })))
+}
+
+async function chainOf({ workspace, token }: { workspace: string; token: string }): Promise<MemberList[]> {
+  const chain: MemberList[] = []
+  for (let more = true; more;) {
+    const page = Lists.safeParse((await cloud.room({ method: 'GET', workspace, path: `/member-lists?after=${bodyOf(chain.at(-1))?.version ?? 0}`, token })).json).data
+    chain.push(...page?.data ?? [])
+    more = Boolean(page?.hasMore && page.data.length)
+  }
+  return chain
 }
 
 async function joinWith({ account: restored, typed }: { account: Account; typed: boolean }): Promise<Cloud> {
@@ -615,7 +625,7 @@ async function checkAsked(): Promise<void> {
   const me = await keysService.deviceKey()
   for (const { id: workspace } of now.rooms.filter((each) => !now.settled.includes(each.id))) {
     const found = Letters.safeParse((await cloud.room({ method: 'GET', workspace, path: '/letters', token })).json).data?.data ?? []
-    const chain = found.length ? Lists.safeParse((await cloud.room({ method: 'GET', workspace, path: '/member-lists?after=0', token })).json).data?.data ?? [] : []
+    const chain = found.length ? await chainOf({ workspace, token }) : []
     const first = !keysService.account()
     if (found.length && await roomKeys.joinApproved({ ws: workspace, chain, found })) {
       for (const each of found) await cloud.room({ method: 'DELETE', workspace, path: `/letters/${each.id}`, token })

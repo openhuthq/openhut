@@ -3,6 +3,8 @@ import { check as checkSignature, concat, fromBase64, sha256, sign, toBase64, ty
 
 type Link = { list: MemberList; body: MemberListBody }
 
+const KEEP_REMOVED = 1000
+
 const LABEL = new TextEncoder().encode('openhut/member-list\0')
 export const YOUNG_MS = 3 * 24 * 60 * 60_000
 
@@ -26,6 +28,26 @@ export async function check({ anchor, chain }: { anchor: string; chain: MemberLi
     previous = next
   }
   return previous.body
+}
+
+export function bodyOf(list: MemberList | undefined): MemberListBody | undefined {
+  return list && MemberListBody.safeParse(parseJson(new TextDecoder().decode(fromBase64(list.bytes)))).data
+}
+
+export function firstOf(room: { list: MemberList; first?: MemberList }): MemberList {
+  return room.first ?? room.list
+}
+
+export async function nextOf({ list, body, me }: { list: MemberList; body: MemberListBody; me: string }): Promise<MemberListBody> {
+  const owner = ownerOf(body)?.devices.includes(me)
+  const removed = owner && body.removed.length > KEEP_REMOVED ? body.removed.slice(-KEEP_REMOVED / 2) : body.removed
+  return { ...body, version: body.version + 1, previous: await anchorOf(list), at: Math.max(Date.now(), body.at ?? 0), removed }
+}
+
+export function withoutDevices({ body, gone }: { body: MemberListBody; gone: string[] }): MemberListBody {
+  const kept = <T>(map: Record<string, T> | undefined) => map && Object.fromEntries(Object.entries(map).filter(([device]) => !gone.includes(device)))
+  const members = body.members.map((member) => ({ ...member, devices: member.devices.filter((device) => !gone.includes(device)) }))
+  return { ...body, members, removed: [...body.removed, ...gone.filter((device) => !body.removed.includes(device))], runtimes: body.runtimes?.filter((device) => !gone.includes(device)), added: kept(body.added), names: kept(body.names) }
 }
 
 async function open(list: MemberList): Promise<Link | null> {

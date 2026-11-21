@@ -1,18 +1,19 @@
 import { spawnSync } from 'node:child_process'
 import { randomInt } from 'node:crypto'
 import { hostname } from 'node:os'
-import { checkProof, MemberList, signProof, type CloudSession, type Letter, type MemberListBody } from '@openhut/common/cloud/cloud.ts'
-import { anchorOf, check, keyVersionOf, signList, youngUntil } from '@openhut/common/cloud/member-list.ts'
+import * as z from 'zod/mini'
+import { checkProof, MemberList, parseJson, signProof, type CloudSession, type Letter, type Member, type MemberListBody } from '@openhut/common/cloud/cloud.ts'
+import { anchorOf, bodyOf, check, firstOf, keyVersionOf, nextOf, signList, withoutDevices, youngUntil } from '@openhut/common/cloud/member-list.ts'
 import { equal, fromBase64, fromWords, identity, letter, lock, newKey, newWords, pairingWorkspace, read, slot, toBase64, unlock, type Bytes, type Identity, type LetterPurpose } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { HttpError } from '../platform/http-error.ts'
-import { keyStore, type Account, type Move, type Room, type Session, type Stored } from './key-store.ts'
-import { bodyOf, nextOf, readSecret, roomKeys, secretOf } from './room-keys.ts'
+import { keyStore, Keys, type Account, type Move, type Room, type Session, type Stored } from './key-store.ts'
 
 const REFRESH_EARLY_MS = 5 * 60_000
 const HERE = process.platform === 'darwin' ? 'Mac' : 'computer'
 export type Sent = { to: string; purpose: LetterPurpose; body: string }
 type Boxed = { id: string; key: string; chain: MemberList[] }
+const Secret = z.object({ ...Keys.shape, anchor: z.string(), team: z.optional(z.boolean()) })
 const { machine } = keyStore
 
 export const keysService = {
@@ -60,7 +61,7 @@ export const keysService = {
     if (!account || !body) return null
     if (body.members.some((member) => member.devices.includes(device))) return null
     const members = body.members.map((member) => member.email === account.email ? { ...member, devices: [...member.devices, device] } : member)
-    const base = await nextOf({ list: account.list, body })
+    const base = await nextOf({ list: account.list, body, me: await keysService.deviceKey() })
     return signList({ signer: await keysService.device(), body: { ...base, members, runtimes: [...body.runtimes ?? [], device], added: { ...body.added, [device]: base.at ?? 0 } } })
   },
 
@@ -204,10 +205,7 @@ export const keysService = {
     const since = Math.min(...remove.map((device) => body.added?.[device] ?? 0))
     const planted = mine.devices.filter((device) => body.runtimes?.includes(device) && (body.added?.[device] ?? 0) >= since)
     const gone = [...new Set([...remove, ...planted])]
-    const kept = <T>(map: Record<string, T> = {}) => Object.fromEntries(Object.entries(map).filter(([device]) => !gone.includes(device)))
-    const base = await nextOf({ list: account.list, body })
-    const members = body.members.map((member) => member === mine ? { ...member, devices: member.devices.filter((device) => !gone.includes(device)) } : member)
-    return signList({ signer: await keysService.device(), body: { ...base, members, removed: [...base.removed, ...gone], runtimes: body.runtimes?.filter((device) => !gone.includes(device)), added: kept(body.added), names: body.names && kept(body.names) } })
+    return signList({ signer: await keysService.device(), body: withoutDevices({ body: await nextOf({ list: account.list, body, me }), gone }) })
   },
 
   async change(): Promise<{ list: MemberList; next: Account; letters: Sent[] }> {
@@ -221,24 +219,14 @@ export const keysService = {
     const key = newKey()
     const kit = toBase64((await accountDevice(key)).publicKey)
     const gone = mine.devices.includes(oldKit) ? [oldKit] : []
-    const base = await nextOf({ list: account.list, body })
-    const members = body.members.map((member) => member === mine ? { ...member, devices: [...member.devices.filter((device) => !gone.includes(device)), kit], kit } : member)
-    const kept = <T>(map: Record<string, T> = {}) => Object.fromEntries(Object.entries(map).filter(([device]) => !gone.includes(device)))
+    const base = withoutDevices({ body: await nextOf({ list: account.list, body, me }), gone })
+    const members = base.members.map((member) => member.email === account.email ? { ...member, devices: [...member.devices, kit], kit } : member)
     const keyVersion = keyVersionOf(body) + 1
-    const list = await signList({ signer: await keysService.device(), body: { ...base, members, keyVersion, removed: [...base.removed, ...gone], runtimes: body.runtimes?.filter((device) => !gone.includes(device)), added: { ...kept(body.added), [kit]: base.at ?? 0 }, names: body.names && kept(body.names) } })
+    const list = await signList({ signer: await keysService.device(), body: { ...base, members, keyVersion, added: { ...base.added, [kit]: base.at ?? 0 } } })
     if (!await check({ anchor: await anchorOf(account.list), chain: [account.list, list] })) throw new HttpError(409, 'Your devices changed on another computer just now. Try again.')
-    const { workspace } = account
-    const own = workspace.own ?? toBase64(await roomKeys.own() ?? newKey())
-    const next = { ...account, key: toBase64(key), list, workspace: { ...workspace, key: toBase64(newKey()), version: keyVersion, old: { ...workspace.old, [workspace.version]: workspace.key }, slot: workspace.slot ?? workspace.key, own } }
-    const secret = await secretOf({ room: next, own: true })
-    const shared = await secretOf({ room: next, own: false })
-    const letters: Sent[] = []
-    for (const member of members) {
-      for (const device of member.devices.filter((each) => each !== me && each !== member.kit)) {
-        letters.push(await sealTo({ to: device, purpose: 'workspace-key', workspace: workspace.id, plain: member.email === account.email ? secret : shared }))
-        if (member.email === account.email && !body.runtimes?.includes(device)) letters.push(await sealTo({ to: device, purpose: 'account-key', workspace: workspace.id, plain: key }))
-      }
-    }
+    const { next, letters } = await rotateKeys({ room: { ...account, key: toBase64(key) }, list, keyVersion, members, me })
+    const own = members.find((member) => member.email === account.email)?.devices.filter((device) => device !== me && device !== kit && !body.runtimes?.includes(device)) ?? []
+    for (const to of own) letters.push(await sealTo({ to, purpose: 'account-key', workspace: account.workspace.id, plain: key }))
     return { list, next, letters }
   },
 
@@ -317,12 +305,40 @@ async function restoreTeam({ key, workspace, sub, email, device }: { key: Bytes;
   const mine = body ? body.members.find((member) => member.email === email) : undefined
   if (!secret || !body || !last || !chain[0] || body.workspace !== workspace.id || !mine?.devices.includes(toBase64(signer.publicKey))) return null
   const me = toBase64((await identity(fromBase64(device))).publicKey)
-  const base = await nextOf({ list: last, body })
+  const base = await nextOf({ list: last, body, me })
   const fresh = !mine.devices.includes(me)
-  const members = body.members.map((member) => member === mine && fresh ? { ...member, devices: [...member.devices, me] } : member)
+  const members = body.members.map((member) => member === mine ? { ...member, devices: fresh ? [...member.devices, me] : member.devices, kit: toBase64(signer.publicKey) } : member)
   const list = await signList({ signer, body: { ...base, members, ...fresh && { added: { ...body.added, [me]: base.at ?? 0 }, names: { ...body.names, [me]: deviceName() } } } })
   const { anchor: _anchor, team: _team, ...keys } = secret
   return { workspace: { id: workspace.id, ...keys }, list, first: chain[0] }
+}
+
+export async function ownOf(room: Room): Promise<Bytes | null> {
+  const key = stored()?.account?.key
+  if (room.workspace.own) return fromBase64(room.workspace.own)
+  return key ? fromBase64(await slot({ key: fromBase64(key), path: `own/${room.workspace.id}` })) : null
+}
+
+export async function secretOf({ room, own, team = false }: { room: Room; own: boolean; team?: boolean }): Promise<Bytes> {
+  const { id: _id, own: _own, ...keys } = room.workspace
+  const ownKey = own ? await ownOf(room) : null
+  return new TextEncoder().encode(JSON.stringify({ ...keys, ...ownKey && { own: toBase64(ownKey) }, anchor: await anchorOf(firstOf(room)), ...team && { team } }))
+}
+
+export function readSecret(plain: Bytes): z.infer<typeof Secret> | null {
+  if (plain.length === 64) return { key: toBase64(plain.slice(0, 32)), version: 1, anchor: toBase64(plain.slice(32)) }
+  return z.safeParse(Secret, parseJson(new TextDecoder().decode(plain))).data ?? null
+}
+
+export async function rotateKeys<R extends Room>({ room, list, keyVersion, members, me }: { room: R; list: MemberList; keyVersion: number; members: Member[]; me: string }): Promise<{ next: R; letters: Sent[] }> {
+  const { workspace } = room
+  const own = workspace.own ?? (stored()?.account?.key ? toBase64(await ownOf(room) ?? newKey()) : undefined)
+  const next = { ...room, list, workspace: { ...workspace, key: toBase64(newKey()), version: keyVersion, old: { ...workspace.old, [workspace.version]: workspace.key }, slot: workspace.slot ?? workspace.key, ...own && { own } } }
+  const secret = await secretOf({ room: next, own: true })
+  const shared = await secretOf({ room: next, own: false })
+  const email = stored()?.account?.email
+  const letters = await Promise.all(members.flatMap((member) => member.devices.filter((device) => device !== me && device !== member.kit).map((to) => sealTo({ to, purpose: 'workspace-key', workspace: workspace.id, plain: member.email === email ? secret : shared }))))
+  return { next, letters }
 }
 
 async function boxedSecret({ account, room }: { account: Account; room: Room }): Promise<Bytes> {

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { MemberListBody } from '../../src/cloud/cloud.ts'
-import { anchorOf, check, signList } from '../../src/cloud/member-list.ts'
+import { anchorOf, bodyOf, check, nextOf, signList, withoutDevices } from '../../src/cloud/member-list.ts'
 import { fromBase64, identity, newKey, sign, toBase64 } from '../../src/vault/vault.ts'
 
 const [moMac, saraMac, saraPhone, anaMac, invite, eve] = await Promise.all(Array.from({ length: 6 }, () => identity()))
@@ -247,6 +247,38 @@ test('the kit key may only add one device to its own person, never remove or cha
     { keyVersion: 2, at },
   ]
   for (const change of changes) assert.equal(await check({ anchor: start.anchor, chain: [start.list, await v2(change, eve)] }), null)
+})
+
+test('in a team room an admin’s account key marked as kit may only add one device, even when old: no removing devices or people, no key change', async () => {
+  const kit = key(eve)
+  const team = (marked: boolean): MemberListBody => ({ workspace: 'ws_00000003', version: 1, previous: null, members: [{ email: 'mo@example.com', role: 'owner', devices: [key(moMac)] }, { email: 'sara@example.com', role: 'admin', devices: [key(saraMac), kit], ...marked && { kit } }, { email: 'ana@example.com', role: 'member', devices: [key(anaMac)] }], invites: [], removed: [], at: T, added: { [key(moMac)]: T, [key(saraMac)]: T, [kit]: T, [key(anaMac)]: T } })
+  const at = T + 4 * 24 * 60 * 60_000
+  for (const marked of [false, true]) {
+    const body = team(marked)
+    const list = await signList({ signer: moMac, body })
+    const v2 = after({ body, list })
+    const [mo, sara, ana] = body.members
+    const takeover = await v2({ members: [mo, { ...sara, devices: [kit, key(saraPhone)] }], removed: [key(saraMac), key(anaMac)], keyVersion: 2, at, added: { [key(moMac)]: T, [kit]: T, [key(saraPhone)]: at } }, eve)
+    assert.equal(Boolean(await check({ anchor: await anchorOf(list), chain: [list, takeover] })), !marked)
+    if (!marked) continue
+    const refused: Partial<MemberListBody>[] = [
+      { members: [mo, { ...sara, devices: [kit] }, ana], removed: [key(saraMac)], at, added: { [key(moMac)]: T, [kit]: T, [key(anaMac)]: T } },
+      { members: [mo, sara], removed: [key(anaMac)], at, added: { [key(moMac)]: T, [key(saraMac)]: T, [kit]: T } },
+      { keyVersion: 2, at },
+    ]
+    for (const change of refused) assert.equal(await check({ anchor: await anchorOf(list), chain: [list, await v2(change, eve)] }), null)
+    assert.ok(await check({ anchor: await anchorOf(list), chain: [list, await v2({ members: [mo, { ...sara, devices: [...sara.devices, key(saraPhone)] }, ana], at, added: { ...body.added, [key(saraPhone)]: at } }, eve)] }))
+  }
+})
+
+test('withoutDevices drops devices everywhere and puts each on removed once; nextOf links to the list it follows', async () => {
+  const body: MemberListBody = { ...first, members: [{ ...first.members[0], devices: [key(moMac), key(saraPhone)] }, first.members[1]], removed: [key(eve)], runtimes: [key(saraPhone)], added: { [key(moMac)]: T, [key(saraPhone)]: T, [key(saraMac)]: T }, names: { [key(saraPhone)]: 'Phone' } }
+  const cut = withoutDevices({ body, gone: [key(saraPhone), key(eve)] })
+  assert.deepEqual([cut.members[0]?.devices, cut.removed, cut.runtimes, cut.added, cut.names], [[key(moMac)], [key(eve), key(saraPhone)], [], { [key(moMac)]: T, [key(saraMac)]: T }, {}])
+  const list = await signList({ signer: moMac, body })
+  assert.deepEqual(bodyOf(list), body)
+  const following = await nextOf({ list, body, me: key(moMac) })
+  assert.deepEqual([following.version, following.previous], [2, await anchorOf(list)])
 })
 
 test('a new device carries the time of the list that added it, and the time never goes back', async () => {

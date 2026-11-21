@@ -8,9 +8,9 @@ import { config } from '../../../src/server/platform/config.ts'
 import { seal, unseal } from '../../../src/server/platform/secrets.ts'
 import { accountDevice, keysService } from '../../../src/server/cloud/keys-service.ts'
 import { keyStore } from '../../../src/server/cloud/key-store.ts'
-import { bodyOf, roomKeys } from '../../../src/server/cloud/room-keys.ts'
+import { roomKeys } from '../../../src/server/cloud/room-keys.ts'
 import { deviceWords, fromBase64, identity, letter, lock, newKey, newPairing, pairingWorkspace, read, slot, toBase64, unlock } from '@openhut/common/vault/vault.ts'
-import { anchorOf, check, signList } from '@openhut/common/cloud/member-list.ts'
+import { anchorOf, bodyOf, check, signList } from '@openhut/common/cloud/member-list.ts'
 
 await migrate()
 const FILE = join(config.dataDir, 'cloud-keys.sealed')

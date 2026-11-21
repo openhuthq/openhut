@@ -92,7 +92,7 @@ test('an admin’s workspace-key letter can’t plant an own key or change the s
   assert.equal(roomKeys.room()?.workspace.old?.['2'], workspace?.key)
 })
 
-test('in a team room this Mac lists the account key as its own device, so the 12 words bring the team room back on a fresh Mac', async () => {
+test('in a team room this Mac lists the account key as its kit, moves the mark when Change keys makes a new one, and the 12 words bring the team room back on a fresh Mac', async () => {
   const boss = await identity()
   const bossKey = toBase64(boss.publicKey)
   const ws = 'TeamRoom0001'
@@ -108,9 +108,23 @@ test('in a team room this Mac lists the account key as its own device, so the 12
   } })
   const v3 = puts[0]
   assert.ok(v3)
-  const kit = await keysService.accountDeviceKey()
+  const oldKit = await keysService.accountDeviceKey()
   const listed = await check({ anchor: await anchorOf(v1), chain: [v1, v2, v3] })
-  assert.deepEqual(listed?.members.find((member) => member.email === 'mo@example.com')?.devices, [mine, kit])
+  assert.deepEqual(listed?.members.find((member) => member.email === 'mo@example.com'), { email: 'mo@example.com', role: 'member', devices: [mine, oldKit], kit: oldKit })
+  const changed = await keysService.change()
+  homeChain.push(changed.list)
+  await keysService.adopt({ account: changed.next })
+  const kit = await keysService.accountDeviceKey()
+  assert.ok(kit && kit !== oldKit)
+  assert.equal(changed.letters.some((each) => each.to === kit || each.to === oldKit), false)
+  await roomKeys.refresh({ ws, call: async ({ method, path, body }) => {
+    if (method === 'PUT' && path === '/members') puts.push(body as MemberList)
+    return { status: 200, json: { object: 'list', data: [] } }
+  } })
+  const v4 = puts[1]
+  assert.ok(v4)
+  const moved = await check({ anchor: await anchorOf(v1), chain: [v1, v2, v3, v4] })
+  assert.deepEqual([moved?.members.find((member) => member.email === 'mo@example.com'), moved?.removed], [{ email: 'mo@example.com', role: 'member', devices: [mine, kit], kit }, [oldKit]])
 
   const teamKey = toBase64(newKey())
   const sealed = await letter({ sender: boss, to: me.publicKey, workspace: ws, purpose: 'workspace-key', version: 1, plain: new TextEncoder().encode(JSON.stringify({ key: teamKey, version: 1, anchor: await anchorOf(v1) })) })
@@ -121,7 +135,7 @@ test('in a team room this Mac lists the account key as its own device, so the 12
   assert.ok(current && team)
   const words = await keysService.newKit()
   await keysService.setKit({ box: words.box, savedAt: new Date().toISOString() })
-  const workspaces = [{ ...await keysService.workspaceBox({ account: current }), chain: homeChain }, { ...await keysService.workspaceBox({ account: current, room: team }), chain: [v1, v2, v3] }]
+  const workspaces = [{ ...await keysService.workspaceBox({ account: current }), chain: homeChain }, { ...await keysService.workspaceBox({ account: current, room: team }), chain: [v1, v2, v3, v4] }]
   await keysService.setSession(undefined)
   await keysService.forget()
   await keysService.setLocked({ sub: 'dev-mo', email: 'mo@example.com' })
@@ -131,8 +145,8 @@ test('in a team room this Mac lists the account key as its own device, so the 12
   assert.equal(back?.workspace.key, teamKey)
   const fresh = toBase64((await keysService.device()).publicKey)
   assert.notEqual(fresh, mine)
-  const after = back && await check({ anchor: await anchorOf(v1), chain: [v1, v2, v3, back.list] })
-  assert.deepEqual(after?.members.find((member) => member.email === 'mo@example.com')?.devices, [mine, kit, fresh])
+  const after = back && await check({ anchor: await anchorOf(v1), chain: [v1, v2, v3, v4, back.list] })
+  assert.deepEqual(after?.members.find((member) => member.email === 'mo@example.com'), { email: 'mo@example.com', role: 'member', devices: [mine, kit, fresh], kit })
 })
 
 test('Change keys is saved before its PUT: when the list landed but the answer was lost, the next refresh takes the new key and queues its letters; a letter that fails stays queued', async () => {
