@@ -219,6 +219,11 @@ export const agentService = {
     emit({ name: 'agent.synced', target: { type: 'agent', id } })
   },
 
+  async dropWorkspace(workspace: string | null): Promise<void> {
+    const rows = await db.selectFrom('agent').select('id').where((eb) => workspace ? eb('workspace', '=', workspace) : eb('workspace', 'is', null)).execute()
+    for (const row of rows) await agentService.applySynced({ id: row.id, value: null, by: null })
+  },
+
   async hideSynced({ id, owner, me }: { id: string; owner: string; me: string }): Promise<void> {
     const row = await db.selectFrom('agent').select(['owner']).where('id', '=', id).executeTakeFirst()
     if (row && (row.owner ?? me) === owner) await agentService.applySynced({ id, value: null, by: owner })

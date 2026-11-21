@@ -304,6 +304,21 @@ test('a device younger than 3 days may only add devices to its own person or dro
   assert.ok(await check({ anchor: start.anchor, chain: [start.list, v2, await v3({ keyVersion: 2, at: joined + 3 * DAY + 1 }, anaMac)] }))
 })
 
+test('a device is young only next to its own person’s older devices, so an admin who joined today can let a device in and remove people', async () => {
+  const start = await dated()
+  const joined = T + DAY
+  const ana = { email: 'ana@example.com', role: 'admin' as const, devices: [key(anaMac)] }
+  const v2 = await after(start)({ members: [...start.body.members, ana], at: joined, added: { ...start.body.added, [key(anaMac)]: joined } }, moMac)
+  const body2 = await check({ anchor: start.anchor, chain: [start.list, v2] })
+  assert.ok(body2)
+  const at = joined + 60_000
+  const sara = { ...first.members[1], devices: [key(saraMac), key(saraPhone)] }
+  const letIn = await after({ body: body2, list: v2 })({ members: [start.body.members[0], sara, ana], at, added: { ...body2.added, [key(saraPhone)]: at } }, anaMac)
+  assert.ok(await check({ anchor: start.anchor, chain: [start.list, v2, letIn] }))
+  const removed = await after({ body: body2, list: v2 })({ members: [start.body.members[0], ana], removed: [key(saraMac)], keyVersion: 2, at, added: { [key(moMac)]: T, [key(eve)]: T, [key(anaMac)]: joined } }, anaMac)
+  assert.ok(await check({ anchor: start.anchor, chain: [start.list, v2, removed] }))
+})
+
 test('the first device of a workspace is never young, and a device name never changes once listed', async () => {
   const start = await dated()
   const v2 = after(start)

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { CloudUploadIcon, FingerPrintIcon, PlusSignIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
+import { CloudUploadIcon, FingerPrintIcon, Key01Icon, PlusSignIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import type { Backup, Cloud } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
@@ -16,7 +16,8 @@ import { HERE } from '@/features/settings/desktop'
 import { Chevron, Row, useConfirming } from '@/features/settings/kit'
 import { isPhone, scan } from '@/lib/native'
 import { ago, shortDate, shortDateTime } from '@/lib/format'
-import { open, useOpen, useSearch } from '@/lib/router'
+import { navigate, open, useOpen, useSearch } from '@/lib/router'
+import { useDeleteData, useRotated } from '@/features/cloud/workspaces'
 import { toastError } from '@/lib/toast'
 
 export function CloudSettings() {
@@ -50,8 +51,33 @@ export function CloudSettings() {
       <Button type="button" variant="secondary" className={PILL} disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
     </div>
     <ErrorNote message={error ?? undefined} />
+    {data.workspaces.some((each) => each.own) && <DeleteData />}
     {kitOpen && <SaveKit />}
   </>
+}
+
+function DeleteData() {
+  const remove = useDeleteData()
+  const { confirming, setConfirming, box } = useConfirming()
+  return <section ref={box} className="mt-4 flex flex-col gap-2.5">
+    <span className="px-1 text-[13.5px] font-semibold">Danger zone</span>
+    <div className="flex items-center gap-4 px-1 py-1">
+      <span className="grid flex-1 gap-0.5"><span className="text-[13.5px] font-semibold">{confirming ? 'Delete your cloud data for good?' : 'Delete your cloud data'}</span><span className="text-[12.5px] text-body">{confirming ? `Your workspace, its backup and your keys leave OpenHut Cloud. You leave the workspaces you joined. This ${HERE} keeps its agents.` : `Backups and sync stop for good. Your ${HERE}s keep their copy.`}</span></span>
+      {confirming
+        ? <span className="flex gap-2"><Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button><Button type="button" variant="danger" className={`${PILL} bg-[oklch(55%_0.2_25)] text-white not-disabled:hover:bg-[oklch(50%_0.2_25)] not-disabled:hover:text-white`} disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete'}</Button></span>
+        : <Button type="button" variant="danger" className="h-8 shrink-0 rounded-md border border-hair px-3 text-[12.5px]" onClick={() => setConfirming(true)}>Delete cloud data</Button>}
+    </div>
+  </section>
+}
+
+function RotateConnections({ rotate }: { rotate: Cloud['rotate'] }) {
+  const done = useRotated()
+  return <div className="flex flex-col gap-2 rounded-lg border border-[oklch(80%_0.1_60)] bg-[oklch(97%_0.03_60)] px-4 py-3 text-[13px]">
+    <span className="flex items-center gap-2 font-semibold"><I icon={Key01Icon} size={16} className="text-[oklch(50%_0.12_50)]" />Connections to rotate</span>
+    <span className="text-body">The device you removed could read these keys. Make a new key at each service, then paste it into the connection.</span>
+    <span className="flex flex-col">{rotate.map((each) => <Button key={each.id} type="button" variant="ghost" className="h-8 justify-between px-1 text-[13px]" onClick={() => navigate('/connections')}><span>{each.name}</span><span className="text-[12px] text-mute">{each.kind}</span></Button>)}</span>
+    <span className="flex justify-end"><Button type="button" variant="secondary" className={PILL} disabled={done.isPending} onClick={() => done.mutate(undefined, { onError: toastError })}>Done</Button></span>
+  </div>
 }
 
 function KeptAccount({ email }: { email: string }) {
@@ -72,6 +98,7 @@ export function CloudDevices() {
   const signIn = useSignIn()
   const remove = useRemoveMac()
   if (cloud?.status === 'on' || cloud?.status === 'offline') return <>
+    {cloud.rotate.length > 0 && <RotateConnections rotate={cloud.rotate} />}
     {cloud.devices.map((device) => <Row key={device.key} icon={<DeviceIcon kind={device.kind} />} title={device.name ?? (device.kind === 'server' ? 'Computer that runs agents' : 'Mac')} note={device.here ? `This ${HERE}` : device.addedAt && `Added ${shortDateTime.format(new Date(device.addedAt))}`}>
       {!device.here && !isPhone() && !cloud.youngUntil && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${device.name ?? 'this device'}?`} detail={device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))}. ${REMOVE_DETAIL}` : REMOVE_DETAIL} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
     </Row>)}

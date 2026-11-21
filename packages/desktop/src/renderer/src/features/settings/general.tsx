@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch'
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Section, Status } from '@/components/kit'
 import { useAdmin, useUpdateAdmin } from '@/features/settings/api'
-import { WorkspaceSettings } from '@/features/people/workspace'
+import { WorkspaceDanger, WorkspaceSettings } from '@/features/people/workspace'
 import { HERE, bytes, desktop, useMachine, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
 import { home } from '@/features/settings/home'
 import { Row, Rows } from '@/features/settings/kit'
@@ -38,6 +38,7 @@ export function GeneralSettings() {
         {admin.data && <UsageData admin={admin.data} />}
       </Rows>
     </Section>
+    <WorkspaceDanger />
   </>
 }
 

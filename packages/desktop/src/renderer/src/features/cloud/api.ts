@@ -3,7 +3,8 @@ import { AllowedDevice, Cloud, CloudAuthorization, CloudPairing, RecoveryKit, ty
 import { request } from '@/lib/api-client'
 import { WORDS } from '@/lib/platform'
 import { navigate } from '@/lib/router'
-import { toast, toastError } from '@/lib/toast'
+import { toastError } from '@/lib/toast'
+import { showDone } from '@/features/cloud/unlock'
 
 const CLOUD_KEY = ['cloud']
 const SIGN_IN_KEY = ['cloud-sign-in']
@@ -98,7 +99,7 @@ export function useRemoveMac() {
     mutationFn: (key: string) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/devices/${encodeURIComponent(key)}`, method: 'DELETE' }),
     onSuccess: (cloud) => {
       client.setQueryData(CLOUD_KEY, cloud)
-      toast('Mac removed. Your old recovery kit stopped working. Save a new one.')
+      showDone({ title: 'Mac removed', note: 'It can’t open anything new. Keys changed. Save a new recovery kit.' })
       navigate('/settings/cloud?open=kit')
     },
     onError: toastError,

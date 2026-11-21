@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { OpenHutAgent } from '@openhut/client'
-import { Cloud, CloudInvite, CloudInvitePreview, type CloudWorkspaceView, type CreateCloudInvite } from '@openhut/common/cloud/cloud.ts'
+import { Cloud, CloudInvite, CloudInvitePreview, CloudWorkspaceView, type CreateCloudInvite, type Role } from '@openhut/common/cloud/cloud.ts'
 import { request } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
 import { nameOf, useCloud } from '@/features/cloud/api'
@@ -42,7 +42,7 @@ export function useWorkspaces(): { all: CloudWorkspaceView[]; active: CloudWorks
   const cloud = useCloud().data
   const id = useSyncExternalStore(subscribe, chosen)
   const all = cloud?.status === 'off' ? [] : cloud?.workspaces ?? []
-  return { all, active: all.find((each) => each.id === id) ?? all.find((each) => each.home), email: cloud?.email ?? null }
+  return { all, active: all.find((each) => each.id === id) ?? all.find((each) => each.home) ?? all[0], email: cloud?.email ?? null }
 }
 
 export function inWorkspace({ agent, active }: { agent: Pick<OpenHutAgent, 'workspace' | 'computer'>; active: CloudWorkspaceView | undefined }): boolean {
@@ -85,7 +85,47 @@ export function useRename() {
 export function useSetRole() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, email, role }: { id: string; email: string; role: 'admin' | 'member' }) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/workspaces/${encodeURIComponent(id)}/members/${encodeURIComponent(email)}`, method: 'PATCH', body: { role } }),
+    mutationFn: ({ id, email, role }: { id: string; email: string; role: Role }) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/workspaces/${encodeURIComponent(id)}/members/${encodeURIComponent(email)}`, method: 'PATCH', body: { role } }),
     onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
+  })
+}
+
+function useCloudCall<T>(call: (input: T) => Promise<Cloud>) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: call,
+    onSuccess: (cloud) => {
+      client.setQueryData(CLOUD_KEY, cloud)
+      void client.invalidateQueries({ queryKey: AGENTS_KEY })
+    },
+  })
+}
+
+const room = (id: string) => `/api/cloud/workspaces/${encodeURIComponent(id)}`
+
+export const useRemoveMember = () => useCloudCall(({ id, email }: { id: string; email: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/members/${encodeURIComponent(email)}`, method: 'DELETE' }))
+
+export const useDeleteWorkspace = () => useCloudCall(({ id, name }: { id: string; name: string }) => request({ schema: Cloud, computer: 'local', path: room(id), method: 'DELETE', body: { name } }))
+
+export const useApprove = () => useCloudCall(({ id, device, words }: { id: string; device: string; words: string[] }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}/approvals`, method: 'POST', body: { words } }))
+
+export const useDeny = () => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}`, method: 'DELETE' }))
+
+export const useAsk = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud/requests', method: 'POST' }))
+
+export const useCancelAsk = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud/requests', method: 'DELETE' }))
+
+export const useDeleteData = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud', method: 'DELETE' }))
+
+export const useRotated = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud/rotations', method: 'DELETE' }))
+
+export function useCreateWorkspace() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (name: string) => request({ schema: CloudWorkspaceView, computer: 'local', path: '/api/cloud/workspaces', method: 'POST', body: { name } }),
+    onSuccess: (workspace) => {
+      chooseWorkspace(workspace.id)
+      void client.invalidateQueries({ queryKey: CLOUD_KEY })
+    },
   })
 }

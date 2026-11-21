@@ -5,7 +5,8 @@ import { createServer } from 'node:http'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { WebSocketServer } from 'ws'
 import Fastify from 'fastify'
-import { fromBase64, lock, newWords, toBase64 } from '@openhut/common/vault/vault.ts'
+import { fromBase64, identity, lock, newWords, toBase64 } from '@openhut/common/vault/vault.ts'
+import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
 
 const seen: { state?: string; deviceKey?: string; members?: unknown; email: string; kit?: unknown; passkey?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean; dropKit?: boolean; refuseBox?: boolean; confirmed?: unknown; cut?: boolean; down?: boolean; failDelete?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [] }
 const cloud = createServer(async (req, res) => {
@@ -62,6 +63,7 @@ const { validateWithZod } = await import('../../../src/server/platform/validatio
 const { answerErrors } = await import('../../../src/server/platform/http-error.ts')
 const { cloudController } = await import('../../../src/server/cloud/cloud-controller.ts')
 const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
+const { roomKeys } = await import('../../../src/server/cloud/room-keys.ts')
 const { cloudService } = await import('../../../src/server/cloud/cloud-service.ts')
 await migrate()
 
@@ -310,4 +312,33 @@ test('a Mac taken off the account from another device answers locked with Sign i
   await keysService.setSession(undefined)
   const removed = await status()
   assert.deepEqual([removed.status, removed.needsSignIn, removed.email], ['locked', true, 'ana@example.com'])
+})
+
+test('Not me on a Mac that is also in a team rotates that team in the same move, and lists the connections it could read', async () => {
+  await keysService.forgetHere()
+  Object.assign(seen, { kit: undefined, members: undefined, workspaces: [], lists: [] })
+  await keysService.open({ sub: 'dev-zed', email: 'zed@example.com' })
+  await keysService.setSession({ token: 'session-token', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
+  const stolen = await identity()
+  const lost = toBase64(stolen.publicKey)
+  const me = await keysService.device()
+  const addTo = async (ws?: string) => {
+    const room = roomKeys.room(ws)
+    const body = roomKeys.members(ws)
+    assert.ok(room && body)
+    const at = Math.max(Date.now(), body.at ?? 0)
+    const list = await signList({ signer: me, body: { ...body, version: body.version + 1, previous: await anchorOf(room.list), at, members: body.members.map((member) => member.email === 'zed@example.com' ? { ...member, devices: [...member.devices, lost] } : member), added: { ...body.added, [lost]: at } } })
+    assert.ok(await roomKeys.advance({ lists: [list], ws }))
+  }
+  await addTo()
+  const team = await roomKeys.createTeam()
+  await addTo(team.workspace.id)
+  const removed = await app.inject({ method: 'DELETE', url: `/api/cloud/devices/${encodeURIComponent(lost)}`, headers })
+  assert.equal(removed.statusCode, 200)
+  const after = roomKeys.members(team.workspace.id)
+  assert.equal(after?.keyVersion, 2)
+  assert.ok(after?.removed.includes(lost))
+  assert.equal(after?.members[0]?.devices.includes(lost), false)
+  assert.equal(roomKeys.room(team.workspace.id)?.workspace.version, 2)
+  assert.deepEqual(removed.json().rotate, [])
 })
