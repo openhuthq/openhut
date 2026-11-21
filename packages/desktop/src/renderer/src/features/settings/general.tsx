@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch'
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Section, Status } from '@/components/kit'
 import { useAdmin, useUpdateAdmin } from '@/features/settings/api'
+import { WorkspaceSettings } from '@/features/people/workspace'
 import { HERE, bytes, desktop, useMachine, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
 import { home } from '@/features/settings/home'
 import { Row, Rows } from '@/features/settings/kit'
@@ -18,6 +19,7 @@ import { toastError } from '@/lib/toast'
 export function GeneralSettings() {
   const admin = useAdmin()
   return <>
+    <WorkspaceSettings />
     <ErrorNote message={admin.error?.message} />
     <Rows>
       {desktop && <PrefSwitch icon={Login01Icon} hue="text-hue-green" name="openAtLogin" title="Open at login" note="Agents start in the background, without opening this window." />}

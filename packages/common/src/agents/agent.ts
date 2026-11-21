@@ -32,6 +32,10 @@ export const Agent = z.object({
   canEdit: z.boolean(),
   runsHere: z._default(z.boolean(), true),
   changedBy: z._default(z.nullable(z.string()), null),
+  workspace: z._default(z.nullable(z.string()), null),
+  shared: z._default(z.boolean(), false),
+  owner: z._default(z.nullable(z.string()), null),
+  canManage: z._default(z.boolean(), true),
   createdAt: Timestamp,
 })
 export type Agent = z.infer<typeof Agent>
@@ -44,6 +48,7 @@ export const CreateAgent = z.object({
   instructions: z.optional(z.string().check(z.maxLength(20_000))),
   model: z.optional(ModelKey),
   face: z.optional(Face),
+  workspace: z.optional(z.string().check(z.regex(/^[A-Za-z0-9_-]{8,64}$/))),
 })
 export type CreateAgent = z.infer<typeof CreateAgent>
 
@@ -56,6 +61,7 @@ export const UpdateAgentFields = {
   browser: z.optional(z.boolean()),
   face: z.optional(Face),
   runsHere: z.optional(z.literal(true)),
+  shared: z.optional(z.boolean()),
 }
 export const UpdateAgent = z.object(UpdateAgentFields).check(atLeastOneField)
 export type UpdateAgent = z.infer<typeof UpdateAgent>

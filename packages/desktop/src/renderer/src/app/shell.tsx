@@ -7,6 +7,7 @@ import { agentPath, type Route } from '@/app/routes'
 import { useAgents, useShareLocalFaces } from '@/features/agents/api'
 import { AgentView } from '@/features/agents/agent-view'
 import { NewAgentDialog } from '@/features/agents/new-agent'
+import { inWorkspace, useWorkspaces } from '@/features/cloud/workspaces'
 import { Sidebar, SidebarContext, type Contact } from '@/features/agents/sidebar'
 import { useThreads } from '@/features/threads/api'
 import { PHONE, useMedia } from '@/lib/media'
@@ -20,6 +21,7 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
   const agents = useAgents()
   useShareLocalFaces(agents.data)
   const threads = useThreads()
+  const { active } = useWorkspaces()
   const [collapsed, setCollapsed] = useState(false)
   const phone = useMedia(PHONE)
   const order = useRef<string[]>([])
@@ -36,13 +38,14 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
     return () => window.removeEventListener('keydown', key)
   }, [])
   const contacts: Contact[] = (agents.data ?? [])
+    .filter((agent) => inWorkspace({ agent, active }))
     .map((agent) => ({ agent, thread: threads.data?.find((thread) => thread.agentId === agent.id) }))
     .sort((a, b) => lastSeen(b) - lastSeen(a))
   const newAgent = () => navigate(activeId ? agentPath({ agentId: activeId, dialog: 'new' }) : '/new')
   order.current = contacts.map(({ agent }) => agent.id)
   const controls = { collapsed, expand: () => setCollapsed(false), newAgent }
   return <SidebarContext value={controls}><div className="flex h-dvh overflow-hidden bg-card pt-[env(safe-area-inset-top)] phone:bg-sidebar pb-[env(safe-area-inset-bottom)] text-left">
-    <Sidebar contacts={contacts} activeId={activeId} collapsed={collapsed} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} />
+    <Sidebar contacts={contacts} activeId={activeId} collapsed={collapsed} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} team={Boolean(active && (active.members.length > 1 || active.invites.length > 0))} />
     {route.page === 'agent' && (phone
       ? <PhonePage key={route.agentId}><AgentView agentId={route.agentId} dialog={route.dialog} detail={route.detail} /></PhonePage>
       : <AgentView key={route.agentId} agentId={route.agentId} dialog={route.dialog} detail={route.detail} />)}

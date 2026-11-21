@@ -206,7 +206,7 @@ function Restoring({ cloud }: { cloud: Cloud }) {
   </Window>
 }
 
-function Window({ children }: { children: ReactNode }) {
+export function Window({ children }: { children: ReactNode }) {
   return <div className="flex h-dvh flex-col bg-canvas text-ink">
     <div className={cn('flex h-[52px] shrink-0 items-center justify-center text-[13px] font-semibold text-mute', DRAG)}>OpenHut</div>
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 pb-12 text-center">{children}</div>

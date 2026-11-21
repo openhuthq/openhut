@@ -20,6 +20,7 @@ const { accessService } = await import('../../../src/server/access/access-servic
 const { invitationController } = await import('../../../src/server/access/invitation-controller.ts')
 const { migrate } = await import('../../../src/server/platform/db.ts')
 const { answerErrors } = await import('../../../src/server/platform/http-error.ts')
+const { validateWithZod } = await import('../../../src/server/platform/validation.ts')
 const { computerId, relayKeyHex } = await import('../../../src/server/platform/secrets.ts')
 const { relayService } = await import('../../../src/server/relay/relay-service.ts')
 const { who } = await import('../../../src/server/team/identity.ts')
@@ -36,6 +37,7 @@ const released = new Promise<void>((resolve) => { release = resolve })
 
 const app = Fastify()
 answerErrors(app)
+app.setValidatorCompiler(validateWithZod)
 app.get('/caller', async (req) => who(req))
 app.post<{ Body: unknown }>('/echo', async (req) => ({ got: req.body }))
 app.get('/stream', async (_req, reply) => {

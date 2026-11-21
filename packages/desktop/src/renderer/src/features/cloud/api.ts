@@ -25,7 +25,7 @@ export function useCloud() {
       }
       if (cloud.status !== 'off' && client.getQueryData(SIGN_IN_KEY)) {
         client.setQueryData(SIGN_IN_KEY, false)
-        if (cloud.status !== 'locked') navigate(cloud.kit ? '/settings/cloud' : '/settings/cloud?open=kit', true)
+        if (cloud.status !== 'locked' && location.pathname !== '/join') navigate(cloud.kit ? '/settings/cloud' : '/settings/cloud?open=kit', true)
       }
       return cloud
     },

@@ -68,12 +68,14 @@ export const agentService = {
     return row
   },
 
-  async create({ actor, name, instructions, model, face }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'face'>): Promise<Agent> {
+  async create({ actor, name, instructions, model, face, workspace }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'face' | 'workspace'>): Promise<Agent> {
     const clean = cleanName(name)
     requireModel(model)
+    const team = workspace && workspace !== keysService.account()?.workspace.id ? workspace : null
+    if (team && !keysService.room(team)) throw new HttpError(400, 'This computer isn’t in that workspace.', { param: 'workspace' })
     const net = await freeNet()
     const row = await db.insertInto('agent').values({
-      id: newId('ag'), name: clean, owner_id: actor.id, model: model ?? DEFAULT_MODEL, net, channel_key: seal(randomBytes(24).toString('hex')), face,
+      id: newId('ag'), name: clean, owner_id: actor.id, model: model ?? DEFAULT_MODEL, net, channel_key: seal(randomBytes(24).toString('hex')), face, workspace: team,
       instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000),
     }).returningAll().executeTakeFirstOrThrow().catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'Someone created an agent at the same moment. Try again.') : err })
     try {
@@ -90,11 +92,12 @@ export const agentService = {
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateAgent }): Promise<Agent> {
     const before = await agentService.requireEditable({ actor, id })
     requireModel(changed(patch.model, before.model))
+    requireRole({ row: before, patch })
     if (patch.browser && !(await features()).browser) throw new HttpError(409, 'This computer can\'t give agents a browser. Run the agent on a Linux computer you added to use one.', { param: 'browser' })
-    const { codeExecution, browser, runsHere: moveHere, ...fields } = patch
+    const { codeExecution, browser, runsHere: moveHere, shared, ...fields } = patch
     await db.updateTable('agent').set({
       ...fields,
-      code_execution: codeExecution, web_browser: browser, name: patch.name === undefined ? undefined : cleanName(patch.name),
+      code_execution: codeExecution, web_browser: browser, name: patch.name === undefined ? undefined : cleanName(patch.name), shared,
       runs_on: moveHere ? await keysService.deviceKey() : undefined, changed_by: patch.instructions === undefined ? undefined : null,
     }).where('id', '=', id).execute()
     if (patch.wanted || moveHere || RENDERED.some((field) => patch[field] !== undefined)) {
@@ -111,6 +114,7 @@ export const agentService = {
 
   async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'agent'>> {
     const row = await rowOf(id)
+    if (!canManage(row)) throw new HttpError(403, `Only an owner or admin of this workspace can delete ${row.name}.`)
     await agentd.remove({ id })
     await db.deleteFrom('agent').where('id', '=', id).execute()
     emit({ name: 'agent.deleted', actor, target: { type: 'agent', id, name: row.name } })
@@ -173,27 +177,36 @@ export const agentService = {
     }
   },
 
-  async synced(): Promise<AgentValue[]> {
-    const rows = await db.selectFrom('agent').selectAll().orderBy('created_at').execute()
+  async synced({ workspace, owner }: { workspace: string | null; owner: string }): Promise<AgentValue[]> {
+    const rows = await db.selectFrom('agent').selectAll().where((eb) => workspace ? eb('workspace', '=', workspace) : eb('workspace', 'is', null)).orderBy('created_at').execute()
     const me = await keysService.deviceKey()
-    return rows.map((row) => ({ id: row.id, name: row.name, instructions: row.instructions, model: row.model, face: row.face, codeExecution: row.code_execution, wanted: row.wanted, runsOn: row.runs_on ?? me }))
+    return rows.map((row) => ({ id: row.id, name: row.name, instructions: row.instructions, model: row.model, face: row.face, codeExecution: row.code_execution, wanted: row.wanted, runsOn: row.runs_on ?? me, shared: row.shared, owner: row.owner ?? owner }))
   },
 
-  async applySynced({ id, value, by }: { id: string; value: AgentValue | null; by: string | null }): Promise<void> {
-    const row = await db.selectFrom('agent').select(['id', 'instructions', 'changed_by']).where('id', '=', id).executeTakeFirst()
+  async applySynced({ id, value, by, author, workspace, me }: { id: string; value: AgentValue | null; by: string | null; author?: { email: string; role: string }; workspace?: string | null; me?: string }): Promise<void> {
+    const row = await db.selectFrom('agent').select(['id', 'instructions', 'changed_by', 'owner', 'runs_on', 'code_execution']).where('id', '=', id).executeTakeFirst()
+    const limited = row && author?.role === 'member' && (row.owner ?? me) !== author.email
     if (!value) {
+      if (limited) return
       if (row) await agentd.remove({ id, trash: true })
       await db.deleteFrom('agent').where('id', '=', id).execute()
-      return
+      return emit({ name: 'agent.synced', target: { type: 'agent', id } })
     }
+    const kept = limited ? { runs_on: row.runs_on, code_execution: row.code_execution, owner: row.owner } : { runs_on: value.runsOn ?? null, code_execution: value.codeExecution, owner: value.owner && value.owner !== me ? value.owner : null }
     const changedBy = !row || row.instructions !== value.instructions ? by : row.changed_by
-    const fields = { name: value.name, instructions: value.instructions, model: value.model, face: value.face, code_execution: value.codeExecution, wanted: value.wanted, runs_on: value.runsOn ?? null, changed_by: changedBy }
+    const fields = { name: value.name, instructions: value.instructions, model: value.model, face: value.face, wanted: value.wanted, shared: Boolean(value.shared), changed_by: changedBy, ...kept, ...workspace !== undefined && { workspace } }
     if (row) await db.updateTable('agent').set(fields).where('id', '=', id).execute()
     else {
       const owner = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirstOrThrow()
       await db.insertInto('agent').values({ id, ...fields, owner_id: owner.id, net: await freeNet(), channel_key: seal(randomBytes(24).toString('hex')) }).execute()
     }
     await agentService.reapply({ id })
+    emit({ name: 'agent.synced', target: { type: 'agent', id } })
+  },
+
+  async hideSynced({ id, owner, me }: { id: string; owner: string; me: string }): Promise<void> {
+    const row = await db.selectFrom('agent').select(['owner']).where('id', '=', id).executeTakeFirst()
+    if (row && (row.owner ?? me) === owner) await agentService.applySynced({ id, value: null, by: owner })
   },
 
   async reapply({ id }: { id: string }): Promise<void> {
@@ -388,10 +401,23 @@ export function runsHere({ row, me }: { row: Pick<AgentRow, 'runs_on'>; me: stri
   return !row.runs_on || row.runs_on === me
 }
 
+function canManage(row: Pick<AgentRow, 'workspace' | 'owner'>): boolean {
+  const role = keysService.roleIn(row.workspace ?? undefined)
+  return !row.owner || row.owner === keysService.account()?.email || role === undefined || role !== 'member'
+}
+
+function requireRole({ row, patch }: { row: AgentRow; patch: UpdateAgent }): void {
+  const mine = !row.owner || row.owner === keysService.account()?.email
+  if (patch.shared === false && row.shared && !mine) throw new HttpError(403, `Only ${row.owner} can make ${row.name} private.`, { param: 'shared' })
+  const limited = (['codeExecution', 'browser', 'runsHere', 'shared'] as const).find((field) => patch[field] !== undefined)
+  if (limited && !canManage(row)) throw new HttpError(403, `Only an owner or admin of this workspace can change where ${row.name} runs, what it can run, or who can use it.`, { param: limited })
+}
+
 function agentOf({ row, ownerName, state, health, editable, here }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean; here: boolean }): Agent {
   return {
     id: row.id, object: 'agent', name: row.name, ownerId: row.owner_id, ownerName: ownerName ?? 'someone', model: row.model, wanted: row.wanted,
-    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, browser: row.web_browser, face: row.face, canEdit: editable, runsHere: here, changedBy: row.changed_by, createdAt: new Date(row.created_at).toISOString(),
+    status: statusOf(state), health: health.health, healthDetail: health.detail, summary: summaryOf(row.instructions), net: row.net, instructions: row.instructions, codeExecution: row.code_execution, browser: row.web_browser, face: row.face, canEdit: editable, runsHere: here, changedBy: row.changed_by,
+    workspace: row.workspace, shared: row.shared, owner: row.owner, canManage: canManage(row), createdAt: new Date(row.created_at).toISOString(),
   }
 }
 

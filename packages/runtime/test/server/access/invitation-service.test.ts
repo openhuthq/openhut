@@ -1,7 +1,12 @@
 import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { generateKeyPairSync, randomBytes, sign } from 'node:crypto'
+import { once } from 'node:events'
+import { createServer } from 'node:http'
 import Fastify from 'fastify'
+import type { MemberList, MemberListBody } from '@openhut/common/cloud/cloud.ts'
+import { anchorOf, check, signList } from '@openhut/common/cloud/member-list.ts'
+import { identity, letter, toBase64 } from '@openhut/common/vault/vault.ts'
 import { connect, generateKeyPair, toHex, type Tunnel, type TunnelError } from '@openhut/tunnel'
 import { startRelay, waitFor } from '@openhut/tunnel/test/relay.ts'
 import { canonical, type Access, type Unsigned } from '@openhut/common/access/access.ts'
@@ -9,10 +14,30 @@ import type { Invitation } from '@openhut/common/access/invitation.ts'
 
 const relay = await startRelay()
 process.env.OPENHUT_RELAY_URL = relay.url
+const room = { invites: new Map<string, { status: number; json: unknown }>(), puts: [] as MemberList[], putStatus: 200 }
+const fake = createServer(async (req, res) => {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) chunks.push(chunk as Buffer)
+  const reply = (status: number, json: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(json))
+  const invite = /\/invites\/([^/]+)$/.exec(req.url ?? '')?.[1]
+  const found = invite ? room.invites.get(invite) : undefined
+  if (found) return reply(found.status, found.json)
+  if (invite) return reply(404, { error: { type: 'invalid_request_error', message: 'gone' } })
+  if (req.method === 'PUT' && req.url?.endsWith('/members')) {
+    room.puts.push(JSON.parse(Buffer.concat(chunks).toString()) as MemberList)
+    return reply(room.putStatus, {})
+  }
+  reply(404, { error: { type: 'invalid_request_error', message: 'nothing here' } })
+}).listen(0, '127.0.0.1')
+await once(fake, 'listening')
+const fakeAddress = fake.address()
+process.env.OPENHUT_CLOUD_URL = `http://127.0.0.1:${typeof fakeAddress === 'object' && fakeAddress ? fakeAddress.port : 0}`
 const { accessService } = await import('../../../src/server/access/access-service.ts')
 const { invitationController } = await import('../../../src/server/access/invitation-controller.ts')
 const { migrate } = await import('../../../src/server/platform/db.ts')
 const { answerErrors } = await import('../../../src/server/platform/http-error.ts')
+const { validateWithZod } = await import('../../../src/server/platform/validation.ts')
+const { inviteId, keysService } = await import('../../../src/server/cloud/keys-service.ts')
 const { computerId, relayKeyHex } = await import('../../../src/server/platform/secrets.ts')
 const { relayService } = await import('../../../src/server/relay/relay-service.ts')
 
@@ -23,6 +48,7 @@ const MAC = randomBytes(32).toString('hex')
 const computer = { id: computerId, key: relayKeyHex }
 const app = Fastify()
 answerErrors(app)
+app.setValidatorCompiler(validateWithZod)
 app.get('/api/agents', async () => ({ object: 'list', data: [] }))
 await app.register(invitationController, { prefix: '/api/invitations' })
 await app.ready()
@@ -127,7 +153,63 @@ test('the device is accepted as soon as the list holds its key, with that list, 
   tunnel.close()
 })
 
+const WS = 'TeamWorkspace01'
+
+async function teamInvite({ email = 'ana@example.com' }: { email?: string } = {}) {
+  const mo = await identity()
+  const card = await identity()
+  const at = Date.now()
+  const genesis: MemberListBody = { workspace: WS, version: 1, previous: null, members: [{ email: 'mo@example.com', role: 'owner', devices: [toBase64(mo.publicKey)] }], invites: [], removed: [], at, added: { [toBase64(mo.publicKey)]: at } }
+  const first = await signList({ signer: mo, body: genesis })
+  const second = await signList({ signer: mo, body: { ...genesis, version: 2, previous: await anchorOf(first), invites: [{ email, role: 'member', key: toBase64(card.publicKey) }] } })
+  const plain = new TextEncoder().encode(JSON.stringify({ workspace: WS, name: 'Activepieces', from: 'mo@example.com', email, role: 'member', anchor: await anchorOf(first), expiresAt: new Date(at + 48 * 3600_000).toISOString() }))
+  const body = toBase64(await letter({ sender: mo, to: card.publicKey, workspace: WS, purpose: 'invite', version: 1, plain }) ?? new Uint8Array())
+  const id = await inviteId(card.publicKey)
+  room.invites.set(id, { status: 200, json: { id, object: 'invite', workspace: WS, email, role: 'member', key: toBase64(card.publicKey), from: toBase64(mo.publicKey), body, expiresAt: new Date(at + 48 * 3600_000).toISOString(), memberLists: [first, second] } })
+  return { id, first, second, link: `https://openhut.dev/join#${WS}.${toBase64(card.secret)}` }
+}
+
+const cloudJoin = async (path: 'previews' | 'joins', link: string) => {
+  const response = await app.inject({ method: 'POST', url: `/api/invitations/cloud/${path}`, headers: { authorization: 'Bearer test-key' }, payload: { link } })
+  return { status: response.statusCode, body: response.json() }
+}
+
+test('a used, expired or wrong-email cloud invite is refused with a sentence', async () => {
+  await keysService.open({ sub: 'dev-ana', email: 'ana@example.com' })
+  await keysService.setSession({ token: 'session', expiresAt: new Date(Date.now() + 3600_000).toISOString() })
+  assert.deepEqual(await cloudJoin('previews', 'https://openhut.dev/join#nope'), { status: 400, body: { error: { type: 'invalid_request_error', message: 'That isn’t an OpenHut invite link. Copy the whole link and try again.', param: 'link' } } })
+  const used = await teamInvite()
+  room.invites.delete(used.id)
+  const gone = await cloudJoin('previews', used.link)
+  assert.deepEqual([gone.status, gone.body.error.message], [404, 'This invite link no longer works. It was used already, or it was taken back. Ask for a new one.'])
+  const late = await teamInvite()
+  room.invites.set(late.id, { status: 410, json: { error: { type: 'invalid_request_error', message: 'This invite link expired. Invites last 48 hours.' } } })
+  const expired = await cloudJoin('joins', late.link)
+  assert.deepEqual([expired.status, expired.body.error.message], [410, 'This invite link expired. Invites last 48 hours. Ask for a new one.'])
+  const other = await teamInvite({ email: 'ana.k@example.com' })
+  room.invites.set(other.id, { status: 403, json: { error: { type: 'permission_error', message: 'This invite is for ana.k@example.com. You’re signed in as ana@example.com.' } } })
+  const wrong = await cloudJoin('joins', other.link)
+  assert.deepEqual([wrong.status, wrong.body.error.message], [403, 'This invite is for ana.k@example.com. You’re signed in as ana@example.com.'])
+  assert.equal(room.puts.length, 0)
+})
+
+test('joining reads the sealed invite, signs the join with the link’s key and waits for an admin to send the workspace key', async () => {
+  const invite = await teamInvite()
+  const preview = await cloudJoin('previews', invite.link)
+  assert.deepEqual(preview.body, { object: 'cloud_invite_preview', workspace: WS, name: 'Activepieces', from: 'mo@example.com', email: 'ana@example.com', role: 'member' })
+  const joined = await cloudJoin('joins', invite.link)
+  assert.equal(joined.status, 200)
+  const put = room.puts.at(-1)
+  assert.ok(put)
+  const body = await check({ anchor: await anchorOf(invite.first), chain: [invite.first, invite.second, put] })
+  assert.deepEqual(body?.members.map((member) => [member.email, member.role, member.devices]), [['mo@example.com', 'owner', body?.members[0]?.devices], ['ana@example.com', 'member', [await keysService.deviceKey()]]])
+  assert.deepEqual(body?.invites, [])
+  assert.deepEqual(joined.body.workspaces.map((each: { id: string; home: boolean; waiting: boolean; role: string }) => [each.home, each.waiting, each.role]), [[true, false, 'owner'], [false, true, 'member']])
+  assert.equal((await cloudJoin('joins', invite.link)).body.error.message, 'You’re already in this workspace.')
+})
+
 test.after(async () => {
+  fake.close()
   served?.close()
   await app.close()
   await relay.close()

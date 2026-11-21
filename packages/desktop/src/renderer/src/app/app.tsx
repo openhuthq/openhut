@@ -8,12 +8,13 @@ import { OfflineChip, useJoinRuntimes } from '@/features/cloud/live'
 import { CloudGate } from '@/features/cloud/unlock'
 import { ConnectionsView } from '@/features/connections/connections-view'
 import { FirstRun } from '@/features/first-run/first-run'
+import { CloudJoin, JoinLinkDialog } from '@/features/join/cloud-join'
 import { Join } from '@/features/join/join'
 import { useMe } from '@/features/people/api'
 import { SettingsView } from '@/features/settings/settings-view'
 import { isPhone, leave, onBack, UnlockCanceled, update } from '@/lib/native'
 import { usePhone } from '@/lib/phone'
-import { navigate, open, usePath } from '@/lib/router'
+import { navigate, open, useOpen, usePath } from '@/lib/router'
 
 type Background = { path: string; route: ShellRoute }
 
@@ -31,6 +32,7 @@ function Dashboard() {
   const background = useRef<Background>({ path: '/', route: { page: 'home', adding: false } })
   if (route.page === 'home' || route.page === 'agent') background.current = { path, route }
   const me = useMe()
+  const opened = useOpen()
   useEffect(() => onBack(back), [])
   useEffect(() => { void update() }, [])
   if (route.page === 'welcome') return <FirstRun />
@@ -40,12 +42,14 @@ function Dashboard() {
   </div>
   if (!me.data) return <div className="grid h-dvh place-items-center bg-sidebar"><span className="animate-[fadein_.3s_1s_both]"><Spinner className="size-5" /></span></div>
   const close = () => navigate(background.current.path)
+  if (route.page === 'join') return <CloudJoin />
   return <CloudGate>
     <Shell route={route.page === 'settings' || route.page === 'connections' ? background.current.route : route} overlay={route.page === 'settings' || route.page === 'connections' ? route.page : undefined} />
     {route.page === 'settings' && <SettingsView tab={route.tab} onClose={close} />}
     {route.page === 'connections' && <ConnectionsView onClose={close} />}
     <OfflineChip />
     <JoinRuntimes />
+    {opened === 'join-link' && <JoinLinkDialog />}
   </CloudGate>
 }
 
