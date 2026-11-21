@@ -101,9 +101,15 @@ export const keysService = {
     await save({ ...await keys(), session })
   },
 
+  ownedBy({ sub }: { sub: string }): void {
+    const other = stored?.account ?? stored?.locked
+    if (other && other.sub !== sub) throw new HttpError(409, `This ${process.platform === 'darwin' ? 'Mac' : 'computer'} is signed in to ${other.email}. Sign in with that account.`)
+  },
+
   async open({ sub, email }: { sub: string; email: string }): Promise<Account> {
     const current = await keys()
     if (current.account?.sub === sub) return current.account
+    keysService.ownedBy({ sub })
     const device = await identity(fromBase64(current.device))
     const id = toBase64(newKey(12))
     const key = newKey()
@@ -172,7 +178,7 @@ function pick(): number[] {
 }
 
 async function keys(): Promise<Stored> {
-  if (stored && stored.machine === machine) return stored
+  if (stored) return stored
   stored = { device: toBase64(newKey()), machine }
   await save(stored)
   return stored
@@ -189,7 +195,8 @@ async function load(): Promise<Stored | undefined> {
   const sealed = keychain
     ? (await db.selectFrom('install_setting').select('value').where('name', '=', ROW).executeTakeFirst())?.value
     : existsSync(FILE) ? readFileSync(FILE, 'utf8') : undefined
-  return sealed ? z.safeParse(Stored, JSON.parse(unseal(sealed))).data : undefined
+  const found = sealed ? z.safeParse(Stored, JSON.parse(unseal(sealed))).data : undefined
+  return found?.machine === machine ? found : undefined
 }
 
 function machineId(): string {

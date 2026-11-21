@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react'
-import { CloudIcon, FileDownloadIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
+import { useRef, useState, type FormEvent } from 'react'
+import { CloudIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import type { RecoveryKit } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { CopyButton } from '@/components/copy-button'
+import { ErrorNote } from '@/components/error-note'
 import { Creature } from '@/components/creature'
 import { Hut } from '@/components/hut'
 import { I, PILL } from '@/components/kit'
@@ -42,7 +43,7 @@ export function NeedsCloud({ title }: { title: string }) {
 }
 
 export function TurnOn({ pending, onClick, short }: { pending: boolean; onClick: () => void; short?: boolean }) {
-  return <Button type="button" variant="primary" className={short ? `${PILL} gap-1.5` : 'gap-1.5'} disabled={pending} onClick={onClick}><I icon={CloudIcon} size={short ? 14 : 15} />{short ? 'Turn on' : 'Turn on OpenHut Cloud'}</Button>
+  return <Button type="button" variant={short ? 'secondary' : 'primary'} className={short ? `${PILL} gap-1.5` : 'gap-1.5'} disabled={pending} onClick={onClick}><I icon={CloudIcon} size={short ? 14 : 15} />{pending ? 'Connecting…' : short ? 'Turn on' : 'Turn on OpenHut Cloud'}</Button>
 }
 
 function YouVsUs({ team }: { team?: boolean }) {
@@ -69,13 +70,13 @@ export function SaveKit() {
   const make = useNewKit()
   const [shown, setShown] = useState<RecoveryKit>()
   const [checking, setChecking] = useState(false)
-  const create = () => make.mutate(undefined, { onSuccess: setShown, onError: toastError })
-  if (shown && checking) return <ConfirmKit kit={shown} onBack={() => setChecking(false)} onDone={() => { setShown(undefined); setChecking(false) }} />
+  const create = () => make.mutate(undefined, { onSuccess: (made) => { download(made); setShown(made) }, onError: toastError })
+  if (shown && checking) return <ConfirmKit kit={shown} onBack={() => setChecking(false)} onDone={() => open()} />
   if (shown) return <KitWords kit={shown} onSaved={() => setChecking(true)} />
   return <Dialog size="narrow" label="Save a way back in" dismissable={false} onClose={() => open()}>
     <DialogHead title="Save a way back in" />
     <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
-      <p className="m-0 text-body">We can't reset your key. Pick how you get back in.</p>
+      <p className="m-0 text-body">We can't reset your key. Save your recovery kit to get back in.</p>
       <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
         <div className="flex items-center gap-3 px-4 py-3.5">
           <Mascot kind="kit" size={24} />
@@ -84,42 +85,50 @@ export function SaveKit() {
         </div>
       </div>
     </div>
-    <DialogFoot start={<span className="text-[12px] text-mute">{kit ? 'You can get back in on a new Mac.' : 'Save at least one to continue.'}</span>}><Button type="button" variant="primary" disabled={!kit} onClick={() => open()}>Continue</Button></DialogFoot>
+    <DialogFoot start={<span className="text-[12px] text-mute">{kit ? 'You can get back in on a new Mac.' : 'Save it to continue.'}</span>}><Button type="button" variant="primary" disabled={!kit} onClick={() => open()}>Continue</Button></DialogFoot>
   </Dialog>
 }
 
+function numbered(kit: RecoveryKit): string {
+  return kit.words.map((word, index) => `${index + 1}. ${word}`).join('\n')
+}
+
+function download(kit: RecoveryKit) {
+  const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([`OpenHut recovery kit\n\nThese 12 words and your Google account open your cloud. Keep them offline.\n\n${numbered(kit)}\n`], { type: 'text/plain' })), download: 'openhut-recovery-kit.txt' })
+  link.click()
+  URL.revokeObjectURL(link.href)
+}
+
 function KitWords({ kit, onSaved }: { kit: RecoveryKit; onSaved: () => void }) {
-  const text = kit.words.map((word, index) => `${index + 1}. ${word}`).join('\n')
-  const download = () => {
-    const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([`OpenHut recovery kit\n\nThese 12 words and your Google account open your cloud. Keep them offline.\n\n${text}\n`], { type: 'text/plain' })), download: 'openhut-recovery-kit.txt' })
-    link.click()
-    URL.revokeObjectURL(link.href)
-  }
-  return <Dialog size="narrow" label="Save your recovery words" dismissable={false} onClose={() => open()}>
-    <DialogHead title="Save your recovery words" />
+  return <Dialog size="narrow" label="Save your recovery words" onClose={() => open()}>
+    <DialogHead title="Save your recovery words" onClose={() => open()} />
     <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
-      <p className="m-0 text-body">They unlock your cloud on a new Mac. With your Google account they open everything, so keep them like a password. We can't reset them.</p>
+      <p className="m-0 text-body">They unlock your cloud on a new Mac. We can't reset them.</p>
       <div className="grid grid-cols-3 gap-2">{kit.words.map((word, index) => <span key={index} className="flex items-center gap-2 rounded-lg border border-hair bg-card px-3 py-2 font-mono text-[13px]"><span className="w-4 text-right text-[11px] text-mute">{index + 1}</span>{word}</span>)}</div>
     </div>
-    <DialogFoot start={<span className="flex gap-2"><CopyButton text={text} label="Copy" /><Button type="button" variant="secondary" size="sm" className="gap-1.5" onClick={download}><I icon={FileDownloadIcon} size={14} />Download</Button></span>}><Button type="button" variant="primary" onClick={onSaved}>I saved them</Button></DialogFoot>
+    <DialogFoot start={<CopyButton text={numbered(kit)} label="Copy" />}><Button type="button" variant="primary" onClick={onSaved}>I saved them</Button></DialogFoot>
   </Dialog>
 }
 
 function ConfirmKit({ kit, onBack, onDone }: { kit: RecoveryKit; onBack: () => void; onDone: () => void }) {
   const confirm = useConfirmKit()
+  const busy = useRef(false)
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (busy.current) return
+    busy.current = true
     const form = new FormData(event.currentTarget)
-    confirm.mutate(kit.ask.map((index) => String(form.get(`word-${index}`) ?? '')), { onSuccess: onDone })
+    confirm.mutate(kit.ask.map((index) => String(form.get(`word-${index}`) ?? '')), { onSuccess: onDone, onSettled: () => { busy.current = false } })
   }
   return <Dialog size="narrow" label="Check your recovery words" dismissable={false} onClose={() => open()}>
     <form onSubmit={submit}>
       <DialogHead title="Check your recovery words" />
       <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
         <p className="m-0 text-body">Type two of them, so we know the kit is saved.</p>
-        {kit.ask.map((index, i) => <label key={index} className="flex flex-col gap-1.5"><span className="font-medium">Word {index + 1}</span><Input name={`word-${index}`} autoComplete="off" spellCheck={false} autoFocus={i === 0} required /></label>)}
+        {kit.ask.map((index, i) => <label key={index} className="flex flex-col gap-1.5"><span className="font-medium">Word {index + 1}</span><Input name={`word-${index}`} className="font-mono" autoComplete="off" spellCheck={false} autoFocus={i === 0} required /></label>)}
+        <ErrorNote message={confirm.error?.message} />
       </div>
-      <DialogFoot error={confirm.error?.message} start={<Button type="button" variant="secondary" onClick={onBack}>Back</Button>}><Button type="submit" variant="primary" disabled={confirm.isPending}>Save kit</Button></DialogFoot>
+      <DialogFoot start={<Button type="button" variant="secondary" onClick={onBack}>Back</Button>}><Button type="submit" variant="primary" disabled={confirm.isPending}>Done</Button></DialogFoot>
     </form>
   </Dialog>
 }

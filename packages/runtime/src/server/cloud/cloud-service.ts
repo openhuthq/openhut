@@ -9,10 +9,10 @@ import { keysService, type Account } from './keys-service.ts'
 import { syncService } from './sync-service.ts'
 
 const PENDING_MS = 15 * 60_000
-const RETURN = /^(app:\/\/openhut|http:\/\/(127\.0\.0\.1|localhost)(:\d+)?)$/
+const SIGNED_IN = 'You’re signed in. You can go back to OpenHut.'
 const Workspaces = z.object({ data: z.array(z.object({ id: z.string(), key: z.string() })) })
 const Lists = z.object({ data: z.array(MemberList) })
-const pending = new Map<string, { verifier: string; authorization: string; returnTo: string; at: number }>()
+const pending = new Map<string, { verifier: string; authorization: string; at: number }>()
 
 export const cloudService = {
   async status(): Promise<Cloud> {
@@ -29,7 +29,7 @@ export const cloudService = {
     }
   },
 
-  async start({ returnTo }: { returnTo?: string }): Promise<CloudAuthorization> {
+  async start(): Promise<CloudAuthorization> {
     const device = await keysService.device()
     const state = randomBytes(24).toString('base64url')
     const verifier = randomBytes(32).toString('base64url')
@@ -38,34 +38,34 @@ export const cloudService = {
       provider: 'google', scopes: ['openid', 'email'], codeChallenge, redirectUrl: `${callbackBase()}/api/cloud/callback`, state, deviceKey: toBase64(device.publicKey),
     })
     for (const [key, value] of pending) if (Date.now() - value.at > PENDING_MS) pending.delete(key)
-    pending.set(state, { verifier, authorization: id, returnTo: returnTo && RETURN.test(returnTo) ? returnTo : '', at: Date.now() })
+    pending.set(state, { verifier, authorization: id, at: Date.now() })
     return { object: 'cloud_authorization', authorizationUrl }
   },
 
   async finish({ state, code, error }: { state?: string; code?: string; error?: string }): Promise<string> {
     const started = pending.get(state ?? '')
     pending.delete(state ?? '')
-    const back = `${started?.returnTo ?? ''}/settings/cloud`
-    if (!started || !code) return `${back}?error=${encodeURIComponent(error ? 'Sign-in was cancelled.' : 'This sign-in expired. Try again.')}`
+    if (!started || !code) return page(error ? 'Sign-in was cancelled. You can go back to OpenHut.' : 'This sign-in expired. Go back to OpenHut and try again.')
     try {
       const device = await keysService.device()
       const signature = await signProof({ signer: device, proof: 'session', parts: [started.authorization, code] })
       const session = await cloud.session({ grantType: 'authorization_code', authorization: started.authorization, code, codeVerifier: started.verifier, deviceKey: toBase64(device.publicKey), signature })
+      keysService.ownedBy(session)
       await keysService.setSession({ token: session.token, expiresAt: session.expiresAt })
       if (keysService.account()?.sub !== session.sub) {
         const kit = await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token: session.token })
         if (kit.status === 200) {
           await keysService.setLocked({ sub: session.sub, email: session.email })
-          return `${started.returnTo}/`
+          return page(SIGNED_IN)
         }
         await syncService.reset({ restoring: false })
       }
       const account = await keysService.open({ sub: session.sub, email: session.email })
       await openRoom({ account, token: session.token })
       syncService.connect()
-      return keysService.kit() ? back : `${back}?open=kit`
+      return page(SIGNED_IN)
     } catch (err) {
-      return `${back}?error=${encodeURIComponent(messageOf(err))}`
+      return page(`${messageOf(err)} Go back to OpenHut and try again.`)
     }
   },
 
@@ -107,6 +107,11 @@ export const cloudService = {
   },
 
   connect: syncService.connect,
+}
+
+function page(sentence: string): string {
+  const text = sentence.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`)
+  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>OpenHut</title><body style="margin:0;display:grid;place-items:center;min-height:90vh;font:15px/1.5 -apple-system,system-ui,sans-serif;color:#0b0b0b;background:#fff"><p style="max-width:420px;padding:0 16px;text-align:center">${text}</p></body>`
 }
 
 async function openRoom({ account, token }: { account: Account; token: string }): Promise<void> {

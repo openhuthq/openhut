@@ -196,9 +196,6 @@ export const Cloud = z.object({
 })
 export type Cloud = z.infer<typeof Cloud>
 
-export const CreateCloudAuthorization = z.object({ returnTo: z.optional(z.string().check(z.maxLength(100))) })
-export type CreateCloudAuthorization = z.infer<typeof CreateCloudAuthorization>
-
 export const CloudAuthorization = z.object({ object: z.literal('cloud_authorization'), authorizationUrl: z.string() })
 export type CloudAuthorization = z.infer<typeof CloudAuthorization>
 
