@@ -249,6 +249,7 @@ export const agentService = {
   async reapply({ id }: { id: string }): Promise<void> {
     const row = await rowOf(id)
     await agentd.apply({ id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' && runsHere({ row, me: await meIfNeeded([row]) }) })
+    probes.delete(id)
   },
 
   async stopAll(): Promise<void> {
