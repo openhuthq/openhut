@@ -179,6 +179,7 @@ export const cloudService = {
   },
 
   async deleteData(): Promise<Cloud> {
+    if (keysService.locked() && !keysService.account()) return await deleteLocked()
     const account = keysService.mustBeOn()
     const teams = roomKeys.rooms().map((room) => room.workspace.id).filter((ws) => ws !== account.workspace.id)
     const shared = teams.find((ws) => roomKeys.roleIn(ws) === 'owner' && (roomKeys.members(ws)?.members.length ?? 0) > 1)
@@ -619,6 +620,15 @@ async function removed(): Promise<void> {
 
 function listedUnder({ account, device }: { account: Account; device: string }): boolean {
   return Boolean(bodyOf(account.list)?.members.some((member) => member.email === account.email && member.devices.includes(device)))
+}
+
+async function deleteLocked(): Promise<Cloud> {
+  mustBeLocked()
+  const wiped = await cloud.account({ method: 'DELETE', path: '/v1/account', token: await keysService.token() })
+  if (wiped.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t delete your account. Try again.')
+  await syncService.reset({ restoring: false })
+  await keysService.forgetHere()
+  return cloudService.status()
 }
 
 function mustBeLocked(): { sub: string; email: string } {

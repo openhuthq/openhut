@@ -48,12 +48,17 @@ function CloudLocked({ cloud }: { cloud: Cloud }) {
     </Rows>
     <Section title="Danger zone">
       <Rows>
-        <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete cloud account" note="Unlock first. Deleting needs your key, so your Google sign-in alone can’t wipe your backup.">
-          <Button type="button" variant="danger" className={PILL} onClick={() => open('enable')}>Delete account</Button>
-        </Row>
+        <LockedDelete />
       </Rows>
     </Section>
   </>
+}
+
+function LockedDelete() {
+  const remove = useDeleteData()
+  return <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete cloud account" note={<span className="text-fail">Deletes your backup and sign-in. Agents on this computer stay.</span>}>
+    <ConfirmButton className={PILL} disabled={remove.isPending} question="Delete your cloud account?" detail="Your agents and chats stay on this computer. You can’t undo this." list={['Your backup of agents, chats and settings', 'Your recovery kit and sign-in']} action="Delete account" typed="delete my account" onConfirm={() => remove.mutate(undefined, { onSuccess: () => notify({ title: 'Cloud account deleted', note: 'Your agents and chats stay on this computer.' }), onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
+  </Row>
 }
 
 function AccountHead({ email, note, status }: { email: string; note: ReactNode; status: ReactNode }) {

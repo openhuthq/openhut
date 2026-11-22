@@ -9,12 +9,13 @@ import { fromBase64, identity, lock, newWords, toBase64 } from '@openhut/common/
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
 import { checkProof } from '@openhut/common/cloud/cloud.ts'
 
-const seen: { state?: string; deviceKey?: string; refreshed: number; members?: unknown; email: string; kit?: unknown; passkey?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean; dropKit?: boolean; refuseBox?: boolean; confirmed?: unknown; cut?: boolean; down?: boolean; failDelete?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [], refreshed: 0 }
+const seen: { erased?: Record<string, unknown>; state?: string; deviceKey?: string; refreshed: number; members?: unknown; email: string; kit?: unknown; passkey?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean; dropKit?: boolean; refuseBox?: boolean; confirmed?: unknown; cut?: boolean; down?: boolean; failDelete?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [], refreshed: 0 }
 const cloud = createServer(async (req, res) => {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
   const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown> : {}
   const reply = (status: number, json: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(json))
+  if (req.url === '/v1/account' && req.method === 'DELETE') return reply(200, { id: `dev-${seen.email}`, object: 'account', deleted: true, erased: seen.erased = body })
   if (req.url === '/v1/auth/sign-in/social') {
     Object.assign(seen, { state: body.state, deviceKey: body.device })
     return reply(200, { url: 'https://accounts.example/auth', redirect: false })
@@ -276,6 +277,19 @@ test('a passkey’s PRF output locks the account key in the room; on a new Mac t
   assert.equal(wrong.statusCode, 400)
   assert.match(wrong.json().error.message, /Touch ID isn’t set up on this/)
   assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/unlock', headers, payload: { prf } })).statusCode, 200)
+  assert.equal((await until('on')).email, 'ana@example.com')
+})
+
+test('a locked Mac deletes the cloud account with only its sign-in, sends no proof, and goes back to off', async () => {
+  await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })
+  await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })
+  await signIn('ana@example.com')
+  assert.equal((await status()).status, 'locked')
+  const deleted = await app.inject({ method: 'DELETE', url: '/api/cloud', headers })
+  assert.equal(deleted.statusCode, 200)
+  assert.deepEqual([deleted.json().status, seen.erased], ['off', {}])
+  await signIn('ana@example.com')
+  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/unlock', headers, payload: { prf: Buffer.alloc(32, 7).toString('base64url') } })).statusCode, 200)
   assert.equal((await until('on')).email, 'ana@example.com')
 })
 
