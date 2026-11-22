@@ -1,8 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Computer, Features } from '@openhut/client'
 import { useAgents } from '@/features/agents/api'
 import { Admin, Update } from '@openhut/common/admin/admin.ts'
 import { ApiError } from '@openhut/common/api.ts'
+import { Cloud } from '@openhut/common/cloud/cloud.ts'
+import { request } from '@/lib/api-client'
 import { openhut } from '@/lib/openhut'
 import { adminsOf } from '@/features/computers/admins'
 import { WORDS } from '@/lib/platform'
@@ -28,6 +30,12 @@ export function useComputerAdmins() {
     queryFn: (): Promise<ComputerAdmin[]> => adminsOf({ computers: computers ?? [], read: adminOf }),
     enabled: !!computers,
   })
+}
+
+export function useDeviceKeys(computers: Computer[]): Record<string, string | null | undefined> {
+  const remote = computers.filter((computer) => computer.id !== 'local' && computer.online)
+  const keys = useQueries({ queries: remote.map((computer) => ({ queryKey: [...COMPUTERS_KEY, 'device', computer.id], queryFn: () => request({ schema: Cloud, computer: computer.id, path: '/api/cloud' }).then((cloud) => cloud.device), staleTime: Infinity, retry: false })) })
+  return Object.fromEntries(remote.map((computer, index) => [computer.id, keys[index]?.data]))
 }
 
 export function useRemoveComputer() {

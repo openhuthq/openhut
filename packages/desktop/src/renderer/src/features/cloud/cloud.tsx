@@ -145,17 +145,36 @@ function RotateConnections({ rotate }: { rotate: Cloud['rotate'] }) {
 
 const addedAt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })
 
-export function CloudDevices() {
+export type CloudDevice = Cloud['devices'][number]
+
+export function devicesOf(cloud: Cloud | undefined): CloudDevice[] {
+  return cloud?.status === 'on' || cloud?.status === 'offline' ? cloud.devices : []
+}
+
+export function deviceNote({ device, note }: { device: CloudDevice | undefined; note?: string }): string {
+  return [device?.here && (isPhone() ? 'Your computer' : 'This computer'), note, device?.addedAt && `Added ${addedAt.format(new Date(device.addedAt))}`].filter(Boolean).join(' · ')
+}
+
+export function KeysToReplace() {
+  const cloud = useCloud().data
+  return cloud?.rotate.length ? <RotateConnections rotate={cloud.rotate} /> : null
+}
+
+export function CloudDevices({ merged }: { merged: string[] }) {
   const cloud = useCloud().data
   const remove = useRemoveMac()
-  if (cloud?.status === 'on' || cloud?.status === 'offline') return <>
-    {cloud.rotate.length > 0 && <RotateConnections rotate={cloud.rotate} />}
-    {cloud.devices.map((device) => <Row key={device.key} icon={<DeviceIcon kind={device.kind} />} title={device.name ?? (device.kind === 'server' ? 'Computer that runs agents' : 'Computer')} note={[device.here && (isPhone() ? 'Your computer' : 'This computer'), device.addedAt && `Added ${addedAt.format(new Date(device.addedAt))}`].filter(Boolean).join(' · ')}>
+  if (cloud?.status !== 'on' && cloud?.status !== 'offline') return null
+  return <>
+    {cloud.devices.filter((device) => !merged.includes(device.key)).map((device) => <Row key={device.key} icon={<DeviceIcon kind={device.kind} />} title={device.name ?? (device.kind === 'server' ? 'Computer that runs agents' : 'Computer')} note={deviceNote({ device })}>
       {!device.here && !isPhone() && !cloud.youngUntil && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${device.name ?? 'this device'}?`} detail={device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))}. ${REMOVE_DETAIL}` : REMOVE_DETAIL} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
     </Row>)}
     {cloud.youngUntil && <p className="m-0 px-1 text-[12.5px] text-mute">This computer was added less than 3 days ago. Remove devices from an older one, or after {shortDate.format(new Date(cloud.youngUntil))}.</p>}
-    <Row onClick={() => open('add-mac')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-blue" />} title="Unlock a new computer" note={`Let a new computer in with this ${isPhone() ? 'phone' : 'one'}.`}><Chevron /></Row>
   </>
+}
+
+export function UnlockComputer() {
+  const cloud = useCloud().data
+  if (cloud?.status === 'on' || cloud?.status === 'offline') return <Row onClick={() => open('add-mac')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-blue" />} title="Unlock a new computer" note={`Let a new computer in with this ${isPhone() ? 'phone' : 'one'}.`}><Chevron /></Row>
   if (cloud?.status !== 'off' || isPhone()) return null
   return <Row icon={<I icon={SquareLock02Icon} size={20} className="text-mute" />} title="Chat from your other computers" note="Needs OpenHut Cloud"><EnableCloud /></Row>
 }
