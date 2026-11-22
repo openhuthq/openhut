@@ -1,8 +1,8 @@
 # Release signing
 
-The Mac app installs an update only when `release.json`, naming the release's version and listing the SHA-512 of every release file, carries an Ed25519 signature by the offline release key. The app also requires the signed version to equal the version the feed offers, so an older signed release can't be served again as a newer one (electron-updater never installs a version older than the running one). CI never holds that key, so a stolen CI secret alone can't ship an update. Until a public key is pinned in `packages/desktop/src/release-key.mjs`, the app installs updates as before.
+The Mac app installs an update only when `release.json`, naming the release's version and listing the SHA-512 of every release file, carries an Ed25519 signature by the offline release key. The app also requires the signed version to equal the version the feed offers, so an older signed release can't be served again as a newer one (electron-updater never installs a version older than the running one). CI never holds that key, so a stolen CI secret alone can't ship an update. The public key is pinned in `packages/desktop/src/release-key.mjs` (since 2026-11-22); the private key exists only offline with the owner.
 
-## Make the key (once, owner)
+## Make the key (done once; again only to replace a lost or leaked key)
 
 On a computer you trust, with the repo checked out, and the key going to an offline drive:
 
@@ -34,18 +34,11 @@ gh run rerun --repo openhuthq/openhut --failed "$(gh run list --repo openhuthq/o
 
 Check what you sign first: `shasum -a 256 vX.Y.Z/*` against the build log, and `SHA256SUMS` against a build of the same tag (`npm -w @openhut/desktop run build && npm -w @openhut/desktop run pack-backend && npm -w @openhut/desktop run sums`).
 
-## GitHub settings (owner)
+## GitHub settings
 
-- **Release secrets need a reviewer.** Settings › Environments › New environment `release`, tick "Required reviewers", add yourself, and under "Deployment branches and tags" allow only tags `v*`. Move `CSC_LINK`, `CSC_KEY_PASSWORD`, `NOTARY_KEY_P8_BASE64`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID` from repo secrets into that environment (delete the repo copies), then add `environment: release` to the desktop workflow's `build` and `publish` jobs. `CLOUDFLARE_API_TOKEN` stays a repo secret because the site deploy uses it too.
-- **Protect release tags.** Settings › Rules › Rulesets › New tag ruleset, target `v*`, enforce "Restrict creations", "Restrict updates" and "Restrict deletions", bypass list: only you. Or with `gh`:
+Set up on 2026-11-22:
 
-```sh
-gh api -X POST repos/openhuthq/openhut/rulesets --input - <<'EOF'
-{"name":"release tags","target":"tag","enforcement":"active",
- "conditions":{"ref_name":{"include":["refs/tags/v*"],"exclude":[]}},
- "rules":[{"type":"creation"},{"type":"update"},{"type":"deletion"}],
- "bypass_actors":[{"actor_id":5,"actor_type":"RepositoryRole","bypass_mode":"always"}]}
-EOF
-```
+- **Environment `release`**: required reviewer the owner, deployment only from tags `v*`. The desktop workflow's `publish` job runs in it, so nothing goes public without the owner's approval.
+- **Tag ruleset `release tags`** on `refs/tags/v*`: creation, update, deletion and force-push are restricted; only the repository Admin role (`actor_id` 5) bypasses.
 
-(`actor_id` 5 is the repository Admin role.)
+Still the owner's (needs the secret values): move `CSC_LINK`, `CSC_KEY_PASSWORD`, `NOTARY_KEY_P8_BASE64`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID` from repo secrets into the `release` environment (delete the repo copies), then run the `draft` and `build` jobs in it on tags (`environment: ${{ startsWith(github.ref, 'refs/tags/') && 'release' || '' }}`); a manual full build of a branch then can't sign. `CLOUDFLARE_API_TOKEN` stays a repo secret because the site deploy uses it too. The release key is never a secret anywhere.

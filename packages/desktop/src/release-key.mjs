@@ -1,7 +1,7 @@
 import { createPublicKey, verify } from 'node:crypto'
 import { basename } from 'node:path'
 
-export const RELEASE_KEY = ''
+export const RELEASE_KEY = 'MCowBQYDK2VwAyEAs5x8ki7YTcgU4CLw8G+n0nWLYYrlZj6SYPTsJjfOd5o='
 
 export function cosigned({ manifest, signature, key, version, files }) {
   try {
