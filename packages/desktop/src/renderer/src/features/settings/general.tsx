@@ -1,5 +1,5 @@
 import type { IconSvgElement } from '@hugeicons/react'
-import { Alert02Icon, ChartColumnIcon, Coffee01Icon, Folder01Icon, Login01Icon, Notification01Icon } from '@hugeicons/core-free-icons'
+import { ChartColumnIcon, Coffee01Icon, Folder01Icon, Login01Icon } from '@hugeicons/core-free-icons'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -9,7 +9,6 @@ import { useAdmin, useUpdateAdmin } from '@/features/settings/api'
 import { bytes, desktop, useMachine, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
 import { home } from '@/features/settings/home'
 import { Row, Rows } from '@/features/settings/kit'
-import { isPhone } from '@/lib/native'
 import { WORDS } from '@/lib/platform'
 import { toastError } from '@/lib/toast'
 
@@ -21,12 +20,6 @@ export function GeneralSettings() {
       {desktop && <PrefSwitch icon={Login01Icon} hue="text-hue-green" name="openAtLogin" title="Open at login" note="Agents start in the background, without opening this window." />}
       {desktop && <PrefSwitch icon={Coffee01Icon} hue="text-hue-amber" name="keepAwake" title="Keep this computer awake" note="While agents run, so they keep answering. The screen can still turn off." />}
     </Rows>
-    {!isPhone() && <Section title="Notify me when">
-      <Rows>
-        <PrefSwitch icon={Notification01Icon} hue="text-hue-amber" name="notifyReplies" title="An agent replies" note="While this window is closed or in the background." />
-        <PrefSwitch icon={Alert02Icon} hue="text-hue-red" name="notifyFailures" title="An agent stops or fails" note={WORDS.badgeNote} />
-      </Rows>
-    </Section>}
     <Section title="Data">
       <Rows>
         {desktop && <DataFolder />}
