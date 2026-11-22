@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { lockHere, openHere, openRecord, sealRecord, type AgentValue, type Synced } from '../../src/cloud/record.ts'
+import { lockHere, openHere, openRecord, ownerProven, proveOwner, sealRecord, type AgentValue, type Synced } from '../../src/cloud/record.ts'
 import { recordBind, signRecord, type Member, type Record } from '../../src/cloud/cloud.ts'
 import { identity, lock, newKey, toBase64 } from '../../src/vault/vault.ts'
 
@@ -121,4 +121,23 @@ test('a Here is locked to its sender, padded to one fixed size, and opens only w
   assert.equal(await openHere({ workspace, keys: { 1: newKey() }, from, body }), null)
   assert.equal(Buffer.from(body, 'base64url').includes('ag_helpdesk'), false)
   assert.equal(await lockHere({ workspace, key, version: 1, from, value: { ...value, agent: 'ag_x'.repeat(200) } }), null)
+})
+
+test('an owner proof holds only for the owner’s own device, this workspace, this agent and the Shared or Private it was signed for', async () => {
+  const mine: AgentValue = { ...helpdesk, owner: 'mo@example.com', shared: false }
+  const proof = await proveOwner({ signer: mo, workspace, value: mine, n: 1 })
+  assert.equal(await ownerProven({ workspace, value: { ...mine, ownerProof: proof }, members }), true)
+  assert.equal(await ownerProven({ workspace, value: { ...mine, instructions: 'Edited by a member.', ownerProof: proof }, members }), true)
+  assert.equal(await ownerProven({ workspace, value: mine, members }), false)
+  assert.equal(await ownerProven({ workspace, value: { ...mine, shared: true, ownerProof: proof }, members }), false)
+  assert.equal(await ownerProven({ workspace, value: { ...mine, ownerProof: { ...proof, n: 2 } }, members }), false)
+  assert.equal(await ownerProven({ workspace: 'ws_other_room', value: { ...mine, ownerProof: proof }, members }), false)
+  assert.equal(await ownerProven({ workspace, value: { ...mine, id: 'ag_another', ownerProof: proof }, members }), false)
+  assert.equal(await ownerProven({ workspace, value: { ...mine, owner: 'ana@example.com', ownerProof: proof }, members }), false)
+  const anas = await proveOwner({ signer: ana, workspace, value: mine, n: 1 })
+  assert.equal(await ownerProven({ workspace, value: { ...mine, ownerProof: anas }, members }), false)
+  const strangers = await proveOwner({ signer: stranger, workspace, value: mine, n: 1 })
+  assert.equal(await ownerProven({ workspace, value: { ...mine, ownerProof: strangers }, members }), false)
+  const opened = await open(await sealed({ value: { ...mine, ownerProof: proof } }))
+  assert.deepEqual(opened?.kind === 'agent' && opened.value?.ownerProof, proof)
 })

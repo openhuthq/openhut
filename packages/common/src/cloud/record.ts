@@ -3,7 +3,7 @@ import { Wanted } from '../agents/agent.ts'
 import { ConnectionKind } from '../connections/connection.ts'
 import { ModelKey, ProviderId, ProviderModel } from '../models/provider.ts'
 import { ChatMessage, fileInHome, AGENT_HOME } from '../threads/thread.ts'
-import { checkRecord, DeviceKey, HereField, Locked, Member, parseJson, recordBind, Signed, signRecord, type Record as CloudRecord } from './cloud.ts'
+import { checkProof, checkRecord, DeviceKey, HereField, Locked, Member, parseJson, recordBind, Signature, Signed, signProof, signRecord, type Record as CloudRecord } from './cloud.ts'
 import { fromBase64, lock, newKey, readHeader, toBase64, unlock, type Bytes, type Identity } from '../vault/vault.ts'
 
 const AgentId = z.string().check(z.regex(/^ag_[a-z0-9]{8}$/))
@@ -11,6 +11,9 @@ const Hash = z.string().check(z.regex(/^[A-Za-z0-9_-]{43}$/))
 const PICTURE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/
 const Face = z.string().check(z.maxLength(60_000), z.refine((face) => PICTURE.test(face) || face.startsWith('{'), 'A face is a look or a PNG, JPEG or WebP picture.'))
 const MemoryText = z.nullable(z.string().check(z.maxLength(10_000)))
+
+export const OwnerProof = z.object({ by: DeviceKey, n: z.number().check(z.int(), z.minimum(1), z.maximum(0xffffffff)), signature: Signature })
+export type OwnerProof = z.infer<typeof OwnerProof>
 
 export const AgentValue = z.object({
   id: AgentId,
@@ -23,6 +26,7 @@ export const AgentValue = z.object({
   runsOn: z.optional(DeviceKey),
   shared: z.optional(z.boolean()),
   owner: z.optional(Member.shape.email),
+  ownerProof: z.optional(OwnerProof),
 })
 export type AgentValue = z.infer<typeof AgentValue>
 
@@ -149,6 +153,17 @@ export async function openRecord({ workspace, keys, record, members, own }: { wo
   return fits ? opened : null
 }
 
+export async function proveOwner({ signer, workspace, value, n }: { signer: Identity; workspace: string; value: AgentValue; n: number }): Promise<OwnerProof> {
+  return { by: toBase64(signer.publicKey), n, signature: await signProof({ signer, proof: 'agent-owner', parts: ownerParts({ workspace, value, n }) }) }
+}
+
+export async function ownerProven({ workspace, value, members }: { workspace: string; value: AgentValue; members: Member[] }): Promise<boolean> {
+  const proof = value.ownerProof
+  const owner = members.find((member) => member.email === value.owner)
+  if (!proof || !owner?.devices.includes(proof.by)) return false
+  return checkProof({ device: proof.by, proof: 'agent-owner', parts: ownerParts({ workspace, value, n: proof.n }), signature: proof.signature })
+}
+
 export async function lockHere({ workspace, key, version, from, value }: { workspace: string; key: Bytes; version: number; from: string; value: HereValue }): Promise<string | null> {
   const plain = HereValue.safeParse(value).success ? padded({ json: JSON.stringify(value), size: HERE_BYTES }) : null
   const locked = plain && await lock({ key, version, bind: hereBind({ workspace, from }), plain })
@@ -167,6 +182,10 @@ export function padded({ json, size }: { json: string; size?: number }): Bytes |
   const out = new Uint8Array(target).fill(0x20)
   out.set(bytes)
   return out
+}
+
+function ownerParts({ workspace, value, n }: { workspace: string; value: AgentValue; n: number }): string[] {
+  return [workspace, value.id, value.owner ?? '', value.shared ? 'shared' : 'private', String(n)]
 }
 
 function hereBind({ workspace, from }: { workspace: string; from: string }): string {

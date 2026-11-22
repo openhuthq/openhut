@@ -176,7 +176,7 @@ export function parseJson(value: string): unknown {
   }
 }
 
-export const PROOFS = ['session', 'refresh', 'delete', 'key-box', 'device', 'words'] as const
+export const PROOFS = ['session', 'refresh', 'delete', 'key-box', 'device', 'words', 'agent-owner'] as const
 export type Proof = (typeof PROOFS)[number]
 
 export function proofBytes({ proof, parts }: { proof: Proof; parts: string[] }): Bytes {

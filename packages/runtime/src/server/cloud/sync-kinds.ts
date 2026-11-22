@@ -1,6 +1,6 @@
 import * as z from 'zod/mini'
 import { parseJson, type Member } from '@openhut/common/cloud/cloud.ts'
-import type { AgentValue, Opened, Synced } from '@openhut/common/cloud/record.ts'
+import { ownerProven, proveOwner, type AgentValue, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
 import { PROVIDERS } from '@openhut/common/models/provider.ts'
 import { fromBase64, letter, read, toBase64, type Bytes, type Identity } from '@openhut/common/vault/vault.ts'
 import { agentService } from '../agents/agent-service.ts'
@@ -30,7 +30,7 @@ export const syncKinds = {
     const agents = await agentService.synced({ workspace: ctx.home ? null : ctx.workspace, owner: ctx.email })
     const owned: Owned = new Map(agents.map((agent) => [agent.id, agent.shared ? undefined : agent.owner]))
     switch (kind) {
-      case 'agent': return agents.map((value) => ({ kind, ref: value.id, value, owner: owned.get(value.id) }))
+      case 'agent': return Promise.all(agents.map(async (value) => ({ kind, ref: value.id, value: await withProof({ value, ctx }), owner: owned.get(value.id) })))
       case 'setting': return ctx.admin && ctx.home ? settingLocals() : null
       case 'connection': return ctx.admin && ctx.home ? connectionLocals(ctx) : null
       case 'message': return (await threadService.synced()).filter((value) => owned.has(value.agentId)).map((value) => ({ kind, ref: value.message.id, value, owner: owned.get(value.agentId), agentId: value.agentId, assistant: value.message.role === 'assistant' }))
@@ -73,7 +73,8 @@ export const syncKinds = {
     switch (open.kind) {
       case 'agent': {
         const devices = [toBase64(ctx.me.publicKey), ...ctx.members.find((member) => member.email === ctx.email)?.devices ?? []]
-        return agentService.applySynced({ id: open.ref, value: open.value, author: { ...author, device: open.by }, workspace: workspaceOf(ctx), me: ctx.email, mine: devices })
+        const owns = Boolean(open.value) && await claimOf({ value: open.value, by: open.by, ctx }) === 'take'
+        return agentService.applySynced({ id: open.ref, value: open.value, author: { ...author, device: open.by }, workspace: workspaceOf(ctx), me: ctx.email, mine: devices, owns })
       }
       case 'setting': return open.value && ctx.home && mine ? applySetting(open.value) : undefined
       case 'message': return threadService.applySynced({ id: open.ref, value: open.value, author: by, later })
@@ -109,10 +110,37 @@ async function agentAllowed({ value, by, ctx, row }: { value: AgentValue; by: st
   const first = row?.signer
   const before = first ? ctx.members.find((each) => each.devices.includes(first)) : undefined
   if (!current && before && before.email !== author?.email) return false
-  const limited = author?.role === 'member' && (current?.owner ?? (current ? ctx.email : author.email)) !== author.email
+  const claim = await claimOf({ value, by, ctx })
+  if (claim === 'drop') return false
+  let holder = author?.email
+  if (current) holder = claim === 'take' ? value.owner : current.owner ?? ctx.email
+  const limited = author?.role === 'member' && holder !== author.email
   const listed = ctx.members.some((each) => value.runsOn !== undefined && each.devices.includes(value.runsOn))
   if (value.runsOn !== current?.runsOn && (!listed || limited)) return false
   return !limited || value.codeExecution === (current?.codeExecution ?? false)
+}
+
+async function claimOf({ value, by, ctx }: { value: AgentValue | null; by: string; ctx: Context }): Promise<'take' | 'keep' | 'drop'> {
+  if (!value) return 'keep'
+  const author = ctx.members.find((each) => each.devices.includes(by))?.email
+  const current = await agentService.placement({ id: value.id })
+  const proof = await ownerProven({ workspace: ctx.workspace, value, members: ctx.members }) ? value.ownerProof : undefined
+  if (!current) return proof ? 'take' : 'drop'
+  const holder = current.owner ?? ctx.email
+  if (proof && value.owner === ctx.email && author === ctx.email && holder !== ctx.email) return 'take'
+  if (author === ctx.email && holder === ctx.email && value.owner !== undefined && value.owner !== ctx.email) return 'drop'
+  if (!proof || value.owner !== holder) return 'keep'
+  const was = current.proof?.n ?? 0
+  if (proof.n < was || (proof.n === was && value.shared && !current.shared)) return 'drop'
+  return 'take'
+}
+
+async function withProof({ value, ctx }: { value: AgentValue; ctx: Context }): Promise<AgentValue> {
+  const listed = ctx.members.find((member) => member.email === ctx.email)?.devices.includes(toBase64(ctx.me.publicKey))
+  if (value.owner !== ctx.email || !listed || await ownerProven({ workspace: ctx.workspace, value, members: ctx.members })) return value
+  const ownerProof = await proveOwner({ signer: ctx.me, workspace: ctx.workspace, value, n: (value.ownerProof?.n ?? 0) + 1 })
+  await agentService.setOwnerProof({ id: value.id, proof: ownerProof })
+  return { ...value, ownerProof }
 }
 
 function settingLocals(): Local[] {

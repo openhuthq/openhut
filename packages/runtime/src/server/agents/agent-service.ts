@@ -3,7 +3,8 @@ import type { Selectable } from 'kysely'
 import * as z from 'zod/mini'
 import { type Agent, type CreateAgent, type AgentHealth, type AgentImport, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import type { Export } from '@openhut/common/admin/admin.ts'
-import type { AgentValue } from '@openhut/common/cloud/record.ts'
+import { parseJson } from '@openhut/common/cloud/cloud.ts'
+import { OwnerProof, type AgentValue } from '@openhut/common/cloud/record.ts'
 import type { Deleted } from '@openhut/common/api.ts'
 import { ChannelKind } from '@openhut/common/channels/channel.ts'
 import { LEGACY_MODELS, ModelKey, splitModelKey } from '@openhut/common/models/provider.ts'
@@ -181,7 +182,11 @@ export const agentService = {
   async synced({ workspace, owner }: { workspace: string | null; owner: string }): Promise<AgentValue[]> {
     const rows = await db.selectFrom('agent').selectAll().where((eb) => workspace ? eb('workspace', '=', workspace) : eb('workspace', 'is', null)).orderBy('created_at').execute()
     const me = await keysService.deviceKey()
-    return rows.map((row) => ({ id: row.id, name: row.name, instructions: row.instructions, model: row.model, face: row.face, codeExecution: row.code_execution, wanted: row.wanted, runsOn: row.runs_on ?? me, shared: row.shared, owner: row.owner ?? owner }))
+    return rows.map((row) => ({ id: row.id, name: row.name, instructions: row.instructions, model: row.model, face: row.face, codeExecution: row.code_execution, wanted: row.wanted, runsOn: row.runs_on ?? me, shared: row.shared, owner: row.owner ?? owner, ownerProof: proofOf(row.owner_proof) }))
+  },
+
+  async setOwnerProof({ id, proof }: { id: string; proof: OwnerProof }): Promise<void> {
+    await db.updateTable('agent').set({ owner_proof: JSON.stringify(proof) }).where('id', '=', id).execute()
   },
 
   async forgetDevice({ device }: { device: string }): Promise<void> {
@@ -189,16 +194,15 @@ export const agentService = {
     await db.updateTable('agent').set({ runs_on: null }).where('runs_on', '=', device).execute()
   },
 
-  async placement({ id }: { id: string }): Promise<{ runsOn: string; codeExecution: boolean; owner: string | null } | undefined> {
-    const row = await db.selectFrom('agent').select(['runs_on', 'code_execution', 'owner']).where('id', '=', id).executeTakeFirst()
-    return row && { runsOn: row.runs_on ?? await keysService.deviceKey(), codeExecution: row.code_execution, owner: row.owner }
+  async placement({ id }: { id: string }): Promise<{ runsOn: string; codeExecution: boolean; owner: string | null; shared: boolean; proof: OwnerProof | undefined } | undefined> {
+    const row = await db.selectFrom('agent').select(['runs_on', 'code_execution', 'owner', 'shared', 'owner_proof']).where('id', '=', id).executeTakeFirst()
+    return row && { runsOn: row.runs_on ?? await keysService.deviceKey(), codeExecution: row.code_execution, owner: row.owner, shared: row.shared, proof: proofOf(row.owner_proof) }
   },
 
-  async applySynced({ id, value, author, workspace, me, mine = [] }: { id: string; value: AgentValue | null; author: { email: string; role: string; device?: string }; workspace: string | null; me: string; mine?: string[] }): Promise<void> {
-    const row = await db.selectFrom('agent').select(['id', 'instructions', 'changed_by', 'owner', 'runs_on', 'shared', 'workspace']).where('id', '=', id).executeTakeFirst()
-    if (row && !writable({ row, author, workspace, me })) return
-    const byOwner = !row || (row.owner ?? me) === author.email
-    const limited = row && author.role === 'member' && !byOwner
+  async applySynced({ id, value, author, workspace, me, mine = [], owns = false }: { id: string; value: AgentValue | null; author: { email: string; role: string; device?: string }; workspace: string | null; me: string; mine?: string[]; owns?: boolean }): Promise<void> {
+    const row = await db.selectFrom('agent').select(['id', 'instructions', 'changed_by', 'owner', 'runs_on', 'shared', 'workspace', 'owner_proof']).where('id', '=', id).executeTakeFirst()
+    if (row && !(owns && value && row.workspace === workspace) && !writable({ row, author, workspace, me })) return
+    const limited = row && author.role === 'member' && (row.owner ?? me) !== author.email
     if (!value) {
       if (limited) return
       const chats = await db.selectFrom('thread').selectAll().where('agent_id', '=', id).execute()
@@ -209,7 +213,7 @@ export const agentService = {
     }
     const placed = value.runsOn && (author.email === me || !mine.includes(value.runsOn)) ? value.runsOn : row ? row.runs_on : author.device ?? null
     const kept = { runs_on: placed, code_execution: value.codeExecution }
-    const owned = byOwner ? { owner: value.owner && value.owner !== me ? value.owner : null, shared: Boolean(value.shared) } : { owner: row.owner, shared: row.shared }
+    const owned = !row || owns ? { owner: value.owner && value.owner !== me ? value.owner : null, shared: Boolean(value.shared), owner_proof: value.ownerProof ? JSON.stringify(value.ownerProof) : null } : { owner: row.owner, shared: row.shared, owner_proof: row.owner_proof }
     const changedBy = !row || row.instructions !== value.instructions ? author.email : row.changed_by
     const former = kept.runs_on !== null && settings.formerDevices().includes(kept.runs_on)
     const fields = { name: value.name, instructions: value.instructions, model: value.model, face: value.face, wanted: value.wanted, changed_by: changedBy, workspace, ...kept, ...owned, ...former && { runs_on: null } }
@@ -441,6 +445,10 @@ export function runsHere({ row, me }: { row: Pick<AgentRow, 'runs_on'>; me: stri
 function canManage(row: Pick<AgentRow, 'workspace' | 'owner'>): boolean {
   const role = roomKeys.roleIn(row.workspace ?? undefined)
   return !row.owner || row.owner === keysService.account()?.email || role === undefined || role !== 'member'
+}
+
+function proofOf(json: string | null): OwnerProof | undefined {
+  return json ? OwnerProof.safeParse(parseJson(json)).data : undefined
 }
 
 function writable({ row, author, workspace, me }: { row: Pick<AgentRow, 'owner' | 'shared' | 'workspace'>; author: { email: string }; workspace: string | null; me: string }): boolean {
