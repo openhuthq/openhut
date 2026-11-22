@@ -29,7 +29,7 @@ export function PeopleSettings() {
   const cloud = useCloud().data
   const { active, email } = useWorkspaces()
   if (!cloud) return null
-  if (cloud.status === 'off' || !active) return <NeedsCloud title="Work on agents with your team" />
+  if (cloud.status === 'off' || !active) return <NeedsCloud title="Share agents with your team" note="Your team can chat with and edit the agents you share." />
   const admin = active.role !== 'member'
   return <section className="flex flex-col gap-2.5">
     <div className="flex items-center gap-2 px-1">

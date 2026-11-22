@@ -4,7 +4,7 @@ description: Optional. We store your data, but we can't read it. Only your devic
 icon: hut
 ---
 
-OpenHut works without an account. Turn on OpenHut Cloud when you want backups, the same agents on every Mac, and a team. Turn it on in **Settings › Cloud** with your Google account. Until you do, OpenHut never talks to the cloud.
+OpenHut works without an account. Enable OpenHut Cloud when you want backups, the same agents on every Mac, and a team: **Settings › Cloud › Enable cloud**, then **Continue with Google**. The same page signs you up the first time and signs you in after that. Until you do, OpenHut never talks to the cloud.
 
 ## What syncs
 
@@ -33,17 +33,17 @@ We ask Google only for your email. We never see your Google password, and signin
 
 ## Save a way back in
 
-We can't reset your key. When you turn the cloud on, OpenHut asks you to save a recovery kit: 12 words. With your Google account, they unlock your cloud on a new Mac. Keep them offline, like a password.
+We can't reset your key. Right after you sign in, OpenHut asks you to save a recovery kit: one small file with 12 words. With your Google account, it unlocks your cloud on a new Mac. Keep it offline, like a password.
 
-To make a new kit, **Settings › Cloud › Make a new kit**. This also changes your keys. The old words stop working once you've checked the new ones.
+To make a new kit, **Settings › Cloud › Make a new kit**. This also changes your keys, so the old kit stops working right away.
 
 ## A new Mac
 
-Sign in on the new Mac with the same Google account. Then pick one way in:
+Sign in on the new Mac with the same Google account. **Settings › Cloud** then asks you to unlock. The app keeps working while it waits. Pick one way in:
 
 - **Your phone or another Mac.** The new Mac shows a code. Scan it with the OpenHut app on your phone, or type it on a Mac that's already in.
 - **An admin.** The new Mac shows 4 words. An admin of your team types them under your name in **Settings › People** and clicks **Approve**.
-- **Your recovery kit.** Type the 12 words.
+- **Your recovery kit.** Drop the file, or type the 12 words.
 - **Touch ID.** If you added a passkey in **Settings › Cloud** on another Mac, unlock with your fingerprint. Needs macOS 15 or later. Changing your own workspace's keys or making a new kit removes it, so add it again after.
 
 Your agents and chats come back, with the same names and history.
@@ -74,6 +74,10 @@ The phone app is a remote for your Mac. It talks to the agents on your computers
 
 **Settings › Cloud › Sign out**. Your agents keep running on your Mac, and your phone keeps working. Sign in again with the same Google account to pick up where you left off. A Mac holds one account's keys at a time, so it asks for the account it used before.
 
+## Delete your cloud account
+
+**Settings › Cloud › Delete account**, at the bottom. It deletes what OpenHut Cloud keeps for you: the cloud copy of your agents, chats and settings, your devices list, your recovery kit and Touch ID, and your sign-in. Teams you own alone are deleted, and you leave the teams you joined. If you own a team with other people in it, make someone else its owner or delete it first. Your other devices lose access to the cloud. The Mac you delete from signs out and keeps its agents and chats.
+
 ## Check the app
 
-**Settings › Cloud** shows the **Encryption code**: the start of the SHA-256 of the vault, the code that locks and unlocks everything, and **Copy** copies all of it. It's the hash of `packages/common/src/vault/vault.ts` in [the source](https://github.com/openhuthq/openhut) at that version. Each release also lists the SHA-256 of every file of the app's code in `SHA256SUMS`. The wire format is in [the protocol](https://github.com/openhuthq/openhut/blob/main/docs/cloud-protocol.md).
+Each release lists the SHA-256 of every file of the app's code in `SHA256SUMS`, so you can check that the app you run is built from [the source](https://github.com/openhuthq/openhut) at that version. The code that locks and unlocks everything is `packages/common/src/vault/vault.ts`. The wire format is in [the protocol](https://github.com/openhuthq/openhut/blob/main/docs/cloud-protocol.md).

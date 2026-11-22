@@ -16,23 +16,31 @@ const PAIRING_POLL_MS = 2000
 
 export function useCloud() {
   const client = useQueryClient()
-  const signingIn = useQuery({ queryKey: SIGN_IN_KEY, queryFn: () => false, initialData: false, staleTime: Infinity }).data
+  const signingIn = useSigningIn()
   return useQuery({
     queryKey: CLOUD_KEY,
     queryFn: async () => {
       const cloud = await request({ schema: Cloud, computer: 'local', path: '/api/cloud' })
       if (cloud.status === 'off' && cloud.signInError && client.getQueryData(SIGN_IN_KEY)) {
         client.setQueryData(SIGN_IN_KEY, false)
-        navigate('/settings/cloud', true)
+        navigate('/settings/cloud?open=sign-in', true)
       }
       if (cloud.status !== 'off' && client.getQueryData(SIGN_IN_KEY)) {
         client.setQueryData(SIGN_IN_KEY, false)
-        if (cloud.status !== 'locked' && location.pathname !== '/join') navigate(cloud.kit ? '/settings/cloud' : '/settings/cloud?open=kit', true)
+        if (location.pathname !== '/join') navigate(cloud.status === 'locked' || cloud.kit ? '/settings/cloud' : '/settings/cloud?open=welcome', true)
       }
       return cloud
     },
     refetchInterval: (query) => signingIn && query.state.data?.status === 'off' ? OFFLINE_POLL_MS : pollOf(query.state.data),
   })
+}
+
+export function useSigningIn(): boolean {
+  return useQuery({ queryKey: SIGN_IN_KEY, queryFn: () => false, initialData: false, staleTime: Infinity }).data
+}
+
+export function enableCloud() {
+  navigate('/settings/cloud?open=sign-in')
 }
 
 function pollOf(cloud: Cloud | undefined): number | false {
