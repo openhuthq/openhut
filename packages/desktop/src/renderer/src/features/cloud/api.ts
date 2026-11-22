@@ -38,7 +38,7 @@ export function useSigningIn(): boolean {
 }
 
 export function enableCloud() {
-  navigate('/settings/account?open=enable')
+  navigate('/settings/team')
 }
 
 function landAfterSignIn(cloud: Cloud) {
