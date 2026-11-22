@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiMagicIcon, CloudDownloadIcon, Home01Icon, LaptopIcon, PlugSocketIcon, Settings02Icon, UserCircleIcon, UserGroupIcon } from '@hugeicons/core-free-icons'
+import { AiMagicIcon, Building03Icon, CloudDownloadIcon, LaptopIcon, PlugSocketIcon, Settings02Icon, UserCircleIcon, UserGroupIcon } from '@hugeicons/core-free-icons'
 import { AccountSettings } from '@/features/cloud/cloud'
 import { PeopleSettings } from '@/features/people/people'
 import { TeamSettings } from '@/features/people/workspace'
@@ -22,8 +22,8 @@ const TABS: [string, string, IconSvgElement, string][] = [
   ['models', 'Models', AiMagicIcon, 'text-hue-violet'],
   ['mcp', 'MCP', PlugSocketIcon, 'text-hue-teal'],
   ['updates', 'Updates', CloudDownloadIcon, 'text-hue-sky'],
+  ['team', 'Team', Building03Icon, 'text-hue-green'],
   ['account', 'Account', UserCircleIcon, 'text-hue-blue'],
-  ['team', 'Team', Home01Icon, 'text-hue-green'],
   ['people', 'People', UserGroupIcon, 'text-hue-amber'],
 ]
 
@@ -34,7 +34,7 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
   const name = TABS.find(([slug]) => slug === tab)?.[1] ?? 'General'
   const nav = <nav aria-label="Settings" className="no-scrollbar flex w-[198px] shrink-0 flex-col gap-0.5 overflow-y-auto px-3 py-4">
     {TABS.filter(([slug]) => (!isPhone() || slug !== 'mcp') && (!!desktop || slug !== 'updates')).map(([slug, name, icon, hue]) => <Fragment key={slug}>
-      {slug === 'account' && <span className="mt-4 px-[9px] pb-1 text-[11.5px] font-medium text-mute">Cloud</span>}
+      {slug === 'team' && <span className="mt-4 px-[9px] pb-1 text-[11.5px] font-medium text-mute">Cloud</span>}
       <a href={`/settings/${slug}`} aria-current={slug === tab ? 'page' : undefined} onClick={(event) => { event.preventDefault(); navigate(`/settings/${slug}`, true) }}
       className={cn('flex items-center gap-[9px] rounded-lg px-[9px] py-[7px] text-[13px]/[18px] text-ink no-underline', HOVER, slug === tab && PICKED)}><I icon={icon} size={18} className={hue} />{name}</a>
     </Fragment>)}
