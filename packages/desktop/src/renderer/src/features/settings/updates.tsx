@@ -1,42 +1,31 @@
-import { CloudDownloadIcon } from '@hugeicons/core-free-icons'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { I, Section } from '@/components/kit'
-import { usePrefs, useSetPrefs } from '@/features/settings/desktop'
+import { CloudDownloadIcon, TestTube01Icon } from '@hugeicons/core-free-icons'
+import { buttonVariants } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
+import { I, PILL } from '@/components/kit'
+import { usePrefs } from '@/features/settings/desktop'
+import { PrefSwitch } from '@/features/settings/general'
 import { Row, Rows } from '@/features/settings/kit'
-import { updateNote, useAppUpdate } from '@/features/settings/update'
-import { CheckButton, UpdateEverything, UpdateStatus } from '@/features/settings/update-pill'
-import { toastError } from '@/lib/toast'
-
-const CHANNELS = [
-  { value: 'stable', title: 'Stable releases', note: 'Tested and ready.' },
-  { value: 'beta', title: 'Try new features first', note: 'Get beta versions early.' },
-]
+import { downloadUrl, updateNote, useAppUpdate, type UpdateState } from '@/features/settings/update'
+import { CheckButton, UpdatePill } from '@/features/settings/update-pill'
+import { cn } from '@/lib/utils'
 
 export function UpdatesSettings() {
   const state = useAppUpdate().data
-  return <>
-    {state && <Rows>
-      <Row icon={<I icon={CloudDownloadIcon} size={20} className="text-hue-sky" />} title={`OpenHut ${state.current}`} note={updateNote(state)}>{!state.ready && <UpdateStatus idle={<CheckButton label="Check for updates" />} />}</Row>
-    </Rows>}
-    <div className="px-2.5 empty:hidden"><UpdateEverything /></div>
-    <Section title="Channel">
-      <Channel prerelease={!!state?.current.includes('-')} />
-    </Section>
-  </>
+  const prefs = usePrefs()
+  if (!state) return null
+  const stays = state.current.includes('-') && prefs.data?.betaUpdates === false
+  return <Rows>
+    <Row icon={<I icon={CloudDownloadIcon} size={20} className="text-hue-sky" />} title={`OpenHut ${state.current}`} note={updateNote(state)}><Action state={state} /></Row>
+    <PrefSwitch icon={TestTube01Icon} hue="text-hue-violet" name="betaUpdates" title="Try new features early" note={stays ? 'You stay on this beta until a newer stable version.' : 'Get beta versions before everyone else.'} />
+  </Rows>
 }
 
-function Channel({ prerelease }: { prerelease: boolean }) {
-  const prefs = usePrefs()
-  const setPrefs = useSetPrefs()
-  if (!prefs.data) return null
-  const picked = prefs.data.betaUpdates ? 'beta' : 'stable'
+function Action({ state }: { state: UpdateState }) {
+  if (state.ready) return <UpdatePill label="Restart now" />
+  if (state.checking || state.available) return <Spinner className="mt-0" />
+  if (!state.error) return <CheckButton label="Check for updates" />
   return <>
-    <RadioGroup name="channel" variant="card" aria-label="Update channel" className="px-2.5" onChange={(event) => setPrefs.mutate({ betaUpdates: (event.target as HTMLInputElement).value === 'beta' }, { onError: toastError })}>
-      {CHANNELS.map((channel) => <RadioGroupItem key={channel.value} value={channel.value} defaultChecked={channel.value === picked} disabled={setPrefs.isPending}>
-        <span className="font-medium">{channel.title}</span>
-        <span className="col-start-2 text-[12px]/[16px] text-mute">{channel.note}</span>
-      </RadioGroupItem>)}
-    </RadioGroup>
-    {prerelease && picked === 'stable' && <p className="m-0 px-2.5 text-[12px]/[16px] text-mute">You stay on this version until a newer stable one.</p>}
+    <a href={downloadUrl(Reflect.get(window, 'openhut')?.platform)} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'ghost' }), PILL, 'text-mute')}>Download</a>
+    <CheckButton label="Retry" />
   </>
 }

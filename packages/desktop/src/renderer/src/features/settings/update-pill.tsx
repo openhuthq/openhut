@@ -15,11 +15,11 @@ import { WORDS } from '@/lib/platform'
 const HERE_NAME = WORDS.thisComputer
 import { cn } from '@/lib/utils'
 
-export function UpdatePill({ className }: { className?: string }) {
+export function UpdatePill({ className, label = 'Restart to update' }: { className?: string; label?: string }) {
   const note = readyNote(useAppUpdate().data)
   const install = useMutation({ mutationFn: async () => updates?.install(), onError: toastError })
   if (!note) return null
-  return <Button type="button" variant="secondary" className={cn(PILL, className)} title={note} aria-label={`Restart to update. ${note}.`} disabled={install.isPending} onClick={() => install.mutate()}>Restart to update</Button>
+  return <Button type="button" variant="secondary" className={cn(PILL, className)} title={note} aria-label={`Restart to update. ${note}.`} disabled={install.isPending} onClick={() => install.mutate()}>{label}</Button>
 }
 
 export function UpdateStatus({ idle }: { idle: ReactNode }) {

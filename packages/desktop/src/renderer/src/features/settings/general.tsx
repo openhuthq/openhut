@@ -39,7 +39,7 @@ export function GeneralSettings() {
   </>
 }
 
-function PrefSwitch({ icon, hue, name, title, note }: { icon: IconSvgElement; hue: string; name: keyof Prefs; title: string; note?: string }) {
+export function PrefSwitch({ icon, hue, name, title, note }: { icon: IconSvgElement; hue: string; name: keyof Prefs; title: string; note?: string }) {
   const prefs = usePrefs()
   const setPrefs = useSetPrefs()
   return <Row icon={<I icon={icon} size={20} className={hue} />} title={title} note={note}>
