@@ -30,8 +30,14 @@ Use this before writing or changing any text a person reads in the app or on ope
 - Errors carry no codes ("HTTP 500") and always end with what to do next ("Try again.", "OpenHut tries again.").
 
 **On the site and in announcements**
-- Say outcomes, not how it works: "Your agents on every Mac", not "encrypted records sync through the cloud". The mechanism lives behind a "How it works" or "Security" link.
+- Say outcomes, not how it works: "Your agents on every computer", not "encrypted records sync through the cloud". The mechanism lives behind a "How it works" or "Security" link.
 - Never overclaim. Check claims against the docs and code first. The known traps are in `private/brain/openhut-site.md` ("Showing OpenHut Cloud on the site"): the phone never reads cloud data, no live cursors, removal doesn't change keys, restored agents don't start by themselves, the cloud does see emails, members, device names and timing.
+
+**Write like Notion and Linear** (the owner's references; their home pages, 2026-11-22)
+- Titles are 2 to 5 words: a noun phrase ("Planning and monitoring", "Changelog") or a verb and its object ("Capture knowledge", "Find answers").
+- One line under a title, one idea. Never a second line that explains the first.
+- Links are a verb and an object with an arrow: "Triage product feedback →". Buttons are two or three words: "Get started".
+- Say what it is, not how it works. Calm and sure: no exclamation marks, no hype.
 
 **Style**
 - Active voice, present tense, second person ("your agents").
