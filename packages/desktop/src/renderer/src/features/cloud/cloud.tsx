@@ -57,7 +57,7 @@ function CloudLocked({ cloud }: { cloud: Cloud }) {
 function LockedDelete() {
   const remove = useDeleteData()
   return <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete cloud account" note={<span className="text-fail">Deletes your backup and sign-in. Agents on this computer stay.</span>}>
-    <ConfirmButton className={PILL} disabled={remove.isPending} question="Delete your cloud account?" detail="Your agents and chats stay on this computer. You can’t undo this." list={['Your backup of agents, chats and settings', 'Your recovery kit and sign-in']} action="Delete account" typed="delete my account" onConfirm={() => remove.mutate(undefined, { onSuccess: () => notify({ title: 'Cloud account deleted', note: 'Your agents and chats stay on this computer.' }), onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
+    <ConfirmButton className={PILL} disabled={remove.isPending} question="Delete your cloud account?" detail="Your agents and chats stay on this computer. You can’t undo this." list={['Your backup of agents, chats and settings', 'Your recovery kit and sign-in']} action="Delete account" typed="delete my account" onConfirm={() => remove.mutateAsync().then(() => notify({ title: 'Cloud account deleted', note: 'Your agents and chats stay on this computer.' }))}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
   </Row>
 }
 
@@ -114,7 +114,7 @@ function DeleteAccount({ cloud }: { cloud: Cloud }) {
   return <Section title="Danger zone">
     <Rows>
       <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete cloud account" note={deleteNote({ cloud, shared: shared?.name })}>
-        <ConfirmButton className={PILL} disabled={Boolean(shared || cloud.youngUntil) || remove.isPending} question="Delete your cloud account?" detail="Your agents and chats stay on this computer. You can’t undo this." list={gone} action="Delete account" typed="delete my account" onConfirm={() => remove.mutate(undefined, { onSuccess: () => notify({ title: 'Cloud account deleted', note: 'Your agents and chats stay on this computer.' }), onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
+        <ConfirmButton className={PILL} disabled={Boolean(shared || cloud.youngUntil) || remove.isPending} question="Delete your cloud account?" detail="Your agents and chats stay on this computer. You can’t undo this." list={gone} action="Delete account" typed="delete my account" onConfirm={() => remove.mutateAsync().then(() => notify({ title: 'Cloud account deleted', note: 'Your agents and chats stay on this computer.' }))}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
       </Row>
     </Rows>
   </Section>
