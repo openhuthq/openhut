@@ -5,7 +5,7 @@ import { sandboxes } from './sandbox/index.ts'
 
 export const SOCK = process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock'
 export const IMAGE = process.env.AGENT_IMAGE || readFileSync(new URL('../../../../install/agent-image', import.meta.url), 'utf8').trim()
-export const APP_GID = Number(process.env.APP_GID ?? 0)
+export const APP_GID = gidOf('openhut')
 export const ASSETS = process.env.AGENTD_ASSETS || dirname(fileURLToPath(new URL('../../../../package.json', import.meta.url)))
 export const DATA = resolve(process.env.AGENTD_DATA || '/data')
 export const PIPE = process.platform === 'win32'
@@ -43,4 +43,8 @@ export function own({ path, uid, gid, mode }: { path: string; uid: number; gid: 
   if (!AS_ROOT) return
   chownSync(path, uid, gid)
   chmodSync(path, mode)
+}
+
+function gidOf(user: string): number {
+  try { return Number(new RegExp(`^${user}:[^:]*:\\d+:(\\d+):`, 'm').exec(readFileSync('/etc/passwd', 'utf8'))?.[1] ?? 0) } catch { return 0 }
 }

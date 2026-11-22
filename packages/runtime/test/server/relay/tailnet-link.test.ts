@@ -13,7 +13,6 @@ const port = await new Promise<number>((resolve) => {
   })
 })
 process.env.OPENHUT_TAILNET_PORT = String(port)
-process.env.OPENHUT_RELAY_URL = ''
 const { accessService } = await import('../../../src/server/access/access-service.ts')
 const { migrate } = await import('../../../src/server/platform/db.ts')
 const { computerId, relayKeyHex } = await import('../../../src/server/platform/secrets.ts')

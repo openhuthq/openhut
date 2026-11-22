@@ -15,7 +15,8 @@ import { canonical, type Access, type Unsigned } from '@openhut/common/access/ac
 import type { Invitation } from '@openhut/common/access/invitation.ts'
 
 const relay = await startRelay()
-process.env.OPENHUT_RELAY_URL = relay.url
+const { config } = await import('../../../src/server/platform/config.ts')
+config.relayUrl = relay.url
 const { accessService } = await import('../../../src/server/access/access-service.ts')
 const { invitationController } = await import('../../../src/server/access/invitation-controller.ts')
 const { migrate } = await import('../../../src/server/platform/db.ts')
@@ -115,7 +116,7 @@ test('another computer joins with a code: it is on the relay while the owner dec
   const created = await app.inject({ method: 'POST', url: '/api/invitations', headers: { authorization: 'Bearer test-key' } })
   const invitation: Invitation = created.json()
   const dir = mkdtempSync(join(tmpdir(), 'oh-join-'))
-  const env: Record<string, string | undefined> = { ...process.env, OPENHUT_DATA: dir, OPENHUT_JOIN: invitation.code, OPENHUT_RELAY_URL: other.url, PORT: '0', OPENHUT_GATEWAY_PORT: '0' }
+  const env: Record<string, string | undefined> = { ...process.env, OPENHUT_DATA: dir, OPENHUT_JOIN: invitation.code, OPENHUT_CLOUD_URL: other.url.replace(/^ws/, 'http'), PORT: '0', OPENHUT_GATEWAY_PORT: '0' }
   delete env.OPENHUT_CLIENT_KEY_SHA256
   const child = spawn(process.execPath, [new URL('../../../src/server/app.ts', import.meta.url).pathname], { env, stdio: 'ignore' })
   try {
@@ -212,7 +213,7 @@ test('a computer that already joined asks again with a new code, as when the own
   const dir = mkdtempSync(join(tmpdir(), 'oh-rejoin-'))
   const asked = async () => {
     const invitation: Invitation = (await app.inject({ method: 'POST', url: '/api/invitations', headers: { authorization: 'Bearer test-key' } })).json()
-    const env: Record<string, string | undefined> = { ...process.env, OPENHUT_DATA: dir, OPENHUT_JOIN: invitation.code, OPENHUT_RELAY_URL: other.url, PORT: '0', OPENHUT_GATEWAY_PORT: '0' }
+    const env: Record<string, string | undefined> = { ...process.env, OPENHUT_DATA: dir, OPENHUT_JOIN: invitation.code, OPENHUT_CLOUD_URL: other.url.replace(/^ws/, 'http'), PORT: '0', OPENHUT_GATEWAY_PORT: '0' }
     delete env.OPENHUT_CLIENT_KEY_SHA256
     const child = spawn(process.execPath, [new URL('../../../src/server/app.ts', import.meta.url).pathname], { env, stdio: 'ignore' })
     let seen: Invitation = invitation

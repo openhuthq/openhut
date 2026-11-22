@@ -26,7 +26,6 @@ pkill -f "^node $J/packages/.*agentd\.ts" 2>/dev/null || true
 pkill -f "^node $J/packages/.*/app\.ts" 2>/dev/null || true
 sleep 1; rm -f /run/agentd/agentd.sock
 RUNAS="runuser -u openhut --"; command -v su-exec >/dev/null 2>&1 && RUNAS="su-exec openhut"
-export APP_GID="$(id -g openhut)"
 "$J/install/supervise.sh" "$LOG/agentd.log" node "$J/packages/runtime/src/agentd/agentd.ts" &
 i=0; until [ -S /run/agentd/agentd.sock ]; do i=$((i+1)); [ $i -gt 300 ] && { mark "agentd failed"; exit 1; }; sleep 0.2; done
 ( umask 077; cd "$J" && exec "$J/install/supervise.sh" "$LOG/app.log" $RUNAS node "$J/packages/runtime/src/server/app.ts" ) &

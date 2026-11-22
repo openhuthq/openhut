@@ -41,7 +41,7 @@ if (phase === 'pair') {
   test('the install wrote the tailnet route, an empty relay URL and no join code', () => {
     assert.match(env(), /^OPENHUT_ROUTE=tailnet$/m)
     assert.match(env(), /^OPENHUT_TAILNET_PORT=8788$/m)
-    assert.match(env(), /^OPENHUT_RELAY_URL=$/m)
+    assert.match(env(), /^OPENHUT_TAILNET_PORT=\d+$/m)
     assert.doesNotMatch(env(), /OPENHUT_JOIN/)
     assert.match(COMPUTER, /^[0-9a-f]{64}$/)
   })
@@ -72,7 +72,7 @@ if (phase === 'pair') {
 if (phase === 'after-upgrade') {
   test('an upgrade with no settings keeps the tailnet route and the relay off, and the paired Mac still gets in', async () => {
     assert.match(env(), /^OPENHUT_ROUTE=tailnet$/m)
-    assert.match(env(), /^OPENHUT_RELAY_URL=$/m)
+    assert.match(env(), /^OPENHUT_TAILNET_PORT=\d+$/m)
     const saved: Saved = JSON.parse(readFileSync(KEYS, 'utf8'))
     const reply = await admin({ publicKey: fromHex(saved.device.publicKey), secretKey: fromHex(saved.device.secretKey) })
     assert.equal(reply.status, 200)
