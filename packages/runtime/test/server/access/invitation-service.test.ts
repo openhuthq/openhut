@@ -13,7 +13,6 @@ import { canonical, type Access, type Unsigned } from '@openhut/common/access/ac
 import type { Invitation } from '@openhut/common/access/invitation.ts'
 
 const relay = await startRelay()
-process.env.OPENHUT_RELAY_URL = relay.url
 const room = { invites: new Map<string, { status: number; json: unknown }>(), puts: [] as MemberList[], putStatus: 200, asked: [] as string[] }
 const fake = createServer(async (req, res) => {
   const chunks: Buffer[] = []
@@ -34,6 +33,8 @@ const fake = createServer(async (req, res) => {
 await once(fake, 'listening')
 const fakeAddress = fake.address()
 process.env.OPENHUT_CLOUD_URL = `http://127.0.0.1:${typeof fakeAddress === 'object' && fakeAddress ? fakeAddress.port : 0}`
+const { config } = await import('../../../src/server/platform/config.ts')
+config.relayUrl = relay.url
 const { accessService } = await import('../../../src/server/access/access-service.ts')
 const { invitationController } = await import('../../../src/server/access/invitation-controller.ts')
 const { migrate } = await import('../../../src/server/platform/db.ts')

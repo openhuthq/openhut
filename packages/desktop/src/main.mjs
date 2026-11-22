@@ -70,7 +70,7 @@ const LOCAL = { id: 'local', name: MAC ? 'This Mac' : 'This computer', url: CONT
 const LOCAL_KEY = 'keys/local.key'
 const EDGE_INSTALL_URL = 'https://openhut.dev/edge'
 const INSTALL_URL = process.env.OPENHUT_INSTALL_URL || bakedInstallUrl()
-const RELAY_URL = process.env.OPENHUT_RELAY_URL ?? 'wss://cloud.openhut.dev'
+const RELAY_URL = (process.env.OPENHUT_CLOUD_URL || 'https://cloud.openhut.dev').replace(/^http/, 'ws')
 const TAILNET_PORT = 8788
 const PUT_ACCESS = `put='c=$(curl -sS -o /dev/null -w %{http_code} --unix-socket /data/app/openhut.sock -X PUT -H content-type:application/json --data-binary @- http://openhut/api/access); [ "$c" = 200 ] || [ "$c" = 409 ]'; if docker container inspect openhut >/dev/null 2>&1; then docker exec -i openhut sh -c "$put"; else sh -c "$put"; fi`
 const AUTOSTART = join(app.getPath('appData'), 'autostart/openhut.desktop')
