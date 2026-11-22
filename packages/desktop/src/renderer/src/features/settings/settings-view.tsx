@@ -30,7 +30,7 @@ const TABS: [string, string, IconSvgElement, string][] = [
 ]
 
 const MOVED: Record<string, string> = { devices: 'computers', cloud: 'account', backup: 'account', people: 'team' }
-const GROUP: Record<string, string> = { team: 'Team', account: 'You' }
+const GROUP: Record<string, string> = { team: 'Cloud' }
 
 export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: () => void }) {
   const tab = MOVED[asked] ?? asked
