@@ -13,7 +13,6 @@ import { ConfirmDialog, useConfirming } from '@/components/confirm-button'
 import { Choice, DialogCard, DRAG, GLASS, HOVER, I, MenuCard, PILL, ROW, ROW_VALUE, Section, TINY_ICON } from '@/components/kit'
 import { agentPath, type AgentDialog } from '@/app/routes'
 import { useAgents, useChannels, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
-import type { Computer } from '@openhut/client'
 import { nameOf, runsOnNote, useComputers, useFeatures } from '@/features/computers/api'
 import { ChangedBy, useChangedByOther } from '@/features/cloud/live'
 import { EditLock, FieldBox, useHolder } from '@/features/cloud/presence'
@@ -156,6 +155,7 @@ function RunsOn({ agent }: { agent: Agent }) {
   const live = home?.online ?? true
   const move = useMove(home)
   const update = useUpdateAgent(agent.id)
+  const note = noteOf(agent)
   return <>
     <DropdownMenu>
       <DropdownMenuTrigger className={ROW} disabled={!!move.going}><I icon={LaptopIcon} size={15} className="text-mute" />Runs on<span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="truncate">{agent.runsHere ? nameOf({ computers, id }) : elsewhereOf(agent)}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
@@ -172,7 +172,7 @@ function RunsOn({ agent }: { agent: Agent }) {
     </DropdownMenu>
     {move.line
       ? <p role="status" className="m-0 px-2.5 py-1 text-[12.5px]/[1.45] text-body">{move.line}</p>
-      : <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{noteOf({ agent, computers, id })}</p>}
+      : note && <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{note}</p>}
     {id === 'local' && !WORDS.sandboxed && <TeamHint agent={agent} server={(computers ?? []).find((each) => each.id !== 'local' && each.online)} onMove={(to) => move.go(to)} />}
   </>
 }
@@ -194,12 +194,9 @@ function Access({ agent }: { agent: Agent }) {
     </DropdownMenu>
 }
 
-function noteOf({ agent, computers, id }: { agent: Agent; computers: Computer[] | undefined; id: string }): string {
+function noteOf(agent: Agent): string | undefined {
   if (agent.runsNowhere) return `No computer runs it now. ${agent.canManage ? 'Run it here to start it.' : `Ask an admin to run ${agent.name} on their computer.`}`
   if (!agent.runsHere) return `Runs on ${agent.runsOnName ?? 'your other computer'}. Chats sync here.`
-  if (id !== 'local') return `Runs on ${nameOf({ computers, id })}, sealed in its own box.`
-  if (WORDS.sandboxed) return 'Runs on this computer, sealed in its own box.'
-  return 'Runs on this computer like any app, with your access.'
 }
 
 function elsewhereOf(agent: Agent): string {
