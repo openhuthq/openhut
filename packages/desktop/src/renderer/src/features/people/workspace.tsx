@@ -1,12 +1,15 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
-import { Delete02Icon, Key01Icon, Logout03Icon } from '@hugeicons/core-free-icons'
+import { useState } from 'react'
+import { Delete02Icon, Key01Icon, Logout03Icon, PencilEdit02Icon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { ErrorNote } from '@/components/error-note'
-import { useChangeKeys, useDeleteWorkspace, useRemoveMember, useRename, useWorkspaces } from '@/features/cloud/workspaces'
+import { TeamMark } from '@/components/custom/team-mark'
+import { useCloud } from '@/features/cloud/api'
+import { Pitch } from '@/features/cloud/sign-in'
+import { CloudSetup } from '@/features/cloud/setup'
+import { peopleNote, useChangeKeys, useDeleteWorkspace, useRemoveMember, useRename, useWorkspaces } from '@/features/cloud/workspaces'
 import { navigate, open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
@@ -16,42 +19,62 @@ import { cn } from '@/lib/utils'
 
 const KEYS_NOTE = 'Use after a lost computer or a teammate you don’t trust. Everyone else stays in.'
 
-export function WorkspaceSettings() {
+const ROLE = { owner: 'the owner', admin: 'an admin', member: 'a member' }
+const NAME = 'm-0 min-w-0 text-[18px]/[1.3] font-semibold tracking-[-.01em]'
+
+export function TeamSettings() {
+  const cloud = useCloud().data
   const { active } = useWorkspaces()
-  const rename = useRename()
-  if (!active) return null
-  const { name } = active
-  const save = (value: string) => {
-    if (value.trim() && value.trim() !== name) rename.mutate({ id: active.id, name: value }, { onSuccess: () => toast('Team renamed') })
-  }
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    save(String(new FormData(event.currentTarget).get('name') ?? ''))
-  }
-  return <section className="flex flex-col gap-2">
-    <form onSubmit={submit} className="flex items-end gap-3 px-1">
-      <label className="grid flex-1 gap-1">
-        <span className="text-[12px] text-mute">Team name</span>
-        <Input key={name} name="name" defaultValue={name} maxLength={60} disabled={active.role === 'member' || rename.isPending} onBlur={(event) => save(event.currentTarget.value)} className="h-9 text-[13.5px]" />
-      </label>
-    </form>
-    {active.role === 'member' && <p className="m-0 px-1 text-[12px] text-mute">Only an owner or admin can rename it.</p>}
-    <ErrorNote message={rename.error?.message} />
-  </section>
+  const opened = useOpen()
+  if (!cloud) return null
+  const enabling = opened === 'enable' && <CloudSetup />
+  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch door="people" /></>
+  return <>
+    {enabling}
+    <div className="flex items-center gap-3.5 px-1">
+      <TeamMark name={active.name} className="size-12 rounded-xl text-[22px]" />
+      <span className="grid min-w-0 flex-1 gap-0.5">
+        <TeamName workspace={active} editing={opened === 'rename'} />
+        <span className="text-[12px] text-mute">{peopleNote(active)} · you’re {ROLE[active.role]}</span>
+      </span>
+    </div>
+    <TeamDanger />
+  </>
 }
 
-export function TeamDanger({ ownDelete }: { ownDelete: ReactNode }) {
+function TeamName({ workspace, editing }: { workspace: CloudWorkspaceView; editing: boolean }) {
+  const rename = useRename()
+  const { name } = workspace
+  const can = workspace.role !== 'member'
+  const shown = rename.isPending ? rename.variables.name : name
+  if (!editing || !can) return <span className="flex min-w-0 items-center gap-1">
+    <h3 className={cn(NAME, 'truncate')} title={can ? 'Double-click to rename' : undefined} onDoubleClick={can ? () => open('rename') : undefined}>{shown}</h3>
+    {can && <Button type="button" variant="ghost" size="icon-xs" aria-label="Rename team" title="Rename" onClick={() => open('rename')}><I icon={PencilEdit02Icon} size={14} /></Button>}
+  </span>
+  return <Input autoFocus defaultValue={name} maxLength={60} aria-label="Team name" spellCheck={false} onFocus={(event) => event.currentTarget.select()} className={cn(NAME, 'h-8 px-1.5')}
+    onKeyDown={(event) => {
+      if (event.key === 'Escape') event.currentTarget.value = name
+      if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); event.currentTarget.blur() }
+    }}
+    onBlur={(event) => {
+      const value = event.currentTarget.value.trim()
+      if (value && value !== name) rename.mutate({ id: workspace.id, name: value }, { onSuccess: () => toast('Team renamed'), onError: toastError })
+      open()
+    }} />
+}
+
+function TeamDanger() {
   const { active } = useWorkspaces()
   const opened = useOpen()
   const changeKeys = useChangeKeys()
   const [changing, setChanging] = useState(false)
-  if (!active) return <Section title="Danger zone"><Rows>{ownDelete}</Rows></Section>
+  if (!active) return null
   const name = active.name
   const owner = active.role === 'owner'
   const admin = active.role !== 'member'
   const changed = () => {
     notify({ title: 'Encryption reset', note: 'Everyone else stays in.' })
-    if (active.own) navigate('/settings/team?open=kit')
+    if (active.own) navigate('/settings/account?open=kit')
   }
   return <Section title="Danger zone">
     <Rows>
@@ -61,7 +84,7 @@ export function TeamDanger({ ownDelete }: { ownDelete: ReactNode }) {
       {!active.own && <Row icon={<I icon={Logout03Icon} size={20} className="text-fail" />} title={`Leave ${name}`} note={owner ? 'Make someone else the owner first.' : 'For good. What you made stays with the team.'}>
         <Button type="button" variant="secondary" className={cn(PILL, 'text-fail')} disabled={owner} onClick={() => open('leave')}>Leave</Button>
       </Row>}
-      {active.own ? ownDelete : admin && <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete team" note="Deletes everything in it for everyone.">
+      {!active.own && admin && <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete team" note="Deletes everything in it for everyone.">
         <Button type="button" variant="secondary" className={cn(PILL, 'text-fail')} onClick={() => open('delete')}>Delete team</Button>
       </Row>}
     </Rows>

@@ -38,13 +38,13 @@ export function useSigningIn(): boolean {
 }
 
 export function enableCloud() {
-  navigate('/settings/team?open=enable')
+  navigate('/settings/account?open=enable')
 }
 
 function landAfterSignIn(cloud: Cloud) {
   if (location.pathname === '/join') return
   if (new URLSearchParams(location.search).get('open') === 'enable') return
-  if (cloud.status === 'locked' || !cloud.kit) navigate('/settings/team?open=enable', true)
+  if (cloud.status === 'locked' || !cloud.kit) navigate('/settings/account?open=enable', true)
 }
 
 function pollOf(cloud: Cloud | undefined): number | false {
@@ -113,7 +113,7 @@ export function useRemoveMac() {
     mutationFn: (key: string) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/devices/${encodeURIComponent(key)}`, method: 'DELETE' }),
     onSuccess: (cloud) => {
       client.setQueryData(CLOUD_KEY, cloud)
-      notify({ title: 'Device removed', note: NEW_KIT_HINT, action: { label: 'Make a new kit', onClick: () => navigate('/settings/team?open=kit') } })
+      notify({ title: 'Device removed', note: NEW_KIT_HINT, action: { label: 'Make a new kit', onClick: () => navigate('/settings/account?open=kit') } })
     },
     onError: toastError,
   })
@@ -125,7 +125,7 @@ export function useStartOver() {
     mutationFn: () => request({ schema: Cloud, computer: 'local', path: '/api/cloud/key-boxes', method: 'DELETE' }),
     onSuccess: (cloud) => {
       client.setQueryData(CLOUD_KEY, cloud)
-      navigate('/settings/team?open=kit', true)
+      navigate('/settings/account?open=kit', true)
     },
   })
 }

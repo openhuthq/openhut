@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenuItem, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { Glyph } from '@/components/glyph'
+import { TeamMark } from '@/components/custom/team-mark'
 import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
 import { BackupCard } from '@/features/cloud/backup-card'
 import { useWorkspaces } from '@/features/cloud/workspaces'
@@ -75,7 +76,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
       <BackupCard />
       <UpdateEverything />
       <div className="flex w-full items-center gap-2">
-        {active && <a href="/settings/team" aria-label="Team settings" title={active.name} className={cn(SURFACE, 'grid size-10 shrink-0 place-items-center rounded-lg')}><span className="grid size-[26px] place-items-center rounded-md bg-ink text-[13px] font-semibold text-white">{active.name.trim().charAt(0).toUpperCase()}</span></a>}
+        {active && <a href="/settings/team" aria-label="Team settings" title={active.name} className={cn(SURFACE, 'grid size-10 shrink-0 place-items-center rounded-lg')}><TeamMark name={active.name} /></a>}
         <a href="/connections" className={cn(SURFACE, 'flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg pr-3 pl-3.5 text-[13.5px] font-medium')}>
           <ConnectedMarks />
         </a>

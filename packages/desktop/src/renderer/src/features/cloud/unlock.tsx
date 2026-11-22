@@ -225,7 +225,7 @@ export function CloudGate({ children }: { children: ReactNode }) {
 
 function LockedToast() {
   if (isPhone()) return <Toast lead={<Hut mood="key" className="size-8" />} title="Unlock OpenHut on your computer" note="Your agents and chats are restored after that." />
-  return <Toast lead={<Hut mood="key" className="size-8" />} title="Unlock OpenHut Cloud" note="Restore your agents and chats on this computer."><Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/team?open=enable')}>Unlock</Button></Toast>
+  return <Toast lead={<Hut mood="key" className="size-8" />} title="Unlock OpenHut Cloud" note="Restore your agents and chats on this computer."><Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/account?open=enable')}>Unlock</Button></Toast>
 }
 
 function Joins({ cloud }: { cloud: Cloud }) {
