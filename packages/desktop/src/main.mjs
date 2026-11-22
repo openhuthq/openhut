@@ -74,7 +74,7 @@ const RELAY_URL = (process.env.OPENHUT_CLOUD_URL || 'https://cloud.openhut.dev')
 const TAILNET_PORT = 8788
 const PUT_ACCESS = `put='c=$(curl -sS -o /dev/null -w %{http_code} --unix-socket /data/app/openhut.sock -X PUT -H content-type:application/json --data-binary @- http://openhut/api/access); [ "$c" = 200 ] || [ "$c" = 409 ]'; if docker container inspect openhut >/dev/null 2>&1; then docker exec -i openhut sh -c "$put"; else sh -c "$put"; fi`
 const AUTOSTART = join(app.getPath('appData'), 'autostart/openhut.desktop')
-const DEFAULT_PREFS = { keepAwake: true, notifyReplies: true, notifyFailures: true, betaUpdates: false }
+const DEFAULT_PREFS = { keepAwake: true, betaUpdates: false }
 const CANVAS = '#f4f3f5'
 const POLL_MS = 5000
 const HEALTHY_MS = 120_000
@@ -442,14 +442,14 @@ async function poll() {
   for (const agent of agents.filter((each) => each.online)) {
     const strikes = needsYou(agent) ? (watched.strikes.get(agent.id) ?? 0) + 1 : 0
     watched.strikes.set(agent.id, strikes)
-    if (strikes === 2 && wants.notifyFailures) notify({ title: `${agent.name} stopped answering`, body: agent.healthDetail || 'It isn\'t running. OpenHut keeps trying to start it.', path: `/agents/${agent.id}` })
+    if (strikes === 2) notify({ title: `${agent.name} stopped answering`, body: agent.healthDetail || 'It isn\'t running. OpenHut keeps trying to start it.', path: `/agents/${agent.id}` })
   }
   app.setBadgeCount(agents.filter((agent) => agent.online && watched.strikes.get(agent.id) >= 2).length)
   await Promise.all(list.filter((computer) => computer.online).map(async (computer) => {
     for (const thread of (await answerOf({ computer: computer.id, path: '/api/threads' })).data ?? []) {
       const before = watched.threads.get(thread.id)
       watched.threads.set(thread.id, thread.updatedAt)
-      if (before && before !== thread.updatedAt && wants.notifyReplies && !looking()) await notifyReply({ computer: computer.id, thread, agent: agents.find((each) => each.id === thread.agentId) })
+      if (before && before !== thread.updatedAt && !looking()) await notifyReply({ computer: computer.id, thread, agent: agents.find((each) => each.id === thread.agentId) })
     }
   }).map((each) => each.catch(() => undefined)))
   trayMenu({ agents, computers: list })
