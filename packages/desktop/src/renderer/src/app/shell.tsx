@@ -11,7 +11,6 @@ import { NewAgentDialog } from '@/features/agents/new-agent'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
 import { Hut } from '@/components/hut'
 import { nameOf } from '@/features/cloud/api'
-import { Switcher } from '@/features/cloud/switcher'
 import { inWorkspace, useWorkspaces } from '@/features/cloud/workspaces'
 import { HERE } from '@/features/settings/desktop'
 import { Sidebar, SidebarContext, type Contact } from '@/features/agents/sidebar'
@@ -85,7 +84,6 @@ function Home({ first, adding, overlaid, waiting }: { first: string | undefined;
 function PhoneTop() {
   return <span className="absolute top-3 left-4 hidden items-center gap-1.5 phone:flex">
     <a href="/settings/general" aria-label="Settings" className={cn(ICON_BUTTON, 'float grid size-10 rounded-full bg-card text-ink')}><I icon={Settings02Icon} size={20} /></a>
-    <Switcher />
   </span>
 }
 

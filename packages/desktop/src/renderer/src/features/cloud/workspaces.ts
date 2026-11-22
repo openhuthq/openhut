@@ -118,13 +118,3 @@ export const useDeleteData = () => useCloudCall(() => request({ schema: Cloud, c
 
 export const useRotated = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud/rotations', method: 'DELETE' }))
 
-export function useCreateWorkspace() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (name: string) => request({ schema: CloudWorkspaceView, computer: 'local', path: '/api/cloud/workspaces', method: 'POST', body: { name } }),
-    onSuccess: (workspace) => {
-      chooseWorkspace(workspace.id)
-      void client.invalidateQueries({ queryKey: CLOUD_KEY })
-    },
-  })
-}

@@ -9,7 +9,6 @@ import { CloudGate } from '@/features/cloud/unlock'
 import { ConnectionsView } from '@/features/connections/connections-view'
 import { FirstRun } from '@/features/first-run/first-run'
 import { CloudJoin, JoinLinkDialog } from '@/features/join/cloud-join'
-import { CreateWorkspaceDialog } from '@/features/cloud/switcher'
 import { Join } from '@/features/join/join'
 import { useMe } from '@/features/people/api'
 import { SettingsView } from '@/features/settings/settings-view'
@@ -50,7 +49,6 @@ function Dashboard() {
     {route.page === 'connections' && <ConnectionsView onClose={close} />}
     <JoinRuntimes />
     {opened === 'join-link' && <JoinLinkDialog />}
-    {opened === 'new-workspace' && <CreateWorkspaceDialog />}
   </CloudGate>
 }
 
