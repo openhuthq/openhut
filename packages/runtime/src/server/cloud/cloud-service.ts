@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import * as z from 'zod/mini'
 import { checkProof, type CloudWorkspaceView, fromQr, KeyBox, Letter, MemberList, qrPayload, signProof, WordsNonce, type AllowedDevice, type Role, type Cloud, type CloudAuthorization, type CloudPairing, type RecoveryKit, type RuntimeInvite, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { addedOf, bodyOf, check, newUntil, youngUntil } from '@openhut/common/cloud/member-list.ts'
@@ -27,7 +27,7 @@ const Asked = z.object({ data: z.array(z.object({ device: z.string(), nonce: z.n
 const ROTATE = 'cloud_rotate'
 const Teams = z.object({ data: z.array(z.object({ id: z.string() })) })
 const ASK_POLL_MS = 2000
-const pending = new Map<string, { verifier: string; authorization: string; at: number }>()
+const pending = new Map<string, number>()
 let signInError: string | null = null
 let boxesDiffer = false
 let checkedAt = 0
@@ -220,19 +220,15 @@ export const cloudService = {
   async start(): Promise<CloudAuthorization> {
     const device = await keysService.device()
     const state = randomBytes(24).toString('base64url')
-    const verifier = randomBytes(32).toString('base64url')
-    const codeChallenge = createHash('sha256').update(verifier).digest('base64url')
-    const { id, authorizationUrl } = await cloud.authorization({
-      provider: 'google', scopes: ['openid', 'email'], codeChallenge, redirectUrl: `${callbackBase()}/api/cloud/callback`, state, deviceKey: toBase64(device.publicKey),
-    })
-    for (const [key, value] of pending) if (Date.now() - value.at > PENDING_MS) pending.delete(key)
-    pending.set(state, { verifier, authorization: id, at: Date.now() })
+    const { url } = await cloud.signIn({ provider: 'google', device: toBase64(device.publicKey), redirectUrl: `${callbackBase()}/api/cloud/callback`, state })
+    for (const [key, at] of pending) if (Date.now() - at > PENDING_MS) pending.delete(key)
+    pending.set(state, Date.now())
     signInError = null
-    return { object: 'cloud_authorization', authorizationUrl }
+    return { object: 'cloud_authorization', authorizationUrl: url }
   },
 
   async finish({ state, code, error }: { state?: string; code?: string; error?: string }): Promise<string> {
-    const started = pending.get(state ?? '')
+    const started = pending.has(state ?? '')
     pending.delete(state ?? '')
     if (!started) return page('This sign-in expired. Go back to OpenHut and try again.')
     if (!code) {
@@ -241,10 +237,9 @@ export const cloudService = {
     }
     try {
       const device = await keysService.device()
-      const signature = await signProof({ signer: device, proof: 'session', parts: [started.authorization, code] })
-      const session = await cloud.session({ grantType: 'authorization_code', authorization: started.authorization, code, codeVerifier: started.verifier, deviceKey: toBase64(device.publicKey), signature })
+      const session = await cloud.claim({ code, signature: await signProof({ signer: device, proof: 'session', parts: [code] }) })
       keysService.ownedBy(session)
-      await keysService.setSession({ token: session.token, expiresAt: session.expiresAt })
+      await keysService.setSession({ token: session.token, refresh: session.refresh, expiresAt: session.expiresAt })
       const who = { sub: session.sub, email: session.email }
       if (keysService.account()?.sub !== session.sub) {
         if (await accountExists(session.token)) {

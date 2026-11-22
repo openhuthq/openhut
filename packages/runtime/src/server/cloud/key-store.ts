@@ -22,7 +22,7 @@ const Stored = z.object({
   kit: z.optional(KIT),
   moves: z.optional(z.array(z.object({ method: z.enum(['POST', 'DELETE']), path: z.string(), body: z.unknown() }))),
   locked: z.optional(z.object({ sub: z.string(), email: z.string() })),
-  session: z.optional(z.object({ token: z.string(), expiresAt: z.string() })),
+  session: z.optional(z.object({ token: z.string(), refresh: z.optional(z.string()), expiresAt: z.string() })),
   outbox: z.optional(z.array(Outgoing)),
   rotating: z.optional(z.array(z.object({ room: Room, letters: z.array(Outgoing) }))),
   asking: z.optional(z.array(z.object({ id: z.string(), admins: z.array(z.string()), signers: z.array(z.string()), secret: z.string(), nonce: z.optional(z.string()), words: z.optional(z.array(z.string())), revealed: z.optional(z.boolean()) }))),

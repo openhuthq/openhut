@@ -192,17 +192,11 @@ export async function checkProof({ device, proof, parts, signature }: { device: 
   return check({ publicKey: fromBase64(device), bytes: proofBytes({ proof, parts }), signature: fromBase64(signature) })
 }
 
-export const CreateCloudSession = z.discriminatedUnion('grantType', [
-  z.object({
-    grantType: z.literal('authorization_code'), authorization: z.string().check(z.maxLength(2000)), code: z.string().check(z.maxLength(2000)),
-    codeVerifier: z.string().check(z.maxLength(200)), deviceKey: DeviceKey, signature: Signature,
-  }),
-  z.object({ grantType: z.literal('refresh'), session: z.string().check(z.maxLength(2000)), signedAt: z.number().check(z.int()), signature: Signature }),
-])
-export type CreateCloudSession = z.infer<typeof CreateCloudSession>
-
-export const CloudSession = z.object({ object: z.literal('cloud_session'), token: z.string(), sub: z.string(), email: Email, expiresAt: Timestamp })
+export const CloudSession = z.object({ object: z.literal('cloud_session'), token: z.string(), refresh: z.optional(z.string()), sub: z.string(), email: Email, expiresAt: Timestamp })
 export type CloudSession = z.infer<typeof CloudSession>
+
+export const CloudSignIn = z.object({ url: z.string() })
+export type CloudSignIn = z.infer<typeof CloudSignIn>
 
 export const SignedRequest = z.object({ signedAt: z.number().check(z.int()), signature: Signature })
 export type SignedRequest = z.infer<typeof SignedRequest>

@@ -39,15 +39,13 @@ export const keysService = {
     const session = stored()?.session
     if (!session) throw new HttpError(409, 'Turn on OpenHut Cloud first.')
     if (Date.parse(session.expiresAt) - Date.now() > REFRESH_EARLY_MS) return session.token
-    const signedAt = Date.now()
-    const signature = await signProof({ signer: await keysService.device(), proof: 'refresh', parts: [session.token, String(signedAt)] })
     const account = stored()?.account
     const runtime = account && !account.key ? account.workspace.id : undefined
-    const next = await cloud.session({ grantType: 'refresh', session: session.token, signedAt, signature }).catch((err: unknown) => {
+    const next = await renew(session.refresh).catch((err: unknown) => {
       if (!runtime) throw err
       return keysService.deviceSession(runtime)
     })
-    await keysService.setSession({ token: next.token, expiresAt: next.expiresAt })
+    await keysService.setSession({ token: next.token, refresh: next.refresh, expiresAt: next.expiresAt })
     return next.token
   },
 
@@ -371,4 +369,11 @@ function kitOf(keys: Stored | undefined): Stored['kit'] {
 
 function stored(): Stored | undefined {
   return keyStore.current()
+}
+
+async function renew(refresh: string | undefined): Promise<CloudSession> {
+  if (!refresh) throw new HttpError(502, 'This session can’t be refreshed. Sign in again.')
+  const signedAt = Date.now()
+  const signature = await signProof({ signer: await keysService.device(), proof: 'refresh', parts: [refresh, String(signedAt)] })
+  return cloud.refresh({ session: refresh, signedAt, signature })
 }

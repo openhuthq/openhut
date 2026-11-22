@@ -1,16 +1,19 @@
 import * as z from 'zod/mini'
-import { CloudSession, type CreateCloudSession, type DeviceSession } from '@openhut/common/cloud/cloud.ts'
+import { CloudSession, CloudSignIn, type DeviceSession } from '@openhut/common/cloud/cloud.ts'
 import { OAuthAuthorization, OAuthToken, type CreateOAuthAuthorization, type CreateOAuthToken } from '@openhut/common/cloud/oauth.ts'
 import { config } from './config.ts'
 import { HttpError } from './http-error.ts'
 
 const CloudError = z.object({ error: z.object({ message: z.string() }) })
+const AuthError = z.object({ message: z.string() })
 const held = new Set<string>()
 
 export const cloud = {
   authorization: (body: CreateOAuthAuthorization): Promise<OAuthAuthorization> => post({ path: '/v1/oauth-authorizations', body, reply: OAuthAuthorization }),
   token: (body: CreateOAuthToken): Promise<OAuthToken> => post({ path: '/v1/oauth-tokens', body, reply: OAuthToken }),
-  session: (body: CreateCloudSession): Promise<CloudSession> => post({ path: '/v1/sessions', body, reply: CloudSession }),
+  signIn: (body: { provider: 'google'; device: string; redirectUrl: string; state: string }): Promise<CloudSignIn> => post({ path: '/v1/auth/sign-in/social', body, reply: CloudSignIn }),
+  claim: (body: { code: string; signature: string }): Promise<CloudSession> => post({ path: '/v1/auth/openhut/session', body, reply: CloudSession }),
+  refresh: (body: { session: string; signedAt: number; signature: string }): Promise<CloudSession> => post({ path: '/v1/auth/openhut/token', body, reply: CloudSession }),
   deviceSession: ({ workspace, ...body }: DeviceSession & { workspace: string }): Promise<CloudSession> => post({ path: `/v1/workspaces/${workspace}/sessions`, body, reply: CloudSession }),
   roomUrl: (workspace: string): string => `${config.cloudUrl.replace(/^http/, 'ws')}/v1/workspaces/${workspace}`,
 
@@ -55,7 +58,7 @@ async function post<T>({ path, body, reply }: { path: string; body: unknown; rep
   const json: unknown = await response.json().catch(() => undefined)
   const parsed = z.safeParse(reply, json)
   if (response.ok && parsed.success) return parsed.data
-  throw new HttpError(502, z.safeParse(CloudError, json).data?.error.message ?? `OpenHut Cloud answered HTTP ${response.status}.`)
+  throw new HttpError(502, z.safeParse(CloudError, json).data?.error.message ?? z.safeParse(AuthError, json).data?.message ?? `OpenHut Cloud answered HTTP ${response.status}.`)
 }
 
 function unreachable(error: unknown): never {
