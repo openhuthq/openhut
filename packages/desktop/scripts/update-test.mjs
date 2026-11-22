@@ -41,7 +41,7 @@ await new Promise((resolve) => feed.once('listening', resolve))
 const releaseScript = join(import.meta.dirname, '../../../scripts/release.sh')
 const testKey = RELEASE_KEY && !remote ? execFileSync(releaseScript, ['key', join(root, 'test-release.pem')], { encoding: 'utf8' }).trim() : ''
 if (testKey) execFileSync(releaseScript, ['sign', resolve(args.feed)], { env: { ...process.env, RELEASE_KEY: join(root, 'test-release.pem') } })
-const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_UPDATE_FEED: remote ? args.feed : `http://127.0.0.1:${feed.address().port}/`, OPENHUT_MODEL: 'test', OPENHUT_SANDBOX: 'memory', ...testKey && { OPENHUT_RELEASE_KEY: testKey } }
+const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_UPDATE_FEED: remote ? args.feed : `http://127.0.0.1:${feed.address().port}/`, OPENHUT_MODEL: 'test', OPENHUT_SANDBOX: 'memory', ...testKey && { OPENHUT_RELEASE_KEY: testKey } }
 
 let child
 try {
