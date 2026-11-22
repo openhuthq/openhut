@@ -32,10 +32,9 @@ export function PeopleSettings() {
   const opened = useOpen()
   if (!cloud) return null
   const enabling = opened === 'enable' && <CloudSetup door="people" />
-  if (cloud.status === 'off' || !active) return <><Pitch door="people" />{enabling}</>
+  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch door="people" /></>
   const admin = active.role !== 'member'
-  return <section className="flex flex-col gap-2.5">
-    {enabling}
+  return <>{enabling}<section className="flex flex-col gap-2.5">
     <div className="flex items-center gap-2 px-1">
       <span className="text-[13px] font-medium">{active.name}</span>
       <span className="ml-auto text-[12px] text-mute">{peopleNote(active)}</span>
@@ -53,7 +52,7 @@ export function PeopleSettings() {
         {invite.link && <Button type="button" variant="ghost" className={PILL} onClick={() => void copy(invite.link ?? '')}>Copy link</Button>}
       </div>)}
     </div>
-  </section>
+  </section></>
 }
 
 function PersonRow({ member, workspace, you, admin }: { member: Member; workspace: CloudWorkspaceView; you: boolean; admin: boolean }) {

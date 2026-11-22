@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowLeft01Icon, CloudIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, CloudIcon, CloudUploadIcon, ComputerPhoneSyncIcon, Key01Icon, SquareLock02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
 import type { Cloud, RecoveryKit } from '@openhut/common/cloud/cloud.ts'
 import { kitText, readKit } from '@openhut/common/vault/kit-file.ts'
 import { Button } from '@/components/ui/button'
@@ -70,8 +70,8 @@ export function Pitch({ door }: { door: Door }) {
 
 export function Why({ door, onNext }: { door: Door; onNext: () => void }) {
   const rows: [ReactNode, string, string][] = door === 'people'
-    ? [[<Mascot kind="team" size={28} />, 'Work on agents together', 'Your team can chat with and edit the agents you share.'], [<Mascot kind="kit" size={28} />, 'The rest stay yours', 'Agents you don’t share stay private, even from your team.']]
-    : [[<Mascot kind="backup" size={28} />, 'Lose your Mac, keep everything', `Agents, chats and settings come back on a new ${HERE}.`], [<Mascot kind="sync" size={28} />, 'On your other Macs too', 'Chat with the same agents on every Mac you sign in to.']]
+    ? [[<I icon={UserGroupIcon} size={20} className="text-hue-amber" />, 'Work on agents together', 'Your team can chat with and edit the agents you share.'], [<I icon={Key01Icon} size={20} className="text-hue-amber" />, 'The rest stay yours', 'Agents you don’t share stay private, even from your team.']]
+    : [[<I icon={CloudUploadIcon} size={20} className="text-hue-blue" />, 'Lose your Mac, keep everything', `Agents, chats and settings come back on a new ${HERE}.`], [<I icon={ComputerPhoneSyncIcon} size={20} className="text-hue-blue" />, 'On your other Macs too', 'Chat with the same agents on every Mac you sign in to.']]
   return <Step art={<Art door={door} />} title={door === 'people' ? 'Share agents with your team' : 'Never lose your agents'} action={<Button type="button" variant="primary" className={PRIMARY} autoFocus onClick={onNext}>Continue</Button>}>
     <div className="w-full max-w-[420px] text-left">
       <Rows>
@@ -99,9 +99,9 @@ export function MacIsIn({ cloud, door, onNext }: { cloud: Cloud; door: Door; onN
     action={<Button type="button" variant="primary" className={PRIMARY} autoFocus onClick={onNext}>{cloud.kit ? 'Done' : 'Next'}</Button>}>
     <div className="w-full max-w-[420px] text-left">
       <Rows>
-        {door === 'people' && <Row icon={<Mascot kind="team" size={26} />} title="Your workspace is ready to share" note="Invite people from People when you’re done here." />}
-        <Row icon={<Mascot kind="backup" size={26} />} title={busy ? 'Backing up your agents' : 'Your agents are backed up'} note={busy ? `${done} of ${total}` : `Lose this ${HERE}, keep everything.`} />
-        {!cloud.kit && <Row icon={<Mascot kind="kit" size={26} />} title="Next: your recovery kit" note={`It gets you back in on a new ${HERE}. We can’t reset it.`} />}
+        {door === 'people' && <Row icon={<I icon={UserGroupIcon} size={20} className="text-hue-amber" />} title="Your workspace is ready to share" note="Invite people from People when you’re done here." />}
+        <Row icon={<I icon={CloudUploadIcon} size={20} className="text-hue-blue" />} title={busy ? 'Backing up your agents' : 'Your agents are backed up'} note={busy ? `${done} of ${total}` : `Lose this ${HERE}, keep everything.`} />
+        {!cloud.kit && <Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Next: your recovery kit" note={`It gets you back in on a new ${HERE}. We can’t reset it.`} />}
       </Rows>
     </div>
   </Step>
@@ -113,8 +113,8 @@ export function AllSet({ onDone }: { onDone: () => void }) {
     action={<Button type="button" variant="primary" className={PRIMARY} autoFocus onClick={onDone}>Done</Button>}>
     <div className="w-full max-w-[420px] text-left">
       <Rows>
-        <Row icon={<Mascot kind="backup" size={26} />} title="Backed up" note={`Your agents and chats, on this ${HERE} and in OpenHut Cloud.`} />
-        <Row icon={<Mascot kind="kit" size={26} />} title="Recovery kit saved" note={`Your way back in on a new ${HERE}.`} />
+        <Row icon={<I icon={CloudUploadIcon} size={20} className="text-hue-blue" />} title="Backed up" note={`Your agents and chats, on this ${HERE} and in OpenHut Cloud.`} />
+        <Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit saved" note={`Your way back in on a new ${HERE}.`} />
       </Rows>
     </div>
   </Step>
@@ -242,14 +242,10 @@ function Smile({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
   </g>
 }
 
-export function Mascot({ kind, size, alive }: { kind: 'phone' | 'kit' | 'backup' | 'sync' | 'team'; size: number; alive?: boolean }) {
+export function Mascot({ kind, size, alive }: { kind: 'kit'; size: number; alive?: boolean }) {
   const line = { stroke: INK, strokeWidth: 4, strokeLinejoin: 'round' as const }
   return <svg width={size} height={size} viewBox="0 0 100 100" className={alive ? 'kit-alive shrink-0' : 'shrink-0'} aria-hidden>
-    {kind === 'phone' && <><rect x={28} y={10} width={44} height={80} rx={11} fill="#19B3B1" {...line} /><rect x={35} y={20} width={30} height={54} rx={5} fill="#fbe3c8" /><Smile x={50} y={45} /><circle cx={50} cy={82} r={2.5} fill={INK} /></>}
     {kind === 'kit' && <><rect x={18} y={20} width={50} height={62} rx={7} fill="#fbe3c8" {...line} /><Smile x={43} y={42} /><path d="M30 62h26M30 70h18" stroke={INK} strokeWidth={3} strokeLinecap="round" opacity={0.35} /><g className="m-key"><circle cx={74} cy={38} r={10} fill="#f7c948" {...line} /><path d="M74 48v28m0-8h7m-7-8h6" stroke={INK} strokeWidth={4} strokeLinecap="round" fill="none" /></g></>}
-    {kind === 'backup' && <><path d="M28 74h46a16 16 0 0 0 0-32a22 22 0 0 0-42-4a18 18 0 0 0-4 36z" fill="#fff" {...line} /><Smile x={51} y={56} /></>}
-    {kind === 'sync' && <><rect x={12} y={26} width={54} height={38} rx={6} fill="#3d8fdc" {...line} /><rect x={18} y={32} width={42} height={26} rx={3} fill="#fbe3c8" /><Smile x={39} y={45} s={0.8} /><path d="M6 72h66" {...line} strokeLinecap="round" /><rect x={66} y={40} width={24} height={42} rx={6} fill="#19B3B1" {...line} /><Smile x={78} y={60} s={0.55} /></>}
-    {kind === 'team' && <><circle cx={26} cy={58} r={17} fill="#ff7a59" {...line} /><Smile x={26} y={58} s={0.7} /><circle cx={74} cy={58} r={17} fill="#19B3B1" {...line} /><Smile x={74} y={58} s={0.7} /><circle cx={50} cy={50} r={20} fill="#f7c948" {...line} /><Smile x={50} y={50} s={0.8} /></>}
   </svg>
 }
 

@@ -188,6 +188,15 @@ handle('devices.allow', answer(allow))
 handle('passkey.status', () => passkey(['status']))
 handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
 handle('passkey.open', () => passkey(['open']))
+handle('cloud.notify', () => new Promise((resolve) => {
+  if (!Notification.isSupported()) return resolve({ shown: false })
+  const note = new Notification({ title: 'Unlock OpenHut Cloud', body: `Bring your agents and chats to this ${MAC ? 'Mac' : 'computer'}.` })
+  note.on('click', () => show('/settings/backup?open=enable'))
+  note.on('show', () => resolve({ shown: true }))
+  note.on('failed', () => resolve({ shown: false }))
+  setTimeout(() => resolve({ shown: false }), 3000)
+  note.show()
+}))
 handle('cloud.signIn', ({ url } = {}) => {
   const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
   const { x, y, width, height } = window?.getBounds() ?? {}

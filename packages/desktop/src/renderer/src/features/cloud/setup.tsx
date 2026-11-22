@@ -21,7 +21,7 @@ export function CloudSetup({ door }: { door: Door }) {
   const close = () => open()
   const off = cloud.status === 'off'
   const shown: Stage = off ? (stage === 'why' ? 'why' : 'sign-in') : stage === 'why' || stage === 'sign-in' ? 'in' : stage
-  const at = { why: 0, 'sign-in': 1, in: 2, kit: 3, done: unlocking ? 3 : 4 }[shown]
+  const at = shown === 'in' && unlocking && cloud.status !== 'locked' ? 3 : { why: 0, 'sign-in': 1, in: 2, kit: 3, done: 4 }[shown]
   return <Guide label={LABEL[door]} at={at} of={unlocking ? 4 : 5} onClose={close}>
     {shown === 'why' && <Why door={door} onNext={() => setStage('sign-in')} />}
     {shown === 'sign-in' && <SignUpIn back={() => setStage('why')} error={cloud.signInError ?? undefined} />}

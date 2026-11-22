@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
-import { Alert02Icon, Cancel01Icon, FingerPrintIcon } from '@hugeicons/core-free-icons'
+import { Alert02Icon, Cancel01Icon, FingerPrintIcon, Key01Icon, SmartPhone01Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { kitWord, nearestWord, readKit, validKit } from '@openhut/common/vault/kit-file.ts'
@@ -15,7 +15,7 @@ import { DRAG, I, PILL } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { QrCode } from '@/features/agents/qr-code'
-import { nameOf, REMOVE_DETAIL, useCloud, useRemoveMac, usePairing, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useStartOver, useUnlock } from '@/features/cloud/api'
+import { nameOf, notifyUnlock, REMOVE_DETAIL, useCloud, useRemoveMac, usePairing, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useStartOver, useUnlock } from '@/features/cloud/api'
 import { Mascot } from '@/features/cloud/sign-in'
 import { PRIMARY, Step } from '@/features/cloud/step'
 import { chooseWorkspace, useAsk, useCancelAsk } from '@/features/cloud/workspaces'
@@ -49,9 +49,9 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
     action={canPasskey && <Button type="button" variant="primary" className={cn(PRIMARY, 'gap-2')} disabled={passkey.isPending} onClick={() => passkey.mutate(undefined, { onError: toastError })}><I icon={FingerPrintIcon} size={16} />{passkey.isPending ? 'Unlocking…' : 'Use Touch ID'}</Button>}>
     <div className="w-full max-w-[420px] text-left">
       <Rows>
-        <Row onClick={() => setWay('code')} icon={<Mascot kind="phone" size={30} />} title="Use my iPhone or another Mac" note="Scan a code with it"><Chevron /></Row>
-        {cloud.kitInCloud && <Row onClick={() => setWay('kit')} icon={<Mascot kind="kit" size={30} />} title="Use my recovery kit" note="The file you saved"><Chevron /></Row>}
-        {cloud.canAsk && <Row onClick={() => setWay('admin')} icon={<Mascot kind="team" size={30} />} title="Ask an admin" note="Get your team workspaces back"><Chevron /></Row>}
+        <Row onClick={() => setWay('code')} icon={<I icon={SmartPhone01Icon} size={20} className="text-hue-blue" />} title="Use my iPhone or another Mac" note="Scan a code with it"><Chevron /></Row>
+        {cloud.kitInCloud && <Row onClick={() => setWay('kit')} icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Use my recovery kit" note="The file you saved"><Chevron /></Row>}
+        {cloud.canAsk && <Row onClick={() => setWay('admin')} icon={<I icon={UserGroupIcon} size={20} className="text-hue-amber" />} title="Ask an admin" note="Get your team workspaces back"><Chevron /></Row>}
       </Rows>
     </div>
     {!canPasskey && helper && !helper.error && <span className="text-[12px] text-mute">This {HERE} can't use passkeys.</span>}
@@ -204,6 +204,12 @@ export function CloudGate({ children }: { children: ReactNode }) {
   const queries = useQueryClient()
   const path = usePath()
   const [landing, setLanding] = useState(false)
+  const [notified, setNotified] = useState<boolean>()
+  const locked = cloud?.status === 'locked'
+  useEffect(() => {
+    if (!locked) return setNotified(undefined)
+    void notifyUnlock().then(setNotified)
+  }, [locked])
   const restoring = cloud?.backup.state === 'restoring'
   const agent = cloud?.backup.agent
   const problem = cloud?.backup.problem
@@ -216,8 +222,7 @@ export function CloudGate({ children }: { children: ReactNode }) {
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
   if (!cloud) return children
-  const locked = cloud.status === 'locked' && !path.startsWith('/settings/')
-  return <>{children}<Toasts>{locked && <LockedToast />}<NewMacAlert cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
+  return <>{children}<Toasts>{cloud.status === 'locked' && notified === false && !path.startsWith('/settings/') && <LockedToast />}<NewMacAlert cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
 }
 
 function LockedToast() {

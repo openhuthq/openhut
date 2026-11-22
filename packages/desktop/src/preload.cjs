@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('openhut', {
   },
   cloud: {
     signIn: (url) => ipcRenderer.invoke('cloud.signIn', { url }),
+    notify: () => ipcRenderer.invoke('cloud.notify'),
   },
   passkey: {
     status: () => ipcRenderer.invoke('passkey.status'),

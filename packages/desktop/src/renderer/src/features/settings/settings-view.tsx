@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
 import { AiMagicIcon, CloudDownloadIcon, CloudIcon, LaptopIcon, PlugSocketIcon, Settings02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
 import { BackupSettings } from '@/features/cloud/cloud'
@@ -16,12 +17,12 @@ import { cn } from '@/lib/utils'
 
 const TABS: [string, string, IconSvgElement, string][] = [
   ['general', 'General', Settings02Icon, 'text-hue-slate'],
-  ['backup', 'Backup', CloudIcon, 'text-hue-blue'],
-  ['people', 'People', UserGroupIcon, 'text-hue-amber'],
   ['devices', 'Devices', LaptopIcon, 'text-hue-blue'],
   ['models', 'Models', AiMagicIcon, 'text-hue-violet'],
   ['mcp', 'MCP', PlugSocketIcon, 'text-hue-teal'],
   ['updates', 'Updates', CloudDownloadIcon, 'text-hue-sky'],
+  ['backup', 'Backup', CloudIcon, 'text-hue-blue'],
+  ['people', 'People', UserGroupIcon, 'text-hue-amber'],
 ]
 
 const MOVED: Record<string, string> = { computers: 'devices', phones: 'devices', cloud: 'backup' }
@@ -30,8 +31,11 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
   const tab = MOVED[asked] ?? asked
   const name = TABS.find(([slug]) => slug === tab)?.[1] ?? 'General'
   const nav = <nav aria-label="Settings" className="no-scrollbar flex w-[198px] shrink-0 flex-col gap-0.5 overflow-y-auto px-3 py-4">
-    {TABS.filter(([slug]) => (!isPhone() || slug !== 'mcp') && (!!desktop || slug !== 'updates')).map(([slug, name, icon, hue]) => <a key={slug} href={`/settings/${slug}`} aria-current={slug === tab ? 'page' : undefined} onClick={(event) => { event.preventDefault(); navigate(`/settings/${slug}`, true) }}
-      className={cn('flex items-center gap-[9px] rounded-lg px-[9px] py-[7px] text-[13px]/[18px] text-ink no-underline', HOVER, slug === tab && PICKED)}><I icon={icon} size={18} className={hue} />{name}</a>)}
+    {TABS.filter(([slug]) => (!isPhone() || slug !== 'mcp') && (!!desktop || slug !== 'updates')).map(([slug, name, icon, hue]) => <Fragment key={slug}>
+      {slug === 'backup' && <span className="mt-4 px-[9px] pb-1 text-[11.5px] font-medium text-mute">Cloud</span>}
+      <a href={`/settings/${slug}`} aria-current={slug === tab ? 'page' : undefined} onClick={(event) => { event.preventDefault(); navigate(`/settings/${slug}`, true) }}
+      className={cn('flex items-center gap-[9px] rounded-lg px-[9px] py-[7px] text-[13px]/[18px] text-ink no-underline', HOVER, slug === tab && PICKED)}><I icon={icon} size={18} className={hue} />{name}</a>
+    </Fragment>)}
   </nav>
   const opened = useOpen()
   const step = tab === 'models' ? stepOf(opened) : undefined

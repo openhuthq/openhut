@@ -129,7 +129,11 @@ export function useStartOver() {
 }
 
 type SheetReply = { url?: string; error?: string; message?: string }
-const sheet: { signIn: (url: string) => Promise<SheetReply> } | undefined = Reflect.get(window, 'openhut')?.cloud
+const sheet: { signIn: (url: string) => Promise<SheetReply>; notify: () => Promise<{ shown?: boolean }> } | undefined = Reflect.get(window, 'openhut')?.cloud
+
+export async function notifyUnlock(): Promise<boolean> {
+  return Boolean((await sheet?.notify().catch(() => undefined))?.shown)
+}
 
 export function useSignIn() {
   const client = useQueryClient()
