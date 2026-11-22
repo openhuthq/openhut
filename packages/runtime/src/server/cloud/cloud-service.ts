@@ -52,7 +52,7 @@ export const cloudService = {
     const accountKey = await keysService.accountDeviceKey()
     const asked = locked ? resumeAsking() : undefined
     const askRooms = keysService.asked()
-    const inCloud = locked && session ? await kitInCloud() : null
+    const [inCloud, passkeyInCloud] = locked && session ? await Promise.all([kitInCloud(), boxInCloud('passkey')]) : [null, false]
     const devices = lists.flatMap((body) => {
       const mine = body?.members.find((member) => member.email === account?.email)
       return body && mine ? mine.devices.filter((key) => key !== mine.kit && key !== accountKey).map((key) => ({ key, here: key === here, addedAt: addedOf(body, key) ? new Date(addedOf(body, key)).toISOString() : null, name: body.names?.[key] ?? null, kind: body.runtimes?.includes(key) ? 'server' as const : 'mac' as const })) : []
@@ -62,7 +62,7 @@ export const cloudService = {
       device: here,
       workspace: on && account && members ? { id: account.workspace.id, version: members.version, members: members.members } : null,
       keyStore: keyStore.kind(), kit: on ? kitOf() : null, kitInCloud: inCloud ? inCloud.found : Boolean(keysService.kitState().saved), cloudKit: inCloud?.kit ?? null, backup: syncService.status(),
-      signInError, keptAccount: on ? null : (keysService.kitState().saved ? keysService.account()?.email ?? null : null), devices, passkey: on && passkeySaved, youngUntil: young > Date.now() ? new Date(young).toISOString() : null, needsSignIn: Boolean(locked && !session),
+      signInError, keptAccount: on ? null : (keysService.kitState().saved ? keysService.account()?.email ?? null : null), devices, passkey: on ? passkeySaved : passkeyInCloud, youngUntil: young > Date.now() ? new Date(young).toISOString() : null, needsSignIn: Boolean(locked && !session),
       workspaces: on && account ? roomKeys.rooms().map(({ workspace: { id, key } }) => {
         const body = roomKeys.members(id)
         const invites = (body?.invites ?? []).map((each) => ({ email: each.email, role: each.role, link: roomKeys.link({ ws: id, email: each.email }) ?? null }))
@@ -454,8 +454,16 @@ async function accountExists(token: string): Promise<boolean> {
   return listed.data.length > 0 || (await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token })).status === 200
 }
 
+async function cloudBox(kind: 'kit' | 'passkey'): Promise<{ status: number; json: unknown }> {
+  return await cloud.account({ method: 'GET', path: `/v1/key-boxes/${kind}`, token: await keysService.token() }).catch(() => ({ status: 0, json: null }))
+}
+
+async function boxInCloud(kind: 'kit' | 'passkey'): Promise<boolean> {
+  return (await cloudBox(kind)).status !== 404
+}
+
 async function kitInCloud(): Promise<{ found: boolean; kit: { id: string; savedAt: string | null } | null }> {
-  const got = await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token: await keysService.token() }).catch(() => ({ status: 0, json: null }))
+  const got = await cloudBox('kit')
   const box = KeyBox.safeParse(got.json).data
   return { found: got.status !== 404, kit: box ? { id: await kitId(box.body), savedAt: box.savedAt ?? null } : null }
 }

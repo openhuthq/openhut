@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { CloudUploadIcon, Delete02Icon, FingerPrintIcon, Key01Icon, Logout03Icon, PlusSignIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import type { Backup, Cloud } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
@@ -10,11 +10,11 @@ import { PersonFace } from '@/components/custom/person-face'
 import { DeviceIcon } from '@/components/custom/device'
 import { notify } from '@/components/custom/toast'
 import { ConfirmButton } from '@/components/confirm-button'
-import { nameOf, REMOVE_DETAIL, useAddPasskey, useAllow, useCloud, useForget, usePasskeys, useRemoveMac, useSignOut } from '@/features/cloud/api'
+import { nameOf, REMOVE_DETAIL, useAddPasskey, useAllow, useCloud, usePasskeys, useRemoveMac, useSignOut } from '@/features/cloud/api'
 import { markSeen } from '@/features/cloud/seen'
 import { EnableCloud, Pitch } from '@/features/cloud/sign-in'
 import { CloudSetup, KitDialog } from '@/features/cloud/setup'
-import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
+import { Chevron, Row, Rows } from '@/features/settings/kit'
 import { isPhone, scan, useConfirmed } from '@/lib/native'
 import { ago, shortDate, shortDateTime } from '@/lib/format'
 import { navigate, open, useOpen, useSearch } from '@/lib/router'
@@ -29,26 +29,48 @@ export function BackupSettings() {
   if (!data) return <ErrorNote message={error} />
   const on = data.status === 'on' || data.status === 'offline'
   return <>
-    {on ? <CloudOn cloud={data} error={error ?? undefined} /> : <Pitch door="backup" />}
+    {on ? <CloudOn cloud={data} error={error ?? undefined} /> : data.status === 'locked' && !isPhone() ? <CloudLocked cloud={data} /> : <Pitch door="backup" />}
     {data.status === 'off' && <ErrorNote message={error ?? undefined} />}
-    {data.status === 'off' && data.keptAccount && <KeptAccount email={data.keptAccount} />}
     {opened === 'enable' && <CloudSetup />}
     {opened === 'kit' && data.status !== 'off' && <KitDialog />}
   </>
 }
 
-function CloudOn({ cloud, error }: { cloud: Cloud; error?: string }) {
+function CloudLocked({ cloud }: { cloud: Cloud }) {
+  const email = cloud.email ?? ''
+  return <>
+    <AccountHead email={email} note={<span className="flex items-center gap-1.5 text-[12px] text-mute"><Google />{email}</span>} status={<Status tone="off">Locked</Status>} />
+    <Rows>
+      <Row icon={<I icon={SquareLock02Icon} size={20} className="text-hue-amber" />} title="Locked on this computer" note="Unlock to restore your agents and chats">
+        <Button type="button" variant="primary" className={PILL} onClick={() => open('enable')}>Unlock</Button>
+      </Row>
+      <SignOutRow />
+    </Rows>
+  </>
+}
+
+function AccountHead({ email, note, status }: { email: string; note: ReactNode; status: ReactNode }) {
+  return <div className="flex items-center gap-3.5 px-1">
+    <PersonFace name={nameOf(email)} email={email} size={48} />
+    <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[18px]/[1.2] font-semibold tracking-[-.01em]">{nameOf(email)}</span>{note}</span>
+    {status}
+  </div>
+}
+
+function SignOutRow() {
   const signOut = useSignOut()
+  return <Row icon={<I icon={Logout03Icon} size={20} className="text-hue-slate" />} title="Sign out" note="Your agents keep running on this computer">
+    <Button type="button" variant="secondary" className={PILL} disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
+  </Row>
+}
+
+function CloudOn({ cloud, error }: { cloud: Cloud; error?: string }) {
   const helper = usePasskeys()
   const addPasskey = useAddPasskey()
   const email = cloud.email ?? ''
   const young = Boolean(cloud.youngUntil)
   return <>
-    <div className="flex items-center gap-3.5 px-1">
-      <PersonFace name={nameOf(email)} email={email} size={48} />
-      <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[18px]/[1.2] font-semibold tracking-[-.01em]">{nameOf(email)}</span>{cloud.status === 'on' ? <span className="flex items-center gap-1.5 text-[12px] text-mute"><Google />{email}</span> : <span className="text-[12px] text-mute">Can’t reach the cloud. Your agents keep working.</span>}</span>
-      {cloud.status === 'on' ? <Status tone="on">On</Status> : <Status tone="wait">Offline</Status>}
-    </div>
+    <AccountHead email={email} note={cloud.status === 'on' ? <span className="flex items-center gap-1.5 text-[12px] text-mute"><Google />{email}</span> : <span className="text-[12px] text-mute">Can’t reach the cloud. Your agents keep working.</span>} status={cloud.status === 'on' ? <Status tone="on">On</Status> : <Status tone="wait">Offline</Status>} />
     <Rows>
       <Row icon={<I icon={CloudUploadIcon} size={20} className="text-hue-blue" />} title="Backup" note={<span className={cloud.backup.problem || cloud.backup.state === 'failed' ? 'text-fail' : undefined}>{backupNote({ ...cloud.backup, offline: cloud.status === 'offline' })}</span>} />
       <Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>{kitNote(cloud.kit)}{cloud.keyStore === 'file' && ' · Stored in a file, not the keychain'}</span>}>
@@ -57,9 +79,7 @@ function CloudOn({ cloud, error }: { cloud: Cloud; error?: string }) {
       {helper?.passkeys && helper.prf && <Row icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title="Touch ID" note={cloud.passkey ? 'On' : 'Unlock a new Mac with your fingerprint'}>
         {!cloud.passkey && !young && <Button type="button" variant="secondary" className={PILL} disabled={addPasskey.isPending} onClick={() => addPasskey.mutate(email, { onError: toastError })}>Add</Button>}
       </Row>}
-      <Row icon={<I icon={Logout03Icon} size={20} className="text-hue-slate" />} title="Sign out" note="Your agents keep running on this computer">
-        <Button type="button" variant="secondary" className={PILL} disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
-      </Row>
+      <SignOutRow />
     </Rows>
     <ErrorNote message={error} />
     {cloud.workspaces.some((each) => each.own) && <DeleteAccount cloud={cloud} />}
@@ -103,19 +123,6 @@ function RotateConnections({ rotate }: { rotate: Cloud['rotate'] }) {
   return <Section title="Keys to replace" action={<Button type="button" variant="ghost" className={PILL} disabled={done.isPending} onClick={() => done.mutate(undefined, { onError: toastError })}>Done</Button>}>
     <Rows>{rotate.map((each) => <Row key={each.id} icon={<I icon={Key01Icon} size={18} className="text-hue-amber" />} title={each.name} note={`The device you removed could read this ${each.kind} key. Make a new one at the service.`} onClick={() => navigate('/connections')}><Chevron /></Row>)}</Rows>
   </Section>
-}
-
-function KeptAccount({ email }: { email: string }) {
-  const forget = useForget()
-  const { confirming, setConfirming, box } = useConfirming()
-  return <div ref={box}><Row icon={<PersonFace name={nameOf(email)} email={email} size={32} />} title={nameOf(email)} note={confirming ? 'Removes this account from this computer. Your recovery kit brings it back.' : email}>
-    {confirming
-      ? <>
-        <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
-        <Button type="button" variant="danger" className={PILL} disabled={forget.isPending} onClick={() => forget.mutate(undefined, { onError: toastError })}>Forget</Button>
-      </>
-      : <Button type="button" variant="danger" className={PILL} onClick={() => setConfirming(true)}>Forget</Button>}
-  </Row></div>
 }
 
 const addedAt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })

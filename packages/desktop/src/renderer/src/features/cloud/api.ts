@@ -168,14 +168,6 @@ export function useNewKit() {
   })
 }
 
-export function useForget() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: () => request({ schema: Cloud, computer: 'local', path: '/api/cloud/account', method: 'DELETE' }),
-    onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
-  })
-}
-
 export function nameOf(email: string): string {
   const first = (email.split('@')[0] ?? '').split(/[._+-]/)[0] ?? ''
   return first.charAt(0).toUpperCase() + first.slice(1)

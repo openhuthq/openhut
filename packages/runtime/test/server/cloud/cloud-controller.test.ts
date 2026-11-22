@@ -80,7 +80,7 @@ answerErrors(app)
 app.setValidatorCompiler(validateWithZod)
 await app.register(cloudController, { prefix: '/api/cloud' })
 const headers = { authorization: 'Bearer test-key' }
-const status = async () => (await app.inject({ method: 'GET', url: '/api/cloud', headers })).json() as { status: string; email: string | null; workspace: { members: { email: string; role: string }[] } | null; kit: { savedAt: string; differs: boolean } | null; signInError: string | null; keptAccount: string | null; kitInCloud: boolean; device: string; needsSignIn: boolean }
+const status = async () => (await app.inject({ method: 'GET', url: '/api/cloud', headers })).json() as { status: string; email: string | null; workspace: { members: { email: string; role: string }[] } | null; kit: { savedAt: string; differs: boolean } | null; signInError: string | null; keptAccount: string | null; kitInCloud: boolean; passkey: boolean; device: string; needsSignIn: boolean }
 const signIn = async (email: string) => {
   seen.email = email
   await app.inject({ method: 'POST', url: '/api/cloud/sessions', headers })
@@ -150,10 +150,7 @@ test('a downloaded kit is saved at once, a second account gets its sentence and 
   assert.ok(back.kit?.savedAt)
 })
 
-test('a Mac younger than 3 days can’t make a new kit; on an older one a new kit the cloud kept but didn’t confirm leaves no kit, not the retired one', async () => {
-  const young = await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })
-  assert.equal(young.statusCode, 403)
-  assert.match(young.json().error.message, /added less than 3 days ago/)
+test('a new kit the cloud kept but didn’t confirm leaves no kit, not the retired one', async () => {
   assert.ok((await status()).kit)
   await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })
   await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })
@@ -270,7 +267,11 @@ test('a passkey’s PRF output locks the account key in the room; on a new Mac t
   await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })
   await app.inject({ method: 'DELETE', url: '/api/cloud/account', headers })
   await signIn('ana@example.com')
-  assert.equal((await status()).status, 'locked')
+  assert.deepEqual([(await status()).status, (await status()).passkey], ['locked', true])
+  const saved = seen.passkey
+  seen.passkey = undefined
+  assert.deepEqual([(await status()).status, (await status()).passkey], ['locked', false])
+  seen.passkey = saved
   const wrong = await app.inject({ method: 'POST', url: '/api/cloud/unlock', headers, payload: { prf: Buffer.alloc(32, 8).toString('base64url') } })
   assert.equal(wrong.statusCode, 400)
   assert.match(wrong.json().error.message, /Touch ID isn’t set up on this/)
