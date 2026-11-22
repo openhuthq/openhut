@@ -444,7 +444,7 @@ async function unsent({ s, kinds, ctx }: { s: State; kinds: Synced[]; ctx: Conte
     if (!mine) continue
     const ids = new Set(mine.map((each) => each.id))
     for (const [id, each] of s.refused) if (each.kind === kind && !ids.has(id)) s.refused.delete(id)
-    const gone: Item[] = TOMBSTONED.includes(kind) ? [...rows.values()].filter((row) => row.kind === kind && row.hash !== DELETED && !ids.has(row.id)).map((row) => ({ id: row.id, kind, ref: row.ref, value: null, agentId: row.agent_id ?? undefined })) : []
+    const gone: Item[] = TOMBSTONED.includes(kind) ? [...rows.values()].filter((row) => row.kind === kind && row.hash !== DELETED && (row.hash !== DROPPED || row.signer === me) && !ids.has(row.id)).map((row) => ({ id: row.id, kind, ref: row.ref, value: null, agentId: row.agent_id ?? undefined })) : []
     for (const each of [...mine, ...gone]) {
       const row = rows.get(each.id)
       const runsHere = each.agentId !== undefined && runners.get(each.agentId) === me
