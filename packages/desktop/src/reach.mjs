@@ -4,7 +4,7 @@ export function reacher({ connect, relayUrl, key, direct }) {
   const sessions = new Map()
   const open = (computer) => {
     if (!sessions.has(computer.id)) {
-      const opening = key().then((device) => connect({ relayUrl, computer: { id: relayId(computer.key), key: computer.key }, key: device }))
+      const opening = key().then((device) => connect({ relayUrl, url: urlOf(computer), computer: { id: relayId(computer.key), key: computer.key }, key: device }))
       const gone = () => { if (sessions.get(computer.id) === opening) sessions.delete(computer.id) }
       opening.then(async (tunnel) => {
         for await (const _ of tunnel.control);
@@ -40,4 +40,10 @@ export function reacher({ connect, relayUrl, key, direct }) {
 
 export function relayId(key) {
   return createHash('sha256').update(Buffer.from(key, 'hex')).digest('hex')
+}
+
+export function urlOf(computer) {
+  if (!computer.tailnet) return undefined
+  const { ip, port } = computer.tailnet
+  return `ws://${ip.includes(':') ? `[${ip}]` : ip}:${port}`
 }

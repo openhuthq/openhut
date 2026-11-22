@@ -33,8 +33,8 @@ import { settings } from './platform/settings.ts'
 import { listenLocally } from './team/identity.ts'
 
 await migrate()
-if (config.installKind === 'server' && !/^[0-9a-f]{64}$/i.test(config.clientKeySha256 ?? '') && !config.join && !settings.access()) {
-  log.error({ event: 'app.no_client_key', message: 'Set OPENHUT_JOIN to a join code from the OpenHut app, OPENHUT_CLIENT_KEY_SHA256 to the hex SHA-256 of the key the app enrolled, or OPENHUT_INSTALL_KIND=desktop for local mode. Refusing to start without one.' })
+if (config.installKind === 'server' && !/^[0-9a-f]{64}$/i.test(config.clientKeySha256 ?? '') && !config.join && !config.tailnetPort && !settings.access()) {
+  log.error({ event: 'app.no_client_key', message: 'Set OPENHUT_JOIN to a join code from the OpenHut app, OPENHUT_TAILNET_PORT to be added over Tailscale, OPENHUT_CLIENT_KEY_SHA256 to the hex SHA-256 of the key the app enrolled, or OPENHUT_INSTALL_KIND=desktop for local mode. Refusing to start without one.' })
   process.exit(1)
 }
 

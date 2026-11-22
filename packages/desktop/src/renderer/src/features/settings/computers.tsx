@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ComputerTerminal01Icon, LaptopIcon, Tick02Icon, PlusSignIcon, ServerStack01Icon } from '@hugeicons/core-free-icons'
+import { LaptopIcon, Tick02Icon, PlusSignIcon, ServerStack01Icon } from '@hugeicons/core-free-icons'
 import type { Computer, OpenHutAgent, TailnetPeer } from '@openhut/client'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -28,6 +28,8 @@ import { open, useOpen } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
 import { cn } from '@/lib/utils'
+import { TurnOn } from '@/features/cloud/sign-in'
+import { useCloud, useSignIn } from '@/features/cloud/api'
 
 const GET_TAILSCALE = 'https://tailscale.com/download'
 
@@ -48,6 +50,8 @@ function ComputerList() {
   const admins = useComputerAdmins().data
   const agents = useAgents().data ?? []
   const enrollments = useEnrollments().data
+  const tailscale = useTailnet().data?.state
+  const tailscaleOff = !!tailscale && tailscale !== 'running'
   return <>
     <Intro>Run your agents</Intro>
     <ErrorNote message={computers.error?.message} />
@@ -55,7 +59,7 @@ function ComputerList() {
       {computers.data?.map((computer) => {
         const admin = admins?.find((each) => each.computer.id === computer.id)?.admin
         if (admin?.server.update?.status === 'running') return <UpdatingRow key={computer.id} computer={computer} />
-        const note = noteOf({ computer, admin, count: agents.filter((agent) => agent.computer === computer.id).length })
+        const note = noteOf({ computer, admin, tailscaleOff, count: agents.filter((agent) => agent.computer === computer.id).length })
         if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={computer.name} note={note}>{!isPhone() && <UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Current</span>} />}</Row>
         return <RemovableRow key={computer.id} computer={computer} admin={admin} note={note} agents={agents.filter((agent) => agent.computer === computer.id)} />
       })}
@@ -65,13 +69,16 @@ function ComputerList() {
   </>
 }
 
-function noteOf({ computer, admin, count }: { computer: Computer; admin: Admin | undefined; count: number }) {
+const ROUTES = { tailnet: 'Tailscale', relay: 'Relay' }
+
+function noteOf({ computer, admin, count, tailscaleOff }: { computer: Computer; admin: Admin | undefined; count: number; tailscaleOff: boolean }) {
+  if (!computer.online && computer.route === 'tailnet' && tailscaleOff) return `Offline · Tailscale is off on this ${HERE}`
   if (!computer.online) return 'Offline'
   if (computer.appTooOld) return 'Update OpenHut to use this computer'
   if (computer.runtimeTooOld) return 'Update this computer to use it'
   const failed = admin?.server.update?.status === 'failed' ? admin.server.update : null
   if (failed) return `Couldn't update to ${failed.to}. ${sentence(failed.reason ?? 'The update stopped before it finished.')}`
-  return [computer.id === 'local' && !WORDS.sandboxed ? 'Agents run as you' : 'Each agent in its own sandbox', agentCount(count), admin && `OpenHut ${computer.id === 'local' ? admin.server.version : admin.server.build}`].filter(Boolean).join(' · ')
+  return [computer.route && ROUTES[computer.route], computer.id === 'local' && !WORDS.sandboxed ? 'Agents run as you' : 'Each agent in its own sandbox', agentCount(count), admin && `OpenHut ${computer.id === 'local' ? admin.server.version : admin.server.build}`].filter(Boolean).join(' · ')
 }
 
 function sentence(text: string) {
@@ -137,11 +144,11 @@ function TailscaleStep() {
   const add = (peer: Peer) => { start({ name: peer.name, dns: peer.dns } satisfies TailnetPeer); open(`adding:${peer.name}`) }
   return <TailscaleDialog title="Add over Tailscale" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}>
     {!data && <Scene mood="looking" title="Looking at your tailnet…" />}
-    {data?.state === 'missing' && <Empty title="Install Tailscale to reach your other computers" line="OpenHut finds and sets up your other computers over Tailscale.">
+    {data?.state === 'missing' && <Empty title="Install Tailscale" line="OpenHut uses it to find your other computers.">
       <a href={GET_TAILSCALE} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Get Tailscale</a>
       <Button type="button" variant="ghost" className={PILL} disabled={tailnet.isFetching} onClick={recheck}>I've installed it</Button>
     </Empty>}
-    {data?.state === 'stopped' && <Empty title="Open Tailscale and sign in" line={`Tailscale is installed but not connected on this ${HERE}.`}>
+    {data?.state === 'stopped' && <Empty title="Tailscale is off" line={`Open it and sign in on this ${HERE}.`}>
       <Button type="button" variant="secondary" className={PILL} disabled={tailnet.isFetching} onClick={recheck}>Check again</Button>
     </Empty>}
     {data?.state === 'running' && <Peers peers={data.peers} tailnet={data.tailnet} recheck={recheck} checking={tailnet.isFetching} onAdd={add} />}
@@ -149,25 +156,27 @@ function TailscaleStep() {
 }
 
 function Peers({ peers, tailnet, recheck, checking, onAdd }: { peers: Peer[]; tailnet: string; recheck: () => void; checking: boolean; onAdd: (peer: Peer) => void }) {
-  const added = new Set((useComputers().data ?? []).map((computer) => computer.name))
+  const computers = useComputers().data ?? []
+  const added = new Set(computers.filter((computer) => computer.route !== 'relay').map((computer) => computer.name))
+  const onRelay = new Set(computers.filter((computer) => computer.route === 'relay').map((computer) => computer.name))
   const enrolling = new Set(useEnrollments().data.map((each) => each.peer.dns))
   const shown = byEligibility(peers).filter((peer) => stateOf(peer) === 'ready' || stateOf(peer) === 'ssh-off')
   const hidden = peers.length - shown.length
-  if (!shown.length) return <Empty title="No other computers on your tailnet yet" line="Install Tailscale on an always-on Linux computer and sign in with the same account.">
+  if (!shown.length) return <Empty title="No Linux computers on your tailnet yet" line="Install Tailscale on an always-on Linux computer and sign in with the same account.">
     <Button type="button" variant="secondary" className={PILL} disabled={checking} onClick={recheck}>Check again</Button>
   </Empty>
   return <div className="flex flex-col gap-1.5">
-    <p className="m-0 px-2.5 text-body">Pick a Linux computer on {tailnet || 'your tailnet'}. OpenHut installs itself there over Tailscale SSH, then reaches it through its relay.</p>
+    <p className="m-0 px-2.5 text-body">Pick a Linux computer on {tailnet || 'your tailnet'}.</p>
     <Rows>{shown.map((peer) => {
       const ready = stateOf(peer) === 'ready'
-      const note = ['Linux', peer.ip, !ready && 'Tailscale SSH is off'].filter(Boolean).join(' · ')
+      const note = ['Linux', peer.ip, !ready && 'Tailscale SSH is off', onRelay.has(peer.name) && 'On OpenHut Relay now'].filter(Boolean).join(' · ')
       const icon = <I icon={ServerStack01Icon} size={20} className={ready ? 'text-hue-blue' : 'text-mute'} />
       return <Row key={peer.dns} icon={icon} title={peer.name} note={note}>
         {added.has(peer.name)
           ? <Button type="button" variant="ghost" className={PILL} disabled><I icon={Tick02Icon} size={14} className="text-pass" />Added</Button>
           : enrolling.has(peer.dns)
             ? <Button type="button" variant="ghost" className={PILL} onClick={() => open(`adding:${peer.name}`)}>Adding…</Button>
-            : <Button type="button" variant="secondary" className={PILL} onClick={() => ready ? onAdd(peer) : open(`ssh:${peer.name}`)}>{ready ? 'Add' : 'Set up'}</Button>}
+            : <Button type="button" variant="secondary" className={PILL} onClick={() => ready ? onAdd(peer) : open(`ssh:${peer.name}`)}>{onRelay.has(peer.name) ? 'Switch' : ready ? 'Add' : 'Set up'}</Button>}
       </Row>
     })}</Rows>
     {hidden > 0 && <p className="m-0 px-2.5 pt-1 text-[12px]/[16px] text-mute">{hidden === 1 ? '1 offline or non-Linux device isn\'t' : `${hidden} offline or non-Linux devices aren't`} shown.</p>}
@@ -252,22 +261,26 @@ function TailscaleDialog({ title, back, foot, children }: { title: string; back?
 }
 
 function AddComputer() {
+  const cloud = useCloud().data
+  const signIn = useSignIn()
+  const signedIn = !!cloud && cloud.status !== 'off'
   return <TailscaleDialog title="Add a computer">
-    <p className="m-0 px-2.5 text-body">An always-on Linux computer gives each agent its own sandbox and keeps answering while this {HERE} sleeps. How do you want to add it?</p>
     <Rows>
-      <Row onClick={() => open('command')} icon={<I icon={ComputerTerminal01Icon} size={20} className="text-hue-blue" />} title="Run a command (easiest)" note="Paste one line on the computer. Traffic goes through the OpenHut Cloud relay, end-to-end encrypted, so OpenHut can't read it."><Chevron /></Row>
-      <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Over Tailscale" note="Pick it from your tailnet and OpenHut installs itself. No terminal needed."><Chevron /></Row>
+      <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Tailscale" note="Use the Tailscale you already have. Nothing goes through OpenHut."><Chevron /></Row>
+      {signedIn
+        ? <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="The easiest way, no Tailscale needed. Encrypted, so we can't read it."><Chevron /></Row>
+        : <Row icon={<Hut mood="asleep" className="size-6 opacity-50 grayscale" />} title="OpenHut Relay" note="The easiest way, no Tailscale needed. Needs OpenHut Cloud."><TurnOn short pending={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })} /></Row>}
     </Rows>
   </TailscaleDialog>
 }
 
 function AddByCommand() {
   return <PairDialog
-    title="Run a command"
+    title="Add over OpenHut Relay"
     back={() => open('add')}
-    check={(device) => `Allow it only if ${device.name} shows the same numbers. Your agents can run there once it joins.`}
+    check={(device) => `Allow it only if ${device.name} shows the same numbers.`}
     waiting={(code) => <>
-      <p className="m-0 text-body">Run this on an always-on Linux computer. It installs OpenHut there and adds it to your computers.</p>
+      <p className="m-0 text-body">Run this on your Linux computer.</p>
       <Command text={joinCommand(code)} />
       <Waiting>Waiting for it to join…</Waiting>
     </>}

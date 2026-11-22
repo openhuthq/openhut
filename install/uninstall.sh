@@ -26,8 +26,9 @@ iptables -D INPUT -j AGENT-IN 2>/dev/null
 iptables -F AGENT 2>/dev/null && iptables -X AGENT
 iptables -F AGENT-IN 2>/dev/null && iptables -X AGENT-IN
 ip rule del to 10.200.0.0/16 lookup main priority 5200 2>/dev/null
+! grep -qx OPENHUT_ROUTE=tailnet /etc/openhut/env 2>/dev/null || ! command -v tailscale >/dev/null 2>&1 || tailscale serve --tcp=8788 off >/dev/null 2>&1
 
-rm -rf /opt/openhut /opt/openhut.new /opt/openhut.old /opt/openhut.failed /run/openhut-install.lock /etc/openhut /data/app /data/app.before-update /data/agents /data/agent-conf \
+rm -rf /opt/openhut /opt/openhut.new /opt/openhut.old /opt/openhut.failed /run/openhut-install.lock /etc/openhut /data/app /data/app.before-update /data/app.before-update.env /data/agents /data/agent-conf \
   /etc/agentd /var/lib/openhut /var/cache/openhut /var/log/openhut /var/log/openhut-boot.log /run/openhut /run/agentd
 rmdir /data 2>/dev/null
 if command -v userdel >/dev/null 2>&1; then userdel openhut 2>/dev/null; else deluser openhut 2>/dev/null; delgroup openhut 2>/dev/null; fi

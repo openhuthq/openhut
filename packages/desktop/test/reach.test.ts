@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { connect } from '@openhut/tunnel'
 import { startComputer, startRelay, waitFor } from '../../tunnel/test/relay.ts'
 import { ownerKeys } from '../src/owner-keys.mjs'
-import { reacher } from '../src/reach.mjs'
+import { reacher, urlOf } from '../src/reach.mjs'
 
 const safeStorage = {
   encryptStringAsync: async (text: string) => Buffer.from(text),
@@ -82,4 +82,10 @@ test('the live view of a relay computer opens a socket on the same tunnel sessio
   assert.deepEqual(ctx.sockets, ['/api/browsers/agt_1/live?fps=30'])
   live.close()
   await ctx.close()
+})
+
+test('a computer added over Tailscale is dialed straight at its tailnet address; one on the relay goes through the relay', () => {
+  assert.equal(urlOf({ id: 'a1', name: 'Office', key: 'k' }), undefined)
+  assert.equal(urlOf({ id: 'a1', name: 'homelab', key: 'k', tailnet: { dns: 'homelab.tail4e2a.ts.net', ip: '100.88.14.3', port: 8788 } }), 'ws://100.88.14.3:8788')
+  assert.equal(urlOf({ id: 'a1', name: 'homelab', key: 'k', tailnet: { dns: 'homelab.tail4e2a.ts.net', ip: 'fd7a:115c:a1e0::1', port: 8788 } }), 'ws://[fd7a:115c:a1e0::1]:8788')
 })

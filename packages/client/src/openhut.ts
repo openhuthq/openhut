@@ -6,7 +6,7 @@ import { Connection, ConnectionAuthorization, SIGN_IN_KINDS, type CreateConnecti
 import { Me } from '@openhut/common/team/team.ts'
 import { PROVIDERS, Provider, type ProviderId } from '@openhut/common/models/provider.ts'
 
-export type StoredComputer = { id: string; name: string; url: string }
+export type StoredComputer = { id: string; name: string; url: string; route?: 'relay' | 'tailnet' }
 export type Features = { whatsapp: boolean; browser: boolean }
 export type Computer = StoredComputer & { online: boolean; features: Features; appTooOld: boolean; runtimeTooOld: boolean }
 export type TailnetPeer = { name: string; dns: string }

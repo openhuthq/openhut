@@ -68,6 +68,8 @@ const LOCAL = { id: 'local', name: MAC ? 'This Mac' : 'This computer', url: CONT
 const LOCAL_KEY = 'keys/local.key'
 const INSTALL_URL = process.env.OPENHUT_INSTALL_URL ?? 'https://openhut.dev'
 const RELAY_URL = process.env.OPENHUT_RELAY_URL ?? 'wss://cloud.openhut.dev'
+const TAILNET_PORT = 8788
+const PUT_ACCESS = `put='c=$(curl -sS -o /dev/null -w %{http_code} --unix-socket /data/app/openhut.sock -X PUT -H content-type:application/json --data-binary @- http://openhut/api/access); [ "$c" = 200 ] || [ "$c" = 409 ]'; if docker container inspect openhut >/dev/null 2>&1; then docker exec -i openhut sh -c "$put"; else sh -c "$put"; fi`
 const AUTOSTART = join(app.getPath('appData'), 'autostart/openhut.desktop')
 const DEFAULT_PREFS = { keepAwake: true, notifyReplies: true, notifyFailures: true }
 const CANVAS = '#f4f3f5'
@@ -241,7 +243,7 @@ function storedComputers() {
 }
 
 function computers() {
-  return [LOCAL, ...storedComputers().map(({ id, name, url = '' }) => ({ id, name, url }))]
+  return [LOCAL, ...storedComputers().map(({ id, name, url = '', tailnet: on }) => ({ id, name, url, route: on ? 'tailnet' : 'relay' }))]
 }
 
 async function keyOf(computer) {
@@ -291,24 +293,40 @@ async function install({ peer, dns, entry }) {
   if (!TAILSCALE) throw new Error('Tailscale isn\'t installed on this computer. Install it from tailscale.com/download and sign in.')
   if (DEV && !process.env.OPENHUT_INSTALL_URL) throw new Error('Set OPENHUT_INSTALL_URL to a local release to add computers from a dev build.')
   if (!/^https?:\/\/[\w.:/-]+$/.test(INSTALL_URL)) throw new Error('OPENHUT_INSTALL_URL isn\'t a plain http(s) address.')
+  let key = ''
   const say = (line) => {
     entry.lines.push(line)
     entry.url = /https:\/\/login\.tailscale\.com\/\S+/.exec(line)?.[0] ?? entry.url
+    key = /^OPENHUT_KEY=([0-9a-f]{64})$/.exec(line.trim())?.[1] ?? key
     shareEnrollments()
   }
   const name = peer.name || dns
-  const invitation = await api('/api/invitations', { method: 'POST' })
-  const path = `/api/invitations/${encodeURIComponent(invitation.id)}`
+  const found = await tailnet()
+  const ip = found.state === 'running' ? found.peers.find((each) => each.dns === dns)?.ip : undefined
+  if (!ip) throw new Error(`Can't find ${name} on your tailnet. Check it's on.`)
   say(`Installing OpenHut on ${dns} over Tailscale SSH`)
-  await tailscaleSsh({ args: ['ssh', `root@${dns}`, `read -r code; script=$(curl -fsSL '${INSTALL_URL}') || exit 1; printf '%s\\n' "$script" | OPENHUT_JOIN="$code" OPENHUT_APP_VERSION=${app.getVersion()} sh`], input: `${invitation.code}\n`, say })
+  await tailscaleSsh({ args: ['ssh', `root@${dns}`, `script=$(curl -fsSL '${INSTALL_URL}') || exit 1; printf '%s\\n' "$script" | OPENHUT_ROUTE=tailnet OPENHUT_APP_VERSION=${app.getVersion()} sh`], input: '', say })
+  if (!key) throw new Error(`OpenHut is installed, but ${name} didn't say its key.`)
   entry.waitingAt = Date.now()
-  say(`Waiting for ${name} to join`)
-  if (!await waitFor(async () => (await api(path)).status !== 'waiting', 120)) throw new Error(`OpenHut is installed, but ${name} didn't answer within 2 minutes.`)
-  const { device } = await api(path)
-  if (device?.kind !== 'computer') throw new Error(`Something other than ${name} used its join code.`)
-  await allow({ id: invitation.id, name })
+  say(`Pairing with ${name}`)
+  const before = storedComputers()
+  const id = before.find((each) => each.key === key)?.id ?? randomBytes(4).toString('hex')
+  writeFileSync(COMPUTERS, JSON.stringify([...before.filter((each) => each.key !== key), { id, name, key, tailnet: { dns, ip, port: TAILNET_PORT } }], null, 2))
+  tunnels.drop(id)
+  try {
+    const list = await openhut.access.allow({ name, kind: 'computer', key })
+    await tailscaleSsh({ args: ['ssh', `root@${dns}`, PUT_ACCESS], input: JSON.stringify(list), say: () => undefined })
+    if (!await waitFor(async () => (await toComputer({ req: new Request(`${APP_ORIGIN}/c/${id}/api/admin`), id, path: '/api/admin' })).ok, 30)) throw new Error(`OpenHut is running on ${name}, but this ${LOCAL.name.replace(/^This /, '')} can't reach port ${TAILNET_PORT} on it. Check your tailnet's access rules allow it.`)
+  } catch (error) {
+    if (!before.some((each) => each.key === key)) {
+      writeFileSync(COMPUTERS, JSON.stringify(storedComputers().filter((each) => each.key !== key), null, 2))
+      await openhut.access.sync().catch(() => undefined)
+    }
+    tunnels.drop(id)
+    throw error
+  }
   say(`${name} is ready`)
-  return { id: storedComputers().find((each) => each.key === device.key)?.id, name, url: '' }
+  return { id, name, url: '', route: 'tailnet' }
 }
 
 function boxLog(dns) {

@@ -40,6 +40,7 @@ export const config = {
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))).version,
   build: BUILD,
   join: JOIN,
+  tailnetPort: Number(process.env.OPENHUT_TAILNET_PORT ?? 0),
   relayUrl: process.env.OPENHUT_RELAY_URL ?? relayOf(JOIN) ?? (BUILD === 'dev' ? undefined : 'wss://cloud.openhut.dev'),
   claudeBin: process.env.OPENHUT_CLAUDE ?? fileURLToPath(new URL('../../../../../bin/claude', import.meta.url)),
   claudeHostBin: process.env.OPENHUT_CLAUDE_HOST ?? fileURLToPath(new URL(`../../../../../bin/${process.platform === 'darwin' ? 'claude-darwin' : 'claude'}`, import.meta.url)),

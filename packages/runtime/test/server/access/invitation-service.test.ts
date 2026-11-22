@@ -56,7 +56,6 @@ app.get('/api/agents', async () => ({ object: 'list', data: [] }))
 await app.register(invitationController, { prefix: '/api/invitations' })
 await app.ready()
 let version = 0
-let served: { close: () => void } | undefined
 
 function signed(clients: string[]): Access {
   const unsigned: Unsigned = { object: 'access', owner: ownerKey, version: ++version, clients: [MAC, ...clients].map((key) => ({ key, name: 'Device', addedAt: '2026-11-18T09:00:00.000Z' })), computers: [] }
@@ -84,7 +83,10 @@ test('with no list yet there is no owner to put in a code, so no invitation', as
   assert.equal(status, 404)
   assert.match(body.error.message, /no access list yet/)
   await accessService.put({ access: signed([]), local: true })
-  served = await relayService.start({ server: app.server })
+  await relayService.start({ server: app.server })
+  assert.equal(relayService.state().relay, false)
+  await invite()
+  assert.equal(relayService.state().relay, true)
   await waitFor(relay.online)
 })
 
@@ -251,7 +253,7 @@ test('joining reads the sealed invite, signs the join with the link’s key and 
 
 test.after(async () => {
   fake.close()
-  served?.close()
+  relayService.stop()
   await app.close()
   await relay.close()
 })

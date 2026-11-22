@@ -12,6 +12,8 @@ AGENT_BROWSER=0.43.0
 HOST_IMAGE=docker:28-dind@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac
 PREFIX=/opt/openhut
 JOIN_CODE="${OPENHUT_JOIN:-}"
+ROUTE="${OPENHUT_ROUTE:-}"
+TAILNET_PORT=8788
 [ "${1:-}" != join ] || JOIN_CODE="${2:-}"
 say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die() { printf 'openhut: %s\n' "$*" >&2; exit 1; }
@@ -19,6 +21,14 @@ retry() { n=0; until timeout 600 "$@"; do n=$((n+1)); [ $n -ge 4 ] && return 1; 
 fetch() { curl -fsSL --retry 4 --retry-all-errors --connect-timeout 15 -m 900 "$1" -o "$2"; }
 check() { printf '%s  %s\n' "$2" "$3" | "$1" -c - >/dev/null || die "checksum mismatch: $3"; }
 joining() { [ -n "$JOIN_CODE" ]; }
+tailnet() { [ "$ROUTE" = tailnet ]; }
+serve_tailnet() {
+  command -v tailscale >/dev/null 2>&1 || die "Tailscale isn't installed on this computer. Install it from tailscale.com/download, sign in, then try again."
+  ${SUDO:-} tailscale serve --help 2>&1 | grep -q -- '--tcp' || die "this Tailscale is too old to share a port with your tailnet. Update Tailscale, then try again."
+  say "Opening port $TAILNET_PORT to your tailnet only"
+  ${SUDO:-} timeout 300 tailscale serve --bg --tcp "$TAILNET_PORT" "tcp://127.0.0.1:$TAILNET_PORT" || die "Tailscale didn't open port $TAILNET_PORT to your tailnet. If it printed a link, open it to allow Serve on your tailnet, then try again."
+}
+key_line() { k=$(curl -fsS --unix-socket /data/app/openhut.sock http://openhut/api/admin 2>/dev/null | sed -n 's/.*"relay":{"key":"\([0-9a-f]\{64\}\)".*/\1/p'); [ -z "$k" ] || echo "OPENHUT_KEY=$k"; }
 node_ok() { node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; }
 
 write_env() {
@@ -36,7 +46,8 @@ write_env() {
     echo "OPENHUT_MODEL=${OPENHUT_MODEL:-claude}"
     echo "OPENHUT_URL=$SOURCE_URL"
     [ -z "$CLIENT_KEY" ] || echo "OPENHUT_CLIENT_KEY_SHA256=$CLIENT_KEY"
-    ! joining || echo "OPENHUT_JOIN='$JOIN_CODE'"
+    if tailnet; then echo "OPENHUT_ROUTE=tailnet"; echo "OPENHUT_TAILNET_PORT=$TAILNET_PORT"; echo "OPENHUT_RELAY_URL="
+    elif joining; then echo "OPENHUT_JOIN='$JOIN_CODE'"; fi
     [ -z "$LISTEN" ] || echo "OPENHUT_HOST=$LISTEN"
     [ -z "${OPENHUT_CLOUD_URL:-}" ] || echo "OPENHUT_CLOUD_URL=$OPENHUT_CLOUD_URL"
   } > /etc/openhut/env.new
@@ -63,6 +74,7 @@ start() {
 go_back() {
   rm -rf "$PREFIX.failed"; mv "$PREFIX" "$PREFIX.failed"; mv "$PREFIX.old" "$PREFIX"
   if [ -d /data/app.before-update ]; then stop_app; rm -rf /data/app && cp -a /data/app.before-update /data/app; fi
+  [ ! -f /data/app.before-update.env ] || cp /data/app.before-update.env /etc/openhut/env
   start || true
   rm -rf "$PREFIX.failed"
 }
@@ -70,19 +82,21 @@ fresh() { h=$(curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$h" |
   [ "$(echo "$h" | sed -n 's/.*"started":\([0-9]*\).*/\1/p')" -ge "$STARTED_AFTER" ]; }
 up() { i=0; until fresh; do i=$((i+1)); [ $i -gt "$1" ] && return 1; printf .; sleep 3; done; }
 running() {
-  if [ -n "$ASKED" ]; then echo "OpenHut is running and asking to join your computers. Check the six digits in the OpenHut app and accept it there."
+  if tailnet; then echo "OpenHut is running. Your Mac reaches it over your tailnet."; key_line
+  elif [ -n "$ASKED" ]; then echo "OpenHut is running and asking to join your computers. Check the six digits in the OpenHut app and accept it there."
   elif joining; then echo "OpenHut is running."
   else echo "OpenHut is running for the app key sha256:$(printf '%s' "$CLIENT_KEY" | cut -c1-8)..."; fi
 }
 
 NO_KEY="no app key: add this computer from the OpenHut app (Settings > Computers), which gives you the command to run here (curl -fsSL openhut.dev | sh -s -- join <code>)"
+[ -z "$ROUTE" ] || tailnet || die "OPENHUT_ROUTE can only be tailnet."
 if joining; then printf '%s' "$JOIN_CODE" | grep -Eqx "openhut://join\?[0-9A-Za-z_.~%=&:/?-]+" || die "that join code isn't one the OpenHut app gave. Copy the whole command from the app again."; fi
 if [ -n "${OPENHUT_APP_VERSION:-}" ] && [ "${MIN_APP_VERSION#@}" = "$MIN_APP_VERSION" ] &&
   [ "$(printf '%s\n%s\n' "$MIN_APP_VERSION" "$OPENHUT_APP_VERSION" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" != "$MIN_APP_VERSION" ]; then
   die "this release needs the OpenHut app $MIN_APP_VERSION or newer, and yours is $OPENHUT_APP_VERSION. Update OpenHut, then try again. Nothing changed here."
 fi
 container() {
-  $D run -d --name openhut --privileged --restart unless-stopped -p 127.0.0.1:8787:8787 -v openhut:/var/lib/docker --entrypoint sh "$1" \
+  $D run -d --name openhut --privileged --restart unless-stopped -p 127.0.0.1:8787:8787 ${PUBLISH:-} -v openhut:/var/lib/docker --entrypoint sh "$1" \
     -c 'if [ -x /opt/openhut/install/host-start.sh ]; then exec /opt/openhut/install/host-start.sh; fi; exec sleep infinity' >/dev/null
 }
 
@@ -98,10 +112,19 @@ if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
   D=docker; docker info >/dev/null 2>&1 || D="$SUDO docker"
   i=0; until $D info >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 30 ] && die "Docker isn't running. Start it, then run this again."; sleep 1; done
   say "OpenHut container"
+  bound() { [ "$($D container inspect -f "{{range (index .HostConfig.PortBindings \"$1/tcp\")}}{{.HostIp}}{{end}}" openhut 2>/dev/null)" = 127.0.0.1 ]; }
+  PUBLISH=
+  if tailnet; then
+    PUBLISH="-p 127.0.0.1:$TAILNET_PORT:$TAILNET_PORT"
+    command -v tailscale >/dev/null 2>&1 || die "Tailscale isn't installed on this computer. Install it from tailscale.com/download, sign in, then try again."
+    if ! bound "$TAILNET_PORT" && { ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null; } | grep -Eq "[:.]$TAILNET_PORT[[:space:]]"; then die "port $TAILNET_PORT is taken on this computer, so your Mac can't reach OpenHut over Tailscale. Free it, then try again. Nothing changed here."; fi
+  elif $D container inspect openhut >/dev/null 2>&1 && bound "$TAILNET_PORT"; then
+    PUBLISH="-p 127.0.0.1:$TAILNET_PORT:$TAILNET_PORT"
+  fi
   if ! $D container inspect openhut >/dev/null 2>&1; then
-    joining || printf '%s' "${OPENHUT_CLIENT_KEY_SHA256:-}" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
+    joining || tailnet || printf '%s' "${OPENHUT_CLIENT_KEY_SHA256:-}" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
     container "$HOST_IMAGE"
-  elif [ "$($D container inspect -f '{{range (index .HostConfig.PortBindings "8787/tcp")}}{{.HostIp}}{{end}}' openhut 2>/dev/null)" != 127.0.0.1 ]; then
+  elif ! bound 8787 || { [ -n "$PUBLISH" ] && ! bound "$TAILNET_PORT"; }; then
     say "Publishing OpenHut on this computer's 127.0.0.1 only (the container is kept: its data comes along)"
     $D stop -t 30 openhut >/dev/null
     $D commit openhut openhut:kept >/dev/null
@@ -109,7 +132,8 @@ if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
     container openhut:kept
   fi
   $D start openhut >/dev/null
-  printf '%s\n' "$JOIN_CODE" | $D exec -i -e OPENHUT_CONTAINER=1 -e "OPENHUT_CLIENT_KEY_SHA256=${OPENHUT_CLIENT_KEY_SHA256:-}" -e "OPENHUT_APP_VERSION=${OPENHUT_APP_VERSION:-}" openhut sh -c "read -r OPENHUT_JOIN; export OPENHUT_JOIN; apk add -q curl && curl -fsSL $OPENHUT_URL | sh" || exit 1
+  ! tailnet || serve_tailnet
+  printf '%s\n' "$JOIN_CODE" | $D exec -i -e OPENHUT_CONTAINER=1 -e "OPENHUT_ROUTE=$ROUTE" -e "OPENHUT_CLIENT_KEY_SHA256=${OPENHUT_CLIENT_KEY_SHA256:-}" -e "OPENHUT_APP_VERSION=${OPENHUT_APP_VERSION:-}" openhut sh -c "read -r OPENHUT_JOIN; export OPENHUT_JOIN; apk add -q curl && curl -fsSL $OPENHUT_URL | sh" || exit 1
   exit 0
 fi
 
@@ -118,8 +142,9 @@ fi
 ENROLLED="$(sed -n 's/^OPENHUT_CLIENT_KEY_SHA256=//p' /etc/openhut/env 2>/dev/null || true)"
 CLIENT_KEY="${OPENHUT_CLIENT_KEY_SHA256:-$ENROLLED}"
 ASKED="$JOIN_CODE"
-JOIN_CODE="${JOIN_CODE:-$(sed -n "s/^OPENHUT_JOIN='\(.*\)'$/\1/p" /etc/openhut/env 2>/dev/null || true)}"
-joining || printf '%s' "$CLIENT_KEY" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
+[ -n "$ASKED" ] || ROUTE="${ROUTE:-$(sed -n 's/^OPENHUT_ROUTE=//p' /etc/openhut/env 2>/dev/null || true)}"
+tailnet || JOIN_CODE="${JOIN_CODE:-$(sed -n "s/^OPENHUT_JOIN='\(.*\)'$/\1/p" /etc/openhut/env 2>/dev/null || true)}"
+joining || tailnet || printf '%s' "$CLIENT_KEY" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
 if command -v flock >/dev/null 2>&1; then
   exec 9>/run/openhut-install.lock
   i=0; until flock -n 9; do
@@ -135,6 +160,7 @@ if [ "$(cat "$PREFIX/BUILD" 2>/dev/null)" = "$OPENHUT_BUILD" ] && [ -f /etc/open
   printf 'Waiting for OpenHut'
   up 100 || { printf '\n'; die "OpenHut didn't come back with the new key; see /var/log/openhut"; }
   printf '\n'
+  ! tailnet || [ -f /.dockerenv ] || serve_tailnet
   running
   exit 0
 fi
@@ -217,6 +243,7 @@ if [ -d /data/app ] && [ -d "$PREFIX" ]; then
   stop_app
   rm -rf /data/app.before-update
   cp -a /data/app /data/app.before-update || { rm -rf /data/app.before-update; start '' || true; die "couldn't keep a copy of the data (is the disk full?), so nothing changed"; }
+  cp /etc/openhut/env /data/app.before-update.env 2>/dev/null || rm -f /data/app.before-update.env
 fi
 rm -rf "$PREFIX.old"; [ ! -d "$PREFIX" ] || mv "$PREFIX" "$PREFIX.old"; mv "$PREFIX.new" "$PREFIX"; SWAPPED=1
 id openhut >/dev/null 2>&1 || { addgroup -S openhut >/dev/null 2>&1 && adduser -S -D -G openhut openhut >/dev/null 2>&1; } || useradd --system --user-group --no-create-home openhut
@@ -239,6 +266,7 @@ if ! up "$TRIES"; then
 fi
 rm -rf "$PREFIX.old"
 printf '\n'
+! tailnet || [ -f /.dockerenv ] || serve_tailnet
 docker image inspect "${AGENT_IMAGE:-$(cat "$PREFIX/install/agent-image")}" >/dev/null 2>&1 || echo "The agent image (about 1 GB) is still downloading; agents start once it's done."
 echo "OpenHut sends anonymous usage events to openhut.dev. Turn it off in Settings > General. Details: https://openhut.dev/docs/security"
 running
