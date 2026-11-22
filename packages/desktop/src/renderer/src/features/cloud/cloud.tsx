@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { CloudUploadIcon, Delete02Icon, FingerPrintIcon, Key01Icon, Link01Icon, Logout03Icon, PlusSignIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
+import { CloudUploadIcon, Delete02Icon, FingerPrintIcon, Key01Icon, Logout03Icon, PlusSignIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import type { Backup, Cloud } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
@@ -31,7 +31,6 @@ export function AccountSettings() {
   const on = data.status === 'on' || data.status === 'offline'
   return <>
     {on ? <CloudOn cloud={data} error={error ?? undefined} /> : data.status === 'locked' && !isPhone() ? <CloudLocked cloud={data} /> : <Pitch />}
-    {!on && !isPhone() && <JoinRow />}
     {data.status === 'off' && <ErrorNote message={error ?? undefined} />}
     {opened === 'enable' && <CloudSetup />}
     {opened === 'kit' && data.status !== 'off' && <KitDialog />}
@@ -61,14 +60,6 @@ function LockedDelete() {
   return <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete account" note={<span className="text-fail">{DELETE_NOTE}</span>}>
     <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={remove.isPending} question="Delete your account?" detail="Your agents and chats stay on this computer. You can’t undo this." list={['Your backup of agents, chats and settings', 'Your recovery kit and sign-in']} action="Delete account" typed="delete my account" onConfirm={() => remove.mutateAsync().then(accountDeleted)}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
   </Row>
-}
-
-export function JoinRow() {
-  return <Rows>
-    <Row icon={<I icon={Link01Icon} size={20} className="text-hue-blue" />} title="Join a team" note="Got an invite link? Paste it here.">
-      <Button type="button" variant="secondary" className={PILL} onClick={() => open('join-link')}>Join with a link</Button>
-    </Row>
-  </Rows>
 }
 
 function AccountHead({ email, note, status }: { email: string; note: ReactNode; status: ReactNode }) {
@@ -104,7 +95,6 @@ function CloudOn({ cloud, error }: { cloud: Cloud; error?: string }) {
       <SignOutRow />
     </Rows>
     <ErrorNote message={error} />
-    <JoinRow />
     <Section title="Danger zone">
       <Rows>
         <DeleteAccount cloud={cloud} />

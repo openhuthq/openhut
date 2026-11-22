@@ -9,6 +9,8 @@ import { TeamMark } from '@/components/custom/team-mark'
 import { useCloud } from '@/features/cloud/api'
 import { Pitch } from '@/features/cloud/sign-in'
 import { CloudSetup } from '@/features/cloud/setup'
+import { JoinRow } from '@/features/join/cloud-join'
+import { isPhone } from '@/lib/native'
 import { peopleNote, useChangeKeys, useDeleteWorkspace, useRemoveMember, useRename, useWorkspaces } from '@/features/cloud/workspaces'
 import { navigate, open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
@@ -28,7 +30,8 @@ export function TeamSettings() {
   const opened = useOpen()
   if (!cloud) return null
   const enabling = opened === 'enable' && <CloudSetup />
-  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch /></>
+  const join = !isPhone() && <JoinRow />
+  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch />{join}</>
   return <>
     {enabling}
     <div className="flex items-center gap-3.5 px-1">
@@ -38,6 +41,7 @@ export function TeamSettings() {
         <span className="text-[12px] text-mute">{peopleNote(active)} · you’re {ROLE[active.role]}</span>
       </span>
     </div>
+    {join}
     <TeamDanger />
   </>
 }

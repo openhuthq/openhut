@@ -1,5 +1,8 @@
 import { useEffect, useSyncExternalStore, type FormEvent } from 'react'
+import { Link01Icon } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
+import { I, PILL } from '@/components/kit'
+import { Row, Rows } from '@/features/settings/kit'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Hut } from '@/components/hut'
@@ -73,6 +76,14 @@ function refusal({ error, email }: { error: Error; email: string | null }): { ti
   if (status === 403) return { title: 'This invite is for another email', body: `It’s for ${error instanceof RequestError && error.param ? error.param : 'another email'}. You’re signed in as ${email ?? 'someone else'}.` }
   if (status === 404 || status === 410) return { title: 'This invite link no longer works', body: 'It was used already or it expired. Ask for a new one.' }
   return { title: 'This invite didn’t open', body: error.message }
+}
+
+export function JoinRow() {
+  return <Rows>
+    <Row icon={<I icon={Link01Icon} size={20} className="text-hue-blue" />} title="Join a team" note="Got an invite link? Paste it here.">
+      <Button type="button" variant="secondary" className={PILL} onClick={() => open('join-link')}>Join with a link</Button>
+    </Row>
+  </Rows>
 }
 
 export function JoinLinkDialog() {
