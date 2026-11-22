@@ -13,7 +13,7 @@ import { callbackBase, connectionService } from '../connections/connection-servi
 import { keyStore, type Account, type AskRoom, type Move, type Room } from './key-store.ts'
 import { deviceName, deviceOs, keysService, notYoung, openLetter, readSecret } from './keys-service.ts'
 import { roomKeys } from './room-keys.ts'
-import { teamIcon } from './team-icon.ts'
+import { guessSite, teamIcon } from './team-icon.ts'
 import { refusal, syncService } from './sync-service.ts'
 import { agentService } from '../agents/agent-service.ts'
 
@@ -225,7 +225,8 @@ export const cloudService = {
   },
 
   async icon({ workspace, reply }: { workspace: string; reply: FastifyReply }): Promise<FastifyReply> {
-    const site = syncService.site(mustBeOn(workspace))
+    const ws = mustBeOn(workspace)
+    const site = syncService.site(ws) || guessSite(roomKeys.members(ws)?.members ?? [])
     const icon = site && await teamIcon.get(site)
     if (!icon) throw new HttpError(404, 'This team has no website icon.')
     return reply.header('content-type', icon.type).header('x-content-type-options', 'nosniff').header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'").header('cache-control', 'private, max-age=3600').send(icon.bytes)

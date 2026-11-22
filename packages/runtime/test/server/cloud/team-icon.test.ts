@@ -2,7 +2,7 @@ import { after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
-import { fetchIcon, linksOf } from '../../../src/server/cloud/team-icon.ts'
+import { fetchIcon, linksOf, guessSite } from '../../../src/server/cloud/team-icon.ts'
 
 const PNG = Buffer.from('89504e470d0a1a0a', 'hex')
 const pages: Record<string, string> = {
@@ -47,4 +47,11 @@ test('it never fetches from a host it doesn’t allow, even through a redirect, 
   assert.equal(await fetchIcon({ page: `${origin}/away`, allow: local }).then((icon) => icon?.bytes.toString()), 'ico')
   assert.equal(await fetchIcon({ page: 'http://127.0.0.1:1/', allow: local }), null)
   assert.equal(await fetchIcon({ page: 'file:///etc/hosts' }), null)
+})
+
+test('a team without a website guesses its site from the owner\u2019s work email, never a personal one', () => {
+  assert.equal(guessSite([{ email: 'sara@gmail.com', role: 'member' }, { email: 'mo@Activepieces.com', role: 'owner' }]), 'activepieces.com')
+  assert.equal(guessSite([{ email: 'mo@gmail.com', role: 'owner' }, { email: 'ana@acme.dev', role: 'member' }]), 'acme.dev')
+  assert.equal(guessSite([{ email: 'mo@gmail.com', role: 'owner' }, { email: 'ana@icloud.com', role: 'member' }]), null)
+  assert.equal(guessSite([]), null)
 })

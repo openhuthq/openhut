@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { BlockList } from 'node:net'
 import { join } from 'node:path'
 import * as z from 'zod/mini'
+import { siteHost } from '@openhut/common/cloud/cloud.ts'
 import { config } from '../platform/config.ts'
 
 export type TeamIcon = { type: string; bytes: Buffer }
@@ -98,4 +99,14 @@ async function isPublic(host: string): Promise<boolean> {
 
 function iconOf(kept: z.infer<typeof Kept>): TeamIcon | null {
   return kept.type && kept.data ? { type: kept.type, bytes: Buffer.from(kept.data, 'base64') } : null
+}
+
+const PERSONAL = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'yahoo.com', 'ymail.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'proton.me', 'protonmail.com', 'pm.me', 'gmx.com', 'gmx.de', 'mail.com', 'yandex.com', 'yandex.ru', 'zoho.com', 'hey.com', 'fastmail.com', 'qq.com', '163.com'])
+
+export function guessSite(members: { email: string; role: string }[]): string | null {
+  for (const member of [...members.filter((each) => each.role === 'owner'), ...members]) {
+    const domain = member.email.split('@')[1]?.toLowerCase()
+    if (domain && !PERSONAL.has(domain)) return siteHost(domain)
+  }
+  return null
 }
