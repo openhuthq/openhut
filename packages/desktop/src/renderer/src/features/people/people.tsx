@@ -10,13 +10,13 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { ErrorNote } from '@/components/error-note'
-import { I, PILL } from '@/components/kit'
+import { I, PILL, Section } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { nameOf, useCloud } from '@/features/cloud/api'
 import { SignInOnTeam } from '@/features/cloud/sign-in'
 import { Row, Rows } from '@/features/settings/kit'
 import { CloudSetup } from '@/features/cloud/setup'
-import { peopleNote, useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useRevokeInvite, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
+import { useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useRevokeInvite, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
 import { ago } from '@/lib/format'
 import { copyText } from '@/lib/clipboard'
 import { isPhone, useConfirmed } from '@/lib/native'
@@ -36,19 +36,18 @@ export function PeopleSettings() {
   if (cloud.status === 'off' || !active) return <>{enabling}<SignInOnTeam what="who’s in it" /></>
   const admin = active.role !== 'member'
   return <>{enabling}{!cloud.kit && <Rows><Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note="Not saved"><Button type="button" variant="primary" className={PILL} onClick={() => open('enable')}>Save kit</Button></Row></Rows>}<section className="flex flex-col gap-2.5">
-    <div className="flex items-center gap-2 px-1">
-      <span className="text-[13px] font-medium">{active.name}</span>
-      <span className="ml-auto text-[12px] text-mute">{peopleNote(active)}</span>
-      {admin && <InviteButton workspace={active} />}
-    </div>
+    {admin && <div className="flex justify-end px-1"><InviteButton workspace={active} /></div>}
     <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
       {active.members.map((member) => <div key={member.email}>
         <PersonRow member={member} workspace={active} you={member.email === email} admin={admin} />
         {active.requests.filter((each) => each.email === member.email).map((each) => <Request key={each.device} workspace={active} request={each} name={nameOf(member.email)} mine={member.email === email} admin={admin} />)}
       </div>)}
+    </div>
+  </section>{active.invites.length > 0 && <Section title="Invited">
+    <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
       {active.invites.map((invite) => <InviteRow key={invite.email} invite={invite} workspace={active} admin={admin} />)}
     </div>
-  </section></>
+  </Section>}</>
 }
 
 function InviteRow({ invite, workspace, admin }: { invite: CloudWorkspaceView['invites'][number]; workspace: CloudWorkspaceView; admin: boolean }) {
@@ -57,7 +56,6 @@ function InviteRow({ invite, workspace, admin }: { invite: CloudWorkspaceView['i
   return <div className="flex items-center gap-3 px-4 py-3">
     <span className="opacity-40"><PersonFace name={name} email={invite.email} size={40} /></span>
     <span className="grid min-w-0 flex-1 gap-px"><span className="text-[13.5px] font-medium">{name}</span><span className="truncate text-[12px] text-mute">{invite.email}</span></span>
-    <span className="text-[13px] text-body">Invited</span>
     {invite.link && <Button type="button" variant="ghost" className={PILL} onClick={() => void copy(invite.link ?? '')}>Copy link</Button>}
     {admin && <ConfirmButton className={PILL} disabled={revoke.isPending} question={`Revoke ${name}’s invite?`} detail="The link stops working. You can invite them again later." action="Revoke" onConfirm={() => revoke.mutateAsync({ id: workspace.id, email: invite.email }).then(() => toast(`${name}’s invite revoked`))}>Revoke</ConfirmButton>}
   </div>
