@@ -53,7 +53,6 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
         <Button type="button" variant="bare" className={cn(ICON_BUTTON, ROUND)} aria-label="New agent" title="New agent" onClick={onNew}><I icon={PlusSignIcon} size={phone ? 20 : 16} /></Button>
       </span>
     </div>
-    <span className={cn(LABEL, 'mx-3 phone:hidden')}>Agents</span>
     <h1 className="m-0 hidden px-5 pt-1 pb-3 text-[32px]/[1.1] font-bold tracking-[-.02em] phone:block">Agents</h1>
     <nav className="flex min-h-0 flex-col gap-1 overflow-auto px-3 pt-1 phone:gap-0 phone:px-2">
       {(team ? [['Shared', contacts.filter(({ agent }) => agent.shared)], ['Private', contacts.filter(({ agent }) => !agent.shared)]] as const : [['', contacts]] as const).map(([label, group]) => (group.length > 0 || label === 'Shared') && <div key={label} className="flex flex-col gap-1 phone:gap-0">
