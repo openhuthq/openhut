@@ -3,7 +3,7 @@ set -eu
 cd "$(dirname "$0")/.."
 case "${1:-}" in
   key) exec node scripts/release-key.ts key "${2:?release.sh key <new key file>}" ;;
-  sign) exec node scripts/release-key.ts sign "${RELEASE_KEY:?RELEASE_KEY must name the offline release key file}" "${2:?release.sh sign <release folder>}" ;;
+  sign) exec node scripts/release-key.ts sign "${RELEASE_KEY:?RELEASE_KEY must name the offline release key file}" "${2:?release.sh sign <release folder> [version]}" ${3:+"$3"} ;;
 esac
 BASE="${BASE:-https://openhut.dev}"
 OUT="${OUT:-dist}"
@@ -27,4 +27,4 @@ MIN_APP=$(sed -n "s/^export const MIN_APP_VERSION = '\(.*\)'$/\1/p" packages/com
 SUM=$(shasum -a 256 "$OUT/openhut.tgz" | cut -d' ' -f1)
 sed -e "/^OPENHUT_URL=/s|https://openhut.dev|$BASE|" -e "s|@OPENHUT_SHA256@|$SUM|" -e "s|@OPENHUT_BUILD@|$BUILD|" -e "s|@OPENHUT_TGZ@|${TGZ:-$BASE/openhut.tgz}|" -e "s|@OPENHUT_MIN_APP@|$MIN_APP|" install/install.sh > "$OUT/install.sh"
 echo "$OUT/: build $BUILD, install.sh (OPENHUT_URL=$BASE, tarball ${TGZ:-$BASE/openhut.tgz}), openhut.tgz $(du -h "$OUT/openhut.tgz" | cut -f1) sha256 $SUM"
-[ -z "${RELEASE_KEY:-}" ] || node scripts/release-key.ts sign "$RELEASE_KEY" "$OUT"
+[ -z "${RELEASE_KEY:-}" ] || node scripts/release-key.ts sign "$RELEASE_KEY" "$OUT" "$BUILD"

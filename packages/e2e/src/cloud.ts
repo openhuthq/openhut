@@ -28,11 +28,12 @@ const CANARIES = {
   reply: `Parcel ${tag}-R is in Berlin.`,
   connection: `Cloud Orders ${tag}`,
   connectionKey: SECRET,
+  file: `Invoice ${tag}-F: 4471 EUR, due Friday.`,
 }
 const results: CheckResult[] = []
 
 type Call = (path: string, body?: unknown, method?: string) => Promise<Record<string, unknown>>
-type Runtime = { call: Call; restart: () => Promise<void>; stop: () => void }
+type Runtime = { url: string; call: Call; restart: () => Promise<void>; stop: () => void }
 type Status = { status: string; email: string | null; device: string | null; workspace: { id: string; members: { email: string; devices: string[] }[] } | null; backup: { state: string; done: number; total: number; at: string | null }; kitInCloud: boolean; workspaces: { id: string; waiting: boolean; members: { email: string }[] }[]; gone: { name: string; why: string }[] }
 
 const hermes = createServer((req, res) => {
@@ -84,6 +85,7 @@ function runtime({ name, port }: { name: string; port: number }): Runtime {
   }
   start()
   const each: Runtime = {
+    url: `http://127.0.0.1:${port}`,
     call: call(`http://127.0.0.1:${port}`, 'host'),
     stop,
     restart: async () => {
@@ -140,10 +142,28 @@ async function signIn(each: Runtime, email: string) {
   await fetch(link)
 }
 
-async function say(each: Runtime, { agentId, text }: { agentId: string; text: string }) {
+async function threadOf(each: Runtime, agentId: string): Promise<{ id: string }> {
   const threads = await each.call('/api/threads') as { data: { id: string; agentId: string }[] }
-  const thread = threads.data.find((t) => t.agentId === agentId) ?? await each.call('/api/threads', { agentId }) as { id: string }
-  await each.call(`/api/threads/${thread.id}/chat`, { trigger: 'submit-message', message: { id: `msg_${randomBytes(6).toString('hex')}`, role: 'user', parts: [{ type: 'text', text }] } })
+  return threads.data.find((t) => t.agentId === agentId) ?? await each.call('/api/threads', { agentId }) as { id: string }
+}
+
+async function say(each: Runtime, { agentId, text, files = [] }: { agentId: string; text: string; files?: { path: string; name: string; mediaType: string }[] }) {
+  const thread = await threadOf(each, agentId)
+  const parts = [...files.map((file) => ({ type: 'file', url: file.path, filename: file.name, mediaType: file.mediaType })), { type: 'text', text }]
+  await each.call(`/api/threads/${thread.id}/chat`, { trigger: 'submit-message', message: { id: `msg_${randomBytes(6).toString('hex')}`, role: 'user', parts } })
+}
+
+async function attach(each: Runtime, { agentId, name, body }: { agentId: string; name: string; body: string }) {
+  const thread = await threadOf(each, agentId)
+  const res = await fetch(`${each.url}/api/threads/${thread.id}/files?${new URLSearchParams({ name, type: 'text/plain' })}`, { method: 'POST', headers: { authorization: 'Bearer host', 'content-type': 'application/octet-stream' }, body })
+  if (!res.ok) throw new Error(`the upload answered ${res.status}: ${await res.text()}`)
+  return await res.json() as { path: string; name: string; mediaType: string }
+}
+
+async function fetched(each: Runtime, { agentId, path }: { agentId: string; path: string }): Promise<string | undefined> {
+  const thread = await threadOf(each, agentId)
+  const res = await fetch(`${each.url}/api/threads/${thread.id}/files?${new URLSearchParams({ path })}`, { headers: { authorization: 'Bearer host' } })
+  return res.ok ? await res.text() : undefined
 }
 
 async function said(each: Runtime, agentId: string): Promise<string> {
@@ -163,7 +183,7 @@ function check(id: string, name: string, expected: string, fn: () => Promise<str
   })
 }
 
-const state = { workspace: '', device: '', agent: '', words: [] as string[] }
+const state = { workspace: '', device: '', agent: '', file: '', words: [] as string[] }
 
 check('Y1', 'The Mac signs in to the cloud room', 'host runtime: cloud on, owner mo@example.com', async () => {
   await signIn(host, 'mo@example.com')
@@ -193,21 +213,23 @@ check('Y3', 'A connection added on the Mac reaches the remote runtime with its k
   return `${found.name}, keyHere ${found.keyHere}`
 })
 
-check('Y4', 'Back up: an agent, its chat and a recovery kit reach the room', 'agent running and answering; kit saved in the cloud; backup idle with everything sent', async () => {
+check('Y4', 'Back up: an agent, its chat with an attached file and a recovery kit reach the room', 'agent running and answering; a file attached to the chat; kit saved in the cloud; backup idle with everything sent', async () => {
   const agent = await host.call('/api/agents', { name: CANARIES.agent, instructions: CANARIES.instructions }) as { id: string }
   state.agent = agent.id
   await host.call(`/api/agents/${agent.id}`, { wanted: 'running' }, 'PATCH')
   await until(async () => (await host.call(`/api/agents/${agent.id}`)).status === 'running', 'the agent to run')
   await say(host, { agentId: agent.id, text: CANARIES.messages[0] })
-  await say(host, { agentId: agent.id, text: CANARIES.messages[1] })
+  const file = await attach(host, { agentId: agent.id, name: 'invoice.txt', body: CANARIES.file })
+  state.file = file.path
+  await say(host, { agentId: agent.id, text: CANARIES.messages[1], files: [file] })
   assert.ok((await said(host, agent.id)).includes(CANARIES.reply), 'the agent answered')
   const kit = await host.call('/api/cloud/kits', {}) as { words: string[] }
   state.words = kit.words
   const cloud = await statusUntil(host, (s) => s.backup.state === 'idle' && !!s.backup.at && s.kitInCloud, 'the backup to finish')
-  return `${kit.words.length} words; backup ${cloud.backup.state} ${cloud.backup.done}/${cloud.backup.total} at ${cloud.backup.at}`
+  return `${file.path} attached; ${kit.words.length} words; backup ${cloud.backup.state} ${cloud.backup.done}/${cloud.backup.total} at ${cloud.backup.at}`
 })
 
-check('Y5', 'Restore on a fresh runtime with the kit', 'fresh runtime: signed in as mo it is locked; the 12 words open it; the same agent id, name, instructions and chat come back', async () => {
+check('Y5', 'Restore on a fresh runtime with the kit', 'fresh runtime: signed in as mo it is locked; the 12 words open it; the same agent id, name, instructions, chat and attached file come back', async () => {
   await signIn(restored, 'mo@example.com')
   const locked = await statusUntil(restored, (s) => s.status === 'locked', 'the fresh runtime to ask for the kit')
   await restored.call('/api/cloud/unlock', { words: state.words })
@@ -215,7 +237,8 @@ check('Y5', 'Restore on a fresh runtime with the kit', 'fresh runtime: signed in
   const agent = await until(async () => { const each = await restored.call(`/api/agents/${state.agent}`); return each.name === CANARIES.agent && each }, 'the agent on the restored runtime')
   assert.equal(agent.instructions, CANARIES.instructions)
   const chat = await until(async () => { const text = await said(restored, state.agent); return CANARIES.messages.slice(0, 2).every((m) => text.includes(m)) && text.includes(CANARIES.reply) && text }, 'the chat on the restored runtime')
-  return `${locked.status} -> ${on.status}; ${String(agent.name)} (${state.agent}), instructions match, chat ${chat.length} bytes with both messages and the reply`
+  await until(async () => await fetched(restored, { agentId: state.agent, path: state.file }) === CANARIES.file, 'the attached file on the restored runtime')
+  return `${locked.status} -> ${on.status}; ${String(agent.name)} (${state.agent}), instructions match, chat ${chat.length} bytes with both messages and the reply, ${state.file} back byte for byte`
 })
 
 check('Y6', 'An invite and a join', 'sara signs in on her own runtime, mo invites her as a member, she joins and both see her on the member list', async () => {

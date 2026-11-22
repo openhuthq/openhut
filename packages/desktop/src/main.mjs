@@ -873,6 +873,7 @@ function update() {
     if (existsSync(SKIPPED) && readFileSync(SKIPPED, 'utf8').trim() === version) return setUpdate({ checking: false, available: null })
     updateCheck.quiet = false
     void releaseSigned(info).then((ok) => {
+      if (auto.updateInfoAndProvider?.info !== info) return
       if (!ok) {
         logger.error(`openhut: ${version} has no valid release signature, so it isn't installed`)
         return setUpdate({ checking: false, available: null, error: 'signature' })
@@ -898,7 +899,7 @@ async function releaseSigned(info) {
   if (!key) return true
   const feed = process.env.OPENHUT_UPDATE_FEED || 'https://dl.openhut.dev/'
   const [manifest, signature] = await Promise.all(['release.json', 'release.json.sig'].map((name) => net.fetch(new URL(`v${info.version}/${name}`, feed).href).then((res) => res.ok ? res.text() : '', () => '')))
-  return cosigned({ manifest, signature, key, files: info.files ?? [] })
+  return cosigned({ manifest, signature, key, version: String(info.version), files: info.files ?? [] })
 }
 
 function serve(req) {
