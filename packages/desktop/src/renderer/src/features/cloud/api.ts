@@ -13,6 +13,7 @@ const BUSY_POLL_MS = 700
 const SHOW_DONE_MS = 60_000
 const ON_POLL_MS = 10_000
 const PAIRING_POLL_MS = 2000
+const SIGN_IN_POLL_MS = 1500
 
 export function useCloud() {
   const client = useQueryClient()
@@ -28,7 +29,7 @@ export function useCloud() {
       }
       return cloud
     },
-    refetchInterval: (query) => signingIn && query.state.data?.status === 'off' ? OFFLINE_POLL_MS : pollOf(query.state.data),
+    refetchInterval: (query) => signingIn && query.state.data?.status === 'off' ? SIGN_IN_POLL_MS : pollOf(query.state.data),
   })
 }
 
@@ -128,35 +129,26 @@ export function useStartOver() {
   })
 }
 
-type SheetReply = { url?: string; error?: string; message?: string }
-const sheet: { signIn: (url: string) => Promise<SheetReply>; notify: () => Promise<{ shown?: boolean }> } | undefined = Reflect.get(window, 'openhut')?.cloud
+const bridge: { notify: () => Promise<{ shown?: boolean }> } | undefined = Reflect.get(window, 'openhut')?.cloud
 
 export async function notifyUnlock(): Promise<boolean> {
-  return Boolean((await sheet?.notify().catch(() => undefined))?.shown)
+  return Boolean((await bridge?.notify().catch(() => undefined))?.shown)
 }
 
 export function useSignIn() {
   const client = useQueryClient()
-  const inBrowser = async () => {
-    const { authorizationUrl } = await request({ schema: CloudAuthorization, computer: 'local', path: '/api/cloud/sessions', method: 'POST' })
-    window.open(authorizationUrl, '_blank', 'noopener')
-    client.setQueryData(SIGN_IN_KEY, true)
-  }
   return useMutation({
-    mutationFn: async () => {
-      if (!sheet) return inBrowser()
-      const { authorizationUrl } = await request({ schema: CloudAuthorization, computer: 'local', path: '/api/cloud/sessions', method: 'POST', body: { sheet: true } })
-      const back = await sheet.signIn(authorizationUrl)
-      if (back.error === 'missing') return inBrowser()
-      if (back.error === 'canceled') return
-      if (!back.url) throw new Error(back.message ?? 'Sign-in didn’t finish. Try again.')
-      const params = new URL(back.url).searchParams
-      const body = Object.fromEntries(['state', 'code', 'error'].flatMap((name) => params.get(name) ? [[name, params.get(name)]] : []))
-      const cloud = await request({ schema: Cloud, computer: 'local', path: '/api/cloud/callbacks', method: 'POST', body })
-      client.setQueryData(CLOUD_KEY, cloud)
-      landAfterSignIn(cloud)
+    mutationFn: () => request({ schema: CloudAuthorization, computer: 'local', path: '/api/cloud/sessions', method: 'POST' }),
+    onSuccess: ({ authorizationUrl }) => {
+      window.open(authorizationUrl, '_blank', 'noopener')
+      client.setQueryData(SIGN_IN_KEY, true)
     },
   })
+}
+
+export function useCancelSignIn() {
+  const client = useQueryClient()
+  return () => client.setQueryData(SIGN_IN_KEY, false)
 }
 
 export function useSignOut() {

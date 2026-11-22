@@ -9,14 +9,14 @@ import { fromBase64, identity, lock, newWords, toBase64 } from '@openhut/common/
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
 import { checkProof } from '@openhut/common/cloud/cloud.ts'
 
-const seen: { redirectUrl?: unknown; state?: string; deviceKey?: string; refreshed: number; members?: unknown; email: string; kit?: unknown; passkey?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean; dropKit?: boolean; refuseBox?: boolean; confirmed?: unknown; cut?: boolean; down?: boolean; failDelete?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [], refreshed: 0 }
+const seen: { state?: string; deviceKey?: string; refreshed: number; members?: unknown; email: string; kit?: unknown; passkey?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean; dropKit?: boolean; refuseBox?: boolean; confirmed?: unknown; cut?: boolean; down?: boolean; failDelete?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [], refreshed: 0 }
 const cloud = createServer(async (req, res) => {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
   const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown> : {}
   const reply = (status: number, json: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(json))
   if (req.url === '/v1/auth/sign-in/social') {
-    Object.assign(seen, { state: body.state, deviceKey: body.device, redirectUrl: body.redirectUrl })
+    Object.assign(seen, { state: body.state, deviceKey: body.device })
     return reply(200, { url: 'https://accounts.example/auth', redirect: false })
   }
   if (req.url === '/v1/auth/openhut/session') {
@@ -120,23 +120,6 @@ test('/api/cloud is off until sign-in, and off again after sign-out', async () =
   const off = await status()
   assert.equal(off.status, 'off')
   assert.equal(off.workspace, null)
-})
-
-test('the sign-in sheet finishes at openhut://cloud/callback: the app posts the callback back, and a state it didn’t start is refused', async () => {
-  seen.email = 'mo@example.com'
-  const started = await app.inject({ method: 'POST', url: '/api/cloud/sessions', headers, payload: { sheet: true } })
-  assert.equal(started.json().authorizationUrl, 'https://accounts.example/auth')
-  assert.equal(seen.redirectUrl, 'openhut://cloud/callback')
-  const forged = await app.inject({ method: 'POST', url: '/api/cloud/callbacks', headers, payload: { state: 'forged', code: 'c' } })
-  assert.equal(forged.statusCode, 400)
-  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/callbacks', payload: { state: seen.state, code: 'c' } })).statusCode, 401)
-  const done = await app.inject({ method: 'POST', url: '/api/cloud/callbacks', headers, payload: { state: seen.state, code: 'c' } })
-  assert.equal(done.statusCode, 200)
-  assert.equal((await until('on')).email, 'mo@example.com')
-  assert.equal((await app.inject({ method: 'POST', url: '/api/cloud/callbacks', headers, payload: { state: seen.state, code: 'c' } })).statusCode, 400, 'a callback works once')
-  await app.inject({ method: 'POST', url: '/api/cloud/sessions', headers })
-  assert.match(String(seen.redirectUrl), /^http:\/\/127\.0\.0\.1:\d+\/api\/cloud\/callback$/)
-  await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })
 })
 
 test('a downloaded kit is saved at once, a second account gets its sentence and a way out, and the words restore after forgetting', async () => {

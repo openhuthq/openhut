@@ -39,7 +39,7 @@ function startOf(cloud: Cloud | undefined): Stage {
 function Unlocked({ cloud, onDone }: { cloud: Cloud; onDone: () => void }) {
   const { state, done, total, current } = cloud.backup
   const restoring = state === 'restoring'
-  return <Step art={<Hut mood={restoring ? 'key' : 'party'} className={restoring ? 'calm key-turn size-[96px]' : 'size-[96px]'} />} title={restoring ? 'Restoring' : `This ${HERE} is in`} line={restoring ? (current ? `${current} · ${Math.min(done + 1, total)} of ${total}` : 'Bringing your agents back…') : 'Agents restored.'}
+  return <Step art={<Hut mood={restoring ? 'key' : 'party'} className={restoring ? 'calm key-turn size-[96px]' : 'size-[96px]'} />} title={restoring ? 'Restoring' : `This ${HERE} is in`} line={restoring ? (current ? `${current} · ${Math.min(done + 1, total)} of ${total}` : 'Bringing your agents back…') : 'Your agents are back.'}
     action={<Button type="button" variant="primary" className={PRIMARY} autoFocus onClick={onDone}>Done</Button>} />
 }
 

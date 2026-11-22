@@ -47,18 +47,18 @@ function CloudOn({ cloud, error }: { cloud: Cloud; error?: string }) {
   return <>
     <div className="flex items-center gap-3.5 px-1">
       <PersonFace name={nameOf(email)} email={email} size={48} />
-      <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[18px]/[1.2] font-semibold tracking-[-.01em]">{nameOf(email)}</span>{cloud.status === 'on' ? <span className="flex items-center gap-1.5 text-[12px] text-mute"><Google />{email}</span> : <span className="text-[12px] text-mute">Offline. Agents keep working.</span>}</span>
+      <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[18px]/[1.2] font-semibold tracking-[-.01em]">{nameOf(email)}</span>{cloud.status === 'on' ? <span className="flex items-center gap-1.5 text-[12px] text-mute"><Google />{email}</span> : <span className="text-[12px] text-mute">Can’t reach the cloud. Your agents keep working.</span>}</span>
       {cloud.status === 'on' ? <Status tone="on">On</Status> : <Status tone="wait">Offline</Status>}
     </div>
     <Rows>
       <Row icon={<I icon={CloudUploadIcon} size={20} className="text-hue-blue" />} title="Backup" note={<span className={cloud.backup.problem || cloud.backup.state === 'failed' ? 'text-fail' : undefined}>{backupNote({ ...cloud.backup, offline: cloud.status === 'offline' })}</span>} />
-      <Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>{kitNote(cloud.kit)}{cloud.keyStore === 'file' && ' · Keys in a private file'}</span>}>
+      <Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>{kitNote(cloud.kit)}{cloud.keyStore === 'file' && ' · Keys saved in a private file'}</span>}>
         {!young && <Button type="button" variant={cloud.kit ? 'secondary' : 'primary'} className={PILL} onClick={() => open(cloud.kit ? 'kit' : 'enable')}>{cloud.kit ? 'Make a new kit' : 'Save kit'}</Button>}
       </Row>
-      {helper?.passkeys && helper.prf && <Row icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title="Touch ID" note={cloud.passkey ? 'On' : `Unlock a new ${HERE}`}>
+      {helper?.passkeys && helper.prf && <Row icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title="Touch ID" note={cloud.passkey ? 'On' : `Unlock a new ${HERE} with your fingerprint`}>
         {!cloud.passkey && !young && <Button type="button" variant="secondary" className={PILL} disabled={addPasskey.isPending} onClick={() => addPasskey.mutate(email, { onError: toastError })}>Add</Button>}
       </Row>}
-      <Row icon={<I icon={Logout03Icon} size={20} className="text-hue-slate" />} title="Sign out" note="Agents keep running">
+      <Row icon={<I icon={Logout03Icon} size={20} className="text-hue-slate" />} title="Sign out" note={`Your agents keep running on this ${HERE}`}>
         <Button type="button" variant="secondary" className={PILL} disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
       </Row>
     </Rows>
@@ -145,7 +145,7 @@ function backupNote({ state, done, total, at, problem, offline }: Backup & { off
 }
 
 function kitNote(kit: Cloud['kit']): string {
-  if (kit?.differs) return 'Out of date. Make a new kit.'
+  if (kit?.differs) return 'Out of date. Make a new one.'
   return kit ? `Saved ${shortDate.format(new Date(kit.savedAt))}` : 'Not saved'
 }
 

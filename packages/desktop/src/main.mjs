@@ -190,18 +190,13 @@ handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
 handle('passkey.open', () => passkey(['open']))
 handle('cloud.notify', () => new Promise((resolve) => {
   if (!Notification.isSupported()) return resolve({ shown: false })
-  const note = new Notification({ title: 'Unlock OpenHut Cloud', body: `Bring your agents and chats to this ${MAC ? 'Mac' : 'computer'}.` })
+  const note = new Notification({ title: 'Unlock OpenHut Cloud', body: `Get your agents back on this ${MAC ? 'Mac' : 'computer'}.` })
   note.on('click', () => show('/settings/backup?open=enable'))
   note.on('show', () => resolve({ shown: true }))
   note.on('failed', () => resolve({ shown: false }))
   setTimeout(() => resolve({ shown: false }), 3000)
   note.show()
 }))
-handle('cloud.signIn', ({ url } = {}) => {
-  const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-  const { x, y, width, height } = window?.getBounds() ?? {}
-  return passkey(['signin', String(url), 'openhut', ...(window ? [x, y, width, height].map(String) : [])], 600_000)
-})
 handle('kit.save', saveKit)
 
 async function saveKit({ name, body } = {}) {
@@ -213,10 +208,10 @@ async function saveKit({ name, body } = {}) {
   return { text: readFileSync(filePath, 'utf8') }
 }
 
-function passkey(args, timeout = 180_000) {
+function passkey(args) {
   const helper = join(app.isPackaged ? join(process.resourcesPath, 'passkey') : join(HERE, '..', 'native', 'passkey', 'build'), 'OpenHut Passkey.app', 'Contents', 'MacOS', 'passkey')
   if (process.platform !== 'darwin' || !existsSync(helper)) return { error: 'missing' }
-  return new Promise((resolve) => execFile(helper, args, { timeout }, (_error, stdout) => {
+  return new Promise((resolve) => execFile(helper, args, { timeout: 180_000 }, (_error, stdout) => {
     try {
       resolve(JSON.parse(String(stdout)))
     } catch {

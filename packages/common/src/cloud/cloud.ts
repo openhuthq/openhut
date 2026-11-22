@@ -275,11 +275,6 @@ export const Cloud = z.object({
 })
 export type Cloud = z.infer<typeof Cloud>
 
-export const APP_CALLBACK = 'openhut://cloud/callback'
-export const StartSignIn = z.object({ sheet: z.optional(z.boolean()) })
-export type StartSignIn = z.infer<typeof StartSignIn>
-export const FinishSignIn = z.object({ state: z.optional(z.string().check(z.maxLength(200))), code: z.optional(z.string().check(z.maxLength(200))), error: z.optional(z.string().check(z.maxLength(200))) })
-export type FinishSignIn = z.infer<typeof FinishSignIn>
 export const CloudAuthorization = z.object({ object: z.literal('cloud_authorization'), authorizationUrl: z.string() })
 export type CloudAuthorization = z.infer<typeof CloudAuthorization>
 

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import * as z from 'zod/mini'
-import { APP_CALLBACK, checkProof, type CloudWorkspaceView, fromQr, KeyBox, Letter, MemberList, qrPayload, signProof, WordsNonce, type AllowedDevice, type Role, type Cloud, type CloudAuthorization, type CloudPairing, type RecoveryKit, type RuntimeInvite, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
+import { checkProof, type CloudWorkspaceView, fromQr, KeyBox, Letter, MemberList, qrPayload, signProof, WordsNonce, type AllowedDevice, type Role, type Cloud, type CloudAuthorization, type CloudPairing, type RecoveryKit, type RuntimeInvite, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { addedOf, bodyOf, check, newUntil, youngUntil } from '@openhut/common/cloud/member-list.ts'
 import { askCommit, deviceWords, fingerprint, fromBase64, fromLongCode, letter, longCode, newKey, newPairing, toBase64 } from '@openhut/common/vault/vault.ts'
 import { kitId } from '@openhut/common/vault/kit-file.ts'
@@ -219,20 +219,14 @@ export const cloudService = {
     return cloudService.status()
   },
 
-  async start({ sheet = false }: { sheet?: boolean } = {}): Promise<CloudAuthorization> {
+  async start(): Promise<CloudAuthorization> {
     const device = await keysService.device()
     const state = randomBytes(24).toString('base64url')
-    const { url } = await cloud.signIn({ provider: 'google', device: toBase64(device.publicKey), redirectUrl: sheet ? APP_CALLBACK : `${callbackBase()}/api/cloud/callback`, state })
+    const { url } = await cloud.signIn({ provider: 'google', device: toBase64(device.publicKey), redirectUrl: `${callbackBase()}/api/cloud/callback`, state })
     for (const [key, at] of pending) if (Date.now() - at > PENDING_MS) pending.delete(key)
     pending.set(state, Date.now())
     signInError = null
     return { object: 'cloud_authorization', authorizationUrl: url }
-  },
-
-  async complete(callback: { state?: string; code?: string; error?: string }): Promise<Cloud> {
-    if (!pending.has(callback.state ?? '')) throw new HttpError(400, 'This sign-in expired. Try again.')
-    await cloudService.finish(callback)
-    return cloudService.status()
   },
 
   async finish({ state, code, error }: { state?: string; code?: string; error?: string }): Promise<string> {

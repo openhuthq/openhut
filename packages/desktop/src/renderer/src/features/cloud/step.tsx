@@ -16,7 +16,7 @@ export function Guide({ label, at, of, onClose, children }: { label: string; at:
   </Dialog>
 }
 
-export function Step({ art, title, line, back, action, children }: { art: ReactNode; title: ReactNode; line?: ReactNode; back?: () => void; action?: ReactNode; children?: ReactNode }) {
+export function Step({ art, title, line, back, backLabel = 'Back', action, children }: { art: ReactNode; title: ReactNode; line?: ReactNode; back?: () => void; backLabel?: string; action?: ReactNode; children?: ReactNode }) {
   return <div className="flex min-h-0 flex-1 animate-[stepin_.28s_ease-out] flex-col motion-reduce:animate-none">
     <div className="flex h-[120px] shrink-0 items-end justify-center">{art}</div>
     <div className="flex shrink-0 flex-col items-center gap-1.5 px-8 pt-4 text-center">
@@ -25,7 +25,7 @@ export function Step({ art, title, line, back, action, children }: { art: ReactN
     </div>
     <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto px-8 pt-5 pb-3 text-center text-[13px]/[18px]">{children}</div>
     <div className="flex h-16 shrink-0 items-center justify-between border-t border-hair px-5">
-      {back ? <Button type="button" variant="secondary" data-back onClick={back}>Back</Button> : <span />}
+      {back ? <Button type="button" variant="secondary" data-back onClick={back}>{backLabel}</Button> : <span />}
       {action}
     </div>
   </div>
