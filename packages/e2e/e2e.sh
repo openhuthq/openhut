@@ -30,8 +30,9 @@ BUILD=e2e-1 BASE=http://host.docker.internal:8099 ./scripts/release.sh || fail "
 trap 'stop_mirror; stop_cloud' EXIT
 mirror dist
 curl -fs -o /dev/null http://127.0.0.1:8790/ && fail ":8790 already answers; stop the cloud an earlier run left behind"
+(cd private/cloud && CI=1 WRANGLER_SEND_METRICS=false npx wrangler d1 migrations apply openhut-stats --local --persist-to "../../$R/cloud-state") >>"$R/cloud.log" 2>&1 || fail "cloud migrations"
 (cd private/cloud && WRANGLER_SEND_METRICS=false exec npm run dev -- --ip 0.0.0.0 --port 8790 --inspector-port 0 --persist-to "../../$R/cloud-state" \
-  --show-interactive-dev-session=false --log-level warn) >>"$R/cloud.log" 2>&1 &
+  --var AUTH_URL:http://127.0.0.1:8790 --show-interactive-dev-session=false --log-level warn) >>"$R/cloud.log" 2>&1 &
 CLOUD=$!
 i=0; until curl -s -o /dev/null http://127.0.0.1:8790/; do i=$((i+1)); [ $i -gt 150 ] && fail "cloud on :8790"; sleep 0.2; done
 
@@ -66,7 +67,7 @@ copy_test || fail "copy test"
 
 run_phase main; main=$?
 
-echo "--- cloud: a runtime on this Mac signs in to the local room, adds the server as a runtime device and shares a connection key with it"
+echo "--- cloud: runtimes on this Mac sign in to the local room, add the server as a runtime device, share a connection key, back up, restore with the kit, invite, join, remove and restart"
 RESULTS="$R" OPENHUT_E2E_KEY="$KEY" REMOTE_CONTAINER=openhut-host node --test --test-force-exit --test-reporter=spec packages/e2e/src/cloud.ts; cloud=$?
 
 echo "--- re-add: the app adds this computer again with a new key; the same build pairs instead of reinstalling, then the first key is added back"
@@ -109,8 +110,11 @@ mirror dist
 echo "--- Update now: e2e-3, installed from Admin's API"
 run_phase update; update=$?
 
+echo "--- security: dump the workspace room and grep it for every agent name, message and connection key the cloud run used"
+RESULTS="$R" node packages/e2e/src/security.ts; security=$?
+
 for f in boot agentd app; do in_host sh -c "grep -v -e ExperimentalWarning -e trace-warnings /var/log/openhut/$f.log" > "$R/$f.log" 2>&1; done
 [ "$(tree_sha)" = "$(cat "$R/tree.sha256")" ] && tree=same || tree=changed
 node packages/e2e/src/report.ts "$tree" > "$R/e2e-report.md"; report=$?
-echo "main=$main cloud=$cloud after-upgrade=$upgrade after-restart=$after update-broken=$broken update=$update report=$report -> $R/e2e-report.md"
-[ $main -eq 0 ] && [ $cloud -eq 0 ] && [ $upgrade -eq 0 ] && [ $after -eq 0 ] && [ $broken -eq 0 ] && [ $update -eq 0 ] && [ $report -eq 0 ]
+echo "main=$main cloud=$cloud after-upgrade=$upgrade after-restart=$after update-broken=$broken update=$update security=$security report=$report -> $R/e2e-report.md"
+[ $main -eq 0 ] && [ $cloud -eq 0 ] && [ $upgrade -eq 0 ] && [ $after -eq 0 ] && [ $broken -eq 0 ] && [ $update -eq 0 ] && [ $security -eq 0 ] && [ $report -eq 0 ]

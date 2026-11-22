@@ -1,8 +1,9 @@
 import type { IconSvgElement } from '@hugeicons/react'
-import { Alert02Icon, ChartColumnIcon, Coffee01Icon, Folder01Icon, Login01Icon, Notification01Icon, CloudDownloadIcon } from '@hugeicons/core-free-icons'
+import { Alert02Icon, ChartColumnIcon, Coffee01Icon, Folder01Icon, Login01Icon, Notification01Icon, CloudDownloadIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import { CopyButton } from '@/components/copy-button'
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Section, Status } from '@/components/kit'
 import { useAdmin, useUpdateAdmin } from '@/features/settings/api'
@@ -25,6 +26,7 @@ export function GeneralSettings() {
       {desktop && <PrefSwitch icon={Login01Icon} hue="text-hue-green" name="openAtLogin" title="Open at login" note="Agents start in the background, without opening this window." />}
       {desktop && <PrefSwitch icon={Coffee01Icon} hue="text-hue-amber" name="keepAwake" title={`Keep this ${HERE} awake while agents run`} note={`The screen can still turn off. Agents can't answer while the ${HERE} sleeps.`} />}
       <Version />
+      <Vault />
     </Rows>
     {!isPhone() && <Section title="Notify me when">
       <Rows>
@@ -46,6 +48,13 @@ function Version() {
   const state = useAppUpdate().data
   if (!state) return null
   return <Row icon={<I icon={CloudDownloadIcon} size={20} className="text-hue-sky" />} title={`OpenHut ${state.current}`} note={updateNote(state)}><UpdateStatus idle={<Status tone="on">Up to date</Status>} /></Row>
+}
+
+function Vault() {
+  const hash: string = import.meta.env.VITE_VAULT_SHA256 ?? ''
+  return <Row icon={<I icon={SquareLock02Icon} size={20} className="text-hue-green" />} title="Vault" note={<span className="font-mono break-all">SHA-256 {hash}</span>}>
+    <CopyButton text={hash} label="Copy" variant="ghost" className={PILL} />
+  </Row>
 }
 
 function PrefSwitch({ icon, hue, name, title, note }: { icon: IconSvgElement; hue: string; name: keyof Prefs; title: string; note?: string }) {

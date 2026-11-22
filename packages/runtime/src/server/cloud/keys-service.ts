@@ -69,7 +69,7 @@ export const keysService = {
   async joinAsRuntime({ session, workspace, chain }: { session: CloudSession; workspace: Account['workspace']; chain: MemberList[] }): Promise<void> {
     const list = chain.at(-1)
     if (!list || !chain[0]) throw new HttpError(502, 'OpenHut Cloud sent no member list.')
-    const account = { sub: session.sub, email: session.email, key: '', workspace, list, first: chain[0] }
+    const account = { sub: session.sub, email: session.email, key: '', runtime: true, workspace, list, first: chain[0] }
     await keyStore.write({ device: (await keyStore.read()).device, machine, account, session: { token: session.token, expiresAt: session.expiresAt } })
   },
 
