@@ -5,7 +5,6 @@ import { ConfirmDialog } from '@/components/confirm-button'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ErrorNote } from '@/components/error-note'
-import { WorkspaceLogo } from '@/features/cloud/switcher'
 import { useChangeKeys, useDeleteWorkspace, useRemoveMember, useRename, useWorkspaces } from '@/features/cloud/workspaces'
 import { navigate, open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
@@ -27,7 +26,6 @@ export function WorkspaceSettings() {
   }
   return <section className="flex flex-col gap-2">
     <form onSubmit={submit} className="flex items-end gap-3 px-1">
-      <WorkspaceLogo workspace={active} size={36} />
       <label className="grid flex-1 gap-1">
         <span className="text-[12px] text-mute">Workspace name</span>
         <Input key={name} name="name" defaultValue={name} maxLength={60} disabled={active.role === 'member' || rename.isPending} onBlur={(event) => save(event.currentTarget.value)} className="h-9 text-[13.5px]" />
