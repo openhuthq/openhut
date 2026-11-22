@@ -843,7 +843,7 @@ const agentRow = (id: string, workspace: string | null) => db.insertInto('agent'
 const agentHere = async (id: string) => Boolean(await db.selectFrom('agent').select('id').where('id', '=', id).executeTakeFirst())
 const tell = (message: object) => { for (const ws of sockets) ws.send(JSON.stringify(message)) }
 
-test('a delete notice not signed by an admin on the list, or a bare 404, does nothing; a signed one moves only that workspace’s agents to the trash', async () => {
+test('a delete notice not signed by an admin’s device on the list (a stranger, or the owner’s kit key), or a bare 404, does nothing; a signed one moves only that workspace’s agents to the trash', async () => {
   const team = await roomKeys.createTeam()
   const ws = team.workspace.id
   syncService.connect()
@@ -853,7 +853,14 @@ test('a delete notice not signed by an admin on the list, or a bare 404, does no
   const stranger = await identity()
   const signed = async (signer: Identity, at = signedAt) => signProof({ signer, proof: 'delete', parts: [ws, String(at)] })
   const notice = { by: toBase64(me.publicKey), signedAt, signature: await signed(me) }
+  const kit = await identity()
+  const [mine, kitKey] = [toBase64(me.publicKey), toBase64(kit.publicKey)]
+  const stored = await keyStore.read()
+  assert.ok(stored.account?.teams)
+  const withKit = await signList({ signer: me, body: { workspace: ws, version: 1, previous: null, members: [{ email: stored.account.email, role: 'owner', devices: [mine, kitKey], kit: kitKey }], invites: [], removed: [], at: signedAt, added: { [mine]: signedAt, [kitKey]: signedAt } } })
+  await keyStore.write({ ...stored, account: { ...stored.account, teams: stored.account.teams.map((each) => each.workspace.id === ws ? { ...each, list: withKit, first: withKit } : each) } })
   const forged = [
+    { status: 410, json: { deleted: { by: kitKey, signedAt, signature: await signed(kit) } } },
     { status: 404, json: {} },
     { status: 410, json: { error: { message: 'deleted' } } },
     { status: 410, json: { deleted: { ...notice, signature: await signed(stranger) } } },
