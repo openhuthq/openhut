@@ -14,10 +14,10 @@ import { I, PILL } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { nameOf, useCloud } from '@/features/cloud/api'
 import { NeedsCloud } from '@/features/cloud/sign-in'
-import { useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
+import { peopleNote, useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
 import { ago } from '@/lib/format'
 import { copyText } from '@/lib/clipboard'
-import { confirmed, isPhone } from '@/lib/native'
+import { isPhone, useConfirmed } from '@/lib/native'
 import { notify } from '@/components/custom/toast'
 import { open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
@@ -31,11 +31,10 @@ export function PeopleSettings() {
   if (!cloud) return null
   if (cloud.status === 'off' || !active) return <NeedsCloud title="Work on agents with your team" />
   const admin = active.role !== 'member'
-  const count = active.members.length + active.invites.length
   return <section className="flex flex-col gap-2.5">
     <div className="flex items-center gap-2 px-1">
       <span className="text-[13px] font-medium">{active.name}</span>
-      <span className="ml-auto text-[12px] text-mute">{count} {count === 1 ? 'person' : 'people'}</span>
+      <span className="ml-auto text-[12px] text-mute">{peopleNote(active)}</span>
       {admin && <InviteButton workspace={active} />}
     </div>
     <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
@@ -70,7 +69,7 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
     <span className="grid min-w-0 flex-1 gap-px"><span className="flex items-center gap-2 text-[13.5px] font-medium">{name}{you && <span className="text-[12px] font-normal text-mute">You</span>}</span><span className="truncate text-[12px] text-mute">{member.email}</span></span>
     <span className="text-[13px] text-body">{ROLE[member.role]}</span>
     {admin && member.role !== 'owner' && !you ? <DropdownMenu>
-      <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label="More" title="More" disabled={setRole.isPending || remove.isPending || removeDevice.isPending} />}><I icon={MoreHorizontalIcon} size={16} /></DropdownMenuTrigger>
+      <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label={`More options for ${name}`} title="More" disabled={setRole.isPending || remove.isPending || removeDevice.isPending} />}><I icon={MoreHorizontalIcon} size={16} /></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="flex w-[220px] flex-col gap-0.5 rounded-xl p-1.5 text-[13px] shadow-menu">
         <DropdownMenuItem className="h-8 px-2.5" onClick={() => setRole.mutate({ id: workspace.id, email: member.email, role: next }, { onError: toastError })}>{next === 'admin' ? 'Make admin' : 'Make member'}</DropdownMenuItem>
         {owner && <DropdownMenuItem className="h-8 px-2.5" onClick={() => setAsking('owner')}>Make owner</DropdownMenuItem>}
@@ -94,6 +93,7 @@ function Request({ workspace, request, name, mine, admin }: { workspace: CloudWo
   useEffect(() => {
     if (nonce && reveal) void deviceWords({ device: fromBase64(device), nonce: fromBase64(nonce.nonce), reveal: fromBase64(reveal) }).then(setExpected)
   }, [device, nonce, reveal])
+  const { asking, confirm } = useConfirmed()
   const matches = Boolean(expected) && words.map((word) => word.trim().toLowerCase()).join(' ') === expected?.join(' ')
   useEffect(() => { if (matches && isPhone() && document.activeElement instanceof HTMLInputElement) document.activeElement.blur() }, [matches])
   const set = (input: HTMLInputElement, index: number) => {
@@ -119,7 +119,7 @@ function Request({ workspace, request, name, mine, admin }: { workspace: CloudWo
     </span>
     <span className="flex gap-2 phone:w-full phone:justify-end phone:*:h-11 phone:*:flex-1 phone:*:justify-center phone:*:rounded-xl">
       <Button type="button" variant="ghost" className={PILL} disabled={deny.isPending} onClick={() => deny.mutate({ id: workspace.id, device }, { onSuccess: () => toast('Denied'), onError: toastError })}>{mine ? 'Not me' : 'Deny'}</Button>
-      {admin && !mine && <Button type="button" variant="primary" disabled={!matches || approve.isPending} className={cn(PILL, 'gap-1.5 bg-[#12a150] text-white hover:bg-[#0f8a44]')} onClick={() => void confirmed(`Approve ${name}’s new ${title}`).then((ok) => { if (ok) approve.mutate({ id: workspace.id, device, words }, { onSuccess: () => toast(`${name}’s new ${title} is in`), onError: toastError }) })}><I icon={FingerPrintIcon} size={14} />Approve</Button>}
+      {admin && !mine && <Button type="button" variant="primary" disabled={!matches || asking || approve.isPending} className={cn(PILL, 'gap-1.5 bg-[#12a150] text-white hover:bg-[#0f8a44]')} onClick={() => void confirm(`Approve ${name}’s new ${title}`).then((ok) => { if (ok) approve.mutate({ id: workspace.id, device, words }, { onSuccess: () => toast(`${name}’s new ${title} is in`), onError: toastError }) })}><I icon={FingerPrintIcon} size={14} />Approve</Button>}
     </span>
   </div>
 }

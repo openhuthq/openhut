@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
 import { Alert02Icon, Cancel01Icon, FingerPrintIcon } from '@hugeicons/core-free-icons'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
@@ -19,6 +19,7 @@ import { nameOf, REMOVE_DETAIL, useCloud, useRemoveMac, usePairing, usePasskeys,
 import { Mascot } from '@/features/cloud/sign-in'
 import { chooseWorkspace, useAsk, useCancelAsk } from '@/features/cloud/workspaces'
 import { Mismatch } from '@/features/cloud/presence'
+import { freshDevice, markSeen, seenDevices } from '@/features/cloud/seen'
 import { Spinner } from '@/components/ui/spinner'
 import { HERE } from '@/features/settings/desktop'
 import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
@@ -27,9 +28,6 @@ import { navigate } from '@/lib/router'
 import { shortDateTime } from '@/lib/format'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-
-const SEEN_KEY = 'openhut.seen-devices'
-const ALERT_MS = 3 * 24 * 60 * 60_000
 
 function Unlock({ cloud }: { cloud: Cloud }) {
   const [way, setWay] = useState<'kit' | 'code' | 'admin' | null>(null)
@@ -141,37 +139,18 @@ function CodeEntry({ onBack }: { onBack: () => void }) {
 }
 
 export function NewMacAlert({ cloud }: { cloud: Cloud }) {
-  const [seen, setSeen] = useState<string[]>(() => readSeen())
+  const seen = useSyncExternalStore(seenDevices.subscribe, seenDevices.get)
   const remove = useRemoveMac()
-  const since = Date.parse(cloud.devices.find((device) => device.here)?.addedAt ?? '') || 0
-  const fresh = cloud.devices.find((device) => !device.here && device.addedAt && Date.parse(device.addedAt) > since && Date.now() - Date.parse(device.addedAt) < ALERT_MS && !seen.includes(device.key))
+  const fresh = freshDevice({ cloud, seen, now: Date.now() })
   if (!fresh?.addedAt || cloud.status !== 'on') return null
   const when = shortDateTime.format(new Date(fresh.addedAt))
-  const dismiss = () => {
-    const next = [...seen, fresh.key]
-    setSeen(next)
-    try { localStorage.setItem(SEEN_KEY, JSON.stringify(next)) } catch { return }
-  }
   const thing = fresh.kind === 'server' ? 'computer' : 'Mac'
   return <Toast alert lead={<DeviceIcon kind={fresh.kind} />} title={`New ${thing} added`} note={fresh.name ? <><span className="truncate">{fresh.name}</span><span>{when}</span></> : when}>
     {cloud.youngUntil
       ? <span className="w-[104px] shrink-0 text-right text-[12px]/[1.3] text-mute">Remove it from an older device</span>
       : <ConfirmButton variant="secondary" className="shrink-0 rounded-xl px-3.5 text-[12.5px] text-fail" disabled={remove.isPending} question={`Remove ${fresh.name ?? `this ${thing}`}?`} detail={`Added ${when}. ${REMOVE_DETAIL}`} action="Remove" onConfirm={() => remove.mutate(fresh.key)}>Not me</ConfirmButton>}
-    <Button type="button" variant="text" className="shrink-0 px-1 text-mute" aria-label="It's mine" title="It's mine" onClick={dismiss}><I icon={Cancel01Icon} size={14} /></Button>
+    <Button type="button" variant="text" className="shrink-0 px-1 text-mute" aria-label="It's mine" title="It's mine" onClick={() => markSeen([fresh.key])}><I icon={Cancel01Icon} size={14} /></Button>
   </Toast>
-}
-
-function readSeen(): string[] {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]')
-    return Array.isArray(parsed) ? parsed.filter((each): each is string => typeof each === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-export function markSeen(keys: string[]): void {
-  try { localStorage.setItem(SEEN_KEY, JSON.stringify([...readSeen(), ...keys])) } catch { return }
 }
 
 function KitEntry({ onBack }: { onBack: () => void }) {

@@ -182,8 +182,8 @@
   body:has([role=dialog], [role=alertdialog]) #root :focus-visible { outline: none }
   [data-pointer] :focus-visible { outline: none }
   @media (max-width: 640px) {
-    [data-slot=button] { position: relative }
-    [data-slot=button]::after { content: ''; position: absolute; inset: min(0px, calc(50% - 22px)) }
+    [data-slot=button], a[aria-label] { position: relative }
+    [data-slot=button]::after, a[aria-label]::after { content: ''; position: absolute; inset: min(0px, calc(50% - 22px)) }
   }
 }
 
