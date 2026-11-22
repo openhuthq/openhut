@@ -25,13 +25,31 @@ test('an update installs only with the offline key\'s signature over the release
   const signature = readFileSync(join(feed, 'release.json.sig'), 'utf8')
   const files = [{ url: 'v9.9.9/OpenHut-9.9.9-arm64.zip', sha512: createHash('sha512').update('the new app').digest('base64') }]
 
-  assert.equal(cosigned({ manifest, signature, key, files }), true)
-  assert.equal(cosigned({ manifest, signature, key: other, files }), false, 'another key')
-  assert.equal(cosigned({ manifest, signature: '', key, files }), false, 'unsigned')
-  assert.equal(cosigned({ manifest: manifest.replace('"files"', '"files" '), signature, key, files }), false, 'a changed manifest')
-  assert.equal(cosigned({ manifest, signature, key, files: [{ ...files[0], sha512: createHash('sha512').update('a tampered app').digest('base64') }] }), false, 'other bytes than the signed ones')
-  assert.equal(cosigned({ manifest, signature, key, files: [] }), false, 'nothing to install')
-  assert.equal(cosigned({ manifest: '', signature: '', key, files }), false, 'no manifest on the feed')
+  assert.equal(cosigned({ version: '9.9.9', manifest, signature, key, files }), true)
+  assert.equal(cosigned({ version: '9.9.9', manifest, signature, key: other, files }), false, 'another key')
+  assert.equal(cosigned({ version: '9.9.9', manifest, signature: '', key, files }), false, 'unsigned')
+  assert.equal(cosigned({ version: '9.9.9', manifest: manifest.replace('"files"', '"files" '), signature, key, files }), false, 'a changed manifest')
+  assert.equal(cosigned({ version: '9.9.9', manifest, signature, key, files: [{ ...files[0], sha512: createHash('sha512').update('a tampered app').digest('base64') }] }), false, 'other bytes than the signed ones')
+  assert.equal(cosigned({ version: '9.9.9', manifest, signature, key, files: [] }), false, 'nothing to install')
+  assert.equal(cosigned({ version: '9.9.9', manifest: '', signature: '', key, files }), false, 'no manifest on the feed')
+  assert.equal(JSON.parse(manifest).version, '9.9.9', 'the version comes from latest-mac.yml')
+  assert.equal(cosigned({ manifest, signature, key, files }), false, 'no version to check')
+
+  const old = join(dir, 'old')
+  mkdirSync(old)
+  writeFileSync(join(old, 'OpenHut-0.4.0-arm64.zip'), 'the old app')
+  writeFileSync(join(old, 'latest-mac.yml'), 'version: 0.4.0\n')
+  release(['sign', old], { RELEASE_KEY: testKey })
+  const replay = { manifest: readFileSync(join(old, 'release.json'), 'utf8'), signature: readFileSync(join(old, 'release.json.sig'), 'utf8'), key, files: [{ url: 'OpenHut-0.4.0-arm64.zip', sha512: createHash('sha512').update('the old app').digest('base64') }] }
+  assert.equal(cosigned({ ...replay, version: '0.4.0' }), true)
+  assert.equal(cosigned({ ...replay, version: '99.0.0' }), false, 'an old signed release served as a newer version')
+
+  const bare = join(dir, 'bare')
+  mkdirSync(bare)
+  writeFileSync(join(bare, 'openhut.tgz'), 'a runtime')
+  assert.throws(() => release(['sign', bare], { RELEASE_KEY: testKey }), 'a folder without a version is never signed')
+  release(['sign', bare, '1.2.300'], { RELEASE_KEY: testKey })
+  assert.equal(JSON.parse(readFileSync(join(bare, 'release.json'), 'utf8')).version, '1.2.300')
 })
 
 test('the pinned release key is unset or a public Ed25519 key, and the updater checks it before it downloads', () => {
@@ -39,5 +57,6 @@ test('the pinned release key is unset or a public Ed25519 key, and the updater c
   const main = readFileSync(join(import.meta.dirname, '../src/main.mjs'), 'utf8')
   const available = main.slice(main.indexOf("auto.on('update-available'"))
   assert.ok(available.indexOf('releaseSigned(info)') < available.indexOf('auto.downloadUpdate()'))
+  assert.ok(available.indexOf('auto.updateInfoAndProvider?.info !== info') < available.indexOf('auto.downloadUpdate()'), 'it downloads only the update info it checked')
   assert.match(main, /auto\.autoDownload = false/)
 })

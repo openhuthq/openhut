@@ -7,7 +7,7 @@ One page on how OpenHut Cloud keeps your data locked. The room (`cloud.openhut.d
 | Key | Made where | What it does |
 |---|---|---|
 | Device key | each Mac, server and phone; 32 random bytes in the keychain (or a 0600 file) | One secret gives an Ed25519 signing key and an X25519 HPKE key. The public device key is both, 64 bytes, base64url. |
-| Workspace key | the owner's Mac, 32 random bytes | Locks every record and file chunk of one workspace. Has a version (`keyVersion` on the member list). |
+| Workspace key | the owner's Mac, 32 random bytes | Locks every record and file of one workspace, and its name. Has a version (`keyVersion` on the member list). |
 | Slot key | with the workspace key | Turns `kind/ref` into a record id, so ids don't leak agent ids or names. Stays the same when the workspace key changes. |
 | Own key | per person, per workspace | Locks the inside of a Private agent's records a second time, so other members can't open them. |
 | Account key | the first Mac, 32 random bytes | Locks the workspace box (workspace key, slot key, anchor) kept in the Account room, so another of your Macs can get back in. Its "account device" signs member lists that add your new Macs. |
@@ -47,12 +47,12 @@ One locked record per thing: `{ id, ver, seq, deleted, body }`.
 - A Private agent's value is `{ hidden, owner }`: locked again with the owner's own key.
 - A `PUT` with a stale `ver` is refused (409); the writer catches up and the newest edit wins quietly. `seq` is the room's order; `GET /records?after=0` is a full restore.
 - Readers drop a record whose signer isn't on the member list, whose counter isn't its ver, or that a member may not write (settings and connections are admin-only; agent owner and Shared/Private come from an owner proof).
-- Files: 1 MiB chunks, locked like records; a chunk's id is the SHA-256 of its locked bytes, checked by the room.
+- Files: each file goes up whole as one locked blob of up to 32 MiB (lock with bind `workspace/<ws>/file`, or `workspace/<ws>/file/own/<email>` with the owner's own key for a Private agent's file); a blob's id is the SHA-256 of its locked bytes, checked by the room.
 
 ## What the room sees
 
-Emails, roles, device keys and device names (the member list), workspace names, invite emails, record ids, sizes and times, who is online (Here messages are locked and padded to 512 bytes, but their timing shows), and IP addresses. Not agent names, instructions, chats, memory, files, connection keys or any key above.
+Emails, roles, device keys and device names (the member list), invite emails, record ids, sizes and times, who is online (Here messages are locked and padded to 512 bytes, but their timing shows), and IP addresses. Not workspace names (locked with the workspace key), agent names, instructions, chats, memory, files, connection keys or any key above.
 
 ## Export
 
-`GET /v1/workspaces/{id}/export` (a listed device's session) returns every signed member list, every locked record and the file chunk ids, so a workspace can move: copy, then point the apps at the new base URL (`OPENHUT_CLOUD_URL`).
+`GET /v1/workspaces/{id}/export` (a listed device's session) returns every signed member list, every locked record and the file blob ids, so a workspace can move: copy, then point the apps at the new base URL (`OPENHUT_CLOUD_URL`).
