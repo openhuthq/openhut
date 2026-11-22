@@ -7,8 +7,9 @@ import { cn } from '@/lib/utils'
 import { AlertDialog } from '@/components/ui/alert-dialog'
 import { Button, type ButtonVariants } from '@/components/ui/button'
 import { DialogFoot, DialogHead } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 
-type Confirmation = { question: string; detail: string; action: string; onConfirm: () => void }
+type Confirmation = { question: string; detail: string; action: string; typed?: string; onConfirm: () => void }
 
 export function ConfirmButton({ variant = 'danger', size, label, disabled, className, children, ...confirmation }: Confirmation & ButtonVariants & {
   label?: string
@@ -23,12 +24,15 @@ export function ConfirmButton({ variant = 'danger', size, label, disabled, class
   </>
 }
 
-export function ConfirmDialog({ open, onOpenChange, question, detail, action, onConfirm }: Confirmation & { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function ConfirmDialog({ open, onOpenChange, question, detail, action, typed, onConfirm }: Confirmation & { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [text, setText] = useState('')
+  useEffect(() => { if (!open) setText('') }, [open])
   return <AlertDialog open={open} onOpenChange={onOpenChange}>
     <DialogHead title={question} subtitle={detail} />
+    {typed && <label className="flex flex-col gap-1.5 px-5 pb-4 text-[13px]/[18px] text-body"><span>Type <span className="font-medium text-ink">{typed}</span> to confirm</span><Input value={text} onChange={(event) => setText(event.target.value)} autoComplete="off" spellCheck={false} autoFocus /></label>}
     <DialogFoot>
       <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
-      <Button type="button" variant="destructive" onClick={() => { onOpenChange(false); onConfirm() }}>{action}</Button>
+      <Button type="button" variant="destructive" disabled={Boolean(typed) && text.trim().toLowerCase() !== typed} onClick={() => { onOpenChange(false); onConfirm() }}>{action}</Button>
     </DialogFoot>
   </AlertDialog>
 }

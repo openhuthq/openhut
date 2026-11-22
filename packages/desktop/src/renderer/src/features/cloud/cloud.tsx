@@ -82,7 +82,7 @@ function DeleteAccount({ cloud }: { cloud: Cloud }) {
   return <Section title="Danger zone">
     <Rows>
       <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete cloud account" note={deleteNote({ cloud, shared: shared?.name })}>
-        <ConfirmButton className={PILL} disabled={Boolean(shared || cloud.youngUntil) || remove.isPending} question="Delete your cloud account?" detail={detail} action="Delete account" onConfirm={() => remove.mutate(undefined, { onSuccess: () => notify({ title: 'Cloud account deleted', note: `This ${HERE} keeps its agents and chats.` }), onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
+        <ConfirmButton className={PILL} disabled={Boolean(shared || cloud.youngUntil) || remove.isPending} question="Delete your cloud account?" detail={detail} action="Delete account" typed="delete my account" onConfirm={() => remove.mutate(undefined, { onSuccess: () => notify({ title: 'Cloud account deleted', note: `This ${HERE} keeps its agents and chats.` }), onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
       </Row>
     </Rows>
   </Section>
