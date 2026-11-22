@@ -29,7 +29,7 @@ contextBridge.exposeInMainWorld('openhut', {
     allow: (input) => ipcRenderer.invoke('devices.allow', input),
   },
   cloud: {
-    notify: () => ipcRenderer.invoke('cloud.notify'),
+    notify: (input) => ipcRenderer.invoke('cloud.notify', input),
   },
   passkey: {
     status: () => ipcRenderer.invoke('passkey.status'),

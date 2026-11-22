@@ -1,25 +1,22 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
-import { CloudUploadIcon, Delete02Icon, FingerPrintIcon, Key01Icon, Logout03Icon, PlusSignIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
-import type { Backup, Cloud } from '@openhut/common/cloud/cloud.ts'
+import type { ReactNode } from 'react'
+import { CloudUploadIcon, Delete02Icon, FingerPrintIcon, Key01Icon, Logout03Icon, SquareLock02Icon } from '@hugeicons/core-free-icons'
+import type { Backup, Cloud, CloudWorkspaceView, DeviceRequest } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Section, Status } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
-import { DeviceIcon } from '@/components/custom/device'
+import { DeviceIcon, DeviceMeta } from '@/components/custom/device'
 import { notify } from '@/components/custom/toast'
 import { ConfirmButton } from '@/components/confirm-button'
-import { nameOf, REMOVE_DETAIL, useAddPasskey, useAllow, useCloud, usePasskeys, useRemoveMac, useSignOut } from '@/features/cloud/api'
-import { markSeen } from '@/features/cloud/seen'
+import { nameOf, REMOVE_DETAIL, useAddPasskey, useCloud, usePasskeys, useRemoveMac, useSignOut } from '@/features/cloud/api'
 import { EnableCloud, SignInOnTeam } from '@/features/cloud/sign-in'
 import { CloudSetup, KitDialog } from '@/features/cloud/setup'
 import { Chevron, Row, Rows } from '@/features/settings/kit'
-import { isPhone, scan, useConfirmed } from '@/lib/native'
+import { isPhone, useConfirmed } from '@/lib/native'
 import { ago, shortDate, shortDateTime } from '@/lib/format'
 import { navigate, open, useOpen, useSearch } from '@/lib/router'
-import { useDeleteData, useRotated } from '@/features/cloud/workspaces'
-import { toastError } from '@/lib/toast'
+import { useApprove, useDeleteData, useDeny, useRotated } from '@/features/cloud/workspaces'
+import { toast, toastError } from '@/lib/toast'
 
 export function AccountSettings() {
   const cloud = useCloud()
@@ -164,7 +161,9 @@ export function CloudDevices({ merged }: { merged: string[] }) {
   const cloud = useCloud().data
   const remove = useRemoveMac()
   if (cloud?.status !== 'on' && cloud?.status !== 'offline') return null
+  const home = cloud.workspaces.find((workspace) => workspace.home && workspace.own)
   return <>
+    {home?.requests.filter((each) => each.email === cloud.email).map((each) => <JoinRequestRow key={each.device} workspace={home} request={each} />)}
     {cloud.devices.filter((device) => !merged.includes(device.key)).map((device) => <Row key={device.key} icon={<DeviceIcon kind={device.kind} />} title={device.name ?? (device.kind === 'server' ? 'Computer that runs agents' : 'Computer')} note={deviceNote({ device })}>
       {!device.here && !isPhone() && !cloud.youngUntil && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${device.name ?? 'this device'}?`} detail={device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))}. ${REMOVE_DETAIL}` : REMOVE_DETAIL} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
     </Row>)}
@@ -172,7 +171,19 @@ export function CloudDevices({ merged }: { merged: string[] }) {
   </>
 }
 
-export function UnlockComputer() {
+export function JoinRequestRow({ workspace, request }: { workspace: CloudWorkspaceView; request: DeviceRequest }) {
+  const approve = useApprove()
+  const deny = useDeny()
+  const { asking, confirm } = useConfirmed()
+  const title = request.name ?? 'New computer'
+  const busy = approve.isPending || deny.isPending || asking
+  return <Row icon={<DeviceIcon kind="mac" />} title={title} note={<>Wants to join · <DeviceMeta device={{ kind: 'mac', name: title, os: request.os ?? undefined, when: `${ago(request.at)} ago` }} /></>}>
+    <Button type="button" variant="ghost" className={PILL} disabled={busy} onClick={() => deny.mutate({ id: workspace.id, device: request.device }, { onSuccess: () => toast('Denied'), onError: toastError })}>Deny</Button>
+    <Button type="button" variant="primary" className={PILL} disabled={busy} onClick={() => void confirm(`Approve ${title}`).then((ok) => { if (ok) approve.mutate({ id: workspace.id, device: request.device }, { onSuccess: () => toast(`${title} is unlocking`), onError: toastError }) })}>{approve.isPending ? 'Approving…' : 'Approve'}</Button>
+  </Row>
+}
+
+export function CloudOff() {
   const cloud = useCloud().data
   if (cloud?.status !== 'off' || isPhone()) return null
   return <Row icon={<I icon={SquareLock02Icon} size={20} className="text-mute" />} title="Chat from your other computers" note="Needs OpenHut Cloud"><EnableCloud /></Row>
@@ -196,27 +207,3 @@ function Google() {
   return <svg width={12} height={12} aria-hidden="true"><use href="#lg-google" width="100%" height="100%" /></svg>
 }
 
-export function AddMac() {
-  const allow = useAllow()
-  const [added, setAdded] = useState(false)
-  const { asking, confirm } = useConfirmed()
-  const close = () => open()
-  const send = (code: string) => void confirm('Add the new computer').then((ok) => { if (ok) allow.mutate(code, { onSuccess: ({ devices }) => { markSeen(devices); setAdded(true) } }) })
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    send(String(new FormData(event.currentTarget).get('code') ?? ''))
-  }
-  return <Dialog size="narrow" label="Unlock a new computer" onClose={close}>
-    <DialogHead title="Unlock a new computer" onClose={close} />
-    <form id="add-mac" onSubmit={submit} className="flex flex-col gap-4 px-5 py-5 text-[13px]/[18px]">
-      {added ? <p className="m-0 text-body">Added. Your new computer is unlocking and gets your agents, chats and settings.</p> : <>
-        <p className="m-0 text-body">On the new computer, choose Use your iPhone or another computer. Then {isPhone() ? 'scan the code it shows, or type it' : 'type the code it shows'}.</p>
-        {isPhone() && <Button type="button" variant="primary" className="h-12 justify-center rounded-xl" disabled={asking || allow.isPending} onClick={() => void scan().then((text) => { if (text) send(text) }, toastError)}>Scan the code</Button>}
-        <Input name="code" aria-label="Code" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-X" autoFocus={!isPhone()} autoComplete="off" autoCapitalize="characters" spellCheck={false} className="font-mono phone:h-11" />
-        <div className="flex gap-2.5 rounded-lg bg-[oklch(97%_0.03_60)] px-3.5 py-3 text-[oklch(40%_0.1_50)]"><I icon={SquareLock02Icon} size={16} className="mt-px shrink-0" /><span>Add only a computer in front of you that’s yours. If someone asked you to do this, on a call, by email or in chat, it’s a scam.</span></div>
-        <ErrorNote message={allow.error?.message} />
-      </>}
-    </form>
-    <DialogFoot start={<Button type="button" variant="secondary" onClick={close}>{added ? 'Done' : 'Cancel'}</Button>}>{!added && <Button type="submit" form="add-mac" variant="primary" disabled={asking || allow.isPending}>{allow.isPending ? 'Adding…' : 'Add the new computer'}</Button>}</DialogFoot>
-  </Dialog>
-}

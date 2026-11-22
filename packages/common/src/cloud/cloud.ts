@@ -1,6 +1,6 @@
 import * as z from 'zod/mini'
 import { Timestamp } from '../api.ts'
-import { check, concat, field, fromBase64, isLocked, LETTER_PURPOSES, sign, toBase64, type Bytes, type Identity, type Pairing } from '../vault/vault.ts'
+import { check, concat, field, fromBase64, isLocked, LETTER_PURPOSES, sign, toBase64, type Bytes, type Identity } from '../vault/vault.ts'
 
 const base64 = /^[A-Za-z0-9_-]*$/
 
@@ -166,22 +166,6 @@ export const Presence = z.object({
 })
 export type Presence = z.infer<typeof Presence>
 
-export const PairingQr = z.object({
-  openhut: z.literal('pair'),
-  secret: z.string().check(z.regex(/^[0-9A-HJKMNP-TV-Z]{20}$/)),
-  fingerprint: canonical({ length: 43, message: 'Send the fingerprint as 32 bytes of base64url.' }),
-  hint: z.string().check(z.maxLength(320)),
-})
-
-export function qrPayload(pairing: Pairing): string {
-  return JSON.stringify({ openhut: 'pair', secret: pairing.secret, fingerprint: pairing.fingerprint, hint: pairing.hint })
-}
-
-export function fromQr(payload: string): Pairing | null {
-  const parsed = PairingQr.safeParse(parseJson(payload))
-  return parsed.success ? { secret: parsed.data.secret, fingerprint: parsed.data.fingerprint, hint: parsed.data.hint } : null
-}
-
 export function parseJson(value: string): unknown {
   try {
     return JSON.parse(value)
@@ -190,7 +174,7 @@ export function parseJson(value: string): unknown {
   }
 }
 
-export const PROOFS = ['session', 'refresh', 'delete', 'key-box', 'device', 'words', 'agent-owner'] as const
+export const PROOFS = ['session', 'refresh', 'delete', 'key-box', 'device', 'agent-owner'] as const
 export type Proof = (typeof PROOFS)[number]
 
 export function proofBytes({ proof, parts }: { proof: Proof; parts: string[] }): Bytes {
@@ -236,15 +220,10 @@ export const Backup = z.object({
 })
 export type Backup = z.infer<typeof Backup>
 
-export const WordsNonce = z.object({ nonce: Base64, by: DeviceKey, signature: Signature })
-export type WordsNonce = z.infer<typeof WordsNonce>
-
-export const AskAdmin = z.object({ name: z.string().check(z.maxLength(64)), os: z.string().check(z.maxLength(32)), commit: Base64 })
+export const AskAdmin = z.object({ name: z.string().check(z.maxLength(64)), os: z.string().check(z.maxLength(32)) })
 export type AskAdmin = z.infer<typeof AskAdmin>
 
-export const AskReveal = z.object({ reveal: Base64 })
-
-export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null), commit: z._default(z.nullable(Base64), null), nonce: z._default(z.nullable(WordsNonce), null), reveal: z._default(z.nullable(Base64), null) })
+export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null) })
 export type DeviceRequest = z.infer<typeof DeviceRequest>
 
 export const DeleteNotice = z.object({ by: DeviceKey, signedAt: z.number(), signature: Signature })
@@ -283,7 +262,7 @@ export const Cloud = z.object({
   youngUntil: z._default(z.nullable(Timestamp), null),
   needsSignIn: z.boolean(),
   workspaces: z._default(z.array(CloudWorkspaceView), []),
-  asking: z._default(z.nullable(z.object({ rooms: z.array(z.object({ admins: z.array(Email), words: z.nullable(z.array(z.string())) })), denied: z.boolean(), error: z._default(z.nullable(z.string()), null) })), null),
+  asking: z._default(z.nullable(z.object({ rooms: z.array(z.object({ admins: z.array(Email), own: z._default(z.boolean(), false) })), denied: z.boolean(), error: z._default(z.nullable(z.string()), null), name: z._default(z.nullable(z.string()), null) })), null),
   canAsk: z._default(z.boolean(), false),
   rotate: z._default(z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() })), []),
   gone: z._default(z.array(z.object({ name: z.string(), why: z.enum(['removed', 'deleted']) })), []),
@@ -302,15 +281,6 @@ export type UnlockCloud = z.infer<typeof UnlockCloud>
 
 export const AddPasskey = z.object({ prf: Prf })
 export type AddPasskey = z.infer<typeof AddPasskey>
-
-export const CloudPairing = z.object({ object: z.literal('pairing'), qr: z.string(), code: z.string(), expiresAt: Timestamp })
-export type CloudPairing = z.infer<typeof CloudPairing>
-
-export const AllowDevice = z.object({ code: z.string().check(z.maxLength(1000)) })
-export type AllowDevice = z.infer<typeof AllowDevice>
-
-export const AllowedDevice = z.object({ object: z.literal('pairing_allowed'), devices: z.array(DeviceKey) })
-export type AllowedDevice = z.infer<typeof AllowedDevice>
 
 export const CreateCloudInvite = z.object({ workspace: Id, email: z.pipe(z.string().check(z.trim(), z.toLowerCase()), Email), role: InviteRole })
 export type CreateCloudInvite = z.infer<typeof CreateCloudInvite>
@@ -335,6 +305,3 @@ export type CreateWorkspace = z.infer<typeof CreateWorkspace>
 
 export const DeleteWorkspace = z.object({ name: z.string().check(z.maxLength(200)) })
 export type DeleteWorkspace = z.infer<typeof DeleteWorkspace>
-
-export const ApproveDevice = z.object({ words: z.array(z.string().check(z.maxLength(20))).check(z.length(4)) })
-export type ApproveDevice = z.infer<typeof ApproveDevice>
