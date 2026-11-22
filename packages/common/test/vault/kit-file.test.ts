@@ -13,6 +13,10 @@ test('kitText lays the kit out as the spec shows, and readKit reads it back', ()
   assert.deepEqual(readKit(text), { words: WORDS, email: 'mo@example.com', kitId: 'K-7F3A-29C1', valid: true })
 })
 
+test('a numbered device name in the header doesn’t replace a word', () => {
+  assert.deepEqual(readKit(kitText({ ...KIT, device: 'Mo’s MacBook Pro (2)' }))?.words, WORDS)
+})
+
 test('readKit finds the kit in a paste a password manager reflowed', () => {
   const reflowed = kitText(KIT).replace(/\s+/g, ' ')
   assert.deepEqual(readKit(`Notes: ${reflowed} more notes`), { words: WORDS, email: 'mo@example.com', kitId: 'K-7F3A-29C1', valid: true })

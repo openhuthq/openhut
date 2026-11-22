@@ -70,7 +70,7 @@ export function nearestWord(word: string): string {
 
 function numbered(text: string): string[] | null {
   const found = new Map<number, string>()
-  for (const [, number, word] of text.matchAll(NUMBERED)) if (!found.has(Number(number))) found.set(Number(number), word.toLowerCase())
+  for (const [, number, word] of text.matchAll(NUMBERED)) found.set(Number(number), word.toLowerCase())
   const words = Array.from({ length: 12 }, (_, index) => found.get(index + 1))
   return words.every((word) => word !== undefined) ? words : null
 }
