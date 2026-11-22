@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Letter, MemberList, MemberListBody } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, check, signList } from '@openhut/common/cloud/member-list.ts'
-import { identity, letter, newKey, toBase64, type Identity } from '@openhut/common/vault/vault.ts'
+import { fromBase64, identity, letter, newKey, toBase64, type Identity } from '@openhut/common/vault/vault.ts'
 import { migrate } from '../../../src/server/platform/db.ts'
 import { accountDevice, keysService } from '../../../src/server/cloud/keys-service.ts'
 import { roomKeys } from '../../../src/server/cloud/room-keys.ts'
@@ -171,4 +171,36 @@ test('Change keys is saved before its PUT: when the list landed but the answer w
   assert.ok(queued())
   assert.equal(await roomKeys.post(), 0)
   assert.ok(queued(), 'a letter the cloud refused stays queued')
+})
+
+test('an admin revokes an invite: the next list drops it and moves its key to removed, so its link can no longer sign a join', async () => {
+  await keysService.forgetHere()
+  await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
+  await keysService.setSession({ token: 't', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
+  const boss = await identity()
+  const bossKey = toBase64(boss.publicKey)
+  const mine = toBase64((await keysService.device()).publicKey)
+  const ws = 'TeamRoom0003'
+  const at = Date.now() - 1000
+  const v1 = await signList({ signer: boss, body: { workspace: ws, version: 1, previous: null, members: [{ email: 'boss@example.com', role: 'owner', devices: [bossKey] }, { email: 'mo@example.com', role: 'admin', devices: [mine] }], invites: [], removed: [], at, added: { [bossKey]: at, [mine]: at } } })
+  await roomKeys.addTeam({ ws, list: v1, first: v1 })
+  const invited = await roomKeys.invite({ ws, email: 'ana@example.com', role: 'member', name: 'Team' })
+  assert.ok(await roomKeys.advance({ lists: [invited.list], ws }))
+  const card = await identity(fromBase64(invited.link.split('.').at(-1) ?? ''))
+  const ana = toBase64((await identity()).publicKey)
+  const joinAfter = async (chain: MemberList[]) => {
+    const last = chain.at(-1)
+    const body = await check({ anchor: await anchorOf(v1), chain })
+    assert.ok(last && body)
+    const now = Math.max(Date.now(), body.at ?? 0)
+    const join = await signList({ signer: card, body: { ...body, version: body.version + 1, previous: await anchorOf(last), at: now, members: [...body.members, { email: 'ana@example.com', role: 'member', devices: [ana] }], invites: [], removed: [...body.removed.filter((key) => key !== invited.key), invited.key], added: { ...body.added, [ana]: now } } })
+    return check({ anchor: await anchorOf(v1), chain: [...chain, join] })
+  }
+  assert.ok(await joinAfter([v1, invited.list]))
+  const revoked = await roomKeys.revoke({ ws, email: 'ana@example.com' })
+  const body = await check({ anchor: await anchorOf(v1), chain: [v1, invited.list, revoked] })
+  assert.deepEqual([body?.invites, body?.removed], [[], [invited.key]])
+  assert.equal(await joinAfter([v1, invited.list, revoked]), null)
+  assert.ok(await roomKeys.advance({ lists: [revoked], ws }))
+  await assert.rejects(roomKeys.revoke({ ws, email: 'ana@example.com' }), (err: Error & { status?: number }) => err.status === 404)
 })

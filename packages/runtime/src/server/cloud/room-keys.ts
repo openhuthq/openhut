@@ -78,6 +78,13 @@ export const roomKeys = {
     return { list, id: await inviteId(card.publicKey), key, body: toBase64(sealed), link: `${INVITE_URL}#${ws}.${toBase64(card.secret)}`, expiresAt }
   },
 
+  async revoke({ ws, email }: { ws: string; email: string }): Promise<MemberList> {
+    const { room, body } = adminRoom({ ws, sentence: 'Only an owner or admin can revoke an invite.' })
+    const gone = body.invites.filter((each) => each.email === email).map((each) => each.key)
+    if (!gone.length) throw new HttpError(404, `There’s no pending invite for ${email}.`)
+    return signList({ signer: await keysService.device(), body: { ...await nextOf({ list: room.list, body, me: await keysService.deviceKey() }), invites: body.invites.filter((each) => each.email !== email), removed: [...body.removed, ...gone] } })
+  },
+
   async withRole({ ws, email, role }: { ws: string; email: string; role: Role }): Promise<MemberList> {
     const { room, body } = adminRoom({ ws, sentence: 'Only an owner or admin can change roles.' })
     const target = body.members.find((member) => member.email === email)

@@ -4,7 +4,7 @@ import type { CloudWorkspaceView, DeviceRequest, Member } from '@openhut/common/
 import { deviceWords, fromBase64 } from '@openhut/common/vault/vault.ts'
 import { DeviceIcon, DeviceMeta } from '@/components/custom/device'
 import { Button } from '@/components/ui/button'
-import { ConfirmDialog } from '@/components/confirm-button'
+import { ConfirmButton, ConfirmDialog } from '@/components/confirm-button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -16,7 +16,7 @@ import { nameOf, useCloud } from '@/features/cloud/api'
 import { Pitch } from '@/features/cloud/sign-in'
 import { Row, Rows } from '@/features/settings/kit'
 import { CloudSetup } from '@/features/cloud/setup'
-import { peopleNote, useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
+import { peopleNote, useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useRevokeInvite, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
 import { ago } from '@/lib/format'
 import { copyText } from '@/lib/clipboard'
 import { isPhone, useConfirmed } from '@/lib/native'
@@ -46,14 +46,21 @@ export function PeopleSettings() {
         <PersonRow member={member} workspace={active} you={member.email === email} admin={admin} />
         {active.requests.filter((each) => each.email === member.email).map((each) => <Request key={each.device} workspace={active} request={each} name={nameOf(member.email)} mine={member.email === email} admin={admin} />)}
       </div>)}
-      {active.invites.map((invite) => <div key={invite.email} className="flex items-center gap-3 px-4 py-3">
-        <span className="opacity-40"><PersonFace name={nameOf(invite.email)} email={invite.email} size={40} /></span>
-        <span className="grid min-w-0 flex-1 gap-px"><span className="text-[13.5px] font-medium">{nameOf(invite.email)}</span><span className="truncate text-[12px] text-mute">{invite.email}</span></span>
-        <span className="text-[13px] text-body">Invited</span>
-        {invite.link && <Button type="button" variant="ghost" className={PILL} onClick={() => void copy(invite.link ?? '')}>Copy link</Button>}
-      </div>)}
+      {active.invites.map((invite) => <InviteRow key={invite.email} invite={invite} workspace={active} admin={admin} />)}
     </div>
   </section></>
+}
+
+function InviteRow({ invite, workspace, admin }: { invite: CloudWorkspaceView['invites'][number]; workspace: CloudWorkspaceView; admin: boolean }) {
+  const revoke = useRevokeInvite()
+  const name = nameOf(invite.email)
+  return <div className="flex items-center gap-3 px-4 py-3">
+    <span className="opacity-40"><PersonFace name={name} email={invite.email} size={40} /></span>
+    <span className="grid min-w-0 flex-1 gap-px"><span className="text-[13.5px] font-medium">{name}</span><span className="truncate text-[12px] text-mute">{invite.email}</span></span>
+    <span className="text-[13px] text-body">Invited</span>
+    {invite.link && <Button type="button" variant="ghost" className={PILL} onClick={() => void copy(invite.link ?? '')}>Copy link</Button>}
+    {admin && <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={revoke.isPending} question={`Revoke ${name}’s invite?`} detail="The link stops working. You can invite them again later." action="Revoke" onConfirm={() => revoke.mutateAsync({ id: workspace.id, email: invite.email }).then(() => toast(`${name}’s invite revoked`))}>Revoke</ConfirmButton>}
+  </div>
 }
 
 function PersonRow({ member, workspace, you, admin }: { member: Member; workspace: CloudWorkspaceView; you: boolean; admin: boolean }) {
