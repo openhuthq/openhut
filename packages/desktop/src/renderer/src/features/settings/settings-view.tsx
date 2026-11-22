@@ -1,8 +1,9 @@
 import { Fragment } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiMagicIcon, Building03Icon, CloudDownloadIcon, LaptopIcon, PlugSocketIcon, Settings02Icon, SmartPhone01Icon, UserCircleIcon, UserGroupIcon } from '@hugeicons/core-free-icons'
+import { AiMagicIcon, Building03Icon, CloudDownloadIcon, LaptopIcon, PlugSocketIcon, Settings02Icon, SmartPhone01Icon, UserCircleIcon } from '@hugeicons/core-free-icons'
 import { AccountSettings } from '@/features/cloud/cloud'
-import { PeopleSettings } from '@/features/people/people'
+import { TeamMark } from '@/components/custom/team-mark'
+import { useWorkspaces } from '@/features/cloud/workspaces'
 import { TeamSettings } from '@/features/people/workspace'
 import { ComputersSettings } from '@/features/settings/computers'
 import { DevicesSettings } from '@/features/settings/devices'
@@ -26,19 +27,21 @@ const TABS: [string, string, IconSvgElement, string][] = [
   ['updates', 'Updates', CloudDownloadIcon, 'text-hue-sky'],
   ['team', 'Team', Building03Icon, 'text-hue-green'],
   ['account', 'Account', UserCircleIcon, 'text-hue-blue'],
-  ['people', 'People', UserGroupIcon, 'text-hue-amber'],
 ]
 
-const MOVED: Record<string, string> = { devices: 'computers', cloud: 'account', backup: 'account' }
+const MOVED: Record<string, string> = { devices: 'computers', cloud: 'account', backup: 'account', people: 'team' }
+const GROUP: Record<string, string> = { team: 'Team', account: 'You' }
 
 export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: () => void }) {
   const tab = MOVED[asked] ?? asked
-  const name = TABS.find(([slug]) => slug === tab)?.[1] ?? 'General'
+  const team = useWorkspaces().active
+  const label = (slug: string, fallback: string) => slug === 'team' && team ? team.name : fallback
+  const name = label(tab, TABS.find(([slug]) => slug === tab)?.[1] ?? 'General')
   const nav = <nav aria-label="Settings" className="no-scrollbar flex w-[198px] shrink-0 flex-col gap-0.5 overflow-y-auto px-3 py-4">
     {TABS.filter(([slug]) => (!isPhone() || slug !== 'mcp') && (!!desktop || slug !== 'updates')).map(([slug, name, icon, hue]) => <Fragment key={slug}>
-      {slug === 'team' && <span className="mt-4 px-[9px] pb-1 text-[11.5px] font-medium text-mute">Cloud</span>}
+      {GROUP[slug] && <span className="mt-4 px-[9px] pb-1 text-[11.5px] font-medium text-mute">{GROUP[slug]}</span>}
       <a href={`/settings/${slug}`} aria-current={slug === tab ? 'page' : undefined} onClick={(event) => { event.preventDefault(); navigate(`/settings/${slug}`, true) }}
-      className={cn('flex items-center gap-[9px] rounded-lg px-[9px] py-[7px] text-[13px]/[18px] text-ink no-underline', HOVER, slug === tab && PICKED)}><I icon={icon} size={18} className={hue} />{name}{slug === 'phones' && !PHONES && <span className="ml-auto rounded-full bg-soft px-1.5 py-px text-[10.5px] font-medium text-mute">Soon</span>}</a>
+      className={cn('flex items-center gap-[9px] rounded-lg px-[9px] py-[7px] text-[13px]/[18px] text-ink no-underline', HOVER, slug === tab && PICKED)}>{slug === 'team' && team ? <TeamMark workspace={team} className="size-[18px] rounded-[5px] text-[10px]" /> : <I icon={icon} size={18} className={hue} />}<span className="truncate">{label(slug, name)}</span>{slug === 'phones' && !PHONES && <span className="ml-auto rounded-full bg-soft px-1.5 py-px text-[10.5px] font-medium text-mute">Soon</span>}</a>
     </Fragment>)}
   </nav>
   const opened = useOpen()
@@ -57,7 +60,6 @@ function Tab({ tab }: { tab: string }) {
   switch (tab) {
     case 'account': return <AccountSettings />
     case 'team': return <TeamSettings />
-    case 'people': return <PeopleSettings />
     case 'computers': return <ComputersSettings />
     case 'phones': return PHONES ? <DevicesSettings /> : <PhonesSoon />
     case 'models': return <ModelsSettings />

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Delete02Icon, Key01Icon, Logout03Icon, PencilEdit02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import { ArrowRight01Icon, Delete02Icon, Key01Icon, Logout03Icon, PencilEdit02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/confirm-button'
@@ -11,61 +11,71 @@ import { useCloud } from '@/features/cloud/api'
 import { Pitch } from '@/features/cloud/sign-in'
 import { CloudSetup } from '@/features/cloud/setup'
 import { isPhone } from '@/lib/native'
-import { chooseWorkspace, peopleNote, useChangeKeys, useDeleteWorkspace, useRemoveMember, useRename, useWorkspaces } from '@/features/cloud/workspaces'
+import { chooseWorkspace, peopleNote, useChangeKeys, useDeleteWorkspace, useRemoveMember, useRename, useSetWebsite, useWorkspaces } from '@/features/cloud/workspaces'
 import { navigate, open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
-import { I, PILL } from '@/components/kit'
+import { I, PILL, Section } from '@/components/kit'
+import { TeamPeople } from '@/features/people/people'
 import { Row, Rows } from '@/features/settings/kit'
 import { cn } from '@/lib/utils'
 
 const KEYS_NOTE = 'Use after a lost computer or a teammate you don’t trust. Everyone else stays in.'
 
 const ROLE = { owner: 'the owner', admin: 'an admin', member: 'a member' }
+const LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 
 export function TeamSettings() {
   const cloud = useCloud().data
-  const { all, active } = useWorkspaces()
+  const { active } = useWorkspaces()
   const opened = useOpen()
   if (!cloud) return null
   const enabling = opened === 'enable' && <CloudSetup />
   if (cloud.status === 'off' || !active) return <>{enabling}<Pitch /></>
-  const [kind, id] = (opened ?? '').split(':')
-  const target = all.find((each) => each.id === id)
+  const admin = active.role !== 'member'
   return <>
     {enabling}
-    <Rows>
-      {all.map((workspace) => <TeamRow key={workspace.id} workspace={workspace} current={workspace.id === active.id} renaming={kind === 'rename' && id === workspace.id} />)}
-      {!isPhone() && <Row onClick={() => open('join-link')} icon={<span className="grid size-8 place-items-center rounded-lg bg-soft text-mute"><I icon={PlusSignIcon} size={16} /></span>} title="Join another team" note="Paste an invite link" />}
-    </Rows>
-    {target && kind === 'keys' && target.role !== 'member' && <KeysConfirm workspace={target} />}
-    {target && kind === 'leave' && !target.own && <LeaveConfirm workspace={target} />}
-    {target && kind === 'delete' && target.role !== 'member' && !target.own && <DeleteConfirm workspace={target} />}
+    <TeamHeader workspace={active} editing={admin ? opened ?? undefined : undefined} />
+    <TeamPeople workspace={active} />
+    <TeamMore workspace={active} />
+    {opened === 'keys' && admin && <KeysConfirm workspace={active} />}
+    {opened === 'leave' && !active.own && <LeaveConfirm workspace={active} />}
+    {opened === 'delete' && admin && !active.own && <DeleteConfirm workspace={active} />}
   </>
 }
 
-function TeamRow({ workspace, current, renaming }: { workspace: CloudWorkspaceView; current: boolean; renaming: boolean }) {
+function TeamHeader({ workspace, editing }: { workspace: CloudWorkspaceView; editing?: string }) {
+  const rename = useRename()
+  const setWebsite = useSetWebsite()
   const admin = workspace.role !== 'member'
-  const owner = workspace.role === 'owner'
-  const go = (kind: string) => open(`${kind}:${workspace.id}`)
-  const editing = renaming && admin
-  const title = <span className="flex min-w-0 items-center gap-1.5">
-    {editing ? <TeamNameInput workspace={workspace} /> : <span className="truncate" onDoubleClick={admin ? () => go('rename') : undefined}>{workspace.name}</span>}
-    {current && <span className="rounded-full bg-soft px-1.5 py-px text-[10.5px] font-medium text-mute">Current</span>}
-    {admin && <Tooltip label="Rename"><Button type="button" variant="ghost" size="icon-xs" aria-label={`Rename ${workspace.name}`} className={cn(editing && 'invisible')} onClick={() => go('rename')}><I icon={PencilEdit02Icon} size={13} className="text-mute" /></Button></Tooltip>}
-  </span>
-  return <Row icon={<TeamMark workspace={workspace} className="size-8 rounded-lg text-[14px]" />} title={title} note={`${peopleNote(workspace)} · you’re ${ROLE[workspace.role]}`}>
-    {!current && <Button type="button" variant="ghost" className={PILL} onClick={() => { chooseWorkspace(workspace.id); navigate('/') }}>Switch</Button>}
-    {admin && <Tooltip label="Reset encryption"><Button type="button" variant="ghost" size="icon-sm" aria-label={`Reset encryption for ${workspace.name}`} onClick={() => go('keys')}><I icon={Key01Icon} size={16} className="text-hue-amber" /></Button></Tooltip>}
-    {!workspace.own && <Tooltip label={owner ? 'Make someone else the owner to leave' : 'Leave'}><Button type="button" variant="ghost" size="icon-sm" aria-label={`Leave ${workspace.name}`} disabled={owner} onClick={() => go('leave')}><I icon={Logout03Icon} size={16} className="text-fail" /></Button></Tooltip>}
-    {!workspace.own && admin && <Tooltip label="Delete team"><Button type="button" variant="ghost" size="icon-sm" aria-label={`Delete ${workspace.name}`} onClick={() => go('delete')}><I icon={Delete02Icon} size={16} className="text-fail" /></Button></Tooltip>}
-  </Row>
+  const saveName = (value: string) => {
+    if (value && value !== workspace.name) rename.mutate({ id: workspace.id, name: value }, { onSuccess: () => toast('Team renamed'), onError: toastError })
+  }
+  const saveSite = (value: string) => {
+    if (value === (workspace.website ?? '')) return
+    setWebsite.mutate({ id: workspace.id, website: value || null }, { onSuccess: () => toast(value ? 'Website saved' : 'Website removed'), onError: toastError })
+  }
+  const pencil = (what: string, label: string) => admin && <Tooltip label={label}><Button type="button" variant="ghost" size="icon-xs" aria-label={label} className={cn(editing === what && 'invisible')} onClick={() => open(what)}><I icon={PencilEdit02Icon} size={13} className="text-mute" /></Button></Tooltip>
+  return <div className="flex items-center gap-3.5 px-1">
+    <TeamMark workspace={workspace} className="size-12 rounded-xl text-[22px]" />
+    <span className="grid min-w-0 flex-1 gap-0.5">
+      <span className="flex min-w-0 items-center gap-1.5 text-[18px]/[1.3] font-semibold tracking-[-.01em]">
+        {editing === 'rename' ? <InlineEdit value={workspace.name} label="Team name" onSave={saveName} /> : <span className="truncate" onDoubleClick={admin ? () => open('rename') : undefined}>{workspace.name}</span>}
+        {pencil('rename', 'Rename')}
+      </span>
+      <span className="flex min-w-0 items-center gap-1 text-[12.5px]/[18px] text-mute">
+        {editing === 'site' ? <InlineEdit value={workspace.website ?? ''} label="Team website" placeholder="example.com" onSave={saveSite} />
+          : workspace.website ? <span className="truncate" onDoubleClick={admin ? () => open('site') : undefined}>{workspace.website}</span>
+          : admin ? <Button type="button" variant="text" className="h-auto p-0 text-[12.5px]/[18px] font-normal text-hue-blue" onClick={() => open('site')}>Add website</Button> : null}
+        {workspace.website && pencil('site', 'Change website')}
+        <span className="shrink-0">{workspace.website || admin ? '· ' : ''}{peopleNote(workspace)} · you’re {ROLE[workspace.role]}</span>
+      </span>
+    </span>
+  </div>
 }
 
-function TeamNameInput({ workspace }: { workspace: CloudWorkspaceView }) {
-  const rename = useRename()
+function InlineEdit({ value, label, placeholder, onSave }: { value: string; label: string; placeholder?: string; onSave: (value: string) => void }) {
   const ref = useRef<HTMLSpanElement>(null)
-  const { name } = workspace
   useEffect(() => {
     const field = ref.current
     if (!field) return
@@ -75,17 +85,46 @@ function TeamNameInput({ workspace }: { workspace: CloudWorkspaceView }) {
     getSelection()?.removeAllRanges()
     getSelection()?.addRange(range)
   }, [])
-  return <span ref={ref} role="textbox" aria-label="Team name" contentEditable="plaintext-only" suppressContentEditableWarning spellCheck={false} className="min-w-[2ch] truncate outline-none"
+  return <span ref={ref} role="textbox" aria-label={label} data-placeholder={placeholder} contentEditable="plaintext-only" suppressContentEditableWarning spellCheck={false} className="min-w-[2ch] truncate outline-none empty:before:text-mute-2 empty:before:content-[attr(data-placeholder)]"
     onKeyDown={(event) => {
-      if (event.key === 'Escape') event.currentTarget.textContent = name
+      if (event.key === 'Escape') event.currentTarget.textContent = value
       if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); event.currentTarget.blur() }
     }}
     onBlur={(event) => {
-      const value = (event.currentTarget.textContent ?? '').trim().slice(0, 60)
-      if (value && value !== name) rename.mutate({ id: workspace.id, name: value }, { onSuccess: () => toast('Team renamed'), onError: toastError })
-      else event.currentTarget.textContent = name
+      onSave((event.currentTarget.textContent ?? '').trim().slice(0, 120))
       open()
-    }}>{name}</span>
+    }}>{value}</span>
+}
+
+function TeamMore({ workspace }: { workspace: CloudWorkspaceView }) {
+  const [shown, setShown] = useState(false)
+  const admin = workspace.role !== 'member'
+  const owner = workspace.role === 'owner'
+  const rows: { title: string; note: string; action: string; dialog: string; danger: boolean; off?: boolean }[] = [
+    ...admin ? [{ title: 'Reset encryption', note: KEYS_NOTE, action: 'Reset', dialog: 'keys', danger: false }] : [],
+    ...workspace.own ? [] : [{ title: 'Leave', note: owner ? 'Make someone else the owner first.' : 'You lose access. What you made stays with the team.', action: 'Leave', dialog: 'leave', danger: true, off: owner }],
+    ...workspace.own || !admin ? [] : [{ title: 'Delete team', note: 'Deletes everything in it for everyone.', action: 'Delete team', dialog: 'delete', danger: true }],
+  ]
+  if (!rows.length) return null
+  return <div className="flex flex-col gap-1.5">
+    <Button type="button" variant="ghost" aria-expanded={shown} className="w-fit gap-1.5 px-1.5 text-[12.5px] font-normal text-mute" onClick={() => setShown(!shown)}><I icon={ArrowRight01Icon} size={12} className={cn('transition-transform', shown && 'rotate-90')} />More options</Button>
+    {shown && <Rows>{rows.map((row) => <Row key={row.dialog} icon={<I icon={row.dialog === 'keys' ? Key01Icon : row.dialog === 'leave' ? Logout03Icon : Delete02Icon} size={20} className={row.danger ? 'text-fail' : 'text-hue-amber'} />} title={row.title} note={row.note}>
+      <Button type="button" variant={row.danger ? 'danger' : 'ghost'} className={PILL} disabled={row.off} onClick={() => open(row.dialog)}>{row.action}</Button>
+    </Row>)}</Rows>}
+  </div>
+}
+
+export function YourTeams() {
+  const { all, active } = useWorkspaces()
+  if (!active) return null
+  return <Section title="Your teams">
+    <Rows>
+      {all.map((workspace) => <Row key={workspace.id} icon={<TeamMark workspace={workspace} className="size-8 rounded-lg text-[14px]" />} title={<span className="flex min-w-0 items-center gap-1.5"><span className="truncate">{workspace.name}</span>{workspace.id === active.id && <span className="rounded-full bg-soft px-1.5 py-px text-[10.5px] font-medium text-mute">Current</span>}</span>} note={[peopleNote(workspace), LABEL[workspace.role], workspace.website].filter(Boolean).join(' · ')}>
+        {workspace.id !== active.id && <Button type="button" variant="ghost" className={PILL} onClick={() => { chooseWorkspace(workspace.id); toast(`Switched to ${workspace.name}`) }}>Switch</Button>}
+      </Row>)}
+      {!isPhone() && <Row onClick={() => open('join-link')} icon={<span className="grid size-8 place-items-center rounded-lg bg-soft text-mute"><I icon={PlusSignIcon} size={16} /></span>} title="Join another team" note="Paste an invite link" />}
+    </Rows>
+  </Section>
 }
 
 function KeysConfirm({ workspace }: { workspace: CloudWorkspaceView }) {

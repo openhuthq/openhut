@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { FingerPrintIcon, Key01Icon, Link01Icon, MoreHorizontalIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import { FingerPrintIcon, Link01Icon, MoreHorizontalIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView, DeviceRequest, Member } from '@openhut/common/cloud/cloud.ts'
 import { deviceWords, fromBase64 } from '@openhut/common/vault/vault.ts'
 import { DeviceIcon, DeviceMeta } from '@/components/custom/device'
@@ -12,10 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Section } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
-import { nameOf, useCloud } from '@/features/cloud/api'
-import { SignInOnTeam } from '@/features/cloud/sign-in'
-import { Row, Rows } from '@/features/settings/kit'
-import { CloudSetup } from '@/features/cloud/setup'
+import { nameOf } from '@/features/cloud/api'
 import { useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useRevokeInvite, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
 import { ago } from '@/lib/format'
 import { copyText } from '@/lib/clipboard'
@@ -27,27 +24,24 @@ import { cn } from '@/lib/utils'
 
 const ROLE = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 
-export function PeopleSettings() {
-  const cloud = useCloud().data
-  const { active, email } = useWorkspaces()
-  const opened = useOpen()
-  if (!cloud) return null
-  const enabling = opened === 'enable' && <CloudSetup />
-  if (cloud.status === 'off' || !active) return <>{enabling}<SignInOnTeam what="who’s in it" /></>
-  const admin = active.role !== 'member'
-  return <>{enabling}{!cloud.kit && <Rows><Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note="Not saved"><Button type="button" variant="primary" className={PILL} onClick={() => open('enable')}>Save kit</Button></Row></Rows>}<section className="flex flex-col gap-2.5">
-    {admin && <div className="flex justify-end px-1"><InviteButton workspace={active} /></div>}
-    <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
-      {active.members.map((member) => <div key={member.email}>
-        <PersonRow member={member} workspace={active} you={member.email === email} admin={admin} />
-        {active.requests.filter((each) => each.email === member.email).map((each) => <Request key={each.device} workspace={active} request={each} name={nameOf(member.email)} mine={member.email === email} admin={admin} />)}
-      </div>)}
-    </div>
-  </section>{active.invites.length > 0 && <Section title="Invited">
-    <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
-      {active.invites.map((invite) => <InviteRow key={invite.email} invite={invite} workspace={active} admin={admin} />)}
-    </div>
-  </Section>}</>
+export function TeamPeople({ workspace }: { workspace: CloudWorkspaceView }) {
+  const { email } = useWorkspaces()
+  const admin = workspace.role !== 'member'
+  return <>
+    <Section title="People" action={admin ? <InviteButton workspace={workspace} /> : undefined}>
+      <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
+        {workspace.members.map((member) => <div key={member.email}>
+          <PersonRow member={member} workspace={workspace} you={member.email === email} admin={admin} />
+          {workspace.requests.filter((each) => each.email === member.email).map((each) => <Request key={each.device} workspace={workspace} request={each} name={nameOf(member.email)} mine={member.email === email} admin={admin} />)}
+        </div>)}
+      </div>
+    </Section>
+    {workspace.invites.length > 0 && <Section title="Invited">
+      <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
+        {workspace.invites.map((invite) => <InviteRow key={invite.email} invite={invite} workspace={workspace} admin={admin} />)}
+      </div>
+    </Section>}
+  </>
 }
 
 function InviteRow({ invite, workspace, admin }: { invite: CloudWorkspaceView['invites'][number]; workspace: CloudWorkspaceView; admin: boolean }) {
