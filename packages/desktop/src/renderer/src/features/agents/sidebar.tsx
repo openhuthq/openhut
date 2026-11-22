@@ -1,15 +1,18 @@
-import { createContext, useState, type ReactElement } from 'react'
+import { createContext, useState, type FormEvent, type ReactElement } from 'react'
 import { Delete02Icon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@openhut/client'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { Glyph } from '@/components/glyph'
 import { TeamMark } from '@/components/custom/team-mark'
 import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
 import { BackupCard, useBackup } from '@/features/cloud/backup-card'
-import { chooseWorkspace, peopleNote, useWorkspaces } from '@/features/cloud/workspaces'
+import { hasTeam } from '@/features/cloud/teams'
+import { chooseWorkspace, peopleNote, useCreateTeam, useWorkspaces } from '@/features/cloud/workspaces'
 import { Faces } from '@/features/cloud/presence'
 import { agentPath } from '@/app/routes'
 import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
@@ -84,6 +87,23 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
   </aside>
 }
 
+export function CreateTeamDialog() {
+  const create = useCreateTeam()
+  const close = () => open()
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    create.mutate(String(new FormData(event.currentTarget).get('name') ?? '').trim(), { onSuccess: () => navigate('/settings/team') })
+  }
+  return <Dialog size="narrow" label="Create a team" onClose={close}>
+    <DialogHead title="Create a team" onClose={close} />
+    <form id="new-team" onSubmit={submit} className="flex flex-col gap-3 px-5 py-5 text-[13px]/[18px]">
+      <p className="m-0 text-body">Share agents with the people you invite.</p>
+      <Input name="name" required maxLength={60} autoFocus autoComplete="off" placeholder="Team name" aria-label="Team name" />
+    </form>
+    <DialogFoot error={create.error?.message} start={<Button type="button" variant="secondary" onClick={close}>Cancel</Button>}><Button type="submit" form="new-team" variant="primary" disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create'}</Button></DialogFoot>
+  </Dialog>
+}
+
 function RowMenu({ agent, children }: { agent: OpenHutAgent; children: ReactElement }) {
   const update = useUpdateAgent(agent.id)
   const remove = useDeleteAgent(agent.id)
@@ -125,6 +145,7 @@ function TeamSwitcher() {
   const { all, active } = useWorkspaces()
   const backup = useBackup()
   if (!active) return null
+  const joined = hasTeam(all)
   const syncing = backup?.busy ? `, backing up ${backup.percent}%` : backup?.failed ? ', backup needs attention' : ''
   return <DropdownMenu>
     <DropdownMenuTrigger render={<Button type="button" variant="bare" aria-label={`Team: ${active.name}${syncing}`} title={active.name} className={cn(SURFACE, 'relative grid size-10 shrink-0 place-items-center rounded-lg')} />}>
@@ -140,7 +161,8 @@ function TeamSwitcher() {
         {workspace.id === active.id && <I icon={Tick02Icon} size={14} />}
       </DropdownMenuItem>)}
       <DropdownMenuSeparator />
-      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />Join another team</DropdownMenuItem>
+      {!joined && <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('new-team')}><I icon={PlusSignIcon} size={15} className="text-mute" />Create a team</DropdownMenuItem>}
+      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />{joined ? 'Join another team' : 'Join a team'}</DropdownMenuItem>
       <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/team')}><I icon={Settings02Icon} size={15} className="text-mute" />Team settings</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
