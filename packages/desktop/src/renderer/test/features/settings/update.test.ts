@@ -35,7 +35,8 @@ test('the app follows the main process from download to ready', async () => {
 test('a refused or failed update says so instead of up to date', () => {
   assert.match(updateNote({ ...idle, error: 'signature' }), /isn't signed by OpenHut/)
   assert.match(updateNote({ ...idle, error: 'failed' }), /Couldn't update/)
-  assert.equal(updateNote(idle), 'Updates download on their own.')
+  assert.equal(updateNote(idle), 'Up to date.')
+  assert.equal(updateNote({ ...idle, ready: { version: '0.1.2' } }), 'Version 0.1.2 is ready.')
 })
 
 test('a window opened after the download still sees the update', async () => {

@@ -28,12 +28,12 @@ export function progressTitle(progress: number | undefined) {
 }
 
 export function updateNote(state: UpdateState) {
-  if (state.ready) return 'Ready to install.'
+  if (state.ready) return `Version ${state.ready.version} is ready.`
   if (state.error === 'signature') return 'The new version isn\'t signed by OpenHut, so this computer refused it.'
   if (state.error) return 'Couldn\'t update.'
   if (state.available) return `Downloading OpenHut ${state.available}…`
-  if (state.checking) return 'Checking for updates…'
-  return 'Updates download on their own.'
+  if (state.checking) return 'Checking…'
+  return 'Up to date.'
 }
 
 export function useAppUpdate() {
