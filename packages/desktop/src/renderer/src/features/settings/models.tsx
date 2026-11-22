@@ -14,6 +14,7 @@ import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { useAdmin, useCompleteSeatSignIn, useSeatUsage, useStartSeatSignIn } from '@/features/settings/api'
 import { useAgents } from '@/features/agents/api'
+import { Face } from '@/features/agents/face'
 import { useComputers } from '@/features/computers/api'
 import { Busy, DialogCard, HINT, I, PILL, SetupSheet, Section, Status } from '@/components/kit'
 import { Check, CardTitle, ListNote, Row, Rows, useConfirming } from '@/features/settings/kit'
@@ -25,7 +26,6 @@ import { openPage } from '@/lib/native'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
-const SPEND_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
 const LIST = new Intl.ListFormat('en-GB', { type: 'conjunction' })
 let returningTo: ProviderId | undefined
 const resetTime = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' })
@@ -229,11 +229,15 @@ function Spend({ usage }: { usage: SeatUsage }) {
   const used = [...usage.agents].filter((agent) => agent.costUsd > 0).sort((a, b) => b.costUsd - a.costUsd)
   const total = used.reduce((sum, agent) => sum + agent.costUsd, 0)
   const week = usage.windows.find((each) => each.kind === 'seven_day')
+  const agents = useAgents().data ?? []
   return <Section title="Claude this week" action={<span className="text-mute">{[usageLine(usage), week && `${week.percent}% of the weekly limit`].filter(Boolean).join(' · ')}</span>}>
-    <Rows>{used.map((agent, index) => <Row key={agent.agentId} icon={<i className="size-2.5 rounded-[3px]" style={{ background: SPEND_COLORS[index % SPEND_COLORS.length] }} />} title={agent.agentName}>
-      <span className="text-mute tabular-nums">{Math.max(1, Math.round((agent.costUsd / total) * 100))}%</span>
-      <span className="w-16 text-right font-mono text-xs tabular-nums">${agent.costUsd.toFixed(2)}</span>
-    </Row>)}</Rows>
+    <Rows>{used.map((agent) => {
+      const known = agents.find((each) => each.id === agent.agentId)
+      return <Row key={agent.agentId} icon={known ? <Face agent={known} size={20} /> : <i className="size-5 rounded-[24%] bg-hover" />} title={agent.agentName}>
+        <span className="text-mute tabular-nums">{Math.max(1, Math.round((agent.costUsd / total) * 100))}%</span>
+        <span className="w-16 text-right font-mono text-xs tabular-nums">${agent.costUsd.toFixed(2)}</span>
+      </Row>
+    })}</Rows>
   </Section>
 }
 
