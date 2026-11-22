@@ -1,5 +1,5 @@
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiMagicIcon, CloudIcon, LaptopIcon, PlugSocketIcon, Settings02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
+import { AiMagicIcon, CloudDownloadIcon, CloudIcon, LaptopIcon, PlugSocketIcon, Settings02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
 import { CloudSettings } from '@/features/cloud/cloud'
 import { PeopleSettings } from '@/features/people/people'
 import { ComputersSettings } from '@/features/settings/computers'
@@ -7,6 +7,8 @@ import { DevicesSettings } from '@/features/settings/devices'
 import { GeneralSettings } from '@/features/settings/general'
 import { leave, ModelsSettings, ModelsStep, stepOf } from '@/features/settings/models'
 import { McpSettings } from '@/features/settings/mcp'
+import { UpdatesSettings } from '@/features/settings/updates'
+import { desktop } from '@/features/settings/desktop'
 import { AppWindow, HOVER, I, PICKED } from '@/components/kit'
 import { isPhone } from '@/lib/native'
 import { navigate, useOpen } from '@/lib/router'
@@ -19,6 +21,7 @@ const TABS: [string, string, IconSvgElement, string][] = [
   ['devices', 'Devices', LaptopIcon, 'text-hue-blue'],
   ['models', 'Models', AiMagicIcon, 'text-hue-violet'],
   ['mcp', 'MCP', PlugSocketIcon, 'text-hue-teal'],
+  ['updates', 'Updates', CloudDownloadIcon, 'text-hue-sky'],
 ]
 
 const MOVED: Record<string, string> = { computers: 'devices', phones: 'devices' }
@@ -27,7 +30,7 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
   const tab = MOVED[asked] ?? asked
   const name = TABS.find(([slug]) => slug === tab)?.[1] ?? 'General'
   const nav = <nav aria-label="Settings" className="no-scrollbar flex w-[198px] shrink-0 flex-col gap-0.5 overflow-y-auto px-3 py-4">
-    {TABS.filter(([slug]) => !isPhone() || slug !== 'mcp').map(([slug, name, icon, hue]) => <a key={slug} href={`/settings/${slug}`} aria-current={slug === tab ? 'page' : undefined} onClick={(event) => { event.preventDefault(); navigate(`/settings/${slug}`, true) }}
+    {TABS.filter(([slug]) => (!isPhone() || slug !== 'mcp') && (!!desktop || slug !== 'updates')).map(([slug, name, icon, hue]) => <a key={slug} href={`/settings/${slug}`} aria-current={slug === tab ? 'page' : undefined} onClick={(event) => { event.preventDefault(); navigate(`/settings/${slug}`, true) }}
       className={cn('flex items-center gap-[9px] rounded-lg px-[9px] py-[7px] text-[13px]/[18px] text-ink no-underline', HOVER, slug === tab && PICKED)}><I icon={icon} size={18} className={hue} />{name}</a>)}
   </nav>
   const opened = useOpen()
@@ -49,6 +52,7 @@ function Tab({ tab }: { tab: string }) {
     case 'devices': return <YourDevices />
     case 'models': return <ModelsSettings />
     case 'mcp': return <McpSettings />
+    case 'updates': return <UpdatesSettings />
     default: return <GeneralSettings />
   }
 }

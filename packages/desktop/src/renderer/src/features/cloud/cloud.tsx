@@ -9,6 +9,7 @@ import { I, PILL, Section, Status } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { DeviceIcon } from '@/components/custom/device'
 import { ConfirmButton } from '@/components/confirm-button'
+import { CopyButton } from '@/components/copy-button'
 import { nameOf, REMOVE_DETAIL, useAddPasskey, useAllow, useCloud, useForget, usePasskeys, useRemoveMac, useSignIn, useSignOut } from '@/features/cloud/api'
 import { markSeen } from '@/features/cloud/seen'
 import { CloudOff, SaveKit, TurnOn } from '@/features/cloud/sign-in'
@@ -21,6 +22,20 @@ import { useDeleteData, useRotated } from '@/features/cloud/workspaces'
 import { toastError } from '@/lib/toast'
 
 export function CloudSettings() {
+  return <>
+    <CloudBody />
+    <Rows><EncryptionCode /></Rows>
+  </>
+}
+
+function EncryptionCode() {
+  const hash: string = import.meta.env.VITE_VAULT_SHA256 ?? ''
+  return <Row icon={<I icon={SquareLock02Icon} size={20} className="text-hue-green" />} title="Encryption code" note={<><span className="font-mono">{hash.slice(0, 12)}</span> · Matches this version's published source.</>}>
+    <CopyButton text={hash} label="Copy" variant="ghost" className={PILL} />
+  </Row>
+}
+
+function CloudBody() {
   const cloud = useCloud()
   const signOut = useSignOut()
   const helper = usePasskeys()
