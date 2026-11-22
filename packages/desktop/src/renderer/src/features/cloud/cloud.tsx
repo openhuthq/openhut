@@ -174,7 +174,6 @@ export function CloudDevices({ merged }: { merged: string[] }) {
 
 export function UnlockComputer() {
   const cloud = useCloud().data
-  if (cloud?.status === 'on' || cloud?.status === 'offline') return <Row onClick={() => open('add-mac')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-blue" />} title="Unlock a new computer" note={`Let a new computer in with this ${isPhone() ? 'phone' : 'one'}.`}><Chevron /></Row>
   if (cloud?.status !== 'off' || isPhone()) return null
   return <Row icon={<I icon={SquareLock02Icon} size={20} className="text-mute" />} title="Chat from your other computers" note="Needs OpenHut Cloud"><EnableCloud /></Row>
 }
