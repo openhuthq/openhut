@@ -149,7 +149,7 @@ test('a new workspace sends its name locked, and a name the cloud refuses is an 
   assert.equal(sent.includes('Support'), false)
   assert.equal(await roomKeys.openName({ ws: made.id, locked: sent }), 'Support')
   account.refuseName = true
-  await assert.rejects(cloudService.create({ name: 'Sales' }), (err: Error & { status?: number }) => err.status === 502 && /didn’t name the workspace \(HTTP 400\)/.test(err.message))
+  await assert.rejects(cloudService.create({ name: 'Sales' }), (err: Error & { status?: number }) => err.status === 502 && /couldn’t name the workspace\. Try again\./.test(err.message))
   account.refuseName = false
 })
 

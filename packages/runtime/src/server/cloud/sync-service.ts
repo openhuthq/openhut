@@ -22,7 +22,6 @@ const RETRY_MS = 1000
 const RETRY_MAX_MS = 60_000
 const HEAD_MS = 2000
 const HEAD = 'head'
-const HERE = process.platform === 'darwin' ? 'Mac' : 'computer'
 const KEPT = [401, 409, 429]
 const TOMBSTONED: Synced[] = ['agent', 'message', 'connection']
 const FIRST: Synced[] = ['connection', 'setting', 'agent']
@@ -132,7 +131,7 @@ export const syncService = {
 
   status: (): Backup => {
     const stuck = homeState()?.refused.values().next().value
-    return { ...backup, problem: backup.problem ?? (stuck ? `${stuck.name} can’t be backed up: it doesn’t fit what OpenHut Cloud keeps.` : null) }
+    return { ...backup, problem: backup.problem ?? (stuck ? `${stuck.name} can’t be backed up. OpenHut tries again when it changes.` : null) }
   },
 
   name: (ws: string): string => states.get(ws)?.name ?? defaultName(ws),
@@ -279,7 +278,7 @@ async function catchUp(s: State, from: number | null = null): Promise<void> {
     const records: Record[] = []
     for (let after = Math.min(from ?? Infinity, await seqOf(s)), more = true; more;) {
       const page = Page.safeParse((await room(s, { method: 'GET', path: `/records?after=${after}` })).json)
-      if (!page.success) throw new HttpError(502, 'OpenHut Cloud sent records this computer can’t read.')
+      if (!page.success) throw new HttpError(502, 'OpenHut Cloud sent a backup this computer can’t read. Update OpenHut and try again.')
       records.push(...page.data.data)
       more = page.data.hasMore && page.data.data.length > 0
       after = page.data.data.at(-1)?.seq ?? after
@@ -387,7 +386,7 @@ async function openSafely({ s, record, ctx }: { s: State; record: Record; ctx: C
 async function checkHead(s: State, records: [string, number][]): Promise<void> {
   const rows = await rowsById(s)
   const missing = records.filter(([id, ver]) => (rows.get(id)?.ver ?? 0) < ver).length
-  s.backup.problem = missing ? `${missing} of ${records.length} agents and settings didn’t come back. Open OpenHut on your other ${HERE} so it backs them up again.` : null
+  s.backup.problem = missing ? `${missing} of ${records.length} agents, chats and settings didn’t come back. Open OpenHut on your other computer so it backs them up again.` : null
   if (!missing) s.wanted = null
 }
 
@@ -491,7 +490,7 @@ async function put({ s, item, ver, ctx }: { s: State; item: Item; ver: number; c
     return 'sent'
   }
   if (reply.status >= 400 && reply.status < 500 && !KEPT.includes(reply.status)) return 'refused'
-  if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud refused a backup (HTTP ${reply.status}).`)
+  if (reply.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t save a backup. OpenHut tries again.')
   if (!s.echo.has(item.id)) s.echo.set(item.id, ver - 1)
   await saveRow(s, { id: item.id, kind: item.kind, ref: item.ref, ver, seq: Record.safeParse(reply.json).data?.seq ?? 0, hash, signer: toBase64(ctx.me.publicKey), agent_id: item.agentId ?? null })
   return 'sent'
@@ -548,10 +547,10 @@ async function signedDelete({ ws, json }: { ws: string; json: unknown }): Promis
 
 export async function refusal({ ws, status }: { ws: string; status: number }): Promise<HttpError> {
   if (status === 409) return new HttpError(409, CHANGED)
-  if (status !== 403) return new HttpError(502, `OpenHut Cloud didn’t take the change (HTTP ${status}). Try again.`)
+  if (status !== 403) return new HttpError(502, 'OpenHut Cloud couldn’t save the change. Try again.')
   const newer = await cloud.room({ method: 'GET', workspace: ws, path: `/member-lists?after=${roomKeys.members(ws)?.version ?? 0}`, token: await keysService.token() }).catch(() => null)
   if (newer?.status === 403 || (Newer.safeParse(newer?.json).data?.data.length ?? 0) > 0) return new HttpError(409, CHANGED)
-  return new HttpError(403, 'OpenHut Cloud refused the change (HTTP 403).')
+  return new HttpError(403, 'OpenHut Cloud couldn’t save the change. Try again.')
 }
 
 async function drop({ ws, why }: { ws: string; why: Gone['why'] | null }): Promise<void> {
@@ -594,6 +593,6 @@ async function wordsReady({ ws, request: { device, commit, nonce, reveal } }: { 
 }
 
 async function room(s: State, { method, path, body }: { method: 'GET' | 'PUT' | 'POST' | 'DELETE'; path: string; body?: unknown }): Promise<{ status: number; json: unknown }> {
-  if (!keysService.account()) throw new HttpError(409, 'Turn on OpenHut Cloud first.')
+  if (!keysService.account()) throw new HttpError(409, 'Enable OpenHut Cloud first.')
   return cloud.room({ method, workspace: s.ws, path, token: await keysService.token(), body })
 }

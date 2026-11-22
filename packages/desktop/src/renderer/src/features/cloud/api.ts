@@ -13,26 +13,38 @@ const BUSY_POLL_MS = 700
 const SHOW_DONE_MS = 60_000
 const ON_POLL_MS = 10_000
 const PAIRING_POLL_MS = 2000
+const SIGN_IN_POLL_MS = 1500
 
 export function useCloud() {
   const client = useQueryClient()
-  const signingIn = useQuery({ queryKey: SIGN_IN_KEY, queryFn: () => false, initialData: false, staleTime: Infinity }).data
+  const signingIn = useSigningIn()
   return useQuery({
     queryKey: CLOUD_KEY,
     queryFn: async () => {
       const cloud = await request({ schema: Cloud, computer: 'local', path: '/api/cloud' })
-      if (cloud.status === 'off' && cloud.signInError && client.getQueryData(SIGN_IN_KEY)) {
+      const settling = client.getQueryData(SIGN_IN_KEY) && (cloud.status !== 'off' || cloud.signInError)
+      if (settling) {
         client.setQueryData(SIGN_IN_KEY, false)
-        navigate('/settings/cloud', true)
-      }
-      if (cloud.status !== 'off' && client.getQueryData(SIGN_IN_KEY)) {
-        client.setQueryData(SIGN_IN_KEY, false)
-        if (cloud.status !== 'locked' && location.pathname !== '/join') navigate(cloud.kit ? '/settings/cloud' : '/settings/cloud?open=kit', true)
+        landAfterSignIn(cloud)
       }
       return cloud
     },
-    refetchInterval: (query) => signingIn && query.state.data?.status === 'off' ? OFFLINE_POLL_MS : pollOf(query.state.data),
+    refetchInterval: (query) => signingIn && query.state.data?.status === 'off' ? SIGN_IN_POLL_MS : pollOf(query.state.data),
   })
+}
+
+export function useSigningIn(): boolean {
+  return useQuery({ queryKey: SIGN_IN_KEY, queryFn: () => false, initialData: false, staleTime: Infinity }).data
+}
+
+export function enableCloud() {
+  navigate('/settings/backup?open=enable')
+}
+
+function landAfterSignIn(cloud: Cloud) {
+  if (location.pathname === '/join') return
+  if (new URLSearchParams(location.search).get('open') === 'enable') return
+  if (cloud.status === 'locked' || !cloud.kit) navigate('/settings/backup?open=enable', true)
 }
 
 function pollOf(cloud: Cloud | undefined): number | false {
@@ -66,8 +78,8 @@ export function usePasskeys() {
 export async function passkeyPrf(create?: { email: string }): Promise<string> {
   const reply = create ? await passkey?.create(create) : await passkey?.open()
   if (reply?.prf) return reply.prf
-  if (reply?.error === 'no-prf') throw new Error('Your password manager can’t unlock OpenHut. Keep your recovery kit.')
-  throw new Error(reply?.error === 'canceled' ? 'Cancelled.' : `Your passkey isn’t on this ${WORDS.here}.`)
+  if (reply?.error === 'no-prf') throw new Error('Your password manager’s passkey can’t unlock OpenHut. Use Touch ID or your recovery kit.')
+  throw new Error(reply?.error === 'canceled' ? 'Canceled.' : 'Touch ID isn’t set up here. Unlock another way.')
 }
 
 export function usePasskeyUnlock() {
@@ -91,7 +103,7 @@ export function useAllow() {
   return useMutation({ mutationFn: (code: string) => request({ schema: AllowedDevice, computer: 'local', path: '/api/cloud/devices', method: 'POST', body: { code } }) })
 }
 
-const NEW_KIT_HINT = 'If anyone else has your recovery kit, make a new kit so those words stop working.'
+const NEW_KIT_HINT = 'If anyone else has your recovery kit, make a new kit so the old one stops working.'
 export const REMOVE_DETAIL = `It can’t get anything new from OpenHut Cloud. Do this only if it’s lost, sold or not yours. ${NEW_KIT_HINT}`
 
 export function useRemoveMac() {
@@ -100,7 +112,7 @@ export function useRemoveMac() {
     mutationFn: (key: string) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/devices/${encodeURIComponent(key)}`, method: 'DELETE' }),
     onSuccess: (cloud) => {
       client.setQueryData(CLOUD_KEY, cloud)
-      notify({ title: 'Mac removed', note: NEW_KIT_HINT, action: { label: 'Make a new kit', onClick: () => navigate('/settings/cloud?open=kit') } })
+      notify({ title: 'Device removed', note: NEW_KIT_HINT, action: { label: 'Make a new kit', onClick: () => navigate('/settings/backup?open=kit') } })
     },
     onError: toastError,
   })
@@ -112,9 +124,15 @@ export function useStartOver() {
     mutationFn: () => request({ schema: Cloud, computer: 'local', path: '/api/cloud/key-boxes', method: 'DELETE' }),
     onSuccess: (cloud) => {
       client.setQueryData(CLOUD_KEY, cloud)
-      navigate('/settings/cloud?open=kit', true)
+      navigate('/settings/backup?open=kit', true)
     },
   })
+}
+
+const bridge: { notify: () => Promise<{ shown?: boolean }> } | undefined = Reflect.get(window, 'openhut')?.cloud
+
+export async function notifyUnlock(): Promise<boolean> {
+  return Boolean((await bridge?.notify().catch(() => undefined))?.shown)
 }
 
 export function useSignIn() {
@@ -126,6 +144,11 @@ export function useSignIn() {
       client.setQueryData(SIGN_IN_KEY, true)
     },
   })
+}
+
+export function useCancelSignIn() {
+  const client = useQueryClient()
+  return () => client.setQueryData(SIGN_IN_KEY, false)
 }
 
 export function useSignOut() {

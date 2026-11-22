@@ -73,12 +73,12 @@ test('signing in with another Google account is refused, and the first account k
   const mo = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   await keysService.setKit({ box: (await keysService.newKit()).box, savedAt: new Date().toISOString() })
   const kit = keysService.kitState().saved
-  await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error & { status?: number }) => err.status === 409 && /keeps the keys of mo@example\.com\. Sign in with that account, or forget it below\./.test(err.message))
+  await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error & { status?: number }) => err.status === 409 && /is set up for mo@example\.com\. Sign in with that account, or forget it below\./.test(err.message))
   assert.deepEqual(keysService.account(), mo)
   assert.deepEqual(keysService.kitState().saved, kit)
   const box = keysService.kitState().saved?.box
   await keysService.setKit(undefined)
-  await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error) => /keeps the keys of mo@example\.com\. Sign in with that account and save a recovery kit first\./.test(err.message))
+  await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error) => /is set up for mo@example\.com\. Sign in with that account and save a recovery kit first\./.test(err.message))
   await keysService.setKit(kit && box ? { box, savedAt: kit.savedAt } : undefined)
 })
 

@@ -36,6 +36,6 @@ export function BackupCard() {
       <span className="ml-auto text-[12px] font-normal text-mute tabular-nums">{busy ? `${percent}%` : failed ? (backup.problem ? '' : 'Trying again') : 'Just now'}</span>
     </span>
     <Meter value={percent} done={!busy && !failed} aria-label="Backup" />
-    <span className="text-[11.5px] text-mute">{failed ? `${total - done} of ${total} not backed up yet` : busy ? `${done} of ${total} agents and settings` : 'Only your devices can read it.'}</span>
+    <span className="text-[11.5px] text-mute">{failed ? `${total - done} of ${total} not backed up yet` : busy ? `${done} of ${total} agents, chats and settings` : 'We can’t read your data.'}</span>
   </div>
 }

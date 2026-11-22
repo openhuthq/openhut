@@ -40,7 +40,7 @@ export function CloudJoin() {
   if (!on) return <Window>
     <Hut mood="party" className="size-[84px]" />
     <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Join your team</h1>
-    <p className="m-0 max-w-[420px] text-[14px] text-body">{isPhone() ? `Turn on OpenHut Cloud on your ${HERE} with the email the invite was sent to, then open the link again.` : 'Sign in with the email the invite was sent to.'}</p>
+    <p className="m-0 max-w-[420px] text-[14px] text-body">{isPhone() ? `Enable OpenHut Cloud on your ${HERE} with the email the invite was sent to, then open the link again.` : 'Sign in with the email the invite was sent to.'}</p>
     {!isPhone() && <Button type="button" variant="primary" className="mt-2 h-10 w-[300px] justify-center phone:h-12 phone:w-full gap-2" disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}><Google />Continue with Google</Button>}
   </Window>
   const error = preview.error ?? join.error

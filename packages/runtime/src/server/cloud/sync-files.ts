@@ -96,14 +96,14 @@ function fileKey({ ctx, owner }: { ctx: Context; owner: string | undefined }): {
 
 async function upload({ value, ctx, owner }: { value: Omit<FileValue, 'blob'>; ctx: Context; owner: string | undefined }): Promise<string> {
   const locking = fileKey({ ctx, owner })
-  if (!locking) throw new HttpError(409, 'This computer can’t lock that private file.')
+  if (!locking) throw new HttpError(409, 'Couldn’t back up a file. OpenHut tries again.')
   const body = await agentd.read({ id: value.agentId, path: `home/${value.path}` })
   if (!body || hashOf(body) !== value.sha) throw new HttpError(409, 'The file changed while it was being backed up.')
   const locked = await lock({ key: locking.key, version: ctx.version, bind: locking.bind, plain: new Uint8Array(body) })
-  if (!locked) throw new HttpError(500, 'This computer couldn’t lock a file.')
+  if (!locked) throw new HttpError(500, 'Couldn’t back up a file. OpenHut tries again.')
   const hash = hashOf(locked)
   const status = await ctx.putFile({ hash, body: locked })
-  if (status !== 200) throw new HttpError(502, `OpenHut Cloud refused a file (HTTP ${status}).`)
+  if (status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t save a backup. OpenHut tries again.')
   return hash
 }
 
@@ -126,7 +126,7 @@ async function download({ value, ctx, owner }: { value: FileValue; ctx: Context;
   const plain = locked && locking && hashOf(locked) === value.blob ? await unlock({ keys: locking.keys, bind: locking.bind, locked }) : null
   if (!plain) throw new HttpError(502, 'OpenHut Cloud sent a file this computer can’t open.')
   const body = Buffer.from(plain)
-  if (body.length !== value.size || hashOf(body) !== value.sha) throw new HttpError(502, 'A synced file didn’t match its fingerprint.')
+  if (body.length !== value.size || hashOf(body) !== value.sha) throw new HttpError(502, 'A file didn’t come back intact. OpenHut tries again.')
   const saved = await agentd.write({ id: value.agentId, path: `home/${value.path}`, body, replace: true })
   if (saved.path !== `home/${value.path}`) throw new HttpError(502, `A synced file was saved as ${saved.path}, not ${value.path}.`)
   shas.set(`${value.agentId}/${value.path}:${value.size}`, value.sha)

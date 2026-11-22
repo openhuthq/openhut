@@ -28,8 +28,8 @@ import { open, useOpen } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
 import { cn } from '@/lib/utils'
-import { TurnOn } from '@/features/cloud/sign-in'
-import { useCloud, useSignIn } from '@/features/cloud/api'
+import { EnableCloud } from '@/features/cloud/sign-in'
+import { useCloud } from '@/features/cloud/api'
 
 const GET_TAILSCALE = 'https://tailscale.com/download'
 
@@ -262,14 +262,13 @@ function TailscaleDialog({ title, back, foot, children }: { title: string; back?
 
 function AddComputer() {
   const cloud = useCloud().data
-  const signIn = useSignIn()
   const signedIn = !!cloud && cloud.status !== 'off'
   return <TailscaleDialog title="Add a computer">
     <Rows>
       <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Tailscale" note="Use the Tailscale you already have. Nothing goes through OpenHut."><Chevron /></Row>
       {signedIn
         ? <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="The easiest way, no Tailscale needed. Encrypted, so we can't read it."><Chevron /></Row>
-        : <Row icon={<Hut mood="asleep" className="size-6 opacity-50 grayscale" />} title="OpenHut Relay" note="The easiest way, no Tailscale needed. Needs OpenHut Cloud."><TurnOn short pending={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })} /></Row>}
+        : <Row icon={<Hut mood="asleep" className="size-6 opacity-50 grayscale" />} title="OpenHut Relay" note="The easiest way, no Tailscale needed. Needs OpenHut Cloud."><EnableCloud /></Row>}
     </Rows>
   </TailscaleDialog>
 }

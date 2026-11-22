@@ -117,5 +117,5 @@ export function Mismatch() {
   const mismatch = usePresence().data?.mismatch ?? []
   const names = [...new Set(mismatch.map((each) => nameOf(each.email)))]
   if (!names.length) return null
-  return <Toast alert lead={<Tinted icon={Alert02Icon} hue={RED} />} title={`Your workspace history doesn’t match ${names.join(' and ')}’s`} note="No keys go out until it does. Check with them on a call." />
+  return <Toast alert lead={<Tinted icon={Alert02Icon} hue={RED} />} title={`Your computer and ${names.join(' and ')}’s don’t agree on who’s in the workspace`} note="Sharing is paused until they do. Check with them on a call." />
 }

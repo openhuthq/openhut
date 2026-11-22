@@ -34,7 +34,7 @@ export const roomKeys = {
   async lockName({ ws, name }: { ws: string; name: string }): Promise<string> {
     const workspace = roomKeys.room(ws)?.workspace
     const locked = workspace?.key && await lock({ key: fromBase64(workspace.key), version: workspace.version, bind: nameBind(ws), plain: new TextEncoder().encode(name) })
-    if (!locked) throw new HttpError(409, 'This computer has no key for this workspace yet. Try again once it joined.')
+    if (!locked) throw new HttpError(409, 'This computer is still joining the workspace. Try again in a moment.')
     return toBase64(locked)
   },
 
@@ -74,7 +74,7 @@ export const roomKeys = {
     const expiresAt = new Date(Date.now() + INVITE_MS).toISOString()
     const plain = await lockInvite({ secret: card.secret, workspace: ws, plain: new TextEncoder().encode(JSON.stringify({ workspace: ws, name, from: account.email, email, role, anchor: await anchorOf(firstOf(room)), expiresAt })) })
     const sealed = plain && await letter({ sender: await keysService.device(), to: card.publicKey, workspace: ws, purpose: 'invite', version: 1, plain })
-    if (!sealed) throw new HttpError(500, 'This computer couldn’t seal the invite.')
+    if (!sealed) throw new HttpError(500, 'Couldn’t make the invite. Try again.')
     return { list, id: await inviteId(card.publicKey), key, body: toBase64(sealed), link: `${INVITE_URL}#${ws}.${toBase64(card.secret)}`, expiresAt }
   },
 
@@ -83,8 +83,8 @@ export const roomKeys = {
     const target = body.members.find((member) => member.email === email)
     const mine = roomKeys.roleIn(ws)
     if (!target) throw new HttpError(404, `${email} isn’t in this workspace.`)
-    if (target.role === 'owner') throw new HttpError(403, 'The owner stays the owner. Hand the workspace over first.')
-    if (role === 'owner' && (mine !== 'owner' || roomKeys.isOwn(ws))) throw new HttpError(403, mine === 'owner' ? 'Your own workspace stays yours. Make a new workspace for the team, then hand that one over.' : 'Only the owner can hand the workspace over.')
+    if (target.role === 'owner') throw new HttpError(403, 'You can’t change the owner’s role. Make someone else the owner first.')
+    if (role === 'owner' && (mine !== 'owner' || roomKeys.isOwn(ws))) throw new HttpError(403, mine === 'owner' ? 'Your own workspace stays yours. Make a new workspace for the team, then make someone else its owner.' : 'Only the owner can make someone else the owner.')
     const me = keyStore.current()?.account?.email
     const roleAfter = (member: MemberListBody['members'][number]): Role => {
       if (member === target) return role
@@ -104,11 +104,11 @@ export const roomKeys = {
     const mine = roomKeys.roleIn(ws)
     const me = await keysService.deviceKey()
     const leaving = Boolean(account && emails.includes(account.email))
-    if (!account || !room || !body || !mine) throw new HttpError(409, 'Turn on OpenHut Cloud and open this workspace first.')
+    if (!account || !room || !body || !mine) throw new HttpError(409, 'Enable OpenHut Cloud and open this workspace first.')
     if (emails.some((email) => email !== account.email && (mine === 'member' || body.members.find((member) => member.email === email)?.role === 'owner'))) throw new HttpError(403, 'Only an owner or admin can remove people, and nobody can remove the owner.')
     if (leaving && mine === 'owner') throw new HttpError(403, 'Make someone else the owner first.')
-    if (leaving && roomKeys.isOwn(ws)) throw new HttpError(403, 'This is your own workspace. Delete your cloud data in Settings, Cloud instead.')
-    if (rotate && mine === 'member') throw new HttpError(403, 'Only an owner or admin can change the keys.')
+    if (leaving && roomKeys.isOwn(ws)) throw new HttpError(403, 'This is your own workspace. To remove it, delete your cloud account in Settings › Backup.')
+    if (rotate && mine === 'member') throw new HttpError(403, 'Only an owner or admin can reset encryption.')
     const gone = [...body.members.filter((member) => emails.includes(member.email)).flatMap((member) => member.devices), ...devices.filter((device) => body.members.some((member) => member.devices.includes(device)))]
     if (devices.some((device) => !body.members.some((member) => member.email === account.email && member.devices.includes(device))) && mine === 'member') throw new HttpError(403, 'Only an owner or admin can remove someone else’s device.')
     if (gone.length && !leaving) notYoungIn({ body, device: me })
@@ -124,7 +124,7 @@ export const roomKeys = {
   async approve({ ws, email, device, words, nonce, reveal, name }: { ws: string; email: string; device: string; words: string[]; nonce: string; reveal: string; name?: string | null }): Promise<{ list: MemberList; letter: Sent }> {
     const { room, body } = adminRoom({ ws, sentence: 'Only an owner or admin can let a new device in.' })
     const target = body.members.find((member) => member.email === email)
-    if (!room.workspace.key) throw new HttpError(409, 'This computer is still waiting for the workspace key.')
+    if (!room.workspace.key) throw new HttpError(409, 'This computer is still joining the workspace. Try again in a moment.')
     if (!target || body.members.some((member) => member.devices.includes(device))) throw new HttpError(409, `${email} isn’t waiting with that device anymore.`)
     const expected = await deviceWords({ device: fromBase64(device), nonce: fromBase64(nonce), reveal: fromBase64(reveal) })
     if (words.map((word) => word.trim().toLowerCase()).join(' ') !== expected.join(' ')) throw new HttpError(400, 'Those aren’t the 4 words on their screen. Ask them to read them again.', { param: 'words' })
@@ -216,7 +216,7 @@ export const roomKeys = {
     const body = await check({ anchor, chain })
     const last = chain.at(-1)
     const invite = body?.invites.find((each) => each.key === toBase64(card.publicKey) && each.email === account.email)
-    if (!body || !last || !invite || body.workspace !== ws) throw new HttpError(400, 'This invite doesn’t check out. Ask for a new link.')
+    if (!body || !last || !invite || body.workspace !== ws) throw new HttpError(400, 'This invite link doesn’t work. Ask for a new one.')
     const me = await keysService.deviceKey()
     const next = await nextOf({ list: last, body, me })
     return signList({ signer: card, body: { ...next, members: [...body.members, { email: account.email, role: invite.role, devices: [me] }], invites: body.invites.filter((each) => each !== invite), removed: [...body.removed.filter((key) => key !== me), invite.key], added: { ...body.added, [me]: next.at ?? 0 }, names: { ...body.names, [me]: deviceName() } } })

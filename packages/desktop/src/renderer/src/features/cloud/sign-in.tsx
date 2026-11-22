@@ -1,178 +1,205 @@
-import { useState, type FormEvent } from 'react'
-import { CloudIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
-import type { RecoveryKit } from '@openhut/common/cloud/cloud.ts'
+import { useState, type FormEvent, type ReactNode } from 'react'
+import { ArrowLeft01Icon, CloudIcon, CloudUploadIcon, ComputerPhoneSyncIcon, Key01Icon, SquareLock02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
+import type { Cloud, RecoveryKit } from '@openhut/common/cloud/cloud.ts'
 import { kitText, readKit } from '@openhut/common/vault/kit-file.ts'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { CopyButton } from '@/components/copy-button'
 import { DropZone } from '@/components/custom/drop-zone'
 import { ErrorNote } from '@/components/error-note'
 import { Creature } from '@/components/creature'
 import { Hut } from '@/components/hut'
-import { I, PILL } from '@/components/kit'
-import { useCloud, useNewKit, useSignIn } from '@/features/cloud/api'
-import { HERE } from '@/features/settings/desktop'
+import { I, ICON_BUTTON, PILL } from '@/components/kit'
+import { enableCloud, nameOf, useCancelSignIn, useCloud, useNewKit, useSignIn, useSigningIn } from '@/features/cloud/api'
+import { toastError } from '@/lib/toast'
+import { PRIMARY, Step } from '@/features/cloud/step'
+import { Row, Rows } from '@/features/settings/kit'
 import { shortDate } from '@/lib/format'
 import { isPhone } from '@/lib/native'
 import { open } from '@/lib/router'
-import { toastError } from '@/lib/toast'
 import { copyText } from '@/lib/clipboard'
+import { cn } from '@/lib/utils'
 import team from './team.png'
 
 const INK = '#0b0b0b'
-const LEARN = 'https://openhut.dev/docs/cloud'
 
-export function CloudOff() {
-  const signIn = useSignIn()
-  return <div className="flex flex-col items-center gap-4 px-6 pt-4 text-center">
-    <span className="flex items-end justify-center gap-2">
-      <Creature id="helpdesk-1" size={56} />
-      <Hut mood="key" className="mx-1 size-[84px]" />
-      <Creature id="sales-2" size={56} />
-    </span>
-    <span className="text-[18px]/[1.3] font-semibold">Your agents, everywhere</span>
-    <YouVsUs />
-    <Features />
-    <TurnOn pending={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })} />
+export function Pane({ back, children }: { back?: () => void; children: ReactNode }) {
+  return <div className="relative flex flex-col items-center gap-3 px-6 pt-4 text-center text-[13px]/[18px]">
+    {back && <Button type="button" data-back variant="bare" className={cn(ICON_BUTTON, 'absolute -top-1 left-0')} aria-label="Back" title="Back" onClick={back}><I icon={ArrowLeft01Icon} size={16} /></Button>}
+    {children}
   </div>
 }
 
-export function NeedsCloud({ title }: { title: string }) {
-  const signIn = useSignIn()
-  return <div className="flex flex-col items-center gap-3 px-2 pt-2 pb-2 text-center">
-    <img src={team} alt="" width={420} height={140} className="mix-blend-multiply" />
-    <span className="text-[18px]/[1.3] font-semibold">{title}</span>
-    <YouVsUs team />
-    <div className="mt-1 flex gap-2"><TurnOn pending={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })} /></div>
-  </div>
+export function Title({ children }: { children: ReactNode }) {
+  return <span className="mt-1 text-[18px]/[1.3] font-semibold tracking-[-.01em]">{children}</span>
 }
 
-export function TurnOn({ pending, onClick, short }: { pending: boolean; onClick: () => void; short?: boolean }) {
-  if (isPhone()) return <span className="text-[13px] text-mute">Turn on OpenHut Cloud in OpenHut on your {HERE}.</span>
-  return <Button type="button" variant={short ? 'secondary' : 'primary'} className={short ? `${PILL} gap-1.5` : 'gap-1.5'} disabled={pending} onClick={onClick}><I icon={CloudIcon} size={short ? 14 : 15} />{pending ? 'Connecting…' : short ? 'Turn on' : 'Turn on OpenHut Cloud'}</Button>
+export function Lead({ children }: { children: ReactNode }) {
+  return <p className="m-0 max-w-[460px] text-[13.5px]/[20px] text-body">{children}</p>
 }
 
-function YouVsUs({ team }: { team?: boolean }) {
-  return <p className="m-0 inline-flex max-w-[620px] items-center justify-center gap-2 text-center text-[14px]/[21px] text-body">
-    <I icon={SquareLock02Icon} size={16} className="mt-[2px] shrink-0 text-ink" />
-    <span>{team ? 'We store your team\'s data, but we can\'t read it. Only your team\'s devices can.' : 'We store your data, but we can\'t read it. Only your devices can.'} <a href={LEARN} target="_blank" rel="noreferrer" className="whitespace-nowrap text-ink underline underline-offset-2">Read more</a></span>
-  </p>
+export type Door = 'backup' | 'people'
+
+const PITCH: Record<Door, { title: string; note: string }> = {
+  backup: { title: 'Backups', note: 'Lose your computer, keep everything.' },
+  people: { title: 'Teams', note: 'Share agents with your team.' },
 }
 
-function Features() {
-  const rows: ['backup' | 'sync' | 'team', string, string][] = [
-    ['backup', 'Backups', 'Lose your Mac, keep everything.'],
-    ['sync', 'Sync', 'Same agents on every Mac and your phone.'],
-    ['team', 'Teams', 'Share agents with coworkers.'],
-  ]
-  return <div className="w-full max-w-[440px] overflow-hidden rounded-xl border border-hair bg-card text-left">{rows.map(([kind, title, note]) => <div key={title} className="flex items-center gap-3.5 border-b border-hair px-4 py-2.5 last:border-0">
-    <Mascot kind={kind} size={34} />
-    <span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">{title}</span><span className="text-[12px] text-mute">{note}</span></span>
-  </div>)}</div>
+function Characters() {
+  return <span className="flex items-end justify-center gap-2">
+    <Creature id="helpdesk-1" size={52} />
+    <Hut mood="key" className="mx-1 size-[84px]" />
+    <Creature id="sales-2" size={52} />
+  </span>
 }
 
-export function SaveKit() {
+const ROW_ICON = { blue: 'text-hue-blue', amber: 'text-hue-amber' }
+
+function Benefit({ icon, hue, title, note }: { icon: Parameters<typeof I>[0]['icon']; hue: keyof typeof ROW_ICON; title: string; note?: ReactNode }) {
+  return <Row icon={<I icon={icon} size={20} className={ROW_ICON[hue]} />} title={title} note={note} />
+}
+
+export function Pitch({ door }: { door: Door }) {
   const cloud = useCloud().data
-  const kit = cloud?.kit
-  const saved = Boolean(kit && !kit.differs)
-  const young = cloud?.youngUntil
-  const make = useNewKit()
-  const [shown, setShown] = useState<RecoveryKit>()
-  const [replaced, setReplaced] = useState(false)
-  const create = () => make.mutate(undefined, { onSuccess: (made) => { setReplaced(Boolean(kit)); setShown(made) }, onError: toastError })
-  if (shown) return <KitSteps kit={shown} email={cloud?.email ?? ''} replaced={replaced} />
-  return <Dialog size="narrow" label="Save a way back in" dismissable={false} onClose={() => open()}>
-    <DialogHead title="Save a way back in" />
-    <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
-      <p className="m-0 text-body">We can't reset your key. Save your recovery kit to get back in.</p>
-      <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
-        <div className="flex items-center gap-3 px-4 py-3.5">
-          <Mascot kind="kit" size={24} />
-          <span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Recovery kit</span><span className="text-[12px] text-mute">{saved ? 'Saved. Keep it offline.' : 'One small file. Keep it offline.'}</span></span>
-          {!young && <Button type="button" variant="secondary" className={PILL} disabled={make.isPending} onClick={create}>{saved ? 'Make a new kit' : isPhone() ? 'Show the words' : 'Make my kit'}</Button>}
-        </div>
-      </div>
-      {young && <p className="m-0 text-[12px] text-mute">This {HERE} was added less than 3 days ago, so it can’t make a kit yet. Make one from an older device, or wait until {shortDate.format(new Date(young))}.</p>}
+  const locked = cloud?.status === 'locked'
+  const pitch = PITCH[door]
+  return <Pane>
+    {locked ? <Hut mood="key" className="size-[84px]" /> : door === 'people' ? <img src={team} alt="" width={360} height={120} className="mix-blend-multiply" /> : <Characters />}
+    <Title>{locked ? `Welcome back, ${nameOf(cloud.email ?? '')}` : pitch.title}</Title>
+    <Lead>{locked ? 'Unlock to restore your agents and chats.' : pitch.note}</Lead>
+    {isPhone()
+      ? <span className="text-[13px] text-mute">{locked ? 'Unlock OpenHut on your computer.' : 'Enable OpenHut Cloud on your computer.'}</span>
+      : <Button type="button" variant="primary" className={BIG} onClick={() => open('enable')}>{locked ? 'Unlock' : 'Enable cloud'}</Button>}
+  </Pane>
+}
+
+export function Why({ onNext }: { onNext: () => void }) {
+  return <Step art={<Characters />} title="OpenHut Cloud" action={<Button type="button" variant="primary" className={PRIMARY} autoFocus onClick={onNext}>Continue</Button>}>
+    <div className="w-full max-w-[360px] text-left">
+      <Rows>
+        <Benefit icon={CloudUploadIcon} hue="blue" title="Backups" note="Lose your computer, keep everything" />
+        <Benefit icon={ComputerPhoneSyncIcon} hue="blue" title="Every computer" note="Your agents on all your computers" />
+        <Benefit icon={UserGroupIcon} hue="amber" title="Teams" note="Share agents with your team" />
+        <Benefit icon={SquareLock02Icon} hue="amber" title="End-to-end encrypted" note="We can’t read your data" />
+      </Rows>
     </div>
-    <DialogFoot start={<span className="text-[12px] text-mute">{(saved || !young) && (saved ? 'You can get back in on a new Mac.' : 'Save it to continue.')}</span>}><Button type="button" variant="primary" disabled={!saved && !young} onClick={() => open()}>Continue</Button></DialogFoot>
-  </Dialog>
+  </Step>
+}
+
+export function SignUpIn({ back, error }: { back: () => void; error?: string }) {
+  const signIn = useSignIn()
+  const waiting = useSigningIn()
+  const cancel = useCancelSignIn()
+  return <Step art={<Hut mood={waiting ? 'looking' : 'key'} className="size-[96px]" />} title={waiting ? 'Finish signing in in your browser' : 'Sign in'} line={waiting ? 'This page moves on by itself when you’re done.' : 'With Google. It only shares your email.'} back={waiting ? cancel : back} backLabel={waiting ? 'Cancel' : undefined}
+    action={<Button type="button" variant="primary" className={cn(PRIMARY, 'gap-2')} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}><Google size={14} />{waiting ? 'Open the browser again' : 'Continue with Google'}</Button>}>
+    <ErrorNote message={signIn.error?.message ?? error} />
+  </Step>
+}
+
+export function MacIsIn({ cloud, onNext }: { cloud: Cloud; onNext: () => void }) {
+  const { state, done, total } = cloud.backup
+  const busy = state === 'backing_up'
+  return <Step art={<Hut mood="party" className="size-[96px]" />} title="OpenHut Cloud is on" line={<span className="inline-flex items-center gap-1.5"><Google />{cloud.email}</span>}
+    action={<Button type="button" variant="primary" className={PRIMARY} autoFocus onClick={onNext}>{cloud.kit ? 'Done' : 'Next'}</Button>}>
+    <div className="w-full max-w-[360px] text-left">
+      <Rows>
+        <Benefit icon={CloudUploadIcon} hue="blue" title={busy ? 'Backing up' : 'Backed up'} note={busy ? `${done} of ${total}` : 'Agents, chats and settings'} />
+        {!cloud.kit && <Benefit icon={Key01Icon} hue="amber" title="Next: recovery kit" note="Get back in if you lose this computer" />}
+      </Rows>
+    </div>
+  </Step>
+}
+
+export function AllSet({ onDone }: { onDone: () => void }) {
+  return <Step art={<span className="relative"><Hut className="calm blink-once size-[96px]" /><svg viewBox="0 0 20 20" className="sparkle absolute -top-1 -right-3 size-5" aria-hidden><path d="M10 1l2 7 7 2-7 2-2 7-2-7-7-2 7-2z" fill="#f7c948" stroke="#0b0b0b" strokeWidth={1.6} strokeLinejoin="round" /></svg></span>}
+    title="All set" line="Keep your recovery kit somewhere safe."
+    action={<Button type="button" variant="primary" className={PRIMARY} autoFocus onClick={onDone}>Done</Button>}>
+    <div className="w-full max-w-[360px] text-left">
+      <Rows>
+        <Benefit icon={CloudUploadIcon} hue="blue" title="Backed up" />
+        <Benefit icon={Key01Icon} hue="amber" title="Recovery kit saved" />
+      </Rows>
+    </div>
+  </Step>
+}
+
+export function EnableCloud() {
+  if (isPhone()) return <span className="text-[13px] text-mute">Enable OpenHut Cloud on your computer.</span>
+  return <Button type="button" variant="secondary" className={`${PILL} gap-1.5`} onClick={enableCloud}><I icon={CloudIcon} size={14} />Enable cloud</Button>
 }
 
 type KitBridge = { save: (input: { name: string; body: string }) => Promise<{ canceled?: boolean; text?: string }> }
 const kitBridge: KitBridge | undefined = Reflect.get(window, 'openhut')?.kit
-type Step = 'save' | 'paste' | 'drop' | 'words' | 'type' | 'done'
+type KitStep = 'save' | 'paste' | 'drop' | 'words' | 'type'
 const LINK = 'h-auto p-0 text-[12.5px] font-normal text-ink underline underline-offset-2'
+const BIG = 'mt-2 h-10 w-[240px] justify-center text-[14px]'
 
-function KitSteps({ kit, email, replaced }: { kit: RecoveryKit; email: string; replaced: boolean }) {
-  const [step, setStep] = useState<Step>(isPhone() ? 'words' : 'save')
+export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () => void }) {
+  const cloud = useCloud().data
+  const make = useNewKit()
+  const [kit, setKit] = useState<RecoveryKit>()
+  const [replaced, setReplaced] = useState(false)
+  const [step, setStep] = useState<KitStep>('save')
   const [error, setError] = useState<string>()
-  const text = kitText({ email, madeAt: kit.madeAt, device: kit.device, kitId: kit.kitId, words: kit.words })
+  const email = cloud?.email ?? ''
+  const old = Boolean(cloud?.kit && !cloud.kit.differs)
+  const young = cloud?.youngUntil
   const name = `OpenHut Recovery Kit (${email}).txt`
-  const same = (other: string | undefined) => readKit(other ?? '')?.words.join(' ') === kit.words.join(' ')
-  const go = (next: Step) => {
+  const textOf = (made: RecoveryKit) => kitText({ email, madeAt: made.madeAt, device: made.device, kitId: made.kitId, words: made.words })
+  const same = (other: string | undefined) => Boolean(kit) && readKit(other ?? '')?.words.join(' ') === kit?.words.join(' ')
+  const go = (next: KitStep) => {
     setError(undefined)
     setStep(next)
   }
+  const ready = async () => {
+    if (kit) return kit
+    const made = await make.mutateAsync()
+    setReplaced(old)
+    setKit(made)
+    return made
+  }
+  const run = (task: () => Promise<unknown>) => void task().catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
   const save = async () => {
+    const made = await ready()
+    const text = textOf(made)
     if (!kitBridge) {
       download({ name, text })
       return go('drop')
     }
     const saved = await kitBridge.save({ name, body: text })
     if (saved.canceled) return
-    if (!same(saved.text)) return setError('The saved file doesn’t match your kit. Save it again.')
-    go('done')
+    if (readKit(saved.text ?? '')?.words.join(' ') !== made.words.join(' ')) return setError('The saved file doesn’t match your kit. Save it again.')
+    onDone()
   }
-  const copy = () => copyText(text).then((ok) => ok && go('paste'))
-  const check = (pasted: string) => same(pasted) ? go('done') : setError(readKit(pasted) ? 'That’s a different kit. Use the one you just saved.' : 'That doesn’t look like your kit. Try again.')
-  if (step === 'done') return <KitKept />
-  if (step === 'words') return <KitWords kit={kit} replaced={replaced} onBack={isPhone() ? undefined : () => go('save')} onSaved={() => go('type')} />
-  if (step === 'type') return <ConfirmKit kit={kit} onBack={() => go('words')} onDone={() => go('done')} />
+  const copy = async () => {
+    if (await copyText(textOf(await ready()))) go('paste')
+  }
+  const words = async () => {
+    await ready()
+    go('words')
+  }
+  const check = (pasted: string) => same(pasted) ? onDone() : setError(readKit(pasted) ? 'That’s a different kit. Use the one you just saved.' : 'That doesn’t look like your kit. Try again.')
+  if (step === 'words' && kit) return <KitWords kit={kit} replaced={replaced} onBack={isPhone() ? onBack : () => go('save')} onSaved={() => go('type')} />
+  if (step === 'type' && kit) return <ConfirmKit kit={kit} onBack={() => go('words')} onDone={onDone} />
   if (step === 'paste' || step === 'drop') return <KitCheck how={step} error={error} onText={check} onBack={() => go('save')} />
-  return <Dialog size="narrow" label="Save your recovery kit" onClose={() => open()}>
-    <DialogHead title="Save your recovery kit" onClose={() => open()} />
-    <div className="flex flex-col items-center gap-3 px-6 pt-7 pb-6 text-center text-[13px]/[18px]">
-      <Mascot kind="kit" size={92} alive />
-      <span className="mt-1 text-[17px]/[1.3] font-semibold">One small file opens your cloud</span>
-      <p className="m-0 max-w-[400px] text-[13.5px] text-body">With your Google account, it opens your cloud on a new Mac. We can't reset it.</p>
-      {replaced && <p className="m-0 font-medium text-ink">Your old kit stops working now.</p>}
-      <Button type="button" variant="primary" className="mt-2 h-10 w-[240px] justify-center text-[14px]" onClick={() => void save()}>Save kit…</Button>
-      <ErrorNote message={error} />
-      <span className="text-[12.5px] text-mute">Rather <Button type="button" variant="text" className={LINK} onClick={() => void copy()}>copy it</Button> or <Button type="button" variant="text" className={LINK} onClick={() => go('words')}>write it down</Button>?</span>
-    </div>
-  </Dialog>
+  return <Step art={<Mascot kind="kit" size={96} alive />} title={old && !kit ? 'New recovery kit' : 'Recovery kit'} line="Get back in if you lose this computer. We can’t reset it." back={onBack}
+    action={!young && <Button type="button" variant="primary" className={PRIMARY} disabled={make.isPending} onClick={() => run(isPhone() ? words : save)}>{isPhone() ? 'Show the words' : 'Save kit'}</Button>}>
+    {old && !kit && <p className="m-0 font-medium text-ink">{cloud?.passkey ? 'The old kit and Touch ID stop working.' : 'The old kit stops working.'}</p>}
+    {young && <p className="m-0 max-w-[420px] text-[12.5px] text-mute">This computer was added less than 3 days ago. Make a kit after {shortDate.format(new Date(young))}, or on an older one.</p>}
+    <ErrorNote message={error} />
+    {!young && !isPhone() && <span className="text-[12.5px] text-mute">Or <Button type="button" variant="text" className={LINK} disabled={make.isPending} onClick={() => run(copy)}>copy it</Button> · <Button type="button" variant="text" className={LINK} disabled={make.isPending} onClick={() => run(words)}>write it down</Button></span>}
+  </Step>
 }
 
 function KitCheck({ how, error, onText, onBack }: { how: 'paste' | 'drop'; error?: string; onText: (text: string) => void; onBack: () => void }) {
-  return <Dialog size="narrow" label="Check your kit" dismissable={false} onClose={() => open()}>
-    <DialogHead title={how === 'paste' ? 'Paste it back' : 'Drop it back'} />
-    <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
-      <p className="m-0 text-body">{how === 'paste' ? 'Paste it back here so we know it’s saved.' : 'Drop the file back here so we know it’s saved.'}</p>
-      <DropZone onText={onText}>{(hot) => <>
-        <Hut mood={hot ? 'surprised' : 'looking'} className="calm mb-1 size-14" />
-        <span className="font-medium text-ink">{how === 'paste' ? 'Paste it here' : 'Drop your kit here'}</span>
-        <span className="text-[12.5px] text-mute">{how === 'paste' ? 'or drop the file' : 'or paste it'}</span>
-      </>}</DropZone>
-      <ErrorNote message={error} />
-    </div>
-    <DialogFoot start={<Button type="button" variant="secondary" onClick={onBack}>Back</Button>}><span /></DialogFoot>
-  </Dialog>
-}
-
-function KitKept() {
-  return <Dialog size="narrow" label="All set" dismissable={false} onClose={() => open()}>
-    <DialogHead title="All set" />
-    <div className="flex flex-col items-center gap-3 px-6 pt-7 pb-6 text-center text-[13px]/[18px]">
-      <span className="relative">
-        <Hut className="calm blink-once size-[84px]" />
-        <svg viewBox="0 0 20 20" className="sparkle absolute -top-1 -right-3 size-5" aria-hidden><path d="M10 1l2 7 7 2-7 2-2 7-2-7-7-2 7-2z" fill="#f7c948" stroke="#0b0b0b" strokeWidth={1.6} strokeLinejoin="round" /></svg>
-      </span>
-      <span className="mt-1 text-[17px]/[1.3] font-semibold">Got it. Your kit is safe.</span>
-      <p className="m-0 max-w-[400px] text-body">Keep it somewhere only you can reach, like a password manager.</p>
-    </div>
-    <DialogFoot><Button type="button" variant="primary" autoFocus onClick={() => open()}>Continue</Button></DialogFoot>
-  </Dialog>
+  return <Step art={<Mascot kind="kit" size={72} />} title={how === 'paste' ? 'Paste it back' : 'Drop it back'} line="So we know it’s saved." back={onBack}>
+    <DropZone className="w-full max-w-[420px]" onText={onText}>{(hot) => <>
+      <Hut mood={hot ? 'surprised' : 'looking'} className="calm mb-1 size-12" />
+      <span className="font-medium text-ink">{how === 'paste' ? 'Paste it here' : 'Drop your kit here'}</span>
+      <span className="text-[12.5px] text-mute">{how === 'paste' ? 'or drop the file' : 'or paste it'}</span>
+    </>}</DropZone>
+    <ErrorNote message={error} />
+  </Step>
 }
 
 function numbered(kit: RecoveryKit): string {
@@ -186,15 +213,10 @@ function download({ name, text }: { name: string; text: string }) {
 }
 
 function KitWords({ kit, replaced, onBack, onSaved }: { kit: RecoveryKit; replaced: boolean; onBack?: () => void; onSaved: () => void }) {
-  return <Dialog size="narrow" label="Write down your words" onClose={() => open()}>
-    <DialogHead title="Write down your words" onClose={() => open()} />
-    <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
-      <p className="m-0 text-body">They open your cloud on a new Mac. We can't reset them.</p>
-      {replaced && <p className="m-0 font-medium text-ink">Your old recovery words stop working now.</p>}
-      <div className="grid grid-cols-3 gap-2 phone:grid-cols-2">{kit.words.map((word, index) => <span key={index} className="flex items-center gap-2 rounded-lg border border-hair bg-card px-3 py-2 font-mono text-[13px]"><span className="w-4 text-right text-[11px] text-mute">{index + 1}</span>{word}</span>)}</div>
-    </div>
-    <DialogFoot start={onBack ? <Button type="button" variant="secondary" onClick={onBack}>Back</Button> : <CopyButton text={numbered(kit)} label="Copy" />}><Button type="button" variant="primary" onClick={onSaved}>I wrote them down</Button></DialogFoot>
-  </Dialog>
+  return <Step art={<Mascot kind="kit" size={72} />} title="Your 12 words" line={replaced ? 'Your old words stop working now.' : 'Write them down and keep them safe.'} back={onBack}
+    action={<span className="flex gap-2"><CopyButton text={numbered(kit)} label="Copy" /><Button type="button" variant="primary" className={PRIMARY} onClick={onSaved}>I wrote them down</Button></span>}>
+    <div className="grid w-full max-w-[420px] grid-cols-3 gap-2 text-left phone:grid-cols-2">{kit.words.map((word, index) => <span key={index} className="flex items-center gap-2 rounded-lg border border-hair bg-card px-3 py-2 font-mono text-[13px]"><span className="w-4 text-right text-[11px] text-mute">{index + 1}</span>{word}</span>)}</div>
+  </Step>
 }
 
 function ConfirmKit({ kit, onBack, onDone }: { kit: RecoveryKit; onBack: () => void; onDone: () => void }) {
@@ -206,17 +228,12 @@ function ConfirmKit({ kit, onBack, onDone }: { kit: RecoveryKit; onBack: () => v
     if (right) onDone()
     setWrong(!right)
   }
-  return <Dialog size="narrow" label="Check your words" dismissable={false} onClose={() => open()}>
-    <form onSubmit={submit}>
-      <DialogHead title="Check your words" />
-      <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
-        <p className="m-0 text-body">Type two of the words so we know you have them.</p>
-        {kit.ask.map((index, i) => <label key={index} className="flex flex-col gap-1.5"><span className="font-medium">Word {index + 1}</span><Input name={`word-${index}`} className="font-mono" autoComplete="off" spellCheck={false} autoFocus={i === 0} required /></label>)}
-        <ErrorNote message={wrong ? 'Those words don’t match your kit. Check the numbers and try again.' : undefined} />
-      </div>
-      <DialogFoot start={<Button type="button" variant="secondary" onClick={onBack}>Back</Button>}><Button type="submit" variant="primary">Done</Button></DialogFoot>
+  return <Step art={<Mascot kind="kit" size={72} />} title="Check your words" line="Type two of them." back={onBack} action={<Button type="submit" form="check-kit" variant="primary" className={PRIMARY}>Check</Button>}>
+    <form id="check-kit" onSubmit={submit} className="flex w-full max-w-[320px] flex-col gap-3 text-left">
+      {kit.ask.map((index, i) => <label key={index} className="flex flex-col gap-1.5"><span className="font-medium">Word {index + 1}</span><Input name={`word-${index}`} className="font-mono" autoComplete="off" spellCheck={false} autoFocus={i === 0} required /></label>)}
+      <ErrorNote message={wrong ? 'Those don’t match. Check the word numbers.' : undefined} />
     </form>
-  </Dialog>
+  </Step>
 }
 
 function Smile({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
@@ -228,13 +245,13 @@ function Smile({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
   </g>
 }
 
-export function Mascot({ kind, size, alive }: { kind: 'phone' | 'kit' | 'backup' | 'sync' | 'team'; size: number; alive?: boolean }) {
+export function Mascot({ kind, size, alive }: { kind: 'kit'; size: number; alive?: boolean }) {
   const line = { stroke: INK, strokeWidth: 4, strokeLinejoin: 'round' as const }
   return <svg width={size} height={size} viewBox="0 0 100 100" className={alive ? 'kit-alive shrink-0' : 'shrink-0'} aria-hidden>
-    {kind === 'phone' && <><rect x={28} y={10} width={44} height={80} rx={11} fill="#19B3B1" {...line} /><rect x={35} y={20} width={30} height={54} rx={5} fill="#fbe3c8" /><Smile x={50} y={45} /><circle cx={50} cy={82} r={2.5} fill={INK} /></>}
     {kind === 'kit' && <><rect x={18} y={20} width={50} height={62} rx={7} fill="#fbe3c8" {...line} /><Smile x={43} y={42} /><path d="M30 62h26M30 70h18" stroke={INK} strokeWidth={3} strokeLinecap="round" opacity={0.35} /><g className="m-key"><circle cx={74} cy={38} r={10} fill="#f7c948" {...line} /><path d="M74 48v28m0-8h7m-7-8h6" stroke={INK} strokeWidth={4} strokeLinecap="round" fill="none" /></g></>}
-    {kind === 'backup' && <><path d="M28 74h46a16 16 0 0 0 0-32a22 22 0 0 0-42-4a18 18 0 0 0-4 36z" fill="#fff" {...line} /><Smile x={51} y={56} /></>}
-    {kind === 'sync' && <><rect x={12} y={26} width={54} height={38} rx={6} fill="#3d8fdc" {...line} /><rect x={18} y={32} width={42} height={26} rx={3} fill="#fbe3c8" /><Smile x={39} y={45} s={0.8} /><path d="M6 72h66" {...line} strokeLinecap="round" /><rect x={66} y={40} width={24} height={42} rx={6} fill="#19B3B1" {...line} /><Smile x={78} y={60} s={0.55} /></>}
-    {kind === 'team' && <><circle cx={26} cy={58} r={17} fill="#ff7a59" {...line} /><Smile x={26} y={58} s={0.7} /><circle cx={74} cy={58} r={17} fill="#19B3B1" {...line} /><Smile x={74} y={58} s={0.7} /><circle cx={50} cy={50} r={20} fill="#f7c948" {...line} /><Smile x={50} y={50} s={0.8} /></>}
   </svg>
+}
+
+function Google({ size = 12 }: { size?: number }) {
+  return <svg width={size} height={size} aria-hidden="true"><use href="#lg-google" width="100%" height="100%" /></svg>
 }

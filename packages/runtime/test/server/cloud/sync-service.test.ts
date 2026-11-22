@@ -220,7 +220,7 @@ test('a record the cloud can never take is skipped and named, the rest and the h
   syncService.send()
   await until(() => room.records.has(later) && (room.records.get(head)?.ver ?? 0) > headVer && syncService.status().state === 'failed', 'the later agent and the head to go out')
   assert.equal(room.records.has(sales), false)
-  assert.match(syncService.status().problem ?? '', /^(Sales|Refused) can’t be backed up: it doesn’t fit what OpenHut Cloud keeps\.$/)
+  assert.match(syncService.status().problem ?? '', /^(Sales|Refused) can’t be backed up\. OpenHut tries again when it changes\.$/)
   assert.equal(room.rejected, 1)
   const failing = () => syncService.status().total - syncService.status().done
   assert.equal(failing(), 2)
@@ -263,7 +263,7 @@ test('a full restore checks the signed head and says so plainly when the cloud l
   await syncService.reset({ restoring: true })
   syncService.connect()
   await until(() => syncService.status().problem !== null, 'the head check')
-  assert.match(syncService.status().problem ?? '', /^1 of \d+ agents and settings didn’t come back\. Open OpenHut on your other (Mac|computer) so it backs them up again\.$/)
+  assert.match(syncService.status().problem ?? '', /^1 of \d+ agents, chats and settings didn’t come back\. Open OpenHut on your other (Mac|computer) so it backs them up again\.$/)
   await until(() => syncService.status().state === 'idle', 'the restore to end')
   push(store({ ...kept }))
   await until(() => syncService.status().problem === null, 'the problem to clear once the missing record arrives')

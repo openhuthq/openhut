@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { FingerPrintIcon, Link01Icon, MoreHorizontalIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import { FingerPrintIcon, Key01Icon, Link01Icon, MoreHorizontalIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView, DeviceRequest, Member } from '@openhut/common/cloud/cloud.ts'
 import { deviceWords, fromBase64 } from '@openhut/common/vault/vault.ts'
 import { DeviceIcon, DeviceMeta } from '@/components/custom/device'
@@ -13,7 +13,9 @@ import { ErrorNote } from '@/components/error-note'
 import { I, PILL } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { nameOf, useCloud } from '@/features/cloud/api'
-import { NeedsCloud } from '@/features/cloud/sign-in'
+import { Pitch } from '@/features/cloud/sign-in'
+import { Row, Rows } from '@/features/settings/kit'
+import { CloudSetup } from '@/features/cloud/setup'
 import { peopleNote, useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
 import { ago } from '@/lib/format'
 import { copyText } from '@/lib/clipboard'
@@ -28,10 +30,12 @@ const ROLE = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 export function PeopleSettings() {
   const cloud = useCloud().data
   const { active, email } = useWorkspaces()
+  const opened = useOpen()
   if (!cloud) return null
-  if (cloud.status === 'off' || !active) return <NeedsCloud title="Work on agents with your team" />
+  const enabling = opened === 'enable' && <CloudSetup />
+  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch door="people" /></>
   const admin = active.role !== 'member'
-  return <section className="flex flex-col gap-2.5">
+  return <>{enabling}{!cloud.kit && <Rows><Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note="Not saved"><Button type="button" variant="primary" className={PILL} onClick={() => open('enable')}>Save kit</Button></Row></Rows>}<section className="flex flex-col gap-2.5">
     <div className="flex items-center gap-2 px-1">
       <span className="text-[13px] font-medium">{active.name}</span>
       <span className="ml-auto text-[12px] text-mute">{peopleNote(active)}</span>
@@ -49,7 +53,7 @@ export function PeopleSettings() {
         {invite.link && <Button type="button" variant="ghost" className={PILL} onClick={() => void copy(invite.link ?? '')}>Copy link</Button>}
       </div>)}
     </div>
-  </section>
+  </section></>
 }
 
 function PersonRow({ member, workspace, you, admin }: { member: Member; workspace: CloudWorkspaceView; you: boolean; admin: boolean }) {
@@ -77,7 +81,7 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
         <DropdownMenuItem className="h-8 px-2.5 text-fail" onClick={() => setAsking('remove')}>Remove from workspace</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu> : <span className="w-7" />}
-    <ConfirmDialog open={asking === 'remove'} onOpenChange={close} question={`Remove ${name}?`} detail={`${name} can’t get anything new from OpenHut Cloud. What ${name} already saw stays on their Mac.`} action="Remove" onConfirm={() => remove.mutate({ id: workspace.id, email: member.email }, { onSuccess: () => notify({ title: `${name} removed`, note: 'They can’t get anything new from OpenHut Cloud.' }), onError: toastError })} />
+    <ConfirmDialog open={asking === 'remove'} onOpenChange={close} question={`Remove ${name}?`} detail={`${name} can’t get anything new from OpenHut Cloud. What ${name} already saw stays on their computer.`} action="Remove" onConfirm={() => remove.mutate({ id: workspace.id, email: member.email }, { onSuccess: () => notify({ title: `${name} removed`, note: 'They can’t get anything new from OpenHut Cloud.' }), onError: toastError })} />
     <ConfirmDialog open={asking === 'owner'} onOpenChange={close} question={`Make ${name} the owner?`} detail={`You become an admin. Only ${name} can change this.`} action="Make owner" onConfirm={() => setRole.mutate({ id: workspace.id, email: member.email, role: 'owner' }, { onSuccess: () => toast(`${name} owns ${workspace.name} now. You’re an admin.`), onError: toastError })} />
     <ConfirmDialog open={device !== null} onOpenChange={close} question={`Remove ${device ? deviceName(device) : 'device'}?`} detail={`It can’t get anything new from ${workspace.name}.`} action="Remove" onConfirm={() => device && removeDevice.mutate({ id: workspace.id, device }, { onSuccess: () => toast(`${deviceName(device)} removed`), onError: toastError })} />
   </div>
@@ -105,14 +109,14 @@ function Request({ workspace, request, name, mine, admin }: { workspace: CloudWo
     if (next && next !== input) next.focus()
   }
   if (!admin && !mine) return null
-  const title = request.name ?? 'Mac'
+  const title = request.name ?? 'computer'
   return <div className="-mt-1 flex flex-wrap items-center gap-3 pr-4 pb-3 pl-[68px] phone:items-start phone:pl-4">
     <DeviceIcon kind="mac" />
     <span className="grid min-w-0 flex-1 gap-1.5">
       <span className="text-[13px] font-medium">{mine ? `${title} asked to join as you` : `New ${title} wants in`}</span>
       <span className="text-[12px] text-mute"><DeviceMeta device={{ kind: 'mac', name: title, os: request.os ?? undefined, when: `${ago(at)} ago` }} /></span>
       {admin && !mine && <>
-        <span className="text-[12px] text-body">{ready ? `Call ${name} and type the 4 words on their screen` : 'The words show once their Mac is ready.'}</span>
+        <span className="text-[12px] text-body">{ready ? `Call ${name} and type the 4 words on their screen` : 'The words show once their computer is ready.'}</span>
         <span className="flex flex-wrap items-center gap-1.5">{words.map((word, index) => <Input key={index} value={word} disabled={!ready} aria-label={`Word ${index + 1}`} autoComplete="off" autoCapitalize="none" spellCheck={false} onChange={(event) => set(event.target, index)} className="h-7 w-[72px] px-2 text-[12.5px] phone:h-11 phone:w-[calc(50%-3px)] phone:px-3" />)}</span>
       </>}
       {mine && <span className="text-[12px] text-body">If it isn’t yours, deny it. Nobody gets in without the 4 words.</span>}
