@@ -643,10 +643,6 @@ async function keepSecret(hex) {
   rmSync(HANDOFF, { force: true })
 }
 
-function claudeVersion() {
-  return JSON.parse(readFileSync(join(BACKEND, 'install/native-runtime.json'), 'utf8')).claude.version
-}
-
 async function boot() {
   mkdirSync(LOGS, { recursive: true })
   mkdirSync(DATA, { recursive: true })
@@ -656,14 +652,14 @@ async function boot() {
   if (CONTAINER) return bootContainer()
   keepData()
   await assets()
-  const shared = { OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_CLAUDE_HOST: NATIVE_CLAUDE, OPENHUT_CLAUDE_VERSION: claudeVersion() }
+  const shared = { OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_BIN: dirname(NATIVE_CLAUDE) }
   if (!PIPES) rmSync(SOCK, { force: true })
-  start('agentd', { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, AGENTD_CLAUDE: NATIVE_CLAUDE, AGENTD_BROWSER: join(dirname(NATIVE_CLAUDE), WIN ? 'agent-browser.exe' : 'agent-browser'), AGENTD_WHATSAPP_BRIDGE: join(RUNTIME, 'hermes/scripts/whatsapp-bridge'), OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT) })
+  start('agentd', { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT) })
   await waitFor(() => listening(SOCK), 30)
   if (!PIPES) rmSync(SERVER_SOCK, { force: true })
   await rootSecret()
   serverEnv.PORT = String(await signInCallbacks())
-  start('server', Object.assign(serverEnv, { ...shared, AGENTD_SOCK: SOCK, AGENTD_HERMES: RUNTIME, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_AGENT_GATEWAY: `http://127.0.0.1:${GATEWAY_PORT}`, OPENHUT_AGENT_HOST_NET: '1' }))
+  start('server', Object.assign(serverEnv, { ...shared, AGENTD_SOCK: SOCK, AGENTD_HERMES: RUNTIME, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_AGENT_HOST_NET: '1' }))
   if (!await waitFor(() => listening(SERVER_SOCK), 60)) return false
   if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   return true

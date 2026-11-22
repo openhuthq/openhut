@@ -10,10 +10,10 @@ import { pullOf } from '../../../src/agentd/sandbox/gvisor.ts'
 
 const base = mkdtempSync(`${tmpdir()}/agentd-gvisor-`)
 const DATA = `${base}/data`
-const BRIDGE = `${base}/whatsapp-bridge`
+const BRIDGE = `${DATA}/whatsapp-bridge`
 const SOCK = `${base}/agentd.sock`
 mkdirSync(`${BRIDGE}/node_modules`, { recursive: true })
-Object.assign(process.env, { OPENHUT_SANDBOX: 'memory', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK, AGENTD_WHATSAPP_BRIDGE: BRIDGE })
+Object.assign(process.env, { OPENHUT_SANDBOX: 'memory', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK })
 
 const { server } = await import('../../../src/agentd/agentd.ts')
 const { boxes } = await import('../../../src/agentd/sandbox/memory.ts')

@@ -1,5 +1,5 @@
 import { chmodSync, chownSync, existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { sandboxes } from './sandbox/index.ts'
 
@@ -8,12 +8,14 @@ export const IMAGE = process.env.AGENT_IMAGE || readFileSync(new URL('../../../.
 export const APP_GID = Number(process.env.APP_GID ?? 0)
 export const ASSETS = process.env.AGENTD_ASSETS || dirname(fileURLToPath(new URL('../../../../package.json', import.meta.url)))
 export const DATA = resolve(process.env.AGENTD_DATA || '/data')
-export const RESOLV = process.env.AGENTD_RESOLV || '/etc/agentd/resolv.conf'
+export const PIPE = process.platform === 'win32'
+export const BIN = process.env.OPENHUT_BIN || join(ASSETS, 'bin')
+export const EXE = PIPE ? '.exe' : ''
+export const RESOLV = '/etc/agentd/resolv.conf'
 export const AGENT_UID = 10000
 export const AGENT_USER = `${AGENT_UID}:${AGENT_UID}`
 export const AS_ROOT = process.getuid?.() === 0
 export const AGENT_OWNER = AS_ROOT ? { uid: AGENT_UID, gid: AGENT_UID } : undefined
-export const PIPE = process.platform === 'win32'
 export const TMP_MIB = 256
 export const ID = /^ag_[a-z0-9]{8}$/
 export const box = await sandboxes()

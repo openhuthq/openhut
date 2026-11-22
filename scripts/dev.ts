@@ -8,7 +8,6 @@ import { PassThrough } from 'node:stream'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { memory } from '../packages/runtime/src/agentd/sandbox/memory.ts'
 import type { Exec } from '../packages/runtime/src/agentd/sandbox/sandbox.ts'
-import { fakeProviderEnv, fakeProviders } from './fake-providers.ts'
 
 const DATA = process.env.OPENHUT_DATA ?? '.data'
 const AGENTD_DATA = `${DATA}/agentd`
@@ -43,8 +42,7 @@ const SKILLS: Record<string, string> = {
   'late-invoices': '---\nname: late-invoices\ndescription: Chase invoices more than 30 days late.\n---\n\n# Late invoices\n\n1. Query invoices past due.\n2. Draft a reminder per customer.\n',
   ...Object.fromEntries(BUNDLED.map(([path, description]) => [path, `---\nname: ${path.split('/')[1]}\ndescription: ${description}\n---\n\n# ${path.split('/')[1]}\n`])),
 }
-const fakeModels = process.env.OPENHUT_FAKE_PROVIDERS ? fakeProviderEnv() : {}
-const env = { ...process.env, ...fakeModels, AGENTD_SOCK: SOCK, OPENHUT_DATA: DATA, OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update('dev').digest('hex'), OPENHUT_MODEL: 'test', OPENHUT_AGENT_API: `http://127.0.0.1:${FAKES_PORT}`, OPENHUT_SLACK_API: `http://127.0.0.1:${FAKES_PORT}/slack` }
+const env = { ...process.env, AGENTD_SOCK: SOCK, OPENHUT_DATA: DATA, OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update('dev').digest('hex'), OPENHUT_MODEL: 'test', OPENHUT_AGENT_API: `http://127.0.0.1:${FAKES_PORT}` }
 const TAILSCALE = `#!/bin/sh
 up="$AGENTD_DATA/tailscale-up"
 case "$1" in
@@ -53,14 +51,6 @@ case "$1" in
   status) if [ -f "$up" ]; then echo '{"BackendState":"Running","CurrentTailnet":{"Name":"example.ts.net"},"Self":{"DNSName":"openhut.example.ts.net.","TailscaleIPs":["100.101.102.103"]}}'; else echo '{"BackendState":"NeedsLogin"}'; fi ;;
 esac
 `
-const SLACK_CHANNELS = [
-  ['C0SUPPORT1', 'support', 42, false, false], ['C0ENGINEER', 'engineering', 31, false, false], ['C0SALES001', 'sales', 17, false, false],
-  ['C0DESIGN01', 'design', 8, false, false], ['C0GENERAL1', 'general', 128, false, false], ['C0RANDOM01', 'random', 120, false, false],
-  ['C0GROWTH01', 'growth', 14, false, true], ['G0LEADERS1', 'leadership', 6, true, true], ['C0PARTNER1', 'acme-partners', 23, false, true, true],
-  ['G0MPIM0001', 'mpdm-mo--sara--gus-1', 3, true, true, false, true],
-].map(([id, name, num_members, is_private, is_member, is_ext_shared, is_mpim]) => ({ id, name, num_members, is_private, is_member, is_ext_shared, is_mpim }))
-
-if (process.env.OPENHUT_FAKE_PROVIDERS) fakeProviders()
 mkdirSync(`${AGENTD_DATA}/whatsapp-bridge/node_modules`, { recursive: true })
 mkdirSync(BIN, { recursive: true })
 writeFileSync(`${BIN}/tailscale`, TAILSCALE, { mode: 0o755 })
@@ -86,7 +76,6 @@ createServer((req, res) => {
   req.on('data', (chunk) => { raw += chunk })
   req.on('end', async () => {
     if (req.url?.endsWith('/models')) return res.writeHead(200, { 'content-type': 'application/json' }).end('{"object":"list","data":[{"id":"hermes-agent"}]}')
-    if (req.url?.startsWith('/slack/')) return res.writeHead(200, { 'content-type': 'application/json', 'x-oauth-scopes': 'channels:read,channels:join,chat:write' }).end(JSON.stringify(fakeSlack(req.url.slice(7), new URLSearchParams(raw))))
     const messages: { content: string | { type: string; text?: string }[] }[] = JSON.parse(raw || '{}').messages ?? []
     const content = messages.at(-1)?.content ?? ''
     const last = typeof content === 'string' ? content : content.map((part) => part.text ?? `[${part.type}]`).join(' ')
@@ -124,7 +113,7 @@ createServer((req, res) => {
     else await say(`Fake Hermes heard: **${last}** (message ${messages.length} in this thread).`)
     res.end('data: [DONE]\n\n')
   })
-}).listen(FAKES_PORT, '127.0.0.1', () => console.log(`fake Hermes and Slack APIs on :${FAKES_PORT}`))
+}).listen(FAKES_PORT, '127.0.0.1', () => console.log(`fake Hermes on :${FAKES_PORT}`))
 
 const plain = { ...memory }
 Object.assign(memory, {
@@ -143,7 +132,7 @@ Object.assign(memory, {
     return plain.exec(req)
   },
 })
-Object.assign(process.env, { OPENHUT_SANDBOX: 'memory', AGENTD_DATA, AGENTD_SOCK: SOCK, AGENTD_WHATSAPP_BRIDGE: `${AGENTD_DATA}/whatsapp-bridge`, PATH: `${BIN}:${process.env.PATH}` })
+Object.assign(process.env, { OPENHUT_SANDBOX: 'memory', AGENTD_DATA, AGENTD_SOCK: SOCK, PATH: `${BIN}:${process.env.PATH}` })
 const { server } = await import('../packages/runtime/src/agentd/agentd.ts')
 if (!server.listening) await once(server, 'listening')
 const app = spawn(process.execPath, ['--env-file-if-exists=.env', 'packages/runtime/src/server/app.ts'], { env, stdio: 'inherit' })
@@ -158,13 +147,6 @@ for (const child of [app, vite]) {
   })
 }
 
-function fakeSlack(method: string, params: URLSearchParams) {
-  if (method === 'auth.test') return { ok: true, team: 'Acme', user: 'gus', bot_id: 'B0FAKEGUS' }
-  if (method === 'bots.info') return { ok: true, bot: { app_id: 'A0FAKEGUS' } }
-  if (method === 'conversations.list') return { ok: true, channels: SLACK_CHANNELS.filter((each) => !!each.is_mpim === (params.get('types') === 'mpim')), response_metadata: { next_cursor: '' } }
-  if (method === 'conversations.join') Object.assign(SLACK_CHANNELS.find((each) => each.id === params.get('channel')) ?? {}, { is_member: true })
-  return { ok: true }
-}
 
 function seed(home: string) {
   if (!existsSync(home) || existsSync(`${home}/skills/.bundled_manifest`)) return
