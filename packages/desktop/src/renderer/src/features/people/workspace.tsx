@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
+import { Delete02Icon, Key01Icon, Logout03Icon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/confirm-button'
@@ -9,6 +10,9 @@ import { useChangeKeys, useDeleteWorkspace, useRemoveMember, useRename, useWorks
 import { navigate, open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
+import { I, PILL, Section } from '@/components/kit'
+import { Row, Rows } from '@/features/settings/kit'
+import { cn } from '@/lib/utils'
 
 const KEYS_NOTE = 'Use after a lost computer or a teammate you don’t trust. Everyone else stays in.'
 
@@ -18,7 +22,7 @@ export function WorkspaceSettings() {
   if (!active) return null
   const { name } = active
   const save = (value: string) => {
-    if (value.trim() && value.trim() !== name) rename.mutate({ id: active.id, name: value }, { onSuccess: () => toast('Workspace renamed') })
+    if (value.trim() && value.trim() !== name) rename.mutate({ id: active.id, name: value }, { onSuccess: () => toast('Team renamed') })
   }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -27,7 +31,7 @@ export function WorkspaceSettings() {
   return <section className="flex flex-col gap-2">
     <form onSubmit={submit} className="flex items-end gap-3 px-1">
       <label className="grid flex-1 gap-1">
-        <span className="text-[12px] text-mute">Workspace name</span>
+        <span className="text-[12px] text-mute">Team name</span>
         <Input key={name} name="name" defaultValue={name} maxLength={60} disabled={active.role === 'member' || rename.isPending} onBlur={(event) => save(event.currentTarget.value)} className="h-9 text-[13.5px]" />
       </label>
     </form>
@@ -36,43 +40,35 @@ export function WorkspaceSettings() {
   </section>
 }
 
-export function WorkspaceDanger() {
+export function TeamDanger({ ownDelete }: { ownDelete: ReactNode }) {
   const { active } = useWorkspaces()
   const opened = useOpen()
-  if (!active) return null
-  return <>
-    <DangerZone workspace={active} />
-    {opened === 'leave' && !active.own && <LeaveConfirm workspace={active} />}
-    {opened === 'delete' && active.role !== 'member' && <DeleteConfirm workspace={active} />}
-  </>
-}
-
-function DangerZone({ workspace }: { workspace: CloudWorkspaceView }) {
-  const name = workspace.name
-  const owner = workspace.role === 'owner'
-  const admin = workspace.role !== 'member'
   const changeKeys = useChangeKeys()
   const [changing, setChanging] = useState(false)
-  const rows: [string, string, string, string, boolean][] = [
-    ...admin ? [['Reset encryption', KEYS_NOTE, 'Reset encryption', 'keys', false] as [string, string, string, string, boolean]] : [],
-    ...workspace.own ? [] : [[`Leave ${name}`, owner ? 'Make someone else the owner first.' : 'For good. What you made stays with the workspace.', 'Leave', 'leave', owner] as [string, string, string, string, boolean]],
-    ...workspace.own || !admin ? [] : [['Delete this workspace', 'Deletes everything in it for everyone.', 'Delete workspace', 'delete', false] as [string, string, string, string, boolean]],
-  ]
-  if (!rows.length) return null
+  if (!active) return <Section title="Danger zone"><Rows>{ownDelete}</Rows></Section>
+  const name = active.name
+  const owner = active.role === 'owner'
+  const admin = active.role !== 'member'
   const changed = () => {
     notify({ title: 'Encryption reset', note: 'Everyone else stays in.' })
-    if (workspace.own) navigate('/settings/backup?open=kit')
+    if (active.own) navigate('/settings/team?open=kit')
   }
-  return <section className="flex flex-col gap-2.5">
-    <span className="px-1 text-[13.5px] font-semibold">Danger zone</span>
-    <div className="flex flex-col divide-y divide-hair rounded-lg border border-[oklch(75%_0.12_25)]">
-      {rows.map(([title, note, action, dialog, off]) => <div key={title} className="flex items-center gap-4 px-4 py-3.5">
-        <span className="grid flex-1 gap-0.5"><span className="text-[13.5px] font-semibold">{title}</span><span className="text-[12.5px] text-body">{note}</span></span>
-        <Button type="button" variant="danger" disabled={off || (dialog === 'keys' && changeKeys.isPending)} title={off ? note : undefined} className="h-8 shrink-0 rounded-md border border-hair px-3 text-[12.5px]" onClick={() => dialog === 'keys' ? setChanging(true) : open(dialog)}>{action}</Button>
-      </div>)}
-    </div>
-    <ConfirmDialog open={changing} onOpenChange={setChanging} question={`Reset encryption for ${name}?`} detail={workspace.own ? `${KEYS_NOTE} You save a new recovery kit after.` : KEYS_NOTE} action="Change keys" onConfirm={() => changeKeys.mutate(workspace.id, { onSuccess: changed, onError: toastError })} />
-  </section>
+  return <Section title="Danger zone">
+    <Rows>
+      {admin && <Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Reset encryption" note={KEYS_NOTE}>
+        <Button type="button" variant="secondary" className={cn(PILL, 'text-fail')} disabled={changeKeys.isPending} onClick={() => setChanging(true)}>Reset encryption</Button>
+      </Row>}
+      {!active.own && <Row icon={<I icon={Logout03Icon} size={20} className="text-fail" />} title={`Leave ${name}`} note={owner ? 'Make someone else the owner first.' : 'For good. What you made stays with the team.'}>
+        <Button type="button" variant="secondary" className={cn(PILL, 'text-fail')} disabled={owner} onClick={() => open('leave')}>Leave</Button>
+      </Row>}
+      {active.own ? ownDelete : admin && <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete team" note="Deletes everything in it for everyone.">
+        <Button type="button" variant="secondary" className={cn(PILL, 'text-fail')} onClick={() => open('delete')}>Delete team</Button>
+      </Row>}
+    </Rows>
+    <ConfirmDialog open={changing} onOpenChange={setChanging} question={`Reset encryption for ${name}?`} detail={active.own ? `${KEYS_NOTE} You save a new recovery kit after.` : KEYS_NOTE} action="Change keys" onConfirm={() => changeKeys.mutateAsync(active.id).then(changed)} />
+    {opened === 'leave' && !active.own && <LeaveConfirm workspace={active} />}
+    {opened === 'delete' && admin && !active.own && <DeleteConfirm workspace={active} />}
+  </Section>
 }
 
 function LeaveConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
@@ -98,8 +94,8 @@ function DeleteConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
     <DialogHead title={`Delete ${name}?`} onClose={close} />
     <div className="flex flex-col gap-4 px-5 py-5 text-[13px]/[18px]">
       <span className="text-body">Every agent, chat and setting in {name} is deleted for everyone. You can’t undo this.</span>
-      <label className="flex flex-col gap-1.5"><span className="font-medium">Type the workspace name</span><Input value={typed} autoFocus autoComplete="off" spellCheck={false} placeholder={name} onChange={(event) => setTyped(event.target.value)} className="h-9 text-[13px] phone:h-11" /></label>
+      <label className="flex flex-col gap-1.5"><span className="font-medium">Type the team name</span><Input value={typed} autoFocus autoComplete="off" spellCheck={false} placeholder={name} onChange={(event) => setTyped(event.target.value)} className="h-9 text-[13px] phone:h-11" /></label>
     </div>
-    <DialogFoot error={remove.error?.message} start={<Button type="button" variant="secondary" onClick={close}>Cancel</Button>}><Button type="button" variant="destructive" disabled={typed.trim() !== name.trim() || remove.isPending} onClick={go}>{remove.isPending ? 'Deleting…' : 'Delete workspace'}</Button></DialogFoot>
+    <DialogFoot error={remove.error?.message} start={<Button type="button" variant="secondary" onClick={close}>Cancel</Button>}><Button type="button" variant="destructive" disabled={typed.trim() !== name.trim() || remove.isPending} onClick={go}>{remove.isPending ? 'Deleting…' : 'Delete team'}</Button></DialogFoot>
   </Dialog>
 }
