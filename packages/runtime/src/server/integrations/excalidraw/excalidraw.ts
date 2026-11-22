@@ -152,7 +152,7 @@ async function upload(drawing: Scene): Promise<string> {
   const { payload, key } = await pack(drawing)
   const response = await guardedFetch(UPLOAD_URL, { method: 'POST', body: payload, signal: AbortSignal.timeout(20_000) })
   const stored = z.safeParse(z.object({ id: z.string().check(z.regex(/^[\w-]{1,80}$/)) }), await response.json().catch(() => undefined))
-  if (!response.ok || !stored.success) throw new HttpError(502, `Excalidraw did not store the drawing (HTTP ${response.status}). Try again in a moment.`)
+  if (!response.ok || !stored.success) throw new HttpError(502, 'Excalidraw didn\'t store the drawing. Try again in a moment.')
   return `https://excalidraw.com/#json=${stored.data.id},${key}`
 }
 

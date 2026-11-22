@@ -65,7 +65,7 @@ export function useLive({ computer, path, canvas }: { computer: string; path: st
           setHeld(false)
           setMine(false)
           setState((known) => known === 'live' ? 'connecting' : 'closed')
-          if (code >= 4000) setError(reason || 'The live view was refused.')
+          if (code >= 4000) setError(reason || 'Couldn\'t open the live view. Close this and open it again.')
           else if (!stopped) retry = setTimeout(connect, RETRY_MS)
         },
       })

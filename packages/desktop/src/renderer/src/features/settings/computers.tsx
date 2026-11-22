@@ -15,7 +15,7 @@ import { useAgents } from '@/features/agents/api'
 import { useComputerAdmins, useComputers, useRemoveComputer, useUpdateComputer } from '@/features/computers/api'
 import { useEnroll, useEnrollments, type Enrollment } from '@/features/computers/enroll'
 import { detailsOf, failureOf, percentOf, phaseOf, stageOf } from '@/features/computers/enroll-steps'
-import { HERE, useTailnet } from '@/features/settings/desktop'
+import { useTailnet } from '@/features/settings/desktop'
 import { WORDS } from '@/lib/platform'
 import { byEligibility, stateOf, type Peer } from '@/features/settings/peers'
 import { PairDialog, Waiting } from '@/features/settings/invite'
@@ -53,32 +53,37 @@ function ComputerList() {
   const tailscale = useTailnet().data?.state
   const tailscaleOff = !!tailscale && tailscale !== 'running'
   return <>
-    <Intro>Run your agents</Intro>
+    <Intro>Computers that run your agents</Intro>
     <ErrorNote message={computers.error?.message} />
     <Rows>
       {computers.data?.map((computer) => {
         const admin = admins?.find((each) => each.computer.id === computer.id)?.admin
         if (admin?.server.update?.status === 'running') return <UpdatingRow key={computer.id} computer={computer} />
         const note = noteOf({ computer, admin, tailscaleOff, count: agents.filter((agent) => agent.computer === computer.id).length })
-        if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={computer.name} note={note}>{!isPhone() && <UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Current</span>} />}</Row>
+        if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={computer.name} note={note}>{!isPhone() && <UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Up to date</span>} />}</Row>
         return <RemovableRow key={computer.id} computer={computer} admin={admin} note={note} agents={agents.filter((agent) => agent.computer === computer.id)} />
       })}
       {enrollments.map((enrollment) => <EnrollRow key={enrollment.peer.dns} enrollment={enrollment} />)}
-      {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note={`A Linux server gives each agent its own sandbox and keeps answering while this ${HERE} sleeps.`}><Chevron /></Row>}
+      {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note="A Linux computer that stays on seals each agent in its own box and keeps answering while this computer sleeps."><Chevron /></Row>}
     </Rows>
   </>
 }
 
-const ROUTES = { tailnet: 'Tailscale', relay: 'Relay' }
+const ROUTES = { tailnet: 'Tailscale', relay: 'OpenHut Relay' }
 
 function noteOf({ computer, admin, count, tailscaleOff }: { computer: Computer; admin: Admin | undefined; count: number; tailscaleOff: boolean }) {
-  if (!computer.online && computer.route === 'tailnet' && tailscaleOff) return `Offline · Tailscale is off on this ${HERE}`
+  if (!computer.online && computer.route === 'tailnet' && tailscaleOff) return 'Offline · Tailscale is off on this computer'
   if (!computer.online) return 'Offline'
   if (computer.appTooOld) return 'Update OpenHut to use this computer'
   if (computer.runtimeTooOld) return 'Update this computer to use it'
   const failed = admin?.server.update?.status === 'failed' ? admin.server.update : null
   if (failed) return `Couldn't update to ${failed.to}. ${sentence(failed.reason ?? 'The update stopped before it finished.')}`
-  return [computer.route && ROUTES[computer.route], computer.id === 'local' && !WORDS.sandboxed ? 'Agents run as you' : 'Each agent in its own sandbox', agentCount(count), admin && `OpenHut ${computer.id === 'local' ? admin.server.version : admin.server.build}`].filter(Boolean).join(' · ')
+  return [computer.route && ROUTES[computer.route], computer.id === 'local' && !WORDS.sandboxed ? 'Agents have your access' : 'Each agent sealed in its own box', agentCount(count), admin && `OpenHut ${computer.id === 'local' ? admin.server.version : admin.server.build}`].filter(Boolean).join(' · ')
+}
+
+function labelOf({ ready, onRelay }: { ready: boolean; onRelay: boolean }) {
+  if (!ready) return 'Turn on SSH'
+  return onRelay ? 'Switch to Tailscale' : 'Add'
 }
 
 function sentence(text: string) {
@@ -107,7 +112,7 @@ function RemovableRow({ computer, admin, note, agents }: { computer: Computer; a
   const remove = useRemoveComputer()
   const update = useUpdateComputer()
   const { confirming, setConfirming, box } = useConfirming()
-  return <div ref={box}><Row icon={<ComputerMark computer={computer} />} title={computer.name} note={confirming ? 'Its agents stop and leave this list.' : note}>
+  return <div ref={box}><Row icon={<ComputerMark computer={computer} />} title={computer.name} note={confirming ? 'Its agents stop and disappear from this app. They stay on that computer.' : note}>
     {confirming
       ? <>
         <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
@@ -143,12 +148,12 @@ function TailscaleStep() {
   const data = tailnet.data
   const add = (peer: Peer) => { start({ name: peer.name, dns: peer.dns } satisfies TailnetPeer); open(`adding:${peer.name}`) }
   return <TailscaleDialog title="Add over Tailscale" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}>
-    {!data && <Scene mood="looking" title="Looking at your tailnet…" />}
+    {!data && <Scene mood="looking" title="Looking for your computers…" />}
     {data?.state === 'missing' && <Empty title="Install Tailscale" line="OpenHut uses it to find your other computers.">
       <a href={GET_TAILSCALE} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Get Tailscale</a>
-      <Button type="button" variant="ghost" className={PILL} disabled={tailnet.isFetching} onClick={recheck}>I've installed it</Button>
+      <Button type="button" variant="ghost" className={PILL} disabled={tailnet.isFetching} onClick={recheck}>Check again</Button>
     </Empty>}
-    {data?.state === 'stopped' && <Empty title="Tailscale is off" line={`Open it and sign in on this ${HERE}.`}>
+    {data?.state === 'stopped' && <Empty title="Tailscale is off" line="Open it and sign in on this computer.">
       <Button type="button" variant="secondary" className={PILL} disabled={tailnet.isFetching} onClick={recheck}>Check again</Button>
     </Empty>}
     {data?.state === 'running' && <Peers peers={data.peers} tailnet={data.tailnet} recheck={recheck} checking={tailnet.isFetching} onAdd={add} />}
@@ -162,21 +167,22 @@ function Peers({ peers, tailnet, recheck, checking, onAdd }: { peers: Peer[]; ta
   const enrolling = new Set(useEnrollments().data.map((each) => each.peer.dns))
   const shown = byEligibility(peers).filter((peer) => stateOf(peer) === 'ready' || stateOf(peer) === 'ssh-off')
   const hidden = peers.length - shown.length
-  if (!shown.length) return <Empty title="No Linux computers on your tailnet yet" line="Install Tailscale on an always-on Linux computer and sign in with the same account.">
+  if (!shown.length) return <Empty title="No Linux computers on your Tailscale yet" line="Install Tailscale on an always-on Linux computer and sign in with the same account.">
     <Button type="button" variant="secondary" className={PILL} disabled={checking} onClick={recheck}>Check again</Button>
   </Empty>
   return <div className="flex flex-col gap-1.5">
-    <p className="m-0 px-2.5 text-body">Pick a Linux computer on {tailnet || 'your tailnet'}.</p>
+    <p className="m-0 px-2.5 text-body">Pick a Linux computer on {tailnet || 'your Tailscale'}.</p>
     <Rows>{shown.map((peer) => {
       const ready = stateOf(peer) === 'ready'
       const note = ['Linux', peer.ip, !ready && 'Tailscale SSH is off', onRelay.has(peer.name) && 'On OpenHut Relay now'].filter(Boolean).join(' · ')
       const icon = <I icon={ServerStack01Icon} size={20} className={ready ? 'text-hue-blue' : 'text-mute'} />
+      const label = labelOf({ ready, onRelay: onRelay.has(peer.name) })
       return <Row key={peer.dns} icon={icon} title={peer.name} note={note}>
         {added.has(peer.name)
           ? <Button type="button" variant="ghost" className={PILL} disabled><I icon={Tick02Icon} size={14} className="text-pass" />Added</Button>
           : enrolling.has(peer.dns)
             ? <Button type="button" variant="ghost" className={PILL} onClick={() => open(`adding:${peer.name}`)}>Adding…</Button>
-            : <Button type="button" variant="secondary" className={PILL} onClick={() => ready ? onAdd(peer) : open(`ssh:${peer.name}`)}>{onRelay.has(peer.name) ? 'Switch' : ready ? 'Add' : 'Set up'}</Button>}
+            : <Button type="button" variant="secondary" className={PILL} onClick={() => ready ? onAdd(peer) : open(`ssh:${peer.name}`)}>{label}</Button>}
       </Row>
     })}</Rows>
     {hidden > 0 && <p className="m-0 px-2.5 pt-1 text-[12px]/[16px] text-mute">{hidden === 1 ? '1 offline or non-Linux device isn\'t' : `${hidden} offline or non-Linux devices aren't`} shown.</p>}
@@ -230,7 +236,7 @@ function Adding({ name }: { name: string }) {
     const remove = <Button type="button" variant="secondary" onClick={() => { dismiss(enrollment.peer.dns); open() }}>Remove</Button>
     const details = detailsOf({ enrollment, version: APP_VERSION })
     return <TailscaleDialog title="Add over Tailscale" back={remove} foot={<><CopyButton text={details} label="Copy details" />{retry}</>}>
-      <Scene mood="worried" title={`${name} didn't join`} line={failureOf({ error: enrollment.error, url: enrollment.url, name }).sentence} />
+      <Scene mood="worried" title={`Couldn't add ${name}`} line={failureOf({ error: enrollment.error, url: enrollment.url, name }).sentence} />
       <details className="mx-2.5 rounded-lg border border-hair">
         <summary className="cursor-pointer px-3 py-2 text-mute select-none">Show details</summary>
         <pre className="m-0 max-h-40 overflow-auto border-t border-hair bg-tint px-3 py-2 font-mono text-[11px]/[1.6] whitespace-pre-wrap text-ink">{details}</pre>
@@ -240,7 +246,7 @@ function Adding({ name }: { name: string }) {
   const stage = stageOf(enrollment?.lines ?? [])
   const percent = percentOf({ lines: enrollment?.lines ?? [], waitingAt: enrollment?.waitingAt, now })
   return <TailscaleDialog title="Add over Tailscale" back={hide} foot={<span className="text-[12px] text-mute">It keeps going if you close this.</span>}>
-    <Scene mood="building" title={`Moving into ${name}`} line={enrollment?.url
+    <Scene mood="building" title={`Adding ${name}`} line={enrollment?.url
       ? <>Tailscale wants you to approve this. <a href={enrollment.url} target="_blank" rel="noreferrer" className="text-ink underline underline-offset-2">Open the approval page</a></>
       : <>{stage.line} · <span className="font-medium text-ink tabular-nums">{percent}%</span></>}>
       <div className="relative h-28 w-full max-w-[300px]">
@@ -268,8 +274,8 @@ function AddComputer() {
     <Rows>
       <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Tailscale" note="Use the Tailscale you already have. Nothing goes through OpenHut."><Chevron /></Row>
       {signedIn
-        ? <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="The easiest way, no Tailscale needed. Encrypted, so we can't read it."><Chevron /></Row>
-        : <Row icon={<Hut mood="asleep" className="size-6 opacity-50 grayscale" />} title="OpenHut Relay" note="The easiest way, no Tailscale needed. Needs OpenHut Cloud."><TurnOn short pending={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })} /></Row>}
+        ? <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="The easiest way. No Tailscale needed. End-to-end encrypted."><Chevron /></Row>
+        : <Row icon={<Hut mood="asleep" className="size-6 opacity-50 grayscale" />} title="OpenHut Relay" note="The easiest way. No Tailscale needed. Needs OpenHut Cloud."><TurnOn short pending={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })} /></Row>}
     </Rows>
   </TailscaleDialog>
 }

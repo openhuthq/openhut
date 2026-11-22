@@ -23,14 +23,13 @@ export function readyNote(state: UpdateState | null | undefined) {
 }
 
 export function progressTitle(progress: number | undefined) {
-  if ((progress ?? 0) < 35) return 'Packing a few things'
-  return (progress ?? 0) < 80 ? 'Fixing up the hut' : 'Nearly there'
+  return (progress ?? 0) < 80 ? 'Downloading the update' : 'Almost ready'
 }
 
 export function updateNote(state: UpdateState) {
   if (state.ready) return `Version ${state.ready.version} is ready.`
-  if (state.error === 'signature') return 'The new version isn\'t signed by OpenHut, so this computer refused it.'
-  if (state.error) return 'Couldn\'t update.'
+  if (state.error === 'signature') return 'This update didn\'t come from OpenHut, so it wasn\'t installed. Download OpenHut again.'
+  if (state.error) return 'Couldn\'t update. Try again, or download the new version.'
   if (state.available) return `Downloading OpenHut ${state.available}…`
   if (state.checking) return 'Checking…'
   return 'Up to date.'

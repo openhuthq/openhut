@@ -11,7 +11,7 @@ export async function request<T>({ schema, method = 'GET', body, ...where }: Whe
   const payload: unknown = await response.json().catch(() => null)
   if (!response.ok) throw failure(response.status, payload)
   const parsed = schema.safeParse(payload)
-  if (!parsed.success) throw new RequestError({ message: "The server sent an answer this page doesn't understand. Reload the page and try again.", status: response.status })
+  if (!parsed.success) throw new RequestError({ message: "OpenHut got an answer it doesn't understand. Update OpenHut and try again.", status: response.status })
   return parsed.data
 }
 
@@ -39,7 +39,7 @@ export function formError(error: Error | null, fields: readonly string[]) {
 
 function failure(status: number, payload: unknown) {
   const parsed = ApiError.safeParse(payload)
-  if (!parsed.success) return new RequestError({ message: `The server answered ${status}. Try again in a moment.`, status })
+  if (!parsed.success) return new RequestError({ message: 'Something went wrong. Try again in a moment.', status })
   return new RequestError({ message: parsed.data.error.message, status, param: parsed.data.error.param })
 }
 

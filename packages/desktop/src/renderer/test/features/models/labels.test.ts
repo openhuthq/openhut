@@ -12,7 +12,7 @@ test('context windows read as K or M', () => {
 
 test('a key model says its context and prices; a subscription model says its note', () => {
   const router = provider('openrouter', [])
-  assert.equal(describe({ provider: router, model: model('x', { contextLength: 500_000, inputPrice: 15, outputPrice: 75 }) }), '500K context · $15 / $75 per M')
+  assert.equal(describe({ provider: router, model: model('x', { contextLength: 500_000, inputPrice: 15, outputPrice: 75 }) }), '500K context · $15 / $75 per 1M tokens')
   assert.equal(describe({ provider: router, model: model('x') }), '')
   assert.equal(describe({ provider: provider('claude', [], 'subscription'), model: model('opus', { note: 'Most capable' }) }), 'Most capable')
 })
@@ -29,8 +29,8 @@ test('search matches the name or the id, in any case', () => {
 })
 
 test('what the app says after connecting: models found and how many are on, or that a subscription signed in', () => {
-  assert.equal(foundNotice({ provider: provider('openrouter', [model('a'), model('b', { on: false })]) }), 'Found 2 models. 1 is switched on, turn on the ones agents may use.')
-  assert.equal(foundNotice({ provider: provider('openrouter', [model('a', { on: false })]) }), 'Found 1 model. None are switched on yet, turn on the ones agents may use.')
+  assert.equal(foundNotice({ provider: provider('openrouter', [model('a'), model('b', { on: false })]) }), 'Found 2 models. 1 is on. Turn on the ones your agents can use.')
+  assert.equal(foundNotice({ provider: provider('openrouter', [model('a', { on: false })]) }), 'Found 1 model. None are on yet. Turn on the ones your agents can use.')
   assert.equal(foundNotice({ provider: provider('codex', [model('gpt-5.5')], 'subscription') }), 'Signed in. 1 model found.')
 })
 

@@ -64,7 +64,7 @@ function AccessSheet({ connection, agents }: { connection: OpenHutConnection; ag
     <div className="flex animate-grow flex-col gap-3">
       <div className="flex flex-col gap-0.5 rounded-lg border border-hair bg-card p-1">
         {editable.length ? editable.map((agent) => <AgentCheck key={agent.id} agent={agent} checked={picked.includes(agent.id)} onChange={() => setPicked(picked.includes(agent.id) ? picked.filter((id) => id !== agent.id) : [...picked, agent.id])} />)
-          : <p className="m-0 px-2 py-1.5 text-[12.5px] text-mute">You have no agents yet. Grant it from here once you make one.</p>}
+          : <p className="m-0 px-2 py-1.5 text-[12.5px] text-mute">No agents yet. Come back here once you make one.</p>}
       </div>
     </div>
   </SetupSheet>
@@ -83,12 +83,12 @@ function ManageSheet({ connection, agents }: { connection: OpenHutConnection; ag
   return <SetupSheet brand={connection.kind} title={connection.name} blurb={[titleOf(connection.kind), connection.account].filter(Boolean).join(' · ')} error={returned} onClose={close}
     safe={`Added ${shortDate.format(new Date(connection.createdAt))}`}
     foot={<>
-      <ConfirmButton variant="danger" disabled={!connection.canDelete} question={`Delete ${connection.name}?`} detail="Every agent loses it on its next call." action="Delete" onConfirm={() => remove.mutate(undefined, { onError: toastError })}>Delete</ConfirmButton>
+      <ConfirmButton variant="danger" disabled={!connection.canDelete} question={`Delete ${connection.name}?`} detail="Every agent stops being able to use it." action="Delete" onConfirm={() => remove.mutate(undefined, { onError: toastError })}>Delete</ConfirmButton>
       {connection.signIn && <Button variant="secondary" disabled={authorize.isPending} onClick={() => authorize.mutate({ connectionId: connection.id }, { onError: toastError })}>{authorize.isPending ? 'Opening…' : 'Reconnect'}</Button>}
       <Button variant="primary" onClick={close}>Done</Button>
     </>}>
     <ItemGroup className="rounded-lg">
-      <Item size="sm"><ItemContent stacked><ItemTitle>Status</ItemTitle><ItemDescription className="text-xs">{connection.lastSuccessAt ? `Last good call ${ago(connection.lastSuccessAt)} ago` : 'No calls yet'}</ItemDescription></ItemContent><StatusBadge status={connection.status} /></Item>
+      <Item size="sm"><ItemContent stacked><ItemTitle>Status</ItemTitle><ItemDescription className="text-xs">{connection.lastSuccessAt ? `Last worked ${ago(connection.lastSuccessAt)} ago` : 'Not used yet'}</ItemDescription></ItemContent><StatusBadge status={connection.status} /></Item>
     </ItemGroup>
     <Section title="Who can use it"><div className="flex flex-col gap-0.5 rounded-lg border border-hair bg-card p-1"><AgentGrants connection={connection} agents={agents} /></div></Section>
     {connection.usable && <Tools connection={connection} />}
@@ -98,7 +98,7 @@ function ManageSheet({ connection, agents }: { connection: OpenHutConnection; ag
 
 function Tools({ connection }: { connection: OpenHutConnection }) {
   const tools = useConnectionTools(connection)
-  return <Section title="What agents can call" action={<span className="font-medium text-mute">{tools.data?.length}</span>}>
+  return <Section title="What agents can do" action={<span className="font-medium text-mute">{tools.data?.length}</span>}>
     <Loaded query={tools}>{(list) => list.length
       ? <div className="flex flex-wrap gap-1">{list.map((tool) => <Badge key={tool.name} variant="tag" title={tool.description} className="font-mono">{tool.name}</Badge>)}</div>
       : <p className="m-0 px-0.5 text-[12.5px] text-mute">It lists no tools.</p>}</Loaded>
@@ -109,7 +109,7 @@ function Activity({ connection, agents }: { connection: OpenHutConnection; agent
   const events = useConnectionEvents(connection)
   return <Section title="Activity">
     <Loaded query={events}>{(calls) => {
-      if (!calls.length) return <p className="m-0 px-0.5 text-[12.5px] text-mute">No calls yet.</p>
+      if (!calls.length) return <p className="m-0 px-0.5 text-[12.5px] text-mute">Nothing yet.</p>
       return <ItemGroup className="rounded-lg">{calls.map((call) => <Item key={call.id} size="sm">
         <Face agent={agents.find((agent) => agent.id === call.agentId) ?? { id: call.agentId, instructions: '' }} size={22} />
         <ItemContent stacked><ItemTitle className="text-[12.5px]"><span className="truncate">{call.reason}</span></ItemTitle><ItemDescription className="text-xs">{call.agentName} · {call.tool}</ItemDescription></ItemContent>

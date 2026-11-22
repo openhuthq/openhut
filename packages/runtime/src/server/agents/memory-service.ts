@@ -26,7 +26,7 @@ export const memoryService = {
       const entries = patch[target]?.map((entry) => entry.trim())
       if (!entries) continue
       if (!current[target].saved) throw new HttpError(409, `The agent hasn't saved anything to ${LABEL[target].toLowerCase()} yet. It can be edited here once it has.`)
-      if (entries.some((entry) => !entry || BARE_DELIMITER.test(entry))) throw new HttpError(400, 'Each entry needs some text, and a line with only § in it can\'t be saved.', { param: target })
+      if (entries.some((entry) => !entry || BARE_DELIMITER.test(entry))) throw new HttpError(400, 'Each entry needs some text. Type something, or remove it.', { param: target })
       const over = memoryLength(entries) - MEMORY_LIMITS[target]
       if (over > 0) throw new HttpError(400, `${LABEL[target]} are ${over.toLocaleString('en')} characters over the ${MEMORY_LIMITS[target].toLocaleString('en')} limit. Shorten or remove an entry.`, { param: target })
       await agentd.write({ id: agentId, path: FILE[target], body: entries.join(MEMORY_DELIMITER) })

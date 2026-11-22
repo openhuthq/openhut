@@ -32,7 +32,7 @@ type Open = { id: string; secret: string; expiresAt: number; status: 'waiting' |
 
 export const invitationService = {
   create({ actor }: { actor: Caller }): Invitation {
-    if (!config.relayUrl) throw new HttpError(409, 'This computer isn\'t on the relay, so nothing can join it. Set OPENHUT_RELAY_URL and restart it.')
+    if (!config.relayUrl) throw new HttpError(409, 'This copy of OpenHut can\'t add phones or computers. Download OpenHut again from openhut.dev.')
     const { owner } = accessService.get()
     const open: Open = { id: newId('inv'), secret: randomBytes(32).toString('hex'), expiresAt: Date.now() + LIFETIME_MS, status: 'waiting', device: null, digits: null }
     invitations.set(open.id, open)
@@ -147,7 +147,7 @@ function status(open: Open): Invitation['status'] {
 
 function found(id: string): Open {
   const open = invitations.get(id)
-  if (!open) throw new HttpError(404, 'There\'s no such invitation on this computer. Invitations last 5 minutes and are gone after a restart.')
+  if (!open) throw new HttpError(404, 'This code no longer works. Make a new code.')
   return open
 }
 

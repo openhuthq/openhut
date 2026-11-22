@@ -84,7 +84,7 @@ export const adminService = {
   },
 
   async seatUsage(): Promise<SeatUsage> {
-    if (!settings.seatToken()) throw new HttpError(409, 'No Claude seat is connected, so there\'s no usage to show.')
+    if (!settings.seatToken()) throw new HttpError(409, 'Sign in to Claude under Settings › Models to see usage.')
     const windows = seatLimits.latest()
     const resetsAt = windows.find((window) => window.kind === 'seven_day')?.resetsAt
     const since = (resetsAt ? Date.parse(resetsAt) : Date.now()) - WEEK_MS
@@ -101,8 +101,8 @@ export const adminService = {
 
   async startUpdate({ actor, appVersion }: { actor: Caller; appVersion?: string | string[] }): Promise<Update> {
     const { build: to, sha256 } = await latestRelease({ fresh: true })
-    if (!to) throw new HttpError(502, `Couldn't read the latest release from ${config.releaseUrl}. Try again in a minute.`)
-    if (!isNewer({ latest: to, current: config.build })) throw new HttpError(409, 'This is already the latest release.')
+    if (!to) throw new HttpError(502, 'Couldn\'t check for a new version. Try again in a minute.')
+    if (!isNewer({ latest: to, current: config.build })) throw new HttpError(409, 'This computer is already up to date.')
     const running = await currentUpdate(await probe())
     if (running?.status === 'running') throw new HttpError(409, 'An update is already running. This page shows when it finishes.')
     const stored = { from: config.build, to, startedAt: new Date().toISOString() }
@@ -116,7 +116,7 @@ export const adminService = {
   },
 
   async startSeatSignIn(): Promise<SeatSignIn> {
-    if (config.modelMode !== 'claude') throw new HttpError(409, 'This server runs the test model, so it has no Claude seat.')
+    if (config.modelMode !== 'claude') throw new HttpError(409, 'This computer uses the test model, so there\'s no Claude sign-in.')
     return seatSignIn.start()
   },
 

@@ -281,7 +281,7 @@ export const agentService = {
   async createGrant({ actor, agentId, connectionId }: { actor: Caller; agentId: string; connectionId: string }): Promise<Grant> {
     await agentService.requireEditable({ actor, id: agentId })
     const connection = await connectionService.get({ actor, id: connectionId })
-    if (!connection.usable) throw new HttpError(403, `You can grant only a connection you can use. ${connection.ownerName} hasn't shared ${connection.name}.`)
+    if (!connection.usable) throw new HttpError(403, `${connection.ownerName} hasn't shared ${connection.name} with you, so you can't add it to an agent. Ask ${connection.ownerName} to share it.`)
     await db.insertInto('connection_grant').values({ id: newId('gr'), agent_id: agentId, connection_id: connectionId })
       .onConflict((oc) => oc.columns(['connection_id', 'agent_id']).doNothing()).execute()
     const grant = await db.selectFrom('connection_grant').selectAll().where('agent_id', '=', agentId).where('connection_id', '=', connectionId).executeTakeFirstOrThrow()
@@ -345,8 +345,8 @@ async function reconcile(): Promise<void> {
 async function freeNet(): Promise<number> {
   const used = new Set((await db.selectFrom('agent').select('net').execute()).map((row) => row.net))
   const net = Array.from({ length: MAX_AGENTS }, (_, i) => i + 1).find((n) => !used.has(n))
-  if (!net) throw new HttpError(409, `This server already runs ${MAX_AGENTS} agents. Delete one first.`)
-  if ((await agentd.health()).imageReady === false) throw new HttpError(409, 'OpenHut is still downloading the agent image. This happens once, on the first start, and takes a few minutes. Try again shortly.')
+  if (!net) throw new HttpError(409, `This computer already runs ${MAX_AGENTS} agents. Delete one first.`)
+  if ((await agentd.health()).imageReady === false) throw new HttpError(409, 'OpenHut is still downloading what agents need to run. This happens once and takes a few minutes. Try again shortly.')
   return net
 }
 
@@ -496,7 +496,7 @@ async function healthOf({ row, state }: { row: AgentRow; state: string | undefin
   }
   const last = await probe({ row, fresh: false })
   const provider = splitModelKey(row.model)?.provider ?? 'claude'
-  if (!last.detail && config.modelMode === 'claude' && !providerService.connected(provider)) return { health: 'no_seat', detail: `${providerService.get({ id: provider }).name} isn't connected on this computer, so its model can't answer. Connect it under Settings, Models.` }
+  if (!last.detail && config.modelMode === 'claude' && !providerService.connected(provider)) return { health: 'no_seat', detail: `${providerService.get({ id: provider }).name} isn't connected on this computer, so its model can't answer. Connect it under Settings › Models.` }
   if (!last.detail) return { health: 'answering', detail: '' }
   return { health: Date.now() - last.failingSince > STARTING_MS ? 'not_answering' : 'starting', detail: last.detail }
 }
@@ -505,7 +505,7 @@ async function probe({ row, fresh }: { row: AgentRow; fresh: boolean }): Promise
   const last = probes.get(row.id)
   if (last && !fresh && Date.now() - last.at < PROBE_FRESH_MS) return last
   const detail = await fetch(`${agentApiUrl(row.net)}/v1/models`, { headers: { authorization: `Bearer ${unseal(row.channel_key)}` }, signal: AbortSignal.timeout(PROBE_MS) })
-    .then((res) => res.ok ? '' : `Hermes answered ${res.status}.`)
+    .then((res) => res.ok ? '' : 'The agent returned an error.')
     .catch((err: unknown) => unreachable(err))
   const next = { at: Date.now(), detail, failingSince: detail && last?.detail ? last.failingSince : Date.now() }
   probes.set(row.id, next)
@@ -513,9 +513,8 @@ async function probe({ row, fresh }: { row: AgentRow; fresh: boolean }): Promise
 }
 
 export function unreachable(err: unknown): string {
-  if (err instanceof Error && err.name === 'TimeoutError') return `Hermes didn't answer within ${PROBE_MS / 1000} seconds.`
-  const code = err instanceof Error && typeof err.cause === 'object' && err.cause !== null && 'code' in err.cause ? String(err.cause.code) : messageOf(err)
-  return `Hermes isn't answering on port 8642 (${code}).`
+  if (err instanceof Error && err.name === 'TimeoutError') return `The agent didn't answer within ${PROBE_MS / 1000} seconds.`
+  return 'The agent isn\'t answering.'
 }
 
 type Probe = { at: number; detail: string; failingSince: number }

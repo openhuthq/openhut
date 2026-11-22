@@ -29,7 +29,7 @@ export const channelService = {
     if (row.kind !== 'whatsapp' || row.status !== 'linking') return channelOf({ row, qr: null })
     if (!(await agentService.get({ actor, id: row.agent_id })).canEdit) return channelOf({ row, qr: null })
     const pairing = whatsappPairing.follow(row.agent_id)
-    if (pairing.status === 'error') throw new HttpError(502, `WhatsApp linking stopped (${pairing.error}). Close this and link again.`)
+    if (pairing.status === 'error') throw new HttpError(502, `WhatsApp didn't connect (${pairing.error}). Close this and try again.`)
     if (pairing.status !== 'linked') return channelOf({ row, qr: pairing.qr ?? null })
     const linked = await db.updateTable('channel').set({ status: 'connected', account: pairing.phone ? `+${pairing.phone}` : null }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
     emit({ name: 'channel.linked', actor, target: { type: 'channel', id, kind: linked.kind, agentId: linked.agent_id } })
@@ -105,7 +105,7 @@ async function setupOf({ body, agentName, agentId }: { body: CreateChannel; agen
     }
     case 'whatsapp': {
       if (!(await features()).whatsapp) throw new HttpError(409, 'This computer can\'t link WhatsApp. Run the agent on a Linux computer you added to use it.', { param: 'kind' })
-      if ((await containerStates())?.[agentId] !== 'running') throw new HttpError(409, `Start ${agentName} first: WhatsApp links from inside its container.`)
+      if ((await containerStates())?.[agentId] !== 'running') throw new HttpError(409, `Start ${agentName} first, then connect WhatsApp.`)
       return { status: 'linking', account: null, secrets: '' }
     }
   }

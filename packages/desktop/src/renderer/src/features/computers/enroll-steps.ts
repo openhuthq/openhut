@@ -16,10 +16,10 @@ export function phaseOf(lines: string[]) {
 }
 
 const STAGES: Record<string, { at: number; line: string }> = {
-  'Connecting…': { at: 12, line: 'Knocking on the door' },
-  'Installing…': { at: 45, line: 'Unpacking a few things' },
-  'Starting…': { at: 75, line: 'Turning on the lights' },
-  'Almost ready…': { at: 92, line: 'Almost settled in' },
+  'Connecting…': { at: 12, line: 'Connecting' },
+  'Installing…': { at: 45, line: 'Installing OpenHut' },
+  'Starting…': { at: 75, line: 'Starting' },
+  'Almost ready…': { at: 92, line: 'Almost ready' },
 }
 
 export function stageOf(lines: string[]) {
@@ -31,8 +31,8 @@ export function failureOf({ error, url, name }: { error: string; url: string | n
   if (/another install or update is already running/i.test(text)) return { kind: 'busy', sentence: `${name} is already installing or updating. Try again in a few minutes.` }
   if (url || /login\.tailscale\.com|tailscale (ssh )?(check|auth)/i.test(text)) return { kind: 'approve', sentence: 'Approve the Tailscale sign-in in your browser, then try again.' }
   if (/refused|unreachable|no route to host|could not resolve|timed out|exited with 255/i.test(text)) return { kind: 'unreachable', sentence: `Can't reach ${name} over Tailscale. Check it's on.` }
-  if (/can't reach port|port \d+ is taken|too old to share|didn't open port|didn't say its key|can't find .* on your tailnet/i.test(text)) return { kind: 'other', sentence: sentenceOf(text) }
-  if (/didn't answer within/i.test(text)) return { kind: 'silent', sentence: `OpenHut is running on ${name} but it never asked to join. Try again, or copy the details for us.` }
+  if (/can't reach port|port \d+ is taken|too old to share|didn't open port|didn't say its key|can't find .* on your Tailscale/i.test(text)) return { kind: 'other', sentence: sentenceOf(text) }
+  if (/didn't answer within/i.test(text)) return { kind: 'silent', sentence: `OpenHut is installed on ${name}, but it didn't connect. Try again, or copy the details and send them to us.` }
   if (/code expired/i.test(text)) return { kind: 'timeout', sentence: `OpenHut didn't start on ${name}. Try again.` }
   return { kind: 'other', sentence: "Couldn't install OpenHut. Check the computer is on and try again." }
 }

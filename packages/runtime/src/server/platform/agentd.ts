@@ -77,9 +77,9 @@ export async function containerStates(): Promise<Record<string, string> | undefi
 async function ask<S extends z.ZodMiniType>({ request, body, doing, schema }: { request: Record<string, unknown>; body?: string; doing: string; schema: S }): Promise<z.output<S>> {
   const reply = await send({ request, body, doing })
   const failure = z.safeParse(Failure, reply)
-  if (failure.success) throw new HttpError(502, `The agent runner couldn't ${doing}: ${failure.data.error}. Details are in /var/log/openhut/agentd.log.`)
+  if (failure.success) throw new HttpError(502, `OpenHut couldn't ${doing}: ${failure.data.error}. Restart OpenHut and try again.`)
   const parsed = z.safeParse(schema, reply)
-  if (!parsed.success) throw new HttpError(502, `The agent runner sent a reply the app doesn't understand while trying to ${doing}. Check that agentd and the app are the same release.`)
+  if (!parsed.success) throw new HttpError(502, `OpenHut couldn't ${doing}. Update OpenHut on this computer and try again.`)
   return parsed.data
 }
 
@@ -89,16 +89,16 @@ function send({ request, body = '', doing }: { request: Record<string, unknown>;
     let buffer = ''
     socket.setTimeout(TIMEOUT_MS, () => {
       socket.destroy()
-      reject(new HttpError(504, `The agent runner didn't ${doing} in time. Try again.`))
+      reject(new HttpError(504, `OpenHut didn't ${doing} in time. Try again.`))
     })
     socket.setEncoding('utf8')
     socket.on('data', (chunk: string) => { buffer += chunk })
     socket.on('end', () => {
-      try { resolve(JSON.parse(buffer)) } catch { reject(new HttpError(502, `The agent runner sent a broken reply while trying to ${doing}. Try again.`)) }
+      try { resolve(JSON.parse(buffer)) } catch { reject(new HttpError(502, `OpenHut couldn't ${doing}. Try again.`)) }
     })
     socket.on('error', (err) => {
       log.error({ event: 'agentd.unreachable', error: err.message })
-      reject(new HttpError(503, 'Agents can\'t run on this computer right now because its agent runner isn\'t answering. Restart OpenHut on it.'))
+      reject(new HttpError(503, 'Agents can\'t run on this computer right now. Restart OpenHut on it.'))
     })
     socket.write(`${JSON.stringify(request)}\n${body && `${body}\n`}`)
   })

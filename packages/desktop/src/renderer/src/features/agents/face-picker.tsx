@@ -43,11 +43,11 @@ export function FacePicker({ initial }: { initial: string | null }) {
   const upload = (picked: File | undefined) => {
     if (!picked) return
     squarePicture({ source: picked, size: 256, type: 'image/jpeg' })
-      .then((photo) => show({ index: null, own: photo }), () => toastError(new Error('That file is not a picture OpenHut can read.')))
+      .then((photo) => show({ index: null, own: photo }), () => toastError(new Error('That file isn\'t a picture. Pick a PNG or JPEG.')))
   }
   return <>
     <Input type="hidden" name="face" value={face} />
-    <Button type="button" variant="bare" aria-label="Other faces" title="Other faces" onClick={shuffle}
+    <Button type="button" variant="bare" aria-label="Shuffle" title="Shuffle" onClick={shuffle}
       className="grid size-[104px] place-items-center rounded-xl shadow-[inset_0_0_0_1px_var(--hair)]" style={{ background: stageOf(face) }}>
       <span key={spin} className={cn('block', spin > 0 && 'animate-hop')}><Face agent={shown(face)} size={84} label="Agent face" /></span>
     </Button>

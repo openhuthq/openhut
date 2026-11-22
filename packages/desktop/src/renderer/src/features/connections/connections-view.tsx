@@ -59,7 +59,7 @@ export function ConnectionsView({ onClose }: { onClose: () => void }) {
             ? <ItemGroup>
               {loaded.map((connection) => <Row key={connection.id} connection={connection} agents={agents.data ?? []} computers={many ? computers.data : undefined} />)}
             </ItemGroup>
-            : <p className="m-0 text-[13px] text-balance text-body">Nothing yet. Pick one under All: each opens a short guide.</p>}</Loaded>
+            : <p className="m-0 text-[13px] text-balance text-body">Nothing connected yet. Pick an app under All.</p>}</Loaded>
         </div>
         : <div className="mt-6 flex flex-col gap-3.5"><span className="text-[12px] text-mute">{shelf === 'All' ? 'Apps' : shelf}</span>
           <div className="grid grid-cols-2 gap-x-8 phone:grid-cols-1">{shown.map((item) => {

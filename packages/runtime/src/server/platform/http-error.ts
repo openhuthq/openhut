@@ -27,6 +27,6 @@ export function answerErrors(app: FastifyInstance): void {
     if (err instanceof HttpError) return reply.status(err.status).send(errorBody(err))
     const status = err.statusCode ?? 500
     if (status >= 500) log.error({ event: 'http.error', error: err.message, stack: err.stack })
-    return reply.status(status).send(errorBody({ status, message: status >= 500 ? 'Something went wrong on our side. Try again.' : err.message }))
+    return reply.status(status).send(errorBody({ status, message: status >= 500 ? 'Something went wrong. Try again.' : err.message }))
   })
 }

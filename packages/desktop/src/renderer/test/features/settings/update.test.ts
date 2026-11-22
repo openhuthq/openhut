@@ -33,7 +33,7 @@ test('the app follows the main process from download to ready', async () => {
 })
 
 test('a refused or failed update says so instead of up to date', () => {
-  assert.match(updateNote({ ...idle, error: 'signature' }), /isn't signed by OpenHut/)
+  assert.match(updateNote({ ...idle, error: 'signature' }), /didn't come from OpenHut/)
   assert.match(updateNote({ ...idle, error: 'failed' }), /Couldn't update/)
   assert.equal(updateNote(idle), 'Up to date.')
   assert.equal(updateNote({ ...idle, ready: { version: '0.1.2' } }), 'Version 0.1.2 is ready.')
@@ -69,7 +69,7 @@ test('the download link matches the platform', () => {
 })
 
 test('the update card names how far the download is in plain words', () => {
-  assert.equal(progressTitle(undefined), 'Packing a few things')
-  assert.equal(progressTitle(50), 'Fixing up the hut')
-  assert.equal(progressTitle(95), 'Nearly there')
+  assert.equal(progressTitle(undefined), 'Downloading the update')
+  assert.equal(progressTitle(50), 'Downloading the update')
+  assert.equal(progressTitle(95), 'Almost ready')
 })

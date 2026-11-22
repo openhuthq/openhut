@@ -5,7 +5,6 @@ import { Admin, Update } from '@openhut/common/admin/admin.ts'
 import { ApiError } from '@openhut/common/api.ts'
 import { openhut } from '@/lib/openhut'
 import { adminsOf } from '@/features/computers/admins'
-import { HERE } from '@/features/settings/desktop'
 import { WORDS } from '@/lib/platform'
 import { AGENTS_KEY, COMPUTERS_KEY, CONNECTIONS_KEY } from '@/lib/query-keys'
 
@@ -46,8 +45,8 @@ export function useRemoveComputer() {
 
 export function runsOnNote(computer: Computer) {
   if (!computer.online) return 'Offline'
-  if (computer.id !== 'local') return 'Its own sandbox · always on'
-  return `${WORDS.sandboxed ? 'Its own sandbox' : 'Runs as you'} · while this ${HERE} is awake`
+  if (computer.id !== 'local') return 'Sealed in its own box · always on'
+  return `${WORDS.sandboxed ? 'Sealed in its own box' : 'With your access'} · while this computer is awake`
 }
 
 export function nameOf({ computers, id }: { computers: Computer[] | undefined; id: string }) {
@@ -57,7 +56,7 @@ export function nameOf({ computers, id }: { computers: Computer[] | undefined; i
 export async function startUpdate(computer: { id: string; name: string }): Promise<Update> {
   const response = await openhut.fetch({ computer: computer.id, path: '/api/updates', init: { method: 'POST' } })
   const body = await response.json().catch(() => null)
-  if (!response.ok) throw new Error(ApiError.safeParse(body).data?.error.message ?? `${computer.name} answered ${response.status}.`)
+  if (!response.ok) throw new Error(ApiError.safeParse(body).data?.error.message ?? `${computer.name} couldn't start the update. Try again.`)
   return Update.parse(body)
 }
 

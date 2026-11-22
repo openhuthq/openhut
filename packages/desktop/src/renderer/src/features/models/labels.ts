@@ -26,7 +26,7 @@ export function describe({ provider, model }: { provider: Provider; model: Provi
   if (provider.kind === 'subscription') return model.note ?? ''
   const bits: string[] = []
   if (model.contextLength) bits.push(`${context(model.contextLength)} context`)
-  if (prices(model)) bits.push(`${prices(model)} per M`)
+  if (prices(model)) bits.push(`${prices(model)} per 1M tokens`)
   return bits.join(' · ')
 }
 
@@ -70,8 +70,8 @@ export function foundNotice({ provider }: { provider: Provider | undefined }) {
   const total = provider?.models.length ?? 0
   const on = provider?.models.filter((model) => model.on).length ?? 0
   if (provider?.kind === 'subscription') return `Signed in. ${plural({ count: total, one: 'model', many: 'models' })} found.`
-  const switched = on ? `${on} ${on === 1 ? 'is' : 'are'} switched on` : 'None are switched on yet'
-  return `Found ${plural({ count: total, one: 'model', many: 'models' })}. ${switched}, turn on the ones agents may use.`
+  const switched = on ? `${on} ${on === 1 ? 'is' : 'are'} on` : 'None are on yet'
+  return `Found ${plural({ count: total, one: 'model', many: 'models' })}. ${switched}. Turn on the ones your agents can use.`
 }
 
 export function updatedAgo(iso: string | null) {

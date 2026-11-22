@@ -118,7 +118,7 @@ function ConnectKey({ provider, onConnected }: { provider: Provider; onConnected
   const keyField = useRef<HTMLInputElement>(null)
   useEffect(() => keyField.current?.focus(), [])
   const flip = (id: string) => setTicked(chosen.includes(id) ? chosen.filter((each) => each !== id) : [...chosen, id])
-  return <SetupSheet brand={provider.id} title={`Connect ${info.short}`} blurb={`Paste an API key from ${info.keysAt}. The app fetches the models you can use.`} safe="Takes a few seconds." onClose={() => leave(provider.id)}
+  return <SetupSheet brand={provider.id} title={`Connect ${info.short}`} blurb={`Paste an API key from ${info.keysAt}. OpenHut finds the models you can use.`} safe="Takes a few seconds." onClose={() => leave(provider.id)}
     onSubmit={(event) => {
       const field = formValues(event)
       const apiKey = field('key').trim()
@@ -127,9 +127,9 @@ function ConnectKey({ provider, onConnected }: { provider: Provider; onConnected
     }}
     foot={<>
       <Button type="button" variant="secondary" onClick={() => leave(provider.id)}>Cancel</Button>
-      {connect.isPending ? <Busy label="Connecting…" /> : <Button type="submit" variant="primary" disabled={!chosen.length}>Test and connect</Button>}
+      {connect.isPending ? <Busy label="Connecting…" /> : <Button type="submit" variant="primary" disabled={!chosen.length}>Connect</Button>}
     </>}>
-    <Field label="API key" strong hint="Pasted once and sealed. You will not see it again." error={short ? KEY_MESSAGE : connect.error?.message}>
+    <Field label="API key" strong hint="Stored on the computers you pick. You won't see it again." error={short ? KEY_MESSAGE : connect.error?.message}>
       {(control) => <Input {...control} ref={keyField} mono type="password" name="key" maxLength={MAX_KEY} autoComplete="off" spellCheck={false} placeholder={info.keyHint ?? undefined} onInput={() => { setShort(false); connect.reset() }} />}
     </Field>
     <FieldSet>
@@ -184,7 +184,7 @@ function Manage({ provider, notice, clearNotice }: { provider: Provider & { comp
   return <div className="flex min-h-0 flex-1 flex-col">
     <StepTitle id={provider.id}>{provider.name}</StepTitle>
     <div className="no-scrollbar fade-b flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto px-6 pt-[18px] pb-10">
-      <div ref={box}><Row icon={<Glyph name={provider.id} size={20} />} title={confirming ? `${off} ${info.short}?` : provider.name}
+      <div ref={box}><Row icon={<Glyph name={provider.id} size={20} />} title={confirming ? `${off}${subscription ? ' of' : ''} ${info.short}?` : provider.name}
         note={confirming ? effect : <>{provider.keyHint && <><span className="font-mono">{provider.keyHint}</span> · </>}{where}{updated && ` · updated ${updated}`}</>}>
         {confirming
           ? <>
@@ -206,10 +206,10 @@ function Manage({ provider, notice, clearNotice }: { provider: Provider & { comp
           </div>
           <ToggleGroup value={only ? 'on' : 'all'} onPick={(value) => setOnly(value === 'on')} aria-label="Filter"><ToggleGroupItem value="all">All</ToggleGroupItem><ToggleGroupItem value="on">On</ToggleGroupItem></ToggleGroup>
         </div>
-        <p className={cn(HINT, 'px-2.5 pt-2.5 pb-1')}>Switched-off models stay out of the pickers.</p>
+        <p className={cn(HINT, 'px-2.5 pt-2.5 pb-1')}>Models you turn off are hidden when you choose an agent's model.</p>
         <Rows>
           {visible.map((model) => <ModelRow key={model.id} provider={provider} model={model} onSwitch={toggle} />)}
-          {!shown.length && <p className="m-0 px-2.5 py-1 text-[12px] text-mute">No model matches.</p>}
+          {!shown.length && <p className="m-0 px-2.5 py-1 text-[12px] text-mute">No models match.</p>}
         </Rows>
         {!query.trim() && !all && shown.length > FIRST_SHOWN && <div className="px-2.5 pt-1.5"><Button type="button" variant="text" className="text-[12px]" onClick={() => setAll(true)}>Show all {count(shown.length)}</Button></div>}
       </div>
@@ -265,7 +265,7 @@ function SeatSignIn() {
           : <span className="inline-flex items-center gap-2"><Spinner className="mt-0" />Starting the Claude sign-in. This takes about 10 seconds.</span>}</p>}
       <Input mono name="code" required minLength={10} autoComplete="off" spellCheck={false} aria-label="Code from claude.ai" placeholder="Paste the code from claude.ai" disabled={!signIn} autoFocus />
       {complete.error && <FieldError>{complete.error.message}</FieldError>}
-      <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => open()}>Cancel</Button><Button type="submit" variant="primary" disabled={!signIn || complete.isPending}>{complete.isPending ? 'Connecting…' : 'Connect'}</Button></div>
+      <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => open()}>Cancel</Button><Button type="submit" variant="primary" disabled={!signIn || complete.isPending}>{complete.isPending ? 'Signing in…' : 'Sign in'}</Button></div>
     </form>
   </DialogCard>
 }

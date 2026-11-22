@@ -16,7 +16,7 @@ import { Faces } from '@/features/cloud/presence'
 import { agentPath } from '@/app/routes'
 import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
-import { toneOf, troubleOf } from '@/features/agents/status'
+import { toneOf, troubleOf, wordOf } from '@/features/agents/status'
 import { nameOf, useComputers } from '@/features/computers/api'
 import { useConnections } from '@/features/connections/api'
 import { UpdateEverything } from '@/features/settings/update-pill'
@@ -106,7 +106,7 @@ function Gear() {
 
 function Live({ agent, className }: { agent: OpenHutAgent; className: string }) {
   const tone = toneOf(agent)
-  return <i title={troubleOf(agent) ?? agent.status} className={cn('absolute size-3 rounded-full border-2 border-sidebar', LIVE[tone], className)} />
+  return <i title={wordOf(agent)} className={cn('absolute size-3 rounded-full border-2 border-sidebar', LIVE[tone], className)} />
 }
 
 const SUGGESTED = ['gmail', 'drive', 'postgres'] as const

@@ -58,6 +58,6 @@ test('a server that refuses to start an update, or never finishes, is reported a
   })
   assert.deepEqual(outcomes.map((each) => [each.id, each.ok, each.reason]), [
     ['a', false, 'An update is already running.'],
-    ['b', false, 'It didn\'t finish in time. Its row in Settings › Computers shows when it does.'],
+    ['b', false, 'It didn\'t finish in time. Settings › Devices shows when it does.'],
   ])
 })

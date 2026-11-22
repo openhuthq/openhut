@@ -74,32 +74,32 @@ export function Join({ removed, link, paired }: { removed: boolean; link: { code
     <div className="h-[52px] shrink-0" />
     {step === 'connecting' && <Center>
       <Hut className="mb-2 size-16 [&>svg]:animate-[hop_1.6s_ease-in-out_infinite]" />
-      <p className="m-0 text-[15px] text-body">Connecting to your Mac…</p>
+      <p className="m-0 text-[15px] text-body">Connecting to your computer…</p>
     </Center>}
     {step === 'code' && <Center>
       <Hut className="mb-2 size-16 [&>svg]:animate-[hop_1.6s_ease-in-out_infinite]" />
-      <p className="m-0 text-[15px] text-body">Check that your Mac shows</p>
+      <p className="m-0 text-[15px] text-body">Check that your computer shows</p>
       <span data-digits className="text-[40px]/[1] font-semibold tabular-nums tracking-[.06em]">{digits.slice(0, 3)} {digits.slice(3)}</span>
       <p className="m-0 text-[15px] text-body">then press <b className="font-semibold text-ink">Allow</b> there.</p>
     </Center>}
     {step === 'joined' && <>
       <Center><Welcomed /></Center>
-      <Foot><Button variant="primary" size="lg" className="w-full justify-center" onClick={enter}>Say hello</Button></Foot>
+      <Foot><Button variant="primary" size="lg" className="w-full justify-center" onClick={enter}>Start chatting</Button></Foot>
     </>}
     {step === 'removed' && <>
       <Center>
         <Hut className="size-20 opacity-50 grayscale" />
         <h1 className="m-0 text-[22px]/[1.3] font-semibold">This phone was removed</h1>
-        <p className="m-0 max-w-[300px] text-[15px]/[1.5] text-body">It was removed on your Mac, so it can't reach your agents anymore. Scan a new code to add it again.</p>
+        <p className="m-0 max-w-[300px] text-[15px]/[1.5] text-body">It was removed on your computer, so it can't reach your agents anymore. Scan a new code to add it again.</p>
       </Center>
       {error && <ErrorNote className="mx-6 mb-4" message={error} />}
-      <Foot><Button variant="primary" size="lg" className="w-full justify-center gap-2" onClick={scanCode}><I icon={QrCodeScanIcon} size={17} />Scan a code</Button></Foot>
+      <Foot><Button variant="primary" size="lg" className="w-full justify-center gap-2" onClick={scanCode}><I icon={QrCodeScanIcon} size={17} />Scan the code</Button></Foot>
     </>}
     {step === 'start' && <>
       <Center>
         <div className="relative"><span className="absolute inset-0 scale-150 rounded-md bg-[radial-gradient(circle,#f7c94855,transparent_65%)]" /><Hut className="relative size-28" /></div>
         <h1 className="m-0 text-[24px]/[1.25] font-semibold">Your agents, on your phone</h1>
-        <p className="m-0 max-w-[300px] text-[15px]/[1.5] text-body">Open OpenHut on your Mac, go to Settings → Devices → Add a phone, and scan the code.</p>
+        <p className="m-0 max-w-[300px] text-[15px]/[1.5] text-body">Open OpenHut on your computer, go to Settings › Devices › Add a phone, and scan the code.</p>
       </Center>
       {error && <ErrorNote className="mx-6 mb-4" message={error} />}
       <Foot><Button variant="primary" size="lg" className="w-full justify-center gap-2" onClick={scanCode}><I icon={QrCodeScanIcon} size={17} />Scan the code</Button></Foot>

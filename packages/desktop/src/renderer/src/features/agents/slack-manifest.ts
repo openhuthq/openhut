@@ -2,7 +2,7 @@ export function slackManifest(name: string) {
   const display = name.slice(0, 35)
   return {
     _metadata: { major_version: 1, minor_version: 1 },
-    display_information: { name: display, description: `${display}, a OpenHut agent`.slice(0, 140), background_color: '#1a1a2e' },
+    display_information: { name: display, description: `${display}, an OpenHut agent`.slice(0, 140), background_color: '#1a1a2e' },
     features: {
       app_home: { home_tab_enabled: false, messages_tab_enabled: false, messages_tab_read_only_enabled: false },
       bot_user: { display_name: display, always_online: true },

@@ -4,7 +4,7 @@ import { Clock01Icon, Key01Icon, PlayIcon, Refresh01Icon, ServerStack01Icon, Shi
 import { Button } from '@/components/ui/button'
 import { Hut } from '@/components/hut'
 import { ErrorNote } from '@/components/error-note'
-import { HERE, useFirstRun } from '@/features/settings/desktop'
+import { useFirstRun } from '@/features/settings/desktop'
 import { WORDS } from '@/lib/platform'
 import { I } from '@/components/kit'
 import { Progress } from '@/features/settings/kit'
@@ -30,13 +30,13 @@ export function FirstRun() {
 function Welcome({ onStart }: { onStart: () => void }) {
   return <Center>
     <div className="relative"><span className="absolute inset-0 scale-150 rounded-md bg-[radial-gradient(circle,#f7c94855,transparent_65%)]" /><Hut className="relative size-28" /></div>
-    <Headline>Your agents. On this {HERE}.</Headline>
-    <p className="m-0 max-w-[440px] text-[14px]/[1.5] text-body">{WORDS.sandboxed ? 'Each agent runs in its own sandbox.' : `Agents run on this ${HERE}, as you, like any app you install.`} Chats, memory and keys stay here. There's no account to make.</p>
+    <Headline>Your agents. On this computer.</Headline>
+    <p className="m-0 max-w-[440px] text-[14px]/[1.5] text-body">{WORDS.sandboxed ? 'Each agent is sealed in its own box.' : 'Agents run on this computer like any app you install, with your access.'} Chats, memory and keys stay here. No account needed.</p>
     <Button variant="primary" size="lg" className="mt-2 w-[240px] justify-center gap-2" onClick={onStart} autoFocus><I icon={PlayIcon} size={15} />Start</Button>
     <div className="mt-2 flex items-center gap-5 text-[12px] text-mute">
-      <span className="inline-flex items-center gap-1.5"><I icon={WORDS.sandboxed ? Shield01Icon : UserIcon} size={14} />{WORDS.sandboxed ? 'Sealed per agent' : 'Runs as you'}</span>
+      <span className="inline-flex items-center gap-1.5"><I icon={WORDS.sandboxed ? Shield01Icon : UserIcon} size={14} />{WORDS.sandboxed ? 'Sealed per agent' : 'With your access'}</span>
       <span className="inline-flex items-center gap-1.5"><I icon={Key01Icon} size={14} />Keys in the {WORDS.keychain}</span>
-      <span className="inline-flex items-center gap-1.5"><I icon={ServerStack01Icon} size={14} />Add a server anytime</span>
+      <span className="inline-flex items-center gap-1.5"><I icon={ServerStack01Icon} size={14} />Add a computer anytime</span>
     </div>
   </Center>
 }
@@ -44,7 +44,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
 function Starting({ run, error, onRetry }: { run: ReturnType<typeof useFirstRun>['data']; error: string | undefined; onRetry: () => void }) {
   return <Center>
     <Hut className={cn('size-20', !run?.failed && '[&>svg]:animate-hop')} />
-    <Headline>Getting your hut ready</Headline>
+    <Headline>Getting OpenHut ready</Headline>
     <div className="mt-2 w-[480px] rounded-lg border border-hair bg-card p-4 text-left"><Progress rows={run?.steps ?? []} /></div>
     <ErrorNote message={error} />
     {run?.failed

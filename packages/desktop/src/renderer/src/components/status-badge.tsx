@@ -9,10 +9,10 @@ const DASHED = badge(DashedLineCircleIcon)
 const BAN = badge(UnavailableIcon)
 const ALERT = badge(AlertCircleIcon)
 const STATUS = {
-  connected: { word: 'Connected', tip: 'Last call succeeded', variant: 'success', icon: BADGE_CHECK },
-  failing: { word: 'Failing', tip: 'Last call failed', variant: 'outline', icon: ALERT },
-  no_calls: { word: 'No calls yet', tip: 'No agent has called it yet', variant: 'outline', icon: DASHED },
-  denied: { word: 'Denied', tip: 'No grant for this tool', variant: 'destructive', icon: BAN },
+  connected: { word: 'Connected', tip: 'It worked last time', variant: 'success', icon: BADGE_CHECK },
+  failing: { word: 'Failing', tip: 'It failed last time', variant: 'outline', icon: ALERT },
+  no_calls: { word: 'Not used yet', tip: 'No agent has used it yet', variant: 'outline', icon: DASHED },
+  denied: { word: 'Blocked', tip: 'This agent isn\'t allowed to use this tool', variant: 'destructive', icon: BAN },
   failed: { word: 'Failed', tip: 'The tool ran and failed', variant: 'outline', icon: ALERT },
 } satisfies Record<string, { word: string; tip: string; variant: 'success' | 'destructive' | 'outline'; icon: ReactNode }>
 

@@ -296,7 +296,7 @@ function routineOf(row: RoutineRow): Routine {
 
 function stoppedOf(row: RoutineRow): string | null {
   if (row.next_run_at || row.run_status !== 'failed') return null
-  return row.cron ? 'Stopped after 3 failed tries' : 'Didn\'t go out'
+  return row.cron ? 'Stopped after 3 failed tries' : 'Couldn\'t run'
 }
 
 function runText(row: RoutineRow): string {

@@ -79,7 +79,7 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
         </Setting>
       </div>
       <Button type="submit" variant="primary" size="lg" className="h-10 w-full justify-center" disabled={empty || createAgent.isPending}>{createAgent.isPending ? 'Creating…' : 'Create'}</Button>
-      {createAgent.error ? <p role="alert" className="m-0 text-xs text-fail">{createAgent.error.message}</p> : <span className="text-[12px]/[16px] text-mute phone:hidden">Its job, model and channels are on its right panel.</span>}
+      {createAgent.error ? <p role="alert" className="m-0 text-xs text-fail">{createAgent.error.message}</p> : <span className="text-[12px]/[16px] text-mute phone:hidden">You can set its job and where to talk to it next.</span>}
     </form>
   </DialogCard>
 }
