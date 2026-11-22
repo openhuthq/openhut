@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { QueryClient } from '@tanstack/react-query'
-import { UPDATE_KEY, downloadUrl, followUpdate, progressTitle, readyNote, updateNote, type UpdateBridge, type UpdateState } from '../../../src/features/settings/update.ts'
+import { UPDATE_KEY, downloadUrl, followUpdate, progressTitle, readUpdate, readyNote, updateNote, type UpdateBridge, type UpdateState } from '../../../src/features/settings/update.ts'
 
 const idle: UpdateState = { current: '0.1.1', checking: false, available: null, ready: null, error: null }
 
@@ -44,6 +44,16 @@ test('a window opened after the download still sees the update', async () => {
   followUpdate({ bridge: mockBridge({ ...idle, ready: { version: '0.1.2' } }).bridge, client })
   await settle()
   assert.equal(readyNote(client.getQueryData<UpdateState>(UPDATE_KEY)), 'OpenHut 0.1.2 is ready')
+})
+
+test('refetching the update state asks the app again instead of clearing it', async () => {
+  const client = new QueryClient()
+  const { bridge } = mockBridge({ ...idle, current: '0.5.0-beta.3' })
+  followUpdate({ bridge, client })
+  await settle()
+  const again = await client.fetchQuery({ queryKey: UPDATE_KEY, queryFn: () => readUpdate(bridge), staleTime: 0 })
+  assert.equal(again?.current, '0.5.0-beta.3')
+  assert.equal(await readUpdate(undefined), null)
 })
 
 test('without the desktop bridge there is no update state', () => {

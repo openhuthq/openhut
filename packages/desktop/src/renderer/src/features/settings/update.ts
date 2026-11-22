@@ -36,6 +36,10 @@ export function updateNote(state: UpdateState) {
   return 'Up to date.'
 }
 
+export async function readUpdate(bridge: UpdateBridge | undefined): Promise<UpdateState | null> {
+  return bridge ? bridge.state() : null
+}
+
 export function useAppUpdate() {
-  return useQuery<UpdateState | null>({ queryKey: UPDATE_KEY, queryFn: () => null, initialData: null, staleTime: Infinity })
+  return useQuery<UpdateState | null>({ queryKey: UPDATE_KEY, queryFn: () => readUpdate(updates), staleTime: Infinity, gcTime: Infinity })
 }
