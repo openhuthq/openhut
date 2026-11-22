@@ -44,7 +44,7 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
   if (way === 'code') return <CodeEntry onBack={() => setWay(null)} />
   if (way === 'admin' || cloud.asking) return <AdminWait cloud={cloud} onBack={() => setWay(null)} />
   const canPasskey = Boolean(helper?.passkeys && helper.prf)
-  return <Step art={<Hut mood="key" className="size-[96px]" />} title={`Welcome back, ${nameOf(cloud.email ?? '')}`} line="Unlock to restore your agents and chats." back={back}
+  return <Step art={<Hut mood="key" className="size-[96px]" />} title={`You’re signed in, ${nameOf(cloud.email ?? '')}`} line="One more step: the key that reads your agents and chats." back={back}
     action={canPasskey && <Button type="button" variant="primary" className={cn(PRIMARY, 'gap-2')} disabled={passkey.isPending} onClick={() => passkey.mutate(undefined, { onError: toastError })}><I icon={FingerPrintIcon} size={16} />{passkey.isPending ? 'Unlocking…' : 'Use Touch ID'}</Button>}>
     <div className="w-full max-w-[420px] text-left">
       <Rows>
@@ -55,7 +55,6 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
     </div>
     {!canPasskey && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
     {!cloud.kitInCloud && <NoKitYet />}
-    {leave}
   </Step>
 }
 

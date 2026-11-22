@@ -79,7 +79,8 @@ export async function passkeyPrf(create?: { email: string }): Promise<string> {
   const reply = create ? await passkey?.create(create) : await passkey?.open()
   if (reply?.prf) return reply.prf
   if (reply?.error === 'no-prf') throw new Error('Your password manager’s passkey can’t unlock OpenHut. Use Touch ID or your recovery kit.')
-  throw new Error(reply?.error === 'canceled' ? 'Canceled.' : 'Touch ID isn’t set up here. Unlock another way.')
+  if (reply?.error === 'canceled') throw new Error('Canceled.')
+  throw new Error(reply?.message ? `Touch ID didn’t work: ${reply.message}` : 'Touch ID isn’t set up here. Unlock another way.')
 }
 
 export function usePasskeyUnlock() {

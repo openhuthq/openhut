@@ -65,8 +65,8 @@ export function Pitch({ door }: { door: Door }) {
   const pitch = PITCH[door]
   return <Pane>
     {locked ? <Hut mood="key" className="size-[84px]" /> : door === 'people' ? <img src={team} alt="" width={360} height={120} className="mix-blend-multiply" /> : <Characters />}
-    <Title>{locked ? `Welcome back, ${nameOf(cloud.email ?? '')}` : pitch.title}</Title>
-    <Lead>{locked ? 'Unlock to restore your agents and chats.' : pitch.note}</Lead>
+    <Title>{locked ? `You’re signed in, ${nameOf(cloud.email ?? '')}` : pitch.title}</Title>
+    <Lead>{locked ? 'One more step: the key that reads your agents and chats.' : pitch.note}</Lead>
     {isPhone()
       ? <span className="text-[13px] text-mute">{locked ? 'Unlock OpenHut on your computer.' : 'Enable OpenHut Cloud on your computer.'}</span>
       : <Button type="button" variant="primary" className={BIG} onClick={() => open('enable')}>{locked ? 'Unlock' : 'Enable cloud'}</Button>}
