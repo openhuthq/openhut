@@ -160,13 +160,13 @@ export const cloudService = {
     syncService.connect()
     await syncService.refreshName(id)
     const view = (await cloudService.status()).workspaces.find((each) => each.id === id)
-    if (!view) throw new HttpError(500, 'The new workspace didn’t open on this computer.')
+    if (!view) throw new HttpError(500, `The new workspace didn’t open on this ${HERE}. Try again.`)
     return view
   },
 
   async deleteWorkspace({ workspace, name }: { workspace: string; name: string }): Promise<Cloud> {
     mustBeOn(workspace)
-    if (roomKeys.isOwn(workspace)) throw new HttpError(403, 'This is your own workspace. Delete your cloud data in Settings, Cloud instead.')
+    if (roomKeys.isOwn(workspace)) throw new HttpError(403, 'This is your own workspace. To remove it, delete your cloud account in Settings › Backup.')
     const expected = syncService.name(workspace)
     if (expected !== null && name.trim() !== expected.trim()) throw new HttpError(400, 'Type the workspace name exactly as it’s shown.', { param: 'name' })
     await notNew(workspace)
@@ -183,7 +183,7 @@ export const cloudService = {
     const account = keysService.mustBeOn()
     const teams = roomKeys.rooms().map((room) => room.workspace.id).filter((ws) => ws !== account.workspace.id)
     const shared = teams.find((ws) => roomKeys.roleIn(ws) === 'owner' && (roomKeys.members(ws)?.members.length ?? 0) > 1)
-    if (shared) throw new HttpError(409, `Hand over or delete ${syncService.name(shared)} first.`)
+    if (shared) throw new HttpError(409, `Make someone else the owner of ${syncService.name(shared)}, or delete it first.`)
     const owned = teams.filter((ws) => roomKeys.roleIn(ws) === 'owner')
     for (const ws of [account.workspace.id, ...owned]) await notNew(ws)
     const token = await keysService.token()
@@ -310,7 +310,7 @@ export const cloudService = {
     const token = await keysService.token()
     const cleared = await cloud.account({ method: 'DELETE', path: '/v1/key-boxes', token })
     if (cleared.status === 409) throw new HttpError(409, 'Your recovery kit is in OpenHut Cloud now. Type its words to unlock.')
-    if (cleared.status === 403) throw new HttpError(403, `Your keys are on another device. Unlock with your iPhone or another ${HERE}.`)
+    if (cleared.status === 403) throw new HttpError(403, `This account is set up on another device. Unlock with your iPhone or another ${HERE}.`)
     if (cleared.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t start over. Try again.')
     await syncService.reset({ restoring: false })
     const account = await keysService.open(locked)
@@ -327,14 +327,14 @@ export const cloudService = {
     const token = await keysService.token()
     const kind = 'words' in body ? 'kit' : 'passkey'
     const box = KeyBox.safeParse((await cloud.account({ method: 'GET', path: `/v1/key-boxes/${kind}`, token })).json).data
-    if (!box && kind === 'kit') throw new HttpError(409, `There’s no recovery kit for this account yet. Save one on the ${HERE} you signed in on first, then type its words here.`)
-    if (!box) throw new HttpError(409, `There’s no passkey for this account yet. Add one on a ${HERE} that’s already unlocked.`)
+    if (!box && kind === 'kit') throw new HttpError(409, `There’s no recovery kit for this account yet. Save one on the ${HERE} you set up first, then type its words here.`)
+    if (!box) throw new HttpError(409, `Touch ID isn’t set up for this account yet. Add it in Settings › Backup on a ${HERE} that’s already unlocked.`)
     const workspaces = await boxesOf(token)
     const account = 'words' in body
       ? await keysService.restore({ words: body.words, kit: box.body, workspaces })
       : await keysService.fromPasskey({ prf: fromBase64(body.prf), box: box.body }).then((key) => key && keysService.restoreWith({ key, workspaces }))
     if (!account && 'words' in body) throw new HttpError(400, 'Those aren’t the words of your recovery kit. Check each word and try again.', { param: 'words' })
-    if (!account) throw new HttpError(400, `Your passkey isn’t on this ${HERE}.`)
+    if (!account) throw new HttpError(400, `Touch ID isn’t set up on this ${HERE}. Unlock another way.`)
     return joinWith({ account, typed: 'words' in body })
   },
 
@@ -359,7 +359,7 @@ export const cloudService = {
     const devices: string[] = []
     for (const { device } of waiting) if (!qr || await fingerprint(fromBase64(device)) === qr.fingerprint) devices.push(device)
     if (!devices.length) throw new HttpError(409, `That ${HERE} isn’t waiting for a code. Keep OpenHut open on its code screen and try again.`)
-    if (await roomKeys.post(await Promise.all(devices.map(async (to) => ({ ...await keysService.pairingLetter({ to, secret }), workspace: account.workspace.id }))))) throw new HttpError(502, 'OpenHut Cloud didn’t take the key for that Mac. Try again.')
+    if (await roomKeys.post(await Promise.all(devices.map(async (to) => ({ ...await keysService.pairingLetter({ to, secret }), workspace: account.workspace.id }))))) throw new HttpError(502, 'OpenHut Cloud couldn’t add that Mac. Try again.')
     return { object: 'pairing_allowed', devices }
   },
 
@@ -391,7 +391,7 @@ export const cloudService = {
   async addRuntime({ device }: { device: string }): Promise<RuntimeInvite> {
     const account = keysService.account()
     const me = roomKeys.members()?.members.find((member) => member.email === account?.email)
-    if (!account || !keysService.session()) throw new HttpError(409, 'Turn on OpenHut Cloud on this computer first.')
+    if (!account || !keysService.session()) throw new HttpError(409, `Enable OpenHut Cloud on this ${HERE} first.`)
     if (!me || me.role === 'member') throw new HttpError(403, 'Only an owner or admin can add a computer that runs agents.')
     const token = await keysService.token()
     const list = await keysService.addDevice(device)
@@ -403,7 +403,7 @@ export const cloudService = {
     const signer = await keysService.device()
     const body = await letter({ sender: signer, to: fromBase64(device), workspace: account.workspace.id, purpose: 'workspace-key', version: account.workspace.version, plain: await keysService.secret() })
     const sent = body && await cloud.room({ method: 'POST', workspace: account.workspace.id, path: '/letters', token, body: { to: device, purpose: 'workspace-key', body: toBase64(body) } })
-    if (sent?.status !== 200) throw new HttpError(502, 'OpenHut Cloud didn’t take the key for that computer. Try again.')
+    if (sent?.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t add that computer. Try again.')
     return { object: 'runtime_invite', workspace: account.workspace.id, email: account.email, from: toBase64(signer.publicKey) }
   },
 
@@ -417,7 +417,7 @@ export const cloudService = {
     const chain = await chainOf({ workspace, token })
     const secret = plain && readSecret(plain)
     const body = secret && chain[0] && await check({ anchor: secret.anchor, chain })
-    if (!found || !secret || !body || !body.members.some((member) => member.email === email && member.devices.includes(toBase64(device.publicKey)))) throw new HttpError(400, 'This computer couldn’t open the workspace key it was sent. Add it again from your Mac.')
+    if (!found || !secret || !body || !body.members.some((member) => member.email === email && member.devices.includes(toBase64(device.publicKey)))) throw new HttpError(400, 'This computer couldn’t join the workspace. Add it again from your Mac.')
     await cloud.room({ method: 'DELETE', workspace, path: `/letters/${found.id}`, token })
     await syncService.reset({ restoring: false })
     const { anchor: _anchor, ...keys } = secret
@@ -433,7 +433,7 @@ export const cloudService = {
 }
 
 export function mustBeOn(workspace: string): string {
-  if (!keysService.session() || !roomKeys.room(workspace)) throw new HttpError(409, 'Turn on OpenHut Cloud and open this workspace first.')
+  if (!keysService.session() || !roomKeys.room(workspace)) throw new HttpError(409, 'Enable OpenHut Cloud and open this workspace first.')
   return workspace
 }
 

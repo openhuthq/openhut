@@ -132,7 +132,7 @@ export const syncService = {
 
   status: (): Backup => {
     const stuck = homeState()?.refused.values().next().value
-    return { ...backup, problem: backup.problem ?? (stuck ? `${stuck.name} can’t be backed up: it doesn’t fit what OpenHut Cloud keeps.` : null) }
+    return { ...backup, problem: backup.problem ?? (stuck ? `${stuck.name} can’t be backed up. OpenHut tries again when it changes.` : null) }
   },
 
   name: (ws: string): string => states.get(ws)?.name ?? defaultName(ws),
@@ -279,7 +279,7 @@ async function catchUp(s: State, from: number | null = null): Promise<void> {
     const records: Record[] = []
     for (let after = Math.min(from ?? Infinity, await seqOf(s)), more = true; more;) {
       const page = Page.safeParse((await room(s, { method: 'GET', path: `/records?after=${after}` })).json)
-      if (!page.success) throw new HttpError(502, 'OpenHut Cloud sent records this computer can’t read.')
+      if (!page.success) throw new HttpError(502, 'OpenHut Cloud sent a backup this computer can’t read. Update OpenHut and try again.')
       records.push(...page.data.data)
       more = page.data.hasMore && page.data.data.length > 0
       after = page.data.data.at(-1)?.seq ?? after
@@ -594,6 +594,6 @@ async function wordsReady({ ws, request: { device, commit, nonce, reveal } }: { 
 }
 
 async function room(s: State, { method, path, body }: { method: 'GET' | 'PUT' | 'POST' | 'DELETE'; path: string; body?: unknown }): Promise<{ status: number; json: unknown }> {
-  if (!keysService.account()) throw new HttpError(409, 'Turn on OpenHut Cloud first.')
+  if (!keysService.account()) throw new HttpError(409, 'Enable OpenHut Cloud first.')
   return cloud.room({ method, workspace: s.ws, path, token: await keysService.token(), body })
 }

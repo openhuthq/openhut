@@ -37,7 +37,7 @@ export const keysService = {
 
   async token(): Promise<string> {
     const session = stored()?.session
-    if (!session) throw new HttpError(409, 'Turn on OpenHut Cloud first.')
+    if (!session) throw new HttpError(409, 'Enable OpenHut Cloud first.')
     if (Date.parse(session.expiresAt) - Date.now() > REFRESH_EARLY_MS) return session.token
     const account = stored()?.account
     const runtime = account && !account.key ? account.workspace.id : undefined
@@ -68,7 +68,7 @@ export const keysService = {
 
   async joinAsRuntime({ session, workspace, chain }: { session: CloudSession; workspace: Account['workspace']; chain: MemberList[] }): Promise<void> {
     const list = chain.at(-1)
-    if (!list || !chain[0]) throw new HttpError(502, 'OpenHut Cloud sent no member list.')
+    if (!list || !chain[0]) throw new HttpError(502, 'OpenHut Cloud didn’t say who’s in this workspace. Try again.')
     const account = { sub: session.sub, email: session.email, key: '', runtime: true, workspace, list, first: chain[0] }
     await keyStore.write({ device: (await keyStore.read()).device, machine, account, session: { token: session.token, expiresAt: session.expiresAt } })
   },
@@ -134,7 +134,7 @@ export const keysService = {
 
   ownedBy({ sub }: { sub: string }): void {
     const other = stored()?.account ?? stored()?.locked
-    if (other && other.sub !== sub) throw new HttpError(409, `This ${HERE} keeps the keys of ${other.email}. ${stored()?.account && !kitOf(stored()) ? 'Sign in with that account and save a recovery kit first.' : 'Sign in with that account, or forget it below.'}`)
+    if (other && other.sub !== sub) throw new HttpError(409, `This ${HERE} is set up for ${other.email}. ${stored()?.account && !kitOf(stored()) ? 'Sign in with that account and save a recovery kit first.' : 'Sign in with that account, or forget it below.'}`)
   },
 
   async open({ sub, email }: { sub: string; email: string }): Promise<Account> {
@@ -155,7 +155,7 @@ export const keysService = {
 
   async newKit(): Promise<{ words: string[]; box: string; ask: number[] }> {
     const account = (await keyStore.read()).account
-    if (!account) throw new HttpError(409, 'Turn on OpenHut Cloud before making a recovery kit.')
+    if (!account) throw new HttpError(409, 'Enable OpenHut Cloud before making a recovery kit.')
     await notYoung(account)
     const { words, key } = await newWords()
     const box = await lock({ key, version: 1, bind: bind({ sub: account.sub, name: 'kit' }), plain: fromBase64(account.key) })
@@ -185,7 +185,7 @@ export const keysService = {
   async passkeyBox(prf: Bytes): Promise<{ body: string; by: string; signature: string; savedAt?: number }> {
     const account = keysService.mustBeOn()
     const body = await lock({ key: prf, version: 1, bind: bind({ sub: account.sub, name: 'passkey' }), plain: fromBase64(account.key) })
-    if (!body) throw new HttpError(400, 'Your passkey didn’t give a key OpenHut can use. Keep your recovery kit.')
+    if (!body) throw new HttpError(400, 'Your password manager’s passkey can’t unlock OpenHut. Use Touch ID or your recovery kit.')
     return keysService.signBox({ account, name: 'passkey', body: toBase64(body), savedAt: Date.now() })
   },
 
@@ -216,7 +216,7 @@ export const keysService = {
     await notYoung(account)
     const mine = body?.members.find((member) => member.email === account.email)
     const oldKit = toBase64((await accountDevice(fromBase64(account.key))).publicKey)
-    if (!body || !mine) throw new HttpError(409, 'Turn on OpenHut Cloud on this computer first.')
+    if (!body || !mine) throw new HttpError(409, `Enable OpenHut Cloud on this ${HERE} first.`)
     const key = newKey()
     const kit = toBase64((await accountDevice(key)).publicKey)
     const gone = mine.devices.includes(oldKit) ? [oldKit] : []
@@ -233,7 +233,7 @@ export const keysService = {
 
   mustBeOn(): Account {
     const account = stored()?.account
-    if (!account?.key || !stored()?.session) throw new HttpError(409, 'Turn on OpenHut Cloud on this computer first.')
+    if (!account?.key || !stored()?.session) throw new HttpError(409, `Enable OpenHut Cloud on this ${HERE} first.`)
     return account
   },
 
@@ -264,7 +264,7 @@ export async function notYoung(account: Account): Promise<void> {
 
 export function notYoungIn({ body, device }: { body: MemberListBody; device: string }): void {
   const until = youngUntil(body, device)
-  if (until > Date.now()) throw new HttpError(403, `This ${HERE} was added less than 3 days ago, so it can’t remove an older device or change your keys yet. Do it from an older device, or wait until ${new Date(until).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
+  if (until > Date.now()) throw new HttpError(403, `This ${HERE} was added less than 3 days ago, so it can’t remove devices or reset encryption yet. Do it from an older device, or wait until ${new Date(until).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
 }
 
 export const openLetter = async ({ found, workspace }: { found: Letter; workspace: string }): Promise<Bytes | null> =>
@@ -372,7 +372,7 @@ function stored(): Stored | undefined {
 }
 
 async function renew(refresh: string | undefined): Promise<CloudSession> {
-  if (!refresh) throw new HttpError(502, 'This session can’t be refreshed. Sign in again.')
+  if (!refresh) throw new HttpError(502, 'You were signed out. Sign in again.')
   const signedAt = Date.now()
   const signature = await signProof({ signer: await keysService.device(), proof: 'refresh', parts: [refresh, String(signedAt)] })
   return cloud.refresh({ session: refresh, signedAt, signature })
