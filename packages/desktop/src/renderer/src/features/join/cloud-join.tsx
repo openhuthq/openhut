@@ -75,13 +75,17 @@ function refusal({ error, email }: { error: Error; email: string | null }): { ti
   return { title: 'This invite didn’t open', body: error.message }
 }
 
+export function joinPathOf(text: string): string | undefined {
+  const link = text.trim()
+  return link.includes('#') && !link.endsWith('#') ? `/join${link.slice(link.indexOf('#'))}` : undefined
+}
+
 export function JoinLinkDialog() {
   const close = () => open()
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const text = String(new FormData(event.currentTarget).get('link') ?? '').trim()
-    const hash = text.slice(text.indexOf('#'))
-    if (text.includes('#')) navigate(`/join${hash}`)
+    const path = joinPathOf(String(new FormData(event.currentTarget).get('link') ?? ''))
+    if (path) navigate(path)
   }
   return <Dialog size="narrow" label="Join with a link" onClose={close}>
     <DialogHead title="Join with a link" onClose={close} />

@@ -1,4 +1,4 @@
-import { app, autoUpdater as squirrel, BrowserWindow, crashReporter, dialog, ipcMain, Menu, net, Notification, powerSaveBlocker, protocol, safeStorage, screen, shell, Tray, utilityProcess } from 'electron'
+import { app, autoUpdater as squirrel, BrowserWindow, clipboard, crashReporter, dialog, ipcMain, Menu, net, Notification, powerSaveBlocker, protocol, safeStorage, screen, shell, Tray, utilityProcess } from 'electron'
 import { execFile, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer, request } from 'node:http'
@@ -12,6 +12,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import updater from 'electron-updater'
 import WebSocket from 'ws'
+import { inviteLink } from './invite-link.mjs'
 import { deviceName, ownerKeys } from './owner-keys.mjs'
 import { reacher } from './reach.mjs'
 import { fanOut } from './mcp-fan-out.mjs'
@@ -108,6 +109,7 @@ let blocker
 let setup
 let booted
 let linked = joinPath(process.argv.find((arg) => arg.startsWith('openhut:')))
+let invited = null
 let opened = false
 let fetching = null
 const updating = { checking: false, available: null, progress: 0, ready: null, error: null }
@@ -573,7 +575,7 @@ function firstRun(start) {
       setup.failed = true
     })
   }
-  return setup ?? { failed: false, agentId: '', steps: [] }
+  return { ...setup ?? { failed: false, agentId: '', steps: [] }, invite: invited }
 }
 
 async function meet(run) {
@@ -1065,7 +1067,10 @@ app.whenReady().then(async () => {
     appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't start: ${error.message}\n`)
     return error.message
   })
-  if (fresh) window('/welcome')
+  if (fresh) {
+    invited = inviteLink(linked && `https://openhut.dev${linked}`) ?? inviteLink(clipboard.readText())
+    window('/welcome')
+  }
   const started = await booted
   if (started !== true) {
     const back = previousVersion()
