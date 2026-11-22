@@ -8,7 +8,7 @@ import { ConfirmDialog } from '@/components/confirm-button'
 import { Glyph } from '@/components/glyph'
 import { TeamMark } from '@/components/custom/team-mark'
 import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
-import { BackupCard } from '@/features/cloud/backup-card'
+import { BackupCard, useBackup } from '@/features/cloud/backup-card'
 import { chooseWorkspace, peopleNote, useWorkspaces } from '@/features/cloud/workspaces'
 import { Faces } from '@/features/cloud/presence'
 import { agentPath } from '@/app/routes'
@@ -71,7 +71,6 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
       {!contacts.length && <p className={EMPTY}>No agents yet</p>}
     </nav>
     <footer className="mt-auto flex flex-col items-start gap-2 px-3 pt-2 pb-3">
-      <BackupCard />
       <UpdateEverything />
       <div className="flex w-full items-center gap-2">
         {active && <TeamSwitcher />}
@@ -124,10 +123,17 @@ function ConnectedMarks() {
 
 function TeamSwitcher() {
   const { all, active } = useWorkspaces()
+  const backup = useBackup()
   if (!active) return null
+  const syncing = backup?.busy ? `, backing up ${backup.percent}%` : backup?.failed ? ', backup needs attention' : ''
   return <DropdownMenu>
-    <DropdownMenuTrigger render={<Button type="button" variant="bare" aria-label={`Team: ${active.name}`} title={active.name} className={cn(SURFACE, 'grid size-10 shrink-0 place-items-center rounded-lg')} />}><TeamMark workspace={active} /></DropdownMenuTrigger>
+    <DropdownMenuTrigger render={<Button type="button" variant="bare" aria-label={`Team: ${active.name}${syncing}`} title={active.name} className={cn(SURFACE, 'relative grid size-10 shrink-0 place-items-center rounded-lg')} />}>
+      <TeamMark workspace={active} />
+      {backup?.busy && <span aria-hidden="true" className="pointer-events-none absolute inset-[5px] animate-spin rounded-[9px] border-2 border-transparent border-t-hue-blue border-r-hue-blue motion-reduce:animate-none" />}
+      {backup && !backup.busy && <span aria-hidden="true" className={cn('absolute top-1 right-1 size-2 rounded-full ring-2 ring-card', backup.failed ? 'bg-fail' : 'bg-pass')} />}
+    </DropdownMenuTrigger>
     <DropdownMenuContent side="top" align="start" className="flex w-[260px] flex-col gap-0.5 rounded-lg p-1.5 shadow-menu">
+      {backup && <><BackupCard /><DropdownMenuSeparator /></>}
       {all.map((workspace) => <DropdownMenuItem key={workspace.id} className="h-auto gap-2.5 px-2 py-1.5" onClick={() => { if (workspace.id !== active.id) { chooseWorkspace(workspace.id); navigate('/') } }}>
         <TeamMark workspace={workspace} className="size-7 rounded-md text-[12px]" />
         <span className="grid min-w-0 flex-1 leading-tight"><span className="truncate text-[13px] font-medium">{workspace.name}</span><span className="text-[11.5px] text-mute">{peopleNote(workspace)}</span></span>

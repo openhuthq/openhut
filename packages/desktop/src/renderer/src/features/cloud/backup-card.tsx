@@ -7,7 +7,7 @@ import { useCloud } from '@/features/cloud/api'
 
 const SHOW_DONE_MS = 60_000
 
-export function BackupCard() {
+export function useBackup() {
   const cloud = useCloud().data
   const backup = cloud?.backup
   const previous = useRef<Backup | undefined>(undefined)
@@ -29,8 +29,15 @@ export function BackupCard() {
   const failed = state === 'failed'
   if (!busy && !failed && doneAt === null) return null
   const percent = (busy || failed) && total ? Math.round((done / total) * 100) : 100
+  return { backup, busy, failed, done, total, percent }
+}
+
+export function BackupCard() {
+  const status = useBackup()
+  if (!status) return null
+  const { backup, busy, failed, done, total, percent } = status
   const icon = failed ? <I icon={Alert02Icon} size={15} className="text-fail" /> : busy ? <I icon={CloudUploadIcon} size={15} /> : <I icon={Tick02Icon} size={15} className="text-success" />
-  return <div className="flex w-full flex-col gap-2 rounded-xl border border-hair bg-card px-3.5 py-3 shadow-[0_2px_8px_oklch(0%_0_0/.06)]" role="status">
+  return <div className="flex w-full flex-col gap-2 px-2 pt-1.5 pb-2" role="status">
     <span className="flex items-center gap-2 text-[13px] font-medium">
       {icon}{failed ? 'Couldn’t back up' : busy ? 'Backing up' : 'Backed up'}
       <span className="ml-auto text-[12px] font-normal text-mute tabular-nums">{busy ? `${percent}%` : failed ? (backup.problem ? '' : 'Trying again') : 'Just now'}</span>
