@@ -11,6 +11,7 @@ type DeviceKeyPlugin = {
   publicKey(): Promise<{ publicKey: string }>
   agree(options: { publicKey: string }): Promise<{ secret: string }>
   wipe(): Promise<void>
+  confirm(options: { reason: string }): Promise<void>
 }
 
 export type DeviceKey = { publicKey: Uint8Array; agree(remote: Uint8Array): Promise<Uint8Array> }
@@ -70,6 +71,11 @@ export async function deviceKey(): Promise<DeviceKey | undefined> {
       throw Reflect.get(Object(err), 'code') === 'canceled' ? new UnlockCanceled(String(Reflect.get(Object(err), 'message'))) : err
     })).secret),
   }
+}
+
+export async function confirmed(reason: string): Promise<boolean> {
+  if (!isPhone()) return true
+  return plugin.confirm({ reason }).then(() => true, () => false)
 }
 
 export async function wipe(): Promise<void> {

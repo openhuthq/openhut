@@ -18,7 +18,8 @@ public class DeviceKeyPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "publicKey", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "agree", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "wipe", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "wipe", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "confirm", returnType: CAPPluginReturnPromise)
     ]
 
     private let service = "dev.openhut.app.device-key"
@@ -71,6 +72,12 @@ public class DeviceKeyPlugin: CAPPlugin, CAPBridgedPlugin {
         if let failure { throw failure }
         unlocked = (context, Date())
         return context
+    }
+
+    @objc func confirm(_ call: CAPPluginCall) {
+        LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: call.getString("reason") ?? "Confirm it's you") { ok, _ in
+            if ok { call.resolve() } else { call.reject("Not confirmed.", "canceled") }
+        }
     }
 
     @objc func wipe(_ call: CAPPluginCall) {

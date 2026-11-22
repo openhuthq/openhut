@@ -4,7 +4,6 @@ import type { Backup } from '@openhut/common/cloud/cloud.ts'
 import { I } from '@/components/kit'
 import { Meter } from '@/components/ui/meter'
 import { useCloud } from '@/features/cloud/api'
-import { isPhone } from '@/lib/native'
 
 const SHOW_DONE_MS = 60_000
 
@@ -24,7 +23,7 @@ export function BackupCard() {
     const timer = setTimeout(() => setDoneAt(null), SHOW_DONE_MS)
     return () => clearTimeout(timer)
   }, [doneAt])
-  if (isPhone() || !cloud || !backup || cloud.status === 'off' || cloud.status === 'locked') return null
+  if (!cloud || !backup || cloud.status === 'off' || cloud.status === 'locked') return null
   const { state, done, total } = backup
   const busy = state === 'backing_up'
   const failed = state === 'failed'

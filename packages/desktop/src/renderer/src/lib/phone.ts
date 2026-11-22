@@ -5,6 +5,7 @@ import type { Platform, StoredComputer } from '@openhut/client'
 import { deviceKey, isPhone, onLink, openPage, phoneName, saved, UnlockCanceled, wipe, type DeviceKey } from '@/lib/native'
 import { mayRetry, type Failed } from '@/lib/backoff'
 import { fromPhone } from '@/lib/platform'
+import { navigate } from '@/lib/router'
 
 export type PhoneState = { status: 'loading' | 'join' | 'paired' | 'removed'; link: { code: string } | undefined }
 type Held = { list: Access; relayUrl: string }
@@ -159,6 +160,10 @@ if (isPhone()) {
     held = found
     set({ status: found ? 'paired' : 'join' })
   }, () => set({ status: 'join' }))
-  onLink((url) => { if (url.startsWith('openhut://join')) set({ link: { code: url } }) })
+  onLink((url) => {
+    if (!url.startsWith('openhut://join')) return
+    if (url.includes('?')) return set({ link: { code: url } })
+    if (url.includes('#')) navigate(`/join${url.slice(url.indexOf('#'))}`)
+  })
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') failures.clear() })
 }

@@ -19,7 +19,7 @@ const listeners = new Set<() => void>()
 export function Toast({ lead, title, note, children, alert }: { lead: ReactNode; title: string; note?: ReactNode; children?: ReactNode; alert?: boolean }) {
   return <div role={alert ? 'alert' : 'status'} className="flex w-full items-center gap-3 rounded-[18px] border border-hair bg-card p-2.5 pr-3 shadow-[0_8px_24px_oklch(0%_0_0/.10)] animate-grow">
     <span className="grid size-9 shrink-0 place-items-center">{lead}</span>
-    <span className="grid min-w-0 flex-1 gap-px text-[13px]"><span className="font-semibold">{title}</span>{note && <span className="line-clamp-3 text-mute">{note}</span>}</span>
+    <span className="grid min-w-0 flex-1 gap-px text-[13px]"><span className="font-semibold">{title}</span>{note && <span className={typeof note === 'string' ? 'line-clamp-3 text-mute' : 'grid text-mute'}>{note}</span>}</span>
     {children}
   </div>
 }

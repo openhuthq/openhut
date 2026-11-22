@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Creature } from '@/components/creature'
-import { PILL } from '@/components/kit'
+import { I, ICON_BUTTON, PILL } from '@/components/kit'
+import { Settings02Icon } from '@hugeicons/core-free-icons'
 import { PhonePage } from '@/app/phone-page'
 import { agentPath, type Route } from '@/app/routes'
 import { useAgents, useShareLocalFaces } from '@/features/agents/api'
@@ -66,19 +67,26 @@ function Home({ first, adding, overlaid, waiting }: { first: string | undefined;
   if (first) return <Redirect to={agentPath({ agentId: first, dialog: adding ? 'new' : undefined })} />
   const owner = waiting?.members.find((member) => member.role === 'owner')?.email
   if (waiting) return <section className="relative flex flex-1 flex-col items-center justify-center gap-2 bg-card px-8 pb-12 text-center">
-    <span className="absolute top-3 left-3 hidden phone:block"><Switcher /></span>
+    <PhoneTop />
     <Hut mood="looking" className="size-[84px]" />
     <h1 className="mt-2 mb-0 text-[20px]/[1.3] font-semibold text-ink">Almost in</h1>
     <p className="m-0 text-[14px]/[1.5] text-body">{nameOf(owner ?? '')}’s {HERE} lets you in as soon as it’s on.</p>
   </section>
   return <section className="relative flex flex-1 flex-col items-center justify-center gap-2 bg-card px-8 pb-12 text-center">
-    <span className="absolute top-3 left-3 hidden phone:block"><Switcher /></span>
+    <PhoneTop />
     <Creature id="first-agent" size={64} />
     <h1 className="mt-2 mb-0 text-[20px]/[1.3] font-semibold text-ink">Make your first agent</h1>
     <p className="m-0 text-[14px]/[1.5] text-body">Tell it its job and where to talk to it.</p>
     <Button type="button" variant="primary" className={cn(PILL, 'mt-2 h-8 px-3.5 text-[13px]')} onClick={() => navigate('/new')}>New agent</Button>
     {adding && <NewAgentDialog onClose={() => navigate('/')} />}
   </section>
+}
+
+function PhoneTop() {
+  return <span className="absolute top-3 left-4 hidden items-center gap-1.5 phone:flex">
+    <a href="/settings/general" aria-label="Settings" className={cn(ICON_BUTTON, 'float grid size-10 rounded-full bg-card text-ink')}><I icon={Settings02Icon} size={20} /></a>
+    <Switcher />
+  </span>
 }
 
 function lastSeen({ agent, thread }: Contact) {

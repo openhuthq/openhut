@@ -474,7 +474,7 @@ function checkSoon(): void {
   checkBoxes().catch(warnCheck)
   void roomKeys.post().catch(warnCheck)
   const home = keysService.account()?.workspace.id
-  void keysService.token().then((token) => cloud.account({ method: 'PUT', path: '/v1/teams', token, body: { ids: roomKeys.rooms().map((room) => room.workspace.id).filter((id) => id !== home) } }), warnCheck)
+  void keysService.token().then((token) => cloud.account({ method: 'PUT', path: '/v1/teams', token, body: { ids: roomKeys.rooms().map((room) => room.workspace.id).filter((id) => id !== home) } })).catch(warnCheck)
 }
 
 function warnCheck(err: unknown): void {

@@ -17,6 +17,7 @@ import { NeedsCloud } from '@/features/cloud/sign-in'
 import { useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
 import { ago } from '@/lib/format'
 import { copyText } from '@/lib/clipboard'
+import { confirmed, isPhone } from '@/lib/native'
 import { notify } from '@/components/custom/toast'
 import { open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
@@ -94,6 +95,7 @@ function Request({ workspace, request, name, mine, admin }: { workspace: CloudWo
     if (nonce && reveal) void deviceWords({ device: fromBase64(device), nonce: fromBase64(nonce.nonce), reveal: fromBase64(reveal) }).then(setExpected)
   }, [device, nonce, reveal])
   const matches = Boolean(expected) && words.map((word) => word.trim().toLowerCase()).join(' ') === expected?.join(' ')
+  useEffect(() => { if (matches && isPhone() && document.activeElement instanceof HTMLInputElement) document.activeElement.blur() }, [matches])
   const set = (input: HTMLInputElement, index: number) => {
     const typed = input.value.toLowerCase().split(/\s+/)
     const parts = typed.filter(Boolean)
@@ -104,20 +106,20 @@ function Request({ workspace, request, name, mine, admin }: { workspace: CloudWo
   }
   if (!admin && !mine) return null
   const title = request.name ?? 'Mac'
-  return <div className="-mt-1 flex flex-wrap items-center gap-3 pr-4 pb-3 pl-[68px] phone:pl-4">
+  return <div className="-mt-1 flex flex-wrap items-center gap-3 pr-4 pb-3 pl-[68px] phone:items-start phone:pl-4">
     <DeviceIcon kind="mac" />
     <span className="grid min-w-0 flex-1 gap-1.5">
       <span className="text-[13px] font-medium">{mine ? `${title} asked to join as you` : `New ${title} wants in`}</span>
       <span className="text-[12px] text-mute"><DeviceMeta device={{ kind: 'mac', name: title, os: request.os ?? undefined, when: `${ago(at)} ago` }} /></span>
       {admin && !mine && <>
         <span className="text-[12px] text-body">{ready ? `Call ${name} and type the 4 words on their screen` : 'The words show once their Mac is ready.'}</span>
-        <span className="flex flex-wrap items-center gap-1.5">{words.map((word, index) => <Input key={index} value={word} disabled={!ready} aria-label={`Word ${index + 1}`} autoComplete="off" spellCheck={false} onChange={(event) => set(event.target, index)} className="h-7 w-[72px] px-2 text-[12.5px]" />)}</span>
+        <span className="flex flex-wrap items-center gap-1.5">{words.map((word, index) => <Input key={index} value={word} disabled={!ready} aria-label={`Word ${index + 1}`} autoComplete="off" autoCapitalize="none" spellCheck={false} onChange={(event) => set(event.target, index)} className="h-7 w-[72px] px-2 text-[12.5px] phone:h-11 phone:w-[calc(50%-3px)] phone:px-3" />)}</span>
       </>}
       {mine && <span className="text-[12px] text-body">If it isn’t yours, deny it. Nobody gets in without the 4 words.</span>}
     </span>
-    <span className="flex gap-2 phone:w-full phone:justify-end">
+    <span className="flex gap-2 phone:w-full phone:justify-end phone:*:h-11 phone:*:flex-1 phone:*:justify-center phone:*:rounded-xl">
       <Button type="button" variant="ghost" className={PILL} disabled={deny.isPending} onClick={() => deny.mutate({ id: workspace.id, device }, { onSuccess: () => toast('Denied'), onError: toastError })}>{mine ? 'Not me' : 'Deny'}</Button>
-      {admin && !mine && <Button type="button" variant="primary" disabled={!matches || approve.isPending} className={cn(PILL, 'gap-1.5 bg-[#12a150] text-white hover:bg-[#0f8a44]')} onClick={() => approve.mutate({ id: workspace.id, device, words }, { onSuccess: () => toast(`${name}’s new Mac is in`), onError: toastError })}><I icon={FingerPrintIcon} size={14} />Approve</Button>}
+      {admin && !mine && <Button type="button" variant="primary" disabled={!matches || approve.isPending} className={cn(PILL, 'gap-1.5 bg-[#12a150] text-white hover:bg-[#0f8a44]')} onClick={() => void confirmed(`Approve ${name}’s new ${title}`).then((ok) => { if (ok) approve.mutate({ id: workspace.id, device, words }, { onSuccess: () => toast(`${name}’s new ${title} is in`), onError: toastError }) })}><I icon={FingerPrintIcon} size={14} />Approve</Button>}
     </span>
   </div>
 }
@@ -136,13 +138,13 @@ function InviteButton({ workspace }: { workspace: CloudWorkspaceView }) {
     <PopoverContent className="flex w-[320px] flex-col gap-2.5 rounded-xl p-3 text-[13px]">
       <form onSubmit={submit} className="flex flex-col gap-2.5">
         <div className="flex gap-2">
-          <Input name="email" type="email" required aria-label="Their email" placeholder="Their email" autoFocus className="h-8 flex-1 text-[13px]" />
+          <Input name="email" type="email" required aria-label="Their email" placeholder="Their email" autoFocus className="h-8 flex-1 text-[13px] phone:h-11" />
           <Select value={role} onValueChange={(value) => setRole(value === 'admin' ? 'admin' : 'member')}>
-            <SelectTrigger aria-label="Role" className="h-8 w-[104px] text-[13px]">{ROLE[role]}</SelectTrigger>
+            <SelectTrigger aria-label="Role" className="h-8 w-[104px] text-[13px] phone:h-11">{ROLE[role]}</SelectTrigger>
             <SelectContent><SelectItem value="member">Member</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent>
           </Select>
         </div>
-        <Button type="submit" variant="secondary" className="h-8 w-full gap-1.5" disabled={invite.isPending}><I icon={Link01Icon} size={14} />{invite.isPending ? 'Making the link…' : 'Copy invite link'}</Button>
+        <Button type="submit" variant="secondary" className="h-8 w-full gap-1.5 phone:h-11 phone:justify-center" disabled={invite.isPending}><I icon={Link01Icon} size={14} />{invite.isPending ? 'Making the link…' : 'Copy invite link'}</Button>
         <ErrorNote message={invite.error?.message} />
         <span className="text-[12px] text-mute">Your agents stay private until you share them.</span>
       </form>
