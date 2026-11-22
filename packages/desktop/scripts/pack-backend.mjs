@@ -22,6 +22,7 @@ await bundle('packages/client/src/openhut.ts', 'client.mjs')
 await bundle('packages/tunnel/src/index.ts', 'tunnel.mjs', { alias: { 'sodium-universal': 'sodium-javascript' } })
 cpSync(join(import.meta.dirname, '../bin/openhut-mcp'), join(OUT, 'bin/openhut-mcp'))
 mkdirSync(join(OUT, 'node_modules'), { recursive: true })
+writeFileSync(join(OUT, 'INSTALL_URL'), `${process.env.OPENHUT_INSTALL_URL || 'https://openhut.dev/edge'}\n`)
 if (!LINUX) await runtime()
 
 async function runtime() {

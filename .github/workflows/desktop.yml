@@ -23,6 +23,7 @@ env:
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   TAGGED: ${{ startsWith(github.ref, 'refs/tags/') }}
   FULL: ${{ startsWith(github.ref, 'refs/tags/') || inputs.full }}
+  OPENHUT_INSTALL_URL: ${{ startsWith(github.ref, 'refs/tags/') && format('https://github.com/{0}/releases/download/{1}/install.sh', github.repository, github.ref_name) || 'https://openhut.dev/edge' }}
 
 jobs:
   draft:
