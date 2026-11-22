@@ -20,8 +20,9 @@ Use this before writing or changing any text a person reads in the app or on ope
 - Getting them back on a new Mac: **restore** ("Restoring your agents…"). Not bring back.
 - Privacy: **End-to-end encrypted / We can't read your data.**
 - Unlocking with a fingerprint: **Touch ID** (never "passkey" in user text).
-- New encryption for a workspace: **Reset encryption** (not change keys).
-- Passing a workspace on: **Make someone else the owner** (not hand over).
+- New encryption for a team: **Reset encryption** (not change keys).
+- Passing a team on: **Make someone else the owner** (not hand over).
+- Call it a **team**, never a workspace, in anything people read ("Join Mo’s team", "Mo’s team"). Slack and Google Workspace keep their own word.
 - The 12 words and their file: **recovery kit** (not recovery words).
 - Where an agent runs: **sealed in its own box** only on Linux (gVisor); on Mac and Windows it runs **like any app you install, with your access**. Never claim a sandbox or box on Mac or Windows.
 - Agent states: **Running**, **Stopped**, **Stopped unexpectedly**, **Model not connected**. Tools an agent may not use: **Blocked**.
