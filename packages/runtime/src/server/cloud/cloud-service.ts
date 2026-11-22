@@ -156,28 +156,28 @@ export const cloudService = {
     const made = await cloud.room({ method: 'PUT', workspace: id, path: '/members', token, body: room.list })
     if (made.status !== 200) {
       await roomKeys.dropRoom(id)
-      throw new HttpError(502, 'OpenHut Cloud couldn’t make the workspace. Try again.')
+      throw new HttpError(502, 'OpenHut Cloud couldn’t make the team. Try again.')
     }
     const named = await cloud.room({ method: 'PATCH', workspace: id, path: '', token, body: { name: await roomKeys.lockMeta({ ws: id, field: 'name', plain: name }) } })
-    if (named.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t name the workspace. Try again.')
+    if (named.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t name the team. Try again.')
     syncService.connect()
     await syncService.refreshName(id)
     const view = (await cloudService.status()).workspaces.find((each) => each.id === id)
-    if (!view) throw new HttpError(500, `The new workspace didn’t open on this computer. Try again.`)
+    if (!view) throw new HttpError(500, `The new team didn’t open on this computer. Try again.`)
     return view
   },
 
   async deleteWorkspace({ workspace, name }: { workspace: string; name: string }): Promise<Cloud> {
     mustBeOn(workspace)
-    if (roomKeys.isOwn(workspace)) throw new HttpError(403, 'This is your own workspace. To remove it, delete your cloud account in Settings › Backup.')
+    if (roomKeys.isOwn(workspace)) throw new HttpError(403, 'This is your own team. To remove it, delete your cloud account in Settings › Backup.')
     const expected = syncService.name(workspace)
-    if (expected !== null && name.trim() !== expected.trim()) throw new HttpError(400, 'Type the workspace name exactly as it’s shown.', { param: 'name' })
+    if (expected !== null && name.trim() !== expected.trim()) throw new HttpError(400, 'Type the team name exactly as it’s shown.', { param: 'name' })
     await notNew(workspace)
     syncService.leaving({ ws: workspace, on: true })
     const deleted = await cloud.room({ method: 'DELETE', workspace, path: '', token: await keysService.token(), body: await keysService.deleteProof(workspace) })
     if (deleted.status !== 200) syncService.leaving({ ws: workspace, on: false })
-    if (deleted.status === 403) throw new HttpError(403, 'Only an owner or admin can delete the workspace.')
-    if (deleted.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t delete the workspace. Try again.')
+    if (deleted.status === 403) throw new HttpError(403, 'Only an owner or admin can delete the team.')
+    if (deleted.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t delete the team. Try again.')
     await syncService.drop(workspace)
     return cloudService.status()
   },
@@ -220,8 +220,8 @@ export const cloudService = {
     if (!Object.keys(body).length) return cloudService.status()
     const what = name === undefined ? 'change the website of' : 'rename'
     const reply = await cloud.room({ method: 'PATCH', workspace: ws, path: '', token: await keysService.token(), body })
-    if (reply.status === 403) throw new HttpError(403, `Only an owner or admin can ${what} the workspace.`)
-    if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud couldn’t ${what} the workspace. Try again.`)
+    if (reply.status === 403) throw new HttpError(403, `Only an owner or admin can ${what} the team.`)
+    if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud couldn’t ${what} the team. Try again.`)
     await syncService.refreshName(ws)
     return cloudService.status()
   },
@@ -417,7 +417,7 @@ export const cloudService = {
     const chain = await chainOf({ workspace, token })
     const secret = plain && readSecret(plain)
     const body = secret && chain[0] && await check({ anchor: secret.anchor, chain })
-    if (!found || !secret || !body || !body.members.some((member) => member.email === email && member.devices.includes(toBase64(device.publicKey)))) throw new HttpError(400, 'This computer couldn’t join the workspace. Add it again from your Mac.')
+    if (!found || !secret || !body || !body.members.some((member) => member.email === email && member.devices.includes(toBase64(device.publicKey)))) throw new HttpError(400, 'This computer couldn’t join the team. Add it again from your Mac.')
     await cloud.room({ method: 'DELETE', workspace, path: `/letters/${found.id}`, token })
     await syncService.reset({ restoring: false })
     const { anchor: _anchor, ...keys } = secret
@@ -433,7 +433,7 @@ export const cloudService = {
 }
 
 export function mustBeOn(workspace: string): string {
-  if (!keysService.session() || !roomKeys.room(workspace)) throw new HttpError(409, 'Enable OpenHut Cloud and open this workspace first.')
+  if (!keysService.session() || !roomKeys.room(workspace)) throw new HttpError(409, 'Enable OpenHut Cloud and open this team first.')
   return workspace
 }
 
@@ -715,7 +715,7 @@ async function openRoom({ account, token }: { account: Account; token: string })
   const found = await cloud.room({ method: 'GET', workspace, path: '/members', token })
   if (found.status === 200) return true
   const made = found.status === 404 ? await cloud.room({ method: 'PUT', workspace, path: '/members', token, body: account.list }) : found
-  if (made.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t open this workspace. Try again.')
+  if (made.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t open this team. Try again.')
   return true
 }
 
@@ -726,7 +726,7 @@ async function teamsOf(token: string): Promise<{ id: string }[]> {
 async function notNew(ws: string): Promise<void> {
   const body = roomKeys.members(ws)
   const until = body ? newUntil(body, await keysService.deviceKey()) : 0
-  if (until > Date.now()) throw new HttpError(403, `This computer was added less than 3 days ago, so it can’t delete a workspace yet. Do it from an older one, or wait until ${new Date(until).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
+  if (until > Date.now()) throw new HttpError(403, `This computer was added less than 3 days ago, so it can’t delete a team yet. Do it from an older one, or wait until ${new Date(until).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
 }
 
 async function keepToRotate(): Promise<void> {

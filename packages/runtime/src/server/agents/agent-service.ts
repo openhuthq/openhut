@@ -74,7 +74,7 @@ export const agentService = {
     const clean = cleanName(name)
     requireModel(model)
     const team = workspace && workspace !== keysService.account()?.workspace.id ? workspace : null
-    if (team && !roomKeys.room(team)) throw new HttpError(400, 'This computer isn’t in that workspace.', { param: 'workspace' })
+    if (team && !roomKeys.room(team)) throw new HttpError(400, 'This computer isn’t in that team.', { param: 'workspace' })
     const net = await freeNet()
     const row = await db.insertInto('agent').values({
       id: newId('ag'), name: clean, owner_id: actor.id, model: model ?? DEFAULT_MODEL, net, channel_key: seal(randomBytes(24).toString('hex')), face, workspace: team,
@@ -116,7 +116,7 @@ export const agentService = {
 
   async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'agent'>> {
     const row = await rowOf(id)
-    if (!canManage(row)) throw new HttpError(403, `Only an owner or admin of this workspace can delete ${row.name}.`)
+    if (!canManage(row)) throw new HttpError(403, `Only an owner or admin of this team can delete ${row.name}.`)
     await agentd.remove({ id })
     await db.deleteFrom('agent').where('id', '=', id).execute()
     emit({ name: 'agent.deleted', actor, target: { type: 'agent', id, name: row.name } })
@@ -460,7 +460,7 @@ function requireRole({ row, patch }: { row: AgentRow; patch: UpdateAgent }): voi
   const mine = !row.owner || row.owner === keysService.account()?.email
   if (patch.shared === false && row.shared && !mine) throw new HttpError(403, `Only ${row.owner} can make ${row.name} private.`, { param: 'shared' })
   const limited = (['codeExecution', 'browser', 'runsHere', 'shared'] as const).find((field) => patch[field] !== undefined)
-  if (limited && !canManage(row)) throw new HttpError(403, `Only an owner or admin of this workspace can change where ${row.name} runs, what it can run, or who can use it.`, { param: limited })
+  if (limited && !canManage(row)) throw new HttpError(403, `Only an owner or admin of this team can change where ${row.name} runs, what it can run, or who can use it.`, { param: limited })
 }
 
 function agentOf({ row, ownerName, state, health, editable, here }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean; here: boolean }): Agent {

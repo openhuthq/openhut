@@ -34,7 +34,7 @@ export const roomKeys = {
   async lockMeta({ ws, field, plain }: { ws: string; field: MetaField; plain: string }): Promise<string> {
     const workspace = roomKeys.room(ws)?.workspace
     const locked = workspace?.key && await lock({ key: fromBase64(workspace.key), version: workspace.version, bind: metaBind({ ws, field }), plain: new TextEncoder().encode(plain) })
-    if (!locked) throw new HttpError(409, 'This computer is still joining the workspace. Try again in a moment.')
+    if (!locked) throw new HttpError(409, 'This computer is still joining the team. Try again in a moment.')
     return toBase64(locked)
   },
 
@@ -66,7 +66,7 @@ export const roomKeys = {
   async invite({ ws, email, role, name }: { ws: string; email: string; role: 'admin' | 'member'; name: string }): Promise<{ list: MemberList; id: string; key: string; body: string; link: string; expiresAt: string }> {
     const account = keysService.mustBeOn()
     const { room, body } = adminRoom({ ws, sentence: 'Only an owner or admin can invite people.' })
-    if (body.members.some((member) => member.email === email)) throw new HttpError(409, `${email} is already in this workspace.`, { param: 'email' })
+    if (body.members.some((member) => member.email === email)) throw new HttpError(409, `${email} is already in this team.`, { param: 'email' })
     const card = await identity()
     const key = toBase64(card.publicKey)
     const replaced = body.invites.filter((each) => each.email === email).map((each) => each.key)
@@ -89,9 +89,9 @@ export const roomKeys = {
     const { room, body } = adminRoom({ ws, sentence: 'Only an owner or admin can change roles.' })
     const target = body.members.find((member) => member.email === email)
     const mine = roomKeys.roleIn(ws)
-    if (!target) throw new HttpError(404, `${email} isn’t in this workspace.`)
+    if (!target) throw new HttpError(404, `${email} isn’t in this team.`)
     if (target.role === 'owner') throw new HttpError(403, 'You can’t change the owner’s role. Make someone else the owner first.')
-    if (role === 'owner' && (mine !== 'owner' || roomKeys.isOwn(ws))) throw new HttpError(403, mine === 'owner' ? 'Your own workspace stays yours. Make a new workspace for the team, then make someone else its owner.' : 'Only the owner can make someone else the owner.')
+    if (role === 'owner' && (mine !== 'owner' || roomKeys.isOwn(ws))) throw new HttpError(403, mine === 'owner' ? 'Your own team stays yours. Make a new team, then make someone else its owner.' : 'Only the owner can make someone else the owner.')
     const me = keyStore.current()?.account?.email
     const roleAfter = (member: MemberListBody['members'][number]): Role => {
       if (member === target) return role
@@ -111,10 +111,10 @@ export const roomKeys = {
     const mine = roomKeys.roleIn(ws)
     const me = await keysService.deviceKey()
     const leaving = Boolean(account && emails.includes(account.email))
-    if (!account || !room || !body || !mine) throw new HttpError(409, 'Enable OpenHut Cloud and open this workspace first.')
+    if (!account || !room || !body || !mine) throw new HttpError(409, 'Enable OpenHut Cloud and open this team first.')
     if (emails.some((email) => email !== account.email && (mine === 'member' || body.members.find((member) => member.email === email)?.role === 'owner'))) throw new HttpError(403, 'Only an owner or admin can remove people, and nobody can remove the owner.')
     if (leaving && mine === 'owner') throw new HttpError(403, 'Make someone else the owner first.')
-    if (leaving && roomKeys.isOwn(ws)) throw new HttpError(403, 'This is your own workspace. To remove it, delete your cloud account in Settings › Backup.')
+    if (leaving && roomKeys.isOwn(ws)) throw new HttpError(403, 'This is your own team. To remove it, delete your cloud account in Settings › Backup.')
     if (rotate && mine === 'member') throw new HttpError(403, 'Only an owner or admin can reset encryption.')
     const gone = [...body.members.filter((member) => emails.includes(member.email)).flatMap((member) => member.devices), ...devices.filter((device) => body.members.some((member) => member.devices.includes(device)))]
     if (devices.some((device) => !body.members.some((member) => member.email === account.email && member.devices.includes(device))) && mine === 'member') throw new HttpError(403, 'Only an owner or admin can remove someone else’s device.')
@@ -131,7 +131,7 @@ export const roomKeys = {
   async approve({ ws, email, device, name }: { ws: string; email: string; device: string; name?: string | null }): Promise<{ list: MemberList; letter: Sent }> {
     const { room, body } = adminRoom({ ws, sentence: 'Only an owner or admin can let a new device in.' })
     const target = body.members.find((member) => member.email === email)
-    if (!room.workspace.key) throw new HttpError(409, 'This computer is still joining the workspace. Try again in a moment.')
+    if (!room.workspace.key) throw new HttpError(409, 'This computer is still joining the team. Try again in a moment.')
     if (!target || body.members.some((member) => member.devices.includes(device))) throw new HttpError(409, `${email} isn’t waiting with that device anymore.`)
     const base = await nextOf({ list: room.list, body, me: await keysService.deviceKey() })
     const list = await signList({ signer: await keysService.device(), body: { ...base, members: body.members.map((member) => member === target ? { ...member, devices: [...member.devices, device] } : member), added: { ...body.added, [device]: base.at ?? 0 }, ...name && { names: { ...body.names, [device]: name.slice(0, 64) } } } })
