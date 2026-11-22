@@ -84,6 +84,21 @@ class DeviceKeyPlugin : Plugin() {
         call.resolve()
     }
 
+    @PluginMethod
+    fun confirm(call: PluginCall) {
+        val prompt = BiometricPrompt.Builder(context)
+            .setTitle(call.getString("reason") ?: "Confirm it's you")
+            .setAllowedAuthenticators(Authenticators.BIOMETRIC_STRONG or Authenticators.DEVICE_CREDENTIAL)
+            .build()
+        activity.runOnUiThread {
+            prompt.authenticate(CancellationSignal(), context.mainExecutor, object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = call.resolve()
+
+                override fun onAuthenticationError(code: Int, message: CharSequence) = call.reject("Not confirmed: $message", "canceled")
+            })
+        }
+    }
+
     private fun secret(key: PrivateKey, remote: String): JSObject {
         val other = KeyFactory.getInstance("XDH").generatePublic(X509EncodedKeySpec(spkiPrefix + unhex(remote)))
         val agreement = KeyAgreement.getInstance("XDH", "AndroidKeyStore")

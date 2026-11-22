@@ -95,7 +95,8 @@ export function sessions(input: Handlers & { key: ComputerKey }): (pipe: Pipe) =
   }
 
   async function respond({ session, stream, incoming }: { session: Session; stream: number; incoming: Incoming }) {
-    const { method, path, headers, parts } = incoming
+    const { method, path, parts, size } = incoming
+    const headers = size ? { ...incoming.headers, 'content-length': String(size) } : incoming.headers
     let response: Response
     try {
       response = await input.handle({ device: session.key, method, path, headers, body: new Blob(parts).stream() })

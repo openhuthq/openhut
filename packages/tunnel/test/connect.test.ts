@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { connect, TunnelError, type TunnelSocket } from '../src/index.ts'
 import { nativeKey, newDevice, startComputer, startRelay, waitFor } from './relay.ts'
 
-test('a request and its response cross the tunnel, with only the allowed headers', async () => {
+test('a request and its response cross the tunnel, with only the allowed headers and the body length', async () => {
   const seen: Record<string, string>[] = []
   const big = 'x'.repeat(200_000)
   const ctx = await startComputer({
@@ -20,7 +20,7 @@ test('a request and its response cross the tunnel, with only the allowed headers
   assert.equal(response.status, 201)
   assert.equal(response.headers.get('x-answer'), '42')
   assert.deepEqual(await response.json(), { method: 'POST', path: '/api/agents?limit=2', body: '{"name":"Ada"}', big })
-  assert.deepEqual(seen, [{ 'content-type': 'application/json' }])
+  assert.deepEqual(seen, [{ 'content-type': 'application/json', 'content-length': '14' }])
   assert.equal((await tunnel.fetch('/empty', { method: 'DELETE' })).status, 201)
   tunnel.close()
   await ctx.close()

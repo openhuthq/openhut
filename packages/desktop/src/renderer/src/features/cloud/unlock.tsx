@@ -153,7 +153,7 @@ export function NewMacAlert({ cloud }: { cloud: Cloud }) {
     try { localStorage.setItem(SEEN_KEY, JSON.stringify(next)) } catch { return }
   }
   const thing = fresh.kind === 'server' ? 'computer' : 'Mac'
-  return <Toast alert lead={<DeviceIcon kind={fresh.kind} />} title={`New ${thing} added`} note={fresh.name ? `${fresh.name} · ${when}` : when}>
+  return <Toast alert lead={<DeviceIcon kind={fresh.kind} />} title={`New ${thing} added`} note={fresh.name ? <><span className="truncate">{fresh.name}</span><span>{when}</span></> : when}>
     {cloud.youngUntil
       ? <span className="w-[104px] shrink-0 text-right text-[12px]/[1.3] text-mute">Remove it from an older device</span>
       : <ConfirmButton variant="secondary" className="shrink-0 rounded-xl px-3.5 text-[12.5px] text-fail" disabled={remove.isPending} question={`Remove ${fresh.name ?? `this ${thing}`}?`} detail={`Added ${when}. ${REMOVE_DETAIL}`} action="Remove" onConfirm={() => remove.mutate(fresh.key)}>Not me</ConfirmButton>}
@@ -228,10 +228,9 @@ export function CloudGate({ children }: { children: ReactNode }) {
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
   if (!cloud) return children
-  if (isPhone()) return <>{children}<GoneNotice cloud={cloud} /></>
-  if (cloud.status === 'locked') return <Unlock cloud={cloud} />
+  if (cloud.status === 'locked' && !isPhone()) return <Unlock cloud={cloud} />
   if (restoring || landing) return <Restoring cloud={cloud} />
-  return <>{children}<Toasts><NewMacAlert cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
+  return <>{children}<Toasts>{cloud.status === 'locked' && <Toast lead={<Hut mood="key" className="size-8" />} title={`Unlock OpenHut on your ${HERE}`} note="Your agents come back here after that." />}<NewMacAlert cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
 }
 
 function Joins({ cloud }: { cloud: Cloud }) {
@@ -277,7 +276,7 @@ function Restoring({ cloud }: { cloud: Cloud }) {
 }
 
 export function Window({ children }: { children: ReactNode }) {
-  return <div className="flex h-dvh flex-col bg-canvas text-ink">
+  return <div className="flex h-dvh flex-col bg-canvas pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-ink">
     <div className={cn('flex h-[52px] shrink-0 items-center justify-center text-[13px] font-semibold text-mute', DRAG)}>OpenHut</div>
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 pb-12 text-center">{children}</div>
   </div>

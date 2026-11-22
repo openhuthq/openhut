@@ -23,7 +23,7 @@ export function Switcher() {
   const { all, active, email } = useWorkspaces()
   if (!active) return null
   return <DropdownMenu>
-    <DropdownMenuTrigger className={cn('flex min-w-0 items-center gap-2 rounded-lg border-0 bg-transparent px-2 py-1.5 text-ink data-popup-open:bg-picked', HOVER)}>
+    <DropdownMenuTrigger aria-label={`Workspace: ${active.name}`} className={cn('flex min-w-0 items-center gap-2 rounded-lg border-0 bg-transparent px-2 py-1.5 text-ink data-popup-open:bg-picked', HOVER)}>
       <WorkspaceLogo workspace={active} />
       <span className="truncate text-[14px] font-semibold">{active.name}</span>
       <I icon={ArrowDown01Icon} size={14} className="shrink-0 text-mute" />

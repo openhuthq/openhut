@@ -14,7 +14,7 @@ import { markSeen } from '@/features/cloud/unlock'
 import { CloudOff, SaveKit, TurnOn } from '@/features/cloud/sign-in'
 import { HERE } from '@/features/settings/desktop'
 import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
-import { isPhone, scan } from '@/lib/native'
+import { confirmed, isPhone, scan } from '@/lib/native'
 import { ago, shortDate, shortDateTime } from '@/lib/format'
 import { navigate, open, useOpen, useSearch } from '@/lib/router'
 import { useDeleteData, useRotated } from '@/features/cloud/workspaces'
@@ -109,11 +109,11 @@ export function CloudDevices() {
   const remove = useRemoveMac()
   if (cloud?.status === 'on' || cloud?.status === 'offline') return <>
     {cloud.rotate.length > 0 && <RotateConnections rotate={cloud.rotate} />}
-    {cloud.devices.map((device) => <Row key={device.key} icon={<DeviceIcon kind={device.kind} />} title={device.name ?? (device.kind === 'server' ? 'Computer that runs agents' : 'Mac')} note={[device.here && `This ${HERE}`, device.addedAt && `Added ${addedAt.format(new Date(device.addedAt))}`].filter(Boolean).join(' · ')}>
+    {cloud.devices.map((device) => <Row key={device.key} icon={<DeviceIcon kind={device.kind} />} title={device.name ?? (device.kind === 'server' ? 'Computer that runs agents' : 'Mac')} note={[device.here && (isPhone() ? `Your ${HERE}` : `This ${HERE}`), device.addedAt && `Added ${addedAt.format(new Date(device.addedAt))}`].filter(Boolean).join(' · ')}>
       {!device.here && !isPhone() && !cloud.youngUntil && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${device.name ?? 'this device'}?`} detail={device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))}. ${REMOVE_DETAIL}` : REMOVE_DETAIL} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
     </Row>)}
     {cloud.youngUntil && <p className="m-0 px-1 text-[12.5px] text-mute">This {HERE} was added less than 3 days ago. You can remove devices from it after {shortDate.format(new Date(cloud.youngUntil))}.</p>}
-    <Row onClick={() => open('add-mac')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-blue" />} title="Add a Mac" note="Unlock OpenHut on your new Mac with this one."><Chevron /></Row>
+    <Row onClick={() => open('add-mac')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-blue" />} title="Add a Mac" note={`Unlock OpenHut on your new Mac with this ${isPhone() ? 'phone' : 'one'}.`}><Chevron /></Row>
   </>
   if (cloud?.status !== 'off' || isPhone()) return null
   return <Row icon={<I icon={SquareLock02Icon} size={20} className="text-mute" />} title="Chat from your other computers" note="Needs OpenHut Cloud"><TurnOn short pending={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })} /></Row>
@@ -141,7 +141,7 @@ export function AddMac() {
   const allow = useAllow()
   const [added, setAdded] = useState(false)
   const close = () => open()
-  const send = (code: string) => allow.mutate(code, { onSuccess: ({ devices }) => { markSeen(devices); setAdded(true) } })
+  const send = (code: string) => void confirmed(`Add this ${HERE}`).then((ok) => { if (ok) allow.mutate(code, { onSuccess: ({ devices }) => { markSeen(devices); setAdded(true) } }) })
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     send(String(new FormData(event.currentTarget).get('code') ?? ''))
@@ -150,13 +150,13 @@ export function AddMac() {
     <DialogHead title="Add a Mac" onClose={close} />
     <form id="add-mac" onSubmit={submit} className="flex flex-col gap-4 px-5 py-5 text-[13px]/[18px]">
       {added ? <p className="m-0 text-body">Added. The new {HERE} is unlocking now and gets your agents, chats and keys.</p> : <>
-        <p className="m-0 text-body">On the new Mac, pick Use my iPhone or another Mac. Then {isPhone() ? 'scan' : 'type'} the code it shows.</p>
-        {isPhone() && <Button type="button" variant="primary" className="h-10 justify-center" onClick={() => void scan().then((text) => { if (text) send(text) }, toastError)}>Scan the code</Button>}
-        <Input name="code" aria-label="Code" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-X" autoFocus={!isPhone()} autoComplete="off" spellCheck={false} className="font-mono" />
+        <p className="m-0 text-body">On the new Mac, pick Use my iPhone or another Mac. Then {isPhone() ? 'scan the code it shows, or type it' : 'type the code it shows'}.</p>
+        {isPhone() && <Button type="button" variant="primary" className="h-12 justify-center rounded-xl" onClick={() => void scan().then((text) => { if (text) send(text) }, toastError)}>Scan the code</Button>}
+        <Input name="code" aria-label="Code" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-X" autoFocus={!isPhone()} autoComplete="off" autoCapitalize="characters" spellCheck={false} className="font-mono phone:h-11" />
         <div className="flex gap-2.5 rounded-lg bg-[oklch(97%_0.03_60)] px-3.5 py-3 text-[oklch(40%_0.1_50)]"><I icon={SquareLock02Icon} size={16} className="mt-px shrink-0" /><span>Add only a {HERE} in front of you that's yours. If someone asked you to do this, on a call, by email or in chat, it's a scam.</span></div>
         <ErrorNote message={allow.error?.message} />
       </>}
     </form>
-    <DialogFoot start={<Button type="button" variant="secondary" onClick={close}>{added ? 'Done' : 'Cancel'}</Button>}>{!added && <Button type="submit" form="add-mac" variant="primary" disabled={allow.isPending}>{allow.isPending ? 'Adding…' : 'Add'}</Button>}</DialogFoot>
+    <DialogFoot start={<Button type="button" variant="secondary" onClick={close}>{added ? 'Done' : 'Cancel'}</Button>}>{!added && <Button type="submit" form="add-mac" variant="primary" disabled={allow.isPending}>{allow.isPending ? 'Adding…' : `Add this ${HERE}`}</Button>}</DialogFoot>
   </Dialog>
 }

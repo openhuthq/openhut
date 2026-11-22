@@ -9,6 +9,8 @@ import { Window } from '@/features/cloud/unlock'
 import { chooseWorkspace, useInvitePreview, useJoin, useWorkspaces } from '@/features/cloud/workspaces'
 import { navigate, open } from '@/lib/router'
 import { toastError } from '@/lib/toast'
+import { isPhone } from '@/lib/native'
+import { HERE } from '@/features/settings/desktop'
 
 const LINK = 'https://openhut.dev/join'
 
@@ -38,8 +40,8 @@ export function CloudJoin() {
   if (!on) return <Window>
     <Hut mood="party" className="size-[84px]" />
     <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Join your team</h1>
-    <p className="m-0 max-w-[420px] text-[14px] text-body">Sign in with the email the invite was sent to.</p>
-    <Button type="button" variant="primary" className="mt-2 h-10 w-[300px] justify-center gap-2" disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}><Google />Continue with Google</Button>
+    <p className="m-0 max-w-[420px] text-[14px] text-body">{isPhone() ? `Turn on OpenHut Cloud on your ${HERE} with the email the invite was sent to, then open the link again.` : 'Sign in with the email the invite was sent to.'}</p>
+    {!isPhone() && <Button type="button" variant="primary" className="mt-2 h-10 w-[300px] justify-center phone:h-12 phone:w-full gap-2" disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}><Google />Continue with Google</Button>}
   </Window>
   const error = preview.error ?? join.error
   if (error) {
@@ -48,7 +50,7 @@ export function CloudJoin() {
       <Hut mood="worried" className="size-[84px]" />
       <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">{title}</h1>
       <p className="m-0 max-w-[420px] text-[14px] text-body">{body}</p>
-      <Button type="button" variant="secondary" className="mt-2 h-10 w-[300px] justify-center" onClick={() => navigate('/', true)}>Back to OpenHut</Button>
+      <Button type="button" variant="secondary" className="mt-2 h-10 w-[300px] justify-center phone:h-12 phone:w-full" onClick={() => navigate('/', true)}>Back to OpenHut</Button>
     </Window>
   }
   const invite = preview.data
@@ -61,7 +63,7 @@ export function CloudJoin() {
     <Hut mood="party" className="size-[84px]" />
     <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Join {invite.name}</h1>
     <p className="m-0 max-w-[420px] text-[14px] text-body">{nameOf(invite.from)} invited you as {invite.role === 'admin' ? 'an admin' : 'a member'}.</p>
-    <Button type="button" variant="primary" className="mt-2 h-10 w-[300px] justify-center" disabled={join.isPending} onClick={() => join.mutate(link, { onSuccess: done })}>{join.isPending ? 'Joining…' : 'Join workspace'}</Button>
+    <Button type="button" variant="primary" className="mt-2 h-10 w-[300px] justify-center phone:h-12 phone:w-full" disabled={join.isPending} onClick={() => join.mutate(link, { onSuccess: done })}>{join.isPending ? 'Joining…' : 'Join workspace'}</Button>
     <span className="inline-flex items-center gap-1.5 text-[12px] text-mute"><Google />Signed in as {cloud.email}</span>
   </Window>
 }
