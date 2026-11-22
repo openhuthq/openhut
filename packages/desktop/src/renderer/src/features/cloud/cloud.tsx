@@ -73,16 +73,17 @@ function DeleteAccount({ cloud }: { cloud: Cloud }) {
   const shared = teams.find((each) => each.role === 'owner' && each.members.length > 1)
   const deleted = teams.filter((each) => each.role === 'owner').map((each) => each.name)
   const left = teams.filter((each) => each.role !== 'owner').map((each) => each.name)
-  const detail = [
-    `This deletes your cloud copy of your agents, chats and settings, your devices list, your recovery kit${cloud.passkey ? ' and Touch ID' : ''}, and your sign-in.`,
-    deleted.length > 0 && `${list(deleted)} ${deleted.length > 1 ? 'are' : 'is'} deleted too.`,
-    left.length > 0 && `You leave ${list(left)}.`,
-    `Your other devices lose access to the cloud. This ${HERE} signs out and keeps its agents and chats. You can’t undo this.`,
-  ].filter(Boolean).join(' ')
+  const gone = [
+    'Backup of agents, chats and settings',
+    cloud.passkey ? 'Recovery kit, Touch ID and sign-in' : 'Recovery kit and sign-in',
+    'Access from your other devices',
+    deleted.length > 0 && `${list(deleted)} ${deleted.length > 1 ? 'workspaces' : 'workspace'}`,
+    left.length > 0 && `Your place in ${list(left)}`,
+  ].filter((item): item is string => Boolean(item))
   return <Section title="Danger zone">
     <Rows>
       <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete cloud account" note={deleteNote({ cloud, shared: shared?.name })}>
-        <ConfirmButton className={PILL} disabled={Boolean(shared || cloud.youngUntil) || remove.isPending} question="Delete your cloud account?" detail={detail} action="Delete account" typed="delete my account" onConfirm={() => remove.mutate(undefined, { onSuccess: () => notify({ title: 'Cloud account deleted', note: `This ${HERE} keeps its agents and chats.` }), onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
+        <ConfirmButton className={PILL} disabled={Boolean(shared || cloud.youngUntil) || remove.isPending} question="Delete your cloud account?" detail={`This ${HERE} keeps its agents and chats. Can’t be undone.`} list={gone} action="Delete account" typed="delete my account" onConfirm={() => remove.mutate(undefined, { onSuccess: () => notify({ title: 'Cloud account deleted', note: `This ${HERE} keeps its agents and chats.` }), onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
       </Row>
     </Rows>
   </Section>
