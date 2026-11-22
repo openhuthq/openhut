@@ -491,7 +491,7 @@ async function put({ s, item, ver, ctx }: { s: State; item: Item; ver: number; c
     return 'sent'
   }
   if (reply.status >= 400 && reply.status < 500 && !KEPT.includes(reply.status)) return 'refused'
-  if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud refused a backup (HTTP ${reply.status}).`)
+  if (reply.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t save a backup. OpenHut tries again.')
   if (!s.echo.has(item.id)) s.echo.set(item.id, ver - 1)
   await saveRow(s, { id: item.id, kind: item.kind, ref: item.ref, ver, seq: Record.safeParse(reply.json).data?.seq ?? 0, hash, signer: toBase64(ctx.me.publicKey), agent_id: item.agentId ?? null })
   return 'sent'
@@ -548,10 +548,10 @@ async function signedDelete({ ws, json }: { ws: string; json: unknown }): Promis
 
 export async function refusal({ ws, status }: { ws: string; status: number }): Promise<HttpError> {
   if (status === 409) return new HttpError(409, CHANGED)
-  if (status !== 403) return new HttpError(502, `OpenHut Cloud didn’t take the change (HTTP ${status}). Try again.`)
+  if (status !== 403) return new HttpError(502, 'OpenHut Cloud couldn’t save the change. Try again.')
   const newer = await cloud.room({ method: 'GET', workspace: ws, path: `/member-lists?after=${roomKeys.members(ws)?.version ?? 0}`, token: await keysService.token() }).catch(() => null)
   if (newer?.status === 403 || (Newer.safeParse(newer?.json).data?.data.length ?? 0) > 0) return new HttpError(409, CHANGED)
-  return new HttpError(403, 'OpenHut Cloud refused the change (HTTP 403).')
+  return new HttpError(403, 'OpenHut Cloud couldn’t save the change. Try again.')
 }
 
 async function drop({ ws, why }: { ws: string; why: Gone['why'] | null }): Promise<void> {

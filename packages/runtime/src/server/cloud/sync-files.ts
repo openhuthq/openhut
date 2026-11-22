@@ -103,7 +103,7 @@ async function upload({ value, ctx, owner }: { value: Omit<FileValue, 'blob'>; c
   if (!locked) throw new HttpError(500, 'This computer couldn’t lock a file.')
   const hash = hashOf(locked)
   const status = await ctx.putFile({ hash, body: locked })
-  if (status !== 200) throw new HttpError(502, `OpenHut Cloud refused a file (HTTP ${status}).`)
+  if (status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t save a backup. OpenHut tries again.')
   return hash
 }
 

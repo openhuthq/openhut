@@ -91,7 +91,7 @@ export const cloudService = {
       if (!others.length) continue
       const secret = newKey()
       const asked = await cloud.room({ method: 'POST', workspace: id, path: '/requests', token, body: { name: deviceName(), os: deviceOs(), commit: toBase64(await askCommit({ device: me, reveal: secret })) } })
-      if (asked.status !== 200) refused = z.safeParse(z.object({ error: z.object({ message: z.string() }) }), asked.json).data?.error.message ?? `OpenHut Cloud didn’t take the request (HTTP ${asked.status}).`
+      if (asked.status !== 200) refused = z.safeParse(z.object({ error: z.object({ message: z.string() }) }), asked.json).data?.error.message ?? 'OpenHut Cloud couldn’t send your request. Try again.'
       if (asked.status !== 200) continue
       rooms.push({ id, admins: others.map((member) => member.email), signers: others.flatMap((member) => member.devices), secret: toBase64(secret) })
     }
@@ -123,7 +123,7 @@ export const cloudService = {
 
   async deny({ workspace, device }: { workspace: string; device: string }): Promise<Cloud> {
     const denied = await cloud.room({ method: 'DELETE', workspace: mustBeOn(workspace), path: `/requests/${encodeURIComponent(device)}`, token: await keysService.token() })
-    if (denied.status !== 200 && denied.status !== 404) throw new HttpError(502, `OpenHut Cloud didn’t deny it (HTTP ${denied.status}). Try again.`)
+    if (denied.status !== 200 && denied.status !== 404) throw new HttpError(502, 'OpenHut Cloud couldn’t deny it. Try again.')
     await syncService.refreshRequests(workspace)
     return cloudService.status()
   },
@@ -153,10 +153,10 @@ export const cloudService = {
     const made = await cloud.room({ method: 'PUT', workspace: id, path: '/members', token, body: room.list })
     if (made.status !== 200) {
       await roomKeys.dropRoom(id)
-      throw new HttpError(502, `OpenHut Cloud didn’t make the workspace (HTTP ${made.status}). Try again.`)
+      throw new HttpError(502, 'OpenHut Cloud couldn’t make the workspace. Try again.')
     }
     const named = await cloud.room({ method: 'PATCH', workspace: id, path: '', token, body: { name: await roomKeys.lockName({ ws: id, name }) } })
-    if (named.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t name the workspace (HTTP ${named.status}). Try again.`)
+    if (named.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t name the workspace. Try again.')
     syncService.connect()
     await syncService.refreshName(id)
     const view = (await cloudService.status()).workspaces.find((each) => each.id === id)
@@ -174,7 +174,7 @@ export const cloudService = {
     const deleted = await cloud.room({ method: 'DELETE', workspace, path: '', token: await keysService.token(), body: await keysService.deleteProof(workspace) })
     if (deleted.status !== 200) syncService.leaving({ ws: workspace, on: false })
     if (deleted.status === 403) throw new HttpError(403, 'Only an owner or admin can delete the workspace.')
-    if (deleted.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t delete the workspace (HTTP ${deleted.status}). Try again.`)
+    if (deleted.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t delete the workspace. Try again.')
     await syncService.drop(workspace)
     return cloudService.status()
   },
@@ -197,9 +197,9 @@ export const cloudService = {
     }
     syncService.disconnect()
     const wiped = await cloud.account({ method: 'DELETE', path: '/v1/account', token, body: proof })
-    if (wiped.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t delete your keys (HTTP ${wiped.status}). Try again.`)
+    if (wiped.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t delete your account. Try again.')
     const home = await cloud.room({ method: 'DELETE', workspace: account.workspace.id, path: '', token, body: await keysService.deleteProof(account.workspace.id) })
-    if (home.status !== 200 && home.status !== 404) throw new HttpError(502, `OpenHut Cloud didn’t delete your workspace (HTTP ${home.status}). Try again.`)
+    if (home.status !== 200 && home.status !== 404) throw new HttpError(502, 'OpenHut Cloud couldn’t delete your account. Try again.')
     await syncService.reset({ restoring: false })
     await keysService.forgetHere()
     return cloudService.status()
@@ -208,7 +208,7 @@ export const cloudService = {
   async rename({ workspace, name }: { workspace: string; name: string }): Promise<Cloud> {
     const reply = await cloud.room({ method: 'PATCH', workspace: mustBeOn(workspace), path: '', token: await keysService.token(), body: { name: await roomKeys.lockName({ ws: workspace, name }) } })
     if (reply.status === 403) throw new HttpError(403, 'Only an owner or admin can rename the workspace.')
-    if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t rename the workspace (HTTP ${reply.status}). Try again.`)
+    if (reply.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t rename the workspace. Try again.')
     await syncService.refreshName(workspace)
     return cloudService.status()
   },
@@ -294,7 +294,7 @@ export const cloudService = {
       try {
         const saved = await cloud.account({ method: 'PUT', path: '/v1/key-boxes/kit', token, body: await keysService.signBox({ account: signer, name: 'kit', body: box, savedAt }) })
         boxesDiffer = saved.status === 403
-        if (saved.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t keep your kit (HTTP ${saved.status}). Try again.`)
+        if (saved.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t save your recovery kit. Try again.')
       } catch (err) {
         await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token }).then((got) => dropPending({ account: signer, token, cloudKit: KeyBox.safeParse(got.json).data })).catch(warnCheck)
         throw err
@@ -311,7 +311,7 @@ export const cloudService = {
     const cleared = await cloud.account({ method: 'DELETE', path: '/v1/key-boxes', token })
     if (cleared.status === 409) throw new HttpError(409, 'Your recovery kit is in OpenHut Cloud now. Type its words to unlock.')
     if (cleared.status === 403) throw new HttpError(403, `Your keys are on another device. Unlock with your iPhone or another ${HERE}.`)
-    if (cleared.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t start over (HTTP ${cleared.status}). Try again.`)
+    if (cleared.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t start over. Try again.')
     await syncService.reset({ restoring: false })
     const account = await keysService.open(locked)
     if (!await openRoom({ account, token })) {
@@ -367,7 +367,7 @@ export const cloudService = {
     await notYoung(keysService.mustBeOn())
     const saved = await cloud.account({ method: 'PUT', path: '/v1/key-boxes/passkey', token: await keysService.token(), body: await keysService.passkeyBox(fromBase64(prf)) })
     boxesDiffer ||= saved.status === 403
-    if (saved.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t keep your passkey (HTTP ${saved.status}). Try again.`)
+    if (saved.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t save Touch ID. Try again.')
     passkeySaved = true
     return cloudService.status()
   },
@@ -397,7 +397,7 @@ export const cloudService = {
     const list = await keysService.addDevice(device)
     if (list) {
       const put = await cloud.room({ method: 'PUT', workspace: account.workspace.id, path: '/members', token, body: list })
-      if (put.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t add that computer (HTTP ${put.status}). Try again.`)
+      if (put.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t add that computer. Try again.')
       await roomKeys.advance({ lists: [list] })
     }
     const signer = await keysService.device()
@@ -451,7 +451,7 @@ function kitOf(): { savedAt: string; differs: boolean } | null {
 async function accountExists(token: string): Promise<boolean> {
   const workspaces = await cloud.account({ method: 'GET', path: '/v1/workspaces', token })
   const listed = Workspaces.safeParse(workspaces.json).data
-  if (workspaces.status !== 200 || !listed) throw new HttpError(502, `OpenHut Cloud didn’t say whether this account has a backup (HTTP ${workspaces.status}).`)
+  if (workspaces.status !== 200 || !listed) throw new HttpError(502, 'OpenHut Cloud couldn’t check for a backup. Try again.')
   return listed.data.length > 0 || (await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token })).status === 200
 }
 
@@ -571,7 +571,7 @@ async function joinWith({ account: restored, typed }: { account: Account; typed:
   stopPairing()
   const token = await keysService.token()
   const joined = await cloud.room({ method: 'PUT', workspace: restored.workspace.id, path: '/members', token, body: restored.list })
-  if (joined.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t add this computer (HTTP ${joined.status}). Try again.`)
+  if (joined.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t add this computer. Try again.')
   const teams = []
   for (const team of restored.teams ?? []) if ((await cloud.room({ method: 'PUT', workspace: team.workspace.id, path: '/members', token, body: team.list })).status === 200) teams.push(team)
   const account = { ...restored, teams }
@@ -709,7 +709,7 @@ async function rotate({ changed: { list, next, letters }, drop }: { changed: Awa
   ]
   const put = await cloud.room({ method: 'PUT', workspace: next.workspace.id, path: '/members', token, body: list })
   if (put.status === 409) throw new HttpError(409, 'Your devices changed on another computer just now. Try again.')
-  if (put.status !== 200) throw new HttpError(put.status === 403 ? 403 : 502, `OpenHut Cloud refused the change (HTTP ${put.status}).`)
+  if (put.status !== 200) throw new HttpError(put.status === 403 ? 403 : 502, 'OpenHut Cloud couldn’t save the change. Try again.')
   await keysService.adopt({ account: next, moves })
   passkeySaved = false
   await roomKeys.post(letters.map((each) => ({ ...each, workspace: next.workspace.id })))
@@ -723,7 +723,7 @@ async function finishMoves(token: string): Promise<void> {
     const { status } = await cloud.account({ ...move, token }).catch(() => ({ status: 0 }))
     const stale = (status === 403 || status === 409) && z.safeParse(z.object({ by: z.string() }), move.body).data?.by !== signer
     boxesDiffer = status !== 200 && !(status === 404 && move.method === 'DELETE') && !stale
-    if (boxesDiffer) throw new HttpError(502, `Your keys changed, but OpenHut Cloud didn’t move your recovery kit over yet (HTTP ${status}). OpenHut tries again every minute, or make a new kit.`)
+    if (boxesDiffer) throw new HttpError(502, 'Your recovery kit isn’t updated in OpenHut Cloud yet. OpenHut tries again every minute, or you can make a new kit.')
     await keysService.setMoves(keysService.moves().slice(1))
   }
 }
@@ -740,7 +740,7 @@ async function openRoom({ account, token }: { account: Account; token: string })
   const found = await cloud.room({ method: 'GET', workspace, path: '/members', token })
   if (found.status === 200) return true
   const made = found.status === 404 ? await cloud.room({ method: 'PUT', workspace, path: '/members', token, body: account.list }) : found
-  if (made.status !== 200) throw new HttpError(502, `OpenHut Cloud refused this workspace (HTTP ${made.status}).`)
+  if (made.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t open this workspace. Try again.')
   return true
 }
 
