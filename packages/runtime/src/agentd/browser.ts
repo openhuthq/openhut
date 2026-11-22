@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
-import { box, conf, DATA, writeIfChanged } from './host.ts'
+import { BIN, box, conf, DATA, EXE, writeIfChanged } from './host.ts'
 import { BROWSER_STREAM_PORT_BASE, type Exec, type Mount } from './sandbox/sandbox.ts'
 import { isRecord, jsonOrUndefined } from './util.ts'
 
@@ -15,7 +15,7 @@ export const HELD_POLICY = `${JSON.stringify({ default: 'deny', allow: ['snapsho
 export const HOLD_IDLE_MS = 120_000
 export const MAX_FPS = 30
 
-const BIN = process.env.AGENTD_BROWSER || fileURLToPath(new URL('../../../../bin/agent-browser', import.meta.url))
+const AGENT_BROWSER = join(BIN, `agent-browser${EXE}`)
 const DIR = fileURLToPath(new URL('../../../../install/agent-browser', import.meta.url))
 const INSTALLED_CHROME = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', `${process.env.ProgramFiles}\\Google\\Chrome\\Application\\chrome.exe`, `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`]
 let chrome: string | undefined
@@ -25,7 +25,7 @@ export const browser = {
   tmpMib: 1024,
 
   installed(): boolean {
-    return box.name === 'memory' || existsSync(BIN)
+    return box.name === 'memory' || existsSync(AGENT_BROWSER)
   },
 
   async prepare(): Promise<void> {
@@ -34,9 +34,9 @@ export const browser = {
   },
 
   mounts(id: string): Mount[] {
-    if (box.name === 'native') return [{ host: BIN, guest: '/usr/local/bin/agent-browser', readOnly: true }]
+    if (box.name === 'native') return [{ host: AGENT_BROWSER, guest: '/usr/local/bin/agent-browser', readOnly: true }]
     return [
-      { host: BIN, guest: '/usr/local/lib/agent-browser', readOnly: true },
+      { host: AGENT_BROWSER, guest: '/usr/local/lib/agent-browser', readOnly: true },
       { host: DIR, guest: '/opt/agent-browser', readOnly: true },
       { host: `${DIR}/agent-browser.sh`, guest: '/usr/local/bin/agent-browser', readOnly: true },
       { host: `${conf(id)}/${POLICY_FILE}`, guest: `/opt/data/${POLICY_FILE}`, readOnly: true },
@@ -87,7 +87,7 @@ async function installChrome(): Promise<string> {
   const downloaded = found()
   if (downloaded) return downloaded
   console.log('browser: downloading Chrome for agents, once')
-  await new Promise<void>((done, fail) => execFile(BIN, ['install'], { env: { ...process.env, HOME: home, USERPROFILE: home }, timeout: 15 * 60_000 }, (error) => error ? fail(error) : done()))
+  await new Promise<void>((done, fail) => execFile(AGENT_BROWSER, ['install'], { env: { ...process.env, HOME: home, USERPROFILE: home }, timeout: 15 * 60_000 }, (error) => error ? fail(error) : done()))
   const path = found()
   if (!path) throw new Error("Chrome didn't install for the browser; try turning Browser on again")
   return path

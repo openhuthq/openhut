@@ -1,9 +1,11 @@
 import { existsSync } from 'node:fs'
 import type { Socket } from 'node:net'
-import { box } from './host.ts'
+import { join } from 'node:path'
+import { box, DATA } from './host.ts'
+import { RUNTIME } from './sandbox/native.ts'
 import type { Mount } from './sandbox/sandbox.ts'
 
-const BRIDGE = process.env.AGENTD_WHATSAPP_BRIDGE || '/var/lib/openhut/whatsapp-bridge'
+const BRIDGE = { native: join(RUNTIME, 'hermes/scripts/whatsapp-bridge'), memory: join(DATA, 'whatsapp-bridge'), gvisor: '/var/lib/openhut/whatsapp-bridge' }[box.name]
 const PAIR_COMMAND = ['node', '/opt/data/scripts/whatsapp-bridge/bridge.js', '--pair-only', '--pair-json', '--session', '/opt/data/platforms/whatsapp/session']
 
 export const whatsapp = {

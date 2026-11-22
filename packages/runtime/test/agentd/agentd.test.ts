@@ -13,7 +13,7 @@ const data = mkdtempSync(join(tmpdir(), 'agentd-'))
 const sock = join(data, 'agentd.sock')
 mkdirSync(join(data, 'whatsapp-bridge', 'node_modules'), { recursive: true })
 const agentd = spawn(process.execPath, [fileURLToPath(new URL('../../src/agentd/agentd.ts', import.meta.url))], {
-  env: { ...process.env, OPENHUT_SANDBOX: 'memory', AGENTD_DATA: data, AGENTD_SOCK: sock, AGENTD_WHATSAPP_BRIDGE: join(data, 'whatsapp-bridge') },
+  env: { ...process.env, OPENHUT_SANDBOX: 'memory', AGENTD_DATA: data, AGENTD_SOCK: sock },
   stdio: ['ignore', 'pipe', 'inherit'],
 })
 after(() => {

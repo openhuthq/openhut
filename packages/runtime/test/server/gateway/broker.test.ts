@@ -9,9 +9,8 @@ const fake = createServer((req, res) => void upstream(req, res))
 fake.listen(0, '127.0.0.1')
 await once(fake, 'listening')
 const fakeUrl = `http://127.0.0.1:${(fake.address() as AddressInfo).port}`
-process.env.OPENHUT_ANTHROPIC_API = fakeUrl
-process.env.OPENHUT_TELEGRAM_API = fakeUrl
-process.env.OPENHUT_OPENAI_API = fakeUrl
+const { config } = await import('../../../src/server/platform/config.ts')
+Object.assign(config, { anthropicApi: fakeUrl, telegramApi: fakeUrl, openaiApi: fakeUrl })
 
 const { db, migrate } = await import('../../../src/server/platform/db.ts')
 const { agentToken, seal } = await import('../../../src/server/platform/secrets.ts')

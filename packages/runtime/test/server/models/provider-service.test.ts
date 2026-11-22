@@ -26,9 +26,8 @@ const fake = createServer((req, res) => {
 fake.listen(0, '127.0.0.1')
 await once(fake, 'listening')
 const base = `http://127.0.0.1:${(fake.address() as AddressInfo).port}`
-process.env.OPENHUT_OPENAI_API = `${base}/openai`
-process.env.OPENHUT_OPENROUTER_API = `${base}/openrouter/api`
-process.env.OPENHUT_XAI_API = `${base}/xai`
+const { config } = await import('../../../src/server/platform/config.ts')
+Object.assign(config, { openaiApi: `${base}/openai`, openrouterApi: `${base}/openrouter/api`, xaiApi: `${base}/xai` })
 after(() => fake.close())
 
 const { migrate } = await import('../../../src/server/platform/db.ts')

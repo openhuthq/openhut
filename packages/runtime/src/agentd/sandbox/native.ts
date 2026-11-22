@@ -7,7 +7,7 @@ import type { Exec, Mount, Sandboxes, SandboxSpec, SandboxState } from './sandbo
 const WIN = process.platform === 'win32'
 const DATA = resolve(process.env.AGENTD_DATA || '/data')
 const STATE = join(DATA, 'native')
-const RUNTIME = process.env.AGENTD_HERMES || join(DATA, 'runtime')
+export const RUNTIME = process.env.AGENTD_HERMES || join(DATA, 'runtime')
 const PYTHON = WIN ? join(RUNTIME, 'python', 'python.exe') : join(RUNTIME, 'python', 'bin', 'python3')
 const KILL_MS = 10_000
 const BASE_PATH = WIN ? `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32;${process.env.SystemRoot ?? 'C:\\Windows'}` : '/usr/bin:/bin:/usr/sbin:/sbin'

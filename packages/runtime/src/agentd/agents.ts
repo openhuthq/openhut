@@ -2,13 +2,14 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import { browser, POLICY_FILE, policyOf } from './browser.ts'
 import { firewall } from './firewall.ts'
-import { AGENT_UID, AGENT_USER, ASSETS, box, conf, DATA, home, ID, IMAGE, own, RESOLV, TMP_MIB, writeIfChanged } from './host.ts'
+import { join } from 'node:path'
+import { AGENT_UID, AGENT_USER, ASSETS, BIN, box, conf, DATA, EXE, home, ID, IMAGE, own, RESOLV, TMP_MIB, writeIfChanged } from './host.ts'
 import type { Mount, SandboxSpec, SandboxState } from './sandbox/sandbox.ts'
 import { whatsapp } from './whatsapp.ts'
 
 export const FILES = ['config.yaml', '.env', 'SOUL.md', 'auth.json'] as const
 const PLUGINS = `${ASSETS}/vendor/hermes-plugins`
-const CLAUDE_BIN = process.env.AGENTD_CLAUDE || `${ASSETS}/bin/claude`
+const CLAUDE_BIN = join(BIN, `claude${EXE}`)
 const MOUNTS = createHash('sha256').update(`${PLUGINS}\n${CLAUDE_BIN}`).digest('hex').slice(0, 16)
 const SPEC = '4'
 const TRASH = `${DATA}/trash`
