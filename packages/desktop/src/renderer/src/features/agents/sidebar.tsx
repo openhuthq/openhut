@@ -73,7 +73,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
       <BackupCard />
       <UpdateEverything />
       <div className="flex w-full items-center gap-2">
-        {active && email && <a href="/settings/backup" aria-label="Your account" title={email} className={cn(SURFACE, 'grid size-10 shrink-0 place-items-center rounded-lg')}><PersonFace name={personName(email)} email={email} size={26} /></a>}
+        {active && email && <a href="/settings/team" aria-label="Your account" title={email} className={cn(SURFACE, 'grid size-10 shrink-0 place-items-center rounded-lg')}><PersonFace name={personName(email)} email={email} size={26} /></a>}
         <a href="/connections" className={cn(SURFACE, 'flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg pr-3 pl-3.5 text-[13.5px] font-medium')}>
           <ConnectedMarks />
         </a>

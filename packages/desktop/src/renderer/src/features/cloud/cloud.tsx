@@ -19,6 +19,7 @@ import { isPhone, scan, useConfirmed } from '@/lib/native'
 import { ago, shortDate, shortDateTime } from '@/lib/format'
 import { navigate, open, useOpen, useSearch } from '@/lib/router'
 import { useDeleteData, useRotated } from '@/features/cloud/workspaces'
+import { TeamDanger, WorkspaceSettings } from '@/features/people/workspace'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -57,8 +58,8 @@ function CloudLocked({ cloud }: { cloud: Cloud }) {
 
 function LockedDelete() {
   const remove = useDeleteData()
-  return <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete cloud account" note={<span className="text-fail">Deletes your backup and sign-in. Agents on this computer stay.</span>}>
-    <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={remove.isPending} question="Delete your cloud account?" detail="Your agents and chats stay on this computer. You can’t undo this." list={['Your backup of agents, chats and settings', 'Your recovery kit and sign-in']} action="Delete account" typed="delete my account" onConfirm={() => remove.mutateAsync().then(() => notify({ title: 'Cloud account deleted', note: 'Your agents and chats stay on this computer.' }))}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
+  return <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete team" note={<span className="text-fail">Deletes your backup and sign-in. Agents on this computer stay.</span>}>
+    <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={remove.isPending} question="Delete your team?" detail="Your agents and chats stay on this computer. You can’t undo this." list={['Your backup of agents, chats and settings', 'Your recovery kit and sign-in']} action="Delete team" typed="delete my team" onConfirm={() => remove.mutateAsync().then(() => notify({ title: 'Team deleted', note: 'Your agents and chats stay on this computer.' }))}>{remove.isPending ? 'Deleting…' : 'Delete team'}</ConfirmButton>
   </Row>
 }
 
@@ -95,7 +96,8 @@ function CloudOn({ cloud, error }: { cloud: Cloud; error?: string }) {
       <SignOutRow />
     </Rows>
     <ErrorNote message={error} />
-    {cloud.workspaces.some((each) => each.own) && <DeleteAccount cloud={cloud} />}
+    <WorkspaceSettings />
+    <TeamDanger ownDelete={<DeleteAccount cloud={cloud} />} />
   </>
 }
 
@@ -112,13 +114,9 @@ function DeleteAccount({ cloud }: { cloud: Cloud }) {
     deleted.length > 0 && `${list(deleted)} ${deleted.length > 1 ? 'workspaces' : 'workspace'}`,
     left.length > 0 && `Your place in ${list(left)}`,
   ].filter((item): item is string => Boolean(item))
-  return <Section title="Danger zone">
-    <Rows>
-      <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete cloud account" note={deleteNote({ cloud, shared: shared?.name })}>
-        <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={Boolean(shared || cloud.youngUntil) || remove.isPending} question="Delete your cloud account?" detail="Your agents and chats stay on this computer. You can’t undo this." list={gone} action="Delete account" typed="delete my account" onConfirm={() => remove.mutateAsync().then(() => notify({ title: 'Cloud account deleted', note: 'Your agents and chats stay on this computer.' }))}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
-      </Row>
-    </Rows>
-  </Section>
+  return <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete team" note={deleteNote({ cloud, shared: shared?.name })}>
+    <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={Boolean(shared || cloud.youngUntil) || remove.isPending} question="Delete your team?" detail="Your agents and chats stay on this computer. You can’t undo this." list={gone} action="Delete team" typed="delete my team" onConfirm={() => remove.mutateAsync().then(() => notify({ title: 'Team deleted', note: 'Your agents and chats stay on this computer.' }))}>{remove.isPending ? 'Deleting…' : 'Delete team'}</ConfirmButton>
+  </Row>
 }
 
 function deleteNote({ cloud, shared }: { cloud: Cloud; shared?: string }): string {
