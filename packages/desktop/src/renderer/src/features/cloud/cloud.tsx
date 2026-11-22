@@ -12,7 +12,7 @@ import { notify } from '@/components/custom/toast'
 import { ConfirmButton } from '@/components/confirm-button'
 import { nameOf, REMOVE_DETAIL, useAddPasskey, useAllow, useCloud, usePasskeys, useRemoveMac, useSignOut } from '@/features/cloud/api'
 import { markSeen } from '@/features/cloud/seen'
-import { EnableCloud, Pitch } from '@/features/cloud/sign-in'
+import { EnableCloud, SignInOnTeam } from '@/features/cloud/sign-in'
 import { CloudSetup, KitDialog } from '@/features/cloud/setup'
 import { Chevron, Row, Rows } from '@/features/settings/kit'
 import { isPhone, scan, useConfirmed } from '@/lib/native'
@@ -30,7 +30,7 @@ export function AccountSettings() {
   if (!data) return <ErrorNote message={error} />
   const on = data.status === 'on' || data.status === 'offline'
   return <>
-    {on ? <CloudOn cloud={data} error={error ?? undefined} /> : data.status === 'locked' && !isPhone() ? <CloudLocked cloud={data} /> : <Pitch />}
+    {on ? <CloudOn cloud={data} error={error ?? undefined} /> : data.status === 'locked' && !isPhone() ? <CloudLocked cloud={data} /> : <SignInOnTeam what="your account" />}
     {data.status === 'off' && <ErrorNote message={error ?? undefined} />}
     {opened === 'enable' && <CloudSetup />}
     {opened === 'kit' && data.status !== 'off' && <KitDialog />}
