@@ -7,7 +7,7 @@ import { signProof } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
 import { deviceWords, fromBase64, identity, newKey, toBase64 } from '@openhut/common/vault/vault.ts'
 
-const account = { signer: undefined as string | undefined, boxes: new Map<string, { body: string; by: string; signature: string }>(), hideWorkspaces: false, failBoxes: 0, refuseLetters: false, names: [] as string[], refuseName: false }
+const account = { signer: undefined as string | undefined, boxes: new Map<string, { body: string; by: string; signature: string }>(), hideWorkspaces: false, failBoxes: 0, refuseLetters: false, names: [] as string[], sites: [] as (string | undefined)[], refuseName: false }
 let authorization = ''
 const TEAM = 'ws_teamroom'
 const asks = { on: false, device: '', list: undefined as unknown, commits: [] as string[], nonce: null as { nonce: string; by: string; signature: string } | null, echo: null as string | null, reveals: [] as string[], revealStatus: 500 }
@@ -62,6 +62,7 @@ const cloud = createServer(async (req, res) => {
   if (/^\/v1\/workspaces\/[^/]+\/members$/.test(req.url ?? '') && req.method === 'PUT') account.signer = (JSON.parse(Buffer.from(body.bytes ?? '', 'base64url').toString()) as { members: { kit?: string }[] }).members[0]?.kit
   if (/^\/v1\/workspaces\/[^/]+$/.test(req.url ?? '') && req.method === 'PATCH') {
     account.names.push(body.name ?? '')
+    account.sites.push(body.site)
     return account.refuseName ? reply(400, { error: { type: 'invalid_request_error', message: 'Send the name locked.' } }) : reply(200, body)
   }
   if (/^\/v1\/workspaces\/[^/]+\/letters$/.test(req.url ?? '') && req.method === 'GET' && account.refuseLetters) return reply(403, { error: { type: 'permission_error', message: 'Not a member.' } })
@@ -147,10 +148,23 @@ test('a new workspace sends its name locked, and a name the cloud refuses is an 
   const sent = account.names.at(-1) ?? ''
   assert.notEqual(sent, 'Support')
   assert.equal(sent.includes('Support'), false)
-  assert.equal(await roomKeys.openName({ ws: made.id, locked: sent }), 'Support')
+  assert.equal(await roomKeys.openMeta({ ws: made.id, field: 'name', locked: sent }), 'Support')
   account.refuseName = true
   await assert.rejects(cloudService.create({ name: 'Sales' }), (err: Error & { status?: number }) => err.status === 502 && /couldn’t name the workspace\. Try again\./.test(err.message))
   account.refuseName = false
+})
+
+test('a team website is sent locked as the bare host on its own, never with the name; a bad one is refused and null clears it', async () => {
+  const team = await cloudService.create({ name: 'Website' })
+  account.names.length = 0
+  await cloudService.update({ workspace: team.id, website: ' https://www.Activepieces.com/about ' })
+  const sent = account.sites.at(-1) ?? ''
+  assert.deepEqual([account.names, sent.includes('activepieces')], [[''], false])
+  assert.equal(await roomKeys.openMeta({ ws: team.id, field: 'site', locked: sent }), 'www.activepieces.com')
+  assert.equal(await roomKeys.openMeta({ ws: team.id, field: 'name', locked: sent }), null)
+  await assert.rejects(cloudService.update({ workspace: team.id, website: 'localhost:8787' }), (err: Error & { status?: number; param?: string }) => err.status === 400 && err.param === 'website')
+  await cloudService.update({ workspace: team.id, website: null })
+  assert.equal(await roomKeys.openMeta({ ws: team.id, field: 'site', locked: account.sites.at(-1) }), '')
 })
 
 test('a locked Mac whose device key was removed stops pairing at once, gets a new device key, and asks to sign in again', async () => {

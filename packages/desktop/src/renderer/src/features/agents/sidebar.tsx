@@ -74,7 +74,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
       <BackupCard />
       <UpdateEverything />
       <div className="flex w-full items-center gap-2">
-        {active && <a href="/settings/team" aria-label="Team settings" title={active.name} className={cn(SURFACE, 'grid size-10 shrink-0 place-items-center rounded-lg')}><TeamMark name={active.name} /></a>}
+        {active && <a href="/settings/team" aria-label="Team settings" title={active.name} className={cn(SURFACE, 'grid size-10 shrink-0 place-items-center rounded-lg')}><TeamMark workspace={active} /></a>}
         <a href="/connections" className={cn(SURFACE, 'flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg pr-3 pl-3.5 text-[13.5px] font-medium')}>
           <ConnectedMarks />
         </a>

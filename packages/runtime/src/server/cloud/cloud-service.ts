@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
+import type { FastifyReply } from 'fastify'
 import * as z from 'zod/mini'
-import { checkProof, type CloudWorkspaceView, fromQr, KeyBox, Letter, MemberList, qrPayload, signProof, WordsNonce, type AllowedDevice, type Role, type Cloud, type CloudAuthorization, type CloudPairing, type RecoveryKit, type RuntimeInvite, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
+import { checkProof, type CloudWorkspaceView, fromQr, KeyBox, Letter, MemberList, qrPayload, signProof, WordsNonce, type AllowedDevice, type Role, type Cloud, type CloudAuthorization, type CloudPairing, type RecoveryKit, type RuntimeInvite, type UnlockCloud, siteHost } from '@openhut/common/cloud/cloud.ts'
 import { addedOf, bodyOf, check, newUntil, youngUntil } from '@openhut/common/cloud/member-list.ts'
 import { askCommit, deviceWords, fingerprint, fromBase64, fromLongCode, letter, longCode, newKey, newPairing, toBase64 } from '@openhut/common/vault/vault.ts'
 import { kitId } from '@openhut/common/vault/kit-file.ts'
@@ -12,6 +13,7 @@ import { callbackBase, connectionService } from '../connections/connection-servi
 import { keyStore, type Account, type AskRoom, type Move, type Room } from './key-store.ts'
 import { deviceName, deviceOs, keysService, notYoung, openLetter, readSecret } from './keys-service.ts'
 import { roomKeys } from './room-keys.ts'
+import { teamIcon } from './team-icon.ts'
 import { refusal, syncService } from './sync-service.ts'
 import { agentService } from '../agents/agent-service.ts'
 
@@ -66,7 +68,7 @@ export const cloudService = {
       workspaces: on && account ? roomKeys.rooms().map(({ workspace: { id, key } }) => {
         const body = roomKeys.members(id)
         const invites = (body?.invites ?? []).map((each) => ({ email: each.email, role: each.role, link: roomKeys.link({ ws: id, email: each.email }) ?? null }))
-        return { id, name: syncService.name(id), home: id === account.workspace.id, own: roomKeys.isOwn(id), role: roomKeys.roleIn(id) ?? 'member', waiting: !key, members: body?.members ?? [], invites, requests: syncService.requests(id), names: body?.names ?? {} }
+        return { id, name: syncService.name(id), website: syncService.site(id), home: id === account.workspace.id, own: roomKeys.isOwn(id), role: roomKeys.roleIn(id) ?? 'member', waiting: !key, members: body?.members ?? [], invites, requests: syncService.requests(id), names: body?.names ?? {} }
       }) : [],
       asking: asked ? { rooms: askRooms.filter((room) => !asked.settled.includes(room.id)).map(({ admins, words, revealed }) => ({ admins, words: revealed && words ? words : null })), denied: asked.settled.length === askRooms.length, error: asked.error } : null,
       canAsk: Boolean(locked && session && await teamsOf(session.token).then((teams) => teams.length > 0, () => false)),
@@ -154,7 +156,7 @@ export const cloudService = {
       await roomKeys.dropRoom(id)
       throw new HttpError(502, 'OpenHut Cloud couldn’t make the workspace. Try again.')
     }
-    const named = await cloud.room({ method: 'PATCH', workspace: id, path: '', token, body: { name: await roomKeys.lockName({ ws: id, name }) } })
+    const named = await cloud.room({ method: 'PATCH', workspace: id, path: '', token, body: { name: await roomKeys.lockMeta({ ws: id, field: 'name', plain: name }) } })
     if (named.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t name the workspace. Try again.')
     syncService.connect()
     await syncService.refreshName(id)
@@ -205,12 +207,28 @@ export const cloudService = {
     return cloudService.status()
   },
 
-  async rename({ workspace, name }: { workspace: string; name: string }): Promise<Cloud> {
-    const reply = await cloud.room({ method: 'PATCH', workspace: mustBeOn(workspace), path: '', token: await keysService.token(), body: { name: await roomKeys.lockName({ ws: workspace, name }) } })
-    if (reply.status === 403) throw new HttpError(403, 'Only an owner or admin can rename the workspace.')
-    if (reply.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t rename the workspace. Try again.')
-    await syncService.refreshName(workspace)
+  async update({ workspace, name, website }: { workspace: string; name?: string; website?: string | null }): Promise<Cloud> {
+    const ws = mustBeOn(workspace)
+    const site = website === null ? '' : website && siteHost(website)
+    if (site === null) throw new HttpError(400, 'Enter a website like example.com.', { param: 'website' })
+    const body = {
+      ...name === undefined ? {} : { name: await roomKeys.lockMeta({ ws, field: 'name', plain: name }) },
+      ...site === undefined ? {} : { site: await roomKeys.lockMeta({ ws, field: 'site', plain: site }) },
+    }
+    if (!Object.keys(body).length) return cloudService.status()
+    const what = name === undefined ? 'change the website of' : 'rename'
+    const reply = await cloud.room({ method: 'PATCH', workspace: ws, path: '', token: await keysService.token(), body })
+    if (reply.status === 403) throw new HttpError(403, `Only an owner or admin can ${what} the workspace.`)
+    if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud couldn’t ${what} the workspace. Try again.`)
+    await syncService.refreshName(ws)
     return cloudService.status()
+  },
+
+  async icon({ workspace, reply }: { workspace: string; reply: FastifyReply }): Promise<FastifyReply> {
+    const site = syncService.site(mustBeOn(workspace))
+    const icon = site && await teamIcon.get(site)
+    if (!icon) throw new HttpError(404, 'This team has no website icon.')
+    return reply.header('content-type', icon.type).header('x-content-type-options', 'nosniff').header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'").header('cache-control', 'private, max-age=3600').send(icon.bytes)
   },
 
   async setRole({ workspace, email, role }: { workspace: string; email: string; role: Role }): Promise<Cloud> {

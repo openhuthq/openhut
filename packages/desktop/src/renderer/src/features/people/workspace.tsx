@@ -54,7 +54,7 @@ function TeamRow({ workspace, current, renaming }: { workspace: CloudWorkspaceVi
     {current && <span className="rounded-full bg-soft px-1.5 py-px text-[10.5px] font-medium text-mute">Current</span>}
     {admin && <Tooltip label="Rename"><Button type="button" variant="ghost" size="icon-xs" aria-label={`Rename ${workspace.name}`} className={cn(editing && 'invisible')} onClick={() => go('rename')}><I icon={PencilEdit02Icon} size={13} className="text-mute" /></Button></Tooltip>}
   </span>
-  return <Row icon={<TeamMark name={workspace.name} className="size-8 rounded-lg text-[14px]" />} title={title} note={`${peopleNote(workspace)} · you’re ${ROLE[workspace.role]}`}>
+  return <Row icon={<TeamMark workspace={workspace} className="size-8 rounded-lg text-[14px]" />} title={title} note={`${peopleNote(workspace)} · you’re ${ROLE[workspace.role]}`}>
     {!current && <Button type="button" variant="ghost" className={PILL} onClick={() => { chooseWorkspace(workspace.id); navigate('/') }}>Switch</Button>}
     {admin && <Tooltip label="Reset encryption"><Button type="button" variant="ghost" size="icon-sm" aria-label={`Reset encryption for ${workspace.name}`} onClick={() => go('keys')}><I icon={Key01Icon} size={16} className="text-hue-amber" /></Button></Tooltip>}
     {!workspace.own && <Tooltip label={owner ? 'Make someone else the owner to leave' : 'Leave'}><Button type="button" variant="ghost" size="icon-sm" aria-label={`Leave ${workspace.name}`} disabled={owner} onClick={() => go('leave')}><I icon={Logout03Icon} size={16} className="text-fail" /></Button></Tooltip>}
