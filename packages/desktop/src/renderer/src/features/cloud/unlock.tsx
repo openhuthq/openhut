@@ -2,9 +2,11 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent,
 import { Alert02Icon, Cancel01Icon, FingerPrintIcon } from '@hugeicons/core-free-icons'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
+import { kitWord, nearestWord, readKit, validKit } from '@openhut/common/vault/kit-file.ts'
 import { agentPath } from '@/app/routes'
 import { ConfirmButton } from '@/components/confirm-button'
 import { DeviceIcon } from '@/components/custom/device'
+import { DropZone } from '@/components/custom/drop-zone'
 import { PersonFace, PersonFaces } from '@/components/custom/person-face'
 import { AMBER, notify, Tinted, Toast, Toasts } from '@/components/custom/toast'
 import { ErrorNote } from '@/components/error-note'
@@ -25,7 +27,7 @@ import { HERE } from '@/features/settings/desktop'
 import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { isPhone } from '@/lib/native'
 import { navigate } from '@/lib/router'
-import { shortDateTime } from '@/lib/format'
+import { longDate, shortDateTime } from '@/lib/format'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -43,7 +45,7 @@ function Unlock({ cloud }: { cloud: Cloud }) {
     <Button type="button" variant="primary" className="mt-2 h-10 w-[320px] justify-center text-[14px]" disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}>Sign in again</Button>
     {leave}
   </Window>
-  if (way === 'kit') return <KitEntry onBack={() => setWay(null)} />
+  if (way === 'kit') return <KitEntry cloud={cloud} onBack={() => setWay(null)} />
   if (way === 'code') return <CodeEntry onBack={() => setWay(null)} />
   if (way === 'admin' || cloud.asking) return <AdminWait cloud={cloud} onBack={() => setWay(null)} />
   const canPasskey = Boolean(helper?.passkeys && helper.prf)
@@ -58,7 +60,7 @@ function Unlock({ cloud }: { cloud: Cloud }) {
     <div className="w-[380px] rounded-lg border border-hair bg-card p-1 text-left">
       <Rows>
         <Row onClick={() => setWay('code')} icon={<Mascot kind="phone" size={30} />} title="Use my iPhone or another Mac" note="Scan a code with it"><Chevron /></Row>
-        {cloud.kitInCloud && <Row onClick={() => setWay('kit')} icon={<Mascot kind="kit" size={30} />} title="Use my recovery kit" note="The 12 words you saved"><Chevron /></Row>}
+        {cloud.kitInCloud && <Row onClick={() => setWay('kit')} icon={<Mascot kind="kit" size={30} />} title="Use my recovery kit" note="The file you saved"><Chevron /></Row>}
         {cloud.canAsk && <Row onClick={() => setWay('admin')} icon={<Mascot kind="team" size={30} />} title="Ask an admin" note="Get your team workspaces back"><Chevron /></Row>}
       </Rows>
     </div>
@@ -153,12 +155,50 @@ export function NewMacAlert({ cloud }: { cloud: Cloud }) {
   </Toast>
 }
 
-function KitEntry({ onBack }: { onBack: () => void }) {
+function KitEntry({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
+  const [typing, setTyping] = useState(false)
+  const [problem, setProblem] = useState<{ text: string; tone: 'fail' | 'warn' }>()
+  const unlock = useUnlock()
+  const me = cloud.email ?? ''
+  const tryKit = (text: string) => {
+    const kit = readKit(text)
+    const replaced = kit?.kitId && cloud.cloudKit && kit.kitId !== cloud.cloudKit.id ? cloud.cloudKit.savedAt : undefined
+    if (!kit) return setProblem({ tone: 'fail', text: 'That doesn’t look like a recovery kit. Drop the file OpenHut saved, or type the words instead.' })
+    if (kit.email && me && kit.email !== me) return setProblem({ tone: 'fail', text: `This kit is for ${kit.email}. You’re signed in as ${me}. Drop ${nameOf(me)}’s kit, or sign out and sign in as ${nameOf(kit.email)}.` })
+    if (replaced !== undefined) return setProblem({ tone: 'warn', text: `This kit was replaced${replaced ? ` on ${longDate.format(new Date(replaced))}` : ''} and no longer works. Use the newest one, or another way in.` })
+    if (!kit.valid) return setProblem({ tone: 'fail', text: 'One of the words in this kit got changed, so it can’t open your cloud. Try another copy, or type the words instead.' })
+    setProblem(undefined)
+    unlock.mutate({ words: kit.words }, { onError: (err) => setProblem({ tone: 'fail', text: err.message }) })
+  }
+  if (typing) return <KitWordsEntry onBack={() => setTyping(false)} />
+  return <Window>
+    <h1 className="m-0 text-[22px]/[1.25] font-semibold">Use your recovery kit</h1>
+    <p className="m-0 -mt-2 text-[14px] text-body">The file you saved when you turned on OpenHut Cloud.</p>
+    <div className="mt-2 flex w-[460px] flex-col gap-3">
+      {problem && <div role="alert" className={cn('flex items-center gap-3 rounded-xl px-3.5 py-3 text-left text-[13.5px]/[1.45]', problem.tone === 'warn' ? 'bg-warning-subtle text-warning-strong' : 'bg-[color-mix(in_oklch,var(--fail)_10%,transparent)] text-ink')}><Hut mood="worried" className="size-10" /><span>{problem.text}</span></div>}
+      <DropZone className="py-8" onText={tryKit}>{(hot) => unlock.isPending
+        ? <><Hut mood="key" className="mb-1 size-16 [&>svg]:animate-hop" /><span className="font-medium text-ink">Unlocking…</span></>
+        : <>
+          <span className={cn('mb-1 transition-transform duration-200', hot && '-translate-y-1 scale-110')}><Hut mood={hot ? 'party' : 'looking'} className="size-16" /></span>
+          <span className="text-[15px] font-medium text-ink">{hot ? 'Drop to unlock' : 'Drop your kit file here'}</span>
+          <span className="text-[12.5px] text-mute">{hot ? 'We’ll check it’s yours first' : 'or paste it with ⌘V'}</span>
+        </>}</DropZone>
+    </div>
+    <div className="flex w-[460px] items-center justify-between">
+      <Button type="button" variant="text" className="text-[12px] font-normal text-mute" onClick={onBack}>Back</Button>
+      <Button type="button" variant="secondary" className={PILL} onClick={() => setTyping(true)}>Type the words instead</Button>
+    </div>
+  </Window>
+}
+
+function KitWordsEntry({ onBack }: { onBack: () => void }) {
   const [words, setWords] = useState<string[]>(Array.from({ length: 12 }, () => ''))
+  const [typo, setTypo] = useState<{ at: number; text: string }>()
   const unlock = useUnlock()
   const set = (input: HTMLInputElement, index: number) => {
     const typed = input.value.toLowerCase().split(/\s+/)
     const parts = typed.filter(Boolean)
+    setTypo(undefined)
     setWords((all) => all.map((word, i) => i === index ? parts[0] ?? '' : i > index && i < index + parts.length ? parts[i - index] : word))
     const next = typed.length > 1 ? input.form?.querySelectorAll('input')[Math.min(index + Math.max(parts.length, 1), 11)] : undefined
     if (!next || next === input) return
@@ -166,26 +206,30 @@ function KitEntry({ onBack }: { onBack: () => void }) {
     next.select()
   }
   const paste = (event: ClipboardEvent<HTMLInputElement>) => {
-    const pasted = event.clipboardData.getData('text').toLowerCase().replace(/\d+\./g, ' ').split(/\s+/).filter(Boolean)
-    if (pasted.length !== 12) return
+    const pasted = readKit(event.clipboardData.getData('text'))
+    if (!pasted) return
     event.preventDefault()
-    setWords(pasted)
+    setTypo(undefined)
+    setWords(pasted.words)
   }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    unlock.mutate({ words }, { onError: () => setWords((all) => all.map(() => '')) })
+    const at = words.findIndex((word) => !kitWord(word))
+    if (at >= 0) return setTypo({ at, text: `Word ${at + 1} isn’t a kit word. Did you mean “${nearestWord(words[at])}”?` })
+    if (!validKit(words)) return setTypo({ at: -1, text: 'These words don’t fit together. Check each one against your kit, in order.' })
+    unlock.mutate({ words })
   }
   return <Window>
     <form onSubmit={submit} className="flex flex-col items-center gap-4">
-      <Mascot kind="kit" size={84} />
-      <h1 className="m-0 text-[22px]/[1.25] font-semibold">Type your 12 words</h1>
-      <p className="m-0 text-[14px] text-body">From the recovery kit you saved.</p>
-      <div className="mt-2 grid w-[460px] grid-cols-3 gap-2">{words.map((word, index) => <label key={index} className="flex h-10 items-center gap-2 rounded-xl border border-hair bg-card px-3 text-[13px] focus-within:border-ink">
+      <Hut mood={typo ? 'worried' : 'key'} className="size-[84px]" />
+      <h1 className="m-0 text-[22px]/[1.25] font-semibold">Type the 12 words</h1>
+      <p className="m-0 text-[14px] text-body">From your recovery kit, in order.</p>
+      <div className="mt-2 grid w-[460px] grid-cols-3 gap-2">{words.map((word, index) => <label key={index} className={cn('flex h-10 items-center gap-2 rounded-xl border border-hair bg-card px-3 text-[13px] focus-within:border-ink', typo?.at === index && 'border-fail text-fail focus-within:border-fail')}>
         <span className="w-4 text-[11px] text-mute tabular-nums">{index + 1}</span>
-        <Input className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-[13px] focus-visible:outline-none" value={word} autoFocus={index === 0} autoComplete="off" spellCheck={false} aria-label={`Word ${index + 1}`} onChange={(event) => set(event.target, index)} onPaste={paste} />
+        <Input className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-[13px] text-inherit focus-visible:outline-none" value={word} autoFocus={index === 0} autoComplete="off" spellCheck={false} aria-label={`Word ${index + 1}`} aria-invalid={typo?.at === index || undefined} onChange={(event) => set(event.target, index)} onPaste={paste} />
       </label>)}</div>
-      <Button type="submit" variant="primary" disabled={words.some((word) => !word) || unlock.isPending} className="mt-2 h-10 w-[460px] justify-center text-[14px]">{unlock.isPending ? 'Unlocking…' : 'Unlock'}</Button>
-      <ErrorNote message={unlock.error?.message} />
+      <ErrorNote className="w-[460px] text-left" message={typo?.text ?? unlock.error?.message} />
+      <Button type="submit" variant="primary" disabled={words.some((word) => !word) || unlock.isPending} className="h-10 w-[460px] justify-center text-[14px]">{unlock.isPending ? 'Unlocking…' : 'Unlock'}</Button>
       <Button type="button" variant="text" className="text-[12px] font-normal text-mute" onClick={onBack}>Back</Button>
     </form>
   </Window>
@@ -248,9 +292,9 @@ function Restoring({ cloud }: { cloud: Cloud }) {
   useEffect(() => void queries.invalidateQueries({ queryKey: ['agents'] }), [done, queries])
   const slots = Array.from({ length: Math.min(total, 3) }, (_, index) => agents[index])
   return <Window>
-    <div className="flex h-16 items-center gap-3">{total === 0 ? <Hut mood="key" className="size-16" /> : slots.map((each, index) => each ? <Face key={each.id} agent={each} size={64} /> : <span key={index} className="size-16 rounded-full bg-soft" />)}</div>
-    <h1 className="m-0 mt-2 text-[22px]/[1.25] font-semibold">Bringing your agents back</h1>
-    <p className="m-0 text-[14px] text-body">{current ? `Restoring ${current} · ${Math.min(done + 1, total)} of ${total}` : 'Unlocking your backup…'}</p>
+    <div className="flex h-[84px] items-end gap-3">{total === 0 ? <Hut mood="key" className="size-[84px] [&>svg]:animate-hop" /> : slots.map((each, index) => each ? <Face key={each.id} agent={each} size={64} /> : <span key={index} className="size-16 rounded-full bg-soft" />)}</div>
+    <h1 className="m-0 mt-2 text-[22px]/[1.25] font-semibold">{total === 0 && cloud.email ? `Welcome back, ${nameOf(cloud.email)}` : 'Bringing your agents back'}</h1>
+    <p className="m-0 text-[14px] text-body">{current ? `Restoring ${current} · ${Math.min(done + 1, total)} of ${total}` : `Unlocked. Bringing your agents and chats to this ${HERE}…`}</p>
   </Window>
 }
 

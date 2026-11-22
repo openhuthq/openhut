@@ -3,6 +3,7 @@ import * as z from 'zod/mini'
 import { checkProof, type CloudWorkspaceView, fromQr, KeyBox, Letter, MemberList, qrPayload, signProof, WordsNonce, type AllowedDevice, type Role, type Cloud, type CloudAuthorization, type CloudPairing, type RecoveryKit, type RuntimeInvite, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { addedOf, bodyOf, check, newUntil, youngUntil } from '@openhut/common/cloud/member-list.ts'
 import { askCommit, deviceWords, fingerprint, fromBase64, fromLongCode, letter, longCode, newKey, newPairing, toBase64 } from '@openhut/common/vault/vault.ts'
+import { kitId } from '@openhut/common/vault/kit-file.ts'
 import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
 import { log } from '../platform/events.ts'
@@ -52,6 +53,7 @@ export const cloudService = {
     const accountKey = await keysService.accountDeviceKey()
     const asked = locked ? resumeAsking() : undefined
     const askRooms = keysService.asked()
+    const inCloud = locked && session ? await kitInCloud() : null
     const devices = lists.flatMap((body) => {
       const mine = body?.members.find((member) => member.email === account?.email)
       return body && mine ? mine.devices.filter((key) => key !== mine.kit && key !== accountKey).map((key) => ({ key, here: key === here, addedAt: addedOf(body, key) ? new Date(addedOf(body, key)).toISOString() : null, name: body.names?.[key] ?? null, kind: body.runtimes?.includes(key) ? 'server' as const : 'mac' as const })) : []
@@ -60,7 +62,7 @@ export const cloudService = {
       object: 'cloud', status: locked ? 'locked' : on ? (syncService.ready() ? 'on' : 'offline') : 'off', email: locked?.email ?? (on && account ? account.email : null),
       device: here,
       workspace: on && account && members ? { id: account.workspace.id, version: members.version, members: members.members } : null,
-      keyStore: keyStore.kind(), kit: on ? kitOf() : null, kitInCloud: locked && session ? await kitInCloud() : Boolean(keysService.kitState().saved), backup: syncService.status(),
+      keyStore: keyStore.kind(), kit: on ? kitOf() : null, kitInCloud: inCloud ? inCloud.found : Boolean(keysService.kitState().saved), cloudKit: inCloud?.kit ?? null, backup: syncService.status(),
       signInError, keptAccount: on ? null : (keysService.kitState().saved ? keysService.account()?.email ?? null : null), devices, passkey: on && passkeySaved, youngUntil: young > Date.now() ? new Date(young).toISOString() : null, needsSignIn: Boolean(locked && !session),
       workspaces: on && account ? roomKeys.rooms().map(({ workspace: { id, key } }) => {
         const body = roomKeys.members(id)
@@ -299,7 +301,7 @@ export const cloudService = {
       }
       await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString() })
       await confirmKit({ account: signer, token, body: box, savedAt }).catch(warnCheck)
-      return { object: 'recovery_kit' as const, words, ask }
+      return { object: 'recovery_kit' as const, words, ask, kitId: await kitId(box), madeAt: new Date(savedAt).toISOString(), device: deviceName() }
     })
   },
 
@@ -453,8 +455,10 @@ async function accountExists(token: string): Promise<boolean> {
   return listed.data.length > 0 || (await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token })).status === 200
 }
 
-async function kitInCloud(): Promise<boolean> {
-  return (await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token: await keysService.token() }).catch(() => ({ status: 0 }))).status !== 404
+async function kitInCloud(): Promise<{ found: boolean; kit: { id: string; savedAt: string | null } | null }> {
+  const got = await cloud.account({ method: 'GET', path: '/v1/key-boxes/kit', token: await keysService.token() }).catch(() => ({ status: 0, json: null }))
+  const box = KeyBox.safeParse(got.json).data
+  return { found: got.status !== 404, kit: box ? { id: await kitId(box.body), savedAt: box.savedAt ?? null } : null }
 }
 
 function serial<T>(step: () => Promise<T>): Promise<T> {

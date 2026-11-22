@@ -259,6 +259,7 @@ export const Cloud = z.object({
   keyStore: z.enum(['keychain', 'file']),
   kit: z.nullable(z.object({ savedAt: Timestamp, differs: z.boolean() })),
   kitInCloud: z.boolean(),
+  cloudKit: z._default(z.nullable(z.object({ id: z.string(), savedAt: z.nullable(Timestamp) })), null),
   backup: Backup,
   signInError: z.nullable(z.string()),
   keptAccount: z.nullable(Email),
@@ -277,7 +278,7 @@ export type Cloud = z.infer<typeof Cloud>
 export const CloudAuthorization = z.object({ object: z.literal('cloud_authorization'), authorizationUrl: z.string() })
 export type CloudAuthorization = z.infer<typeof CloudAuthorization>
 
-export const RecoveryKit = z.object({ object: z.literal('recovery_kit'), words: z.array(z.string()), ask: z.array(z.number().check(z.int())) })
+export const RecoveryKit = z.object({ object: z.literal('recovery_kit'), words: z.array(z.string()), ask: z.array(z.number().check(z.int())), kitId: z.string(), madeAt: Timestamp, device: z.string() })
 export type RecoveryKit = z.infer<typeof RecoveryKit>
 
 const Prf = canonical({ length: 43, message: 'Send the passkey’s PRF output as 32 bytes of base64url.' })

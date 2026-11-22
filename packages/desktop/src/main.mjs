@@ -188,6 +188,19 @@ handle('devices.allow', answer(allow))
 handle('passkey.status', () => passkey(['status']))
 handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
 handle('passkey.open', () => passkey(['open']))
+handle('kit.save', saveKit)
+handle('kit.show', () => savedKit && shell.showItemInFolder(savedKit))
+
+let savedKit
+async function saveKit({ name, body } = {}) {
+  const options = { defaultPath: join(app.getPath('documents'), String(name).replaceAll('/', '-')), filters: [{ name: 'Text', extensions: ['txt'] }] }
+  const window = BrowserWindow.getFocusedWindow()
+  const { canceled, filePath } = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options)
+  if (canceled || !filePath) return { canceled: true }
+  writeFileSync(filePath, String(body), { mode: 0o600 })
+  savedKit = filePath
+  return { path: filePath, text: readFileSync(filePath, 'utf8') }
+}
 
 function passkey(args) {
   const helper = join(app.isPackaged ? join(process.resourcesPath, 'passkey') : join(HERE, '..', 'native', 'passkey', 'build'), 'OpenHut Passkey.app', 'Contents', 'MacOS', 'passkey')

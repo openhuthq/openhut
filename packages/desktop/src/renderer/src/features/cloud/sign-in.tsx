@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from 'react'
-import { CloudIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
+import { CloudIcon, File01Icon, SquareLock02Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import type { RecoveryKit } from '@openhut/common/cloud/cloud.ts'
+import { kitText, readKit } from '@openhut/common/vault/kit-file.ts'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { CopyButton } from '@/components/copy-button'
+import { DropZone } from '@/components/custom/drop-zone'
 import { ErrorNote } from '@/components/error-note'
 import { Creature } from '@/components/creature'
 import { Hut } from '@/components/hut'
@@ -13,8 +15,10 @@ import { useCloud, useNewKit, useSignIn } from '@/features/cloud/api'
 import { HERE } from '@/features/settings/desktop'
 import { shortDate } from '@/lib/format'
 import { isPhone } from '@/lib/native'
+import { WORDS } from '@/lib/platform'
 import { open } from '@/lib/router'
 import { toastError } from '@/lib/toast'
+import { copyText } from '@/lib/clipboard'
 import team from './team.png'
 
 const INK = '#0b0b0b'
@@ -77,10 +81,8 @@ export function SaveKit() {
   const make = useNewKit()
   const [shown, setShown] = useState<RecoveryKit>()
   const [replaced, setReplaced] = useState(false)
-  const [checking, setChecking] = useState(false)
-  const create = () => make.mutate(undefined, { onSuccess: (made) => { if (!isPhone()) download(made); setReplaced(Boolean(kit)); setShown(made) }, onError: toastError })
-  if (shown && checking) return <ConfirmKit kit={shown} onBack={() => setChecking(false)} onDone={() => open()} />
-  if (shown) return <KitWords kit={shown} replaced={replaced} onSaved={() => setChecking(true)} />
+  const create = () => make.mutate(undefined, { onSuccess: (made) => { setReplaced(Boolean(kit)); setShown(made) }, onError: toastError })
+  if (shown) return <KitSteps kit={shown} email={cloud?.email ?? ''} replaced={replaced} />
   return <Dialog size="narrow" label="Save a way back in" dismissable={false} onClose={() => open()}>
     <DialogHead title="Save a way back in" />
     <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
@@ -88,8 +90,8 @@ export function SaveKit() {
       <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
         <div className="flex items-center gap-3 px-4 py-3.5">
           <Mascot kind="kit" size={24} />
-          <span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Recovery kit</span><span className="text-[12px] text-mute">{saved ? 'Saved. Keep it offline.' : '12 words. Keep them offline.'}</span></span>
-          {!young && <Button type="button" variant="secondary" className={PILL} disabled={make.isPending} onClick={create}>{saved ? 'Make a new kit' : isPhone() ? 'Show the words' : 'Download'}</Button>}
+          <span className="grid flex-1 gap-px"><span className="text-[13.5px] font-medium">Recovery kit</span><span className="text-[12px] text-mute">{saved ? 'Saved. Keep it offline.' : 'One small file. Keep it offline.'}</span></span>
+          {!young && <Button type="button" variant="secondary" className={PILL} disabled={make.isPending} onClick={create}>{saved ? 'Make a new kit' : isPhone() ? 'Show the words' : 'Make my kit'}</Button>}
         </div>
       </div>
       {young && <p className="m-0 text-[12px] text-mute">This {HERE} was added less than 3 days ago, so it can’t make a kit yet. Make one from an older device, or wait until {shortDate.format(new Date(young))}.</p>}
@@ -98,25 +100,106 @@ export function SaveKit() {
   </Dialog>
 }
 
+type KitBridge = { save: (input: { name: string; body: string }) => Promise<{ canceled?: boolean; path?: string; text?: string }>; show: () => Promise<void> }
+const kitBridge: KitBridge | undefined = Reflect.get(window, 'openhut')?.kit
+type Step = 'save' | 'paste' | 'drop' | 'words' | 'type' | { kept: string | null; how: 'file' | 'copy' | 'paper' }
+
+function KitSteps({ kit, email, replaced }: { kit: RecoveryKit; email: string; replaced: boolean }) {
+  const [step, setStep] = useState<Step>(isPhone() ? 'words' : 'save')
+  const [error, setError] = useState<string>()
+  const text = kitText({ email, madeAt: kit.madeAt, device: kit.device, kitId: kit.kitId, words: kit.words })
+  const name = `OpenHut Recovery Kit (${email}).txt`
+  const same = (other: string | undefined) => readKit(other ?? '')?.words.join(' ') === kit.words.join(' ')
+  const go = (next: Step) => {
+    setError(undefined)
+    setStep(next)
+  }
+  const save = async () => {
+    if (!kitBridge) {
+      download({ name, text })
+      return go('drop')
+    }
+    const saved = await kitBridge.save({ name, body: text })
+    if (saved.canceled) return
+    if (!same(saved.text)) return setError('The saved file doesn’t match your kit. Save it again.')
+    go({ kept: saved.path ?? null, how: 'file' })
+  }
+  const copy = () => copyText(text).then((ok) => ok && go('paste'))
+  const check = (pasted: string) => same(pasted) ? go({ kept: null, how: step === 'drop' ? 'file' : 'copy' }) : setError(readKit(pasted) ? 'That’s a different kit. Use the one you just saved.' : 'That doesn’t look like your kit. Try again.')
+  if (typeof step === 'object') return <KitKept path={step.kept} how={step.how} />
+  if (step === 'words') return <KitWords kit={kit} replaced={replaced} onBack={isPhone() ? undefined : () => go('save')} onSaved={() => go('type')} />
+  if (step === 'type') return <ConfirmKit kit={kit} onBack={() => go('words')} onDone={() => go({ kept: null, how: 'paper' })} />
+  if (step === 'paste' || step === 'drop') return <KitCheck how={step} error={error} onText={check} onBack={() => go('save')} />
+  return <Dialog size="narrow" label="Save your recovery kit" onClose={() => open()}>
+    <DialogHead title="Save your recovery kit" onClose={() => open()} />
+    <div className="flex flex-col items-center gap-4 px-6 pt-7 pb-6 text-center text-[13px]/[18px]">
+      <span className="animate-grow"><Mascot kind="kit" size={92} /></span>
+      <span className="text-[17px]/[1.3] font-semibold">One small file opens your cloud</span>
+      <p className="m-0 max-w-[400px] text-[13.5px] text-body">With your Google account, it opens your cloud on a new Mac. We can't reset it, so keep it somewhere safe.</p>
+      {replaced && <p className="m-0 font-medium text-ink">Your old kit stops working now.</p>}
+      <span className="flex max-w-full items-center gap-2 rounded-lg bg-soft px-3 py-1.5 font-mono text-[12px] text-ink"><I icon={File01Icon} size={14} className="shrink-0" /><span className="truncate">{name}</span></span>
+    </div>
+    <DialogFoot error={error} start={<Button type="button" variant="text" className="text-[13px] font-normal text-body" onClick={() => go('words')}>Show words</Button>}>
+      <Button type="button" variant="secondary" onClick={() => void copy()}>Copy</Button>
+      <Button type="button" variant="primary" onClick={() => void save()}>Save kit…</Button>
+    </DialogFoot>
+  </Dialog>
+}
+
+function KitCheck({ how, error, onText, onBack }: { how: 'paste' | 'drop'; error?: string; onText: (text: string) => void; onBack: () => void }) {
+  return <Dialog size="narrow" label="Check your kit" dismissable={false} onClose={() => open()}>
+    <DialogHead title={how === 'paste' ? 'Paste it back to check' : 'Drop it back to check'} />
+    <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
+      <p className="m-0 text-body">{how === 'paste' ? 'Paste your kit from where you keep it, like your password manager. Then we know it’s there.' : 'Your kit is in Downloads. Drop it here, so we know it saved.'}</p>
+      <DropZone onText={onText}>{(hot) => <>
+        <Hut mood={hot ? 'party' : 'looking'} className="mb-1 size-14" />
+        <span className="font-medium text-ink">{hot ? 'Drop to check' : how === 'paste' ? 'Paste it here with ⌘V' : 'Drop your kit file here'}</span>
+        {!hot && <span className="text-[12.5px] text-mute">{how === 'paste' ? 'or drop the file' : 'or paste it with ⌘V'}</span>}
+      </>}</DropZone>
+      <ErrorNote message={error} />
+    </div>
+    <DialogFoot start={<Button type="button" variant="secondary" onClick={onBack}>Back</Button>}><span /></DialogFoot>
+  </Dialog>
+}
+
+function KitKept({ path, how }: { path: string | null; how: 'file' | 'copy' | 'paper' }) {
+  const line = { file: 'Saved and checked', copy: 'Copied and checked', paper: 'Words checked' }[how]
+  return <Dialog size="narrow" label="Kit saved and checked" dismissable={false} onClose={() => open()}>
+    <DialogHead title="Kit saved and checked" />
+    <div className="flex flex-col items-center gap-3 px-6 pt-7 pb-6 text-center text-[13px]/[18px]">
+      <Hut mood="party" className="size-[84px] [&>svg]:animate-hop" />
+      <span className="text-[17px]/[1.3] font-semibold">Got it. Your kit is safe.</span>
+      <span className="flex items-center gap-1.5 rounded-full bg-success-subtle px-3 py-1 text-[12.5px] font-medium text-ink"><I icon={Tick02Icon} size={14} className="text-pass" />{line}</span>
+      {path && <span className="flex max-w-full items-start gap-2 rounded-lg bg-soft px-3 py-1.5 text-left font-mono text-[12px] text-ink"><I icon={File01Icon} size={14} className="mt-px shrink-0" /><span className="min-w-0 break-words">{shown(path)}</span></span>}
+      <p className="m-0 max-w-[400px] text-body">Keep it offline if you can, like a password manager or a USB stick. Anyone with your kit and your Google account can open your cloud.</p>
+    </div>
+    <DialogFoot start={path && kitBridge ? <Button type="button" variant="secondary" onClick={() => void kitBridge?.show()}>{WORDS.showFolder}</Button> : undefined}><Button type="button" variant="primary" autoFocus onClick={() => open()}>Continue</Button></DialogFoot>
+  </Dialog>
+}
+
+function shown(path: string): string {
+  return path.replace(/^\/Users\/[^/]+\/Library\/Mobile Documents\/com~apple~CloudDocs/, 'iCloud Drive').replace(/^\/Users\/[^/]+/, '~').split('/').join(' › ')
+}
+
 function numbered(kit: RecoveryKit): string {
   return kit.words.map((word, index) => `${index + 1}. ${word}`).join('\n')
 }
 
-function download(kit: RecoveryKit) {
-  const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([`OpenHut recovery kit\n\nThese 12 words and your Google account open your cloud. Keep them offline.\n\n${numbered(kit)}\n`], { type: 'text/plain' })), download: 'openhut-recovery-kit.txt' })
+function download({ name, text }: { name: string; text: string }) {
+  const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })), download: name })
   link.click()
   URL.revokeObjectURL(link.href)
 }
 
-function KitWords({ kit, replaced, onSaved }: { kit: RecoveryKit; replaced: boolean; onSaved: () => void }) {
-  return <Dialog size="narrow" label="Save your recovery words" onClose={() => open()}>
-    <DialogHead title="Save your recovery words" onClose={() => open()} />
+function KitWords({ kit, replaced, onBack, onSaved }: { kit: RecoveryKit; replaced: boolean; onBack?: () => void; onSaved: () => void }) {
+  return <Dialog size="narrow" label="Write down your words" onClose={() => open()}>
+    <DialogHead title="Write down your words" onClose={() => open()} />
     <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
-      <p className="m-0 text-body">They unlock your cloud on a new Mac. We can't reset them.</p>
+      <p className="m-0 text-body">They open your cloud on a new Mac. We can't reset them.</p>
       {replaced && <p className="m-0 font-medium text-ink">Your old recovery words stop working now.</p>}
       <div className="grid grid-cols-3 gap-2 phone:grid-cols-2">{kit.words.map((word, index) => <span key={index} className="flex items-center gap-2 rounded-lg border border-hair bg-card px-3 py-2 font-mono text-[13px]"><span className="w-4 text-right text-[11px] text-mute">{index + 1}</span>{word}</span>)}</div>
     </div>
-    <DialogFoot start={<CopyButton text={numbered(kit)} label="Copy" />}><Button type="button" variant="primary" onClick={onSaved}>I saved them</Button></DialogFoot>
+    <DialogFoot start={onBack ? <Button type="button" variant="secondary" onClick={onBack}>Back</Button> : <CopyButton text={numbered(kit)} label="Copy" />}><Button type="button" variant="primary" onClick={onSaved}>I wrote them down</Button></DialogFoot>
   </Dialog>
 }
 
@@ -129,11 +212,11 @@ function ConfirmKit({ kit, onBack, onDone }: { kit: RecoveryKit; onBack: () => v
     if (right) onDone()
     setWrong(!right)
   }
-  return <Dialog size="narrow" label="Check your recovery words" dismissable={false} onClose={() => open()}>
+  return <Dialog size="narrow" label="Check your words" dismissable={false} onClose={() => open()}>
     <form onSubmit={submit}>
-      <DialogHead title="Check your recovery words" />
+      <DialogHead title="Check your words" />
       <div className="flex flex-col gap-4 px-5 py-6 text-[13px]/[18px]">
-        <p className="m-0 text-body">Type two of them, so we know the kit is saved.</p>
+        <p className="m-0 text-body">Type two of them from your paper, so we know you have them.</p>
         {kit.ask.map((index, i) => <label key={index} className="flex flex-col gap-1.5"><span className="font-medium">Word {index + 1}</span><Input name={`word-${index}`} className="font-mono" autoComplete="off" spellCheck={false} autoFocus={i === 0} required /></label>)}
         <ErrorNote message={wrong ? 'Those words don’t match your kit. Check the numbers and try again.' : undefined} />
       </div>
