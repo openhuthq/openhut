@@ -542,7 +542,7 @@ async function signedDelete({ ws, json }: { ws: string; json: unknown }): Promis
   const notice = Gone.safeParse(json).data?.deleted
   const body = roomKeys.members(ws)
   const signer = notice && body?.members.find((member) => member.devices.includes(notice.by))
-  if (!notice || !body || !signer || signer.role === 'member' || body.runtimes?.includes(notice.by) || newUntil(body, notice.by) > notice.signedAt) return false
+  if (!notice || !body || !signer || signer.role === 'member' || signer.kit === notice.by || body.runtimes?.includes(notice.by) || newUntil(body, notice.by) > notice.signedAt) return false
   return checkProof({ device: notice.by, proof: 'delete', parts: [ws, String(notice.signedAt)], signature: notice.signature })
 }
 
