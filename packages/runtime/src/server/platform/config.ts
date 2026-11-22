@@ -19,7 +19,7 @@ export const config = {
   host: process.env.OPENHUT_HOST ?? '127.0.0.1',
   gatewayPort: GATEWAY_PORT,
   releaseUrl: process.env.OPENHUT_URL ?? 'https://openhut.dev',
-  telemetry: !TEST_MODEL,
+  telemetry: !TEST_MODEL && BUILD !== 'dev',
   cloudUrl: process.env.OPENHUT_CLOUD_URL ?? 'https://cloud.openhut.dev',
   telemetryUrl: `${process.env.OPENHUT_CLOUD_URL ?? 'https://cloud.openhut.dev'}/v1/events`,
   socket: process.env.OPENHUT_SOCKET ?? join(DATA, 'openhut.sock'),

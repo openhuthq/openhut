@@ -43,7 +43,8 @@ npm run dev
 ```
 
 Open `http://localhost:5173`. `node scripts/seed-ui.ts` on a fresh `.data` fills in sample agents and
-connections. agentd runs with the memory sandbox, so agents never really run on a laptop.
+connections. Agents run as real Hermes processes, which need the bundled runtime first:
+`npm -w @openhut/desktop run pack-backend` (needs `uv`). Connect Claude in Settings to talk to them.
 
 ## Check it
 
