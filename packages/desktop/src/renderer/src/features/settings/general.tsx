@@ -1,5 +1,5 @@
 import type { IconSvgElement } from '@hugeicons/react'
-import { Alert02Icon, ChartColumnIcon, Coffee01Icon, Folder01Icon, Login01Icon, Notification01Icon, CloudDownloadIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
+import { Alert02Icon, ChartColumnIcon, Coffee01Icon, Folder01Icon, Login01Icon, Notification01Icon, CloudDownloadIcon, SquareLock02Icon, TestTube01Icon } from '@hugeicons/core-free-icons'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -26,6 +26,7 @@ export function GeneralSettings() {
       {desktop && <PrefSwitch icon={Login01Icon} hue="text-hue-green" name="openAtLogin" title="Open at login" note="Agents start in the background, without opening this window." />}
       {desktop && <PrefSwitch icon={Coffee01Icon} hue="text-hue-amber" name="keepAwake" title={`Keep this ${HERE} awake while agents run`} note={`The screen can still turn off. Agents can't answer while the ${HERE} sleeps.`} />}
       <Version />
+      {desktop && <PrefSwitch icon={TestTube01Icon} hue="text-hue-violet" name="betaUpdates" title="Get beta updates" note="New versions before everyone else. Turned off, you stay on your version until a newer stable one." />}
       <Vault />
     </Rows>
     {!isPhone() && <Section title="Notify me when">

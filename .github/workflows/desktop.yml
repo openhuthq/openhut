@@ -63,7 +63,7 @@ jobs:
             echo "::error::$GITHUB_REF_NAME is already published, and a published release never changes. Bump the version instead."
             exit 1
           fi
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "OpenHut ${GITHUB_REF_NAME#v}" --notes ""
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --prerelease="$(case "$GITHUB_REF_NAME" in *-*) echo true ;; *) echo false ;; esac)" --title "OpenHut ${GITHUB_REF_NAME#v}" --notes ""
 
   checks:
     runs-on: ubuntu-latest
