@@ -1068,7 +1068,7 @@ app.whenReady().then(async () => {
     return error.message
   })
   if (fresh) {
-    invited = inviteLink(linked && `https://openhut.dev${linked}`) ?? inviteLink(clipboard.readText())
+    invited = inviteLink(linked && `https://openhut.dev${linked}`) ?? (TEST_HOME ? null : inviteLink(clipboard.readText()))
     window('/welcome')
   }
   const started = await booted
