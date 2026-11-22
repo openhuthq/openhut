@@ -67,7 +67,9 @@ jobs:
         run: |
           cd private/cloud
           npx wrangler r2 bucket info openhut-files > /dev/null 2>&1 || npx wrangler r2 bucket create openhut-files
+          CI=1 npx wrangler d1 migrations apply openhut-stats --remote
           npm run deploy
+          npx wrangler secret list | grep -q '"BETTER_AUTH_SECRET"' || echo "::warning::BETTER_AUTH_SECRET isn't set on openhut-cloud, so cloud sign-in answers 503. Run: npx wrangler secret put BETTER_AUTH_SECRET (in private/cloud)."
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Check that openhut.dev serves this release

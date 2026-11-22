@@ -10,7 +10,6 @@ export const CreateOAuthAuthorization = z.object({
   codeChallenge: z.string().check(z.regex(/^[A-Za-z0-9_-]{43,128}$/, 'Send the S256 PKCE challenge, base64url.')),
   redirectUrl: z.string().check(z.maxLength(500)),
   state: z.string().check(z.minLength(8), z.maxLength(200)),
-  deviceKey: z.optional(z.string().check(z.regex(/^[A-Za-z0-9_-]{86}$/, 'Send a device key as 64 bytes of base64url.'))),
 })
 export type CreateOAuthAuthorization = z.infer<typeof CreateOAuthAuthorization>
 

@@ -38,11 +38,11 @@ const cloud = createServer(async (req, res) => {
     account.boxes.set(name, box)
     return reply(200, box)
   }
-  if (req.url === '/v1/oauth-authorizations') {
+  if (req.url === '/v1/auth/sign-in/social') {
     authorization = body.state ?? ''
-    return reply(200, { id: 'sealed-authorization', object: 'oauth_authorization', provider: 'google', authorizationUrl: 'https://accounts.example/auth', expiresAt: new Date().toISOString() })
+    return reply(200, { url: 'https://accounts.example/auth', redirect: false })
   }
-  if (req.url === '/v1/sessions') return reply(200, { object: 'cloud_session', token: 'session-token', sub: 'dev-sara', email: 'sara@example.com', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
+  if (req.url === '/v1/auth/openhut/session') return reply(200, { object: 'cloud_session', token: 'session-token', refresh: 'refresh-token', sub: 'dev-sara', email: 'sara@example.com', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
   if (req.url === '/v1/workspaces' && req.method === 'GET') {
     const data = account.hideWorkspaces ? [] : [...account.boxes].filter(([name]) => name.startsWith('workspace/')).map(([name, box]) => ({ id: name.slice(10), object: 'workspace', key: box.body, by: box.by, signature: box.signature }))
     return reply(200, { object: 'list', data })

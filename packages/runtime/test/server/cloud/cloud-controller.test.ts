@@ -7,18 +7,27 @@ import { WebSocketServer } from 'ws'
 import Fastify from 'fastify'
 import { fromBase64, identity, lock, newWords, toBase64 } from '@openhut/common/vault/vault.ts'
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
+import { checkProof } from '@openhut/common/cloud/cloud.ts'
 
-const seen: { state?: string; deviceKey?: string; members?: unknown; email: string; kit?: unknown; passkey?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean; dropKit?: boolean; refuseBox?: boolean; confirmed?: unknown; cut?: boolean; down?: boolean; failDelete?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [] }
+const seen: { state?: string; deviceKey?: string; refreshed: number; members?: unknown; email: string; kit?: unknown; passkey?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean; dropKit?: boolean; refuseBox?: boolean; confirmed?: unknown; cut?: boolean; down?: boolean; failDelete?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [], refreshed: 0 }
 const cloud = createServer(async (req, res) => {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
   const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown> : {}
   const reply = (status: number, json: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(json))
-  if (req.url === '/v1/oauth-authorizations') {
-    Object.assign(seen, { state: body.state, deviceKey: body.deviceKey })
-    return reply(200, { id: 'sealed-authorization', object: 'oauth_authorization', provider: 'google', authorizationUrl: 'https://accounts.example/auth', expiresAt: new Date().toISOString() })
+  if (req.url === '/v1/auth/sign-in/social') {
+    Object.assign(seen, { state: body.state, deviceKey: body.device })
+    return reply(200, { url: 'https://accounts.example/auth', redirect: false })
   }
-  if (req.url === '/v1/sessions') return reply(body.deviceKey === seen.deviceKey ? 200 : 400, { object: 'cloud_session', token: 'session-token', sub: `dev-${seen.email}`, email: seen.email, expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
+  if (req.url === '/v1/auth/openhut/session') {
+    const signed = await checkProof({ device: seen.deviceKey ?? '', proof: 'session', parts: [String(body.code)], signature: String(body.signature) })
+    return reply(signed ? 200 : 400, { object: 'cloud_session', token: 'session-token', refresh: 'refresh-token', sub: `dev-${seen.email}`, email: seen.email, expiresAt: new Date(Date.now() + 60_000).toISOString() })
+  }
+  if (req.url === '/v1/auth/openhut/token') {
+    const signed = body.session === 'refresh-token' && await checkProof({ device: seen.deviceKey ?? '', proof: 'refresh', parts: ['refresh-token', String(body.signedAt)], signature: String(body.signature) })
+    if (signed) seen.refreshed++
+    return reply(signed ? 200 : 401, { object: 'cloud_session', token: 'session-token', refresh: 'refresh-token', sub: `dev-${seen.email}`, email: seen.email, expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
+  }
   if (seen.down && req.url?.startsWith('/v1/key-boxes/kit')) return req.socket.destroy()
   if (req.url === '/v1/key-boxes/kit' && req.method === 'PUT' && seen.cut) {
     seen.down = true
@@ -103,6 +112,7 @@ test('/api/cloud is off until sign-in, and off again after sign-out', async () =
   const on = await status()
   assert.equal(on.status, 'on')
   assert.equal(on.email, 'mo@example.com')
+  assert.ok(seen.refreshed > 0, 'a session near its hour refreshes with this device’s signature')
   assert.deepEqual(on.workspace?.members.map((member) => [member.email, member.role]), [['mo@example.com', 'owner']])
   assert.ok(seen.members)
 
