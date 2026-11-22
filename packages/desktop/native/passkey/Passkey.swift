@@ -86,6 +86,51 @@ final class Passkey: NSObject, ASAuthorizationControllerDelegate, ASAuthorizatio
   }
 }
 
+final class SignIn: NSObject, ASWebAuthenticationPresentationContextProviding {
+  let window: NSWindow
+  var session: ASWebAuthenticationSession?
+
+  init(frame: NSRect?) {
+    window = NSWindow(contentRect: frame ?? NSRect(x: 0, y: 0, width: 520, height: 420), styleMask: frame == nil ? [.titled, .fullSizeContentView] : [.borderless], backing: .buffered, defer: false)
+    super.init()
+    if frame == nil {
+      window.title = "OpenHut"
+      window.titlebarAppearsTransparent = true
+      window.center()
+    } else {
+      window.isOpaque = false
+      window.backgroundColor = .clear
+      window.hasShadow = false
+      window.ignoresMouseEvents = true
+    }
+    window.level = .floating
+  }
+
+  func start(url: URL, scheme: String) {
+    let session = ASWebAuthenticationSession(url: url, callbackURLScheme: scheme) { callback, error in
+      if let callback { reply(["url": callback.absoluteString]) }
+      let canceled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
+      reply(["error": canceled ? "canceled" : "failed", "message": error?.localizedDescription ?? "Sign-in didn't finish."], status: 1)
+    }
+    session.presentationContextProvider = self
+    session.prefersEphemeralWebBrowserSession = false
+    self.session = session
+    window.makeKeyAndOrderFront(nil)
+    NSApplication.shared.activate(ignoringOtherApps: true)
+    if !session.start() { reply(["error": "failed", "message": "macOS couldn't open the sign-in sheet."], status: 1) }
+  }
+
+  func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+    window
+  }
+}
+
+func frameOf(_ parts: ArraySlice<String>) -> NSRect? {
+  let numbers = parts.compactMap { Double($0) }
+  guard numbers.count == 4, let screen = NSScreen.screens.first else { return nil }
+  return NSRect(x: numbers[0], y: screen.frame.height - numbers[1] - numbers[3], width: numbers[2], height: numbers[3])
+}
+
 let arguments = Array(CommandLine.arguments.dropFirst())
 switch arguments.first {
 case "status":
@@ -96,6 +141,12 @@ case "create" where arguments.count == 2, "open" where arguments.count == 1:
   NSApplication.shared.setActivationPolicy(.regular)
   DispatchQueue.main.async { arguments[0] == "create" ? passkey.create(email: arguments[1]) : passkey.open() }
   NSApplication.shared.run()
+case "signin" where arguments.count == 3 || arguments.count == 7:
+  guard let url = URL(string: arguments[1]), url.scheme == "https" || (url.scheme == "http" && ["127.0.0.1", "localhost"].contains(url.host ?? "")) else { reply(["error": "usage", "message": "Sign in needs an https URL."], status: 64) }
+  NSApplication.shared.setActivationPolicy(.regular)
+  let signIn = SignIn(frame: frameOf(arguments.dropFirst(3)))
+  DispatchQueue.main.async { signIn.start(url: url, scheme: arguments[2]) }
+  NSApplication.shared.run()
 default:
-  reply(["error": "usage", "message": "passkey status | create <email> | open"], status: 64)
+  reply(["error": "usage", "message": "passkey status | create <email> | open | signin <url> <scheme> [x y width height]"], status: 64)
 }

@@ -21,13 +21,10 @@ export function useCloud() {
     queryKey: CLOUD_KEY,
     queryFn: async () => {
       const cloud = await request({ schema: Cloud, computer: 'local', path: '/api/cloud' })
-      if (cloud.status === 'off' && cloud.signInError && client.getQueryData(SIGN_IN_KEY)) {
+      const settling = client.getQueryData(SIGN_IN_KEY) && (cloud.status !== 'off' || cloud.signInError)
+      if (settling) {
         client.setQueryData(SIGN_IN_KEY, false)
-        navigate('/settings/cloud?open=sign-in', true)
-      }
-      if (cloud.status !== 'off' && client.getQueryData(SIGN_IN_KEY)) {
-        client.setQueryData(SIGN_IN_KEY, false)
-        if (location.pathname !== '/join') navigate(cloud.status === 'locked' || cloud.kit ? '/settings/cloud' : '/settings/cloud?open=welcome', true)
+        landAfterSignIn(cloud)
       }
       return cloud
     },
@@ -40,7 +37,13 @@ export function useSigningIn(): boolean {
 }
 
 export function enableCloud() {
-  navigate('/settings/cloud?open=sign-in')
+  navigate('/settings/backup?open=enable')
+}
+
+function landAfterSignIn(cloud: Cloud) {
+  if (location.pathname === '/join') return
+  if (new URLSearchParams(location.search).get('open') === 'enable') return
+  if (cloud.status === 'locked' || !cloud.kit) navigate('/settings/backup?open=enable', true)
 }
 
 function pollOf(cloud: Cloud | undefined): number | false {
@@ -108,7 +111,7 @@ export function useRemoveMac() {
     mutationFn: (key: string) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/devices/${encodeURIComponent(key)}`, method: 'DELETE' }),
     onSuccess: (cloud) => {
       client.setQueryData(CLOUD_KEY, cloud)
-      notify({ title: 'Mac removed', note: NEW_KIT_HINT, action: { label: 'Make a new kit', onClick: () => navigate('/settings/cloud?open=kit') } })
+      notify({ title: 'Mac removed', note: NEW_KIT_HINT, action: { label: 'Make a new kit', onClick: () => navigate('/settings/backup?open=kit') } })
     },
     onError: toastError,
   })
@@ -120,18 +123,34 @@ export function useStartOver() {
     mutationFn: () => request({ schema: Cloud, computer: 'local', path: '/api/cloud/key-boxes', method: 'DELETE' }),
     onSuccess: (cloud) => {
       client.setQueryData(CLOUD_KEY, cloud)
-      navigate('/settings/cloud?open=kit', true)
+      navigate('/settings/backup?open=kit', true)
     },
   })
 }
 
+type SheetReply = { url?: string; error?: string; message?: string }
+const sheet: { signIn: (url: string) => Promise<SheetReply> } | undefined = Reflect.get(window, 'openhut')?.cloud
+
 export function useSignIn() {
   const client = useQueryClient()
+  const inBrowser = async () => {
+    const { authorizationUrl } = await request({ schema: CloudAuthorization, computer: 'local', path: '/api/cloud/sessions', method: 'POST' })
+    window.open(authorizationUrl, '_blank', 'noopener')
+    client.setQueryData(SIGN_IN_KEY, true)
+  }
   return useMutation({
-    mutationFn: () => request({ schema: CloudAuthorization, computer: 'local', path: '/api/cloud/sessions', method: 'POST' }),
-    onSuccess: ({ authorizationUrl }) => {
-      window.open(authorizationUrl, '_blank', 'noopener')
-      client.setQueryData(SIGN_IN_KEY, true)
+    mutationFn: async () => {
+      if (!sheet) return inBrowser()
+      const { authorizationUrl } = await request({ schema: CloudAuthorization, computer: 'local', path: '/api/cloud/sessions', method: 'POST', body: { sheet: true } })
+      const back = await sheet.signIn(authorizationUrl)
+      if (back.error === 'missing') return inBrowser()
+      if (back.error === 'canceled') return
+      if (!back.url) throw new Error(back.message ?? 'Sign-in didn’t finish. Try again.')
+      const params = new URL(back.url).searchParams
+      const body = Object.fromEntries(['state', 'code', 'error'].flatMap((name) => params.get(name) ? [[name, params.get(name)]] : []))
+      const cloud = await request({ schema: Cloud, computer: 'local', path: '/api/cloud/callbacks', method: 'POST', body })
+      client.setQueryData(CLOUD_KEY, cloud)
+      landAfterSignIn(cloud)
     },
   })
 }

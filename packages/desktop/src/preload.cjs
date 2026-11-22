@@ -28,6 +28,9 @@ contextBridge.exposeInMainWorld('openhut', {
     remove: (input) => ipcRenderer.invoke('devices.remove', input),
     allow: (input) => ipcRenderer.invoke('devices.allow', input),
   },
+  cloud: {
+    signIn: (url) => ipcRenderer.invoke('cloud.signIn', { url }),
+  },
   passkey: {
     status: () => ipcRenderer.invoke('passkey.status'),
     create: (input) => ipcRenderer.invoke('passkey.create', input),

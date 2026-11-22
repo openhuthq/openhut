@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import * as z from 'zod/mini'
-import { AddPasskey, AddRuntime, AllowDevice, ApproveDevice, ChangeRole, CreateWorkspace, DeleteWorkspace, DeviceKey, RenameWorkspace, RuntimeInvite, SetHere, UnlockCloud } from '@openhut/common/cloud/cloud.ts'
+import { AddPasskey, AddRuntime, FinishSignIn, StartSignIn, AllowDevice, ApproveDevice, ChangeRole, CreateWorkspace, DeleteWorkspace, DeviceKey, RenameWorkspace, RuntimeInvite, SetHere, UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { requireSignIn } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
 import { syncService } from './sync-service.ts'
@@ -8,9 +8,11 @@ import { syncService } from './sync-service.ts'
 export const cloudController: FastifyPluginAsync = async (app) => {
   app.get('/', SignedIn, async () => cloudService.status())
 
-  app.post('/sessions', SignedIn, async () => cloudService.start())
+  app.post<{ Body: StartSignIn | null | undefined }>('/sessions', StartRequest, async (req) => cloudService.start({ sheet: req.body?.sheet === true }))
 
   app.get<{ Querystring: { state?: string; code?: string; error?: string } }>('/callback', async (req, reply) => reply.type('text/html; charset=utf-8').send(await cloudService.finish(req.query)))
+
+  app.post<{ Body: FinishSignIn }>('/callbacks', FinishRequest, async (req) => cloudService.complete(req.body))
 
   app.delete('/session', SignedIn, async () => cloudService.signOut())
 
@@ -66,6 +68,8 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 }
 
 const SignedIn = { onRequest: requireSignIn }
+const StartRequest = { onRequest: requireSignIn, schema: { body: z.nullish(StartSignIn) } }
+const FinishRequest = { onRequest: requireSignIn, schema: { body: FinishSignIn } }
 const UnlockRequest = { onRequest: requireSignIn, schema: { body: UnlockCloud } }
 const AddRuntimeRequest = { onRequest: requireSignIn, schema: { body: AddRuntime } }
 const JoinRequest = { onRequest: requireSignIn, schema: { body: RuntimeInvite } }

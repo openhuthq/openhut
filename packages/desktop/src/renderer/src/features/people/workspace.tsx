@@ -61,7 +61,7 @@ function DangerZone({ workspace }: { workspace: CloudWorkspaceView }) {
   if (!rows.length) return null
   const changed = () => {
     notify({ title: 'Keys changed', note: 'Everyone’s Macs pick up the new key.' })
-    if (workspace.own) navigate('/settings/cloud?open=kit')
+    if (workspace.own) navigate('/settings/backup?open=kit')
   }
   return <section className="flex flex-col gap-2.5">
     <span className="px-1 text-[13.5px] font-semibold">Danger zone</span>

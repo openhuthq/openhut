@@ -170,6 +170,7 @@
 @keyframes hop { 0%, 100% { transform: none } 16% { transform: scale(1.1, .86) } 44% { transform: scale(.93, 1.1) translateY(-16%) } 62% { transform: scale(.97, 1.04) translateY(-4%) } 76% { transform: scale(1.08, .9) } }
 @keyframes sweep { 50% { rotate: -14deg } }
 @keyframes jig { 25% { rotate: -8deg } 75% { rotate: 8deg } }
+@keyframes stepin { from { opacity: 0; translate: 12px 0 } }
 @keyframes turn { 0%, 60%, 100% { rotate: 0deg } 75% { rotate: -35deg } }
 @keyframes rise { 0% { opacity: 0; translate: 0 4px } 40% { opacity: 1 } 100% { opacity: 0; translate: 6px -10px } }
 @keyframes drip { 0%, 30% { translate: 0 0; opacity: 1 } 100% { translate: 0 8px; opacity: 0 } }

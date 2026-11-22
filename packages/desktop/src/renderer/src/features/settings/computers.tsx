@@ -268,7 +268,7 @@ function AddComputer() {
       <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Tailscale" note="Use the Tailscale you already have. Nothing goes through OpenHut."><Chevron /></Row>
       {signedIn
         ? <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="The easiest way, no Tailscale needed. Encrypted, so we can't read it."><Chevron /></Row>
-        : <Row icon={<Hut mood="asleep" className="size-6 opacity-50 grayscale" />} title="OpenHut Relay" note="The easiest way, no Tailscale needed. Needs OpenHut Cloud."><EnableCloud short /></Row>}
+        : <Row icon={<Hut mood="asleep" className="size-6 opacity-50 grayscale" />} title="OpenHut Relay" note="The easiest way, no Tailscale needed. Needs OpenHut Cloud."><EnableCloud /></Row>}
     </Rows>
   </TailscaleDialog>
 }

@@ -188,6 +188,11 @@ handle('devices.allow', answer(allow))
 handle('passkey.status', () => passkey(['status']))
 handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
 handle('passkey.open', () => passkey(['open']))
+handle('cloud.signIn', ({ url } = {}) => {
+  const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  const { x, y, width, height } = window?.getBounds() ?? {}
+  return passkey(['signin', String(url), 'openhut', ...(window ? [x, y, width, height].map(String) : [])], 600_000)
+})
 handle('kit.save', saveKit)
 
 async function saveKit({ name, body } = {}) {
@@ -199,10 +204,10 @@ async function saveKit({ name, body } = {}) {
   return { text: readFileSync(filePath, 'utf8') }
 }
 
-function passkey(args) {
+function passkey(args, timeout = 180_000) {
   const helper = join(app.isPackaged ? join(process.resourcesPath, 'passkey') : join(HERE, '..', 'native', 'passkey', 'build'), 'OpenHut Passkey.app', 'Contents', 'MacOS', 'passkey')
   if (process.platform !== 'darwin' || !existsSync(helper)) return { error: 'missing' }
-  return new Promise((resolve) => execFile(helper, args, { timeout: 180_000 }, (_error, stdout) => {
+  return new Promise((resolve) => execFile(helper, args, { timeout }, (_error, stdout) => {
     try {
       resolve(JSON.parse(String(stdout)))
     } catch {

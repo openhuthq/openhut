@@ -12,8 +12,8 @@ import { notify } from '@/components/custom/toast'
 import { ConfirmButton } from '@/components/confirm-button'
 import { nameOf, REMOVE_DETAIL, useAddPasskey, useAllow, useCloud, useForget, usePasskeys, useRemoveMac, useSignOut } from '@/features/cloud/api'
 import { markSeen } from '@/features/cloud/seen'
-import { CloudOff, EnableCloud, SaveKit, SignUpIn, Welcome } from '@/features/cloud/sign-in'
-import { CloudLocked } from '@/features/cloud/unlock'
+import { EnableCloud, Pitch } from '@/features/cloud/sign-in'
+import { CloudSetup, KitDialog } from '@/features/cloud/setup'
 import { HERE } from '@/features/settings/desktop'
 import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { isPhone, scan, useConfirmed } from '@/lib/native'
@@ -22,21 +22,20 @@ import { navigate, open, useOpen, useSearch } from '@/lib/router'
 import { useDeleteData, useRotated } from '@/features/cloud/workspaces'
 import { toastError } from '@/lib/toast'
 
-export function CloudSettings() {
+export function BackupSettings() {
   const cloud = useCloud()
   const opened = useOpen()
   const error = new URLSearchParams(useSearch()).get('error') ?? cloud.error?.message
   const data = cloud.data
   if (!data) return <ErrorNote message={error} />
-  if (data.status === 'off') return <>
-    {opened === 'sign-in' ? <SignUpIn error={error ?? data.signInError ?? undefined} /> : <CloudOff />}
-    {opened !== 'sign-in' && <ErrorNote message={error ?? data.signInError ?? undefined} />}
-    {data.keptAccount && <KeptAccount email={data.keptAccount} />}
+  const on = data.status === 'on' || data.status === 'offline'
+  return <>
+    {on ? <CloudOn cloud={data} error={error ?? undefined} /> : <Pitch door="backup" />}
+    {data.status === 'off' && <ErrorNote message={error ?? undefined} />}
+    {data.status === 'off' && data.keptAccount && <KeptAccount email={data.keptAccount} />}
+    {opened === 'enable' && <CloudSetup door="backup" />}
+    {opened === 'kit' && data.status !== 'off' && <KitDialog />}
   </>
-  if (data.status === 'locked') return <CloudLocked cloud={data} />
-  if (opened === 'kit') return <SaveKit />
-  if (opened === 'welcome') return <Welcome cloud={data} />
-  return <CloudOn cloud={data} error={error ?? undefined} />
 }
 
 function CloudOn({ cloud, error }: { cloud: Cloud; error?: string }) {
@@ -133,7 +132,7 @@ export function CloudDevices() {
     <Row onClick={() => open('add-mac')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-blue" />} title="Add a Mac" note={`Unlock OpenHut on your new Mac with this ${isPhone() ? 'phone' : 'one'}.`}><Chevron /></Row>
   </>
   if (cloud?.status !== 'off' || isPhone()) return null
-  return <Row icon={<I icon={SquareLock02Icon} size={20} className="text-mute" />} title="Chat from your other computers" note="Needs OpenHut Cloud"><EnableCloud short /></Row>
+  return <Row icon={<I icon={SquareLock02Icon} size={20} className="text-mute" />} title="Chat from your other computers" note="Needs OpenHut Cloud"><EnableCloud /></Row>
 }
 
 function backupNote({ state, done, total, at, problem, offline }: Backup & { offline: boolean }): string {

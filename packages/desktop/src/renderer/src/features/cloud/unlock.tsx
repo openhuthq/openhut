@@ -16,7 +16,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { QrCode } from '@/features/agents/qr-code'
 import { nameOf, REMOVE_DETAIL, useCloud, useRemoveMac, usePairing, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useStartOver, useUnlock } from '@/features/cloud/api'
-import { Lead, Mascot, Pane, Title } from '@/features/cloud/sign-in'
+import { Mascot } from '@/features/cloud/sign-in'
+import { PRIMARY, Step } from '@/features/cloud/step'
 import { chooseWorkspace, useAsk, useCancelAsk } from '@/features/cloud/workspaces'
 import { Mismatch } from '@/features/cloud/presence'
 import { freshDevice, markSeen, seenDevices } from '@/features/cloud/seen'
@@ -29,54 +30,34 @@ import { longDate, shortDateTime } from '@/lib/format'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
-export function CloudLocked({ cloud }: { cloud: Cloud }) {
-  if (isPhone()) return <Pane>
-    <Hut mood="key" className="size-[84px]" />
-    <Title>Unlock OpenHut on your {HERE}</Title>
-    <Lead>Your agents come back here after that.</Lead>
-  </Pane>
-  return <Unlock cloud={cloud} />
-}
-
-const WIDE = 'mt-2 h-10 w-full max-w-[400px] justify-center text-[14px]'
-
-function Unlock({ cloud }: { cloud: Cloud }) {
+export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
   const [way, setWay] = useState<'kit' | 'code' | 'admin' | null>(null)
   const signOut = useSignOut()
   const signIn = useSignIn()
   const helper = usePasskeys()
   const passkey = usePasskeyUnlock()
   const leave = <Button type="button" variant="text" className="text-[12px] font-normal text-mute" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out, keep this {HERE} as it is</Button>
-  if (cloud.needsSignIn) return <Pane>
-    <Hut mood="worried" className="size-[84px]" />
-    <Title>This {HERE} was removed</Title>
-    <Lead>It was taken off your account from another device, and can't open anything new. Sign in again to unlock it.</Lead>
-    <Button type="button" variant="primary" className={WIDE} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}>Sign in again</Button>
+  if (cloud.needsSignIn) return <Step art={<Hut mood="worried" className="size-[96px]" />} title={`This ${HERE} was removed`} line="It was taken off your account from another device, and can't open anything new. Sign in again to unlock it."
+    action={<Button type="button" variant="primary" className={PRIMARY} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}>Sign in again</Button>}>
     {leave}
-  </Pane>
+  </Step>
   if (way === 'kit') return <KitEntry cloud={cloud} onBack={() => setWay(null)} />
   if (way === 'code') return <CodeEntry onBack={() => setWay(null)} />
   if (way === 'admin' || cloud.asking) return <AdminWait cloud={cloud} onBack={() => setWay(null)} />
   const canPasskey = Boolean(helper?.passkeys && helper.prf)
-  return <Pane>
-    <Hut mood="key" className="size-[84px]" />
-    <Title>Welcome back, {nameOf(cloud.email ?? '')}</Title>
-    <span className="-mt-1 text-[12.5px] text-mute">Unlock OpenHut Cloud to bring your agents and chats to this {HERE}.</span>
-    {canPasskey && <>
-      <Button type="button" variant="primary" className={cn(WIDE, 'gap-2')} disabled={passkey.isPending} onClick={() => passkey.mutate(undefined, { onError: toastError })}><I icon={FingerPrintIcon} size={18} />{passkey.isPending ? 'Unlocking…' : 'Continue with Touch ID'}</Button>
-      <span className="mt-3 text-[12px] text-mute">No passkey on this {HERE}?</span>
-    </>}
-    {!canPasskey && helper && !helper.error && <span className="text-[12.5px] text-mute">This {HERE} can't use passkeys. Pick another way.</span>}
-    <div className="w-full max-w-[400px] text-left">
+  return <Step art={<Hut mood="key" className="size-[96px]" />} title={`Welcome back, ${nameOf(cloud.email ?? '')}`} line={`Your account already has a backup. Unlock it to bring your agents and chats to this ${HERE}.`} back={back}
+    action={canPasskey && <Button type="button" variant="primary" className={cn(PRIMARY, 'gap-2')} disabled={passkey.isPending} onClick={() => passkey.mutate(undefined, { onError: toastError })}><I icon={FingerPrintIcon} size={16} />{passkey.isPending ? 'Unlocking…' : 'Use Touch ID'}</Button>}>
+    <div className="w-full max-w-[420px] text-left">
       <Rows>
         <Row onClick={() => setWay('code')} icon={<Mascot kind="phone" size={30} />} title="Use my iPhone or another Mac" note="Scan a code with it"><Chevron /></Row>
         {cloud.kitInCloud && <Row onClick={() => setWay('kit')} icon={<Mascot kind="kit" size={30} />} title="Use my recovery kit" note="The file you saved"><Chevron /></Row>}
         {cloud.canAsk && <Row onClick={() => setWay('admin')} icon={<Mascot kind="team" size={30} />} title="Ask an admin" note="Get your team workspaces back"><Chevron /></Row>}
       </Rows>
     </div>
+    {!canPasskey && helper && !helper.error && <span className="text-[12px] text-mute">This {HERE} can't use passkeys.</span>}
     {!cloud.kitInCloud && <NoKitYet />}
     {leave}
-  </Pane>
+  </Step>
 }
 
 function AdminWait({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
@@ -91,25 +72,14 @@ function AdminWait({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
   }, [asking, ask])
   const back = () => cancel.mutate(undefined, { onSettled: onBack })
   const rooms = asking?.rooms ?? []
-  return <Pane back={back}>
-    {asking?.denied && <>
-      <Title>Not approved</Title>
-      <Lead>An admin denied this {HERE}, or the request expired after a day.</Lead>
-      <Button type="button" variant="primary" className={PILL} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Ask again</Button>
-    </>}
-    {!asking?.denied && !ask.isError && <>
-      {rooms.length === 0 && <Title>Asking an admin…</Title>}
-      {rooms.map((room, index) => <div key={index} className="flex flex-col items-center gap-3">
-        <PersonFaces people={room.admins.map((email) => ({ name: nameOf(email), email }))} size={56} />
-        <Title>Waiting for {who(room.admins)}</Title>
-        <Lead>When they call, read them these 4 words.</Lead>
-        <div className="flex gap-2">{(room.words ?? ['', '', '', '']).map((word, at) => <span key={at} className="min-w-[72px] rounded-lg border border-hair bg-card px-3.5 py-2 text-[17px] font-semibold">{word || '…'}</span>)}</div>
-      </div>)}
-      <Spinner className="mt-1" />
-    </>}
+  const admins = rooms.flatMap((room) => room.admins)
+  if (asking?.denied) return <Step art={<Hut mood="worried" className="size-[96px]" />} title="Not approved" line={`An admin denied this ${HERE}, or the request expired after a day.`} back={back}
+    action={<Button type="button" variant="primary" className={PRIMARY} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Ask again</Button>} />
+  return <Step art={admins.length ? <PersonFaces people={admins.map((email) => ({ name: nameOf(email), email }))} size={64} /> : <Hut mood="looking" className="size-[96px]" />} title={rooms.length ? `Waiting for ${who(admins)}` : 'Asking an admin…'} line={rooms.length ? 'When they call, read them these 4 words.' : undefined} back={back}>
+    {rooms.map((room, index) => <div key={index} className="flex gap-2">{(room.words ?? ['', '', '', '']).map((word, at) => <span key={at} className="min-w-[72px] rounded-lg border border-hair bg-card px-3.5 py-2 text-[17px] font-semibold">{word || '…'}</span>)}</div>)}
+    {!ask.isError && <Spinner className="mt-1" />}
     <ErrorNote message={ask.error?.message ?? asking?.error ?? undefined} />
-    <Button type="button" variant="text" className="text-[12px] font-normal text-mute underline" disabled={cancel.isPending} onClick={back}>Try another way</Button>
-  </Pane>
+  </Step>
 }
 
 function who(admins: string[]): string {
@@ -136,18 +106,13 @@ function NoKitYet() {
   </div>
 }
 
-
 function CodeEntry({ onBack }: { onBack: () => void }) {
   const pairing = usePairing(true)
-  return <Pane back={onBack}>
-    <Title>Scan with your iPhone or other Mac</Title>
-    <Lead>Open OpenHut on it, tap Add a Mac in Devices, and point it here.</Lead>
-    <span className="mt-2 grid size-[208px] place-items-center rounded-xl border border-hair bg-white p-2 [&_canvas]:size-full!">{pairing.data && <QrCode text={pairing.data.qr} label={`Code to unlock this ${HERE}`} />}</span>
-    <span className="mt-1 text-[12px] text-mute">Can't scan? Type this on your other device</span>
+  return <Step art={<span className="grid size-[120px] place-items-center rounded-xl border border-hair bg-white p-1.5 [&_canvas]:size-full!">{pairing.data && <QrCode text={pairing.data.qr} label={`Code to unlock this ${HERE}`} />}</span>} title="Scan with your iPhone or other Mac" line="Open OpenHut on it, tap Add a Mac in Devices, and point it here." back={onBack}>
+    <span className="text-[12px] text-mute">Can't scan? Type this on your other device</span>
     <span className="font-mono text-[15px] tracking-[.08em] select-all">{pairing.data?.code ?? '…'}</span>
     <ErrorNote message={pairing.error?.message} />
-    <Button type="button" variant="text" className="text-[12px] font-normal text-mute underline" onClick={onBack}>Try another way</Button>
-  </Pane>
+  </Step>
 }
 
 export function NewMacAlert({ cloud }: { cloud: Cloud }) {
@@ -181,19 +146,17 @@ function KitEntry({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
     unlock.mutate({ words: kit.words }, { onError: (err) => setProblem({ tone: 'fail', text: err.message }) })
   }
   if (typing) return <KitWordsEntry onBack={() => setTyping(false)} />
-  return <Pane back={onBack}>
-    <Title>Use your recovery kit</Title>
-    <Lead>The file you saved when you enabled OpenHut Cloud.</Lead>
-    <div className="mt-2 flex w-full max-w-[440px] flex-col gap-3">
+  return <Step art={<Mascot kind="kit" size={84} />} title="Use your recovery kit" line="The file you saved when you set up OpenHut Cloud." back={onBack}>
+    <div className="flex w-full max-w-[440px] flex-col gap-3">
       {problem && <p role="alert" className={cn('m-0 rounded-xl px-3.5 py-3 text-left text-[13.5px]/[1.45]', problem.tone === 'warn' ? 'bg-warning-subtle text-warning-strong' : 'bg-[color-mix(in_oklch,var(--fail)_10%,transparent)] text-ink')}>{problem.text}</p>}
-      <DropZone className="py-8" onText={tryKit}>{(hot) => <>
-        <Hut key={problem?.text} mood={unlock.isPending ? 'key' : hot ? 'surprised' : problem ? 'worried' : 'looking'} className={cn('calm mb-1 size-16', unlock.isPending && 'key-turn', problem && !hot && 'blink-slow')} />
+      <DropZone className="py-5" onText={tryKit}>{(hot) => <>
+        <Hut key={problem?.text} mood={unlock.isPending ? 'key' : hot ? 'surprised' : problem ? 'worried' : 'looking'} className={cn('calm mb-1 size-12', unlock.isPending && 'key-turn', problem && !hot && 'blink-slow')} />
         <span className="text-[15px] font-medium text-ink">{unlock.isPending ? 'Unlocking…' : 'Drop your kit here'}</span>
         {!unlock.isPending && <span className="text-[12.5px] text-mute">or paste it</span>}
       </>}</DropZone>
       <span className="text-[12.5px] text-mute">Don’t have the file? <Button type="button" variant="text" className="h-auto p-0 text-[12.5px] font-normal text-ink underline underline-offset-2" onClick={() => setTyping(true)}>Type the words instead</Button>.</span>
     </div>
-  </Pane>
+  </Step>
 }
 
 function KitWordsEntry({ onBack }: { onBack: () => void }) {
@@ -224,19 +187,16 @@ function KitWordsEntry({ onBack }: { onBack: () => void }) {
     if (!validKit(words)) return setTypo({ at: -1, text: 'These words don’t fit together. Check each one against your kit, in order.' })
     unlock.mutate({ words })
   }
-  return <Pane back={onBack}>
-    <form onSubmit={submit} className="flex w-full flex-col items-center gap-3">
-      <Hut key={typo?.text} mood={typo ? 'worried' : 'key'} className={cn('calm size-[84px]', typo && 'blink-slow')} />
-      <Title>Type the 12 words</Title>
-      <Lead>From your recovery kit, in order.</Lead>
-      <div className="mt-2 grid w-full max-w-[440px] grid-cols-3 gap-2">{words.map((word, index) => <label key={index} className={cn('flex h-10 items-center gap-2 rounded-xl border border-hair bg-card px-3 text-[13px] focus-within:border-ink', typo?.at === index && 'border-fail text-fail focus-within:border-fail')}>
+  return <Step art={<Hut key={typo?.text} mood={typo ? 'worried' : 'key'} className={cn('calm size-[96px]', typo && 'blink-slow')} />} title="Type the 12 words" line="From your recovery kit, in order." back={onBack}
+    action={<Button type="submit" form="kit-words" variant="primary" disabled={words.some((word) => !word) || unlock.isPending} className={PRIMARY}>{unlock.isPending ? 'Unlocking…' : 'Unlock'}</Button>}>
+    <form id="kit-words" onSubmit={submit} className="flex w-full flex-col items-center gap-3">
+      <div className="grid w-full max-w-[440px] grid-cols-3 gap-2">{words.map((word, index) => <label key={index} className={cn('flex h-10 items-center gap-2 rounded-xl border border-hair bg-card px-3 text-[13px] focus-within:border-ink', typo?.at === index && 'border-fail text-fail focus-within:border-fail')}>
         <span className="w-4 text-[11px] text-mute tabular-nums">{index + 1}</span>
         <Input className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-[13px] text-inherit focus-visible:outline-none" value={word} autoFocus={index === 0} autoComplete="off" spellCheck={false} aria-label={`Word ${index + 1}`} aria-invalid={typo?.at === index || undefined} onChange={(event) => set(event.target, index)} onPaste={paste} />
       </label>)}</div>
       <ErrorNote className="w-full max-w-[440px] text-left" message={typo?.text ?? unlock.error?.message} />
-      <Button type="submit" variant="primary" disabled={words.some((word) => !word) || unlock.isPending} className="h-10 w-full max-w-[440px] justify-center text-[14px]">{unlock.isPending ? 'Unlocking…' : 'Unlock'}</Button>
     </form>
-  </Pane>
+  </Step>
 }
 
 export function CloudGate({ children }: { children: ReactNode }) {
@@ -256,13 +216,13 @@ export function CloudGate({ children }: { children: ReactNode }) {
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
   if (!cloud) return children
-  const locked = cloud.status === 'locked' && path !== '/settings/cloud'
+  const locked = cloud.status === 'locked' && !path.startsWith('/settings/')
   return <>{children}<Toasts>{locked && <LockedToast />}<NewMacAlert cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
 }
 
 function LockedToast() {
   if (isPhone()) return <Toast lead={<Hut mood="key" className="size-8" />} title={`Unlock OpenHut on your ${HERE}`} note="Your agents come back here after that." />
-  return <Toast lead={<Hut mood="key" className="size-8" />} title="Unlock OpenHut Cloud" note={`Bring your agents and chats to this ${HERE}.`}><Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/cloud')}>Unlock</Button></Toast>
+  return <Toast lead={<Hut mood="key" className="size-8" />} title="Unlock OpenHut Cloud" note={`Bring your agents and chats to this ${HERE}.`}><Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/backup?open=enable')}>Unlock</Button></Toast>
 }
 
 function Joins({ cloud }: { cloud: Cloud }) {

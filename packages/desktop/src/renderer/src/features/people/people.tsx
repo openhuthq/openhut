@@ -13,7 +13,8 @@ import { ErrorNote } from '@/components/error-note'
 import { I, PILL } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { nameOf, useCloud } from '@/features/cloud/api'
-import { NeedsCloud } from '@/features/cloud/sign-in'
+import { Pitch } from '@/features/cloud/sign-in'
+import { CloudSetup } from '@/features/cloud/setup'
 import { peopleNote, useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
 import { ago } from '@/lib/format'
 import { copyText } from '@/lib/clipboard'
@@ -28,10 +29,13 @@ const ROLE = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 export function PeopleSettings() {
   const cloud = useCloud().data
   const { active, email } = useWorkspaces()
+  const opened = useOpen()
   if (!cloud) return null
-  if (cloud.status === 'off' || !active) return <NeedsCloud title="Share agents with your team" note="Your team can chat with and edit the agents you share." />
+  const enabling = opened === 'enable' && <CloudSetup door="people" />
+  if (cloud.status === 'off' || !active) return <><Pitch door="people" />{enabling}</>
   const admin = active.role !== 'member'
   return <section className="flex flex-col gap-2.5">
+    {enabling}
     <div className="flex items-center gap-2 px-1">
       <span className="text-[13px] font-medium">{active.name}</span>
       <span className="ml-auto text-[12px] text-mute">{peopleNote(active)}</span>

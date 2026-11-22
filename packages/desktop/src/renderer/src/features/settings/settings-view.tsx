@@ -1,6 +1,6 @@
 import type { IconSvgElement } from '@hugeicons/react'
 import { AiMagicIcon, CloudDownloadIcon, CloudIcon, LaptopIcon, PlugSocketIcon, Settings02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
-import { CloudSettings } from '@/features/cloud/cloud'
+import { BackupSettings } from '@/features/cloud/cloud'
 import { PeopleSettings } from '@/features/people/people'
 import { ComputersSettings } from '@/features/settings/computers'
 import { DevicesSettings } from '@/features/settings/devices'
@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
 
 const TABS: [string, string, IconSvgElement, string][] = [
   ['general', 'General', Settings02Icon, 'text-hue-slate'],
-  ['cloud', 'Cloud', CloudIcon, 'text-hue-blue'],
+  ['backup', 'Backup', CloudIcon, 'text-hue-blue'],
   ['people', 'People', UserGroupIcon, 'text-hue-amber'],
   ['devices', 'Devices', LaptopIcon, 'text-hue-blue'],
   ['models', 'Models', AiMagicIcon, 'text-hue-violet'],
@@ -24,7 +24,7 @@ const TABS: [string, string, IconSvgElement, string][] = [
   ['updates', 'Updates', CloudDownloadIcon, 'text-hue-sky'],
 ]
 
-const MOVED: Record<string, string> = { computers: 'devices', phones: 'devices' }
+const MOVED: Record<string, string> = { computers: 'devices', phones: 'devices', cloud: 'backup' }
 
 export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: () => void }) {
   const tab = MOVED[asked] ?? asked
@@ -47,7 +47,7 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
 
 function Tab({ tab }: { tab: string }) {
   switch (tab) {
-    case 'cloud': return <CloudSettings />
+    case 'backup': return <BackupSettings />
     case 'people': return <PeopleSettings />
     case 'devices': return <YourDevices />
     case 'models': return <ModelsSettings />
