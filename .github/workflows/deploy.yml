@@ -67,7 +67,7 @@ jobs:
         run: |
           cd private/cloud
           npx wrangler r2 bucket info openhut-files > /dev/null 2>&1 || npx wrangler r2 bucket create openhut-files
-          CI=1 npx wrangler d1 migrations apply openhut-stats --remote
+          CI=1 npx wrangler d1 migrations apply openhut-stats --remote || echo "::warning::Couldn't apply the D1 migrations (the CLOUDFLARE_API_TOKEN needs D1 Edit), so cloud sign-in fails closed until they're applied."
           npm run deploy
           npx wrangler secret list | grep -q '"BETTER_AUTH_SECRET"' || echo "::warning::BETTER_AUTH_SECRET isn't set on openhut-cloud, so cloud sign-in answers 503. Run: npx wrangler secret put BETTER_AUTH_SECRET (in private/cloud)."
         env:
