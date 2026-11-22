@@ -21,7 +21,7 @@ async function offered({ from, beta, feed }: { from: string; beta: boolean; feed
   return updaterAt({ version: from, beta }).isUpdateAvailable({ version: feed, files: [], path: '', sha512: '', releaseDate: '' })
 }
 
-test('the app reads the beta feed only while Get beta updates is on', () => {
+test('the app reads the beta feed only while Beta updates is on', () => {
   const runtime = { platform: 'darwin' as const, executor: null as never, isUseMultipleRangeRequest: false }
   for (const version of ['0.4.1', '0.5.0-beta.1']) {
     assert.equal(new GenericProvider({ provider: 'generic', url: 'https://dl.openhut.dev/' }, updaterAt({ version, beta: true }), runtime).channel, 'beta-mac')

@@ -26,7 +26,7 @@ export function GeneralSettings() {
       {desktop && <PrefSwitch icon={Login01Icon} hue="text-hue-green" name="openAtLogin" title="Open at login" note="Agents start in the background, without opening this window." />}
       {desktop && <PrefSwitch icon={Coffee01Icon} hue="text-hue-amber" name="keepAwake" title={`Keep this ${HERE} awake while agents run`} note={`The screen can still turn off. Agents can't answer while the ${HERE} sleeps.`} />}
       <Version />
-      {desktop && <PrefSwitch icon={TestTube01Icon} hue="text-hue-violet" name="betaUpdates" title="Get beta updates" note="New versions before everyone else. Turned off, you stay on your version until a newer stable one." />}
+      {desktop && <PrefSwitch icon={TestTube01Icon} hue="text-hue-violet" name="betaUpdates" title="Beta updates" note="Get new versions early." />}
       <Vault />
     </Rows>
     {!isPhone() && <Section title="Notify me when">

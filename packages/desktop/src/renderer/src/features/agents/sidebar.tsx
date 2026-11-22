@@ -44,7 +44,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
   const { active, email } = useWorkspaces()
   return <aside inert={collapsed} className={cn('pushable still shrink-0 overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring)', collapsed ? 'w-0' : 'w-[280px] border-r-[0.5px]', contacts.length ? 'phone:w-full phone:border-r-0' : 'phone:hidden', GLASS)}>
     <div className={cn('flex h-full w-[280px] flex-col phone:w-full transition-[opacity,translate] duration-[160ms] ease-out', collapsed && '-translate-x-2 opacity-0')}>
-    <div className={cn('flex h-[56px] shrink-0 items-center gap-1.5 pr-3 pl-5 phone:h-16 phone:px-4', DRAG)}>
+    <div className={cn('flex h-[56px] shrink-0 items-center gap-1.5 pr-3 pl-[84px] phone:h-16 phone:px-4', DRAG)}>
       <a href="/settings/general" aria-label="Settings" className={cn(ICON_BUTTON, ROUND, 'hidden phone:grid')}><I icon={Settings02Icon} size={20} /></a>
       <span className="-ml-2.5 min-w-0 phone:ml-0"><Switcher /></span>
       <span className="ml-auto flex gap-1.5">
