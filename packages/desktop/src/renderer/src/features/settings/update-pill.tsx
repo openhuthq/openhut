@@ -24,14 +24,18 @@ export function UpdatePill({ className }: { className?: string }) {
 
 export function UpdateStatus({ idle }: { idle: ReactNode }) {
   const state = useAppUpdate().data
-  const client = useQueryClient()
-  const check = useMutation({ mutationFn: async () => updates?.check(), onSuccess: (next) => next && client.setQueryData(UPDATE_KEY, next), onError: toastError })
   if (state?.ready) return <UpdatePill />
   if (!state?.error) return state?.checking || state?.available ? <Spinner className="mt-0" /> : idle
   return <span className="inline-flex gap-1.5">
     <a href={downloadUrl(Reflect.get(window, 'openhut')?.platform)} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Download</a>
-    <Button type="button" variant="ghost" className={PILL} disabled={check.isPending} onClick={() => check.mutate()}>Retry</Button>
+    <CheckButton label="Retry" />
   </span>
+}
+
+export function CheckButton({ label }: { label: string }) {
+  const client = useQueryClient()
+  const check = useMutation({ mutationFn: async () => updates?.check(), onSuccess: (next) => next && client.setQueryData(UPDATE_KEY, next), onError: toastError })
+  return <Button type="button" variant="ghost" className={PILL} disabled={check.isPending} onClick={() => check.mutate()}>{label}</Button>
 }
 
 export function UpdateEverything() {
