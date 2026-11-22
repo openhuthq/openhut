@@ -2,7 +2,7 @@ appId: dev.openhut.app
 productName: OpenHut
 copyright: Copyright © 2026 OpenHut
 directories: { buildResources: build, output: release }
-files: [src/main.mjs, src/mcp-bridge.mjs, src/mcp-fan-out.mjs, src/owner-keys.mjs, src/reach.mjs, src/release-key.mjs, src/preload.cjs, "src/trayTemplate*.png", dist/renderer/**, package.json]
+files: [src/main.mjs, src/mcp-bridge.mjs, src/mcp-fan-out.mjs, src/owner-keys.mjs, src/reach.mjs, src/release-key.mjs, src/update-channel.mjs, src/preload.cjs, "src/trayTemplate*.png", dist/renderer/**, package.json]
 asar: true
 electronLanguages: en-US
 protocols: [{ name: OpenHut, schemes: [openhut] }]
@@ -43,6 +43,7 @@ dmg:
   iconSize: 112
   window: { width: 540, height: 380 }
   contents: [{ x: 140, y: 168 }, { x: 400, y: 168, type: link, path: /Applications }]
+detectUpdateChannel: false
 publish: [{ provider: generic, url: "https://dl.openhut.dev/" }, { provider: github, owner: openhuthq, repo: openhut }]
 electronFuses:
   runAsNode: false

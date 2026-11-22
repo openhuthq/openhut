@@ -46,13 +46,27 @@ release() {
   for file in SHA256SUMS release.json release.json.sig; do
     [ ! -f "$dir/$file" ] || put "v$v/$file" "$dir/$file" "$FOREVER" text/plain
   done
+  case $v in
+    *-*) feeds "$v" "$dir" beta; return ;;
+  esac
   for file in OpenHut-arm64.dmg OpenHut-x64.AppImage openhut-x64.deb OpenHut-Setup-x64.exe; do
     put "latest/$file" "$dir/$file" 'public, max-age=300'
   done
+  feeds "$v" "$dir" latest
+  beta=$(curl -fsS "$URL/beta-mac.yml" 2>/dev/null | sed -n 's/^version: //p' || true)
+  if [ "$beta" != "${beta%%-*}" ] && newer "${beta%%-*}" "$v"; then echo "r2: the beta feed stays on $beta"; else feeds "$v" "$dir" beta; fi
+}
+
+feeds() {
+  v=$1 dir=$2 channel=$3
   for feed in latest.yml latest-mac.yml latest-linux.yml; do
     sed -e "s#^\(  *- url: \)#\1v$v/#" -e "s#^path: #path: v$v/#" "$dir/$feed" > "$dir/$feed.r2"
-    put "$feed" "$dir/$feed.r2" 'public, max-age=60' text/yaml
+    put "$channel${feed#latest}" "$dir/$feed.r2" 'public, max-age=60' text/yaml
   done
+}
+
+newer() {
+  [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" = "$1" ]
 }
 
 case "${1:-}" in

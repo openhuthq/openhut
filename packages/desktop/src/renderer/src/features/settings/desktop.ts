@@ -4,7 +4,7 @@ import type { Peer } from '@/features/settings/peers'
 
 export type Tailnet = { state: 'running'; tailnet: string; self: { name: string; os: string; ip: string }; peers: Peer[] } | { state: 'missing' } | { state: 'stopped' }
 export type Machine = { chip: string; memory: number; folder: string; size: number }
-export type Prefs = { openAtLogin: boolean; keepAwake: boolean; notifyReplies: boolean; notifyFailures: boolean }
+export type Prefs = { openAtLogin: boolean; keepAwake: boolean; notifyReplies: boolean; notifyFailures: boolean; betaUpdates: boolean }
 export type FirstRun = { failed: boolean; agentId: string; steps: [string, string, 'done' | 'now' | 'next' | 'failed', number?][] }
 type Failure = { error: string }
 type Bridge = {

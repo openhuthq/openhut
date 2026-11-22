@@ -16,6 +16,7 @@ import { deviceName, ownerKeys } from './owner-keys.mjs'
 import { reacher } from './reach.mjs'
 import { fanOut } from './mcp-fan-out.mjs'
 import { cosigned, RELEASE_KEY } from './release-key.mjs'
+import { useChannel } from './update-channel.mjs'
 
 const DEV = !app.isPackaged
 const MAC = process.platform === 'darwin'
@@ -72,7 +73,7 @@ const RELAY_URL = process.env.OPENHUT_RELAY_URL ?? 'wss://cloud.openhut.dev'
 const TAILNET_PORT = 8788
 const PUT_ACCESS = `put='c=$(curl -sS -o /dev/null -w %{http_code} --unix-socket /data/app/openhut.sock -X PUT -H content-type:application/json --data-binary @- http://openhut/api/access); [ "$c" = 200 ] || [ "$c" = 409 ]'; if docker container inspect openhut >/dev/null 2>&1; then docker exec -i openhut sh -c "$put"; else sh -c "$put"; fi`
 const AUTOSTART = join(app.getPath('appData'), 'autostart/openhut.desktop')
-const DEFAULT_PREFS = { keepAwake: true, notifyReplies: true, notifyFailures: true }
+const DEFAULT_PREFS = { keepAwake: true, notifyReplies: true, notifyFailures: true, betaUpdates: false }
 const CANVAS = '#f4f3f5'
 const POLL_MS = 5000
 const HEALTHY_MS = 120_000
@@ -374,6 +375,7 @@ function setPrefs(patch) {
     if (name === 'openAtLogin') openAtLogin(on)
     else writeFileSync(PREFS, JSON.stringify({ ...prefs(), [name]: on }))
   }
+  if (!DEV && known.some(([name]) => name === 'betaUpdates')) checkForUpdate()
   poll().catch(() => undefined)
   return prefsNow()
 }
@@ -846,13 +848,18 @@ function checkForUpdate() {
   if (updating.ready) return updateState()
   updateCheck = { at: Date.now(), quiet: false }
   setUpdate({ checking: true, error: null })
-  return updater.autoUpdater.checkForUpdates().then(updateState, updateState)
+  return lookForUpdate().then(updateState, updateState)
 }
 
 function checkQuietly() {
   if (updating.ready || updating.available || Date.now() - updateCheck.at < UPDATE_EVERY_MS) return
   updateCheck = { at: Date.now(), quiet: true }
-  updater.autoUpdater.checkForUpdates().catch(() => undefined)
+  lookForUpdate().catch(() => undefined)
+}
+
+function lookForUpdate() {
+  useChannel({ updater: updater.autoUpdater, beta: prefs().betaUpdates })
+  return updater.autoUpdater.checkForUpdates()
 }
 
 function update() {
