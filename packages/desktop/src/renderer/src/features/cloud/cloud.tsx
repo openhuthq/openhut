@@ -19,7 +19,6 @@ import { isPhone, scan, useConfirmed } from '@/lib/native'
 import { ago, shortDate, shortDateTime } from '@/lib/format'
 import { navigate, open, useOpen, useSearch } from '@/lib/router'
 import { useDeleteData, useRotated } from '@/features/cloud/workspaces'
-import { YourTeams } from '@/features/people/workspace'
 import { toastError } from '@/lib/toast'
 
 export function AccountSettings() {
@@ -84,7 +83,6 @@ function CloudOn({ cloud, error }: { cloud: Cloud; error?: string }) {
   const young = Boolean(cloud.youngUntil)
   return <>
     <AccountHead email={email} note={cloud.status === 'on' ? <span className="flex items-center gap-1.5 text-[12px] text-mute"><Google />{email}</span> : <span className="text-[12px] text-mute">Can’t reach the cloud. Your agents keep working.</span>} status={cloud.status === 'on' ? <Status tone="on">On</Status> : <Status tone="wait">Offline</Status>} />
-    <YourTeams />
     <Rows>
       <Row icon={<I icon={CloudUploadIcon} size={20} className="text-hue-blue" />} title="Backup" note={<span className={cloud.backup.problem || cloud.backup.state === 'failed' ? 'text-fail' : undefined}>{backupNote({ ...cloud.backup, offline: cloud.status === 'offline' })}</span>} />
       <Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>{kitNote(cloud.kit)}{cloud.keyStore === 'file' && ' · Stored in a file, not the keychain'}</span>}>

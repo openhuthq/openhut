@@ -1,15 +1,15 @@
 import { createContext, useState, type ReactElement } from 'react'
-import { Delete02Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon } from '@hugeicons/core-free-icons'
+import { Delete02Icon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@openhut/client'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
-import { DropdownMenuItem, LongPressMenu } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { Glyph } from '@/components/glyph'
 import { TeamMark } from '@/components/custom/team-mark'
 import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
 import { BackupCard } from '@/features/cloud/backup-card'
-import { useWorkspaces } from '@/features/cloud/workspaces'
+import { chooseWorkspace, peopleNote, useWorkspaces } from '@/features/cloud/workspaces'
 import { Faces } from '@/features/cloud/presence'
 import { agentPath } from '@/app/routes'
 import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
@@ -20,7 +20,7 @@ import { useConnections } from '@/features/connections/api'
 import { UpdateEverything } from '@/features/settings/update-pill'
 import { ago } from '@/lib/format'
 import { PHONE, useMedia } from '@/lib/media'
-import { navigate } from '@/lib/router'
+import { navigate, open } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -74,7 +74,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
       <BackupCard />
       <UpdateEverything />
       <div className="flex w-full items-center gap-2">
-        {active && <a href="/settings/team" aria-label="Team settings" title={active.name} className={cn(SURFACE, 'grid size-10 shrink-0 place-items-center rounded-lg')}><TeamMark workspace={active} /></a>}
+        {active && <TeamSwitcher />}
         <a href="/connections" className={cn(SURFACE, 'flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg pr-3 pl-3.5 text-[13.5px] font-medium')}>
           <ConnectedMarks />
         </a>
@@ -120,4 +120,22 @@ function ConnectedMarks() {
     <span className="truncate">{connections.data && !connected.length ? 'Connect apps' : 'Connections'}</span>
     <span className="ml-auto flex shrink-0 gap-1">{kinds.map((kind) => <Glyph key={kind} name={kind} size={14} />)}</span>
   </>
+}
+
+function TeamSwitcher() {
+  const { all, active } = useWorkspaces()
+  if (!active) return null
+  return <DropdownMenu>
+    <DropdownMenuTrigger render={<Button type="button" variant="bare" aria-label={`Team: ${active.name}`} title={active.name} className={cn(SURFACE, 'grid size-10 shrink-0 place-items-center rounded-lg')} />}><TeamMark workspace={active} /></DropdownMenuTrigger>
+    <DropdownMenuContent side="top" align="start" className="flex w-[260px] flex-col gap-0.5 rounded-lg p-1.5 shadow-menu">
+      {all.map((workspace) => <DropdownMenuItem key={workspace.id} className="h-auto gap-2.5 px-2 py-1.5" onClick={() => { if (workspace.id !== active.id) { chooseWorkspace(workspace.id); navigate('/') } }}>
+        <TeamMark workspace={workspace} className="size-7 rounded-md text-[12px]" />
+        <span className="grid min-w-0 flex-1 leading-tight"><span className="truncate text-[13px] font-medium">{workspace.name}</span><span className="text-[11.5px] text-mute">{peopleNote(workspace)}</span></span>
+        {workspace.id === active.id && <I icon={Tick02Icon} size={14} />}
+      </DropdownMenuItem>)}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />Join another team</DropdownMenuItem>
+      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/team')}><I icon={Settings02Icon} size={15} className="text-mute" />Team settings</DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
 }

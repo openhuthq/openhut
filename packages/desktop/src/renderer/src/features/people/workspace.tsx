@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight01Icon, Delete02Icon, Key01Icon, Logout03Icon, PencilEdit02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import { ArrowRight01Icon, Delete02Icon, Key01Icon, Logout03Icon, PencilEdit02Icon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/confirm-button'
@@ -10,12 +10,11 @@ import { TeamMark } from '@/components/custom/team-mark'
 import { useCloud } from '@/features/cloud/api'
 import { Pitch } from '@/features/cloud/sign-in'
 import { CloudSetup } from '@/features/cloud/setup'
-import { isPhone } from '@/lib/native'
-import { chooseWorkspace, peopleNote, useChangeKeys, useDeleteWorkspace, useRemoveMember, useRename, useSetWebsite, useWorkspaces } from '@/features/cloud/workspaces'
+import { peopleNote, useChangeKeys, useDeleteWorkspace, useRemoveMember, useRename, useSetWebsite, useWorkspaces } from '@/features/cloud/workspaces'
 import { navigate, open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
-import { I, PILL, Section } from '@/components/kit'
+import { I, PILL } from '@/components/kit'
 import { TeamPeople } from '@/features/people/people'
 import { Row, Rows } from '@/features/settings/kit'
 import { cn } from '@/lib/utils'
@@ -23,7 +22,6 @@ import { cn } from '@/lib/utils'
 const KEYS_NOTE = 'Use after a lost computer or a teammate you don’t trust. Everyone else stays in.'
 
 const ROLE = { owner: 'the owner', admin: 'an admin', member: 'a member' }
-const LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 
 export function TeamSettings() {
   const cloud = useCloud().data
@@ -112,19 +110,6 @@ function TeamMore({ workspace }: { workspace: CloudWorkspaceView }) {
       <Button type="button" variant={row.danger ? 'danger' : 'ghost'} className={PILL} disabled={row.off} onClick={() => open(row.dialog)}>{row.action}</Button>
     </Row>)}</Rows>}
   </div>
-}
-
-export function YourTeams() {
-  const { all, active } = useWorkspaces()
-  if (!active) return null
-  return <Section title="Your teams">
-    <Rows>
-      {all.map((workspace) => <Row key={workspace.id} icon={<TeamMark workspace={workspace} className="size-8 rounded-lg text-[14px]" />} title={<span className="flex min-w-0 items-center gap-1.5"><span className="truncate">{workspace.name}</span>{workspace.id === active.id && <span className="rounded-full bg-soft px-1.5 py-px text-[10.5px] font-medium text-mute">Current</span>}</span>} note={[peopleNote(workspace), LABEL[workspace.role], workspace.website].filter(Boolean).join(' · ')}>
-        {workspace.id !== active.id && <Button type="button" variant="ghost" className={PILL} onClick={() => { chooseWorkspace(workspace.id); toast(`Switched to ${workspace.name}`) }}>Switch</Button>}
-      </Row>)}
-      {!isPhone() && <Row onClick={() => open('join-link')} icon={<span className="grid size-8 place-items-center rounded-lg bg-soft text-mute"><I icon={PlusSignIcon} size={16} /></span>} title="Join another team" note="Paste an invite link" />}
-    </Rows>
-  </Section>
 }
 
 function KeysConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
