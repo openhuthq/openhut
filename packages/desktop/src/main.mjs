@@ -192,7 +192,7 @@ handle('passkey.open', () => passkey(['open']))
 handle('cloud.notify', () => new Promise((resolve) => {
   if (!Notification.isSupported()) return resolve({ shown: false })
   const note = new Notification({ title: 'Unlock OpenHut Cloud', body: 'Restore your agents and chats on this computer.' })
-  note.on('click', () => show('/settings/backup?open=enable'))
+  note.on('click', () => show('/settings/account?open=enable'))
   note.on('show', () => resolve({ shown: true }))
   note.on('failed', () => resolve({ shown: false }))
   setTimeout(() => resolve({ shown: false }), 3000)
