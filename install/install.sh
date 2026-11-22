@@ -268,5 +268,5 @@ rm -rf "$PREFIX.old"
 printf '\n'
 ! tailnet || [ -f /.dockerenv ] || serve_tailnet
 docker image inspect "${AGENT_IMAGE:-$(cat "$PREFIX/install/agent-image")}" >/dev/null 2>&1 || echo "The agent image (about 1 GB) is still downloading; agents start once it's done."
-echo "OpenHut sends anonymous usage events to openhut.dev. Turn it off in Settings > General. Details: https://openhut.dev/docs/security"
+echo "OpenHut sends anonymous usage events to openhut.dev. Turn it off in Settings > General. Details: https://openhut.dev/privacy"
 running
