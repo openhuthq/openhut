@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Delete02Icon, Key01Icon, Logout03Icon, PencilEdit02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
@@ -33,13 +33,10 @@ export function TeamSettings() {
   const target = all.find((each) => each.id === id)
   return <>
     {enabling}
-    <div className="flex flex-col gap-1.5">
-      <Rows>{all.map((workspace) => <TeamRow key={workspace.id} workspace={workspace} current={workspace.id === active.id} renaming={kind === 'rename' && id === workspace.id} />)}</Rows>
-      {!isPhone() && <Button type="button" variant="bare" onClick={() => open('join-link')} className="flex w-full items-center gap-3 rounded-lg border border-dashed border-mid bg-transparent px-2.5 py-2.5 text-left text-ink hover:bg-soft">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-dashed border-mid text-mute"><I icon={PlusSignIcon} size={16} /></span>
-        <span className="grid min-w-0 gap-px"><span className="text-[13px]/[18px]">Join another team</span><span className="text-[12px]/[16px] text-mute">Paste an invite link</span></span>
-      </Button>}
-    </div>
+    <Rows>
+      {all.map((workspace) => <TeamRow key={workspace.id} workspace={workspace} current={workspace.id === active.id} renaming={kind === 'rename' && id === workspace.id} />)}
+      {!isPhone() && <Row onClick={() => open('join-link')} icon={<span className="grid size-8 place-items-center rounded-lg bg-soft text-mute"><I icon={PlusSignIcon} size={16} /></span>} title="Join another team" note="Paste an invite link" />}
+    </Rows>
     {target && kind === 'keys' && target.role !== 'member' && <KeysConfirm workspace={target} />}
     {target && kind === 'leave' && !target.own && <LeaveConfirm workspace={target} />}
     {target && kind === 'delete' && target.role !== 'member' && !target.own && <DeleteConfirm workspace={target} />}
@@ -51,7 +48,7 @@ function TeamRow({ workspace, current, renaming }: { workspace: CloudWorkspaceVi
   const owner = workspace.role === 'owner'
   const go = (kind: string) => open(`${kind}:${workspace.id}`)
   const title = renaming && admin ? <TeamNameInput workspace={workspace} /> : <span className="flex min-w-0 items-center gap-1.5">
-    <span className="truncate">{workspace.name}</span>
+    <span className="truncate" onDoubleClick={admin ? () => go('rename') : undefined}>{workspace.name}</span>
     {current && <span className="rounded-full bg-soft px-1.5 py-px text-[10.5px] font-medium text-mute">Current</span>}
     {admin && <Tooltip label="Rename"><Button type="button" variant="ghost" size="icon-xs" aria-label={`Rename ${workspace.name}`} onClick={() => go('rename')}><I icon={PencilEdit02Icon} size={13} className="text-mute" /></Button></Tooltip>}
   </span>
@@ -65,17 +62,28 @@ function TeamRow({ workspace, current, renaming }: { workspace: CloudWorkspaceVi
 
 function TeamNameInput({ workspace }: { workspace: CloudWorkspaceView }) {
   const rename = useRename()
+  const ref = useRef<HTMLSpanElement>(null)
   const { name } = workspace
-  return <Input autoFocus defaultValue={name} maxLength={60} aria-label="Team name" spellCheck={false} onFocus={(event) => event.currentTarget.select()} className="h-7 px-1.5 text-[13px]"
+  useEffect(() => {
+    const field = ref.current
+    if (!field) return
+    field.focus()
+    const range = document.createRange()
+    range.selectNodeContents(field)
+    getSelection()?.removeAllRanges()
+    getSelection()?.addRange(range)
+  }, [])
+  return <span ref={ref} role="textbox" aria-label="Team name" contentEditable="plaintext-only" suppressContentEditableWarning spellCheck={false} className="block min-w-[2ch] truncate outline-none"
     onKeyDown={(event) => {
-      if (event.key === 'Escape') event.currentTarget.value = name
+      if (event.key === 'Escape') event.currentTarget.textContent = name
       if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); event.currentTarget.blur() }
     }}
     onBlur={(event) => {
-      const value = event.currentTarget.value.trim()
+      const value = (event.currentTarget.textContent ?? '').trim().slice(0, 60)
       if (value && value !== name) rename.mutate({ id: workspace.id, name: value }, { onSuccess: () => toast('Team renamed'), onError: toastError })
+      else event.currentTarget.textContent = name
       open()
-    }} />
+    }}>{name}</span>
 }
 
 function KeysConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
