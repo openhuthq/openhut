@@ -249,7 +249,7 @@ test('joining reads the sealed invite, signs the join with the link’s key and 
   assert.deepEqual(body?.members.map((member) => [member.email, member.role, member.devices]), [['mo@example.com', 'owner', body?.members[0]?.devices], ['ana@example.com', 'member', [await keysService.deviceKey()]]])
   assert.deepEqual(body?.invites, [])
   assert.deepEqual(joined.body.workspaces.map((each: { id: string; home: boolean; waiting: boolean; role: string }) => [each.home, each.waiting, each.role]), [[true, false, 'owner'], [false, true, 'member']])
-  assert.equal((await cloudJoin('joins', invite.link)).body.error.message, 'You’re already in this workspace.')
+  assert.equal((await cloudJoin('joins', invite.link)).body.error.message, 'You’re already in this team.')
 })
 
 test.after(async () => {

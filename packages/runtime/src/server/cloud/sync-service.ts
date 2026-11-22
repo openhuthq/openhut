@@ -39,7 +39,7 @@ const Requests = z.object({ data: z.array(DeviceRequest) })
 const Gone = z.object({ deleted: DeleteNotice })
 const Newer = z.object({ data: z.array(z.unknown()) })
 const NAME = 'cloud_name'
-const CHANGED = 'Someone changed this workspace a moment ago. Try again.'
+const CHANGED = 'Someone changed this team a moment ago. Try again.'
 const GONE = [4001, 4003, 4010]
 const Missing = z.object({ error: z.object({ param: z.literal('file') }) })
 const Message = z.discriminatedUnion('type', [
@@ -194,7 +194,7 @@ export const syncService = {
 function defaultName(ws: string): string {
   const owner = roomKeys.members(ws)?.members.find((member) => member.role === 'owner')?.email ?? ''
   const first = (owner.split('@')[0] ?? '').split(/[._+-]/)[0] ?? ''
-  return `${first.charAt(0).toUpperCase()}${first.slice(1)}’s workspace`
+  return `${first.charAt(0).toUpperCase()}${first.slice(1)}’s team`
 }
 
 function homeState(): State | undefined {

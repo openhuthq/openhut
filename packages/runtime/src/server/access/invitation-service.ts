@@ -101,7 +101,7 @@ async function readInvite(link: string): Promise<Opened> {
   const secret = parsed?.[2]
   if (!ws || !secret) throw new HttpError(400, 'That isn’t an OpenHut invite link. Copy the whole link and try again.', { param: 'link' })
   if (!keysService.account() || !keysService.session()) throw new HttpError(409, 'Sign in to OpenHut Cloud to join.')
-  if (roomKeys.room(ws)) throw new HttpError(409, 'You’re already in this workspace.', { param: 'link' })
+  if (roomKeys.room(ws)) throw new HttpError(409, 'You’re already in this team.', { param: 'link' })
   const card = await identity(fromBase64(secret))
   const id = await inviteId(card.publicKey)
   const invite = await fetchInvite({ ws, id })

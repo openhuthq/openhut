@@ -109,7 +109,7 @@ function DeleteAccount({ cloud }: { cloud: Cloud }) {
     'Your backup of agents, chats and settings',
     cloud.passkey ? 'Your recovery kit, Touch ID and sign-in' : 'Your recovery kit and sign-in',
     'Access from your other devices',
-    deleted.length > 0 && `${list(deleted)} ${deleted.length > 1 ? 'workspaces' : 'workspace'}`,
+    deleted.length > 0 && `Your ${deleted.length > 1 ? 'teams' : 'team'} ${list(deleted)}`,
     left.length > 0 && `Your place in ${list(left)}`,
   ].filter((item): item is string => Boolean(item))
   return <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete account" note={deleteNote({ cloud, shared: shared?.name })}>

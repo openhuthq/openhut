@@ -76,7 +76,7 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
         <DropdownMenuItem className="h-8 px-2.5" onClick={() => setRole.mutate({ id: workspace.id, email: member.email, role: next }, { onError: toastError })}>{next === 'admin' ? 'Make admin' : 'Make member'}</DropdownMenuItem>
         {owner && <DropdownMenuItem className="h-8 px-2.5" onClick={() => setAsking('owner')}>Make owner</DropdownMenuItem>}
         {devices.map((key) => <DropdownMenuItem key={key} className="h-8 px-2.5" onClick={() => setAsking(key)}><span className="truncate">Remove {deviceName(key)}</span></DropdownMenuItem>)}
-        <DropdownMenuItem className="h-8 px-2.5 text-fail" onClick={() => setAsking('remove')}>Remove from workspace</DropdownMenuItem>
+        <DropdownMenuItem className="h-8 px-2.5 text-fail" onClick={() => setAsking('remove')}>Remove from team</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu> : <span className="w-7" />}
     <ConfirmDialog open={asking === 'remove'} onOpenChange={close} question={`Remove ${name}?`} detail={`${name} can’t get anything new from OpenHut Cloud. What ${name} already saw stays on their computer.`} action="Remove" onConfirm={() => remove.mutate({ id: workspace.id, email: member.email }, { onSuccess: () => notify({ title: `${name} removed`, note: 'They can’t get anything new from OpenHut Cloud.' }), onError: toastError })} />

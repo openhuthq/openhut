@@ -124,7 +124,7 @@ export type NewInvite = z.infer<typeof NewInvite>
 export const OpenedInvite = z.object({ ...Invite.shape, memberLists: z.array(MemberList).check(z.maxLength(200)), hasMore: z.optional(z.boolean()) })
 export type OpenedInvite = z.infer<typeof OpenedInvite>
 
-export const WorkspaceName = z.string().check(z.trim(), z.minLength(1, 'Give the workspace a name.'), z.maxLength(60, 'Keep the name under 60 characters.'))
+export const WorkspaceName = z.string().check(z.trim(), z.minLength(1, 'Give the team a name.'), z.maxLength(60, 'Keep the name under 60 characters.'))
 const HOST = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2,63}|xn--[a-z0-9-]+)$/
 
 export function siteHost(input: string): string | null {
