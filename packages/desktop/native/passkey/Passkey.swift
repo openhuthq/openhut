@@ -35,7 +35,7 @@ func status() -> [String: Any] {
 
 @available(macOS 15.0, *)
 final class Passkey: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
-  let window = NSWindow(contentRect: .zero, styleMask: [], backing: .buffered, defer: true)
+  let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 160), styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
   let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingParty)
 
   func create(email: String) {
@@ -54,6 +54,12 @@ final class Passkey: NSObject, ASAuthorizationControllerDelegate, ASAuthorizatio
     let controller = ASAuthorizationController(authorizationRequests: [request])
     controller.delegate = self
     controller.presentationContextProvider = self
+    window.title = "OpenHut"
+    window.titlebarAppearsTransparent = true
+    window.level = .floating
+    window.center()
+    window.makeKeyAndOrderFront(nil)
+    NSApplication.shared.activate(ignoringOtherApps: true)
     controller.performRequests()
   }
 
@@ -87,7 +93,7 @@ case "status":
 case "create" where arguments.count == 2, "open" where arguments.count == 1:
   guard #available(macOS 15.0, *) else { reply(["error": "needs-macos-15"], status: 2) }
   let passkey = Passkey()
-  NSApplication.shared.setActivationPolicy(.accessory)
+  NSApplication.shared.setActivationPolicy(.regular)
   DispatchQueue.main.async { arguments[0] == "create" ? passkey.create(email: arguments[1]) : passkey.open() }
   NSApplication.shared.run()
 default:
