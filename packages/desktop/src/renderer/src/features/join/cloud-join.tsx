@@ -81,7 +81,7 @@ function refusal({ error, email }: { error: Error; email: string | null }): { ti
 export function JoinRow() {
   return <Rows>
     <Row icon={<I icon={Link01Icon} size={20} className="text-hue-blue" />} title="Join a team" note="Got an invite link? Paste it here.">
-      <Button type="button" variant="secondary" className={PILL} onClick={() => open('join-link')}>Join with a link</Button>
+      <Button type="button" variant="ghost" className={PILL} onClick={() => open('join-link')}>Join with a link</Button>
     </Row>
   </Rows>
 }
