@@ -14,6 +14,7 @@ import { I, PILL } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { nameOf, useCloud } from '@/features/cloud/api'
 import { Pitch } from '@/features/cloud/sign-in'
+import { JoinRow } from '@/features/cloud/cloud'
 import { Row, Rows } from '@/features/settings/kit'
 import { CloudSetup } from '@/features/cloud/setup'
 import { peopleNote, useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useRevokeInvite, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
@@ -33,7 +34,8 @@ export function PeopleSettings() {
   const opened = useOpen()
   if (!cloud) return null
   const enabling = opened === 'enable' && <CloudSetup />
-  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch door="people" /></>
+  const join = !isPhone() && <JoinRow />
+  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch />{join}</>
   const admin = active.role !== 'member'
   return <>{enabling}{!cloud.kit && <Rows><Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note="Not saved"><Button type="button" variant="primary" className={PILL} onClick={() => open('enable')}>Save kit</Button></Row></Rows>}<section className="flex flex-col gap-2.5">
     <div className="flex items-center gap-2 px-1">
@@ -48,7 +50,7 @@ export function PeopleSettings() {
       </div>)}
       {active.invites.map((invite) => <InviteRow key={invite.email} invite={invite} workspace={active} admin={admin} />)}
     </div>
-  </section></>
+  </section>{join}</>
 }
 
 function InviteRow({ invite, workspace, admin }: { invite: CloudWorkspaceView['invites'][number]; workspace: CloudWorkspaceView; admin: boolean }) {

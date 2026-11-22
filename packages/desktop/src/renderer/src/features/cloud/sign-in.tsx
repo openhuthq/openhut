@@ -37,11 +37,10 @@ export function Lead({ children }: { children: ReactNode }) {
   return <p className="m-0 max-w-[460px] text-[13.5px]/[20px] text-body">{children}</p>
 }
 
-export type Door = 'backup' | 'people'
-
-const PITCH: Record<Door, { title: string; note: string; why: string }> = {
-  backup: { title: 'Backups', note: 'Lose your computer, keep everything.', why: 'Backups need OpenHut Cloud, and it’s off on this computer. Turn it on to keep your agents, chats and settings safe, end-to-end encrypted.' },
-  people: { title: 'Teams', note: 'Share agents with your team.', why: 'Teams need OpenHut Cloud, and it’s off on this computer. Turn it on to invite people and share agents, end-to-end encrypted.' },
+const PITCH = {
+  title: 'Your team on OpenHut',
+  note: 'Share agents with your team, on every computer.',
+  why: 'OpenHut Cloud is off on this computer. Turn it on to invite people and share agents. It backs up your agents too, end-to-end encrypted.',
 }
 
 function Characters() {
@@ -58,15 +57,14 @@ function Benefit({ icon, hue, title, note }: { icon: Parameters<typeof I>[0]['ic
   return <Row icon={<I icon={icon} size={20} className={ROW_ICON[hue]} />} title={title} note={note} />
 }
 
-export function Pitch({ door }: { door: Door }) {
+export function Pitch() {
   const cloud = useCloud().data
   const locked = cloud?.status === 'locked'
-  const pitch = PITCH[door]
   return <Pane>
     {locked ? <Hut mood="key" className="size-[84px]" /> : <Characters />}
-    <Title>{locked ? `You’re signed in, ${nameOf(cloud.email ?? '')}` : pitch.title}</Title>
-    <Lead>{locked ? 'One more step: the key that reads your agents and chats.' : pitch.note}</Lead>
-    {!locked && <p className="m-0 max-w-[420px] text-[12.5px]/[18px] text-mute">{pitch.why}</p>}
+    <Title>{locked ? `You’re signed in, ${nameOf(cloud.email ?? '')}` : PITCH.title}</Title>
+    <Lead>{locked ? 'One more step: the key that reads your agents and chats.' : PITCH.note}</Lead>
+    {!locked && <p className="m-0 max-w-[420px] text-[12.5px]/[18px] text-mute">{PITCH.why}</p>}
     {isPhone()
       ? <span className="text-[13px] text-mute">{locked ? 'Unlock OpenHut on your computer.' : 'Enable OpenHut Cloud on your computer.'}</span>
       : <Button type="button" variant="primary" className={BIG} onClick={() => open('enable')}>{locked ? 'Unlock' : 'Enable cloud'}</Button>}

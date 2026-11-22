@@ -30,7 +30,7 @@ export function AccountSettings() {
   if (!data) return <ErrorNote message={error} />
   const on = data.status === 'on' || data.status === 'offline'
   return <>
-    {on ? <CloudOn cloud={data} error={error ?? undefined} /> : data.status === 'locked' && !isPhone() ? <CloudLocked cloud={data} /> : <Pitch door="backup" />}
+    {on ? <CloudOn cloud={data} error={error ?? undefined} /> : data.status === 'locked' && !isPhone() ? <CloudLocked cloud={data} /> : <Pitch />}
     {!on && !isPhone() && <JoinRow />}
     {data.status === 'off' && <ErrorNote message={error ?? undefined} />}
     {opened === 'enable' && <CloudSetup />}
@@ -63,7 +63,7 @@ function LockedDelete() {
   </Row>
 }
 
-function JoinRow() {
+export function JoinRow() {
   return <Rows>
     <Row icon={<I icon={Link01Icon} size={20} className="text-hue-blue" />} title="Join a team" note="Got an invite link? Paste it here.">
       <Button type="button" variant="secondary" className={PILL} onClick={() => open('join-link')}>Join with a link</Button>
