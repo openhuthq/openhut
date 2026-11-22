@@ -10,7 +10,7 @@ import { TeamMark } from '@/components/custom/team-mark'
 import { useCloud } from '@/features/cloud/api'
 import { Pitch } from '@/features/cloud/sign-in'
 import { CloudSetup } from '@/features/cloud/setup'
-import { peopleNote, useChangeKeys, useDeleteWorkspace, useRemoveMember, useRename, useSetWebsite, useWorkspaces } from '@/features/cloud/workspaces'
+import { useChangeKeys, useDeleteWorkspace, useRemoveMember, useRename, useSetWebsite, useWorkspaces } from '@/features/cloud/workspaces'
 import { navigate, open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
@@ -21,7 +21,6 @@ import { cn } from '@/lib/utils'
 
 const KEYS_NOTE = 'Use after a lost computer or a teammate you don’t trust. Everyone else stays in.'
 
-const ROLE = { owner: 'the owner', admin: 'an admin', member: 'a member' }
 
 export function TeamSettings() {
   const cloud = useCloud().data
@@ -66,7 +65,6 @@ function TeamHeader({ workspace, editing }: { workspace: CloudWorkspaceView; edi
           : workspace.website ? <span className="truncate" onDoubleClick={admin ? () => open('site') : undefined}>{workspace.website}</span>
           : admin ? <Button type="button" variant="text" className="h-auto p-0 text-[12.5px]/[18px] font-normal text-hue-blue" onClick={() => open('site')}>Add website</Button> : null}
         {workspace.website && pencil('site', 'Change website')}
-        <span className="shrink-0">{workspace.website || admin ? '· ' : ''}{peopleNote(workspace)} · you’re {ROLE[workspace.role]}</span>
       </span>
     </span>
   </div>

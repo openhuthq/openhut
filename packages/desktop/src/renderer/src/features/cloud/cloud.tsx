@@ -82,11 +82,11 @@ function CloudOn({ cloud, error }: { cloud: Cloud; error?: string }) {
   const email = cloud.email ?? ''
   const young = Boolean(cloud.youngUntil)
   return <>
-    <AccountHead email={email} note={cloud.status === 'on' ? <span className="flex items-center gap-1.5 text-[12px] text-mute"><Google />{email}</span> : <span className="text-[12px] text-mute">Can’t reach the cloud. Your agents keep working.</span>} status={cloud.status === 'on' ? <Status tone="on">On</Status> : <Status tone="wait">Offline</Status>} />
+    <AccountHead email={email} note={cloud.status === 'on' ? <span className="flex items-center gap-1.5 text-[12px] text-mute"><Google />{email}</span> : <span className="text-[12px] text-mute">Can’t reach the cloud. Your agents keep working.</span>} status={cloud.status === 'on' ? undefined : <Status tone="wait">Offline</Status>} />
     <Rows>
       <Row icon={<I icon={CloudUploadIcon} size={20} className="text-hue-blue" />} title="Backup" note={<span className={cloud.backup.problem || cloud.backup.state === 'failed' ? 'text-fail' : undefined}>{backupNote({ ...cloud.backup, offline: cloud.status === 'offline' })}</span>} />
       <Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>{kitNote(cloud.kit)}{cloud.keyStore === 'file' && ' · Stored in a file, not the keychain'}</span>}>
-        {!young && <Button type="button" variant={cloud.kit ? 'ghost' : 'primary'} className={PILL} onClick={() => open(cloud.kit ? 'kit' : 'enable')}>{cloud.kit ? 'Make a new kit' : 'Save kit'}</Button>}
+        {!young && <Button type="button" variant={cloud.kit ? 'ghost' : 'primary'} className={PILL} onClick={() => open(cloud.kit ? 'kit' : 'enable')}>{cloud.kit ? 'New kit' : 'Save kit'}</Button>}
       </Row>
       {helper?.passkeys && helper.prf && <Row icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title="Touch ID" note={cloud.passkey ? 'On' : 'Unlock a new Mac with your fingerprint'}>
         {!cloud.passkey && !young && <Button type="button" variant="ghost" className={PILL} disabled={addPasskey.isPending} onClick={() => addPasskey.mutate(email, { onError: toastError })}>Add</Button>}

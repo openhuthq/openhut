@@ -89,7 +89,6 @@ export function useTeamIcon({ id, website }: { id: string; website: string | nul
   return useQuery({
     queryKey: ['team-icon', id, website],
     queryFn: async () => URL.createObjectURL(await requestBlob({ computer: 'local', path: `/api/cloud/workspaces/${encodeURIComponent(id)}/icon` })),
-    enabled: Boolean(website),
     staleTime: Infinity,
     gcTime: Infinity,
     retry: false,
