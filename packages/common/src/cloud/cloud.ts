@@ -125,11 +125,25 @@ export const OpenedInvite = z.object({ ...Invite.shape, memberLists: z.array(Mem
 export type OpenedInvite = z.infer<typeof OpenedInvite>
 
 export const WorkspaceName = z.string().check(z.trim(), z.minLength(1, 'Give the workspace a name.'), z.maxLength(60, 'Keep the name under 60 characters.'))
-export const RenameWorkspace = z.object({ name: WorkspaceName })
-export type RenameWorkspace = z.infer<typeof RenameWorkspace>
-export const LockedName = z.object({ name: Locked.check(z.maxLength(1024)) })
+const HOST = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2,63}|xn--[a-z0-9-]+)$/
 
-export const CloudWorkspace = z.object({ id: Id, object: z.literal('workspace'), name: z.nullable(z.string()) })
+export function siteHost(input: string): string | null {
+  const text = input.trim()
+  if (!text || text.length > 200) return null
+  try {
+    const url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`)
+    return !url.username && !url.password && !url.port && url.hostname.length <= 253 && HOST.test(url.hostname) ? url.hostname : null
+  } catch {
+    return null
+  }
+}
+
+export const Website = z.string().check(z.refine((value) => siteHost(value) !== null, 'Enter a website like example.com.'))
+export const UpdateWorkspace = z.object({ name: z.optional(WorkspaceName), website: z.optional(z.nullable(Website)) })
+export type UpdateWorkspace = z.infer<typeof UpdateWorkspace>
+export const LockedWorkspace = z.object({ name: z.optional(Locked.check(z.maxLength(1024))), site: z.optional(Locked.check(z.maxLength(1024))) })
+
+export const CloudWorkspace = z.object({ id: Id, object: z.literal('workspace'), name: z.nullable(z.string()), site: z.optional(z.nullable(z.string())) })
 export type CloudWorkspace = z.infer<typeof CloudWorkspace>
 
 export const KEY_BOX_KINDS = ['passkey', 'kit', 'kit-confirmed'] as const
@@ -239,6 +253,7 @@ export type DeleteNotice = z.infer<typeof DeleteNotice>
 export const CloudWorkspaceView = z.object({
   id: Id,
   name: z.string(),
+  website: z._default(z.nullable(z.string()), null),
   home: z.boolean(),
   own: z._default(z.boolean(), false),
   role: Role,
@@ -315,7 +330,7 @@ export type InviteLetter = z.infer<typeof InviteLetter>
 export const ChangeRole = z.object({ role: Role })
 export type ChangeRole = z.infer<typeof ChangeRole>
 
-export const CreateWorkspace = z.object({ name: RenameWorkspace.shape.name })
+export const CreateWorkspace = z.object({ name: WorkspaceName })
 export type CreateWorkspace = z.infer<typeof CreateWorkspace>
 
 export const DeleteWorkspace = z.object({ name: z.string().check(z.maxLength(200)) })

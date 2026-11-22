@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
-import { checkProof, CloudWorkspace, DeleteNotice, DeviceRequest, parseJson, Record, signProof, type Backup, type SetHere } from '@openhut/common/cloud/cloud.ts'
+import { checkProof, CloudWorkspace, DeleteNotice, DeviceRequest, parseJson, Record, signProof, siteHost, type Backup, type SetHere } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, bodyOf, newUntil } from '@openhut/common/cloud/member-list.ts'
 import { FileValue, openRecord, sealRecord, SYNCED, type AgentValue, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
 import { askCommit, fromBase64, newKey, readHeader, slot, toBase64 } from '@openhut/common/vault/vault.ts'
@@ -52,7 +52,7 @@ type Item = Local & { id: string }
 type Sent = 'sent' | 'later' | 'refused'
 type State = {
   ws: string; home: boolean; call: Call; socket: ReconnectingWebSocket | undefined; ready: boolean; timer: NodeJS.Timeout | undefined; headTimer: NodeJS.Timeout | undefined; keyTimer?: NodeJS.Timeout; failures: number
-  wanted: [string, number][] | null; refused: Map<string, { kind: Synced; hash: string; name: string }>; dirty: Set<Synced>; backup: Backup; name: string | null
+  wanted: [string, number][] | null; refused: Map<string, { kind: Synced; hash: string; name: string }>; dirty: Set<Synced>; backup: Backup; name: string | null; site: string | null
   requests: DeviceRequest[]; leaving?: boolean; log: { seq: number; hash: string }; echo: Map<string, number>
 }
 export type Gone = { name: string; why: 'removed' | 'deleted' }
@@ -136,6 +136,8 @@ export const syncService = {
 
   name: (ws: string): string => states.get(ws)?.name ?? defaultName(ws),
 
+  site: (ws: string): string | null => states.get(ws)?.site ?? null,
+
   async refreshName(ws: string): Promise<void> {
     const s = states.get(ws)
     if (s) await named(s)
@@ -201,7 +203,7 @@ function homeState(): State | undefined {
 }
 
 function open(home: boolean, ws: string): void {
-  const s: State = { ws, home, call: (input) => room(s, input), socket: undefined, ready: false, timer: undefined, headTimer: undefined, failures: 0, wanted: null, refused: new Map(), dirty: new Set(), name: null, requests: [], log: { seq: 0, hash: '' }, echo: new Map(), backup: home ? backup : { ...backup, state: 'idle', at: null, problem: null } }
+  const s: State = { ws, home, call: (input) => room(s, input), socket: undefined, ready: false, timer: undefined, headTimer: undefined, failures: 0, wanted: null, refused: new Map(), dirty: new Set(), name: null, site: null, requests: [], log: { seq: 0, hash: '' }, echo: new Map(), backup: home ? backup : { ...backup, state: 'idle', at: null, problem: null } }
   states.set(ws, s)
   const socket = new ReconnectingWebSocket(cloud.roomUrl(ws), [], { WebSocket: globalThis.WebSocket })
   s.socket = socket
@@ -268,7 +270,12 @@ function run(step: () => Promise<void>): Promise<void> {
 
 async function named(s: State): Promise<void> {
   const reply = await room(s, { method: 'GET', path: '' })
-  s.name = await roomKeys.openName({ ws: s.ws, locked: CloudWorkspace.safeParse(reply.json).data?.name ?? null }) ?? s.name
+  const view = CloudWorkspace.safeParse(reply.json).data
+  const before = [s.name, s.site].join('|')
+  s.name = await roomKeys.openMeta({ ws: s.ws, field: 'name', locked: view?.name }) ?? s.name
+  const site = view && (view.site ? await roomKeys.openMeta({ ws: s.ws, field: 'site', locked: view.site }) : '')
+  if (typeof site === 'string') s.site = siteHost(site)
+  if ([s.name, s.site].join('|') !== before) emit({ name: 'cloud.changed', target: { type: 'cloud', id: s.ws } })
   if (s.name) await db.insertInto('install_setting').values({ name: `${NAME}:${s.ws}`, value: s.name }).onConflict((oc) => oc.column('name').doUpdateSet({ value: s.name ?? '' })).execute()
 }
 

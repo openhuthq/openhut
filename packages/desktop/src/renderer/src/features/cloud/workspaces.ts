@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { OpenHutAgent } from '@openhut/client'
 import { Cloud, CloudInvite, CloudInvitePreview, CloudWorkspaceView, type CreateCloudInvite, type Role } from '@openhut/common/cloud/cloud.ts'
-import { request } from '@/lib/api-client'
+import { request, requestBlob } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
 import { useCloud } from '@/features/cloud/api'
 
@@ -75,6 +75,25 @@ export function useRename() {
     mutationFn: ({ id, name }: { id: string; name: string }) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/workspaces/${encodeURIComponent(id)}`, method: 'PATCH', body: { name } }),
     onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
   })
+}
+
+export function useSetWebsite() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, website }: { id: string; website: string | null }) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/workspaces/${encodeURIComponent(id)}`, method: 'PATCH', body: { website } }),
+    onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
+  })
+}
+
+export function useTeamIcon({ id, website }: { id: string; website: string | null }) {
+  return useQuery({
+    queryKey: ['team-icon', id, website],
+    queryFn: async () => URL.createObjectURL(await requestBlob({ computer: 'local', path: `/api/cloud/workspaces/${encodeURIComponent(id)}/icon` })),
+    enabled: Boolean(website),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
+  }).data
 }
 
 export function useSetRole() {

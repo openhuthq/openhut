@@ -31,18 +31,18 @@ export const roomKeys = {
     return room ? ownOf(room) : null
   },
 
-  async lockName({ ws, name }: { ws: string; name: string }): Promise<string> {
+  async lockMeta({ ws, field, plain }: { ws: string; field: MetaField; plain: string }): Promise<string> {
     const workspace = roomKeys.room(ws)?.workspace
-    const locked = workspace?.key && await lock({ key: fromBase64(workspace.key), version: workspace.version, bind: nameBind(ws), plain: new TextEncoder().encode(name) })
+    const locked = workspace?.key && await lock({ key: fromBase64(workspace.key), version: workspace.version, bind: metaBind({ ws, field }), plain: new TextEncoder().encode(plain) })
     if (!locked) throw new HttpError(409, 'This computer is still joining the workspace. Try again in a moment.')
     return toBase64(locked)
   },
 
-  async openName({ ws, locked }: { ws: string; locked: string | null }): Promise<string | null> {
+  async openMeta({ ws, field, locked }: { ws: string; field: MetaField; locked: string | null | undefined }): Promise<string | null> {
     const workspace = roomKeys.room(ws)?.workspace
     if (!workspace?.key || !locked) return null
     const keys = Object.fromEntries([...Object.entries(workspace.old ?? {}), [String(workspace.version), workspace.key]].map(([version, key]) => [Number(version), fromBase64(key)]))
-    const plain = await unlock({ keys, bind: nameBind(ws), locked: fromBase64(locked) }).catch(() => null)
+    const plain = await unlock({ keys, bind: metaBind({ ws, field }), locked: fromBase64(locked) }).catch(() => null)
     return plain && new TextDecoder().decode(plain)
   },
 
@@ -329,8 +329,10 @@ async function welcome({ ws, call, before, after }: { ws: string; call: Call; be
   for (const sent of await roomKeys.welcomeLetters({ ws, devices: fresh })) await call({ method: 'POST', path: '/letters', body: sent })
 }
 
-function nameBind(ws: string): string {
-  return `workspace/${ws}/name`
+type MetaField = 'name' | 'site'
+
+function metaBind({ ws, field }: { ws: string; field: MetaField }): string {
+  return `workspace/${ws}/${field}`
 }
 
 function adminRoom({ ws, sentence }: { ws: string; sentence: string }): { room: Room; body: MemberListBody } {
