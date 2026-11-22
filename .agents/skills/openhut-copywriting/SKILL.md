@@ -14,6 +14,18 @@ Use this before writing or changing any text a person reads in the app or on ope
 - Keep the same word for the same thing everywhere (one name per feature, matching Settings and the docs).
 - No faces in option rows; plain icons. Characters are for big pictures and for agents and people.
 
+**One word for each thing** (use these, everywhere, errors included)
+- Turning the cloud on: **Enable** ("Enable cloud", "Enable OpenHut Cloud…"). Not turn on, set up.
+- What the cloud keeps: **agents, chats and settings**.
+- Getting them back on a new Mac: **restore** ("Restoring your agents…"). Not bring back.
+- Privacy: **End-to-end encrypted / We can't read your data.**
+- Unlocking with a fingerprint: **Touch ID** (never "passkey" in user text).
+- New encryption for a workspace: **Reset encryption** (not change keys).
+- Passing a workspace on: **Make someone else the owner** (not hand over).
+- The 12 words and their file: **recovery kit** (not recovery words).
+- Use `${HERE}` for this computer, so Linux doesn't read "Mac".
+- Errors carry no codes ("HTTP 500") and always end with what to do next ("Try again.", "OpenHut tries again.").
+
 **On the site and in announcements**
 - Say outcomes, not how it works: "Your agents on every Mac", not "encrypted records sync through the cloud". The mechanism lives behind a "How it works" or "Security" link.
 - Never overclaim. Check claims against the docs and code first. The known traps are in `private/brain/openhut-site.md` ("Showing OpenHut Cloud on the site"): the phone never reads cloud data, no live cursors, removal doesn't change keys, restored agents don't start by themselves, the cloud does see emails, members, device names and timing.
