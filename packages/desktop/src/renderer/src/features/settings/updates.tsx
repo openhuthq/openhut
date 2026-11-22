@@ -16,9 +16,9 @@ export function UpdatesSettings() {
   const state = useAppUpdate().data
   return <>
     {state && <Rows>
-      <Row icon={<I icon={CloudDownloadIcon} size={20} className="text-hue-sky" />} title={`OpenHut ${state.current}`} note={updateNote(state)}><UpdateStatus idle={<CheckButton label="Check for updates" />} /></Row>
+      <Row icon={<I icon={CloudDownloadIcon} size={20} className="text-hue-sky" />} title={`OpenHut ${state.current}`} note={updateNote(state)}>{!state.ready && <UpdateStatus idle={<CheckButton label="Check for updates" />} />}</Row>
     </Rows>}
-    <UpdateEverything />
+    <div className="px-2.5 empty:hidden"><UpdateEverything /></div>
     <Section title="Channel">
       <Channel prerelease={!!state?.current.includes('-')} />
     </Section>
