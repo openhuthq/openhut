@@ -46,6 +46,13 @@ function CloudLocked({ cloud }: { cloud: Cloud }) {
       </Row>
       <SignOutRow />
     </Rows>
+    <Section title="Danger zone">
+      <Rows>
+        <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete cloud account" note="Unlock first. Deleting needs your key, so your Google sign-in alone can’t wipe your backup.">
+          <Button type="button" variant="danger" className={PILL} onClick={() => open('enable')}>Delete account</Button>
+        </Row>
+      </Rows>
+    </Section>
   </>
 }
 
