@@ -24,9 +24,9 @@ joining() { [ -n "$JOIN_CODE" ]; }
 tailnet() { [ "$ROUTE" = tailnet ]; }
 serve_tailnet() {
   command -v tailscale >/dev/null 2>&1 || die "Tailscale isn't installed on this computer. Install it from tailscale.com/download, sign in, then try again."
-  ${SUDO:-} tailscale serve --help 2>&1 | grep -q -- '--tcp' || die "this Tailscale is too old to share a port with your tailnet. Update Tailscale, then try again."
-  say "Opening port $TAILNET_PORT to your tailnet only"
-  ${SUDO:-} timeout 300 tailscale serve --bg --tcp "$TAILNET_PORT" "tcp://127.0.0.1:$TAILNET_PORT" || die "Tailscale didn't open port $TAILNET_PORT to your tailnet. If it printed a link, open it to allow Serve on your tailnet, then try again."
+  ${SUDO:-} tailscale serve --help 2>&1 | grep -q -- '--tcp' || die "this Tailscale is too old to share a port with your Tailscale network. Update Tailscale, then try again."
+  say "Opening port $TAILNET_PORT to your Tailscale network only"
+  ${SUDO:-} timeout 300 tailscale serve --bg --tcp "$TAILNET_PORT" "tcp://127.0.0.1:$TAILNET_PORT" || die "Tailscale didn't open port $TAILNET_PORT to your Tailscale network. If it printed a link, open it to allow Serve, then try again."
 }
 key_line() { k=$(curl -fsS --unix-socket /data/app/openhut.sock http://openhut/api/admin 2>/dev/null | sed -n 's/.*"relay":{"key":"\([0-9a-f]\{64\}\)".*/\1/p'); [ -z "$k" ] || echo "OPENHUT_KEY=$k"; }
 node_ok() { node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; }

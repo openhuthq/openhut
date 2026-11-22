@@ -57,7 +57,7 @@ export const seatSignIn = {
     if (!url) {
       log.warn({ event: 'seat.sign_in_failed', step: 'link', output: plain(signIn.out).slice(-500) })
       close(signIn.id)
-      throw new HttpError(503, 'Claude Code didn\'t give a sign-in link. Try again in a minute.')
+      throw new HttpError(503, 'Couldn\'t start the Claude sign-in. Try again in a minute.')
     }
     signIn.state = stateOf(url)
     return { id: signIn.id, object: 'seat_sign_in', status: 'open', url }
@@ -65,7 +65,7 @@ export const seatSignIn = {
 
   async complete({ id, code }: { id: string; code: string }): Promise<string> {
     const signIn = signInFor({ id, code })
-    if (!signIn) throw new HttpError(404, 'That sign-in is over (each one lasts 10 minutes and takes one code). Press Set up again for a new one.')
+    if (!signIn) throw new HttpError(404, 'That sign-in timed out. Close this window and press Sign in again.')
     const before = signIn.out.length
     signIn.proc.stdin.write(code.trim())
     await new Promise((resolve) => setTimeout(resolve, ENTER_AFTER_MS))
@@ -79,14 +79,14 @@ export const seatSignIn = {
     }
     log.warn({ event: 'seat.sign_in_failed', step: 'code', output: said.slice(-2000) })
     const reason = FAILED.exec(said)?.[0]?.replace(/Press Enter to retry\.?/, '').trim()
-    throw new HttpError(400, reason ? `Claude said: ${reason} Press Set up again for a new code.` : 'Claude didn\'t answer within 2 minutes. Press Set up again for a new code.', { param: 'code' })
+    throw new HttpError(400, reason ? `Claude said: ${reason} Close this window and press Sign in again.` : 'Claude didn\'t answer. Close this window and press Sign in again.', { param: 'code' })
   },
 }
 
 function terminal({ dir, env, run }: { dir: string; env: Record<string, string>; run: string }): ChildProcessWithoutNullStreams {
   if (process.platform === 'darwin') return spawn('/usr/bin/expect', ['-c', MAC_PTY], { cwd: dir, env: { ...env, OPENHUT_RUN: run } })
   if (process.platform !== 'win32') return spawn('script', ['-qfec', run, '/dev/null'], { cwd: dir, env })
-  if (!config.hermesRuntime) throw new HttpError(503, 'This build doesn\'t say where its agent runtime is, so it can\'t run the Claude sign-in.')
+  if (!config.hermesRuntime) throw new HttpError(503, 'Claude sign-in isn\'t working in this copy of OpenHut. Download OpenHut again from openhut.dev.')
   const system = { SystemRoot: process.env.SystemRoot ?? 'C:\\Windows', USERPROFILE: dir, APPDATA: dir, LOCALAPPDATA: dir, TEMP: dir, TMP: dir }
   return spawn(join(config.hermesRuntime, 'python', 'python.exe'), ['-s', '-c', WIN_PTY], { cwd: dir, env: { ...env, ...system, OPENHUT_SITE: join(config.hermesRuntime, 'site'), OPENHUT_CLAUDE_BIN: config.claudeHostBin } })
 }
@@ -94,7 +94,7 @@ function terminal({ dir, env, run }: { dir: string; env: Record<string, string>;
 async function hostClaude(): Promise<void> {
   const bin = config.claudeHostBin
   if (process.platform !== 'darwin' || (existsSync(bin) && (!config.claudeVersion || versionOf(bin) === config.claudeVersion))) return
-  if (!config.claudeVersion) throw new HttpError(503, 'Claude Code isn\'t on this Mac yet, and this build doesn\'t say which version to get.')
+  if (!config.claudeVersion) throw new HttpError(503, 'Claude sign-in isn\'t working in this copy of OpenHut. Download OpenHut again from openhut.dev.')
   const base = `https://downloads.claude.ai/claude-code-releases/${config.claudeVersion}`
   const platform = `darwin-${process.arch}`
   const failed = () => new HttpError(503, 'Couldn\'t download Claude Code for the sign-in. Check the internet connection and try again.')

@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 
 const KINDS: Record<ChannelKind, { label: string; remove: string; gone: string }> = {
   slack: { label: 'Slack', remove: 'Disconnect', gone: 'stops answering in Slack. Connecting again takes new tokens.' },
-  whatsapp: { label: 'WhatsApp', remove: 'Unlink', gone: 'stops answering on WhatsApp. Linking again takes a new QR scan.' },
+  whatsapp: { label: 'WhatsApp', remove: 'Disconnect', gone: 'stops answering on WhatsApp. Connecting again takes a new QR scan.' },
   telegram: { label: 'Telegram', remove: 'Disconnect', gone: 'stops answering on Telegram. Connecting again takes the bot token.' },
 }
 const ORDER: ChannelKind[] = ['slack', 'whatsapp', 'telegram']
@@ -44,7 +44,7 @@ function ChannelRow({ agent, kind, channel }: { agent: Agent; kind: ChannelKind;
     {label}<span className="min-w-0 flex-1 truncate text-xs text-mute">{line(channel)}</span>
     {channel?.status === 'connected'
       ? <Switch checked aria-label={`${remove} ${label}`} disabled={!agent.canEdit || deleteChannel.isPending} onCheckedChange={() => setConfirming(true)} />
-      : <Button type="button" variant="secondary" size="xs" className="rounded-full px-2.5 text-[12px] font-normal" disabled={!agent.canEdit} onClick={(event) => { event.stopPropagation(); open() }}>{channel ? 'Link' : 'Set up'}</Button>}
+      : <Button type="button" variant="secondary" size="xs" className="rounded-full px-2.5 text-[12px] font-normal" disabled={!agent.canEdit} onClick={(event) => { event.stopPropagation(); open() }}>{channel ? 'Scan code' : 'Set up'}</Button>}
     <ConfirmDialog open={confirming} onOpenChange={setConfirming} question={`${remove} ${label}?`} detail={`${agent.name} ${gone}`} action={remove}
       onConfirm={() => channel && deleteChannel.mutate(channel, { onError: toastError })} />
   </div>
@@ -52,7 +52,7 @@ function ChannelRow({ agent, kind, channel }: { agent: Agent; kind: ChannelKind;
 
 function line(channel: Channel | undefined) {
   if (!channel) return ''
-  if (channel.status === 'linking') return 'Waiting for the scan'
+  if (channel.status === 'linking') return 'Waiting for scan…'
   return 'Connected'
 }
 

@@ -43,7 +43,7 @@ function myKey(): Promise<DeviceKey> {
   return key.then((found) => {
     if (found) return found
     key = undefined
-    throw new Error('This phone couldn\'t make its key. Set a screen lock and try again.')
+    throw new Error('This phone couldn\'t set itself up securely. Set a screen lock and try again.')
   }, (err: unknown) => {
     key = undefined
     throw err
@@ -86,32 +86,32 @@ export function parseCode(text: string): Code {
   const get = (name: string) => url?.searchParams.get(name) ?? ''
   const [id, computerKey, owner, secret, relayUrl] = ['c', 'k', 'o', 's', 'r'].map(get)
   const fine = url?.protocol === 'openhut:' && [id, computerKey, owner, secret].every((each) => HEX.test(each)) && /^wss?:\/\//.test(relayUrl)
-  if (!fine) throw new Error('That isn\'t an OpenHut code. Open Settings › Devices › Add a phone on your Mac and scan the code there.')
+  if (!fine) throw new Error('That isn\'t an OpenHut code. Open Settings › Devices › Add a phone on your computer and scan the code there.')
   return { computer: { id, key: computerKey }, owner, secret, relayUrl }
 }
 
 export async function join({ code, onDigits }: { code: string; onDigits: (digits: string) => void }): Promise<void> {
   const parsed = parseCode(code)
-  if (held && held.list.owner !== parsed.owner) throw new Error('This code is from someone else\'s Mac. This phone belongs to yours: remove it there first.')
+  if (held && held.list.owner !== parsed.owner) throw new Error('This code is from someone else\'s computer. This phone belongs to yours. Remove it there first.')
   const tunnel = await connect({
     relayUrl: parsed.relayUrl, computer: parsed.computer, key: await myKey(),
     invitation: { secret: parsed.secret, name: phoneName(), kind: 'client' },
-  }).catch(() => { throw new Error('Your Mac didn\'t answer. Check that OpenHut is open there and try again.') })
+  }).catch(() => { throw new Error('Your computer didn\'t answer. Check that OpenHut is open there and try again.') })
   try {
     onDigits(tunnel.digits)
     for await (const message of tunnel.control) {
-      if (message.type === 'declined') throw new Error('Your Mac said no to this phone, or the code ran out. Make a new code and scan it again.')
+      if (message.type === 'declined') throw new Error('Your computer said no to this phone, or the code expired. Make a new code and scan it again.')
       if (message.type !== 'accepted') continue
       const list = Access.safeParse(message.access)
       const mine = await myKey()
       const me = Array.from(mine.publicKey, (byte) => byte.toString(16).padStart(2, '0')).join('')
       if (!list.success || list.data.owner !== parsed.owner || !await verify(list.data) || !list.data.clients.some((each) => each.key === me)) {
-        throw new Error('The answer from your Mac wasn\'t signed by the owner in the code, so this phone didn\'t join.')
+        throw new Error('This phone couldn\'t confirm it reached your computer, so it didn\'t join. Make a new code and scan it again.')
       }
       await keep({ list: list.data, relayUrl: parsed.relayUrl })
       return
     }
-    throw new Error('This code was already used or ran out. Make a new one on your Mac and scan it.')
+    throw new Error('This code was already used or expired. Make a new one on your computer and scan it.')
   } finally {
     tunnel.close()
   }
@@ -145,8 +145,8 @@ export const phonePlatform: Platform = {
   },
   store: {
     computers: async () => (held?.list.computers ?? []).map((each, index) => ({ id: index ? each.id : 'local', name: fromPhone(each.name), url: '' })),
-    add: () => Promise.reject(new Error('Add computers from the OpenHut app on your Mac.')),
-    remove: () => Promise.reject(new Error('Remove computers from the OpenHut app on your Mac.')),
+    add: () => Promise.reject(new Error('Add computers from the OpenHut app on your computer.')),
+    remove: () => Promise.reject(new Error('Remove computers from the OpenHut app on your computer.')),
   },
   openUrl: openPage,
   signed: {

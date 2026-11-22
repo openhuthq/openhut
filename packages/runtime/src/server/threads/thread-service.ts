@@ -14,7 +14,7 @@ import { HttpError, messageOf } from '../platform/http-error.ts'
 import { agentApiUrl } from '../platform/network.ts'
 import { deleted } from '../platform/responses.ts'
 import { newId, unseal } from '../platform/secrets.ts'
-import { agentService, runsHere, unreachable } from '../agents/agent-service.ts'
+import { agentService, runsHere } from '../agents/agent-service.ts'
 import { keysService } from '../cloud/keys-service.ts'
 import type { Caller } from '../team/identity.ts'
 
@@ -82,7 +82,7 @@ export const threadService = {
     const row = await ownRow({ actor, id })
     await agentService.requireEditable({ actor, id: row.agent_id })
     const name = uploadName(path)
-    if (!name) throw new HttpError(400, `Only files uploaded to a chat, in ${UPLOADS}, can be deleted here.`, { param: 'path' })
+    if (!name) throw new HttpError(400, 'Only files you sent in a chat can be deleted here.', { param: 'path' })
     const { removed } = await agentd.delete({ id: row.agent_id, paths: [uploadPath(name)] })
     if (!removed.length) throw new HttpError(404, 'That upload isn\'t in the agent\'s uploads folder. It may have been deleted already.', { param: 'path' })
     return deleted({ id: path, object: 'file' })
@@ -117,7 +117,7 @@ export const threadService = {
     const row = await ownRow({ actor, id })
     await agentService.requireEditable({ actor, id: row.agent_id })
     const inside = fileInHome(path)
-    if (!inside) throw new HttpError(400, `Only files in the agent's home folder, ${AGENT_HOME}, can be downloaded.`, { param: 'path' })
+    if (!inside) throw new HttpError(400, 'Only files in the agent\'s own folder can be saved.', { param: 'path' })
     const body = await agentd.read({ id: row.agent_id, path: `home/${inside}` })
     if (body === null) throw new HttpError(404, 'That file isn\'t in the agent\'s home folder. It may have been moved or deleted.', { param: 'path' })
     const name = inside.slice(inside.lastIndexOf('/') + 1)
@@ -285,8 +285,8 @@ async function callAgent({ agent, session, message, signal }: { agent: AgentRow;
     headers: { authorization: `Bearer ${unseal(agent.channel_key)}`, 'content-type': 'application/json', 'x-hermes-session-id': session },
     body: JSON.stringify({ model: 'hermes-agent', stream: true, messages: [{ role: 'system', content: CHAT_NOTE }, message] }),
     signal: AbortSignal.any([signal, AbortSignal.timeout(TURN_MS)]),
-  }).catch((err: unknown) => { throw new HttpError(502, signal.aborted ? 'Stopped.' : `${agent.name} isn't reachable. ${unreachable(err)}`) })
-  if (!res.ok || !res.body) throw new HttpError(502, `${agent.name} answered ${res.status}: ${(await res.text()).slice(0, 300)}`)
+  }).catch((err: unknown) => { throw new HttpError(502, signal.aborted ? 'Stopped.' : `${agent.name} isn't answering. Try again, or stop it and start it again.`) })
+  if (!res.ok || !res.body) throw new HttpError(502, `${agent.name} couldn't answer. Try again, or stop it and start it again.`)
   return res.body
 }
 

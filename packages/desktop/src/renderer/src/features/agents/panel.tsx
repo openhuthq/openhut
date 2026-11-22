@@ -26,7 +26,6 @@ import { RoutinesRow } from '@/features/routines/routines-dialog'
 import { useWorkspaces } from '@/features/cloud/workspaces'
 import { ModelRows } from '@/features/agents/model-rows'
 import { AgentStatus } from '@/features/agents/status'
-import { HERE } from '@/features/settings/desktop'
 import { formValues } from '@/lib/form'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
@@ -87,7 +86,7 @@ function AgentActions({ agent }: { agent: Agent }) {
   const change = (patch: Parameters<typeof updateAgent.mutate>[0]) => updateAgent.mutate(patch, { onError: toastError })
   const locked = !agent.canEdit || !agent.canManage || updateAgent.isPending
   return <div className="mt-auto flex flex-col pt-2">
-    <span className={LABEL}>Computer</span>
+    <span className={LABEL}>Allowed to</span>
     <div className="-mx-2.5 flex flex-col gap-px">
       <label className={ROW}><I icon={SourceCodeIcon} size={15} className="text-mute" />Run code<Switch className="ml-auto" checked={agent.codeExecution} aria-label="Run code" disabled={locked} onCheckedChange={() => change({ codeExecution: !agent.codeExecution })} /></label>
     </div>
@@ -115,7 +114,7 @@ function PanelTitle({ agent, naming }: { agent: Agent; naming: boolean }) {
           {agent.canEdit && agent.canManage && <Tooltip label={`Delete ${agent.name}`}><Button type="button" variant="bare" className={cn(TINY_ICON, 'text-fail')} aria-label={`Delete ${agent.name}`} onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={16} /></Button></Tooltip>}
         </>}</span>}
     </div>
-    <span className="flex items-center gap-2 text-xs text-body">{confirming ? 'Its memory goes too.' : <AgentStatus agent={agent} />}</span>
+    <span className="flex items-center gap-2 text-xs text-body">{confirming ? 'Its chats, memory and skills go with it.' : <AgentStatus agent={agent} />}</span>
   </div>
 }
 
@@ -143,7 +142,7 @@ function useMemoryCount(agent: Agent) {
   const memory = useMemory(agent.id).data
   if (!memory) return undefined
   const count = memory.notes.entries.length + memory.people.entries.length
-  return count === 1 ? '1 note' : `${count} notes`
+  return count === 1 ? '1 memory' : `${count} memories`
 }
 
 function Counted({ agent, dialog, icon, title, value }: { agent: Agent; dialog: AgentDialog; icon: IconSvgElement; title: string; value: string | number | undefined }) {
@@ -198,9 +197,9 @@ function Access({ agent }: { agent: Agent }) {
 function noteOf({ agent, computers, id }: { agent: Agent; computers: Computer[] | undefined; id: string }): string {
   if (agent.runsNowhere) return `No computer runs it now. ${agent.canManage ? 'Run it here to start it.' : `Ask an admin to run ${agent.name} on their computer.`}`
   if (!agent.runsHere) return `Runs on ${agent.runsOnName ?? 'your other computer'}. Chats sync here.`
-  if (id !== 'local') return `Runs in its own sandbox on ${nameOf({ computers, id })}.`
-  if (WORDS.sandboxed) return `Runs in its own sandbox on this ${HERE}.`
-  return `Runs as you, like any app on this ${HERE}.`
+  if (id !== 'local') return `Runs on ${nameOf({ computers, id })}, sealed in its own box.`
+  if (WORDS.sandboxed) return 'Runs on this computer, sealed in its own box.'
+  return 'Runs on this computer like any app, with your access.'
 }
 
 function elsewhereOf(agent: Agent): string {
@@ -211,7 +210,7 @@ function TeamHint({ agent, server, onMove }: { agent: Agent; server: { id: strin
   const slack = useChannels(agent.id).data?.some((channel) => channel.kind === 'slack' && channel.status === 'connected')
   if (!slack) return null
   return <div className="mx-2.5 mt-1 mb-1 flex flex-col items-start gap-1 rounded-lg bg-tint px-3 py-2.5 text-[12.5px]/[1.45] text-body">
-    <span>{agent.name} is in your team's Slack. For team use, run it on a server.</span>
+    <span>{agent.name} is in your team's Slack. For team use, run it on a computer that stays on.</span>
     {server
       ? <Button type="button" variant="text" onClick={() => onMove(server.id)}>Move to {server.name}</Button>
       : <Button type="button" variant="text" onClick={() => navigate('/settings/devices')}>Add a computer</Button>}

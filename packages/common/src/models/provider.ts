@@ -11,7 +11,7 @@ export const KEY_MESSAGE = 'That does not look like a key. Paste the whole thing
 
 export const PROVIDERS = [
   { id: 'claude', kind: 'subscription', name: 'Claude subscription', short: 'Claude', blurb: 'Pro or Max', keysAt: null, keyHint: null },
-  { id: 'codex', kind: 'subscription', name: 'Codex subscription', short: 'Codex', blurb: 'ChatGPT Plus or Pro', keysAt: null, keyHint: null },
+  { id: 'codex', kind: 'subscription', name: 'ChatGPT subscription', short: 'ChatGPT', blurb: 'Plus or Pro', keysAt: null, keyHint: null },
   { id: 'openrouter', kind: 'key', name: 'OpenRouter', short: 'OpenRouter', blurb: 'One key for hundreds of models', keysAt: 'openrouter.ai/keys', keyHint: 'sk-or-v1-…' },
   { id: 'openai', kind: 'key', name: 'OpenAI', short: 'OpenAI', blurb: 'GPT models with your OpenAI key', keysAt: 'platform.openai.com/api-keys', keyHint: 'sk-…' },
   { id: 'xai', kind: 'key', name: 'xAI', short: 'xAI', blurb: 'Grok models with your xAI key', keysAt: 'console.x.ai', keyHint: 'xai-…' },

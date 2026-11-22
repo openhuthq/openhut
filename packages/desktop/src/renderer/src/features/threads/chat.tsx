@@ -83,7 +83,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
     </> : <ChatEmpty agent={agent} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     {!agent.runsHere && chat.status !== 'submitted' && last?.role === 'user' && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
-    {chat.error && <Alert variant="error-outline" role="alert"><span>{chat.error.message}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Retry</Button></Alert>}
+    {chat.error && <Alert variant="error-outline" role="alert"><span>{chat.error.message}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Try again</Button></Alert>}
   </ChatFrame></CardReply></ChatFiles>
 }
 
@@ -241,7 +241,7 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
 function placeholderOf(agent: Agent) {
   const state = agentState(agent)
   if (state === 'running' || state === 'not_answering') return `Ask ${agent.name} anything…`
-  if (state === 'stopped') return `${agent.name} is asleep`
+  if (state === 'stopped') return `${agent.name} is stopped`
   return `${agent.name} isn't ready yet`
 }
 
@@ -250,7 +250,7 @@ function NotReady({ agent }: { agent: Agent }) {
   const reason = {
     starting: 'It\'s still starting. You can type as soon as it answers.',
     no_seat: 'Its model isn\'t connected.',
-    not_answering: 'It restarts on its own, or Stop and Start it from the panel.',
+    not_answering: 'It restarts on its own. You can also stop it and start it again.',
     stopped: '',
     missing: 'It comes back by itself within 30 seconds.',
     running: '',
@@ -408,7 +408,7 @@ function Steps({ steps, live }: { steps: Step[]; live: boolean }) {
   </Collapsible>
 }
 
-const OUTCOME = { allowed: 'Allowed', denied: 'Denied', failed: 'Failed' }
+const OUTCOME = { allowed: 'Allowed', denied: 'Blocked', failed: 'Failed' }
 const TILE = {
   code: '[--k:#8a6ae0]',
   web: '[--k:oklch(54%_.12_233)]',
@@ -447,12 +447,12 @@ function ChatEmpty({ agent }: { agent: Agent }) {
   const state = agentState(agent)
   const offline = useOffline(agent)
   const copy = offline
-    ? [`${agent.name}'s computer is offline`, 'It answers again as soon as its computer is back on your tailnet.']
+    ? [`${agent.name}'s computer is offline`, 'It answers again as soon as its computer is back online.']
     : {
       running: [`Say hello to ${agent.name}`, 'Ask it anything, or tell it what its job is.'],
       starting: [`Starting ${agent.name}`, 'It takes about a minute the first time. You can type as soon as it answers.'],
-      no_seat: [`${agent.name} isn't ready`, 'Connect its model in Settings, then it starts answering.'],
-      not_answering: [`${agent.name} isn't answering`, 'It restarts on its own, or Stop and Start it from the panel.'],
+      no_seat: [`${agent.name} isn't ready`, 'Connect its model under Settings › Models, then it starts answering.'],
+      not_answering: [`${agent.name} isn't answering`, 'It restarts on its own. You can also stop it and start it again.'],
       stopped: ['', ''],
       missing: [`${agent.name} stopped unexpectedly`, 'It comes back by itself within 30 seconds.'],
     }[state]
@@ -465,7 +465,7 @@ function ChatEmpty({ agent }: { agent: Agent }) {
 
 function Asleep({ agent }: { agent: Agent }) {
   const updateAgent = useUpdateAgent(agent.id)
-  return <Centered agent={agent} title={`${agent.name} is asleep`} line="It won't answer here or on its channels until you start it. Its memory and chats are kept." dim>
+  return <Centered agent={agent} title={`${agent.name} is stopped`} line="It won't answer here or on its channels until you start it. Its memory and chats are kept." dim>
     <Button type="button" variant="primary" className="mt-1 gap-1.5" disabled={!agent.canEdit || updateAgent.isPending} onClick={() => updateAgent.mutate({ wanted: 'running' }, { onError: toastError })}><I icon={PlayIcon} size={14} />Start {agent.name}</Button>
   </Centered>
 }

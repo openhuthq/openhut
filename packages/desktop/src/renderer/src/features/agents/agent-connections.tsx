@@ -46,7 +46,7 @@ function AddConnection({ agent, connections }: { agent: Agent; connections: Open
       {connections.map((connection) => {
         const missing = !connection.computers.some((copy) => copy.computer === home)
         const pick = () => missing
-          ? addTo.mutate({ id: connection.id, computer: home }, { onSuccess: () => toast(`${connection.name} is on ${there} now. Add it again to grant it.`), onError: toastError })
+          ? addTo.mutate({ id: connection.id, computer: home }, { onSuccess: () => toast(`${connection.name} is on ${there} now. Add it again so ${agent.name} can use it.`), onError: toastError })
           : createGrant.mutate({ agentId: agent.id, connectionId: connection.id }, { onError: toastError })
         return <DropdownMenuItem size="tall" key={connection.id} disabled={addTo.isPending} onClick={pick}>
           <Glyph name={connection.kind} size={16} />

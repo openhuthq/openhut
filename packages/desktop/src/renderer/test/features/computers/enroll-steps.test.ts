@@ -26,7 +26,7 @@ test('the installer\'s lines become one plain word for where the add is', () => 
 test('each phase is a step further along, in plain words', () => {
   const lines = [[], ['==> Docker'], ['==> Starting'], ['==> Starting', 'Waiting for box to join']]
   const stages = lines.map(stageOf)
-  assert.deepEqual(stages.map((each) => each.line), ['Knocking on the door', 'Unpacking a few things', 'Turning on the lights', 'Almost settled in'])
+  assert.deepEqual(stages.map((each) => each.line), ['Connecting', 'Installing OpenHut', 'Starting', 'Almost ready'])
   assert.deepEqual(stages.map((each) => each.at), [...stages.map((each) => each.at)].sort((a, b) => a - b))
 })
 

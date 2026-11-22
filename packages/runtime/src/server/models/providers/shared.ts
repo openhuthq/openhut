@@ -53,13 +53,13 @@ export async function getJson({ id, url, key, account }: { id: ProviderId; url: 
       throw new HttpError(502, `${name} didn't answer. Check your connection and try again.`)
     })
   if (res.status === 401 || res.status === 403) throw new HttpError(400, `${short} refused that key. Check it and try again.`, { param: 'apiKey' })
-  if (!res.ok) throw new HttpError(502, `${name} answered ${res.status} when asked for its models. Try again in a minute.`)
-  return res.json().catch(() => { throw new HttpError(502, `${name} sent a model list the app can't read.`) })
+  if (!res.ok) throw new HttpError(502, `${name} couldn't list its models. Try again in a minute.`)
+  return res.json().catch(() => { throw new HttpError(502, `${name} sent a model list OpenHut can't read. Try again in a minute.`) })
 }
 
 export function parse<S extends z.ZodMiniType>({ id, schema, body }: { id: ProviderId; schema: S; body: unknown }): z.output<S> {
   const parsed = z.safeParse(schema, body)
-  if (!parsed.success) throw new HttpError(502, `${providerInfo(id).name} sent a models list the app can't read.`)
+  if (!parsed.success) throw new HttpError(502, `${providerInfo(id).name} sent a model list OpenHut can't read. Try again in a minute.`)
   return parsed.data
 }
 

@@ -16,16 +16,16 @@ export function UpdatesSettings() {
   const stays = state.current.includes('-') && prefs.data?.betaUpdates === false
   return <Rows>
     <Row icon={<I icon={CloudDownloadIcon} size={20} className="text-hue-sky" />} title={`OpenHut ${state.current}`} note={updateNote(state)}><Action state={state} /></Row>
-    <PrefSwitch icon={TestTube01Icon} hue="text-hue-violet" name="betaUpdates" title="Try new features early" note={stays ? 'You stay on this beta until a newer stable version.' : 'Get beta versions before everyone else.'} />
+    <PrefSwitch icon={TestTube01Icon} hue="text-hue-violet" name="betaUpdates" title="Try new features early" note={stays ? 'You stay on this beta until the next regular version is out.' : 'Get beta versions before everyone else.'} />
   </Rows>
 }
 
 function Action({ state }: { state: UpdateState }) {
-  if (state.ready) return <UpdatePill label="Restart now" />
+  if (state.ready) return <UpdatePill />
   if (state.checking || state.available) return <Spinner className="mt-0" />
   if (!state.error) return <CheckButton label="Check for updates" />
   return <>
     <a href={downloadUrl(Reflect.get(window, 'openhut')?.platform)} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'ghost' }), PILL, 'text-mute')}>Download</a>
-    <CheckButton label="Retry" />
+    <CheckButton label="Try again" />
   </>
 }

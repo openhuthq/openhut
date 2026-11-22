@@ -319,7 +319,7 @@ async function enroll({ peer, retried = false } = {}) {
 }
 
 async function install({ peer, dns, entry }) {
-  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(dns)) throw new Error('Pick a computer from your tailnet.')
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(dns)) throw new Error('Pick a computer from your Tailscale list.')
   if (!TAILSCALE) throw new Error('Tailscale isn\'t installed on this computer. Install it from tailscale.com/download and sign in.')
   if (!/^https?:\/\/[\w.:/-]+$/.test(INSTALL_URL)) throw new Error('OPENHUT_INSTALL_URL isn\'t a plain http(s) address.')
   let key = ''
@@ -332,7 +332,7 @@ async function install({ peer, dns, entry }) {
   const name = peer.name || dns
   const found = await tailnet()
   const ip = found.state === 'running' ? found.peers.find((each) => each.dns === dns)?.ip : undefined
-  if (!ip) throw new Error(`Can't find ${name} on your tailnet. Check it's on.`)
+  if (!ip) throw new Error(`Can't find ${name} on your Tailscale. Check it's on.`)
   say(`Installing OpenHut on ${dns} over Tailscale SSH`)
   await tailscaleSsh({ args: ['ssh', `root@${dns}`, `script=$(curl -fsSL '${INSTALL_URL}') || exit 1; printf '%s\\n' "$script" | OPENHUT_ROUTE=tailnet OPENHUT_APP_VERSION=${app.getVersion()} sh`], input: '', say })
   if (!key) throw new Error(`OpenHut is installed, but ${name} didn't say its key.`)
@@ -345,7 +345,7 @@ async function install({ peer, dns, entry }) {
   try {
     const list = await openhut.access.allow({ name, kind: 'computer', key })
     await tailscaleSsh({ args: ['ssh', `root@${dns}`, PUT_ACCESS], input: JSON.stringify(list), say: () => undefined })
-    if (!await waitFor(async () => (await toComputer({ req: new Request(`${APP_ORIGIN}/c/${id}/api/admin`), id, path: '/api/admin' })).ok, 30)) throw new Error(`OpenHut is running on ${name}, but this ${LOCAL.name.replace(/^This /, '')} can't reach port ${TAILNET_PORT} on it. Check your tailnet's access rules allow it.`)
+    if (!await waitFor(async () => (await toComputer({ req: new Request(`${APP_ORIGIN}/c/${id}/api/admin`), id, path: '/api/admin' })).ok, 30)) throw new Error(`OpenHut is running on ${name}, but this ${LOCAL.name.replace(/^This /, '')} can't reach port ${TAILNET_PORT} on it. Check your Tailscale access rules allow it.`)
   } catch (error) {
     if (!before.some((each) => each.key === key)) {
       writeFileSync(COMPUTERS, JSON.stringify(storedComputers().filter((each) => each.key !== key), null, 2))
@@ -489,7 +489,7 @@ function keepAwake(on) {
   }
 }
 
-const STATE_WORDS = { running: 'Running', starting: 'Starting', not_answering: 'Not answering', no_seat: 'Not ready', stopped: 'Asleep', missing: 'Error' }
+const STATE_WORDS = { running: 'Running', starting: 'Starting', not_answering: 'Not answering', no_seat: 'Model not connected', stopped: 'Stopped', missing: 'Stopped unexpectedly' }
 
 function stateOf(agent) {
   if (agent.wanted === 'stopped') return 'stopped'
@@ -566,7 +566,7 @@ function watch() {
 
 function firstRun(start) {
   if (start && (!setup || setup.failed)) {
-    setup = { failed: false, agentId: '', steps: [[`Checked this ${MAC ? 'Mac' : 'computer'}`, '', 'now'], ['Starting OpenHut', '', 'next'], [CONTAINER ? 'Agent runtime and network fence' : 'Agent runtime', '', 'next'], ['Meeting your first agent', '', 'next']] }
+    setup = { failed: false, agentId: '', steps: [['Checked this computer', '', 'now'], ['Starting OpenHut', '', 'next'], ['Setting up agents', '', 'next'], ['Meeting your first agent', '', 'next']] }
     meet(setup).catch((error) => {
       const step = setup.steps.find((each) => each[2] === 'now')
       if (step) step.splice(1, 2, error.message, 'failed')
@@ -586,14 +586,14 @@ async function meet(run) {
   step(0, hardware)
   const downloading = follow({ run, index: 1, read: async () => fetching ?? (CONTAINER ? (await agentd({ cmd: 'progress' })).pull : null) })
   const started = await booted.finally(downloading)
-  if (started !== true) throw new Error(`It didn't start. The logs are in ${LOGS}.`)
+  if (started !== true) throw new Error('OpenHut didn\'t start. Try again. Help › Show Logs has the details.')
   await api('/api/me')
   step(1, `version ${app.getVersion()}`)
   let fence = {}
   const pulling = follow({ run, index: 2, read: async () => (await agentd({ cmd: 'progress' })).pull })
   await waitFor(async () => (fence = await agentd({ cmd: 'fence' })).ok, 900).finally(pulling)
   const passed = (fence.checks ?? []).filter((check) => check.pass).length
-  if (!fence.ok) throw new Error(fence.error ?? `the fence failed ${(fence.checks ?? []).filter((check) => !check.pass).map((check) => check.name).join(', ')}`)
+  if (!fence.ok) throw new Error(fence.error ?? `Agents couldn't be sealed off (${(fence.checks ?? []).filter((check) => !check.pass).map((check) => check.name).join(', ')}). Try again.`)
   step(2, fence.skipped ? 'ready' : `${passed} of ${fence.checks.length} checks passed`)
   const agents = (await api('/api/agents')).data
   const agent = agents[0] ?? await api('/api/agents', { method: 'POST', body: { name: FIRST_AGENT } })

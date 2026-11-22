@@ -31,7 +31,7 @@ export function BrowserPreview({ agent }: { agent: Agent }) {
     <span className="flex h-7 min-w-0 items-center gap-1.5 border-t border-hair px-2 text-[11.5px]">
       <i className="size-[6px] shrink-0 animate-[blive_1.6s_ease-in-out_infinite] rounded-full bg-fail" />
       <span className="truncate font-mono"><span className="text-ink">{address.host}</span><span className="text-mute">{address.rest}</span></span>
-      <span className="ml-auto shrink-0 text-mute group-hover:text-ink">Expand</span>
+      <span className="ml-auto shrink-0 text-mute group-hover:text-ink">Open</span>
     </span>
   </a>
 }
@@ -94,7 +94,6 @@ export function BrowserDialog({ agent, onClose }: { agent: Agent; onClose: () =>
       {mine ? <Badge variant="pill-ink">You're in control</Badge>
         : <Badge variant="pill"><i className={cn('size-[7px] rounded-full', live.state === 'live' ? 'animate-[blive_1.6s_ease-in-out_infinite] bg-fail' : 'bg-mute-2')} />{live.state === 'live' ? 'Live' : live.state === 'closed' ? 'No page open' : 'Connecting'}</Badge>}
       <span className="flex-1" />
-      {live.state === 'live' && <span className="font-mono text-xs text-mute tabular-nums" title="Frames a second the live view is getting">{live.fps} fps</span>}
       <Button type="button" variant="primary" disabled={!mine && live.state !== 'live'} onClick={() => live.hold(!mine)}>{mine ? `Hand back to ${name}` : 'Take over'}</Button>
       <Button type="button" size="icon-sm" aria-label="Close" title={mine ? 'Close (hands back)' : 'Close (Esc)'} onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
     </header>

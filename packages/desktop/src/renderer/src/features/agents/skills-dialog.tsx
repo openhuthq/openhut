@@ -31,7 +31,7 @@ type View = 'rendered' | 'source'
 type Drafts = Record<string, string>
 
 const FILTERS: [Filter, string][] = [['all', 'All'], ['learned', 'Learned'], ['builtIn', 'Built in']]
-const VIEWS: [View, string][] = [['rendered', 'Rendered'], ['source', 'Source']]
+const VIEWS: [View, string][] = [['rendered', 'Formatted'], ['source', 'Plain text']]
 const PROSE = 'msg-t [&_:is(h1,h2,h3,h4)]:mt-5 [&_:is(h1,h2,h3,h4)]:mb-2 [&_:is(h1,h2,h3,h4)]:leading-snug [&_h1]:text-[17px] [&_h1]:font-semibold [&_h2]:text-[15px] [&_h2]:font-semibold [&_:is(h3,h4)]:text-[14px] [&_:is(h3,h4)]:font-semibold'
 
 export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: string | undefined; onClose: () => void }) {

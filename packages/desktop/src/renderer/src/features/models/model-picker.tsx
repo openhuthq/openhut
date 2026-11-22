@@ -41,7 +41,7 @@ export function ModelPicker({ providers, value, onPick, title, label, none, disa
       {connected.map((provider) => <ProviderMenu key={provider.id} provider={provider} value={value} onPick={onPick} />)}
       {missing.length > 0 && <>
         <div className={LABEL}>Not set up</div>
-        {missing.map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={info.short} note={info.kind === 'subscription' ? 'Sign in under Settings, Models' : 'Add a key under Settings, Models'} disabled />)}
+        {missing.map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={info.short} note={info.kind === 'subscription' ? 'Sign in under Settings › Models' : 'Add a key under Settings › Models'} disabled />)}
       </>}
     </DropdownMenuContent>
   </DropdownMenu>

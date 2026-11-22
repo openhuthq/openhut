@@ -36,7 +36,7 @@ On an always-on computer you add, watch them work live. Take over any time.
 
 <p align="center"><img src="docs/readme/where.gif" alt="Ops moves from This Mac to ops-server and back; Support, Growth and Scout stay on the always-on server" width="100%"></p>
 
-On your Mac, or on your own server. Each agent in its own sandbox.
+On your Mac or PC, or on your own server. On Linux, each agent is sealed in its own box.
 
 <table>
 <tr>
@@ -46,7 +46,7 @@ On your Mac, or on your own server. Each agent in its own sandbox.
 <th align="center"><a href="https://github.com/DuskBotAI/duskbot"><img src="docs/readme/logos/duskbot.png" width="24" height="24" alt="DuskBot" title="DuskBot"></a></th>
 <th align="center"><a href="https://github.com/NousResearch/hermes-agent"><img src="docs/readme/logos/hermes.png" width="24" height="24" alt="Hermes Agent on its own" title="Hermes Agent on its own"></a></th>
 </tr>
-<tr><td>Each agent in its own sandbox</td><td align="center">✓</td><td align="center">✗</td><td align="center">✗</td><td align="center">✗</td></tr>
+<tr><td>Each agent sealed in its own box (on Linux)</td><td align="center">✓</td><td align="center">✗</td><td align="center">✗</td><td align="center">✗</td></tr>
 <tr><td>Data keys stay in a gateway</td><td align="center">✓</td><td align="center">✗</td><td align="center">✗</td><td align="center">✗</td></tr>
 <tr><td>Slack, WhatsApp, Telegram</td><td align="center">✓</td><td align="center">✓</td><td align="center">✗</td><td align="center">✓</td></tr>
 <tr><td>MIT open source</td><td align="center">✓</td><td align="center">✓</td><td align="center">✗</td><td align="center">✓</td></tr>

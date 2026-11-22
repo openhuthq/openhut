@@ -37,7 +37,7 @@ export const skillService = {
   async delete({ actor, id }: { actor: Caller; id: string }): Promise<{ id: string; object: 'skill'; deleted: true }> {
     const skill = await skillService.get({ actor, id })
     await agentService.requireEditable({ actor, id: skill.agentId })
-    if (skill.builtIn) throw new HttpError(400, 'Built-in skills come with Hermes and can\'t be deleted. Only skills the agent learned can.')
+    if (skill.builtIn) throw new HttpError(400, 'Built-in skills come with OpenHut and can\'t be deleted. Only skills the agent learned can.')
     await agentd.delete({ id: skill.agentId, paths: [`skills/${skill.path}`] })
     emit({ name: 'skill.deleted', actor, target: { type: 'skill', id, agentId: skill.agentId } })
     return { id, object: 'skill', deleted: true }

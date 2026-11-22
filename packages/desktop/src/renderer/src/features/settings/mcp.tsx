@@ -15,7 +15,7 @@ export function McpSettings() {
   if (!bridge) return <ErrorNote message="Open the OpenHut app on this computer to see this." />
   const command = [/\s/.test(bridge.command) ? `"${bridge.command}"` : bridge.command, ...bridge.args].join(' ')
   return <>
-    <Intro>Manage your agents from Claude Code, Codex or Cursor. One MCP reaches every computer you added.</Intro>
+    <Intro>Manage your agents from Claude Code, Codex or Cursor. One setup covers every computer you added.</Intro>
     <div className="flex flex-col gap-1">
       <Client brand="claude" name="Claude Code"><Command text={`claude mcp add openhut -- ${command}`} /></Client>
       <Client brand="codex" name="Codex"><Command text={`codex mcp add openhut -- ${command}`} /></Client>

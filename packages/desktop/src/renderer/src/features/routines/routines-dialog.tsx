@@ -108,7 +108,7 @@ function StatusCircle({ routine }: { routine: Routine }) {
 function lineOf({ routine, now }: { routine: Routine; now: Date }): string {
   if (routine.stopped) return routine.stopped
   if (routine.last?.status === 'open') return 'Running now'
-  if (routine.last?.status === 'failed') return 'Last check failed'
+  if (routine.last?.status === 'failed') return 'Last run failed'
   return routine.nextRunAt ? nextOf({ at: new Date(routine.nextRunAt), now }) : 'Running now'
 }
 
@@ -127,7 +127,7 @@ function Empty({ agent }: { agent: Agent }) {
   return <div className="grid flex-1 place-items-center p-8">
     <div className="grid max-w-[400px] justify-items-center gap-2 text-center">
       <Face agent={agent} size={56} />
-      <h2 className="m-0 mt-2 text-[20px] font-semibold">Nothing on the list yet</h2>
+      <h2 className="m-0 mt-2 text-[20px] font-semibold">No routines yet</h2>
       <p className="m-0 text-[14px]/[1.55] text-body">{agent.name} adds routines here when something needs a follow-up.</p>
     </div>
   </div>

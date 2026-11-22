@@ -28,7 +28,7 @@ export function MemoryDialog({ agent, onClose }: { agent: Agent; onClose: () => 
   return <DialogCard onClose={onClose} className={cn(SPLIT_DIALOG, 'flex-col')}>
     <div className="flex items-start gap-3 border-b border-hair px-5 pt-5 pb-4">
       <Face agent={agent} size={40} />
-      <div className="grid min-w-0 flex-1 gap-1"><DialogTitle className="text-[15px]/[22px] font-medium">{agent.name}'s memory</DialogTitle><p className="m-0 text-[13px]/[18px] text-body">{agent.runsHere ? `${agent.name} saves these itself as it works. Changes apply from its next conversation.` : 'Runs on your other computer.'}</p></div>
+      <div className="grid min-w-0 flex-1 gap-1"><DialogTitle className="text-[15px]/[22px] font-medium">{agent.name}'s memory</DialogTitle><p className="m-0 text-[13px]/[18px] text-body">{agent.runsHere ? `${agent.name} saves these itself as it works. Changes apply from its next conversation.` : 'Its memory is on your other computer. Open OpenHut there to change it.'}</p></div>
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" tabIndex={-1} className="-mt-1 -mr-1" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
     </div>
     <ErrorNote className="mx-5 mt-3" message={memory.error?.message} />
@@ -93,9 +93,9 @@ function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
             onConfirm={() => save({ target: selected.kind.target, list: memory[selected.kind.target].entries.filter((_, j) => j !== selected.index), done: () => setPicked(null) })}><I icon={Delete02Icon} size={14} />Remove</ConfirmButton> : removing
             ? <><span className="text-[13px]">{agent.name} forgets it for good. This can't be undone.</span>
               <Button type="button" variant="destructive" size="sm" disabled={update.isPending} onClick={() => save({ target: selected.kind.target, list: memory[selected.kind.target].entries.filter((_, j) => j !== selected.index), done: () => { setRemoving(false); setPicked(null) } })}>Remove</Button>
-              <Button type="button" variant="secondary" size="sm" onClick={() => setRemoving(false)}>Keep it</Button></>
+              <Button type="button" variant="secondary" size="sm" onClick={() => setRemoving(false)}>Cancel</Button></>
             : <Button type="button" variant="danger" onClick={() => setRemoving(true)}><I icon={Delete02Icon} size={14} />Remove</Button>}
-          <span className="ml-auto flex gap-2"><Button type="reset" variant="secondary">Revert</Button><Button type="submit" variant="primary" disabled={update.isPending}>Save</Button></span>
+          <span className="ml-auto flex gap-2"><Button type="reset" variant="secondary">Discard</Button><Button type="submit" variant="primary" disabled={update.isPending}>Save</Button></span>
         </Foot>}
       </form>}
       {!adding && !selected && !phone && <p className="m-0 p-5 text-[13px] text-mute">{agent.name} hasn't saved anything yet.</p>}

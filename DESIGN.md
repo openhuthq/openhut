@@ -109,7 +109,7 @@ Today every Settings action is a secondary pill, so Sign in and Manage look the 
 | Models › provider | Refresh models | secondary | 3 ghost |
 | Models › provider | Disconnect / Sign out (opens confirm) | secondary | 3 ghost, red |
 | Models › provider | Show all N | secondary | 4 text |
-| Models › key form | Cancel / Test and connect | secondary / primary | 2 / 1 |
+| Models › key form | Cancel / Connect | secondary / primary | 2 / 1 |
 | Models › sign-in | Copy code / Open host | secondary / secondary | 3 ghost / 2 secondary |
 | MCP | Copy (command, path) | secondary | 3 ghost |
 | Settings | Back, Close | icon | icon (ghost) |
@@ -215,13 +215,13 @@ From 0.4.0, agents on This Mac (or a Windows PC) are plain processes that run as
 
 | Where | This Mac / this PC | A server |
 |---|---|---|
-| Line under Runs on (agent panel) | Runs as you, like any app on this Mac. | Runs in its own sandbox on beelink. |
-| Runs on menu, option note | Runs as you · while this Mac is awake | Its own sandbox · always on |
-| Settings › Your devices, row note | Agents run as you · 2 agents · OpenHut 0.4.0 | Each agent in its own sandbox · 1 agent · OpenHut 0.4.0 |
-| Add a computer, row note | A Linux server gives each agent its own sandbox and keeps answering while this Mac sleeps. | |
-| Welcome | Agents run on this Mac, as you, like any app you install. Chats, memory and keys stay here. There's no account to make. | |
-| Welcome, the three marks | Runs as you · Keys in the macOS Keychain · Add a server anytime | |
-| First run, third step | Agent runtime · ready | Agent runtime and network fence · 6 of 6 checks passed (Linux app, unchanged) |
+| Line under Runs on (agent panel) | Runs on this computer like any app, with your access. | Runs on beelink, sealed in its own box. |
+| Runs on menu, option note | With your access · while this computer is awake | Sealed in its own box · always on |
+| Settings › Devices, row note | Agents have your access · 2 agents · OpenHut 0.4.0 | Each agent sealed in its own box · 1 agent · OpenHut 0.4.0 |
+| Add a computer, row note | A Linux computer that stays on seals each agent in its own box and keeps answering while this computer sleeps. | |
+| Welcome | Agents run on this computer like any app you install, with your access. Chats, memory and keys stay here. No account needed. | |
+| Welcome, the three marks | With your access · Keys in the macOS Keychain · Add a computer anytime | |
+| First run, third step | Setting up agents · ready | Setting up agents · 6 of 6 checks passed (Linux app) |
 
 "Mac" follows `WORDS.here` ("computer" on Windows and Linux).
 

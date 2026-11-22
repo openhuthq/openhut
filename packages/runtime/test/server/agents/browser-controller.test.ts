@@ -34,7 +34,7 @@ await app.ready()
 test('the live view is refused without the key, from another site, and while the agent\'s browser is off', async () => {
   assert.deepEqual(await closed(await app.injectWS('/api/browsers/ag_browseon/live')), { code: 4401, reason: 'Send the key the OpenHut app enrolled with this computer, as Authorization: Bearer <key>.' })
   assert.equal((await closed(await app.injectWS('/api/browsers/ag_browseon/live', { headers: { ...KEY, origin: 'https://evil.example' } }))).code, 4403)
-  assert.deepEqual(await closed(await app.injectWS('/api/browsers/ag_browseof/live', { headers: KEY })), { code: 4409, reason: 'Ops\'s browser is off. Switch Browser on in Ops\'s settings first.' })
+  assert.deepEqual(await closed(await app.injectWS('/api/browsers/ag_browseof/live', { headers: KEY })), { code: 4409, reason: 'Turn on Browser for Ops first.' })
 })
 
 test('frames come down as agent-browser sent them and the viewer\'s acks go up to agentd', async () => {

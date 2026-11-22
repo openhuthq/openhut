@@ -19,7 +19,7 @@ export const claude: Provider = {
     name: 'anthropic',
     origin: config.anthropicApi,
     allow: ({ method, path }) => method === 'POST' && (path === '/v1/messages' || path === '/v1/messages/count_tokens'),
-    credential: async () => settings.seatToken() || refuse('No Claude seat is connected. An owner or admin connects one in Admin.'),
+    credential: async () => settings.seatToken() || refuse('Claude isn\'t signed in on this computer. Sign in under Settings › Models.'),
     apply: ({ out, secret }) => out.headers.set('authorization', `Bearer ${secret}`),
     observe: (headers) => seatLimits.observe(headers),
   },

@@ -7,7 +7,7 @@ import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Section } from '@/components/kit'
 import { useAdmin, useUpdateAdmin } from '@/features/settings/api'
 import { WorkspaceDanger, WorkspaceSettings } from '@/features/people/workspace'
-import { HERE, bytes, desktop, useMachine, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
+import { bytes, desktop, useMachine, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
 import { home } from '@/features/settings/home'
 import { Row, Rows } from '@/features/settings/kit'
 import { isPhone } from '@/lib/native'
@@ -21,7 +21,7 @@ export function GeneralSettings() {
     <ErrorNote message={admin.error?.message} />
     <Rows>
       {desktop && <PrefSwitch icon={Login01Icon} hue="text-hue-green" name="openAtLogin" title="Open at login" note="Agents start in the background, without opening this window." />}
-      {desktop && <PrefSwitch icon={Coffee01Icon} hue="text-hue-amber" name="keepAwake" title={`Keep this ${HERE} awake while agents run`} note={`The screen can still turn off. Agents can't answer while the ${HERE} sleeps.`} />}
+      {desktop && <PrefSwitch icon={Coffee01Icon} hue="text-hue-amber" name="keepAwake" title="Keep this computer awake" note="While agents run, so they keep answering. The screen can still turn off." />}
     </Rows>
     {!isPhone() && <Section title="Notify me when">
       <Rows>
@@ -58,7 +58,7 @@ function DataFolder() {
 function UsageData({ admin }: { admin: Admin }) {
   const updateAdmin = useUpdateAdmin()
   const test = admin.seat.mode === 'test'
-  return <Row icon={<I icon={ChartColumnIcon} size={20} className="text-hue-violet" />} title="Share anonymous usage data" note={test ? 'Test-model builds never send usage data.' : 'Which features you use. Never your messages or files.'}>
+  return <Row icon={<I icon={ChartColumnIcon} size={20} className="text-hue-violet" />} title="Share anonymous usage data" note={test ? 'Off in test builds.' : 'Which features you use. Never your messages or files.'}>
     <Switch checked={admin.usageData} aria-label="Share anonymous usage data" disabled={updateAdmin.isPending}
       onCheckedChange={() => updateAdmin.mutate({ usageData: !admin.usageData }, { onError: toastError })} />
   </Row>

@@ -24,10 +24,10 @@ export const providerService = {
     const split = splitModelKey(key)
     if (!split) throw new HttpError(400, 'Use provider:model, like claude:sonnet.', { param })
     const provider = providerOf(split.provider)
-    if (!provider.connected) throw new HttpError(409, `${provider.name} isn't connected on this computer. Connect it under Settings, Models first.`, { param })
+    if (!provider.connected) throw new HttpError(409, `${provider.name} isn't connected on this computer. Connect it under Settings › Models first.`, { param })
     const model = provider.models.find((each) => each.id === split.model)
-    if (!model) throw new HttpError(409, `${provider.name} doesn't list ${split.model}. Refresh its models under Settings, Models.`, { param })
-    if (!model.on) throw new HttpError(409, `${model.name} is switched off. Turn it on under Settings, Models first.`, { param })
+    if (!model) throw new HttpError(409, `${provider.name} doesn't list ${split.model}. Refresh its models under Settings › Models.`, { param })
+    if (!model.on) throw new HttpError(409, `${model.name} is switched off. Turn it on under Settings › Models first.`, { param })
   },
 
   async update({ actor, id, patch }: { actor: Caller; id: ProviderId; patch: UpdateProvider }): Promise<Provider> {
@@ -75,7 +75,7 @@ async function connect({ actor, id, key }: { actor: Caller; id: ProviderId; key:
   const info = PROVIDERS.find((each) => each.id === id)
   if (info?.kind !== 'key') throw new HttpError(409, `${info?.short ?? 'That provider'} signs in with an account, not a key.`, { param: 'apiKey' })
   const found = await providers[id].listModels(key)
-  if (!found.length) throw new HttpError(409, `${info.short} accepted that key but lists no chat models for it.`, { param: 'apiKey' })
+  if (!found.length) throw new HttpError(409, `${info.short} accepted that key but has no models for it. Try another key.`, { param: 'apiKey' })
   await settings.setProviderKey(id, key)
   await save({ id, listed: found })
   emit({ name: 'provider.connected', actor, target: { type: 'provider', id } })

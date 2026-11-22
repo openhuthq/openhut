@@ -7,7 +7,6 @@ import { AddMac, CloudDevices } from '@/features/cloud/cloud'
 import { I, PILL } from '@/components/kit'
 import { QrCode } from '@/features/agents/qr-code'
 import { useDevices, useRemoveDevice } from '@/features/settings/api'
-import { HERE } from '@/features/settings/desktop'
 import { PairDialog, Waiting } from '@/features/settings/invite'
 import { Chevron, Intro, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { shortDate } from '@/lib/format'
@@ -27,10 +26,10 @@ function DeviceList() {
   const devices = useDevices()
   const mine = useQuery({ queryKey: ['device-key'], queryFn: devicePublicKey, enabled: isPhone(), staleTime: Infinity }).data
   return <>
-    <Intro>Chat with your agents</Intro>
+    <Intro>Phones you chat from</Intro>
     <Rows>
       {devices.data?.filter((device) => !device.self).map((device) => <DeviceRow key={device.key} device={device} mine={device.key === mine} />)}
-      {!isPhone() && <Row onClick={() => open('add-phone')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a phone" note={`Scan a code with the OpenHut app. Works when this ${HERE} is asleep too.`}><Chevron /></Row>}
+      {!isPhone() && <Row onClick={() => open('add-phone')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a phone" note="Scan a code with the OpenHut app on your phone."><Chevron /></Row>}
       <CloudDevices />
     </Rows>
     <ErrorNote message={devices.error?.message} />
@@ -53,7 +52,7 @@ function DeviceRow({ device, mine }: { device: Device; mine: boolean }) {
 function AddPhone() {
   return <PairDialog
     title="Add a phone"
-    check={() => `Allow it only if your phone shows the same numbers. It will see and talk to the agents on all your computers, like this ${HERE} does.`}
+    check={() => `Allow it only if your phone shows the same numbers. It will see and talk to the agents on all your computers, like this computer does.`}
     waiting={(code) => <div className="flex items-start gap-6">
       <span className="grid size-[216px] shrink-0 place-items-center rounded-xl border border-hair bg-white p-2 [&_canvas]:size-full!"><QrCode text={code} label="Code to add a phone" /></span>
       <div className="flex min-h-[216px] flex-col gap-3 pt-1">

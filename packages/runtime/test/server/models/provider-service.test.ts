@@ -51,7 +51,7 @@ test('a good key connects, lists only chat models, switches on the eight newest 
 })
 
 test('a refused key is a 400 on apiKey and saves nothing', async () => {
-  await assert.rejects(providerService.update({ actor, id: 'xai', patch: { apiKey: 'sk-bad-key-12345' } }), /xAI answered 503/)
+  await assert.rejects(providerService.update({ actor, id: 'xai', patch: { apiKey: 'sk-bad-key-12345' } }), /xAI couldn't list its models/)
   await assert.rejects(providerService.update({ actor, id: 'openrouter', patch: { apiKey: 'sk-bad-key-12345' } }), (err: unknown) => err instanceof Error && /OpenRouter refused that key/.test(err.message) && 'param' in err && err.param === 'apiKey')
   assert.equal(providerService.get({ id: 'openrouter' }).connected, false)
   assert.equal(settings.providerKey('openrouter'), '')

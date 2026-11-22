@@ -1,16 +1,18 @@
 ---
 title: Security
-description: Any agent can be tricked by a message. So each one is boxed in, and none holds your keys.
+description: Any agent can be tricked by a message. So your keys stay out of its reach, and on Linux each one is sealed in its own box.
 icon: finance
 ---
 
-## Its own sandbox
+## Its own box, on Linux
 
-Each agent runs in its own sandbox: a small virtual machine on your Mac, a gVisor container in Docker on a Linux desktop or a [computer](/computers) you add. It has a read-only system and its own network. It can't reach another agent, your computer or your LAN.
+On a Linux desktop or a [computer](/computers) you add, each agent runs in its own gVisor container, with a read-only system and its own network. It can't reach another agent, that computer or your LAN.
 
-## A firewall
+On a Mac or Windows PC, agents run like any app you install, with your access: they can open what you can open, your home network included.
 
-Agents can make HTTPS calls out, and nothing else. Private ranges, your tailnet and the cloud metadata address are blocked. OpenHut checks this before it starts any agent; if the check fails, no agent starts.
+## A firewall, on Linux
+
+On Linux, agents can make HTTPS calls out, and nothing else. Private ranges, your Tailscale network and the cloud metadata address are blocked. OpenHut checks this before it starts any agent; if the check fails, no agent starts.
 
 ## OpenHut holds the keys
 
@@ -25,10 +27,10 @@ An agent holds only its own token. Where it needs a key, the gateway adds the re
 | Your Claude plan | The gateway adds it to each model call. Changing it restarts nothing. |
 | A Telegram bot token | The gateway adds it. The agent can't log the bot out or change where its messages go. |
 | Database passwords and app sign-ins | Encrypted on each computer you put them on. Agents call them through the gateway's tools. |
-| Slack bot and app tokens | **In the agent's sandbox**, until a later release brokers them. |
-| A WhatsApp link | **In the agent's sandbox**, until a later release moves it into a separate bridge. |
+| Slack bot and app tokens | **With the agent**, until a later release brokers them. |
+| A WhatsApp link | **With the agent**, until a later release moves it into a separate bridge. |
 
-The app reaches this Mac's OpenHut over a file only your user can open, and each added computer with its own key, over your tailnet. No computer is open to the internet.
+The app reaches this computer's OpenHut over a file only your user can open, and each added computer with its own key, over Tailscale or OpenHut Relay. No computer is open to the internet.
 
 If an agent's own token may have leaked, ask your AI app over [MCP](/mcp) to revoke it (`revoke_agent_token`): the old one stops working at once, and the agent restarts with a new one.
 

@@ -6,14 +6,18 @@ import { useRestarting } from '@/features/agents/api'
 const STATES: Record<ReturnType<typeof agentState>, [Tone, string]> = {
   running: ['on', 'Running'],
   starting: ['wait', 'Starting'],
-  stopped: ['off', 'Asleep'],
+  stopped: ['off', 'Stopped'],
   not_answering: ['bad', 'Not answering'],
-  no_seat: ['bad', 'Not ready'],
+  no_seat: ['bad', 'Model not connected'],
   missing: ['bad', 'Stopped unexpectedly'],
 }
 
 export function toneOf(agent: Agent): Tone {
   return STATES[agentState(agent)][0]
+}
+
+export function wordOf(agent: Agent): string {
+  return STATES[agentState(agent)][1]
 }
 
 export function troubleOf(agent: Agent): string | undefined {
