@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { FingerPrintIcon, Link01Icon, MoreHorizontalIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import { FingerPrintIcon, Key01Icon, Link01Icon, MoreHorizontalIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView, DeviceRequest, Member } from '@openhut/common/cloud/cloud.ts'
 import { deviceWords, fromBase64 } from '@openhut/common/vault/vault.ts'
 import { DeviceIcon, DeviceMeta } from '@/components/custom/device'
@@ -14,6 +14,7 @@ import { I, PILL } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { nameOf, useCloud } from '@/features/cloud/api'
 import { Pitch } from '@/features/cloud/sign-in'
+import { Row, Rows } from '@/features/settings/kit'
 import { CloudSetup } from '@/features/cloud/setup'
 import { peopleNote, useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
 import { ago } from '@/lib/format'
@@ -31,10 +32,10 @@ export function PeopleSettings() {
   const { active, email } = useWorkspaces()
   const opened = useOpen()
   if (!cloud) return null
-  const enabling = opened === 'enable' && <CloudSetup door="people" />
+  const enabling = opened === 'enable' && <CloudSetup />
   if (cloud.status === 'off' || !active) return <>{enabling}<Pitch door="people" /></>
   const admin = active.role !== 'member'
-  return <>{enabling}<section className="flex flex-col gap-2.5">
+  return <>{enabling}{!cloud.kit && <Rows><Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note="Not saved"><Button type="button" variant="primary" className={PILL} onClick={() => open('enable')}>Save kit</Button></Row></Rows>}<section className="flex flex-col gap-2.5">
     <div className="flex items-center gap-2 px-1">
       <span className="text-[13px] font-medium">{active.name}</span>
       <span className="ml-auto text-[12px] text-mute">{peopleNote(active)}</span>
