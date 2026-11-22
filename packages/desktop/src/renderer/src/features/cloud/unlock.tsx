@@ -97,7 +97,7 @@ function AdminWait({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
       </div>)}
       <Spinner className="mt-1" />
     </>}
-    <ErrorNote message={ask.error?.message} />
+    <ErrorNote message={ask.error?.message ?? asking?.error ?? undefined} />
     <Button type="button" variant="text" className="text-[12px] font-normal text-mute underline" disabled={cancel.isPending} onClick={back}>Try another way</Button>
   </Window>
 }
