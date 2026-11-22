@@ -13,7 +13,13 @@ if (!args.from || !args.feed || !['button', 'quit'].includes(args.via)) {
   process.exit(2)
 }
 const remote = /^https?:\/\//.test(args.feed)
-const want = /^version: (.+)$/m.exec(remote ? await (await fetch(new URL('latest-mac.yml', args.feed))).text() : readFileSync(join(args.feed, 'latest-mac.yml'), 'utf8'))[1].trim()
+const yml = remote ? await (await fetch(new URL('latest-mac.yml', args.feed))).text() : readFileSync(join(args.feed, 'latest-mac.yml'), 'utf8')
+const want = /^version: (.+)$/m.exec(yml)[1].trim()
+const missing = remote ? [] : [...yml.matchAll(/^\s*-?\s*(?:url|path): (.+)$/gm)].map((match) => match[1].trim()).filter((name) => !existsSync(join(args.feed, name)))
+if (missing.length) {
+  console.error(`update-test: ${args.feed} lacks ${[...new Set(missing)].join(', ')}, which its latest-mac.yml names, so the signed release.json wouldn't cover them and the app would refuse the update`)
+  process.exit(2)
+}
 const root = mkdtempSync(join(tmpdir(), 'openhut-update-'))
 const app = join(root, 'Applications/OpenHut.app')
 const home = join(root, 'home')

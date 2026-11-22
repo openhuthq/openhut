@@ -158,7 +158,7 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: |
           npx electron-builder --mac zip --arm64 -c.extraMetadata.version=0.0.1 -c.directories.output=release-old --publish never
-          mkdir -p feed && cp release/latest-mac.yml release/OpenHut-*-arm64.zip release/OpenHut-*-arm64.zip.blockmap feed/
+          mkdir -p feed && cp release/latest-mac.yml release/OpenHut-*-arm64.zip release/OpenHut-*-arm64.zip.blockmap release/OpenHut-arm64.dmg feed/
           node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via button
           node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via quit
       - name: Add the Mac app to the draft release
