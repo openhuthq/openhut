@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const dir = mkdtempSync(join(tmpdir(), 'openhut-update-'))
-process.env.OPENHUT_UPDATE_LOG = join(dir, 'update.log')
+process.env.AGENTD_DATA = dir
 const { lastUpdate } = await import('../../src/agentd/update.ts')
 
 test('no finished update until the installer writes its exit code', () => {

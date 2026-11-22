@@ -64,7 +64,7 @@ if (MCP_BRIDGE) {
 const WINDOW_STATE = join(HOME, 'window.json')
 const PREFS = join(HOME, 'prefs.json')
 const SECRET = join(HOME, 'secret.bin')
-const HANDOFF = join(HOME, 'secret.handoff')
+const HANDOFF = join(DATA, 'app', 'secret.handoff')
 const COMPUTERS = join(HOME, 'computers.json')
 const LOCAL = { id: 'local', name: MAC ? 'This Mac' : 'This computer', url: CONTAINER ? 'http://127.0.0.1:8787' : '' }
 const LOCAL_KEY = 'keys/local.key'
@@ -643,7 +643,6 @@ async function rootSecret() {
   if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   if (!existsSync(SECRET)) await keepSecret(randomBytes(32).toString('hex'))
   serverEnv.OPENHUT_SECRET = (await safeStorage.decryptStringAsync(readFileSync(SECRET))).result
-  serverEnv.OPENHUT_SECRET_HANDOFF = HANDOFF
 }
 
 async function keepSecret(hex) {

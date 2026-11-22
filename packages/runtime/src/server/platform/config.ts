@@ -39,7 +39,7 @@ export const config = {
   codexAuthApi: 'https://auth.openai.com',
   agentdSocket: process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock',
   secret: process.env.OPENHUT_SECRET,
-  secretHandoff: process.env.OPENHUT_SECRET_HANDOFF,
+  secretHandoff: process.env.OPENHUT_SECRET ? join(DATA, 'secret.handoff') : undefined,
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))).version,
   build: BUILD,
   join: JOIN,
