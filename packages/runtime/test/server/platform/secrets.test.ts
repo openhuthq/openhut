@@ -15,14 +15,14 @@ function boot({ data, env }: { data: string; env: Record<string, string> }): { t
 
 test('the app keeps the root secret: none in the database, a stored one handed off once', () => {
   const dir = mkdtempSync(join(tmpdir(), 'openhut-secret-'))
-  const handoff = join(dir, 'handoff')
+  const handoff = join(dir, 'db', 'secret.handoff')
   const legacy = boot({ data: join(dir, 'db'), env: {} })
   assert.match(legacy.row ?? '', /^[0-9a-f]{64}$/)
-  const moved = boot({ data: join(dir, 'db'), env: { OPENHUT_SECRET: 'ab'.repeat(32), OPENHUT_SECRET_HANDOFF: handoff } })
+  const moved = boot({ data: join(dir, 'db'), env: { OPENHUT_SECRET: 'ab'.repeat(32) } })
   assert.equal(moved.row, null)
   assert.equal(moved.token, legacy.token)
   assert.equal(readFileSync(handoff, 'utf8'), legacy.row)
-  const kept = boot({ data: join(dir, 'fresh'), env: { OPENHUT_SECRET: 'cd'.repeat(32), OPENHUT_SECRET_HANDOFF: join(dir, 'unused') } })
+  const kept = boot({ data: join(dir, 'fresh'), env: { OPENHUT_SECRET: 'cd'.repeat(32) } })
   assert.equal(kept.row, null)
-  assert.equal(existsSync(join(dir, 'unused')), false)
+  assert.equal(existsSync(join(dir, 'fresh', 'secret.handoff')), false)
 })

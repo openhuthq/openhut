@@ -1,12 +1,13 @@
 import { execFile, spawn } from 'node:child_process'
 import { existsSync, readFileSync, statSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { isRecord } from './util.ts'
 
 const run = promisify(execFile)
 const RELEASE_URL = process.env.OPENHUT_URL ?? 'https://openhut.dev'
 const INSTALL_LOCK = '/run/openhut-install.lock'
-const LOG = process.env.OPENHUT_UPDATE_LOG ?? '/var/log/openhut/update.log'
+const LOG = join(resolve(process.env.AGENTD_DATA || '/data'), 'update.log')
 const EXIT = `${LOG}.exit`
 export const UPDATE_SCRIPT = `exec >"$LOG" 2>&1; rm -f "$EXIT"; f=$(mktemp)
 if ! curl -fsSL --retry 3 "$OPENHUT_URL" -o "$f"; then echo "openhut: couldn't download the release from $OPENHUT_URL"; code=2
