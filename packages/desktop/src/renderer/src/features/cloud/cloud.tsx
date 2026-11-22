@@ -20,6 +20,7 @@ import { ago, shortDate, shortDateTime } from '@/lib/format'
 import { navigate, open, useOpen, useSearch } from '@/lib/router'
 import { useDeleteData, useRotated } from '@/features/cloud/workspaces'
 import { toastError } from '@/lib/toast'
+import { cn } from '@/lib/utils'
 
 export function BackupSettings() {
   const cloud = useCloud()
@@ -57,7 +58,7 @@ function CloudLocked({ cloud }: { cloud: Cloud }) {
 function LockedDelete() {
   const remove = useDeleteData()
   return <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete cloud account" note={<span className="text-fail">Deletes your backup and sign-in. Agents on this computer stay.</span>}>
-    <ConfirmButton className={PILL} disabled={remove.isPending} question="Delete your cloud account?" detail="Your agents and chats stay on this computer. You can’t undo this." list={['Your backup of agents, chats and settings', 'Your recovery kit and sign-in']} action="Delete account" typed="delete my account" onConfirm={() => remove.mutateAsync().then(() => notify({ title: 'Cloud account deleted', note: 'Your agents and chats stay on this computer.' }))}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
+    <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={remove.isPending} question="Delete your cloud account?" detail="Your agents and chats stay on this computer. You can’t undo this." list={['Your backup of agents, chats and settings', 'Your recovery kit and sign-in']} action="Delete account" typed="delete my account" onConfirm={() => remove.mutateAsync().then(() => notify({ title: 'Cloud account deleted', note: 'Your agents and chats stay on this computer.' }))}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
   </Row>
 }
 
@@ -114,7 +115,7 @@ function DeleteAccount({ cloud }: { cloud: Cloud }) {
   return <Section title="Danger zone">
     <Rows>
       <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete cloud account" note={deleteNote({ cloud, shared: shared?.name })}>
-        <ConfirmButton className={PILL} disabled={Boolean(shared || cloud.youngUntil) || remove.isPending} question="Delete your cloud account?" detail="Your agents and chats stay on this computer. You can’t undo this." list={gone} action="Delete account" typed="delete my account" onConfirm={() => remove.mutateAsync().then(() => notify({ title: 'Cloud account deleted', note: 'Your agents and chats stay on this computer.' }))}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
+        <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={Boolean(shared || cloud.youngUntil) || remove.isPending} question="Delete your cloud account?" detail="Your agents and chats stay on this computer. You can’t undo this." list={gone} action="Delete account" typed="delete my account" onConfirm={() => remove.mutateAsync().then(() => notify({ title: 'Cloud account deleted', note: 'Your agents and chats stay on this computer.' }))}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
       </Row>
     </Rows>
   </Section>
@@ -145,7 +146,7 @@ export function CloudDevices() {
   if (cloud?.status === 'on' || cloud?.status === 'offline') return <>
     {cloud.rotate.length > 0 && <RotateConnections rotate={cloud.rotate} />}
     {cloud.devices.map((device) => <Row key={device.key} icon={<DeviceIcon kind={device.kind} />} title={device.name ?? (device.kind === 'server' ? 'Computer that runs agents' : 'Computer')} note={[device.here && (isPhone() ? 'Your computer' : 'This computer'), device.addedAt && `Added ${addedAt.format(new Date(device.addedAt))}`].filter(Boolean).join(' · ')}>
-      {!device.here && !isPhone() && !cloud.youngUntil && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${device.name ?? 'this device'}?`} detail={device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))}. ${REMOVE_DETAIL}` : REMOVE_DETAIL} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
+      {!device.here && !isPhone() && !cloud.youngUntil && <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={remove.isPending} question={`Remove ${device.name ?? 'this device'}?`} detail={device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))}. ${REMOVE_DETAIL}` : REMOVE_DETAIL} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
     </Row>)}
     {cloud.youngUntil && <p className="m-0 px-1 text-[12.5px] text-mute">This computer was added less than 3 days ago. Remove devices from an older one, or after {shortDate.format(new Date(cloud.youngUntil))}.</p>}
     <Row onClick={() => open('add-mac')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-blue" />} title="Unlock a new computer" note={`Let a new computer in with this ${isPhone() ? 'phone' : 'one'}.`}><Chevron /></Row>
