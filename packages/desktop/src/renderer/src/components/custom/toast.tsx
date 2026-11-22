@@ -40,7 +40,7 @@ export function notify({ lead = <Tinted icon={Tick02Icon} hue={GREEN} />, title,
 
 export function Toasts({ children }: { children?: ReactNode }) {
   const shown = useSyncExternalStore((listener) => { listeners.add(listener); return () => { listeners.delete(listener) } }, () => notices)
-  return <div className="pointer-events-none fixed top-14 right-[294px] z-[60] flex w-[380px] max-w-[calc(100%-32px)] flex-col gap-2 phone:top-[calc(10px+env(safe-area-inset-top,0px))] phone:right-4 *:pointer-events-auto">
+  return <div data-toasts className="pointer-events-none fixed top-14 right-[294px] z-[60] flex w-[380px] max-w-[calc(100%-32px)] flex-col gap-2 phone:top-[calc(10px+env(safe-area-inset-top,0px))] phone:right-4 *:pointer-events-auto">
     {children}
     {shown.map((each) => <Toast key={each.key} lead={each.lead} title={each.title} note={each.note}>{each.action && <Button type="button" variant="secondary" className={PILL} onClick={each.action.onClick}>{each.action.label}</Button>}</Toast>)}
   </div>

@@ -51,6 +51,7 @@ export function Dialog({ size = 'default', dismissable = true, label, onClose, o
   useLayoutEffect(() => () => leaveAfter({ sheet: popup.current, backdrop: backdrop.current }), [])
   return <DialogPrimitive.Root open disablePointerDismissal={!dismissable} onOpenChange={(open, details) => {
     if (open) return
+    if (details.reason === 'outside-press' && details.event.target instanceof Element && details.event.target.closest('[data-toasts]')) return
     if (details.reason === 'escape-key' && onEscape) onEscape()
     else if (dismissable || details.reason !== 'escape-key') onClose()
   }}>

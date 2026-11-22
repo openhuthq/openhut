@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
 import { Alert02Icon, Cancel01Icon, FingerPrintIcon, Key01Icon } from '@hugeicons/core-free-icons'
 import { useQueryClient } from '@tanstack/react-query'
-import type { Cloud, CloudWorkspaceView, DeviceRequest } from '@openhut/common/cloud/cloud.ts'
+import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { kitWord, nearestWord, readKit, validKit } from '@openhut/common/vault/kit-file.ts'
 import { agentPath } from '@/app/routes'
 import { ConfirmButton } from '@/components/confirm-button'
@@ -19,7 +19,7 @@ import { Mascot } from '@/features/cloud/sign-in'
 import { PRIMARY, Step } from '@/features/cloud/step'
 import { chooseWorkspace, useAsk, useCancelAsk } from '@/features/cloud/workspaces'
 import { Mismatch } from '@/features/cloud/presence'
-import { freshDevice, markSeen, seenDevices } from '@/features/cloud/seen'
+import { freshDevice, joinRequests, markSeen, seenDevices } from '@/features/cloud/seen'
 import { Spinner } from '@/components/ui/spinner'
 import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { isPhone } from '@/lib/native'
@@ -52,7 +52,7 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
       </Rows>
     </div>
     {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
-    {!cloud.kitInCloud && <NoKitYet />}
+    {!cloud.kitInCloud && <CantGetIn />}
   </Step>
 }
 
@@ -86,13 +86,13 @@ function who(admins: string[]): string {
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names.at(-1)}` : names[0] ?? 'an admin'
 }
 
-function NoKitYet() {
-  const cloud = useCloud()
+function CantGetIn() {
+  const [open, setOpen] = useState(false)
   const startOver = useStartOver()
   const { confirming, setConfirming, box } = useConfirming()
-  return <div className="flex w-full max-w-[400px] flex-col items-center gap-3">
-    <p className="m-0 text-[13px] text-body">No recovery kit yet. Save one on the computer you set up first.</p>
-    <Button type="button" variant="secondary" className={PILL} disabled={cloud.isFetching} onClick={() => void cloud.refetch()}>{cloud.isFetching ? 'Checking…' : 'Check again'}</Button>
+  if (!open) return <Button type="button" variant="text" className="mt-auto text-[12px] font-normal text-mute" onClick={() => setOpen(true)}>Can’t get in?</Button>
+  return <div className="mt-auto flex w-full max-w-[400px] flex-col items-center gap-2">
+    <p className="m-0 text-[12.5px]/[18px] text-mute">There’s no recovery kit yet. If none of your computers can approve this one, you can start over with an empty backup.</p>
     <div ref={box} className="flex flex-wrap items-center justify-center gap-2">
       {confirming
         ? <>
@@ -105,30 +105,24 @@ function NoKitYet() {
   </div>
 }
 
-function approvable({ cloud }: { cloud: Cloud }): { workspace: CloudWorkspaceView; request: DeviceRequest }[] {
-  return cloud.workspaces.flatMap((workspace) => workspace.requests.filter((each) => workspace.own && workspace.home ? each.email === cloud.email : workspace.role !== 'member' && each.email !== cloud.email).map((request) => ({ workspace, request })))
-}
-
 function JoinRequests({ cloud }: { cloud: Cloud }) {
   const [dismissed, setDismissed] = useState<string[]>([])
-  const path = usePath()
-  const pending = approvable({ cloud })
+  const pending = joinRequests({ cloud })
   const told = useRef(new Set<string>())
   useEffect(() => {
-    for (const { workspace, request } of pending) {
+    for (const { workspace, request, mine, path } of pending) {
       if (told.current.has(request.device)) continue
       told.current.add(request.device)
-      const mine = request.email === cloud.email
-      if (!document.hasFocus()) notifyDesktop({ title: `${request.name ?? 'A new computer'} wants to join`, body: mine ? 'Approve or deny it in Settings › Computers.' : `${nameOf(request.email)} asked to join ${workspace.name}.`, path: mine ? '/settings/computers' : '/settings/team' })
+      if (!document.hasFocus()) notifyDesktop({ title: `${request.name ?? 'A new computer'} wants to join`, body: mine ? 'Approve or deny it in Settings › Computers.' : `${nameOf(request.email)} asked to join ${workspace.name}.`, path })
     }
-  }, [pending, cloud.email])
+  }, [pending])
   const shown = pending.find(({ request }) => !dismissed.includes(request.device))
-  if (!shown || cloud.status !== 'on' || path.startsWith('/settings/computers') || path.startsWith('/settings/team')) return null
-  const { workspace, request } = shown
-  const mine = request.email === cloud.email
+  if (!shown) return null
+  const { workspace, request, mine, path } = shown
   const go = () => {
     if (!mine) chooseWorkspace(workspace.id)
-    navigate(mine ? '/settings/computers' : '/settings/team')
+    setDismissed((all) => [...all, request.device])
+    navigate(path)
   }
   return <Toast alert lead={<DeviceIcon kind="mac" />} title={`${request.name ?? 'A new computer'} wants to join`} note={mine ? request.email : `${nameOf(request.email)} · ${workspace.name}`}>
     <Button type="button" variant="secondary" className={PILL} onClick={go}>Open</Button>
