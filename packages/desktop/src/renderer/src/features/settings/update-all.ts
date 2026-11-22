@@ -34,5 +34,5 @@ async function updateOne({ server, steps }: { server: Behind; steps: Steps }): P
     if (admin.server.update?.status === 'failed') return { ...server, ok: false, reason: admin.server.update.reason ?? 'The update stopped before it finished.' }
     if (!admin.server.update && admin.server.build === started.to) return { ...server, ok: true, reason: null }
   }
-  return { ...server, ok: false, reason: 'It didn\'t finish in time. Settings › Devices shows when it does.' }
+  return { ...server, ok: false, reason: 'It didn\'t finish in time. Settings › Computers shows when it does.' }
 }

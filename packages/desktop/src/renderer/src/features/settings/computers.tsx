@@ -29,6 +29,7 @@ import { toastError } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
 import { cn } from '@/lib/utils'
 import { EnableCloud } from '@/features/cloud/sign-in'
+import { AddMac, CloudDevices } from '@/features/cloud/cloud'
 import { useCloud } from '@/features/cloud/api'
 
 const GET_TAILSCALE = 'https://tailscale.com/download'
@@ -37,7 +38,9 @@ export function ComputersSettings() {
   const [step, name = ''] = (useOpen() ?? '').split(':')
   return <>
     <ComputerList />
+    <Rows><CloudDevices /></Rows>
     {step === 'add' && <AddComputer />}
+    {step === 'add-mac' && <AddMac />}
     {step === 'command' && <AddByCommand />}
     {step === 'tailscale' && <TailscaleStep />}
     {step === 'ssh' && <TurnOnSsh name={name} />}

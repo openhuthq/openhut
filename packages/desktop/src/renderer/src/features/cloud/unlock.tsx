@@ -107,7 +107,7 @@ function NoKitYet() {
 
 function CodeEntry({ onBack }: { onBack: () => void }) {
   const pairing = usePairing(true)
-  return <Step art={<span className="grid size-[120px] place-items-center rounded-xl border border-hair bg-white p-1.5 [&_canvas]:size-full!">{pairing.data && <QrCode text={pairing.data.qr} label="Code to unlock this computer" />}</span>} title="Scan this code" line="On your iPhone or other computer: Settings › Devices › Unlock a new computer." back={onBack}>
+  return <Step art={<span className="grid size-[120px] place-items-center rounded-xl border border-hair bg-white p-1.5 [&_canvas]:size-full!">{pairing.data && <QrCode text={pairing.data.qr} label="Code to unlock this computer" />}</span>} title="Scan this code" line="On your iPhone or other computer: Settings › Computers › Unlock a new computer." back={onBack}>
     <span className="text-[12px] text-mute">Or type this code</span>
     <span className="font-mono text-[15px] tracking-[.08em] select-all">{pairing.data?.code ?? '…'}</span>
     <ErrorNote message={pairing.error?.message} />

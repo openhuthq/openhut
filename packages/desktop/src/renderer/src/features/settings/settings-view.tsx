@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiMagicIcon, Building03Icon, CloudDownloadIcon, LaptopIcon, PlugSocketIcon, Settings02Icon, UserCircleIcon, UserGroupIcon } from '@hugeicons/core-free-icons'
+import { AiMagicIcon, Building03Icon, CloudDownloadIcon, LaptopIcon, PlugSocketIcon, Settings02Icon, SmartPhone01Icon, UserCircleIcon, UserGroupIcon } from '@hugeicons/core-free-icons'
 import { AccountSettings } from '@/features/cloud/cloud'
 import { PeopleSettings } from '@/features/people/people'
 import { TeamSettings } from '@/features/people/workspace'
@@ -18,7 +18,8 @@ import { cn } from '@/lib/utils'
 
 const TABS: [string, string, IconSvgElement, string][] = [
   ['general', 'General', Settings02Icon, 'text-hue-slate'],
-  ['devices', 'Devices', LaptopIcon, 'text-hue-blue'],
+  ['computers', 'Computers', LaptopIcon, 'text-hue-blue'],
+  ['phones', 'Phones', SmartPhone01Icon, 'text-hue-green'],
   ['models', 'Models', AiMagicIcon, 'text-hue-violet'],
   ['mcp', 'MCP', PlugSocketIcon, 'text-hue-teal'],
   ['updates', 'Updates', CloudDownloadIcon, 'text-hue-sky'],
@@ -27,7 +28,7 @@ const TABS: [string, string, IconSvgElement, string][] = [
   ['people', 'People', UserGroupIcon, 'text-hue-amber'],
 ]
 
-const MOVED: Record<string, string> = { computers: 'devices', phones: 'devices', cloud: 'account', backup: 'account' }
+const MOVED: Record<string, string> = { devices: 'computers', cloud: 'account', backup: 'account' }
 
 export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: () => void }) {
   const tab = MOVED[asked] ?? asked
@@ -56,18 +57,11 @@ function Tab({ tab }: { tab: string }) {
     case 'account': return <AccountSettings />
     case 'team': return <TeamSettings />
     case 'people': return <PeopleSettings />
-    case 'devices': return <YourDevices />
+    case 'computers': return <ComputersSettings />
+    case 'phones': return <DevicesSettings />
     case 'models': return <ModelsSettings />
     case 'mcp': return <McpSettings />
     case 'updates': return <UpdatesSettings />
     default: return <GeneralSettings />
   }
-}
-
-function YourDevices() {
-  const step = (useOpen() ?? '').split(':')[0]
-  return <>
-    <ComputersSettings />
-    {!['tailscale', 'ssh', 'others'].includes(step) && <DevicesSettings />}
-  </>
 }
