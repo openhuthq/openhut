@@ -25,7 +25,7 @@ const Stored = z.object({
   session: z.optional(z.object({ token: z.string(), refresh: z.optional(z.string()), expiresAt: z.string() })),
   outbox: z.optional(z.array(Outgoing)),
   rotating: z.optional(z.array(z.object({ room: Room, letters: z.array(Outgoing) }))),
-  asking: z.optional(z.array(z.object({ id: z.string(), admins: z.array(z.string()), signers: z.array(z.string()), secret: z.string(), nonce: z.optional(z.string()), words: z.optional(z.array(z.string())), revealed: z.optional(z.boolean()) }))),
+  asking: z.optional(z.array(z.object({ id: z.string(), admins: z.array(z.string()), own: z.optional(z.boolean()) }))),
 })
 export type Stored = z.infer<typeof Stored>
 export type Account = NonNullable<Stored['account']>

@@ -1,7 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { FingerPrintIcon, Link01Icon, MoreHorizontalIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView, DeviceRequest, Member } from '@openhut/common/cloud/cloud.ts'
-import { deviceWords, fromBase64 } from '@openhut/common/vault/vault.ts'
 import { DeviceIcon, DeviceMeta } from '@/components/custom/device'
 import { Button } from '@/components/ui/button'
 import { ConfirmButton, ConfirmDialog } from '@/components/confirm-button'
@@ -16,7 +15,7 @@ import { nameOf } from '@/features/cloud/api'
 import { useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useRevokeInvite, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
 import { ago } from '@/lib/format'
 import { copyText } from '@/lib/clipboard'
-import { isPhone, useConfirmed } from '@/lib/native'
+import { useConfirmed } from '@/lib/native'
 import { notify } from '@/components/custom/toast'
 import { open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
@@ -32,7 +31,7 @@ export function TeamPeople({ workspace }: { workspace: CloudWorkspaceView }) {
       <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
         {workspace.members.map((member) => <div key={member.email}>
           <PersonRow member={member} workspace={workspace} you={member.email === email} admin={admin} />
-          {workspace.requests.filter((each) => each.email === member.email).map((each) => <Request key={each.device} workspace={workspace} request={each} name={nameOf(member.email)} mine={member.email === email} admin={admin} />)}
+          {workspace.requests.filter((each) => each.email === member.email && !(workspace.own && each.email === email)).map((each) => <Request key={each.device} workspace={workspace} request={each} name={nameOf(member.email)} mine={member.email === email} admin={admin} />)}
         </div>)}
       </div>
     </Section>
@@ -87,42 +86,22 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
 }
 
 function Request({ workspace, request, name, mine, admin }: { workspace: CloudWorkspaceView; request: DeviceRequest; name: string; mine: boolean; admin: boolean }) {
-  const { device, at, nonce, reveal } = request
-  const ready = Boolean(nonce && reveal)
-  const [words, setWords] = useState(['', '', '', ''])
-  const [expected, setExpected] = useState<string[] | null>(null)
+  const { device, at } = request
   const approve = useApprove()
   const deny = useDeny()
-  useEffect(() => {
-    if (nonce && reveal) void deviceWords({ device: fromBase64(device), nonce: fromBase64(nonce.nonce), reveal: fromBase64(reveal) }).then(setExpected)
-  }, [device, nonce, reveal])
   const { asking, confirm } = useConfirmed()
-  const matches = Boolean(expected) && words.map((word) => word.trim().toLowerCase()).join(' ') === expected?.join(' ')
-  useEffect(() => { if (matches && isPhone() && document.activeElement instanceof HTMLInputElement) document.activeElement.blur() }, [matches])
-  const set = (input: HTMLInputElement, index: number) => {
-    const typed = input.value.toLowerCase().split(/\s+/)
-    const parts = typed.filter(Boolean)
-    if (!parts.length) parts.push('')
-    setWords((all) => all.map((word, i) => i < index || i >= index + parts.length ? word : parts[i - index]))
-    const next = typed.length > 1 ? input.parentElement?.querySelectorAll('input')[Math.min(index + parts.length, 3)] : undefined
-    if (next && next !== input) next.focus()
-  }
   if (!admin && !mine) return null
   const title = request.name ?? 'computer'
   return <div className="-mt-1 flex flex-wrap items-center gap-3 pr-4 pb-3 pl-[68px] phone:items-start phone:pl-4">
     <DeviceIcon kind="mac" />
     <span className="grid min-w-0 flex-1 gap-1.5">
-      <span className="text-[13px] font-medium">{mine ? `${title} asked to join as you` : `New ${title} wants in`}</span>
+      <span className="text-[13px] font-medium">{mine ? `${title} asked to join as you` : `${name}’s ${title} wants to join`}</span>
       <span className="text-[12px] text-mute"><DeviceMeta device={{ kind: 'mac', name: title, os: request.os ?? undefined, when: `${ago(at)} ago` }} /></span>
-      {admin && !mine && <>
-        <span className="text-[12px] text-body">{ready ? `Call ${name} and type the 4 words on their screen` : 'The words show once their computer is ready.'}</span>
-        <span className="flex flex-wrap items-center gap-1.5">{words.map((word, index) => <Input key={index} value={word} disabled={!ready} aria-label={`Word ${index + 1}`} autoComplete="off" autoCapitalize="none" spellCheck={false} onChange={(event) => set(event.target, index)} className="h-7 w-[72px] px-2 text-[12.5px] phone:h-11 phone:w-[calc(50%-3px)] phone:px-3" />)}</span>
-      </>}
-      {mine && <span className="text-[12px] text-body">If it isn’t yours, deny it. Nobody gets in without the 4 words.</span>}
+      {mine && <span className="text-[12px] text-body">If it isn’t yours, deny it.</span>}
     </span>
     <span className="flex gap-2 phone:w-full phone:justify-end phone:*:h-11 phone:*:flex-1 phone:*:justify-center phone:*:rounded-xl">
       <Button type="button" variant="ghost" className={PILL} disabled={deny.isPending} onClick={() => deny.mutate({ id: workspace.id, device }, { onSuccess: () => toast('Denied'), onError: toastError })}>{mine ? 'Not me' : 'Deny'}</Button>
-      {admin && !mine && <Button type="button" variant="primary" disabled={!matches || asking || approve.isPending} className={cn(PILL, 'gap-1.5 bg-[#12a150] text-white hover:bg-[#0f8a44]')} onClick={() => void confirm(`Approve ${name}’s new ${title}`).then((ok) => { if (ok) approve.mutate({ id: workspace.id, device, words }, { onSuccess: () => toast(`${name}’s new ${title} is in`), onError: toastError }) })}><I icon={FingerPrintIcon} size={14} />Approve</Button>}
+      {admin && !mine && <Button type="button" variant="primary" disabled={asking || approve.isPending} className={cn(PILL, 'gap-1.5 bg-[#12a150] text-white hover:bg-[#0f8a44]')} onClick={() => void confirm(`Approve ${name}’s ${title}`).then((ok) => { if (ok) approve.mutate({ id: workspace.id, device }, { onSuccess: () => toast(`${name}’s ${title} is in`), onError: toastError }) })}><I icon={FingerPrintIcon} size={14} />Approve</Button>}
     </span>
   </div>
 }

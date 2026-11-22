@@ -41,17 +41,6 @@
       ],
       "key": "9198f8c339d6a216df80b7ef966ee7c5a178e499d238c66e633e87e035f9c868"
     },
-    "pair": {
-      "secret": "0123456789ABCDEFGHJK",
-      "longCode": "01234-56789-ABCDE-FGHJK-H",
-      "device": "8bb04e1c1b83dddf311f5bcddf7c50ede3c0802f47ec796e2a131cf41298d9f37808d98283260794bb05f2ae69674ca2fe2e55c16c863031f90235576f0f3b0e",
-      "fingerprint": "usCINwwHF6PbpyXegpZtGNxhWl_VnWFBw9lSqlOYaGI",
-      "oldDevice": "7776e870b93354f2a0b24c23f2a36cc4e80e223218c1b97926fdd018396a2b9b1d682f8bb8b6fea684a63bd478009bc62050d365c18a68803261a055b162925e",
-      "workspace": "ws_00000001",
-      "newProof": "40735fe075dc83b398b44b453c37881098fea073c7c1467a29c8bbd67a967d06",
-      "oldProof": "43c15938cf1dd12cacd7f0a582bb38a4f75f1f37a155ea4317cb0d7accd61ccb",
-      "letterWorkspace": "qcs0lHgIKZIBLnV5QHUtJxPH6aZiZ7n9Uh8eC5FD3iE"
-    },
     "slot": {
       "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
       "path": "agent/ag_00000001/instructions",
@@ -64,18 +53,6 @@
       "key": "0b74fc93e4d54b5b9ec0d222031c0d3fb3dd956412e3a3dd418fd6093149637b",
       "plain": "7b22776f726b7370616365223a2277735f3030303030303031222c22656d61696c223a22616e61406578616d706c652e636f6d227d",
       "locked": "010100000001b0b1b2b3b4b5b6b7b8b9babbf21eba26dc942650b9a3e24f5ed3acdd57cad9da0dafb907e621ef80d7c9228e3ea1c4b0e7112069cec918d9f8ac863119019cb667691b030671645cac43fb8178d02643f8"
-    },
-    "deviceWords": {
-      "device": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      "reveal": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
-      "commit": "6a64522989cdf6817d8006404ab090af45b7165612daaec08f7b1b57b7b5402e",
-      "nonce": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
-      "words": [
-        "banana",
-        "cost",
-        "glove",
-        "anger"
-      ]
     }
   }
 }

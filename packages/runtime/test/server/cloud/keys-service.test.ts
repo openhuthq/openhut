@@ -6,10 +6,10 @@ import { join } from 'node:path'
 import { migrate, db } from '../../../src/server/platform/db.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { seal, unseal } from '../../../src/server/platform/secrets.ts'
-import { accountDevice, keysService } from '../../../src/server/cloud/keys-service.ts'
+import { accountDevice, keysService, openLetter } from '../../../src/server/cloud/keys-service.ts'
 import { keyStore } from '../../../src/server/cloud/key-store.ts'
 import { roomKeys } from '../../../src/server/cloud/room-keys.ts'
-import { deviceWords, fromBase64, identity, letter, lock, newKey, newPairing, pairingWorkspace, read, slot, toBase64, unlock } from '@openhut/common/vault/vault.ts'
+import { fromBase64, identity, letter, lock, newKey, read, slot, toBase64, unlock } from '@openhut/common/vault/vault.ts'
 import { anchorOf, bodyOf, check, signList } from '@openhut/common/cloud/member-list.ts'
 
 await migrate()
@@ -82,7 +82,7 @@ test('signing in with another Google account is refused, and the first account k
   await keysService.setKit(kit && box ? { box, savedAt: kit.savedAt } : undefined)
 })
 
-test('a new Mac reads its pairing letter only with the code it shows', async () => {
+test('a new Mac opens an approval letter only when it is sealed to its own key for its own workspace, then restores with the account key in it', async () => {
   const oldMac = await identity()
   const accountKey = newKey()
   const kit = await identity(fromBase64(await slot({ key: accountKey, path: 'account-device' })))
@@ -94,18 +94,15 @@ test('a new Mac reads its pairing letter only with the code it shows', async () 
   const box = toBase64(await lock({ key: accountKey, version: 1, bind: 'account/dev-mo/workspace/ws_paired01', plain: secret }) ?? new Uint8Array())
   await keysService.relock({ sub: 'dev-mo', email: 'mo@example.com' })
   const me = (await keysService.device()).publicKey
-  const { secret: code } = await newPairing({ device: me, hint: 'mo@example.com' })
-  const { secret: otherCode } = await newPairing({ device: me, hint: 'mo@example.com' })
-  const sealed = async (sender: typeof oldMac, shown: string) => {
-    const context = await pairingWorkspace({ secret: shown, newDevice: me, oldDevice: sender.publicKey, workspace: 'ws_paired01' })
-    const body = await letter({ sender, to: me, workspace: context ?? '', purpose: 'pairing', version: 1, plain: accountKey })
-    return { id: 'letter01', object: 'letter' as const, to: toBase64(me), from: toBase64(sender.publicKey), workspace: 'ws_paired01', purpose: 'pairing' as const, body: toBase64(body ?? new Uint8Array()) }
+  const someoneElse = await identity()
+  const sealed = async ({ to = me, workspace = 'ws_paired01', purpose = 'account-key' as const }: { to?: Uint8Array<ArrayBuffer>; workspace?: string; purpose?: 'account-key' | 'workspace-key' } = {}) => {
+    const body = await letter({ sender: oldMac, to, workspace, purpose, version: 1, plain: accountKey })
+    return { id: 'letter01', object: 'letter' as const, to: toBase64(me), from: toBase64(oldMac.publicKey), workspace: 'ws_paired01', purpose: 'account-key' as const, body: toBase64(body ?? new Uint8Array()) }
   }
-  assert.equal(await keysService.readPairing({ secret: otherCode, workspace: 'ws_paired01', found: await sealed(oldMac, code) }), null)
-  assert.equal(await keysService.readPairing({ secret: code, workspace: 'ws_paired01', found: await sealed(oldMac, otherCode) }), null)
-  assert.equal(await keysService.readPairing({ secret: code, workspace: 'ws_wrong001', found: await sealed(oldMac, code) }), null)
-  const opened = await keysService.readPairing({ secret: code, workspace: 'ws_paired01', found: await sealed(oldMac, code) })
-  assert.deepEqual(opened, accountKey)
+  assert.equal(await openLetter({ found: await sealed({ to: someoneElse.publicKey }), workspace: 'ws_paired01' }), null)
+  assert.equal(await openLetter({ found: await sealed({ workspace: 'ws_wrong001' }), workspace: 'ws_paired01' }), null)
+  assert.equal(await openLetter({ found: await sealed({ purpose: 'workspace-key' }), workspace: 'ws_paired01' }), null)
+  assert.deepEqual(await openLetter({ found: await sealed(), workspace: 'ws_paired01' }), accountKey)
   const account = await keysService.restoreWith({ key: accountKey, workspaces: [{ id: 'ws_paired01', key: box, chain: [genesis] }] })
   assert.ok(account)
   const joined = await check({ anchor: await anchorOf(genesis), chain: [genesis, account.list] })
@@ -205,7 +202,7 @@ test('taking letters returns the used, stale, unreadable and strangers’ letter
   assert.equal(keysService.account()?.workspace.version, 2)
 })
 
-test('the 4 words need the admin’s nonce and the device’s revealed secret; removing someone from a team drops them without a key change; Change keys rotates, and the removed member can’t read anything written after', async () => {
+test('an admin lets a new device in with no words, and your own approval letter carries the account key only to that device; removing someone from a team drops them without a key change; Change keys rotates, and the removed member can’t read anything written after', async () => {
   await keysService.setSession(undefined)
   await keysService.relock({ sub: 'dev-mo', email: 'mo@example.com' })
   await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
@@ -219,14 +216,14 @@ test('the 4 words need the admin’s nonce and the device’s revealed secret; r
   const at = Math.max(Date.now(), body.at ?? 0)
   const v2 = await signList({ signer: await keysService.device(), body: { ...body, version: 2, previous: await anchorOf(team.list), at, members: [...body.members, { email: 'sara@example.com', role: 'admin', devices: [key(sara)] }, { email: 'ana@example.com', role: 'member', devices: [key(ana)] }], added: { ...body.added, [key(sara)]: at, [key(ana)]: at } } })
   assert.ok(await roomKeys.advance({ lists: [v2], ws }))
-  const nonce = newKey(16)
-  const reveal = newKey()
-  const words = await deviceWords({ device: anaMac.publicKey, nonce, reveal })
-  const approve = (input: { words: string[]; nonce: Uint8Array; reveal: Uint8Array }) => roomKeys.approve({ ws, email: 'ana@example.com', device: key(anaMac), words: input.words, nonce: toBase64(input.nonce), reveal: toBase64(input.reveal) })
-  await assert.rejects(approve({ words: ['tiger', 'salt', 'brown', 'lake'], nonce, reveal }), (err: Error & { status?: number }) => err.status === 400)
-  await assert.rejects(approve({ words, nonce: newKey(16), reveal }), (err: Error & { status?: number }) => err.status === 400)
-  await assert.rejects(approve({ words, nonce, reveal: newKey() }), (err: Error & { status?: number }) => err.status === 400)
-  const approved = await approve({ words, nonce, reveal })
+  const own = await keysService.accountLetter(key(anaMac))
+  const home = keysService.account()?.workspace.id ?? ''
+  const me = await keysService.device()
+  const reading = { from: me.publicKey, workspace: home, purpose: 'account-key' as const, body: fromBase64(own.body), allowed: [me.publicKey] }
+  assert.deepEqual(await read({ ...reading, recipient: anaMac }), fromBase64(keysService.account()?.key ?? ''))
+  assert.equal(await read({ ...reading, recipient: ana }), null)
+  await assert.rejects(roomKeys.approve({ ws, email: 'ana@example.com', device: key(ana) }), (err: Error & { status?: number }) => err.status === 409)
+  const approved = await roomKeys.approve({ ws, email: 'ana@example.com', device: key(anaMac) })
   assert.deepEqual(bodyOf(approved.list)?.members.find((member) => member.email === 'ana@example.com')?.devices, [key(ana), key(anaMac)])
   assert.ok(await roomKeys.advance({ lists: [approved.list], ws }))
   const anaKey = roomKeys.room(ws)?.workspace.key ?? ''

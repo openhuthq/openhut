@@ -126,7 +126,7 @@ export const useChangeKeys = () => useCloudCall((id: string) => request({ schema
 
 export const useDeleteWorkspace = () => useCloudCall(({ id, name }: { id: string; name: string }) => request({ schema: Cloud, computer: 'local', path: room(id), method: 'DELETE', body: { name } }))
 
-export const useApprove = () => useCloudCall(({ id, device, words }: { id: string; device: string; words: string[] }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}/approvals`, method: 'POST', body: { words } }))
+export const useApprove = () => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}/approvals`, method: 'POST' }))
 
 export const useDeny = () => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}`, method: 'DELETE' }))
 

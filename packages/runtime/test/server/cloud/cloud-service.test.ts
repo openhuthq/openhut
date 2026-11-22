@@ -3,14 +3,14 @@ import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { signProof } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
-import { deviceWords, fromBase64, identity, newKey, toBase64 } from '@openhut/common/vault/vault.ts'
+import { fromBase64, identity, letter, newKey, toBase64 } from '@openhut/common/vault/vault.ts'
 
 const account = { signer: undefined as string | undefined, boxes: new Map<string, { body: string; by: string; signature: string }>(), hideWorkspaces: false, failBoxes: 0, refuseLetters: false, names: [] as string[], sites: [] as (string | undefined)[], refuseName: false }
 let authorization = ''
 const TEAM = 'ws_teamroom'
-const asks = { on: false, device: '', list: undefined as unknown, commits: [] as string[], nonce: null as { nonce: string; by: string; signature: string } | null, echo: null as string | null, reveals: [] as string[], revealStatus: 500 }
+const asks = { on: false, device: '', list: undefined as unknown, sent: [] as unknown[] }
+const home = { id: '', chain: [] as unknown[], device: '', sent: [] as unknown[], letters: [] as unknown[], deleted: [] as string[] }
 const cloud = createServer(async (req, res) => {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
@@ -21,15 +21,10 @@ const cloud = createServer(async (req, res) => {
   if (asks.on && req.url?.startsWith(`${room}/member-lists`)) return reply(200, { object: 'list', data: [asks.list], hasMore: false })
   if (asks.on && req.url === `${room}/letters`) return reply(200, { object: 'list', data: [] })
   if (asks.on && req.url === `${room}/requests` && req.method === 'POST') {
-    asks.commits.push(body.commit ?? '')
-    asks.nonce = null
+    asks.sent.push(body)
     return reply(200, {})
   }
-  if (asks.on && req.url === `${room}/requests`) return reply(200, { object: 'list', data: [{ device: asks.device, nonce: asks.nonce, reveal: asks.echo }] })
-  if (asks.on && req.url?.endsWith('/reveal')) {
-    asks.reveals.push(body.reveal ?? '')
-    return reply(asks.revealStatus, {})
-  }
+  if (asks.on && req.url === `${room}/requests`) return reply(200, { object: 'list', data: asks.device ? [{ device: asks.device }] : [] })
   if (asks.on && req.url?.startsWith(`${room}/requests/`)) return reply(200, {})
   const keep = (name: string, box: { body: string; by: string; signature: string }) => {
     if (account.failBoxes-- > 0) return reply(503, { error: { type: 'api_error', message: 'busy' } })
@@ -66,6 +61,18 @@ const cloud = createServer(async (req, res) => {
     return account.refuseName ? reply(400, { error: { type: 'invalid_request_error', message: 'Send the name locked.' } }) : reply(200, body)
   }
   if (/^\/v1\/workspaces\/[^/]+\/letters$/.test(req.url ?? '') && req.method === 'GET' && account.refuseLetters) return reply(403, { error: { type: 'permission_error', message: 'Not a member.' } })
+  const mine = home.id && `/v1/workspaces/${home.id}`
+  if (mine && req.url?.startsWith(`${mine}/member-lists`)) return reply(200, { object: 'list', data: home.chain, hasMore: false })
+  if (mine && req.url === `${mine}/requests` && req.method === 'POST') {
+    home.sent.push(body)
+    return reply(200, {})
+  }
+  if (mine && req.url === `${mine}/requests`) return reply(200, { object: 'list', data: [{ device: home.device }] })
+  if (mine && req.url === `${mine}/letters` && req.method === 'GET') return reply(200, { object: 'list', data: home.letters })
+  if (mine && req.url?.startsWith(`${mine}/letters/`) && req.method === 'DELETE') {
+    home.deleted.push(decodeURIComponent(req.url.slice(`${mine}/letters/`.length)))
+    return reply(200, {})
+  }
   if (/^\/v1\/workspaces\/[^/]+\/(members|letters)$/.test(req.url ?? '') && req.method !== 'GET') return reply(200, body)
   reply(404, { error: { type: 'invalid_request_error', message: 'none' } })
 })
@@ -167,17 +174,6 @@ test('a team website is sent locked as the bare host on its own, never with the 
   assert.equal(await roomKeys.openMeta({ ws: team.id, field: 'site', locked: account.sites.at(-1) }), '')
 })
 
-test('a locked Mac whose device key was removed stops pairing at once, gets a new device key, and asks to sign in again', async () => {
-  const before = await keysService.deviceKey()
-  await keysService.relock({ sub: 'dev-sara', email: 'sara@example.com' })
-  account.refuseLetters = true
-  await assert.rejects(cloudService.startPairing(), (err: Error & { status?: number }) => err.status === 403 && /removed from your account\. Sign in again/.test(err.message))
-  const after = await cloudService.status()
-  assert.deepEqual([after.status, after.needsSignIn, after.email], ['locked', true, 'sara@example.com'])
-  assert.notEqual(after.device, before)
-  account.refuseLetters = false
-})
-
 let stolen = ''
 async function addStolen(): Promise<void> {
   const current = keysService.account()
@@ -195,63 +191,59 @@ async function until(done: () => boolean | Promise<boolean>): Promise<void> {
 }
 
 const admin = await identity()
-async function signedNonce(): Promise<{ nonce: string; by: string; signature: string }> {
-  const nonce = toBase64(newKey(16))
-  return { nonce, by: toBase64(admin.publicKey), signature: await signProof({ signer: admin, proof: 'words', parts: [TEAM, asks.device, asks.commits.at(-1) ?? '', nonce] }) }
-}
 
-async function wordsOf({ nonce, reveal }: { nonce: string; reveal: string }): Promise<string[]> {
-  return deviceWords({ device: fromBase64(asks.device), nonce: fromBase64(nonce), reveal: fromBase64(reveal) })
-}
-
-test('a cloud that fails the reveal, learns r and swaps in another nonce gets no words from it: the Mac asks again with a new r and says why', async () => {
+test('asking a team sends only this Mac’s name and OS, shows the admins who can approve, and settles when the request is gone', async () => {
   await keysService.relock({ sub: 'dev-sara', email: 'sara@example.com' })
   await keysService.setSession({ token: 'session-token', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
   asks.device = await keysService.deviceKey()
   asks.list = await signList({ signer: admin, body: { workspace: TEAM, version: 1, previous: null, members: [{ email: 'ana@example.com', role: 'owner', devices: [toBase64(admin.publicKey)] }, { email: 'sara@example.com', role: 'member', devices: [] }], invites: [], removed: [] } })
   asks.on = true
-  await cloudService.ask()
-  asks.nonce = { ...await signedNonce(), signature: toBase64(newKey(64)) }
-  await sleep(2500)
-  assert.deepEqual(asks.reveals, [], 'r never leaves the Mac for a nonce no admin signed')
-  const first = await signedNonce()
-  asks.nonce = first
-  await until(() => asks.reveals.length > 0)
-  const r = asks.reveals[0] ?? ''
-  assert.deepEqual(keysService.asked()[0]?.words, await wordsOf({ nonce: first.nonce, reveal: r }), 'the words are fixed from the first nonce before r leaves')
-  const swapped = await signedNonce()
-  Object.assign(asks, { nonce: swapped, echo: r, revealStatus: 200 })
-  const ground = await wordsOf({ nonce: swapped.nonce, reveal: r })
-  await until(() => asks.commits.length === 2)
-  await until(async () => /asked again with new words/.test((await cloudService.status()).asking?.error ?? ''))
-  const after = await cloudService.status()
-  assert.deepEqual(after.asking?.rooms.map((each) => each.words), [null])
-  assert.notEqual(keysService.asked()[0]?.secret, r)
-  assert.equal(keysService.asked()[0]?.nonce, undefined)
-  assert.ok(asks.reveals.every((each) => each === r), 'r is only ever revealed for the first nonce')
-  const fresh = await signedNonce()
-  asks.nonce = fresh
-  await until(async () => Boolean((await cloudService.status()).asking?.rooms[0]?.words))
-  const words = (await cloudService.status()).asking?.rooms[0]?.words
-  assert.deepEqual(words, await wordsOf({ nonce: fresh.nonce, reveal: asks.reveals.at(-1) ?? '' }))
-  assert.notDeepEqual(words, ground)
-})
-
-test('a restart between the nonce and the reveal keeps the same words', async () => {
-  await cloudService.ask()
-  Object.assign(asks, { echo: null, revealStatus: 500, reveals: [] })
-  const nonce = await signedNonce()
-  asks.nonce = nonce
-  await until(() => asks.reveals.length > 0)
-  const before = keysService.asked()[0]?.words
-  assert.deepEqual(before, await wordsOf({ nonce: nonce.nonce, reveal: asks.reveals[0] ?? '' }))
-  const fresh = '../../../src/server/cloud/cloud-service.ts?restart'
-  const restarted = (await import(fresh) as typeof import('../../../src/server/cloud/cloud-service.ts')).cloudService
-  asks.revealStatus = 200
-  await until(async () => Boolean((await restarted.status()).asking?.rooms[0]?.words))
-  assert.deepEqual((await restarted.status()).asking?.rooms[0]?.words, before)
-  assert.equal(asks.commits.length, 3, 'the restart doesn’t start a new ask')
-  await restarted.cancelAsk()
+  const asked = await cloudService.ask()
+  assert.equal(asked.canAsk, true)
+  assert.deepEqual(asked.asking?.rooms, [{ admins: ['ana@example.com'], own: false }])
+  assert.deepEqual(asks.sent.map((each) => Object.keys(each as object).sort()), [['name', 'os']])
+  asks.device = ''
+  await until(async () => Boolean((await cloudService.status()).asking?.denied))
   await cloudService.cancelAsk()
   asks.on = false
+})
+
+
+test('your own new Mac asks your other computers with no words: a removed Mac is told to sign in again, and an account-key letter sealed to it unlocks and restores it', async () => {
+  await keysService.setSession(undefined)
+  await keysService.removedHere()
+  const first = await keysService.open({ sub: 'dev-sara', email: 'sara@example.com' })
+  const firstMac = await keysService.device()
+  const box = await keysService.workspaceBox({ account: first })
+  account.boxes.clear()
+  Object.assign(account, { signer: undefined, hideWorkspaces: false })
+  account.boxes.set(`workspace/${box.id}`, { body: box.key, by: box.by, signature: box.signature })
+  Object.assign(home, { id: first.workspace.id, chain: [first.list] })
+  const session = () => keysService.setSession({ token: 'session-token', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
+
+  await keysService.removedHere()
+  await session()
+  home.device = await keysService.deviceKey()
+  account.refuseLetters = true
+  const asked = await cloudService.ask()
+  assert.deepEqual(asked.asking?.rooms, [{ admins: ['sara@example.com'], own: true }])
+  assert.deepEqual(home.sent.map((each) => Object.keys(each as object).sort()), [['name', 'os']])
+  await until(async () => (await cloudService.status()).needsSignIn)
+  assert.notEqual(await keysService.deviceKey(), home.device)
+  account.refuseLetters = false
+
+  await session()
+  await cloudService.ask()
+  const newMac = await keysService.device()
+  home.device = toBase64(newMac.publicKey)
+  const sealed = async (sender: typeof firstMac, id: string) => ({ id, object: 'letter', to: home.device, from: toBase64(sender.publicKey), workspace: home.id, purpose: 'account-key', body: toBase64(await letter({ sender, to: newMac.publicKey, workspace: home.id, purpose: 'account-key', version: 1, plain: fromBase64(first.key) }) ?? new Uint8Array()) })
+  home.letters = [await sealed(admin, 'stranger')]
+  await sleep(2500)
+  assert.equal((await cloudService.status()).status, 'locked', 'a key from a device that isn’t yours opens nothing')
+  home.letters = [await sealed(admin, 'stranger'), await sealed(firstMac, 'approved')]
+  await until(async () => (await cloudService.status()).status !== 'locked')
+  assert.deepEqual([keysService.account()?.key, keysService.account()?.workspace.id], [first.key, first.workspace.id])
+  assert.deepEqual(keysService.asked(), [])
+  assert.ok(home.deleted.includes('approved'))
+  home.id = ''
 })

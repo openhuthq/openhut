@@ -189,10 +189,10 @@ handle('devices.allow', answer(allow))
 handle('passkey.status', () => passkey(['status']))
 handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
 handle('passkey.open', () => passkey(['open']))
-handle('cloud.notify', () => new Promise((resolve) => {
+handle('cloud.notify', ({ title = 'Unlock OpenHut Cloud', body = 'Restore your agents and chats on this computer.', path = '/settings/account?open=enable' } = {}) => new Promise((resolve) => {
   if (!Notification.isSupported()) return resolve({ shown: false })
-  const note = new Notification({ title: 'Unlock OpenHut Cloud', body: 'Restore your agents and chats on this computer.' })
-  note.on('click', () => show('/settings/account?open=enable'))
+  const note = new Notification({ title: String(title), body: String(body) })
+  note.on('click', () => show(String(path).startsWith('/settings/') ? String(path) : '/settings/account'))
   note.on('show', () => resolve({ shown: true }))
   note.on('failed', () => resolve({ shown: false }))
   setTimeout(() => resolve({ shown: false }), 3000)

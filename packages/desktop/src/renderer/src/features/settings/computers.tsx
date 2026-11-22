@@ -29,7 +29,7 @@ import { toastError } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
 import { cn } from '@/lib/utils'
 import { EnableCloud } from '@/features/cloud/sign-in'
-import { AddMac, CloudDevices, deviceNote, devicesOf, KeysToReplace, UnlockComputer } from '@/features/cloud/cloud'
+import { CloudDevices, CloudOff, deviceNote, devicesOf, KeysToReplace } from '@/features/cloud/cloud'
 import { useCloud } from '@/features/cloud/api'
 
 const GET_TAILSCALE = 'https://tailscale.com/download'
@@ -39,7 +39,6 @@ export function ComputersSettings() {
   return <>
     <ComputerList />
     {step === 'add' && <AddComputer />}
-    {step === 'add-mac' && <AddMac />}
     {step === 'command' && <AddByCommand />}
     {step === 'tailscale' && <TailscaleStep />}
     {step === 'ssh' && <TurnOnSsh name={name} />}
@@ -75,7 +74,7 @@ function ComputerList() {
       {enrollments.map((enrollment) => <EnrollRow key={enrollment.peer.dns} enrollment={enrollment} />)}
       <CloudDevices merged={merged} />
       {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note="A Linux computer that stays on seals each agent in its own box and keeps answering while this computer sleeps."><Chevron /></Row>}
-      <UnlockComputer />
+      <CloudOff />
     </Rows>
   </>
 }

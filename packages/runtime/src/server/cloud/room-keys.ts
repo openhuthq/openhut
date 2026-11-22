@@ -1,7 +1,7 @@
 import * as z from 'zod/mini'
 import { Letter, MemberList, type MemberListBody, type Role } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, bodyOf, check, firstOf, keyVersionOf, nextOf, signList, withoutDevices, youngUntil } from '@openhut/common/cloud/member-list.ts'
-import { deviceWords, fromBase64, identity, letter, lock, lockInvite, newKey, sha256, toBase64, unlock, type Bytes, type Identity } from '@openhut/common/vault/vault.ts'
+import { fromBase64, identity, letter, lock, lockInvite, newKey, sha256, toBase64, unlock, type Bytes, type Identity } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { log } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
@@ -128,13 +128,11 @@ export const roomKeys = {
     return { list, room: next, letters }
   },
 
-  async approve({ ws, email, device, words, nonce, reveal, name }: { ws: string; email: string; device: string; words: string[]; nonce: string; reveal: string; name?: string | null }): Promise<{ list: MemberList; letter: Sent }> {
+  async approve({ ws, email, device, name }: { ws: string; email: string; device: string; name?: string | null }): Promise<{ list: MemberList; letter: Sent }> {
     const { room, body } = adminRoom({ ws, sentence: 'Only an owner or admin can let a new device in.' })
     const target = body.members.find((member) => member.email === email)
     if (!room.workspace.key) throw new HttpError(409, 'This computer is still joining the workspace. Try again in a moment.')
     if (!target || body.members.some((member) => member.devices.includes(device))) throw new HttpError(409, `${email} isn’t waiting with that device anymore.`)
-    const expected = await deviceWords({ device: fromBase64(device), nonce: fromBase64(nonce), reveal: fromBase64(reveal) })
-    if (words.map((word) => word.trim().toLowerCase()).join(' ') !== expected.join(' ')) throw new HttpError(400, 'Those aren’t the 4 words on their screen. Ask them to read them again.', { param: 'words' })
     const base = await nextOf({ list: room.list, body, me: await keysService.deviceKey() })
     const list = await signList({ signer: await keysService.device(), body: { ...base, members: body.members.map((member) => member === target ? { ...member, devices: [...member.devices, device] } : member), added: { ...body.added, [device]: base.at ?? 0 }, ...name && { names: { ...body.names, [device]: name.slice(0, 64) } } } })
     return { list, letter: await sealTo({ to: device, purpose: 'workspace-key', workspace: ws, plain: await secretOf({ room, own: false }) }) }

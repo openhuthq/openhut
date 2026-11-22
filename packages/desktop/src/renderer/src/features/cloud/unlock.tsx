@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
-import { Alert02Icon, Cancel01Icon, FingerPrintIcon, Key01Icon, SmartPhone01Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
+import { Alert02Icon, Cancel01Icon, FingerPrintIcon, Key01Icon } from '@hugeicons/core-free-icons'
 import { useQueryClient } from '@tanstack/react-query'
-import type { Cloud } from '@openhut/common/cloud/cloud.ts'
+import type { Cloud, CloudWorkspaceView, DeviceRequest } from '@openhut/common/cloud/cloud.ts'
 import { kitWord, nearestWord, readKit, validKit } from '@openhut/common/vault/kit-file.ts'
 import { agentPath } from '@/app/routes'
 import { ConfirmButton } from '@/components/confirm-button'
@@ -14,8 +14,7 @@ import { Hut } from '@/components/hut'
 import { DRAG, I, PILL } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { QrCode } from '@/features/agents/qr-code'
-import { nameOf, notifyUnlock, REMOVE_DETAIL, useCloud, useRemoveMac, usePairing, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useStartOver, useUnlock } from '@/features/cloud/api'
+import { nameOf, notifyDesktop, notifyUnlock, REMOVE_DETAIL, useCloud, useRemoveMac, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useStartOver, useUnlock } from '@/features/cloud/api'
 import { Mascot } from '@/features/cloud/sign-in'
 import { PRIMARY, Step } from '@/features/cloud/step'
 import { chooseWorkspace, useAsk, useCancelAsk } from '@/features/cloud/workspaces'
@@ -30,7 +29,7 @@ import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
-  const [way, setWay] = useState<'kit' | 'code' | 'admin' | null>(null)
+  const [way, setWay] = useState<'kit' | 'ask' | null>(null)
   const signOut = useSignOut()
   const signIn = useSignIn()
   const helper = usePasskeys()
@@ -41,17 +40,15 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
     {leave}
   </Step>
   if (way === 'kit') return <KitEntry cloud={cloud} onBack={() => setWay(null)} />
-  if (way === 'code') return <CodeEntry onBack={() => setWay(null)} />
-  if (way === 'admin' || cloud.asking) return <AdminWait cloud={cloud} onBack={() => setWay(null)} />
+  if (way === 'ask' || cloud.asking) return <Requested cloud={cloud} onBack={() => setWay(null)} />
   const macCan = Boolean(helper?.passkeys && helper.prf)
   const canPasskey = macCan && cloud.passkey
   return <Step art={<Hut mood="key" className="size-[96px]" />} title={`You’re signed in, ${nameOf(cloud.email ?? '')}`} line="One more step: the key that reads your agents and chats." back={back}
-    action={canPasskey && <Button type="button" variant="primary" className={cn(PRIMARY, 'gap-2')} disabled={passkey.isPending} onClick={() => passkey.mutate(undefined, { onError: toastError })}><I icon={FingerPrintIcon} size={16} />{passkey.isPending ? 'Unlocking…' : 'Use Touch ID'}</Button>}>
+    action={cloud.canAsk && <Button type="button" variant="primary" className={PRIMARY} onClick={() => setWay('ask')}>Request access</Button>}>
     <div className="w-full max-w-[420px] text-left">
       <Rows>
-        <Row onClick={() => setWay('code')} icon={<I icon={SmartPhone01Icon} size={20} className="text-hue-blue" />} title="Use your iPhone or another computer" note="Scan or type a code"><Chevron /></Row>
+        {canPasskey && <Row onClick={() => passkey.mutate(undefined, { onError: toastError })} disabled={passkey.isPending} icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title={passkey.isPending ? 'Unlocking…' : 'Use Touch ID'} note="With the passkey you saved"><Chevron /></Row>}
         {cloud.kitInCloud && <Row onClick={() => setWay('kit')} icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Use your recovery kit" note="The file or the 12 words"><Chevron /></Row>}
-        {cloud.canAsk && <Row onClick={() => setWay('admin')} icon={<I icon={UserGroupIcon} size={20} className="text-hue-amber" />} title="Ask an admin" note="For team workspaces"><Chevron /></Row>}
       </Rows>
     </div>
     {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
@@ -59,7 +56,7 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
   </Step>
 }
 
-function AdminWait({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
+function Requested({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
   const ask = useAsk()
   const cancel = useCancelAsk()
   const asking = cloud.asking
@@ -71,13 +68,16 @@ function AdminWait({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
   }, [asking, ask])
   const back = () => cancel.mutate(undefined, { onSettled: onBack })
   const rooms = asking?.rooms ?? []
-  const admins = rooms.flatMap((room) => room.admins)
-  if (asking?.denied) return <Step art={<Hut mood="worried" className="size-[96px]" />} title="Not approved" line="An admin said no, or the request expired." back={back}
-    action={<Button type="button" variant="primary" className={PRIMARY} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Ask again</Button>} />
-  return <Step art={admins.length ? <PersonFaces people={admins.map((email) => ({ name: nameOf(email), email }))} size={64} /> : <Hut mood="looking" className="size-[96px]" />} title={rooms.length ? `Waiting for ${who(admins)}` : 'Asking an admin…'} line={rooms.length ? 'When they call, read them these 4 words.' : undefined} back={back}>
-    {rooms.map((room, index) => <div key={index} className="flex gap-2">{(room.words ?? ['', '', '', '']).map((word, at) => <span key={at} className="min-w-[72px] rounded-lg border border-hair bg-card px-3.5 py-2 text-[17px] font-semibold">{word || '…'}</span>)}</div>)}
+  const admins = rooms.filter((room) => !room.own).flatMap((room) => room.admins)
+  const own = rooms.some((room) => room.own)
+  const where = [own && 'on another of your computers, in Settings › Computers', admins.length > 0 && `by ${who(admins)}`].filter(Boolean).join(', or ')
+  if (asking?.denied) return <Step art={<Hut mood="worried" className="size-[96px]" />} title="Not approved" line="It was denied, or the request expired after an hour." back={back}
+    action={<Button type="button" variant="primary" className={PRIMARY} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Request again</Button>} />
+  return <Step art={admins.length && !own ? <PersonFaces people={admins.map((email) => ({ name: nameOf(email), email }))} size={64} /> : <Hut mood="looking" className="size-[96px]" />} title="Requires approval" line={rooms.length ? `Approve it ${where}. It unlocks by itself.` : 'Sending your request…'} back={back}>
+    <span className="flex items-center gap-2 rounded-xl border border-hair bg-card px-3.5 py-2.5 text-[13px]"><DeviceIcon kind="mac" />{asking?.name ?? 'This computer'}<span className="text-mute">· {cloud.email}</span></span>
     {!ask.isError && <Spinner className="mt-1" />}
     <ErrorNote message={ask.error?.message ?? asking?.error ?? undefined} />
+    <Button type="button" variant="text" className="text-[12px] font-normal text-mute" disabled={cancel.isPending} onClick={back}>Cancel</Button>
   </Step>
 }
 
@@ -105,13 +105,35 @@ function NoKitYet() {
   </div>
 }
 
-function CodeEntry({ onBack }: { onBack: () => void }) {
-  const pairing = usePairing(true)
-  return <Step art={<span className="grid size-[120px] place-items-center rounded-xl border border-hair bg-white p-1.5 [&_canvas]:size-full!">{pairing.data && <QrCode text={pairing.data.qr} label="Code to unlock this computer" />}</span>} title="Scan this code" line="On your iPhone or other computer: Settings › Computers › Unlock a new computer." back={onBack}>
-    <span className="text-[12px] text-mute">Or type this code</span>
-    <span className="font-mono text-[15px] tracking-[.08em] select-all">{pairing.data?.code ?? '…'}</span>
-    <ErrorNote message={pairing.error?.message} />
-  </Step>
+function approvable({ cloud }: { cloud: Cloud }): { workspace: CloudWorkspaceView; request: DeviceRequest }[] {
+  return cloud.workspaces.flatMap((workspace) => workspace.requests.filter((each) => workspace.own && workspace.home ? each.email === cloud.email : workspace.role !== 'member' && each.email !== cloud.email).map((request) => ({ workspace, request })))
+}
+
+function JoinRequests({ cloud }: { cloud: Cloud }) {
+  const [dismissed, setDismissed] = useState<string[]>([])
+  const path = usePath()
+  const pending = approvable({ cloud })
+  const told = useRef(new Set<string>())
+  useEffect(() => {
+    for (const { workspace, request } of pending) {
+      if (told.current.has(request.device)) continue
+      told.current.add(request.device)
+      const mine = request.email === cloud.email
+      if (!document.hasFocus()) notifyDesktop({ title: `${request.name ?? 'A new computer'} wants to join`, body: mine ? 'Approve or deny it in Settings › Computers.' : `${nameOf(request.email)} asked to join ${workspace.name}.`, path: mine ? '/settings/computers' : '/settings/team' })
+    }
+  }, [pending, cloud.email])
+  const shown = pending.find(({ request }) => !dismissed.includes(request.device))
+  if (!shown || cloud.status !== 'on' || path.startsWith('/settings/computers') || path.startsWith('/settings/team')) return null
+  const { workspace, request } = shown
+  const mine = request.email === cloud.email
+  const go = () => {
+    if (!mine) chooseWorkspace(workspace.id)
+    navigate(mine ? '/settings/computers' : '/settings/team')
+  }
+  return <Toast alert lead={<DeviceIcon kind="mac" />} title={`${request.name ?? 'A new computer'} wants to join`} note={mine ? request.email : `${nameOf(request.email)} · ${workspace.name}`}>
+    <Button type="button" variant="secondary" className={PILL} onClick={go}>Open</Button>
+    <Button type="button" variant="text" className="shrink-0 px-1 text-mute" aria-label="Later" title="Later" onClick={() => setDismissed((all) => [...all, request.device])}><I icon={Cancel01Icon} size={14} /></Button>
+  </Toast>
 }
 
 export function NewMacAlert({ cloud }: { cloud: Cloud }) {
@@ -220,7 +242,7 @@ export function CloudGate({ children }: { children: ReactNode }) {
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
   if (!cloud) return children
-  return <>{children}<Toasts>{cloud.status === 'locked' && notified === false && !path.startsWith('/settings/') && <LockedToast />}<NewMacAlert cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
+  return <>{children}<Toasts>{cloud.status === 'locked' && notified === false && !path.startsWith('/settings/') && <LockedToast />}<JoinRequests cloud={cloud} /><NewMacAlert cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
 }
 
 function LockedToast() {
