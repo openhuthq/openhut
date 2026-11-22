@@ -9,8 +9,9 @@ import { AlertDialog } from '@/components/ui/alert-dialog'
 import { Button, type ButtonVariants } from '@/components/ui/button'
 import { DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Spinner } from '@/components/ui/spinner'
 
-type Confirmation = { question: string; detail: string; action: string; list?: string[]; typed?: string; onConfirm: () => void }
+type Confirmation = { question: string; detail: string; action: string; list?: string[]; typed?: string; onConfirm: () => unknown }
 
 export function ConfirmButton({ variant = 'danger', size, label, disabled, className, children, ...confirmation }: Confirmation & ButtonVariants & {
   label?: string
@@ -27,14 +28,28 @@ export function ConfirmButton({ variant = 'danger', size, label, disabled, class
 
 export function ConfirmDialog({ open, onOpenChange, question, detail, action, list, typed, onConfirm }: Confirmation & { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [text, setText] = useState('')
-  useEffect(() => { if (!open) setText('') }, [open])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string>()
+  useEffect(() => {
+    if (open) return
+    setText('')
+    setError(undefined)
+  }, [open])
+  const confirm = () => {
+    const done = onConfirm()
+    if (!(done instanceof Promise)) return onOpenChange(false)
+    setBusy(true)
+    setError(undefined)
+    done.then(() => onOpenChange(false), (err: unknown) => setError(err instanceof Error ? err.message : String(err))).finally(() => setBusy(false))
+  }
   return <AlertDialog open={open} onOpenChange={onOpenChange}>
     <DialogHead title={question} subtitle={detail} />
     {list && <ul className="m-0 flex list-none flex-col gap-2 px-5 pb-4 text-[13px]/[18px] text-ink">{list.map((item) => <li key={item} className="flex items-center gap-2"><I icon={Cancel01Icon} size={14} className="shrink-0 text-fail" />{item}</li>)}</ul>}
     {typed && <label className="flex flex-col gap-1.5 px-5 pb-4 text-[13px]/[18px] text-body"><span>Type <span className="font-medium text-ink">{typed}</span> to confirm</span><Input value={text} onChange={(event) => setText(event.target.value)} autoComplete="off" spellCheck={false} autoFocus /></label>}
+    {error && <p role="alert" className="m-0 px-5 pb-4 text-[13px]/[18px] text-fail">{error}</p>}
     <DialogFoot>
-      <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
-      <Button type="button" variant="destructive" disabled={Boolean(typed) && text.trim().toLowerCase() !== typed} onClick={() => { onOpenChange(false); onConfirm() }}>{action}</Button>
+      <Button type="button" variant="secondary" disabled={busy} onClick={() => onOpenChange(false)}>Cancel</Button>
+      <Button type="button" variant="destructive" className="gap-2" disabled={busy || (Boolean(typed) && text.trim().toLowerCase() !== typed)} onClick={confirm}>{busy && <Spinner />}{action}</Button>
     </DialogFoot>
   </AlertDialog>
 }
