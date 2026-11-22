@@ -100,7 +100,7 @@ function DeleteConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
     <DialogHead title={`Delete ${name}?`} onClose={close} />
     <div className="flex flex-col gap-4 px-5 py-5 text-[13px]/[18px]">
       <span className="text-body">Every agent, chat and memory in {name} is deleted for everyone. This can’t be undone.</span>
-      <label className="flex flex-col gap-1.5"><span className="font-medium">Type the workspace name</span><Input value={typed} autoFocus autoComplete="off" spellCheck={false} placeholder={name} onChange={(event) => setTyped(event.target.value)} className="h-9 text-[13px]" /></label>
+      <label className="flex flex-col gap-1.5"><span className="font-medium">Type the workspace name</span><Input value={typed} autoFocus autoComplete="off" spellCheck={false} placeholder={name} onChange={(event) => setTyped(event.target.value)} className="h-9 text-[13px] phone:h-11" /></label>
     </div>
     <DialogFoot error={remove.error?.message} start={<Button type="button" variant="secondary" onClick={close}>Cancel</Button>}><Button type="button" variant="destructive" disabled={typed.trim() !== name.trim() || remove.isPending} onClick={go}>{remove.isPending ? 'Deleting…' : 'Delete workspace'}</Button></DialogFoot>
   </Dialog>

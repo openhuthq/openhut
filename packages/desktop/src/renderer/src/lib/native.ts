@@ -5,6 +5,8 @@ import { Keyboard } from '@capacitor/keyboard'
 import { CapacitorBarcodeScanner, CapacitorBarcodeScannerTypeHint } from '@capacitor/barcode-scanner'
 import { Preferences } from '@capacitor/preferences'
 import { LiveUpdate } from '@capawesome/capacitor-live-update'
+import { useState } from 'react'
+import { toast } from '@/lib/toast'
 import { latestBundle } from '@/lib/updates'
 
 type DeviceKeyPlugin = {
@@ -20,7 +22,7 @@ const plugin = registerPlugin<DeviceKeyPlugin>('DeviceKey')
 
 if (Capacitor.getPlatform() === 'ios') void Keyboard.setAccessoryBarVisible({ isVisible: false })
 if (Capacitor.isNativePlatform()) document.addEventListener('dragstart', (event) => event.preventDefault())
-if (Capacitor.getPlatform() === 'ios') {
+if (Capacitor.isNativePlatform()) {
   void Keyboard.addListener('keyboardWillShow', ({ keyboardHeight }) => keyboard(keyboardHeight))
   void Keyboard.addListener('keyboardWillHide', () => keyboard(0))
 }
@@ -75,7 +77,19 @@ export async function deviceKey(): Promise<DeviceKey | undefined> {
 
 export async function confirmed(reason: string): Promise<boolean> {
   if (!isPhone()) return true
-  return plugin.confirm({ reason }).then(() => true, () => false)
+  return plugin.confirm({ reason }).then(() => true, () => {
+    toast('Not confirmed. Nothing was sent.')
+    return false
+  })
+}
+
+export function useConfirmed(): { asking: boolean; confirm: (reason: string) => Promise<boolean> } {
+  const [asking, setAsking] = useState(false)
+  const confirm = (reason: string) => {
+    setAsking(true)
+    return confirmed(reason).finally(() => setAsking(false))
+  }
+  return { asking, confirm }
 }
 
 export async function wipe(): Promise<void> {

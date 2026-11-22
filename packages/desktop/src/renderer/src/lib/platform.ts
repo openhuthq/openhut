@@ -13,6 +13,6 @@ export function fromPhone(name: string): string {
 }
 
 const bridge: { platform?: string } | undefined = typeof window === 'undefined' ? undefined : Reflect.get(window, 'openhut')
-const guess = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac') ? 'darwin' : 'linux'
+const guess = typeof navigator !== 'undefined' && /Mac|Android/.test(navigator.userAgent) ? 'darwin' : 'linux'
 
 export const WORDS = wordsFor(bridge?.platform ?? guess)

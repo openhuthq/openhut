@@ -30,14 +30,14 @@ export function Switcher() {
     </DropdownMenuTrigger>
     <DropdownMenuContent className="flex w-[260px] flex-col gap-0.5 rounded-xl p-1.5 shadow-menu">
       <span className="px-2.5 pt-1 pb-1 text-[11.5px] text-mute">{email}</span>
-      {all.map((workspace) => <DropdownMenuItem key={workspace.id} onClick={() => { chooseWorkspace(workspace.id); navigate('/') }} className={cn('h-auto gap-2.5 rounded-lg px-2.5 py-2', workspace.id === active.id && 'bg-soft')}>
+      {all.map((workspace) => <DropdownMenuItem key={workspace.id} aria-label={`${workspace.name}, ${peopleNote(workspace)}`} onClick={() => { chooseWorkspace(workspace.id); navigate('/') }} className={cn('h-auto gap-2.5 rounded-lg px-2.5 py-2', workspace.id === active.id && 'bg-soft')}>
         <WorkspaceLogo workspace={workspace} size={22} />
         <span className="grid flex-1 leading-tight"><span className="text-[13px] font-medium">{workspace.name}</span><span className="text-[11.5px] text-mute">{peopleNote(workspace)}</span></span>
         {workspace.id === active.id && <I icon={Tick02Icon} size={14} />}
       </DropdownMenuItem>)}
       <DropdownMenuSeparator />
       {active.role !== 'member' && <DropdownMenuItem className="h-8 gap-2.5 px-2.5 text-[13px]" onClick={() => navigate('/settings/people?open=invite')}><I icon={UserGroupIcon} size={15} className="text-mute" />Invite people</DropdownMenuItem>}
-      {all.some((each) => each.own) && <DropdownMenuItem className="h-8 gap-2.5 px-2.5 text-[13px]" onClick={() => open('new-workspace')}><I icon={PlusSignIcon} size={15} className="text-mute" />Create another team</DropdownMenuItem>}
+      {all.some((each) => each.own) && <DropdownMenuItem className="h-8 gap-2.5 px-2.5 text-[13px]" onClick={() => open('new-workspace')}><I icon={PlusSignIcon} size={15} className="text-mute" />Create another workspace</DropdownMenuItem>}
       <DropdownMenuItem className="h-8 gap-2.5 px-2.5 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />Join with a link</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
@@ -50,11 +50,11 @@ export function CreateWorkspaceDialog() {
     event.preventDefault()
     create.mutate(String(new FormData(event.currentTarget).get('name') ?? '').trim(), { onSuccess: () => { close(); navigate('/settings/people') } })
   }
-  return <Dialog size="narrow" label="Create a team" onClose={close}>
-    <DialogHead title="Create a team" onClose={close} />
+  return <Dialog size="narrow" label="Create a workspace" onClose={close}>
+    <DialogHead title="Create a workspace" onClose={close} />
     <form id="new-workspace" onSubmit={submit} className="flex flex-col gap-3 px-5 py-5 text-[13px]/[18px]">
       <span className="text-body">A new workspace for agents you share. Your own workspace stays yours.</span>
-      <Input name="name" required maxLength={60} autoFocus placeholder="Team name" aria-label="Team name" className="h-9 text-[13px]" />
+      <Input name="name" required maxLength={60} autoFocus placeholder="Workspace name" aria-label="Workspace name" className="h-9 text-[13px]" />
     </form>
     <DialogFoot error={create.error?.message} start={<Button type="button" variant="secondary" onClick={close}>Cancel</Button>}><Button type="submit" form="new-workspace" variant="primary" disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create'}</Button></DialogFoot>
   </Dialog>
