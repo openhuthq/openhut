@@ -175,19 +175,15 @@ function KitEntry({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
     <h1 className="m-0 text-[22px]/[1.25] font-semibold">Use your recovery kit</h1>
     <p className="m-0 -mt-2 text-[14px] text-body">The file you saved when you turned on OpenHut Cloud.</p>
     <div className="mt-2 flex w-[460px] flex-col gap-3">
-      {problem && <div role="alert" className={cn('flex items-center gap-3 rounded-xl px-3.5 py-3 text-left text-[13.5px]/[1.45]', problem.tone === 'warn' ? 'bg-warning-subtle text-warning-strong' : 'bg-[color-mix(in_oklch,var(--fail)_10%,transparent)] text-ink')}><Hut mood="worried" className="size-10" /><span>{problem.text}</span></div>}
-      <DropZone className="py-8" onText={tryKit}>{(hot) => unlock.isPending
-        ? <><Hut mood="key" className="mb-1 size-16 [&>svg]:animate-hop" /><span className="font-medium text-ink">Unlocking…</span></>
-        : <>
-          <span className={cn('mb-1 transition-transform duration-200', hot && '-translate-y-1 scale-110')}><Hut mood={hot ? 'party' : 'looking'} className="size-16" /></span>
-          <span className="text-[15px] font-medium text-ink">{hot ? 'Drop to unlock' : 'Drop your kit file here'}</span>
-          <span className="text-[12.5px] text-mute">{hot ? 'We’ll check it’s yours first' : 'or paste it with ⌘V'}</span>
-        </>}</DropZone>
+      {problem && <p role="alert" className={cn('m-0 rounded-xl px-3.5 py-3 text-left text-[13.5px]/[1.45]', problem.tone === 'warn' ? 'bg-warning-subtle text-warning-strong' : 'bg-[color-mix(in_oklch,var(--fail)_10%,transparent)] text-ink')}>{problem.text}</p>}
+      <DropZone className="py-8" onText={tryKit}>{(hot) => <>
+        <Hut key={problem?.text} mood={unlock.isPending ? 'key' : hot ? 'surprised' : problem ? 'worried' : 'looking'} className={cn('calm mb-1 size-16', unlock.isPending && 'key-turn', problem && !hot && 'blink-slow')} />
+        <span className="text-[15px] font-medium text-ink">{unlock.isPending ? 'Unlocking…' : 'Drop your kit here'}</span>
+        {!unlock.isPending && <span className="text-[12.5px] text-mute">or paste it</span>}
+      </>}</DropZone>
+      <span className="text-[12.5px] text-mute">Don’t have the file? <Button type="button" variant="text" className="h-auto p-0 text-[12.5px] font-normal text-ink underline underline-offset-2" onClick={() => setTyping(true)}>Type the words instead</Button>.</span>
     </div>
-    <div className="flex w-[460px] items-center justify-between">
-      <Button type="button" variant="text" className="text-[12px] font-normal text-mute" onClick={onBack}>Back</Button>
-      <Button type="button" variant="secondary" className={PILL} onClick={() => setTyping(true)}>Type the words instead</Button>
-    </div>
+    <Button type="button" variant="text" className="text-[12px] font-normal text-mute" onClick={onBack}>Back</Button>
   </Window>
 }
 
@@ -221,7 +217,7 @@ function KitWordsEntry({ onBack }: { onBack: () => void }) {
   }
   return <Window>
     <form onSubmit={submit} className="flex flex-col items-center gap-4">
-      <Hut mood={typo ? 'worried' : 'key'} className="size-[84px]" />
+      <Hut key={typo?.text} mood={typo ? 'worried' : 'key'} className={cn('calm size-[84px]', typo && 'blink-slow')} />
       <h1 className="m-0 text-[22px]/[1.25] font-semibold">Type the 12 words</h1>
       <p className="m-0 text-[14px] text-body">From your recovery kit, in order.</p>
       <div className="mt-2 grid w-[460px] grid-cols-3 gap-2">{words.map((word, index) => <label key={index} className={cn('flex h-10 items-center gap-2 rounded-xl border border-hair bg-card px-3 text-[13px] focus-within:border-ink', typo?.at === index && 'border-fail text-fail focus-within:border-fail')}>
@@ -292,7 +288,7 @@ function Restoring({ cloud }: { cloud: Cloud }) {
   useEffect(() => void queries.invalidateQueries({ queryKey: ['agents'] }), [done, queries])
   const slots = Array.from({ length: Math.min(total, 3) }, (_, index) => agents[index])
   return <Window>
-    <div className="flex h-[84px] items-end gap-3">{total === 0 ? <Hut mood="key" className="size-[84px] [&>svg]:animate-hop" /> : slots.map((each, index) => each ? <Face key={each.id} agent={each} size={64} /> : <span key={index} className="size-16 rounded-full bg-soft" />)}</div>
+    <div className="flex h-[84px] items-end gap-3">{total === 0 ? <Hut mood="key" className="calm key-turn size-[84px]" /> : slots.map((each, index) => each ? <Face key={each.id} agent={each} size={64} /> : <span key={index} className="size-16 rounded-full bg-soft" />)}</div>
     <h1 className="m-0 mt-2 text-[22px]/[1.25] font-semibold">{total === 0 && cloud.email ? `Welcome back, ${nameOf(cloud.email)}` : 'Bringing your agents back'}</h1>
     <p className="m-0 text-[14px] text-body">{current ? `Restoring ${current} · ${Math.min(done + 1, total)} of ${total}` : `Unlocked. Bringing your agents and chats to this ${HERE}…`}</p>
   </Window>

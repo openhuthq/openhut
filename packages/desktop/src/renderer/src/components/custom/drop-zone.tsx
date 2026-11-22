@@ -39,7 +39,7 @@ export function DropZone({ onText, children, className }: { onText: (text: strin
     void take(event.dataTransfer)
   }
   return <>
-    <button type="button" data-hot={hot || undefined} className={cn('flex w-full flex-col items-center gap-1.5 rounded-xl border-[1.5px] border-dashed border-mid bg-card px-6 py-6 text-[14px] text-body transition-[background-color,border-color,transform] duration-200 hover:border-ink data-hot:scale-[1.015] data-hot:border-pass data-hot:bg-success-subtle data-hot:text-ink', className)} onClick={() => picker.current?.click()} onDragEnter={enter} onDragOver={(event) => event.preventDefault()} onDragLeave={leave} onDrop={drop}>
+    <button type="button" data-hot={hot || undefined} className={cn('flex w-full flex-col items-center gap-1.5 rounded-xl border-[1.5px] border-dashed border-mid bg-card px-6 py-6 text-[14px] text-body transition-[background-color,border-color] duration-200 hover:border-ink data-hot:border-pass data-hot:bg-success-subtle data-hot:text-ink', className)} onClick={() => picker.current?.click()} onDragEnter={enter} onDragOver={(event) => event.preventDefault()} onDragLeave={leave} onDrop={drop}>
       {children(hot)}
     </button>
     <input ref={picker} type="file" accept=".txt,text/plain" className="hidden" onChange={(event) => void event.target.files?.[0]?.text().then(onText)} />

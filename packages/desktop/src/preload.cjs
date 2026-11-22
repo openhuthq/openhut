@@ -35,7 +35,6 @@ contextBridge.exposeInMainWorld('openhut', {
   },
   kit: {
     save: (input) => ipcRenderer.invoke('kit.save', input),
-    show: () => ipcRenderer.invoke('kit.show'),
   },
   computers: {
     list: () => ipcRenderer.invoke('computers.list'),
