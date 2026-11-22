@@ -6,7 +6,7 @@ type Link = { list: MemberList; body: MemberListBody }
 const KEEP_REMOVED = 1000
 
 const LABEL = new TextEncoder().encode('openhut/member-list\0')
-export const YOUNG_MS = 3 * 24 * 60 * 60_000
+export const YOUNG_MS = 0
 
 export async function signList({ signer, body }: { signer: Identity; body: MemberListBody }): Promise<MemberList> {
   const bytes = new TextEncoder().encode(JSON.stringify(MemberListBody.safeParse(body).data ?? body))

@@ -43,7 +43,8 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
   if (way === 'kit') return <KitEntry cloud={cloud} onBack={() => setWay(null)} />
   if (way === 'code') return <CodeEntry onBack={() => setWay(null)} />
   if (way === 'admin' || cloud.asking) return <AdminWait cloud={cloud} onBack={() => setWay(null)} />
-  const canPasskey = Boolean(helper?.passkeys && helper.prf)
+  const macCan = Boolean(helper?.passkeys && helper.prf)
+  const canPasskey = macCan && cloud.passkey
   return <Step art={<Hut mood="key" className="size-[96px]" />} title={`You’re signed in, ${nameOf(cloud.email ?? '')}`} line="One more step: the key that reads your agents and chats." back={back}
     action={canPasskey && <Button type="button" variant="primary" className={cn(PRIMARY, 'gap-2')} disabled={passkey.isPending} onClick={() => passkey.mutate(undefined, { onError: toastError })}><I icon={FingerPrintIcon} size={16} />{passkey.isPending ? 'Unlocking…' : 'Use Touch ID'}</Button>}>
     <div className="w-full max-w-[420px] text-left">
@@ -53,7 +54,7 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
         {cloud.canAsk && <Row onClick={() => setWay('admin')} icon={<I icon={UserGroupIcon} size={20} className="text-hue-amber" />} title="Ask an admin" note="For team workspaces"><Chevron /></Row>}
       </Rows>
     </div>
-    {!canPasskey && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
+    {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
     {!cloud.kitInCloud && <NoKitYet />}
   </Step>
 }

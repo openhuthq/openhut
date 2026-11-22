@@ -82,7 +82,7 @@ test('signing in with another Google account is refused, and the first account k
   await keysService.setKit(kit && box ? { box, savedAt: kit.savedAt } : undefined)
 })
 
-test('a new Mac reads its pairing letter only with the code it shows, and while younger than 3 days it can’t remove the Mac that let it in', async () => {
+test('a new Mac reads its pairing letter only with the code it shows', async () => {
   const oldMac = await identity()
   const accountKey = newKey()
   const kit = await identity(fromBase64(await slot({ key: accountKey, path: 'account-device' })))
@@ -112,8 +112,6 @@ test('a new Mac reads its pairing letter only with the code it shows, and while 
   assert.deepEqual(joined?.members[0].devices, [...devices, toBase64(me)])
   assert.equal(account.list.by, devices[1])
   await keysService.adopt({ account })
-  await keysService.setSession({ token: 't', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
-  await assert.rejects(keysService.dropDevices([devices[0]]), (err: Error & { status?: number }) => err.status === 403 && /added less than 3 days ago/.test(err.message))
 })
 
 test('Not me drops the device from the member list in one version and changes no key; Change keys makes a new workspace key and account key that the removed Mac never gets', async () => {
