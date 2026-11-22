@@ -7,7 +7,7 @@ Use this before writing or changing any text a person reads in the app or on ope
 **The test:** would a non-technical person understand it at a glance? If not, rewrite it. Short is good; cryptic is not. "Private / Even from us" failed this test; "End-to-end encrypted / We can't read your data" passes.
 
 **In the app**
-- Titles, labels and benefits are short words or phrases ("Backups", "Every Mac", "Teams"), not sentences. A sentence only where a word can't carry it: a confirmation that lists what gets deleted, an error that says how to fix it.
+- Titles, labels and benefits are short words or phrases ("Backups", "Teams"), not sentences. But a line someone reads to understand a consequence is a full, plain sentence a person would say out loud: "Your agents and chats stay on this computer. You can't undo this.", not "This Mac keeps its agents and chats. Can't be undone."
 - One call to action per screen, a plain verb ("Enable cloud", "Save kit", "Restart now"). The button says exactly what happens.
 - Name things the way people know them: OpenHut Cloud, recovery kit, Touch ID, agent, Mac, phone. Not internal words (record, relay, vault, key, hash, token, workspace key, PRF).
 - Errors say what went wrong and what to do next, no apology, no codes.
@@ -23,7 +23,7 @@ Use this before writing or changing any text a person reads in the app or on ope
 - New encryption for a workspace: **Reset encryption** (not change keys).
 - Passing a workspace on: **Make someone else the owner** (not hand over).
 - The 12 words and their file: **recovery kit** (not recovery words).
-- Use `${HERE}` for this computer, so Linux doesn't read "Mac".
+- Say **computer**, not Mac: OpenHut runs on Mac, Windows and Linux. Say Mac only for something that is truly Mac-only (Touch ID, the Mac app download).
 - Errors carry no codes ("HTTP 500") and always end with what to do next ("Try again.", "OpenHut tries again.").
 
 **On the site and in announcements**
