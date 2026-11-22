@@ -219,6 +219,11 @@ export const cloudService = {
     return cloudService.status()
   },
 
+  async revokeInvite({ workspace, email }: { workspace: string; email: string }): Promise<Cloud> {
+    await putList({ workspace, list: await roomKeys.revoke({ ws: mustBeOn(workspace), email }) })
+    return cloudService.status()
+  },
+
   async start(): Promise<CloudAuthorization> {
     const device = await keysService.device()
     const state = randomBytes(24).toString('base64url')

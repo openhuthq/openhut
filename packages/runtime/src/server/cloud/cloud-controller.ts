@@ -54,6 +54,8 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string; email: string } }>('/workspaces/:id/members/:email', SignedIn, async (req) => cloudService.remove({ workspace: req.params.id, email: req.params.email }))
 
+  app.delete<{ Params: { id: string; email: string } }>('/workspaces/:id/invites/:email', SignedIn, async (req) => cloudService.revokeInvite({ workspace: req.params.id, email: req.params.email }))
+
   app.delete<{ Params: { id: string; key: string } }>('/workspaces/:id/devices/:key', DeviceRequest, async (req) => cloudService.removeDevice({ workspace: req.params.id, device: req.params.key }))
 
   app.post<{ Params: { id: string } }>('/workspaces/:id/keys', SignedIn, async (req) => cloudService.changeKeys({ workspace: req.params.id }))
