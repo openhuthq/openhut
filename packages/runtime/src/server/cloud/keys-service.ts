@@ -7,7 +7,7 @@ import { anchorOf, bodyOf, check, firstOf, keyVersionOf, nextOf, signList, witho
 import { equal, fromBase64, fromWords, identity, letter, lock, newKey, newWords, pairingWorkspace, read, slot, toBase64, unlock, type Bytes, type Identity, type LetterPurpose } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { HttpError } from '../platform/http-error.ts'
-import { keyStore, Keys, type Account, type Move, type Room, type Session, type Stored } from './key-store.ts'
+import { keyStore, Keys, type Account, type AskRoom, type Move, type Room, type Session, type Stored } from './key-store.ts'
 
 const REFRESH_EARLY_MS = 5 * 60_000
 const HERE = process.platform === 'darwin' ? 'Mac' : 'computer'
@@ -29,6 +29,9 @@ export const keysService = {
   account: (): Account | undefined => stored()?.account,
   locked: (): { sub: string; email: string } | undefined => stored()?.locked,
   kitState: (): { saved: { box: string; savedAt: string } | null; pending: string | null } => ({ saved: kitOf(stored()) ?? null, pending: stored()?.kit?.confirmed === false ? stored()?.kit?.box ?? null : null }),
+
+  asked: (): AskRoom[] => stored()?.asking ?? [],
+  setAsked: async (asking: AskRoom[]): Promise<void> => keyStore.write({ ...await keyStore.read(), asking: asking.length ? asking : undefined }),
 
   setLocked: async (locked: { sub: string; email: string } | undefined): Promise<void> => keyStore.write({ ...await keyStore.read(), locked }),
 

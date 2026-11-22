@@ -273,7 +273,7 @@ export const Cloud = z.object({
   youngUntil: z._default(z.nullable(Timestamp), null),
   needsSignIn: z.boolean(),
   workspaces: z._default(z.array(CloudWorkspaceView), []),
-  asking: z._default(z.nullable(z.object({ rooms: z.array(z.object({ admins: z.array(Email), words: z.nullable(z.array(z.string())) })), denied: z.boolean() })), null),
+  asking: z._default(z.nullable(z.object({ rooms: z.array(z.object({ admins: z.array(Email), words: z.nullable(z.array(z.string())) })), denied: z.boolean(), error: z._default(z.nullable(z.string()), null) })), null),
   canAsk: z._default(z.boolean(), false),
   rotate: z._default(z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() })), []),
   gone: z._default(z.array(z.object({ name: z.string(), why: z.enum(['removed', 'deleted']) })), []),
