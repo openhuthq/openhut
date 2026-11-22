@@ -28,7 +28,7 @@ export function TeamSettings() {
   const opened = useOpen()
   if (!cloud) return null
   const enabling = opened === 'enable' && <CloudSetup />
-  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch door="people" /></>
+  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch /></>
   return <>
     {enabling}
     <div className="flex items-center gap-3.5 px-1">
