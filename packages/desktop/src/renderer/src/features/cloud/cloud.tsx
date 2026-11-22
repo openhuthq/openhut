@@ -14,7 +14,6 @@ import { nameOf, REMOVE_DETAIL, useAddPasskey, useAllow, useCloud, useForget, us
 import { markSeen } from '@/features/cloud/seen'
 import { EnableCloud, Pitch } from '@/features/cloud/sign-in'
 import { CloudSetup, KitDialog } from '@/features/cloud/setup'
-import { HERE } from '@/features/settings/desktop'
 import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { isPhone, scan, useConfirmed } from '@/lib/native'
 import { ago, shortDate, shortDateTime } from '@/lib/format'
@@ -52,13 +51,13 @@ function CloudOn({ cloud, error }: { cloud: Cloud; error?: string }) {
     </div>
     <Rows>
       <Row icon={<I icon={CloudUploadIcon} size={20} className="text-hue-blue" />} title="Backup" note={<span className={cloud.backup.problem || cloud.backup.state === 'failed' ? 'text-fail' : undefined}>{backupNote({ ...cloud.backup, offline: cloud.status === 'offline' })}</span>} />
-      <Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>{kitNote(cloud.kit)}{cloud.keyStore === 'file' && ' · Keys saved in a private file'}</span>}>
+      <Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>{kitNote(cloud.kit)}{cloud.keyStore === 'file' && ' · Stored in a file, not the keychain'}</span>}>
         {!young && <Button type="button" variant={cloud.kit ? 'secondary' : 'primary'} className={PILL} onClick={() => open(cloud.kit ? 'kit' : 'enable')}>{cloud.kit ? 'Make a new kit' : 'Save kit'}</Button>}
       </Row>
-      {helper?.passkeys && helper.prf && <Row icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title="Touch ID" note={cloud.passkey ? 'On' : `Unlock a new ${HERE} with your fingerprint`}>
+      {helper?.passkeys && helper.prf && <Row icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title="Touch ID" note={cloud.passkey ? 'On' : 'Unlock a new Mac with your fingerprint'}>
         {!cloud.passkey && !young && <Button type="button" variant="secondary" className={PILL} disabled={addPasskey.isPending} onClick={() => addPasskey.mutate(email, { onError: toastError })}>Add</Button>}
       </Row>}
-      <Row icon={<I icon={Logout03Icon} size={20} className="text-hue-slate" />} title="Sign out" note={`Your agents keep running on this ${HERE}`}>
+      <Row icon={<I icon={Logout03Icon} size={20} className="text-hue-slate" />} title="Sign out" note="Your agents keep running on this computer">
         <Button type="button" variant="secondary" className={PILL} disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
       </Row>
     </Rows>
@@ -74,8 +73,8 @@ function DeleteAccount({ cloud }: { cloud: Cloud }) {
   const deleted = teams.filter((each) => each.role === 'owner').map((each) => each.name)
   const left = teams.filter((each) => each.role !== 'owner').map((each) => each.name)
   const gone = [
-    'Backup of agents, chats and settings',
-    cloud.passkey ? 'Recovery kit, Touch ID and sign-in' : 'Recovery kit and sign-in',
+    'Your backup of agents, chats and settings',
+    cloud.passkey ? 'Your recovery kit, Touch ID and sign-in' : 'Your recovery kit and sign-in',
     'Access from your other devices',
     deleted.length > 0 && `${list(deleted)} ${deleted.length > 1 ? 'workspaces' : 'workspace'}`,
     left.length > 0 && `Your place in ${list(left)}`,
@@ -83,16 +82,16 @@ function DeleteAccount({ cloud }: { cloud: Cloud }) {
   return <Section title="Danger zone">
     <Rows>
       <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete cloud account" note={deleteNote({ cloud, shared: shared?.name })}>
-        <ConfirmButton className={PILL} disabled={Boolean(shared || cloud.youngUntil) || remove.isPending} question="Delete your cloud account?" detail={`This ${HERE} keeps its agents and chats. Can’t be undone.`} list={gone} action="Delete account" typed="delete my account" onConfirm={() => remove.mutate(undefined, { onSuccess: () => notify({ title: 'Cloud account deleted', note: `This ${HERE} keeps its agents and chats.` }), onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
+        <ConfirmButton className={PILL} disabled={Boolean(shared || cloud.youngUntil) || remove.isPending} question="Delete your cloud account?" detail="Your agents and chats stay on this computer. You can’t undo this." list={gone} action="Delete account" typed="delete my account" onConfirm={() => remove.mutate(undefined, { onSuccess: () => notify({ title: 'Cloud account deleted', note: 'Your agents and chats stay on this computer.' }), onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete account'}</ConfirmButton>
       </Row>
     </Rows>
   </Section>
 }
 
 function deleteNote({ cloud, shared }: { cloud: Cloud; shared?: string }): string {
-  if (cloud.youngUntil) return `This ${HERE} was added less than 3 days ago. Delete from an older device, or after ${shortDate.format(new Date(cloud.youngUntil))}.`
-  if (shared) return `You own ${shared}, which has other people in it. Make someone else its owner or delete it first.`
-  return `Removes everything you keep in OpenHut Cloud. This ${HERE} keeps its agents.`
+  if (cloud.youngUntil) return `This computer was added less than 3 days ago. Delete your account from an older one, or after ${shortDate.format(new Date(cloud.youngUntil))}.`
+  if (shared) return `You own ${shared}, and other people are in it. Make someone else the owner, or delete it first.`
+  return 'Deletes everything you keep in OpenHut Cloud. Your agents stay on this computer.'
 }
 
 function list(names: string[]): string {
@@ -101,7 +100,7 @@ function list(names: string[]): string {
 
 function RotateConnections({ rotate }: { rotate: Cloud['rotate'] }) {
   const done = useRotated()
-  return <Section title="Connections to rotate" action={<Button type="button" variant="ghost" className={PILL} disabled={done.isPending} onClick={() => done.mutate(undefined, { onError: toastError })}>Done</Button>}>
+  return <Section title="Keys to replace" action={<Button type="button" variant="ghost" className={PILL} disabled={done.isPending} onClick={() => done.mutate(undefined, { onError: toastError })}>Done</Button>}>
     <Rows>{rotate.map((each) => <Row key={each.id} icon={<I icon={Key01Icon} size={18} className="text-hue-amber" />} title={each.name} note={`The device you removed could read this ${each.kind} key. Make a new one at the service.`} onClick={() => navigate('/connections')}><Chevron /></Row>)}</Rows>
   </Section>
 }
@@ -109,7 +108,7 @@ function RotateConnections({ rotate }: { rotate: Cloud['rotate'] }) {
 function KeptAccount({ email }: { email: string }) {
   const forget = useForget()
   const { confirming, setConfirming, box } = useConfirming()
-  return <div ref={box}><Row icon={<PersonFace name={nameOf(email)} email={email} size={32} />} title={nameOf(email)} note={confirming ? `Removes its keys from this ${HERE}. Your recovery words bring it back.` : email}>
+  return <div ref={box}><Row icon={<PersonFace name={nameOf(email)} email={email} size={32} />} title={nameOf(email)} note={confirming ? 'Removes this account from this computer. Your recovery kit brings it back.' : email}>
     {confirming
       ? <>
         <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
@@ -126,11 +125,11 @@ export function CloudDevices() {
   const remove = useRemoveMac()
   if (cloud?.status === 'on' || cloud?.status === 'offline') return <>
     {cloud.rotate.length > 0 && <RotateConnections rotate={cloud.rotate} />}
-    {cloud.devices.map((device) => <Row key={device.key} icon={<DeviceIcon kind={device.kind} />} title={device.name ?? (device.kind === 'server' ? 'Computer that runs agents' : 'Mac')} note={[device.here && (isPhone() ? `Your ${HERE}` : `This ${HERE}`), device.addedAt && `Added ${addedAt.format(new Date(device.addedAt))}`].filter(Boolean).join(' · ')}>
+    {cloud.devices.map((device) => <Row key={device.key} icon={<DeviceIcon kind={device.kind} />} title={device.name ?? (device.kind === 'server' ? 'Computer that runs agents' : 'Computer')} note={[device.here && (isPhone() ? 'Your computer' : 'This computer'), device.addedAt && `Added ${addedAt.format(new Date(device.addedAt))}`].filter(Boolean).join(' · ')}>
       {!device.here && !isPhone() && !cloud.youngUntil && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${device.name ?? 'this device'}?`} detail={device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))}. ${REMOVE_DETAIL}` : REMOVE_DETAIL} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
     </Row>)}
-    {cloud.youngUntil && <p className="m-0 px-1 text-[12.5px] text-mute">This {HERE} was added less than 3 days ago. You can remove devices from it after {shortDate.format(new Date(cloud.youngUntil))}.</p>}
-    <Row onClick={() => open('add-mac')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-blue" />} title="Add a Mac" note={`Unlock OpenHut on your new Mac with this ${isPhone() ? 'phone' : 'one'}.`}><Chevron /></Row>
+    {cloud.youngUntil && <p className="m-0 px-1 text-[12.5px] text-mute">This computer was added less than 3 days ago. Remove devices from an older one, or after {shortDate.format(new Date(cloud.youngUntil))}.</p>}
+    <Row onClick={() => open('add-mac')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-blue" />} title="Unlock a new computer" note={`Let a new computer in with this ${isPhone() ? 'phone' : 'one'}.`}><Chevron /></Row>
   </>
   if (cloud?.status !== 'off' || isPhone()) return null
   return <Row icon={<I icon={SquareLock02Icon} size={20} className="text-mute" />} title="Chat from your other computers" note="Needs OpenHut Cloud"><EnableCloud /></Row>
@@ -139,10 +138,10 @@ export function CloudDevices() {
 function backupNote({ state, done, total, at, problem, offline }: Backup & { offline: boolean }): string {
   if (problem) return problem
   if (state === 'backing_up') return `Backing up · ${done} of ${total}`
-  if (state === 'restoring') return total ? `Bringing your agents back · ${Math.min(done + 1, total)} of ${total}` : 'Bringing your agents back…'
+  if (state === 'restoring') return total ? `Restoring your agents · ${Math.min(done + 1, total)} of ${total}` : 'Restoring your agents…'
   if (state === 'failed') return `Couldn’t back up ${total - done} of ${total} · Trying again`
-  if (offline) return at ? `Last backup ${ago(at)} ago` : `Agents and settings, locked on this ${HERE} first`
-  return at ? `Up to date · ${ago(at)} ago` : `Agents and settings, locked on this ${HERE} first`
+  if (offline) return at ? `Last backup ${ago(at)} ago` : 'Agents, chats and settings · End-to-end encrypted'
+  return at ? `Up to date · ${ago(at)} ago` : 'Agents, chats and settings · End-to-end encrypted'
 }
 
 function kitNote(kit: Cloud['kit']): string {
@@ -159,22 +158,22 @@ export function AddMac() {
   const [added, setAdded] = useState(false)
   const { asking, confirm } = useConfirmed()
   const close = () => open()
-  const send = (code: string) => void confirm(`Add this ${HERE}`).then((ok) => { if (ok) allow.mutate(code, { onSuccess: ({ devices }) => { markSeen(devices); setAdded(true) } }) })
+  const send = (code: string) => void confirm('Add the new computer').then((ok) => { if (ok) allow.mutate(code, { onSuccess: ({ devices }) => { markSeen(devices); setAdded(true) } }) })
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     send(String(new FormData(event.currentTarget).get('code') ?? ''))
   }
-  return <Dialog size="narrow" label="Add a Mac" onClose={close}>
-    <DialogHead title="Add a Mac" onClose={close} />
+  return <Dialog size="narrow" label="Unlock a new computer" onClose={close}>
+    <DialogHead title="Unlock a new computer" onClose={close} />
     <form id="add-mac" onSubmit={submit} className="flex flex-col gap-4 px-5 py-5 text-[13px]/[18px]">
-      {added ? <p className="m-0 text-body">Added. The new {HERE} is unlocking now and gets your agents, chats and keys.</p> : <>
-        <p className="m-0 text-body">On the new Mac, pick Use my iPhone or another Mac. Then {isPhone() ? 'scan the code it shows, or type it' : 'type the code it shows'}.</p>
+      {added ? <p className="m-0 text-body">Added. Your new computer is unlocking and gets your agents, chats and settings.</p> : <>
+        <p className="m-0 text-body">On the new computer, choose Use your iPhone or another computer. Then {isPhone() ? 'scan the code it shows, or type it' : 'type the code it shows'}.</p>
         {isPhone() && <Button type="button" variant="primary" className="h-12 justify-center rounded-xl" disabled={asking || allow.isPending} onClick={() => void scan().then((text) => { if (text) send(text) }, toastError)}>Scan the code</Button>}
         <Input name="code" aria-label="Code" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-X" autoFocus={!isPhone()} autoComplete="off" autoCapitalize="characters" spellCheck={false} className="font-mono phone:h-11" />
-        <div className="flex gap-2.5 rounded-lg bg-[oklch(97%_0.03_60)] px-3.5 py-3 text-[oklch(40%_0.1_50)]"><I icon={SquareLock02Icon} size={16} className="mt-px shrink-0" /><span>Add only a {HERE} in front of you that's yours. If someone asked you to do this, on a call, by email or in chat, it's a scam.</span></div>
+        <div className="flex gap-2.5 rounded-lg bg-[oklch(97%_0.03_60)] px-3.5 py-3 text-[oklch(40%_0.1_50)]"><I icon={SquareLock02Icon} size={16} className="mt-px shrink-0" /><span>Add only a computer in front of you that’s yours. If someone asked you to do this, on a call, by email or in chat, it’s a scam.</span></div>
         <ErrorNote message={allow.error?.message} />
       </>}
     </form>
-    <DialogFoot start={<Button type="button" variant="secondary" onClick={close}>{added ? 'Done' : 'Cancel'}</Button>}>{!added && <Button type="submit" form="add-mac" variant="primary" disabled={asking || allow.isPending}>{allow.isPending ? 'Adding…' : `Add this ${HERE}`}</Button>}</DialogFoot>
+    <DialogFoot start={<Button type="button" variant="secondary" onClick={close}>{added ? 'Done' : 'Cancel'}</Button>}>{!added && <Button type="submit" form="add-mac" variant="primary" disabled={asking || allow.isPending}>{allow.isPending ? 'Adding…' : 'Add the new computer'}</Button>}</DialogFoot>
   </Dialog>
 }

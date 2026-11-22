@@ -18,7 +18,6 @@ import { agentService } from '../agents/agent-service.ts'
 const PENDING_MS = 15 * 60_000
 const CHECK_MS = 60_000
 const PAIRING_POLL_MS = 2000
-const HERE = process.platform === 'darwin' ? 'Mac' : 'computer'
 const SIGNED_IN = 'You’re signed in. You can go back to OpenHut.'
 const Workspaces = z.object({ data: z.array(z.object({ id: z.string(), key: z.string(), by: z.optional(z.string()), signature: z.optional(z.string()) })) })
 const Lists = z.object({ data: z.array(MemberList), hasMore: z.optional(z.boolean()) })
@@ -160,7 +159,7 @@ export const cloudService = {
     syncService.connect()
     await syncService.refreshName(id)
     const view = (await cloudService.status()).workspaces.find((each) => each.id === id)
-    if (!view) throw new HttpError(500, `The new workspace didn’t open on this ${HERE}. Try again.`)
+    if (!view) throw new HttpError(500, `The new workspace didn’t open on this computer. Try again.`)
     return view
   },
 
@@ -310,13 +309,13 @@ export const cloudService = {
     const token = await keysService.token()
     const cleared = await cloud.account({ method: 'DELETE', path: '/v1/key-boxes', token })
     if (cleared.status === 409) throw new HttpError(409, 'Your recovery kit is in OpenHut Cloud now. Type its words to unlock.')
-    if (cleared.status === 403) throw new HttpError(403, `This account is set up on another device. Unlock with your iPhone or another ${HERE}.`)
+    if (cleared.status === 403) throw new HttpError(403, `This account is set up on another device. Unlock with your iPhone or another computer.`)
     if (cleared.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t start over. Try again.')
     await syncService.reset({ restoring: false })
     const account = await keysService.open(locked)
     if (!await openRoom({ account, token })) {
       await keysService.relock(locked)
-      throw new HttpError(409, `Your other ${HERE} started over a moment ago. Check again.`)
+      throw new HttpError(409, `Your other computer started over a moment ago. Check again.`)
     }
     cloudService.connect()
     return cloudService.status()
@@ -327,14 +326,14 @@ export const cloudService = {
     const token = await keysService.token()
     const kind = 'words' in body ? 'kit' : 'passkey'
     const box = KeyBox.safeParse((await cloud.account({ method: 'GET', path: `/v1/key-boxes/${kind}`, token })).json).data
-    if (!box && kind === 'kit') throw new HttpError(409, `There’s no recovery kit for this account yet. Save one on the ${HERE} you set up first, then type its words here.`)
-    if (!box) throw new HttpError(409, `Touch ID isn’t set up for this account yet. Add it in Settings › Backup on a ${HERE} that’s already unlocked.`)
+    if (!box && kind === 'kit') throw new HttpError(409, `There’s no recovery kit for this account yet. Save one on the computer you set up first, then type its words here.`)
+    if (!box) throw new HttpError(409, `Touch ID isn’t set up for this account yet. Add it in Settings › Backup on a Mac that’s already unlocked.`)
     const workspaces = await boxesOf(token)
     const account = 'words' in body
       ? await keysService.restore({ words: body.words, kit: box.body, workspaces })
       : await keysService.fromPasskey({ prf: fromBase64(body.prf), box: box.body }).then((key) => key && keysService.restoreWith({ key, workspaces }))
     if (!account && 'words' in body) throw new HttpError(400, 'Those aren’t the words of your recovery kit. Check each word and try again.', { param: 'words' })
-    if (!account) throw new HttpError(400, `Touch ID isn’t set up on this ${HERE}. Unlock another way.`)
+    if (!account) throw new HttpError(400, `Touch ID isn’t set up on this Mac. Unlock another way.`)
     return joinWith({ account, typed: 'words' in body })
   },
 
@@ -358,7 +357,7 @@ export const cloudService = {
     const waiting = Waiting.safeParse((await cloud.room({ method: 'GET', workspace: account.workspace.id, path: '/waiting', token })).json).data?.data ?? []
     const devices: string[] = []
     for (const { device } of waiting) if (!qr || await fingerprint(fromBase64(device)) === qr.fingerprint) devices.push(device)
-    if (!devices.length) throw new HttpError(409, `That ${HERE} isn’t waiting for a code. Keep OpenHut open on its code screen and try again.`)
+    if (!devices.length) throw new HttpError(409, `That computer isn’t waiting for a code. Keep OpenHut open on its code screen and try again.`)
     if (await roomKeys.post(await Promise.all(devices.map(async (to) => ({ ...await keysService.pairingLetter({ to, secret }), workspace: account.workspace.id }))))) throw new HttpError(502, 'OpenHut Cloud couldn’t add that Mac. Try again.')
     return { object: 'pairing_allowed', devices }
   },
@@ -391,7 +390,7 @@ export const cloudService = {
   async addRuntime({ device }: { device: string }): Promise<RuntimeInvite> {
     const account = keysService.account()
     const me = roomKeys.members()?.members.find((member) => member.email === account?.email)
-    if (!account || !keysService.session()) throw new HttpError(409, `Enable OpenHut Cloud on this ${HERE} first.`)
+    if (!account || !keysService.session()) throw new HttpError(409, `Enable OpenHut Cloud on this computer first.`)
     if (!me || me.role === 'member') throw new HttpError(403, 'Only an owner or admin can add a computer that runs agents.')
     const token = await keysService.token()
     const list = await keysService.addDevice(device)
@@ -607,7 +606,7 @@ async function checkPairing(): Promise<void> {
 async function removed(): Promise<void> {
   stopPairing()
   await keysService.removedHere()
-  throw new HttpError(403, `This ${HERE} was removed from your account. Sign in again to add it back.`)
+  throw new HttpError(403, `This computer was removed from your account. Sign in again to add it back.`)
 }
 
 function listedUnder({ account, device }: { account: Account; device: string }): boolean {
@@ -751,7 +750,7 @@ async function teamsOf(token: string): Promise<{ id: string }[]> {
 async function notNew(ws: string): Promise<void> {
   const body = roomKeys.members(ws)
   const until = body ? newUntil(body, await keysService.deviceKey()) : 0
-  if (until > Date.now()) throw new HttpError(403, `This ${HERE} was added less than 3 days ago, so it can’t delete a workspace yet. Do it from an older device, or wait until ${new Date(until).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
+  if (until > Date.now()) throw new HttpError(403, `This computer was added less than 3 days ago, so it can’t delete a workspace yet. Do it from an older one, or wait until ${new Date(until).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
 }
 
 async function keepToRotate(): Promise<void> {

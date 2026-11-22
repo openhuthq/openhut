@@ -78,8 +78,8 @@ export function usePasskeys() {
 export async function passkeyPrf(create?: { email: string }): Promise<string> {
   const reply = create ? await passkey?.create(create) : await passkey?.open()
   if (reply?.prf) return reply.prf
-  if (reply?.error === 'no-prf') throw new Error('Your password manager can’t unlock OpenHut. Keep your recovery kit.')
-  throw new Error(reply?.error === 'canceled' ? 'Cancelled.' : `Your passkey isn’t on this ${WORDS.here}.`)
+  if (reply?.error === 'no-prf') throw new Error('Your password manager’s passkey can’t unlock OpenHut. Use Touch ID or your recovery kit.')
+  throw new Error(reply?.error === 'canceled' ? 'Canceled.' : 'Touch ID isn’t set up here. Unlock another way.')
 }
 
 export function usePasskeyUnlock() {
@@ -103,7 +103,7 @@ export function useAllow() {
   return useMutation({ mutationFn: (code: string) => request({ schema: AllowedDevice, computer: 'local', path: '/api/cloud/devices', method: 'POST', body: { code } }) })
 }
 
-const NEW_KIT_HINT = 'If anyone else has your recovery kit, make a new kit so those words stop working.'
+const NEW_KIT_HINT = 'If anyone else has your recovery kit, make a new kit so the old one stops working.'
 export const REMOVE_DETAIL = `It can’t get anything new from OpenHut Cloud. Do this only if it’s lost, sold or not yours. ${NEW_KIT_HINT}`
 
 export function useRemoveMac() {
@@ -112,7 +112,7 @@ export function useRemoveMac() {
     mutationFn: (key: string) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/devices/${encodeURIComponent(key)}`, method: 'DELETE' }),
     onSuccess: (cloud) => {
       client.setQueryData(CLOUD_KEY, cloud)
-      notify({ title: 'Mac removed', note: NEW_KIT_HINT, action: { label: 'Make a new kit', onClick: () => navigate('/settings/backup?open=kit') } })
+      notify({ title: 'Device removed', note: NEW_KIT_HINT, action: { label: 'Make a new kit', onClick: () => navigate('/settings/backup?open=kit') } })
     },
     onError: toastError,
   })

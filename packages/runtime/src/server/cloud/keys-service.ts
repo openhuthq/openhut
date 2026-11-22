@@ -10,7 +10,6 @@ import { HttpError } from '../platform/http-error.ts'
 import { keyStore, Keys, type Account, type AskRoom, type Move, type Room, type Session, type Stored } from './key-store.ts'
 
 const REFRESH_EARLY_MS = 5 * 60_000
-const HERE = process.platform === 'darwin' ? 'Mac' : 'computer'
 export type Sent = { to: string; purpose: LetterPurpose; body: string }
 type Boxed = { id: string; key: string; chain: MemberList[] }
 const Secret = z.object({ ...Keys.shape, anchor: z.string(), team: z.optional(z.boolean()) })
@@ -134,7 +133,7 @@ export const keysService = {
 
   ownedBy({ sub }: { sub: string }): void {
     const other = stored()?.account ?? stored()?.locked
-    if (other && other.sub !== sub) throw new HttpError(409, `This ${HERE} is set up for ${other.email}. ${stored()?.account && !kitOf(stored()) ? 'Sign in with that account and save a recovery kit first.' : 'Sign in with that account, or forget it below.'}`)
+    if (other && other.sub !== sub) throw new HttpError(409, `This computer is set up for ${other.email}. ${stored()?.account && !kitOf(stored()) ? 'Sign in with that account and save a recovery kit first.' : 'Sign in with that account, or forget it below.'}`)
   },
 
   async open({ sub, email }: { sub: string; email: string }): Promise<Account> {
@@ -216,7 +215,7 @@ export const keysService = {
     await notYoung(account)
     const mine = body?.members.find((member) => member.email === account.email)
     const oldKit = toBase64((await accountDevice(fromBase64(account.key))).publicKey)
-    if (!body || !mine) throw new HttpError(409, `Enable OpenHut Cloud on this ${HERE} first.`)
+    if (!body || !mine) throw new HttpError(409, `Enable OpenHut Cloud on this computer first.`)
     const key = newKey()
     const kit = toBase64((await accountDevice(key)).publicKey)
     const gone = mine.devices.includes(oldKit) ? [oldKit] : []
@@ -233,7 +232,7 @@ export const keysService = {
 
   mustBeOn(): Account {
     const account = stored()?.account
-    if (!account?.key || !stored()?.session) throw new HttpError(409, `Enable OpenHut Cloud on this ${HERE} first.`)
+    if (!account?.key || !stored()?.session) throw new HttpError(409, `Enable OpenHut Cloud on this computer first.`)
     return account
   },
 
@@ -264,7 +263,7 @@ export async function notYoung(account: Account): Promise<void> {
 
 export function notYoungIn({ body, device }: { body: MemberListBody; device: string }): void {
   const until = youngUntil(body, device)
-  if (until > Date.now()) throw new HttpError(403, `This ${HERE} was added less than 3 days ago, so it can’t remove devices or reset encryption yet. Do it from an older device, or wait until ${new Date(until).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
+  if (until > Date.now()) throw new HttpError(403, `This computer was added less than 3 days ago, so it can’t remove devices or reset encryption yet. Do it from an older one, or wait until ${new Date(until).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
 }
 
 export const openLetter = async ({ found, workspace }: { found: Letter; workspace: string }): Promise<Bytes | null> =>

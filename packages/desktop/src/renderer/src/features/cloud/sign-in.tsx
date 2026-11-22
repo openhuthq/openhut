@@ -13,7 +13,6 @@ import { I, ICON_BUTTON, PILL } from '@/components/kit'
 import { enableCloud, nameOf, useCancelSignIn, useCloud, useNewKit, useSignIn, useSigningIn } from '@/features/cloud/api'
 import { toastError } from '@/lib/toast'
 import { PRIMARY, Step } from '@/features/cloud/step'
-import { HERE } from '@/features/settings/desktop'
 import { Row, Rows } from '@/features/settings/kit'
 import { shortDate } from '@/lib/format'
 import { isPhone } from '@/lib/native'
@@ -42,7 +41,7 @@ export function Lead({ children }: { children: ReactNode }) {
 export type Door = 'backup' | 'people'
 
 const PITCH: Record<Door, { title: string; note: string }> = {
-  backup: { title: 'Backups', note: 'Lose your Mac, keep everything.' },
+  backup: { title: 'Backups', note: 'Lose your computer, keep everything.' },
   people: { title: 'Teams', note: 'Share agents with your team.' },
 }
 
@@ -67,9 +66,9 @@ export function Pitch({ door }: { door: Door }) {
   return <Pane>
     {locked ? <Hut mood="key" className="size-[84px]" /> : door === 'people' ? <img src={team} alt="" width={360} height={120} className="mix-blend-multiply" /> : <Characters />}
     <Title>{locked ? `Welcome back, ${nameOf(cloud.email ?? '')}` : pitch.title}</Title>
-    <Lead>{locked ? `Unlock to get your agents back on this ${HERE}.` : pitch.note}</Lead>
+    <Lead>{locked ? 'Unlock to restore your agents and chats.' : pitch.note}</Lead>
     {isPhone()
-      ? <span className="text-[13px] text-mute">{locked ? `Unlock on your ${HERE}.` : `Enable it on your ${HERE}.`}</span>
+      ? <span className="text-[13px] text-mute">{locked ? 'Unlock OpenHut on your computer.' : 'Enable OpenHut Cloud on your computer.'}</span>
       : <Button type="button" variant="primary" className={BIG} onClick={() => open('enable')}>{locked ? 'Unlock' : 'Enable cloud'}</Button>}
   </Pane>
 }
@@ -78,10 +77,10 @@ export function Why({ onNext }: { onNext: () => void }) {
   return <Step art={<Characters />} title="OpenHut Cloud" action={<Button type="button" variant="primary" className={PRIMARY} autoFocus onClick={onNext}>Continue</Button>}>
     <div className="w-full max-w-[360px] text-left">
       <Rows>
-        <Benefit icon={CloudUploadIcon} hue="blue" title="Backups" note="Lose your Mac, keep everything" />
-        <Benefit icon={ComputerPhoneSyncIcon} hue="blue" title="Every Mac" note="Your agents on all your Macs" />
+        <Benefit icon={CloudUploadIcon} hue="blue" title="Backups" note="Lose your computer, keep everything" />
+        <Benefit icon={ComputerPhoneSyncIcon} hue="blue" title="Every computer" note="Your agents on all your computers" />
         <Benefit icon={UserGroupIcon} hue="amber" title="Teams" note="Share agents with your team" />
-        <Benefit icon={SquareLock02Icon} hue="amber" title="End-to-end encrypted" note="We can’t read your agents or chats" />
+        <Benefit icon={SquareLock02Icon} hue="amber" title="End-to-end encrypted" note="We can’t read your data" />
       </Rows>
     </div>
   </Step>
@@ -91,7 +90,7 @@ export function SignUpIn({ back, error }: { back: () => void; error?: string }) 
   const signIn = useSignIn()
   const waiting = useSigningIn()
   const cancel = useCancelSignIn()
-  return <Step art={<Hut mood={waiting ? 'looking' : 'key'} className="size-[96px]" />} title={waiting ? 'Finish signing in in your browser' : 'Sign in'} line={waiting ? 'This page moves on by itself when you’re done.' : 'With your Google account. We only see your email address.'} back={waiting ? cancel : back} backLabel={waiting ? 'Cancel' : undefined}
+  return <Step art={<Hut mood={waiting ? 'looking' : 'key'} className="size-[96px]" />} title={waiting ? 'Finish signing in in your browser' : 'Sign in'} line={waiting ? 'This page moves on by itself when you’re done.' : 'With Google. It only shares your email.'} back={waiting ? cancel : back} backLabel={waiting ? 'Cancel' : undefined}
     action={<Button type="button" variant="primary" className={cn(PRIMARY, 'gap-2')} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}><Google size={14} />{waiting ? 'Open the browser again' : 'Continue with Google'}</Button>}>
     <ErrorNote message={signIn.error?.message ?? error} />
   </Step>
@@ -100,12 +99,12 @@ export function SignUpIn({ back, error }: { back: () => void; error?: string }) 
 export function MacIsIn({ cloud, onNext }: { cloud: Cloud; onNext: () => void }) {
   const { state, done, total } = cloud.backup
   const busy = state === 'backing_up'
-  return <Step art={<Hut mood="party" className="size-[96px]" />} title={`This ${HERE} is in`} line={<span className="inline-flex items-center gap-1.5"><Google />{cloud.email}</span>}
+  return <Step art={<Hut mood="party" className="size-[96px]" />} title="OpenHut Cloud is on" line={<span className="inline-flex items-center gap-1.5"><Google />{cloud.email}</span>}
     action={<Button type="button" variant="primary" className={PRIMARY} autoFocus onClick={onNext}>{cloud.kit ? 'Done' : 'Next'}</Button>}>
     <div className="w-full max-w-[360px] text-left">
       <Rows>
-        <Benefit icon={CloudUploadIcon} hue="blue" title={busy ? 'Backing up' : 'Backed up'} note={busy ? `${done} of ${total}` : 'Your agents and chats are saved'} />
-        {!cloud.kit && <Benefit icon={Key01Icon} hue="amber" title="Next: recovery kit" note={`Get back in if you lose this ${HERE}`} />}
+        <Benefit icon={CloudUploadIcon} hue="blue" title={busy ? 'Backing up' : 'Backed up'} note={busy ? `${done} of ${total}` : 'Agents, chats and settings'} />
+        {!cloud.kit && <Benefit icon={Key01Icon} hue="amber" title="Next: recovery kit" note="Get back in if you lose this computer" />}
       </Rows>
     </div>
   </Step>
@@ -125,7 +124,7 @@ export function AllSet({ onDone }: { onDone: () => void }) {
 }
 
 export function EnableCloud() {
-  if (isPhone()) return <span className="text-[13px] text-mute">Set up OpenHut Cloud on your {HERE}.</span>
+  if (isPhone()) return <span className="text-[13px] text-mute">Enable OpenHut Cloud on your computer.</span>
   return <Button type="button" variant="secondary" className={`${PILL} gap-1.5`} onClick={enableCloud}><I icon={CloudIcon} size={14} />Enable cloud</Button>
 }
 
@@ -183,10 +182,10 @@ export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () =>
   if (step === 'words' && kit) return <KitWords kit={kit} replaced={replaced} onBack={isPhone() ? onBack : () => go('save')} onSaved={() => go('type')} />
   if (step === 'type' && kit) return <ConfirmKit kit={kit} onBack={() => go('words')} onDone={onDone} />
   if (step === 'paste' || step === 'drop') return <KitCheck how={step} error={error} onText={check} onBack={() => go('save')} />
-  return <Step art={<Mascot kind="kit" size={96} alive />} title={old && !kit ? 'New recovery kit' : 'Recovery kit'} line={`Get back in if you lose this ${HERE}. We can’t reset it.`} back={onBack}
-    action={!young && <Button type="button" variant="primary" className={PRIMARY} disabled={make.isPending} onClick={() => run(isPhone() ? words : save)}>{isPhone() ? 'Show the words' : 'Save kit…'}</Button>}>
+  return <Step art={<Mascot kind="kit" size={96} alive />} title={old && !kit ? 'New recovery kit' : 'Recovery kit'} line="Get back in if you lose this computer. We can’t reset it." back={onBack}
+    action={!young && <Button type="button" variant="primary" className={PRIMARY} disabled={make.isPending} onClick={() => run(isPhone() ? words : save)}>{isPhone() ? 'Show the words' : 'Save kit'}</Button>}>
     {old && !kit && <p className="m-0 font-medium text-ink">{cloud?.passkey ? 'The old kit and Touch ID stop working.' : 'The old kit stops working.'}</p>}
-    {young && <p className="m-0 max-w-[420px] text-[12.5px] text-mute">This {HERE} is new. Make a kit after {shortDate.format(new Date(young))}, or on an older {HERE}.</p>}
+    {young && <p className="m-0 max-w-[420px] text-[12.5px] text-mute">This computer was added less than 3 days ago. Make a kit after {shortDate.format(new Date(young))}, or on an older one.</p>}
     <ErrorNote message={error} />
     {!young && !isPhone() && <span className="text-[12.5px] text-mute">Or <Button type="button" variant="text" className={LINK} disabled={make.isPending} onClick={() => run(copy)}>copy it</Button> · <Button type="button" variant="text" className={LINK} disabled={make.isPending} onClick={() => run(words)}>write it down</Button></span>}
   </Step>

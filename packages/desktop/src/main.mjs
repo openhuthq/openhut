@@ -190,7 +190,7 @@ handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
 handle('passkey.open', () => passkey(['open']))
 handle('cloud.notify', () => new Promise((resolve) => {
   if (!Notification.isSupported()) return resolve({ shown: false })
-  const note = new Notification({ title: 'Unlock OpenHut Cloud', body: `Get your agents back on this ${MAC ? 'Mac' : 'computer'}.` })
+  const note = new Notification({ title: 'Unlock OpenHut Cloud', body: 'Restore your agents and chats on this computer.' })
   note.on('click', () => show('/settings/backup?open=enable'))
   note.on('show', () => resolve({ shown: true }))
   note.on('failed', () => resolve({ shown: false }))

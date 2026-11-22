@@ -40,7 +40,7 @@ function DeviceList() {
 function DeviceRow({ device, mine }: { device: Device; mine: boolean }) {
   const remove = useRemoveDevice()
   const { confirming, setConfirming, box } = useConfirming()
-  return <div ref={box}><Row icon={<I icon={/phone/i.test(device.name) ? SmartPhone01Icon : LaptopIcon} size={20} className="text-hue-green" />} title={device.name} note={confirming ? 'It stops reaching your agents right away.' : `${mine ? 'This phone' : 'Reaches the agents on all your computers'} · added ${added(device)}`}>
+  return <div ref={box}><Row icon={<I icon={/phone/i.test(device.name) ? SmartPhone01Icon : LaptopIcon} size={20} className="text-hue-green" />} title={device.name} note={confirming ? 'It stops reaching your agents right away.' : `${mine ? 'This phone' : 'Reaches the agents on all your computers'} · Added ${added(device)}`}>
     {isPhone() ? null : confirming
       ? <>
         <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>

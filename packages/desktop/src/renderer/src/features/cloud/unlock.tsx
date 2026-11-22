@@ -22,7 +22,6 @@ import { chooseWorkspace, useAsk, useCancelAsk } from '@/features/cloud/workspac
 import { Mismatch } from '@/features/cloud/presence'
 import { freshDevice, markSeen, seenDevices } from '@/features/cloud/seen'
 import { Spinner } from '@/components/ui/spinner'
-import { HERE } from '@/features/settings/desktop'
 import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { isPhone } from '@/lib/native'
 import { navigate, usePath } from '@/lib/router'
@@ -37,7 +36,7 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
   const helper = usePasskeys()
   const passkey = usePasskeyUnlock()
   const leave = <Button type="button" variant="text" className="text-[12px] font-normal text-mute" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
-  if (cloud.needsSignIn) return <Step art={<Hut mood="worried" className="size-[96px]" />} title={`This ${HERE} was removed`} line="Sign in again to unlock it."
+  if (cloud.needsSignIn) return <Step art={<Hut mood="worried" className="size-[96px]" />} title="This computer was removed" line="Sign in again to unlock it."
     action={<Button type="button" variant="primary" className={PRIMARY} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}>Sign in again</Button>}>
     {leave}
   </Step>
@@ -45,16 +44,16 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
   if (way === 'code') return <CodeEntry onBack={() => setWay(null)} />
   if (way === 'admin' || cloud.asking) return <AdminWait cloud={cloud} onBack={() => setWay(null)} />
   const canPasskey = Boolean(helper?.passkeys && helper.prf)
-  return <Step art={<Hut mood="key" className="size-[96px]" />} title={`Welcome back, ${nameOf(cloud.email ?? '')}`} line={`Unlock to get your agents back on this ${HERE}.`} back={back}
+  return <Step art={<Hut mood="key" className="size-[96px]" />} title={`Welcome back, ${nameOf(cloud.email ?? '')}`} line="Unlock to restore your agents and chats." back={back}
     action={canPasskey && <Button type="button" variant="primary" className={cn(PRIMARY, 'gap-2')} disabled={passkey.isPending} onClick={() => passkey.mutate(undefined, { onError: toastError })}><I icon={FingerPrintIcon} size={16} />{passkey.isPending ? 'Unlocking…' : 'Use Touch ID'}</Button>}>
     <div className="w-full max-w-[420px] text-left">
       <Rows>
-        <Row onClick={() => setWay('code')} icon={<I icon={SmartPhone01Icon} size={20} className="text-hue-blue" />} title="Use your iPhone or another Mac" note="Scan a code"><Chevron /></Row>
+        <Row onClick={() => setWay('code')} icon={<I icon={SmartPhone01Icon} size={20} className="text-hue-blue" />} title="Use your iPhone or another computer" note="Scan or type a code"><Chevron /></Row>
         {cloud.kitInCloud && <Row onClick={() => setWay('kit')} icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Use your recovery kit" note="The file or the 12 words"><Chevron /></Row>}
         {cloud.canAsk && <Row onClick={() => setWay('admin')} icon={<I icon={UserGroupIcon} size={20} className="text-hue-amber" />} title="Ask an admin" note="For team workspaces"><Chevron /></Row>}
       </Rows>
     </div>
-    {!canPasskey && helper && !helper.error && <span className="text-[12px] text-mute">No Touch ID on this {HERE}.</span>}
+    {!canPasskey && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
     {!cloud.kitInCloud && <NoKitYet />}
     {leave}
   </Step>
@@ -92,12 +91,12 @@ function NoKitYet() {
   const startOver = useStartOver()
   const { confirming, setConfirming, box } = useConfirming()
   return <div className="flex w-full max-w-[400px] flex-col items-center gap-3">
-    <p className="m-0 text-[13px] text-body">No recovery kit yet. Save one on the {HERE} you used first.</p>
+    <p className="m-0 text-[13px] text-body">No recovery kit yet. Save one on the computer you set up first.</p>
     <Button type="button" variant="secondary" className={PILL} disabled={cloud.isFetching} onClick={() => void cloud.refetch()}>{cloud.isFetching ? 'Checking…' : 'Check again'}</Button>
     <div ref={box} className="flex flex-wrap items-center justify-center gap-2">
       {confirming
         ? <>
-          <span className="w-full text-[12px] text-mute">Start over with an empty backup? Your other {HERE}s will need the new kit.</span>
+          <span className="w-full text-[12px] text-mute">Start over with an empty backup? Your other computers will need the new kit.</span>
           <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
           <Button type="button" variant="danger" className={PILL} disabled={startOver.isPending} onClick={() => startOver.mutate(undefined, { onError: toastError })}>Start over</Button>
         </>
@@ -108,7 +107,7 @@ function NoKitYet() {
 
 function CodeEntry({ onBack }: { onBack: () => void }) {
   const pairing = usePairing(true)
-  return <Step art={<span className="grid size-[120px] place-items-center rounded-xl border border-hair bg-white p-1.5 [&_canvas]:size-full!">{pairing.data && <QrCode text={pairing.data.qr} label={`Code to unlock this ${HERE}`} />}</span>} title="Scan this code" line="On your iPhone or other Mac: OpenHut › Devices › Add a Mac." back={onBack}>
+  return <Step art={<span className="grid size-[120px] place-items-center rounded-xl border border-hair bg-white p-1.5 [&_canvas]:size-full!">{pairing.data && <QrCode text={pairing.data.qr} label="Code to unlock this computer" />}</span>} title="Scan this code" line="On your iPhone or other computer: Settings › Devices › Unlock a new computer." back={onBack}>
     <span className="text-[12px] text-mute">Or type this code</span>
     <span className="font-mono text-[15px] tracking-[.08em] select-all">{pairing.data?.code ?? '…'}</span>
     <ErrorNote message={pairing.error?.message} />
@@ -121,12 +120,11 @@ export function NewMacAlert({ cloud }: { cloud: Cloud }) {
   const fresh = freshDevice({ cloud, seen, now: Date.now() })
   if (!fresh?.addedAt || cloud.status !== 'on') return null
   const when = shortDateTime.format(new Date(fresh.addedAt))
-  const thing = fresh.kind === 'server' ? 'computer' : 'Mac'
-  return <Toast alert lead={<DeviceIcon kind={fresh.kind} />} title={`New ${thing} added`} note={fresh.name ? <><span className="truncate">{fresh.name}</span><span>{when}</span></> : when}>
+  return <Toast alert lead={<DeviceIcon kind={fresh.kind} />} title="New computer added" note={fresh.name ? <><span className="truncate">{fresh.name}</span><span>{when}</span></> : when}>
     {cloud.youngUntil
       ? <span className="w-[104px] shrink-0 text-right text-[12px]/[1.3] text-mute">Remove it from an older device</span>
-      : <ConfirmButton variant="secondary" className="shrink-0 rounded-xl px-3.5 text-[12.5px] text-fail" disabled={remove.isPending} question={`Remove ${fresh.name ?? `this ${thing}`}?`} detail={`Added ${when}. ${REMOVE_DETAIL}`} action="Remove" onConfirm={() => remove.mutate(fresh.key)}>Not me</ConfirmButton>}
-    <Button type="button" variant="text" className="shrink-0 px-1 text-mute" aria-label="It's mine" title="It's mine" onClick={() => markSeen([fresh.key])}><I icon={Cancel01Icon} size={14} /></Button>
+      : <ConfirmButton variant="secondary" className="shrink-0 rounded-xl px-3.5 text-[12.5px] text-fail" disabled={remove.isPending} question={`Remove ${fresh.name ?? 'this computer'}?`} detail={`Added ${when}. ${REMOVE_DETAIL}`} action="Remove" onConfirm={() => remove.mutate(fresh.key)}>Not me</ConfirmButton>}
+    <Button type="button" variant="text" className="shrink-0 px-1 text-mute" aria-label="It’s mine" title="It’s mine" onClick={() => markSeen([fresh.key])}><I icon={Cancel01Icon} size={14} /></Button>
   </Toast>
 }
 
@@ -218,7 +216,7 @@ export function CloudGate({ children }: { children: ReactNode }) {
     if (!landing) return
     setLanding(false)
     void queries.invalidateQueries()
-    notify(problem ? { lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: 'Not everything came back', note: problem } : { title: 'Your agents are back', note: `Restored from your cloud backup on this ${HERE}.` })
+    notify(problem ? { lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: 'Not everything came back', note: problem } : { title: 'Your agents are restored', note: 'Your agents and chats are on this computer now.' })
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
   if (!cloud) return children
@@ -226,8 +224,8 @@ export function CloudGate({ children }: { children: ReactNode }) {
 }
 
 function LockedToast() {
-  if (isPhone()) return <Toast lead={<Hut mood="key" className="size-8" />} title={`Unlock OpenHut on your ${HERE}`} note="Your agents come back here after that." />
-  return <Toast lead={<Hut mood="key" className="size-8" />} title="Unlock OpenHut Cloud" note={`Get your agents back on this ${HERE}.`}><Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/backup?open=enable')}>Unlock</Button></Toast>
+  if (isPhone()) return <Toast lead={<Hut mood="key" className="size-8" />} title="Unlock OpenHut on your computer" note="Your agents and chats are restored after that." />
+  return <Toast lead={<Hut mood="key" className="size-8" />} title="Unlock OpenHut Cloud" note="Restore your agents and chats on this computer."><Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/backup?open=enable')}>Unlock</Button></Toast>
 }
 
 function Joins({ cloud }: { cloud: Cloud }) {
@@ -254,7 +252,7 @@ function GoneNotice({ cloud }: { cloud: Cloud }) {
     if (!last) return
     const home = cloud.workspaces.find((each) => each.home)
     if (home) chooseWorkspace(home.id)
-    notify({ lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: last.why === 'deleted' ? `${last.name} was deleted` : `You were removed from ${last.name}`, note: `Its agents moved to the trash on this ${HERE}.` })
+    notify({ lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: last.why === 'deleted' ? `${last.name} was deleted` : `You were removed from ${last.name}`, note: 'Its agents moved to the trash on this computer.' })
   }, [cloud.gone, cloud.workspaces])
   return null
 }

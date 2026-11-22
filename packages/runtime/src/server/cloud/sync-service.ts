@@ -22,7 +22,6 @@ const RETRY_MS = 1000
 const RETRY_MAX_MS = 60_000
 const HEAD_MS = 2000
 const HEAD = 'head'
-const HERE = process.platform === 'darwin' ? 'Mac' : 'computer'
 const KEPT = [401, 409, 429]
 const TOMBSTONED: Synced[] = ['agent', 'message', 'connection']
 const FIRST: Synced[] = ['connection', 'setting', 'agent']
@@ -387,7 +386,7 @@ async function openSafely({ s, record, ctx }: { s: State; record: Record; ctx: C
 async function checkHead(s: State, records: [string, number][]): Promise<void> {
   const rows = await rowsById(s)
   const missing = records.filter(([id, ver]) => (rows.get(id)?.ver ?? 0) < ver).length
-  s.backup.problem = missing ? `${missing} of ${records.length} agents and settings didn’t come back. Open OpenHut on your other ${HERE} so it backs them up again.` : null
+  s.backup.problem = missing ? `${missing} of ${records.length} agents, chats and settings didn’t come back. Open OpenHut on your other computer so it backs them up again.` : null
   if (!missing) s.wanted = null
 }
 
