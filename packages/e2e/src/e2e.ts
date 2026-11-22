@@ -1365,6 +1365,18 @@ function afterRestart() {
     writeFileSync(`${RESULTS}/isolation-probe-dev-after-restart.json`, JSON.stringify({ probe: iso.probe, matrix: iso.rows }, null, 2))
     return { actual: iso.rows.map((x) => `${x.target}: ${x.agent}/${x.from_server}${x.ok ? '' : ' ✗'}`), pass: iso.pass }
   })
+
+  check('H6', 'The server comes back on the cloud after the upgrade and the restart, with the connection key the Mac shared', 'GET /api/cloud on within 2 min; the cloud run\'s Cloud Orders connection still has its key here', async () => {
+    let actual: unknown = null
+    const on = async () => {
+      const cloud = (await api<{ status: string }>('GET', '/api/cloud', undefined, KEY)).json
+      const synced = (await api<List<Connection>>('GET', '/api/connections', undefined, KEY)).json.data.find((c) => c.name.startsWith('Cloud Orders'))
+      actual = { cloud: cloud.status, connection: synced ? `${synced.name}, keyHere ${synced.keyHere}` : null }
+      return cloud.status === 'on' && synced?.keyHere === true
+    }
+    const pass = await until(on, 120_000, 'the cloud to be on').then(() => true, () => false)
+    return { actual, pass }
+  })
 }
 
 function updateBroken() {

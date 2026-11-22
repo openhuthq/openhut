@@ -17,7 +17,8 @@
     "typecheck": "tsc -p src/renderer",
     "test": "node --test \"src/renderer/test/**/*.test.ts\" \"test/**/*.test.ts\"",
     "pack-backend": "node scripts/pack-backend.mjs",
-    "dist": "npm run build && npm run pack-backend && electron-builder --mac --arm64 --publish never",
+    "sums": "cd dist && { find renderer -type f; find backend -name '*.mjs' -not -path '*/node_modules/*' -not -path 'backend/runtime/*'; } | LC_ALL=C sort | xargs shasum -a 256 > SHA256SUMS && shasum -a 256 SHA256SUMS",
+    "dist": "npm run build && npm run pack-backend && npm run sums && electron-builder --mac --arm64 --publish never",
     "dist:win": "npm run build && npm run pack-backend && electron-builder --win --x64 -c.extraMetadata.name=openhut --publish never",
     "dist:linux": "umask 022 && npm run build && npm run pack-backend && electron-builder --linux --x64 --publish never"
   },

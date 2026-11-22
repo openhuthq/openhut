@@ -95,7 +95,7 @@ export const roomKeys = {
     return signList({ signer: await keysService.device(), body: { ...await nextOf({ list: room.list, body, me: await keysService.deviceKey() }), members } })
   },
 
-  isOwn: (ws: string): boolean => Boolean(keyStore.current()?.account?.key) && keyStore.current()?.account?.workspace.id === ws,
+  isOwn: (ws: string): boolean => Boolean(keyStore.current()?.account?.key || keyStore.current()?.account?.runtime) && keyStore.current()?.account?.workspace.id === ws,
 
   async teamChange({ ws, emails = [], devices = [], rotate = false }: { ws: string; emails?: string[]; devices?: string[]; rotate?: boolean }): Promise<{ list: MemberList; room: Room; letters: Sent[] }> {
     const account = keyStore.current()?.account

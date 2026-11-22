@@ -4,17 +4,31 @@ description: Optional. We store your data, but we can't read it. Only your devic
 icon: hut
 ---
 
-OpenHut works without an account. Turn on OpenHut Cloud when you want backups, the same agents on every Mac, and a team. Turn it on in **Settings › Cloud** with your Google account.
+OpenHut works without an account. Turn on OpenHut Cloud when you want backups, the same agents on every Mac, and a team. Turn it on in **Settings › Cloud** with your Google account. Until you do, OpenHut never talks to the cloud.
+
+## What syncs
+
+- Your agents: name, instructions, model, face, and where each one runs.
+- Chats, message by message, live while a reply streams.
+- Memory, from the computer that runs the agent.
+- Files you add to a chat.
+- Connections, with their keys sealed to your own computers only. A teammate sees a connection's name, never its key.
+- Some settings, like your time zone and usage data choice.
+
+What an agent may use (its grants) and its sandbox never sync. Each computer decides those for itself.
+
+One agent runs on one computer at a time. Open it on another Mac and you can chat with it there, or click **Run it here** to move it.
 
 ## What we can't read
 
-Your agents, their instructions, chats, memory, files and connection keys are locked on your Mac before they leave it. The key that opens them is made on your Mac and never reaches us. Without it, what we store is noise.
+Everything above is locked on your Mac before it leaves it. The key that opens it is made on your Mac and never reaches us. Without it, what we store is noise.
 
 ## What we can see
 
 - Your email, from Google, so we know who signed in.
-- Who is in your workspace: their emails, roles and devices. Your devices sign this list, so we can't change it.
-- How much you store and when, to keep the service running.
+- Who is in each workspace: emails, roles, and devices with their names. Your devices sign this list, so we can't change it.
+- Workspace names.
+- Timing: when your devices sync, how much they store, and when someone in a workspace is online or typing.
 
 We ask Google only for your email. We never see your Google password, and signing in doesn't give us your mail or files.
 
@@ -22,8 +36,44 @@ We ask Google only for your email. We never see your Google password, and signin
 
 We can't reset your key. When you turn the cloud on, OpenHut asks you to save a recovery kit: 12 words. With your Google account, they unlock your cloud on a new Mac. Keep them offline, like a password.
 
-To make a new kit, **Settings › Cloud › Make a new kit**. The old words stop working once you've checked the new ones.
+To make a new kit, **Settings › Cloud › Make a new kit**. This also changes your keys. The old words stop working once you've checked the new ones.
+
+## A new Mac
+
+Sign in on the new Mac with the same Google account. Then pick one way in:
+
+- **Your phone or another Mac.** The new Mac shows a code. Scan it with the OpenHut app on your phone, or type it on a Mac that's already in.
+- **An admin.** The new Mac shows 4 words. An admin of your team types them under your name in **Settings › People** and clicks **Approve**.
+- **Your recovery kit.** Type the 12 words.
+
+Your agents and chats come back, with the same names and history.
+
+## Not me
+
+When a Mac joins your account, your other devices show **New Mac added**. If it isn't yours, click **Not me**. That Mac is cut off right away. You can also remove a device in **Settings › Devices**.
+
+A device added less than 3 days ago can't remove older ones. So someone who got in can't lock you out.
+
+## Teams
+
+Everyone has a workspace. To share one, **Settings › People › Invite**: pick an email and a role, then send the link. A link works once, for 48 hours, and only for that email.
+
+Each agent is **Private** or **Shared**. Your teammates see and chat with Shared agents. Private ones stay yours, locked so even teammates can't open them.
+
+## Removing someone
+
+When you remove someone, or a device, the cloud refuses them from then on. They get nothing new. The keys stay the same, so this is quick, but whatever they already had on their Mac stays there.
+
+If you don't trust them, an admin can also **Change keys** in **Settings › General**, under the workspace. Everyone's Macs pick up the new key by themselves.
+
+## Your phone
+
+The phone app is a remote for your Mac. It talks to the agents on your computers through the relay, end-to-end encrypted. It has no cloud account of its own: turn the cloud on from your Mac. The phone can still let a new Mac in, by scanning its code. See [Phones](/phones).
 
 ## Sign out
 
 **Settings › Cloud › Sign out**. Your agents keep running on your Mac, and your phone keeps working. Sign in again with the same Google account to pick up where you left off. A Mac holds one account's keys at a time, so it asks for the account it used before.
+
+## Check the app
+
+**Settings › General** shows the SHA-256 of the vault, the code that locks and unlocks everything. It's the hash of `packages/common/src/vault/vault.ts` in [the source](https://github.com/openhuthq/openhut) at that version. Each release also lists the SHA-256 of every file of the app's code in `SHA256SUMS`. The wire format is in [the protocol](https://github.com/openhuthq/openhut/blob/main/docs/cloud-protocol.md).

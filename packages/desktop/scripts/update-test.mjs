@@ -2,9 +2,10 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createReadStream, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
+import { RELEASE_KEY } from '../src/release-key.mjs'
 
 const { values: args } = parseArgs({ options: { from: { type: 'string' }, feed: { type: 'string' }, via: { type: 'string', default: 'button' }, keep: { type: 'boolean', default: false }, broken: { type: 'boolean', default: false } } })
 if (!args.from || !args.feed || !['button', 'quit'].includes(args.via)) {
@@ -31,7 +32,10 @@ const feed = createServer((req, res) => {
   createReadStream(file).pipe(res)
 }).listen(0, '127.0.0.1')
 await new Promise((resolve) => feed.once('listening', resolve))
-const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_UPDATE_FEED: remote ? args.feed : `http://127.0.0.1:${feed.address().port}/`, OPENHUT_MODEL: 'test', OPENHUT_SANDBOX: 'memory' }
+const releaseScript = join(import.meta.dirname, '../../../scripts/release.sh')
+const testKey = RELEASE_KEY && !remote ? execFileSync(releaseScript, ['key', join(root, 'test-release.pem')], { encoding: 'utf8' }).trim() : ''
+if (testKey) execFileSync(releaseScript, ['sign', resolve(args.feed)], { env: { ...process.env, RELEASE_KEY: join(root, 'test-release.pem') } })
+const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_UPDATE_FEED: remote ? args.feed : `http://127.0.0.1:${feed.address().port}/`, OPENHUT_MODEL: 'test', OPENHUT_SANDBOX: 'memory', ...testKey && { OPENHUT_RELEASE_KEY: testKey } }
 
 let child
 try {

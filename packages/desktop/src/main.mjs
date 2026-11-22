@@ -15,6 +15,7 @@ import WebSocket from 'ws'
 import { deviceName, ownerKeys } from './owner-keys.mjs'
 import { reacher } from './reach.mjs'
 import { fanOut } from './mcp-fan-out.mjs'
+import { cosigned, RELEASE_KEY } from './release-key.mjs'
 
 const DEV = !app.isPackaged
 const MAC = process.platform === 'darwin'
@@ -871,8 +872,14 @@ function update() {
     const version = String(info?.version ?? '')
     if (existsSync(SKIPPED) && readFileSync(SKIPPED, 'utf8').trim() === version) return setUpdate({ checking: false, available: null })
     updateCheck.quiet = false
-    setUpdate({ checking: false, available: version, progress: 0 })
-    auto.downloadUpdate().catch(() => undefined)
+    void releaseSigned(info).then((ok) => {
+      if (!ok) {
+        logger.error(`openhut: ${version} has no valid release signature, so it isn't installed`)
+        return setUpdate({ checking: false, available: null, error: 'signature' })
+      }
+      setUpdate({ checking: false, available: version, progress: 0 })
+      auto.downloadUpdate().catch(() => undefined)
+    })
   })
   auto.on('download-progress', (info) => {
     const progress = Math.floor(info?.percent ?? 0)
@@ -884,6 +891,14 @@ function update() {
   checkForUpdate()
   setInterval(checkQuietly, UPDATE_EVERY_MS)
   app.on('browser-window-focus', checkQuietly)
+}
+
+async function releaseSigned(info) {
+  const key = (TEST_HOME && process.env.OPENHUT_RELEASE_KEY) || RELEASE_KEY
+  if (!key) return true
+  const feed = process.env.OPENHUT_UPDATE_FEED || 'https://dl.openhut.dev/'
+  const [manifest, signature] = await Promise.all(['release.json', 'release.json.sig'].map((name) => net.fetch(new URL(`v${info.version}/${name}`, feed).href).then((res) => res.ok ? res.text() : '', () => '')))
+  return cosigned({ manifest, signature, key, files: info.files ?? [] })
 }
 
 function serve(req) {
