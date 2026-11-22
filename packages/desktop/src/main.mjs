@@ -68,7 +68,8 @@ const HANDOFF = join(HOME, 'secret.handoff')
 const COMPUTERS = join(HOME, 'computers.json')
 const LOCAL = { id: 'local', name: MAC ? 'This Mac' : 'This computer', url: CONTAINER ? 'http://127.0.0.1:8787' : '' }
 const LOCAL_KEY = 'keys/local.key'
-const INSTALL_URL = process.env.OPENHUT_INSTALL_URL ?? 'https://openhut.dev'
+const EDGE_INSTALL_URL = 'https://openhut.dev/edge'
+const INSTALL_URL = process.env.OPENHUT_INSTALL_URL || bakedInstallUrl()
 const RELAY_URL = process.env.OPENHUT_RELAY_URL ?? 'wss://cloud.openhut.dev'
 const TAILNET_PORT = 8788
 const PUT_ACCESS = `put='c=$(curl -sS -o /dev/null -w %{http_code} --unix-socket /data/app/openhut.sock -X PUT -H content-type:application/json --data-binary @- http://openhut/api/access); [ "$c" = 200 ] || [ "$c" = 409 ]'; if docker container inspect openhut >/dev/null 2>&1; then docker exec -i openhut sh -c "$put"; else sh -c "$put"; fi`
@@ -246,6 +247,14 @@ function answer(fn) {
   return (arg) => Promise.resolve().then(() => fn(arg)).catch((error) => ({ error: error.message }))
 }
 
+function bakedInstallUrl() {
+  try {
+    return readFileSync(join(BACKEND, 'INSTALL_URL'), 'utf8').trim() || EDGE_INSTALL_URL
+  } catch {
+    return EDGE_INSTALL_URL
+  }
+}
+
 function storedComputers() {
   try {
     return JSON.parse(readFileSync(COMPUTERS, 'utf8'))
@@ -303,7 +312,6 @@ async function enroll({ peer, retried = false } = {}) {
 async function install({ peer, dns, entry }) {
   if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(dns)) throw new Error('Pick a computer from your tailnet.')
   if (!TAILSCALE) throw new Error('Tailscale isn\'t installed on this computer. Install it from tailscale.com/download and sign in.')
-  if (DEV && !process.env.OPENHUT_INSTALL_URL) throw new Error('Set OPENHUT_INSTALL_URL to a local release to add computers from a dev build.')
   if (!/^https?:\/\/[\w.:/-]+$/.test(INSTALL_URL)) throw new Error('OPENHUT_INSTALL_URL isn\'t a plain http(s) address.')
   let key = ''
   const say = (line) => {
