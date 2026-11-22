@@ -31,7 +31,7 @@ export function TeamSettings() {
   if (!cloud) return null
   const enabling = opened === 'enable' && <CloudSetup />
   const join = !isPhone() && <JoinRow />
-  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch />{join}</>
+  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch /></>
   return <>
     {enabling}
     <div className="flex items-center gap-3.5 px-1">

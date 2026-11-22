@@ -13,7 +13,7 @@ import { ErrorNote } from '@/components/error-note'
 import { I, PILL } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { nameOf, useCloud } from '@/features/cloud/api'
-import { Pitch } from '@/features/cloud/sign-in'
+import { SignInOnTeam } from '@/features/cloud/sign-in'
 import { Row, Rows } from '@/features/settings/kit'
 import { CloudSetup } from '@/features/cloud/setup'
 import { peopleNote, useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useRevokeInvite, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
@@ -33,7 +33,7 @@ export function PeopleSettings() {
   const opened = useOpen()
   if (!cloud) return null
   const enabling = opened === 'enable' && <CloudSetup />
-  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch /></>
+  if (cloud.status === 'off' || !active) return <>{enabling}<SignInOnTeam what="who’s in it" /></>
   const admin = active.role !== 'member'
   return <>{enabling}{!cloud.kit && <Rows><Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note="Not saved"><Button type="button" variant="primary" className={PILL} onClick={() => open('enable')}>Save kit</Button></Row></Rows>}<section className="flex flex-col gap-2.5">
     <div className="flex items-center gap-2 px-1">
