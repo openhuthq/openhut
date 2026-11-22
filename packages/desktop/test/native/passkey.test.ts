@@ -7,7 +7,7 @@ const folder = join(import.meta.dirname, '..', '..', 'native', 'passkey')
 const swift = process.platform === 'darwin' && spawnSync('swiftc', ['--version']).status === 0
 
 test('the passkey helper answers in JSON, says an unsigned build can’t use passkeys, and fails cleanly without the associated domain', { skip: !swift && 'needs macOS with swiftc' }, () => {
-  const app = execFileSync(join(folder, 'build.sh'), { encoding: 'utf8' }).trim().split('\n').at(-1) ?? ''
+  const app = execFileSync(join(folder, 'build.sh'), { encoding: 'utf8', env: { ...process.env, PASSKEY_PROFILE: '' } }).trim().split('\n').at(-1) ?? ''
   const helper = join(app, 'Contents', 'MacOS', 'passkey')
   const run = (args: string[]) => {
     const done = spawnSync(helper, args, { encoding: 'utf8', timeout: 15_000 })
