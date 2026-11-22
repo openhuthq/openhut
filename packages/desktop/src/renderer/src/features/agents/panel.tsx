@@ -167,7 +167,7 @@ function RunsOn({ agent }: { agent: Agent }) {
           note={runsOnNote(computer)}
           selected={computer.id === id} disabled={computer.id === id || !computer.online || !agent.canEdit || !agent.canManage} onClick={() => move.go(computer.id)} />)}
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="h-8 gap-2 text-[13px]" onClick={() => navigate('/settings/devices')}><I icon={PlusSignIcon} size={14} className="text-pass" />Add a computer…</DropdownMenuItem>
+        <DropdownMenuItem className="h-8 gap-2 text-[13px]" onClick={() => navigate('/settings/computers')}><I icon={PlusSignIcon} size={14} className="text-pass" />Add a computer…</DropdownMenuItem>
       </MenuCard>
     </DropdownMenu>
     {move.line
@@ -210,7 +210,7 @@ function TeamHint({ agent, server, onMove }: { agent: Agent; server: { id: strin
     <span>{agent.name} is in your team's Slack. For team use, run it on a computer that stays on.</span>
     {server
       ? <Button type="button" variant="text" onClick={() => onMove(server.id)}>Move to {server.name}</Button>
-      : <Button type="button" variant="text" onClick={() => navigate('/settings/devices')}>Add a computer</Button>}
+      : <Button type="button" variant="text" onClick={() => navigate('/settings/computers')}>Add a computer</Button>}
   </div>
 }
 

@@ -52,7 +52,7 @@ export const invitationService = {
 
   decline({ actor, id }: { actor: Caller; id: string }): Invitation {
     const open = found(id)
-    if (status(open) === 'accepted') throw new HttpError(409, 'This device already joined. Remove it in Settings › Devices instead.')
+    if (status(open) === 'accepted') throw new HttpError(409, 'This device already joined. Remove it in Settings › Phones instead.')
     open.status = 'declined'
     emit({ name: 'invitation.declined', actor, target: { type: 'invitation', id } })
     return shown(open)

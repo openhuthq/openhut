@@ -306,7 +306,7 @@ async function enroll({ peer, retried = false } = {}) {
     const added = await install({ peer, dns, entry })
     enrollments.delete(dns)
     shareEnrollments()
-    if (!main?.isFocused()) notify({ title: `${entry.peer.name} is ready`, body: 'Its agents can run there now.', path: '/settings/devices' })
+    if (!main?.isFocused()) notify({ title: `${entry.peer.name} is ready`, body: 'Its agents can run there now.', path: '/settings/computers' })
     return added
   } catch (error) {
     const retryAt = !retried && /already running/i.test(error.message) ? Date.now() + RETRY_MS : null
