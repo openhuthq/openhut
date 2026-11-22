@@ -1,0 +1,88 @@
+name: Cut a release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Stable bumps main; beta bumps a new branch release/v<version> from main
+        type: choice
+        options: [stable, beta]
+        default: stable
+      version:
+        description: The new version, like 0.5.0 (stable) or 0.5.0-beta.2 (beta)
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cut-release
+  cancel-in-progress: false
+
+jobs:
+  cut:
+    if: github.ref == 'refs/heads/main'
+    environment: release
+    runs-on: ubuntu-latest
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: The version fits the channel and is higher than every release before it
+        run: |
+          git fetch --tags --force --quiet
+          git tag -l 'v*' | node -e '
+            const { CHANNEL, VERSION } = process.env
+            const parse = (v) => {
+              const m = /^(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/.exec(v)
+              return m && [+m[1], +m[2], +m[3], m[4] === undefined ? Infinity : +m[4]]
+            }
+            const cmp = (a, b) => a.reduce((d, x, i) => d || (x > b[i]) - (x < b[i]), 0)
+            const fail = (message) => { console.log(`::error::${message}`); process.exit(1) }
+            const want = parse(VERSION)
+            if (!want) fail(`${VERSION} is not a version like 0.5.0 or 0.5.0-beta.2.`)
+            if (CHANNEL === "beta" && want[3] === Infinity) fail(`A beta needs a -beta.N part, like ${VERSION}-beta.1.`)
+            if (CHANNEL === "stable" && want[3] !== Infinity) fail(`A stable has no -beta part; use the beta channel for ${VERSION}.`)
+            const tags = require("fs").readFileSync(0, "utf8").split("\n").map((t) => t.slice(1)).filter(parse)
+            const stables = tags.filter((t) => !t.includes("-"))
+            const above = CHANNEL === "beta" ? tags : stables
+            const top = above.sort((a, b) => cmp(parse(a), parse(b))).at(-1)
+            if (top && cmp(want, parse(top)) <= 0) fail(`v${VERSION} is not higher than v${top}.`)
+            console.log(`v${VERSION} is higher than ${top ? `v${top}` : "no release"}.`)
+          '
+          if git ls-remote --exit-code origin "refs/heads/release/v$VERSION" >/dev/null; then
+            echo "::error::The branch release/v$VERSION already exists."
+            exit 1
+          fi
+      - name: Bump the app and runtime version
+        run: |
+          node -e '
+            const fs = require("fs")
+            const v = process.env.VERSION
+            const edit = (file, change) => {
+              const json = JSON.parse(fs.readFileSync(file, "utf8"))
+              change(json)
+              fs.writeFileSync(file, JSON.stringify(json, null, 2) + "\n")
+            }
+            edit("packages/desktop/package.json", (p) => { p.version = v })
+            edit("packages/runtime/package.json", (p) => { p.version = v })
+            edit("package-lock.json", (l) => { l.packages["packages/desktop"].version = v; l.packages["packages/runtime"].version = v })
+          '
+          git diff --stat
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "Release $VERSION: the app and runtime version"
+      - name: Push the bump, then the tag, which starts the desktop workflow
+        env:
+          RELEASE_TAG_KEY: ${{ secrets.RELEASE_TAG_KEY }}
+        run: |
+          git push origin "HEAD:refs/heads/$([ "$CHANNEL" = stable ] && echo main || echo "release/v$VERSION")"
+          git tag "v$VERSION"
+          printf '%s\n' "$RELEASE_TAG_KEY" > "$RUNNER_TEMP/tag-key" && chmod 600 "$RUNNER_TEMP/tag-key"
+          GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tag-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" git push "git@github.com:$GITHUB_REPOSITORY.git" "refs/tags/v$VERSION"
+          rm "$RUNNER_TEMP/tag-key"
+          echo "Pushed v$VERSION; the desktop workflow builds it: https://github.com/$GITHUB_REPOSITORY/actions/workflows/desktop.yml" >> "$GITHUB_STEP_SUMMARY"
