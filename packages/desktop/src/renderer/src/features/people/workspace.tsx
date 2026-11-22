@@ -17,6 +17,7 @@ import { toast, toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
 import { I, PILL } from '@/components/kit'
 import { Row, Rows } from '@/features/settings/kit'
+import { cn } from '@/lib/utils'
 
 const KEYS_NOTE = 'Use after a lost computer or a teammate you don’t trust. Everyone else stays in.'
 
@@ -47,10 +48,11 @@ function TeamRow({ workspace, current, renaming }: { workspace: CloudWorkspaceVi
   const admin = workspace.role !== 'member'
   const owner = workspace.role === 'owner'
   const go = (kind: string) => open(`${kind}:${workspace.id}`)
-  const title = renaming && admin ? <TeamNameInput workspace={workspace} /> : <span className="flex min-w-0 items-center gap-1.5">
-    <span className="truncate" onDoubleClick={admin ? () => go('rename') : undefined}>{workspace.name}</span>
+  const editing = renaming && admin
+  const title = <span className="flex min-w-0 items-center gap-1.5">
+    {editing ? <TeamNameInput workspace={workspace} /> : <span className="truncate" onDoubleClick={admin ? () => go('rename') : undefined}>{workspace.name}</span>}
     {current && <span className="rounded-full bg-soft px-1.5 py-px text-[10.5px] font-medium text-mute">Current</span>}
-    {admin && <Tooltip label="Rename"><Button type="button" variant="ghost" size="icon-xs" aria-label={`Rename ${workspace.name}`} onClick={() => go('rename')}><I icon={PencilEdit02Icon} size={13} className="text-mute" /></Button></Tooltip>}
+    {admin && <Tooltip label="Rename"><Button type="button" variant="ghost" size="icon-xs" aria-label={`Rename ${workspace.name}`} className={cn(editing && 'invisible')} onClick={() => go('rename')}><I icon={PencilEdit02Icon} size={13} className="text-mute" /></Button></Tooltip>}
   </span>
   return <Row icon={<TeamMark name={workspace.name} className="size-8 rounded-lg text-[14px]" />} title={title} note={`${peopleNote(workspace)} · you’re ${ROLE[workspace.role]}`}>
     {!current && <Button type="button" variant="ghost" className={PILL} onClick={() => { chooseWorkspace(workspace.id); navigate('/') }}>Switch</Button>}
@@ -73,7 +75,7 @@ function TeamNameInput({ workspace }: { workspace: CloudWorkspaceView }) {
     getSelection()?.removeAllRanges()
     getSelection()?.addRange(range)
   }, [])
-  return <span ref={ref} role="textbox" aria-label="Team name" contentEditable="plaintext-only" suppressContentEditableWarning spellCheck={false} className="block min-w-[2ch] truncate outline-none"
+  return <span ref={ref} role="textbox" aria-label="Team name" contentEditable="plaintext-only" suppressContentEditableWarning spellCheck={false} className="min-w-[2ch] truncate outline-none"
     onKeyDown={(event) => {
       if (event.key === 'Escape') event.currentTarget.textContent = name
       if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); event.currentTarget.blur() }
