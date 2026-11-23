@@ -1,0 +1,232 @@
+import ReconnectingWebSocket from 'partysocket/ws'
+import * as z from 'zod/mini'
+import { CloudWorkspace, DeviceRequest, parseJson, siteHost } from '@openhut/common/cloud/cloud.ts'
+import { anchorOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
+import { padded } from '@openhut/common/records/seal.ts'
+import { Collection } from '@openhut/common/records/wire.ts'
+import { fromBase64, lock, toBase64, unlock } from '@openhut/common/vault/vault.ts'
+import { agentService } from '../agents/agent-service.ts'
+import { cloud } from '../platform/cloud.ts'
+import { config } from '../platform/config.ts'
+import { db } from '../platform/db.ts'
+import { emit, log } from '../platform/events.ts'
+import { messageOf } from '../platform/http-error.ts'
+import { keysService } from './keys-service.ts'
+import { presence } from './presence.ts'
+import { changed, recordsService } from './records.ts'
+import { roomKeys, type Call } from './room-keys.ts'
+
+export const BEAT_MS = 10_000
+const GONE = [4001, 4003, 4010]
+const LIVE: Record<Collection, string[]> = {
+  agent: ['agent'], control: ['agent', 'grant'], message: ['thread'], memory: ['memory'], connection: ['connection'], skill: ['skill'], routine: ['routine'], channel: ['channel'], file: ['thread'],
+}
+const Beat = z.object({ at: z.number(), build: z.string(), version: z.string(), kind: z.string() })
+const Requests = z.object({ data: z.array(DeviceRequest) })
+const Message = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('ready') }),
+  z.object({ type: z.literal('notice'), object: z.string(), id: z.string(), ver: z.optional(z.number()), workspace: z.string() }),
+  z.object({ type: z.literal('beat'), workspace: z.string(), from: z.string(), at: z.number(), body: z.string() }),
+  z.object({ type: z.literal('here'), workspace: z.string(), from: z.string(), at: z.number(), body: z.string() }),
+  z.object({ type: z.literal('gone'), workspace: z.string(), from: z.string() }),
+])
+
+export type Beat = z.infer<typeof Beat>
+export type Gone = { name: string; why: 'removed' | 'deleted' }
+
+let socket: ReconnectingWebSocket | undefined
+let ready = false
+let timer: NodeJS.Timeout | undefined
+let queue: Promise<void> = Promise.resolve()
+const names = new Map<string, { name: string | null; site: string | null }>()
+const requests = new Map<string, DeviceRequest[]>()
+const beats = new Map<string, Map<string, Beat>>()
+const gone: Gone[] = []
+
+presence.wire({
+  rooms: () => ready ? roomKeys.rooms().map((room) => room.workspace.id) : [],
+  roomOf: async (agent) => {
+    const row = await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', agent).executeTakeFirst()
+    const ws = row?.shared ? row.workspace ?? keysService.account()?.workspace.id : undefined
+    return ws && roomKeys.room(ws) ? ws : null
+  },
+  context: async (ws) => {
+    const account = keysService.account()
+    const room = roomKeys.room(ws)
+    const body = bodyOf(room?.list)
+    if (!account || !room?.workspace.key || !body) return null
+    return { workspace: ws, key: fromBase64(room.workspace.key), version: room.workspace.version, keys: roomKeys.ring(ws), me: await keysService.deviceKey(), members: body.members, email: account.email, list: body.version, listHash: await anchorOf(room.list) }
+  },
+  send: ({ ws, body }) => sent({ type: 'here', workspace: ws, body }),
+  catchUp: (ws) => void run(() => refreshKeys(ws)),
+})
+
+export const cloudEvents = {
+  start(): void {
+    if (socket || !keysService.account() || !keysService.session()) return
+    const opened = new ReconnectingWebSocket(cloud.eventsUrl(), [], { WebSocket: globalThis.WebSocket })
+    socket = opened
+    opened.addEventListener('open', () => {
+      keysService.token().then((token) => opened.send(JSON.stringify({ type: 'hello', token })), (err: unknown) => log.warn({ event: 'cloud.refresh_failed', error: messageOf(err) }))
+    })
+    opened.addEventListener('message', (event) => heard(String(event.data)))
+    opened.addEventListener('close', (event) => {
+      ready = false
+      for (const room of roomKeys.rooms()) presence.closed(room.workspace.id)
+      if (GONE.includes(event.code)) void run(checkRemoved)
+    })
+    timer = setInterval(() => {
+      void beatAll()
+      void recordsService.drain()
+    }, BEAT_MS)
+    timer.unref()
+  },
+
+  stop(): void {
+    socket?.close()
+    socket = undefined
+    ready = false
+    clearInterval(timer)
+    presence.forget()
+  },
+
+  ready: (): boolean => ready,
+
+  name: (ws: string): string => names.get(ws)?.name ?? defaultName(ws),
+  site: (ws: string): string | null => names.get(ws)?.site ?? null,
+  requests: (ws: string): DeviceRequest[] => requests.get(ws) ?? [],
+  beats: (ws: string): Map<string, Beat> => beats.get(ws) ?? new Map(),
+  gone: (): Gone[] => gone,
+
+  refreshName: (ws: string): Promise<void> => run(() => refreshName(ws)),
+  refreshRequests: (ws: string): Promise<void> => run(() => refreshRequests(ws)),
+  refreshKeys: (ws: string): Promise<void> => run(() => refreshKeys(ws)),
+  settled: (): Promise<void> => queue,
+
+  async drop({ ws, why }: { ws: string; why: Gone['why'] | null }): Promise<void> {
+    const own = roomKeys.isOwn(ws)
+    if (why) gone.push({ name: cloudEvents.name(ws), why })
+    names.delete(ws)
+    requests.delete(ws)
+    presence.closed(ws)
+    await roomKeys.dropRoom(ws)
+    if (!own) await (why === 'removed' ? agentService.keepWorkspace(ws) : agentService.dropWorkspace(ws))
+    emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
+  },
+}
+
+function heard(text: string): void {
+  const message = Message.safeParse(parseJson(text)).data
+  if (message?.type === 'ready') {
+    ready = true
+    void run(async () => {
+      for (const room of roomKeys.rooms()) {
+        const ws = room.workspace.id
+        await refreshKeys(ws)
+        await refreshName(ws)
+        await refreshRequests(ws)
+        presence.ready(ws)
+      }
+    })
+    void beatAll()
+    void recordsService.drain()
+  }
+  if (message?.type === 'notice') noticed(message)
+  if (message?.type === 'beat') void beatHeard(message)
+  if (message?.type === 'here') void presence.heard({ ws: message.workspace, from: message.from, at: message.at, body: message.body })
+  if (message?.type === 'gone') presence.gone({ ws: message.workspace, from: message.from })
+}
+
+function noticed({ object, id, ver = 0, workspace }: { object: string; id: string; ver?: number; workspace: string }): void {
+  const collection = Collection.safeParse(object).data
+  if (collection) {
+    changed({ collection, id, ver, workspace })
+    for (const type of LIVE[collection]) emit({ name: `${type}.changed`, target: { type, id } })
+  }
+  if (object === 'member_list' || object === 'letter') void run(() => refreshKeys(workspace))
+  if (object === 'join_request') void run(() => refreshRequests(workspace))
+  if (object === 'workspace') void run(() => refreshName(workspace))
+}
+
+async function beatAll(): Promise<void> {
+  if (!ready) return
+  const me = await keysService.deviceKey()
+  const value: Beat = { at: Date.now(), build: config.build, version: config.version, kind: config.installKind }
+  for (const room of roomKeys.rooms()) {
+    const ws = room.workspace.id
+    const listed = roomKeys.members(ws)?.members.some((member) => member.devices.includes(me))
+    const plain = padded({ json: JSON.stringify(value) })
+    const body = listed && room.workspace.key && plain && await lock({ key: fromBase64(room.workspace.key), version: room.workspace.version, bind: beatBind({ ws, from: me }), plain })
+    if (body) sent({ type: 'beat', workspace: ws, body: toBase64(body) })
+  }
+}
+
+async function beatHeard({ workspace, from, body }: { workspace: string; from: string; body: string }): Promise<void> {
+  const listed = roomKeys.members(workspace)?.members.some((member) => member.devices.includes(from))
+  const plain = listed ? await unlock({ keys: roomKeys.ring(workspace), bind: beatBind({ ws: workspace, from }), locked: fromBase64(body) }) : null
+  const value = plain && Beat.safeParse(parseJson(new TextDecoder().decode(plain).trimEnd())).data
+  if (!value) return
+  const room = beats.get(workspace) ?? new Map<string, Beat>()
+  const first = !room.has(from)
+  room.set(from, value)
+  beats.set(workspace, room)
+  if (first) emit({ name: 'computer.beat', target: { type: 'admin', id: from } })
+}
+
+function sent(message: { type: 'beat' | 'here'; workspace: string; body: string }): boolean {
+  if (!ready || !socket) return false
+  socket.send(JSON.stringify(message))
+  return true
+}
+
+function run(step: () => Promise<void>): Promise<void> {
+  queue = queue.then(step).catch((err: unknown) => log.warn({ event: 'cloud.events_failed', error: messageOf(err) }))
+  return queue
+}
+
+async function refreshKeys(ws: string): Promise<void> {
+  if (!roomKeys.room(ws)) return
+  const { changed: moved } = await roomKeys.refresh({ ws, call: callIn(ws) })
+  const list = roomKeys.members(ws)
+  if (list) presence.members({ ws, emails: list.members.map((member) => member.email) })
+  if (moved) emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
+}
+
+async function refreshName(ws: string): Promise<void> {
+  const view = CloudWorkspace.safeParse((await callIn(ws)({ method: 'GET', path: '' })).json).data
+  const before = JSON.stringify(names.get(ws) ?? null)
+  const name = await roomKeys.openMeta({ ws, field: 'name', locked: view?.name })
+  const site = view?.site ? await roomKeys.openMeta({ ws, field: 'site', locked: view.site }) : null
+  names.set(ws, { name, site: site && siteHost(site) })
+  if (JSON.stringify(names.get(ws)) !== before) emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
+}
+
+async function refreshRequests(ws: string): Promise<void> {
+  const before = JSON.stringify(requests.get(ws) ?? [])
+  requests.set(ws, Requests.safeParse((await callIn(ws)({ method: 'GET', path: '/requests' })).json).data?.data ?? [])
+  if (JSON.stringify(requests.get(ws)) !== before) emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
+}
+
+async function checkRemoved(): Promise<void> {
+  const home = keysService.account()?.workspace.id
+  if (!home) return
+  const { status } = await callIn(home)({ method: 'GET', path: '/member-lists?after=0' })
+  if (status !== 403 && status !== 410) return
+  cloudEvents.stop()
+  await keysService.removedHere()
+  emit({ name: 'cloud.changed', target: { type: 'cloud', id: home } })
+}
+
+function callIn(ws: string): Call {
+  return async (input) => cloud.room({ ...input, workspace: ws, token: await keysService.token() })
+}
+
+function beatBind({ ws, from }: { ws: string; from: string }): string {
+  return `beat/${ws}/${from}`
+}
+
+function defaultName(ws: string): string {
+  const owner = roomKeys.members(ws)?.members.find((member) => member.role === 'owner')?.email ?? ''
+  const first = (owner.split('@')[0] ?? '').split(/[._+-]/)[0] ?? ''
+  return `${first.charAt(0).toUpperCase()}${first.slice(1)}’s team`
+}

@@ -3,7 +3,7 @@ import * as z from 'zod/mini'
 import { RecordsError, recordsClient, type RecordsClient } from '@openhut/common/records/client.ts'
 import { signer, type Keyring, type Opened, type Value } from '@openhut/common/records/seal.ts'
 import { COLLECTIONS, type Collection } from '@openhut/common/records/wire.ts'
-import { fromBase64, type Bytes } from '@openhut/common/vault/vault.ts'
+import type { Bytes } from '@openhut/common/vault/vault.ts'
 import { config } from '../platform/config.ts'
 import { db } from '../platform/db.ts'
 import { log } from '../platform/events.ts'
@@ -19,14 +19,11 @@ export type Held<T = unknown, S = unknown> = {
 }
 export type Change = { collection: Collection; id: string; ver: number; workspace: string }
 export type Patch = { value: unknown; secret?: unknown }
-export type PutRecord = {
-  collection: Collection; id: string; workspace: string; parent?: string; value: unknown; secret?: unknown; personal?: boolean; queue?: boolean
-  reapply?: (current: Held) => Patch | null | Promise<Patch | null>
-}
-type Write = PutRecord & { deleted?: boolean }
+type Fields = { workspace: string; value: unknown; secret?: unknown; personal?: boolean; queue?: boolean; reapply?: (current: Held) => Patch | null | Promise<Patch | null> }
+export type PutRecord = Fields & ({ collection: 'control' | 'memory'; parent: string; id?: undefined } | { collection: Exclude<Collection, 'control' | 'memory'>; id: string; parent?: string })
+type Write = Fields & { collection: Collection; id: string; parent?: string; deleted?: boolean }
 type Seen = { ver: number; parent: string | null }
 
-const BATCH = 100
 const Queued = z.object({ value: z.unknown(), secret: z.optional(z.unknown()), personal: z.optional(z.boolean()) })
 const listeners = new Set<(change: Change) => void>()
 let seen: Promise<Map<string, Seen>> | undefined
@@ -51,16 +48,7 @@ export const recordsService = {
     return row && keep(row)
   },
 
-  async batchGet({ collection, workspace, ids }: { collection: Collection; workspace: string; ids: string[] }): Promise<Held[]> {
-    const records = await clientNow()
-    const all: Held[] = []
-    for (let at = 0; at < ids.length; at += BATCH) {
-      for (const row of await reach(() => records.batchGet({ collection, workspace, ids: ids.slice(at, at + BATCH) }))) all.push(await keep(row))
-    }
-    return all
-  },
-
-  put: (input: PutRecord): Promise<Held | null> => send(input),
+  put: (input: PutRecord): Promise<Held | null> => send({ ...input, id: idOf(input) }),
 
   async remove({ collection, workspace, id, queue }: { collection: Collection; workspace: string; id: string; queue?: boolean }): Promise<void> {
     const held = (await seenMap()).get(id) ?? await recordsService.get({ collection, workspace, id }).then((row) => row && { parent: row.parent ?? null })
@@ -78,6 +66,10 @@ export const recordsService = {
     draining = draining.then(drainOnce).catch((err: unknown) => log.warn({ event: 'records.drain_failed', error: messageOf(err) }))
     return draining
   },
+}
+
+export function idOf(input: PutRecord): string {
+  return input.id === undefined ? input.parent : input.id
 }
 
 export function changed(change: Change): void {
@@ -158,8 +150,7 @@ function valueOf({ value, secret, personal }: Patch & { personal?: boolean }): V
 }
 
 async function clientNow(): Promise<RecordsClient> {
-  const rooms = roomKeys.rooms()
-  const own = new Map(await Promise.all(rooms.map(async (room) => [room.workspace.id, await roomKeys.own(room.workspace.id)] as const)))
+  const own = new Map(await Promise.all(roomKeys.rooms().map(async (room) => [room.workspace.id, await roomKeys.own(room.workspace.id)] as const)))
   const vault = keysService.vault()
   const map = await seenMap()
   const ring = (key: Bytes | null | undefined): Keyring | null => key ? { version: 1, keys: { 1: key } } : null
@@ -170,9 +161,8 @@ async function clientNow(): Promise<RecordsClient> {
     keys: ({ use, workspace }) => {
       if (use === 'own') return ring(own.get(workspace))
       if (use === 'vault') return ring(vault)
-      const found = rooms.find((room) => room.workspace.id === workspace)?.workspace
-      if (!found?.key) return null
-      return { version: found.version, keys: Object.fromEntries([...Object.entries(found.old ?? {}), [String(found.version), found.key]].map(([version, key]) => [Number(version), fromBase64(key)])) }
+      const found = roomKeys.room(workspace)?.workspace
+      return found?.key ? { version: found.version, keys: roomKeys.ring(workspace) } : null
     },
     roster: (workspace) => roomKeys.members(workspace),
     seen: (id) => map.get(id),

@@ -5,8 +5,10 @@ import { createServer } from 'node:http'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64, identity, letter, newKey, toBase64 } from '@openhut/common/vault/vault.ts'
+import type { Box, Letter } from '../../../src/server/platform/cloud.ts'
+import { roomRequest } from './flat.ts'
 
-const account = { signer: undefined as string | undefined, boxes: new Map<string, { body: string; by: string; signature: string }>(), hideWorkspaces: false, failBoxes: 0, refuseLetters: false, names: [] as string[], sites: [] as (string | undefined)[], refuseName: false }
+const account = { signer: undefined as string | undefined, bundles: [] as { letters: Letter[]; boxes: Box[] }[], boxes: new Map<string, { body: string; by: string; signature: string }>(), hideWorkspaces: false, failBoxes: 0, refuseLetters: false, names: [] as string[], sites: [] as (string | undefined)[], refuseName: false }
 let authorization = ''
 const TEAM = 'ws_teamroom'
 const asks = { on: false, device: '', list: undefined as unknown, sent: [] as unknown[] }
@@ -14,18 +16,26 @@ const home = { id: '', chain: [] as unknown[], device: '', sent: [] as unknown[]
 const cloud = createServer(async (req, res) => {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
-  const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) as Record<string, string> : {}
+  const { url, method, body: raw, letters, boxes } = roomRequest({ url: req.url, method: req.method, body: chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown> : {} })
+  const body = raw as Record<string, string>
   const reply = (status: number, json: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(json))
+  const list = method === 'PUT' && url.endsWith('/members') ? JSON.parse(Buffer.from(body.bytes ?? '', 'base64url').toString()) as { version: number } : undefined
+  if (list && boxes.length && list.version === 1 && account.signer) return reply(403, { error: { type: 'permission_error', message: 'This account already has a home workspace.' } })
+  if (list) account.bundles.push({ letters, boxes })
+  for (const box of boxes) {
+    if (box.deleted) account.boxes.delete(box.name)
+    else account.boxes.set(box.name, { body: box.body ?? '', by: box.by, signature: box.signature })
+  }
   const room = `/v1/workspaces/${TEAM}`
-  if (asks.on && req.url === '/v1/teams') return reply(200, { object: 'list', data: [{ id: TEAM }] })
-  if (asks.on && req.url?.startsWith(`${room}/member-lists`)) return reply(200, { object: 'list', data: [asks.list], hasMore: false })
-  if (asks.on && req.url === `${room}/letters`) return reply(200, { object: 'list', data: [] })
-  if (asks.on && req.url === `${room}/requests` && req.method === 'POST') {
+  if (asks.on && url === '/v1/teams') return reply(200, { object: 'list', data: [{ id: TEAM }] })
+  if (asks.on && url.startsWith(`${room}/member-lists`)) return reply(200, { object: 'list', data: [asks.list], hasMore: false })
+  if (asks.on && url === `${room}/letters`) return reply(200, { object: 'list', data: [] })
+  if (asks.on && url === `${room}/requests` && method === 'POST') {
     asks.sent.push(body)
     return reply(200, {})
   }
-  if (asks.on && req.url === `${room}/requests`) return reply(200, { object: 'list', data: asks.device ? [{ device: asks.device }] : [] })
-  if (asks.on && req.url?.startsWith(`${room}/requests/`)) return reply(200, {})
+  if (asks.on && url === `${room}/requests`) return reply(200, { object: 'list', data: asks.device ? [{ device: asks.device }] : [] })
+  if (asks.on && url.startsWith(`${room}/requests/`)) return reply(200, {})
   const keep = (name: string, box: { body: string; by: string; signature: string }) => {
     if (account.failBoxes-- > 0) return reply(503, { error: { type: 'api_error', message: 'busy' } })
     if (account.signer && account.signer !== box.by) return reply(403, { error: { type: 'permission_error', message: 'Only your account key can replace your key boxes.' } })
@@ -33,53 +43,53 @@ const cloud = createServer(async (req, res) => {
     account.boxes.set(name, box)
     return reply(200, box)
   }
-  if (req.url === '/v1/auth/sign-in/social') {
+  if (url === '/v1/auth/sign-in/social') {
     authorization = body.state ?? ''
     return reply(200, { url: 'https://accounts.example/auth', redirect: false })
   }
-  if (req.url === '/v1/auth/openhut/session') return reply(200, { object: 'cloud_session', token: 'session-token', refresh: 'refresh-token', sub: 'dev-sara', email: 'sara@example.com', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
-  if (req.url === '/v1/workspaces' && req.method === 'GET') {
+  if (url === '/v1/auth/openhut/session') return reply(200, { object: 'cloud_session', token: 'session-token', refresh: 'refresh-token', sub: 'dev-sara', email: 'sara@example.com', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
+  if (url === '/v1/workspaces' && method === 'GET') {
     const data = account.hideWorkspaces ? [] : [...account.boxes].filter(([name]) => name.startsWith('workspace/')).map(([name, box]) => ({ id: name.slice(10), object: 'workspace', key: box.body, by: box.by, signature: box.signature }))
     return reply(200, { object: 'list', data })
   }
-  if (req.url === '/v1/workspaces') return keep(`workspace/${body.id}`, { body: body.key ?? '', by: body.by ?? '', signature: body.signature ?? '' })
-  const kind = /^\/v1\/key-boxes\/(kit|kit-confirmed|passkey)$/.exec(req.url ?? '')?.[1]
-  if (kind && req.method === 'GET') {
+  if (url === '/v1/workspaces') return keep(`workspace/${body.id}`, { body: body.key ?? '', by: body.by ?? '', signature: body.signature ?? '' })
+  const kind = /^\/v1\/key-boxes\/(kit|kit-confirmed|passkey)$/.exec(url ?? '')?.[1]
+  if (kind && method === 'GET') {
     const box = account.boxes.get(kind)
     return box ? reply(200, { object: 'key_box', kind, ...box }) : reply(404, { error: { type: 'invalid_request_error', message: 'none' } })
   }
-  if (kind && req.method === 'PUT') return keep(kind, { body: body.body ?? '', by: body.by ?? '', signature: body.signature ?? '' })
-  if (kind && req.method === 'DELETE') {
+  if (kind && method === 'PUT') return keep(kind, { body: body.body ?? '', by: body.by ?? '', signature: body.signature ?? '' })
+  if (kind && method === 'DELETE') {
     if (body.by !== account.signer) return reply(403, { error: { type: 'permission_error', message: 'Only your account key can delete your key boxes.' } })
     account.boxes.delete(kind)
     return reply(200, { object: 'key_box', kind, deleted: true })
   }
-  if (/^\/v1\/workspaces\/[^/]+\/members$/.test(req.url ?? '') && req.method === 'PUT') account.signer = (JSON.parse(Buffer.from(body.bytes ?? '', 'base64url').toString()) as { members: { kit?: string }[] }).members[0]?.kit
-  if (/^\/v1\/workspaces\/[^/]+$/.test(req.url ?? '') && req.method === 'PATCH') {
+  if (/^\/v1\/workspaces\/[^/]+\/members$/.test(url ?? '') && method === 'PUT') account.signer = (JSON.parse(Buffer.from(body.bytes ?? '', 'base64url').toString()) as { members: { kit?: string }[] }).members[0]?.kit
+  if (/^\/v1\/workspaces\/[^/]+$/.test(url ?? '') && method === 'PATCH') {
     account.names.push(body.name ?? '')
     account.sites.push(body.site)
     return account.refuseName ? reply(400, { error: { type: 'invalid_request_error', message: 'Send the name locked.' } }) : reply(200, body)
   }
-  if (/^\/v1\/workspaces\/[^/]+\/letters$/.test(req.url ?? '') && req.method === 'GET' && account.refuseLetters) return reply(403, { error: { type: 'permission_error', message: 'Not a member.' } })
+  if (/^\/v1\/workspaces\/[^/]+\/letters$/.test(url ?? '') && method === 'GET' && account.refuseLetters) return reply(403, { error: { type: 'permission_error', message: 'Not a member.' } })
   const mine = home.id && `/v1/workspaces/${home.id}`
-  if (mine && req.url?.startsWith(`${mine}/member-lists`)) return reply(200, { object: 'list', data: home.chain, hasMore: false })
-  if (mine && req.url === `${mine}/requests` && req.method === 'POST') {
+  if (mine && url.startsWith(`${mine}/member-lists`)) return reply(200, { object: 'list', data: home.chain, hasMore: false })
+  if (mine && url === `${mine}/requests` && method === 'POST') {
     home.sent.push(body)
     return reply(200, {})
   }
-  if (mine && req.url === `${mine}/requests`) return reply(200, { object: 'list', data: [{ device: home.device }] })
-  if (mine && req.url === `${mine}/letters` && req.method === 'GET') return reply(200, { object: 'list', data: home.letters })
-  if (mine && req.url?.startsWith(`${mine}/letters/`) && req.method === 'DELETE') {
-    home.deleted.push(decodeURIComponent(req.url.slice(`${mine}/letters/`.length)))
+  if (mine && url === `${mine}/requests`) return reply(200, { object: 'list', data: [{ device: home.device }] })
+  if (mine && url === `${mine}/letters` && method === 'GET') return reply(200, { object: 'list', data: home.letters })
+  if (mine && url.startsWith(`${mine}/letters/`) && method === 'DELETE') {
+    home.deleted.push(decodeURIComponent(url.slice(`${mine}/letters/`.length)))
     return reply(200, {})
   }
-  if (/^\/v1\/workspaces\/[^/]+\/(members|letters)$/.test(req.url ?? '') && req.method !== 'GET') return reply(200, body)
+  if (/^\/v1\/workspaces\/[^/]+\/(members|letters)$/.test(url ?? '') && method !== 'GET') return reply(200, body)
   reply(404, { error: { type: 'invalid_request_error', message: 'none' } })
 })
 cloud.listen(0, '127.0.0.1')
 await once(cloud, 'listening')
 const address = cloud.address()
-process.env.OPENHUT_CLOUD_URL = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`
+process.env.OPENHUT_API_URL = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`
 
 const { migrate } = await import('../../../src/server/platform/db.ts')
 const { cloudService } = await import('../../../src/server/cloud/cloud-service.ts')
@@ -114,7 +124,7 @@ test('when both Macs sign in at once, the one whose workspace box the cloud refu
   assert.deepEqual([...account.boxes.keys()], ['workspace/ws_firstmac'])
 })
 
-test('a Change keys whose first move fails once is kept and finished later: Make a new kit then works and the old boxes are gone', async () => {
+test('Change keys is one bundle: the new list, a letter to each device (this one too), the new workspace box and signed deletes of the old kit and passkey', async () => {
   await keysService.setLocked(undefined)
   Object.assign(account, { signer: undefined, hideWorkspaces: false })
   account.boxes.clear()
@@ -126,28 +136,20 @@ test('a Change keys whose first move fails once is kept and finished later: Make
   account.boxes.set(`workspace/${box.id}`, { body: box.key, by: box.by, signature: box.signature })
   await cloudService.newKit()
   account.boxes.set('passkey', { body: 'old-passkey', by: oldKit, signature: 'signed' })
-  assert.equal(account.signer, oldKit)
   await addStolen()
-  account.failBoxes = 1
-  await assert.rejects(cloudService.changeKeys({ workspace: first.workspace.id }), (err: Error & { status?: number }) => err.status === 502 && /tries again/.test(err.message))
+  account.bundles.length = 0
+  await cloudService.changeKeys({ workspace: first.workspace.id })
   const newKit = await kitOf()
+  const me = await keysService.deviceKey()
+  const [bundle] = account.bundles
+  assert.ok(bundle && account.bundles.length === 1)
   assert.equal(account.signer, newKit, 'the signer is the kit on the new list, with no handover')
-  assert.deepEqual(keysService.moves().map((move) => `${move.method} ${move.path}`), ['POST /v1/workspaces', 'DELETE /v1/key-boxes/kit', 'DELETE /v1/key-boxes/kit-confirmed', 'DELETE /v1/key-boxes/passkey'])
+  assert.deepEqual(bundle.boxes.map((each) => `${each.name}${each.deleted ? ' deleted' : ''}`), [`workspace/${box.id}`, 'kit deleted', 'kit-confirmed deleted', 'passkey deleted'])
+  assert.deepEqual(bundle.letters.map((each) => `${each.purpose} ${each.to === me ? 'me' : each.to === stolen ? 'other device' : each.to}`).sort(), ['account-key me', 'account-key other device', 'workspace-key me', 'workspace-key other device'])
   const kit = await cloudService.newKit()
   assert.equal(kit.words.length, 12)
   assert.notEqual(newKit, oldKit)
-  assert.deepEqual(keysService.moves(), [])
   assert.deepEqual([...account.boxes].map(([name, each]) => [name, each.by]).sort(), [['kit', newKit], ['kit-confirmed', newKit], [`workspace/${box.id}`, newKit]])
-})
-
-test('a stored move another Mac’s rotation made stale is refused and dropped, so it doesn’t block Change keys', async () => {
-  const account0 = keysService.account()
-  assert.ok(account0)
-  const stale = await keysService.signBox({ account: { ...account0, key: toBase64(newKey()) }, name: 'delete/kit', body: '' })
-  await keysService.setMoves([{ method: 'DELETE', path: '/v1/key-boxes/kit', body: stale }])
-  await cloudService.changeKeys({ workspace: account0.workspace.id })
-  assert.deepEqual(keysService.moves(), [])
-  assert.equal(account.signer, toBase64((await accountDevice(fromBase64(keysService.account()?.key ?? ''))).publicKey))
 })
 
 test('a new workspace sends its name locked, and a name the cloud refuses is an error, not a workspace with the default name', async () => {
@@ -201,7 +203,7 @@ test('asking a team sends only this Mac’s name and OS, shows the admins who ca
   const asked = await cloudService.ask()
   assert.equal(asked.canAsk, true)
   assert.deepEqual(asked.asking?.rooms, [{ admins: ['ana@example.com'], own: false }])
-  assert.deepEqual(asks.sent.map((each) => Object.keys(each as object).sort()), [['name', 'os']])
+  assert.deepEqual(asks.sent.map((each) => Object.keys(each as object).sort()), [['name', 'os', 'server']])
   asks.device = ''
   await until(async () => Boolean((await cloudService.status()).asking?.denied))
   await cloudService.cancelAsk()
@@ -227,7 +229,7 @@ test('your own new Mac asks your other computers with no words: a removed Mac is
   account.refuseLetters = true
   const asked = await cloudService.ask()
   assert.deepEqual(asked.asking?.rooms, [{ admins: ['sara@example.com'], own: true }])
-  assert.deepEqual(home.sent.map((each) => Object.keys(each as object).sort()), [['name', 'os']])
+  assert.deepEqual(home.sent.map((each) => Object.keys(each as object).sort()), [['name', 'os', 'server']])
   await until(async () => (await cloudService.status()).needsSignIn)
   assert.notEqual(await keysService.deviceKey(), home.device)
   account.refuseLetters = false

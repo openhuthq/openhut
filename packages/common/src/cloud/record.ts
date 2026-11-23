@@ -3,7 +3,8 @@ import { Wanted } from '../agents/agent.ts'
 import { ConnectionKind } from '../connections/connection.ts'
 import { ModelKey, ProviderId, ProviderModel } from '../models/provider.ts'
 import { ChatMessage, fileInHome, AGENT_HOME } from '../threads/thread.ts'
-import { checkProof, checkRecord, DeviceKey, HereField, Locked, Member, parseJson, recordBind, Signature, Signed, signProof, signRecord, type Record as CloudRecord } from './cloud.ts'
+import { checkProof, checkRecord, DeviceKey, Locked, Member, parseJson, recordBind, Signature, Signed, signProof, signRecord, type Record as CloudRecord } from './cloud.ts'
+import { padded } from '../records/seal.ts'
 import { fromBase64, lock, newKey, readHeader, toBase64, unlock, type Bytes, type Identity } from '../vault/vault.ts'
 
 const AgentId = z.string().check(z.regex(/^ag_[a-z0-9]{8}$/))
@@ -67,18 +68,6 @@ export const FileValue = z.object({
 })
 export type FileValue = z.infer<typeof FileValue>
 
-export const HereValue = z.object({
-  agent: z.nullable(AgentId),
-  field: z.nullable(HereField),
-  typing: z.boolean(),
-  at: z.number().check(z.int()),
-  seq: z.number().check(z.int(), z.minimum(0)),
-  log: z.string().check(z.maxLength(43)),
-  list: z.number().check(z.int(), z.minimum(0)),
-  listHash: z.string().check(z.maxLength(43)),
-})
-export type HereValue = z.infer<typeof HereValue>
-export const HERE_BYTES = 512
 
 export const SYNCED = ['agent', 'setting', 'connection', 'message', 'memory', 'file', 'head'] as const
 export type Synced = (typeof SYNCED)[number]
@@ -104,8 +93,6 @@ const Body = z.object({
 const Hidden = z.object({ hidden: Locked, owner: Member.shape.email })
 const text = new TextEncoder()
 const words = new TextDecoder()
-const SMALL = 64 << 10
-const MIN_BUCKET = 1024
 
 export function refOf(opened: Opened): string | null {
   if (!opened.value) return null
@@ -164,32 +151,8 @@ export async function ownerProven({ workspace, value, members }: { workspace: st
   return checkProof({ device: proof.by, proof: 'agent-owner', parts: ownerParts({ workspace, value, n: proof.n }), signature: proof.signature })
 }
 
-export async function lockHere({ workspace, key, version, from, value }: { workspace: string; key: Bytes; version: number; from: string; value: HereValue }): Promise<string | null> {
-  const plain = HereValue.safeParse(value).success ? padded({ json: JSON.stringify(value), size: HERE_BYTES }) : null
-  const locked = plain && await lock({ key, version, bind: hereBind({ workspace, from }), plain })
-  return locked ? toBase64(locked) : null
-}
-
-export async function openHere({ workspace, keys, from, body }: { workspace: string; keys: Record<number, Bytes>; from: string; body: string }): Promise<HereValue | null> {
-  const plain = await unlock({ keys, bind: hereBind({ workspace, from }), locked: fromBase64(body) })
-  return plain?.length === HERE_BYTES ? HereValue.safeParse(parseJson(words.decode(plain))).data ?? null : null
-}
-
-export function padded({ json, size }: { json: string; size?: number }): Bytes | null {
-  const bytes = text.encode(json)
-  const target = size ?? (bytes.length > SMALL ? bytes.length : Math.max(MIN_BUCKET, 2 ** Math.ceil(Math.log2(bytes.length))))
-  if (bytes.length > target) return null
-  const out = new Uint8Array(target).fill(0x20)
-  out.set(bytes)
-  return out
-}
-
 function ownerParts({ workspace, value, n }: { workspace: string; value: AgentValue; n: number }): string[] {
   return [workspace, value.id, value.owner ?? '', value.shared ? 'shared' : 'private', String(n)]
-}
-
-function hereBind({ workspace, from }: { workspace: string; from: string }): string {
-  return `workspace/${workspace}/here/${from}`
 }
 
 async function openOwn({ workspace, id, own, hidden }: { workspace: string; id: string; own: Own; hidden: z.infer<typeof Hidden> }): Promise<unknown> {

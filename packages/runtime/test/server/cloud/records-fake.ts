@@ -1,8 +1,8 @@
 import { HttpError } from '../../../src/server/platform/http-error.ts'
-import { changed, recordsService, type Held, type PutRecord } from '../../../src/server/cloud/records.ts'
+import { changed, idOf, recordsService, type Held, type PutRecord } from '../../../src/server/cloud/records.ts'
 
 export type FakeRecords = ReturnType<typeof useFakeRecords>
-type Write = PutRecord & { deleted?: boolean }
+type Write = Omit<PutRecord, 'collection' | 'id' | 'parent'> & { collection: Held['collection']; id: string; parent?: string; deleted?: boolean }
 
 export function useFakeRecords({ by = 'this-device' }: { by?: string } = {}) {
   const rows = new Map<string, Held>()
@@ -49,9 +49,7 @@ export function useFakeRecords({ by = 'this-device' }: { by?: string } = {}) {
       const row = rows.get(id)
       return row?.collection === collection && row.workspace === workspace ? see(row) : null
     },
-    batchGet: async ({ collection, workspace, ids }: { collection: Held['collection']; workspace: string; ids: string[] }) =>
-      ids.flatMap((id) => rows.get(id) ?? []).filter((row) => row.collection === collection && row.workspace === workspace).map(see),
-    put: (input: PutRecord) => put(input),
+    put: (input: PutRecord) => put({ ...input, id: idOf(input) }),
     remove: async ({ collection, workspace, id, queue }: { collection: Held['collection']; workspace: string; id: string; queue?: boolean }) => {
       const current = rows.get(id)
       if (current?.collection === collection && current.workspace === workspace && !current.deleted) await put({ ...current, value: null, queue, deleted: true, reapply: (latest) => latest.deleted ? null : { value: null } })

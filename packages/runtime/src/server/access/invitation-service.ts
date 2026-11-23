@@ -7,7 +7,7 @@ import { fromBase64, identity, openInvite, read, type Identity } from '@openhut/
 import { cloudService, mustBeOn, putList } from '../cloud/cloud-service.ts'
 import { keysService } from '../cloud/keys-service.ts'
 import { inviteId, roomKeys } from '../cloud/room-keys.ts'
-import { syncService } from '../cloud/sync-service.ts'
+import { cloudEvents } from '../cloud/cloud-events.ts'
 import { cloud } from '../platform/cloud.ts'
 import { config } from '../platform/config.ts'
 import { emit } from '../platform/events.ts'
@@ -59,7 +59,7 @@ export const invitationService = {
   },
 
   async inviteToCloud({ workspace, email, role }: CreateCloudInvite): Promise<CloudInvite> {
-    const made = await roomKeys.invite({ ws: mustBeOn(workspace), email, role, name: syncService.name(workspace) })
+    const made = await roomKeys.invite({ ws: mustBeOn(workspace), email, role, name: cloudEvents.name(workspace) })
     await putList({ workspace, list: made.list })
     const posted = await cloud.room({ method: 'POST', workspace, path: '/invites', token: await keysService.token(), body: { id: made.id, email, role, key: made.key, body: made.body } })
     if (posted.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t keep the invite (HTTP ${posted.status}). Try again.`)
@@ -76,7 +76,7 @@ export const invitationService = {
     const { ws, card, invite, letter } = await readInvite(link)
     const list = await roomKeys.joinList({ card, chain: invite.memberLists, anchor: letter.anchor, ws })
     const first = invite.memberLists[0]
-    const put = await cloud.room({ method: 'PUT', workspace: ws, path: '/members', token: await keysService.token(), body: list })
+    const put = await cloud.memberLists({ token: await keysService.token(), list })
     const status = put.status === 409 ? 404 : put.status
     if (status !== 200) throw new HttpError(REFUSED[status] ? status : 502, REFUSED[status] ?? `OpenHut Cloud didn’t let you join (HTTP ${status}). Try again.`)
     if (first) await roomKeys.addTeam({ ws, list, first })
