@@ -50,7 +50,7 @@ export const adminService = {
         running: agents.filter((agent) => states?.[agent.id] === 'running').length, total: agents.length,
       },
       publicKey: transferPublicKey,
-      relay: { key: relayKeyHex, computerId, url: config.relayUrl || null },
+      relay: { key: relayKeyHex, computerId, url: config.relayUrl },
       features: available,
       minAppVersion: MIN_APP_VERSION,
     }

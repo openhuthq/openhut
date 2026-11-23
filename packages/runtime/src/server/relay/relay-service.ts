@@ -12,7 +12,7 @@ import { Access, verify } from '@openhut/common/access/access.ts'
 import { accessService } from '../access/access-service.ts'
 import { invitationService } from '../access/invitation-service.ts'
 import { config } from '../platform/config.ts'
-import { emit, listen, log } from '../platform/events.ts'
+import { emit, log } from '../platform/events.ts'
 import { messageOf } from '../platform/http-error.ts'
 import { computerId, registerToken, relayKey, relayKeyHex } from '../platform/secrets.ts'
 import { settings } from '../platform/settings.ts'
@@ -26,40 +26,23 @@ const JOIN_WINDOW_MS = 5 * 60_000
 const FIRST_RETRY_MS = 2_000
 const MAX_RETRY_MS = 30_000
 const CLOSED_BY_COMPUTER = 4003
-const SYNC_MS = 60_000
 
 let relay: { close: () => void } | undefined
 let tailnet: TailnetLink | undefined
-let handlers: Handlers | undefined
 
 export const relayService = {
   async start({ server }: { server: Server }): Promise<void> {
-    handlers = {
+    const handlers: Handlers = {
       device: (key) => accessService.device(key),
       invited: (input) => invitationService.invited(input),
       handle: (input) => handle({ server, ...input }),
       socket: (input) => socket({ server, ...input }),
     }
     if (config.tailnetPort) await listenOnTailnet(handlers)
-    listen(({ name }) => { if (/^(invitation|access)\./.test(name)) relayService.sync() })
-    setInterval(relayService.sync, SYNC_MS).unref()
-    relayService.sync()
+    relay = serve({ relayUrl: config.relayUrl, computerId, registerToken, key: relayKey, ...handlers })
+    log.info({ event: 'relay.on' })
     const code = config.join
-    if (code && config.relayUrl && code !== settings.joinTried()) await settings.setJoinTried(code).then(() => join(code)).catch((err: unknown) => log.error({ event: 'relay.join_failed', reason: messageOf(err) }))
-  },
-
-  sync(): void {
-    if (!handlers || !config.relayUrl) return
-    const wanted = needed()
-    if (wanted && !relay) {
-      relay = serve({ relayUrl: config.relayUrl, computerId, registerToken, key: relayKey, ...handlers })
-      log.info({ event: 'relay.on' })
-    }
-    if (!wanted && relay) {
-      relay.close()
-      relay = undefined
-      log.info({ event: 'relay.off' })
-    }
+    if (code && code !== settings.joinTried()) await settings.setJoinTried(code).then(() => join(code)).catch((err: unknown) => log.error({ event: 'relay.join_failed', reason: messageOf(err) }))
   },
 
   stop(): void {
@@ -67,7 +50,6 @@ export const relayService = {
     relay = undefined
     tailnet?.close()
     tailnet = undefined
-    handlers = undefined
   },
 
   state(): { relay: boolean; tailnet: { port: number; open: number } | null } {
@@ -77,12 +59,6 @@ export const relayService = {
   handle,
   socket,
   join,
-}
-
-function needed(): boolean {
-  if (config.join || invitationService.waiting()) return true
-  if (settings.removedClients().length) return true
-  return (settings.access() ? accessService.get().clients.length : 0) > 1
 }
 
 async function listenOnTailnet(input: Handlers): Promise<void> {
