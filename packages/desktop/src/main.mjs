@@ -3,7 +3,7 @@ import { execFile, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer, request } from 'node:http'
 import { connect } from 'node:net'
-import { appendFileSync, cpSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, cpSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { cpus, homedir, totalmem } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { Readable } from 'node:stream'
@@ -13,7 +13,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import updater from 'electron-updater'
 import WebSocket from 'ws'
 import { DEV_NAME, devBuild, devCloud, devLabel } from './dev-build.mjs'
-import { inviteLink } from './invite-link.mjs'
+import { linkHandler } from './desktop-entry.mjs'
+import { invitePath } from './invite-link.mjs'
 import { linkPath } from './open-link.mjs'
 import { cosigned, RELEASE_KEY } from './release-key.mjs'
 import { useChannel } from './update-channel.mjs'
@@ -23,6 +24,7 @@ const MAC = process.platform === 'darwin'
 const WIN = process.platform === 'win32'
 if (WIN) process.env.NODE_PENDING_PIPE_INSTANCES ??= '64'
 const CONTAINER = (!MAC && !WIN) || process.env.OPENHUT_SANDBOX === 'gvisor'
+const APPIMAGE = process.env.APPIMAGE
 process.umask(0o022)
 const TEST_HOME = process.env.OPENHUT_TEST_HOME
 const RELEASE_FEED = app.getName() !== DEV_NAME
@@ -37,7 +39,12 @@ if (!app.requestSingleInstanceLock()) app.exit(0)
 app.setName(NAME)
 app.setPath('userData', USER_DATA)
 app.setAppLogsPath(TEST_HOME ? join(TEST_HOME, 'logs') : LOOKS_DEV && MAC ? join(app.getPath('home'), 'Library/Logs/OpenHut Dev') : undefined)
-if (!DEV) app.setAsDefaultProtocolClient(SCHEME)
+if (!DEV && !APPIMAGE) app.setAsDefaultProtocolClient(SCHEME)
+app.on('second-instance', (_event, argv) => app.whenReady().then(() => {
+  const url = argv.find((arg) => arg.startsWith(`${SCHEME}:`))
+  if (url) return openLink(url)
+  if (opened || main) show()
+}))
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '../../..')
@@ -64,6 +71,7 @@ const SERVER_SOCK = sockAt('server')
 const WINDOW_STATE = join(HOME, 'window.json')
 const PREFS = join(HOME, 'prefs.json')
 const SECRET = join(HOME, 'secret.bin')
+const PENDING_INVITE = join(HOME, 'invite')
 const HANDOFF = join(DATA, 'app', 'secret.handoff')
 const LOCAL = { name: MAC ? 'This Mac' : 'This computer', url: 'http://127.0.0.1:8787' }
 const LOCAL_KEY = 'keys/local.key'
@@ -98,6 +106,7 @@ let booted
 let bootFailed = ''
 let linked = ownLink(process.argv.find((arg) => arg.startsWith(`${SCHEME}:`)))
 let fresh = false
+let carriedInvite = false
 let opened = false
 let fetching = null
 const updating = { checking: false, available: null, progress: 0, ready: null, error: null }
@@ -186,6 +195,12 @@ handle('cloud.notify', ({ title = 'Unlock OpenHut', body = 'Bring your agents an
   note.show()
 }))
 handle('kit.save', saveKit)
+handle('invite.forget', () => rmSync(PENDING_INVITE, { force: true }))
+handle('invite.clear-clipboard', clearCarriedInvite)
+handle('focus', () => {
+  show()
+  if (!main.isFocused()) main.flashFrame(true)
+})
 
 async function saveKit({ name, body } = {}) {
   const options = { defaultPath: join(app.getPath('documents'), String(name).replaceAll('/', '-')), filters: [{ name: 'Text', extensions: ['txt'] }] }
@@ -325,11 +340,60 @@ function setPrefs(patch) {
   return prefsNow()
 }
 
+function handleLinks() {
+  const entry = join(app.getPath('home'), '.local/share/applications/openhut-appimage.desktop')
+  const exec = join(app.getPath('home'), '.local/share/openhut/OpenHut.AppImage')
+  try {
+    mkdirSync(dirname(exec), { recursive: true })
+    rmSync(exec, { force: true })
+    symlinkSync(APPIMAGE, exec)
+    mkdirSync(dirname(entry), { recursive: true })
+    writeFileSync(entry, linkHandler({ exec, argv: process.argv, scheme: SCHEME }))
+  } catch {
+    return
+  }
+  execFile('xdg-mime', ['query', 'default', `x-scheme-handler/${SCHEME}`], (_error, current) => {
+    if (['', 'openhut-appimage.desktop'].includes(String(current).trim())) execFile('xdg-mime', ['default', 'openhut-appimage.desktop', `x-scheme-handler/${SCHEME}`], () => undefined)
+  })
+}
+
+async function clearCarriedInvite() {
+  if (!carriedInvite || !invitePath(await clipboard.readText())) return
+  clipboard.writeText('')
+}
+
+function keepInvite(path) {
+  if (!invitePath(`https://openhut.dev${path ?? ''}`)) return
+  mkdirSync(HOME, { recursive: true })
+  writeFileSync(PENDING_INVITE, path, { mode: 0o600 })
+}
+
+function pendingInvite() {
+  return invitePath(`https://openhut.dev${existsSync(PENDING_INVITE) ? readFileSync(PENDING_INVITE, 'utf8').trim() : ''}`)
+}
+
+function carryClipboard(win) {
+  let taken = false
+  const take = async () => {
+    const path = !taken && invitePath(await clipboard.readText())
+    if (!path) return taken
+    taken = true
+    carriedInvite = true
+    keepInvite(path)
+    await clearCarriedInvite()
+    show(path)
+    return true
+  }
+  const focused = new Promise((resolve) => win.once('focus', () => take().then(resolve, () => resolve(taken))))
+  const shown = new Promise((resolve) => win.once('ready-to-show', () => setTimeout(() => take().then(resolve, () => resolve(taken)), 300)))
+  return shown.then((got) => got || Promise.race([focused, sleep(3000).then(() => taken)]))
+}
+
 function openAtLogin(on) {
   if (MAC || WIN) return app.setLoginItemSettings({ openAtLogin: on, args: WIN ? ['--hidden'] : [] })
   if (!on) return rmSync(AUTOSTART, { force: true })
   mkdirSync(dirname(AUTOSTART), { recursive: true })
-  writeFileSync(AUTOSTART, `[Desktop Entry]\nType=Application\nName=OpenHut\nComment=Start OpenHut's agents in the background\nExec="${process.env.APPIMAGE ?? process.execPath}" --hidden\nX-GNOME-Autostart-enabled=true\n`)
+  writeFileSync(AUTOSTART, `[Desktop Entry]\nType=Application\nName=OpenHut\nComment=Start OpenHut's agents in the background\nExec="${APPIMAGE ?? process.execPath}" --hidden\nX-GNOME-Autostart-enabled=true\n`)
 }
 
 async function api(path, { method = 'GET', body } = {}) {
@@ -343,7 +407,7 @@ async function api(path, { method = 'GET', body } = {}) {
 function agentd(ask) {
   if (CONTAINER) {
     const relay = "const s = require('net').connect('/run/agentd/agentd.sock'); s.end(process.argv[1]); s.pipe(process.stdout)"
-    return new Promise((resolve, reject) => execFile('docker', ['exec', 'openhut', 'node', '-e', relay, `${JSON.stringify(ask)}\n`], { timeout: 120_000 }, (error, stdout) => error ? reject(error) : resolve(JSON.parse(stdout))))
+    return new Promise((resolve, reject) => execFile('docker', ['exec', 'openhut', 'node', '-e', relay, `${JSON.stringify(ask)}\n`], { timeout: 120_000 }, (error, stdout) => error ? reject(error) : resolve(stdout))).then(JSON.parse)
   }
   return new Promise((resolve, reject) => {
     const sock = connect(SOCK)
@@ -485,7 +549,7 @@ function parsed(text) {
 }
 
 function firstRun() {
-  if (fresh && (!setup || setup.failed)) {
+  if (fresh && booted && (!setup || setup.failed)) {
     setup = { done: false, failed: false, steps: [['Checked this computer', '', 'now'], ['Starting OpenHut', '', 'next'], ['Setting up agents', '', 'next']] }
     meet(setup).catch((error) => {
       const step = setup.steps.find((each) => each[2] === 'now')
@@ -693,6 +757,7 @@ function window(path = '/agents') {
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-version=${app.getVersion()}`, ...(LOOKS_DEV ? [`--openhut-dev=${devLabel(CLOUD.OPENHUT_CLOUD_URL)}`] : [])] },
   })
   win.on('close', saveBounds)
+  win.on('focus', () => win.flashFrame(false))
   win.once('ready-to-show', () => win.show())
   win.loadURL(`${APP_ORIGIN}${path}`)
   main = win
@@ -710,7 +775,8 @@ function ownLink(url) {
 
 function openLink(url) {
   linked = ownLink(url)
-  if (linked && opened) show(linked)
+  keepInvite(linked)
+  if (linked && (opened || main)) show(linked)
 }
 
 function show(path) {
@@ -952,12 +1018,17 @@ app.on('before-quit', (event) => {
 app.whenReady().then(async () => {
   if (LOOKS_DEV) app.dock?.setIcon(join(HERE, 'icon-dev.png'))
   menu()
+  if (APPIMAGE && !DEV) handleLinks()
   protocol.handle('app', serve)
+  fresh = !existsSync(CONTAINER ? join(HOME, LOCAL_KEY) : join(DATA, 'app'))
+  keepInvite(linked)
+  if (fresh) window(pendingInvite() ?? '/')
+  const carried = fresh && !pendingInvite() && !TEST_HOME ? carryClipboard(main) : Promise.resolve(false)
   if (CONTAINER && !await dockerUp()) {
+    await carried
     await dialog.showMessageBox({ type: 'error', message: 'OpenHut needs Docker', detail: 'On Linux, OpenHut runs each agent in its own gVisor sandbox in Docker. Install Docker (sudo apt install docker.io), let your user run it (sudo usermod -aG docker $USER), sign in again, then open OpenHut.', buttons: ['Quit'] })
     return app.quit()
   }
-  fresh = !existsSync(CONTAINER ? join(HOME, LOCAL_KEY) : join(DATA, 'app'))
   const hidden = process.argv.includes('--hidden') || (MAC && app.getLoginItemSettings().wasOpenedAtLogin)
   booted = boot().catch((error) => {
     appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't start: ${error.message}\n`)
@@ -966,10 +1037,6 @@ app.whenReady().then(async () => {
     bootFailed = started === true ? '' : String(started || 'OpenHut didn\'t start.')
     return started
   })
-  if (fresh) {
-    const invite = inviteLink(linked && `https://openhut.dev${linked}`) ?? (TEST_HOME ? null : inviteLink(clipboard.readText()))
-    window(invite ? invite.slice('https://openhut.dev'.length) : '/')
-  }
   const started = await booted
   if (started !== true) {
     const back = previousVersion()
@@ -981,14 +1048,9 @@ app.whenReady().then(async () => {
     return app.quit()
   }
   writeFileSync(BOOTED, app.getVersion())
-  if (!fresh && (!hidden || linked)) window(linked)
+  if (!fresh && (!hidden || linked)) window(linked ?? pendingInvite())
   opened = true
   watch()
   if (!DEV && RELEASE_FEED) update()
   app.on('activate', () => show())
-  app.on('second-instance', (_event, argv) => {
-    const url = argv.find((arg) => arg.startsWith(`${SCHEME}:`))
-    if (url) openLink(url)
-    else show()
-  })
 })

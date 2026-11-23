@@ -17,6 +17,7 @@ import { BIG, Step } from '@/features/cloud/step'
 import { shortDate } from '@/lib/format'
 import { isPhone } from '@/lib/native'
 import { open, usePath } from '@/lib/router'
+import { inviteOf } from '@/features/join/invite'
 import { copyText } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 
@@ -25,7 +26,7 @@ const POINTS = [
   [SquareLock02Icon, 'Encrypted on your device. No one can read it, including us'],
   [SourceCodeIcon, 'Open source, so anyone can check how it works'],
 ] as const
-const INVITED = 'Sign in with the email your invite went to. Everything you share there stays end-to-end encrypted.'
+const INVITED = 'Sign in with the email your invite went to. Everything in the team stays end-to-end encrypted.'
 const SWAP = 'col-start-1 row-start-1 inline-flex items-center justify-center gap-2 transition-[opacity,translate] duration-300 ease-[cubic-bezier(.22,1,.36,1)]'
 
 export function SignIn({ cloud }: { cloud: Cloud | undefined }) {
@@ -35,15 +36,16 @@ export function SignIn({ cloud }: { cloud: Cloud | undefined }) {
   const online = useOnline()
   const agents = useAgents().data?.length ?? 0
   const invited = usePath() === '/join'
+  const hint = invited ? inviteOf(location.hash)?.email : undefined
   const moving = migrating({ agents, invited })
   const busy = waiting || signIn.isPending
-  const action = isPhone() ? undefined : <Button type="button" variant="primary" className={cn(BIG, 'grid', busy && 'bg-[#2a2b2e]')} disabled={!online || signIn.isPending} onClick={() => signIn.mutate()}>
+  const action = isPhone() ? undefined : <Button type="button" variant="primary" className={cn(BIG, 'grid', busy && 'bg-[#2a2b2e]')} disabled={!online || signIn.isPending} onClick={() => signIn.mutate(hint)}>
     <span className={cn(SWAP, busy && '-translate-y-2.5 opacity-0')}><Google size={17} />Continue with Google</span>
     <span className={cn(SWAP, !busy && 'translate-y-2.5 opacity-0')} aria-hidden={!busy}><Spinner className="mt-0 border-white/30 border-t-white" />Finish in your browser</span>
   </Button>
   const quiet = !invited && !isPhone() && <Button type="button" variant="text" onClick={() => open('join-link')}>I have an invite link</Button>
   const link = waiting ? <span className="text-mute">Google opened in your browser · <Button type="button" variant="text" className="font-normal text-mute" onClick={cancel}>Cancel</Button></span> : quiet
-  const [title, line] = invited ? ['You’re invited.', INVITED] : [moving ? 'Sign in to keep going.' : 'Your agents, everywhere.', moving]
+  const [title, line] = invited ? ['You’re invited.', hint ? `Sign in as ${hint} to join. Everything in the team stays end-to-end encrypted.` : INVITED] : [moving ? 'Sign in to keep going.' : 'Your agents, everywhere.', moving]
   return <Step title={title} line={line} action={action} link={link}>
     {!invited && <ul className="m-0 flex list-none flex-col gap-3 p-0 text-left">{POINTS.map(([icon, text]) => <li key={text} className="flex items-center gap-3 text-[15px]/[1.4] text-body"><I icon={icon} size={18} className="shrink-0 text-mute" />{text}</li>)}</ul>}
     {isPhone() && <p className="m-0 text-[13px] text-mute">Sign in to OpenHut on your computer.</p>}

@@ -2,7 +2,7 @@ appId: dev.openhut.app
 productName: OpenHut
 copyright: Copyright © 2026 OpenHut
 directories: { buildResources: build, output: release }
-files: [src/main.mjs, src/dev-build.mjs, src/icon-dev.png, src/invite-link.mjs, src/open-link.mjs, src/release-key.mjs, src/update-channel.mjs, src/preload.cjs, "src/trayTemplate*.png", dist/renderer/**, package.json]
+files: [src/main.mjs, src/desktop-entry.mjs, src/dev-build.mjs, src/icon-dev.png, src/invite-link.mjs, src/open-link.mjs, src/release-key.mjs, src/update-channel.mjs, src/preload.cjs, "src/trayTemplate*.png", dist/renderer/**, package.json]
 asar: true
 electronLanguages: en-US
 protocols: [{ name: OpenHut, schemes: [openhut] }]
@@ -24,7 +24,7 @@ mac:
   artifactName: "OpenHut-${version}-${arch}.${ext}"
 linux:
   target: [{ target: AppImage, arch: x64 }, { target: deb, arch: x64 }]
-  icon: build/icon.png
+  icon: build/icons
   executableName: openhut
   category: Utility
   maintainer: OpenHut <hello@openhut.dev>
@@ -35,7 +35,7 @@ win:
   executableName: OpenHut
 nsis: { artifactName: "OpenHut-Setup-x64.${ext}", oneClick: true, perMachine: false }
 appImage: { artifactName: "OpenHut-x64.AppImage" }
-deb: { artifactName: openhut-x64.deb }
+deb: { artifactName: openhut-x64.deb, packageCategory: utils, priority: optional, fpm: ['build/openhut.metainfo.xml=/usr/share/metainfo/dev.openhut.app.metainfo.xml'] }
 dmg:
   artifactName: "OpenHut-${arch}.${ext}"
   title: OpenHut

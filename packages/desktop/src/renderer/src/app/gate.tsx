@@ -16,7 +16,7 @@ import { JoinLinkDialog } from '@/features/join/cloud-join'
 import { useFirstRun, type FirstRun } from '@/features/settings/desktop'
 import { isPhone, UnlockCanceled } from '@/lib/native'
 import { RequestError } from '@/lib/api-client'
-import { useOpen } from '@/lib/router'
+import { useOpen, usePath } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
 type Me = { error: Error | null; isFetching: boolean; refetch: () => unknown }
@@ -29,6 +29,7 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   const queries = useQueryClient()
   const chosen = useChosen()
   const opened = useOpen()
+  const invited = usePath() === '/join'
   const [saving, setSaving] = useState(false)
   const [offer, setOffer] = useState(false)
   const helper = usePasskeys()
@@ -53,7 +54,7 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   }, [installing, refetchMe, refetchCloud])
   if (step === 'loading') return error && !installing ? <Down error={error} retrying={me.isFetching} onRetry={() => { void me.refetch(); void cloud.refetch() }} /> : <Waiting note={installing ? 'Setting up OpenHut on this computer. The first time takes a few minutes.' : undefined} />
   if (isPhone() && step !== 'ready') return <Stage><Step title="Finish on your computer." line="Set up OpenHut there, then come back." /></Stage>
-  if (step === 'kit' && !saving) setSaving(true)
+  if (step === 'kit' && !saving && !invited) setSaving(true)
   if (saving) return <Stage><SaveKit onDone={() => {
     setSaving(false)
     setOffer(Boolean(helper?.passkeys && helper.prf && !cloud.data?.passkey))
@@ -61,7 +62,7 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   if (offer) return <Stage><TouchIdOffer onDone={() => setOffer(false)} /></Stage>
   if (step === 'getting-ready' && !readying) setReadying(true)
   if (readying && step !== 'getting-ready' && step !== 'ready') setReadying(false)
-  if (step === 'getting-ready' || (readying && step === 'ready')) return <Stage><GettingReady run={run.data} failure={failure} ready={step === 'ready'} onRetry={() => { void run.refetch(); void me.refetch(); void cloud.refetch() }} onOpen={() => setReadying(false)} /></Stage>
+  if (step === 'getting-ready' || (readying && step === 'ready')) return <Stage><GettingReady run={run.data} failure={failure} ready={step === 'ready'} invited={invited} onRetry={() => { void run.refetch(); void me.refetch(); void cloud.refetch() }} onOpen={() => setReadying(false)} /></Stage>
   if (step === 'sign-in') return <><Stage><SignIn cloud={cloud.data} /></Stage>{opened === 'join-link' && <JoinLinkDialog />}</>
   if (!cloud.data) return <Waiting />
   if (step === 'unlock') return <Stage><Unlock cloud={cloud.data} /></Stage>
@@ -82,16 +83,18 @@ function Down({ error, retrying, onRetry }: { error: Error | null; retrying: boo
   </div>
 }
 
-function GettingReady({ run, failure, ready, onRetry, onOpen }: { run: FirstRun | undefined; failure?: string; ready: boolean; onRetry: () => void; onOpen: () => void }) {
+function GettingReady({ run, failure, ready, invited, onRetry, onOpen }: { run: FirstRun | undefined; failure?: string; ready: boolean; invited: boolean; onRetry: () => void; onOpen: () => void }) {
   if (failure) return <Step title="OpenHut couldn’t start." line={failure} action={<Button variant="primary" className={BIG} onClick={onRetry}><I icon={Refresh01Icon} size={16} />Try again</Button>} />
   const steps = run?.steps ?? []
   const now = steps.find(([, , state]) => state === 'now' || state === 'failed')
   const doneCount = steps.filter(([, , state]) => state === 'done').length
   const value = ready ? 100 : Math.round(((doneCount + (now?.[3] ?? 0)) / Math.max(steps.length, 1)) * 100)
+  const [title, line] = invited ? ['You’re invited.', ready ? 'OpenHut is ready.' : 'Setting up OpenHut. This happens once, then your invite.'] : [ready ? 'Ready.' : 'Getting ready.', ready ? 'Your agents live here now.' : 'Only the first time.']
+  const label = invited ? 'See your invite' : 'Open OpenHut'
   const action = run?.failed
     ? <Button variant="primary" className={BIG} onClick={onRetry}><I icon={Refresh01Icon} size={16} />Try again</Button>
-    : <Button variant="primary" className={cn(BIG, !ready && 'bg-[#2a2b2e] disabled:opacity-100')} disabled={!ready} autoFocus={ready} onClick={onOpen}>{!ready && <Spinner className="mt-0 border-white/30 border-t-white" />}{ready ? 'Open OpenHut' : 'Setting up'}</Button>
-  return <Step happy={ready} title={ready ? 'Ready.' : 'Getting ready.'} line={ready ? 'Your agents live here now.' : 'Only the first time.'} action={action}>
+    : <Button variant="primary" className={cn(BIG, !ready && 'bg-[#2a2b2e] disabled:opacity-100')} disabled={!ready} autoFocus={ready} onClick={onOpen}>{!ready && <Spinner className="mt-0 border-white/30 border-t-white" />}{ready ? label : 'Setting up'}</Button>
+  return <Step happy={ready} title={title} line={line} action={action}>
     <Meter className="w-[320px] max-w-full" size="xs" value={value} aria-label="Getting ready" />
     <span key={now?.[0]} className={cn('animate-[fadein_.35s_ease-out] text-[14px] font-medium', now?.[2] === 'failed' ? 'text-fail' : 'text-ink')}>{ready ? 'All done' : now?.[0] ?? 'Starting'}</span>
   </Step>

@@ -6,6 +6,7 @@
   "productName": "OpenHut",
   "description": "Self-hosted agents for a team, on this computer.",
   "author": "OpenHut",
+  "license": "MIT",
   "homepage": "https://openhut.dev",
   "main": "src/main.mjs",
   "scripts": {

@@ -15,6 +15,7 @@ type Bridge = {
   setPrefs: (patch: Partial<Prefs>) => Promise<Prefs | Failure>
   firstRun: () => Promise<FirstRun | Failure>
   onChanged: (listener: () => void) => void
+  focus?: () => Promise<unknown>
 }
 const PREFS_KEY = ['prefs']
 const FIRST_RUN_POLL_MS = 500

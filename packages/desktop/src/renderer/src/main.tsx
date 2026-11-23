@@ -7,6 +7,7 @@ import hutDev from '@/hut-dev.svg'
 import { desktop } from '@/features/settings/desktop'
 import { RequestError } from '@/lib/api-client'
 import { followEnrollments } from '@/features/computers/enroll'
+import { clearCarriedInvite } from '@/features/join/invite'
 import { followUpdate, updates } from '@/features/settings/update'
 import { followEvents } from '@/lib/live'
 import sprite from '@/logos.svg?raw'
@@ -27,6 +28,7 @@ desktop?.onChanged(() => void client.invalidateQueries())
 followEnrollments(client)
 followUpdate({ bridge: updates, client })
 addEventListener('pointerdown', () => { document.documentElement.dataset.pointer = '' }, true)
+addEventListener('pointerdown', clearCarriedInvite, { once: true, capture: true })
 addEventListener('keydown', (event) => { if (event.key === 'Tab') delete document.documentElement.dataset.pointer }, true)
 followEvents(client)
 document.body.insertAdjacentHTML('afterbegin', sprite)

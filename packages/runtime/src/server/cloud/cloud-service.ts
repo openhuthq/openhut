@@ -13,17 +13,18 @@ import { config } from '../platform/config.ts'
 import { db } from '../platform/db.ts'
 import { log } from '../platform/events.ts'
 import { page } from '../platform/page.ts'
+import { settings } from '../platform/settings.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { callbackBase, connectionService } from '../connections/connection-service.ts'
 import { keyStore, type Account, type AskRoom } from './key-store.ts'
 import { deviceName, deviceOs, keysService, openLetter, sealTo } from './keys-service.ts'
 import { roomKeys } from './room-keys.ts'
 import { guessSite, teamIcon } from './team-icon.ts'
+import { hinted, takeSignIn, withSignIn } from './sign-ins.ts'
 import { BEAT_MS, cloudEvents } from './cloud-events.ts'
 import { recordsService } from './records.ts'
 import { agentService } from '../agents/agent-service.ts'
 
-const PENDING_MS = 15 * 60_000
 const CHECK_MS = 60_000
 const SIGNED_IN = 'You’re signed in. You can go back to OpenHut.'
 const Boxes = z.object({ data: z.array(z.object({ id: z.string(), body: z.string(), by: z.string(), signature: z.string() })) })
@@ -36,7 +37,6 @@ const Letters = z.object({ data: z.array(Letter) })
 const Asked = z.object({ data: z.array(JoinRequest) })
 const ROTATE = 'cloud_rotate'
 const ASK_POLL_MS = 2000
-const pending = new Map<string, number>()
 let signInError: string | null = null
 let boxesDiffer = false
 let checkedAt = 0
@@ -215,19 +215,18 @@ export const cloudService = {
     return cloudService.status()
   },
 
-  async start(): Promise<CloudAuthorization> {
+  async start({ loginHint }: { loginHint?: string } = {}): Promise<CloudAuthorization> {
     const device = await keysService.device()
     const state = randomBytes(24).toString('base64url')
     const { url } = await cloud.signIn({ provider: 'google', device: toBase64(device.publicKey), redirectUrl: `${callbackBase()}/api/cloud/callback`, state })
-    for (const [key, at] of pending) if (Date.now() - at > PENDING_MS) pending.delete(key)
-    pending.set(state, Date.now())
+    await settings.setSignIns(withSignIn({ pending: settings.signIns(), state, now: Date.now() }))
     signInError = null
-    return { object: 'cloud_authorization', authorizationUrl: url }
+    return { object: 'cloud_authorization', authorizationUrl: hinted({ url, loginHint }) }
   },
 
   async finish({ state, code, error }: { state?: string; code?: string; error?: string }): Promise<string> {
-    const started = pending.has(state ?? '')
-    pending.delete(state ?? '')
+    const { started, rest } = takeSignIn({ pending: settings.signIns(), state: state ?? '', now: Date.now() })
+    await settings.setSignIns(rest)
     if (!started) return page('This sign-in expired. Go back to OpenHut and try again.')
     if (!code) {
       signInError = error ? 'Sign-in was cancelled.' : 'Google didn’t finish the sign-in. Try again.'
