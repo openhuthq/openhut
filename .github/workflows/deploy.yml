@@ -25,8 +25,18 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-  deploy:
+  image:
     needs: test
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/runtime-image.yml
+    secrets: inherit
+    with:
+      tags: edge
+
+  deploy:
+    needs: [test, image]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -48,6 +58,8 @@ jobs:
       - name: Release files
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ needs.image.outputs.image }}
+          BUILD: ${{ needs.image.outputs.build }}
         run: |
           set -o pipefail
           if names=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q '.assets[].name' 2>err.txt); then :
