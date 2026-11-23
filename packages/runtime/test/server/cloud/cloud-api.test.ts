@@ -83,6 +83,13 @@ test('against the real cloud API: dev sign-in, save the kit, make an agent, chat
     const record = await recordsService.get({ collection: 'connection', workspace, id: connection.id })
     assert.equal(record?.personal, true)
     assert.ok(keysService.vault(), 'a Mac holds the account’s vault key for connection secrets')
+
+    const token = await keysService.token()
+    const lists = () => fetch(`${cloud.url}/v1/member-lists?workspace=${workspace}`, { headers: { authorization: `Bearer ${token}` } })
+    assert.equal((await lists()).status, 200)
+    const out = await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })
+    assert.equal(out.json<{ status: string }>().status, 'off', out.body)
+    assert.equal((await lists()).status, 403, 'signing out took this computer off the account’s device list')
   } finally {
     cloudEvents.stop()
     hermes.close()

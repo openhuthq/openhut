@@ -51,7 +51,7 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
 function StartOver({ onBack }: { onBack: () => void }) {
   const remove = useDeleteData()
   return <Step title="Start over?" line="This deletes your account and everything in it, then starts fresh. It can’t be undone: your data was encrypted on your devices, so nobody can recover it." back={onBack}
-    action={<Button type="button" variant="destructive" className={BIG} disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete and start over'}</Button>}>
+    action={<Button type="button" variant="destructive" className={BIG} disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: () => navigate('/', true), onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete and start over'}</Button>}>
     <ErrorNote message={remove.error?.message} />
   </Step>
 }

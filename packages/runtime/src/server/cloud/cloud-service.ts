@@ -4,7 +4,7 @@ import * as z from 'zod/mini'
 import { type Backup, KeyBox, Letter, MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type UnlockCloud, siteHost } from '@openhut/common/cloud/cloud.ts'
 import { JoinCode, Me, signV1 } from '@openhut/common/cloud/v1/identity.ts'
 import { JoinRequest } from '@openhut/common/cloud/v1/trust.ts'
-import { addedOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
+import { addedOf, bodyOf, nextOf, signList, withoutDevices } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64, toBase64 } from '@openhut/common/vault/vault.ts'
 import { kitId } from '@openhut/common/vault/kit-file.ts'
 import { cloud, type Box, type Letter as Sealed, type Reply } from '../platform/cloud.ts'
@@ -506,10 +506,22 @@ async function joinWith({ account: restored, typed }: { account: Account; typed:
 
 async function leaveHere(): Promise<void> {
   if (!await recordsService.sent()) throw new HttpError(409, 'Your agents aren’t backed up yet. Sign out once this computer is online and the backup is done, so nothing is lost.')
+  await dropHere()
   cloudEvents.stop()
   await agentService.wipe()
   await connectionService.wipe()
   await keysService.forgetHere()
+}
+
+async function dropHere(): Promise<void> {
+  const me = await keysService.deviceKey()
+  const signer = await keysService.device()
+  for (const room of roomKeys.rooms()) {
+    const body = bodyOf(room.list)
+    if (!body?.members.some((member) => member.devices.includes(me))) continue
+    const list = await signList({ signer, body: withoutDevices({ body: await nextOf({ list: room.list, body, me }), gone: [me] }) })
+    await putList({ workspace: room.workspace.id, list })
+  }
 }
 
 async function removed(): Promise<void> {
