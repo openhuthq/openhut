@@ -107,4 +107,14 @@ test('a decision the agent never heard about is sent again after a restart', asy
   assert.equal((await db.selectFrom('change_request').select('told').where('id', '=', id).executeTakeFirstOrThrow()).told, true)
 })
 
+test('approving again after a crash is safe: a channel already removed counts as done, and the agent can\'t ask to add one it has', async () => {
+  const twice = await client.callTool({ name: 'add_channel', arguments: { why: 'x', kind: 'whatsapp', ownerAddress: '+15550002222', open: false, origin: app } })
+  assert.equal(twice.isError, true)
+  assert.match(textOf(twice), /already have WhatsApp/)
+  const asked = textOf(await client.callTool({ name: 'remove_channel', arguments: { why: 'Not used.', id: 'ch_chgwhats', origin: app } }))
+  const id = idIn(asked)
+  await db.deleteFrom('channel').where('id', '=', 'ch_chgwhats').execute()
+  assert.equal((await changeRequestService.approve({ actor: owner, id })).status, 'approved')
+})
+
 test.after(() => { void client.close(); server.close() })

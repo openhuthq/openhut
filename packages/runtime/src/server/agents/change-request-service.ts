@@ -123,7 +123,11 @@ function parsedInput({ action, input, agentId }: { action: ChangeAction; input: 
 async function summaryOf({ action, input, agentId }: { action: ChangeAction; input: Record<string, unknown>; agentId: string }): Promise<string> {
   switch (action) {
     case 'update_self': return [input.name !== undefined && `Rename to ${String(input.name)}`, input.instructions !== undefined && 'Change its instructions'].filter(Boolean).join(' and ')
-    case 'add_channel': return `Add ${LABEL[input.kind as keyof typeof LABEL]}${input.open ? ', open to anyone' : ''}`
+    case 'add_channel': {
+      const kind = input.kind as keyof typeof LABEL
+      if (await db.selectFrom('channel').select('id').where('agent_id', '=', agentId).where('kind', '=', kind).executeTakeFirst()) throw new HttpError(409, `You already have ${LABEL[kind]}. Ask your owner to remove it in OpenHut first, or ask to change it with update_channel.`)
+      return `Add ${LABEL[kind]}${input.open ? ', open to anyone' : ''}`
+    }
     case 'update_channel': return `Change who can message it on ${LABEL[(await ownChannel({ agentId, id: String(input.id) })).kind]}`
     case 'remove_channel': return `Remove ${LABEL[(await ownChannel({ agentId, id: String(input.id) })).kind]}`
     case 'request_connection': {
@@ -139,7 +143,7 @@ async function apply({ actor, row, input }: { actor: Caller; row: Row; input: un
   const fields = input as Record<string, unknown>
   switch (action(row)) {
     case 'update_self': return void await agentService.update({ actor, id: agentId, patch: z.parse(SelfChange, input) })
-    case 'add_channel': return void await channelService.create({ actor, ...z.parse(CreateChannel, { ...fields, agentId }) })
+    case 'add_channel': return void await channelService.create({ actor, ...z.parse(CreateChannel, { ...fields, agentId }) }).catch(alreadyDone(409))
     case 'update_channel': {
       const { id, ...patch } = z.parse(ChannelChange, input)
       await ownChannel({ agentId, id })
@@ -147,10 +151,15 @@ async function apply({ actor, row, input }: { actor: Caller; row: Row; input: un
     }
     case 'remove_channel': {
       const { id } = z.parse(ChannelId, input)
-      await ownChannel({ agentId, id })
-      return void await channelService.delete({ actor, id })
+      return void await ownChannel({ agentId, id }).then(() => channelService.delete({ actor, id })).catch(alreadyDone(404))
     }
     case 'request_connection': return void await agentService.createGrant({ actor, agentId, connectionId: z.parse(ConnectionId, input).connectionId })
+  }
+}
+
+function alreadyDone(status: number) {
+  return (err: unknown) => {
+    if (!(err instanceof HttpError) || err.status !== status) throw err
   }
 }
 

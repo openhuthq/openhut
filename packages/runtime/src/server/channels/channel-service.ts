@@ -43,13 +43,10 @@ export const channelService = {
     if (row.kind !== 'whatsapp' || row.status !== 'linking') return rowChannel({ row, qr: null })
     const agent = await agentService.requireEditable({ actor, id: row.agent_id }).catch(() => null)
     if (!agent || (agent.owner ?? actor.email) !== actor.email) return rowChannel({ row, qr: null })
-    const pairing = whatsappPairing.follow(row.agent_id)
+    const pairing = whatsappPairing.follow({ agentId: row.agent_id, onLinked: (phone) => whatsappLinked({ id, phone, place: placeOf(agent) }) })
     if (pairing.status === 'error') throw new HttpError(502, `WhatsApp didn't connect (${pairing.error}). Close this and try again.`)
     if (pairing.status !== 'linked') return rowChannel({ row, qr: pairing.qr ?? null })
-    const linked = await db.updateTable('channel').set({ status: 'connected', account: pairing.phone ? `+${pairing.phone}` : null }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
-    const value: ChannelRecord = { kind: linked.kind, status: 'connected', account: linked.account, ...audienceOf(linked), createdAt: new Date(linked.created_at).toISOString() }
-    await recordsService.put({ collection: 'channel', id, parent: linked.agent_id, ...placeOf(agent), value, queue: true, reapply: (latest) => ({ value: { ...ChannelRecord.parse(latest.value), status: 'connected', account: linked.account }, secret: latest.secret }) })
-    emit({ name: 'channel.linked', actor, target: { type: 'channel', id, kind: linked.kind, agentId: linked.agent_id } })
+    const linked = await whatsappLinked({ id, phone: pairing.phone, place: placeOf(agent) })
     return rowChannel({ row: linked, qr: null })
   },
 
@@ -243,6 +240,14 @@ async function disconnect(row: Row): Promise<void> {
       return
     case 'discord': return
   }
+}
+
+async function whatsappLinked({ id, phone, place }: { id: string; phone: string | undefined; place: { workspace: string; personal: boolean } }): Promise<Row> {
+  const linked = await db.updateTable('channel').set({ status: 'connected', account: phone ? `+${phone}` : null }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
+  const value: ChannelRecord = { kind: linked.kind, status: 'connected', account: linked.account, ...audienceOf(linked), createdAt: new Date(linked.created_at).toISOString() }
+  await recordsService.put({ collection: 'channel', id, parent: linked.agent_id, ...place, value, queue: true, reapply: (latest) => ({ value: { ...ChannelRecord.parse(latest.value), status: 'connected', account: linked.account }, secret: latest.secret }) })
+  emit({ name: 'channel.linked', target: { type: 'channel', id, kind: linked.kind, agentId: linked.agent_id } })
+  return linked
 }
 
 async function claimLink(row: Row): Promise<string | null> {
