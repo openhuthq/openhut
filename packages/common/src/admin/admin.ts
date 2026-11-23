@@ -32,7 +32,6 @@ export const Admin = z.object({
   }),
   tailnetUrl: z.optional(z.null()),
   google: z.optional(z.object({ clientId: z.null(), redirectUri: z.string() })),
-  usageData: z.boolean(),
   publicKey: z.string(),
   relay: z.optional(z.object({ key: z.string(), computerId: z.string(), url: z.nullable(z.string()) })),
   features: z.optional(z.object({ whatsapp: z.boolean(), browser: z.boolean() })),
@@ -52,7 +51,6 @@ export type Health = z.infer<typeof Health>
 
 export const UpdateAdminFields = {
   seatToken: z.optional(z.string().check(z.regex(/^\S{20,}$/, 'Paste the token that `claude setup-token` printed.'), z.maxLength(2000))),
-  usageData: z.optional(z.boolean()),
 }
 export const UpdateAdmin = z.object(UpdateAdminFields).check(atLeastOneField)
 export type UpdateAdmin = z.infer<typeof UpdateAdmin>

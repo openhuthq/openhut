@@ -18,7 +18,6 @@ import { Sidebar, SidebarContext, type Contact } from '@/features/agents/sidebar
 import { useThreads } from '@/features/threads/api'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate, Redirect } from '@/lib/router'
-import { track } from '@/lib/track'
 import { cn } from '@/lib/utils'
 
 export type ShellRoute = Extract<Route, { page: 'home' } | { page: 'agent' } | { page: 'missing' }>
@@ -32,7 +31,6 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
   const phone = useMedia(PHONE)
   const order = useRef<string[]>([])
   const activeId = route.page === 'agent' ? route.agentId : undefined
-  useEffect(() => track({ name: 'dashboard_page_viewed', properties: { page: overlay ?? route.page } }), [overlay, route.page])
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return

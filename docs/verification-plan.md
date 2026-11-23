@@ -41,8 +41,7 @@ How the installer works, and how `npm run e2e` runs it on Docker Desktop (a bare
 
 ## Checks
 
-Each check is one `node:test` test in `packages/e2e/src/e2e.ts`, which names what it proves and what it expects; a run's `packages/e2e/results/e2e-report.md` lists them all with the actual values. Two worth naming:
-- **T1** is a unit-level check run on the server: it loads `events.ts` in local mode in a node process and checks the usage data it would send has no email, login or username. The desktop app's own telemetry is not exercised end to end.
+Each check is one `node:test` test in `packages/e2e/src/e2e.ts`, which names what it proves and what it expects; a run's `packages/e2e/results/e2e-report.md` lists them all with the actual values. One worth naming:
 - **F8** asks agentd for its fence report and requires exactly the six checks above, all passing on gVisor. F4 and H5 probe the same ground from a real agent: every blocked target must time out from the agent (dropped, not reset) while the server reaches it, including stand-in listeners at 10.99.0.10:443 and 169.254.169.254:443 and one the run holds open on the server itself.
 
 ## Mock parity
@@ -54,7 +53,7 @@ The approved mock is the **Mock** tab of the OpenHut blueprint artifact (https:/
 | Agents, New agent | yes | — |
 | Agent: one page, no tabs. Left: name with Reroll on the avatar, instructions preview, skills. Right: status, model dropdown, owner; channels; connections | yes | Slack and WhatsApp work. The mock's Reroll, skill upload, Memories row and per-connection tool access aren't in this build, so the page leaves them out. Stop/Start and Delete have coloured text with a neutral border |
 | Connections; a connection: Activity on the left, details, sharing and agents on the right; add Postgres | yes | Sharing with one person isn't in this build; other connector kinds are listed, not installable |
-| Admin: Claude seat, Google, Server, Usage data | yes | The mock's Google, Backups and 5-hour window aren't in this build, so the page leaves them out |
+| Admin: Claude seat, Google, Server | yes | The mock's Google, Backups and 5-hour window aren't in this build, so the page leaves them out |
 
 **User sign-off on parity: pending.**
 

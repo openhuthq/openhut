@@ -11,7 +11,6 @@ import { agentController, grantController } from './agents/agent-controller.ts'
 import { memoryController } from './agents/memory-controller.ts'
 import { browserController } from './agents/browser-controller.ts'
 import { eventsController } from './platform/events-controller.ts'
-import { startTelemetry } from './platform/telemetry.ts'
 import { skillController } from './agents/skill-controller.ts'
 import { agentService } from './agents/agent-service.ts'
 import { channelController } from './channels/channel-controller.ts'
@@ -87,7 +86,6 @@ process.once('SIGTERM', async () => {
   process.exit(0)
 })
 emit({ name: 'app.started', properties: { at: config.installKind === 'server' ? config.port : config.socket, build: config.build, version: config.version, kind: config.installKind } })
-await startTelemetry()
 relayService.start({ server: app.server }).catch((err: unknown) => log.error({ event: 'relay.start_failed', error: messageOf(err) }))
 await gatewayServer.start().catch(async (err: unknown) => {
   log.error({ event: 'gateway.bind_failed', port: config.gatewayPort, error: messageOf(err) })
