@@ -80,7 +80,7 @@ export const ROLES = ['owner', 'admin', 'member'] as const
 export const Role = z.enum(ROLES)
 export type Role = z.infer<typeof Role>
 
-export const Member = z.object({ email: Email, role: Role, devices: z.array(DeviceKey).check(z.maxLength(20)), kit: z.optional(DeviceKey) })
+export const Member = z.object({ email: Email, role: Role, devices: z.array(DeviceKey).check(z.maxLength(20)), kit: z.optional(DeviceKey), viewers: z.optional(z.array(DeviceKey).check(z.maxLength(20))) })
 export type Member = z.infer<typeof Member>
 
 export const PendingInvite = z.object({ email: Email, role: z.enum(['admin', 'member']), key: DeviceKey })
