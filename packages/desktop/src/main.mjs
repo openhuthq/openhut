@@ -269,10 +269,10 @@ async function install({ peer, join, dns, entry }) {
   const found = await tailnet()
   const ip = found.state === 'running' ? found.peers.find((each) => each.dns === dns)?.ip : undefined
   if (!ip) throw new Error(`Can't find ${name} on your Tailscale. Check it's on.`)
-  say(`Installing OpenHut on ${dns} over Tailscale SSH`)
-  await tailscaleSsh({ args: ['ssh', `root@${dns}`, `read -r OPENHUT_JOIN; export OPENHUT_JOIN; script=$(curl -fsSL '${INSTALL_URL}') || exit 1; printf '%s\\n' "$script" | OPENHUT_ROUTE=tailnet OPENHUT_APP_VERSION=${app.getVersion()} sh`], input: `${join}\n`, say })
+  say(`Installing OpenHut on ${dns} over Tailscale SSH. It joins through OpenHut Relay.`)
+  await tailscaleSsh({ args: ['ssh', `root@${dns}`, `read -r OPENHUT_JOIN; export OPENHUT_JOIN; script=$(curl -fsSL '${INSTALL_URL}') || exit 1; printf '%s\\n' "$script" | OPENHUT_APP_VERSION=${app.getVersion()} sh`], input: `${join}\n`, say })
   say(`${name} is ready. Approve it when it asks to join.`)
-  return { name, route: 'tailnet' }
+  return { name }
 }
 
 function boxLog(dns) {

@@ -7,7 +7,7 @@ data only through the runtime's gateway, which holds every key and checks each a
 it from the app, or by asking an agent to change its own name, instructions, channels or connections, which you approve in the app (`private/brain/decisions/agents-change-themselves.md`). Everyone signs in to OpenHut Cloud on first launch: always
 synced, always a team, end-to-end encrypted (`private/brain/decisions/sign-in-first.md`). Apps read sealed records from the cloud
 (`api.openhut.dev`) and decrypt them locally; a runtime keeps only the run set for the agents it runs. The app reaches the local
-runtime on a 0600 Unix socket, and a remote one end-to-end encrypted through the relay or straight over your tailnet, after it
+runtime on a 0600 Unix socket, and a remote one end-to-end encrypted through the relay (Tailscale only carries the first install, over Tailscale SSH), after it
 asked to join with a one-use code and you approved it.
 Scope and decisions: `private/brain/decisions/openhut-v1-scope.md`.
 
@@ -26,7 +26,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   serves the renderer on `app://openhut`) and the React dashboard in `src/renderer` (Vite to `dist/renderer`, TanStack
   Query), which calls `/api/*` on `app://openhut`; the main process forwards it to the runtime's socket. Tailwind v4 with shared components in `src/renderer/src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`private/brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.
-- **`packages/tunnel`** — `@openhut/tunnel`, the encrypted tunnel (through the relay, or fed by any pipe through `sessions()`, which the runtime's tailnet port uses): Noise IK on `noise-handshake`,
+- **`packages/tunnel`** — `@openhut/tunnel`, the encrypted tunnel (through the relay; `sessions()` runs it over any pipe): Noise IK on `noise-handshake`,
   the frame codec, `connect` (device) and `serve` (computer); both show the access token as `x-openhut-token`, so `connect` runs in Node only for now.
 - **`packages/e2e`** — `@openhut/e2e`, the end-to-end run: the cloud server on PGlite, a bare Linux server in Docker, the
   curl install of a remote runtime that joins with a one-use code (`OPENHUT_JOIN`), a tampered upgrade, the upgrade and a restart. Results go to `packages/e2e/results/` (gitignored).
