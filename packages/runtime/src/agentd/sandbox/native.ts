@@ -133,7 +133,7 @@ async function halt({ id, seconds }: { id: string; seconds: number }) {
 }
 
 function closeBrowser(spec: SandboxSpec) {
-  const dir = spec.env.AGENT_BROWSER_SOCKET_DIR
+  const dir = envOf(spec).AGENT_BROWSER_SOCKET_DIR
   if (!dir || !existsSync(dir)) return
   for (const name of readdirSync(dir).filter((each) => each.endsWith('.pid'))) {
     const pid = Number(readFileSync(join(dir, name), 'utf8'))

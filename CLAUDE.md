@@ -2,7 +2,7 @@
 
 Self-hosted agents with an end-to-end encrypted cloud: the OpenHut app (Mac and Linux) runs agents on several runtimes, one on
 this computer and one on each computer you add. A runtime runs many Hermes agents, each in its
-own process (a plain process that runs as you on a Mac or Windows PC, a gVisor sandbox in Docker on Linux), with their own Slack app and WhatsApp number. Agents reach team
+own process (a plain process that runs as you in the app on a Mac, Windows or Linux PC, a gVisor sandbox in Docker on a server you add), with their own Slack app and WhatsApp number. Agents reach team
 data only through the runtime's gateway, which holds every key and checks each agent's grants on every call. You manage
 it from the app, or by asking an agent to change its own name, instructions, channels or connections, which you approve in the app (`private/brain/decisions/agents-change-themselves.md`). Everyone signs in to OpenHut Cloud on first launch: always
 synced, always a team, end-to-end encrypted (`private/brain/decisions/sign-in-first.md`). Apps read sealed records from the cloud
@@ -20,9 +20,9 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   errors, evlog logging, the typed agentd client), `team/` (identity: the socket or the enrolled key, and the one owner),
   `agents/` (agents, grants, their Hermes files), `channels/`, `connections/`, `gateway/` (the agents' MCP gateway and
   key broker on :8081), `admin/`, and
-  `integrations/<service>/`. `src/agentd/` is the root helper: the only process that starts agents (gVisor on Linux, native on
-  Mac and Windows: a plain Hermes process per agent, or memory, `private/brain/decisions/sandbox-module.md`), on a Unix socket. Tests mirror them in `test/server/` and `test/agentd/`.
-- **`packages/desktop`** — `@openhut/desktop`, the Mac and Linux app (`private/brain/decisions/desktop-app.md`): Electron main (`src/main.mjs`, starts agentd and the server,
+  `integrations/<service>/`. `src/agentd/` is the root helper: the only process that starts agents (gVisor on servers, native in the app on
+  Mac, Windows and Linux: a plain Hermes process per agent, or memory, `private/brain/decisions/sandbox-module.md`), on a Unix socket. Tests mirror them in `test/server/` and `test/agentd/`.
+- **`packages/desktop`** — `@openhut/desktop`, the Mac, Windows and Linux app (`private/brain/decisions/desktop-app.md`): Electron main (`src/main.mjs`, starts agentd and the server,
   serves the renderer on `app://openhut`) and the React dashboard in `src/renderer` (Vite to `dist/renderer`, TanStack
   Query), which calls `/api/*` on `app://openhut`; the main process forwards it to the runtime's socket. Tailwind v4 with shared components in `src/renderer/src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`private/brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.
@@ -95,14 +95,14 @@ Every dev run (unpackaged, `OPENHUT_TEST_HOME`, or `npm -w @openhut/desktop run 
 ## Build the desktop app
 
 `npm -w @openhut/desktop run dist` builds the renderer, bundles the runtime's server and agentd with esbuild into
-`packages/desktop/dist/backend` with the Hermes runtime, Node, Claude Code and agent-browser for the build's platform (`scripts/pack-hermes.mjs`, pinned in `install/native-runtime.json`; nothing downloads on first run) (`scripts/pack-backend.mjs`; on Linux it packs nothing but an empty `node_modules`, since the install in Docker brings the rest), and runs electron-builder (`electron-builder.yml`): an arm64,
+`packages/desktop/dist/backend` with the Hermes runtime, Node, Claude Code and agent-browser for the build's platform (`scripts/pack-hermes.mjs`, pinned in `install/native-runtime.json`; nothing downloads on first run) (`scripts/pack-backend.mjs`), and runs electron-builder (`electron-builder.yml`): an arm64,
 macOS 14+ `release/mac-arm64/OpenHut.app`, `release/OpenHut-arm64.dmg` and the versioned zip. It signs with the Developer ID
 in the login keychain (hardened runtime, `build/entitlements.mac.plist`) and never notarizes (`notarize: false`): only the
 release workflow (`.github/workflows/desktop.yml`, `scripts/notarize.sh`) notarizes, staples and checks a build. The packaged app runs the real model unless `OPENHUT_MODEL` is set.
 Icon sources: `build/icon.svg`, `build/background.svg`. Gotchas: `private/brain/openhut-gotchas.md` (Mac app, Linux app).
 
 On x86_64 Linux, `npm -w @openhut/desktop run dist:linux` builds `release/OpenHut-x64.AppImage` and `release/openhut-x64.deb`;
-the Linux app runs this computer's runtime with the curl install in Docker (agents on gVisor, no KVM needed). It needs a Linux machine, not a cross-build from the Mac.
+the Linux app runs agents natively like the Mac app, with no Docker (`private/brain/decisions/linux-app-runs-agents-natively.md`). It needs a Linux machine, not a cross-build from the Mac.
 
 ## Test
 

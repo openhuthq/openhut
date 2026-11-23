@@ -56,6 +56,22 @@ test('an agent process tree includes what its children started', { skip: process
   assert.equal(pids.length, 3)
 })
 
+test('stopping an agent kills its browser daemon, whose socket folder is under the agent own tmp', { skip: process.platform === 'win32' }, async () => {
+  const agent: SandboxSpec = { ...spec, id: 'ag_test0003', env: { AGENT_BROWSER_SOCKET_DIR: '/tmp/oh-ag_test0003' } }
+  await native.create(agent)
+  const hermes = spawn('sleep', ['30'], { stdio: 'ignore' })
+  const daemon = spawn('sleep', ['30'], { stdio: 'ignore', detached: true })
+  const dir = join(data, 'native', agent.id, 'tmp', 'oh-ag_test0003')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, `${agent.id}.pid`), String(daemon.pid))
+  writeFileSync(join(data, 'native', agent.id, 'spec.json'), JSON.stringify({ spec: agent, pid: hermes.pid }))
+  const gone = new Promise((resolve) => daemon.once('exit', () => resolve('killed')))
+  await native.stop({ id: agent.id, seconds: 1 })
+  const outcome = await Promise.race([gone, sleep(5000).then(() => 'alive')])
+  daemon.kill('SIGKILL')
+  assert.equal(outcome, 'killed')
+})
+
 test('a command the computer lacks fails the run instead of crashing agentd', async () => {
   const home = join(data, 'home-missing')
   mkdirSync(home, { recursive: true })

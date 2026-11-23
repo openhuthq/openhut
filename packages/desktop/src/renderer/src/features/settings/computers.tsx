@@ -30,7 +30,6 @@ import { request } from '@/lib/api-client'
 import { ago, shortDateTime } from '@/lib/format'
 import { isPhone, useConfirmed } from '@/lib/native'
 import { APP_VERSION, type Computer, type TailnetPeer } from '@/lib/openhut'
-import { WORDS } from '@/lib/platform'
 import { open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
@@ -91,7 +90,7 @@ function noteOf({ computer, admin, count, device }: { computer: Computer; admin:
   if (computer.appTooOld) return 'Update OpenHut to use this computer'
   const failed = admin?.server.update?.status === 'failed' ? admin.server.update : null
   if (failed) return `Couldn't update to ${failed.to}. ${sentence(failed.reason ?? 'The update stopped before it finished.')}`
-  return [isPhone() ? 'Your computer' : 'This computer', WORDS.sandboxed ? 'Each agent sealed in its own box' : 'Agents have your access', agentCount(count), admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')
+  return [isPhone() ? 'Your computer' : 'This computer', 'Agents have your access', agentCount(count), admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')
 }
 
 function addedOf(device: Device | undefined) {

@@ -17,7 +17,7 @@ export const MAX_FPS = 30
 
 const AGENT_BROWSER = join(BIN, `agent-browser${EXE}`)
 const DIR = fileURLToPath(new URL('../../../../install/agent-browser', import.meta.url))
-const INSTALLED_CHROME = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', `${process.env.ProgramFiles}\\Google\\Chrome\\Application\\chrome.exe`, `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`]
+const INSTALLED_CHROME = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/opt/google/chrome/chrome', `${process.env.ProgramFiles}\\Google\\Chrome\\Application\\chrome.exe`, `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`]
 let chrome: string | undefined
 
 export const browser = {
@@ -97,7 +97,7 @@ function findChrome(dir: string, depth = 5): string | undefined {
   if (depth < 0 || !existsSync(dir)) return undefined
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name)
-    if (entry.isFile() && (entry.name === 'chrome.exe' || entry.name === 'Google Chrome for Testing')) return path
+    if (entry.isFile() && ['chrome', 'chrome.exe', 'Google Chrome for Testing'].includes(entry.name)) return path
     if (entry.isDirectory()) {
       const inner = findChrome(path, depth - 1)
       if (inner) return inner

@@ -29,7 +29,6 @@ import { AgentStatus } from '@/features/agents/status'
 import { formValues } from '@/lib/form'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
-import { WORDS } from '@/lib/platform'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -174,7 +173,7 @@ function RunsOn({ agent }: { agent: Agent }) {
     {move.line
       ? <p role="status" className="m-0 px-2.5 py-1 text-[12.5px]/[1.45] text-body">{move.line}</p>
       : note && <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{note}</p>}
-    {id === 'local' && !WORDS.sandboxed && <TeamHint agent={agent} server={(computers ?? []).find((each) => each.kind === 'server' && each.online)} onMove={(to) => move.go(to)} />}
+    {id === 'local' && <TeamHint agent={agent} server={(computers ?? []).find((each) => each.kind === 'server' && each.online)} onMove={(to) => move.go(to)} />}
   </>
 }
 

@@ -34,7 +34,7 @@ export function runsOnNote(computer: Computer) {
   if (!computer.online) return computer.kind === 'server' ? 'Offline · it isn’t answering' : 'Offline · open OpenHut on it to use it'
   if (computer.kind === 'server') return 'Sealed in its own box · always on'
   if (computer.kind === 'desktop') return 'Another of your computers · while it’s awake'
-  return `${WORDS.sandboxed ? 'Sealed in its own box' : 'With your access'} · while this ${WORDS.here} is awake`
+  return `With your access · while this ${WORDS.here} is awake`
 }
 
 export function whereNote(computer: Computer) {
