@@ -9,6 +9,7 @@ const ChatRequest = z.object({
   messages: z.optional(z.array(z.object({ role: z.optional(z.string()), content: z.optional(z.unknown()) }))),
   tools: z.optional(z.array(z.object({ name: z.optional(z.string()), function: z.optional(z.object({ name: z.optional(z.string()) })) }))),
 })
+const DirectCall = z.object({ tool: z.string(), args: z.optional(z.record(z.string(), z.unknown())) })
 const USAGE = { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 }
 
 export function testModel({ path, body, res }: { path: string; body: unknown; res: ServerResponse }): void {
@@ -22,7 +23,7 @@ export function testModel({ path, body, res }: { path: string; body: unknown; re
   const toolNames = (request.tools ?? []).map((tool) => tool.function?.name ?? tool.name).filter((name) => name !== undefined)
   const callTool = toolNames.find((name) => name.endsWith('call_tool'))
   log.info({ event: 'test_llm.request', messages: messages.length, lastRole: last.role, tools: toolNames.length, callTool })
-  const reply = replyTo({ last, callTool, shell: toolNames.find((name) => name === 'terminal' || name === 'Bash'), schedule: toolNames.find((name) => name.endsWith('schedule_routine')) })
+  const reply = replyTo({ last, callTool, shell: toolNames.find((name) => name === 'terminal' || name === 'Bash'), schedule: toolNames.find((name) => name.endsWith('schedule_routine')), ask: toolNames.find((name) => name.endsWith('ask_to_connect')), names: toolNames })
   const base = { id: `cmpl-${Date.now()}`, created: Math.floor(Date.now() / 1000), model: request.model ?? 'openhut-test' }
   const toolCalls = reply.tool ? [{ id: `call_${Date.now()}`, type: 'function', function: { name: reply.tool.name, arguments: reply.tool.args } }] : undefined
   const finish = reply.tool ? 'tool_calls' : 'stop'
@@ -51,12 +52,19 @@ export function testAnthropic({ req, body, res }: { req: IncomingMessage; body: 
     .end(JSON.stringify({ id: `msg_${Date.now()}`, type: 'message', role: 'assistant', model: request.model ?? 'openhut-test', content: [{ type: 'text', text }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 } }))
 }
 
-function replyTo({ last, callTool, shell, schedule }: { last: { role?: string; content?: unknown }; callTool: string | undefined; shell: string | undefined; schedule: string | undefined }): { content?: string; tool?: { name: string; args: string } } {
+function replyTo({ last, callTool, shell, schedule, ask, names }: { last: { role?: string; content?: unknown }; callTool: string | undefined; shell: string | undefined; schedule: string | undefined; ask: string | undefined; names: string[] }): { content?: string; tool?: { name: string; args: string } } {
+  const handed = last.role === 'tool' ? /```spec\\n((?:[^`\\]|\\.)*?)```/.exec(asText(last.content))?.[1] : undefined
+  if (handed) return { content: `Here is what I need.\n\n\`\`\`spec\n${JSON.parse(`"${handed}"`)}\`\`\`` }
   if (last.role === 'tool') return { content: `TOOL RESULT: ${asText(last.content).slice(0, 20_000)}` }
   const routine = /\[Routine rt_\w+ · run ru_\w+\] Time for "([^"]+)"/.exec(asText(last.content))?.[1]
   if (routine) return { content: `ROUTINE RAN: ${routine}` }
   const wanted = /routine:\s*(\{[\s\S]+\})\s*$/i.exec(lastText(last.content))?.[1]
   if (wanted && schedule) return { tool: { name: schedule, args: wanted } }
+  const direct = DirectCall.safeParse(jsonOf(/call:\s*(\{[\s\S]+\})\s*$/i.exec(lastText(last.content))?.[1])).data
+  const named = direct && names.find((name) => name.endsWith(direct.tool))
+  if (direct && named) return { tool: { name: named, args: JSON.stringify(direct.args ?? {}) } }
+  const asked = /ask:\s*(\{[\s\S]+\})\s*$/i.exec(lastText(last.content))?.[1]
+  if (asked && ask) return { tool: { name: ask, args: asked } }
   const sql = /sql:\s*([\s\S]+?)\s*$/i.exec(asText(last.content))?.[1]
   if (sql && callTool) return { tool: { name: callTool, args: JSON.stringify({ reason: 'The user asked for data', name: 'postgres_query', arguments: { sql } }) } }
   const command = /browser:\s*([a-z][a-z -]*(?:\s+[^\s'"`$;&|<>\\]+)*)\s*"?\s*$/i.exec(lastText(last.content))?.[1]
@@ -72,4 +80,8 @@ function asText(content: unknown): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
   return content.map((part: unknown) => typeof part === 'object' && part !== null && 'text' in part && typeof part.text === 'string' ? part.text : '').join(' ')
+}
+
+function jsonOf(raw: string | undefined): unknown {
+  try { return raw ? JSON.parse(raw) : undefined } catch { return undefined }
 }

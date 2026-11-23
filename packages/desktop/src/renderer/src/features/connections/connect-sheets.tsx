@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { GOOGLE_KINDS, SIGN_IN_KINDS } from '@openhut/common/connections/connection.ts'
 import type { Me } from '@openhut/common/team/team.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -10,6 +10,9 @@ import { uniqueName, type Integration } from '@/features/connections/catalog'
 import { Field } from '@/features/connections/sheet'
 import { CopyButton } from '@/components/copy-button'
 import { useComputers } from '@/features/computers/api'
+import { useAgents } from '@/features/agents/api'
+import { Face } from '@/features/agents/face'
+import { askOf, asked } from '@/features/connections/asked'
 import { Busy, PILL, SetupSheet } from '@/components/kit'
 import { fieldError, formError } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
@@ -21,11 +24,16 @@ import { cn } from '@/lib/utils'
 const ROLE_SQL = `create role openhut_reader login password 'choose-a-password';
 grant pg_read_all_data to openhut_reader;`
 
-type FlowProps = { me: Me; item: Integration; close: () => void; returned: string | undefined }
+type Ask = { url?: string; name?: string; auth?: string; computer?: string; line?: ReactNode }
+type FlowProps = { me: Me; item: Integration; close: () => void; returned: string | undefined; ask: Ask }
 
 export function ConnectSheet({ me, item }: { me: Me; item: Integration }) {
   const returned = new URLSearchParams(location.search).get('error') ?? undefined
-  const props = { me, item, returned, close: () => navigate('/connections') }
+  const wanted = askOf(location.search)
+  const asker = (useAgents().data ?? []).find((agent) => agent.id === wanted.agentId)
+  useEffect(() => { if (asker) asked.remember({ agentId: asker.id, kind: item.name }) }, [asker?.id, item.name])
+  const ask = asker ? { url: wanted.url, name: wanted.name, auth: wanted.auth, computer: asker.computer, line: <span className="flex items-center gap-2 text-[13px] text-body"><Face agent={asker} size={20} />{asker.name} asked for this. It can use it once you connect.</span> } : {}
+  const props = { me, item, returned, ask, close: () => navigate('/connections') }
   switch (item.name) {
     case 'postgres': return <PostgresSheet {...props} />
     case 'convex': return <ConvexSheet {...props} />
@@ -40,10 +48,10 @@ function sheetOf(item: Integration) {
 
 const FOOT = (close: () => void, busy: boolean, label: string) => <><Button type="button" variant="secondary" onClick={close}>Cancel</Button>{busy ? <Busy label="Connecting…" /> : <Button type="submit" variant="primary">{label}</Button>}</>
 
-function PostgresSheet({ item, close, returned }: FlowProps) {
+function PostgresSheet({ item, close, returned, ask }: FlowProps) {
   const create = useCreateConnection()
   const [mode, setMode] = useState('dsn')
-  const putOn = usePutOn(item)
+  const putOn = usePutOn(item, ask)
   return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(create.error, ['dsn', 'name']) ?? returned}
     onSubmit={(event) => {
       const field = formValues(event)
@@ -51,6 +59,7 @@ function PostgresSheet({ item, close, returned }: FlowProps) {
       create.mutate({ kind: 'postgres', name: field('name').trim(), dsn, computers: putOn.picked })
     }}
     foot={FOOT(close, create.isPending, 'Test and connect')}>
+    {ask.line}
     {putOn.row(fieldError(create.error, 'name'))}
     <ToggleGroup aria-label="How to enter it" className="w-fit" value={mode} onPick={setMode}>
       <ToggleGroupItem className="text-[13px]" value="dsn">Connection string</ToggleGroupItem>
@@ -71,26 +80,27 @@ function PostgresSheet({ item, close, returned }: FlowProps) {
   </SetupSheet>
 }
 
-function ConvexSheet({ item, close, returned }: FlowProps) {
+function ConvexSheet({ item, close, returned, ask }: FlowProps) {
   const create = useCreateConnection()
-  const putOn = usePutOn(item)
+  const putOn = usePutOn(item, ask)
   return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(create.error, ['deployKey', 'name']) ?? returned}
     onSubmit={(event) => {
       const field = formValues(event)
       create.mutate({ kind: 'convex', name: field('name').trim(), deployKey: field('deployKey'), computers: putOn.picked })
     }}
     foot={FOOT(close, create.isPending, 'Test and connect')}>
+    {ask.line}
     {putOn.row(fieldError(create.error, 'name'))}
     <Field label="Deploy key" error={fieldError(create.error, 'deployKey')}><Input mono name="deployKey" type="password" required placeholder="prod:happy-otter-123|eyJ…" autoComplete="off" /></Field>
     <span className="flex items-center gap-2 text-[12px] text-mute">From Settings › Deploy keys.<a className={cn(buttonVariants({ variant: 'secondary' }), PILL)} href="https://dashboard.convex.dev" target="_blank" rel="noreferrer">Open Convex</a></span>
   </SetupSheet>
 }
 
-function McpSheet({ item, close, returned }: FlowProps) {
+function McpSheet({ item, close, returned, ask }: FlowProps) {
   const create = useCreateConnection()
   const authorize = useAuthorizeConnection()
-  const [auth, setAuth] = useState('header')
-  const putOn = usePutOn(item)
+  const [auth, setAuth] = useState({ sign_in: 'oauth', public: 'none' }[ask.auth ?? ''] ?? 'header')
+  const putOn = usePutOn(item, ask)
   const error = create.error ?? authorize.error
   return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(error, ['url', 'header', 'name']) ?? returned}
     onSubmit={(event) => {
@@ -100,8 +110,9 @@ function McpSheet({ item, close, returned }: FlowProps) {
       create.mutate({ kind: 'mcp', ...server, header: auth === 'header' ? `${field('headerName')}: ${field('headerValue')}` : undefined, computers: putOn.picked })
     }}
     foot={FOOT(close, create.isPending || authorize.isPending, 'Connect')}>
+    {ask.line}
     {putOn.row(fieldError(error, 'name'), auth === 'oauth')}
-    <Field label="URL" error={fieldError(error, 'url')}><Input mono name="url" type="url" required placeholder="https://mcp.example.com/mcp" autoComplete="off" /></Field>
+    <Field label="URL" error={fieldError(error, 'url')}><Input mono name="url" type="url" required defaultValue={ask.url} placeholder="https://mcp.example.com/mcp" autoComplete="off" /></Field>
     <ToggleGroup aria-label="How it signs in" className="w-fit" value={auth} onPick={setAuth}>
       <ToggleGroupItem className="text-[13px]" value="none">Public</ToggleGroupItem>
       <ToggleGroupItem className="text-[13px]" value="header">Header</ToggleGroupItem>
@@ -114,11 +125,11 @@ function McpSheet({ item, close, returned }: FlowProps) {
   </SetupSheet>
 }
 
-function QuickSheet({ item, close, returned }: FlowProps) {
+function QuickSheet({ item, close, returned, ask }: FlowProps) {
   const quick = useQuickConnect()
   return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(quick.error, []) ?? returned}
     foot={<><Button type="button" variant="secondary" onClick={close}>Cancel</Button>
-      <Button type="button" variant="primary" disabled={quick.pending} onClick={() => quick.connect(item)}>{quick.pending ? 'Connecting…' : 'Try again'}</Button></>} />
+      <Button type="button" variant="primary" disabled={quick.pending} onClick={() => quick.connect(item)}>{quick.pending ? 'Connecting…' : quick.error || returned ? 'Try again' : 'Connect'}</Button></>}>{ask.line}</SetupSheet>
 }
 
 export function useQuickConnect() {
@@ -138,13 +149,13 @@ export function useQuickConnect() {
 
 const QUICK = new Set(['posthog', 'linear', 'github', 'excalidraw'])
 
-function usePutOn(item: Integration) {
+function usePutOn(item: Integration, ask: Ask) {
   const computers = useComputers().data ?? []
   const taken = (useConnections().data ?? []).map((connection) => connection.name)
-  const [picked, setPicked] = useState(['local'])
+  const [picked, setPicked] = useState([ask.computer ?? 'local'])
   const many = computers.length > 1
   const row = (error: string | undefined, signIn = false) => <div className={cn('grid gap-2.5', many && 'grid-cols-[3fr_2fr]')}>
-    <Field label="Name" error={error}><Input name="name" required defaultValue={uniqueName({ title: item.title, taken })} maxLength={60} autoComplete="off" /></Field>
+    <Field label="Name" error={error}><Input name="name" required defaultValue={ask.name ?? uniqueName({ title: item.title, taken })} maxLength={60} autoComplete="off" /></Field>
     {many && <div className="flex min-w-0 flex-col gap-1.5"><span className="text-xs font-medium text-mute">Computers</span>
       {signIn
         ? <span className="flex h-8 items-center text-[13px] text-mute">{WORDS.thisComputer} only for now</span>

@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
 import * as z from 'zod/mini'
 import { useChat } from '@ai-sdk/react'
+import { useQueryClient } from '@tanstack/react-query'
+import { said } from '@/features/connections/asked'
+import { AGENTS_KEY } from '@/lib/query-keys'
+import { usePath } from '@/lib/router'
 import { DefaultChatTransport, type UIMessage } from 'ai'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -73,6 +77,18 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
     void chat.sendMessage(files.length ? { text, files } : { text })
     attachments.clear()
   }
+  const path = usePath()
+  const client = useQueryClient()
+  useEffect(() => {
+    const line = said.get(agent.id)
+    if (!line || busy) return
+    if (agent.health !== 'answering') {
+      const timer = setTimeout(() => void client.invalidateQueries({ queryKey: AGENTS_KEY }), 1_500)
+      return () => clearTimeout(timer)
+    }
+    said.delete(agent.id)
+    send(line)
+  }, [agent.id, agent.health, busy, path])
   const shown = agent.runsHere ? chat.messages : chat.messages.filter((message) => message.role === 'user' || message.parts.some((part) => part.type !== 'step-start'))
   const last = shown.at(-1)
   const clear = chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />

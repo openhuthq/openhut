@@ -108,7 +108,7 @@ let tray
 let blocker
 let setup
 let booted
-let linked = joinPath(process.argv.find((arg) => arg.startsWith('openhut:')))
+let linked = linkPath(process.argv.find((arg) => arg.startsWith('openhut:')))
 let invited = null
 let opened = false
 let fetching = null
@@ -793,17 +793,19 @@ function saveBounds() {
   if (main && !main.isDestroyed()) writeFileSync(WINDOW_STATE, JSON.stringify(main.getNormalBounds()))
 }
 
-function joinPath(url) {
+function linkPath(url) {
   try {
     const { protocol, hostname, hash } = new URL(url ?? '')
-    return protocol === 'openhut:' && hostname === 'join' && hash.length > 1 ? `/join${hash}` : undefined
+    if (protocol !== 'openhut:' || hash.length < 2) return undefined
+    if (hostname === 'join') return `/join${hash}`
+    return hostname === 'open' && /^#\/connections\/new\/[a-z_]+\?[^#]*$/.test(hash) ? hash.slice(1) : undefined
   } catch {
     return undefined
   }
 }
 
 function openLink(url) {
-  linked = joinPath(url)
+  linked = linkPath(url)
   if (linked && opened) show(linked)
 }
 

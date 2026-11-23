@@ -11,6 +11,7 @@ import { testAnthropic, testModel } from './test-model.ts'
 import { brokerService, upstreams } from './broker.ts'
 import { cardService } from '../cards/card-service.ts'
 import { routineService } from '../routines/routine-service.ts'
+import { ASKABLE, askCard, MCP_AUTH } from '@openhut/common/asks/ask.ts'
 
 const PER_AGENT = 8
 const MAX_BODY = 1 << 20
@@ -73,6 +74,20 @@ function agentMcp(agent: GatewayAgent): McpServer {
   }, async ({ reason: why, name, arguments: args, connectionId }) => {
     const result = await connectionService.call({ agent, name, args, connectionId, reason: why })
     return text(result.text, result.isError)
+  })
+  server.registerTool('ask_to_connect', {
+    description: 'Ask the person to connect an app you need and can\'t reach yet. You get a card: put it in your reply. One app at a time.',
+    inputSchema: {
+      app: z.enum(ASKABLE),
+      why: z.string().min(1).max(300).describe('One or two sentences for the person: what you will do with it, and how to make the access if they need to (a read-only role, a token\'s scopes).'),
+      url: z.url({ protocol: /^https$/ }).max(500).optional().describe('For app mcp: the server\'s URL.'),
+      name: z.string().min(1).max(60).optional().describe('For app mcp: what to call it, like DigitalOcean.'),
+      auth: z.enum(MCP_AUTH).optional().describe('For app mcp: how the server lets you in. header for a token (DigitalOcean), sign_in for OAuth (Cloudflare\'s servers, like https://observability.mcp.cloudflare.com/mcp), public for none.'),
+    },
+  }, async ({ app, why, url, name, auth }) => {
+    if ((url || name || auth) && app !== 'mcp') return text('Only app mcp takes a url, a name or auth. Leave them out.', true)
+    if (app === 'mcp' && !url) return text('Send the MCP server\'s url with app mcp.', true)
+    return text(`Put this card in your reply, after a sentence on what you need:\n\n${askCard({ agentId: agent.id, app, url, name, auth, why })}`)
   })
   server.registerTool('schedule_routine', {
     description: 'Use this whenever something needs a follow-up later: a promise you made, a reply you\'re waiting on, a date someone mentioned. Don\'t wait to be asked. Then tell the person in one line what you set up. Check list_routines first, and don\'t set up the same follow-up twice. Each run starts in the chat where you call this, with that chat\'s history.',
