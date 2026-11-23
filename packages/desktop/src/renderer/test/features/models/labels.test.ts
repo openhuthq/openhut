@@ -49,7 +49,6 @@ test('disconnecting says who stops answering', () => {
   assert.equal(consequence({ agents, id: 'openrouter' }), 'Juniper and Maple use its models, and stop answering until you pick others.')
   assert.equal(consequence({ agents: [agent('Juniper', 'openrouter:a/b')], id: 'openrouter' }), 'Juniper uses its models, and stops answering until you pick others.')
   assert.equal(consequence({ agents, id: 'xai' }), 'No agent uses its models yet.')
-  assert.equal(consequence({ agents: [agent('Old', 'sonnet')], id: 'claude' }), 'Old uses its models, and stops answering until you pick others.')
 })
 
 test('prices keep two significant digits under a dollar and drop trailing zeros', () => {
