@@ -164,11 +164,13 @@ export function useTelegramInvite() {
   })
 }
 
-export function useConversations(channel: Channel) {
+export function useConversations(channel: Channel | undefined, { waiting = false }: { waiting?: boolean } = {}) {
   return useQuery({
-    queryKey: conversationsKey(channel.id),
-    queryFn: () => request({ schema: CONVERSATION_LIST, of: channel.agentId, path: `${channelPath(channel.id)}/conversations` }).then((page) => page.data),
-    staleTime: 30_000,
+    queryKey: conversationsKey(channel?.id ?? ''),
+    queryFn: () => request({ schema: CONVERSATION_LIST, of: channel?.agentId ?? '', path: `${channelPath(channel?.id ?? '')}/conversations` }).then((page) => page.data),
+    enabled: !!channel,
+    staleTime: waiting ? 0 : 30_000,
+    refetchInterval: (query) => waiting && !query.state.data?.length ? 3_000 : false,
   })
 }
 

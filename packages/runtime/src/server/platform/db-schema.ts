@@ -29,6 +29,7 @@ export interface Database {
   }
   record_held: { id: string; ver: number; parent: string | null }
   record_outbox: { seq: Generated<string>; id: string; collection: string; workspace: string; parent: string | null; body: string; deleted: Generated<boolean> }
+  telegram_code: { hash: string; channel_id: string; agent_id: string; kind: 'claim' | 'invite'; sealed: string | null; expires_at: Timestamp }
   change_request: {
     id: string; agent_id: string; action: string; input: string; summary: string; why: string; origin: string
     status: Generated<'pending' | 'approved' | 'denied'>; note: string | null; told: Generated<boolean>; created_at: Generated<Date>; decided_at: Timestamp | null

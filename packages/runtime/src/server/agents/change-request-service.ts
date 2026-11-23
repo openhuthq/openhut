@@ -17,6 +17,9 @@ import { agentService } from './agent-service.ts'
 
 const DASHBOARD = 'api_server'
 const QUIET_MS = 10_000
+const RETRY_MS = 30_000
+const RETRIES = 20
+const delivering = new Set<string>()
 const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram', discord: 'Discord' } as const
 const SelfChange = z.object({ name: UpdateAgentFields.name, instructions: UpdateAgentFields.instructions })
 const ChannelChange = z.object({ id: z.string().check(z.maxLength(40)), open: z.optional(z.boolean()), allowed: z.optional(z.array(z.string().check(z.maxLength(20))).check(z.maxLength(50))) })
@@ -85,6 +88,11 @@ export const changeRequestService = {
   async picked({ agentId, id }: { agentId: string; id: string }): Promise<void> {
     const done = await db.updateTable('change_request').set({ told: true }).where('agent_id', '=', agentId).where('id', '=', id).where('status', '<>', 'pending').returning('id').executeTakeFirst()
     if (!done) throw new HttpError(404, `No decided request ${id}.`)
+  },
+
+  async resume(): Promise<void> {
+    const rows = await db.selectFrom('change_request').selectAll().where('status', '<>', 'pending').where('told', '=', false).execute()
+    for (const row of rows) deliver(row)
   },
 
   runDashboardWith(runner: Runner): void {
@@ -171,11 +179,16 @@ async function decide({ id, status, input, summary, note }: { id: string; status
   return db.updateTable('change_request').set({ status, input: JSON.stringify(input), summary, note, decided_at: new Date() }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
 }
 
-function deliver(row: Row): void {
-  if (!inApp(row)) return
-  void db.updateTable('change_request').set({ told: true }).where('id', '=', row.id).execute()
-    .then(() => dashboardRunner({ agentId: row.agent_id, text: decisionText(row) }))
-    .catch((err: unknown) => log.warn({ event: 'change_request.deliver_failed', id: row.id, error: messageOf(err) }))
+function deliver(row: Row, attempt = 0): void {
+  if (!inApp(row) || delivering.has(row.id)) return
+  delivering.add(row.id)
+  void dashboardRunner({ agentId: row.agent_id, text: decisionText(row) })
+    .then(() => db.updateTable('change_request').set({ told: true }).where('id', '=', row.id).execute())
+    .then(() => { delivering.delete(row.id) }, (err: unknown) => {
+      delivering.delete(row.id)
+      log.warn({ event: 'change_request.deliver_failed', id: row.id, attempt, error: messageOf(err) })
+      if (attempt < RETRIES) setTimeout(() => deliver(row, attempt + 1), RETRY_MS).unref()
+    })
 }
 
 function decisionText(row: Row): string {

@@ -89,8 +89,22 @@ test('an agent can ask for Discord with its bot token, and the token stays out o
   const row = await db.selectFrom('change_request').select(['summary', 'input']).where('action', '=', 'add_channel').orderBy('created_at', 'desc').executeTakeFirstOrThrow()
   assert.equal(row.summary, 'Add Discord')
   assert.doesNotMatch(row.summary, /fake-discord/)
-  const noChannels = await client.callTool({ name: 'add_channel', arguments: { why: 'x', kind: 'discord', botToken: token, allowed: [], origin: app } })
-  assert.equal(noChannels.isError, true)
+  const noChannels = await client.callTool({ name: 'add_channel', arguments: { why: 'x', kind: 'discord', botToken: token, origin: app } })
+  assert.notEqual(noChannels.isError, true, 'the owner picks its channels in OpenHut')
+})
+
+test('a decision the agent never heard about is sent again after a restart', async () => {
+  const asked = textOf(await client.callTool({ name: 'update_self', arguments: { why: 'Shorter.', name: 'Op', origin: app } }))
+  const id = idIn(asked)
+  await changeRequestService.deny({ actor: owner, id })
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  await db.updateTable('change_request').set({ told: false }).where('id', '=', id).execute()
+  const before = told.length
+  await changeRequestService.resume()
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  assert.equal(told.length, before + 1)
+  assert.match(told.at(-1)?.text ?? '', new RegExp(`^\\[OpenHut ${id}\\] Not approved`))
+  assert.equal((await db.selectFrom('change_request').select('told').where('id', '=', id).executeTakeFirstOrThrow()).told, true)
 })
 
 test.after(() => { void client.close(); server.close() })
