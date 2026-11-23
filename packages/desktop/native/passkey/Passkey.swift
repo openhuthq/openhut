@@ -44,6 +44,8 @@ final class Passkey: NSObject, ASAuthorizationControllerDelegate, ASAuthorizatio
     perform(request)
   }
 
+  var quiet = false
+
   func open() {
     let request = provider.createCredentialAssertionRequest(challenge: random())
     request.prf = .inputValues(.init(saltInput1: salt))
@@ -60,7 +62,7 @@ final class Passkey: NSObject, ASAuthorizationControllerDelegate, ASAuthorizatio
     window.center()
     window.makeKeyAndOrderFront(nil)
     NSApplication.shared.activate(ignoringOtherApps: true)
-    controller.performRequests()
+    if quiet { controller.performRequests(options: .preferImmediatelyAvailableCredentials) } else { controller.performRequests() }
   }
 
   func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
@@ -82,7 +84,7 @@ final class Passkey: NSObject, ASAuthorizationControllerDelegate, ASAuthorizatio
 
   func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
     let canceled = (error as? ASAuthorizationError)?.code == .canceled
-    reply(["error": canceled ? "canceled" : "failed", "message": error.localizedDescription], status: 1)
+    reply(["error": quiet ? "none-here" : canceled ? "canceled" : "failed", "message": error.localizedDescription], status: 1)
   }
 }
 
@@ -90,12 +92,13 @@ let arguments = Array(CommandLine.arguments.dropFirst())
 switch arguments.first {
 case "status":
   reply(status())
-case "create" where arguments.count == 2, "open" where arguments.count == 1:
+case "create" where arguments.count == 2, "open" where arguments.count == 1, "open" where arguments == ["open", "--quiet"]:
   guard #available(macOS 15.0, *) else { reply(["error": "needs-macos-15"], status: 2) }
   let passkey = Passkey()
+  passkey.quiet = arguments.count == 2 && arguments[1] == "--quiet"
   NSApplication.shared.setActivationPolicy(.regular)
   DispatchQueue.main.async { arguments[0] == "create" ? passkey.create(email: arguments[1]) : passkey.open() }
   NSApplication.shared.run()
 default:
-  reply(["error": "usage", "message": "passkey status | create <email> | open"], status: 64)
+  reply(["error": "usage", "message": "passkey status | create <email> | open [--quiet]"], status: 64)
 }

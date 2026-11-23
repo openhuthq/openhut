@@ -7,8 +7,8 @@ import { I } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Meter } from '@/components/ui/meter'
 import { Spinner } from '@/components/ui/spinner'
-import { notifyUnlock, useCloud } from '@/features/cloud/api'
-import { SaveKit, SignIn } from '@/features/cloud/sign-in'
+import { notifyUnlock, useCloud, usePasskeys } from '@/features/cloud/api'
+import { SaveKit, SignIn, TouchIdOffer } from '@/features/cloud/sign-in'
 import { BIG, Stage, Step } from '@/features/cloud/step'
 import { Unlock } from '@/features/cloud/unlock'
 import { activeOf, GateContext, useChosen } from '@/features/cloud/workspaces'
@@ -27,6 +27,8 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   const chosen = useChosen()
   const opened = useOpen()
   const [saving, setSaving] = useState(false)
+  const [offer, setOffer] = useState(false)
+  const helper = usePasskeys()
   const [readying, setReadying] = useState(false)
   const step = gateOf({ cloud: cloud.data, setup: run.data, down: Boolean(me.error ?? cloud.error) })
   const done = run.data?.done
@@ -39,7 +41,11 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   if (step === 'loading') return me.error ?? cloud.error ? <Down error={me.error ?? cloud.error} retrying={me.isFetching} onRetry={() => { void me.refetch(); void cloud.refetch() }} /> : <Waiting />
   if (isPhone() && step !== 'ready') return <Stage><Step title="Finish on your computer." line="Set up OpenHut there, then come back." /></Stage>
   if (step === 'kit' && !saving) setSaving(true)
-  if (saving) return <Stage><SaveKit onDone={() => setSaving(false)} /></Stage>
+  if (saving) return <Stage><SaveKit onDone={() => {
+    setSaving(false)
+    setOffer(Boolean(helper?.passkeys && helper.prf && !cloud.data?.passkey))
+  }} /></Stage>
+  if (offer) return <Stage><TouchIdOffer onDone={() => setOffer(false)} /></Stage>
   if (step === 'getting-ready' && !readying) setReadying(true)
   if (readying && step !== 'getting-ready' && step !== 'ready') setReadying(false)
   if (step === 'getting-ready' || (readying && step === 'ready')) return <Stage><GettingReady run={run.data} ready={step === 'ready'} onRetry={() => void run.refetch()} onOpen={() => setReadying(false)} /></Stage>

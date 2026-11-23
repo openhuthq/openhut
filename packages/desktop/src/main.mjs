@@ -172,7 +172,8 @@ handle('computers.enrollments', () => [...enrollments.values()])
 handle('computers.dismiss', ({ dns } = {}) => { enrollments.delete(dns); shareEnrollments(); return { dns } })
 handle('passkey.status', () => passkey(['status']))
 handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
-handle('passkey.open', () => passkey(['open']))
+handle('passkey.open', ({ quiet } = {}) => passkey(quiet ? ['open', '--quiet'] : ['open']))
+handle('passkey.cancel', () => { passkeyRun?.kill() })
 handle('cloud.notify', ({ title = 'Unlock OpenHut', body = 'Bring your agents and chats to this computer.', path = '/' } = {}) => new Promise((resolve) => {
   if (!Notification.isSupported()) return resolve({ shown: false })
   const note = new Notification({ title: String(title), body: String(body) })
@@ -196,14 +197,16 @@ async function saveKit({ name, body } = {}) {
 function passkey(args) {
   const helper = join(app.isPackaged ? join(process.resourcesPath, 'passkey') : join(HERE, '..', 'native', 'passkey', 'build'), 'OpenHut Passkey.app', 'Contents', 'MacOS', 'passkey')
   if (process.platform !== 'darwin' || !existsSync(helper)) return { error: 'missing' }
-  return new Promise((resolve) => execFile(helper, args, { timeout: 180_000 }, (_error, stdout) => {
+  passkeyRun?.kill()
+  return new Promise((resolve) => { passkeyRun = execFile(helper, args, { timeout: 180_000 }, (error, stdout) => {
     try {
       resolve(JSON.parse(String(stdout)))
     } catch {
-      resolve({ error: 'failed' })
+      resolve({ error: error?.signal === 'SIGTERM' ? 'canceled' : 'failed' })
     }
-  }))
+  }) })
 }
+let passkeyRun
 ipcMain.on('browser-live', (event, path) => void relayLive({ port: event.ports[0], path: fromApp(event) ? path : '' }))
 
 function answer(fn) {

@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore, type FormEvent } from 'react'
-import { ComputerPhoneSyncIcon, File01Icon, SourceCodeIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
+import { ComputerPhoneSyncIcon, File01Icon, FingerPrintIcon, SourceCodeIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import type { Cloud, RecoveryKit } from '@openhut/common/cloud/cloud.ts'
 import { kitText, readKit } from '@openhut/common/vault/kit-file.ts'
 import { checksKit, migrating, type KitWay } from '@/app/gate-state'
@@ -10,7 +10,9 @@ import { CopyButton } from '@/components/copy-button'
 import { ErrorNote } from '@/components/error-note'
 import { I } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
-import { useCancelSignIn, useCloud, useNewKit, useSignIn, useSigningIn } from '@/features/cloud/api'
+import { PasskeyQuiet, useAddPasskey, useCancelSignIn, useCloud, useNewKit, useSignIn, useSigningIn } from '@/features/cloud/api'
+import { notify } from '@/components/custom/toast'
+import { toastError } from '@/lib/toast'
 import { BIG, Step } from '@/features/cloud/step'
 import { shortDate } from '@/lib/format'
 import { isPhone } from '@/lib/native'
@@ -167,4 +169,19 @@ function ConfirmKit({ kit, onBack, onDone }: { kit: RecoveryKit; onBack: () => v
 
 function Google({ size = 12 }: { size?: number }) {
   return <svg width={size} height={size} aria-hidden="true"><use href="#lg-google" width="100%" height="100%" /></svg>
+}
+
+export function TouchIdOffer({ onDone }: { onDone: () => void }) {
+  const cloud = useCloud().data
+  const add = useAddPasskey()
+  const turnOn = () => add.mutate(cloud?.email ?? '', {
+    onSuccess: () => {
+      notify({ lead: <I icon={FingerPrintIcon} size={18} className="text-hue-green" />, title: 'Touch ID is on', note: 'Your next Mac opens OpenHut with one touch.' })
+      onDone()
+    },
+    onError: (error) => { if (!(error instanceof PasskeyQuiet)) toastError(error) },
+  })
+  return <Step title="Unlock OpenHut on your next Mac with Touch ID." line="It’s saved in iCloud Keychain. Anyone with both your Apple Account and this Google account can get in too."
+    link={<Button type="button" variant="text" className="font-normal text-mute" disabled={add.isPending} onClick={onDone}>Not now</Button>}
+    action={<Button type="button" variant="primary" className={BIG} disabled={add.isPending} onClick={turnOn}><I icon={FingerPrintIcon} size={16} />{add.isPending ? 'Waiting for Touch ID…' : 'Turn on Touch ID'}</Button>} />
 }

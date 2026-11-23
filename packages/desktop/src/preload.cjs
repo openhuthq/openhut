@@ -29,7 +29,8 @@ contextBridge.exposeInMainWorld('openhut', {
   passkey: {
     status: () => ipcRenderer.invoke('passkey.status'),
     create: (input) => ipcRenderer.invoke('passkey.create', input),
-    open: () => ipcRenderer.invoke('passkey.open'),
+    open: (input) => ipcRenderer.invoke('passkey.open', input),
+    cancel: () => ipcRenderer.invoke('passkey.cancel'),
   },
   kit: {
     save: (input) => ipcRenderer.invoke('kit.save', input),
