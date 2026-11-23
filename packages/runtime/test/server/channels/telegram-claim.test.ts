@@ -28,7 +28,10 @@ Object.assign(config, { telegramApi: `http://127.0.0.1:${(telegram.address() as 
 fakeAgentd()
 await migrate()
 await db.insertInto('person').values({ id: 'usr_tgowner1', email: 'tg@example.com', role: 'owner', removed_at: null }).execute()
-await db.insertInto('agent').values({ id: 'ag_tgclaim1', name: 'Juniper', owner_id: 'usr_tgowner1', instructions: '#', model: 'claude:sonnet', net: 74, channel_key: seal('k'.repeat(48)), wanted: 'stopped' }).execute()
+await db.insertInto('agent').values([
+  { id: 'ag_tgclaim1', name: 'Juniper', owner_id: 'usr_tgowner1', instructions: '#', model: 'claude:sonnet', net: 74, channel_key: seal('k'.repeat(48)), wanted: 'stopped' },
+  { id: 'ag_tgclaim2', name: 'Rover', owner_id: 'usr_tgowner1', instructions: '#', model: 'claude:sonnet', net: 75, channel_key: seal('k'.repeat(48)), wanted: 'stopped' },
+]).execute()
 signIn({ email: 'tg@example.com' })
 runSet.watch()
 await runSet.refresh()
@@ -77,6 +80,24 @@ test('an invite link lets one more person in, once', async () => {
   await assert.rejects(channelService.telegramJoin({ agentId: 'ag_tgclaim1', code, person: alex }), /expired or was already used/)
   assert.equal(sent.at(-1)?.text, 'That invite link expired or was already used. Ask for a new one.')
   await assert.rejects(channelService.telegramJoin({ agentId: 'ag_other00', code: 'x'.repeat(22), person: alex }), /expired/)
+})
+
+test('codes live in the database, so a restarted runtime shows the same Start link and still honours an invite', async () => {
+  const made = await channelService.create({ actor, kind: 'telegram', agentId: 'ag_tgclaim2', botToken: token, open: false, allowed: [] })
+  assert.ok(made.qr)
+  const stored = await db.selectFrom('telegram_code').selectAll().where('channel_id', '=', made.id).execute()
+  assert.deepEqual(stored.map((row) => row.kind), ['claim'])
+  assert.ok(stored[0].sealed && !stored[0].sealed.includes(/start=(.+)$/.exec(made.qr ?? '')?.[1] ?? 'x'), 'the claim code is sealed at rest')
+  const restarted = await import(`../../../src/server/channels/telegram-codes.ts?restart=${Date.now()}`) as typeof import('../../../src/server/channels/telegram-codes.ts')
+  const again = await restarted.telegramCodes.claim({ channelId: made.id, agentId: 'ag_tgclaim2', account: '@juniper_test_bot', botToken: token, onClaim: async () => undefined })
+  assert.equal(again, made.qr)
+  assert.deepEqual(await restarted.telegramCodes.pending(), [made.id])
+  const invite = await channelService.telegramInvite({ actor, id: channelId })
+  const code = /\?start=([\w-]{22})$/.exec(invite.url)?.[1] ?? ''
+  assert.deepEqual(await restarted.telegramCodes.take({ code, agentId: 'ag_tgclaim1', kind: 'invite' }), { channelId })
+  assert.equal(await restarted.telegramCodes.take({ code, agentId: 'ag_tgclaim1', kind: 'invite' }), undefined)
+  await restarted.telegramCodes.stop(made.id)
+  assert.deepEqual(await restarted.telegramCodes.pending(), [])
 })
 
 test.after(() => { telegram.close() })

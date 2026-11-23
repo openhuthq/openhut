@@ -13,6 +13,7 @@ import { eventsController } from './platform/events-controller.ts'
 import { skillController } from './agents/skill-controller.ts'
 import { agentService } from './agents/agent-service.ts'
 import { channelController } from './channels/channel-controller.ts'
+import { channelService } from './channels/channel-service.ts'
 import { connectionAuthorizationController, connectionController, connectionEventController, connectionToolController } from './connections/connection-controller.ts'
 import { providerController } from './models/provider-controller.ts'
 import { gatewayServer } from './gateway/gateway-server.ts'
@@ -98,5 +99,7 @@ await runSet.start()
 await agentService.boot()
 routineService.runDashboardWith((input) => threadService.runRoutine(input))
 changeRequestService.runDashboardWith((input) => threadService.runRoutine(input))
+void changeRequestService.resume().catch((err: unknown) => log.warn({ event: 'change_request.resume_failed', error: messageOf(err) }))
 routineService.start()
+void channelService.resumeTelegramClaims().catch((err: unknown) => log.warn({ event: 'telegram.claim_resume_failed', error: messageOf(err) }))
 cloudService.connect()

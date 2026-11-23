@@ -1,44 +1,51 @@
 import { randomBytes } from 'node:crypto'
+import { db } from '../platform/db.ts'
 import { log } from '../platform/events.ts'
 import { messageOf } from '../platform/http-error.ts'
+import { seal, sha, unseal } from '../platform/secrets.ts'
 import { telegram } from '../integrations/telegram/telegram.ts'
 
 export const CLAIM_MS = 10 * 60_000
 export const INVITE_MS = 24 * 60 * 60_000
 const START = /^\/start(?:@\w+)?\s+([\w-]{16,64})$/
-const codes = new Map<string, Code>()
-const claims = new Map<string, { code: string; expires: number; abort: AbortController }>()
+const polling = new Map<string, AbortController>()
 
 export type Person = { userId: string; name: string; chatId: number }
+type Kind = 'claim' | 'invite'
+type Claim = { channelId: string; agentId: string; account: string; botToken: string; onClaim: (person: Person) => Promise<void> }
 
 export const telegramCodes = {
-  claim({ channelId, agentId, account, botToken, onClaim }: { channelId: string; agentId: string; account: string; botToken: string; onClaim: (person: Person) => Promise<void> }): string {
-    const running = claims.get(channelId)
-    if (running && running.expires > Date.now()) return telegram.startLink({ account, code: running.code })
-    running?.abort.abort()
-    const code = newCode({ channelId, agentId, kind: 'claim', ms: CLAIM_MS })
-    const claim = { code, expires: Date.now() + CLAIM_MS, abort: new AbortController() }
-    claims.set(channelId, claim)
-    void poll({ botToken, claim, onClaim }).finally(() => { if (claims.get(channelId) === claim) claims.delete(channelId) })
-    return telegram.startLink({ account, code })
+  async claim(claim: Claim): Promise<string> {
+    const code = await current(claim.channelId) ?? await issue({ channelId: claim.channelId, agentId: claim.agentId, kind: 'claim', ms: CLAIM_MS })
+    if (!polling.has(claim.channelId)) watch(claim)
+    return telegram.startLink({ account: claim.account, code })
   },
 
-  invite({ channelId, agentId, account }: { channelId: string; agentId: string; account: string }): { url: string; expiresAt: string } {
-    const code = newCode({ channelId, agentId, kind: 'invite', ms: INVITE_MS })
+  async invite({ channelId, agentId, account }: { channelId: string; agentId: string; account: string }): Promise<{ url: string; expiresAt: string }> {
+    const code = await issue({ channelId, agentId, kind: 'invite', ms: INVITE_MS })
     return { url: telegram.startLink({ account, code }), expiresAt: new Date(Date.now() + INVITE_MS).toISOString() }
   },
 
-  take({ code, agentId, kind }: { code: string; agentId: string; kind: Code['kind'] }): Code | undefined {
-    const found = codes.get(code)
-    if (!found || found.agentId !== agentId || found.kind !== kind) return undefined
-    codes.delete(code)
-    return found.expires > Date.now() ? found : undefined
+  async take({ code, agentId, kind }: { code: string; agentId: string; kind: Kind }): Promise<{ channelId: string } | undefined> {
+    const row = await db.deleteFrom('telegram_code').where('hash', '=', sha(code)).where('agent_id', '=', agentId).where('kind', '=', kind).returning(['channel_id', 'expires_at']).executeTakeFirst()
+    return row && new Date(row.expires_at).getTime() > Date.now() ? { channelId: row.channel_id } : undefined
   },
 
-  stop(channelId: string): void {
-    claims.get(channelId)?.abort.abort()
-    claims.delete(channelId)
-    for (const [code, each] of codes) if (each.channelId === channelId) codes.delete(code)
+  async settle(channelId: string): Promise<void> {
+    polling.get(channelId)?.abort()
+    polling.delete(channelId)
+    await db.deleteFrom('telegram_code').where('channel_id', '=', channelId).where('kind', '=', 'claim').execute()
+  },
+
+  async stop(channelId: string): Promise<void> {
+    polling.get(channelId)?.abort()
+    polling.delete(channelId)
+    await db.deleteFrom('telegram_code').where('channel_id', '=', channelId).execute()
+  },
+
+  async pending(): Promise<string[]> {
+    const rows = await db.selectFrom('telegram_code').select('channel_id').where('kind', '=', 'claim').where('expires_at', '>', new Date()).execute()
+    return rows.map((row) => row.channel_id)
   },
 
   codeIn(text: string): string | undefined {
@@ -46,11 +53,32 @@ export const telegramCodes = {
   },
 }
 
-async function poll({ botToken, claim, onClaim }: { botToken: string; claim: { code: string; expires: number; abort: AbortController }; onClaim: (person: Person) => Promise<void> }): Promise<void> {
+async function current(channelId: string): Promise<string | undefined> {
+  const row = await db.selectFrom('telegram_code').select('sealed').where('channel_id', '=', channelId).where('kind', '=', 'claim').where('expires_at', '>', new Date()).executeTakeFirst()
+  return row?.sealed ? unseal(row.sealed) : undefined
+}
+
+async function issue({ channelId, agentId, kind, ms }: { channelId: string; agentId: string; kind: Kind; ms: number }): Promise<string> {
+  await db.deleteFrom('telegram_code').where('expires_at', '<', new Date()).execute()
+  if (kind === 'claim') await db.deleteFrom('telegram_code').where('channel_id', '=', channelId).where('kind', '=', 'claim').execute()
+  const code = randomBytes(16).toString('base64url')
+  await db.insertInto('telegram_code').values({ hash: sha(code), channel_id: channelId, agent_id: agentId, kind, sealed: kind === 'claim' ? seal(code) : null, expires_at: new Date(Date.now() + ms) }).execute()
+  return code
+}
+
+function watch(claim: Claim): void {
+  const abort = new AbortController()
+  polling.set(claim.channelId, abort)
+  void poll({ claim, signal: abort.signal })
+    .catch((err: unknown) => log.warn({ event: 'telegram.claim_failed', channel: claim.channelId, error: messageOf(err).replaceAll(claim.botToken, '…') }))
+    .finally(() => { if (polling.get(claim.channelId) === abort) polling.delete(claim.channelId) })
+}
+
+async function poll({ claim, signal }: { claim: Claim; signal: AbortSignal }): Promise<void> {
   let offset = 0
-  while (!claim.abort.signal.aborted && Date.now() < claim.expires) {
-    const updates = await telegram.updates({ botToken, offset, signal: AbortSignal.any([claim.abort.signal, AbortSignal.timeout(35_000)]) }).catch((err: unknown) => {
-      if (!claim.abort.signal.aborted) log.warn({ event: 'telegram.claim_poll_failed', error: messageOf(err).replaceAll(botToken, '…') })
+  while (!signal.aborted && await current(claim.channelId)) {
+    const updates = await telegram.updates({ botToken: claim.botToken, offset, signal: AbortSignal.any([signal, AbortSignal.timeout(35_000)]) }).catch((err: unknown) => {
+      if (!signal.aborted) log.warn({ event: 'telegram.claim_poll_failed', channel: claim.channelId, error: messageOf(err).replaceAll(claim.botToken, '…') })
       return null
     })
     if (!updates) {
@@ -61,21 +89,10 @@ async function poll({ botToken, claim, onClaim }: { botToken: string; claim: { c
       offset = update.update_id + 1
       const message = update.message
       const code = message?.text ? telegramCodes.codeIn(message.text) : undefined
-      if (!message?.from || code !== claim.code) continue
-      const taken = codes.get(code)
-      if (!taken || taken.kind !== 'claim') continue
-      codes.delete(code)
-      await telegram.updates({ botToken, offset, signal: AbortSignal.timeout(5_000) }).catch(() => undefined)
-      await onClaim({ userId: String(message.from.id), name: message.from.first_name ?? 'there', chatId: message.chat.id })
+      if (!message?.from || !code || !await telegramCodes.take({ code, agentId: claim.agentId, kind: 'claim' })) continue
+      await telegram.updates({ botToken: claim.botToken, offset, signal: AbortSignal.timeout(5_000) }).catch(() => undefined)
+      await claim.onClaim({ userId: String(message.from.id), name: message.from.first_name ?? 'there', chatId: message.chat.id })
       return
     }
   }
 }
-
-function newCode({ channelId, agentId, kind, ms }: { channelId: string; agentId: string; kind: Code['kind']; ms: number }): string {
-  const code = randomBytes(16).toString('base64url')
-  codes.set(code, { channelId, agentId, kind, expires: Date.now() + ms })
-  return code
-}
-
-type Code = { channelId: string; agentId: string; kind: 'claim' | 'invite'; expires: number }

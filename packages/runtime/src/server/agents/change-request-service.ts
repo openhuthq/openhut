@@ -87,6 +87,11 @@ export const changeRequestService = {
     if (!done) throw new HttpError(404, `No decided request ${id}.`)
   },
 
+  async resume(): Promise<void> {
+    const rows = await db.selectFrom('change_request').selectAll().where('status', '<>', 'pending').where('told', '=', false).execute()
+    for (const row of rows) deliver(row)
+  },
+
   runDashboardWith(runner: Runner): void {
     dashboardRunner = runner
   },
@@ -173,8 +178,8 @@ async function decide({ id, status, input, summary, note }: { id: string; status
 
 function deliver(row: Row): void {
   if (!inApp(row)) return
-  void db.updateTable('change_request').set({ told: true }).where('id', '=', row.id).execute()
-    .then(() => dashboardRunner({ agentId: row.agent_id, text: decisionText(row) }))
+  void dashboardRunner({ agentId: row.agent_id, text: decisionText(row) })
+    .then(() => db.updateTable('change_request').set({ told: true }).where('id', '=', row.id).execute())
     .catch((err: unknown) => log.warn({ event: 'change_request.deliver_failed', id: row.id, error: messageOf(err) }))
 }
 

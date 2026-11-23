@@ -65,7 +65,7 @@ export const channelService = {
     emit({ name: 'channel.created', actor, target: { type: 'channel', id, kind: body.kind, agentId: facts.id } })
     await runSet.apply({ workspace: facts.workspace, id: facts.id })
     const row = await db.selectFrom('channel').selectAll().where('id', '=', id).executeTakeFirst()
-    return channelOf({ held: held ?? await recordOf(id), qr: row?.kind === 'telegram' && row.status === 'linking' ? claimLink(row) : null })
+    return channelOf({ held: held ?? await recordOf(id), qr: row?.kind === 'telegram' && row.status === 'linking' ? await claimLink(row) : null })
   },
 
   async telegramInvite({ actor, id }: { actor: Caller; id: string }): Promise<TelegramInvite> {
@@ -73,11 +73,11 @@ export const channelService = {
     const value = ChannelRecord.parse(held.value)
     await owned({ actor, agentId: held.parent ?? '' })
     if (value.kind !== 'telegram' || value.status !== 'connected' || !value.account) throw new HttpError(409, 'Finish connecting Telegram first, then invite people.')
-    return { object: 'telegram_invite', ...telegramCodes.invite({ channelId: id, agentId: held.parent ?? '', account: value.account }) }
+    return { object: 'telegram_invite', ...await telegramCodes.invite({ channelId: id, agentId: held.parent ?? '', account: value.account }) }
   },
 
   async telegramJoin({ agentId, code, person }: { agentId: string; code: string; person: Person }): Promise<{ object: 'telegram_join'; joined: boolean }> {
-    const invite = telegramCodes.take({ code, agentId, kind: 'invite' })
+    const invite = await telegramCodes.take({ code, agentId, kind: 'invite' })
     const row = await db.selectFrom('channel').selectAll().where('agent_id', '=', agentId).where('kind', '=', 'telegram').executeTakeFirst()
     const botToken = row && TelegramSecrets.parse(JSON.parse(unseal(row.secrets))).botToken
     if (!invite || !row || !botToken || row.id !== invite.channelId) {
@@ -145,6 +145,13 @@ export const channelService = {
     emit({ name: 'channel.deleted', actor, target: { type: 'channel', id, kind: ChannelRecord.parse(held.value).kind, agentId: facts.id } })
     await runSet.apply({ workspace: facts.workspace, id: facts.id })
     return deleted({ id, object: 'channel' })
+  },
+
+  async resumeTelegramClaims(): Promise<void> {
+    for (const id of await telegramCodes.pending()) {
+      const row = await db.selectFrom('channel').selectAll().where('id', '=', id).where('kind', '=', 'telegram').where('status', '=', 'linking').executeTakeFirst()
+      if (row) await claimLink(row).catch((err: unknown) => log.warn({ event: 'telegram.claim_resume_failed', channel: id, error: messageOf(err) }))
+    }
   },
 
   async agentOf({ id }: { id: string }): Promise<string | undefined> {
@@ -227,13 +234,13 @@ async function disconnect(row: Row): Promise<void> {
       return
     case 'slack': return
     case 'telegram':
-      telegramCodes.stop(row.id)
+      await telegramCodes.stop(row.id)
       return
     case 'discord': return
   }
 }
 
-function claimLink(row: Row): string | null {
+async function claimLink(row: Row): Promise<string | null> {
   if (!row.account) return null
   const botToken = TelegramSecrets.parse(JSON.parse(unseal(row.secrets))).botToken
   return telegramCodes.claim({ channelId: row.id, agentId: row.agent_id, account: row.account, botToken, onClaim: (person) => claimed({ row, botToken, person }) })
@@ -245,6 +252,7 @@ async function claimed({ row, botToken, person }: { row: Row; botToken: string; 
   const own = (value: ChannelRecord): ChannelRecord => ({ ...value, status: 'connected', ownerAddress: person.userId, names: { ...value.names, [person.userId]: person.name } })
   await recordsService.put({ collection: 'channel', id: row.id, parent: row.agent_id, workspace: facts.workspace, personal: facts.personal, value: own(ChannelRecord.parse(held.value)), secret: held.secret, reapply: (latest) => ({ value: own(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
   await db.updateTable('channel').set({ status: 'connected', owner_address: person.userId }).where('id', '=', row.id).execute()
+  await telegramCodes.settle(row.id)
   await telegram.send({ botToken, chatId: person.chatId, text: `Hi ${person.name}, you're in. Ask me anything.` }).catch(() => undefined)
   emit({ name: 'channel.linked', target: { type: 'channel', id: row.id, kind: 'telegram', agentId: row.agent_id } })
   await runSet.apply({ workspace: facts.workspace, id: row.agent_id }).catch((err: unknown) => log.warn({ event: 'telegram.claim_apply_failed', agent: row.agent_id, error: messageOf(err) }))

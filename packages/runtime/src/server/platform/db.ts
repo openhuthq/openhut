@@ -99,4 +99,7 @@ export async function migrate(): Promise<void> {
     why text not null, origin text not null, status text not null default 'pending' check (status in ('pending', 'approved', 'denied')), note text,
     told boolean not null default false, created_at timestamptz not null default now(), decided_at timestamptz)`.execute(db)
   await sql`create index if not exists change_request_by_agent on change_request (agent_id, created_at desc)`.execute(db)
+  await sql`create table if not exists telegram_code (
+    hash text primary key, channel_id text not null, agent_id text not null, kind text not null check (kind in ('claim', 'invite')),
+    sealed text, expires_at timestamptz not null)`.execute(db)
 }
