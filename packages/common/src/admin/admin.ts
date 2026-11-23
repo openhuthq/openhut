@@ -30,8 +30,6 @@ export const Admin = z.object({
     running: z.number(),
     total: z.number(),
   }),
-  tailnetUrl: z.optional(z.null()),
-  google: z.optional(z.object({ clientId: z.null(), redirectUri: z.string() })),
   publicKey: z.string(),
   relay: z.optional(z.object({ key: z.string(), computerId: z.string(), url: z.nullable(z.string()) })),
   features: z.optional(z.object({ whatsapp: z.boolean(), browser: z.boolean() })),
