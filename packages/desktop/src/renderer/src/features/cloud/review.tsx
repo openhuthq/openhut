@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogHead } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { useApprove, useDeny, useReview } from '@/features/cloud/workspaces'
-import { randomLook, SWATCHES, type Look } from '@/lib/face'
+import { EYEWEAR, HATS, randomLook, SWATCHES, type Look } from '@/lib/face'
 import { useConfirmed } from '@/lib/native'
 import { open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
@@ -13,12 +13,16 @@ import { cn } from '@/lib/utils'
 
 const SHOWN = 8
 
+const WEAR = [...HATS, 'glasses', 'shades', 'monocle'] as const
+
 export function faceLook(index: number): Look {
-  return { ...randomLook({ seed: 'openhut-face' }), body: index % SWATCHES.length, eyes: index % 5, mouth: index % 3, hat: null, eyewear: null, extra: null }
+  const wear = WEAR[index % WEAR.length]
+  const hat = HATS.find((each) => each === wear) ?? null
+  return { ...randomLook({ seed: 'openhut-face' }), body: (index * 5) % SWATCHES.length, eyes: index % 5, mouth: index % 3, hat, eyewear: hat ? null : EYEWEAR.find((each) => each === wear) ?? null, extra: null }
 }
 
-export function FaceTile({ index, size = 44 }: { index: number; size?: number }) {
-  return <Creature look={faceLook(index)} size={size} tile label={`${SWATCHES[index % SWATCHES.length].name} face`} />
+export function FaceTile({ index, size = 64 }: { index: number; size?: number }) {
+  return <Creature look={faceLook(index)} size={size} label={`${SWATCHES[(index * 5) % SWATCHES.length].name} face with a ${WEAR[index % WEAR.length]}`} />
 }
 
 export function useAnswer({ workspace, request, label }: { workspace: string; request: DeviceRequest; label: string }) {
