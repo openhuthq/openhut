@@ -1,5 +1,4 @@
 import { parseJson } from '../cloud/cloud.ts'
-import { padded } from '../cloud/record.ts'
 import { check, concat, field, fromBase64, lock, sha256, sign, toBase64, unlock, type Bytes, type Identity } from '../vault/vault.ts'
 import type { Collection, PutSealed, SealedRow } from './wire.ts'
 
@@ -15,6 +14,8 @@ type Part = { use: KeyUse; locked: Bytes }
 
 const LABEL = new TextEncoder().encode('openhut/sealed\0')
 const PART_HEAD = 5
+const SMALL = 64 << 10
+const MIN_BUCKET = 1024
 
 export function signer(identity: Identity): Signer {
   return { key: toBase64(identity.publicKey), sign: (bytes) => sign({ secret: identity.secret, bytes }) }
@@ -68,6 +69,15 @@ export async function open({ row, keys }: { row: SealedRow; keys: Keys }): Promi
   }
   const { sig: _sig, body: _body, updatedAt: _updatedAt, ...rest } = row
   return { ...rest, sealedWith: parts.map((part) => part.use), value }
+}
+
+export function padded({ json, size }: { json: string; size?: number }): Bytes | null {
+  const bytes = new TextEncoder().encode(json)
+  const target = size ?? (bytes.length > SMALL ? bytes.length : Math.max(MIN_BUCKET, 2 ** Math.ceil(Math.log2(bytes.length))))
+  if (bytes.length > target) return null
+  const out = new Uint8Array(target).fill(0x20)
+  out.set(bytes)
+  return out
 }
 
 export function sealedWith(body: string): KeyUse[] | null {

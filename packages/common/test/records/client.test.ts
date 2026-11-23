@@ -14,18 +14,17 @@ async function world() {
 
 const chat = { collection: 'message', workspace: team, parent: 'ag_shared1' } as const
 
-test('put, get, list and batch-get round-trip through the cloud', async () => {
-  const { mo, ana } = await world()
+test('put, get and list round-trip through the cloud', async () => {
+  const { cloud, mo, ana } = await world()
   await mo.put({ ...chat, id: 'msg_0000001', value: { workspace: { text: 'one' } } })
-  await ana.put({ ...chat, id: 'msg_0000002', value: { workspace: { text: 'two' } } })
+  await clientOf({ device: 'moServer', cloud }).put({ ...chat, id: 'msg_0000002', value: { workspace: { text: 'two' } } })
   assert.deepEqual((await ana.get({ ...agentWhere() }))?.value, { workspace: { name: 'Helpdesk' } })
   const page = await mo.list({ ...chat, limit: 1 })
   assert.deepEqual(page.data.map((row) => row.value), [{ workspace: { text: 'one' } }])
   assert.equal(page.next, 'msg_0000001')
   const rest = await mo.list({ ...chat, startingAfter: page.next ?? undefined })
-  assert.deepEqual(rest.data.map((row) => row.by), [keyOf('anaMac')])
+  assert.deepEqual(rest.data.map((row) => row.by), [keyOf('moServer')])
   assert.equal(rest.next, null)
-  assert.deepEqual((await mo.batchGet({ collection: 'message', workspace: team, ids: ['msg_0000002', 'msg_0000404'] })).map((row) => row.id), ['msg_0000002'])
   assert.equal(await mo.get({ collection: 'message', workspace: team, id: 'msg_0000404' }), null)
 })
 
@@ -68,17 +67,18 @@ test('a runtime refuses an older version than it holds, or an agent whose owner 
 
 test('a 409 hands the latest row to reapply and retries once; without reapply it throws with the latest', async () => {
   const { mo, ana } = await world()
-  const base = await mo.put({ ...chat, id: 'mem_0000001', collection: 'memory', value: { workspace: { notes: ['a'] } } })
-  await ana.put({ ...chat, collection: 'memory', id: 'mem_0000001', current: base.ver, value: { workspace: { notes: ['a', 'b'] } } })
+  const memory = { ...chat, collection: 'memory', id: 'ag_shared1' } as const
+  const base = await mo.put({ ...memory, value: { workspace: { notes: ['a'] } } })
+  await ana.put({ ...memory, current: base.ver, value: { workspace: { notes: ['a', 'b'] } } })
   const seen: unknown[] = []
-  const merged = await mo.put({ ...chat, collection: 'memory', id: 'mem_0000001', current: base.ver, value: { workspace: { notes: ['a', 'c'] } }, reapply: (latest) => {
+  const merged = await mo.put({ ...memory, current: base.ver, value: { workspace: { notes: ['a', 'c'] } }, reapply: (latest) => {
     seen.push(latest.value)
     return { workspace: { notes: ['a', 'b', 'c'] } }
   } })
   assert.deepEqual(seen, [{ workspace: { notes: ['a', 'b'] } }])
   assert.equal(merged.ver, 3)
-  assert.deepEqual((await ana.get({ collection: 'memory', workspace: team, id: 'mem_0000001' }))?.value, { workspace: { notes: ['a', 'b', 'c'] } })
-  const conflict = await mo.put({ ...chat, collection: 'memory', id: 'mem_0000001', current: 1, value: { workspace: {} } }).catch((error: unknown) => error)
+  assert.deepEqual((await ana.get(memory))?.value, { workspace: { notes: ['a', 'b', 'c'] } })
+  const conflict = await mo.put({ ...memory, current: 1, value: { workspace: {} } }).catch((error: unknown) => error)
   assert.ok(conflict instanceof RecordsError)
   assert.equal(conflict.status, 409)
   assert.equal(conflict.current?.ver, 3)
@@ -94,13 +94,16 @@ test('remove writes a signed tombstone, retrying over a newer version', async ()
   assert.equal((await ana.get({ collection: 'message', workspace: team, id: 'msg_0000001' }))?.deleted, true)
 })
 
-test('a control row placing the agent on someone else’s computer is dropped', async () => {
+test('an agent has one control row, and one placing it on someone else’s computer is dropped', async () => {
   const { mo } = await world()
-  const control = { collection: 'control', workspace: team, parent: 'ag_shared1' } as const
-  await mo.put({ ...control, id: 'ctl_0000001', value: { workspace: { runsOn: keyOf('moServer'), grants: [] } } })
-  await mo.put({ ...control, id: 'ctl_0000002', value: { workspace: { runsOn: keyOf('anaMac'), grants: [] } } })
-  await mo.put({ ...control, id: 'ctl_0000003', value: { workspace: { runsOn: 7 } } })
-  assert.deepEqual((await mo.list(control)).data.map((row) => row.id), ['ctl_0000001'])
+  const control = { collection: 'control', workspace: team, parent: 'ag_shared1', id: 'ag_shared1' } as const
+  const elsewhere = await mo.put({ ...control, value: { workspace: { runsOn: keyOf('anaMac'), grants: [] } } })
+  assert.equal(await mo.get(control), null)
+  const garbled = await mo.put({ ...control, current: elsewhere.ver, value: { workspace: { runsOn: 7 } } })
+  assert.equal(await mo.get(control), null)
+  await mo.put({ ...control, current: garbled.ver, value: { workspace: { runsOn: keyOf('moServer'), grants: [] } } })
+  await mo.put({ ...control, id: 'ctl_0000002', value: { workspace: { runsOn: keyOf('moServer'), grants: [] } } })
+  assert.deepEqual((await mo.list(control)).data.map((row) => row.id), ['ag_shared1'])
 })
 
 test('sealing without the key, or the cloud refusing, throws a sentence', async () => {

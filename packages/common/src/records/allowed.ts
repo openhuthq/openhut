@@ -2,11 +2,11 @@ import type { Member, MemberListBody } from '../cloud/cloud.ts'
 import { sealedWith } from './seal.ts'
 import type { SealedRow } from './wire.ts'
 
-export type Roster = Pick<MemberListBody, 'workspace' | 'members' | 'removed' | 'runtimes'> & { viewers?: string[] }
+export type Roster = Pick<MemberListBody, 'workspace' | 'members' | 'removed'> & { viewers: string[] }
 export type AgentFacts = { id: string; workspace: string; owner: string; private: boolean }
-export type Row = Pick<SealedRow, 'object' | 'workspace' | 'parent' | 'by' | 'deleted' | 'body'>
+export type Row = Pick<SealedRow, 'id' | 'object' | 'workspace' | 'parent' | 'by' | 'deleted' | 'body'>
 
-export function agentFacts(agent: Row & { id: string }): AgentFacts | null {
+export function agentFacts(agent: Row): AgentFacts | null {
   if (agent.object !== 'agent' || agent.deleted || !agent.parent) return null
   return { id: agent.id, workspace: agent.workspace, owner: agent.parent, private: privateRow(agent) }
 }
@@ -14,22 +14,20 @@ export function agentFacts(agent: Row & { id: string }): AgentFacts | null {
 export function allowed({ row, roster, agent, current }: { row: Row; roster: Roster; agent?: AgentFacts | null; current?: Row | null }): boolean {
   const writer = memberOf({ roster, device: row.by })
   const moved = current && (current.object !== row.object || current.workspace !== row.workspace || current.parent !== row.parent)
-  if (!writer || roster.workspace !== row.workspace || moved) return false
-  const viewer = roster.viewers?.includes(row.by) ?? false
+  if (!writer || roster.workspace !== row.workspace || moved || roster.viewers.includes(row.by)) return false
   const mine = !current || memberOf({ roster, device: current.by })?.email === writer.email
-  if (row.object === 'agent') return !viewer && agentMay({ row, current, writer })
-  if (row.object === 'connection') return !viewer && row.parent === null && mine
+  if (row.object === 'agent') return agentMay({ row, current, writer })
+  if (row.object === 'connection') return row.parent === null && writer.role === 'owner' && mine
   if (!agent || agent.id !== row.parent || agent.workspace !== row.workspace) return false
   const owner = writer.email === agent.owner
   if (agent.private && !owner) return false
-  if (row.object === 'control' || row.object === 'channel') return owner && !viewer
-  if (row.object === 'skill' || row.object === 'routine') return !viewer
-  if (row.object === 'memory') return !viewer || mine || owner
-  return mine || owner
+  if ((row.object === 'control' || row.object === 'memory') && row.id !== row.parent) return false
+  if (row.object === 'memory' || row.object === 'skill' || row.object === 'routine') return true
+  return owner
 }
 
 export function runsOnAllowed({ roster, agent, runsOn }: { roster: Roster; agent: AgentFacts; runsOn: string }): boolean {
-  return roster.workspace === agent.workspace && memberOf({ roster, device: runsOn })?.email === agent.owner && !roster.viewers?.includes(runsOn)
+  return roster.workspace === agent.workspace && memberOf({ roster, device: runsOn })?.email === agent.owner && !roster.viewers.includes(runsOn)
 }
 
 function agentMay({ row, current, writer }: { row: Row; current?: Row | null; writer: Member }): boolean {
