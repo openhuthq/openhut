@@ -146,8 +146,9 @@
   .calm.blink-slow .c-eyes { animation: blink-slow 1.4s ease-in-out .5s 1 }
   .calm.key-turn .c-prop { transform-origin: 92px 70px; animation: key-turn 1s ease-in-out .3s 1 }
   .sparkle { transform-origin: center; animation: sparkle 1.4s ease-out .4s 1 both }
-  .kit-alive .m-eyes { transform-box: fill-box; transform-origin: center; animation: blink-rare 7s ease-in-out 1.2s infinite }
-  .kit-alive .m-key { transform-box: view-box; transform-origin: 74px 38px; animation: key-nudge 9s ease-in-out 2s infinite }
+  .still .c-body { animation: none }
+  .still .c-eyes { animation-duration: 5.2s }
+  .still .c-hat path:last-child { transform-box: fill-box; transform-origin: 0 50%; animation: flag 1.8s ease-in-out infinite }
   .msg-t { font-size: 14px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere }
   .msg-t > :first-child { margin-top: 0 }
   .msg-t > :last-child { margin-bottom: 0 }
@@ -163,11 +164,13 @@
 @keyframes breathe { 50% { transform: scale(1.03, .97) } }
 @keyframes blink { 0%, 93%, 100% { scale: 1 1 } 96% { scale: 1 .08 } }
 @keyframes blink-slow { 0%, 100% { scale: 1 1 } 45%, 60% { scale: 1 .08 } }
-@keyframes blink-rare { 0%, 96%, 100% { scale: 1 1 } 98% { scale: 1 .1 } }
 @keyframes key-turn { 0%, 100% { rotate: 0deg } 45% { rotate: -40deg } 75% { rotate: 8deg } }
-@keyframes key-nudge { 0%, 88%, 100% { rotate: 0deg } 92% { rotate: -16deg } 96% { rotate: 6deg } }
+@keyframes flag { 50% { transform: scaleX(.8) skewY(-7deg) } }
 @keyframes sparkle { 0% { opacity: 0; scale: .3; rotate: -30deg } 60% { opacity: 1; scale: 1.15 } 100% { opacity: 1; scale: 1; rotate: 0deg } }
 @keyframes hop { 0%, 100% { transform: none } 16% { transform: scale(1.1, .86) } 44% { transform: scale(.93, 1.1) translateY(-16%) } 62% { transform: scale(.97, 1.04) translateY(-4%) } 76% { transform: scale(1.08, .9) } }
+@keyframes hop-rest { 0%, 26%, 100% { transform: none } 4% { transform: scale(1.1, .86) } 11% { transform: scale(.93, 1.1) translateY(-16%) } 16% { transform: scale(.97, 1.04) translateY(-4%) } 20% { transform: scale(1.08, .9) } }
+@keyframes pop { 0% { opacity: 0; scale: .4 } 60% { opacity: 1; scale: 1.1 } 100% { scale: 1 } }
+@keyframes bob { 50% { translate: 0 -5px } }
 @keyframes sweep { 50% { rotate: -14deg } }
 @keyframes jig { 25% { rotate: -8deg } 75% { rotate: 8deg } }
 @keyframes stepin { from { opacity: 0; translate: 12px 0 } }
@@ -212,7 +215,6 @@
 @keyframes pushin { from { transform: translateX(100%) } }
 @keyframes levelin { from { opacity: 0; translate: 6% 0 } }
 @keyframes levelback { from { opacity: 0; translate: -6% 0 } }
-@keyframes toastin { from { opacity: 0; transform: translateY(-140%) } }
 
 @media (max-width: 640px) {
   :root { --kb: 0px; --safe-bottom: env(safe-area-inset-bottom, 0px) }

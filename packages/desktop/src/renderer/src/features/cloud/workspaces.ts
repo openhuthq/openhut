@@ -1,11 +1,8 @@
-import { useSyncExternalStore } from 'react'
+import { createContext, use, useSyncExternalStore } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Cloud, CloudInvite, CloudInvitePreview, CloudWorkspaceView, type CreateCloudInvite, type Role } from '@openhut/common/cloud/cloud.ts'
+import { Cloud, CloudInvite, CloudInvitePreview, type CloudWorkspaceView, type CreateCloudInvite, type Role } from '@openhut/common/cloud/cloud.ts'
 import { request, requestBlob } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
-import { useAgents } from '@/features/agents/api'
-import { useCloud } from '@/features/cloud/api'
-import { visibleTeams } from '@/features/cloud/teams'
 
 const ACTIVE_KEY = 'openhut.workspace'
 const CHANGED = 'openhut:workspace'
@@ -34,12 +31,26 @@ function subscribe(listener: () => void) {
   }
 }
 
-export function useWorkspaces(): { all: CloudWorkspaceView[]; active: CloudWorkspaceView | undefined; email: string | null } {
-  const cloud = useCloud().data
-  const id = useSyncExternalStore(subscribe, chosen)
-  const agents = useAgents().data
-  const all = visibleTeams({ workspaces: cloud?.status === 'off' ? [] : cloud?.workspaces ?? [], agents })
-  return { all, active: all.find((each) => each.id === id) ?? all.find((each) => each.home) ?? all[0], email: cloud?.email ?? null }
+export type Gated = { cloud: Cloud; active: CloudWorkspaceView }
+export const GateContext = createContext<Gated | null>(null)
+
+export function useGate(): Gated {
+  const gated = use(GateContext)
+  if (!gated) throw new Error('This screen shows only after sign-in.')
+  return gated
+}
+
+export function useChosen(): string | null {
+  return useSyncExternalStore(subscribe, chosen)
+}
+
+export function activeOf({ workspaces, chosen }: { workspaces: CloudWorkspaceView[]; chosen: string | null }): CloudWorkspaceView | undefined {
+  return workspaces.find((each) => each.id === chosen) ?? workspaces.find((each) => each.home) ?? workspaces[0]
+}
+
+export function useWorkspaces(): { all: CloudWorkspaceView[]; active: CloudWorkspaceView; email: string | null } {
+  const { cloud, active } = useGate()
+  return { all: cloud.workspaces, active, email: cloud.email }
 }
 
 export function useInvite() {
@@ -116,7 +127,7 @@ export const useRemoveMember = () => useCloudCall(({ id, email }: { id: string; 
 
 export const useRevokeInvite = () => useCloudCall(({ id, email }: { id: string; email: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/invites/${encodeURIComponent(email)}`, method: 'DELETE' }))
 
-export const useRemoveDevice =() => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/devices/${encodeURIComponent(device)}`, method: 'DELETE' }))
+export const useRemoveDevice = () => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/devices/${encodeURIComponent(device)}`, method: 'DELETE' }))
 
 export const useChangeKeys = () => useCloudCall((id: string) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/keys`, method: 'POST' }))
 
@@ -134,14 +145,3 @@ export const useDeleteData = () => useCloudCall(() => request({ schema: Cloud, c
 
 export const useRotated = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud/rotations', method: 'DELETE' }))
 
-
-export function useCreateTeam() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (name: string) => request({ schema: CloudWorkspaceView, computer: 'local', path: '/api/cloud/workspaces', method: 'POST', body: { name } }),
-    onSuccess: async (workspace) => {
-      await client.invalidateQueries({ queryKey: CLOUD_KEY })
-      chooseWorkspace(workspace.id)
-    },
-  })
-}

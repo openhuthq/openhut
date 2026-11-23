@@ -40,8 +40,7 @@ How the installer works, and how `npm run e2e` runs it on Docker Desktop (a bare
 
 ## Checks
 
-Each check is one `node:test` test in `packages/e2e/src/e2e.ts`, which names what it proves and what it expects; a run's `packages/e2e/results/e2e-report.md` lists them all with the actual values. Two worth naming:
-- **T1** is a unit-level check run on the server: it loads `events.ts` in local mode in a node process and checks the usage data it would send has no email, login or username. The desktop app's own telemetry is not exercised end to end.
+Each check is one `node:test` test in `packages/e2e/src/e2e.ts`, which names what it proves and what it expects; a run's `packages/e2e/results/e2e-report.md` lists them all with the actual values. One worth naming:
 - **F8** asks agentd for its fence report and requires exactly the six checks above, all passing on gVisor. F4 and H5 probe the same ground from a real agent: every blocked target must time out from the agent (dropped, not reset) while the server reaches it, including stand-in listeners at 10.99.0.10:443 and 169.254.169.254:443 and one the run holds open on the server itself.
 
 ## Mock parity
@@ -53,7 +52,7 @@ The approved mock is the **Mock** tab of the OpenHut blueprint artifact (https:/
 | Agents, New agent | yes | — |
 | Agent: one page, no tabs. Left: name with Reroll on the avatar, instructions preview, skills. Right: status, model dropdown, owner; channels; connections | yes | Slack and WhatsApp work. The mock's Reroll, skill upload, Memories row and per-connection tool access aren't in this build, so the page leaves them out. Stop/Start and Delete have coloured text with a neutral border |
 | Connections; a connection: Activity on the left, details, sharing and agents on the right; add Postgres | yes | Sharing with one person isn't in this build; other connector kinds are listed, not installable |
-| Admin: Claude seat, Google, Server, Usage data | yes | The mock's Google, Backups and 5-hour window aren't in this build, so the page leaves them out |
+| Admin: Claude seat, Google, Server | yes | The mock's Google, Backups and 5-hour window aren't in this build, so the page leaves them out |
 
 **User sign-off on parity: pending.**
 
@@ -68,7 +67,7 @@ The approved mock is the **Mock** tab of the OpenHut blueprint artifact (https:/
 | A live Slack message and a phone scanning the WhatsApp QR | Need a real workspace and a real phone. Here, CH1 proves the app talks to Slack, CH2 that WhatsApp hands out a real pairing code inside the agent's firewall, and unit tests the rendered settings | One test workspace and one test number on the Beelink: connect both from the dashboard, then the D-checks over each channel |
 | Kata (L3), real hardware reboot, the real EC2 metadata service, Tailscale subnet routes | Need KVM, real hardware, a cloud VM and a tailnet. (Here, 169.254.169.254 is a stand-in listener.) | Isolation plan tests 6 and 7 on the Beelink; one EC2 instance for metadata |
 | Memory per agent at scale | Docker Desktop numbers aren't the Beelink's | Isolation plan test 4 |
-| The desktop app path: local mode on the socket end to end, the `openhut-mcp` bridge, microsandbox agents, the fence on microsandbox, the app's own telemetry | The e2e is a Linux server in Docker; there is no desktop e2e | Manual runs recorded in the Build log: the contract suite 12/12 and the fence 6/6 on microsandbox on a Mac and on the Linux KVM box. Re-run on a Mac on 2026-11-17 after the fence moved to 443 and a host listener: fence 6/6 (each refused target a failed connection, public HTTPS 200, gateway 401), contract 12/12 including the no-network positive control |
+| The desktop app path: local mode on the socket end to end, the `openhut-mcp` bridge, microsandbox agents, the fence on microsandbox | The e2e is a Linux server in Docker; there is no desktop e2e | Manual runs recorded in the Build log: the contract suite 12/12 and the fence 6/6 on microsandbox on a Mac and on the Linux KVM box. Re-run on a Mac on 2026-11-17 after the fence moved to 443 and a host listener: fence 6/6 (each refused target a failed connection, public HTTPS 200, gateway 401), contract 12/12 including the no-network positive control |
 | The app adding a computer over Tailscale SSH, which then joins through the relay | Needs a real tailnet. Here A1 proves the key check (none, wrong, right) and A2 that nothing beyond loopback answers | On the Beelink: Settings › Your devices › Add a computer › over Tailscale, then list its agents |
 | An upgrade from a release built at the previous layout (`packages/app` or `packages/server`) | The e2e upgrades between two builds of this tree. `host-start.sh` and `uninstall.sh` stop any `packages/*/app.ts` and `*agentd.ts`, so the old processes free 8787 and 8081; an old install has no key, so the installer stops before changing anything until the app enrolls one | Install the last `packages/server` release on the Beelink, then run the new curl command with a key |
 | A Telegram channel end to end through the broker | Needs a real bot. Here the broker unit tests cover the token swap, the refused methods (encoded too) and polling, and X2 a refused `logOut` from a real agent | One test bot on the Beelink: connect it, then the D-checks over Telegram |

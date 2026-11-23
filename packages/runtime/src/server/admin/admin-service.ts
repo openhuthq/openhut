@@ -1,16 +1,14 @@
 import * as z from 'zod/mini'
-import { MIN_APP_VERSION, type Admin, type CodexSignIn, type CreateExport, type Export, type Health, type SeatSignIn, type SeatUsage, type Update, type UpdateAdmin } from '@openhut/common/admin/admin.ts'
-import { ConnectionKind, type Connection } from '@openhut/common/connections/connection.ts'
+import { MIN_APP_VERSION, type Admin, type CodexSignIn, type Health, type SeatSignIn, type SeatUsage, type Update, type UpdateAdmin } from '@openhut/common/admin/admin.ts'
 import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { createHash } from 'node:crypto'
 import { agentd, containerStates, features, type LastUpdate } from '../platform/agentd.ts'
 import { settings } from '../platform/settings.ts'
-import { emit, setUsageData } from '../platform/events.ts'
-import { computerId, newId, openSealed, relayKeyHex, sealFor, transferPublicKey } from '../platform/secrets.ts'
+import { emit } from '../platform/events.ts'
+import { newId, transferPublicKey } from '../platform/secrets.ts'
 import { codex } from '../integrations/codex/codex.ts'
-import { connectionService } from '../connections/connection-service.ts'
 import { providerService } from '../models/provider-service.ts'
 import type { Caller } from '../team/identity.ts'
 import { seatSignIn } from './seat-sign-in.ts'
@@ -24,12 +22,6 @@ const UPDATE_GRACE_MS = 20_000
 const UPDATE_LIMIT_MS = 45 * 60_000
 const WEEK_MS = 7 * 24 * 60 * 60_000
 const StoredUpdate = z.object({ from: z.string(), to: z.string(), startedAt: z.string() })
-const Transfer = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('connection'), kind: ConnectionKind, name: z.string(), account: z.string(), config: z.unknown() }),
-  z.object({ type: z.literal('claude'), token: z.string(), at: z.string() }),
-  z.object({ type: z.literal('codex'), tokens: z.object({ accessToken: z.string(), refreshToken: z.string() }), at: z.string() }),
-])
-type Transfer = z.infer<typeof Transfer>
 const CODEX_SIGN_IN_MS = 15 * 60_000
 const codexSignIns = new Map<string, { deviceAuthId: string; userCode: string; until: number }>()
 let latest: { build: string | null; sha256: string; at: number } = { build: null, sha256: '', at: 0 }
@@ -49,38 +41,10 @@ export const adminService = {
         version: health.version, build: health.build, latestBuild, updateAvailable: isNewer({ latest: latestBuild, current: health.build }), update: await currentUpdate({ installing, last }), healthy: health.ok, agentd: health.agentd, firewall: health.firewall,
         running: agents.filter((agent) => states?.[agent.id] === 'running').length, total: agents.length,
       },
-      tailnetUrl: null,
-      google: { clientId: null, redirectUri: connectionService.redirectUrl() },
-      usageData: settings.usageData(),
       publicKey: transferPublicKey,
-      relay: { key: relayKeyHex, computerId, url: config.relayUrl || null },
       features: available,
       minAppVersion: MIN_APP_VERSION,
     }
-  },
-
-  async exportSealed({ actor, publicKey, connectionId, subscription }: { actor: Caller } & CreateExport): Promise<Export> {
-    const transfer = await transferOf({ actor, connectionId, subscription })
-    const sealed = attempt(() => sealFor({ publicKey, text: JSON.stringify(transfer) }))
-    if (!sealed) throw new HttpError(400, 'That public key isn\'t one an OpenHut computer gave. Send the publicKey from its GET /api/admin.', { param: 'publicKey' })
-    emit({ name: 'admin.exported', actor, target: { type: 'admin', id: 'install', what: transfer.type, connectionId: connectionId ?? null } })
-    return { object: 'export', sealed }
-  },
-
-  async importSealed({ actor, sealed }: { actor: Caller; sealed: string }): Promise<Connection | Admin> {
-    const transfer = z.safeParse(Transfer, parseJson(attempt(() => openSealed(sealed))))
-    if (!transfer.success) throw new HttpError(400, 'This wasn\'t sealed for this computer. Export it again with this computer\'s publicKey.', { param: 'sealed' })
-    const { data } = transfer
-    emit({ name: 'admin.imported', actor, target: { type: 'admin', id: 'install', what: data.type } })
-    if (data.type === 'connection') return connectionService.save({ actor, kind: data.kind, name: data.name, config: data.config, account: data.account, signIn: false })
-    if (data.type === 'claude') {
-      await settings.setSeatToken(data.token)
-      await settings.setSeatAt(data.at)
-    } else {
-      await settings.setCodexTokens(data.tokens)
-      await settings.setCodexAt(data.at)
-    }
-    return adminService.status()
   },
 
   async seatUsage(): Promise<SeatUsage> {
@@ -140,6 +104,7 @@ export const adminService = {
     const done = await codex.poll(open)
     if (done) {
       codexSignIns.delete(id)
+      await providerService.signedIn({ id: 'codex', secret: done })
       await providerService.refresh({ id: 'codex' })
       emit({ name: 'admin.codex_signed_in', actor, target: { type: 'admin', id: 'install' } })
     }
@@ -147,29 +112,10 @@ export const adminService = {
   },
 
   async update({ actor, patch }: { actor: Caller; patch: UpdateAdmin }): Promise<Admin> {
-    if (patch.seatToken !== undefined) await settings.setSeatToken(patch.seatToken)
-    if (patch.usageData !== undefined) await setUsage(patch.usageData)
+    if (patch.seatToken !== undefined) await providerService.signedIn({ id: 'claude', secret: { token: patch.seatToken, at: new Date().toISOString() } })
     emit({ name: 'admin.updated', actor, target: { type: 'admin', id: 'install', fields: Object.keys(patch) } })
     return adminService.status()
   },
-}
-
-async function transferOf({ actor, connectionId, subscription }: { actor: Caller; connectionId?: string; subscription?: 'claude' | 'codex' }): Promise<Transfer> {
-  if (connectionId) {
-    const row = await connectionService.owned({ actor, id: connectionId })
-    if (row.sign_in) throw new HttpError(409, `${row.name} uses a sign-in, which can't be copied. Sign in to it again on the other computer.`, { param: 'connectionId' })
-    return { type: 'connection', kind: row.kind, name: row.name, account: row.account, config: connectionService.unsealed(row.config) }
-  }
-  const token = settings.seatToken()
-  const tokens = settings.codexTokens()
-  if (subscription === 'claude' && token) return { type: 'claude', token, at: settings.seatAt() ?? new Date(0).toISOString() }
-  if (subscription === 'codex' && tokens) return { type: 'codex', tokens, at: settings.codexAt() ?? new Date(0).toISOString() }
-  throw new HttpError(409, subscription ? `This computer isn't signed in to ${subscription === 'claude' ? 'Claude' : 'ChatGPT'}, so there's nothing to copy.` : 'Send a connectionId or a subscription to export.', { param: subscription ? 'subscription' : 'connectionId' })
-}
-
-async function setUsage(on: boolean): Promise<void> {
-  await settings.setUsageData(on)
-  setUsageData(on)
 }
 
 export function isNewer({ latest, current }: { latest: string | null; current: string }): boolean {
@@ -215,10 +161,6 @@ async function currentUpdate({ installing, last }: { installing: boolean; last: 
   if (status !== 'done') return { object: 'update', status, ...stored.data, reason }
   await settings.setUpdate('')
   return null
-}
-
-function attempt<T>(fn: () => T): T | undefined {
-  try { return fn() } catch { return undefined }
 }
 
 function parseJson(text: string | undefined): unknown {

@@ -4,7 +4,7 @@ description: Hand agents your database and apps, like Postgres, Gmail, Linear an
 icon: logo:postgres
 ---
 
-<Shot src="connect" alt="Connect Postgres: the name, the computers it goes on, then the steps" />
+<Shot src="connect" alt="Connect Postgres: the name, then the steps" />
 
 <Steps>
 <Step>
@@ -18,26 +18,21 @@ An agent that needs an app asks for it in chat, with a **Connect** button that o
 </Step>
 <Step>
 
-### Choose its computers
-
-Under **Computers**, pick where it goes: this Mac, a [computer](/computers) you added, or both. Its key stays on each computer you pick.
-
-</Step>
-<Step>
-
 ### Paste a key or sign in
 
-Postgres, Convex and a custom MCP server take a key. PostHog, Linear, GitHub and Google open their sign-in. Google signs in through OpenHut Cloud, which holds OpenHut's Google app and passes the tokens straight back to your computer without keeping them. Google shows a warning that the app isn't verified yet: choose **Advanced**, then **Go to OpenHut**. Excalidraw takes neither: agents draw a diagram and send a link to it, and anyone with the link can open it.
+Postgres, Convex and a custom MCP server take a key. PostHog, Linear, GitHub and Google open their sign-in. Google signs in through OpenHut Cloud, which holds OpenHut's Google app and passes the tokens straight back to your computer. Google shows a warning that the app isn't verified yet: choose **Advanced**, then **Go to OpenHut**. Excalidraw takes neither: agents draw a diagram and send a link to it, and anyone with the link can open it.
 
 </Step>
 <Step>
 
 ### Hand it to an agent
 
-On the agent, **Add** it under **Can use**. If it isn't on the agent's computer yet, **Add to** that computer.
+On the agent, **Add** it under **Can use**. Only an agent's owner can, and only with their own connections.
 
 </Step>
 </Steps>
+
+A connection belongs to your account, not to one computer: every computer of yours can use it. Its key is encrypted on your device and opens only on your Macs, PCs and servers. Your phones see its name, never its key, and teammates see neither.
 
 Open a connection to see its tools and every call, refused ones too.
 

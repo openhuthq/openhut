@@ -1,58 +1,58 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from 'react'
 import { Alert02Icon, Cancel01Icon, FingerPrintIcon, Key01Icon } from '@hugeicons/core-free-icons'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { kitWord, nearestWord, readKit, validKit } from '@openhut/common/vault/kit-file.ts'
 import { agentPath } from '@/app/routes'
-import { ConfirmButton } from '@/components/confirm-button'
 import { DeviceIcon } from '@/components/custom/device'
 import { DropZone } from '@/components/custom/drop-zone'
-import { PersonFace, PersonFaces } from '@/components/custom/person-face'
-import { AMBER, notify, Tinted, Toast, Toasts } from '@/components/custom/toast'
+import { PersonFace } from '@/components/custom/person-face'
+import { AMBER, notify, Tinted, useStickyToast } from '@/components/custom/toast'
 import { ErrorNote } from '@/components/error-note'
-import { Hut } from '@/components/hut'
-import { DRAG, I, PILL } from '@/components/kit'
+import { I, PILL } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { nameOf, notifyDesktop, notifyUnlock, REMOVE_DETAIL, useCloud, useRemoveMac, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useStartOver, useUnlock } from '@/features/cloud/api'
-import { Mascot } from '@/features/cloud/sign-in'
-import { PRIMARY, Step } from '@/features/cloud/step'
-import { chooseWorkspace, useAsk, useCancelAsk } from '@/features/cloud/workspaces'
+import { nameOf, notifyDesktop, useCloud, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
+import { BIG, Step } from '@/features/cloud/step'
+import { chooseWorkspace, useAsk, useCancelAsk, useDeleteData } from '@/features/cloud/workspaces'
 import { Mismatch } from '@/features/cloud/presence'
-import { freshDevice, joinRequests, markSeen, seenDevices } from '@/features/cloud/seen'
+import { joinRequests } from '@/features/cloud/seen'
 import { Spinner } from '@/components/ui/spinner'
-import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
-import { isPhone } from '@/lib/native'
 import { navigate, usePath } from '@/lib/router'
-import { longDate, shortDateTime } from '@/lib/format'
+import { longDate } from '@/lib/format'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
-  const [way, setWay] = useState<'kit' | 'ask' | null>(null)
+  const [way, setWay] = useState<'kit' | 'ask' | 'start-over' | null>(null)
   const signOut = useSignOut()
   const signIn = useSignIn()
   const helper = usePasskeys()
   const passkey = usePasskeyUnlock()
-  const leave = <Button type="button" variant="text" className="text-[12px] font-normal text-mute" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
-  if (cloud.needsSignIn) return <Step art={<Hut mood="worried" className="size-[96px]" />} title="This computer was removed" line="Sign in again to unlock it."
-    action={<Button type="button" variant="primary" className={PRIMARY} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}>Sign in again</Button>}>
-    {leave}
-  </Step>
+  const leave = <Button type="button" variant="text" className="font-normal text-mute" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
+  if (cloud.needsSignIn) return <Step title="This computer was removed." line="Sign in again to unlock it." link={leave}
+    action={<Button type="button" variant="primary" className={BIG} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}>Sign in again</Button>} />
   if (way === 'kit') return <KitEntry cloud={cloud} onBack={() => setWay(null)} />
+  if (way === 'start-over') return <StartOver onBack={() => setWay(null)} />
   if (way === 'ask' || cloud.asking) return <Requested cloud={cloud} onBack={() => setWay(null)} />
   const macCan = Boolean(helper?.passkeys && helper.prf)
   const canPasskey = macCan && cloud.passkey
-  return <Step art={<Hut mood="key" className="size-[96px]" />} title={`You’re signed in, ${nameOf(cloud.email ?? '')}`} line="One more step: the key that reads your agents and chats." back={back}
-    action={cloud.canAsk && <Button type="button" variant="primary" className={PRIMARY} onClick={() => setWay('ask')}>Request access</Button>}>
-    <div className="w-full max-w-[420px] text-left">
-      <Rows>
-        {canPasskey && <Row onClick={() => passkey.mutate(undefined, { onError: toastError })} disabled={passkey.isPending} icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title={passkey.isPending ? 'Unlocking…' : 'Use Touch ID'} note="With the passkey you saved"><Chevron /></Row>}
-        {cloud.kitInCloud && <Row onClick={() => setWay('kit')} icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Use your recovery kit" note="The file or the 12 words"><Chevron /></Row>}
-      </Rows>
-    </div>
-    {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
-    {!cloud.kitInCloud && <CantGetIn />}
+  const ask = cloud.canAsk ? 'Approve it from a computer you already use, or use your recovery kit.' : 'Use your recovery kit to unlock it.'
+  const lost = <Button type="button" variant="text" className="font-normal text-mute" onClick={() => setWay('start-over')}>Lost your computers and kit? Start over</Button>
+  return <Step title={`Welcome back, ${nameOf(cloud.email ?? '')}`} line={`This computer is new to your account. ${ask}`} back={back} link={<span className="flex flex-col items-center gap-1">{leave}{lost}</span>}
+    action={<div className="flex flex-col items-center gap-2.5">
+      {cloud.canAsk && <Button type="button" variant="primary" className={BIG} onClick={() => setWay('ask')}>Ask my other computer</Button>}
+      {cloud.kitInCloud && <Button type="button" variant={cloud.canAsk ? 'secondary' : 'primary'} className={cloud.canAsk ? BIG : BIG} onClick={() => setWay('kit')}><I icon={Key01Icon} size={16} />Use my recovery kit</Button>}
+      {canPasskey && <Button type="button" variant="secondary" className={BIG} disabled={passkey.isPending} onClick={() => passkey.mutate(undefined, { onError: toastError })}><I icon={FingerPrintIcon} size={16} />{passkey.isPending ? 'Unlocking…' : 'Use Touch ID'}</Button>}
+      {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
+    </div>} />
+}
+
+function StartOver({ onBack }: { onBack: () => void }) {
+  const remove = useDeleteData()
+  return <Step title="Start over?" line="This deletes your account and everything in it, then starts fresh. It can’t be undone: your data was encrypted on your devices, so nobody can recover it." back={onBack}
+    action={<Button type="button" variant="destructive" className={BIG} disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: () => navigate('/', true), onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete and start over'}</Button>}>
+    <ErrorNote message={remove.error?.message} />
   </Step>
 }
 
@@ -71,38 +71,20 @@ function Requested({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
   const admins = rooms.filter((room) => !room.own).flatMap((room) => room.admins)
   const own = rooms.some((room) => room.own)
   const where = [own && 'on another of your computers, in Settings › Computers', admins.length > 0 && `by ${who(admins)}`].filter(Boolean).join(', or ')
-  if (asking?.denied) return <Step art={<Hut mood="worried" className="size-[96px]" />} title="Not approved" line="It was denied, or the request expired after an hour." back={back}
-    action={<Button type="button" variant="primary" className={PRIMARY} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Request again</Button>} />
-  return <Step art={admins.length && !own ? <PersonFaces people={admins.map((email) => ({ name: nameOf(email), email }))} size={64} /> : <Hut mood="looking" className="size-[96px]" />} title="Requires approval" line={rooms.length ? `Approve it ${where}. It unlocks by itself.` : 'Sending your request…'} back={back}>
+  if (asking?.denied) return <Step title="Not approved." line="It was denied, or the request expired after an hour." back={back}
+    action={<Button type="button" variant="primary" className={BIG} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Request again</Button>} />
+  return <Step title="Waiting for approval." line={rooms.length ? 'It unlocks by itself once approved.' : 'Sending your request…'}
+    link={<Button type="button" variant="text" className="font-normal text-mute" disabled={cancel.isPending} onClick={back}>Cancel</Button>}>
     <span className="flex items-center gap-2 rounded-xl border border-hair bg-card px-3.5 py-2.5 text-[13px]"><DeviceIcon kind="mac" />{asking?.name ?? 'This computer'}<span className="text-mute">· {cloud.email}</span></span>
     {!ask.isError && <Spinner className="mt-1" />}
     <ErrorNote message={ask.error?.message ?? asking?.error ?? undefined} />
-    <Button type="button" variant="text" className="text-[12px] font-normal text-mute" disabled={cancel.isPending} onClick={back}>Cancel</Button>
+    {rooms.length > 0 && <span className="max-w-[420px] text-[12.5px] text-mute">Approve it {where}.</span>}
   </Step>
 }
 
 function who(admins: string[]): string {
   const names = admins.map(nameOf)
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names.at(-1)}` : names[0] ?? 'an admin'
-}
-
-function CantGetIn() {
-  const [open, setOpen] = useState(false)
-  const startOver = useStartOver()
-  const { confirming, setConfirming, box } = useConfirming()
-  if (!open) return <Button type="button" variant="text" className="mt-auto text-[12px] font-normal text-mute" onClick={() => setOpen(true)}>Can’t get in?</Button>
-  return <div className="mt-auto flex w-full max-w-[400px] flex-col items-center gap-2">
-    <p className="m-0 text-[12.5px]/[18px] text-mute">There’s no recovery kit yet. If none of your computers can approve this one, you can start over with an empty backup.</p>
-    <div ref={box} className="flex flex-wrap items-center justify-center gap-2">
-      {confirming
-        ? <>
-          <span className="w-full text-[12px] text-mute">Start over with an empty backup? Your other computers will need the new kit.</span>
-          <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
-          <Button type="button" variant="danger" className={PILL} disabled={startOver.isPending} onClick={() => startOver.mutate(undefined, { onError: toastError })}>Start over</Button>
-        </>
-        : <Button type="button" variant="text" className="text-[12px] font-normal text-mute" onClick={() => setConfirming(true)}>Start over</Button>}
-    </div>
-  </div>
 }
 
 function JoinRequests({ cloud }: { cloud: Cloud }) {
@@ -116,32 +98,21 @@ function JoinRequests({ cloud }: { cloud: Cloud }) {
       if (!document.hasFocus()) notifyDesktop({ title: `${request.name ?? 'A new computer'} wants to join`, body: mine ? 'Approve or deny it in Settings › Computers.' : `${nameOf(request.email)} asked to join ${workspace.name}.`, path })
     }
   }, [pending])
-  const shown = pending.find(({ request }) => !dismissed.includes(request.device))
-  if (!shown) return null
-  const { workspace, request, mine, path } = shown
-  const go = () => {
-    if (!mine) chooseWorkspace(workspace.id)
-    setDismissed((all) => [...all, request.device])
-    navigate(path)
-  }
-  return <Toast alert lead={<DeviceIcon kind="mac" />} title={`${request.name ?? 'A new computer'} wants to join`} note={mine ? request.email : `${nameOf(request.email)} · ${workspace.name}`}>
-    <Button type="button" variant="secondary" className={PILL} onClick={go}>Open</Button>
-    <Button type="button" variant="text" className="shrink-0 px-1 text-mute" aria-label="Later" title="Later" onClick={() => setDismissed((all) => [...all, request.device])}><I icon={Cancel01Icon} size={14} /></Button>
-  </Toast>
-}
-
-export function NewMacAlert({ cloud }: { cloud: Cloud }) {
-  const seen = useSyncExternalStore(seenDevices.subscribe, seenDevices.get)
-  const remove = useRemoveMac()
-  const fresh = freshDevice({ cloud, seen, now: Date.now() })
-  if (!fresh?.addedAt || cloud.status !== 'on') return null
-  const when = shortDateTime.format(new Date(fresh.addedAt))
-  return <Toast alert lead={<DeviceIcon kind={fresh.kind} />} title="New computer added" note={fresh.name ? <><span className="truncate">{fresh.name}</span><span>{when}</span></> : when}>
-    {cloud.youngUntil
-      ? <span className="w-[104px] shrink-0 text-right text-[12px]/[1.3] text-mute">Remove it from an older device</span>
-      : <ConfirmButton variant="secondary" className="shrink-0 rounded-xl px-3.5 text-[12.5px] text-fail" disabled={remove.isPending} question={`Remove ${fresh.name ?? 'this computer'}?`} detail={`Added ${when}. ${REMOVE_DETAIL}`} action="Remove" onConfirm={() => remove.mutate(fresh.key)}>Not me</ConfirmButton>}
-    <Button type="button" variant="text" className="shrink-0 px-1 text-mute" aria-label="It’s mine" title="It’s mine" onClick={() => markSeen([fresh.key])}><I icon={Cancel01Icon} size={14} /></Button>
-  </Toast>
+  const here = usePath()
+  const shown = pending.find(({ request, path }) => path !== here && !dismissed.includes(request.device))
+  const later = (device: string) => setDismissed((all) => [...all, device])
+  useStickyToast({ id: 'join-request', notice: shown ? {
+    lead: <DeviceIcon kind="mac" />,
+    title: `${shown.request.name ?? 'A new computer'} wants to join`,
+    note: shown.mine ? shown.request.email : `${nameOf(shown.request.email)} · ${shown.workspace.name}`,
+    action: { label: 'Open', onClick: () => {
+      if (!shown.mine) chooseWorkspace(shown.workspace.id)
+      later(shown.request.device)
+      navigate(shown.path)
+    } },
+    cancel: { label: 'Later', onClick: () => later(shown.request.device) },
+  } : null })
+  return null
 }
 
 function KitEntry({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
@@ -160,11 +131,10 @@ function KitEntry({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
     unlock.mutate({ words: kit.words }, { onError: (err) => setProblem({ tone: 'fail', text: err.message }) })
   }
   if (typing) return <KitWordsEntry onBack={() => setTyping(false)} />
-  return <Step art={<Mascot kind="kit" size={84} />} title="Use your recovery kit" line="Drop the file here." back={onBack}>
+  return <Step title="Use your recovery kit." line="Drop the file here." back={onBack}>
     <div className="flex w-full max-w-[440px] flex-col gap-3">
       {problem && <p role="alert" className={cn('m-0 rounded-xl px-3.5 py-3 text-left text-[13.5px]/[1.45]', problem.tone === 'warn' ? 'bg-warning-subtle text-warning-strong' : 'bg-[color-mix(in_oklch,var(--fail)_10%,transparent)] text-ink')}>{problem.text}</p>}
-      <DropZone className="py-5" onText={tryKit}>{(hot) => <>
-        <Hut key={problem?.text} mood={unlock.isPending ? 'key' : hot ? 'surprised' : problem ? 'worried' : 'looking'} className={cn('calm mb-1 size-12', unlock.isPending && 'key-turn', problem && !hot && 'blink-slow')} />
+      <DropZone className="py-5" onText={tryKit}>{() => <>
         <span className="text-[15px] font-medium text-ink">{unlock.isPending ? 'Unlocking…' : 'Drop your kit here'}</span>
         {!unlock.isPending && <span className="text-[12.5px] text-mute">or paste it</span>}
       </>}</DropZone>
@@ -201,8 +171,8 @@ function KitWordsEntry({ onBack }: { onBack: () => void }) {
     if (!validKit(words)) return setTypo({ at: -1, text: 'These words don’t fit together. Check each one against your kit, in order.' })
     unlock.mutate({ words })
   }
-  return <Step art={<Hut key={typo?.text} mood={typo ? 'worried' : 'key'} className={cn('calm size-[96px]', typo && 'blink-slow')} />} title="Type your 12 words" line="In order." back={onBack}
-    action={<Button type="submit" form="kit-words" variant="primary" disabled={words.some((word) => !word) || unlock.isPending} className={PRIMARY}>{unlock.isPending ? 'Unlocking…' : 'Unlock'}</Button>}>
+  return <Step title="Type your 12 words." line="In order." back={onBack}
+    action={<Button type="submit" form="kit-words" variant="primary" disabled={words.some((word) => !word) || unlock.isPending} className={BIG}>{unlock.isPending ? 'Unlocking…' : 'Unlock'}</Button>}>
     <form id="kit-words" onSubmit={submit} className="flex w-full flex-col items-center gap-3">
       <div className="grid w-full max-w-[440px] grid-cols-3 gap-2">{words.map((word, index) => <label key={index} className={cn('flex h-10 items-center gap-2 rounded-xl border border-hair bg-card px-3 text-[13px] focus-within:border-ink', typo?.at === index && 'border-fail text-fail focus-within:border-fail')}>
         <span className="w-4 text-[11px] text-mute tabular-nums">{index + 1}</span>
@@ -213,17 +183,10 @@ function KitWordsEntry({ onBack }: { onBack: () => void }) {
   </Step>
 }
 
-export function CloudGate({ children }: { children: ReactNode }) {
+export function CloudToasts() {
   const cloud = useCloud().data
   const queries = useQueryClient()
-  const path = usePath()
   const [landing, setLanding] = useState(false)
-  const [notified, setNotified] = useState<boolean>()
-  const locked = cloud?.status === 'locked'
-  useEffect(() => {
-    if (!locked) return setNotified(undefined)
-    void notifyUnlock().then(setNotified)
-  }, [locked])
   const restoring = cloud?.backup.state === 'restoring'
   const agent = cloud?.backup.agent
   const problem = cloud?.backup.problem
@@ -235,13 +198,8 @@ export function CloudGate({ children }: { children: ReactNode }) {
     notify(problem ? { lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: 'Not everything came back', note: problem } : { title: 'Your agents are restored', note: 'Your agents and chats are on this computer now.' })
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
-  if (!cloud) return children
-  return <>{children}<Toasts>{cloud.status === 'locked' && notified === false && !path.startsWith('/settings/') && <LockedToast />}<JoinRequests cloud={cloud} /><NewMacAlert cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
-}
-
-function LockedToast() {
-  if (isPhone()) return <Toast lead={<Hut mood="key" className="size-8" />} title="Unlock OpenHut on your computer" note="Your agents and chats are restored after that." />
-  return <Toast lead={<Hut mood="key" className="size-8" />} title="Unlock OpenHut Cloud" note="Restore your agents and chats on this computer."><Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/account?open=enable')}>Unlock</Button></Toast>
+  if (!cloud) return null
+  return <><JoinRequests cloud={cloud} /><Mismatch /><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
 }
 
 function Joins({ cloud }: { cloud: Cloud }) {
@@ -271,11 +229,4 @@ function GoneNotice({ cloud }: { cloud: Cloud }) {
     notify({ lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: last.why === 'deleted' ? `${last.name} was deleted` : `You were removed from ${last.name}`, note: 'Its agents moved to the trash on this computer.' })
   }, [cloud.gone, cloud.workspaces])
   return null
-}
-
-export function Window({ children }: { children: ReactNode }) {
-  return <div className="flex h-dvh flex-col bg-canvas pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-ink">
-    <div className={cn('flex h-[52px] shrink-0 items-center justify-center text-[13px] font-semibold text-mute', DRAG)}>OpenHut</div>
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 pb-12 text-center">{children}</div>
-  </div>
 }

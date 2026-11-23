@@ -84,3 +84,17 @@ export type Conversation = z.infer<typeof Conversation>
 
 export const ListChannels = z.object({ agentId: z.optional(z.string()) })
 export type ListChannels = z.infer<typeof ListChannels>
+
+export const ChannelRecord = z.object({
+  kind: ChannelKind,
+  status: z.enum(['connected', 'linking']),
+  account: z.nullable(z.string()),
+  ownerAddress: z.string(),
+  open: z.boolean(),
+  allowed: z.array(z.string()),
+  createdAt: z.string(),
+})
+export type ChannelRecord = z.infer<typeof ChannelRecord>
+
+export const ChannelSecrets = z.object({ botToken: z.optional(z.string()), appToken: z.optional(z.string()) })
+export type ChannelSecrets = z.infer<typeof ChannelSecrets>

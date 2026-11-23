@@ -5,9 +5,8 @@ import { Agent, Grant, type CreateAgent, type UpdateAgent } from '@openhut/commo
 import { Memory, type UpdateMemory } from '@openhut/common/agents/memory.ts'
 import { Skill } from '@openhut/common/agents/skill.ts'
 import { Channel, Conversation, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
-import type { OpenHutAgent } from '@openhut/client'
+import { openhut, type OpenHutAgent } from '@/lib/openhut'
 import { request } from '@/lib/api-client'
-import { openhut } from '@/lib/openhut'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
 import { localFace } from '@/features/agents/face'
@@ -259,7 +258,7 @@ export function useMoveAgent() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (input: { id: string; to: string }) => openhut.agents.move(input),
-    onSuccess: ({ agent }) => {
+    onSuccess: (agent) => {
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agent.id ? agent : each))
       void client.invalidateQueries({ queryKey: [...AGENTS_KEY, agent.id] })
       void client.resetQueries({ queryKey: ['threads', 'agent', agent.id] })

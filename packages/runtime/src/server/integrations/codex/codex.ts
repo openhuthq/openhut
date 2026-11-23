@@ -3,6 +3,7 @@ import { HttpError, messageOf } from '../../platform/http-error.ts'
 import { config } from '../../platform/config.ts'
 import { log } from '../../platform/events.ts'
 import { settings } from '../../platform/settings.ts'
+import { connectionRecords } from '../../connections/connection-records.ts'
 
 const ISSUER = config.codexAuthApi
 const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
@@ -12,6 +13,7 @@ const UserCode = z.object({ device_auth_id: z.string(), user_code: z.string() })
 const Authorized = z.object({ authorization_code: z.string(), code_verifier: z.string() })
 const Tokens = z.object({ access_token: z.string(), refresh_token: z.optional(z.string()) })
 const Claims = z.object({ exp: z.optional(z.number()), 'https://api.openai.com/auth': z.optional(z.object({ chatgpt_account_id: z.optional(z.string()) })) })
+const Stored = z.object({ accessToken: z.string(), refreshToken: z.string() })
 let refreshing: Promise<string> | undefined
 
 export const codex = {
@@ -24,31 +26,36 @@ export const codex = {
     return { deviceAuthId: code.device_auth_id, userCode: code.user_code }
   },
 
-  async poll({ deviceAuthId, userCode }: { deviceAuthId: string; userCode: string }): Promise<boolean> {
+  async poll({ deviceAuthId, userCode }: { deviceAuthId: string; userCode: string }): Promise<CodexSecret | null> {
     const res = await call({ url: `${ISSUER}/api/accounts/deviceauth/token`, body: JSON.stringify({ device_auth_id: deviceAuthId, user_code: userCode }), type: 'application/json' })
-    if (res.status === 403 || res.status === 404) return false
+    if (res.status === 403 || res.status === 404) return null
     if (!res.ok) throw new HttpError(502, 'ChatGPT stopped the sign-in. Start again.')
     const { authorization_code: code, code_verifier: verifier } = z.parse(Authorized, await res.json())
     const tokens = await tokenRequest(new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: `${ISSUER}/deviceauth/callback`, client_id: CLIENT_ID, code_verifier: verifier }))
-    await settings.setCodexTokens({ accessToken: tokens.access_token, refreshToken: tokens.refresh_token ?? '' })
-    return true
+    return { accessToken: tokens.access_token, refreshToken: tokens.refresh_token ?? '', at: new Date().toISOString() }
   },
 
   async accessToken(): Promise<string> {
     const stored = settings.codexTokens()
     if (!stored) throw new HttpError(409, 'ChatGPT isn\'t signed in on this computer. Sign in under Settings › Models.')
     if ((claimsOf(stored.accessToken).exp ?? 0) * 1000 - Date.now() > REFRESH_EARLY_MS) return stored.accessToken
-    refreshing ??= refresh(stored.refreshToken).finally(() => { refreshing = undefined })
+    refreshing ??= refresh().finally(() => { refreshing = undefined })
     return refreshing
   },
 
   accountOf: (accessToken: string): string | undefined => claimsOf(accessToken)['https://api.openai.com/auth']?.chatgpt_account_id,
 }
 
-async function refresh(refreshToken: string): Promise<string> {
-  const tokens = await tokenRequest(new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: CLIENT_ID }))
-  await settings.setCodexTokens({ accessToken: tokens.access_token, refreshToken: tokens.refresh_token ?? refreshToken })
-  return tokens.access_token
+async function refresh(): Promise<string> {
+  const secret = await connectionRecords.refresh({
+    id: connectionRecords.providerId('codex'),
+    renew: async (latest) => {
+      const { refreshToken } = z.parse(Stored, latest)
+      const tokens = await tokenRequest(new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: CLIENT_ID }))
+      return { accessToken: tokens.access_token, refreshToken: tokens.refresh_token ?? refreshToken, at: new Date().toISOString() }
+    },
+  })
+  return z.parse(Stored, secret).accessToken
 }
 
 async function tokenRequest(form: URLSearchParams): Promise<z.infer<typeof Tokens>> {
@@ -73,3 +80,5 @@ function claimsOf(token: string): z.infer<typeof Claims> {
     return {}
   }
 }
+
+export type CodexSecret = { accessToken: string; refreshToken: string; at: string }

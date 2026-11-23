@@ -19,6 +19,6 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss(), ...relays ? [policy(relays)] : []],
     resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },
     build: { outDir: '../../dist/renderer', emptyOutDir: true },
-    server: { proxy: { '/api': { target: `http://127.0.0.1:${process.env.PORT ?? 8787}`, ws: true, headers: { authorization: 'Bearer dev' } } } },
+    server: { proxy: Object.fromEntries(['/api', '^/c/'].map((path) => [path, { target: `http://127.0.0.1:${process.env.PORT ?? 8787}`, ws: true, headers: { authorization: 'Bearer dev' } }])) },
   }
 })

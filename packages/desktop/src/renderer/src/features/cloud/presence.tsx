@@ -3,7 +3,7 @@ import { Alert02Icon } from '@hugeicons/core-free-icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Presence, type HereField } from '@openhut/common/cloud/cloud.ts'
 import { hueOf, PersonFace, PersonFaces } from '@/components/custom/person-face'
-import { RED, Tinted, Toast } from '@/components/custom/toast'
+import { RED, Tinted, useStickyToast } from '@/components/custom/toast'
 import { Button } from '@/components/ui/button'
 import { nameOf, useCloud } from '@/features/cloud/api'
 import { request } from '@/lib/api-client'
@@ -116,6 +116,6 @@ export function EditLock({ agentId, field, draft, onClose }: { agentId: string; 
 export function Mismatch() {
   const mismatch = usePresence().data?.mismatch ?? []
   const names = [...new Set(mismatch.map((each) => nameOf(each.email)))]
-  if (!names.length) return null
-  return <Toast alert lead={<Tinted icon={Alert02Icon} hue={RED} />} title={`Your computer and ${names.join(' and ')}’s don’t agree on who’s in the team`} note="Sharing is paused until they do. Check with them on a call." />
+  useStickyToast({ id: 'mismatch', notice: names.length ? { lead: <Tinted icon={Alert02Icon} hue={RED} />, title: `Your computer and ${names.join(' and ')}’s don’t agree on who’s in the team`, note: 'Sharing is paused until they do. Check with them on a call.' } : null })
+  return null
 }

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+<linearGradient id="field" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e4f2ff"/><stop offset="1" stop-color="#9fd0ff"/></linearGradient>
+<linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<filter id="lift" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#002a4a" flood-opacity=".3"/></filter>
+<clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#field)" filter="url(#lift)"/>
+<rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="url(#rim)" stroke-width="3"/>
+<ellipse cx="512" cy="810" rx="235" ry="22" fill="#3b7fc4" opacity=".28"/>
+<svg x="182" y="186" width="660" height="660" viewBox="4 8 100 100" overflow="visible"><g class="c-body"><rect x="27" y="53" width="54" height="45" rx="10" fill="#fbe3c8" stroke="#0b0b0b" stroke-width="5.500"/><path d="M54 20 92 56q3 6-4 6H20q-7 0-4-6z" fill="#7cc4ff" stroke="#0b0b0b" stroke-width="5.500" stroke-linejoin="round"/><path d="M37 41q4.5 4 9 0t9 0 9 0 9 0M25 52q4.8 4 9.7 0t9.7 0 9.7 0 9.7 0 9.7 0 9.7 0" stroke="#3b7fc4" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g><g class="c-face"><ellipse cx="37" cy="83" rx="4.300" ry="2.700" fill="#f5a48c"/><ellipse cx="71" cy="83" rx="4.300" ry="2.700" fill="#f5a48c"/><g class="c-eyes"><ellipse cx="44" cy="76" rx="5.2" ry="6.2" fill="#0b0b0b"/><ellipse cx="64" cy="76" rx="5.2" ry="6.2" fill="#0b0b0b"/><circle cx="46.0" cy="73.5" r="2.1" fill="#fff"/><circle cx="66.0" cy="73.5" r="2.1" fill="#fff"/></g><g class="c-mouth"><path d="M49.500 85q4.500 4 9 0" stroke="#0b0b0b" stroke-width="3" fill="none" stroke-linecap="round"/></g></g><g class="c-hat"><path d="M54 20V9.500" stroke="#0b0b0b" stroke-width="3.400" stroke-linecap="round"/><path d="M55.500 9 69 13.500 55.500 18z" fill="#ff5a3c" stroke="#0b0b0b" stroke-width="3" stroke-linejoin="round"/></g></svg>
+<g clip-path="url(#tile)"><path d="M540 100h170L924 314v170z" fill="#ff3b30"/><text transform="translate(774 250) rotate(45)" text-anchor="middle" dominant-baseline="central" font-family="Helvetica Neue, Arial, sans-serif" font-weight="800" font-size="96" fill="#fff">DEV</text></g>
+</svg>

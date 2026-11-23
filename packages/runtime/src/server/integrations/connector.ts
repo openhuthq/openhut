@@ -27,7 +27,7 @@ export type Connector = {
   tools: (ctx: ConnectorContext) => Promise<ToolSpec[]>
   call: (ctx: ConnectorContext & { tool: string; args: Record<string, unknown> }) => Promise<ToolResult>
 }
-export type ConnectorContext = { config: unknown; save: (config: unknown) => Promise<void> }
+export type ConnectorContext = { config: unknown; refresh: (renew: (latest: Record<string, unknown>) => Promise<Record<string, unknown>>) => Promise<Record<string, unknown>> }
 export type ToolSpec = { name: string; description: string; schema: Record<string, unknown> }
 export type ToolResult = { text: string; isError: boolean }
 type NativeTool<C> = { description: string; input: z.ZodMiniObject; run: (call: { config: C; args: unknown }) => Promise<unknown> }

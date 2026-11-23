@@ -2,7 +2,9 @@ import { createHash, createPublicKey, diffieHellman, generateKeyPairSync, random
 import { once } from 'node:events'
 import type { AddressInfo } from 'node:net'
 import { WebSocketServer, type RawData, type WebSocket } from 'ws'
-import { generateKeyPair, serve, toHex, type DeviceStatus, type Invited, type ServeInput } from '../src/index.ts'
+import { generateKeyPair, serve, toHex, type ServeInput } from '../src/index.ts'
+
+export const TOKEN = 'a-valid-access-token'
 
 export type Relay = {
   url: string
@@ -11,6 +13,7 @@ export type Relay = {
   kickComputer: () => void
   online: () => boolean
   registered: number
+  refused: number
   pongs: number
   deaf: boolean
   close: () => Promise<void>
@@ -22,10 +25,16 @@ function bytes(data: RawData): Buffer {
 }
 
 export async function startRelay(): Promise<Relay> {
-  const server = new WebSocketServer({ host: '127.0.0.1', port: 0, maxPayload: 1024 * 1024 })
+  const server = new WebSocketServer({
+    host: '127.0.0.1', port: 0, maxPayload: 1024 * 1024,
+    verifyClient: ({ req }, done) => {
+      const valid = req.headers['x-openhut-token'] === TOKEN
+      if (!valid) relay.refused++
+      done(valid, 401)
+    }
+  })
   await once(server, 'listening')
   const devices = new Map<string, WebSocket>()
-  let tokenHash: string | undefined
   let computer: WebSocket | undefined
   let lastSeen = 0
   const relay: Relay = {
@@ -35,6 +44,7 @@ export async function startRelay(): Promise<Relay> {
     kickComputer: () => computer?.close(1012, 'restart'),
     online: () => computer !== undefined,
     registered: 0,
+    refused: 0,
     pongs: 0,
     deaf: false,
     close: async () => {
@@ -46,11 +56,6 @@ export async function startRelay(): Promise<Relay> {
   server.on('connection', (socket, request) => {
     const url = new URL(request.url ?? '/', 'http://relay')
     if (url.searchParams.get('role') === 'computer') {
-      const token = request.headers['x-openhut-token']
-      if (typeof token !== 'string' || !token || url.searchParams.has('token')) return socket.close(4001, 'token')
-      const hash = createHash('sha256').update(token).digest('hex')
-      if (tokenHash && tokenHash !== hash) return socket.close(4001, 'token')
-      tokenHash = hash
       relay.registered++
       computer?.close(1000, 'replaced')
       computer = socket
@@ -93,20 +98,19 @@ export async function startRelay(): Promise<Relay> {
   return relay
 }
 
-export async function startComputer(options: Partial<Pick<ServeInput, 'handle' | 'invited' | 'keepalive' | 'socket'>> = {}) {
+export async function startComputer(options: Partial<Pick<ServeInput, 'handle' | 'keepalive' | 'socket' | 'token'>> = {}) {
   const relay = await startRelay()
   const key = generateKeyPair()
-  const statuses = new Map<string, DeviceStatus>()
+  const listed = new Set<string>()
   const handled: string[] = []
   const sockets: string[] = []
   const computerId = createHash('sha256').update(key.publicKey).digest('hex')
   const server = serve({
     relayUrl: relay.url,
     computerId,
-    registerToken: 'token',
+    token: options.token ?? (async () => TOKEN),
     key,
-    device: device => statuses.get(device) ?? 'unknown',
-    invited: options.invited ?? (async (): Promise<Invited | null> => null),
+    listed: device => listed.has(device),
     keepalive: options.keepalive,
     handle: async request => {
       handled.push(`${request.method} ${request.path}`)
@@ -119,11 +123,11 @@ export async function startComputer(options: Partial<Pick<ServeInput, 'handle' |
       return { send: request.send, close: () => sockets.push(`closed ${request.path}`) }
     }
   })
-  await waitFor(relay.online)
+  if (!options.token) await waitFor(relay.online)
   return {
     relay,
     key,
-    statuses,
+    listed,
     handled,
     sockets,
     computer: { id: computerId, key: toHex(key.publicKey) },

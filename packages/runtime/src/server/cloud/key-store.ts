@@ -4,7 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as z from 'zod/mini'
 import { MemberList } from '@openhut/common/cloud/cloud.ts'
-import { LETTER_PURPOSES, newKey, toBase64 } from '@openhut/common/vault/vault.ts'
+import { newKey, toBase64 } from '@openhut/common/vault/vault.ts'
 import { config } from '../platform/config.ts'
 import { db } from '../platform/db.ts'
 import { seal, unseal } from '../platform/secrets.ts'
@@ -14,26 +14,20 @@ const FILE = join(config.dataDir, 'cloud-keys.sealed')
 const KIT = z.object({ box: z.string(), savedAt: z.string(), confirmed: z.optional(z.boolean()) })
 export const Keys = z.object({ key: z.string(), version: z.number(), old: z.optional(z.record(z.string(), z.string())), slot: z.optional(z.string()), own: z.optional(z.string()) })
 const Room = z.object({ workspace: z.object({ id: z.string(), ...Keys.shape }), list: MemberList, first: z.optional(MemberList) })
-export const Outgoing = z.object({ to: z.string(), purpose: z.enum(LETTER_PURPOSES), body: z.string(), workspace: z.string() })
 const Stored = z.object({
   device: z.string(),
   machine: z.string(),
-  account: z.optional(z.object({ sub: z.string(), email: z.string(), key: z.string(), runtime: z.optional(z.boolean()), ...Room.shape, teams: z.optional(z.array(Room)), links: z.optional(z.record(z.string(), z.string())) })),
+  account: z.optional(z.object({ sub: z.string(), email: z.string(), key: z.string(), vault: z.optional(z.string()), ...Room.shape, teams: z.optional(z.array(Room)), links: z.optional(z.record(z.string(), z.string())) })),
   kit: z.optional(KIT),
-  moves: z.optional(z.array(z.object({ method: z.enum(['POST', 'DELETE']), path: z.string(), body: z.unknown() }))),
   locked: z.optional(z.object({ sub: z.string(), email: z.string() })),
   session: z.optional(z.object({ token: z.string(), refresh: z.optional(z.string()), expiresAt: z.string() })),
-  outbox: z.optional(z.array(Outgoing)),
-  rotating: z.optional(z.array(z.object({ room: Room, letters: z.array(Outgoing) }))),
   asking: z.optional(z.array(z.object({ id: z.string(), admins: z.array(z.string()), own: z.optional(z.boolean()) }))),
 })
 export type Stored = z.infer<typeof Stored>
 export type Account = NonNullable<Stored['account']>
 export type Session = NonNullable<Stored['session']>
-export type Move = NonNullable<Stored['moves']>[number]
 export type AskRoom = NonNullable<Stored['asking']>[number]
 export type Room = z.infer<typeof Room>
-export type Outgoing = z.infer<typeof Outgoing>
 
 const keychain = Boolean(config.secret)
 const machine = createHash('sha256').update(machineId()).digest('hex')

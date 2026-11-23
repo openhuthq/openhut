@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
 import { ChatFile, HomeFile, Thread, ThreadWithMessages } from '@openhut/common/threads/thread.ts'
 import { request, requestBlob } from '@/lib/api-client'
-import { openhut } from '@/lib/openhut'
 import { THREADS_KEY } from '@/lib/query-keys'
 import { RASTER } from '@/features/threads/files'
 
@@ -12,18 +11,14 @@ const HOME_FILES = List(HomeFile)
 export function useThreads() {
   return useQuery({
     queryKey: THREADS_KEY,
-    queryFn: async () => (await Promise.all((await openhut.computers.list()).filter((computer) => computer.online)
-      .map((computer) => request({ schema: THREAD_LIST, computer: computer.id, path: '/api/threads' }).then((page) => page.data, () => [])))).flat(),
+    queryFn: async () => (await request({ schema: THREAD_LIST, path: '/api/threads' })).data,
   })
 }
 
 export function useAgentThread(agentId: string) {
   return useQuery({
     queryKey: [...THREADS_KEY, 'agent', agentId],
-    queryFn: async () => {
-      const thread = await request({ schema: Thread, of: agentId, path: '/api/threads', method: 'POST', body: { agentId } })
-      return request({ schema: ThreadWithMessages, of: agentId, path: threadPath(thread.id) })
-    },
+    queryFn: () => request({ schema: ThreadWithMessages, of: agentId, path: threadPath(agentId) }),
     staleTime: Infinity,
   })
 }
@@ -40,7 +35,7 @@ export function useClearChat(agentId: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: ({ threadId, uploads }: { threadId: string; uploads: string[] }) => request({ schema: Deleted('thread'), of: agentId, path: threadPath(threadId), method: 'DELETE', body: { uploads } }),
-    onSuccess: () => client.resetQueries({ queryKey: [...THREADS_KEY, 'agent', agentId] }),
+    onSuccess: () => client.setQueryData<ThreadWithMessages>([...THREADS_KEY, 'agent', agentId], (thread) => thread && { ...thread, messages: [] }),
   })
 }
 

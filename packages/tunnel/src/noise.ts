@@ -88,23 +88,3 @@ export function responder(input: { key: ComputerKey } & Options) {
     }
   }
 }
-
-async function hmacKey({ secret, usage }: { secret: string; usage: 'sign' | 'verify' }) {
-  return crypto.subtle.importKey('raw', fromHex(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [usage])
-}
-
-export async function pairingProof({ secret, handshakeHash }: { secret: string; handshakeHash: Uint8Array }): Promise<string> {
-  const key = await hmacKey({ secret, usage: 'sign' })
-  return toHex(new Uint8Array(await crypto.subtle.sign('HMAC', key, Uint8Array.from(handshakeHash))))
-}
-
-export async function verifyProof({ secret, handshakeHash, proof }: { secret: string; handshakeHash: Uint8Array; proof: string }): Promise<boolean> {
-  if (!/^[0-9a-f]{64}$/.test(proof)) return false
-  const key = await hmacKey({ secret, usage: 'verify' })
-  return crypto.subtle.verify('HMAC', key, fromHex(proof), Uint8Array.from(handshakeHash))
-}
-
-export async function sixDigits(handshakeHash: Uint8Array): Promise<string> {
-  const hash = new DataView(await crypto.subtle.digest('SHA-256', Uint8Array.from(handshakeHash)))
-  return String(hash.getUint32(0) % 1_000_000).padStart(6, '0')
-}

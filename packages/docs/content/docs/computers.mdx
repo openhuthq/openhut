@@ -4,56 +4,43 @@ description: Add an always-on Linux computer, so agents keep answering while you
 icon: recruiter
 ---
 
-<Shot src="computers" alt="Settings, Your devices: This Mac, a second computer and Add a computer" />
+<Shot src="computers" alt="Settings, Computers: This Mac, a second computer and Add a computer" />
 
-**Settings › Computers › Add a computer** gives you two ways to reach it:
+**Settings › Computers › Add a computer** gives you a command with a code in it. Run it on an always-on Linux computer, or let the app run it for you over Tailscale. Either way the computer asks to join your account, and you **Approve** it.
 
-- **Tailscale.** Use the Tailscale you already have. Your Mac talks to the computer straight over your tailnet. No OpenHut account, and nothing goes through OpenHut.
-- **OpenHut Relay.** The easiest way, no Tailscale needed. Traffic goes through our relay, encrypted so we can't read it. Needs [OpenHut Cloud](/cloud).
+## With a command
 
-Each computer in the list says which one it uses.
-
-## Tailscale
-
-Your Mac and the computer both need to be on your [tailnet](https://tailscale.com/download). Turn on Tailscale SSH on the computer once:
-
-```sh
-sudo tailscale set --ssh
-```
-
-Pick **Tailscale**, then the computer. The app installs OpenHut over Tailscale SSH and pairs with it over the same connection, so there are no numbers to check. If Tailscale asks you to approve something, a link shows up; open it and approve.
-
-The install shares one port, 8788, with your tailnet only (`tailscale serve --bg --tcp 8788`). It adds that entry and leaves your other `tailscale serve` settings alone. Only your Mac's key, signed into the computer during pairing, gets past that port. Your tailnet's access rules need to let your Mac reach it.
-
-A computer added this way never connects to the relay. To move one you added through the relay, pick it in the Tailscale list and **Switch**. It keeps its agents and data.
-
-## OpenHut Relay
-
-Pick **OpenHut Relay**. The app shows a command with a code in it. Run it on an always-on Linux computer:
+The app shows a command with a code in it. The code works once, for 10 minutes. Run it on the computer:
 
 ```sh
 curl -fsSL openhut.dev | sh -s -- join '<code>'
 ```
 
-It installs OpenHut there and asks to join, which takes a few minutes. Back in the app, check that the computer shows the same numbers, then **Allow** it. Nothing needs a public address or an open port.
+It installs OpenHut there and asks to join, which takes a few minutes. The code stands in for a Google sign-in, so the computer never needs your Google account. Back in the app, a notice says it wants to join; **Approve** it, here or in **Settings › Computers**. Nothing needs a public address or an open port: your devices reach it through our relay, end-to-end encrypted, so we can't read it.
+
+## Over Tailscale
+
+The second way: your Mac talks to the computer straight over your [tailnet](https://tailscale.com/download), and phones and teammates still reach it through the relay. Your Mac and the computer both need to be on your tailnet. Turn on Tailscale SSH on the computer once:
+
+```sh
+sudo tailscale set --ssh
+```
+
+Pick **Tailscale**, then the computer. The app runs the same install with a join code over Tailscale SSH, and the computer asks to join like any other; **Approve** it. If Tailscale asks you to approve something, a link shows up; open it and approve.
+
+The install shares one port, 8788, with your tailnet only (`tailscale serve --bg --tcp 8788`). It adds that entry and leaves your other `tailscale serve` settings alone. Only your own devices get past that port: the computer checks each one against your account's signed list of devices. Your tailnet's access rules need to let your Mac reach it.
 
 ## Put agents on it
 
-Open an agent, then **Runs on › Move to** the computer. Its memory, skills, chats and channels go with it.
+Open an agent, then **Runs on › Move to** the computer. Its settings, chats, memory, skills, routines, connections and channels are in your account, so they come along. Its own files, browser logins and WhatsApp link stay on the old computer: link WhatsApp again after a move. An agent runs only on its owner's computers.
 
-## Each computer is its own
+## One account, many computers
 
-Every computer runs its own agents, connections and keys, and keeps working while your Mac is off. The app shows them all in one place: the sidebar names each agent's computer, and an agent on an offline computer is greyed out.
+Every computer runs its own agents and keeps working while your Mac is off. The app shows them all in one place: the sidebar names each agent's computer, and an agent on an offline computer is greyed out.
 
-A connection lives on the computers you put it on. **Connect apps** lists it once, with a chip per computer. If an agent needs one that isn't on its computer yet, **Add to** that computer under **Can use**. Your [Claude plan](/claude) is pushed to every computer.
+Connections and API keys belong to your account, not to a computer, so every computer of yours can use them. Your [Claude plan](/claude) works on all of them too.
 
-To remove a computer, **⋯ › Remove**. Its agents stop and their keys stay on it; nothing is deleted there. To wipe it, see [Uninstall](/uninstall).
-
-## What still talks to openhut.dev
-
-With only Tailscale computers: downloading OpenHut and its updates (they install only when you click **Update**), and anonymous usage data, which you can turn off in **Settings › General**. Your Mac's own runtime connects to the relay only while a phone or an invitation needs it.
-
-Phones always reach your computers through the relay, so a Tailscale-only computer shows as offline on a phone.
+To remove a computer, **⋯ › Remove**. Its agents stop and it's cut off from your account; nothing is deleted there. To wipe it, see [Uninstall](/uninstall).
 
 ## What the computer needs
 

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { agentd } from '../../../src/server/platform/agentd.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
+import { runSet } from '../../../src/server/cloud/run-set.ts'
+import { signIn } from './signed-in.ts'
 import { skillService } from '../../../src/server/agents/skill-service.ts'
 
 await migrate()
@@ -10,7 +12,7 @@ await db.insertInto('person').values([
   { id: 'usr_skillown', email: 'skillowner@example.com', role: 'admin', removed_at: null },
   { id: 'usr_skillmem', email: 'skillmember@example.com', role: 'member', removed_at: null },
 ]).execute()
-await db.insertInto('agent').values({ id: 'ag_skilltst', name: 'Dev', owner_id: 'usr_skillown', instructions: '# Dev', model: 'sonnet', net: 9, channel_key: seal('k'.repeat(32)) }).execute()
+await db.insertInto('agent').values({ id: 'ag_skilltst', name: 'Dev', owner_id: 'usr_skillown', instructions: '# Dev', model: 'claude:sonnet', net: 9, channel_key: seal('k'.repeat(32)) }).execute()
 const owner = { id: 'usr_skillown', email: 'skillowner@example.com', local: false, role: 'admin' as const }
 const member = { id: 'usr_skillmem', email: 'skillmember@example.com', local: false, role: 'member' as const }
 const files: Record<string, string> = {
@@ -18,10 +20,14 @@ const files: Record<string, string> = {
   'late-invoices': '---\ndescription: Chase late invoices.\n---\nSteps\n',
 }
 mock.method(agentd, 'ps', async () => ({ states: {} }))
+mock.method(agentd, 'apply', async ({ id }: { id: string }) => ({ applied: id, change: 'none' as const }))
 mock.method(agentd, 'skills', async () => ({ skills: Object.entries(files).map(([path, head]) => ({ path, head })), bundled: 'arxiv:abc\n' }))
 const skillOf = (path: string) => path.slice('skills/'.length, -'/SKILL.md'.length)
 mock.method(agentd, 'read', async ({ path }: { path: string }) => (files[skillOf(path)] === undefined ? null : Buffer.from(files[skillOf(path)])))
 const write = mock.method(agentd, 'write', async ({ path, body }: { path: string; body: Buffer | string }) => { files[skillOf(path)] = String(body); return { path } })
+
+signIn({ email: 'skillowner@example.com' })
+await runSet.refresh()
 
 test('skills an agent learned come first; names and descriptions come from the front matter or the folder', async () => {
   const skills = await skillService.list({ actor: member, agentId: 'ag_skilltst' })

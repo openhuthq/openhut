@@ -58,13 +58,12 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
   const setRole = useSetRole()
   const remove = useRemoveMember()
   const removeDevice = useRemoveDevice()
-  const [asking, setAsking] = useState<'remove' | 'owner' | string | null>(null)
+  const [asking, setAsking] = useState<'remove' | string | null>(null)
   const name = nameOf(member.email)
   const next = member.role === 'admin' ? 'member' : 'admin'
-  const owner = workspace.role === 'owner' && !workspace.own
   const devices = member.devices.length > 1 ? member.devices.filter((key) => key !== member.kit && workspace.names[key]) : []
   const deviceName = (key: string) => workspace.names[key] ?? 'device'
-  const device = asking && asking !== 'remove' && asking !== 'owner' ? asking : null
+  const device = asking && asking !== 'remove' ? asking : null
   const close = (on: boolean) => { if (!on) setAsking(null) }
   return <div className="flex items-center gap-3 px-4 py-3">
     <PersonFace name={name} email={member.email} size={40} />
@@ -74,13 +73,11 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
       <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label={`More options for ${name}`} title="More" disabled={setRole.isPending || remove.isPending || removeDevice.isPending} />}><I icon={MoreHorizontalIcon} size={16} /></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="flex w-[220px] flex-col gap-0.5 rounded-xl p-1.5 text-[13px] shadow-menu">
         <DropdownMenuItem className="h-8 px-2.5" onClick={() => setRole.mutate({ id: workspace.id, email: member.email, role: next }, { onError: toastError })}>{next === 'admin' ? 'Make admin' : 'Make member'}</DropdownMenuItem>
-        {owner && <DropdownMenuItem className="h-8 px-2.5" onClick={() => setAsking('owner')}>Make owner</DropdownMenuItem>}
         {devices.map((key) => <DropdownMenuItem key={key} className="h-8 px-2.5" onClick={() => setAsking(key)}><span className="truncate">Remove {deviceName(key)}</span></DropdownMenuItem>)}
         <DropdownMenuItem className="h-8 px-2.5 text-fail" onClick={() => setAsking('remove')}>Remove from team</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu> : <span className="w-7" />}
     <ConfirmDialog open={asking === 'remove'} onOpenChange={close} question={`Remove ${name}?`} detail={`${name} can’t get anything new from OpenHut Cloud. What ${name} already saw stays on their computer.`} action="Remove" onConfirm={() => remove.mutate({ id: workspace.id, email: member.email }, { onSuccess: () => notify({ title: `${name} removed`, note: 'They can’t get anything new from OpenHut Cloud.' }), onError: toastError })} />
-    <ConfirmDialog open={asking === 'owner'} onOpenChange={close} question={`Make ${name} the owner?`} detail={`You become an admin. Only ${name} can change this.`} action="Make owner" onConfirm={() => setRole.mutate({ id: workspace.id, email: member.email, role: 'owner' }, { onSuccess: () => toast(`${name} owns ${workspace.name} now. You’re an admin.`), onError: toastError })} />
     <ConfirmDialog open={device !== null} onOpenChange={close} question={`Remove ${device ? deviceName(device) : 'device'}?`} detail={`It can’t get anything new from ${workspace.name}.`} action="Remove" onConfirm={() => device && removeDevice.mutate({ id: workspace.id, device }, { onSuccess: () => toast(`${deviceName(device)} removed`), onError: toastError })} />
   </div>
 }

@@ -62,10 +62,14 @@ test('only allowed paths pass, and a refusal is audited', async () => {
 test('a forged token gets 401, and so does the old token right after a revoke', async () => {
   const forged = `${token.slice(0, -1)}${token.endsWith('0') ? '1' : '0'}`
   assert.equal((await fetch(`${gw}/u/anthropic/v1/messages`, { method: 'POST', headers: { authorization: `Bearer ${forged}` } })).status, 401)
-  await db.insertInto('agent').values({ id: 'ag_brokerrv', name: 'Gone', owner_id: 'usr_brokerow', instructions: '# Gone', model: 'sonnet', net: 10, channel_key: seal('k'.repeat(32)) }).execute()
+  await db.insertInto('agent').values({ id: 'ag_brokerrv', name: 'Gone', owner_id: 'usr_brokerow', instructions: '# Gone', model: 'claude:sonnet', net: 10, channel_key: seal('k'.repeat(32)) }).execute()
   const old = agentToken({ id: 'ag_brokerrv', epoch: 0 })
   const ask = (bearer: string) => fetch(`${gw}/u/anthropic/v1/messages`, { method: 'POST', headers: { authorization: `Bearer ${bearer}` }, body: '{}' })
   assert.equal((await ask(old)).status, 200)
+  const { signIn } = await import('../agents/signed-in.ts')
+  const { runSet } = await import('../../../src/server/cloud/run-set.ts')
+  signIn({ email: 'broker@example.com' })
+  await runSet.refresh()
   await agentService.revokeToken({ actor: { id: 'usr_brokerow', email: 'broker@example.com', local: false }, id: 'ag_brokerrv' })
   assert.equal((await ask(old)).status, 401)
   assert.equal((await ask(agentToken({ id: 'ag_brokerrv', epoch: 1 }))).status, 200)

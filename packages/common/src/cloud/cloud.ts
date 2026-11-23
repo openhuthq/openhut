@@ -80,7 +80,7 @@ export const ROLES = ['owner', 'admin', 'member'] as const
 export const Role = z.enum(ROLES)
 export type Role = z.infer<typeof Role>
 
-export const Member = z.object({ email: Email, role: Role, devices: z.array(DeviceKey).check(z.maxLength(20)), kit: z.optional(DeviceKey) })
+export const Member = z.object({ email: Email, role: Role, devices: z.array(DeviceKey).check(z.maxLength(20)), kit: z.optional(DeviceKey), viewers: z.optional(z.array(DeviceKey).check(z.maxLength(20))) })
 export type Member = z.infer<typeof Member>
 
 export const PendingInvite = z.object({ email: Email, role: z.enum(['admin', 'member']), key: DeviceKey })
@@ -223,7 +223,7 @@ export type Backup = z.infer<typeof Backup>
 export const AskAdmin = z.object({ name: z.string().check(z.maxLength(64)), os: z.string().check(z.maxLength(32)) })
 export type AskAdmin = z.infer<typeof AskAdmin>
 
-export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null) })
+export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null), server: z._default(z.boolean(), false) })
 export type DeviceRequest = z.infer<typeof DeviceRequest>
 
 export const DeleteNotice = z.object({ by: DeviceKey, signedAt: z.number(), signature: Signature })
@@ -257,7 +257,7 @@ export const Cloud = z.object({
   backup: Backup,
   signInError: z.nullable(z.string()),
   keptAccount: z.nullable(Email),
-  devices: z.array(z.object({ key: DeviceKey, here: z.boolean(), addedAt: z.nullable(Timestamp), name: z.nullable(z.string()), kind: z.enum(['mac', 'server']) })),
+  devices: z.array(z.object({ key: DeviceKey, here: z.boolean(), addedAt: z.nullable(Timestamp), name: z.nullable(z.string()), kind: z.enum(['mac', 'server']), online: z._default(z.boolean(), false) })),
   passkey: z.boolean(),
   youngUntil: z._default(z.nullable(Timestamp), null),
   needsSignIn: z.boolean(),

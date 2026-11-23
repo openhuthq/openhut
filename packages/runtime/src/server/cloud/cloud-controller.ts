@@ -1,9 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify'
 import * as z from 'zod/mini'
-import { AddPasskey, AddRuntime, ChangeRole, CreateWorkspace, DeleteWorkspace, DeviceKey, RuntimeInvite, SetHere, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
+import { AddPasskey, ChangeRole, DeviceKey, SetHere, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
 import { requireSignIn } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
-import { syncService } from './sync-service.ts'
+import { presence } from './presence.ts'
 
 export const cloudController: FastifyPluginAsync = async (app) => {
   app.get('/', SignedIn, async () => cloudService.status())
@@ -16,15 +16,9 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.post('/kits', SignedIn, async () => cloudService.newKit())
 
-  app.delete('/account', SignedIn, async () => cloudService.forget())
-
-  app.delete('/key-boxes', SignedIn, async () => cloudService.startOver())
+  app.post('/join-codes', SignedIn, async () => cloudService.joinCode())
 
   app.post<{ Body: UnlockCloud }>('/unlock', UnlockRequest, async (req) => cloudService.unlock(req.body))
-
-  app.post<{ Body: AddRuntime }>('/runtimes', AddRuntimeRequest, async (req) => cloudService.addRuntime(req.body))
-
-  app.post<{ Body: RuntimeInvite }>('/join', JoinRequest, async (req) => cloudService.join(req.body))
 
   app.delete<{ Params: { key: string } }>('/devices/:key', NotMeRequest, async (req) => cloudService.notMe({ device: req.params.key }))
 
@@ -36,19 +30,15 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.delete('/', SignedIn, async () => cloudService.deleteData())
 
-  app.get('/presence', SignedIn, async () => syncService.presence())
+  app.get('/presence', SignedIn, async () => presence.view())
 
-  app.post<{ Body: SetHere }>('/here', HereRequest, async (req) => syncService.here(req.body).then(() => syncService.presence()))
+  app.post<{ Body: SetHere }>('/here', HereRequest, async (req) => presence.set(req.body).then(() => presence.view()))
 
   app.post('/requests', SignedIn, async () => cloudService.ask())
 
   app.delete('/requests', SignedIn, async () => cloudService.cancelAsk())
 
   app.delete('/rotations', SignedIn, async () => cloudService.rotated())
-
-  app.post<{ Body: CreateWorkspace }>('/workspaces', CreateRequest, async (req) => cloudService.create(req.body))
-
-  app.delete<{ Params: { id: string }; Body: DeleteWorkspace }>('/workspaces/:id', DeleteRequest, async (req) => cloudService.deleteWorkspace({ workspace: req.params.id, name: req.body.name }))
 
   app.delete<{ Params: { id: string; email: string } }>('/workspaces/:id/members/:email', SignedIn, async (req) => cloudService.remove({ workspace: req.params.id, email: req.params.email }))
 
@@ -67,13 +57,9 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
 const SignedIn = { onRequest: requireSignIn }
 const UnlockRequest = { onRequest: requireSignIn, schema: { body: UnlockCloud } }
-const AddRuntimeRequest = { onRequest: requireSignIn, schema: { body: AddRuntime } }
-const JoinRequest = { onRequest: requireSignIn, schema: { body: RuntimeInvite } }
 const NotMeRequest = { onRequest: requireSignIn, schema: { params: z.object({ key: DeviceKey }) } }
 const DeviceRequest = { onRequest: requireSignIn, schema: { params: z.object({ id: z.string(), key: DeviceKey }) } }
 const PasskeyRequest = { onRequest: requireSignIn, schema: { body: AddPasskey } }
 const UpdateRequest = { onRequest: requireSignIn, schema: { body: UpdateWorkspace } }
 const RoleRequest = { onRequest: requireSignIn, schema: { body: ChangeRole } }
-const CreateRequest = { onRequest: requireSignIn, schema: { body: CreateWorkspace } }
-const DeleteRequest = { onRequest: requireSignIn, schema: { body: DeleteWorkspace } }
 const HereRequest = { onRequest: requireSignIn, schema: { body: SetHere } }

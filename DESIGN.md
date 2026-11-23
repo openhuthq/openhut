@@ -219,8 +219,8 @@ From 0.4.0, agents on This Mac (or a Windows PC) are plain processes that run as
 | Runs on menu, option note | With your access · while this computer is awake | Sealed in its own box · always on |
 | Settings › Devices, row note | Agents have your access · 2 agents · OpenHut 0.4.0 | Each agent sealed in its own box · 1 agent · OpenHut 0.4.0 |
 | Add a computer, row note | A Linux computer that stays on seals each agent in its own box and keeps answering while this computer sleeps. | |
-| Welcome | Agents run on this computer like any app you install, with your access. Chats, memory and keys stay here. No account needed. | |
-| Welcome, the three marks | With your access · Keys in the macOS Keychain · Add a computer anytime | |
+| Getting ready | Agents run on this computer like any app you install, with your access. | |
+| Getting ready, the three marks | With your access · Keys in the macOS Keychain · Add a computer anytime | |
 | First run, third step | Setting up agents · ready | Setting up agents · 6 of 6 checks passed (Linux app) |
 
 "Mac" follows `WORDS.here` ("computer" on Windows and Linux).

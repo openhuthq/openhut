@@ -1,24 +1,18 @@
 import { FrameType, MAX_REQUEST_BODY, MAX_SOCKET_MESSAGE, REQUEST_HEADERS, chunks, decodeFrame, decodeJson, encodeFrame, encodeJson, isRecord, messageChunks, messageJoiner, stringRecord, type Frame, type SocketMessage } from './frames.ts'
 import { fromHex, responder, toHex, type ComputerKey, type Transport } from './noise.ts'
 
-export type DeviceStatus = 'client' | 'removed' | 'unknown'
-export type Hello = { type: 'hello'; proof: string; name: string; kind: 'client' | 'computer'; computer?: { id: string; name: string } }
-export type Decision = { type: 'accepted'; access: object } | { type: 'declined' }
-export type Invited = { accept: () => AsyncIterable<Decision> }
 export type TunnelRequest = { device: string; method: string; path: string; headers: Record<string, string>; body: ReadableStream<Uint8Array> }
 export type SocketPeer = { send: (data: SocketMessage) => void; close: () => void }
 export type TunnelSocketRequest = { device: string; path: string; headers: Record<string, string> } & Pick<SocketPeer, 'send'> & { close: (input: { code: number; reason: string }) => void }
 export type Handlers = {
-  device: (key: string) => DeviceStatus
-  invited: (input: { key: string; proof: string; handshakeHash: Uint8Array; hello: Hello }) => Promise<Invited | null>
+  listed: (key: string) => boolean
   handle: (input: TunnelRequest) => Promise<Response>
   socket: (input: TunnelSocketRequest) => Promise<SocketPeer>
-  strangers?: 'invite' | 'drop'
 }
 export type ServeInput = Handlers & {
   relayUrl: string
   computerId: string
-  registerToken: string
+  token: () => Promise<string>
   key: ComputerKey
   keepalive?: { every: number; within: number }
 }
@@ -30,7 +24,6 @@ type Session = {
   pipe: Pipe
   key: string
   transport?: Transport
-  first: boolean
   ended: boolean
   requests: Map<number, Incoming>
   sockets: Map<number, Socket>
@@ -47,22 +40,13 @@ function envelope({ id, payload }: { id: string; payload: Uint8Array }): Uint8Ar
   return message
 }
 
-function parseHello(value: Record<string, unknown>): Hello | null {
-  const { type, proof, name, kind, computer } = value
-  if (type !== 'hello' || typeof proof !== 'string' || typeof name !== 'string') return null
-  if (kind !== 'client' && kind !== 'computer') return null
-  if (computer === undefined) return { type, proof, name, kind }
-  if (!isRecord(computer) || typeof computer.id !== 'string' || typeof computer.name !== 'string') return null
-  return { type, proof, name, kind, computer: { id: computer.id, name: computer.name } }
-}
-
 function allowedHeaders(headers: unknown): Record<string, string> {
   return Object.fromEntries(Object.entries(stringRecord(headers)).filter(([name]) => REQUEST_HEADERS.includes(name)))
 }
 
 export function sessions(input: Handlers & { key: ComputerKey }): (pipe: Pipe) => PipeSession {
   return (pipe) => {
-    const session: Session = { pipe, key: '', first: true, ended: false, requests: new Map(), sockets: new Map(), readers: new Set() }
+    const session: Session = { pipe, key: '', ended: false, requests: new Map(), sockets: new Map(), readers: new Set() }
     return { receive: (bytes) => receive(session, bytes), end: () => drop(session) }
   }
 
@@ -119,23 +103,8 @@ export function sessions(input: Handlers & { key: ComputerKey }): (pipe: Pipe) =
     }
   }
 
-  async function greet({ session, hello }: { session: Session; hello: Hello | null }) {
-    if (!hello || !session.transport) return kill(session)
-    try {
-      const invitation = await input.invited({ key: session.key, proof: hello.proof, handshakeHash: session.transport.handshakeHash, hello })
-      if (!invitation) return kill(session)
-      for await (const decision of invitation.accept()) {
-        if (session.ended) return
-        send(session, { type: FrameType.control, stream: 0, payload: encodeJson(decision) })
-        if (decision.type === 'declined') return kill(session)
-      }
-    } catch {
-      kill(session)
-    }
-  }
-
   function admitted({ session, removed }: { session: Session; removed: Frame }) {
-    if (input.device(session.key) === 'client') return true
+    if (input.listed(session.key)) return true
     send(session, removed)
     kill(session)
     return false
@@ -190,9 +159,6 @@ export function sessions(input: Handlers & { key: ComputerKey }): (pipe: Pipe) =
   }
 
   function frame(session: Session, { type, stream, payload }: Frame) {
-    const first = session.first
-    session.first = false
-    if (type === FrameType.control && first && input.strangers !== 'drop') return void greet({ session, hello: parseHello(decodeJson(payload)) })
     if (type === FrameType.requestHead) return begin({ session, stream, payload })
     if (type === FrameType.socketOpen) return opening({ session, stream, payload })
     if (type === FrameType.socketMessage || type === FrameType.socketClose) return fromDevice({ session, stream, type, payload })
@@ -220,7 +186,6 @@ export function sessions(input: Handlers & { key: ComputerKey }): (pipe: Pipe) =
       const { message, transport } = handshake.write()
       session.transport = transport
       session.key = toHex(transport.remoteKey)
-      if (input.strangers === 'drop' && input.device(session.key) !== 'client') return kill(session)
       session.pipe.send(new Uint8Array(message))
     } catch {
       kill(session)
@@ -229,7 +194,7 @@ export function sessions(input: Handlers & { key: ComputerKey }): (pipe: Pipe) =
 }
 
 export function serve(input: ServeInput): { close: () => void } {
-  const open = sessions(input)
+  const session = sessions(input)
   const live = new Map<string, PipeSession>()
   let socket: WebSocket | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -266,14 +231,19 @@ export function serve(input: ServeInput): { close: () => void } {
     const id = message.session
     if (message.type === 'open') {
       end(id)
-      live.set(id, open(pipeFor(id)))
+      live.set(id, session(pipeFor(id)))
     }
     if (message.type === 'close') end(id)
   }
 
-  const connect = () => {
+  const retry = () => {
+    if (!stopped) timer = setTimeout(connect, Math.min(30_000, 250 * 2 ** attempts++))
+  }
+
+  const open = (token: string) => {
+    if (stopped) return
     const { every, within } = input.keepalive ?? { every: 30_000, within: 75_000 }
-    const current = new NodeSocket(`${input.relayUrl}/v1/relay/${input.computerId}?role=computer`, { headers: { 'x-openhut-token': input.registerToken } })
+    const current = new NodeSocket(`${input.relayUrl}/v1/relay/${input.computerId}?role=computer`, { headers: { 'x-openhut-token': token } })
     current.binaryType = 'arraybuffer'
     socket = current
     let ping: ReturnType<typeof setInterval> | undefined
@@ -284,7 +254,7 @@ export function serve(input: ServeInput): { close: () => void } {
       clearTimeout(deadline)
       current.close()
       for (const id of [...live.keys()]) end(id)
-      if (!stopped) timer = setTimeout(connect, Math.min(30_000, 250 * 2 ** attempts++))
+      retry()
     }
     let deadline = setTimeout(lost, within)
     lose = lost
@@ -299,7 +269,10 @@ export function serve(input: ServeInput): { close: () => void } {
       if (event.data instanceof ArrayBuffer) onBinary(new Uint8Array(event.data))
     })
     current.addEventListener('close', lost)
+    current.addEventListener('error', lost)
   }
+
+  const connect = () => void input.token().then(open, retry)
 
   connect()
   return {

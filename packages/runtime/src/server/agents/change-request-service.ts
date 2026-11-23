@@ -16,7 +16,6 @@ import { Origin } from '../routines/routine-service.ts'
 import { agentService } from './agent-service.ts'
 
 const DASHBOARD = 'api_server'
-const THREAD_SESSION = /^openhut-(th_[a-z0-9]+)$/
 const QUIET_MS = 10_000
 const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram', discord: 'Discord' } as const
 const SelfChange = z.object({ name: UpdateAgentFields.name, instructions: UpdateAgentFields.instructions })
@@ -25,7 +24,7 @@ const ChannelId = z.object({ id: z.string().check(z.maxLength(40)) })
 const ConnectionId = z.object({ connectionId: z.string().check(z.maxLength(40)) })
 
 type Row = Selectable<Database['change_request']>
-type Runner = (input: { agentId: string; threadId: string; text: string }) => Promise<string>
+type Runner = (input: { agentId: string; text: string }) => Promise<string>
 let dashboardRunner: Runner = async () => { throw new Error('No dashboard runner.') }
 
 export const changeRequestService = {
@@ -46,9 +45,9 @@ export const changeRequestService = {
     return rows.map(requestOf)
   },
 
-  async inThread({ agentId, threadId, since }: { agentId: string; threadId: string; since: Date }): Promise<string[]> {
+  async inChat({ agentId, since }: { agentId: string; since: Date }): Promise<string[]> {
     const rows = await db.selectFrom('change_request').select(['id', 'origin']).where('agent_id', '=', agentId).where('created_at', '>=', since).orderBy('created_at').execute()
-    return rows.filter((row) => threadOf(row) === threadId).map((row) => row.id)
+    return rows.filter(inApp).map((row) => row.id)
   },
 
   async approve({ actor, id, input }: { actor: Caller; id: string; input?: Record<string, unknown> }): Promise<ChangeRequest> {
@@ -80,7 +79,7 @@ export const changeRequestService = {
 
   async due({ agentId }: { agentId: string }): Promise<{ runId: string; text: string; origin: Origin }[]> {
     const rows = await db.selectFrom('change_request').selectAll().where('agent_id', '=', agentId).where('status', '<>', 'pending').where('told', '=', false).execute()
-    return rows.filter((row) => !threadOf(row)).map((row) => ({ runId: row.id, text: decisionText(row), origin: originOf(row) }))
+    return rows.filter((row) => !inApp(row)).map((row) => ({ runId: row.id, text: decisionText(row), origin: originOf(row) }))
   },
 
   async picked({ agentId, id }: { agentId: string; id: string }): Promise<void> {
@@ -173,10 +172,9 @@ async function decide({ id, status, input, summary, note }: { id: string; status
 }
 
 function deliver(row: Row): void {
-  const threadId = threadOf(row)
-  if (!threadId) return
+  if (!inApp(row)) return
   void db.updateTable('change_request').set({ told: true }).where('id', '=', row.id).execute()
-    .then(() => dashboardRunner({ agentId: row.agent_id, threadId, text: decisionText(row) }))
+    .then(() => dashboardRunner({ agentId: row.agent_id, text: decisionText(row) }))
     .catch((err: unknown) => log.warn({ event: 'change_request.deliver_failed', id: row.id, error: messageOf(err) }))
 }
 
@@ -185,9 +183,8 @@ function decisionText(row: Row): string {
   return `[OpenHut ${row.id}] Approved and done: ${row.summary}.${afterApproval({ row, input: JSON.parse(row.input) })} Tell the chat in one line, with the final values if they differ from what you asked for.`
 }
 
-function threadOf(row: Pick<Row, 'origin'>): string | undefined {
-  const origin = originOf(row)
-  return origin.platform === DASHBOARD ? THREAD_SESSION.exec(origin.chat_id)?.[1] : undefined
+function inApp(row: Pick<Row, 'origin'>): boolean {
+  return originOf(row).platform === DASHBOARD
 }
 
 function originOf(row: Pick<Row, 'origin'>): Origin {

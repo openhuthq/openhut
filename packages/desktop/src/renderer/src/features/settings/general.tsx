@@ -4,12 +4,12 @@ import { Switch } from '@/components/ui/switch'
 import { I } from '@/components/kit'
 import { desktop, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
 import { Row, Rows } from '@/features/settings/kit'
-import { TeamGeneral } from '@/features/people/workspace'
+import { TeamSettings } from '@/features/people/workspace'
 import { toastError } from '@/lib/toast'
 
 export function GeneralSettings() {
   return <>
-    <TeamGeneral />
+    <TeamSettings />
     <Rows>
       {desktop && <PrefSwitch icon={Login01Icon} hue="text-hue-green" name="openAtLogin" title="Open at login" note="Agents start in the background, without opening this window." />}
       {desktop && <PrefSwitch icon={Coffee01Icon} hue="text-hue-amber" name="keepAwake" title="Keep this computer awake" note="While agents run, so they keep answering. The screen can still turn off." />}

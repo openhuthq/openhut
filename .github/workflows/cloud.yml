@@ -1,0 +1,46 @@
+name: Cloud
+
+on:
+  push:
+    branches: [main, abuaboud/sign-in-first]
+    paths:
+      - private
+      - packages/common/**
+      - .github/workflows/cloud.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: cloud
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check out private/
+        env:
+          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
+          rm ~/.ssh/id_ed25519
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      - run: gem install kamal -v 2.12.0
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.CLOUD_SSH_KEY }}
+      - run: ssh-keyscan -t ed25519 46.224.128.49 >> ~/.ssh/known_hosts
+      - name: Kamal deploy
+        env:
+          KAMAL_REGISTRY_USERNAME: ${{ github.actor }}
+          KAMAL_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: kamal deploy -c private/api/deploy/kamal.yml

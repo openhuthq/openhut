@@ -1,36 +1,33 @@
 import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { mergeProviders, type ProviderRow } from '@openhut/client'
 import { CodexSignIn } from '@openhut/common/admin/admin.ts'
-import type { Provider, ProviderId } from '@openhut/common/models/provider.ts'
+import { List } from '@openhut/common/api.ts'
+import { Provider, type ProviderId } from '@openhut/common/models/provider.ts'
 import { foundNotice } from '@/features/models/labels'
 import { request } from '@/lib/api-client'
-import { openhut } from '@/lib/openhut'
 import { toastError } from '@/lib/toast'
 import { AGENTS_KEY, PROVIDERS_KEY } from '@/lib/query-keys'
 
-export function useProviders() {
-  return useQuery({ queryKey: PROVIDERS_KEY, queryFn: () => openhut.providers.list() })
-}
+const PROVIDER_LIST = List(Provider)
+const pathOf = (id: ProviderId) => `/api/providers/${id}`
 
-export function useMergedProviders() {
-  const rows = useProviders().data
-  return rows && mergeProviders(rows)
+export function useProviders() {
+  return useQuery({ queryKey: PROVIDERS_KEY, queryFn: () => request({ schema: PROVIDER_LIST, path: '/api/providers' }).then((page) => page.data) })
 }
 
 export function useFoundNotice() {
   const client = useQueryClient()
-  return (id: ProviderId) => foundNotice({ provider: mergeProviders(client.getQueryData<ProviderRow[]>(PROVIDERS_KEY) ?? []).find((each) => each.id === id) })
+  return (id: ProviderId) => foundNotice({ provider: client.getQueryData<Provider[]>(PROVIDERS_KEY)?.find((each) => each.id === id) })
 }
 
-export function useComputerProviders(computer: string): Provider[] | undefined {
-  return useProviders().data?.find((row) => row.computer === computer)?.providers
+export function useComputerProviders(_computer: string): Provider[] | undefined {
+  return useProviders().data
 }
 
 export function useConnectProvider() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (input: { id: ProviderId; apiKey: string; computers: string[] }) => openhut.providers.connect(input),
+    mutationFn: ({ id, apiKey }: { id: ProviderId; apiKey: string }) => request({ schema: Provider, path: pathOf(id), method: 'PATCH', body: { apiKey } }),
     onSuccess: () => client.invalidateQueries({ queryKey: PROVIDERS_KEY }),
   })
 }
@@ -38,7 +35,7 @@ export function useConnectProvider() {
 export function useRefreshProvider() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (id: ProviderId) => openhut.providers.refresh(id),
+    mutationFn: (id: ProviderId) => request({ schema: Provider, path: `${pathOf(id)}/refresh`, method: 'POST' }),
     onSuccess: () => client.invalidateQueries({ queryKey: PROVIDERS_KEY }),
   })
 }
@@ -46,7 +43,7 @@ export function useRefreshProvider() {
 export function useDisconnectProvider() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (id: ProviderId) => openhut.providers.disconnect(id),
+    mutationFn: (id: ProviderId) => request({ schema: Provider, path: pathOf(id), method: 'DELETE' }),
     onError: toastError,
     onSuccess: () => Promise.all([client.invalidateQueries({ queryKey: PROVIDERS_KEY }), client.invalidateQueries({ queryKey: AGENTS_KEY })]),
   })
@@ -55,9 +52,9 @@ export function useDisconnectProvider() {
 export function useSetModel() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (input: { id: ProviderId; model: string; on: boolean }) => openhut.providers.setModels({ id: input.id, models: [{ id: input.model, on: input.on }] }),
+    mutationFn: (input: { id: ProviderId; model: string; on: boolean }) => request({ schema: Provider, path: pathOf(input.id), method: 'PATCH', body: { models: [{ id: input.model, on: input.on }] } }),
     onMutate: ({ id, model, on }) => {
-      client.setQueryData<ProviderRow[]>(PROVIDERS_KEY, (rows) => rows?.map((row) => ({ ...row, providers: row.providers.map((provider) => provider.id === id ? { ...provider, models: provider.models.map((each) => each.id === model ? { ...each, on } : each) } : provider) })))
+      client.setQueryData<Provider[]>(PROVIDERS_KEY, (providers) => providers?.map((provider) => provider.id === id ? { ...provider, models: provider.models.map((each) => each.id === model ? { ...each, on } : each) } : provider))
     },
     onSettled: () => client.invalidateQueries({ queryKey: PROVIDERS_KEY }),
   })
@@ -67,12 +64,12 @@ export function useCodexSignIn(onSignedIn: () => void) {
   const client = useQueryClient()
   const started = useRef(false)
   const finished = useRef(false)
-  const start = useMutation({ mutationFn: () => request({ schema: CodexSignIn, computer: 'local', path: '/api/admin/codex-sign-ins', method: 'POST' }) })
+  const start = useMutation({ mutationFn: () => request({ schema: CodexSignIn, path: '/api/admin/codex-sign-ins', method: 'POST' }) })
   const id = start.data?.id
   const poll = useQuery({
     queryKey: ['codex-sign-in', id],
     enabled: !!id,
-    queryFn: () => request({ schema: CodexSignIn, computer: 'local', path: `/api/admin/codex-sign-ins/${encodeURIComponent(id ?? '')}` }),
+    queryFn: () => request({ schema: CodexSignIn, path: `/api/admin/codex-sign-ins/${encodeURIComponent(id ?? '')}` }),
     refetchInterval: (query) => query.state.data?.status === 'complete' ? false : 2500,
     retry: false,
     gcTime: 0,

@@ -6,7 +6,6 @@ export type Route =
   | { page: 'agent'; agentId: string; dialog: AgentDialog | undefined; detail: string | undefined }
   | { page: 'connections' }
   | { page: 'settings'; tab: string }
-  | { page: 'welcome' }
   | { page: 'join' }
   | { page: 'missing' }
 
@@ -16,7 +15,6 @@ export function routeOf(path: string): Route {
   const [section = '', id = '', dialog = '', detail = '', ...rest] = path.split('/').slice(1).map(decodeURIComponent)
   if (section === 'connections') return { page: 'connections' }
   if (section === 'settings') return { page: 'settings', tab: id || 'general' }
-  if (section === 'welcome' && !id) return { page: 'welcome' }
   if (section === 'join' && !id) return { page: 'join' }
   if (rest.length) return MISSING
   if (section === '' || (section === 'agents' && !id)) return { page: 'home', adding: false }

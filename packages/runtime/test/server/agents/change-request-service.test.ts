@@ -7,14 +7,20 @@ import { gatewayServer } from '../../../src/server/gateway/gateway-server.ts'
 import { changeRequestService } from '../../../src/server/agents/change-request-service.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
+import { runSet } from '../../../src/server/cloud/run-set.ts'
+import { fakeAgentd, signIn } from './signed-in.ts'
 
+fakeAgentd()
 await migrate()
 await db.insertInto('person').values({ id: 'usr_chgowner', email: 'chg@example.com', role: 'owner', removed_at: null }).execute()
 await db.insertInto('agent').values({ id: 'ag_chgagent', name: 'Dev', owner_id: 'usr_chgowner', instructions: '#', model: 'claude:sonnet', net: 73, channel_key: seal('k'.repeat(48)), wanted: 'stopped' }).execute()
 await db.insertInto('channel').values({ id: 'ch_chgwhats', agent_id: 'ag_chgagent', kind: 'whatsapp', status: 'connected', account: null, owner_address: '15550002222', open: false, allowed: '', secrets: '' }).execute()
 
-const owner = { id: 'usr_chgowner', email: 'chg@example.com', local: true }
-const told: { threadId: string; text: string }[] = []
+signIn({ email: 'chg@example.com' })
+runSet.watch()
+await runSet.refresh()
+const owner = { id: 'usr_chgowner', email: 'chg@example.com', local: true, role: 'owner' as const }
+const told: { agentId: string; text: string }[] = []
 changeRequestService.runDashboardWith(async (input) => { told.push(input); return '' })
 
 const server = gatewayServer.create().listen(0, '127.0.0.1')
@@ -23,7 +29,7 @@ const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 const token = agentToken({ id: 'ag_chgagent', epoch: 0 })
 const client = new Client({ name: 'hermes', version: '1' })
 await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/api/v1/mcp`), { requestInit: { headers: { authorization: `Agent ${token}` } } }))
-const app = { platform: 'api_server', chat_id: 'openhut-th_chgthrd1' }
+const app = { platform: 'api_server', chat_id: 'openhut-chgsession' }
 const whatsapp = { platform: 'whatsapp', chat_id: '15550002222@s.whatsapp.net', chat_type: 'dm' }
 const textOf = (result: Awaited<ReturnType<Client['callTool']>>) => (result.content as { text: string }[])[0].text
 const idIn = (text: string) => /chg_[a-z0-9]+/.exec(text)?.[0] ?? ''
@@ -41,14 +47,14 @@ test('a rename waits for approval, the owner edits it, and the decision goes bac
   assert.match(asked, /^Asked for approval \(chg_[a-z0-9]+\): Rename to Ops\. Nothing has changed yet\./)
   const id = idIn(asked)
   assert.equal((await db.selectFrom('agent').select('name').where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow()).name, 'Dev')
-  assert.deepEqual(await changeRequestService.inThread({ agentId: 'ag_chgagent', threadId: 'th_chgthrd1', since: new Date(Date.now() - 60_000) }), [id])
+  assert.deepEqual(await changeRequestService.inChat({ agentId: 'ag_chgagent', since: new Date(Date.now() - 60_000) }), [id])
 
   const approved = await changeRequestService.approve({ actor: owner, id, input: { name: 'Ops Bot' } })
   assert.equal(approved.status, 'approved')
   assert.equal(approved.summary, 'Rename to Ops Bot')
   assert.equal((await db.selectFrom('agent').select('name').where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow()).name, 'Ops Bot')
   await new Promise((resolve) => setTimeout(resolve, 50))
-  assert.deepEqual(told.map((each) => each.threadId), ['th_chgthrd1'])
+  assert.deepEqual(told.map((each) => each.agentId), ['ag_chgagent'])
   assert.match(told[0].text, new RegExp(`^\\[OpenHut ${id}\\] Approved and done: Rename to Ops Bot\\.`))
   await assert.rejects(changeRequestService.approve({ actor: owner, id }), /already approved/)
 })

@@ -19,6 +19,7 @@
     "pack-backend": "node scripts/pack-backend.mjs",
     "sums": "cd dist && { find renderer -type f; find backend -name '*.mjs' -not -path '*/node_modules/*' -not -path 'backend/runtime/*'; } | LC_ALL=C sort | xargs shasum -a 256 > SHA256SUMS && shasum -a 256 SHA256SUMS",
     "dist": "npm run build && npm run pack-backend && npm run sums && electron-builder --mac --arm64 --publish never",
+    "dist:dev": "npm run build && npm run pack-backend && npm run sums && electron-builder --mac --arm64 --config electron-builder.dev.yml --publish never",
     "dist:win": "npm run build && npm run pack-backend && electron-builder --win --x64 -c.extraMetadata.name=openhut --publish never",
     "dist:linux": "umask 022 && npm run build && npm run pack-backend && electron-builder --linux --x64 --publish never"
   },
@@ -36,9 +37,7 @@
     "@fontsource/ibm-plex-mono": "5.3.0",
     "@hugeicons/core-free-icons": "4.4.0",
     "@hugeicons/react": "1.1.10",
-    "@openhut/client": "*",
     "@openhut/common": "*",
-    "@openhut/tunnel": "*",
     "@tailwindcss/vite": "4.3.5",
     "@tanstack/react-query": "5.105.0",
     "@types/qrcode": "1.5.5",
@@ -66,6 +65,7 @@
     "@json-render/core": "0.23.2",
     "@json-render/react": "0.23.2",
     "electron-updater": "6.8.12",
+    "sonner": "^2.0.7",
     "ws": "8.21.0"
   }
 }

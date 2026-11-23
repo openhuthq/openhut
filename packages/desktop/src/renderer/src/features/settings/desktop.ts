@@ -5,7 +5,7 @@ import type { Peer } from '@/features/settings/peers'
 export type Tailnet = { state: 'running'; tailnet: string; self: { name: string; os: string; ip: string }; peers: Peer[] } | { state: 'missing' } | { state: 'stopped' }
 export type Machine = { chip: string; memory: number; folder: string; size: number }
 export type Prefs = { openAtLogin: boolean; keepAwake: boolean; betaUpdates: boolean }
-export type FirstRun = { failed: boolean; agentId: string; steps: [string, string, 'done' | 'now' | 'next' | 'failed', number?][]; invite?: string | null }
+export type FirstRun = { fresh: boolean; done: boolean; failed: boolean; steps: [string, string, 'done' | 'now' | 'next' | 'failed', number?][] }
 type Failure = { error: string }
 type Bridge = {
   tailnet: () => Promise<Tailnet | Failure>
@@ -13,7 +13,7 @@ type Bridge = {
   showFolder: () => Promise<string>
   prefs: () => Promise<Prefs | Failure>
   setPrefs: (patch: Partial<Prefs>) => Promise<Prefs | Failure>
-  firstRun: (start: boolean) => Promise<FirstRun | Failure>
+  firstRun: () => Promise<FirstRun | Failure>
   onChanged: (listener: () => void) => void
 }
 const PREFS_KEY = ['prefs']
@@ -39,8 +39,8 @@ export function useSetPrefs() {
   return useMutation({ mutationFn: (patch: Partial<Prefs>) => answer(desktop?.setPrefs(patch)), onSuccess: (prefs) => client.setQueryData(PREFS_KEY, prefs) })
 }
 
-export function useFirstRun(started: boolean) {
-  return useQuery({ queryKey: ['first-run', started], queryFn: () => answer(desktop?.firstRun(started)), refetchInterval: (query) => started && !query.state.data?.agentId && !query.state.data?.failed ? FIRST_RUN_POLL_MS : false })
+export function useFirstRun() {
+  return useQuery({ queryKey: ['first-run'], queryFn: () => answer(desktop?.firstRun()), enabled: !!desktop, retry: false, refetchIntervalInBackground: true, refetchInterval: (query) => query.state.data?.fresh && !query.state.data.done && !query.state.data.failed ? FIRST_RUN_POLL_MS : false })
 }
 
 function tailnetOf(result: Tailnet | Failure | { tailnet: string; self: { name: string; os: string; ip: string }; peers: Peer[] } | undefined): Tailnet {

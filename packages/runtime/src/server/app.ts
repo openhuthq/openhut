@@ -5,13 +5,11 @@ import { db, migrate } from './platform/db.ts'
 import { emit, log } from './platform/events.ts'
 import { answerErrors, errorBody, messageOf } from './platform/http-error.ts'
 import { validateWithZod } from './platform/validation.ts'
-import { forOlderApps } from './platform/responses.ts'
 import { adminController, healthController, updateController } from './admin/admin-controller.ts'
 import { agentController, grantController } from './agents/agent-controller.ts'
 import { memoryController } from './agents/memory-controller.ts'
 import { browserController } from './agents/browser-controller.ts'
 import { eventsController } from './platform/events-controller.ts'
-import { startTelemetry } from './platform/telemetry.ts'
 import { skillController } from './agents/skill-controller.ts'
 import { agentService } from './agents/agent-service.ts'
 import { channelController } from './channels/channel-controller.ts'
@@ -25,16 +23,18 @@ import { changeRequestController } from './agents/change-request-controller.ts'
 import { changeRequestService } from './agents/change-request-service.ts'
 import { routineService } from './routines/routine-service.ts'
 import { meController } from './team/team-controller.ts'
-import { accessController } from './access/access-controller.ts'
-import { invitationController } from './access/invitation-controller.ts'
+import { invitationController } from './cloud/invite-controller.ts'
+import { forward, forwardController } from './relay/forward.ts'
 import { relayService } from './relay/relay-service.ts'
 import { cloudController } from './cloud/cloud-controller.ts'
 import { cloudService } from './cloud/cloud-service.ts'
+import { runSet } from './cloud/run-set.ts'
 import { settings } from './platform/settings.ts'
 import { listenLocally } from './team/identity.ts'
+import { keysService } from './cloud/keys-service.ts'
 
 await migrate()
-if (config.installKind === 'server' && !/^[0-9a-f]{64}$/i.test(config.clientKeySha256 ?? '') && !config.join && !config.tailnetPort && !settings.access()) {
+if (config.installKind === 'server' && !/^[0-9a-f]{64}$/i.test(config.clientKeySha256 ?? '') && !config.join && !keysService.session() && !config.tailnetPort && !settings.access()) {
   log.error({ event: 'app.no_client_key', message: 'Set OPENHUT_JOIN to a join code from the OpenHut app, OPENHUT_TAILNET_PORT to be added over Tailscale, OPENHUT_CLIENT_KEY_SHA256 to the hex SHA-256 of the key the app enrolled, or OPENHUT_SOCKET for local mode. Refusing to start without one.' })
   process.exit(1)
 }
@@ -42,7 +42,6 @@ if (config.installKind === 'server' && !/^[0-9a-f]{64}$/i.test(config.clientKeyS
 const app = Fastify({ logger: false, bodyLimit: 1 << 20, trustProxy: ['127.0.0.1', '::1'], forceCloseConnections: true })
 answerErrors(app)
 app.setValidatorCompiler(validateWithZod)
-app.addHook('preSerialization', async (req, _reply, payload) => forOlderApps({ req, payload }))
 app.addHook('onRequest', async (req) => {
   const zone = req.headers['openhut-time-zone']
   if (typeof zone === 'string' && zone) await routineService.setTimeZone(zone)
@@ -52,9 +51,9 @@ app.addHook('onSend', async (_req, reply) => {
 })
 
 await app.register(websocket)
+app.addHook('preHandler', forward.http)
 await app.register(healthController, { prefix: '/health' })
 await app.register(meController, { prefix: '/api/me' })
-await app.register(accessController, { prefix: '/api/access' })
 await app.register(invitationController, { prefix: '/api/invitations' })
 await app.register(agentController, { prefix: '/api/agents' })
 await app.register(grantController, { prefix: '/api/grants' })
@@ -74,6 +73,7 @@ await app.register(adminController, { prefix: '/api/admin' })
 await app.register(eventsController, { prefix: '/api/events' })
 await app.register(updateController, { prefix: '/api/updates' })
 await app.register(cloudController, { prefix: '/api/cloud' })
+await app.register(forwardController, { prefix: '/c' })
 
 app.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody({ status: 404, message: `There's no ${req.method} ${req.url.split('?')[0]}.` })))
 
@@ -88,13 +88,13 @@ process.once('SIGTERM', async () => {
   process.exit(0)
 })
 emit({ name: 'app.started', properties: { at: config.installKind === 'server' ? config.port : config.socket, build: config.build, version: config.version, kind: config.installKind } })
-await startTelemetry()
 relayService.start({ server: app.server }).catch((err: unknown) => log.error({ event: 'relay.start_failed', error: messageOf(err) }))
 await gatewayServer.start().catch(async (err: unknown) => {
   log.error({ event: 'gateway.bind_failed', port: config.gatewayPort, error: messageOf(err) })
   await agentService.stopAll()
   process.exit(1)
 })
+await runSet.start()
 await agentService.boot()
 routineService.runDashboardWith((input) => threadService.runRoutine(input))
 changeRequestService.runDashboardWith((input) => threadService.runRoutine(input))

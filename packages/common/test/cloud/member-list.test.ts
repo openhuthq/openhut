@@ -221,6 +221,22 @@ test('a runtime device is listed for records only: it can never sign a member li
   assert.equal(await check({ anchor, chain: [v1, await next({ ...first, runtimes: [key(server)] })] }), null)
 })
 
+test('a viewer (a phone or browser) is listed per person, never signs a member list, never becomes a device, and leaves on removed', async () => {
+  const phone = await identity()
+  const withPhone = { ...first, members: [{ ...first.members[0], viewers: [key(phone)] }, first.members[1]] }
+  const v2 = await next(withPhone)
+  assert.deepEqual(await check({ anchor, chain: [v1, v2] }), { ...withPhone, version: 2, previous: anchor })
+  const v2Anchor = await anchorOf(v2)
+  const third = (body: MemberListBody, signer = moMac) => signList({ signer, body: { ...body, version: 3, previous: v2Anchor } })
+  const withoutSara = { ...withPhone, members: [withPhone.members[0], { ...first.members[1], devices: [] }], removed: [key(saraMac)] }
+  assert.ok(await check({ anchor, chain: [v1, v2, await third(withoutSara)] }))
+  assert.equal(await check({ anchor, chain: [v1, v2, await third(withoutSara, phone)] }), null)
+  assert.equal(await check({ anchor, chain: [v1, v2, await third({ ...withPhone, members: [{ ...first.members[0], devices: [key(moMac), key(phone)] }, first.members[1]] })] }), null)
+  assert.equal(await check({ anchor, chain: [v1, v2, await third({ ...withPhone, members: [{ ...first.members[0], viewers: [] }, first.members[1]] })] }), null)
+  assert.ok(await check({ anchor, chain: [v1, v2, await third({ ...withPhone, members: [{ ...first.members[0], viewers: [] }, first.members[1]], removed: [key(phone)] })] }))
+  assert.equal(await check({ anchor, chain: [v1, await next({ ...first, members: [{ ...first.members[0], viewers: [key(saraMac)] }, first.members[1]] })] }), null)
+})
+
 const DAY = 24 * 60 * 60_000
 const T = 1_800_000_000_000
 type Signed = Awaited<ReturnType<typeof signList>>
@@ -307,7 +323,7 @@ test('a new device can remove an older one right away, and the other way round',
   assert.ok(await check({ anchor: start.anchor, chain: [start.list, v2, await v3(withoutNew, moMac)] }))
 })
 
-test('a device is young only next to its own person’s older devices, so an admin who joined today can let a device in and remove people', async () => {
+test('an admin who joined today can let a device in and remove people', async () => {
   const start = await dated()
   const joined = T + DAY
   const ana = { email: 'ana@example.com', role: 'admin' as const, devices: [key(anaMac)] }
@@ -322,7 +338,7 @@ test('a device is young only next to its own person’s older devices, so an adm
   assert.ok(await check({ anchor: start.anchor, chain: [start.list, v2, removed] }))
 })
 
-test('the first device of a workspace is never young, and a device name never changes once listed', async () => {
+test('a device name never changes once listed', async () => {
   const start = await dated()
   const v2 = after(start)
   assert.ok(await check({ anchor: start.anchor, chain: [start.list, await v2({ keyVersion: 2, at: T + 1000 }, moMac)] }))

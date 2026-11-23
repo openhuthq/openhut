@@ -1,18 +1,14 @@
-import { createContext, useState, type FormEvent, type ReactElement } from 'react'
+import { createContext, useState, type ReactElement } from 'react'
 import { Delete02Icon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
-import type { OpenHutAgent } from '@openhut/client'
+import type { OpenHutAgent } from '@/lib/openhut'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { Glyph } from '@/components/glyph'
 import { TeamMark } from '@/components/custom/team-mark'
 import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
-import { BackupCard, useBackup } from '@/features/cloud/backup-card'
-import { hasTeam } from '@/features/cloud/teams'
-import { chooseWorkspace, peopleNote, useCreateTeam, useWorkspaces } from '@/features/cloud/workspaces'
+import { chooseWorkspace, peopleNote, useWorkspaces } from '@/features/cloud/workspaces'
 import { Faces } from '@/features/cloud/presence'
 import { agentPath } from '@/app/routes'
 import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
@@ -46,7 +42,6 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
   const computers = useComputers().data
   const phone = useMedia(PHONE)
   const many = new Set(contacts.map(({ agent }) => agent.computer)).size > 1
-  const { active } = useWorkspaces()
   return <aside inert={collapsed} className={cn('pushable still shrink-0 overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring)', collapsed ? 'w-0' : 'w-[280px] border-r-[0.5px]', contacts.length ? 'phone:w-full phone:border-r-0' : 'phone:hidden', GLASS)}>
     <div className={cn('flex h-full w-[280px] flex-col phone:w-full transition-[opacity,translate] duration-[160ms] ease-out', collapsed && '-translate-x-2 opacity-0')}>
     <div className={cn('flex h-[44px] shrink-0 items-center gap-1.5 pr-3 pl-3 phone:h-16 phone:px-4', DRAG)}>
@@ -76,7 +71,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
     <footer className="mt-auto flex flex-col items-start gap-2 px-3 pt-2 pb-3">
       <UpdateEverything />
       <div className="flex w-full items-center gap-2">
-        {active && <TeamSwitcher />}
+        <TeamSwitcher />
         <a href="/connections" className={cn(SURFACE, 'flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg pr-3 pl-3.5 text-[13.5px] font-medium')}>
           <ConnectedMarks />
         </a>
@@ -85,23 +80,6 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
     </footer>
     </div>
   </aside>
-}
-
-export function CreateTeamDialog() {
-  const create = useCreateTeam()
-  const close = () => open()
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    create.mutate(String(new FormData(event.currentTarget).get('name') ?? '').trim(), { onSuccess: () => navigate('/settings/general') })
-  }
-  return <Dialog size="narrow" label="Create a team" onClose={close}>
-    <DialogHead title="Create a team" onClose={close} />
-    <form id="new-team" onSubmit={submit} className="flex flex-col gap-3 px-5 py-5 text-[13px]/[18px]">
-      <p className="m-0 text-body">Share agents with the people you invite.</p>
-      <Input name="name" required maxLength={60} autoFocus autoComplete="off" placeholder="Team name" aria-label="Team name" />
-    </form>
-    <DialogFoot error={create.error?.message} start={<Button type="button" variant="secondary" onClick={close}>Cancel</Button>}><Button type="submit" form="new-team" variant="primary" disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create'}</Button></DialogFoot>
-  </Dialog>
 }
 
 function RowMenu({ agent, children }: { agent: OpenHutAgent; children: ReactElement }) {
@@ -143,26 +121,18 @@ function ConnectedMarks() {
 
 function TeamSwitcher() {
   const { all, active } = useWorkspaces()
-  const backup = useBackup()
-  if (!active) return null
-  const joined = hasTeam(all)
-  const syncing = backup?.busy ? `, backing up ${backup.percent}%` : backup?.failed ? ', backup needs attention' : ''
   return <DropdownMenu>
-    <DropdownMenuTrigger render={<Button type="button" variant="bare" aria-label={`Team: ${active.name}${syncing}`} title={active.name} className={cn(SURFACE, 'relative grid size-10 shrink-0 place-items-center rounded-lg')} />}>
+    <DropdownMenuTrigger render={<Button type="button" variant="bare" aria-label={`Team: ${active.name}`} title={active.name} className={cn(SURFACE, 'relative grid size-10 shrink-0 place-items-center rounded-lg')} />}>
       <TeamMark workspace={active} />
-      {backup?.busy && <span aria-hidden="true" className="pointer-events-none absolute inset-[5px] animate-spin rounded-[9px] border-2 border-transparent border-t-hue-blue border-r-hue-blue motion-reduce:animate-none" />}
-      {backup && !backup.busy && <span aria-hidden="true" className={cn('absolute top-1 right-1 size-2 rounded-full ring-2 ring-card', backup.failed ? 'bg-fail' : 'bg-pass')} />}
     </DropdownMenuTrigger>
     <DropdownMenuContent side="top" align="start" className="flex w-[260px] flex-col gap-0.5 rounded-lg p-1.5 shadow-menu">
-      {backup && <><BackupCard /><DropdownMenuSeparator /></>}
       {all.map((workspace) => <DropdownMenuItem key={workspace.id} className="h-auto gap-2.5 px-2 py-1.5" onClick={() => { if (workspace.id !== active.id) { chooseWorkspace(workspace.id); navigate('/') } }}>
         <TeamMark workspace={workspace} className="size-7 rounded-md text-[12px]" />
         <span className="grid min-w-0 flex-1 leading-tight"><span className="truncate text-[13px] font-medium">{workspace.name}</span><span className="text-[11.5px] text-mute">{peopleNote(workspace)}</span></span>
         {workspace.id === active.id && <I icon={Tick02Icon} size={14} />}
       </DropdownMenuItem>)}
       <DropdownMenuSeparator />
-      {!joined && <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('new-team')}><I icon={PlusSignIcon} size={15} className="text-mute" />Create a team</DropdownMenuItem>}
-      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />{joined ? 'Join another team' : 'Join a team'}</DropdownMenuItem>
+      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />Join a team</DropdownMenuItem>
       <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/general')}><I icon={Settings02Icon} size={15} className="text-mute" />Team settings</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>

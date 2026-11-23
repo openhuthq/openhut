@@ -30,9 +30,6 @@ export const Admin = z.object({
     running: z.number(),
     total: z.number(),
   }),
-  tailnetUrl: z.optional(z.null()),
-  google: z.optional(z.object({ clientId: z.null(), redirectUri: z.string() })),
-  usageData: z.boolean(),
   publicKey: z.string(),
   relay: z.optional(z.object({ key: z.string(), computerId: z.string(), url: z.nullable(z.string()) })),
   features: z.optional(z.object({ whatsapp: z.boolean(), browser: z.boolean() })),
@@ -52,7 +49,6 @@ export type Health = z.infer<typeof Health>
 
 export const UpdateAdminFields = {
   seatToken: z.optional(z.string().check(z.regex(/^\S{20,}$/, 'Paste the token that `claude setup-token` printed.'), z.maxLength(2000))),
-  usageData: z.optional(z.boolean()),
 }
 export const UpdateAdmin = z.object(UpdateAdminFields).check(atLeastOneField)
 export type UpdateAdmin = z.infer<typeof UpdateAdmin>
@@ -92,18 +88,10 @@ export const SeatUsage = z.object({
 })
 export type SeatUsage = z.infer<typeof SeatUsage>
 
-export const Subscription = z.enum(['claude', 'codex'])
-export type Subscription = z.infer<typeof Subscription>
-
 export const CreateExport = z.object({
   publicKey: z.string().check(z.regex(/^[\w+/=-]{40,100}$/, 'Send the publicKey from the other computer\'s GET /api/admin.')),
-  connectionId: z.optional(z.string().check(z.maxLength(40))),
-  subscription: z.optional(Subscription),
 })
 export type CreateExport = z.infer<typeof CreateExport>
 
 export const Export = z.object({ object: z.literal('export'), sealed: z.string() })
 export type Export = z.infer<typeof Export>
-
-export const CreateImport = z.object({ sealed: z.string().check(z.maxLength(64_000)) })
-export type CreateImport = z.infer<typeof CreateImport>

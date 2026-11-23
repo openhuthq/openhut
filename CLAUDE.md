@@ -1,11 +1,14 @@
 # OpenHut
 
-Self-hosted agents: the OpenHut app (Mac and Linux) is a thin window over several runtimes, one on this computer and one
-on each computer you add (`private/brain/decisions/app-aggregates-runtimes.md`). A runtime runs many Hermes agents, each in its
+Self-hosted agents with an end-to-end encrypted cloud: the OpenHut app (Mac and Linux) runs agents on several runtimes, one on
+this computer and one on each computer you add. A runtime runs many Hermes agents, each in its
 own process (a plain process that runs as you on a Mac or Windows PC, a gVisor sandbox in Docker on Linux), with their own Slack app and WhatsApp number. Agents reach team
 data only through the runtime's gateway, which holds every key and checks each agent's grants on every call. You manage
-it from the app, or by asking an agent to change its own name, instructions, channels or connections, which you approve in the app (`private/brain/decisions/agents-change-themselves.md`). No sign-in and no people: the app reaches the local
-runtime on a 0600 Unix socket, and a remote one end-to-end encrypted either straight over your tailnet (installed and paired over Tailscale SSH, no cloud) or through the relay after it joined with a code (`private/brain/decisions/two-ways-to-reach-a-computer.md`).
+it from the app, or by asking an agent to change its own name, instructions, channels or connections, which you approve in the app (`private/brain/decisions/agents-change-themselves.md`). Everyone signs in to OpenHut Cloud on first launch: always
+synced, always a team, end-to-end encrypted (`private/brain/decisions/sign-in-first.md`). Apps read sealed records from the cloud
+(`api.openhut.dev`) and decrypt them locally; a runtime keeps only the run set for the agents it runs. The app reaches the local
+runtime on a 0600 Unix socket, and a remote one end-to-end encrypted through the relay or straight over your tailnet, after it
+asked to join with a one-use code and you approved it.
 Scope and decisions: `private/brain/decisions/openhut-v1-scope.md`.
 
 ## Packages
@@ -24,9 +27,9 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   Query), which calls `/api/*` on `app://openhut`; the main process forwards it to the runtime's socket. Tailwind v4 with shared components in `src/renderer/src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`private/brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.
 - **`packages/tunnel`** — `@openhut/tunnel`, the encrypted tunnel (through the relay, or fed by any pipe through `sessions()`, which the runtime's tailnet port uses): Noise IK on `noise-handshake`,
-  the frame codec, `connect` (device, runs in browsers too) and `serve` (computer).
-- **`packages/e2e`** — `@openhut/e2e`, the end-to-end run: a bare Linux server in Docker, the curl install of a remote
-  runtime with an enrolled key, a tampered upgrade, the upgrade and a restart. Results go to `packages/e2e/results/` (gitignored).
+  the frame codec, `connect` (device) and `serve` (computer); both show the access token as `x-openhut-token`, so `connect` runs in Node only for now.
+- **`packages/e2e`** — `@openhut/e2e`, the end-to-end run: the cloud server on PGlite, a bare Linux server in Docker, the
+  curl install of a remote runtime that joins with a one-use code (`OPENHUT_JOIN`), a tampered upgrade, the upgrade and a restart. Results go to `packages/e2e/results/` (gitignored).
 - **`packages/docs`** — `@openhut/docs`, the docs at openhut.dev/docs: Fumadocs on TanStack Start, prerendered. MDX in
   `content/docs`, real dashboard screenshots in `public/screenshots`. Notes: `private/brain/openhut-site.md`.
 - **`private/site`** — `@openhut/site`, openhut.dev, in the private submodule (see Private half below): `install.sh` for curl, the release tarball, the home page, the brand page
@@ -79,14 +82,20 @@ npm run dev
 `npm run dev` starts agentd with native agents (real Hermes processes, as on the Mac app; they need the bundled runtime:
 `npm -w @openhut/desktop run pack-backend`, which needs `uv`), the server API on 127.0.0.1:8787 with `.data`, the real model
 and real outside services (connect Claude in Settings), the dev key `dev` enrolled, and Vite for the renderer with `/api` proxied to it with
-`Authorization: Bearer dev`. Open `http://localhost:5173`. Port 8787 taken (Docker or another checkout)? `PORT=8797 npm run dev` moves the API and Vite's proxy; Vite picks the next free port itself. Another checkout's `npm run dev` already running? Also set `OPENHUT_GATEWAY_PORT` (8081). `node scripts/seed-ui.ts` (on a fresh `.data`) fills in sample
-agents and connections. The desktop app itself: `npm -w @openhut/desktop run build && npm -w @openhut/desktop start`. It keeps
-its data in `~/Library/Application Support/OpenHut Dev`, apart from the installed app's `OpenHut`.
+`Authorization: Bearer dev`. It also runs the cloud locally, never production: the API from `private/api` (PGlite, dev sign-in)
+and the Worker from `private/cloud` (D1 migrations applied), so it needs `private/` and fails without it unless
+`OPENHUT_CLOUD_URL`/`OPENHUT_API_URL` name a cloud. Dev ports (API 8797, gateway 8091, Worker 8790, cloud API 8792) step
+to the next free one, so it runs beside the installed app and other checkouts; it prints the URLs and the sign-in account
+(mo@example.com). Ctrl-C stops everything; `npm run dev:reset` wipes `.data`. `node scripts/seed-ui.ts` (on a fresh `.data`) fills in sample
+agents and connections. The desktop app itself: `npm -w @openhut/desktop run build && npm -w @openhut/desktop start`.
+Every dev run (unpackaged, `OPENHUT_TEST_HOME`, or `npm -w @openhut/desktop run dist:dev`, app id `dev.openhut.app.dev`) is
+"OpenHut Dev": DEV icon and pill, `~/Library/Application Support/OpenHut Dev`, `openhut-dev://`, gateway 8091, the local cloud
+(`packages/desktop/src/dev-build.mjs`), and no updates from the release feed (an `OPENHUT_TEST_HOME` run still updates, for the update tests).
 
 ## Build the desktop app
 
 `npm -w @openhut/desktop run dist` builds the renderer, bundles the runtime's server and agentd with esbuild into
-`packages/desktop/dist/backend` with the Hermes runtime, Node, Claude Code and agent-browser for the build's platform (`scripts/pack-hermes.mjs`, pinned in `install/native-runtime.json`; nothing downloads on first run) (`scripts/pack-backend.mjs`; on Linux it packs only the client, since the install in Docker brings the rest), and runs electron-builder (`electron-builder.yml`): an arm64,
+`packages/desktop/dist/backend` with the Hermes runtime, Node, Claude Code and agent-browser for the build's platform (`scripts/pack-hermes.mjs`, pinned in `install/native-runtime.json`; nothing downloads on first run) (`scripts/pack-backend.mjs`; on Linux it packs nothing but an empty `node_modules`, since the install in Docker brings the rest), and runs electron-builder (`electron-builder.yml`): an arm64,
 macOS 14+ `release/mac-arm64/OpenHut.app`, `release/OpenHut-arm64.dmg` and the versioned zip. It signs with the Developer ID
 in the login keychain (hardened runtime, `build/entitlements.mac.plist`) and never notarizes (`notarize: false`): only the
 release workflow (`.github/workflows/desktop.yml`, `scripts/notarize.sh`) notarizes, staples and checks a build. The packaged app runs the real model unless `OPENHUT_MODEL` is set.
