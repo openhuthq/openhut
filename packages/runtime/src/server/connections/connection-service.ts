@@ -107,6 +107,11 @@ export const connectionService = {
     return deleted({ id, object: 'connection' })
   },
 
+  async wipe(): Promise<void> {
+    await db.deleteFrom('connection').execute()
+    toolCache.clear()
+  },
+
   async synced(): Promise<SyncedConnection[]> {
     const rows = await db.selectFrom('connection').select(['id', 'kind', 'name', 'account', 'sign_in', 'config']).orderBy('created_at').execute()
     return rows.map((row) => ({ id: row.id, kind: row.kind, name: row.name, account: row.account, signIn: row.sign_in, config: row.config ? connectionService.unsealed(row.config) : null }))

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type FormEvent } from 'react'
 import { Alert02Icon, Cancel01Icon, FingerPrintIcon, Key01Icon } from '@hugeicons/core-free-icons'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
@@ -11,19 +11,18 @@ import { PersonFace, PersonFaces } from '@/components/custom/person-face'
 import { AMBER, notify, Tinted, Toast, Toasts } from '@/components/custom/toast'
 import { ErrorNote } from '@/components/error-note'
 import { Hut } from '@/components/hut'
-import { DRAG, I, PILL } from '@/components/kit'
+import { I, PILL } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { nameOf, notifyDesktop, notifyUnlock, REMOVE_DETAIL, useCloud, useRemoveMac, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useStartOver, useUnlock } from '@/features/cloud/api'
+import { nameOf, notifyDesktop, REMOVE_DETAIL, useCloud, useRemoveMac, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
 import { Mascot } from '@/features/cloud/sign-in'
 import { PRIMARY, Step } from '@/features/cloud/step'
 import { chooseWorkspace, useAsk, useCancelAsk } from '@/features/cloud/workspaces'
 import { Mismatch } from '@/features/cloud/presence'
 import { freshDevice, joinRequests, markSeen, seenDevices } from '@/features/cloud/seen'
 import { Spinner } from '@/components/ui/spinner'
-import { Chevron, Row, Rows, useConfirming } from '@/features/settings/kit'
-import { isPhone } from '@/lib/native'
-import { navigate, usePath } from '@/lib/router'
+import { Chevron, Row, Rows } from '@/features/settings/kit'
+import { navigate } from '@/lib/router'
 import { longDate, shortDateTime } from '@/lib/format'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
@@ -52,7 +51,7 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
       </Rows>
     </div>
     {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
-    {!cloud.kitInCloud && <CantGetIn />}
+    <span className="mt-auto">{leave}</span>
   </Step>
 }
 
@@ -84,25 +83,6 @@ function Requested({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
 function who(admins: string[]): string {
   const names = admins.map(nameOf)
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names.at(-1)}` : names[0] ?? 'an admin'
-}
-
-function CantGetIn() {
-  const [open, setOpen] = useState(false)
-  const startOver = useStartOver()
-  const { confirming, setConfirming, box } = useConfirming()
-  if (!open) return <Button type="button" variant="text" className="mt-auto text-[12px] font-normal text-mute" onClick={() => setOpen(true)}>Can’t get in?</Button>
-  return <div className="mt-auto flex w-full max-w-[400px] flex-col items-center gap-2">
-    <p className="m-0 text-[12.5px]/[18px] text-mute">There’s no recovery kit yet. If none of your computers can approve this one, you can start over with an empty backup.</p>
-    <div ref={box} className="flex flex-wrap items-center justify-center gap-2">
-      {confirming
-        ? <>
-          <span className="w-full text-[12px] text-mute">Start over with an empty backup? Your other computers will need the new kit.</span>
-          <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
-          <Button type="button" variant="danger" className={PILL} disabled={startOver.isPending} onClick={() => startOver.mutate(undefined, { onError: toastError })}>Start over</Button>
-        </>
-        : <Button type="button" variant="text" className="text-[12px] font-normal text-mute" onClick={() => setConfirming(true)}>Start over</Button>}
-    </div>
-  </div>
 }
 
 function JoinRequests({ cloud }: { cloud: Cloud }) {
@@ -213,17 +193,10 @@ function KitWordsEntry({ onBack }: { onBack: () => void }) {
   </Step>
 }
 
-export function CloudGate({ children }: { children: ReactNode }) {
+export function CloudToasts() {
   const cloud = useCloud().data
   const queries = useQueryClient()
-  const path = usePath()
   const [landing, setLanding] = useState(false)
-  const [notified, setNotified] = useState<boolean>()
-  const locked = cloud?.status === 'locked'
-  useEffect(() => {
-    if (!locked) return setNotified(undefined)
-    void notifyUnlock().then(setNotified)
-  }, [locked])
   const restoring = cloud?.backup.state === 'restoring'
   const agent = cloud?.backup.agent
   const problem = cloud?.backup.problem
@@ -235,13 +208,8 @@ export function CloudGate({ children }: { children: ReactNode }) {
     notify(problem ? { lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: 'Not everything came back', note: problem } : { title: 'Your agents are restored', note: 'Your agents and chats are on this computer now.' })
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
-  if (!cloud) return children
-  return <>{children}<Toasts>{cloud.status === 'locked' && notified === false && !path.startsWith('/settings/') && <LockedToast />}<JoinRequests cloud={cloud} /><NewMacAlert cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
-}
-
-function LockedToast() {
-  if (isPhone()) return <Toast lead={<Hut mood="key" className="size-8" />} title="Unlock OpenHut on your computer" note="Your agents and chats are restored after that." />
-  return <Toast lead={<Hut mood="key" className="size-8" />} title="Unlock OpenHut Cloud" note="Restore your agents and chats on this computer."><Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/account?open=enable')}>Unlock</Button></Toast>
+  if (!cloud) return null
+  return <><Toasts><JoinRequests cloud={cloud} /><NewMacAlert cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
 }
 
 function Joins({ cloud }: { cloud: Cloud }) {
@@ -271,11 +239,4 @@ function GoneNotice({ cloud }: { cloud: Cloud }) {
     notify({ lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: last.why === 'deleted' ? `${last.name} was deleted` : `You were removed from ${last.name}`, note: 'Its agents moved to the trash on this computer.' })
   }, [cloud.gone, cloud.workspaces])
   return null
-}
-
-export function Window({ children }: { children: ReactNode }) {
-  return <div className="flex h-dvh flex-col bg-canvas pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-ink">
-    <div className={cn('flex h-[52px] shrink-0 items-center justify-center text-[13px] font-semibold text-mute', DRAG)}>OpenHut</div>
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 pb-12 text-center">{children}</div>
-  </div>
 }

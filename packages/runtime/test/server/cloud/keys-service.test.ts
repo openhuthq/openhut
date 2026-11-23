@@ -39,7 +39,7 @@ test('a signed-out Mac unlocks with the 12 words: the kit box opens the account 
   const foreign = { ...mine, id: 'another_ws', key: (await keysService.workspaceBox({ account: { ...account, key: toBase64(newKey()) } })).key }
   const saved = { kit: keysService.kitState().saved?.box ?? '', workspaces: [foreign, mine] }
   await keysService.setSession(undefined)
-  await keysService.forget()
+  await keysService.forgetHere()
   await keysService.setLocked({ sub: 'dev-mo', email: 'mo@example.com' })
   const typo = [...kit.words].reverse()
   assert.equal(await keysService.restore({ words: typo, ...saved }), null)
@@ -73,13 +73,9 @@ test('signing in with another Google account is refused, and the first account k
   const mo = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
   await keysService.setKit({ box: (await keysService.newKit()).box, savedAt: new Date().toISOString() })
   const kit = keysService.kitState().saved
-  await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error & { status?: number }) => err.status === 409 && /is set up for mo@example\.com\. Sign in with that account, or forget it below\./.test(err.message))
+  await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error & { status?: number }) => err.status === 409 && /is set up for mo@example\.com\. Sign in with that account\./.test(err.message))
   assert.deepEqual(keysService.account(), mo)
   assert.deepEqual(keysService.kitState().saved, kit)
-  const box = keysService.kitState().saved?.box
-  await keysService.setKit(undefined)
-  await assert.rejects(keysService.open({ sub: 'dev-sara', email: 'sara@example.com' }), (err: Error) => /is set up for mo@example\.com\. Sign in with that account and save a recovery kit first\./.test(err.message))
-  await keysService.setKit(kit && box ? { box, savedAt: kit.savedAt } : undefined)
 })
 
 test('a new Mac opens an approval letter only when it is sealed to its own key for its own workspace, then restores with the account key in it', async () => {

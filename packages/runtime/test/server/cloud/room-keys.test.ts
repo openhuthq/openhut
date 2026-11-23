@@ -137,7 +137,7 @@ test('in a team room this Mac lists the account key as its kit, moves the mark w
   await keysService.setKit({ box: words.box, savedAt: new Date().toISOString() })
   const workspaces = [{ ...await keysService.workspaceBox({ account: current }), chain: homeChain }, { ...await keysService.workspaceBox({ account: current, room: team }), chain: [v1, v2, v3, v4] }]
   await keysService.setSession(undefined)
-  await keysService.forget()
+  await keysService.forgetHere()
   await keysService.setLocked({ sub: 'dev-mo', email: 'mo@example.com' })
   const restored = await keysService.restore({ words: words.words, kit: words.box, workspaces })
   const back = restored?.teams?.[0]

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { ICONS } from '@/components/icons'
+import { DRAG } from '@/components/kit'
 import { cn } from '@/lib/utils'
 
 export function Guide({ label, at, of, onClose, children }: { label: string; at: number; of: number; onClose: () => void; children: ReactNode }) {
@@ -32,3 +33,10 @@ export function Step({ art, title, line, back, backLabel = 'Back', action, child
 }
 
 export const PRIMARY = 'h-9 min-w-[128px] justify-center px-4'
+
+export function Window({ children }: { children: ReactNode }) {
+  return <div className="flex h-dvh flex-col bg-canvas pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-ink">
+    <div className={cn('flex h-[52px] shrink-0 items-center justify-center text-[13px] font-semibold text-mute', DRAG)}>OpenHut</div>
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 pb-12 text-center">{children}</div>
+  </div>
+}

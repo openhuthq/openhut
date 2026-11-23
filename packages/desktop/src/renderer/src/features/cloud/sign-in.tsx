@@ -1,118 +1,77 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowLeft01Icon, CloudIcon, CloudUploadIcon, ComputerPhoneSyncIcon, Key01Icon, SquareLock02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
+import { useState, useSyncExternalStore, type FormEvent } from 'react'
+import { ComputerPhoneSyncIcon, CloudUploadIcon, Key01Icon, SourceCodeIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import type { Cloud, RecoveryKit } from '@openhut/common/cloud/cloud.ts'
 import { kitText, readKit } from '@openhut/common/vault/kit-file.ts'
+import { migrating } from '@/app/gate-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Spinner } from '@/components/ui/spinner'
 import { CopyButton } from '@/components/copy-button'
 import { DropZone } from '@/components/custom/drop-zone'
 import { ErrorNote } from '@/components/error-note'
-import { Creature } from '@/components/creature'
 import { Hut } from '@/components/hut'
-import { I, ICON_BUTTON, PILL } from '@/components/kit'
-import { enableCloud, nameOf, useCancelSignIn, useCloud, useNewKit, useSignIn, useSigningIn } from '@/features/cloud/api'
-import { toastError } from '@/lib/toast'
-import { PRIMARY, Step } from '@/features/cloud/step'
+import { I } from '@/components/kit'
+import { useAgents } from '@/features/agents/api'
+import { useCancelSignIn, useCloud, useNewKit, useSignIn, useSigningIn } from '@/features/cloud/api'
+import { PRIMARY, Step, Window } from '@/features/cloud/step'
 import { Row, Rows } from '@/features/settings/kit'
 import { shortDate } from '@/lib/format'
 import { isPhone } from '@/lib/native'
-import { navigate, open } from '@/lib/router'
+import { open, usePath } from '@/lib/router'
 import { copyText } from '@/lib/clipboard'
-import { cn } from '@/lib/utils'
 
 const INK = '#0b0b0b'
+const POINTS = [
+  [ComputerPhoneSyncIcon, 'Your agents and chats follow you to every computer you add'],
+  [SquareLock02Icon, 'Encrypted on your device. No one can read it, including us'],
+  [SourceCodeIcon, 'Open source, so anyone can check how it works'],
+] as const
+const INVITED = 'Sign in with the email your invite went to. Everything you share there stays end-to-end encrypted.'
 
-export function Pane({ back, children }: { back?: () => void; children: ReactNode }) {
-  return <div className="relative flex flex-col items-center gap-3 px-6 pt-4 text-center text-[13px]/[18px]">
-    {back && <Button type="button" data-back variant="bare" className={cn(ICON_BUTTON, 'absolute -top-1 left-0')} aria-label="Back" title="Back" onClick={back}><I icon={ArrowLeft01Icon} size={16} /></Button>}
-    {children}
-  </div>
-}
-
-export function Title({ children }: { children: ReactNode }) {
-  return <span className="mt-1 text-[18px]/[1.3] font-semibold tracking-[-.01em]">{children}</span>
-}
-
-export function Lead({ children }: { children: ReactNode }) {
-  return <p className="m-0 max-w-[460px] text-[13.5px]/[20px] text-body">{children}</p>
-}
-
-function Characters() {
-  return <span className="flex items-end justify-center gap-2">
-    <Creature id="helpdesk-1" size={52} />
-    <Hut mood="key" className="mx-1 size-[84px]" />
-    <Creature id="sales-2" size={52} />
-  </span>
-}
-
-const ROW_ICON = { blue: 'text-hue-blue', amber: 'text-hue-amber' }
-
-function Benefit({ icon, hue, title, note }: { icon: Parameters<typeof I>[0]['icon']; hue: keyof typeof ROW_ICON; title: string; note?: ReactNode }) {
-  return <Row icon={<I icon={icon} size={20} className={ROW_ICON[hue]} />} title={title} note={note} />
-}
-
-export function Pitch() {
-  const cloud = useCloud().data
+export function SignIn({ cloud }: { cloud: Cloud | undefined }) {
   const signIn = useSignIn()
   const waiting = useSigningIn()
   const cancel = useCancelSignIn()
-  if (cloud?.status === 'locked') return <Pane>
-    <Hut mood="key" className="size-[84px]" />
-    <Title>{`You’re signed in, ${nameOf(cloud.email ?? '')}`}</Title>
-    <Lead>One more step: the key that reads your agents and chats.</Lead>
-    {isPhone() ? <span className="text-[13px] text-mute">Unlock OpenHut on your computer.</span> : <Button type="button" variant="primary" className={BIG} onClick={() => open('enable')}>Unlock</Button>}
-  </Pane>
-  if (waiting) return <Pane>
-    <Hut mood="looking" className="size-[84px]" />
-    <Title>Finish signing in in your browser</Title>
-    <Lead>This page moves on by itself when you’re done.</Lead>
-    <div className="flex flex-col items-center gap-2">
-      <Button type="button" variant="primary" className={cn(BIG, 'gap-2')} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}><Google size={14} />Open the browser again</Button>
-      <Button type="button" variant="ghost" className={cn(BIG, 'mt-0')} onClick={cancel}>Cancel</Button>
-    </div>
-  </Pane>
-  return <Pane>
-    <Characters />
-    <Title>Sign in to see your team</Title>
-    <Lead>Or join one with an invite link.</Lead>
-    <div className="my-2 w-full max-w-[400px] text-left">
-      <Rows>
-        <Benefit icon={UserGroupIcon} hue="amber" title="Share agents" note="Your teammates chat with the agents you share" />
-        <Benefit icon={ComputerPhoneSyncIcon} hue="blue" title="On every computer" note="Your agents follow you" />
-        <Benefit icon={CloudUploadIcon} hue="blue" title="Backed up" note="Lose your computer, keep everything" />
-        <Benefit icon={SquareLock02Icon} hue="amber" title="End-to-end encrypted" note="We can’t read your data" />
-      </Rows>
-    </div>
+  const online = useOnline()
+  const agents = useAgents().data?.length ?? 0
+  const invited = usePath() === '/join'
+  const moving = migrating({ agents, invited })
+  const busy = waiting || signIn.isPending
+  return <Window>
+    <span className="relative mb-1">
+      <span className="absolute inset-0 scale-150 animate-[fadein_.7s_.3s_both] rounded-full bg-[radial-gradient(circle,#f7c94855,transparent_65%)]" />
+      <Hut mood={invited ? 'party' : 'looking'} className="relative size-28 [&>svg]:animate-[hop-rest_3.6s_cubic-bezier(.2,.8,.2,1)_.6s_infinite]" />
+    </span>
+    <h1 className="m-0 text-[20px]/[1.3] font-semibold">{invited ? 'You’re invited to a team' : moving ? 'Sign in to keep using OpenHut' : 'Your agents, on every computer you use'}</h1>
+    {(invited || moving) && <p className="m-0 max-w-[450px] text-[14px]/[1.5] text-body">{invited ? INVITED : moving}</p>}
+    {!invited && <ul className="m-0 flex list-none flex-col gap-2.5 p-0 text-left">{POINTS.map(([icon, text]) => <li key={text} className="flex items-center gap-3 text-[14px]/[1.4] text-body"><I icon={icon} size={18} className="shrink-0 text-mute" />{text}</li>)}</ul>}
     {isPhone()
-      ? <span className="text-[13px] text-mute">Sign in on your computer.</span>
-      : <div className="flex flex-col items-center gap-2">
-        <Button type="button" variant="primary" className={cn(BIG, 'gap-2')} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}><Google size={14} />Sign in with Google</Button>
-        <Button type="button" variant="secondary" className={cn(BIG, 'mt-0')} onClick={() => open('join-link')}>Join with a link</Button>
+      ? <p className="m-0 text-[13px] text-mute">Sign in to OpenHut on your computer.</p>
+      : <div className="mt-2 flex flex-col items-center gap-2.5">
+        <Button type="button" variant="primary" className="h-10 w-[260px] justify-center gap-2 rounded-[10px] text-[15px]" disabled={!online || signIn.isPending} onClick={() => signIn.mutate()}>
+          {busy ? <><Spinner className="mt-0 border-white/30 border-t-white" />Finish signing in your browser</> : <><Google size={16} />Continue with Google</>}
+        </Button>
+        {waiting
+          ? <Button type="button" variant="text" className="h-[21px] text-[14px] font-normal text-mute" onClick={cancel}>Cancel</Button>
+          : !invited && <Button type="button" variant="text" className="h-[21px] text-[14px]" onClick={() => open('join-link')}>I have an invite link</Button>}
       </div>}
-    <ErrorNote message={signIn.error?.message ?? cloud?.signInError ?? undefined} />
-  </Pane>
+    {online ? <ErrorNote className="max-w-[420px]" message={signIn.error?.message ?? cloud?.signInError ?? undefined} /> : <p className="m-0 text-[13px] text-mute">OpenHut needs the internet the first time.</p>}
+  </Window>
 }
 
-export function SignInOnTeam({ what }: { what: string }) {
-  return <Pane>
-    <Title>Not signed in</Title>
-    <Lead>{`Sign in on the Team tab to see ${what}.`}</Lead>
-    <Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/team')}>Go to Team</Button>
-  </Pane>
+function useOnline(): boolean {
+  return useSyncExternalStore((listener) => {
+    addEventListener('online', listener)
+    addEventListener('offline', listener)
+    return () => {
+      removeEventListener('online', listener)
+      removeEventListener('offline', listener)
+    }
+  }, () => navigator.onLine)
 }
 
-export function MacIsIn({ cloud, onNext }: { cloud: Cloud; onNext: () => void }) {
-  const { state, done, total } = cloud.backup
-  const busy = state === 'backing_up'
-  return <Step art={<Hut mood="party" className="size-[96px]" />} title="OpenHut Cloud is on" line={<span className="inline-flex items-center gap-1.5"><Google />{cloud.email}</span>}
-    action={<Button type="button" variant="primary" className={PRIMARY} autoFocus onClick={onNext}>{cloud.kit ? 'Done' : 'Next'}</Button>}>
-    <div className="w-full max-w-[360px] text-left">
-      <Rows>
-        <Benefit icon={CloudUploadIcon} hue="blue" title={busy ? 'Backing up' : 'Backed up'} note={busy ? `${done} of ${total}` : 'Agents, chats and settings'} />
-        {!cloud.kit && <Benefit icon={Key01Icon} hue="amber" title="Next: recovery kit" note="Get back in if you lose this computer" />}
-      </Rows>
-    </div>
-  </Step>
+function Benefit({ icon, title }: { icon: typeof Key01Icon; title: string }) {
+  return <Row icon={<I icon={icon} size={20} className={icon === Key01Icon ? 'text-hue-amber' : 'text-hue-blue'} />} title={title} />
 }
 
 export function AllSet({ onDone }: { onDone: () => void }) {
@@ -121,23 +80,17 @@ export function AllSet({ onDone }: { onDone: () => void }) {
     action={<Button type="button" variant="primary" className={PRIMARY} autoFocus onClick={onDone}>Done</Button>}>
     <div className="w-full max-w-[360px] text-left">
       <Rows>
-        <Benefit icon={CloudUploadIcon} hue="blue" title="Backed up" />
-        <Benefit icon={Key01Icon} hue="amber" title="Recovery kit saved" />
+        <Benefit icon={CloudUploadIcon} title="Backed up" />
+        <Benefit icon={Key01Icon} title="Recovery kit saved" />
       </Rows>
     </div>
   </Step>
-}
-
-export function EnableCloud() {
-  if (isPhone()) return <span className="text-[13px] text-mute">Enable OpenHut Cloud on your computer.</span>
-  return <Button type="button" variant="secondary" className={`${PILL} gap-1.5`} onClick={enableCloud}><I icon={CloudIcon} size={14} />Enable cloud</Button>
 }
 
 type KitBridge = { save: (input: { name: string; body: string }) => Promise<{ canceled?: boolean; text?: string }> }
 const kitBridge: KitBridge | undefined = Reflect.get(window, 'openhut')?.kit
 type KitStep = 'save' | 'paste' | 'drop' | 'words' | 'type'
 const LINK = 'h-auto p-0 text-[12.5px] font-normal text-ink underline underline-offset-2'
-const BIG = 'mt-2 h-10 w-[240px] justify-center text-[14px]'
 
 export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () => void }) {
   const cloud = useCloud().data
@@ -187,7 +140,7 @@ export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () =>
   if (step === 'words' && kit) return <KitWords kit={kit} replaced={replaced} onBack={isPhone() ? onBack : () => go('save')} onSaved={() => go('type')} />
   if (step === 'type' && kit) return <ConfirmKit kit={kit} onBack={() => go('words')} onDone={onDone} />
   if (step === 'paste' || step === 'drop') return <KitCheck how={step} error={error} onText={check} onBack={() => go('save')} />
-  return <Step art={<Mascot kind="kit" size={96} alive />} title={old && !kit ? 'New recovery kit' : 'Recovery kit'} line="Get back in if you lose this computer. We can’t reset it." back={onBack}
+  return <Step art={<Mascot kind="kit" size={96} alive />} title={old && !kit ? 'New recovery kit' : 'Save your recovery kit'} line="If you ever lose every computer you use, this kit gets you back in. We can’t reset it for you." back={onBack}
     action={!young && <Button type="button" variant="primary" className={PRIMARY} disabled={make.isPending} onClick={() => run(isPhone() ? words : save)}>{isPhone() ? 'Show the words' : 'Save kit'}</Button>}>
     {old && !kit && <p className="m-0 font-medium text-ink">{cloud?.passkey ? 'The old kit and Touch ID stop working.' : 'The old kit stops working.'}</p>}
     {young && <p className="m-0 max-w-[420px] text-[12.5px] text-mute">This computer was added less than 3 days ago. Make a kit after {shortDate.format(new Date(young))}, or on an older one.</p>}

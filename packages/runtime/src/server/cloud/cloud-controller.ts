@@ -16,10 +16,6 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.post('/kits', SignedIn, async () => cloudService.newKit())
 
-  app.delete('/account', SignedIn, async () => cloudService.forget())
-
-  app.delete('/key-boxes', SignedIn, async () => cloudService.startOver())
-
   app.post<{ Body: UnlockCloud }>('/unlock', UnlockRequest, async (req) => cloudService.unlock(req.body))
 
   app.post<{ Body: AddRuntime }>('/runtimes', AddRuntimeRequest, async (req) => cloudService.addRuntime(req.body))

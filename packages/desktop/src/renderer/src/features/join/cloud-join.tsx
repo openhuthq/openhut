@@ -4,13 +4,10 @@ import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Hut } from '@/components/hut'
 import { RequestError } from '@/lib/api-client'
-import { nameOf, useCloud, useSignIn } from '@/features/cloud/api'
-import { Window } from '@/features/cloud/unlock'
-import { chooseWorkspace, useInvitePreview, useJoin, useWorkspaces } from '@/features/cloud/workspaces'
+import { nameOf } from '@/features/cloud/api'
+import { Window } from '@/features/cloud/step'
+import { chooseWorkspace, useGate, useInvitePreview, useJoin } from '@/features/cloud/workspaces'
 import { navigate, open } from '@/lib/router'
-import { toastError } from '@/lib/toast'
-import { isPhone } from '@/lib/native'
-import { HERE } from '@/features/settings/desktop'
 
 const LINK = 'https://openhut.dev/join'
 
@@ -24,25 +21,16 @@ function useHash() {
 export function CloudJoin() {
   const hash = useHash()
   const link = `${LINK}${hash}`
-  const cloud = useCloud().data
-  const signIn = useSignIn()
-  const { all } = useWorkspaces()
-  const on = cloud?.status === 'on' || cloud?.status === 'offline'
-  const joined = all.find((each) => each.id === hash.slice(1).split('.')[0])
-  const preview = useInvitePreview({ link, enabled: on && !joined })
+  const { cloud } = useGate()
+  const joined = cloud.workspaces.find((each) => each.id === hash.slice(1).split('.')[0])
+  const preview = useInvitePreview({ link, enabled: !joined })
   const join = useJoin()
   useEffect(() => {
     if (!joined) return
     chooseWorkspace(joined.id)
     navigate('/', true)
   }, [joined])
-  if (!cloud || joined) return null
-  if (!on) return <Window>
-    <Hut mood="party" className="size-[84px]" />
-    <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Join your team</h1>
-    <p className="m-0 max-w-[420px] text-[14px] text-body">{isPhone() ? `Enable OpenHut Cloud on your ${HERE} with the email the invite was sent to, then open the link again.` : 'Sign in with the email the invite was sent to.'}</p>
-    {!isPhone() && <Button type="button" variant="primary" className="mt-2 h-10 w-[300px] justify-center phone:h-12 phone:w-full gap-2" disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}><Google />Continue with Google</Button>}
-  </Window>
+  if (joined) return null
   const error = preview.error ?? join.error
   if (error) {
     const { title, body } = refusal({ error, email: cloud.email })

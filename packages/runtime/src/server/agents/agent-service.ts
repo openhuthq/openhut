@@ -232,6 +232,11 @@ export const agentService = {
     for (const row of rows) await agentService.applySynced({ id: row.id, value: null, author: { email: row.owner ?? me, role: 'owner' }, workspace, me })
   },
 
+  async wipe(): Promise<void> {
+    for (const { id } of await db.selectFrom('agent').select('id').execute()) await agentd.remove({ id, trash: true }).catch((err: unknown) => log.warn({ event: 'agent.wipe_failed', agent: id, error: messageOf(err) }))
+    await db.deleteFrom('agent').execute()
+  },
+
   async keepWorkspace(workspace: string): Promise<void> {
     await db.updateTable('agent').set({ workspace: null, owner: null, shared: false }).where('workspace', '=', workspace).execute()
   },
