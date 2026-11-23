@@ -1,6 +1,8 @@
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App } from '@/app/app'
+import { DEV_LABEL, DevPill } from '@/components/dev-pill'
+import hutDev from '@/hut-dev.svg'
 import { desktop } from '@/features/settings/desktop'
 import { RequestError } from '@/lib/api-client'
 import { followEnrollments } from '@/features/computers/enroll'
@@ -27,5 +29,9 @@ addEventListener('pointerdown', () => { document.documentElement.dataset.pointer
 addEventListener('keydown', (event) => { if (event.key === 'Tab') delete document.documentElement.dataset.pointer }, true)
 followEvents(client)
 document.body.insertAdjacentHTML('afterbegin', sprite)
+if (DEV_LABEL) {
+  document.title = 'OpenHut Dev'
+  document.querySelector<HTMLLinkElement>('link[rel=icon]')?.setAttribute('href', hutDev)
+}
 const root = document.getElementById('root')
-if (root) createRoot(root).render(<QueryClientProvider client={client}><App /></QueryClientProvider>)
+if (root) createRoot(root).render(<QueryClientProvider client={client}><App /><DevPill /></QueryClientProvider>)

@@ -51,7 +51,7 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
 
 function Card({ children }: { children: ReactNode }) {
   return <div className="flex h-dvh flex-col bg-canvas text-ink">
-    <div className={cn('flex h-[52px] shrink-0 items-center justify-center text-[13px] font-semibold text-mute', DRAG)}>OpenHut</div>
+    <div className={cn('flex h-[52px] shrink-0 items-center justify-center text-[13px] font-semibold text-mute', DRAG)}>{document.title}</div>
     <div className="flex flex-1 items-center justify-center px-6 pb-12">
       <div className="flex h-[min(560px,100%)] w-full max-w-[520px] flex-col overflow-hidden rounded-xl border border-hair bg-card">{children}</div>
     </div>

@@ -82,9 +82,15 @@ npm run dev
 `npm run dev` starts agentd with native agents (real Hermes processes, as on the Mac app; they need the bundled runtime:
 `npm -w @openhut/desktop run pack-backend`, which needs `uv`), the server API on 127.0.0.1:8787 with `.data`, the real model
 and real outside services (connect Claude in Settings), the dev key `dev` enrolled, and Vite for the renderer with `/api` proxied to it with
-`Authorization: Bearer dev`. Open `http://localhost:5173`. Port 8787 taken (Docker or another checkout)? `PORT=8797 npm run dev` moves the API and Vite's proxy; Vite picks the next free port itself. Another checkout's `npm run dev` already running? Also set `OPENHUT_GATEWAY_PORT` (8081). `node scripts/seed-ui.ts` (on a fresh `.data`) fills in sample
-agents and connections. The desktop app itself: `npm -w @openhut/desktop run build && npm -w @openhut/desktop start`. It keeps
-its data in `~/Library/Application Support/OpenHut Dev`, apart from the installed app's `OpenHut`.
+`Authorization: Bearer dev`. It also runs the cloud locally, never production: the API from `private/api` (PGlite, dev sign-in)
+and the Worker from `private/cloud` (D1 migrations applied), so it needs `private/` and fails without it unless
+`OPENHUT_CLOUD_URL`/`OPENHUT_API_URL` name a cloud. Dev ports (API 8797, gateway 8091, Worker 8790, cloud API 8792) step
+to the next free one, so it runs beside the installed app and other checkouts; it prints the URLs and the sign-in account
+(mo@example.com). Ctrl-C stops everything; `npm run dev:reset` wipes `.data`. `node scripts/seed-ui.ts` (on a fresh `.data`) fills in sample
+agents and connections. The desktop app itself: `npm -w @openhut/desktop run build && npm -w @openhut/desktop start`.
+Every dev run (unpackaged, `OPENHUT_TEST_HOME`, or `npm -w @openhut/desktop run dist:dev`, app id `dev.openhut.app.dev`) is
+"OpenHut Dev": DEV icon and pill, `~/Library/Application Support/OpenHut Dev`, `openhut-dev://`, gateway 8091, the local cloud
+(`packages/desktop/src/dev-build.mjs`), and no updates from the release feed (an `OPENHUT_TEST_HOME` run still updates, for the update tests).
 
 ## Build the desktop app
 

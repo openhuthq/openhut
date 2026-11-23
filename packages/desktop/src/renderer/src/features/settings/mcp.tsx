@@ -4,10 +4,13 @@ import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import type { BrandName } from '@/components/brand-icons'
 import { PILL } from '@/components/kit'
+import { DEV_LABEL } from '@/components/dev-pill'
 import { useComputers } from '@/features/computers/api'
 import { desktop } from '@/features/settings/desktop'
 import { Command, Intro } from '@/features/settings/kit'
 import { cn } from '@/lib/utils'
+
+const NAME = DEV_LABEL ? 'openhut-dev' : 'openhut'
 
 export function McpSettings() {
   const bridge = desktop?.mcp
@@ -17,8 +20,8 @@ export function McpSettings() {
   return <>
     <Intro>Manage your agents from Claude Code, Codex or Cursor. One setup covers every computer you added.</Intro>
     <div className="flex flex-col gap-1">
-      <Client brand="claude" name="Claude Code"><Command text={`claude mcp add openhut -- ${command}`} /></Client>
-      <Client brand="codex" name="Codex"><Command text={`codex mcp add openhut -- ${command}`} /></Client>
+      <Client brand="claude" name="Claude Code"><Command text={`claude mcp add ${NAME} -- ${command}`} /></Client>
+      <Client brand="codex" name="Codex"><Command text={`codex mcp add ${NAME} -- ${command}`} /></Client>
       <Client brand="cursor" name="Cursor">
         <a href={cursorLink(bridge)} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Add to Cursor</a>
       </Client>
@@ -35,5 +38,5 @@ function Client({ brand, name, children }: { brand: BrandName; name: string; chi
 }
 
 function cursorLink(bridge: { command: string; args: string[] }) {
-  return `cursor://anysphere.cursor-deeplink/mcp/install?name=openhut&config=${encodeURIComponent(btoa(JSON.stringify(bridge)))}`
+  return `cursor://anysphere.cursor-deeplink/mcp/install?name=${NAME}&config=${encodeURIComponent(btoa(JSON.stringify(bridge)))}`
 }

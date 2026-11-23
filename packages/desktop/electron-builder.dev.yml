@@ -1,0 +1,9 @@
+extends: ./electron-builder.yml
+appId: dev.openhut.app.dev
+productName: OpenHut Dev
+extraMetadata: { productName: OpenHut Dev }
+directories: { output: release-dev }
+protocols: { name: OpenHut Dev, schemes: [openhut-dev] }
+mac: { icon: build/icon-dev.icns }
+dmg: { title: OpenHut Dev }
+publish: null

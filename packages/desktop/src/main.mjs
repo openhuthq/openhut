@@ -12,6 +12,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import updater from 'electron-updater'
 import WebSocket from 'ws'
+import { DEV_NAME, devBuild, devCloud, devLabel } from './dev-build.mjs'
 import { inviteLink } from './invite-link.mjs'
 import { linkPath } from './open-link.mjs'
 import { cosigned, RELEASE_KEY } from './release-key.mjs'
@@ -23,14 +24,19 @@ const WIN = process.platform === 'win32'
 if (WIN) process.env.NODE_PENDING_PIPE_INSTANCES ??= '64'
 const CONTAINER = (!MAC && !WIN) || process.env.OPENHUT_SANDBOX === 'gvisor'
 process.umask(0o022)
-app.setName(DEV ? 'OpenHut Dev' : 'OpenHut')
 const TEST_HOME = process.env.OPENHUT_TEST_HOME
-if (DEV) app.setPath('userData', join(app.getPath('appData'), 'OpenHut Dev'))
+const RELEASE_FEED = app.getName() !== DEV_NAME
+const LOOKS_DEV = devBuild({ packaged: app.isPackaged, name: app.getName(), testHome: TEST_HOME })
+const NAME = LOOKS_DEV ? DEV_NAME : 'OpenHut'
+const SCHEME = LOOKS_DEV ? 'openhut-dev' : 'openhut'
+const CLOUD = LOOKS_DEV ? devCloud(process.env) : {}
+app.setName(NAME)
+if (LOOKS_DEV) app.setPath('userData', join(app.getPath('appData'), 'OpenHut Dev'))
 if (TEST_HOME) app.setPath('userData', TEST_HOME)
-app.setAppLogsPath(TEST_HOME ? join(TEST_HOME, 'logs') : DEV && MAC ? join(app.getPath('home'), 'Library/Logs/OpenHut Dev') : undefined)
+app.setAppLogsPath(TEST_HOME ? join(TEST_HOME, 'logs') : LOOKS_DEV && MAC ? join(app.getPath('home'), 'Library/Logs/OpenHut Dev') : undefined)
 const MCP_BRIDGE = process.argv.includes('--mcp')
 if (!MCP_BRIDGE && !app.requestSingleInstanceLock()) app.exit(0)
-if (!MCP_BRIDGE && !DEV) app.setAsDefaultProtocolClient('openhut')
+if (!MCP_BRIDGE && !DEV) app.setAsDefaultProtocolClient(SCHEME)
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '../../..')
@@ -40,7 +46,7 @@ const SCRIPTS = DEV
   : { agentd: 'packages/runtime/src/agentd/agentd.mjs', server: 'packages/runtime/src/server/platform/app.mjs' }
 const RUNTIME = process.env.AGENTD_HERMES ?? join(BACKEND, DEV ? 'packages/desktop/dist/backend/runtime' : 'runtime')
 const NATIVE_CLAUDE = join(BACKEND, DEV ? 'packages/desktop/dist/backend/bin/native' : 'bin/native', WIN ? 'claude.exe' : 'claude')
-const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
+const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? (LOOKS_DEV ? 8091 : 8081))
 const HOME = app.getPath('userData')
 const BRIDGE = join(HOME, 'bin/openhut-mcp')
 const ASSETS = DEV ? ROOT : join(HOME, 'assets', app.getVersion())
@@ -94,7 +100,7 @@ let tray
 let blocker
 let setup
 let booted
-let linked = linkPath(process.argv.find((arg) => arg.startsWith('openhut:')))
+let linked = ownLink(process.argv.find((arg) => arg.startsWith(`${SCHEME}:`)))
 let fresh = false
 let opened = false
 let fetching = null
@@ -314,7 +320,7 @@ function setPrefs(patch) {
     if (name === 'openAtLogin') openAtLogin(on)
     else writeFileSync(PREFS, JSON.stringify({ ...prefs(), [name]: on }))
   }
-  if (!DEV && known.some(([name]) => name === 'betaUpdates')) checkForUpdate()
+  if (!DEV && RELEASE_FEED && known.some(([name]) => name === 'betaUpdates')) checkForUpdate()
   refresh().catch(() => undefined)
   return prefsNow()
 }
@@ -438,7 +444,7 @@ function trayMenu({ agents }) {
 
 async function setAll({ agents, wanted }) {
   await Promise.all(agents.filter((agent) => agent.wanted !== wanted).map((agent) => api(`/api/agents/${encodeURIComponent(agent.id)}`, { method: 'PATCH', body: { wanted } })))
-    .catch((error) => notify({ title: 'OpenHut', body: error.message }))
+    .catch((error) => notify({ title: NAME, body: error.message }))
   main?.webContents.send('changed')
   await refresh().catch(() => undefined)
 }
@@ -469,7 +475,8 @@ function webHeaders(headers) {
 function watch() {
   if (MAC) {
     tray = new Tray(join(HERE, 'trayTemplate.png'))
-    tray.setToolTip('OpenHut')
+    tray.setToolTip(NAME)
+    if (LOOKS_DEV) tray.setTitle('Dev')
   }
   followEvents()
 }
@@ -584,7 +591,7 @@ async function boot() {
   if (CONTAINER) return bootContainer()
   keepData()
   await assets()
-  const shared = { OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_BIN: dirname(NATIVE_CLAUDE) }
+  const shared = { ...CLOUD, OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_BIN: dirname(NATIVE_CLAUDE) }
   if (!PIPES) rmSync(SOCK, { force: true })
   start('agentd', { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT) })
   await waitFor(() => listening(SOCK), 30)
@@ -699,10 +706,10 @@ function savedBounds() {
 
 function window(path = '/agents') {
   const win = new BrowserWindow({
-    width: 1280, height: 820, ...savedBounds(), minWidth: 900, minHeight: 600, show: false, title: 'OpenHut',
+    width: 1280, height: 820, ...savedBounds(), minWidth: 900, minHeight: 600, show: false, title: NAME,
     ...(MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 18 } } : { autoHideMenuBar: true }),
     backgroundColor: CANVAS,
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-mcp=${JSON.stringify(bridgeCommand())}`, `--openhut-version=${app.getVersion()}`] },
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-mcp=${JSON.stringify(bridgeCommand())}`, `--openhut-version=${app.getVersion()}`, ...(LOOKS_DEV ? [`--openhut-dev=${devLabel(CLOUD.OPENHUT_CLOUD_URL)}`] : [])] },
   })
   win.on('close', saveBounds)
   win.once('ready-to-show', () => win.show())
@@ -716,8 +723,12 @@ function saveBounds() {
 }
 
 
+function ownLink(url) {
+  return url?.startsWith(`${SCHEME}:`) ? linkPath(url.replace(SCHEME, 'openhut')) : undefined
+}
+
 function openLink(url) {
-  linked = linkPath(url)
+  linked = ownLink(url)
   if (linked && opened) show(linked)
 }
 
@@ -754,7 +765,7 @@ function guard(contents) {
 
 function menu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    MAC ? { label: 'OpenHut', submenu: [
+    MAC ? { label: NAME, submenu: [
       { role: 'about' }, { type: 'separator' },
       { label: 'Settings…', accelerator: 'CommandOrControl+,', click: () => show('/settings/general') }, { type: 'separator' },
       { role: 'services' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' },
@@ -770,7 +781,7 @@ function menu() {
       ...(MAC ? [] : [{ type: 'separator' }, { role: 'about' }]),
     ] },
   ]))
-  app.setAboutPanelOptions({ applicationName: 'OpenHut', applicationVersion: app.getVersion(), version: '', copyright: 'Copyright © 2026 OpenHut', credits: 'openhut.dev' })
+  app.setAboutPanelOptions({ applicationName: NAME, applicationVersion: app.getVersion(), version: '', copyright: 'Copyright © 2026 OpenHut', credits: 'openhut.dev' })
 }
 
 function updateState() {
@@ -954,7 +965,7 @@ app.on('before-quit', (event) => {
 })
 
 app.whenReady().then(async () => {
-  if (DEV) app.dock?.setIcon(join(HERE, '../build/icon.png'))
+  if (LOOKS_DEV) app.dock?.setIcon(join(HERE, 'icon-dev.png'))
   menu()
   protocol.handle('app', serve)
   if (CONTAINER && !await dockerUp()) {
@@ -986,10 +997,10 @@ app.whenReady().then(async () => {
   opened = true
   watch()
   serveMcp().catch((error) => appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't serve ${MCP_SOCK}: ${error.message}\n`))
-  if (!DEV) update()
+  if (!DEV && RELEASE_FEED) update()
   app.on('activate', () => show())
   app.on('second-instance', (_event, argv) => {
-    const url = argv.find((arg) => arg.startsWith('openhut:'))
+    const url = argv.find((arg) => arg.startsWith(`${SCHEME}:`))
     if (url) openLink(url)
     else show()
   })

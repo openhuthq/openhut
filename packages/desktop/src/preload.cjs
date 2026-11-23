@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('openhut', {
   platform: process.platform,
   mcp: JSON.parse(process.argv.find((arg) => arg.startsWith('--openhut-mcp='))?.slice('--openhut-mcp='.length) ?? 'null') ?? undefined,
+  dev: process.argv.find((arg) => arg.startsWith('--openhut-dev='))?.slice('--openhut-dev='.length),
   version: process.argv.find((arg) => arg.startsWith('--openhut-version='))?.slice('--openhut-version='.length),
   tailnet: () => ipcRenderer.invoke('tailnet'),
   machine: () => ipcRenderer.invoke('machine'),

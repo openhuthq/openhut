@@ -1,6 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, rmSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 
@@ -9,19 +10,35 @@ const SOCK = `${DATA}/agentd.sock`
 const BACKEND = resolve('packages/desktop/dist/backend')
 const RUNTIME = `${BACKEND}/runtime`
 const BIN = `${BACKEND}/bin/native`
-const CLOUD_PORT = process.env.OPENHUT_CLOUD_PORT ?? '8790'
-const LOCAL_CLOUD = !process.env.OPENHUT_CLOUD_URL && existsSync('private/cloud/package.json')
-const CLOUD_URL = process.env.OPENHUT_CLOUD_URL ?? (LOCAL_CLOUD ? `http://127.0.0.1:${CLOUD_PORT}` : undefined)
-const shared = { ...process.env, OPENHUT_BIN: BIN, AGENTD_HERMES: RUNTIME, AGENTD_SOCK: SOCK, ...CLOUD_URL && { OPENHUT_CLOUD_URL: CLOUD_URL } }
+const taken = new Set<number>()
+const PORT = await freePort(Number(process.env.PORT ?? 8797))
+const GATEWAY_PORT = await freePort(Number(process.env.OPENHUT_GATEWAY_PORT ?? 8091))
+const REMOTE_CLOUD = process.env.OPENHUT_CLOUD_URL
+const LOCAL_CLOUD = !REMOTE_CLOUD
+
+if (LOCAL_CLOUD && !existsSync('private/cloud/node_modules') || LOCAL_CLOUD && !existsSync('private/api/node_modules')) {
+  console.error('npm run dev runs the cloud locally from private/ (private/cloud and private/api), and they aren\'t checked out and installed here. Run npm install with access to openhuthq/openhut-private, or set OPENHUT_CLOUD_URL and OPENHUT_API_URL to a cloud you mean to use.')
+  process.exit(1)
+}
+const CLOUD_PORT = LOCAL_CLOUD ? await freePort(Number(process.env.OPENHUT_CLOUD_PORT ?? 8790)) : 0
+const API_PORT = LOCAL_CLOUD ? await freePort(Number(process.env.OPENHUT_API_PORT ?? 8792)) : 0
+const CLOUD_URL = REMOTE_CLOUD ?? `http://127.0.0.1:${CLOUD_PORT}`
+const API_URL = process.env.OPENHUT_API_URL ?? (LOCAL_CLOUD ? `http://127.0.0.1:${API_PORT}` : 'https://api.openhut.dev')
+const LABEL = LOCAL_CLOUD ? 'Dev · local cloud' : `Dev · ${new URL(CLOUD_URL).hostname}`
+const shared = { ...process.env, PORT: String(PORT), OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_BIN: BIN, AGENTD_HERMES: RUNTIME, AGENTD_SOCK: SOCK, OPENHUT_CLOUD_URL: CLOUD_URL, OPENHUT_API_URL: API_URL }
 
 if (!existsSync(RUNTIME)) console.warn(`No agent runtime at ${RUNTIME}, so agents won't start. Run npm -w @openhut/desktop run pack-backend (needs uv).`)
-if (!CLOUD_URL) console.warn('No private/cloud and no OPENHUT_CLOUD_URL, so sign-in goes to cloud.openhut.dev.')
 const children: ChildProcess[] = []
 if (LOCAL_CLOUD) {
   const state = `${DATA}/cloud`
   const wrangler = { cwd: 'private/cloud', env: { ...process.env, CI: '1', WRANGLER_SEND_METRICS: 'false' } }
-  spawnSync('node_modules/.bin/wrangler', ['d1', 'migrations', 'apply', 'openhut-stats', '--local', '--persist-to', state], { ...wrangler, stdio: 'ignore' })
-  children.push(spawn('npm', ['run', 'dev', '--', '--port', CLOUD_PORT, '--inspector-port', '0', '--persist-to', state, '--var', `AUTH_URL:${CLOUD_URL}`, '--show-interactive-dev-session=false', '--log-level', 'warn'], { ...wrangler, stdio: 'inherit' }))
+  const migrated = spawnSync('node_modules/.bin/wrangler', ['d1', 'migrations', 'apply', 'openhut-stats', '--local', '--persist-to', state], { ...wrangler, encoding: 'utf8' })
+  if (migrated.status !== 0) {
+    console.error(`Couldn't apply the local D1 migrations:\n${migrated.stdout}${migrated.stderr}`)
+    process.exit(1)
+  }
+  children.push(spawn('npm', ['run', 'dev', '--', '--port', String(CLOUD_PORT), '--inspector-port', '0', '--persist-to', state, '--var', `AUTH_URL:${CLOUD_URL}`, '--show-interactive-dev-session=false', '--log-level', 'warn'], { ...wrangler, stdio: 'inherit' }))
+  children.push(spawn(process.execPath, ['src/server.ts'], { cwd: 'private/api', env: { ...process.env, PORT: String(API_PORT), OPENHUT_API_DATA: `${DATA}/api`, DEV_SIGN_IN: '1' }, stdio: 'inherit' }))
 }
 rmSync(SOCK, { force: true })
 const agentd = spawn(process.execPath, ['packages/runtime/src/agentd/agentd.ts'], { env: { ...shared, OPENHUT_SANDBOX: 'native', AGENTD_DATA: `${DATA}/agentd` }, stdio: 'inherit' })
@@ -30,13 +47,35 @@ const app = spawn(process.execPath, ['--env-file-if-exists=.env', 'packages/runt
   env: { ...shared, OPENHUT_DATA: DATA, OPENHUT_AGENT_HOST_NET: '1', OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update('dev').digest('hex') },
   stdio: 'inherit',
 })
-const vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'packages/desktop/src/renderer'], { stdio: 'inherit' })
+const vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'packages/desktop/src/renderer'], { env: { ...shared, VITE_OPENHUT_DEV: LABEL }, stdio: 'inherit' })
 children.push(agentd, app, vite)
-console.log(`Open http://localhost:5173 (Vite sends the dev key, \`Authorization: Bearer dev\`).${LOCAL_CLOUD ? ` Sign-in goes to the dev cloud on ${CLOUD_URL}, which lists test emails instead of Google.` : ''} \`node scripts/seed-ui.ts\` signs in and adds sample agents and connections.`)
-for (const child of children) {
-  child.on('exit', (code) => {
-    process.exitCode ??= code ?? 0
-    for (const each of children) each.kill()
-    process.exit()
-  })
+console.log([
+  '',
+  `OpenHut Dev (${LABEL})`,
+  '  App      http://localhost:5173 (or the next free port Vite prints), with the dev key',
+  `  Runtime  http://127.0.0.1:${PORT}, gateway on ${GATEWAY_PORT}, data in ${DATA}`,
+  `  Cloud    ${CLOUD_URL} (Worker: relay, /v1), API ${API_URL}`,
+  LOCAL_CLOUD ? '  Sign in  pick mo@example.com on the dev sign-in page (no Google)' : '  Sign in  with the cloud above',
+  '  Reset    npm run dev:reset wipes .data (runtime, local cloud DB, D1). Ctrl-C stops everything.',
+  '',
+].join('\n'))
+for (const child of children) child.on('exit', (code) => stop(code ?? 0))
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => stop(0))
+
+function stop(code: number) {
+  process.exitCode ??= code
+  for (const each of children) each.kill()
+  process.exit()
+}
+
+async function freePort(from: number): Promise<number> {
+  for (let port = from; ; port++) {
+    if (taken.has(port)) continue
+    const free = await new Promise<boolean>((done) => {
+      const probe = createServer().once('error', () => done(false)).listen(port, '127.0.0.1', () => probe.close(() => done(true)))
+    })
+    if (!free) continue
+    taken.add(port)
+    return port
+  }
 }

@@ -16,5 +16,5 @@ test('the app registers the openhut scheme, so an invite link on openhut.dev/joi
   const config = readFileSync(join(desktop, 'electron-builder.yml'), 'utf8')
   const main = readFileSync(join(desktop, 'src/main.mjs'), 'utf8')
   assert.match(config, /^protocols: \[\{ name: OpenHut, schemes: \[openhut\] \}\]$/m)
-  for (const hook of ["setAsDefaultProtocolClient('openhut')", "app.on('open-url'", "app.on('second-instance', (_event, argv)"]) assert.ok(main.includes(hook), hook)
+  for (const hook of ["const SCHEME = LOOKS_DEV ? 'openhut-dev' : 'openhut'", 'setAsDefaultProtocolClient(SCHEME)', "app.on('open-url'", "app.on('second-instance', (_event, argv)"]) assert.ok(main.includes(hook), hook)
 })
