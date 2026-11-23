@@ -56,7 +56,7 @@ export function renderFiles({ agent, ownerName, token, channelKey, channels, con
   const env = [
     `API_SERVER_KEY=${channelKey}`, ...(config.agentHostNet ? ['API_SERVER_HOST=127.0.0.1', `API_SERVER_PORT=${AGENT_API_PORT_BASE + agent.net}`] : ['API_SERVER_HOST=0.0.0.0', 'API_SERVER_PORT=8642']), `OPENHUT_GATEWAY=${gateway}`, `OPENHUT_AGENT_TOKEN=${token}`,
     ...(config.modelMode === 'test' ? [] : setups.flatMap((setup) => setup.env)),
-    ...channels.flatMap((channel) => envOf({ channel, token })),
+    ...channels.flatMap((channel) => envOf({ channel, token, gateway })),
   ].join('\n') + '\n'
   const auth = config.modelMode === 'claude' ? setups.find((setup) => setup.auth)?.auth ?? EMPTY_AUTH : EMPTY_AUTH
   return { 'config.yaml': yaml, '.env': env, 'SOUL.md': `${agent.instructions}\n${connectedApps(connections)}${agent.web_browser ? BROWSER_NOTE : ''}${ASK_PROMPT}${CARD_PROMPT}`, 'auth.json': `${JSON.stringify(auth)}\n` }
@@ -105,9 +105,9 @@ function yamlOf({ channel, gateway, net }: { channel: RenderedChannel; gateway: 
   }
 }
 
-function envOf({ channel, token }: { channel: RenderedChannel; token: string }): string[] {
+function envOf({ channel, token, gateway }: { channel: RenderedChannel; token: string; gateway: string }): string[] {
   switch (channel.kind) {
-    case 'slack': return slack.env({ botToken: channel.botToken, appToken: channel.appToken, channels: channel.audience.allowed })
+    case 'slack': return slack.env({ token, gateway, channels: channel.audience.allowed })
     case 'telegram': return telegram.env({ botToken: token, audience: channel.audience })
     case 'discord': return discord.env({ botToken: channel.botToken, channels: channel.audience.allowed })
     case 'whatsapp': return whatsapp.env(channel.audience)
@@ -115,7 +115,7 @@ function envOf({ channel, token }: { channel: RenderedChannel; token: string }):
 }
 
 export type RenderedChannel =
-  | { kind: Extract<ChannelKind, 'slack'>; audience: Audience; botToken: string; appToken: string }
+  | { kind: Extract<ChannelKind, 'slack'>; audience: Audience }
   | { kind: Extract<ChannelKind, 'telegram'>; audience: Audience }
   | { kind: Extract<ChannelKind, 'discord'>; audience: Audience; botToken: string }
   | { kind: Extract<ChannelKind, 'whatsapp'>; audience: Audience }

@@ -6,6 +6,7 @@ import { config } from '../platform/config.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import type { GatewayAgent } from '../agents/agent-service.ts'
 import { channelService } from '../channels/channel-service.ts'
+import { STAND_IN } from '../integrations/slack/slack.ts'
 import { providers } from '../models/providers/index.ts'
 
 const IDLE_MS = 120_000
@@ -20,7 +21,7 @@ export type Upstream = {
   name: string
   origin: string
   allow: (req: { method: string; path: string }) => boolean
-  credential: (agent: GatewayAgent) => Promise<string>
+  credential: (agent: GatewayAgent, incoming: IncomingHttpHeaders) => Promise<string>
   apply: (req: { out: Outgoing; secret: string }) => void
   observe?: (headers: Headers) => void
 }
@@ -39,6 +40,20 @@ export const upstreams = new Map<string, Upstream>([
     credential: (agent) => channelService.telegramToken({ agentId: agent.id }),
     apply: ({ out, secret }) => { out.path = out.path.replace(/^(\/(?:file\/)?bot)[^/]+/, `$1${secret}`) },
   }],
+  ['slack', {
+    name: 'slack',
+    origin: new URL(config.slackApi).origin,
+    allow: ({ path }) => /^\/api\/[a-z]+(?:\.[a-zA-Z]+)+$/.test(path),
+    credential: (agent, incoming) => channelService.slackToken({ agentId: agent.id, app: String(incoming.authorization ?? '').startsWith(`Bearer ${STAND_IN.app}`) }),
+    apply: ({ out, secret }) => { out.headers.set('authorization', `Bearer ${secret}`) },
+  }],
+  ['slackfiles', {
+    name: 'slackfiles',
+    origin: config.slackFiles,
+    allow: ({ method, path }) => method === 'GET' && /^\/files-(?:pri|tmb)\//.test(path),
+    credential: (agent) => channelService.slackToken({ agentId: agent.id }),
+    apply: ({ out, secret }) => { out.headers.set('authorization', `Bearer ${secret}`) },
+  }],
 ])
 
 export const brokerService = {
@@ -52,7 +67,7 @@ export const brokerService = {
       throw new HttpError(403, `The gateway doesn't pass ${tool} through.`)
     }
     const out = { path, headers: forwardable(req.headers) }
-    upstream.apply({ out, secret: await upstream.credential(agent) })
+    upstream.apply({ out, secret: await upstream.credential(agent, req.headers) })
     const status = await relay({ url: new URL(upstream.origin + out.path), method, headers: out.headers, req, res, idleMs, observe: upstream.observe })
       .catch(async (err: unknown) => {
         await audit({ agent, tool, reason: messageOf(err).slice(0, 200), outcome: 'failed', started })

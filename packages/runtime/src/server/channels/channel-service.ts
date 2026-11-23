@@ -127,9 +127,11 @@ export const channelService = {
     return TelegramSecrets.parse(JSON.parse(unseal(row.secrets))).botToken
   },
 
-  async slackToken({ agentId }: { agentId: string }): Promise<string | undefined> {
+  async slackToken({ agentId, app = false }: { agentId: string; app?: boolean }): Promise<string> {
     const row = await db.selectFrom('channel').selectAll().where('agent_id', '=', agentId).where('kind', '=', 'slack').executeTakeFirst()
-    return row && slackSecrets(row).botToken
+    if (!row) throw new HttpError(409, 'This agent has no Slack app. Connect one on its page first.')
+    const secrets = slackSecrets(row)
+    return app ? secrets.appToken : secrets.botToken
   },
 
   async conversations({ id }: { actor: Caller; id: string }): Promise<Conversation[]> {
