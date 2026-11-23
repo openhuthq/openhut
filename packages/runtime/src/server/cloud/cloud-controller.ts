@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import * as z from 'zod/mini'
-import { AddPasskey, ChangeRole, DeviceKey, SetHere, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
+import { AddPasskey, ApproveRequest, ChangeRole, DenyRequestQuery, DeviceKey, SetHere, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
 import { requireSignIn } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
 import { presence } from './presence.ts'
@@ -50,9 +50,11 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.post<{ Params: { id: string } }>('/workspaces/:id/keys', SignedIn, async (req) => cloudService.changeKeys({ workspace: req.params.id }))
 
-  app.post<{ Params: { id: string; device: string } }>('/workspaces/:id/requests/:device/approvals', SignedIn, async (req) => cloudService.approve({ workspace: req.params.id, device: req.params.device }))
+  app.post<{ Params: { id: string; device: string }; Body: ApproveRequest }>('/workspaces/:id/requests/:device/approvals', ApproveRequestRequest, async (req) => cloudService.approve({ workspace: req.params.id, device: req.params.device, faces: req.body?.faces }))
 
-  app.delete<{ Params: { id: string; device: string } }>('/workspaces/:id/requests/:device', SignedIn, async (req) => cloudService.deny({ workspace: req.params.id, device: req.params.device }))
+  app.post<{ Params: { id: string; device: string } }>('/workspaces/:id/requests/:device/reviews', SignedIn, async (req) => cloudService.review({ workspace: req.params.id, device: req.params.device }))
+
+  app.delete<{ Params: { id: string; device: string }; Querystring: DenyRequestQuery }>('/workspaces/:id/requests/:device', DenyRequestRequest, async (req) => cloudService.deny({ workspace: req.params.id, device: req.params.device, why: req.query.why }))
 
   app.patch<{ Params: { id: string; email: string }; Body: ChangeRole }>('/workspaces/:id/members/:email', RoleRequest, async (req) => cloudService.setRole({ workspace: req.params.id, email: req.params.email, role: req.body.role }))
 }
@@ -65,3 +67,5 @@ const PasskeyRequest = { onRequest: requireSignIn, schema: { body: AddPasskey } 
 const UpdateRequest = { onRequest: requireSignIn, schema: { body: UpdateWorkspace } }
 const RoleRequest = { onRequest: requireSignIn, schema: { body: ChangeRole } }
 const HereRequest = { onRequest: requireSignIn, schema: { body: SetHere } }
+const ApproveRequestRequest = { onRequest: requireSignIn, schema: { body: z.optional(ApproveRequest) } }
+const DenyRequestRequest = { onRequest: requireSignIn, schema: { querystring: DenyRequestQuery } }

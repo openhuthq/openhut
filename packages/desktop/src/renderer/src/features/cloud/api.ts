@@ -78,7 +78,7 @@ export function usePasskeyUnlock() {
 export function useAddPasskey() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: async (email: string) => request({ schema: Cloud, computer: 'local', path: '/api/cloud/passkeys', method: 'POST', body: { prf: await passkeyPrf({ create: { email } }) } }),
+    mutationFn: async (email: string | null) => request({ schema: Cloud, computer: 'local', path: '/api/cloud/passkeys', method: 'POST', body: { prf: await passkeyPrf(email ? { create: { email } } : {}) } }),
     onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
   })
 }

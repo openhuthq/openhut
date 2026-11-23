@@ -1,4 +1,4 @@
-import { app, autoUpdater as squirrel, BrowserWindow, clipboard, crashReporter, dialog, ipcMain, Menu, net, Notification, powerSaveBlocker, protocol, safeStorage, screen, shell, Tray, utilityProcess } from 'electron'
+import { app, autoUpdater as squirrel, BrowserWindow, clipboard, crashReporter, dialog, ipcMain, Menu, net, Notification, powerSaveBlocker, protocol, safeStorage, screen, shell, systemPreferences, Tray, utilityProcess } from 'electron'
 import { execFile, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer, request } from 'node:http'
@@ -174,6 +174,7 @@ handle('passkey.status', () => passkey(['status']))
 handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
 handle('passkey.open', ({ quiet } = {}) => passkey(quiet ? ['open', '--quiet'] : ['open']))
 handle('passkey.cancel', () => { passkeyRun?.kill() })
+handle('touchid.prompt', ({ reason } = {}) => process.platform !== 'darwin' ? { ok: true } : systemPreferences.promptTouchID(String(reason)).then(() => ({ ok: true }), (error) => ({ ok: /not available|not enrolled|no identities/i.test(error.message), error: error.message })))
 handle('cloud.notify', ({ title = 'Unlock OpenHut', body = 'Bring your agents and chats to this computer.', path = '/' } = {}) => new Promise((resolve) => {
   if (!Notification.isSupported()) return resolve({ shown: false })
   const note = new Notification({ title: String(title), body: String(body) })

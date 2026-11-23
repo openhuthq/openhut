@@ -3,6 +3,7 @@ import * as z from 'zod/mini'
 import { type DeviceRequest, parseJson, siteHost } from '@openhut/common/cloud/cloud.ts'
 import { Forwarded, Notice, Ready } from '@openhut/common/cloud/v1/events.ts'
 import { JoinRequest } from '@openhut/common/cloud/v1/trust.ts'
+import { commitOf, facesOf } from '@openhut/common/cloud/faces.ts'
 import { anchorOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
 import { padded } from '@openhut/common/records/seal.ts'
 import { Collection } from '@openhut/common/records/wire.ts'
@@ -207,7 +208,7 @@ async function refreshName(ws: string): Promise<void> {
 async function refreshRequests(ws: string): Promise<void> {
   const before = JSON.stringify(requests.get(ws) ?? [])
   const asked = Requests.safeParse((await keysService.call({ method: 'GET', path: `/v1/join-requests?workspace=${ws}` })).json).data?.data ?? []
-  requests.set(ws, asked.filter((each) => each.asked).map((each) => ({ device: each.id, email: each.email, at: each.at, name: each.name, os: each.os, server: each.server })))
+  requests.set(ws, asked.filter((each) => each.asked).map((each) => ({ device: each.id, email: each.email, at: each.at, name: each.name, os: each.os, server: each.server, checked: Boolean(each.commit), reviewed: each.reviewed, faces: each.commit && each.nonce && commitOf({ device: each.id, nonce: each.nonce }) === each.commit ? facesOf({ device: each.id, nonce: each.nonce }) : null })))
   if (JSON.stringify(requests.get(ws)) !== before) emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
 }
 

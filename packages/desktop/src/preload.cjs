@@ -32,6 +32,9 @@ contextBridge.exposeInMainWorld('openhut', {
     open: (input) => ipcRenderer.invoke('passkey.open', input),
     cancel: () => ipcRenderer.invoke('passkey.cancel'),
   },
+  touchId: {
+    prompt: (reason) => ipcRenderer.invoke('touchid.prompt', { reason }),
+  },
   kit: {
     save: (input) => ipcRenderer.invoke('kit.save', input),
   },
