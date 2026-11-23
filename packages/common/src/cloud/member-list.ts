@@ -46,7 +46,7 @@ export async function nextOf({ list, body, me }: { list: MemberList; body: Membe
 
 export function withoutDevices({ body, gone }: { body: MemberListBody; gone: string[] }): MemberListBody {
   const kept = <T>(map: Record<string, T> | undefined) => map && Object.fromEntries(Object.entries(map).filter(([device]) => !gone.includes(device)))
-  const members = body.members.map((member) => ({ ...member, devices: member.devices.filter((device) => !gone.includes(device)) }))
+  const members = body.members.map((member) => ({ ...member, devices: member.devices.filter((device) => !gone.includes(device)), ...member.viewers && { viewers: member.viewers.filter((device) => !gone.includes(device)) } }))
   return { ...body, members, removed: [...body.removed, ...gone.filter((device) => !body.removed.includes(device))], runtimes: body.runtimes?.filter((device) => !gone.includes(device)), added: kept(body.added), names: kept(body.names) }
 }
 
@@ -71,6 +71,7 @@ async function follows({ previous, next }: { previous: Link; next: Link }): Prom
   if (!wellFormed(b) || keyVersionOf(b) < keyVersionOf(a) || !dated({ previous: a, next: b })) return false
   const by = next.list.by
   if (runtimesOf(a).includes(by) || !runtimesOf(a).every((key) => runtimesOf(b).includes(key) || !devicesOf(b).includes(key))) return false
+  if (viewersOf(a).some((key) => devicesOf(b).includes(key))) return false
   const invite = a.invites.find((each) => each.key === by)
   const signer = invite ? undefined : a.members.find((member) => member.devices.includes(by))
   const back = invite ? b.members.find((member) => member.email === invite.email)?.devices.find((key) => a.removed.includes(key)) : undefined
@@ -88,15 +89,15 @@ async function follows({ previous, next }: { previous: Link; next: Link }): Prom
 function joins({ previous, next, invite }: { previous: MemberListBody; next: MemberListBody; invite: MemberListBody['invites'][number] }): boolean {
   const joined = next.members.find((member) => member.email === invite.email)
   if (!joined || previous.members.some((member) => member.email === invite.email)) return false
-  if (joined.role !== invite.role || joined.devices.length !== 1 || half(joined.devices[0]) === half(invite.key)) return false
+  if (joined.role !== invite.role || joined.devices.length !== 1 || joined.viewers?.length || half(joined.devices[0]) === half(invite.key)) return false
   const others = next.members.filter((member) => member !== joined)
   return same(others, previous.members) && same(next.invites, previous.invites.filter((each) => each !== invite))
 }
 
 function dated({ previous: a, next: b }: { previous: MemberListBody; next: MemberListBody }): boolean {
   if (a.at !== undefined && (b.at === undefined || b.at < a.at)) return false
-  const fresh = devicesOf(b).filter((key) => !devicesOf(a).includes(key))
-  const kept = devicesOf(a).filter((key) => devicesOf(b).includes(key))
+  const fresh = listedOf(b).filter((key) => !listedOf(a).includes(key))
+  const kept = listedOf(a).filter((key) => listedOf(b).includes(key))
   return kept.every((key) => addedOf(b, key) === addedOf(a, key) && b.names?.[key] === a.names?.[key]) && fresh.every((key) => b.added?.[key] === b.at)
 }
 
@@ -140,7 +141,7 @@ function changesOnlySelf({ previous, next, signer }: { previous: MemberListBody;
 
 function tracksRemoved({ previous, next, owner, back }: { previous: MemberListBody; next: MemberListBody; owner: boolean; back?: string }): boolean {
   const dropped = (keysOf: (body: MemberListBody) => string[]) => keysOf(previous).filter((key) => !keysOf(next).includes(key))
-  const gone = [...dropped(devicesOf), ...dropped((body) => body.invites.map((each) => each.key))]
+  const gone = [...dropped(listedOf), ...dropped((body) => body.invites.map((each) => each.key))]
   const allowed = new Set([...previous.removed, ...gone].filter((key) => key !== back))
   const removed = new Set(next.removed)
   if (!gone.every((key) => removed.has(key)) || !next.removed.every((key) => allowed.has(key))) return false
@@ -148,10 +149,10 @@ function tracksRemoved({ previous, next, owner, back }: { previous: MemberListBo
 }
 
 function wellFormed(body: MemberListBody): boolean {
-  const keys = [...devicesOf(body), ...body.invites.map((each) => each.key), ...body.removed].map(half)
+  const keys = [...listedOf(body), ...body.invites.map((each) => each.key), ...body.removed].map(half)
   const owners = body.members.filter((member) => member.role === 'owner')
   const kits = body.members.every((member) => !member.kit || member.devices.includes(member.kit))
-  const added = [...Object.keys(body.added ?? {}), ...Object.keys(body.names ?? {})].every((key) => devicesOf(body).includes(key))
+  const added = [...Object.keys(body.added ?? {}), ...Object.keys(body.names ?? {})].every((key) => listedOf(body).includes(key))
   return owners.length === 1 && kits && added && unique(body.members.map((member) => member.email)) && unique(keys) && runtimesOf(body).every((key) => devicesOf(body).includes(key))
 }
 
@@ -165,6 +166,14 @@ export function keyVersionOf(body: MemberListBody): number {
 
 function devicesOf(body: MemberListBody): string[] {
   return body.members.flatMap((member) => member.devices)
+}
+
+export function viewersOf(body: MemberListBody): string[] {
+  return body.members.flatMap((member) => member.viewers ?? [])
+}
+
+export function listedOf(body: MemberListBody): string[] {
+  return [...devicesOf(body), ...viewersOf(body)]
 }
 
 function half(key: string): string {
