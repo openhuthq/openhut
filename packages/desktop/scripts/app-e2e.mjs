@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
+import { bootCloud, devCloudUrl, signIn } from './dev-cloud.mjs'
 
 const { values: args } = parseArgs({ options: { installer: { type: 'string' }, app: { type: 'string' }, out: { type: 'string', default: 'app-e2e' }, agents: { type: 'string', default: '5' }, cloud: { type: 'string' } } })
 if (!args.installer && !args.app) {
@@ -14,7 +15,7 @@ const NAMES = ['Juniper', 'Atlas', 'Birch', 'Cedar', 'Dahlia', 'Elm', 'Fern', 'G
 let exe = args.app ? resolve(args.app, 'Contents/MacOS/OpenHut') : ''
 const home = resolve(args.out, 'home')
 const cdpPort = 9300 + Math.floor(Math.random() * 500)
-const API = `http://127.0.0.1:${8800 + Math.floor(Math.random() * 500)}`
+const API = devCloudUrl()
 const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test', ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: API } }
 const evidence = { platform: `${process.platform} ${WIN ? execFileSync('cmd', ['/c', 'ver']).toString().trim() : execFileSync('sw_vers', ['-productVersion']).toString().trim()}`, steps: [] }
 mkdirSync(args.out, { recursive: true })
@@ -26,7 +27,10 @@ const say = (step, detail = {}) => {
 let child
 let api
 try {
-  if (args.cloud) api = await bootCloud()
+  if (args.cloud) {
+    api = await bootCloud({ dir: args.cloud, api: API })
+    say('the dev cloud API is up', { url: API })
+  }
   if (args.installer) {
     const programs = join(process.env.LOCALAPPDATA, 'Programs')
     execFileSync(args.installer, ['/S'])
@@ -41,7 +45,11 @@ try {
     return reply?.server?.healthy ? reply : null
   }, 120, 'the runtime to be healthy')
   say('the runtime (server and agentd) is up and healthy', { build: admin.server.build })
-  if (args.cloud) await signIn(page)
+  if (args.cloud) {
+    await signIn({ page, api: API })
+    say('signed in to the dev cloud as mo@example.com and saved the kit')
+    await shot(page, '01-signed-in')
+  }
   const agent = await firstAgent(page)
   await page.eval(`fetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wanted: 'running' }) }).then((r) => r.json())`)
   const running = await until(async () => {
@@ -89,27 +97,6 @@ try {
   api?.kill()
   writeFileSync(join(args.out, 'evidence.json'), JSON.stringify(evidence, null, 2))
   console.log(`app-e2e: ${evidence.pass ? 'PASS' : 'FAIL'}; evidence in ${args.out}`)
-}
-
-async function bootCloud() {
-  const { port } = new URL(API)
-  const proc = spawn(process.execPath, ['src/server.ts'], { cwd: resolve(args.cloud), env: { ...process.env, PORT: port, API_URL: API, DEV_SIGN_IN: '1', DATABASE_URL: '', OPENHUT_API_DATA: '' }, stdio: ['ignore', 'ignore', 'inherit'] })
-  await until(async () => fetch(`${API}/v1/events`).then(() => true, () => null), 120, 'the dev cloud API to listen')
-  say('the dev cloud API is up', { url: API })
-  return proc
-}
-
-async function signIn(page) {
-  const { authorizationUrl } = await page.eval("fetch('/api/cloud/sessions', { method: 'POST' }).then((r) => r.json())")
-  const link = new RegExp('href="([^"]+)">mo@example.com<').exec(await (await fetch(authorizationUrl)).text())?.[1]?.replaceAll('&amp;', '&')
-  if (!link) throw new Error('the dev sign-in page has no link for mo@example.com')
-  const back = new URL((await fetch(link, { redirect: 'manual' })).headers.get('location') ?? '', API)
-  await page.eval(`fetch(${JSON.stringify(`/api/cloud/callback${back.search}`)}).then((r) => r.text())`)
-  await until(async () => (await page.eval("fetch('/api/cloud').then((r) => r.json())")).status === 'on' || null, 120, 'the cloud to say signed in')
-  const kit = await page.eval("fetch('/api/cloud/kits', { method: 'POST' }).then((r) => r.status)")
-  if (kit !== 200) throw new Error(`saving the recovery kit answered ${kit}`)
-  say('signed in to the dev cloud as mo@example.com and saved the kit')
-  await shot(page, '01-signed-in')
 }
 
 async function firstAgent(page) {

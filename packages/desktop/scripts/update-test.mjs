@@ -5,11 +5,12 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
+import { bootCloud, devCloudUrl, signIn } from './dev-cloud.mjs'
 import { RELEASE_KEY } from '../src/release-key.mjs'
 
-const { values: args } = parseArgs({ options: { from: { type: 'string' }, feed: { type: 'string' }, via: { type: 'string', default: 'button' }, keep: { type: 'boolean', default: false }, broken: { type: 'boolean', default: false } } })
+const { values: args } = parseArgs({ options: { from: { type: 'string' }, feed: { type: 'string' }, via: { type: 'string', default: 'button' }, keep: { type: 'boolean', default: false }, broken: { type: 'boolean', default: false }, cloud: { type: 'string' } } })
 if (!args.from || !args.feed || !['button', 'quit'].includes(args.via)) {
-  console.error('usage: node scripts/update-test.mjs --from <old OpenHut.app> --feed <folder or URL with latest-mac.yml and the new zip> [--via button|quit] [--broken] [--keep]')
+  console.error('usage: node scripts/update-test.mjs --from <old OpenHut.app> --feed <folder or URL with latest-mac.yml and the new zip> [--via button|quit] [--broken] [--keep] [--cloud <private/api>]')
   process.exit(2)
 }
 const remote = /^https?:\/\//.test(args.feed)
@@ -41,10 +42,13 @@ await new Promise((resolve) => feed.once('listening', resolve))
 const releaseScript = join(import.meta.dirname, '../../../scripts/release.sh')
 const testKey = RELEASE_KEY && !remote ? execFileSync(releaseScript, ['key', join(root, 'test-release.pem')], { encoding: 'utf8' }).trim() : ''
 if (testKey) execFileSync(releaseScript, ['sign', resolve(args.feed)], { env: { ...process.env, RELEASE_KEY: join(root, 'test-release.pem') } })
-const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_UPDATE_FEED: remote ? args.feed : `http://127.0.0.1:${feed.address().port}/`, OPENHUT_MODEL: 'test', OPENHUT_SANDBOX: 'memory', ...testKey && { OPENHUT_RELEASE_KEY: testKey } }
+const API = devCloudUrl()
+const env = { ...process.env, ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: API }, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_UPDATE_FEED: remote ? args.feed : `http://127.0.0.1:${feed.address().port}/`, OPENHUT_MODEL: 'test', OPENHUT_SANDBOX: 'memory', ...testKey && { OPENHUT_RELEASE_KEY: testKey } }
 
 let child
+let api
 try {
+  if (args.cloud) api = await bootCloud({ dir: args.cloud, api: API })
   say('installed the old app', { version: plistVersion(), signature: signedBy() })
   child = launch()
   let page = await connect()
@@ -53,7 +57,12 @@ try {
     return reply?.server?.healthy ? reply : null
   }, 120, 'the old app\'s runtime to be healthy')
   say('the old app is running', { version: await page.eval('window.openhut.version'), runtimeBuild: admin.server.build })
-  const agent = await page.eval("fetch('/api/agents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Keepme' }) }).then((r) => r.json())")
+  if (args.cloud) {
+    await signIn({ page, api: API })
+    say('signed in to the dev cloud as mo@example.com and saved the kit')
+  }
+  const agent = await page.eval("fetch('/api/agents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Keepme' }) }).then(async (r) => ({ status: r.status, ...await r.json() }))")
+  if (!agent.id) throw new Error(`making the agent to keep answered ${agent.status} ${JSON.stringify(agent.error ?? agent)}`)
   say('made an agent to check the data survives', { id: agent.id })
   const ready = await until(async () => {
     const state = await page.eval('window.openhut.update.state()')
@@ -111,6 +120,7 @@ try {
     child.kill('SIGTERM')
     await Promise.race([new Promise((resolve) => child.once('exit', resolve)), sleep(15_000)])
   }
+  api?.kill()
   feed.close()
   if (!args.keep) rmSync(root, { recursive: true, force: true })
   else console.log(`update-test: kept ${root}`)
