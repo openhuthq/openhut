@@ -125,6 +125,14 @@ export const syncService = {
 
   ready: (): boolean => homeState()?.ready ?? false,
 
+  async backedUp(): Promise<boolean> {
+    const s = homeState()
+    const ctx = s && await contextOf(s)
+    if (!s?.ready || !ctx) return false
+    await run(() => flush(s))
+    return !(await unsent({ s, kinds: [...SYNCED], ctx })).some((item) => !s.refused.has(item.id))
+  },
+
   send(kinds: readonly Synced[] = SYNCED): void {
     for (const s of states.values()) send(s, kinds)
   },

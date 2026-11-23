@@ -133,7 +133,7 @@ export const keysService = {
 
   ownedBy({ sub }: { sub: string }): void {
     const other = stored()?.account ?? stored()?.locked
-    if (other && other.sub !== sub) throw new HttpError(409, `This computer is set up for ${other.email}. ${stored()?.account && !kitOf(stored()) ? 'Sign in with that account and save a recovery kit first.' : 'Sign in with that account, or forget it below.'}`)
+    if (other && other.sub !== sub) throw new HttpError(409, `This computer is set up for ${other.email}. Sign in with that account.`)
   },
 
   async open({ sub, email }: { sub: string; email: string }): Promise<Account> {
@@ -161,13 +161,6 @@ export const keysService = {
     return { words, box: toBase64(box ?? new Uint8Array()), ask: [randomInt(0, 6), randomInt(6, 12)] }
   },
 
-  async forget(): Promise<void> {
-    const current = await keyStore.read()
-    if (current.session) throw new HttpError(409, 'Sign out of OpenHut Cloud first.')
-    if (!current.account) return
-    if (!kitOf(current)) throw new HttpError(409, `Save a recovery kit for ${current.account.email} first. Without one, nobody can open its backup again.`)
-    await keyStore.write({ device: toBase64(newKey()), machine })
-  },
 
   async accountLetter(to: string): Promise<Sent> {
     const account = keysService.mustBeOn()

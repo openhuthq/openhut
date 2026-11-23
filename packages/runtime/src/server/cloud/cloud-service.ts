@@ -289,19 +289,13 @@ export const cloudService = {
     }
   },
 
-  async forget(): Promise<Cloud> {
-    const former = await keysService.deviceKey()
-    await keysService.forget()
-    await agentService.forgetDevice({ device: former })
-    signInError = null
-    return cloudService.status()
-  },
-
   async signOut(): Promise<Cloud> {
-    if (keysService.account()?.key && keysService.session()) await checkBoxes().catch(warnCheck)
+    await stopAsking()
+    if (keysService.account()?.key && keysService.session()) await leaveHere()
     await keysService.setSession(undefined)
     await keysService.setLocked(undefined)
     syncService.disconnect()
+    signInError = null
     return cloudService.status()
   },
 
@@ -328,23 +322,6 @@ export const cloudService = {
       await confirmKit({ account: signer, token, body: box, savedAt }).catch(warnCheck)
       return { object: 'recovery_kit' as const, words, ask, kitId: await kitId(box), madeAt: new Date(savedAt).toISOString(), device: deviceName() }
     })
-  },
-
-  async startOver(): Promise<Cloud> {
-    const locked = mustBeLocked()
-    const token = await keysService.token()
-    const cleared = await cloud.account({ method: 'DELETE', path: '/v1/key-boxes', token })
-    if (cleared.status === 409) throw new HttpError(409, 'Your recovery kit is in OpenHut Cloud now. Type its words to unlock.')
-    if (cleared.status === 403) throw new HttpError(403, `This account is set up on another computer. Request access, and approve it there.`)
-    if (cleared.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t start over. Try again.')
-    await syncService.reset({ restoring: false })
-    const account = await keysService.open(locked)
-    if (!await openRoom({ account, token })) {
-      await keysService.relock(locked)
-      throw new HttpError(409, `Your other computer started over a moment ago. Check again.`)
-    }
-    cloudService.connect()
-    return cloudService.status()
   },
 
   async unlock(body: UnlockCloud): Promise<Cloud> {
@@ -588,6 +565,17 @@ async function joinWith({ account: restored, typed }: { account: Account; typed:
   await keysService.adopt({ account, kit: kit && kept ? { box: kit.body, savedAt: kit.savedAt ?? new Date().toISOString() } : undefined })
   cloudService.connect()
   return cloudService.status()
+}
+
+async function leaveHere(): Promise<void> {
+  if (!await syncService.backedUp()) throw new HttpError(409, 'Your agents aren’t backed up yet. Sign out once this computer is online and the backup is done, so nothing is lost.')
+  const me = await keysService.deviceKey()
+  syncService.disconnect()
+  await syncService.reset({ restoring: false })
+  await agentService.forgetDevice({ device: me })
+  await agentService.wipe()
+  await connectionService.wipe()
+  await keysService.forgetHere()
 }
 
 async function removed(): Promise<void> {
