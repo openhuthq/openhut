@@ -1,22 +1,19 @@
 import { AccountSettings } from '@/features/cloud/cloud'
-import { TeamSettings } from '@/features/people/workspace'
 import { ComputersSettings } from '@/features/settings/computers'
 import { GeneralSettings } from '@/features/settings/general'
 import { leave, ModelsSettings, ModelsStep, stepOf } from '@/features/settings/models'
-import { McpSettings } from '@/features/settings/mcp'
 import { UpdatesSettings } from '@/features/settings/updates'
 import { desktop } from '@/features/settings/desktop'
 import { tabsFor } from '@/features/settings/tabs'
 import { AppWindow, HOVER, I, PICKED } from '@/components/kit'
-import { isPhone } from '@/lib/native'
 import { navigate, useOpen } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
-const MOVED: Record<string, string> = { devices: 'computers', cloud: 'account', backup: 'account', people: 'team' }
+const MOVED: Record<string, string> = { devices: 'computers', phones: 'computers', cloud: 'account', backup: 'account', people: 'general', team: 'general', mcp: 'general' }
 
 export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: () => void }) {
   const tab = MOVED[asked] ?? asked
-  const tabs = tabsFor({ phone: isPhone(), desktop: !!desktop })
+  const tabs = tabsFor({ desktop: !!desktop })
   const name = tabs.find(({ slug }) => slug === tab)?.name ?? 'General'
   const nav = <nav aria-label="Settings" className="no-scrollbar flex w-[198px] shrink-0 flex-col gap-0.5 overflow-y-auto px-3 py-4">
     {tabs.map(({ slug, name, icon, hue }) => <a key={slug} href={`/settings/${slug}`} aria-current={slug === tab ? 'page' : undefined} onClick={(event) => { event.preventDefault(); navigate(`/settings/${slug}`, true) }}
@@ -37,10 +34,8 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
 function Tab({ tab }: { tab: string }) {
   switch (tab) {
     case 'account': return <AccountSettings />
-    case 'team': return <TeamSettings />
     case 'computers': return <ComputersSettings />
     case 'models': return <ModelsSettings />
-    case 'mcp': return <McpSettings />
     case 'updates': return <UpdatesSettings />
     default: return <GeneralSettings />
   }

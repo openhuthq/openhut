@@ -1,6 +1,6 @@
 import type { Selectable } from 'kysely'
 import type { Deleted } from '@openhut/common/api.ts'
-import { ADDRESS, ChannelRecord, ChannelSecrets, type Channel, type Conversation, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
+import { ADDRESS, ChannelRecord, ChannelSecrets, type Channel, type ChannelKind, type Conversation, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { log, emit } from '../platform/events.ts'
@@ -10,6 +10,7 @@ import { deleted } from '../platform/responses.ts'
 import { agentd, containerStates, features } from '../platform/agentd.ts'
 import { slack, SlackSecrets } from '../integrations/slack/slack.ts'
 import { telegram, TelegramSecrets } from '../integrations/telegram/telegram.ts'
+import { discord } from '../integrations/discord/discord.ts'
 import { agentService, placeOf, type AgentFacts } from '../agents/agent-service.ts'
 import { recordsService, type Held } from '../cloud/records.ts'
 import { roomKeys } from '../cloud/room-keys.ts'
@@ -18,7 +19,8 @@ import type { Caller } from '../team/identity.ts'
 import { audienceOf } from './audience.ts'
 import { whatsappPairing } from './whatsapp-pairing.ts'
 
-const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram' } as const
+const CHANNEL_KINDS = new Set<ChannelKind>(['slack', 'discord'])
+const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram', discord: 'Discord' } as const
 
 export const channelService = {
   async list({ agentId }: { agentId?: string }): Promise<Channel[]> {
@@ -51,7 +53,7 @@ export const channelService = {
     const name = facts.value.name
     const existing = channelsOf(await recordsService.list({ collection: 'channel', workspace: facts.workspace, parent: facts.id }))
     if (existing.some((channel) => channel.kind === body.kind)) throw new HttpError(409, `${name} already has ${LABEL[body.kind]}. Disconnect it first.`)
-    const audience = body.kind === 'slack' ? { ownerAddress: '', open: false, allowed: [] } : { ownerAddress: body.ownerAddress, open: body.open, allowed: body.allowed }
+    const audience = audienceOfBody(body)
     const { status, account, secret } = await setupOf({ body, facts })
     const id = newId('ch')
     const held = await recordsService.put({ collection: 'channel', id, parent: facts.id, workspace: facts.workspace, personal: facts.personal, value: { kind: body.kind, status, account, ...audience, createdAt: new Date().toISOString() } satisfies ChannelRecord, secret })
@@ -66,8 +68,12 @@ export const channelService = {
     const facts = await owned({ actor, agentId: held.parent ?? '' })
     const wrong = patch.allowed?.find((address) => !ADDRESS[current.kind].pattern.test(address))
     if (wrong) throw new HttpError(400, `${wrong} doesn't look right. ${ADDRESS[current.kind].message}`, { param: 'allowed' })
-    if (current.kind === 'slack' && !patch.allowed) throw new HttpError(400, 'A Slack agent answers everyone in the channels you pick. Send allowed with the channel IDs.', { param: 'allowed' })
-    const change = (value: ChannelRecord): ChannelRecord => ({ ...value, ...patch.allowed && { allowed: [...new Set(patch.allowed)] }, ...current.kind !== 'slack' && patch.open !== undefined && { open: patch.open } })
+    if (CHANNEL_KINDS.has(current.kind) && !patch.allowed) throw new HttpError(400, `A ${LABEL[current.kind]} agent answers everyone in the channels you pick. Send allowed with the channel IDs.`, { param: 'allowed' })
+    if (current.kind === 'discord' && !patch.allowed?.length) throw new HttpError(400, 'Keep at least one Discord channel. Disconnect Discord to stop it answering.', { param: 'allowed' })
+    const botToken = ChannelSecrets.safeParse(held.secret).data?.botToken
+    const added = [...new Set(patch.allowed ?? [])].filter((address) => !current.allowed.includes(address))
+    if (current.kind === 'discord' && botToken && added.length) await discord.enter({ botToken, ids: added, bot: current.account ?? 'The bot' })
+    const change = (value: ChannelRecord): ChannelRecord => ({ ...value, ...patch.allowed && { allowed: [...new Set(patch.allowed)] }, ...!CHANNEL_KINDS.has(current.kind) && patch.open !== undefined && { open: patch.open } })
     const saved = await recordsService.put({ collection: 'channel', id, parent: facts.id, workspace: facts.workspace, personal: facts.personal, value: change(current), secret: held.secret, reapply: (latest) => ({ value: change(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
     emit({ name: 'channel.updated', actor, target: { type: 'channel', id, kind: current.kind, agentId: facts.id } })
     await runSet.apply({ workspace: facts.workspace, id: facts.id })
@@ -162,6 +168,10 @@ async function setupOf({ body, facts }: { body: CreateChannel; facts: AgentFacts
       const account = await telegram.verify({ botToken: body.botToken })
       return { status: 'connected', account, secret: { botToken: body.botToken } }
     }
+    case 'discord': {
+      const account = await discord.verify({ botToken: body.botToken, channels: body.allowed })
+      return { status: 'connected', account, secret: { botToken: body.botToken } }
+    }
     case 'whatsapp': {
       if (facts.row && !(await features()).whatsapp) throw new HttpError(409, 'This computer can\'t link WhatsApp. Run the agent on a Linux computer you added to use it.', { param: 'kind' })
       if (facts.row && (await containerStates())?.[facts.id] !== 'running') throw new HttpError(409, `Start ${facts.value.name} first, then connect WhatsApp.`)
@@ -178,6 +188,15 @@ async function disconnect(row: Row): Promise<void> {
       return
     case 'slack': return
     case 'telegram': return
+    case 'discord': return
+  }
+}
+
+function audienceOfBody(body: CreateChannel): Pick<ChannelRecord, 'ownerAddress' | 'open' | 'allowed'> {
+  switch (body.kind) {
+    case 'slack': return { ownerAddress: '', open: false, allowed: [] }
+    case 'discord': return { ownerAddress: '', open: false, allowed: [...new Set(body.allowed)] }
+    default: return { ownerAddress: body.ownerAddress, open: body.open, allowed: body.allowed }
   }
 }
 

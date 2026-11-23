@@ -8,9 +8,6 @@ import { connect, createServer } from 'node:net'
 import { after, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { isDeepStrictEqual, promisify, stripVTControlCharacters } from 'node:util'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { Admin, Health, Update } from '@openhut/common/admin/admin.ts'
 import type { Agent, Grant } from '@openhut/common/agents/agent.ts'
 import type { ApiError, Deleted, List } from '@openhut/common/api.ts'
@@ -275,22 +272,23 @@ function main() {
 
   check(
     'A4',
-    'The control MCP takes the same enrolled key; there is no OAuth server',
-    'no key: 401; with the key it lists tools; OAuth discovery and token endpoints: 404',
+    'The API takes the enrolled key; there is no control MCP and no OAuth server',
+    'no key: 401; with the key it lists agents; /mcp, OAuth discovery and token endpoints: 404',
     async () => {
-      const noLogin = await fetch(`${APP}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) })
-      call = await mcp(KEY)
+      const noLogin = await fetch(`${APP}/api/agents`)
+      const control = (await fetch(`${APP}/mcp`, { method: 'POST', headers: { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' }, body: '{}' })).status
+      call = rest(KEY)
       const agents = await call<List<Agent>>('list_agents')
       const discovery = (await fetch(`${APP}/.well-known/oauth-authorization-server`)).status
       const token = (await fetch(`${APP}/api/oauth/token`, { method: 'POST' })).status
       return {
-        actual: { noLogin: noLogin.status, listAgents: agents.object, discovery, token },
-        pass: noLogin.status === 401 && agents.object === 'list' && discovery === 404 && token === 404,
+        actual: { noLogin: noLogin.status, listAgents: agents.object, control, discovery, token },
+        pass: noLogin.status === 401 && agents.object === 'list' && control === 404 && discovery === 404 && token === 404,
       }
     },
   )
 
-  check('B1', 'Control MCP creates a connection, two agents and a grant', 'Dev granted Orders DB, Sales has none', async () => {
+  check('B1', 'The API creates a connection, two agents and a grant', 'Dev granted Orders DB, Sales has none', async () => {
     await startTeamDb(dbPassword, agentPassword)
     await until(() => docker('image', 'inspect', agentImagePin()).then(() => true, () => false), 30 * 60_000, 'the agent image to download')
     conn = await call<Connection>('create_connection', { name: 'Orders DB', dsn: `postgres://openhut_agent:${agentPassword}@172.30.0.10:5432/postgres` })
@@ -309,7 +307,7 @@ function main() {
     return { actual: listed.map((a) => `${a.name}:${a.status}`), pass: listed.length === 2 && listed.every((a) => a.status === 'running') }
   })
 
-  check('B3', 'The gateway keeps the DB password: it never comes back out', 'not in any control MCP reply, dashboard page, agent file or log', async () => {
+  check('B3', 'The gateway keeps the DB password: it never comes back out', 'not in any API reply, dashboard page, agent file or log', async () => {
     const outputs = {
       list_connections: await call('list_connections'),
       get_connection: await call('get_connection', { id: conn.id }),
@@ -853,7 +851,7 @@ function main() {
 
   check(
     'U3',
-    "The owner sets the Claude seat over the control MCP; it's sealed and never shown",
+    "The owner sets the Claude seat over the API; it's sealed and never shown",
     'update_admin answers seat.set true; get_admin agrees; the token is in no reply (test mode keeps it out of .env)',
     async () => {
       const updated = await call<Admin>('update_admin', { seatToken })
@@ -1245,7 +1243,7 @@ function afterUpgrade() {
     'token works; Dev in the same container; a build.applied e2e-1 -> e2e-2 event in app.log; Dev restarted with its instructions intact and its plugin folder present, and still answers from the team DB (n = 42); the enrolled key still works',
     async () => {
       const st = savedState()
-      const call = await mcp(KEY)
+      const call = rest(KEY)
       await until(async () => (await startedAt(st.dev.id)) !== st.devStarted, 60_000, 'Dev to restart on the new build')
       await waitReady(st.dev, 180_000)
       const agents = (await call<List<Agent>>('list_agents')).data
@@ -1335,7 +1333,7 @@ function afterRestart() {
     'Dev running and answering within 4 min, n = 42 from the team DB; restart policy no (the app starts it at boot)',
     async () => {
       const st = savedState()
-      const call = await mcp(KEY)
+      const call = rest(KEY)
       await waitReady(st.dev)
       const agents = (await call<List<Agent>>('list_agents')).data
       const reply = inner(await chat(st.dev, 'sql: select count(*)::int as n from orders'))
@@ -1451,15 +1449,38 @@ async function api<T = unknown>(method: string, path: string, body?: unknown, ke
   }
 }
 
-async function mcp(key: string): Promise<Call> {
-  const client = new Client({ name: 'e2e', version: '1' })
-  await client.connect(new StreamableHTTPClientTransport(new URL(`${APP}/mcp`), { requestInit: { headers: { authorization: `Bearer ${key}` } } }))
+const ROUTES: Record<string, (a: Record<string, unknown>) => [string, string, unknown?]> = {
+  list_agents: () => ['GET', '/api/agents'],
+  get_agent: (a) => ['GET', `/api/agents/${a.id}`],
+  create_agent: (a) => ['POST', '/api/agents', a],
+  update_agent: ({ id, ...patch }) => ['PATCH', `/api/agents/${id}`, patch],
+  delete_agent: (a) => ['DELETE', `/api/agents/${a.id}`],
+  revoke_agent_token: (a) => ['POST', `/api/agents/${a.id}/revoke-token`],
+  list_grants: (a) => ['GET', `/api/grants${query(a)}`],
+  create_grant: (a) => ['POST', '/api/grants', a],
+  delete_grant: (a) => ['DELETE', `/api/grants/${a.id}`],
+  list_connections: () => ['GET', '/api/connections'],
+  get_connection: (a) => ['GET', `/api/connections/${a.id}`],
+  create_connection: (a) => ['POST', '/api/connections', a],
+  delete_connection: (a) => ['DELETE', `/api/connections/${a.id}`],
+  list_connection_events: (a) => ['GET', `/api/connection-events${query(a)}`],
+  list_channels: (a) => ['GET', `/api/channels${query(a)}`],
+  get_admin: () => ['GET', '/api/admin'],
+  update_admin: (a) => ['PATCH', '/api/admin', a],
+}
+
+function rest(key: string): Call {
   return async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => {
-    const r = CallToolResultSchema.parse(await client.callTool({ name, arguments: args }))
-    const text = r.content.flatMap((c) => (c.type === 'text' ? [c.text] : [])).join('')
-    if (r.isError) throw new Error(text)
-    return JSON.parse(text)
+    const [method, path, body] = ROUTES[name](args)
+    const r = await api<T & { error?: { message: string } }>(method, path, body, key)
+    if (r.status >= 400) throw new Error(r.json.error?.message ?? `${name} answered ${r.status}`)
+    return r.json
   }
+}
+
+function query(input: Record<string, unknown>): string {
+  const params = new URLSearchParams(Object.entries(input).filter(([, value]) => value !== undefined).map(([k, value]) => [k, String(value)]))
+  return params.size ? `?${params}` : ''
 }
 
 async function events(call: Call, filter: { agentId?: string; connectionId?: string }) {

@@ -18,7 +18,6 @@ const bundle = (entry, outfile, options = {}) => build({
   ...options,
 })
 
-cpSync(join(import.meta.dirname, '../bin/openhut-mcp'), join(OUT, 'bin/openhut-mcp'))
 mkdirSync(join(OUT, 'node_modules'), { recursive: true })
 writeFileSync(join(OUT, 'INSTALL_URL'), `${process.env.OPENHUT_INSTALL_URL || 'https://openhut.dev/edge'}\n`)
 if (!LINUX) await runtime()

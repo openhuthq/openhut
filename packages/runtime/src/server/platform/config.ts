@@ -33,6 +33,7 @@ export const config = {
   agentHostNet: HOST_NET,
   slackApi: 'https://slack.com/api',
   telegramApi: 'https://api.telegram.org',
+  discordApi: 'https://discord.com/api/v10',
   anthropicApi: TEST_MODEL ? `http://127.0.0.1:${GATEWAY_PORT}/test-anthropic` : 'https://api.anthropic.com',
   openrouterApi: 'https://openrouter.ai/api',
   openaiApi: 'https://api.openai.com',

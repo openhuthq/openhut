@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import { once } from 'node:events'
 import { chmodSync, rmSync } from 'node:fs'
 import type { Server } from 'node:http'
@@ -18,7 +18,6 @@ import { newId } from '../platform/secrets.ts'
 
 const LOCAL = Symbol('local')
 const DEVICE = Symbol('device')
-const INNER = randomBytes(32)
 const OWN_DEVICES = new Set([
   'GET /api/threads', 'GET /api/threads/:id', 'DELETE /api/threads/:id', 'POST /api/threads/:id/chat',
   'GET /api/threads/:id/files', 'POST /api/threads/:id/files', 'DELETE /api/threads/:id/files', 'POST /api/threads/:id/files/lookups',
@@ -47,10 +46,6 @@ export function enrolled(header: string | undefined): boolean {
   const key = /^Bearer (\S+)$/.exec(header ?? '')?.[1]
   if (!key || !config.clientKeySha256) return false
   return timingSafeEqual(createHash('sha256').update(key).digest(), Buffer.from(config.clientKeySha256, 'hex'))
-}
-
-export function innerAuthorization({ local }: Caller): string {
-  return `Inner ${INNER.toString('hex')} ${local ? 'local' : 'remote'}`
 }
 
 export function tagDevice<T extends Duplex>({ conn, key }: { conn: T; key: string }): T {
@@ -95,8 +90,6 @@ function arrival(req: FastifyRequest): { local: boolean; device?: string } {
   const conn = req.raw.socket as (Duplex & { [LOCAL]?: true; [DEVICE]?: string }) | undefined
   if (conn?.[LOCAL]) return { local: true }
   if (conn?.[DEVICE] !== undefined) return { local: false, device: conn[DEVICE] }
-  const inner = /^Inner ([0-9a-f]{64}) (local|remote)$/.exec(req.headers.authorization ?? '')
-  if (inner) return { local: inner[2] === 'local' && timingSafeEqual(Buffer.from(inner[1], 'hex'), INNER) }
   return { local: enrolled(req.headers.authorization) }
 }
 

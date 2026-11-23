@@ -14,7 +14,7 @@ const NAMES = ['Juniper', 'Atlas', 'Birch', 'Cedar', 'Dahlia', 'Elm', 'Fern', 'G
 let exe = args.app ? resolve(args.app, 'Contents/MacOS/OpenHut') : ''
 const home = resolve(args.out, 'home')
 const cdpPort = 9300 + Math.floor(Math.random() * 500)
-const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_MODEL: 'test' }
+const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test' }
 const evidence = { platform: `${process.platform} ${WIN ? execFileSync('cmd', ['/c', 'ver']).toString().trim() : execFileSync('sw_vers', ['-productVersion']).toString().trim()}`, steps: [] }
 mkdirSync(args.out, { recursive: true })
 const say = (step, detail = {}) => {

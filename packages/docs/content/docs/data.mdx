@@ -36,4 +36,4 @@ A connection belongs to your account, not to one computer: every computer of you
 
 Open a connection to see its tools and every call, refused ones too.
 
-Postgres queries are one `SELECT`, at most 15 seconds and 1000 rows.
+Postgres queries are one `SELECT`, at most 15 seconds and 1000 rows. Agents can also see a query's plan with `EXPLAIN`, never `EXPLAIN ANALYZE`, so the query doesn't run.

@@ -18,6 +18,7 @@ import { connectionService } from '../connections/connection-service.ts'
 import type { Caller } from '../team/identity.ts'
 import { audienceOf } from '../channels/audience.ts'
 import { SlackSecrets } from '../integrations/slack/slack.ts'
+import { DiscordSecrets } from '../integrations/discord/discord.ts'
 import { resolveSlots } from '../models/model-slots.ts'
 import { providerService } from '../models/provider-service.ts'
 import { renderFiles, type RenderedChannel } from './hermes-files.ts'
@@ -34,6 +35,7 @@ const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
 const DEFAULT_MODEL = 'claude:sonnet'
 const CHILDREN = ['channel', 'routine', 'skill'] as const
+const held = new Map<string, boolean>()
 
 export const agentService = {
   async list({ actor }: { actor: Caller }): Promise<Agent[]> {
@@ -131,7 +133,21 @@ export const agentService = {
     await db.deleteFrom('agent').execute()
   },
 
+  holdReapply(id: string): void {
+    held.set(id, held.get(id) ?? false)
+  },
+
+  async releaseReapply(id: string): Promise<void> {
+    const due = held.get(id)
+    held.delete(id)
+    if (due) await agentService.reapply({ id })
+  },
+
   async reapply({ id }: { id: string }): Promise<void> {
+    if (held.has(id)) {
+      held.set(id, true)
+      return
+    }
     const row = await rowOf(id)
     await agentd.apply({ id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' })
     probes.delete(id)
@@ -344,6 +360,7 @@ function renderedChannel(channel: Selectable<Database['channel']>): RenderedChan
     case 'whatsapp': return { kind: 'whatsapp', audience }
     case 'slack': return { kind: 'slack', audience, ...SlackSecrets.parse(JSON.parse(unseal(channel.secrets))) }
     case 'telegram': return { kind: 'telegram', audience }
+    case 'discord': return { kind: 'discord', audience, ...DiscordSecrets.parse(JSON.parse(unseal(channel.secrets))) }
   }
 }
 

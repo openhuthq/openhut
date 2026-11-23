@@ -41,6 +41,20 @@ test('Slack before any channel is picked: no Slack settings, so it answers nowhe
   assert.doesNotMatch(files['.env'], /SLACK_/)
 })
 
+test('Discord in its channels: the bot token, only those channels, no user allowlist so DMs are refused', () => {
+  const files = render([{ kind: 'discord', botToken: 'fake.bot.token', audience: { ownerAddress: '', open: false, allowed: ['1234567890123456789', '9876543210987654321'] } }])
+  assert.match(files['.env'], /^DISCORD_BOT_TOKEN=fake\.bot\.token$/m)
+  assert.match(files['.env'], /^DISCORD_ALLOWED_CHANNELS=1234567890123456789,9876543210987654321$/m)
+  assert.match(files['.env'], /^DISCORD_HOME_CHANNEL=1234567890123456789$/m)
+  assert.doesNotMatch(files['.env'], /DISCORD_ALLOW_ALL_USERS|DISCORD_ALLOWED_USERS/)
+  assert.match(files['config.yaml'], /discord:\n {2}require_mention: true\n {2}unauthorized_dm_behavior: ignore\n {2}gateway_restart_notification: false/)
+})
+
+test('Discord with no channels: no Discord settings, so it answers nowhere', () => {
+  const files = render([{ kind: 'discord', botToken: 'fake.bot.token', audience: { ownerAddress: '', open: false, allowed: [] } }])
+  assert.doesNotMatch(files['.env'], /DISCORD_/)
+})
+
 test('WhatsApp open to anyone: bot mode, everyone allowed, approvals still off', () => {
   const files = render([{ kind: 'whatsapp', audience: { ownerAddress: '+15551234567', open: true, allowed: [] } }])
   assert.match(files['.env'], /^WHATSAPP_ENABLED=true$/m)

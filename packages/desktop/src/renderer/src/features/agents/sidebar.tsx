@@ -133,7 +133,7 @@ function TeamSwitcher() {
       </DropdownMenuItem>)}
       <DropdownMenuSeparator />
       <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />Join a team</DropdownMenuItem>
-      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/team')}><I icon={Settings02Icon} size={15} className="text-mute" />Team settings</DropdownMenuItem>
+      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/general')}><I icon={Settings02Icon} size={15} className="text-mute" />Team settings</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
 }

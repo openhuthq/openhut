@@ -17,7 +17,7 @@ import { config } from '../../../src/server/platform/config.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
 import { validateWithZod } from '../../../src/server/platform/validation.ts'
-import { innerAuthorization, listenLocally, tagDevice, tunnelKeyOf, who } from '../../../src/server/team/identity.ts'
+import { listenLocally, tagDevice, tunnelKeyOf, who } from '../../../src/server/team/identity.ts'
 import { meController } from '../../../src/server/team/team-controller.ts'
 
 await migrate()
@@ -96,13 +96,6 @@ test('a device\'s connection is refused while no member list holds it, key or no
   assert.equal((await ask({ createConnection: device(VIEWER) })).status, 401)
   assert.equal((await ask({ createConnection: device(VIEWER), headers: { authorization: 'Bearer test-key' } })).status, 401)
   assert.equal((await ask({ createConnection: device(VIEWER), path: '/api/me' })).status, 401)
-})
-
-test('the control MCP\'s calls inside the runtime keep a local caller, and a made-up inner key or a remote one is refused', async () => {
-  const caller = { id: 'usr_x', email: 'x', local: true }
-  assert.equal((await ask({ ...tcp, headers: { authorization: innerAuthorization(caller) } })).body.local, true)
-  assert.equal((await ask({ ...tcp, headers: { authorization: innerAuthorization({ ...caller, local: false }) } })).status, 401)
-  assert.equal((await ask({ ...tcp, headers: { authorization: `Inner ${'0'.repeat(64)} local` } })).status, 401)
 })
 
 test('over the tunnel your own viewer may chat, but gets 403 on agent writes and on every records and trust route', async () => {

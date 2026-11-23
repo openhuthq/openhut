@@ -13,7 +13,7 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
   { shelf: 'Data', items: [
     {
       name: 'postgres', short: 'Read-only database access', safeLine: 'Read-only. Agents never see the connection string.', eta: '2 minutes', title: 'Postgres', blurb: 'Read-only access to a Postgres database.',
-      gets: ['tables: every table and its columns', 'query: one read-only SELECT, 15 s and 1000 rows at most'],
+      gets: ['tables: every table and its columns', 'query: one read-only SELECT, 15 s and 1000 rows at most', 'explain: a query\'s plan, without running it'],
       safe: ['Every query runs in a read-only transaction.', 'Superusers and roles that can run programs are refused.', 'Agents never see the connection string.'],
     },
     {

@@ -18,6 +18,7 @@ await db.insertInto('agent').values([
 await db.insertInto('channel').values([
   { id: 'ch_rtnwhats', agent_id: 'ag_rtnfirst', kind: 'whatsapp', status: 'connected', account: null, owner_address: '15550001111', open: true, allowed: '', secrets: '' },
   { id: 'ch_rtnslack', agent_id: 'ag_rtnfirst', kind: 'slack', status: 'connected', account: null, owner_address: '', open: false, allowed: 'C0FINANCE1', secrets: '' },
+  { id: 'ch_rtndisco', agent_id: 'ag_rtnother', kind: 'discord', status: 'connected', account: '@ops', owner_address: '', open: false, allowed: '1234567890123456789', secrets: '' },
 ]).execute()
 fakeAgentd()
 signIn({ email: 'rtn@example.com' })
@@ -48,6 +49,14 @@ test('a routine needs a chat of the agent\'s own, and one of at or cron', async 
   await assert.rejects(routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'x', plan: 'y', cron: '0,20,40,55,56 * * * *', origin: app } }), /every 15 minutes/)
   await assert.rejects(routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'x', plan: 'y', at: '2026-11-28T09:00:00', origin: app } }), /offset/)
   await assert.rejects(routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'x', plan: 'y', at: minutes(-10).toISOString(), origin: app } }), /has passed/)
+})
+
+test('a Discord routine reports in the channel or thread it was set up in, never in a DM', async () => {
+  const discord = { platform: 'discord', chat_id: '1234567890123456790', chat_type: 'group', chat_name: 'Acme / #on-call' }
+  await assert.rejects(routineService.schedule({ agentId: 'ag_rtnother', input: { name: 'x', plan: 'y', at: minutes(5).toISOString(), origin: { ...discord, chat_type: 'dm', chat_name: 'mo' } } }), /Can't post in mo any more/)
+  const reply = await routineService.schedule({ agentId: 'ag_rtnother', input: { name: 'Watch postgres-eu', plan: 'Check slow queries.', cron: '0 * * * *', origin: discord } })
+  assert.match(reply, /Reports go to Acme \/ #on-call\.$/)
+  await db.deleteFrom('routine').where('agent_id', '=', 'ag_rtnother').execute()
 })
 
 test('a dashboard routine runs in its thread, says what it found, and a once routine then goes away', async () => {

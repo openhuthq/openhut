@@ -15,7 +15,7 @@ import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
-const GLYPHS = ['slack', 'whatsapp', 'telegram'] as const
+const GLYPHS = ['slack', 'whatsapp', 'telegram', 'discord'] as const
 
 export function RoutinesRow({ agent }: { agent: Agent }) {
   const routines = useRoutines(agent.id).data

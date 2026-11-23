@@ -94,4 +94,9 @@ export async function migrate(): Promise<void> {
   await sql`create table if not exists record_held (id text primary key, ver integer not null, parent text)`.execute(db)
   await sql`create table if not exists record_outbox (
     seq bigserial primary key, id text unique not null, collection text not null, workspace text not null, parent text, body text not null, deleted boolean not null default false)`.execute(db)
+  await sql`create table if not exists change_request (
+    id text primary key, agent_id text not null references agent(id) on delete cascade, action text not null, input text not null, summary text not null,
+    why text not null, origin text not null, status text not null default 'pending' check (status in ('pending', 'approved', 'denied')), note text,
+    told boolean not null default false, created_at timestamptz not null default now(), decided_at timestamptz)`.execute(db)
+  await sql`create index if not exists change_request_by_agent on change_request (agent_id, created_at desc)`.execute(db)
 }

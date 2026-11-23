@@ -11,7 +11,7 @@ export interface Database {
     wanted: Generated<'running' | 'stopped'>; code_execution: Generated<boolean>; web_browser: Generated<boolean>; face: Generated<string | null>; token_epoch: Generated<number>; channel_key: string; created_at: Timestamp
     runs_on: Generated<string | null>; changed_by: Generated<string | null>; workspace: Generated<string | null>; shared: Generated<boolean>; owner: Generated<string | null>; owner_proof: Generated<string | null>
   }
-  channel: { id: string; agent_id: string; kind: 'slack' | 'whatsapp' | 'telegram'; status: 'connected' | 'linking'; account: string | null; owner_address: string; secrets: string; open: boolean; allowed: string; created_at: Timestamp }
+  channel: { id: string; agent_id: string; kind: 'slack' | 'whatsapp' | 'telegram' | 'discord'; status: 'connected' | 'linking'; account: string | null; owner_address: string; secrets: string; open: boolean; allowed: string; created_at: Timestamp }
   connection: {
     id: string; kind: ConnectionKind; name: string; account: Generated<string>; sign_in: Generated<boolean>; owner_id: string; config: string
     everyone: Generated<boolean>; created_at: Timestamp; changed_by: Generated<string | null>
@@ -29,4 +29,8 @@ export interface Database {
   }
   record_held: { id: string; ver: number; parent: string | null }
   record_outbox: { seq: Generated<string>; id: string; collection: string; workspace: string; parent: string | null; body: string; deleted: Generated<boolean> }
+  change_request: {
+    id: string; agent_id: string; action: string; input: string; summary: string; why: string; origin: string
+    status: Generated<'pending' | 'approved' | 'denied'>; note: string | null; told: Generated<boolean>; created_at: Generated<Date>; decided_at: Timestamp | null
+  }
 }

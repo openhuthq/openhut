@@ -19,6 +19,7 @@ const SSL_MODES = {
 export const postgres = {
   parseDsn,
   query: runQuery,
+  explain: runExplain,
   connector: nativeConnector({
     config: z.object({ dsn: z.string() }),
     tools: {
@@ -31,6 +32,11 @@ export const postgres = {
         description: 'Run one read-only SELECT. 15 s timeout, at most 1000 rows.',
         input: z.strictObject({ sql: z.string().check(z.minLength(1, 'Pass the SELECT to run.')) }),
         run: ({ config, args }: { config: { dsn: string }; args: { sql: string } }) => runQuery({ dsn: config.dsn, sql: args.sql }),
+      }),
+      explain: nativeTool({
+        description: 'Show the query plan for one statement, without running it: plain EXPLAIN in a read-only transaction, never ANALYZE. Pass the query without EXPLAIN. format json gives the plan as JSON.',
+        input: z.strictObject({ sql: z.string().check(z.minLength(1, 'Pass the query to explain.')), format: z.optional(z.enum(['text', 'json'])) }),
+        run: ({ config, args }: { config: { dsn: string }; args: { sql: string; format?: 'text' | 'json' } }) => runExplain({ dsn: config.dsn, sql: args.sql, format: args.format }),
       }),
     },
   }),
@@ -58,6 +64,31 @@ function parseDsn(dsn: string) {
 }
 
 async function runQuery({ dsn, sql }: { dsn: string; sql: string }): Promise<{ rows: unknown[]; truncated: boolean }> {
+  return readOnly({
+    dsn,
+    run: async (client) => {
+      const cursor: pg.QueryConfig & { queryMode: 'extended' } = { text: `declare jb no scroll cursor for ${sql}`, queryMode: 'extended' }
+      await client.query(cursor)
+      const result = await client.query('fetch 1001 from jb')
+      return { rows: result.rows.slice(0, 1000), truncated: result.rows.length > 1000 }
+    },
+  })
+}
+
+async function runExplain({ dsn, sql, format = 'text' }: { dsn: string; sql: string; format?: 'text' | 'json' }): Promise<{ plan: unknown }> {
+  if (/^\s*explain\b/i.test(sql)) throw new Error('Pass the query itself, without EXPLAIN.')
+  if (/\banaly[sz]e\b/i.test(sql)) throw new Error('Refused: ANALYZE runs the query. Only the plan is allowed.')
+  return readOnly({
+    dsn,
+    run: async (client) => {
+      const explain: pg.QueryConfig & { queryMode: 'extended' } = { text: `explain (format ${format}) ${sql}`, queryMode: 'extended' }
+      const rows = (await client.query<{ 'QUERY PLAN': unknown }>(explain)).rows.map((row) => row['QUERY PLAN'])
+      return { plan: format === 'json' ? rows[0] : rows.join('\n') }
+    },
+  })
+}
+
+async function readOnly<T>({ dsn, run }: { dsn: string; run: (client: pg.Client) => Promise<T> }): Promise<T> {
   const { sslAttempts, ...target } = parseDsn(dsn)
   const host = await checkedAddress(target.host)
   const client = await connectFirst({ attempts: sslAttempts.map((ssl) => ({ ...target, host, ssl: ssl && !isIP(target.host) ? { ...ssl, servername: target.host } : ssl })) })
@@ -77,10 +108,7 @@ async function runQuery({ dsn, sql }: { dsn: string; sql: string }): Promise<{ r
       or pg_has_role(current_user, 'pg_read_server_files', 'member') as risky`)
     if (risky.rows[0]?.risky) throw new Error('Refused: this connection logs in as a superuser, a member of one, or a role that can run server programs or touch server files. Use a read-only role.')
     await client.query('begin read only')
-    const cursor: pg.QueryConfig & { queryMode: 'extended' } = { text: `declare jb no scroll cursor for ${sql}`, queryMode: 'extended' }
-    await client.query(cursor)
-    const result = await client.query('fetch 1001 from jb')
-    return { rows: result.rows.slice(0, 1000), truncated: result.rows.length > 1000 }
+    return await run(client)
   } catch (err) {
     if (tooBig) throw new Error('Result too large: over 8 MB. Select fewer or narrower columns.')
     throw err

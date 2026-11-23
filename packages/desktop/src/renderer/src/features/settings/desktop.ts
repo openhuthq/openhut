@@ -8,7 +8,6 @@ export type Prefs = { openAtLogin: boolean; keepAwake: boolean; betaUpdates: boo
 export type FirstRun = { fresh: boolean; done: boolean; failed: boolean; steps: [string, string, 'done' | 'now' | 'next' | 'failed', number?][] }
 type Failure = { error: string }
 type Bridge = {
-  mcp?: { command: string; args: string[] }
   tailnet: () => Promise<Tailnet | Failure>
   machine: () => Promise<Machine | Failure>
   showFolder: () => Promise<string>

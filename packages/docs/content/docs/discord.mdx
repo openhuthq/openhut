@@ -1,0 +1,44 @@
+---
+title: Discord
+description: Each agent is its own Discord bot. It answers in the channels you list.
+icon: logo:discord
+---
+
+<Steps>
+<Step>
+
+### Make a bot
+
+On the [Discord Developer Portal](https://discord.com/developers/applications), **New Application** and give it the agent's name. On **Bot**, turn on **Message Content Intent** and **Save Changes**. OpenHut checks it's on: without it Discord drops the bot's connection.
+
+</Step>
+<Step>
+
+### Invite it to your server
+
+On **OAuth2** › **URL Generator**, tick `bot`, then under Bot Permissions tick **View Channels**, **Send Messages**, **Send Messages in Threads**, **Create Public Threads** and **Read Message History**. Open the link at the bottom and pick your server. For a private channel, also add the bot to it.
+
+</Step>
+<Step>
+
+### Copy the token and the channel IDs
+
+- **Bot token**: **Bot** › **Reset Token**, then copy it.
+- **Channel IDs**: in Discord, **User Settings** › **Advanced** › turn on **Developer Mode**. Then right-click a channel, like `#on-call`, › **Copy Channel ID**.
+
+</Step>
+<Step>
+
+### Connect
+
+On the agent, under **Talk to it on**, **Set up** next to Discord. Paste the token and the channel IDs and press **Connect**. Everyone in those channels can mention the agent; it answers in a thread. It doesn't answer DMs.
+
+</Step>
+<Step>
+
+### Change them any time
+
+Open Discord again under **Talk to it on** to change its channel IDs.
+
+</Step>
+</Steps>
