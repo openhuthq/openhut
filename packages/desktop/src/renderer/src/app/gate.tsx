@@ -15,10 +15,13 @@ import { activeOf, GateContext, useChosen } from '@/features/cloud/workspaces'
 import { JoinLinkDialog } from '@/features/join/cloud-join'
 import { useFirstRun, type FirstRun } from '@/features/settings/desktop'
 import { isPhone, UnlockCanceled } from '@/lib/native'
+import { RequestError } from '@/lib/api-client'
 import { useOpen } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
 type Me = { error: Error | null; isFetching: boolean; refetch: () => unknown }
+
+const INSTALL_POLL_MS = 3000
 
 export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   const cloud = useCloud()
@@ -30,7 +33,11 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   const [offer, setOffer] = useState(false)
   const helper = usePasskeys()
   const [readying, setReadying] = useState(false)
-  const step = gateOf({ cloud: cloud.data, setup: run.data, down: Boolean(me.error ?? cloud.error) })
+  const error = me.error ?? cloud.error
+  const installing = error instanceof RequestError && error.status === 503
+  const { refetch: refetchMe } = me
+  const { refetch: refetchCloud } = cloud
+  const step = gateOf({ cloud: cloud.data, setup: run.data, down: Boolean(error) })
   const done = run.data?.done
   useEffect(() => {
     if (done) void queries.invalidateQueries()
@@ -38,7 +45,12 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   useEffect(() => {
     if (step === 'unlock') void notifyUnlock()
   }, [step])
-  if (step === 'loading') return me.error ?? cloud.error ? <Down error={me.error ?? cloud.error} retrying={me.isFetching} onRetry={() => { void me.refetch(); void cloud.refetch() }} /> : <Waiting />
+  useEffect(() => {
+    if (!installing) return
+    const timer = setInterval(() => { void refetchMe(); void refetchCloud() }, INSTALL_POLL_MS)
+    return () => clearInterval(timer)
+  }, [installing, refetchMe, refetchCloud])
+  if (step === 'loading') return error && !installing ? <Down error={error} retrying={me.isFetching} onRetry={() => { void me.refetch(); void cloud.refetch() }} /> : <Waiting note={installing ? 'Setting up OpenHut on this computer. The first time takes a few minutes.' : undefined} />
   if (isPhone() && step !== 'ready') return <Stage><Step title="Finish on your computer." line="Set up OpenHut there, then come back." /></Stage>
   if (step === 'kit' && !saving) setSaving(true)
   if (saving) return <Stage><SaveKit onDone={() => {
@@ -57,8 +69,8 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   return <GateContext value={{ cloud: cloud.data, active }}>{children}</GateContext>
 }
 
-function Waiting() {
-  return <div className="grid h-dvh place-items-center bg-sidebar"><span className="animate-[fadein_.3s_1s_both]"><Spinner className="size-5" /></span></div>
+function Waiting({ note }: { note?: string }) {
+  return <div className="grid h-dvh place-items-center bg-sidebar"><span className="flex animate-[fadein_.3s_1s_both] flex-col items-center gap-3 px-8 text-center"><Spinner className="size-5" />{note && <span className="max-w-[320px] text-[14px] text-body">{note}</span>}</span></div>
 }
 
 function Down({ error, retrying, onRetry }: { error: Error | null; retrying: boolean; onRetry: () => void }) {
