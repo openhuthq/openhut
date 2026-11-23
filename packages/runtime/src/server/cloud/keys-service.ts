@@ -2,8 +2,8 @@ import { spawnSync } from 'node:child_process'
 import { randomInt } from 'node:crypto'
 import { hostname } from 'node:os'
 import * as z from 'zod/mini'
-import { checkProof, MemberList, parseJson, signProof, type CloudSession, type Letter, type Member, type MemberListBody } from '@openhut/common/cloud/cloud.ts'
-import { anchorOf, bodyOf, check, firstOf, keyVersionOf, nextOf, signList, withoutDevices, youngUntil } from '@openhut/common/cloud/member-list.ts'
+import { checkProof, MemberList, parseJson, signProof, type CloudSession, type Letter, type Member } from '@openhut/common/cloud/cloud.ts'
+import { anchorOf, bodyOf, check, firstOf, keyVersionOf, nextOf, signList, withoutDevices } from '@openhut/common/cloud/member-list.ts'
 import { equal, fromBase64, fromWords, identity, letter, lock, newKey, newWords, read, slot, toBase64, unlock, type Bytes, type Identity, type LetterPurpose } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { HttpError } from '../platform/http-error.ts'
@@ -155,7 +155,6 @@ export const keysService = {
   async newKit(): Promise<{ words: string[]; box: string; ask: number[] }> {
     const account = (await keyStore.read()).account
     if (!account) throw new HttpError(409, 'Enable OpenHut Cloud before making a recovery kit.')
-    await notYoung(account)
     const { words, key } = await newWords()
     const box = await lock({ key, version: 1, bind: bind({ sub: account.sub, name: 'kit' }), plain: fromBase64(account.key) })
     return { words, box: toBase64(box ?? new Uint8Array()), ask: [randomInt(0, 6), randomInt(6, 12)] }
@@ -192,7 +191,6 @@ export const keysService = {
     const account = keysService.mustBeOn()
     const body = bodyOf(account.list)
     const me = await keysService.deviceKey()
-    await notYoung(account)
     const mine = body?.members.find((member) => member.email === account.email)
     if (!body || !mine || !remove.length || remove.some((device) => device === me || device === mine.kit || !mine.devices.includes(device))) throw new HttpError(400, 'Pick one of your other devices to remove.', { param: 'device' })
     const since = Math.min(...remove.map((device) => body.added?.[device] ?? 0))
@@ -205,7 +203,6 @@ export const keysService = {
     const account = keysService.mustBeOn()
     const body = bodyOf(account.list)
     const me = toBase64((await keysService.device()).publicKey)
-    await notYoung(account)
     const mine = body?.members.find((member) => member.email === account.email)
     const oldKit = toBase64((await accountDevice(fromBase64(account.key))).publicKey)
     if (!body || !mine) throw new HttpError(409, `Enable OpenHut Cloud on this computer first.`)
@@ -247,16 +244,6 @@ export const keysService = {
     const who = account?.key ? { sub: account.sub, email: account.email } : locked
     if (account || locked) await keyStore.write({ device: toBase64(newKey()), machine, locked: who })
   },
-}
-
-export async function notYoung(account: Account): Promise<void> {
-  const body = bodyOf(account.list)
-  if (body) notYoungIn({ body, device: await keysService.deviceKey() })
-}
-
-export function notYoungIn({ body, device }: { body: MemberListBody; device: string }): void {
-  const until = youngUntil(body, device)
-  if (until > Date.now()) throw new HttpError(403, `This computer was added less than 3 days ago, so it can’t remove devices or reset encryption yet. Do it from an older one, or wait until ${new Date(until).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
 }
 
 export const openLetter = async ({ found, workspace }: { found: Letter; workspace: string }): Promise<Bytes | null> =>

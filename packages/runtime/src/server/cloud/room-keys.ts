@@ -1,12 +1,12 @@
 import * as z from 'zod/mini'
 import { Letter, MemberList, type MemberListBody, type Role } from '@openhut/common/cloud/cloud.ts'
-import { anchorOf, bodyOf, check, firstOf, keyVersionOf, nextOf, signList, withoutDevices, youngUntil } from '@openhut/common/cloud/member-list.ts'
+import { anchorOf, bodyOf, check, firstOf, keyVersionOf, nextOf, signList, withoutDevices } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64, identity, letter, lock, lockInvite, newKey, sha256, toBase64, unlock, type Bytes, type Identity } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { log } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { keyStore, type Account, type Outgoing, type Room, type Stored } from './key-store.ts'
-import { accountDevice, deviceName, keysService, notYoungIn, openLetter, ownOf, readSecret, rotateKeys, sealTo, secretOf, type Sent } from './keys-service.ts'
+import { accountDevice, deviceName, keysService, openLetter, ownOf, readSecret, rotateKeys, sealTo, secretOf, type Sent } from './keys-service.ts'
 
 const INVITE_MS = 48 * 60 * 60_000
 const INVITE_URL = 'https://openhut.dev/join'
@@ -118,7 +118,6 @@ export const roomKeys = {
     if (rotate && mine === 'member') throw new HttpError(403, 'Only an owner or admin can reset encryption.')
     const gone = [...body.members.filter((member) => emails.includes(member.email)).flatMap((member) => member.devices), ...devices.filter((device) => body.members.some((member) => member.devices.includes(device)))]
     if (devices.some((device) => !body.members.some((member) => member.email === account.email && member.devices.includes(device))) && mine === 'member') throw new HttpError(403, 'Only an owner or admin can remove someone else’s device.')
-    if (gone.length && !leaving) notYoungIn({ body, device: me })
     const base = withoutDevices({ body: await nextOf({ list: room.list, body, me }), gone })
     const members = base.members.filter((member) => !emails.includes(member.email))
     const keyVersion = keyVersionOf(body) + (rotate ? 1 : 0)
@@ -308,7 +307,7 @@ async function listKit({ ws, call }: { ws: string; call: Call }): Promise<void> 
   const me = await keysService.deviceKey()
   const mine = body?.members.find((member) => member.email === account?.email)
   const home = roomKeys.members()
-  if (!room || !body || !kit || !mine?.devices.includes(me) || ws === account?.workspace.id || youngUntil(body, me) > Date.now()) return
+  if (!room || !body || !kit || !mine?.devices.includes(me) || ws === account?.workspace.id) return
   if (home?.members.find((member) => member.email === account?.email)?.kit !== kit) return
   const gone = mine.devices.filter((device) => device !== me && device !== kit && (home.removed.includes(device) || device === mine.kit))
   const adds = !mine.devices.includes(kit)

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
 import { checkProof, CloudWorkspace, DeleteNotice, DeviceRequest, parseJson, Record, siteHost, type Backup, type SetHere } from '@openhut/common/cloud/cloud.ts'
-import { anchorOf, bodyOf, newUntil } from '@openhut/common/cloud/member-list.ts'
+import { anchorOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
 import { FileValue, openRecord, sealRecord, SYNCED, type AgentValue, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
 import { fromBase64, readHeader, slot, toBase64 } from '@openhut/common/vault/vault.ts'
 import { agentService } from '../agents/agent-service.ts'
@@ -548,7 +548,7 @@ async function signedDelete({ ws, json }: { ws: string; json: unknown }): Promis
   const notice = Gone.safeParse(json).data?.deleted
   const body = roomKeys.members(ws)
   const signer = notice && body?.members.find((member) => member.devices.includes(notice.by))
-  if (!notice || !body || !signer || signer.role === 'member' || signer.kit === notice.by || body.runtimes?.includes(notice.by) || newUntil(body, notice.by) > notice.signedAt) return false
+  if (!notice || !body || !signer || signer.role === 'member' || signer.kit === notice.by || body.runtimes?.includes(notice.by)) return false
   return checkProof({ device: notice.by, proof: 'delete', parts: [ws, String(notice.signedAt)], signature: notice.signature })
 }
 

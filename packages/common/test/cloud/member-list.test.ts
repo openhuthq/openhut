@@ -307,7 +307,7 @@ test('a new device can remove an older one right away, and the other way round',
   assert.ok(await check({ anchor: start.anchor, chain: [start.list, v2, await v3(withoutNew, moMac)] }))
 })
 
-test('a device is young only next to its own person’s older devices, so an admin who joined today can let a device in and remove people', async () => {
+test('an admin who joined today can let a device in and remove people', async () => {
   const start = await dated()
   const joined = T + DAY
   const ana = { email: 'ana@example.com', role: 'admin' as const, devices: [key(anaMac)] }
@@ -322,7 +322,7 @@ test('a device is young only next to its own person’s older devices, so an adm
   assert.ok(await check({ anchor: start.anchor, chain: [start.list, v2, removed] }))
 })
 
-test('the first device of a workspace is never young, and a device name never changes once listed', async () => {
+test('a device name never changes once listed', async () => {
   const start = await dated()
   const v2 = after(start)
   assert.ok(await check({ anchor: start.anchor, chain: [start.list, await v2({ keyVersion: 2, at: T + 1000 }, moMac)] }))

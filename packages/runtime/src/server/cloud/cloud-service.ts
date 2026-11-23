@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import type { FastifyReply } from 'fastify'
 import * as z from 'zod/mini'
 import { type CloudWorkspaceView, KeyBox, Letter, MemberList, signProof, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type RuntimeInvite, type UnlockCloud, siteHost } from '@openhut/common/cloud/cloud.ts'
-import { addedOf, bodyOf, check, newUntil, youngUntil } from '@openhut/common/cloud/member-list.ts'
+import { addedOf, bodyOf, check } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64, letter, toBase64 } from '@openhut/common/vault/vault.ts'
 import { kitId } from '@openhut/common/vault/kit-file.ts'
 import { cloud } from '../platform/cloud.ts'
@@ -11,7 +11,7 @@ import { log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { callbackBase, connectionService } from '../connections/connection-service.ts'
 import { keyStore, type Account, type AskRoom, type Move, type Room } from './key-store.ts'
-import { deviceName, deviceOs, keysService, notYoung, openLetter, readSecret } from './keys-service.ts'
+import { deviceName, deviceOs, keysService, openLetter, readSecret } from './keys-service.ts'
 import { roomKeys } from './room-keys.ts'
 import { guessSite, teamIcon } from './team-icon.ts'
 import { refusal, syncService } from './sync-service.ts'
@@ -46,7 +46,6 @@ export const cloudService = {
     const locked = !account ? keysService.locked() : undefined
     if (on && Date.now() - checkedAt > CHECK_MS) checkSoon()
     const here = await keysService.deviceKey()
-    const young = on && members ? youngUntil(members, here) : 0
     const lists = on && account ? roomKeys.rooms().map((room) => roomKeys.members(room.workspace.id)) : []
     const accountKey = await keysService.accountDeviceKey()
     const asked = locked ? resumeAsking() : undefined
@@ -61,7 +60,7 @@ export const cloudService = {
       device: here,
       workspace: on && account && members ? { id: account.workspace.id, version: members.version, members: members.members } : null,
       keyStore: keyStore.kind(), kit: on ? kitOf() : null, kitInCloud: inCloud ? inCloud.found : Boolean(keysService.kitState().saved), cloudKit: inCloud?.kit ?? null, backup: syncService.status(),
-      signInError, keptAccount: on ? null : (keysService.kitState().saved ? keysService.account()?.email ?? null : null), devices, passkey: on ? passkeySaved : passkeyInCloud, youngUntil: young > Date.now() ? new Date(young).toISOString() : null, needsSignIn: Boolean(locked && !session),
+      signInError, keptAccount: on ? null : (keysService.kitState().saved ? keysService.account()?.email ?? null : null), devices, passkey: on ? passkeySaved : passkeyInCloud, youngUntil: null, needsSignIn: Boolean(locked && !session),
       workspaces: on && account ? roomKeys.rooms().map(({ workspace: { id, key } }) => {
         const body = roomKeys.members(id)
         const invites = (body?.invites ?? []).map((each) => ({ email: each.email, role: each.role, link: roomKeys.link({ ws: id, email: each.email }) ?? null }))
@@ -172,7 +171,6 @@ export const cloudService = {
     if (roomKeys.isOwn(workspace)) throw new HttpError(403, 'This is your own team. To remove it, delete your cloud account in Settings › Backup.')
     const expected = syncService.name(workspace)
     if (expected !== null && name.trim() !== expected.trim()) throw new HttpError(400, 'Type the team name exactly as it’s shown.', { param: 'name' })
-    await notNew(workspace)
     syncService.leaving({ ws: workspace, on: true })
     const deleted = await cloud.room({ method: 'DELETE', workspace, path: '', token: await keysService.token(), body: await keysService.deleteProof(workspace) })
     if (deleted.status !== 200) syncService.leaving({ ws: workspace, on: false })
@@ -189,7 +187,6 @@ export const cloudService = {
     const shared = teams.find((ws) => roomKeys.roleIn(ws) === 'owner' && (roomKeys.members(ws)?.members.length ?? 0) > 1)
     if (shared) throw new HttpError(409, `Make someone else the owner of ${syncService.name(shared)}, or delete it first.`)
     const owned = teams.filter((ws) => roomKeys.roleIn(ws) === 'owner')
-    for (const ws of [account.workspace.id, ...owned]) await notNew(ws)
     const token = await keysService.token()
     const proof = await keysService.accountProof()
     for (const ws of teams) await agentService.keepWorkspace(ws)
@@ -364,7 +361,6 @@ export const cloudService = {
   },
 
   async addPasskey({ prf }: { prf: string }): Promise<Cloud> {
-    await notYoung(keysService.mustBeOn())
     const saved = await cloud.account({ method: 'PUT', path: '/v1/key-boxes/passkey', token: await keysService.token(), body: await keysService.passkeyBox(fromBase64(prf)) })
     boxesDiffer ||= saved.status === 403
     if (saved.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t save Touch ID. Try again.')
@@ -721,12 +717,6 @@ async function openRoom({ account, token }: { account: Account; token: string })
 
 async function teamsOf(token: string): Promise<{ id: string }[]> {
   return Teams.safeParse((await cloud.account({ method: 'GET', path: '/v1/teams', token })).json).data?.data ?? []
-}
-
-async function notNew(ws: string): Promise<void> {
-  const body = roomKeys.members(ws)
-  const until = body ? newUntil(body, await keysService.deviceKey()) : 0
-  if (until > Date.now()) throw new HttpError(403, `This computer was added less than 3 days ago, so it can’t delete a team yet. Do it from an older one, or wait until ${new Date(until).toLocaleDateString('en', { month: 'short', day: 'numeric' })}.`)
 }
 
 async function keepToRotate(): Promise<void> {
