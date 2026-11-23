@@ -34,7 +34,7 @@ export function DiscordDialog({ agent, channel, onClose }: { agent: Agent; chann
           <p className={HINT}><b>New Application</b>, then on <b>Bot</b> turn on <b>Message Content Intent</b>.</p>
         </Step>
         <Step n={2} title="Invite it to your server" state="now">
-          <p className={HINT}><b>OAuth2</b> › <b>URL Generator</b>: tick <code>bot</code>, then <b>Send Messages</b>, <b>Send Messages in Threads</b>, <b>Create Public Threads</b> and <b>Read Message History</b>. Open the link.</p>
+          <p className={HINT}><b>OAuth2</b> › <b>URL Generator</b>: tick <code>bot</code>, then <b>View Channels</b>, <b>Send Messages</b>, <b>Send Messages in Threads</b>, <b>Create Public Threads</b> and <b>Read Message History</b>. Open the link.</p>
         </Step>
         <Step n={3} title="Paste its token" state="now">
           <Field label={<span className="text-xs font-medium text-mute">Bot token</span>} error={fieldError(createChannel.error, 'botToken')} hint={<span className={HINT}><b>Bot</b> › <b>Reset Token</b>.</span>}>{(control) =>
