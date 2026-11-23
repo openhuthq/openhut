@@ -10,8 +10,6 @@ test('the main model carries its context length', () => {
   assert.deepEqual(resolve({ model: 'openai:gpt-5.5' }).primary, { provider: 'openai', model: 'gpt-5.5', contextLength: 400000 })
 })
 
-test('ids from before model keys still mean what they did, and a broken key falls back to Sonnet instead of failing the render', () => {
-  assert.equal(resolve({ model: 'haiku' }).primary.model, 'haiku')
-  assert.equal(resolve({ model: 'codex' }).primary.provider, 'codex')
+test('a broken key falls back to Sonnet instead of failing the render', () => {
   assert.deepEqual(resolve({ model: 'nonsense' }).primary, { provider: 'claude', model: 'sonnet', contextLength: null })
 })

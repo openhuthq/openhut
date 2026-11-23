@@ -138,8 +138,8 @@ const remote = async ({ name, id = helpdeskId, ver = (room.records.get(id)?.ver 
 
 test('first sign-in uploads everything once; an edit made offline goes out once on reconnect', async () => {
   syncService.connect()
-  await until(() => room.records.size === 5 && syncService.status().at !== null, 'the first backup and its head')
-  assert.deepEqual([...room.puts.values()], [1, 1, 1, 1, 1])
+  await until(() => room.records.size === 4 && syncService.status().at !== null, 'the first backup and its head')
+  assert.deepEqual([...room.puts.values()], [1, 1, 1, 1])
   assert.equal(await nameInRoom(), 'Helpdesk')
   assert.equal(JSON.stringify([...room.records.values()]).includes('Helpdesk'), false)
 

@@ -88,7 +88,7 @@ test('an agent moves sealed with its channels, chats, home and the grants this c
   assert.deepEqual([bundle.agent.model, 'fallbackModel' in bundle.agent, 'helperModels' in bundle.agent], ['claude:haiku', false, false])
   const spaced = sealFor({ publicKey: transferPublicKey, text: JSON.stringify({ ...bundle, agent: { ...bundle.agent, model: 'openrouter:a b' } }) })
   await assert.rejects(agentService.importSealed({ actor, sealed: spaced }), { status: 400 })
-  const older = sealFor({ publicKey: transferPublicKey, text: JSON.stringify({ ...bundle, agent: { ...bundle.agent, model: 'haiku', size: 'large' } }) })
+  const older = sealFor({ publicKey: transferPublicKey, text: JSON.stringify({ ...bundle, agent: { ...bundle.agent, size: 'large' } }) })
   const moved = await agentService.importSealed({ actor, sealed: older })
   assert.deepEqual([moved.agent.id, moved.agent.name, moved.agent.model, moved.agent.wanted], [id, 'Mover', 'claude:haiku', 'stopped'])
   assert.equal('size' in moved.agent, false)
