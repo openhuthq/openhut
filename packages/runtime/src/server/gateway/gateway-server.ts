@@ -20,6 +20,7 @@ import { askCard, MCP_AUTH } from '@openhut/common/asks/ask.ts'
 import { ConnectionKind } from '@openhut/common/connections/connection.ts'
 
 const PER_AGENT = 8
+const LONG_POLL = /^\/u\/telegram\/bot[^/]+\/getUpdates$/
 const MAX_BODY = 1 << 20
 const LIMITS = { requestTimeout: 60_000, headersTimeout: 10_000, connectionsCheckingInterval: 2_000 }
 const RunReport = z.object({ picked: z.literal(true).optional(), said: z.string().max(200_000).optional() })
@@ -47,10 +48,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const token = /^(?:Agent|Bearer) (.+)$/.exec(String(req.headers.authorization ?? ''))?.[1] ?? /^\/u\/telegram\/(?:file\/)?bot([^/]+)\//.exec(url.pathname)?.[1]
   const agent = token ? await agentService.byToken({ token }) : undefined
   if (!agent) return json(res, 401, errorBody({ status: 401, message: 'Send this agent\'s own token.' }))
-  if (activity.count(agent.id) >= PER_AGENT) return json(res, 429, errorBody({ status: 429, message: `This agent already has ${PER_AGENT} requests running. Wait for them.` }), true)
-  activity.started(agent.id)
-  res.on('close', () => activity.ended(agent.id))
   const path = url.pathname
+  const listening = LONG_POLL.test(path)
+  if (!listening && activity.count(agent.id) >= PER_AGENT) return json(res, 429, errorBody({ status: 429, message: `This agent already has ${PER_AGENT} requests running. Wait for them.` }), true)
+  if (!listening) {
+    activity.started(agent.id)
+    res.on('close', () => activity.ended(agent.id))
+  }
   const brokered = /^\/u\/([a-z]+)(\/.*)$/.exec(path)
   const upstream = brokered && upstreams.get(brokered[1])
   if (brokered && upstream) return brokerService.forward({ agent, upstream, path: brokered[2] + url.search, req, res })

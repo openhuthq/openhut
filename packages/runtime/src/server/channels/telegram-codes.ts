@@ -9,6 +9,8 @@ export const CLAIM_MS = 10 * 60_000
 export const INVITE_MS = 24 * 60 * 60_000
 const START = /^\/start(?:@\w+)?\s+([\w-]{16,64})$/
 const polling = new Map<string, AbortController>()
+export const EXPIRED = 'That link expired or was already used. Open the newest one in OpenHut.'
+export const welcome = (name: string) => `Hi ${name}, you're in. Ask me anything.`
 
 export type Person = { userId: string; name: string; chatId: number }
 type Kind = 'claim' | 'invite'
@@ -31,20 +33,17 @@ export const telegramCodes = {
     return row && new Date(row.expires_at).getTime() > Date.now() ? { channelId: row.channel_id } : undefined
   },
 
-  async settle(channelId: string): Promise<void> {
+  async stop({ channelId, kind }: { channelId: string; kind?: Kind }): Promise<void> {
     polling.get(channelId)?.abort()
     polling.delete(channelId)
-    await db.deleteFrom('telegram_code').where('channel_id', '=', channelId).where('kind', '=', 'claim').execute()
-  },
-
-  async stop(channelId: string): Promise<void> {
-    polling.get(channelId)?.abort()
-    polling.delete(channelId)
-    await db.deleteFrom('telegram_code').where('channel_id', '=', channelId).execute()
+    let remove = db.deleteFrom('telegram_code').where('channel_id', '=', channelId)
+    if (kind) remove = remove.where('kind', '=', kind)
+    await remove.execute()
   },
 
   async pending(): Promise<string[]> {
-    const rows = await db.selectFrom('telegram_code').select('channel_id').where('kind', '=', 'claim').where('expires_at', '>', new Date()).execute()
+    const rows = await db.selectFrom('telegram_code as t').innerJoin('channel as c', 'c.id', 't.channel_id').select('t.channel_id')
+      .where('t.kind', '=', 'claim').where('t.expires_at', '>', new Date()).where('c.status', '=', 'linking').execute()
     return rows.map((row) => row.channel_id)
   },
 
@@ -54,7 +53,8 @@ export const telegramCodes = {
 }
 
 async function current(channelId: string): Promise<string | undefined> {
-  const row = await db.selectFrom('telegram_code').select('sealed').where('channel_id', '=', channelId).where('kind', '=', 'claim').where('expires_at', '>', new Date()).executeTakeFirst()
+  const row = await db.selectFrom('telegram_code as t').innerJoin('channel as c', 'c.id', 't.channel_id').select('t.sealed')
+    .where('t.channel_id', '=', channelId).where('t.kind', '=', 'claim').where('t.expires_at', '>', new Date()).where('c.status', '=', 'linking').executeTakeFirst()
   return row?.sealed ? unseal(row.sealed) : undefined
 }
 
@@ -89,7 +89,11 @@ async function poll({ claim, signal }: { claim: Claim; signal: AbortSignal }): P
       offset = update.update_id + 1
       const message = update.message
       const code = message?.text ? telegramCodes.codeIn(message.text) : undefined
-      if (!message?.from || !code || !await telegramCodes.take({ code, agentId: claim.agentId, kind: 'claim' })) continue
+      if (!message?.from || !code) continue
+      if (!await telegramCodes.take({ code, agentId: claim.agentId, kind: 'claim' })) {
+        await telegram.send({ botToken: claim.botToken, chatId: message.chat.id, text: EXPIRED }).catch(() => undefined)
+        continue
+      }
       await telegram.updates({ botToken: claim.botToken, offset, signal: AbortSignal.timeout(5_000) }).catch(() => undefined)
       await claim.onClaim({ userId: String(message.from.id), name: message.from.first_name ?? 'there', chatId: message.chat.id })
       return

@@ -1,40 +1,43 @@
 ---
 title: Slack
-description: Each agent is its own Slack app, with its face. It answers in the channels you pick.
+description: Each agent is its own Slack app. It answers in the channels you pick.
 icon: logo:slack
 ---
 
-<Shot src="slack" alt="The Connect to Slack dialog: create the app, then paste its three tokens" />
+<Shot src="slack" alt="The Connect to Slack dialog: create the app, then paste its two tokens" />
 
 <Steps>
 <Step>
 
 ### Create the app
 
-On the agent, under **Talk to it on**, **Set up** next to Slack, then **Create the Slack app**. Slack opens with everything filled in.
+On the agent, under **Talk to it on**, **Set up** next to Slack, then **Create the Slack app**. Slack opens with the agent's name and settings filled in. Pick your workspace and press **Create**.
 
 </Step>
 <Step>
 
-### Paste three tokens
+### Paste two tokens
 
-- **App token** (`xapp-`): **Basic Information** › **App-Level Tokens** › **Generate Token and Scopes**, with the `connections:write` scope.
-- **Bot token** (`xoxb-`): **OAuth & Permissions** › **Install to** your workspace › **Allow**, then copy the **Bot User OAuth Token**.
-- **Configuration token** (`xoxe.xoxp-`): on [Your Apps](https://api.slack.com/apps), **Your App Configuration Tokens** › **Generate Token**. OpenHut uses it once to set the app's icon to the agent's face, and doesn't keep it.
+Paste each one into the same box. OpenHut sorts them by how they start and ticks each off.
+
+- **App token** (`xapp-`): **Basic Information** › **App-Level Tokens** › **Generate Token and Scopes**, with `connections:write`.
+- **Bot token** (`xoxb-`): **Install App** › **Install to** your workspace › **Allow**, then copy the **Bot User OAuth Token**.
 
 </Step>
 <Step>
 
 ### Pick its channels
 
-Press **Connect**, then pick channels from the list. Everyone in them can mention the agent. Private channels and group DMs show up once you type `/invite @agent` in them.
+Pick channels from the list. Everyone in them can mention the agent, and it says hi when it joins. A channel shared with another company gets a warning, since people there could use the agent too. Private channels and group DMs show up once you type `/invite @agent` in them.
 
 </Step>
 <Step>
 
-### Change them any time
+### Give it its face (optional)
 
-Open Slack again under **Talk to it on** to see its channels. Remove one with its ×, or add one from the same list.
+Drag the agent's picture from the sheet onto **Basic Information** › **App icon** in Slack.
 
 </Step>
 </Steps>
+
+Open Slack again under **Talk to it on** to change its channels any time.

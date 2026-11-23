@@ -65,7 +65,8 @@ test('a bot token alone makes a linking channel with a one-time Start link, and 
   const owned = await until(() => channelService.get({ actor, id: made.id }), (channel) => channel.status === 'connected')
   assert.equal(owned.ownerAddress, '123456789')
   assert.deepEqual(owned.names, { 123456789: 'Sam' })
-  assert.deepEqual(sent.map((each) => [each.chat_id, each.text]), [[123456789, 'Hi Sam, you\'re in. Ask me anything.']])
+  assert.deepEqual(sent.map((each) => [each.chat_id, each.text]), [[555551111, 'That link expired or was already used. Open the newest one in OpenHut.'], [123456789, 'Hi Sam, you\'re in. Ask me anything.']])
+  assert.deepEqual(await db.selectFrom('telegram_code').select('kind').where('channel_id', '=', made.id).execute(), [], 'no claim code or poller outlives the claim')
 })
 
 test('an invite link lets one more person in, once', async () => {
@@ -96,7 +97,7 @@ test('codes live in the database, so a restarted runtime shows the same Start li
   const code = /\?start=([\w-]{22})$/.exec(invite.url)?.[1] ?? ''
   assert.deepEqual(await restarted.telegramCodes.take({ code, agentId: 'ag_tgclaim1', kind: 'invite' }), { channelId })
   assert.equal(await restarted.telegramCodes.take({ code, agentId: 'ag_tgclaim1', kind: 'invite' }), undefined)
-  await restarted.telegramCodes.stop(made.id)
+  await restarted.telegramCodes.stop({ channelId: made.id })
   assert.deepEqual(await restarted.telegramCodes.pending(), [])
 })
 

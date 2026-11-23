@@ -27,6 +27,7 @@ export const Channel = z.object({
   allowed: z.array(z.string()),
   names: z.optional(z.record(z.string(), z.string())),
   qr: z.nullable(z.string()),
+  link: z.optional(z.string()),
   createdAt: Timestamp,
 })
 export type Channel = z.infer<typeof Channel>
@@ -39,8 +40,8 @@ export const CreateChannel = z.discriminatedUnion('kind', [
     agentId: z.string().check(z.maxLength(40)),
     botToken: z.string().check(z.regex(/^xoxb-[\w-]{10,}$/, 'Paste the bot token: it starts with xoxb-.')),
     appToken: z.string().check(z.regex(/^xapp-[\w-]{10,}$/, 'Paste the app-level token: it starts with xapp-.')),
-    configToken: z.string().check(z.regex(/^xoxe\.xoxp-[\w.-]{10,}$/, 'Paste the app configuration token: it starts with xoxe.xoxp-.')),
-    icon: z.string().check(z.maxLength(1_000_000), z.regex(/^[A-Za-z0-9+/]+={0,2}$/, 'Send the icon as a base64 PNG.')),
+    configToken: z.optional(z.string().check(z.regex(/^xoxe\.xoxp-[\w.-]{10,}$/, 'Paste the app configuration token: it starts with xoxe.xoxp-.'))),
+    icon: z.optional(z.string().check(z.maxLength(1_000_000), z.regex(/^[A-Za-z0-9+/]+={0,2}$/, 'Send the icon as a base64 PNG.'))),
   }),
   z.object({
     kind: z.literal('whatsapp'),
@@ -61,7 +62,7 @@ export const CreateChannel = z.discriminatedUnion('kind', [
     kind: z.literal('discord'),
     agentId: z.string().check(z.maxLength(40)),
     botToken: z.string().check(z.regex(/^[\w-]{20,}\.[\w-]{4,}\.[\w-]{20,}$/, 'Paste the bot token from the Developer Portal\'s Bot page.')),
-    allowed: z.array(DiscordChannelId).check(z.minLength(1, 'Add at least one channel ID.'), z.maxLength(50)),
+    allowed: z._default(z.array(DiscordChannelId).check(z.maxLength(50)), []),
   }),
 ])
 export type CreateChannel = z.infer<typeof CreateChannel>
@@ -80,6 +81,7 @@ export const Conversation = z.object({
   shared: z.boolean(),
   members: z.number(),
   joined: z.boolean(),
+  group: z.optional(z.string()),
 })
 export type Conversation = z.infer<typeof Conversation>
 

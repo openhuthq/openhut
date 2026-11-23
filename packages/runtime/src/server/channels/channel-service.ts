@@ -18,7 +18,7 @@ import { runSet } from '../cloud/run-set.ts'
 import type { Caller } from '../team/identity.ts'
 import { audienceOf } from './audience.ts'
 import { whatsappPairing } from './whatsapp-pairing.ts'
-import { telegramCodes, type Person } from './telegram-codes.ts'
+import { telegramCodes, welcome, type Person } from './telegram-codes.ts'
 import { activity } from '../gateway/activity.ts'
 
 const CHANNEL_KINDS = new Set<ChannelKind>(['slack', 'discord'])
@@ -93,11 +93,11 @@ export const channelService = {
       await recordsService.put({ collection: 'channel', id: row.id, parent: agentId, workspace: facts.workspace, personal: facts.personal, value: add(current), secret: held.secret, reapply: (latest) => ({ value: add(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
       emit({ name: 'channel.updated', target: { type: 'channel', id: row.id, kind: 'telegram', agentId } })
       agentService.holdReapply(agentId)
-      await runSet.apply({ workspace: facts.workspace, id: agentId })
+      await runSet.apply({ workspace: facts.workspace, id: agentId }).catch((err: unknown) => log.warn({ event: 'telegram.join_apply_failed', agent: agentId, error: messageOf(err) }))
       void activity.quiet({ agentId, ms: QUIET_MS }).then(() => agentService.releaseReapply(agentId))
         .catch((err: unknown) => log.warn({ event: 'telegram.join_reapply_failed', agent: agentId, error: messageOf(err) }))
     }
-    await telegram.send({ botToken, chatId: person.chatId, text: `Hi ${person.name}, you're in. Ask me anything.` }).catch(() => undefined)
+    await telegram.send({ botToken, chatId: person.chatId, text: welcome(person.name) }).catch(() => undefined)
     return { object: 'telegram_join', joined: !known }
   },
 
@@ -112,10 +112,15 @@ export const channelService = {
     const botToken = ChannelSecrets.safeParse(held.secret).data?.botToken
     const added = [...new Set(patch.allowed ?? [])].filter((address) => !current.allowed.includes(address))
     if (current.kind === 'discord' && botToken && added.length) await discord.enter({ botToken, ids: added, bot: current.account ?? 'The bot' })
-    const change = (value: ChannelRecord): ChannelRecord => ({ ...value, ...patch.allowed && { allowed: [...new Set(patch.allowed)] }, ...!CHANNEL_KINDS.has(current.kind) && patch.open !== undefined && { open: patch.open } })
+    const live = current.kind === 'discord' && !!patch.allowed?.length ? { status: 'connected' as const } : {}
+    const change = (value: ChannelRecord): ChannelRecord => ({ ...value, ...live, ...patch.allowed && { allowed: [...new Set(patch.allowed)] }, ...!CHANNEL_KINDS.has(current.kind) && patch.open !== undefined && { open: patch.open } })
     const saved = await recordsService.put({ collection: 'channel', id, parent: facts.id, workspace: facts.workspace, personal: facts.personal, value: change(current), secret: held.secret, reapply: (latest) => ({ value: change(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
     emit({ name: 'channel.updated', actor, target: { type: 'channel', id, kind: current.kind, agentId: facts.id } })
     await runSet.apply({ workspace: facts.workspace, id: facts.id })
+    if (current.kind === 'discord' && botToken && added.length) {
+      const failed = await discord.greet({ botToken, ids: added, bot: current.account ?? 'The bot' })
+      if (failed.length) log.warn({ event: 'channel.greet_failed', agent: facts.id, failed })
+    }
     return channelOf({ held: saved ?? held, qr: null })
   },
 
@@ -134,8 +139,8 @@ export const channelService = {
     const held = await recordOf(id)
     const kind = ChannelRecord.parse(held.value).kind
     const botToken = ChannelSecrets.safeParse(held.secret).data?.botToken
-    if (kind !== 'slack' || !botToken) throw new HttpError(404, `Only Slack has channels to pick. This is ${LABEL[kind]}.`)
-    return slack.conversations({ botToken })
+    if (!botToken || (kind !== 'slack' && kind !== 'discord')) throw new HttpError(404, `Only Slack and Discord have channels to pick. This is ${LABEL[kind]}.`)
+    return kind === 'slack' ? slack.conversations({ botToken }) : discord.conversations({ botToken })
   },
 
   async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'channel'>> {
@@ -216,7 +221,7 @@ async function setupOf({ body, facts }: { body: CreateChannel; facts: AgentFacts
     }
     case 'discord': {
       const account = await discord.verify({ botToken: body.botToken, channels: body.allowed })
-      return { status: 'connected', account, secret: { botToken: body.botToken } }
+      return { status: body.allowed.length ? 'connected' : 'linking', account, secret: { botToken: body.botToken } }
     }
     case 'whatsapp': {
       if (facts.row && !(await features()).whatsapp) throw new HttpError(409, 'This computer can\'t link WhatsApp. Run the agent on a Linux computer you added to use it.', { param: 'kind' })
@@ -234,7 +239,7 @@ async function disconnect(row: Row): Promise<void> {
       return
     case 'slack': return
     case 'telegram':
-      await telegramCodes.stop(row.id)
+      await telegramCodes.stop({ channelId: row.id })
       return
     case 'discord': return
   }
@@ -252,8 +257,8 @@ async function claimed({ row, botToken, person }: { row: Row; botToken: string; 
   const own = (value: ChannelRecord): ChannelRecord => ({ ...value, status: 'connected', ownerAddress: person.userId, names: { ...value.names, [person.userId]: person.name } })
   await recordsService.put({ collection: 'channel', id: row.id, parent: row.agent_id, workspace: facts.workspace, personal: facts.personal, value: own(ChannelRecord.parse(held.value)), secret: held.secret, reapply: (latest) => ({ value: own(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
   await db.updateTable('channel').set({ status: 'connected', owner_address: person.userId }).where('id', '=', row.id).execute()
-  await telegramCodes.settle(row.id)
-  await telegram.send({ botToken, chatId: person.chatId, text: `Hi ${person.name}, you're in. Ask me anything.` }).catch(() => undefined)
+  await telegramCodes.stop({ channelId: row.id, kind: 'claim' })
+  await telegram.send({ botToken, chatId: person.chatId, text: welcome(person.name) }).catch(() => undefined)
   emit({ name: 'channel.linked', target: { type: 'channel', id: row.id, kind: 'telegram', agentId: row.agent_id } })
   await runSet.apply({ workspace: facts.workspace, id: row.agent_id }).catch((err: unknown) => log.warn({ event: 'telegram.claim_apply_failed', agent: row.agent_id, error: messageOf(err) }))
 }
@@ -274,7 +279,8 @@ function channelsOf(records: Held[]): Channel[] {
 
 function channelOf({ held, qr }: { held: Held; qr: string | null }): Channel {
   const value = ChannelRecord.parse(held.value)
-  return { id: held.id, object: 'channel', agentId: held.parent ?? '', kind: value.kind, status: value.status, account: value.account, ownerAddress: value.ownerAddress, open: value.open, allowed: value.allowed, names: value.names, qr, createdAt: value.createdAt }
+  const botToken = value.kind === 'discord' ? ChannelSecrets.safeParse(held.secret).data?.botToken : undefined
+  return { id: held.id, object: 'channel', agentId: held.parent ?? '', kind: value.kind, status: value.status, account: value.account, ownerAddress: value.ownerAddress, open: value.open, allowed: value.allowed, names: value.names, qr, ...botToken && { link: discord.invite(botToken) }, createdAt: value.createdAt }
 }
 
 function rowChannel({ row, qr }: { row: Row; qr: string | null }): Channel {

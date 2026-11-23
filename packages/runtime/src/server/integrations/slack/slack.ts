@@ -23,10 +23,11 @@ const TYPES = ['public_channel,private_channel', 'mpim']
 const PAGES = 20
 
 export const slack = {
-  async verify({ botToken, appToken, configToken, icon, agentName }: { botToken: string; appToken: string; configToken: string; icon: string; agentName: string }): Promise<string> {
+  async verify({ botToken, appToken, configToken, icon, agentName }: { botToken: string; appToken: string; configToken?: string; icon?: string; agentName: string }): Promise<string> {
     const bot = await checkBot(botToken)
     const app = await call({ method: 'apps.connections.open', token: appToken, schema: Ok })
     if (!app.ok) throw new HttpError(400, `Slack didn't accept the app-level token (${app.error}). Make one with the connections:write scope.`, { param: 'appToken' })
+    if (!configToken || !icon) return `${bot.team} · @${bot.user}`
     const info = await call({ method: 'bots.info', token: botToken, params: { bot: bot.bot_id ?? '' }, schema: BotInfo })
     if (!info.ok) throw new HttpError(400, `Slack didn't say which app the bot token belongs to (${info.error}). Copy it again from OAuth & Permissions.`, { param: 'botToken' })
     const form = new FormData()

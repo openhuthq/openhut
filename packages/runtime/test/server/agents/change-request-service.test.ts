@@ -89,8 +89,8 @@ test('an agent can ask for Discord with its bot token, and the token stays out o
   const row = await db.selectFrom('change_request').select(['summary', 'input']).where('action', '=', 'add_channel').orderBy('created_at', 'desc').executeTakeFirstOrThrow()
   assert.equal(row.summary, 'Add Discord')
   assert.doesNotMatch(row.summary, /fake-discord/)
-  const noChannels = await client.callTool({ name: 'add_channel', arguments: { why: 'x', kind: 'discord', botToken: token, allowed: [], origin: app } })
-  assert.equal(noChannels.isError, true)
+  const noChannels = await client.callTool({ name: 'add_channel', arguments: { why: 'x', kind: 'discord', botToken: token, origin: app } })
+  assert.notEqual(noChannels.isError, true, 'the owner picks its channels in OpenHut')
 })
 
 test('a decision the agent never heard about is sent again after a restart', async () => {
