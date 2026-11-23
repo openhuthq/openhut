@@ -25,4 +25,5 @@ test('pairs Hermes start and finish events, merges repeats and names call_tool b
 
 test('reads events without ids, as older replies stored them', () => {
   assert.deepEqual(stepsOf([{ tool: 'call_tool', label: 'postgres_query' }]).map((step) => step.title), ['postgres_query'])
+  assert.deepEqual(stepsOf([{ tool: 'mcp__openhut__ask_to_connect', label: 'Cloudflare' }]).map((step) => [step.title, step.detail]), [['ask_to_connect', undefined]])
 })

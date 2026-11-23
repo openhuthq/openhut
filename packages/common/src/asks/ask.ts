@@ -27,7 +27,7 @@ export function askCard({ app, url, name, auth, why, agentId }: Ask & { why: str
     { op: 'add', path: '/elements/ask', value: { type: 'Card', props: { title: name ?? CONNECTION_TITLES[app], brand, ...(host && { subtitle: host }) }, children: ['why', 'acts'] } },
     { op: 'add', path: '/elements/why', value: { type: 'Text', props: { content: why } } },
     { op: 'add', path: '/elements/acts', value: { type: 'Actions', props: {}, children: ['go'] } },
-    { op: 'add', path: '/elements/go', value: { type: 'LinkButton', props: { label: `Connect ${name ?? CONNECTION_TITLES[app]}`, url: link } } },
+    { op: 'add', path: '/elements/go', value: { type: 'LinkButton', props: { label: 'Connect', url: link } } },
   ]
   return `\`\`\`spec\n${patch.map((line) => JSON.stringify(line)).join('\n')}\n\`\`\``
 }

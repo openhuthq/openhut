@@ -45,15 +45,17 @@ export function kindOf(tool: string): StepKind {
   return 'other'
 }
 
+const ARGUMENT_LABELS = new Set(['ask_to_connect'])
+
 function stepOf({ event, key }: { event: ToolProgress; key: string }): Step {
   const tool = event.tool ?? event.name ?? event.label ?? 'tool'
   const label = event.label?.trim()
-  const named = label && label !== tool && /^[\w.-]{1,64}$/.test(label)
+  const named = label && label !== tool && /^[\w.-]{1,64}$/.test(label) && !ARGUMENT_LABELS.has(shortName(tool))
   return {
     key,
     tool,
     title: named ? label : shortName(tool),
-    detail: label && label !== tool && !named ? label : undefined,
+    detail: label && label !== tool && !named && !ARGUMENT_LABELS.has(shortName(tool)) ? label : undefined,
     count: 1,
     done: event.status === 'completed',
   }

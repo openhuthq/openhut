@@ -29,7 +29,7 @@ test('ask_to_connect gives a card that opens the sheet for this agent', async ()
 test('ask_to_connect fills in an MCP server and refuses a url for anything else', async () => {
   const mcp = await call({ app: 'mcp', why: 'CPU and alerts.', url: 'https://mcp.digitalocean.com/mcp', name: 'DigitalOcean' })
   assert.match(mcp.content[0].text, /\/connections\/new\/mcp\?for=ag_askagent&url=https%3A%2F%2Fmcp\.digitalocean\.com%2Fmcp&name=DigitalOcean/)
-  assert.match(mcp.content[0].text, /Connect DigitalOcean/)
+  assert.match(mcp.content[0].text, /"title":"DigitalOcean"/)
   assert.match(mcp.content[0].text, /"brand":"digitalocean"/)
   const cloudflare = await call({ app: 'mcp', why: 'Workers logs.', url: 'https://observability.mcp.cloudflare.com/mcp', name: 'Cloudflare', auth: 'sign_in' })
   assert.match(cloudflare.content[0].text, /name=Cloudflare&auth=sign_in/)

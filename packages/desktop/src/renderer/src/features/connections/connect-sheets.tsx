@@ -41,7 +41,7 @@ export function ConnectSheet({ me, item }: { me: Me; item: Integration }) {
   }, [asker?.id, wanted.agentId, item.name])
   if (wanted.agentId && !agents.data) return null
   const host = asker && wanted.url && URL.canParse(wanted.url) ? new URL(wanted.url).host : undefined
-  const existing = asker ? (connections.data ?? []).filter((connection) => connection.kind === item.name && connection.usable && copyOn({ connection, computer: asker.computer }) && (item.name !== 'mcp' || connection.name === wanted.name)) : []
+  const existing = asker ? (connections.data ?? []).filter((connection) => connection.kind === item.name && connection.usable && copyOn({ connection, computer: asker.computer }) && (item.name !== 'mcp' || connection.account.split(' · ')[0] === host)) : []
   const ask = asker ? { url: wanted.url, name: wanted.name, auth: wanted.auth, computer: asker.computer, line: <AskedLine asker={asker} host={host} existing={existing} /> } : {}
   const close = () => { asked.forget(); navigate('/connections') }
   const props = { me, item, returned, ask, close }

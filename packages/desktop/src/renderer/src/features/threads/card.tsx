@@ -5,6 +5,7 @@ import { createRenderer } from '@json-render/react'
 import { cardCatalog } from '@openhut/common/cards/card.ts'
 import { askedPath } from '@openhut/common/asks/ask.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { isBrand } from '@/components/brand-icons'
 import { Glyph } from '@/components/glyph'
 import { integration } from '@/features/connections/catalog'
@@ -63,7 +64,7 @@ export const MessageCard = createRenderer(cardCatalog, {
   },
   LinkButton: ({ element: { props } }) => {
     const inApp = askedPath(props.url)
-    if (inApp) return <a href={inApp} className={buttonVariants({ variant: 'text' })}>{props.label}</a>
+    if (inApp) return <a href={inApp} className={cn(buttonVariants({ variant: 'text' }), 'ml-auto')}>{props.label}</a>
     return <a href={props.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>{props.label}<span className="text-[11px] text-mute">↗</span></a>
   },
 })
