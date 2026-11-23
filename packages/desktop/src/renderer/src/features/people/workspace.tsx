@@ -23,11 +23,14 @@ export function TeamSettings() {
   const admin = active.role !== 'member'
   return <>
     <TeamHeader workspace={active} editing={admin ? opened ?? undefined : undefined} />
-    <TeamPeople workspace={active} />
     <TeamMore workspace={active} />
     {opened === 'keys' && admin && <KeysConfirm workspace={active} />}
     {opened === 'leave' && !active.own && <LeaveConfirm workspace={active} />}
   </>
+}
+
+export function PeopleSettings() {
+  return <TeamPeople workspace={useWorkspaces().active} />
 }
 
 function TeamHeader({ workspace, editing }: { workspace: CloudWorkspaceView; editing?: string }) {

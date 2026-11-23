@@ -54,7 +54,7 @@ function KitDialog() {
 
 function SignOut() {
   const signOut = useSignOut()
-  return <ConfirmButton variant="secondary" disabled={signOut.isPending} question="Sign out?" detail="Your agents, chats and connections are deleted from this computer. They’re backed up, and come back when you sign in again." action="Sign out" onConfirm={() => signOut.mutateAsync()}><I icon={Logout03Icon} size={16} />{signOut.isPending ? 'Signing out…' : 'Sign out'}</ConfirmButton>
+  return <ConfirmButton variant="ghost" className={`${PILL} gap-1.5`} disabled={signOut.isPending} question="Sign out?" detail="Your agents, chats and connections are deleted from this computer. They’re backed up, and come back when you sign in again." action="Sign out" onConfirm={() => signOut.mutateAsync()}><I icon={Logout03Icon} size={13} />{signOut.isPending ? 'Signing out…' : 'Sign out'}</ConfirmButton>
 }
 
 function DeleteAccount({ cloud }: { cloud: Cloud }) {

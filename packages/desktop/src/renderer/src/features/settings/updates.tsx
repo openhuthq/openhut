@@ -2,7 +2,7 @@ import { CloudDownloadIcon, TestTube01Icon } from '@hugeicons/core-free-icons'
 import { buttonVariants } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { I, PILL } from '@/components/kit'
-import { usePrefs } from '@/features/settings/desktop'
+import { desktop, usePrefs } from '@/features/settings/desktop'
 import { PrefSwitch } from '@/features/settings/general'
 import { Row, Rows } from '@/features/settings/kit'
 import { downloadUrl, updateNote, useAppUpdate, type UpdateState } from '@/features/settings/update'
@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 export function UpdatesSettings() {
   const state = useAppUpdate().data
   const prefs = usePrefs()
+  if (!desktop) return <Rows><Row icon={<I icon={CloudDownloadIcon} size={20} className="text-hue-sky" />} title="OpenHut" note="Updates install from the OpenHut app on this computer." /></Rows>
   if (!state) return null
   const stays = state.current.includes('-') && prefs.data?.betaUpdates === false
   return <Rows>
