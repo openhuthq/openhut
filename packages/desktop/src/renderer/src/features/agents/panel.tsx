@@ -29,7 +29,6 @@ import { AgentStatus } from '@/features/agents/status'
 import { formValues } from '@/lib/form'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
-import { WORDS } from '@/lib/platform'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -71,7 +70,7 @@ const LABEL = 'pb-1.5 text-[12px]/[16px] text-mute'
 function BrowserRows({ agent, watching }: { agent: Agent; watching: boolean }) {
   const features = useFeatures(agent.id)
   const updateAgent = useUpdateAgent(agent.id)
-  if (!features.browser && !agent.browser) return null
+  if (!features.browser && !agent.browser) return agent.runsHere ? <Section title="Browser"><p className="m-0 text-[12px]/[16px] text-mute">Install Google Chrome on this computer, then turn Browser on.</p></Section> : null
   const toggle = <span className="flex items-center gap-2">
     {agent.browser && agent.canEdit && <a className="text-[12px] text-body underline-offset-2 hover:underline" href={agentPath({ agentId: agent.id, dialog: 'browser' })}>Open</a>}
     <Switch checked={agent.browser} aria-label="Browser" disabled={!agent.canEdit || updateAgent.isPending} onCheckedChange={() => updateAgent.mutate({ browser: !agent.browser }, { onError: toastError })} />
@@ -174,7 +173,7 @@ function RunsOn({ agent }: { agent: Agent }) {
     {move.line
       ? <p role="status" className="m-0 px-2.5 py-1 text-[12.5px]/[1.45] text-body">{move.line}</p>
       : note && <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{note}</p>}
-    {id === 'local' && !WORDS.sandboxed && <TeamHint agent={agent} server={(computers ?? []).find((each) => each.kind === 'server' && each.online)} onMove={(to) => move.go(to)} />}
+    {id === 'local' && <TeamHint agent={agent} server={(computers ?? []).find((each) => each.kind === 'server' && each.online)} onMove={(to) => move.go(to)} />}
   </>
 }
 

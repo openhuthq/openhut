@@ -7,7 +7,6 @@ import { appendFileSync, cpSync, createWriteStream, existsSync, mkdirSync, readd
 import { cpus, homedir, totalmem } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { Readable } from 'node:stream'
-import { text } from 'node:stream/consumers'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import updater from 'electron-updater'
@@ -23,7 +22,6 @@ const DEV = !app.isPackaged
 const MAC = process.platform === 'darwin'
 const WIN = process.platform === 'win32'
 if (WIN) process.env.NODE_PENDING_PIPE_INSTANCES ??= '64'
-const CONTAINER = (!MAC && !WIN) || process.env.OPENHUT_SANDBOX === 'gvisor'
 const APPIMAGE = process.env.APPIMAGE
 process.umask(0o022)
 const TEST_HOME = process.env.OPENHUT_TEST_HOME
@@ -49,11 +47,9 @@ app.on('second-instance', (_event, argv) => app.whenReady().then(() => {
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '../../..')
 const BACKEND = DEV ? ROOT : join(process.resourcesPath, 'backend')
-const SCRIPTS = DEV
-  ? { agentd: 'packages/runtime/src/agentd/agentd.ts', server: 'packages/runtime/src/server/app.ts' }
-  : { agentd: 'packages/runtime/src/agentd/agentd.mjs', server: 'packages/runtime/src/server/platform/app.mjs' }
+const SCRIPTS = { server: DEV ? 'packages/runtime/src/server/app.ts' : 'packages/runtime/src/server/platform/app.mjs' }
 const RUNTIME = process.env.AGENTD_HERMES ?? join(BACKEND, DEV ? 'packages/desktop/dist/backend/runtime' : 'runtime')
-const NATIVE_CLAUDE = join(BACKEND, DEV ? 'packages/desktop/dist/backend/bin/native' : 'bin/native', WIN ? 'claude.exe' : 'claude')
+const NATIVE_BIN = join(BACKEND, DEV ? 'packages/desktop/dist/backend/bin/native' : 'bin/native')
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? (LOOKS_DEV ? 8091 : 8081))
 const HOME = app.getPath('userData')
 const ASSETS = DEV ? ROOT : join(HOME, 'assets', app.getVersion())
@@ -66,15 +62,13 @@ const SKIPPED = join(HOME, 'skipped-version')
 const BUNDLE = join(dirname(app.getPath('exe')), '../..')
 const PIPES = WIN && `\\\\.\\pipe\\openhut-${createHash('sha256').update(HOME).digest('hex').slice(0, 12)}`
 const sockAt = (name) => PIPES ? `${PIPES}-${name}` : join(HOME, `${name}.sock`)
-const SOCK = sockAt('agentd')
 const SERVER_SOCK = sockAt('server')
 const WINDOW_STATE = join(HOME, 'window.json')
 const PREFS = join(HOME, 'prefs.json')
 const SECRET = join(HOME, 'secret.bin')
 const PENDING_INVITE = join(HOME, 'invite')
 const HANDOFF = join(DATA, 'app', 'secret.handoff')
-const LOCAL = { name: MAC ? 'This Mac' : 'This computer', url: 'http://127.0.0.1:8787' }
-const LOCAL_KEY = 'keys/local.key'
+const LOCAL = { name: MAC ? 'This Mac' : 'This computer' }
 const EDGE_INSTALL_URL = 'https://openhut.dev/edge'
 const INSTALL_URL = process.env.OPENHUT_INSTALL_URL || bakedInstallUrl()
 const JOIN_CODE = /^[\w.~:/?#=&%-]{1,500}$/
@@ -92,23 +86,20 @@ const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src
 const MAX_LOG = 10 << 20
 const PIPE_TRIES = 20
 const children = new Map()
-const restarts = { agentd: 0, server: 0 }
+const restarts = { server: 0 }
 const logs = {}
 const serverEnv = {}
 const watched = { threads: new Map(), strikes: new Map(), menu: '', tries: 0 }
 let quitting = false
-let localKey
 let main
 let tray
 let blocker
 let setup
 let booted
-let bootFailed = ''
 let linked = ownLink(process.argv.find((arg) => arg.startsWith(`${SCHEME}:`)))
 let fresh = false
 let carriedInvite = false
 let opened = false
-let fetching = null
 const updating = { checking: false, available: null, progress: 0, ready: null, error: null }
 const UPDATE_EVERY_MS = 30 * 60_000
 let updateCheck = { at: 0, quiet: false }
@@ -236,11 +227,6 @@ function bakedInstallUrl() {
   } catch {
     return EDGE_INSTALL_URL
   }
-}
-
-async function containerKey() {
-  localKey ??= (await safeStorage.decryptStringAsync(readFileSync(join(HOME, LOCAL_KEY)))).result
-  return localKey
 }
 
 const enrollments = new Map()
@@ -404,19 +390,6 @@ async function api(path, { method = 'GET', body } = {}) {
   return answer
 }
 
-function agentd(ask) {
-  if (CONTAINER) {
-    const relay = "const s = require('net').connect('/run/agentd/agentd.sock'); s.end(process.argv[1]); s.pipe(process.stdout)"
-    return new Promise((resolve, reject) => execFile('docker', ['exec', 'openhut', 'node', '-e', relay, `${JSON.stringify(ask)}\n`], { timeout: 120_000 }, (error, stdout) => error ? reject(error) : resolve(stdout))).then(JSON.parse)
-  }
-  return new Promise((resolve, reject) => {
-    const sock = connect(SOCK)
-    sock.on('error', reject)
-    sock.write(`${JSON.stringify(ask)}\n`)
-    text(sock).then((answer) => resolve(JSON.parse(answer)), reject)
-  })
-}
-
 async function refresh() {
   const agents = (await api('/api/agents')).data ?? []
   keepAwake(prefs().keepAwake && agents.some((agent) => agent.runsHere && agent.status === 'running'))
@@ -566,37 +539,13 @@ async function meet(run) {
     if (state === 'done' && run.steps[index + 1]) run.steps[index + 1][2] = 'now'
   }
   const hardware = `${cpus()[0]?.model ?? 'This computer'} · ${Math.round(totalmem() / 2 ** 30)} GB`
-  if (CONTAINER && !await dockerUp()) throw new Error(`${hardware}, but it can't run Docker`)
   step(0, hardware)
-  const downloading = follow({ run, index: 1, read: async () => fetching ?? (CONTAINER ? (await agentd({ cmd: 'progress' })).pull : null) })
-  const started = await booted.finally(downloading)
+  const started = await booted
   if (started !== true) throw new Error('OpenHut didn\'t start. Try again. Help › Show Logs has the details.')
   await api('/api/me')
   step(1, `version ${app.getVersion()}`)
-  let fence = {}
-  const pulling = follow({ run, index: 2, read: async () => (await agentd({ cmd: 'progress' })).pull })
-  await waitFor(async () => (fence = await agentd({ cmd: 'fence' })).ok, 900).finally(pulling)
-  const passed = (fence.checks ?? []).filter((check) => check.pass).length
-  if (!fence.ok) throw new Error(fence.error ?? `Agents couldn't be sealed off (${(fence.checks ?? []).filter((check) => !check.pass).map((check) => check.name).join(', ')}). Try again.`)
-  step(2, fence.skipped ? 'ready' : `${passed} of ${fence.checks.length} checks passed`)
+  step(2, 'ready')
   run.done = true
-}
-
-function follow({ run, index, read }) {
-  const tick = setInterval(() => read().then((pull) => {
-    if (!pull || run.steps[index][2] !== 'now') return
-    run.steps[index].splice(1, 3, noteOf(pull), 'now', pull.total ? Math.min(1, pull.done / pull.total) : undefined)
-  }, () => undefined), 500)
-  return () => clearInterval(tick)
-}
-
-function noteOf({ done, total }) {
-  if (!total) return 'Downloading'
-  return done >= total ? 'Setting up' : `Downloading · ${Math.floor((done / total) * 100)}%`
-}
-
-function dockerUp() {
-  return new Promise((resolve) => execFile('docker', ['info'], { timeout: 20_000 }, (error) => resolve(!error)))
 }
 
 function listening(path) {
@@ -633,17 +582,13 @@ async function boot() {
   for (const file of readdirSync(LOGS).filter((each) => each.endsWith('.log') && !each.endsWith('.old.log'))) {
     if (statSync(join(LOGS, file)).size > MAX_LOG) renameSync(join(LOGS, file), join(LOGS, file.replace(/\.log$/, '.old.log')))
   }
-  if (CONTAINER) return bootContainer()
   keepData()
   await assets()
-  const shared = { ...CLOUD, OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_BIN: dirname(NATIVE_CLAUDE) }
-  if (!PIPES) rmSync(SOCK, { force: true })
-  start('agentd', { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT) })
-  await waitFor(() => listening(SOCK), 30)
+  const shared = { ...CLOUD, OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_BIN: NATIVE_BIN, OPENHUT_CLAUDE: join(DATA, 'claude', WIN ? 'claude.exe' : 'claude') }
   if (!PIPES) rmSync(SERVER_SOCK, { force: true })
   await rootSecret()
   serverEnv.PORT = String(await signInCallbacks())
-  start('server', Object.assign(serverEnv, { ...shared, AGENTD_SOCK: SOCK, AGENTD_HERMES: RUNTIME, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_AGENT_HOST_NET: '1' }))
+  start('server', Object.assign(serverEnv, { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_AGENT_HOST_NET: '1' }))
   if (!await waitFor(() => listening(SERVER_SOCK), 60)) return false
   if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   return true
@@ -664,28 +609,6 @@ function signInCallbacks() {
     server.once('error', reject).listen(0, '127.0.0.1', () => resolve(server.address().port))
   })
   return callbacks
-}
-
-async function bootContainer() {
-  await assets()
-  const answers = async () => (await api('/api/me').then(() => true, () => false))
-  if (existsSync(join(HOME, LOCAL_KEY)) && await waitFor(answers, 90)) return true
-  if (!await dockerUp()) throw new Error('Docker isn\'t running, or your user can\'t use it. Install Docker, add yourself to the docker group (sudo usermod -aG docker $USER), sign in again, then open OpenHut.')
-  const key = randomBytes(32).toString('hex')
-  const fetched = await fetch(INSTALL_URL, { signal: AbortSignal.timeout(60_000) })
-  if (!fetched.ok) throw new Error(`OpenHut couldn't download its installer (${fetched.status} from ${INSTALL_URL}). This build may not be released yet: download OpenHut from openhut.dev.`)
-  const script = await fetched.text()
-  const log = createWriteStream(join(LOGS, 'install.log'), { flags: 'a' })
-  const env = { ...process.env, OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update(key).digest('hex'), OPENHUT_APP_VERSION: app.getVersion(), OPENHUT_PERSONAL: '1' }
-  const child = spawn('sh', ['-s'], { env, stdio: ['pipe', 'pipe', 'pipe'] })
-  for (const stream of [child.stdout, child.stderr]) stream.pipe(log, { end: false })
-  child.stdin.end(script)
-  const code = await new Promise((resolve) => child.on('close', resolve))
-  if (code !== 0) throw new Error(`Installing OpenHut in Docker stopped (exit ${code}). See install.log.`)
-  mkdirSync(join(HOME, 'keys'), { recursive: true, mode: 0o700 })
-  writeFileSync(join(HOME, LOCAL_KEY), await safeStorage.encryptStringAsync(key), { mode: 0o600 })
-  localKey = key
-  return waitFor(answers, 120)
 }
 
 function lastBooted() {
@@ -730,7 +653,7 @@ function goBack(version) {
 
 async function assets() {
   rmSync(join(HOME, 'bin'), { recursive: true, force: true })
-  if (DEV || CONTAINER || existsSync(ASSETS)) return
+  if (DEV || existsSync(ASSETS)) return
   rmSync(`${ASSETS}.tmp`, { recursive: true, force: true })
   cpSync(join(BACKEND, 'vendor/hermes-plugins'), join(`${ASSETS}.tmp`, 'vendor/hermes-plugins'), { recursive: true })
   renameSync(`${ASSETS}.tmp`, ASSETS)
@@ -918,20 +841,8 @@ async function toLocal({ req, path }) {
   const origin = req.headers.get('origin')
   if (!['GET', 'HEAD'].includes(req.method) && origin !== null && origin !== APP_ORIGIN) return refuse(403, 'Only the OpenHut app can change things here.')
   const target = path + new URL(req.url).search
-  if (!CONTAINER && await booted !== true) return refuse(502, `OpenHut's runtime didn't start. The logs are in ${LOGS}.`)
-  if (!CONTAINER) return toSocket({ req, path: target }).catch((error) => refuse(502, `OpenHut's runtime didn't answer (${error.code ?? error.message}). Try again, or restart OpenHut.`))
-  if (bootFailed) return refuse(502, `OpenHut couldn't be set up on this computer. ${bootFailed}`)
-  if (!localKey && !existsSync(join(HOME, LOCAL_KEY))) return refuse(503, `OpenHut is still being set up on ${LOCAL.name.toLowerCase()}.`)
-  const headers = new Headers(req.headers)
-  for (const name of ['host', 'origin', 'cookie', 'connection']) headers.delete(name)
-  headers.set('openhut-app-version', updating.ready?.version || app.getVersion())
-  headers.set('openhut-time-zone', Intl.DateTimeFormat().resolvedOptions().timeZone)
-  headers.set('authorization', `Bearer ${await containerKey()}`)
-  const res = await fetch(`${LOCAL.url}${target}`, { method: req.method, headers, body: req.body, duplex: 'half', redirect: 'manual' }).catch(() => undefined)
-  if (!res) return refuse(502, `OpenHut on ${LOCAL.name.toLowerCase()} isn't answering. Check that Docker is running.`)
-  const out = new Headers(res.headers)
-  for (const name of ['content-encoding', 'content-length', 'transfer-encoding', 'connection']) out.delete(name)
-  return new Response([204, 304].includes(res.status) ? null : res.body, { status: res.status, headers: out })
+  if (await booted !== true) return refuse(502, `OpenHut's runtime didn't start. The logs are in ${LOGS}.`)
+  return toSocket({ req, path: target }).catch((error) => refuse(502, `OpenHut's runtime didn't answer (${error.code ?? error.message}). Try again, or restart OpenHut.`))
 }
 
 async function relayLive({ port, path }) {
@@ -953,8 +864,7 @@ async function relayLive({ port, path }) {
 
 async function liveSocket(path) {
   if (!/^\/api\/(browsers\/[\w-]+\/live(\?fps=\d+)?|events)$/.test(path)) return undefined
-  if (!CONTAINER) return new WebSocket(`ws://localhost${path}`, { createConnection: () => connect(SERVER_SOCK) })
-  return new WebSocket(`${LOCAL.url.replace(/^http/, 'ws')}${path}`, { headers: { authorization: `Bearer ${await containerKey()}`, 'openhut-app-version': app.getVersion() } })
+  return new WebSocket(`ws://localhost${path}`, { createConnection: () => connect(SERVER_SOCK) })
 }
 
 async function toSocket({ req, path }) {
@@ -1020,22 +930,14 @@ app.whenReady().then(async () => {
   menu()
   if (APPIMAGE && !DEV) handleLinks()
   protocol.handle('app', serve)
-  fresh = !existsSync(CONTAINER ? join(HOME, LOCAL_KEY) : join(DATA, 'app'))
+  fresh = !existsSync(join(DATA, 'app'))
   keepInvite(linked)
   if (fresh) window(pendingInvite() ?? '/')
-  const carried = fresh && !pendingInvite() && !TEST_HOME ? carryClipboard(main) : Promise.resolve(false)
-  if (CONTAINER && !await dockerUp()) {
-    await carried
-    await dialog.showMessageBox({ type: 'error', message: 'OpenHut needs Docker', detail: 'On Linux, OpenHut runs each agent in its own gVisor sandbox in Docker. Install Docker (sudo apt install docker.io), let your user run it (sudo usermod -aG docker $USER), sign in again, then open OpenHut.', buttons: ['Quit'] })
-    return app.quit()
-  }
+  if (fresh && !pendingInvite() && !TEST_HOME) carryClipboard(main)
   const hidden = process.argv.includes('--hidden') || (MAC && app.getLoginItemSettings().wasOpenedAtLogin)
   booted = boot().catch((error) => {
     appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't start: ${error.message}\n`)
     return error.message
-  }).then((started) => {
-    bootFailed = started === true ? '' : String(started || 'OpenHut didn\'t start.')
-    return started
   })
   const started = await booted
   if (started !== true) {

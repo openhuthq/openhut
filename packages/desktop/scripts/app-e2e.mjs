@@ -7,17 +7,18 @@ import { bootCloud, devCloudUrl, signIn } from './dev-cloud.mjs'
 
 const { values: args } = parseArgs({ options: { installer: { type: 'string' }, app: { type: 'string' }, out: { type: 'string', default: 'app-e2e' }, agents: { type: 'string', default: '5' }, cloud: { type: 'string' } } })
 if (!args.installer && !args.app) {
-  console.error('usage: node scripts/app-e2e.mjs (--installer <OpenHut-Setup-x64.exe> | --app <OpenHut.app>) [--out <evidence folder>] [--agents 5] [--cloud <private/api>]')
+  console.error('usage: node scripts/app-e2e.mjs (--installer <OpenHut-Setup-x64.exe> | --app <OpenHut.app or linux-unpacked>) [--out <evidence folder>] [--agents 5] [--cloud <private/api>]')
   process.exit(2)
 }
 const WIN = process.platform === 'win32'
+const LINUX = process.platform === 'linux'
 const NAMES = ['Juniper', 'Atlas', 'Birch', 'Cedar', 'Dahlia', 'Elm', 'Fern', 'Grove']
-let exe = args.app ? resolve(args.app, 'Contents/MacOS/OpenHut') : ''
+let exe = args.app ? resolve(args.app, LINUX ? 'openhut' : 'Contents/MacOS/OpenHut') : ''
 const home = resolve(args.out, 'home')
 const cdpPort = 9300 + Math.floor(Math.random() * 500)
 const API = devCloudUrl()
 const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test', ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: API } }
-const evidence = { platform: `${process.platform} ${WIN ? execFileSync('cmd', ['/c', 'ver']).toString().trim() : execFileSync('sw_vers', ['-productVersion']).toString().trim()}`, steps: [] }
+const evidence = { platform: `${process.platform} ${osVersion()}`, steps: [] }
 mkdirSync(args.out, { recursive: true })
 const say = (step, detail = {}) => {
   evidence.steps.push({ step, ...detail, at: new Date().toISOString() })
@@ -44,7 +45,7 @@ try {
     const reply = await page.eval("fetch('/api/admin').then((r) => r.ok ? r.json() : null, () => null)")
     return reply?.server?.healthy ? reply : null
   }, 120, 'the runtime to be healthy')
-  say('the runtime (server and agentd) is up and healthy', { build: admin.server.build })
+  say('the runtime is up and healthy', { build: admin.server.build })
   if (args.cloud) {
     await signIn({ page, api: API })
     say('signed in to the dev cloud as mo@example.com and saved the kit')
@@ -67,8 +68,8 @@ try {
   await many(page, agent)
   if (WIN) {
     const pipes = readdirSync('\\\\.\\pipe\\').filter((name) => name.startsWith('openhut-'))
-    say('the runtime listens on named pipes, not files or TCP', { pipes })
-    if (pipes.length < 2) throw new Error(`expected the agentd and server pipes, found ${pipes.join(', ') || 'none'}`)
+    say('the runtime listens on a named pipe, not a file or TCP', { pipes })
+    if (!pipes.length) throw new Error('expected the server pipe, found none')
   }
   await quit()
   await sleep(3000)
@@ -153,7 +154,7 @@ async function browsers(page, pair) {
   const features = (await page.eval("fetch('/api/admin').then((r) => r.json())")).features
   say('Browser and WhatsApp are available on this computer', { features })
   if (!features?.browser || !features?.whatsapp) {
-    const bridge = join(dirname(exe), WIN ? 'resources' : '../Resources', 'backend/runtime/hermes/scripts/whatsapp-bridge')
+    const bridge = join(resources(), 'backend/runtime/hermes/scripts/whatsapp-bridge')
     throw new Error(`expected Browser and WhatsApp, got ${JSON.stringify(features)}; ${bridge} holds ${existsSync(bridge) ? readdirSync(bridge).join(', ') : 'nothing'}`)
   }
   for (const agent of pair) await page.eval(`fetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ browser: true, codeExecution: true }) }).then((r) => r.json())`)
@@ -202,15 +203,25 @@ async function many(page, first) {
 }
 
 function leftovers() {
-  const backend = join(dirname(exe), WIN ? 'resources' : '../Resources', 'backend')
+  const backend = join(resources(), 'backend')
   const lines = WIN
     ? execFileSync('powershell', ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ExecutablePath)" }']).toString().split(/\r?\n/)
     : execFileSync('ps', ['-axo', 'pid=,command=']).toString().split('\n')
   return lines.filter((line) => line.includes(resolve(backend)) && /agent-browser|python|hermes/.test(line)).map((line) => line.trim().slice(-220))
 }
 
+function osVersion() {
+  if (WIN) return execFileSync('cmd', ['/c', 'ver']).toString().trim()
+  if (LINUX) return execFileSync('uname', ['-r']).toString().trim()
+  return execFileSync('sw_vers', ['-productVersion']).toString().trim()
+}
+
+function resources() {
+  return join(dirname(exe), WIN || LINUX ? 'resources' : '../Resources')
+}
+
 function launch() {
-  const proc = spawn(exe, [`--remote-debugging-port=${cdpPort}`], { env, stdio: 'ignore' })
+  const proc = spawn(exe, [`--remote-debugging-port=${cdpPort}`, ...LINUX ? ['--no-sandbox', '--password-store=basic'] : []], { env, stdio: 'ignore' })
   proc.on('exit', (code) => say('app process exited', { code }))
   return proc
 }

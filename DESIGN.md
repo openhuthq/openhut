@@ -207,9 +207,9 @@ Owner, 2026-11-17, after a fully coloured pass read as too much.
 
 ## Where agents run
 
-Status: in the code since 2026-11-19 (owner). Screens: the "Where agents run" artifact. On the Linux app the local computer is sandboxed too (`WORDS.sandboxed`), so it keeps the sandbox wording and never shows the team note or the dialog.
+Status: in the code since 2026-11-19 (owner). Screens: the "Where agents run" artifact. The Linux app runs agents the same way since 2026-11-23, so it shows the same words.
 
-From 0.4.0, agents on This Mac (or a Windows PC) are plain processes that run as the person: they can open what the person can open, the home network included. Agents on a Linux server each run in their own sandbox. The app says so where people look at an agent first (owner, 2026-11-19: "maybe at the agent level?"), then on the computer, at first run and once after the update. The words are calm and factual: no warning colour, no "unsafe", no "sandbox off".
+From 0.4.0, agents on This Mac (or a Windows or Linux PC) are plain processes that run as the person: they can open what the person can open, the home network included. Agents on a Linux server each run in their own sandbox. The app says so where people look at an agent first (owner, 2026-11-19: "maybe at the agent level?"), then on the computer, at first run and once after the update. The words are calm and factual: no warning colour, no "unsafe", no "sandbox off".
 
 ### Words
 
@@ -221,7 +221,7 @@ From 0.4.0, agents on This Mac (or a Windows PC) are plain processes that run as
 | Add a computer, row note | A Linux computer that stays on seals each agent in its own box and keeps answering while this computer sleeps. | |
 | Getting ready | Agents run on this computer like any app you install, with your access. | |
 | Getting ready, the three marks | With your access · Keys in the macOS Keychain · Add a computer anytime | |
-| First run, third step | Setting up agents · ready | Setting up agents · 6 of 6 checks passed (Linux app) |
+| First run, third step | Setting up agents · ready | |
 
 "Mac" follows `WORDS.here` ("computer" on Windows and Linux).
 

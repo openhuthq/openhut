@@ -3,14 +3,13 @@ import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from
 import { browser, POLICY_FILE, policyOf } from './browser.ts'
 import { firewall } from './firewall.ts'
 import { join } from 'node:path'
-import { AGENT_UID, AGENT_USER, ASSETS, BIN, box, conf, DATA, EXE, home, ID, IMAGE, own, RESOLV, TMP_MIB, writeIfChanged } from './host.ts'
+import { AGENT_UID, AGENT_USER, ASSETS, box, CLAUDE, conf, DATA, home, ID, IMAGE, own, RESOLV, TMP_MIB, writeIfChanged } from './host.ts'
 import type { Mount, SandboxSpec, SandboxState } from './sandbox/sandbox.ts'
 import { whatsapp } from './whatsapp.ts'
 
 export const FILES = ['config.yaml', '.env', 'SOUL.md', 'auth.json'] as const
 const PLUGINS = `${ASSETS}/vendor/hermes-plugins`
-const CLAUDE_BIN = join(BIN, `claude${EXE}`)
-const MOUNTS = createHash('sha256').update(`${PLUGINS}\n${CLAUDE_BIN}`).digest('hex').slice(0, 16)
+const MOUNTS = createHash('sha256').update(`${PLUGINS}\n${CLAUDE}`).digest('hex').slice(0, 16)
 const SPEC = '4'
 const TRASH = `${DATA}/trash`
 const TRASH_MS = 30 * 24 * 60 * 60_000
@@ -154,7 +153,7 @@ function specOf({ id, net, browser: on }: { id: string; net: number; browser: bo
       ...FILES.map((name) => confMount({ id, name, guest: name })),
       confMount({ id, name: CLAUDE_SETTINGS_FILE, guest: '.claude/settings.json' }),
       { host: PLUGINS, guest: '/opt/data/plugins', readOnly: true },
-      { host: CLAUDE_BIN, guest: '/usr/local/bin/claude', readOnly: true },
+      { host: CLAUDE, guest: '/usr/local/bin/claude', readOnly: true },
       ...whatsapp.mounts(),
       ...(on ? browser.mounts(id) : []),
     ],

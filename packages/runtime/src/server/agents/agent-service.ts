@@ -20,6 +20,7 @@ import { audienceOf } from '../channels/audience.ts'
 import { DiscordSecrets } from '../integrations/discord/discord.ts'
 import { resolveSlots } from '../models/model-slots.ts'
 import { providerService } from '../models/provider-service.ts'
+import { claudeCli } from '../admin/seat-sign-in.ts'
 import { renderFiles, type RenderedChannel } from './hermes-files.ts'
 import { keysService } from '../cloud/keys-service.ts'
 import { roomKeys } from '../cloud/room-keys.ts'
@@ -95,7 +96,7 @@ export const agentService = {
     const me = await keysService.deviceKey()
     const target = runsHere ? me : runsOn ?? facts.control?.runsOn ?? me
     if (target !== facts.control?.runsOn) requireRunner({ facts, runsOn: target, me })
-    if (browser && target === me && !(await features()).browser) throw new HttpError(409, 'This computer can\'t give agents a browser. Run the agent on a Linux computer you added to use one.', { param: 'browser' })
+    if (browser && target === me && !(await features()).browser) throw new HttpError(409, config.installKind === 'server' ? 'This computer can\'t give agents a browser. Run the agent on a Linux computer you added to use one.' : 'Install Google Chrome on this computer, then turn Browser on.', { param: 'browser' })
     const personal = shared === undefined ? facts.personal : !shared
     const resealed = personal !== facts.personal
     const name = fields.name === undefined ? undefined : cleanName(fields.name)
@@ -345,6 +346,7 @@ async function tellAgent(id: string): Promise<void> {
 }
 
 async function filesOf(row: AgentRow): Promise<AgentFiles> {
+  if (config.modelMode === 'claude' && splitModelKey(row.model)?.provider === 'claude' && providerService.connected('claude')) await claudeCli.ensure().catch((err: unknown) => log.warn({ event: 'agent.claude_missing', agent: row.id, error: messageOf(err) }))
   const channels = await db.selectFrom('channel').selectAll().where('agent_id', '=', row.id).orderBy('kind').execute()
   const slots = resolveSlots({ model: row.model, catalog: providerService.catalog })
   return renderFiles({

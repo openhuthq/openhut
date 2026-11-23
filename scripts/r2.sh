@@ -35,6 +35,16 @@ claude() {
     zstd -q -f -19 --long=27 -T0 "$tmp/claude" -o "$tmp/claude.zst"
     put "$key" "$tmp/claude.zst" "$FOREVER"
   done
+  for platform in darwin-arm64 win32-x64; do
+    key=claude/$version/$platform/claude.zst
+    if curl -fsI "$URL/$key" >/dev/null; then echo "r2: $key is there"; continue; fi
+    name=claude; [ "$platform" = win32-x64 ] && name=claude.exe
+    want=$(node -p "require('./install/native-runtime.json').claude.sha256['$platform']")
+    curl -fsSL -o "$tmp/claude" "https://downloads.claude.ai/claude-code-releases/$version/$platform/$name"
+    [ "$(shasum -a 256 "$tmp/claude" | cut -d' ' -f1)" = "$want" ] || { echo "r2: claude $version $platform doesn't match native-runtime.json" >&2; exit 1; }
+    zstd -q -f -19 --long=27 -T0 "$tmp/claude" -o "$tmp/claude.zst"
+    put "$key" "$tmp/claude.zst" "$FOREVER"
+  done
   rm -rf "$tmp"
 }
 

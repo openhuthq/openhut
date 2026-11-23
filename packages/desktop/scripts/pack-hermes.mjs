@@ -7,6 +7,7 @@ import { basename, isAbsolute, join } from 'node:path'
 const ROOT = join(import.meta.dirname, '../../..')
 const PIN = JSON.parse(readFileSync(join(ROOT, 'install/native-runtime.json'), 'utf8'))
 const WIN = process.platform === 'win32'
+const LINUX = process.platform === 'linux'
 const PLATFORM = `${WIN ? 'win32' : process.platform}-${process.arch === 'arm64' ? 'arm64' : 'x64'}`
 const CACHE = join(import.meta.dirname, '../dist/native-cache')
 const SKIP = new Set(['tests', 'tests-js', 'website', 'apps', 'evals', 'web', 'ui-tui', '.github', 'docker', 'nix', 'contributors'])
@@ -28,8 +29,23 @@ export async function packHermes(out) {
   cpSync(cache, out, { recursive: true, dereference: true })
   writeFileSync(join(out, 'hermes.py'), LAUNCHER)
   if (!WIN) relink(out)
+  slim(out)
   if (!existsSync(join(out, 'hermes/scripts/whatsapp-bridge/node_modules'))) throw new Error(`the WhatsApp bridge is missing from ${out}; delete ${cache} and pack again`)
-  await packNode(join(out, 'node'))
+  if (!LINUX) await packNode(join(out, 'node'))
+  if (!WIN) execFileSync(join(out, 'python/bin/python3'), ['-s', '-B', join(out, 'hermes.py'), '--version'], { stdio: 'inherit' })
+}
+
+function slim(out) {
+  const lib = join(out, 'python', WIN ? 'Lib' : 'lib')
+  const unused = readdirSync(lib).filter((name) => /^(tcl|tk|itcl|thread)\d|^lib(tcl|tk)/.test(name) || (!WIN && /^libpython3/.test(name)))
+  for (const name of unused) rmSync(join(lib, name), { recursive: true, force: true })
+  const packages = WIN ? join(lib, 'site-packages') : join(lib, readdirSync(lib).find((name) => /^python3\.\d+$/.test(name)) ?? '', 'site-packages')
+  for (const name of existsSync(packages) ? readdirSync(packages).filter((each) => /^pip[-.]|^pip$/.test(each)) : []) rmSync(join(packages, name), { recursive: true, force: true })
+  for (const dir of caches(out)) rmSync(dir, { recursive: true, force: true })
+}
+
+function caches(dir) {
+  return readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).flatMap((entry) => entry.name === '__pycache__' ? [join(dir, entry.name)] : caches(join(dir, entry.name)))
 }
 
 async function build(out) {
@@ -82,16 +98,6 @@ function relink(dir) {
 function trim(python) {
   const lib = join(python, 'lib', readdirSync(join(python, 'lib')).find((name) => /^python3\.\d+$/.test(name)) ?? '')
   for (const path of [join(python, 'include'), join(python, 'share'), join(python, 'lib/pkgconfig'), ...['test', 'idlelib', 'tkinter', 'turtledemo', 'ensurepip'].map((name) => join(lib, name))]) rmSync(path, { recursive: true, force: true })
-}
-
-export async function packClaude(out) {
-  const name = WIN ? 'claude.exe' : 'claude'
-  const file = await cachedFile({ dir: 'claude', name: `${PIN.claude.version}-${PLATFORM}-${name}`, url: `https://downloads.claude.ai/claude-code-releases/${PIN.claude.version}/${PLATFORM}/${name}`, check: (body) => sha256(body) === PIN.claude.sha256[PLATFORM] })
-  mkdirSync(out, { recursive: true })
-  cpSync(file, join(out, name))
-  writeFileSync(join(out, `${name}.version`), PIN.claude.version)
-  if (!WIN) chmodSync(join(out, name), 0o755)
-  return join(out, name)
 }
 
 async function cachedFile({ dir, name, url, check }) {

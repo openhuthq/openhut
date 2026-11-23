@@ -22,7 +22,7 @@
     "dist": "npm run build && npm run pack-backend && npm run sums && electron-builder --mac --arm64 --publish never",
     "dist:dev": "npm run build && npm run pack-backend && npm run sums && electron-builder --mac --arm64 --config electron-builder.dev.yml --publish never",
     "dist:win": "npm run build && npm run pack-backend && electron-builder --win --x64 -c.extraMetadata.name=openhut --publish never",
-    "dist:linux": "umask 022 && npm run build && npm run pack-backend && electron-builder --linux --x64 --publish never"
+    "dist:linux": "umask 022 && npm run build && npm run pack-backend && electron-builder --linux --x64 -c.electronFuses.runAsNode=true --publish never"
   },
   "devDependencies": {
     "@ai-sdk/react": "4.0.176",

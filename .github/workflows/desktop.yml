@@ -97,9 +97,7 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - uses: astral-sh/setup-uv@v6
-        if: matrix.name != 'linux'
       - uses: actions/cache@v4
-        if: matrix.name != 'linux'
         with:
           path: packages/desktop/dist/native-cache
           key: native-runtime-${{ runner.os }}-${{ hashFiles('install/native-runtime.json', 'packages/desktop/scripts/pack-hermes.mjs') }}
@@ -138,7 +136,6 @@ jobs:
           mkdir -p shipped && ditto -x -k release/OpenHut-*-arm64.zip shipped
           for app in release/mac-arm64/OpenHut.app shipped/OpenHut.app; do codesign --verify --deep --strict -R "=$requirement" "$app"; done
       - name: Check out private/ and install the cloud API the update test and app e2e sign in to
-        if: matrix.name != 'linux'
         shell: bash
         env:
           KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
@@ -183,8 +180,16 @@ jobs:
         if: matrix.name == 'macos'
         working-directory: packages/desktop
         run: node scripts/app-e2e.mjs --app release/mac-arm64/OpenHut.app --out app-e2e --cloud ../../private/api
+      - name: Build the AppImage and deb, and add them to the draft release
+        if: matrix.name == 'linux'
+        working-directory: packages/desktop
+        run: umask 022 && npm run build && npm run pack-backend && npx electron-builder --linux --x64 -c.electronFuses.runAsNode=true --publish "$([ "$TAGGED" = true ] && echo always || echo never)"
+      - name: Open it, sign in, meet the first agent, run five at once, chat, restart, and keep the evidence
+        if: matrix.name == 'linux'
+        working-directory: packages/desktop
+        run: sudo apt-get install -y -qq xvfb && xvfb-run -a -s "-screen 0 1280x800x24" node scripts/app-e2e.mjs --app release/linux-unpacked --out app-e2e --cloud ../../private/api
       - uses: actions/upload-artifact@v4
-        if: always() && matrix.name != 'linux'
+        if: always()
         with:
           name: ${{ matrix.name }}-e2e
           path: |
@@ -198,10 +203,6 @@ jobs:
         shell: bash
         run: gh release upload "$GITHUB_REF_NAME" OpenHut-Setup-x64.exe OpenHut-Setup-x64.exe.blockmap latest.yml --clobber
 
-      - name: Build the AppImage and deb, and add them to the draft release
-        if: matrix.name == 'linux'
-        working-directory: packages/desktop
-        run: umask 022 && npm run build && npm run pack-backend && npx electron-builder --linux --x64 --publish "$([ "$TAGGED" = true ] && echo always || echo never)"
       - name: Add the server runtime of the same commit to the draft release
         if: matrix.name == 'linux' && env.TAGGED == 'true'
         run: |

@@ -8,6 +8,8 @@ const WIN = process.platform === 'win32'
 const DATA = resolve(process.env.AGENTD_DATA || '/data')
 const STATE = join(DATA, 'native')
 export const RUNTIME = process.env.AGENTD_HERMES || join(DATA, 'runtime')
+const BACKEND = dirname(RUNTIME)
+const NODE = join(RUNTIME, 'node')
 const PYTHON = WIN ? join(RUNTIME, 'python', 'python.exe') : join(RUNTIME, 'python', 'bin', 'python3')
 const KILL_MS = 10_000
 const BASE_PATH = WIN ? `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32;${process.env.SystemRoot ?? 'C:\\Windows'}` : '/usr/bin:/bin:/usr/sbin:/sbin'
@@ -21,6 +23,7 @@ const save = (id: string, saved: Saved) => writeFileSync(join(dirOf(id), 'spec.j
 
 export function hostOf({ spec, guest }: { spec: SandboxSpec; guest: string }): string {
   if (guest === '/opt/hermes/bin/hermes') return PYTHON
+  if (guest.startsWith(`${BACKEND}/`)) return guest
   if (guest === '/tmp' || guest.startsWith('/tmp/')) return join(dirOf(spec.id), 'tmp', guest.slice(4))
   const mount = spec.mounts.filter((m) => guest === m.guest || guest.startsWith(`${m.guest}/`)).sort((a, b) => b.guest.length - a.guest.length)[0]
   return mount ? join(mount.host, guest.slice(mount.guest.length)) : guest
@@ -37,6 +40,7 @@ function binDir(spec: SandboxSpec) {
 export function layout(spec: SandboxSpec) {
   mkdirSync(join(dirOf(spec.id), 'tmp'), { recursive: true })
   mkdirSync(binDir(spec), { recursive: true })
+  if (!WIN && !existsSync(NODE)) writeFileSync(join(binDir(spec), 'node'), `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec '${process.execPath}' "$@"\n`, { mode: 0o755 })
   for (const m of spec.mounts) placeMount({ spec, mount: m })
   for (const t of spec.tmpfs.filter((each) => each.guest !== '/tmp')) mkdirSync(hostOf({ spec, guest: t.guest }), { recursive: true })
 }
@@ -77,7 +81,7 @@ function clear(path: string) {
 
 function envOf(spec: SandboxSpec): Record<string, string> {
   const mapped = Object.fromEntries(Object.entries(spec.env).map(([name, value]) => [name, value.startsWith('/') && !value.startsWith(DATA) ? hostOf({ spec, guest: value }) : value]))
-  return { ...mapped, PATH: [binDir(spec), join(RUNTIME, 'node'), dirname(PYTHON), BASE_PATH].join(WIN ? ';' : ':'), TMPDIR: join(dirOf(spec.id), 'tmp'), TEMP: join(dirOf(spec.id), 'tmp'), TMP: join(dirOf(spec.id), 'tmp'), PYTHONNOUSERSITE: '1', LANG: 'en_US.UTF-8' }
+  return { ...mapped, PATH: [binDir(spec), NODE, dirname(PYTHON), BASE_PATH].join(WIN ? ';' : ':'), TMPDIR: join(dirOf(spec.id), 'tmp'), TEMP: join(dirOf(spec.id), 'tmp'), TMP: join(dirOf(spec.id), 'tmp'), PYTHONNOUSERSITE: '1', PYTHONPYCACHEPREFIX: join(STATE, 'pycache'), LANG: 'en_US.UTF-8' }
 }
 
 function argvOf({ spec, command }: { spec: SandboxSpec; command: string[] }) {
@@ -133,7 +137,7 @@ async function halt({ id, seconds }: { id: string; seconds: number }) {
 }
 
 function closeBrowser(spec: SandboxSpec) {
-  const dir = spec.env.AGENT_BROWSER_SOCKET_DIR
+  const dir = envOf(spec).AGENT_BROWSER_SOCKET_DIR
   if (!dir || !existsSync(dir)) return
   for (const name of readdirSync(dir).filter((each) => each.endsWith('.pid'))) {
     const pid = Number(readFileSync(join(dir, name), 'utf8'))

@@ -4,6 +4,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { constants, zstdDecompressSync } from 'node:zlib'
 import type { SeatSignIn } from '@openhut/common/admin/admin.ts'
 import { config } from '../platform/config.ts'
 import { log } from '../platform/events.ts'
@@ -18,6 +19,7 @@ const LINK = /\x1b\]8;[^;]*;(https:\/\/claude\.(?:com|ai)\/[^\x1b\x07\s]*oauth\/
 const TOKEN = /sk-ant-oat01-[\w-]{20,}/
 const FAILED = /OAuth error[^\n]*|wasn't accepted[^\n]*/i
 const MAX_OPEN = 3
+const CLAUDE_MIRROR = 'https://dl.openhut.dev/claude'
 const WIN_PTY = `import os, sys, threading
 sys.path.insert(0, os.environ['OPENHUT_SITE'])
 from winpty import PtyProcess
@@ -37,7 +39,7 @@ const open = new Map<string, OpenSignIn>()
 
 export const seatSignIn = {
   async start(): Promise<SeatSignIn> {
-    await hostClaude()
+    await claudeCli.ensure()
     const dir = mkdtempSync(join(tmpdir(), 'openhut-seat-'))
     const run = `stty cols 4000 rows 60; exec '${config.claudeHostBin}' setup-token`
     const env = { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: dir, CLAUDE_CONFIG_DIR: dir, BROWSER: '/bin/true', TERM: 'xterm-256color', DISABLE_AUTOUPDATER: '1' }
@@ -91,22 +93,59 @@ function terminal({ dir, env, run }: { dir: string; env: Record<string, string>;
   return spawn(join(config.hermesRuntime, 'python', 'python.exe'), ['-s', '-c', WIN_PTY], { cwd: dir, env: { ...env, ...system, OPENHUT_SITE: join(config.hermesRuntime, 'site'), OPENHUT_CLAUDE_BIN: config.claudeHostBin } })
 }
 
-async function hostClaude(): Promise<void> {
-  const bin = config.claudeHostBin
-  if (process.platform !== 'darwin' || (existsSync(bin) && (!config.claudeVersion || versionOf(bin) === config.claudeVersion))) return
-  if (!config.claudeVersion) throw new HttpError(503, 'Claude sign-in isn\'t working in this copy of OpenHut. Download OpenHut again from openhut.dev.')
-  const base = `https://downloads.claude.ai/claude-code-releases/${config.claudeVersion}`
-  const platform = `darwin-${process.arch}`
-  const failed = () => new HttpError(503, 'Couldn\'t download Claude Code for the sign-in. Check the internet connection and try again.')
-  const manifest = await fetch(`${base}/manifest.json`, { signal: AbortSignal.timeout(30_000) }).then((r) => r.json() as Promise<{ platforms: Record<string, { checksum: string }> }>).catch(() => { throw failed() })
-  const body = Buffer.from(await fetch(`${base}/${platform}/claude`, { signal: AbortSignal.timeout(300_000) }).then((r) => r.arrayBuffer()).catch(() => { throw failed() }))
-  if (createHash('sha256').update(body).digest('hex') !== manifest.platforms[platform]?.checksum) throw failed()
-  mkdirSync(dirname(bin), { recursive: true })
-  writeFileSync(`${bin}.new`, body)
-  chmodSync(`${bin}.new`, 0o755)
-  renameSync(`${bin}.new`, bin)
-  writeFileSync(`${bin}.version`, config.claudeVersion)
-  log.info({ event: 'seat.claude_downloaded', version: config.claudeVersion })
+let fetching: Promise<void> | undefined
+let progress: { done: number; total: number } | null = null
+
+export const claudeCli = {
+  progress: () => progress,
+
+  ensure(): Promise<void> {
+    const bin = config.claudeHostBin
+    if (config.installKind === 'server' || (existsSync(bin) && versionOf(bin) === config.claudeVersion)) return Promise.resolve()
+    fetching ??= download(bin).finally(() => {
+      fetching = undefined
+      progress = null
+    })
+    return fetching
+  },
+}
+
+async function download(bin: string): Promise<void> {
+  const { claudeVersion: version, claudeSha256: sha256, claudePlatform: platform } = config
+  if (!version || !sha256) throw new HttpError(503, 'Claude sign-in isn\'t working in this copy of OpenHut. Download OpenHut again from openhut.dev.')
+  const name = platform.startsWith('win32') ? 'claude.exe' : 'claude'
+  const sources = [{ url: `${CLAUDE_MIRROR}/${version}/${platform}/claude.zst`, zst: true }, { url: `https://downloads.claude.ai/claude-code-releases/${version}/${platform}/${name}`, zst: false }]
+  for (const source of sources) {
+    const body = await fetched(source.url).catch(() => undefined)
+    const plain = body && source.zst ? unzstd(body) : body
+    if (!plain || createHash('sha256').update(plain).digest('hex') !== sha256) continue
+    mkdirSync(dirname(bin), { recursive: true })
+    writeFileSync(`${bin}.new`, plain)
+    chmodSync(`${bin}.new`, 0o755)
+    renameSync(`${bin}.new`, bin)
+    writeFileSync(`${bin}.version`, version)
+    log.info({ event: 'seat.claude_downloaded', version, from: source.url })
+    return
+  }
+  throw new HttpError(503, 'Couldn\'t download Claude Code. Check the internet connection and try again.')
+}
+
+async function fetched(url: string): Promise<Buffer> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(600_000) })
+  if (!res.ok || !res.body) throw new Error(`${url} answered ${res.status}`)
+  const total = Number(res.headers.get('content-length')) || 0
+  const chunks: Buffer[] = []
+  let done = 0
+  for await (const chunk of res.body) {
+    chunks.push(Buffer.from(chunk))
+    done += chunk.length
+    progress = { done, total }
+  }
+  return Buffer.concat(chunks)
+}
+
+function unzstd(body: Buffer): Buffer | undefined {
+  try { return zstdDecompressSync(body, { params: { [constants.ZSTD_d_windowLogMax]: 31 } }) } catch { return undefined }
 }
 
 function versionOf(bin: string): string {
