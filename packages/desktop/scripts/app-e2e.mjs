@@ -4,9 +4,9 @@ import { dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
 
-const { values: args } = parseArgs({ options: { installer: { type: 'string' }, app: { type: 'string' }, out: { type: 'string', default: 'app-e2e' }, agents: { type: 'string', default: '5' } } })
+const { values: args } = parseArgs({ options: { installer: { type: 'string' }, app: { type: 'string' }, out: { type: 'string', default: 'app-e2e' }, agents: { type: 'string', default: '5' }, cloud: { type: 'string' } } })
 if (!args.installer && !args.app) {
-  console.error('usage: node scripts/app-e2e.mjs (--installer <OpenHut-Setup-x64.exe> | --app <OpenHut.app>) [--out <evidence folder>] [--agents 5]')
+  console.error('usage: node scripts/app-e2e.mjs (--installer <OpenHut-Setup-x64.exe> | --app <OpenHut.app>) [--out <evidence folder>] [--agents 5] [--cloud <private/api>]')
   process.exit(2)
 }
 const WIN = process.platform === 'win32'
@@ -14,7 +14,8 @@ const NAMES = ['Juniper', 'Atlas', 'Birch', 'Cedar', 'Dahlia', 'Elm', 'Fern', 'G
 let exe = args.app ? resolve(args.app, 'Contents/MacOS/OpenHut') : ''
 const home = resolve(args.out, 'home')
 const cdpPort = 9300 + Math.floor(Math.random() * 500)
-const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test' }
+const API = `http://127.0.0.1:${8800 + Math.floor(Math.random() * 500)}`
+const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test', ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: API } }
 const evidence = { platform: `${process.platform} ${WIN ? execFileSync('cmd', ['/c', 'ver']).toString().trim() : execFileSync('sw_vers', ['-productVersion']).toString().trim()}`, steps: [] }
 mkdirSync(args.out, { recursive: true })
 const say = (step, detail = {}) => {
@@ -23,7 +24,9 @@ const say = (step, detail = {}) => {
 }
 
 let child
+let api
 try {
+  if (args.cloud) api = await bootCloud()
   if (args.installer) {
     const programs = join(process.env.LOCALAPPDATA, 'Programs')
     execFileSync(args.installer, ['/S'])
@@ -38,12 +41,13 @@ try {
     return reply?.server?.healthy ? reply : null
   }, 120, 'the runtime to be healthy')
   say('the runtime (server and agentd) is up and healthy', { build: admin.server.build })
+  if (args.cloud) await signIn(page)
   const agent = await firstAgent(page)
   await page.eval(`fetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wanted: 'running' }) }).then((r) => r.json())`)
   const running = await until(async () => {
     const now = await page.eval(`fetch('/api/agents/${agent.id}').then((r) => r.json())`)
-    return now.status === 'running' ? now : null
-  }, 300, 'the agent to be running')
+    return now.status === 'running' && now.health === 'answering' ? now : null
+  }, 300, 'the agent to be running and answering')
   say('made an agent and started it', { id: running.id, name: running.name, status: running.status, health: running.health })
   await chat(page, agent, `hello from ${agent.name}`)
   await page.eval(`navigation.navigate('/agents/${agent.id}')`)
@@ -79,8 +83,30 @@ try {
   process.exitCode = 1
 } finally {
   if (child && child.exitCode === null) await quit().catch(() => child.kill())
+  api?.kill()
   writeFileSync(join(args.out, 'evidence.json'), JSON.stringify(evidence, null, 2))
   console.log(`app-e2e: ${evidence.pass ? 'PASS' : 'FAIL'}; evidence in ${args.out}`)
+}
+
+async function bootCloud() {
+  const { port } = new URL(API)
+  const proc = spawn(process.execPath, ['src/server.ts'], { cwd: resolve(args.cloud), env: { ...process.env, PORT: port, API_URL: API, DEV_SIGN_IN: '1', DATABASE_URL: '', OPENHUT_API_DATA: '' }, stdio: ['ignore', 'ignore', 'inherit'] })
+  await until(async () => fetch(`${API}/v1/events`).then(() => true, () => null), 120, 'the dev cloud API to listen')
+  say('the dev cloud API is up', { url: API })
+  return proc
+}
+
+async function signIn(page) {
+  const { authorizationUrl } = await page.eval("fetch('/api/cloud/sessions', { method: 'POST' }).then((r) => r.json())")
+  const link = new RegExp('href="([^"]+)">mo@example.com<').exec(await (await fetch(authorizationUrl)).text())?.[1]?.replaceAll('&amp;', '&')
+  if (!link) throw new Error('the dev sign-in page has no link for mo@example.com')
+  const back = new URL((await fetch(link, { redirect: 'manual' })).headers.get('location') ?? '', API)
+  await page.eval(`fetch(${JSON.stringify(`/api/cloud/callback${back.search}`)}).then((r) => r.text())`)
+  await until(async () => (await page.eval("fetch('/api/cloud').then((r) => r.json())")).status === 'on' || null, 120, 'the cloud to say signed in')
+  const kit = await page.eval("fetch('/api/cloud/kits', { method: 'POST' }).then((r) => r.status)")
+  if (kit !== 200) throw new Error(`saving the recovery kit answered ${kit}`)
+  say('signed in to the dev cloud as mo@example.com and saved the kit')
+  await shot(page, '01-signed-in')
 }
 
 async function firstAgent(page) {
@@ -100,10 +126,13 @@ async function firstAgent(page) {
       seen.add(phase)
       await shot(page, `00-first-run-${seen.size}`)
     }
-    return run.agentId ? run : null
-  }, 900, 'the first agent to answer').catch((error) => { throw new Error(`${error.message}; first run was at ${JSON.stringify(last?.steps)}`) })
-  say('first run finished: the runtime is ready and the first agent answers', { steps: setup.steps })
-  return page.eval(`fetch('/api/agents/${setup.agentId}').then((r) => r.json())`)
+    return run.done ? run : null
+  }, 900, 'the first run to finish').catch((error) => { throw new Error(`${error.message}; first run was at ${JSON.stringify(last?.steps)}`) })
+  say('first run finished: the runtime is ready', { steps: setup.steps })
+  const made = await page.eval("fetch('/api/agents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Juniper' }) }).then(async (r) => ({ status: r.status, body: await r.json() }))")
+  if (made.status !== 200) throw new Error(`making the first agent answered ${made.status} ${JSON.stringify(made.body)}`)
+  say('made the first agent, as Make your first agent does', { id: made.body.id })
+  return made.body
 }
 
 async function chat(page, agent, text) {

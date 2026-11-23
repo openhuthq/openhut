@@ -165,14 +165,24 @@ jobs:
           for dir in dist/native-cache/hermes/*/hermes/scripts/whatsapp-bridge dist/backend/runtime/hermes/scripts/whatsapp-bridge release/win-unpacked/resources/backend/runtime/hermes/scripts/whatsapp-bridge; do
             echo "$dir: $(ls $dir 2>&1 | head -5 | tr '\n' ' ') node_modules: $(ls $dir/node_modules 2>/dev/null | wc -l)"
           done
-      - name: Install it, meet the first agent, run five at once, chat, restart, and keep the evidence
+      - name: Check out private/ and install the cloud API the app e2e signs in to
+        if: matrix.name != 'linux'
+        shell: bash
+        env:
+          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
+          npm --prefix private/api ci --no-audit --no-fund
+      - name: Install it, sign in, meet the first agent, run five at once, chat, restart, and keep the evidence
         if: matrix.name == 'windows'
         working-directory: packages/desktop
-        run: node scripts/app-e2e.mjs --installer release/OpenHut-Setup-x64.exe --out app-e2e
-      - name: Open it, meet the first agent, run five at once, chat, restart, and keep the evidence
+        run: node scripts/app-e2e.mjs --installer release/OpenHut-Setup-x64.exe --out app-e2e --cloud ../../private/api
+      - name: Open it, sign in, meet the first agent, run five at once, chat, restart, and keep the evidence
         if: matrix.name == 'macos'
         working-directory: packages/desktop
-        run: node scripts/app-e2e.mjs --app release/mac-arm64/OpenHut.app --out app-e2e
+        run: node scripts/app-e2e.mjs --app release/mac-arm64/OpenHut.app --out app-e2e --cloud ../../private/api
       - uses: actions/upload-artifact@v4
         if: always() && matrix.name != 'linux'
         with:
