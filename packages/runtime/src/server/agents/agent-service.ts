@@ -40,6 +40,7 @@ const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
 const RENDERED = ['instructions', 'model', 'codeExecution', 'browser'] as const
 const DEFAULT_MODEL = 'claude:sonnet'
+const held = new Map<string, boolean>()
 const Moved = z.object({
   agent: z.object({ id: z.string().check(z.regex(/^ag_[a-z0-9]{8}$/)), name: z.string().check(z.minLength(1), z.maxLength(40)), instructions: z.string().check(z.maxLength(20_000)), model: z.pipe(z.pipe(z.string(), z.transform((key) => LEGACY_MODELS[key] ?? key)), ModelKey), codeExecution: z.boolean(), browser: z.boolean() }),
   channels: z.array(z.object({ kind: ChannelKind, status: z.enum(['connected', 'linking']), account: z.nullable(z.string()), ownerAddress: z.string(), open: z.boolean(), allowed: z.string(), secrets: z.string() })),
@@ -247,7 +248,21 @@ export const agentService = {
     return Boolean(row && writable({ row, author, workspace, me }))
   },
 
+  holdReapply(id: string): void {
+    held.set(id, held.get(id) ?? false)
+  },
+
+  async releaseReapply(id: string): Promise<void> {
+    const due = held.get(id)
+    held.delete(id)
+    if (due) await agentService.reapply({ id })
+  },
+
   async reapply({ id }: { id: string }): Promise<void> {
+    if (held.has(id)) {
+      held.set(id, true)
+      return
+    }
     const row = await rowOf(id)
     await agentd.apply({ id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' && runsHere({ row, me: await meIfNeeded([row]) }) })
     probes.delete(id)

@@ -3,7 +3,7 @@ import { execFile, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer, request } from 'node:http'
 import { connect } from 'node:net'
-import { appendFileSync, chmodSync, cpSync, createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, cpSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { cpus, homedir, hostname, totalmem } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { Readable } from 'node:stream'
@@ -16,7 +16,6 @@ import { inviteLink } from './invite-link.mjs'
 import { linkPath } from './open-link.mjs'
 import { deviceName, ownerKeys } from './owner-keys.mjs'
 import { reacher } from './reach.mjs'
-import { fanOut } from './mcp-fan-out.mjs'
 import { cosigned, RELEASE_KEY } from './release-key.mjs'
 import { useChannel } from './update-channel.mjs'
 
@@ -31,9 +30,8 @@ const TEST_HOME = process.env.OPENHUT_TEST_HOME
 if (DEV) app.setPath('userData', join(app.getPath('appData'), 'OpenHut Dev'))
 if (TEST_HOME) app.setPath('userData', TEST_HOME)
 app.setAppLogsPath(TEST_HOME ? join(TEST_HOME, 'logs') : DEV && MAC ? join(app.getPath('home'), 'Library/Logs/OpenHut Dev') : undefined)
-const MCP_BRIDGE = process.argv.includes('--mcp')
-if (!MCP_BRIDGE && !app.requestSingleInstanceLock()) app.exit(0)
-if (!MCP_BRIDGE && !DEV) app.setAsDefaultProtocolClient('openhut')
+if (!app.requestSingleInstanceLock()) app.exit(0)
+if (!DEV) app.setAsDefaultProtocolClient('openhut')
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '../../..')
@@ -45,7 +43,6 @@ const RUNTIME = process.env.AGENTD_HERMES ?? join(BACKEND, DEV ? 'packages/deskt
 const NATIVE_CLAUDE = join(BACKEND, DEV ? 'packages/desktop/dist/backend/bin/native' : 'bin/native', WIN ? 'claude.exe' : 'claude')
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
 const HOME = app.getPath('userData')
-const BRIDGE = join(HOME, 'bin/openhut-mcp')
 const ASSETS = DEV ? ROOT : join(HOME, 'assets', app.getVersion())
 const LOGS = app.getPath('logs')
 const DATA = join(HOME, 'data')
@@ -58,11 +55,6 @@ const PIPES = WIN && `\\\\.\\pipe\\openhut-${createHash('sha256').update(HOME).d
 const sockAt = (name) => PIPES ? `${PIPES}-${name}` : join(HOME, `${name}.sock`)
 const SOCK = sockAt('agentd')
 const SERVER_SOCK = sockAt('server')
-const MCP_SOCK = sockAt('mcp')
-if (MCP_BRIDGE) {
-  await (await import('./mcp-bridge.mjs')).bridge({ sock: MCP_SOCK, path: '/mcp', down: 'OpenHut isn\'t running', input: createReadStream(null, { fd: 0 }) })
-  app.exit(0)
-}
 const WINDOW_STATE = join(HOME, 'window.json')
 const PREFS = join(HOME, 'prefs.json')
 const SECRET = join(HOME, 'secret.bin')
@@ -529,31 +521,6 @@ async function setAll({ agents, wanted }) {
   await poll().catch(() => undefined)
 }
 
-function bridgeCommand() {
-  return WIN ? { command: process.execPath, args: ['--mcp'] } : { command: BRIDGE, args: [] }
-}
-
-async function serveMcp() {
-  if (!PIPES) rmSync(MCP_SOCK, { force: true })
-  const mcp = fanOut({
-    local: LOCAL.id,
-    computers: () => openhut.computers.list(),
-    post: ({ computer, msg }) => serve(new Request(`${APP_ORIGIN}/c/${computer}/mcp`, { method: 'POST', body: JSON.stringify(msg), headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' } })).catch((error) => refuse(502, error.message)),
-  })
-  const server = createServer(async (req, res) => {
-    if (req.url !== '/mcp') return res.writeHead(404).end()
-    if (req.method !== 'POST') return res.writeHead(405).end()
-    const answer = await mcp(await text(req))
-    if (!answer) return res.writeHead(202).end()
-    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(answer))
-  })
-  const umask = process.umask(0o177)
-  const listening = new Promise((resolve, reject) => server.once('error', reject).listen(MCP_SOCK, resolve))
-  process.umask(umask)
-  await listening
-  if (!PIPES) chmodSync(MCP_SOCK, 0o600)
-}
-
 function webHeaders(headers) {
   return new Headers(Object.entries(headers).flatMap(([name, value]) => [value].flat().map((each) => [name, String(each)])))
 }
@@ -754,9 +721,7 @@ function goBack(version) {
 }
 
 async function assets() {
-  mkdirSync(dirname(BRIDGE), { recursive: true })
-  cpSync(DEV ? join(HERE, '../bin/openhut-mcp') : join(BACKEND, 'bin/openhut-mcp'), BRIDGE)
-  chmodSync(BRIDGE, 0o755)
+  rmSync(join(HOME, 'bin'), { recursive: true, force: true })
   if (DEV || CONTAINER || existsSync(ASSETS)) return
   rmSync(`${ASSETS}.tmp`, { recursive: true, force: true })
   cpSync(join(BACKEND, 'vendor/hermes-plugins'), join(`${ASSETS}.tmp`, 'vendor/hermes-plugins'), { recursive: true })
@@ -781,7 +746,7 @@ function window(path = '/agents') {
     width: 1280, height: 820, ...savedBounds(), minWidth: 900, minHeight: 600, show: false, title: 'OpenHut',
     ...(MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 18 } } : { autoHideMenuBar: true }),
     backgroundColor: CANVAS,
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-mcp=${JSON.stringify(bridgeCommand())}`, `--openhut-version=${app.getVersion()}`] },
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-version=${app.getVersion()}`] },
   })
   win.on('close', saveBounds)
   win.once('ready-to-show', () => win.show())
@@ -928,9 +893,9 @@ async function releaseSigned(info) {
 
 function serve(req) {
   const { pathname } = new URL(req.url)
-  const routed = /^\/c\/([\w-]+)(\/api\/.*|\/mcp)$/.exec(pathname)
+  const routed = /^\/c\/([\w-]+)(\/api\/.*)$/.exec(pathname)
   if (routed) return toComputer({ req, id: routed[1], path: routed[2] })
-  return pathname.startsWith('/api/') || pathname === '/mcp' ? toComputer({ req, id: LOCAL.id, path: pathname }) : serveRenderer(req)
+  return pathname.startsWith('/api/') ? toComputer({ req, id: LOCAL.id, path: pathname }) : serveRenderer(req)
 }
 
 function refuse(status, message) {
@@ -1078,7 +1043,6 @@ app.whenReady().then(async () => {
   if (!fresh && (!hidden || linked)) window(linked)
   opened = true
   watch()
-  serveMcp().catch((error) => appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't serve ${MCP_SOCK}: ${error.message}\n`))
   if (!DEV) update()
   app.on('activate', () => show())
   app.on('second-instance', (_event, argv) => {

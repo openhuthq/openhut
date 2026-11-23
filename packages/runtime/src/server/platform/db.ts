@@ -94,4 +94,9 @@ export async function migrate(): Promise<void> {
   await sql`alter table cloud_record add column if not exists signer text`.execute(db)
   await sql`alter table cloud_record add column if not exists agent_id text`.execute(db)
   await sql`alter table cloud_record add column if not exists seq integer not null default 0`.execute(db)
+  await sql`create table if not exists change_request (
+    id text primary key, agent_id text not null references agent(id) on delete cascade, action text not null, input text not null, summary text not null,
+    why text not null, origin text not null, status text not null default 'pending' check (status in ('pending', 'approved', 'denied')), note text,
+    told boolean not null default false, created_at timestamptz not null default now(), decided_at timestamptz)`.execute(db)
+  await sql`create index if not exists change_request_by_agent on change_request (agent_id, created_at desc)`.execute(db)
 }

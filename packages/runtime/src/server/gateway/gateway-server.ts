@@ -9,15 +9,19 @@ import { agentService, type GatewayAgent } from '../agents/agent-service.ts'
 import { connectionService, type AgentTool } from '../connections/connection-service.ts'
 import { testAnthropic, testModel } from './test-model.ts'
 import { brokerService, upstreams } from './broker.ts'
+import { activity } from './activity.ts'
 import { cardService } from '../cards/card-service.ts'
 import { routineService } from '../routines/routine-service.ts'
+import { changeRequestService } from '../agents/change-request-service.ts'
+import { channelService } from '../channels/channel-service.ts'
+import { db } from '../platform/db.ts'
+import type { ChangeAction } from '@openhut/common/agents/change-request.ts'
 import { askCard, MCP_AUTH } from '@openhut/common/asks/ask.ts'
 import { ConnectionKind } from '@openhut/common/connections/connection.ts'
 
 const PER_AGENT = 8
 const MAX_BODY = 1 << 20
 const LIMITS = { requestTimeout: 60_000, headersTimeout: 10_000, connectionsCheckingInterval: 2_000 }
-const inFlight = new Map<string, number>()
 const RunReport = z.object({ picked: z.literal(true).optional(), said: z.string().max(200_000).optional() })
 const RenderCard = z.object({ text: z.string().max(200_000), channel: z.string().max(40), chatId: z.string().max(200).optional(), threadId: z.string().max(200).optional() })
 
@@ -42,17 +46,16 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const token = /^(?:Agent|Bearer) (.+)$/.exec(String(req.headers.authorization ?? ''))?.[1] ?? /^\/u\/telegram\/(?:file\/)?bot([^/]+)\//.exec(url.pathname)?.[1]
   const agent = token ? await agentService.byToken({ token }) : undefined
   if (!agent) return json(res, 401, errorBody({ status: 401, message: 'Send this agent\'s own token.' }))
-  const open = inFlight.get(agent.id) ?? 0
-  if (open >= PER_AGENT) return json(res, 429, errorBody({ status: 429, message: `This agent already has ${PER_AGENT} requests running. Wait for them.` }), true)
-  inFlight.set(agent.id, open + 1)
-  res.on('close', () => inFlight.set(agent.id, (inFlight.get(agent.id) ?? 1) - 1))
+  if (activity.count(agent.id) >= PER_AGENT) return json(res, 429, errorBody({ status: 429, message: `This agent already has ${PER_AGENT} requests running. Wait for them.` }), true)
+  activity.started(agent.id)
+  res.on('close', () => activity.ended(agent.id))
   const path = url.pathname
   const brokered = /^\/u\/([a-z]+)(\/.*)$/.exec(path)
   const upstream = brokered && upstreams.get(brokered[1])
   if (brokered && upstream) return brokerService.forward({ agent, upstream, path: brokered[2] + url.search, req, res })
   if (path === '/api/v1/mcp') return serveMcp({ server: agentMcp(agent), req, res, body: req.method === 'POST' ? await readBody(req) : undefined })
-  if (path === '/routines/due' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: await routineService.due({ agentId: agent.id }) })
-  const run = /^\/routines\/runs\/(ru_[a-z0-9]+)$/.exec(path)
+  if (path === '/routines/due' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: [...await routineService.due({ agentId: agent.id }), ...await changeRequestService.due({ agentId: agent.id })] })
+  const run = /^\/routines\/runs\/((?:ru|chg)_[a-z0-9]+)$/.exec(path)
   if (run && req.method === 'POST') return json(res, 200, await reportRun({ agentId: agent.id, runId: run[1], body: await readBody(req) }))
   if (path === '/cards/render' && req.method === 'POST') return json(res, 200, await cardService.render({ agent, ...renderRequest(await readBody(req)) }))
   if (path.startsWith('/test-llm/') && config.modelMode === 'test') return testModel({ path, body: await readBody(req), res })
@@ -105,13 +108,53 @@ function agentMcp(agent: GatewayAgent): McpServer {
     description: 'Use this when what you were following up on is done, or no longer needed. Tell the chat first: the routine leaves the owner\'s list.',
     inputSchema: { id: z.string().max(40), reason: z.string().max(200).describe('Short, past tense, for the log: "Paid on Nov 26".') },
   }, async ({ id, reason }) => text(await routineService.cancel({ agentId: agent.id, id, reason })))
+  server.registerTool('get_self', { description: 'Your name, instructions and channels, the connections you have, and the ones you can ask for. Read it before you ask to change any of them.' }, async () => text(await selfOf(agent)))
+  const why = z.string().min(1).max(300).describe('One sentence for your owner: why this change, in plain words.')
+  const ask = ({ name, action, description, shape }: { name: string; action: ChangeAction; description: string; shape: z.ZodRawShape }) => server.registerTool(name, {
+    description: `${description} Your owner approves it in OpenHut first: the call returns at once, and the answer comes back to you as a message.`,
+    inputSchema: z.object({ why, ...shape }).passthrough(),
+  }, async ({ why: reason, origin, ...input }: Record<string, unknown>) => text(await changeRequestService.ask({ agentId: agent.id, action, input, why: String(reason), origin })))
+  ask({ name: 'update_self', action: 'update_self', description: 'Ask to change your own name or instructions. Send the whole new instructions, not a diff.', shape: { name: z.string().min(1).max(40).optional(), instructions: z.string().max(20_000).optional() } })
+  ask({
+    name: 'add_channel', action: 'add_channel', description: 'Ask to add WhatsApp, Telegram or Discord, so people can message you there. Slack needs a Slack app, so your owner adds it in OpenHut.',
+    shape: {
+      kind: z.enum(['whatsapp', 'telegram', 'discord']),
+      ownerAddress: z.string().max(40).optional().describe('WhatsApp and Telegram: your owner\'s WhatsApp number with country code (+15551234567), or their numeric Telegram user ID.'),
+      open: z.boolean().optional().describe('WhatsApp and Telegram: true lets anyone message you; false only your owner and allowed.'),
+      allowed: z.array(z.string().max(40)).max(50).default([]).describe('Other numbers or Telegram IDs that may message you. For Discord: the channel IDs to answer in.'),
+      botToken: z.string().max(200).optional().describe('For Telegram: the token BotFather gave, like 123456789:AAE…. For Discord: the bot token from the Developer Portal\'s Bot page.'),
+    },
+  })
+  ask({ name: 'update_channel', action: 'update_channel', description: 'Ask to change who can message you on one of your channels.', shape: { id: z.string().max(40), open: z.boolean().optional(), allowed: z.array(z.string().max(20)).max(50).optional().describe('The whole new list.') } })
+  ask({ name: 'remove_channel', action: 'remove_channel', description: 'Ask to remove one of your channels.', shape: { id: z.string().max(40) } })
+  ask({ name: 'request_connection', action: 'request_connection', description: 'Ask for a connection that already exists in OpenHut (get_self lists them). For an app nobody connected yet, use ask_to_connect.', shape: { connectionId: z.string().max(40) } })
   return server
+}
+
+async function selfOf(agent: GatewayAgent): Promise<string> {
+  const [row, channels, connections, grants] = await Promise.all([
+    db.selectFrom('agent').select(['name', 'instructions']).where('id', '=', agent.id).executeTakeFirstOrThrow(),
+    channelService.list({ agentId: agent.id }),
+    db.selectFrom('connection').select(['id', 'name', 'kind']).orderBy('created_at').execute(),
+    db.selectFrom('connection_grant').select('connection_id').where('agent_id', '=', agent.id).execute(),
+  ])
+  const have = new Set(grants.map((grant) => grant.connection_id))
+  return JSON.stringify({
+    name: row.name,
+    instructions: row.instructions,
+    channels: channels.map(({ id, kind, status, account, open, allowed }) => ({ id, kind, status, account, open, allowed })),
+    connections: connections.filter((each) => have.has(each.id)),
+    canAskFor: connections.filter((each) => !have.has(each.id)),
+  }, null, 2)
 }
 
 async function reportRun({ agentId, runId, body }: { agentId: string; runId: string; body: unknown }): Promise<{ object: 'routine_run'; id: string }> {
   const parsed = RunReport.safeParse(body)
   if (!parsed.success || (!parsed.data.picked && parsed.data.said === undefined)) throw new HttpError(400, 'Send picked: true, or said with the reply.')
-  if (parsed.data.picked) await routineService.picked({ agentId, runId })
+  if (runId.startsWith('chg_')) {
+    if (!parsed.data.picked) throw new HttpError(400, 'Send picked: true.')
+    await changeRequestService.picked({ agentId, id: runId })
+  } else if (parsed.data.picked) await routineService.picked({ agentId, runId })
   else await routineService.report({ agentId, runId, said: parsed.data.said ?? '' })
   return { object: 'routine_run', id: runId }
 }

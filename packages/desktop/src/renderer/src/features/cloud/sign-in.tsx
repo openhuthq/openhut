@@ -96,8 +96,8 @@ export function Pitch() {
 export function SignInOnTeam({ what }: { what: string }) {
   return <Pane>
     <Title>Not signed in</Title>
-    <Lead>{`Sign in on the Team tab to see ${what}.`}</Lead>
-    <Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/team')}>Go to Team</Button>
+    <Lead>{`Sign in on the People tab to see ${what}.`}</Lead>
+    <Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/people')}>Go to People</Button>
   </Pane>
 }
 
