@@ -12,6 +12,7 @@ import { useChannels, useDeleteChannel } from '@/features/agents/api'
 import { useFeatures } from '@/features/computers/api'
 import { SlackDialog } from '@/features/agents/slack-dialog'
 import { TelegramDialog } from '@/features/agents/telegram-dialog'
+import { DiscordDialog } from '@/features/agents/discord-dialog'
 import { WhatsappDialog } from '@/features/agents/whatsapp-dialog'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
@@ -21,8 +22,9 @@ const KINDS: Record<ChannelKind, { label: string; remove: string; gone: string }
   slack: { label: 'Slack', remove: 'Disconnect', gone: 'stops answering in Slack. Connecting again takes new tokens.' },
   whatsapp: { label: 'WhatsApp', remove: 'Disconnect', gone: 'stops answering on WhatsApp. Connecting again takes a new QR scan.' },
   telegram: { label: 'Telegram', remove: 'Disconnect', gone: 'stops answering on Telegram. Connecting again takes the bot token.' },
+  discord: { label: 'Discord', remove: 'Disconnect', gone: 'stops answering in Discord. Connecting again takes the bot token.' },
 }
-const ORDER: ChannelKind[] = ['slack', 'whatsapp', 'telegram']
+const ORDER: ChannelKind[] = ['slack', 'discord', 'whatsapp', 'telegram']
 
 export function ChannelRows({ agent }: { agent: Agent }) {
   const channels = useChannels(agent.id)
@@ -61,6 +63,7 @@ export function ChannelDialog({ agent, kind, onClose }: { agent: Agent; kind: Ch
   if (!channels.data || !agent.canEdit) return null
   const channel = channels.data.find((each) => each.kind === kind)
   if (kind === 'slack') return <SlackDialog agent={agent} channel={channel} onClose={onClose} />
+  if (kind === 'discord') return <DiscordDialog agent={agent} channel={channel} onClose={onClose} />
   if (kind === 'whatsapp') return <WhatsappDialog agent={agent} channel={channel} onClose={onClose} />
   return <TelegramDialog agent={agent} channel={channel} onClose={onClose} />
 }

@@ -204,10 +204,10 @@ function elsewhereOf(agent: Agent): string {
 }
 
 function TeamHint({ agent, server, onMove }: { agent: Agent; server: { id: string; name: string } | undefined; onMove: (to: string) => void }) {
-  const slack = useChannels(agent.id).data?.some((channel) => channel.kind === 'slack' && channel.status === 'connected')
-  if (!slack) return null
+  const team = useChannels(agent.id).data?.find((channel) => (channel.kind === 'slack' || channel.kind === 'discord') && channel.status === 'connected')
+  if (!team) return null
   return <div className="mx-2.5 mt-1 mb-1 flex flex-col items-start gap-1 rounded-lg bg-tint px-3 py-2.5 text-[12.5px]/[1.45] text-body">
-    <span>{agent.name} is in your team's Slack. For team use, run it on a computer that stays on.</span>
+    <span>{agent.name} is in your team's {team.kind === 'slack' ? 'Slack' : 'Discord'}. For team use, run it on a computer that stays on.</span>
     {server
       ? <Button type="button" variant="text" onClick={() => onMove(server.id)}>Move to {server.name}</Button>
       : <Button type="button" variant="text" onClick={() => navigate('/settings/computers')}>Add a computer</Button>}

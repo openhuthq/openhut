@@ -3,7 +3,7 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { fieldError } from '@/lib/api-client'
 
-type PeopleKind = Exclude<ChannelKind, 'slack'>
+type PeopleKind = Exclude<ChannelKind, 'slack' | 'discord'>
 
 const WORDING: Record<PeopleKind, { label: string; placeholder: string; hint: string }> = {
   whatsapp: { label: 'Phone numbers', placeholder: '+15551234567, +447700900123', hint: 'With country code. The first one is yours.' },

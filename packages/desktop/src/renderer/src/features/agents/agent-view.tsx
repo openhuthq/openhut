@@ -66,7 +66,8 @@ function Dialogs({ agent, dialog, detail }: { agent: Agent; dialog: AgentDialog 
     case 'skills': return <SkillsDialog agent={agent} open={detail} onClose={close} />
     case 'slack':
     case 'whatsapp':
-    case 'telegram': return <ChannelDialog agent={agent} kind={dialog} onClose={close} />
+    case 'telegram':
+    case 'discord': return <ChannelDialog agent={agent} kind={dialog} onClose={close} />
     case 'browser': return agent.browser && agent.canEdit ? <BrowserDialog agent={agent} onClose={close} /> : null
     default: return null
   }
