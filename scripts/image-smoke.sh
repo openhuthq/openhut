@@ -16,7 +16,9 @@ if ! api http://127.0.0.1:8787/api/cloud | grep -q '"status":"on"'; then
   wait_for 40 "api http://127.0.0.1:8787/api/cloud | grep -q '\"status\":\"on\"'" || fail "the runtime didn't sign in"
   echo "smoke: signed in as mo@example.com"
 fi
-agent=$(api -X POST http://127.0.0.1:8787/api/agents -d '{"name":"Smoke","instructions":"# Smoke\nYou echo."}') || fail "create an agent"
+i=0; until agent=$(api -X POST http://127.0.0.1:8787/api/agents -d '{"name":"Smoke","instructions":"# Smoke\nYou echo."}' 2>/dev/null); do
+  i=$((i+1)); [ "$i" -gt 20 ] && fail "create an agent"; sleep 3
+done
 id=$(printf '%s' "$agent" | sed -n 's/.*"id":"\(ag_[a-z0-9]*\)".*/\1/p')
 [ -n "$id" ] || fail "no agent id in $agent"
 echo "smoke: agent $id"
