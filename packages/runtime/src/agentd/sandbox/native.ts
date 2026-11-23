@@ -80,7 +80,7 @@ function clear(path: string) {
 }
 
 function envOf(spec: SandboxSpec): Record<string, string> {
-  const mapped = Object.fromEntries(Object.entries(spec.env).map(([name, value]) => [name, value.startsWith('/') && !value.startsWith(DATA) ? hostOf({ spec, guest: value }) : value]))
+  const mapped = Object.fromEntries(Object.entries(spec.env).map(([name, value]) => [name, value.startsWith('/') && !value.startsWith(DATA) && name !== 'AGENT_BROWSER_SOCKET_DIR' ? hostOf({ spec, guest: value }) : value]))
   return { ...mapped, PATH: [binDir(spec), NODE, dirname(PYTHON), BASE_PATH].join(WIN ? ';' : ':'), TMPDIR: join(dirOf(spec.id), 'tmp'), TEMP: join(dirOf(spec.id), 'tmp'), TMP: join(dirOf(spec.id), 'tmp'), PYTHONNOUSERSITE: '1', PYTHONPYCACHEPREFIX: join(STATE, 'pycache'), LANG: 'en_US.UTF-8' }
 }
 
