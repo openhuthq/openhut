@@ -6,7 +6,6 @@ import { fromBase64, letter, read, toBase64, type Bytes, type Identity } from '@
 import { agentService } from '../agents/agent-service.ts'
 import { memoryService } from '../agents/memory-service.ts'
 import { connectionService } from '../connections/connection-service.ts'
-import { setUsageData } from '../platform/events.ts'
 import { settings } from '../platform/settings.ts'
 import { routineService } from '../routines/routine-service.ts'
 import { threadService } from '../threads/thread-service.ts'
@@ -147,17 +146,13 @@ function settingLocals(): Local[] {
   const kind = 'setting'
   return [
     { kind, ref: 'time_zone', value: { name: 'time_zone', value: settings.timeZone() } },
-    { kind, ref: 'usage_data', value: { name: 'usage_data', value: settings.usageData() } },
     { kind, ref: 'models', value: { name: 'models', value: PROVIDERS.flatMap(({ id }) => { const catalog = settings.catalog(id); return catalog ? [{ provider: id, ...catalog }] : [] }) } },
   ]
 }
 
 async function applySetting(setting: Extract<Opened, { kind: 'setting' }>['value'] & object): Promise<void> {
   if (setting.name === 'time_zone') return routineService.setTimeZone(setting.value)
-  if (setting.name === 'usage_data') {
-    await settings.setUsageData(setting.value)
-    return setUsageData(setting.value)
-  }
+  if (setting.name === 'usage_data') return
   for (const { provider, at, models } of setting.value) await settings.setCatalog(provider, { at, models })
 }
 

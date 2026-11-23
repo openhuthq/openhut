@@ -44,7 +44,7 @@ function adminOf({ id, runtime }: { id: string; runtime: Fake }): Admin {
   return {
     object: 'admin', seat: { set: !!runtime.seat.token, mode: 'claude', updatedAt: runtime.seat.at }, codex: { set: !!runtime.codexAt, updatedAt: runtime.codexAt ?? null },
     server: { version: '0.3.0', build: 'dev', latestBuild: null, updateAvailable: false, update: null, healthy: true, agentd: true, firewall: true, running: 0, total: 0 },
-    usageData: false, publicKey: keyOf(id), relay: { key: runtime.relayKey ?? noiseKeyOf(id), computerId: createHash('sha256').update(Buffer.from(runtime.relayKey ?? noiseKeyOf(id), 'hex')).digest('hex'), url: null },
+    publicKey: keyOf(id), relay: { key: runtime.relayKey ?? noiseKeyOf(id), computerId: createHash('sha256').update(Buffer.from(runtime.relayKey ?? noiseKeyOf(id), 'hex')).digest('hex'), url: null },
   }
 }
 
@@ -168,13 +168,6 @@ test('agents from every computer come back tagged; connections are merged by kin
   runtimes.beelink.up = false
   assert.deepEqual((await openhut.agents.list()).map((each) => [each.name, each.online]), [['Ops', true], ['Sales', false]])
   assert.deepEqual((await openhut.computers.list()).map((each) => [each.id, each.online]), [['local', true], ['beelink', false]])
-})
-
-test('agents from a computer on an older runtime still show (old model names)', async () => {
-  const { runtimes, openhut } = setup(['local', 'beelink'])
-  runtimes.beelink.agents = [{ ...agent('Juniper'), model: 'sonnet' } as unknown as Agent]
-  const [found] = await openhut.agents.list()
-  assert.deepEqual([found?.name, found?.computer, found?.model], ['Juniper', 'beelink', 'claude:sonnet'])
 })
 
 test('a call about an agent or a connection reaches the computer it lives on, found by listing when it is new to the app', async () => {

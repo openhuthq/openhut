@@ -46,8 +46,8 @@ write_env() {
     echo "OPENHUT_MODEL=${OPENHUT_MODEL:-claude}"
     echo "OPENHUT_URL=$SOURCE_URL"
     [ -z "$CLIENT_KEY" ] || echo "OPENHUT_CLIENT_KEY_SHA256=$CLIENT_KEY"
-    if tailnet; then echo "OPENHUT_ROUTE=tailnet"; echo "OPENHUT_TAILNET_PORT=$TAILNET_PORT"
-    elif joining; then echo "OPENHUT_JOIN='$JOIN_CODE'"; fi
+    if tailnet; then echo "OPENHUT_ROUTE=tailnet"; echo "OPENHUT_TAILNET_PORT=$TAILNET_PORT"; fi
+    if joining; then echo "OPENHUT_JOIN='$JOIN_CODE'"; fi
     [ -z "$LISTEN" ] || echo "OPENHUT_HOST=$LISTEN"
     [ -z "${OPENHUT_CLOUD_URL:-}" ] || echo "OPENHUT_CLOUD_URL=$OPENHUT_CLOUD_URL"
   } > /etc/openhut/env.new

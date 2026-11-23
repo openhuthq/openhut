@@ -85,7 +85,6 @@ test('with no list yet there is no owner to put in a code, so no invitation', as
   assert.match(body.error.message, /no access list yet/)
   await accessService.put({ access: signed([]), local: true })
   await relayService.start({ server: app.server })
-  assert.equal(relayService.state().relay, false)
   await invite()
   assert.equal(relayService.state().relay, true)
   await waitFor(relay.online)

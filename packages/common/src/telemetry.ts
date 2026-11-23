@@ -1,5 +1,3 @@
-import * as z from 'zod/mini'
-
 export const TELEMETRY_EVENTS = {
   install_script_fetched: ['client'],
   release_downloaded: [],
@@ -19,7 +17,6 @@ export const TELEMETRY_EVENTS = {
   message_sent: ['channel', 'agent_name'],
 } as const satisfies Record<string, readonly string[]>
 
-export const BROWSER_EVENTS = ['dashboard_page_viewed'] as const
 export const TELEMETRY_MAX_BATCH = 100
 export const INSTALL_KINDS = ['mac', 'linux', 'server'] as const
 
@@ -27,9 +24,6 @@ export type TelemetryName = keyof typeof TELEMETRY_EVENTS
 export type TelemetryEvent = { name: TelemetryName; properties: Record<string, string | number>; at: number }
 export type InstallKind = typeof INSTALL_KINDS[number]
 export type TelemetryBatch = { instance: string; version: string; kind?: InstallKind; events: TelemetryEvent[] }
-
-export const TrackEvent = z.object({ name: z.enum(BROWSER_EVENTS), properties: z.record(z.string(), z.string().check(z.maxLength(32))) })
-export type TrackEvent = z.infer<typeof TrackEvent>
 
 const VALUE = /^[A-Za-z0-9][\w.+-]{0,31}$/
 const MAX_COUNT = 10_000_000

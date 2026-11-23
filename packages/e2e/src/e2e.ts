@@ -267,16 +267,6 @@ function main() {
     },
   )
 
-  check('T1', 'Usage data identifies no one', 'setup_completed queued with no actor; no email, login or username anywhere (a unit-level check: events.ts in local mode in a node process on the server, not a running desktop app)', async () => {
-    const events = `file://${OPENHUT}/packages/runtime/src/server/platform/events.ts`
-    const script = `const { emit, takeTelemetry } = await import(${JSON.stringify(events)})
-emit({ name: 'setup.completed', actor: { id: 'usr_e2elocal' }, target: { type: 'person', id: 'usr_e2elocal' } })
-console.log(JSON.stringify(takeTelemetry()))`
-    const { stdout } = await sh('node', ['--input-type=module', '-e', script], { env: { ...process.env, OPENHUT_SOCKET: '/tmp/e2e-local.sock', OPENHUT_MODEL: 'claude' } })
-    const sent: { name: string; properties: Record<string, unknown> }[] = JSON.parse(stdout.trim().split('\n').at(-1) ?? '[]')
-    return { actual: sent, pass: sent.some((e) => e.name === 'setup_completed') && !/email|login|username|usr_e2elocal/.test(JSON.stringify(sent)) }
-  })
-
   check('A3', 'The installer ends saying which app key it runs for, and serves nothing beyond loopback', 'install log says it runs for the app key; no tailscale serve and no setup link', async () => {
     const log = readFileSync(`${RESULTS}/install.log`, 'utf8')
     const forKey = log.includes('OpenHut is running for the app key')

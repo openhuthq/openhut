@@ -1,7 +1,7 @@
 import * as z from 'zod/mini'
 import { Timestamp, atLeastOneField } from '../api.ts'
 import { CreateExport } from '../admin/admin.ts'
-import { LEGACY_MODELS, ModelKey } from '../models/provider.ts'
+import { ModelKey } from '../models/provider.ts'
 
 export const AgentStatus = z.enum(['running', 'stopped', 'missing'])
 export type AgentStatus = z.infer<typeof AgentStatus>
@@ -18,7 +18,7 @@ export const Agent = z.object({
   name: z.string(),
   ownerId: z.string(),
   ownerName: z.string(),
-  model: z.pipe(z.pipe(z.string(), z.transform((key) => LEGACY_MODELS[key] ?? key)), ModelKey),
+  model: ModelKey,
   wanted: Wanted,
   status: AgentStatus,
   health: z.nullable(AgentHealth),

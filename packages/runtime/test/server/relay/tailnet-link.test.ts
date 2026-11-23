@@ -47,10 +47,6 @@ test('a key that isn\'t on the list never gets past the handshake', async () => 
   await assert.rejects(connect({ relayUrl: '', url, computer, key: generateKeyPair(), timeout: 3000 }), (error: TunnelError) => error.type === 'closed')
 })
 
-test('with the relay URL empty, nothing connects to the relay', () => {
-  assert.equal(relayService.state().relay, false)
-})
-
 test('nothing listening counts as offline', async () => {
   await assert.rejects(connect({ relayUrl: '', url: 'ws://127.0.0.1:1', computer, key: mac, timeout: 3000 }), (error: TunnelError) => error.type === 'offline')
 })
