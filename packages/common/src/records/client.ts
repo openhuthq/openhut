@@ -119,7 +119,7 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
     get,
 
     async list({ collection, workspace, parent, startingAfter, limit }: { collection: Collection; workspace: string; parent?: string; startingAfter?: string; limit?: number }): Promise<{ data: Opened[]; next: string | null }> {
-      const query = new URLSearchParams({ workspace, ...(parent ? { parent } : {}), ...(startingAfter ? { starting_after: startingAfter } : {}), ...(limit ? { limit: String(limit) } : {}) })
+      const query = new URLSearchParams({ workspace, ...(parent ? { parent } : {}), ...(startingAfter ? { startingAfter } : {}), ...(limit ? { limit: String(limit) } : {}) })
       return many({ reply: await call({ method: 'GET', path: `${collection}?${query}` }), expect: { collection, workspace, parent } })
     },
 
