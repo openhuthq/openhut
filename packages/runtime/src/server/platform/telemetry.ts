@@ -12,7 +12,7 @@ const DAY_MS = 24 * 60 * 60_000
 const SEND_TIMEOUT_MS = 10_000
 const MAX_BATCHES_PER_SEND = 5
 const AGENT_BUCKETS: [number, string][] = [[0, '0'], [1, '1'], [5, '2-5'], [Infinity, '6+']]
-const CHANNELS = ['slack', 'whatsapp', 'telegram']
+const CHANNELS = ['slack', 'whatsapp', 'telegram', 'discord']
 
 export async function startTelemetry(): Promise<void> {
   setUsageData(settings.usageData())

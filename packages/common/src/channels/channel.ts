@@ -1,17 +1,19 @@
 import * as z from 'zod/mini'
 import { Timestamp, atLeastOneField } from '../api.ts'
 
-export const ChannelKind = z.enum(['slack', 'whatsapp', 'telegram'])
+export const ChannelKind = z.enum(['slack', 'whatsapp', 'telegram', 'discord'])
 export type ChannelKind = z.infer<typeof ChannelKind>
 
 export const ADDRESS = {
   slack: { pattern: /^[CG][A-Z0-9]{6,}$/, message: 'Pick Slack channels from the list.' },
   whatsapp: { pattern: /^\+?[1-9]\d{6,14}$/, message: 'Use a phone number with its country code, like +15551234567.' },
   telegram: { pattern: /^[1-9]\d{4,14}$/, message: 'Use a Telegram user ID, like 123456789. @userinfobot tells you yours.' },
+  discord: { pattern: /^[1-9]\d{16,19}$/, message: 'Use a Discord channel ID, like 1234567890123456789. Right-click the channel and Copy Channel ID.' },
 } as const satisfies Record<ChannelKind, { pattern: RegExp; message: string }>
 
 const Phone = z.string().check(z.regex(ADDRESS.whatsapp.pattern, ADDRESS.whatsapp.message))
 const TelegramId = z.string().check(z.regex(ADDRESS.telegram.pattern, ADDRESS.telegram.message))
+const DiscordChannelId = z.string().check(z.regex(ADDRESS.discord.pattern, ADDRESS.discord.message))
 
 export const Channel = z.object({
   id: z.string(),
@@ -53,6 +55,12 @@ export const CreateChannel = z.discriminatedUnion('kind', [
     ownerAddress: TelegramId,
     open: z.boolean(),
     allowed: z.array(TelegramId).check(z.maxLength(50)),
+  }),
+  z.object({
+    kind: z.literal('discord'),
+    agentId: z.string().check(z.maxLength(40)),
+    botToken: z.string().check(z.regex(/^[\w-]{20,}\.[\w-]{4,}\.[\w-]{20,}$/, 'Paste the bot token from the Developer Portal\'s Bot page.')),
+    allowed: z.array(DiscordChannelId).check(z.minLength(1, 'Add at least one channel ID.'), z.maxLength(50)),
   }),
 ])
 export type CreateChannel = z.infer<typeof CreateChannel>

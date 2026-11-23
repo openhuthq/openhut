@@ -7,6 +7,7 @@ import { agentSubnet } from '../platform/network.ts'
 import { AGENT_API_PORT_BASE, WHATSAPP_PORT_BASE } from '../../agentd/sandbox/sandbox.ts'
 import { slack } from '../integrations/slack/slack.ts'
 import { telegram } from '../integrations/telegram/telegram.ts'
+import { discord } from '../integrations/discord/discord.ts'
 import { whatsapp } from '../integrations/whatsapp/whatsapp.ts'
 import { providers, type Route, type Setup } from '../models/providers/index.ts'
 import type { Slot, Slots } from '../models/model-slots.ts'
@@ -99,6 +100,7 @@ function yamlOf({ channel, gateway, net }: { channel: RenderedChannel; gateway: 
   switch (channel.kind) {
     case 'slack': return slack.yaml.trimEnd()
     case 'telegram': return telegram.yaml({ gateway })
+    case 'discord': return discord.yaml
     case 'whatsapp': return config.agentHostNet ? `${whatsapp.yaml}  bridge_port: ${WHATSAPP_PORT_BASE + net}` : whatsapp.yaml.trimEnd()
   }
 }
@@ -107,6 +109,7 @@ function envOf({ channel, token }: { channel: RenderedChannel; token: string }):
   switch (channel.kind) {
     case 'slack': return slack.env({ botToken: channel.botToken, appToken: channel.appToken, channels: channel.audience.allowed })
     case 'telegram': return telegram.env({ botToken: token, audience: channel.audience })
+    case 'discord': return discord.env({ botToken: channel.botToken, channels: channel.audience.allowed })
     case 'whatsapp': return whatsapp.env(channel.audience)
   }
 }
@@ -114,4 +117,5 @@ function envOf({ channel, token }: { channel: RenderedChannel; token: string }):
 export type RenderedChannel =
   | { kind: Extract<ChannelKind, 'slack'>; audience: Audience; botToken: string; appToken: string }
   | { kind: Extract<ChannelKind, 'telegram'>; audience: Audience }
+  | { kind: Extract<ChannelKind, 'discord'>; audience: Audience; botToken: string }
   | { kind: Extract<ChannelKind, 'whatsapp'>; audience: Audience }

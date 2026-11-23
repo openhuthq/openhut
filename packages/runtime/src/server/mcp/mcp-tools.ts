@@ -63,7 +63,7 @@ export const MCP_TOOLS = [
     input: z.extend(UpdateMemory, { id: z.string() }),
     call: ({ api, input: { id, ...patch } }) => api({ method: 'PATCH', url: `/api/memories/${id}`, payload: patch }),
   }),
-  tool({ name: 'list_channels', description: 'Agents\' Slack, WhatsApp and Telegram channels.', input: ListChannels, call: ({ api, input }) => api({ method: 'GET', url: `/api/channels${query(input)}` }) }),
+  tool({ name: 'list_channels', description: 'Agents\' Slack, WhatsApp, Telegram and Discord channels.', input: ListChannels, call: ({ api, input }) => api({ method: 'GET', url: `/api/channels${query(input)}` }) }),
   tool({ name: 'list_providers', description: 'The model providers (Claude and ChatGPT subscriptions, OpenRouter, OpenAI, xAI): which are connected on this computer and every model each offers, with whether it is switched on. An agent\'s model is a key like claude:sonnet or openrouter:google/gemini-3.5-flash.', input: Nothing, call: ({ api }) => api({ method: 'GET', url: '/api/providers' }) }),
   tool({
     name: 'update_provider',

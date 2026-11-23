@@ -1,6 +1,6 @@
 import type { Selectable } from 'kysely'
 import type { Deleted } from '@openhut/common/api.ts'
-import { ADDRESS, type Channel, type Conversation, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
+import { ADDRESS, type Channel, type ChannelKind, type Conversation, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
 import { db, findRow, isUniqueViolation } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { log, emit } from '../platform/events.ts'
@@ -10,12 +10,14 @@ import { deleted } from '../platform/responses.ts'
 import { agentd, containerStates, features } from '../platform/agentd.ts'
 import { slack, SlackSecrets } from '../integrations/slack/slack.ts'
 import { telegram, TelegramSecrets } from '../integrations/telegram/telegram.ts'
+import { discord, DiscordSecrets } from '../integrations/discord/discord.ts'
 import { agentService } from '../agents/agent-service.ts'
 import type { Caller } from '../team/identity.ts'
 import { audienceOf } from './audience.ts'
 import { whatsappPairing } from './whatsapp-pairing.ts'
 
-const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram' } as const
+const CHANNEL_KINDS = new Set<ChannelKind>(['slack', 'discord'])
+const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram', discord: 'Discord' } as const
 
 export const channelService = {
   async list({ agentId }: { agentId?: string }): Promise<Channel[]> {
@@ -40,7 +42,7 @@ export const channelService = {
     const agent = await agentService.requireEditable({ actor, id: body.agentId })
     const existing = await db.selectFrom('channel').select('id').where('agent_id', '=', agent.id).where('kind', '=', body.kind).executeTakeFirst()
     if (existing) throw new HttpError(409, `${agent.name} already has ${LABEL[body.kind]}. Disconnect it first.`)
-    const audience = body.kind === 'slack' ? { owner_address: '', open: false, allowed: '' } : { owner_address: body.ownerAddress, open: body.open, allowed: body.allowed.join(',') }
+    const audience = audienceRow(body)
     const row = await db.insertInto('channel').values({ id: newId('ch'), agent_id: agent.id, kind: body.kind, ...audience, ...await setupOf({ body, agentName: agent.name, agentId: agent.id }) })
       .returningAll().executeTakeFirstOrThrow().catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, `${agent.name} already has ${LABEL[body.kind]}. Disconnect it first.`) : err })
     emit({ name: 'channel.created', actor, target: { type: 'channel', id: row.id, kind: row.kind, agentId: agent.id } })
@@ -53,10 +55,12 @@ export const channelService = {
     const agent = await agentService.requireEditable({ actor, id: row.agent_id })
     const wrong = patch.allowed?.find((address) => !ADDRESS[row.kind].pattern.test(address))
     if (wrong) throw new HttpError(400, `${wrong} doesn't look right. ${ADDRESS[row.kind].message}`, { param: 'allowed' })
-    if (row.kind === 'slack' && !patch.allowed) throw new HttpError(400, 'A Slack agent answers everyone in the channels you pick. Send allowed with the channel IDs.', { param: 'allowed' })
+    if (CHANNEL_KINDS.has(row.kind) && !patch.allowed) throw new HttpError(400, `A ${LABEL[row.kind]} agent answers everyone in the channels you pick. Send allowed with the channel IDs.`, { param: 'allowed' })
+    if (row.kind === 'discord' && !patch.allowed?.length) throw new HttpError(400, 'Keep at least one Discord channel. Disconnect Discord to stop it answering.', { param: 'allowed' })
     const added = [...new Set(patch.allowed ?? [])].filter((address) => !audienceOf(row).allowed.includes(address))
     if (row.kind === 'slack') await slack.enter({ botToken: slackSecrets(row).botToken, ids: added, agentName: agent.name })
-    const open = row.kind === 'slack' ? undefined : patch.open
+    if (row.kind === 'discord') await discord.enter({ botToken: DiscordSecrets.parse(JSON.parse(unseal(row.secrets))).botToken, ids: added, bot: row.account ?? 'The bot' })
+    const open = CHANNEL_KINDS.has(row.kind) ? undefined : patch.open
     const updated = await db.updateTable('channel').set({ open, allowed: patch.allowed && [...new Set(patch.allowed)].join(',') }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
     emit({ name: 'channel.updated', actor, target: { type: 'channel', id, kind: row.kind, agentId: row.agent_id } })
     await reapplyOrLog(row.agent_id)
@@ -103,6 +107,10 @@ async function setupOf({ body, agentName, agentId }: { body: CreateChannel; agen
       const account = await telegram.verify({ botToken: body.botToken })
       return { status: 'connected', account, secrets: seal(JSON.stringify({ botToken: body.botToken })) }
     }
+    case 'discord': {
+      const account = await discord.verify({ botToken: body.botToken, channels: body.allowed })
+      return { status: 'connected', account, secrets: seal(JSON.stringify({ botToken: body.botToken })) }
+    }
     case 'whatsapp': {
       if (!(await features()).whatsapp) throw new HttpError(409, 'This computer can\'t link WhatsApp. Run the agent on a Linux computer you added to use it.', { param: 'kind' })
       if ((await containerStates())?.[agentId] !== 'running') throw new HttpError(409, `Start ${agentName} first, then connect WhatsApp.`)
@@ -119,6 +127,15 @@ async function disconnect(row: Row): Promise<void> {
       return
     case 'slack': return
     case 'telegram': return
+    case 'discord': return
+  }
+}
+
+function audienceRow(body: CreateChannel): { owner_address: string; open: boolean; allowed: string } {
+  switch (body.kind) {
+    case 'slack': return { owner_address: '', open: false, allowed: '' }
+    case 'discord': return { owner_address: '', open: false, allowed: [...new Set(body.allowed)].join(',') }
+    default: return { owner_address: body.ownerAddress, open: body.open, allowed: body.allowed.join(',') }
   }
 }
 

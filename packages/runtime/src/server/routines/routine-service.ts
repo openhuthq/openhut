@@ -27,7 +27,7 @@ const SILENT = /^\s*\[?(SILENT|NO[_ ]REPLY)\]?\s*$/i
 const OFFSET = /(Z|[+-]\d\d:?\d\d)$/i
 const DASHBOARD = 'api_server'
 const THREAD_SESSION = /^openhut-(th_[a-z0-9]+)$/
-const PLATFORM_NAMES: Record<string, string> = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram' }
+const PLATFORM_NAMES: Record<string, string> = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram', discord: 'Discord' }
 
 export const Origin = z.looseObject({
   platform: z.string().check(z.minLength(1), z.maxLength(40)),
@@ -275,6 +275,10 @@ async function placeOf({ agentId, origin }: { agentId: string; origin: Origin })
     const dm = origin.chat_type === 'dm' && origin.chat_id.startsWith('D')
     if (!dm && !allowed.includes(origin.chat_id)) throw new HttpError(400, `Can't post in ${origin.chat_name ? `#${origin.chat_name.replace(/^#/, '')}` : 'that channel'} any more.`)
     return dm ? 'your Slack DM' : `#${(origin.chat_name ?? origin.chat_id).replace(/^#/, '')}`
+  }
+  if (channel.kind === 'discord') {
+    if (origin.chat_type === 'dm' || !allowed.length) throw new HttpError(400, `Can't post in ${origin.chat_name || 'that Discord chat'} any more.`)
+    return origin.chat_name || 'a Discord channel'
   }
   const owner = digits(channel.owner_address)
   const chat = digits(origin.chat_id)
