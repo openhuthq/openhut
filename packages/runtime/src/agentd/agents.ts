@@ -139,7 +139,7 @@ function outdated({ made, browser: on }: { made: SandboxState; browser: boolean 
 
 function stale(made: SandboxState) {
   const started = made.startedAt ? Date.parse(made.startedAt.replace(/(\.\d{3})\d+/, '$1')) : 0
-  return Math.max(...[...FILES, CLAUDE_SETTINGS_FILE].map((name) => statSync(`${conf(made.id)}/${name}`).mtimeMs)) > started
+  return Math.max(...[...FILES, CLAUDE_SETTINGS_FILE].map((name) => Math.floor(statSync(`${conf(made.id)}/${name}`).mtimeMs))) > started
 }
 
 function specOf({ id, net, browser: on }: { id: string; net: number; browser: boolean }): SandboxSpec {

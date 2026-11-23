@@ -4,10 +4,10 @@ const PAIR_MS = 5 * 60_000
 const pairings = new Map<string, Following>()
 
 export const whatsappPairing = {
-  follow(agentId: string): Pairing {
+  follow({ agentId, onLinked }: { agentId: string; onLinked: (phone: string | undefined) => Promise<unknown> }): Pairing {
     const known = pairings.get(agentId)
     if (known && (!known.ended || known.pairing.status === 'linked')) return known.pairing
-    const following: Following = { pairing: { status: 'starting' }, ended: false, stream: undefined }
+    const following: Following = { pairing: { status: 'starting' }, ended: false, stream: undefined, told: false }
     pairings.set(agentId, following)
     const timer = setTimeout(() => {
       fail(following.pairing, 'nobody scanned the code within 5 minutes')
@@ -15,7 +15,13 @@ export const whatsappPairing = {
     }, PAIR_MS)
     following.stream = pairWhatsapp({
       id: agentId,
-      onLine: (line) => read({ pairing: following.pairing, line }),
+      onLine: (line) => {
+        read({ pairing: following.pairing, line })
+        if (following.pairing.status === 'linked' && !following.told) {
+          following.told = true
+          void onLinked(following.pairing.phone).catch(() => { following.told = false })
+        }
+      },
       onEnd: () => {
         clearTimeout(timer)
         following.ended = true
@@ -80,4 +86,4 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export type Pairing = { status: 'starting' | 'qr' | 'linked' | 'error'; qr?: string; phone?: string; error?: string }
-type Following = { pairing: Pairing; ended: boolean; stream: Stream | undefined }
+type Following = { pairing: Pairing; ended: boolean; stream: Stream | undefined; told: boolean }
