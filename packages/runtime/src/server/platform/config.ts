@@ -48,7 +48,6 @@ export const config = {
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))).version,
   build: BUILD,
   join: JOIN,
-  tailnetPort: Number(process.env.OPENHUT_TAILNET_PORT ?? 0),
   relayUrl: RELAY_URL,
   claudeBin: fileURLToPath(new URL('../../../../../bin/claude', import.meta.url)),
   claudeHostBin: process.env.OPENHUT_BIN ? join(process.env.OPENHUT_BIN, process.platform === 'win32' ? 'claude.exe' : 'claude') : fileURLToPath(new URL(`../../../../../bin/${process.platform === 'darwin' ? 'claude-darwin' : 'claude'}`, import.meta.url)),

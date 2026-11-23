@@ -20,15 +20,13 @@ It installs OpenHut there and asks to join, which takes a few minutes. The code 
 
 ## Over Tailscale
 
-The second way: your Mac talks to the computer straight over your [tailnet](https://tailscale.com/download), and phones and teammates still reach it through the relay. Your Mac and the computer both need to be on your tailnet. Turn on Tailscale SSH on the computer once:
+If the computer is on your [tailnet](https://tailscale.com/download), the app can run the install for you, so you don't paste anything. Tailscale is only used for that first install: afterwards the computer talks to your devices through the relay, like any other. Your Mac and the computer both need to be on your tailnet. Turn on Tailscale SSH on the computer once:
 
 ```sh
 sudo tailscale set --ssh
 ```
 
 Pick **Tailscale**, then the computer. The app runs the same install with a join code over Tailscale SSH, and the computer asks to join like any other; **Approve** it. If Tailscale asks you to approve something, a link shows up; open it and approve.
-
-The install shares one port, 8788, with your tailnet only (`tailscale serve --bg --tcp 8788`). It adds that entry and leaves your other `tailscale serve` settings alone. Only your own devices get past that port: the computer checks each one against your account's signed list of devices. Your tailnet's access rules need to let your Mac reach it.
 
 ## Put agents on it
 
@@ -63,9 +61,5 @@ Plan memory for the busiest moment: every running agent can use up to 1 GB, or 4
 - **The code expired.** Make a new one and run the new command.
 - **The Tailscale list is empty or says Tailscale is off.** Install Tailscale on your Mac, open it and sign in, then **Check again**.
 - **"Tailscale SSH is off".** Run `sudo tailscale set --ssh` on that computer, then **Check again**.
-- **"Can't reach port 8788".** Your tailnet's access rules block your Mac from that port. Allow it, then add the computer again.
-- **"Port 8788 is taken".** Something else on the computer uses it. Free it, then add the computer again.
-- **"Offline · Tailscale is off on this Mac".** Open Tailscale on your Mac.
-- **A Tailscale computer shows Offline for good.** Its Tailscale key may have expired. Turn off key expiry for always-on servers in the Tailscale admin console.
 - **A computer shows Offline.** Check that it's on and connected to the internet. Its agents keep running there; the app catches up when it's back.
-- **Remove the port from your tailnet.** On the computer: `sudo tailscale serve --tcp=8788 off`.
+- **A computer added over Tailscale before 0.6.2.** It talked to your Mac over your tailnet, which OpenHut no longer does. Remove it and add it again; its agents' settings and chats come back from your account.

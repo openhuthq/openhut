@@ -290,7 +290,7 @@ function TailscaleDialog({ title, back, foot, children }: { title: string; back?
 function AddComputer() {
   return <TailscaleDialog title="Add a computer">
     <Rows>
-      <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Tailscale" note="Use the Tailscale you already have. Nothing goes through OpenHut."><Chevron /></Row>
+      <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Tailscale" note="Install it over Tailscale SSH in one click. It then talks through OpenHut Relay, end-to-end encrypted."><Chevron /></Row>
       <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="The easiest way. No Tailscale needed. End-to-end encrypted."><Chevron /></Row>
     </Rows>
   </TailscaleDialog>
