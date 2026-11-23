@@ -3,7 +3,7 @@ name: Desktop app
 on:
   push:
     tags: ['v*']
-    branches-ignore: [main]
+    branches: ['**']
   workflow_dispatch:
     inputs:
       full:
@@ -17,7 +17,7 @@ permissions:
 
 concurrency:
   group: desktop-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') && github.ref != 'refs/heads/main' }}
 
 env:
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -26,7 +26,81 @@ env:
   OPENHUT_INSTALL_URL: ${{ startsWith(github.ref, 'refs/tags/') && format('https://github.com/{0}/releases/download/{1}/install.sh', github.repository, github.ref_name) || 'https://openhut.dev/edge' }}
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      desktop: ${{ steps.paths.outputs.desktop }}
+      server: ${{ steps.paths.outputs.server }}
+      private: ${{ steps.paths.outputs.private }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Pick the jobs a branch needs (main and tags run everything); only docs, the site, the brain or the cloud Worker skip the desktops
+        id: paths
+        env:
+          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+        run: |
+          set -o pipefail
+          all() { printf 'desktop=true\nserver=true\nprivate=true\n' >> "$GITHUB_OUTPUT"; exit 0; }
+          [ "$GITHUB_EVENT_NAME" = push ] && [ "$TAGGED" != true ] && [ "$GITHUB_REF_NAME" != main ] || all
+          base=$(git merge-base origin/main HEAD) || all
+          git cat-file -e "$base^{commit}" 2>/dev/null || all
+          changed=$(git diff --name-only "$base" HEAD) || all
+          if echo "$changed" | grep -qx private; then
+            echo private=true >> "$GITHUB_OUTPUT"
+            old=$(git ls-tree "$base" private | awk '{print $3}') new=$(git ls-tree HEAD private | awk '{print $3}')
+            mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+            ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+            git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private || all
+            inside=$(git -C private diff --name-only "$old" "$new" | sed 's|^|private/|') || all
+            changed=$(printf '%s\n%s\n' "$(echo "$changed" | grep -vx private)" "$inside")
+          fi
+          echo "$changed"
+          desktop=$(echo "$changed" | grep -Ev '^$|\.md$|^docs/|^packages/docs/|^packages/phone/|^\.agents/|^private/(site|brain|cloud)/|^\.github/workflows/(deploy|cloud|phone)\.yml$' || true)
+          server=$(echo "$changed" | grep -E '^(install|packages/runtime|packages/common|packages/tunnel|vendor|private/api)/|^package-lock\.json$|^scripts/(release|image|image-smoke)\.sh$|^\.github/workflows/(runtime-image|desktop)\.yml$' || true)
+          echo "Needs the desktops: ${desktop:-nothing}"
+          echo "Needs the server image: ${server:-nothing}"
+          echo "desktop=$([ -n "$desktop" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "server=$([ -n "$server" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  private:
+    needs: changes
+    if: needs.changes.outputs.private == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check out private/
+        env:
+          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: The cloud API, the cloud Worker and the site typecheck and pass their tests
+        run: |
+          npm --prefix private/api run typecheck && npm --prefix private/api test
+          npm --prefix private/cloud run typecheck && npm --prefix private/cloud test
+          npm --prefix private/site run typecheck
+
+  server:
+    needs: changes
+    if: needs.changes.outputs.server == 'true' && !startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/runtime-image.yml
+    secrets: inherit
+    with:
+      tags: ''
+
   draft:
+    environment: ${{ (startsWith(github.ref, 'refs/tags/') || inputs.full) && 'release' || '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -78,7 +152,9 @@ jobs:
       - run: npx turbo run typecheck test
 
   build:
-    needs: draft
+    needs: [draft, changes]
+    if: needs.changes.outputs.desktop == 'true'
+    environment: ${{ (startsWith(github.ref, 'refs/tags/') || inputs.full) && 'release' || '' }}
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false
@@ -233,6 +309,18 @@ jobs:
           sh -n dist/install.sh
           grep -qxF "RUNTIME_IMAGE=\"\${RUNTIME_IMAGE:-$IMAGE}\"" dist/install.sh
           gh release upload "$GITHUB_REF_NAME" dist/install.sh dist/openhut.tgz --clobber
+
+  gate:
+    needs: [changes, private, server, draft, checks, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or was skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for result in $RESULTS; do case $result in success|skipped) ;; *) exit 1 ;; esac; done
 
   publish:
     needs: [checks, build, server-runtime]
