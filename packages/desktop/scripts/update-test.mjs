@@ -25,7 +25,7 @@ const root = mkdtempSync(join(tmpdir(), 'openhut-update-'))
 const app = join(root, 'Applications/OpenHut.app')
 const home = join(root, 'home')
 const cdpPort = 9300 + Math.floor(Math.random() * 500)
-const evidence = { via: args.via, want, broken: args.broken, steps: [] }
+const evidence = { via: args.via, want, broken: args.broken, steps: [], waits: [] }
 const say = (step, detail = {}) => {
   evidence.steps.push({ step, ...detail, at: new Date().toISOString() })
   console.log(`update-test: ${step}${Object.keys(detail).length ? ` ${JSON.stringify(detail)}` : ''}`)
@@ -53,9 +53,9 @@ try {
   child = launch()
   let page = await connect()
   const admin = await until(async () => {
-    const reply = await page.eval("fetch('/api/admin').then((r) => r.ok ? r.json() : null, () => null)")
+    const reply = await admin(page)
     return reply?.server?.healthy ? reply : null
-  }, 120, 'the old app\'s runtime to be healthy')
+  }, 60, 'the old app\'s runtime to be healthy')
   say('the old app is running', { version: await page.eval('window.openhut.version'), runtimeBuild: admin.server.build })
   if (args.cloud) {
     await signIn({ page, api: API })
@@ -68,20 +68,22 @@ try {
     const state = await page.eval('window.openhut.update.state()')
     if (state.error) throw new Error(`the update failed with "${state.error}"; see ${home}/logs/updates.log`)
     return state.ready ? state : null
-  }, 600, 'Squirrel to verify the new version')
+  }, 300, 'Squirrel to verify the new version')
   say('Squirrel verified the new version and the app shows it ready', ready)
   const exited = new Promise((resolve) => child.once('exit', resolve))
   if (args.via === 'button') await page.eval('window.openhut.update.install()').catch(() => undefined)
   else child.kill('SIGTERM')
   await Promise.race([exited, sleep(60_000).then(() => { throw new Error('the old app didn\'t quit within a minute') })])
+  child = undefined
   say(args.via === 'button' ? 'pressed Restart to update; the app quit' : 'quit the app')
-  await until(async () => plistVersion() === want, 180, `the bundle on disk to become ${want}`)
+  await until(async () => plistVersion() === want, 120, `the bundle on disk to become ${want}`)
   execFileSync('codesign', ['--verify', '--deep', '--strict', app])
   say('the bundle on disk is the new version and its signature verifies', { version: plistVersion(), signature: signedBy() })
   if (args.broken) {
     const old = plistVersion.call(null, args.from)
     child = launch({ OPENHUT_TEST_DIALOG: 'Go back' })
     await Promise.race([new Promise((resolve) => child.once('exit', resolve)), sleep(180_000).then(() => { throw new Error('the broken version didn\'t give up within 3 minutes') })])
+    child = undefined
     say('the new version couldn\'t start, so it picked Go back and quit')
     await until(async () => plistVersion() === old, 120, `the bundle on disk to be ${old} again`)
     execFileSync('codesign', ['--verify', '--deep', '--strict', app])
@@ -92,9 +94,9 @@ try {
   child = launch()
   page = await connect()
   const after = await until(async () => {
-    const reply = await page.eval("fetch('/api/admin').then((r) => r.ok ? r.json() : null, () => null)")
+    const reply = await admin(page)
     return reply?.server?.healthy ? reply : null
-  }, 120, 'the new app\'s runtime to be healthy')
+  }, 60, 'the new app\'s runtime to be healthy')
   const agents = await page.eval("fetch('/api/agents').then((r) => r.json())")
   const version = await page.eval('window.openhut.version')
   const kept = agents.data.some((each) => each.id === agent.id)
@@ -136,7 +138,7 @@ async function connect() {
   const target = await until(async () => {
     const list = await fetch(`http://127.0.0.1:${cdpPort}/json/list`).then((r) => r.json()).catch(() => [])
     return list.find((each) => each.type === 'page' && each.url.startsWith('app://openhut'))
-  }, 120, 'the app window')
+  }, 60, 'the app window')
   const socket = new WebSocket(target.webSocketDebuggerUrl)
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject })
   const waiting = new Map()
@@ -156,11 +158,30 @@ async function connect() {
   }
 }
 
+async function admin(page) {
+  const reply = await page.eval("fetch('/api/admin').then(async (r) => ({ status: r.status, body: r.ok ? await r.json() : await r.text() }), () => null)")
+  if (reply?.status === 401 || reply?.status === 403) throw new Error(`GET /api/admin answered ${reply.status}, which waiting won't change: ${String(reply.body).slice(0, 300)}`)
+  return reply?.status === 200 ? reply.body : null
+}
+
 async function until(check, seconds, what) {
-  for (const end = Date.now() + seconds * 1000; Date.now() < end; await sleep(1000)) {
-    const value = await check()
-    if (value) return value
+  const started = Date.now()
+  const waited = (outcome) => evidence.waits.push({ what, seconds: Math.round((Date.now() - started) / 1000), limit: seconds, outcome })
+  for (const end = started + seconds * 1000; Date.now() < end; await sleep(1000)) {
+    if (child && (child.exitCode !== null || child.signalCode !== null)) {
+      waited('app exited')
+      throw new Error(`the app exited (${child.exitCode ?? child.signalCode}) while waiting for ${what}`)
+    }
+    const value = await check().catch((error) => {
+      waited('failed')
+      throw error
+    })
+    if (value) {
+      waited('done')
+      return value
+    }
   }
+  waited('timed out')
   throw new Error(`timed out after ${seconds}s waiting for ${what}`)
 }
 
