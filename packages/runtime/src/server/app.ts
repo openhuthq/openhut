@@ -18,10 +18,11 @@ import { channelController } from './channels/channel-controller.ts'
 import { connectionAuthorizationController, connectionController, connectionEventController, connectionToolController } from './connections/connection-controller.ts'
 import { providerController } from './models/provider-controller.ts'
 import { gatewayServer } from './gateway/gateway-server.ts'
-import { mcpController } from './mcp/mcp-controller.ts'
 import { threadController } from './threads/thread-controller.ts'
 import { threadService } from './threads/thread-service.ts'
 import { routineController } from './routines/routine-controller.ts'
+import { changeRequestController } from './agents/change-request-controller.ts'
+import { changeRequestService } from './agents/change-request-service.ts'
 import { routineService } from './routines/routine-service.ts'
 import { meController } from './team/team-controller.ts'
 import { accessController } from './access/access-controller.ts'
@@ -62,6 +63,7 @@ await app.register(memoryController, { prefix: '/api/memories' })
 await app.register(browserController, { prefix: '/api/browsers' })
 await app.register(threadController, { prefix: '/api/threads' })
 await app.register(routineController, { prefix: '/api/routines' })
+await app.register(changeRequestController, { prefix: '/api/change-requests' })
 await app.register(channelController, { prefix: '/api/channels' })
 await app.register(connectionController, { prefix: '/api/connections' })
 await app.register(connectionEventController, { prefix: '/api/connection-events' })
@@ -72,7 +74,6 @@ await app.register(adminController, { prefix: '/api/admin' })
 await app.register(eventsController, { prefix: '/api/events' })
 await app.register(updateController, { prefix: '/api/updates' })
 await app.register(cloudController, { prefix: '/api/cloud' })
-await app.register(mcpController, { prefix: '/mcp' })
 
 app.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody({ status: 404, message: `There's no ${req.method} ${req.url.split('?')[0]}.` })))
 
@@ -96,5 +97,6 @@ await gatewayServer.start().catch(async (err: unknown) => {
 })
 await agentService.boot()
 routineService.runDashboardWith((input) => threadService.runRoutine(input))
+changeRequestService.runDashboardWith((input) => threadService.runRoutine(input))
 routineService.start()
 cloudService.connect()

@@ -9,7 +9,7 @@ import Fastify from 'fastify'
 import { config } from '../../../src/server/platform/config.ts'
 import { migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
-import { innerAuthorization, listenLocally, tagDevice, who } from '../../../src/server/team/identity.ts'
+import { listenLocally, tagDevice, who } from '../../../src/server/team/identity.ts'
 import { meController } from '../../../src/server/team/team-controller.ts'
 
 await migrate()
@@ -60,13 +60,6 @@ test('a request on a device\'s connection is refused while no device is a client
   assert.equal((await ask({ createConnection: device })).status, 401)
   assert.equal((await ask({ createConnection: device, headers: { authorization: 'Bearer test-key' } })).status, 401)
   assert.equal((await ask({ createConnection: device, path: '/api/me' })).status, 401)
-})
-
-test('the control MCP\'s calls inside the runtime keep the caller, and a made-up inner key is refused', async () => {
-  const caller = { id: 'usr_x', email: 'x', local: true }
-  assert.equal((await ask({ ...tcp, headers: { authorization: innerAuthorization(caller) } })).body.local, true)
-  assert.equal((await ask({ ...tcp, headers: { authorization: innerAuthorization({ ...caller, local: false }) } })).body.local, false)
-  assert.equal((await ask({ ...tcp, headers: { authorization: `Inner ${'0'.repeat(64)} local` } })).status, 401)
 })
 
 test.after(async () => {
