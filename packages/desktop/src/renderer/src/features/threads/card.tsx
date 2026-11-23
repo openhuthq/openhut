@@ -63,7 +63,7 @@ export const MessageCard = createRenderer(cardCatalog, {
   },
   LinkButton: ({ element: { props } }) => {
     const inApp = askedPath(props.url)
-    if (inApp) return <span className="flex flex-wrap items-center gap-3"><a href={inApp} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>{props.label}</a><span className="text-[12.5px] text-mute">Opens in OpenHut</span></span>
+    if (inApp) return <a href={inApp} className={buttonVariants({ variant: 'text' })}>{props.label}</a>
     return <a href={props.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>{props.label}<span className="text-[11px] text-mute">↗</span></a>
   },
 })
