@@ -5,7 +5,6 @@ import { db, migrate } from './platform/db.ts'
 import { emit, log } from './platform/events.ts'
 import { answerErrors, errorBody, messageOf } from './platform/http-error.ts'
 import { validateWithZod } from './platform/validation.ts'
-import { forOlderApps } from './platform/responses.ts'
 import { adminController, healthController, updateController } from './admin/admin-controller.ts'
 import { agentController, grantController } from './agents/agent-controller.ts'
 import { memoryController } from './agents/memory-controller.ts'
@@ -40,7 +39,6 @@ if (config.installKind === 'server' && !/^[0-9a-f]{64}$/i.test(config.clientKeyS
 const app = Fastify({ logger: false, bodyLimit: 1 << 20, trustProxy: ['127.0.0.1', '::1'], forceCloseConnections: true })
 answerErrors(app)
 app.setValidatorCompiler(validateWithZod)
-app.addHook('preSerialization', async (req, _reply, payload) => forOlderApps({ req, payload }))
 app.addHook('onRequest', async (req) => {
   const zone = req.headers['openhut-time-zone']
   if (typeof zone === 'string' && zone) await routineService.setTimeZone(zone)

@@ -170,13 +170,6 @@ test('agents from every computer come back tagged; connections are merged by kin
   assert.deepEqual((await openhut.computers.list()).map((each) => [each.id, each.online]), [['local', true], ['beelink', false]])
 })
 
-test('agents from a computer on an older runtime still show (old model names)', async () => {
-  const { runtimes, openhut } = setup(['local', 'beelink'])
-  runtimes.beelink.agents = [{ ...agent('Juniper'), model: 'sonnet' } as unknown as Agent]
-  const [found] = await openhut.agents.list()
-  assert.deepEqual([found?.name, found?.computer, found?.model], ['Juniper', 'beelink', 'claude:sonnet'])
-})
-
 test('a call about an agent or a connection reaches the computer it lives on, found by listing when it is new to the app', async () => {
   const { runtimes, openhut } = setup(['local', 'beelink'])
   runtimes.beelink.agents = [agent('Sales')]
