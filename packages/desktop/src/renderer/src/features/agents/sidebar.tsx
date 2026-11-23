@@ -1,5 +1,5 @@
 import { createContext, useState, type ReactElement } from 'react'
-import { Delete02Icon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { Delete02Icon, LaptopIcon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, ServerStack01Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
@@ -60,7 +60,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
         title={agent.online ? undefined : `${nameOf({ computers, id: agent.computer })} is offline`}>
         <span className={cn('relative', !agent.online && 'opacity-45')}><Face agent={agent} size={phone ? 52 : 40} /><Live agent={agent} className="-right-0.5 -bottom-0.5 phone:size-3.5" /></span>
         <span className="grid min-w-0 gap-0.5">
-          <span className="flex min-w-0 items-center gap-2"><span className={cn('truncate text-[14px] font-semibold phone:text-[17px]', !agent.online && 'text-mute')}>{agent.name}</span>{agent.shared && <span className="ml-auto shrink-0"><Faces agentId={agent.id} size={18} /></span>}</span>
+          <span className="flex min-w-0 items-center gap-2"><span className={cn('truncate text-[14px] font-semibold phone:text-[17px]', !agent.online && 'text-mute')}>{agent.name}</span><span className="ml-auto flex shrink-0 items-center gap-1.5">{agent.shared && <Faces agentId={agent.id} size={18} />}<Where agent={agent} computers={computers} /></span></span>
           <span className={cn('truncate text-[13px]', agent.online ? 'text-body' : 'text-mute', agent.online && troubleOf(agent) && 'text-fail')}>{many && `${nameOf({ computers, id: agent.computer })} · `}{agent.online ? troubleOf(agent) ?? (agent.summary || 'Say hello') : 'Offline'}</span>
         </span>
         {thread && <span className="hidden self-start pt-1 text-[12px] text-mute tabular-nums phone:block">{ago(thread.updatedAt)}</span>}
@@ -136,4 +136,9 @@ function TeamSwitcher() {
       <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/general')}><I icon={Settings02Icon} size={15} className="text-mute" />Team settings</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
+}
+
+function Where({ agent, computers }: { agent: OpenHutAgent; computers: Parameters<typeof nameOf>[0]['computers'] }) {
+  const label = agent.runsHere ? 'Runs on this computer' : `Runs on ${agent.runsOnName ?? nameOf({ computers, id: agent.computer })}`
+  return <span title={label} aria-label={label} className="grid text-mute-2"><I icon={agent.runsHere ? LaptopIcon : ServerStack01Icon} size={13} /></span>
 }
