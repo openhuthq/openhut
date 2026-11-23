@@ -3,7 +3,7 @@ set -u
 [ "$(uname)" = Darwin ] && [ -z "${E2E_AWAKE:-}" ] && E2E_AWAKE=1 exec caffeinate -is "$0" "$@"
 cd "$(dirname "$0")/../.."
 R=packages/e2e/results
-HOST_IMAGE=$(sed -n 's/^HOST_IMAGE=//p' install/install.sh)
+HOST_IMAGE=$(sed -n 's/^ARG DIND=//p' install/Dockerfile)
 fail() { echo "e2e: $*"; exit 1; }
 healthy() { in_host curl -fsS http://127.0.0.1:8787/health 2>/dev/null | grep -q '"ok":true'; }
 wait_healthy() { i=0; until healthy; do i=$((i+3)); [ $i -ge "$1" ] && return 1; sleep 3; done; }

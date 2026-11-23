@@ -4,15 +4,18 @@ OPENHUT_URL="${OPENHUT_URL:-https://openhut.dev}"
 OPENHUT_SHA256="@OPENHUT_SHA256@"
 OPENHUT_BUILD="@OPENHUT_BUILD@"
 OPENHUT_TGZ="@OPENHUT_TGZ@"
+RUNTIME_IMAGE="${RUNTIME_IMAGE:-@OPENHUT_IMAGE@}"
 MIN_APP_VERSION="@OPENHUT_MIN_APP@"
 GVISOR=20261109.0
 NODE=22.23.5
 CLAUDE=2.1.311
 AGENT_BROWSER=0.43.0
-HOST_IMAGE=docker:28-dind@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac
 PREFIX=/opt/openhut
 JOIN_CODE="${OPENHUT_JOIN:-}"
-[ "${1:-}" != join ] || JOIN_CODE="${2:-}"
+MODE="${1:-}"
+[ "$MODE" != join ] || JOIN_CODE="${2:-}"
+LOCK=/run/openhut-install.lock
+IN=
 say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die() { printf 'openhut: %s\n' "$*" >&2; exit 1; }
 retry() { n=0; until timeout 600 "$@"; do n=$((n+1)); [ $n -ge 4 ] && return 1; echo "  retrying: $1 ($n)"; sleep 5; done; }
@@ -39,6 +42,7 @@ write_env() {
     if joining; then echo "OPENHUT_JOIN='$JOIN_CODE'"; fi
     [ -z "$LISTEN" ] || echo "OPENHUT_HOST=$LISTEN"
     [ -z "${OPENHUT_CLOUD_URL:-}" ] || echo "OPENHUT_CLOUD_URL=$OPENHUT_CLOUD_URL"
+    [ -z "${OPENHUT_API_URL:-}" ] || echo "OPENHUT_API_URL=$OPENHUT_API_URL"
     [ "${OPENHUT_PERSONAL:-}" != 1 ] || echo "OPENHUT_PERSONAL=1"
   } > /etc/openhut/env.new
   mv /etc/openhut/env.new /etc/openhut/env
@@ -68,13 +72,107 @@ go_back() {
   start || true
   rm -rf "$PREFIX.failed"
 }
-fresh() { h=$(curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$h" | grep -q '"ok":true' &&
+fresh() { h=$($IN curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$h" | grep -q '"ok":true' &&
   [ "$(echo "$h" | sed -n 's/.*"started":\([0-9]*\).*/\1/p')" -ge "$STARTED_AFTER" ]; }
 up() { i=0; until fresh; do i=$((i+1)); [ $i -gt "$1" ] && return 1; printf .; sleep 3; done; }
 running() {
-  if [ -n "$ASKED" ]; then echo "OpenHut is running and asking to join your computers. Check the six digits in the OpenHut app and accept it there."
+  if [ -n "${ASKED:-}" ]; then echo "OpenHut is running and asking to join your computers. Check the six digits in the OpenHut app and accept it there."
   elif joining; then echo "OpenHut is running."
   else echo "OpenHut is running for the app key sha256:$(printf '%s' "$CLIENT_KEY" | cut -c1-8)..."; fi
+}
+
+runtime() {
+  docker run -d --name openhut --hostname openhut --label "dev.openhut.build=$(cat "$PREFIX/BUILD")" --label "dev.openhut.agent=$(cat /opt/openhut-agent/image)" \
+    --restart unless-stopped --privileged --read-only --tmpfs /run:size=256m --tmpfs /tmp:size=1g \
+    -v openhut:/var/lib/docker -v openhut-data:/data -p 127.0.0.1:8787:8787 \
+    --log-opt max-size=10m --log-opt max-file=3 "$RUNTIME_IMAGE" >/dev/null
+}
+updater() {
+  [ "$(docker container inspect -f '{{.Config.Image}}' openhut-updater 2>/dev/null || true)" = "$RUNTIME_IMAGE" ] && return
+  docker rm -f openhut-updater >/dev/null 2>&1 || true
+  docker run -d --name openhut-updater --restart unless-stopped --read-only --tmpfs /tmp:size=64m \
+    --cap-drop ALL --security-opt no-new-privileges --security-opt label=disable \
+    -v /var/run/docker.sock:/var/run/docker.sock -v openhut-data:/data -e "OPENHUT_URL=$OPENHUT_URL" \
+    --log-opt max-size=1m --log-opt max-file=2 --entrypoint /opt/openhut/install/updater.sh "$RUNTIME_IMAGE" >/dev/null
+}
+lock() {
+  exec 9>"$LOCK"
+  i=0; until flock -n 9; do
+    [ $i -eq 0 ] && say "Waiting for another install to finish"
+    i=$((i+1)); [ $i -ge 180 ] && die "another install or update is still running after 3 minutes; try again when it's done"; sleep 1
+  done
+}
+exists() { docker container inspect "$1" >/dev/null 2>&1; }
+label() { docker container inspect -f "{{index .Config.Labels \"$2\"}}" "$1" 2>/dev/null || true; }
+migrate() {
+  say "Moving OpenHut into its image (its data comes along)"
+  docker stop -t 10 openhut >/dev/null
+  find /data -mindepth 1 -maxdepth 1 ! -name install.lock ! -name etc -exec rm -rf {} +
+  docker cp openhut:/data - | tar -x -C / || die "couldn't copy the data out of the old container, so nothing changed; it's stopped: docker start openhut"
+  docker cp openhut:/etc/openhut/env - | tar -x -C /etc/openhut/ || true
+  chown -R openhut:openhut /data/app
+  docker rename openhut openhut-legacy
+  PREVIOUS=openhut-legacy
+}
+undo() {
+  docker rm -f openhut >/dev/null 2>&1 || true
+  if [ "$PREVIOUS" = openhut-previous ]; then
+    [ ! -d /data/app.before-update ] || { rm -rf /data/app && cp -a /data/app.before-update /data/app; }
+    [ ! -f /data/app.before-update.env ] || cp /data/app.before-update.env /etc/openhut/env
+  fi
+  docker rename "$PREVIOUS" openhut && docker start openhut >/dev/null
+}
+finish() {
+  if exists openhut && [ "$(docker container inspect -f '{{.Config.Image}}' openhut)" = "$RUNTIME_IMAGE" ]; then
+    say "Pairing with this computer"
+    write_env
+    STARTED_AFTER=$(date +%s)
+    docker restart -t 10 openhut >/dev/null
+    printf 'Waiting for OpenHut'
+    up 100 || { printf '\n'; die "OpenHut didn't come back with the new key; see docker logs openhut"; }
+    printf '\n'
+    updater
+    running
+    return
+  fi
+  TRIES=600
+  if exists openhut; then
+    [ "$(label openhut dev.openhut.agent)" != "$(cat /opt/openhut-agent/image)" ] || TRIES=100
+    say "Saving a copy of the data in case the new release has to be undone"
+    docker stop -t 10 openhut >/dev/null
+    rm -rf /data/app.before-update
+    cp -a /data/app /data/app.before-update || { rm -rf /data/app.before-update; docker start openhut >/dev/null; die "couldn't keep a copy of the data (is the disk full?), so nothing changed"; }
+    cp /etc/openhut/env /data/app.before-update.env 2>/dev/null || rm -f /data/app.before-update.env
+    docker rm -f openhut-previous >/dev/null 2>&1 || true
+    docker rename openhut openhut-previous
+    PREVIOUS=openhut-previous
+  fi
+  say "Starting"
+  write_env
+  STARTED_AFTER=$(date +%s)
+  runtime || { [ -z "$PREVIOUS" ] || undo; die "couldn't start the OpenHut container"; }
+  printf 'Waiting for OpenHut'
+  if ! up "$TRIES"; then
+    printf '\n'
+    [ -n "$PREVIOUS" ] || die "not up after 30 min; see docker logs openhut"
+    say "The new release didn't come up. Going back to the previous one"
+    undo
+    up 600 || die "the new release didn't come up, and the previous one didn't come back either; see docker logs openhut"
+    printf '\n'
+    die "the new release didn't come up, so the previous one is running again"
+  fi
+  printf '\n'
+  OLD=
+  if [ "$PREVIOUS" = openhut-previous ]; then
+    OLD=$(docker container inspect -f '{{.Image}}' openhut-previous)
+    docker rm -f openhut-previous >/dev/null
+  fi
+  [ "$PREVIOUS" != openhut-legacy ] || echo "  The old container is kept, stopped, as openhut-legacy. Once you're happy with this one: docker rm openhut-legacy"
+  [ -z "${OPENHUT_UPDATER:-}" ] || echo 0 > /data/update.log.exit
+  updater
+  [ -z "$OLD" ] || docker image rm "$OLD" >/dev/null 2>&1 || true
+  echo "OpenHut sends anonymous usage events to openhut.dev. Turn it off in Settings > General. Details: https://openhut.dev/privacy"
+  running
 }
 
 NO_KEY="no app key: add this computer from the OpenHut app (Settings > Computers), which gives you the command to run here (curl -fsSL openhut.dev | sh -s -- join <code>)"
@@ -83,15 +181,12 @@ if [ -n "${OPENHUT_APP_VERSION:-}" ] && [ "${MIN_APP_VERSION#@}" = "$MIN_APP_VER
   [ "$(printf '%s\n%s\n' "$MIN_APP_VERSION" "$OPENHUT_APP_VERSION" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" != "$MIN_APP_VERSION" ]; then
   die "this release needs the OpenHut app $MIN_APP_VERSION or newer, and yours is $OPENHUT_APP_VERSION. Update OpenHut, then try again. Nothing changed here."
 fi
-container() {
-  $D run -d --name openhut --privileged --restart unless-stopped -p 127.0.0.1:8787:8787 -v openhut:/var/lib/docker --entrypoint sh "$1" \
-    -c 'if [ -x /opt/openhut/install/host-start.sh ]; then exec /opt/openhut/install/host-start.sh; fi; exec sleep infinity' >/dev/null
-}
 
-if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
+if [ "$MODE" != swap ] && { [ -n "${OPENHUT_UPDATER:-}" ] || { [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; }; }; then
+  [ "${RUNTIME_IMAGE#@}" = "$RUNTIME_IMAGE" ] || die "this installer has no OpenHut image pinned. Download it again from openhut.dev."
   SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
   if ! command -v docker >/dev/null 2>&1; then
-    [ "$(uname -s)" = Linux ] || die "OpenHut runs in Docker. Install Docker Desktop (https://docs.docker.com/desktop/), open it, then run this again."
+    [ "$(uname -s)" = Linux ] || die "OpenHut runs on a Linux server with Docker. On a Mac or a Windows PC, use the OpenHut app: https://openhut.dev"
     say "Docker"
     if command -v apt-get >/dev/null 2>&1; then $SUDO apt-get update -qq && $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker.io >/dev/null
     elif command -v apk >/dev/null 2>&1; then $SUDO apk add -q docker && $SUDO rc-update add docker default >/dev/null && $SUDO service docker start >/dev/null
@@ -99,22 +194,28 @@ if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
   fi
   D=docker; docker info >/dev/null 2>&1 || D="$SUDO docker"
   i=0; until $D info >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 30 ] && die "Docker isn't running. Start it, then run this again."; sleep 1; done
-  say "OpenHut container"
-  bound() { [ "$($D container inspect -f "{{range (index .HostConfig.PortBindings \"$1/tcp\")}}{{.HostIp}}{{end}}" openhut 2>/dev/null)" = 127.0.0.1 ]; }
-  if ! $D container inspect openhut >/dev/null 2>&1; then
-    joining || printf '%s' "${OPENHUT_CLIENT_KEY_SHA256:-}" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
-    container "$HOST_IMAGE"
-  elif ! bound 8787; then
-    say "Publishing OpenHut on this computer's 127.0.0.1 only (the container is kept: its data comes along)"
-    $D stop -t 30 openhut >/dev/null
-    $D commit openhut openhut:kept >/dev/null
-    $D rm openhut >/dev/null
-    container openhut:kept
-  fi
-  $D start openhut >/dev/null
-  printf '%s\n' "$JOIN_CODE" | $D exec -i -e OPENHUT_CONTAINER=1 -e "OPENHUT_CLIENT_KEY_SHA256=${OPENHUT_CLIENT_KEY_SHA256:-}" -e "OPENHUT_APP_VERSION=${OPENHUT_APP_VERSION:-}" -e "OPENHUT_PERSONAL=${OPENHUT_PERSONAL:-}" openhut sh -c "read -r OPENHUT_JOIN; export OPENHUT_JOIN; apk add -q curl && curl -fsSL $OPENHUT_URL | sh" || exit 1
-  exit 0
+  say "OpenHut ${OPENHUT_BUILD}"
+  n=0; until $D pull "$RUNTIME_IMAGE" >/dev/null; do n=$((n+1)); [ $n -ge 4 ] && die "couldn't download $RUNTIME_IMAGE"; echo "  retrying the download ($n)"; sleep 5; done
+  i=0; while [ "$($D container inspect -f '{{.State.Running}}' openhut-install 2>/dev/null || true)" = true ]; do
+    [ $i -eq 0 ] && say "Waiting for another install to finish"
+    i=$((i+1)); [ $i -ge 180 ] && die "another install or update is still running after 3 minutes; try again when it's done"; sleep 1
+  done
+  $D rm -f openhut-install >/dev/null 2>&1 || true
+  printf '%s\n' "$JOIN_CODE" | $D run --rm -i --name openhut-install --security-opt label=disable \
+    -v /var/run/docker.sock:/var/run/docker.sock -v openhut-data:/data \
+    -e "RUNTIME_IMAGE=$RUNTIME_IMAGE" -e "OPENHUT_URL=$OPENHUT_URL" -e OPENHUT_UPDATER -e OPENHUT_CLIENT_KEY_SHA256 -e OPENHUT_APP_VERSION \
+    -e OPENHUT_PERSONAL -e OPENHUT_MODEL -e OPENHUT_CLOUD_URL -e OPENHUT_API_URL -e RESOLVER -e AGENT_IMAGE \
+    --entrypoint sh "$RUNTIME_IMAGE" -c 'read -r OPENHUT_JOIN || true; export OPENHUT_JOIN; exec sh /opt/openhut/install/install.sh swap'
+  exit
 fi
+if [ "$MODE" = swap ]; then
+  mkdir -p /data/etc && chmod 0700 /data/etc
+  LOCK=/data/install.lock IN="docker exec openhut" PREVIOUS=
+  [ -n "${OPENHUT_UPDATER:-}" ] || lock
+  exists openhut || ! exists openhut-legacy || docker rename openhut-legacy openhut
+  if exists openhut && [ -z "$(label openhut dev.openhut.build)" ]; then migrate; fi
+fi
+[ "$MODE" = swap ] || [ -z "${OPENHUT_RUNTIME:-}" ] || die "run this on the server itself, not inside the OpenHut container"
 
 [ "$(uname -s)" = Linux ] || die "OpenHut runs only on Linux (Debian, Ubuntu or Alpine; x86_64 or arm64), not $(uname -s). On a Mac or Windows, run this inside a Linux VM or on a Linux server."
 [ "$(id -u)" = 0 ] || die "run as root:  curl -fsSL $OPENHUT_URL | sudo sh"
@@ -123,14 +224,10 @@ CLIENT_KEY="${OPENHUT_CLIENT_KEY_SHA256:-$ENROLLED}"
 ASKED="$JOIN_CODE"
 JOIN_CODE="${JOIN_CODE:-$(sed -n "s/^OPENHUT_JOIN='\(.*\)'$/\1/p" /etc/openhut/env 2>/dev/null || true)}"
 joining || printf '%s' "$CLIENT_KEY" | grep -Eqx '[0-9a-f]{64}' || die "$NO_KEY"
-if command -v flock >/dev/null 2>&1; then
-  exec 9>/run/openhut-install.lock
-  i=0; until flock -n 9; do
-    [ $i -eq 0 ] && say "Waiting for another install to finish"
-    i=$((i+1)); [ $i -ge 180 ] && die "another install or update is still running after 3 minutes; try again when it's done"; sleep 1
-  done
-fi
+[ "$MODE" = swap ] || ! command -v flock >/dev/null 2>&1 || lock
 [ -z "$ENROLLED" ] || [ -z "$CLIENT_KEY" ] || [ "$ENROLLED" = "$CLIENT_KEY" ] || echo "  A new app key: the app that added this computer before can't reach it anymore."
+if [ "$MODE" = swap ]; then finish; exit 0; fi
+echo "  This server runs OpenHut the old way. Run the install command on the server itself once to move it to the OpenHut image."
 if [ "$(cat "$PREFIX/BUILD" 2>/dev/null)" = "$OPENHUT_BUILD" ] && [ -f /etc/openhut/env ]; then
   say "Pairing with this computer"
   write_env

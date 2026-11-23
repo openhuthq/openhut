@@ -19,7 +19,9 @@ In the app, **Settings › Computers**, then **⋯ › Remove**. Its agents stop
 To wipe it, run this on the computer:
 
 ```sh
-docker rm -f openhut && docker volume rm openhut
+docker rm -f openhut openhut-updater && docker volume rm openhut openhut-data
 ```
+
+A computer added before the OpenHut image may also have `openhut-legacy`; remove it with `docker rm openhut-legacy`.
 
 This removes OpenHut and its agents' own files there. It can't be undone. What's in your account stays. Docker stays installed.

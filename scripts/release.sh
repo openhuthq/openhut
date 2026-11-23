@@ -25,6 +25,6 @@ COPYFILE_DISABLE=1 tar $ROOT --no-xattrs \
 MIN_APP=$(sed -n "s/^export const MIN_APP_VERSION = '\(.*\)'$/\1/p" packages/common/src/admin/admin.ts)
 [ -n "$MIN_APP" ] || { echo "release.sh: no MIN_APP_VERSION in packages/common/src/admin/admin.ts" >&2; exit 1; }
 SUM=$(shasum -a 256 "$OUT/openhut.tgz" | cut -d' ' -f1)
-sed -e "/^OPENHUT_URL=/s|https://openhut.dev|$BASE|" -e "s|@OPENHUT_SHA256@|$SUM|" -e "s|@OPENHUT_BUILD@|$BUILD|" -e "s|@OPENHUT_TGZ@|${TGZ:-$BASE/openhut.tgz}|" -e "s|@OPENHUT_MIN_APP@|$MIN_APP|" install/install.sh > "$OUT/install.sh"
-echo "$OUT/: build $BUILD, install.sh (OPENHUT_URL=$BASE, tarball ${TGZ:-$BASE/openhut.tgz}), openhut.tgz $(du -h "$OUT/openhut.tgz" | cut -f1) sha256 $SUM"
+sed -e "/^OPENHUT_URL=/s|https://openhut.dev|$BASE|" -e "s|@OPENHUT_SHA256@|$SUM|" -e "s|@OPENHUT_BUILD@|$BUILD|" -e "s|@OPENHUT_TGZ@|${TGZ:-$BASE/openhut.tgz}|" -e "s|@OPENHUT_MIN_APP@|$MIN_APP|" -e "s|@OPENHUT_IMAGE@|${IMAGE:-@OPENHUT_IMAGE@}|" install/install.sh > "$OUT/install.sh"
+echo "$OUT/: build $BUILD, install.sh (OPENHUT_URL=$BASE, image ${IMAGE:-not pinned yet}, tarball ${TGZ:-$BASE/openhut.tgz}), openhut.tgz $(du -h "$OUT/openhut.tgz" | cut -f1) sha256 $SUM"
 [ -z "${RELEASE_KEY:-}" ] || node scripts/release-key.ts sign "$RELEASE_KEY" "$OUT" "$BUILD"

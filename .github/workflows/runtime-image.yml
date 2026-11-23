@@ -1,0 +1,166 @@
+name: Runtime image
+
+on:
+  pull_request:
+    paths:
+      - install/**
+      - packages/runtime/**
+      - packages/common/**
+      - packages/tunnel/**
+      - vendor/**
+      - package-lock.json
+      - scripts/release.sh
+      - scripts/image.sh
+      - scripts/image-smoke.sh
+      - .github/workflows/runtime-image.yml
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: Space-separated tags to push to ghcr.io/openhuthq/runtime (empty builds and smoke-tests only)
+        type: string
+        default: ''
+  workflow_call:
+    inputs:
+      build:
+        description: The build number servers see (the version, a leading v is dropped); empty numbers it like release.sh does
+        type: string
+        default: ''
+      tags:
+        description: Space-separated tags to push to ghcr.io/openhuthq/runtime, like "0.6.0" or "edge" (a leading v is dropped)
+        type: string
+        required: true
+    outputs:
+      image:
+        description: The pushed image by digest, ghcr.io/openhuthq/runtime@sha256:…, for install.sh to pin
+        value: ${{ jobs.publish.outputs.image }}
+      build:
+        description: The build number inside the image
+        value: ${{ jobs.publish.outputs.build }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime-image-${{ github.ref }}-${{ inputs.tags || 'smoke' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REPO: ghcr.io/openhuthq/runtime
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+      - name: Check out private/ for the dev cloud the runtime signs in to
+        env:
+          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
+          npm --prefix private/api ci --no-audit --no-fund
+      - name: Start the dev cloud and a local registry
+        run: |
+          (cd private/api && HOST=0.0.0.0 PORT=8793 API_URL=http://127.0.0.1:8793 DEV_SIGN_IN=1 OPENHUT_API_DATA="$RUNNER_TEMP/api" nohup node src/server.ts > "$RUNNER_TEMP/api.log" 2>&1 &)
+          docker run -d --name registry -p 127.0.0.1:5000:5000 registry:2@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        with:
+          driver-opts: network=host
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
+      - name: Build the image for linux/amd64
+        run: |
+          start=$(date +%s)
+          BUILD="ci-${GITHUB_SHA::8}" BASE=http://127.0.0.1:8098 scripts/release.sh
+          scripts/image.sh dist localhost:5000/openhut/runtime:ci --platform linux/amd64 --push --cache-from type=gha,scope=runtime-amd64 --cache-to type=gha,scope=runtime-amd64,mode=min
+          echo "Built in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
+      - name: Install it as a server would, from install.sh
+        run: |
+          KEY=$(openssl rand -hex 32) && echo "KEY=$KEY" >> "$GITHUB_ENV" && echo "::add-mask::$KEY"
+          (cd dist && nohup python3 -m http.server 8098 --bind 127.0.0.1 > "$RUNNER_TEMP/http.log" 2>&1 &)
+          gw=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}')
+          start=$(date +%s)
+          OPENHUT_URL=http://127.0.0.1:8098 OPENHUT_MODEL=test OPENHUT_API_URL="http://$gw:8793" OPENHUT_CLOUD_URL="http://$gw:8793" \
+            OPENHUT_CLIENT_KEY_SHA256=$(printf %s "$KEY" | sha256sum | cut -c1-64) sh dist/install.sh
+          echo "Installed in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
+          docker ps --format '{{.Names}} {{.Image}} {{.Status}}'
+      - name: One agent in gVisor answers a chat
+        run: scripts/image-smoke.sh "$KEY"
+      - name: Size
+        run: |
+          python3 - >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          import json, urllib.request
+          get = lambda ref, kind: json.load(urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:5000/v2/openhut/runtime/manifests/{ref}", headers={"Accept": kind})))
+          index = get("ci", "application/vnd.oci.image.index.v1+json")
+          digest = next(m["digest"] for m in index["manifests"] if m["platform"]["architecture"] == "amd64")
+          layers = get(digest, "application/vnd.oci.image.manifest.v1+json")["layers"]
+          print(f"Image (linux/amd64): {sum(l['size'] for l in layers) / 1e6:.0f} MB compressed, {len(layers)} layers")
+          EOF
+          docker image ls --format '{{.Repository}} {{.Size}} (on disk)' | grep runtime >> "$GITHUB_STEP_SUMMARY"
+      - name: Logs
+        if: failure()
+        run: |
+          docker logs openhut 2>&1 | tail -50 || true
+          docker exec openhut sh -c 'tail -n 80 /var/log/openhut/*.log' || true
+          tail -n 50 "$RUNNER_TEMP/api.log" || true
+
+  publish:
+    needs: smoke
+    if: inputs.tags != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+      build: ${{ steps.push.outputs.build }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build linux/amd64 and linux/arm64, push, and record the digest
+        id: push
+        env:
+          BUILD_INPUT: ${{ inputs.build }}
+          TAGS: ${{ inputs.tags }}
+        run: |
+          start=$(date +%s)
+          BUILD="${BUILD_INPUT#v}" scripts/release.sh
+          build=$(sed -n 's/^OPENHUT_BUILD="\(.*\)"$/\1/p' dist/install.sh)
+          extra=; for tag in $TAGS; do extra="$extra -t $REPO:${tag#v}"; done
+          scripts/image.sh dist "$REPO:$build" --platform linux/amd64,linux/arm64 --push $extra \
+            --label org.opencontainers.image.source="https://github.com/$GITHUB_REPOSITORY" --label org.opencontainers.image.revision="$GITHUB_SHA" \
+            --cache-from type=gha,scope=runtime-multi --cache-to type=gha,scope=runtime-multi,mode=min
+          image=$(sed -n 's/^RUNTIME_IMAGE="${RUNTIME_IMAGE:-\(.*\)}"$/\1/p' dist/install.sh)
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$image" > dist/runtime-image.txt
+          echo "Pushed $image (build $build, tags $TAGS) in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
+      - name: Anyone can pull it, as servers do
+        run: |
+          image=$(cat dist/runtime-image.txt)
+          DOCKER_CONFIG=$(mktemp -d) docker buildx imagetools inspect "$image" ||
+            { echo "::error::$image isn't public. Make the ghcr.io/openhuthq/runtime package public once (package settings), then rerun."; exit 1; }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runtime-image
+          path: |
+            dist/runtime-image.txt
+            dist/image.json
