@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "e2e": "./e2e.sh",
-    "typecheck": "tsc -p .",
-    "e2e:tailnet": "./tailnet.sh"
+    "typecheck": "tsc -p ."
   },
   "devDependencies": {
     "@openhut/common": "*",

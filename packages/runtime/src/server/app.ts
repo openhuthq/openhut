@@ -24,8 +24,8 @@ import { threadService } from './threads/thread-service.ts'
 import { routineController } from './routines/routine-controller.ts'
 import { routineService } from './routines/routine-service.ts'
 import { meController } from './team/team-controller.ts'
-import { accessController } from './access/access-controller.ts'
-import { invitationController } from './access/invitation-controller.ts'
+import { invitationController } from './cloud/invite-controller.ts'
+import { forward, forwardController } from './relay/forward.ts'
 import { relayService } from './relay/relay-service.ts'
 import { cloudController } from './cloud/cloud-controller.ts'
 import { cloudService } from './cloud/cloud-service.ts'
@@ -51,9 +51,9 @@ app.addHook('onSend', async (_req, reply) => {
 })
 
 await app.register(websocket)
+app.addHook('preHandler', forward.http)
 await app.register(healthController, { prefix: '/health' })
 await app.register(meController, { prefix: '/api/me' })
-await app.register(accessController, { prefix: '/api/access' })
 await app.register(invitationController, { prefix: '/api/invitations' })
 await app.register(agentController, { prefix: '/api/agents' })
 await app.register(grantController, { prefix: '/api/grants' })
@@ -73,6 +73,7 @@ await app.register(eventsController, { prefix: '/api/events' })
 await app.register(updateController, { prefix: '/api/updates' })
 await app.register(cloudController, { prefix: '/api/cloud' })
 await app.register(mcpController, { prefix: '/mcp' })
+await app.register(forwardController, { prefix: '/c' })
 
 app.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody({ status: 404, message: `There's no ${req.method} ${req.url.split('?')[0]}.` })))
 

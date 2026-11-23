@@ -1,17 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { randomBytes } from 'node:crypto'
 import { MAX_REQUEST_BODY } from '../src/frames.ts'
-import { connect, sixDigits, verifyProof, type Hello, type Invited, type TunnelError } from '../src/index.ts'
-import { newDevice, startComputer, waitFor } from './relay.ts'
+import { connect, type TunnelError } from '../src/index.ts'
+import { newDevice, startComputer, TOKEN, waitFor } from './relay.ts'
 
 const closed = (error: TunnelError) => error.type === 'closed'
 
 async function client() {
   const ctx = await startComputer()
   const device = newDevice()
-  ctx.statuses.set(device.hex, 'client')
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  ctx.listed.add(device.hex)
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key, token: TOKEN })
   return { ctx, device, tunnel }
 }
 
@@ -56,7 +55,7 @@ test('a replayed handshake message 1 does not start a request', async () => {
   const { ctx, tunnel } = await client()
   assert.equal((await tunnel.fetch('/once')).status, 200)
   const recorded = ctx.relay.frames.slice(0, 3)
-  const replay = new WebSocket(`${ctx.relay.url}/v1/relay/${ctx.computer.id}?role=device`)
+  const replay = new (WebSocket as unknown as new (url: string, init: { headers: Record<string, string> }) => WebSocket)(`${ctx.relay.url}/v1/relay/${ctx.computer.id}?role=device`, { headers: { 'x-openhut-token': TOKEN } })
   const answers: unknown[] = []
   replay.addEventListener('message', event => answers.push(event.data))
   replay.addEventListener('open', () => recorded.forEach(frame => replay.send(frame)))
@@ -71,9 +70,8 @@ test('a replayed handshake message 1 does not start a request', async () => {
 test('a removed device is told it was removed, then closed', async () => {
   const { ctx, device, tunnel } = await client()
   assert.equal((await tunnel.fetch('/before')).status, 200)
-  ctx.statuses.set(device.hex, 'removed')
+  ctx.listed.delete(device.hex)
   await assert.rejects(tunnel.fetch('/after'), (error: TunnelError) => error.type === 'removed' && error.message === 'This device was removed.')
-  for await (const message of tunnel.control) assert.fail(`unexpected ${JSON.stringify(message)}`)
   await assert.rejects(tunnel.fetch('/again'), closed)
   assert.deepEqual(ctx.handled, ['GET /before'])
   await ctx.close()
@@ -81,67 +79,18 @@ test('a removed device is told it was removed, then closed', async () => {
 
 test('an unknown key is told it was removed, then closed', async () => {
   const ctx = await startComputer()
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: newDevice().key })
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: newDevice().key, token: TOKEN })
   await assert.rejects(tunnel.fetch('/agents'), (error: TunnelError) => error.type === 'removed')
   await assert.rejects(tunnel.fetch('/again'), closed)
   assert.deepEqual(ctx.handled, [])
   await ctx.close()
 })
 
-test('a computer key cannot open a session as a device when device() says unknown', async () => {
+test('a computer key cannot open a session as a device when it is not listed', async () => {
   const ctx = await startComputer()
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: ctx.key })
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: ctx.key, token: TOKEN })
   await assert.rejects(tunnel.fetch('/agents'), (error: TunnelError) => error.type === 'removed')
   assert.deepEqual(ctx.handled, [])
-  await ctx.close()
-})
-
-function pairing(secret: string) {
-  const state: { calls: number; digits?: string; key?: string; hello?: Hello; approve: () => void } = { calls: 0, approve: () => {} }
-  const approved = new Promise<void>(resolve => { state.approve = resolve })
-  const invited = async ({ key, proof, handshakeHash, hello }: { key: string; proof: string; handshakeHash: Uint8Array; hello: Hello }): Promise<Invited | null> => {
-    state.calls++
-    if (!(await verifyProof({ secret, handshakeHash, proof }))) return null
-    Object.assign(state, { key, hello, digits: await sixDigits(handshakeHash) })
-    return {
-      accept: async function* () {
-        await approved
-        yield { type: 'accepted', access: { object: 'access', version: 1 } }
-      }
-    }
-  }
-  return { state, invited }
-}
-
-test('pairing with the wrong secret is rejected', async () => {
-  const { state, invited } = pairing(randomBytes(32).toString('hex'))
-  const ctx = await startComputer({ invited })
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: newDevice().key, invitation: { secret: randomBytes(32).toString('hex'), name: 'Phone', kind: 'client' } })
-  const messages = []
-  for await (const message of tunnel.control) messages.push(message)
-  assert.deepEqual(messages, [])
-  assert.equal(state.calls, 1)
-  assert.equal(state.digits, undefined)
-  await ctx.close()
-})
-
-test('pairing with the right secret shows the same six digits on both sides and is accepted once approved', async () => {
-  const secret = randomBytes(32).toString('hex')
-  const { state, invited } = pairing(secret)
-  const ctx = await startComputer({ invited })
-  const device = newDevice()
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key, invitation: { secret, name: 'Phone', kind: 'client' } })
-  assert.match(tunnel.digits, /^\d{6}$/)
-  await waitFor(() => state.digits !== undefined)
-  assert.equal(state.digits, tunnel.digits)
-  assert.equal(state.key, device.hex)
-  assert.deepEqual(state.hello, { type: 'hello', proof: state.hello?.proof, name: 'Phone', kind: 'client' })
-  state.approve()
-  const control = tunnel.control[Symbol.asyncIterator]()
-  assert.deepEqual((await control.next()).value, { type: 'accepted', access: { object: 'access', version: 1 } })
-  ctx.statuses.set(device.hex, 'client')
-  assert.equal((await tunnel.fetch('/after-join')).status, 200)
-  tunnel.close()
   await ctx.close()
 })
 
@@ -153,8 +102,8 @@ test('the computer pings the relay and, when the pongs stop, drops the socket an
   await waitFor(() => ctx.relay.registered === 2)
   ctx.relay.deaf = false
   const device = newDevice()
-  ctx.statuses.set(device.hex, 'client')
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  ctx.listed.add(device.hex)
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key, token: TOKEN })
   assert.equal((await tunnel.fetch('/after')).status, 200)
   tunnel.close()
   await ctx.close()
@@ -162,7 +111,7 @@ test('the computer pings the relay and, when the pongs stop, drops the socket an
 
 test('an unknown device cannot open a socket', async () => {
   const ctx = await startComputer()
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: newDevice().key })
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: newDevice().key, token: TOKEN })
   const socket = tunnel.socket('/live')
   const closes: number[] = []
   socket.onclose = event => closes.push(event.code)
@@ -174,7 +123,7 @@ test('an unknown device cannot open a socket', async () => {
 
 test('a removed device cannot open a socket, and removing a device closes the sockets it has open', async () => {
   const { ctx, device, tunnel } = await client()
-  ctx.statuses.set(device.hex, 'removed')
+  ctx.listed.delete(device.hex)
   const refused = tunnel.socket('/refused')
   const refusals: { code: number; reason: string }[] = []
   refused.onclose = event => refusals.push(event)
@@ -191,7 +140,7 @@ test('a removed device cannot open a socket, and removing a device closes the so
   socket.onclose = event => closes.push(event)
   socket.send('before')
   await waitFor(() => got.length === 1)
-  again.ctx.statuses.set(again.device.hex, 'removed')
+  again.ctx.listed.delete(again.device.hex)
   socket.send('after')
   await waitFor(() => closes.length === 1)
   assert.deepEqual(got, ['before'])
@@ -212,5 +161,22 @@ test('a message from the device over 1 MiB closes that socket with 1009', async 
   await waitFor(() => ctx.sockets.includes('closed /live'))
   assert.equal((await tunnel.fetch('/after')).status, 200)
   tunnel.close()
+  await ctx.close()
+})
+
+test('the relay refuses a device without a valid access token', async () => {
+  const ctx = await startComputer()
+  const device = newDevice()
+  ctx.listed.add(device.hex)
+  await assert.rejects(connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key, token: 'forged' }), (error: TunnelError) => error.type === 'offline')
+  assert.deepEqual(ctx.handled, [])
+  await ctx.close()
+})
+
+test('a computer the relay refuses for its token tries again soon, not only after the keepalive runs out', async () => {
+  const ctx = await startComputer({ token: async () => 'expired', keepalive: { every: 1000, within: 60_000 } })
+  await new Promise(resolve => setTimeout(resolve, 1500))
+  assert.equal(ctx.relay.registered, 0)
+  assert.ok(ctx.relay.refused >= 2)
   await ctx.close()
 })

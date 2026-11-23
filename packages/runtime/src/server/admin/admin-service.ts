@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto'
 import { agentd, containerStates, features, type LastUpdate } from '../platform/agentd.ts'
 import { settings } from '../platform/settings.ts'
 import { emit, setUsageData } from '../platform/events.ts'
-import { computerId, newId, openSealed, relayKeyHex, sealFor, transferPublicKey } from '../platform/secrets.ts'
+import { newId, openSealed, sealFor, transferPublicKey } from '../platform/secrets.ts'
 import { codex } from '../integrations/codex/codex.ts'
 import { connectionService } from '../connections/connection-service.ts'
 import { providerService } from '../models/provider-service.ts'
@@ -53,7 +53,6 @@ export const adminService = {
       google: { clientId: null, redirectUri: connectionService.redirectUrl() },
       usageData: settings.usageData(),
       publicKey: transferPublicKey,
-      relay: { key: relayKeyHex, computerId, url: config.relayUrl || null },
       features: available,
       minAppVersion: MIN_APP_VERSION,
     }

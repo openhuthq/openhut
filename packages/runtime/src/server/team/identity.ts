@@ -6,7 +6,10 @@ import { createServer, type Server as NetServer } from 'node:net'
 import { userInfo } from 'node:os'
 import type { Duplex } from 'node:stream'
 import type { FastifyRequest } from 'fastify'
-import { accessService } from '../access/access-service.ts'
+import * as z from 'zod/mini'
+import { bodyOf } from '@openhut/common/cloud/member-list.ts'
+import { fromBase64 } from '@openhut/common/vault/vault.ts'
+import { keyStore } from '../cloud/key-store.ts'
 import { config } from '../platform/config.ts'
 import { db, isUniqueViolation } from '../platform/db.ts'
 import { emit } from '../platform/events.ts'
@@ -16,22 +19,29 @@ import { newId } from '../platform/secrets.ts'
 const LOCAL = Symbol('local')
 const DEVICE = Symbol('device')
 const INNER = randomBytes(32)
+const OWN_DEVICES = new Set([
+  'GET /api/threads', 'POST /api/threads', 'GET /api/threads/:id', 'DELETE /api/threads/:id', 'POST /api/threads/:id/chat',
+  'GET /api/threads/:id/files', 'POST /api/threads/:id/files', 'DELETE /api/threads/:id/files', 'POST /api/threads/:id/files/lookups',
+  'GET /api/browsers/:id/live', 'GET /api/channels/:id', 'GET /api/connection-events', 'POST /api/updates',
+])
+const TEAMMATES = new Set(['POST /api/threads', 'GET /api/threads/:id', 'POST /api/threads/:id/chat'])
+const AgentBody = z.object({ agentId: z.string() })
+const IdParams = z.object({ id: z.string() })
 
 export async function who(req: FastifyRequest): Promise<Caller> {
-  const caller = await callerOf(req)
-  if (caller) return caller
-  throw new HttpError(401, 'Send the key the OpenHut app enrolled with this computer, as Authorization: Bearer <key>.')
+  const { local, device } = arrival(req)
+  if (local) return { ...await owner(), local: true }
+  if (device === undefined) throw new HttpError(401, 'Send the key the OpenHut app enrolled with this computer, as Authorization: Bearer <key>.')
+  const member = memberOf(device)
+  if (!member) throw new HttpError(401, 'This device isn’t on your list anymore, so it can’t reach this computer.')
+  const route = `${req.method} ${req.routeOptions.url ?? ''}`
+  const allowed = member.own ? OWN_DEVICES.has(route) : TEAMMATES.has(route) && await sharedWith({ req, workspaces: member.workspaces })
+  if (!allowed) throw new HttpError(403, member.own ? 'Only this computer’s own app can do that. From another device you can chat, watch the browser, link WhatsApp, read files and the connection log, and update.' : 'You can only chat with the agents your team shares.')
+  return { id: (await owner()).id, email: member.email, local: false }
 }
 
 export async function requireSignIn(req: FastifyRequest): Promise<void> {
   await who(req)
-}
-
-export async function callerOf(req: FastifyRequest): Promise<Caller | undefined> {
-  const { allowed, local } = arrival(req)
-  if (!allowed) return undefined
-  const owner = await theOwner() ?? await claimOwner()
-  return owner && { ...owner, local }
 }
 
 export function enrolled(header: string | undefined): boolean {
@@ -48,6 +58,26 @@ export function tagDevice<T extends Duplex>({ conn, key }: { conn: T; key: strin
   return Object.assign(conn, { [DEVICE]: key })
 }
 
+export function fromTunnel(req: FastifyRequest): boolean {
+  return arrival(req).device !== undefined
+}
+
+export function tunnelKeyOf(device: string): string {
+  return Buffer.from(fromBase64(device).subarray(32)).toString('hex')
+}
+
+export function memberOf(key: string): { email: string; own: boolean; workspaces: string[] } | undefined {
+  const account = keyStore.current()?.account
+  if (!account) return undefined
+  const found = [account, ...account.teams ?? []].flatMap((room) => {
+    const body = bodyOf(room.list)
+    const member = body?.members.find((each) => each.devices.some((device) => device !== each.kit && !body.removed.includes(device) && tunnelKeyOf(device) === key))
+    return member ? [{ email: member.email, workspace: room.workspace.id }] : []
+  })
+  const first = found[0]
+  return first && { email: first.email, own: first.email === account.email, workspaces: found.map((each) => each.workspace) }
+}
+
 export async function listenLocally({ server, path }: { server: Server; path: string }): Promise<NetServer> {
   const pipe = process.platform === 'win32'
   if (!pipe) rmSync(path, { force: true })
@@ -62,24 +92,40 @@ export async function listenLocally({ server, path }: { server: Server; path: st
   return local
 }
 
-function arrival(req: FastifyRequest): { allowed: boolean; local: boolean } {
+function arrival(req: FastifyRequest): { local: boolean; device?: string } {
   const conn = req.raw.socket as (Duplex & { [LOCAL]?: true; [DEVICE]?: string }) | undefined
-  if (conn?.[LOCAL]) return { allowed: true, local: true }
-  if (conn?.[DEVICE] !== undefined) return { allowed: accessService.device(conn[DEVICE]) === 'client', local: false }
+  if (conn?.[LOCAL]) return { local: true }
+  if (conn?.[DEVICE] !== undefined) return { local: false, device: conn[DEVICE] }
   const inner = /^Inner ([0-9a-f]{64}) (local|remote)$/.exec(req.headers.authorization ?? '')
-  if (inner) return { allowed: timingSafeEqual(Buffer.from(inner[1], 'hex'), INNER), local: inner[2] === 'local' }
-  return { allowed: enrolled(req.headers.authorization), local: false }
+  if (inner) return { local: inner[2] === 'local' && timingSafeEqual(Buffer.from(inner[1], 'hex'), INNER) }
+  return { local: enrolled(req.headers.authorization) }
+}
+
+async function sharedWith({ req, workspaces }: { req: FastifyRequest; workspaces: string[] }): Promise<boolean> {
+  const thread = z.safeParse(IdParams, req.params).data?.id
+  const agentId = thread
+    ? (await db.selectFrom('thread').select('agent_id').where('id', '=', thread).executeTakeFirst())?.agent_id
+    : z.safeParse(AgentBody, req.body).data?.agentId
+  const agent = agentId ? await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', agentId).executeTakeFirst() : undefined
+  return !!agent?.shared && !!agent.workspace && workspaces.includes(agent.workspace)
+}
+
+async function owner(): Promise<Owner> {
+  const person = await theOwner() ?? await claimOwner()
+  return { id: person.id, email: keyStore.current()?.account?.email ?? person.email }
 }
 
 function theOwner(): Promise<Owner | undefined> {
   return db.selectFrom('person').select(['id', 'email']).where('role', '=', 'owner').executeTakeFirst()
 }
 
-async function claimOwner(): Promise<Owner | undefined> {
+async function claimOwner(): Promise<Owner> {
   const owner = await db.insertInto('person').values({ id: newId('usr'), email: userInfo().username, role: 'owner', removed_at: null }).returning(['id', 'email']).executeTakeFirstOrThrow()
     .catch((err: unknown) => { if (isUniqueViolation(err)) return undefined; throw err })
   if (owner) emit({ name: 'setup.completed', actor: owner, target: { type: 'person', id: owner.id } })
-  return owner ?? theOwner()
+  const found = owner ?? await theOwner()
+  if (!found) throw new HttpError(500, 'This computer has no owner yet. Restart OpenHut and try again.')
+  return found
 }
 
 type Owner = { id: string; email: string }

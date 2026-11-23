@@ -6,31 +6,72 @@ import type { AddressInfo } from 'node:net'
 import { userInfo } from 'node:os'
 import { duplexPair } from 'node:stream'
 import Fastify from 'fastify'
+import { signList } from '@openhut/common/cloud/member-list.ts'
+import { identity, newKey, toBase64 } from '@openhut/common/vault/vault.ts'
+import { agentController } from '../../../src/server/agents/agent-controller.ts'
+import { cloudController } from '../../../src/server/cloud/cloud-controller.ts'
+import { keyStore } from '../../../src/server/cloud/key-store.ts'
+import { keysService } from '../../../src/server/cloud/keys-service.ts'
+import { adminController } from '../../../src/server/admin/admin-controller.ts'
 import { config } from '../../../src/server/platform/config.ts'
-import { migrate } from '../../../src/server/platform/db.ts'
+import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
-import { innerAuthorization, listenLocally, tagDevice, who } from '../../../src/server/team/identity.ts'
+import { validateWithZod } from '../../../src/server/platform/validation.ts'
+import { innerAuthorization, listenLocally, tagDevice, tunnelKeyOf, who } from '../../../src/server/team/identity.ts'
 import { meController } from '../../../src/server/team/team-controller.ts'
 
 await migrate()
 const app = Fastify()
 answerErrors(app)
+app.setValidatorCompiler(validateWithZod)
 app.get('/caller', async (req) => who(req))
+for (const url of ['/api/threads/:id', '/api/threads/:id/chat']) app.route({ method: url.endsWith('chat') ? 'POST' : 'GET', url, handler: async (req) => who(req) })
+app.post('/api/threads', async (req) => who(req))
 await app.register(meController, { prefix: '/api/me' })
+await app.register(agentController, { prefix: '/api/agents' })
+await app.register(cloudController, { prefix: '/api/cloud' })
+await app.register(adminController, { prefix: '/api/admin' })
 await app.listen({ port: 0, host: '127.0.0.1' })
 const local = await listenLocally({ server: app.server, path: config.socket })
 const tcp = { host: '127.0.0.1', port: (app.server.address() as AddressInfo).port }
-const device = () => {
+const device = (key: string) => () => {
   const [ours, theirs] = duplexPair()
-  app.server.emit('connection', tagDevice({ conn: ours, key: 'ab'.repeat(32) }))
+  app.server.emit('connection', tagDevice({ conn: ours, key }))
   return theirs
 }
-const ask = (options: RequestOptions) => new Promise<{ status?: number; body: { local?: boolean; user?: { email: string } } }>((done, fail) => {
-  request({ path: '/caller', ...options }, (res) => {
-    let body = ''
-    res.setEncoding('utf8').on('data', (chunk: string) => { body += chunk }).on('end', () => done({ status: res.statusCode, body: JSON.parse(body) }))
-  }).on('error', fail).end()
+const ask = (options: RequestOptions & { body?: unknown }) => new Promise<{ status?: number; body: { local?: boolean; email?: string; user?: { email: string } } }>((done, fail) => {
+  const { body, ...rest } = options
+  const out = request({ path: '/caller', ...rest, headers: { ...rest.headers, ...body !== undefined && { 'content-type': 'application/json' } } }, (res) => {
+    let text = ''
+    res.setEncoding('utf8').on('data', (chunk: string) => { text += chunk }).on('end', () => done({ status: res.statusCode, body: JSON.parse(text) }))
+  }).on('error', fail)
+  out.end(body === undefined ? undefined : JSON.stringify(body))
 })
+
+const viewer = await identity()
+const teammate = await identity()
+const stranger = await identity()
+const VIEWER = tunnelKeyOf(toBase64(viewer.publicKey))
+const TEAMMATE = tunnelKeyOf(toBase64(teammate.publicKey))
+const TEAM = toBase64(newKey(12))
+
+async function listDevices(): Promise<void> {
+  const account = await keysService.open({ sub: 'google-mo', email: 'mo@example.com' })
+  const list = await keysService.addDevice(toBase64(viewer.publicKey)) ?? account.list
+  const me = await keysService.device()
+  const team = await signList({ signer: me, body: { workspace: TEAM, version: 1, previous: null, members: [{ email: 'mo@example.com', role: 'owner', devices: [toBase64(me.publicKey)] }, { email: 'sara@example.com', role: 'member', devices: [toBase64(teammate.publicKey)] }], invites: [], removed: [] } })
+  await keyStore.write({ ...await keyStore.read(), account: { ...account, list, teams: [{ workspace: { id: TEAM, key: toBase64(newKey()), version: 1 }, list: team, first: team }] } })
+  await db.insertInto('person').values({ id: 'usr_tunnelown', email: 'owner', role: 'owner', removed_at: null }).onConflict((oc) => oc.doNothing()).execute()
+  const owner = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirstOrThrow()
+  await db.insertInto('agent').values([
+    { id: 'ag_tshared', name: 'Shared', owner_id: owner.id, instructions: '# Shared', model: 'sonnet', net: 41, channel_key: 'k', workspace: TEAM, shared: true },
+    { id: 'ag_tprivate', name: 'Private', owner_id: owner.id, instructions: '# Private', model: 'sonnet', net: 42, channel_key: 'k', workspace: TEAM, shared: false },
+  ]).execute()
+  await db.insertInto('thread').values([
+    { id: 'th_tshared', agent_id: 'ag_tshared', person_id: owner.id, title: 'Shared' },
+    { id: 'th_tprivate', agent_id: 'ag_tprivate', person_id: owner.id, title: 'Private' },
+  ]).execute()
+}
 
 test('a server install listens on TCP and on a socket only its own user can open', () => {
   assert.equal(config.installKind, 'server')
@@ -47,26 +88,53 @@ test('a request on the socket is the owner and local, with or without a key', as
   assert.equal(me.body.user?.email, userInfo().username)
 })
 
-test('a request over TCP is the owner only with the key the app enrolled, and never local', async () => {
+test('over TCP only the key the app enrolled gets in, and it counts as local like the socket', async () => {
   assert.equal((await ask(tcp)).status, 401)
   assert.equal((await ask({ ...tcp, headers: { authorization: 'Bearer wrong-key' } })).status, 401)
   assert.equal((await ask({ ...tcp, path: '/api/me' })).status, 401)
   const owner = await ask({ socketPath: config.socket })
-  assert.deepEqual(await ask({ ...tcp, headers: { authorization: 'Bearer test-key' } }), { status: 200, body: { ...owner.body, local: false } })
+  assert.deepEqual(await ask({ ...tcp, headers: { authorization: 'Bearer test-key' } }), owner)
   assert.equal((await ask({ ...tcp, path: '/api/me', headers: { authorization: 'Bearer test-key' } })).status, 200)
 })
 
-test('a request on a device\'s connection is refused while no device is a client, key or not', async () => {
-  assert.equal((await ask({ createConnection: device })).status, 401)
-  assert.equal((await ask({ createConnection: device, headers: { authorization: 'Bearer test-key' } })).status, 401)
-  assert.equal((await ask({ createConnection: device, path: '/api/me' })).status, 401)
+test('a device\'s connection is refused while no member list holds it, key or not', async () => {
+  assert.equal((await ask({ createConnection: device(VIEWER) })).status, 401)
+  assert.equal((await ask({ createConnection: device(VIEWER), headers: { authorization: 'Bearer test-key' } })).status, 401)
+  assert.equal((await ask({ createConnection: device(VIEWER), path: '/api/me' })).status, 401)
 })
 
-test('the control MCP\'s calls inside the runtime keep the caller, and a made-up inner key is refused', async () => {
+test('the control MCP\'s calls inside the runtime keep a local caller, and a made-up inner key or a remote one is refused', async () => {
   const caller = { id: 'usr_x', email: 'x', local: true }
   assert.equal((await ask({ ...tcp, headers: { authorization: innerAuthorization(caller) } })).body.local, true)
-  assert.equal((await ask({ ...tcp, headers: { authorization: innerAuthorization({ ...caller, local: false }) } })).body.local, false)
+  assert.equal((await ask({ ...tcp, headers: { authorization: innerAuthorization({ ...caller, local: false }) } })).status, 401)
   assert.equal((await ask({ ...tcp, headers: { authorization: `Inner ${'0'.repeat(64)} local` } })).status, 401)
+})
+
+test('over the tunnel your own viewer may chat, but gets 403 on agent writes and on every records and trust route', async () => {
+  await listDevices()
+  const chat = await ask({ createConnection: device(VIEWER), method: 'POST', path: '/api/threads/th_tprivate/chat', body: {} })
+  assert.deepEqual([chat.status, chat.body.local, chat.body.email], [200, false, 'mo@example.com'])
+  for (const [method, path, body] of [
+    ['POST', '/api/agents', { name: 'Sneaky' }],
+    ['PATCH', '/api/agents/ag_tprivate', { wanted: 'stopped' }],
+    ['DELETE', '/api/agents/ag_tprivate', undefined],
+    ['GET', '/api/agents', undefined],
+    ['GET', '/caller', undefined],
+    ['POST', '/api/admin/codex-sign-ins', undefined],
+    ['POST', `/api/cloud/workspaces/${TEAM}/requests/${toBase64(stranger.publicKey)}/approvals`, undefined],
+    ['DELETE', `/api/cloud/devices/${toBase64(stranger.publicKey)}`, undefined],
+    ['POST', '/api/cloud/kits', undefined],
+  ] as const) assert.equal((await ask({ createConnection: device(VIEWER), method, path, body })).status, 403, `${method} ${path}`)
+})
+
+test('over the tunnel a teammate chats only with agents shared in their workspace, and a stranger gets nothing', async () => {
+  const shared = await ask({ createConnection: device(TEAMMATE), path: '/api/threads/th_tshared' })
+  assert.deepEqual([shared.status, shared.body.email, shared.body.local], [200, 'sara@example.com', false])
+  assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'POST', path: '/api/threads', body: { agentId: 'ag_tshared' } })).status, 200)
+  assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'POST', path: '/api/threads/th_tprivate/chat', body: {} })).status, 403)
+  assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'POST', path: '/api/threads', body: { agentId: 'ag_tprivate' } })).status, 403)
+  assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'PATCH', path: '/api/agents/ag_tshared', body: { wanted: 'stopped' } })).status, 403)
+  assert.equal((await ask({ createConnection: device(tunnelKeyOf(toBase64(stranger.publicKey))), path: '/api/threads/th_tshared' })).status, 401)
 })
 
 test.after(async () => {
