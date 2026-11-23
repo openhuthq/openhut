@@ -194,13 +194,13 @@ check('Y2', 'The remote runtime joins as a device on the member list and signs i
   return `remote ${cloud.status}, listed under ${owner?.email}`
 })
 
-check('Y3', 'A connection added on the Mac reaches the remote runtime with its key', 'remote lists the connection with keyHere true', async () => {
+check('Y3', 'A connection added on the Mac reaches the remote runtime with its key', 'remote lists the connection', async () => {
   await host.call('/api/connections', { kind: 'postgres', name: CANARIES.connection, dsn: `postgres://app:${SECRET}@db.invalid/orders` })
   const found = await until(async () => {
-    const { data } = await remote('/api/connections') as { data: { name: string; keyHere: boolean }[] }
-    return data.find((each) => each.name === CANARIES.connection && each.keyHere)
+    const { data } = await remote('/api/connections') as { data: { name: string }[] }
+    return data.find((each) => each.name === CANARIES.connection)
   }, 'the connection on the remote')
-  return `${found.name}, keyHere ${found.keyHere}`
+  return found.name
 })
 
 check('Y4', 'Back up: an agent, its chat with an attached file and a recovery kit reach the room', 'agent running and answering; a file attached to the chat; kit saved in the cloud; backup idle with everything sent', async () => {

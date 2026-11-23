@@ -1,16 +1,14 @@
 import { Cancel01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
-import type { OpenHutConnection } from '@/lib/openhut'
+import type { Connection } from '@openhut/common/connections/connection.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { I, Section } from '@/components/kit'
-import { useAgents, useCreateGrant, useDeleteGrant, useGrants } from '@/features/agents/api'
-import { nameOf, useComputers } from '@/features/computers/api'
-import { useAddConnectionTo, useConnections } from '@/features/connections/api'
-import { connectionOf, holds } from '@/features/connections/copies'
-import { toast, toastError } from '@/lib/toast'
+import { useCreateGrant, useDeleteGrant, useGrants } from '@/features/agents/api'
+import { useConnections } from '@/features/connections/api'
+import { toastError } from '@/lib/toast'
 import { navigate } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
@@ -19,10 +17,10 @@ export function CanUse({ agent }: { agent: Agent }) {
   const grants = useGrants({ agentId: agent.id })
   const deleteGrant = useDeleteGrant()
   const granted = (grants.data ?? []).flatMap((grant) => {
-    const connection = connectionOf({ connections: connections.data, id: grant.connectionId })
+    const connection = connections.data?.find((each) => each.id === grant.connectionId)
     return connection ? [{ grant, connection }] : []
   })
-  const others = (connections.data ?? []).filter((connection) => !grants.data?.some((grant) => holds({ connection, id: grant.connectionId })))
+  const others = (connections.data ?? []).filter((connection) => !grants.data?.some((grant) => grant.connectionId === connection.id))
   return <Section title="Can use" action={<AddConnection agent={agent} connections={others} />}>
     <ErrorNote message={connections.error?.message ?? grants.error?.message} />
     {grants.data && !granted.length && <p className="m-0 text-[12px]/[16px] text-balance text-mute">{agent.name} can't use any connection yet.</p>}
@@ -34,25 +32,14 @@ export function CanUse({ agent }: { agent: Agent }) {
   </Section>
 }
 
-function AddConnection({ agent, connections }: { agent: Agent; connections: OpenHutConnection[] }) {
+function AddConnection({ agent, connections }: { agent: Agent; connections: Connection[] }) {
   const createGrant = useCreateGrant()
-  const addTo = useAddConnectionTo()
-  const computers = useComputers().data
-  const home = useAgents().data?.find((each) => each.id === agent.id)?.computer ?? 'local'
-  const there = nameOf({ computers, id: home })
   return <DropdownMenu>
     <DropdownMenuTrigger className={cn(buttonVariants({ variant: 'text' }), 'text-xs')} disabled={!agent.canEdit || createGrant.isPending}><I icon={PlusSignIcon} size={12} />Add</DropdownMenuTrigger>
     <DropdownMenuContent align="end">
-      {connections.map((connection) => {
-        const missing = !connection.computers.some((copy) => copy.computer === home)
-        const pick = () => missing
-          ? addTo.mutate({ id: connection.id, computer: home }, { onSuccess: () => toast(`${connection.name} is on ${there} now. Add it again so ${agent.name} can use it.`), onError: toastError })
-          : createGrant.mutate({ agentId: agent.id, connectionId: connection.id }, { onError: toastError })
-        return <DropdownMenuItem size="tall" key={connection.id} disabled={addTo.isPending} onClick={pick}>
-          <Glyph name={connection.kind} size={16} />
-          <span className="flex min-w-0 flex-col"><span className="truncate">{connection.name}</span>{missing && <span className="text-xs whitespace-normal text-mute">Add to {there}</span>}</span>
-        </DropdownMenuItem>
-      })}
+      {connections.map((connection) => <DropdownMenuItem size="tall" key={connection.id} onClick={() => createGrant.mutate({ agentId: agent.id, connectionId: connection.id }, { onError: toastError })}>
+        <Glyph name={connection.kind} size={16} /><span className="truncate">{connection.name}</span>
+      </DropdownMenuItem>)}
       {connections.length > 0 && <DropdownMenuSeparator />}
       <DropdownMenuItem onClick={() => navigate('/connections')}><I icon={PlusSignIcon} size={14} />New connection</DropdownMenuItem>
     </DropdownMenuContent>

@@ -1,10 +1,9 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft01Icon, ArrowUpRight01Icon, LaptopIcon, Search01Icon, ServerStack01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, ArrowUpRight01Icon, Search01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import type { SeatUsage } from '@openhut/common/admin/admin.ts'
 import { KEY_MESSAGE, PROVIDERS, ProviderId, providerInfo, type Provider, type ProviderModel } from '@openhut/common/models/provider.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Field, FieldSet } from '@/components/ui/field'
-import { FieldError } from '@/components/ui/field'
+import { Field, FieldError } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
@@ -15,10 +14,9 @@ import { Glyph } from '@/components/glyph'
 import { useAdmin, useCompleteSeatSignIn, useSeatUsage, useStartSeatSignIn } from '@/features/settings/api'
 import { useAgents } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
-import { useComputers } from '@/features/computers/api'
 import { Busy, DialogCard, HINT, I, PILL, SetupSheet, Section, Status } from '@/components/kit'
 import { Check, CardTitle, ListNote, Row, Rows, useConfirming } from '@/features/settings/kit'
-import { useCodexSignIn, useConnectProvider, useDisconnectProvider, useFoundNotice, useMergedProviders, useRefreshProvider, useSetModel } from '@/features/models/api'
+import { useCodexSignIn, useConnectProvider, useDisconnectProvider, useFoundNotice, useProviders, useRefreshProvider, useSetModel } from '@/features/models/api'
 import { consequence, count, describe, matches, plural, updatedAgo } from '@/features/models/labels'
 import { open, Redirect, useOpen } from '@/lib/router'
 import { formValues } from '@/lib/form'
@@ -26,7 +24,6 @@ import { openPage } from '@/lib/native'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
-const LIST = new Intl.ListFormat('en-GB', { type: 'conjunction' })
 let returningTo: ProviderId | undefined
 const resetTime = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' })
 const FIRST_SHOWN = 10
@@ -43,18 +40,16 @@ export function stepOf(name: string | null): ProviderId | undefined {
 export function ModelsSettings() {
   const admin = useAdmin()
   const dialog = useOpen()
-  const providers = useMergedProviders()
-  const computers = useComputers().data
+  const providers = useProviders().data
   const testModel = admin.data?.seat.mode === 'test'
   const usage = useSeatUsage(!!admin.data && !testModel && admin.data.seat.set)
   useEffect(() => {
     if (returningTo) document.querySelector<HTMLElement>(`[data-provider=${returningTo}]`)?.focus()
     returningTo = undefined
   }, [providers])
-  const where = (provider: { computers: string[] }) => `On ${LIST.format(provider.computers.map((id) => computers?.find((each) => each.id === id)?.name ?? id))}`
   const row = (id: ProviderId) => {
     const provider = providers?.find((each) => each.id === id)
-    return provider && <ProviderRow key={id} provider={provider} note={provider.connected ? notesOf({ provider, where: where(provider), testModel }) : providerInfo(id).blurb} />
+    return provider && <ProviderRow key={id} provider={provider} note={provider.connected ? notesOf({ provider, testModel }) : providerInfo(id).blurb} />
   }
   return <>
     <ErrorNote message={admin.error?.message} />
@@ -62,7 +57,7 @@ export function ModelsSettings() {
       <Section title="Subscriptions"><Rows>{SUBSCRIPTIONS.map((info) => row(info.id))}</Rows></Section>
       <Section title="API keys">
         <Rows>{KEYS.map((info) => row(info.id))}</Rows>
-        <ListNote>Keys stay on the computer you add them to. Agents never see them.</ListNote>
+        <ListNote>Keys reach every computer and server you sign in on. Agents never see them.</ListNote>
       </Section>
     </>}
     {usage.data?.agents.some((agent) => agent.costUsd > 0) && <Spend usage={usage.data} />}
@@ -70,10 +65,10 @@ export function ModelsSettings() {
   </>
 }
 
-function notesOf({ provider, where, testModel }: { provider: Provider; where: string; testModel: boolean }) {
+function notesOf({ provider, testModel }: { provider: Provider; testModel: boolean }) {
   if (provider.id === 'claude' && testModel) return 'Test model (development)'
-  if (provider.kind === 'subscription') return where
-  return [plural({ count: provider.models.length, one: 'model', many: 'models' }), `${count(provider.models.filter((model) => model.on).length)} on`, where].join(' · ')
+  if (provider.kind === 'subscription') return 'On all your computers'
+  return [plural({ count: provider.models.length, one: 'model', many: 'models' }), `${count(provider.models.filter((model) => model.on).length)} on`].join(' · ')
 }
 
 function ProviderRow({ provider, note }: { provider: Provider; note: string }) {
@@ -86,7 +81,7 @@ function ProviderRow({ provider, note }: { provider: Provider; note: string }) {
 }
 
 export function ModelsStep({ id }: { id: ProviderId }) {
-  const provider = useMergedProviders()?.find((each) => each.id === id)
+  const provider = useProviders().data?.find((each) => each.id === id)
   const found = useFoundNotice()
   const [notice, setNotice] = useState('')
   const clearNotice = useCallback(() => setNotice(''), [])
@@ -110,35 +105,24 @@ function StepTitle({ id, children }: { id: ProviderId; children: string }) {
 
 function ConnectKey({ provider, onConnected }: { provider: Provider; onConnected: () => void }) {
   const info = providerInfo(provider.id)
-  const computers = (useComputers().data ?? []).filter((each) => each.online)
-  const [ticked, setTicked] = useState<string[] | undefined>(undefined)
-  const chosen = ticked ?? computers.map((each) => each.id)
   const connect = useConnectProvider()
   const [short, setShort] = useState(false)
   const keyField = useRef<HTMLInputElement>(null)
   useEffect(() => keyField.current?.focus(), [])
-  const flip = (id: string) => setTicked(chosen.includes(id) ? chosen.filter((each) => each !== id) : [...chosen, id])
   return <SetupSheet brand={provider.id} title={`Connect ${info.short}`} blurb={`Paste an API key from ${info.keysAt}. OpenHut finds the models you can use.`} safe="Takes a few seconds." onClose={() => leave(provider.id)}
     onSubmit={(event) => {
       const field = formValues(event)
       const apiKey = field('key').trim()
       setShort(apiKey.length < MIN_KEY)
-      if (apiKey.length >= MIN_KEY) connect.mutate({ id: provider.id, apiKey, computers: chosen }, { onSuccess: onConnected })
+      if (apiKey.length >= MIN_KEY) connect.mutate({ id: provider.id, apiKey }, { onSuccess: onConnected })
     }}
     foot={<>
       <Button type="button" variant="secondary" onClick={() => leave(provider.id)}>Cancel</Button>
-      {connect.isPending ? <Busy label="Connecting…" /> : <Button type="submit" variant="primary" disabled={!chosen.length}>Connect</Button>}
+      {connect.isPending ? <Busy label="Connecting…" /> : <Button type="submit" variant="primary">Connect</Button>}
     </>}>
-    <Field label="API key" strong hint="Stored on the computers you pick. You won't see it again." error={short ? KEY_MESSAGE : connect.error?.message}>
+    <Field label="API key" strong hint="Sealed so only your computers and servers can read it. You won't see it again." error={short ? KEY_MESSAGE : connect.error?.message}>
       {(control) => <Input {...control} ref={keyField} mono type="password" name="key" maxLength={MAX_KEY} autoComplete="off" spellCheck={false} placeholder={info.keyHint ?? undefined} onInput={() => { setShort(false); connect.reset() }} />}
     </Field>
-    <FieldSet>
-      <span className="text-sm font-medium">Put it on</span>
-      <div className="-mx-2 flex flex-col">{computers.map((computer) => <Check key={computer.id} checked={chosen.includes(computer.id)} onChange={() => flip(computer.id)}>
-        <I icon={computer.id === 'local' ? LaptopIcon : ServerStack01Icon} size={16} className="text-mute" /><span className="text-[13px]">{computer.name}</span>
-      </Check>)}</div>
-      {!chosen.length && <FieldError>Pick at least one computer to put it on.</FieldError>}
-    </FieldSet>
   </SetupSheet>
 }
 
@@ -156,10 +140,9 @@ function CodexSignInStep({ onSignedIn }: { onSignedIn: () => void }) {
   </SetupSheet>
 }
 
-function Manage({ provider, notice, clearNotice }: { provider: Provider & { computers: string[] }; notice: string; clearNotice: () => void }) {
+function Manage({ provider, notice, clearNotice }: { provider: Provider; notice: string; clearNotice: () => void }) {
   const info = providerInfo(provider.id)
   const admin = useAdmin().data
-  const computers = useComputers().data
   const agents = useAgents().data ?? []
   const refresh = useRefreshProvider()
   const disconnect = useDisconnectProvider()
@@ -179,13 +162,12 @@ function Manage({ provider, notice, clearNotice }: { provider: Provider & { comp
   const effect = consequence({ agents, id: provider.id })
   const shown = provider.models.filter((model) => (!only || model.on) && matches({ model, query }))
   const visible = query.trim() || all ? shown : shown.slice(0, FIRST_SHOWN)
-  const where = `On ${LIST.format(provider.computers.map((id) => computers?.find((each) => each.id === id)?.name ?? id))}`
   const updated = updatedAgo(provider.updatedAt)
   return <div className="flex min-h-0 flex-1 flex-col">
     <StepTitle id={provider.id}>{provider.name}</StepTitle>
     <div className="no-scrollbar fade-b flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto px-6 pt-[18px] pb-10">
       <div ref={box}><Row icon={<Glyph name={provider.id} size={20} />} title={confirming ? `${off}${subscription ? ' of' : ''} ${info.short}?` : provider.name}
-        note={confirming ? effect : <>{provider.keyHint && <><span className="font-mono">{provider.keyHint}</span> · </>}{where}{updated && ` · updated ${updated}`}</>}>
+        note={confirming ? effect : <>{provider.keyHint && <span className="font-mono">{provider.keyHint}</span>}{provider.keyHint && updated && ' · '}{updated && `updated ${updated}`}</>}>
         {confirming
           ? <>
             <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>

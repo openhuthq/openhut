@@ -286,8 +286,7 @@ export const agentService = {
 
   async createGrant({ actor, agentId, connectionId }: { actor: Caller; agentId: string; connectionId: string }): Promise<Grant> {
     await agentService.requireEditable({ actor, id: agentId })
-    const connection = await connectionService.get({ actor, id: connectionId })
-    if (!connection.usable) throw new HttpError(403, `${connection.ownerName} hasn't shared ${connection.name} with you, so you can't add it to an agent. Ask ${connection.ownerName} to share it.`)
+    await connectionService.get({ actor, id: connectionId })
     await db.insertInto('connection_grant').values({ id: newId('gr'), agent_id: agentId, connection_id: connectionId })
       .onConflict((oc) => oc.columns(['connection_id', 'agent_id']).doNothing()).execute()
     const grant = await db.selectFrom('connection_grant').selectAll().where('agent_id', '=', agentId).where('connection_id', '=', connectionId).executeTakeFirstOrThrow()

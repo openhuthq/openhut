@@ -1,17 +1,20 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { generateKeyPairSync } from 'node:crypto'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { adminService, isNewer, updateStatus } from '../../../src/server/admin/admin-service.ts'
-import { connectionService } from '../../../src/server/connections/connection-service.ts'
+import { connectionRecords } from '../../../src/server/connections/connection-records.ts'
+import { keysService } from '../../../src/server/cloud/keys-service.ts'
+import { useFakeRecords } from '../cloud/records-fake.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { settings } from '../../../src/server/platform/settings.ts'
 
 const actor = { id: 'usr_aaaaaaaa', email: 'owner@example.com', local: false }
 await migrate()
+const fake = useFakeRecords()
+await keysService.open({ sub: 'dev-admin', email: actor.email })
 await db.insertInto('person').values({ id: actor.id, email: actor.email, role: 'owner' }).execute()
 const startedAt = '2026-11-13T12:00:00.000Z'
 const at = (seconds: number) => Date.parse(startedAt) + seconds * 1000
@@ -55,27 +58,12 @@ test('an update is running while the installer holds the lock, done only on the 
   assert.deepEqual(updateStatus({ stored, build: 'a', installing: false, last: last(-60, 'an older failure'), now: at(5) }), { status: 'running', reason: null })
 })
 
-test('a keyed connection and a subscription travel sealed to a public key, keeping when the subscription was signed in', async () => {
-  const { publicKey } = await adminService.status()
-  const source = await connectionService.save({ actor, kind: 'postgres', name: 'Orders DB', config: { dsn: 'postgres://u:p@db/orders' }, account: 'db/orders', signIn: false })
-  const { sealed } = await adminService.exportSealed({ actor, publicKey, connectionId: source.id })
-  assert.equal(sealed.includes('postgres://'), false)
-  const copy = await adminService.importSealed({ actor, sealed })
-  assert.equal(copy.object === 'connection' && copy.name, 'Orders DB')
-  assert.notEqual(copy.object === 'connection' && copy.id, source.id)
-  await settings.setSeatToken('sk-ant-oat01-the-seat-token-for-this-test')
-  await settings.setSeatAt('2026-11-01T00:00:00.000Z')
-  const seat = await adminService.exportSealed({ actor, publicKey, subscription: 'claude' })
-  await settings.setSeatAt('2026-11-02T00:00:00.000Z')
-  const admin = await adminService.importSealed({ actor, sealed: seat.sealed })
-  assert.equal(admin.object === 'admin' && admin.seat.updatedAt, '2026-11-01T00:00:00.000Z')
-})
-
-test('a sign-in connection is never exported, and a box sealed for another computer is refused', async () => {
-  const { publicKey } = await adminService.status()
-  const signedIn = await connectionService.save({ actor, kind: 'github', name: 'GitHub', config: {}, account: 'acme', signIn: true })
-  await assert.rejects(adminService.exportSealed({ actor, publicKey, connectionId: signedIn.id }), /sign-in/)
-  const other = generateKeyPairSync('x25519').publicKey.export({ format: 'der', type: 'spki' }).toString('base64')
-  const { sealed } = await adminService.exportSealed({ actor, publicKey: other, subscription: 'claude' })
-  await assert.rejects(adminService.importSealed({ actor, sealed }), /sealed for this computer/)
+test('a pasted seat token becomes the Claude provider record, sealed with vault, and this computer uses it', async () => {
+  await adminService.update({ actor, patch: { seatToken: 'sk-ant-oat01-the-seat-token-for-this-test' } })
+  const row = fake.rows.get(connectionRecords.providerId('claude'))
+  assert.equal(row?.personal, true)
+  assert.match(JSON.stringify(row?.value), /"kind":"provider","name":"claude"/)
+  assert.match(JSON.stringify(row?.secret), /"token":"sk-ant-oat01-the-seat-token-for-this-test"/)
+  assert.equal(settings.seatToken(), 'sk-ant-oat01-the-seat-token-for-this-test')
+  assert.equal((await adminService.status()).seat.set, true)
 })

@@ -8,11 +8,15 @@ import { db, migrate } from '../../../src/server/platform/db.ts'
 import { connectionAuthorizationService } from '../../../src/server/connections/connection-authorization-service.ts'
 import { connectionService } from '../../../src/server/connections/connection-service.ts'
 import { mcp } from '../../../src/server/integrations/mcp/mcp.ts'
+import { keysService } from '../../../src/server/cloud/keys-service.ts'
+import { useFakeRecords } from '../cloud/records-fake.ts'
 
 const lan = Object.values(networkInterfaces()).flat().find((each) => each?.family === 'IPv4' && !each.internal)?.address
 const actor = { id: 'usr_aaaaaaaa', email: 'owner@example.com', local: false, role: 'owner' as const }
 await migrate()
 await db.insertInto('person').values({ id: actor.id, email: actor.email, role: 'owner' }).execute()
+const fake = useFakeRecords()
+await keysService.open({ sub: 'dev-auth', email: actor.email })
 
 test('a sign-in registers OpenHut, finishes once, and its token reaches the tools', { skip: !lan && 'needs a non-loopback address' }, async () => {
   const server = await oauthMcpServer(lan ?? '')
@@ -32,6 +36,17 @@ test('a sign-in registers OpenHut, finishes once, and its token reaches the tool
     assert.deepEqual((await connectionService.listTools({ actor, connectionId: connection.id })).map((tool) => tool.name), ['mcp_ping'])
     const row = await db.selectFrom('connection').select('config').where('id', '=', connection.id).executeTakeFirstOrThrow()
     assert.ok(!row.config.includes('at-'), 'tokens are sealed')
+    const held = fake.rows.get(connection.id)
+    if (!held) return assert.fail('no connection record')
+    assert.equal(held.personal, true)
+
+    fake.write({ ...held, value: { ...held.value as object, name: 'Renamed' } })
+    for (let tries = 0; tries < 50 && (await connectionService.get({ actor, id: connection.id })).name !== 'Renamed'; tries++) await new Promise((resolve) => setTimeout(resolve, 10))
+    server.expire()
+    assert.deepEqual((await connectionService.listTools({ actor, connectionId: connection.id })).map((tool) => tool.name), ['mcp_ping'])
+    assert.deepEqual([server.refreshes(), fake.leases], [1, [connection.id]])
+    assert.match(JSON.stringify(fake.rows.get(connection.id)?.secret), /"refresh_token":"rt-2"/)
+    assert.match(JSON.stringify(fake.rows.get(connection.id)?.value), /"name":"Renamed"/)
   } finally {
     server.close()
   }
@@ -43,8 +58,10 @@ test('a custom MCP header must be one plain Name: value, never a transport heade
   for (const header of ['Host: evil.example', 'Bearer abc', 'Content-Type: text/plain', 'X-Key:']) assert.throws(() => mcp.parseHeader(header), { param: 'header' })
 })
 
-async function oauthMcpServer(host: string): Promise<{ base: string; close: () => void }> {
+async function oauthMcpServer(host: string): Promise<{ base: string; close: () => void; expire: () => void; refreshes: () => number }> {
   let base = ''
+  let valid = 'at-1'
+  let refreshes = 0
   const server = createServer(async (req, res) => {
     const chunks: Buffer[] = []
     for await (const chunk of req) chunks.push(Buffer.from(chunk))
@@ -62,10 +79,14 @@ async function oauthMcpServer(host: string): Promise<{ base: string; close: () =
     if (path === '/token') {
       const form = new URLSearchParams(body)
       if (form.get('code') === 'good' && form.get('code_verifier')) return json(200, { access_token: 'at-1', token_type: 'Bearer', expires_in: 3600, refresh_token: 'rt-1' })
+      if (form.get('grant_type') === 'refresh_token' && form.get('refresh_token') === 'rt-1') {
+        refreshes++
+        return json(200, { access_token: 'at-2', token_type: 'Bearer', expires_in: 3600, refresh_token: 'rt-2' })
+      }
       return json(400, { error: 'invalid_grant' })
     }
     if (path !== '/mcp') return json(404, { error: 'not found' })
-    if (req.headers.authorization !== 'Bearer at-1') return json(401, { error: 'unauthorized' }, { 'www-authenticate': `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/mcp"` })
+    if (req.headers.authorization !== `Bearer ${valid}`) return json(401, { error: 'unauthorized' }, { 'www-authenticate': `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/mcp"` })
     const tools = new McpServer({ name: 'local', version: '1' })
     tools.registerTool('ping', { description: 'Answers pong.' }, async () => ({ content: [{ type: 'text', text: 'pong' }] }))
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
@@ -75,5 +96,5 @@ async function oauthMcpServer(host: string): Promise<{ base: string; close: () =
   await new Promise((resolve) => server.once('listening', resolve))
   const address = server.address()
   base = `http://${host}:${typeof address === 'object' && address ? address.port : 0}`
-  return { base, close: () => server.close() }
+  return { base, close: () => server.close(), expire: () => { valid = 'at-2' }, refreshes: () => refreshes }
 }

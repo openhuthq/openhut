@@ -1,15 +1,15 @@
 import { useState } from 'react'
-import type { OpenHutAgent, OpenHutConnection } from '@/lib/openhut'
+import type { Connection } from '@openhut/common/connections/connection.ts'
+import type { OpenHutAgent } from '@/lib/openhut'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
 import { ConfirmButton } from '@/components/confirm-button'
 import { Loaded } from '@/components/loaded'
 import { StatusBadge } from '@/components/status-badge'
-import { useAgents, useConnectionGrants, useCreateGrant, useDeleteGrant } from '@/features/agents/api'
+import { useAgents, useCreateGrant, useDeleteGrant, useGrants } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { useAuthorizeConnection, useBackToAsker, useConnectionEvents, useConnections, useConnectionTools, useDeleteConnection } from '@/features/connections/api'
-import { connectionOf, copyOn } from '@/features/connections/copies'
 import { asked } from '@/features/connections/asked'
 import { integration, titleOf } from '@/features/connections/catalog'
 import { Section, SetupSheet } from '@/components/kit'
@@ -21,22 +21,21 @@ import { toastError } from '@/lib/toast'
 
 const close = () => navigate('/connections')
 
-export function AgentGrants({ connection, agents }: { connection: OpenHutConnection; agents: OpenHutAgent[] }) {
-  const grants = useConnectionGrants(connection)
+export function AgentGrants({ connection, agents }: { connection: Connection; agents: OpenHutAgent[] }) {
+  const grants = useGrants({ connectionId: connection.id })
   const createGrant = useCreateGrant()
   const deleteGrant = useDeleteGrant()
   const busy = createGrant.isPending || deleteGrant.isPending
   if (!agents.length) return <p className="m-0 px-2 py-1.5 text-[12.5px] text-mute">No agents yet.</p>
   return <>{agents.map((agent) => {
     const grant = grants.data?.find((each) => each.agentId === agent.id)
-    const here = copyOn({ connection, computer: agent.computer })
-    return <AgentCheck key={agent.id} agent={agent} checked={!!grant} disabled={!grants.data || !agent.canEdit || !here || busy}
-      onChange={() => grant ? deleteGrant.mutate(grant, { onError: toastError }) : here && createGrant.mutate({ agentId: agent.id, connectionId: here }, { onError: toastError })} />
+    return <AgentCheck key={agent.id} agent={agent} checked={!!grant} disabled={!grants.data || !agent.canEdit || busy}
+      onChange={() => grant ? deleteGrant.mutate(grant, { onError: toastError }) : createGrant.mutate({ agentId: agent.id, connectionId: connection.id }, { onError: toastError })} />
   })}</>
 }
 
-export function Faces({ connection, agents }: { connection: OpenHutConnection; agents: OpenHutAgent[] }) {
-  const grants = useConnectionGrants(connection)
+export function Faces({ connection, agents }: { connection: Connection; agents: OpenHutAgent[] }) {
+  const grants = useGrants({ connectionId: connection.id })
   const users = agents.filter((agent) => grants.data?.some((grant) => grant.agentId === agent.id))
   if (!grants.data) return null
   if (!users.length) return <span className="text-xs text-mute-2">No agents</span>
@@ -46,16 +45,16 @@ export function Faces({ connection, agents }: { connection: OpenHutConnection; a
 export function ConnectionSheet({ connectionId, connected }: { connectionId: string; connected: boolean }) {
   const connections = useConnections()
   const agents = useAgents()
-  const connection = connectionOf({ connections: connections.data, id: connectionId })
-  if (connections.data && !connection) return <SetupSheet brand="mcp" title="Connection" blurb="That connection isn't on any of your computers anymore." onClose={close} foot={<Button variant="secondary" onClick={close}>Close</Button>} />
+  const connection = connections.data?.find((each) => each.id === connectionId)
+  if (connections.data && !connection) return <SetupSheet brand="mcp" title="Connection" blurb="That connection doesn't exist anymore." onClose={close} foot={<Button variant="secondary" onClick={close}>Close</Button>} />
   if (!connection || !agents.data) return null
   const props = { connection, agents: agents.data }
   return connected ? <AccessSheet {...props} /> : <ManageSheet {...props} />
 }
 
-function AccessSheet({ connection, agents }: { connection: OpenHutConnection; agents: OpenHutAgent[] }) {
+function AccessSheet({ connection, agents }: { connection: Connection; agents: OpenHutAgent[] }) {
   const createGrant = useCreateGrant()
-  const editable = agents.filter((agent) => agent.canEdit && copyOn({ connection, computer: agent.computer }))
+  const editable = agents.filter((agent) => agent.canEdit)
   const askedBy = editable.find((agent) => agent.id === asked.by(connection.kind))
   const [picked, setPicked] = useState<string[]>(askedBy ? [askedBy.id] : editable.slice(0, 1).map((agent) => agent.id))
   const item = integration(connection.kind)
@@ -74,13 +73,13 @@ function AccessSheet({ connection, agents }: { connection: OpenHutConnection; ag
   </SetupSheet>
 }
 
-function successLine(connection: OpenHutConnection) {
+function successLine(connection: Connection) {
   if (connection.signIn && connection.account) return `Signed in as ${connection.account}`
   if (connection.kind === 'postgres') return `${connection.name} is connected. Read-only.`
   return `${connection.name} is connected.`
 }
 
-function ManageSheet({ connection, agents }: { connection: OpenHutConnection; agents: OpenHutAgent[] }) {
+function ManageSheet({ connection, agents }: { connection: Connection; agents: OpenHutAgent[] }) {
   const remove = useDeleteConnection(connection)
   const authorize = useAuthorizeConnection()
   const returned = new URLSearchParams(location.search).get('error') ?? undefined
@@ -95,12 +94,12 @@ function ManageSheet({ connection, agents }: { connection: OpenHutConnection; ag
       <Item size="sm"><ItemContent stacked><ItemTitle>Status</ItemTitle><ItemDescription className="text-xs">{connection.lastSuccessAt ? `Last worked ${ago(connection.lastSuccessAt)} ago` : 'Not used yet'}</ItemDescription></ItemContent><StatusBadge status={connection.status} /></Item>
     </ItemGroup>
     <Section title="Who can use it"><div className="flex flex-col gap-0.5 rounded-lg border border-hair bg-card p-1"><AgentGrants connection={connection} agents={agents} /></div></Section>
-    {connection.usable && <Tools connection={connection} />}
+    <Tools connection={connection} />
     <Activity connection={connection} agents={agents} />
   </SetupSheet>
 }
 
-function Tools({ connection }: { connection: OpenHutConnection }) {
+function Tools({ connection }: { connection: Connection }) {
   const tools = useConnectionTools(connection)
   return <Section title="What agents can do" action={<span className="font-medium text-mute">{tools.data?.length}</span>}>
     <Loaded query={tools}>{(list) => list.length
@@ -109,7 +108,7 @@ function Tools({ connection }: { connection: OpenHutConnection }) {
   </Section>
 }
 
-function Activity({ connection, agents }: { connection: OpenHutConnection; agents: OpenHutAgent[] }) {
+function Activity({ connection, agents }: { connection: Connection; agents: OpenHutAgent[] }) {
   const events = useConnectionEvents(connection)
   return <Section title="Activity">
     <Loaded query={events}>{(calls) => {

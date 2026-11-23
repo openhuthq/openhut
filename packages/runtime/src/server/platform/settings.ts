@@ -22,10 +22,6 @@ export const settings = {
   formerDevices: (): string[] => z.safeParse(z.array(z.string()), JSON.parse(rows.get('former_devices') ?? '[]')).data ?? [],
   setFormerDevices: (devices: string[]) => write('former_devices', JSON.stringify(devices.slice(-20))),
   setSeatAt: (at: string) => write('seat_at', at),
-  forgetSeat: async () => {
-    await forget('seat_token')
-    await forget('seat_at')
-  },
   codexTokens: (): CodexTokens | undefined => {
     const sealed = rows.get('codex_tokens')
     return sealed ? z.parse(CodexTokens, JSON.parse(unseal(sealed))) : undefined
@@ -36,23 +32,21 @@ export const settings = {
   },
   codexAt: (): string | null => rows.get('codex_at') ?? null,
   setCodexAt: (at: string) => write('codex_at', at),
-  forgetCodex: async () => {
-    await forget('codex_tokens')
-    await forget('codex_at')
-  },
   providerKey: (provider: string): string => {
     const sealed = rows.get(`provider_key_${provider}`)
     return sealed ? unseal(sealed) : ''
   },
   setProviderKey: (provider: string, key: string) => write(`provider_key_${provider}`, seal(key)),
-  forgetProviderKey: (provider: string) => forget(`provider_key_${provider}`),
   catalog: (provider: string): StoredCatalog | undefined => {
     const stored = rows.get(`provider_models_${provider}`)
     const parsed = z.safeParse(StoredCatalog, stored ? JSON.parse(stored) : undefined)
     return parsed.success ? parsed.data : undefined
   },
   setCatalog: (provider: string, catalog: StoredCatalog) => write(`provider_models_${provider}`, JSON.stringify(catalog)),
-  forgetCatalog: (provider: string) => forget(`provider_models_${provider}`),
+  forgetProvider: async (provider: string) => {
+    const secret: Record<string, string[]> = { claude: ['seat_token', 'seat_at'], codex: ['codex_tokens', 'codex_at'] }
+    for (const name of [...secret[provider] ?? [`provider_key_${provider}`], `provider_models_${provider}`]) await forget(name)
+  },
   appliedBuild: (): string | undefined => rows.get('build'),
   setAppliedBuild: (build: string) => write('build', build),
   update: (): string | undefined => rows.get('update') || undefined,
@@ -60,13 +54,6 @@ export const settings = {
   timeZone: (): string => rows.get('time_zone') || Intl.DateTimeFormat().resolvedOptions().timeZone,
   setTimeZone: (zone: string) => write('time_zone', zone),
   access: (): string | undefined => rows.get('access'),
-  joinTried: (): string | undefined => rows.get('join_tried'),
-  setJoinTried: (code: string) => write('join_tried', code),
-  removedClients: (): string[] => z.parse(z.array(z.string()), JSON.parse(rows.get('access_removed') ?? '[]')),
-  setAccess: async ({ access, removed }: { access: string; removed: string[] }) => {
-    await write('access_removed', JSON.stringify(removed))
-    await write('access', access)
-  },
 }
 
 async function forget(name: string): Promise<void> {

@@ -20,15 +20,17 @@ const Stored = z.object({
 
 export const mcp = {
   connector({ url: fixedUrl, redirectUrl }: { url?: string; redirectUrl: () => string }): Connector {
-    const open = ({ config, save }: ConnectorContext) => {
+    const open = ({ config, refresh }: ConnectorContext): Target => {
       const stored = z.parse(Stored, config)
       const url = fixedUrl ?? stored.url
       if (!url) throw new Error('This connection has no server URL. Delete it and connect again.')
-      return { url, headers: stored.headers, oauth: stored.oauth && signIn(stored.oauth), redirectUrl: redirectUrl(), save: (oauth: SignIn) => save({ ...stored, oauth }) }
+      const back = redirectUrl()
+      const renew = async () => z.parse(Stored, await refresh(async (latest) => ({ ...latest, oauth: await renewed({ url, redirectUrl: back, stored: z.parse(Stored, latest) }) }))).oauth
+      return { url, headers: stored.headers, oauth: stored.oauth && signIn(stored.oauth), redirectUrl: back, renew: stored.oauth?.tokens ? renew : undefined }
     }
     return {
-      tools: (ctx) => withClient(open(ctx), listTools),
-      call: (ctx) => withClient(open(ctx), (client) => callTool({ client, tool: ctx.tool, args: ctx.args })),
+      tools: (ctx) => withRenewal(open(ctx), listTools),
+      call: (ctx) => withRenewal(open(ctx), (client) => callTool({ client, tool: ctx.tool, args: ctx.args })),
     }
   },
 
@@ -63,20 +65,45 @@ export const mcp = {
   },
 }
 
-async function withClient<T>({ url, headers, oauth, redirectUrl, save }: { url: string; headers?: Record<string, string>; oauth?: SignIn; redirectUrl: string; save?: (oauth: SignIn) => Promise<void> }, fn: (client: Client) => Promise<T>): Promise<T> {
-  const flow: SignIn = { ...oauth }
-  const before = JSON.stringify(flow.tokens)
+async function withRenewal<T>(target: Target, fn: (client: Client) => Promise<T>): Promise<T> {
+  try {
+    return await withClient(target, fn)
+  } catch (err) {
+    if (!(err instanceof Expired) || !target.renew) throw err
+    const oauth = await target.renew()
+    return withClient({ ...target, oauth: oauth && signIn(oauth), renew: undefined }, fn)
+  }
+}
+
+async function withClient<T>({ url, headers, oauth, redirectUrl }: Target, fn: (client: Client) => Promise<T>): Promise<T> {
+  const flow: SignIn = { clientInformation: oauth?.clientInformation, tokens: oauth?.tokens && withoutRefresh(oauth.tokens) }
   const provider = oauth ? providerFor({ flow, redirectUrl, state: '' }) : undefined
   const client = new Client({ name: 'openhut', version: '1.0.0' })
   try {
     await client.connect(new StreamableHTTPClientTransport(new URL(url), { authProvider: provider, fetch: guardedFetch, requestInit: { headers: headers ?? {} } }))
     return await fn(client)
   } catch (err) {
-    if (provider?.authorizationUrl) throw new Error(`The sign-in to ${new URL(url).host} expired or was revoked. Its owner can press Reconnect on its page.`)
+    if (provider?.authorizationUrl) throw new Expired(url)
     throw err
   } finally {
     await client.close().catch(() => undefined)
-    if (save && JSON.stringify(flow.tokens) !== before) await save({ clientInformation: flow.clientInformation, tokens: flow.tokens })
+  }
+}
+
+async function renewed({ url, redirectUrl, stored }: { url: string; redirectUrl: string; stored: z.infer<typeof Stored> }): Promise<SignIn> {
+  const flow: SignIn = stored.oauth ? signIn(stored.oauth) : {}
+  const result = await auth(providerFor({ flow, redirectUrl, state: '' }), { serverUrl: url, fetchFn: guardedFetch }).catch(() => 'FAILED')
+  if (result !== 'AUTHORIZED' || !flow.tokens) throw new Expired(url)
+  return { clientInformation: flow.clientInformation, tokens: flow.tokens }
+}
+
+function withoutRefresh({ refresh_token: _refresh, ...tokens }: OAuthTokens): OAuthTokens {
+  return tokens
+}
+
+class Expired extends Error {
+  constructor(url: string) {
+    super(`The sign-in to ${new URL(url).host} expired or was revoked. Press Reconnect on its page.`)
   }
 }
 
@@ -130,3 +157,4 @@ function providerFor({ flow, redirectUrl, state }: { flow: SignIn; redirectUrl: 
 }
 
 export type SignIn = { clientInformation?: OAuthClientInformationFull; tokens?: OAuthTokens; codeVerifier?: string }
+type Target = { url: string; headers?: Record<string, string>; oauth?: SignIn; redirectUrl: string; renew?: () => Promise<z.infer<typeof Stored>['oauth']> }

@@ -1,3 +1,5 @@
+import * as z from 'zod/mini'
+import type { Secret } from '@openhut/common/records/lease.ts'
 import { HttpError } from '../../../src/server/platform/http-error.ts'
 import { changed, idOf, recordsService, type Held, type PutRecord } from '../../../src/server/cloud/records.ts'
 
@@ -8,6 +10,7 @@ export function useFakeRecords({ by = 'this-device' }: { by?: string } = {}) {
   const rows = new Map<string, Held>()
   const seen = new Map<string, number>()
   const outbox: Write[] = []
+  const leases: string[] = []
   let offline = false
 
   const see = (row: Held): Held => {
@@ -54,6 +57,15 @@ export function useFakeRecords({ by = 'this-device' }: { by?: string } = {}) {
       const current = rows.get(id)
       if (current?.collection === collection && current.workspace === workspace && !current.deleted) await put({ ...current, value: null, queue, deleted: true, reapply: (latest) => latest.deleted ? null : { value: null } })
     },
+    lease: async ({ collection, workspace, id, refresh }: { collection: Held['collection']; workspace: string; id: string; refresh: (secret: Secret) => Promise<Secret> }) => {
+      if (offline) throw new HttpError(502, 'OpenHut Cloud didn’t answer. Check this computer’s internet connection.')
+      const current = rows.get(id)
+      if (!current || current.deleted || current.collection !== collection || current.workspace !== workspace) throw new HttpError(404, 'That record doesn’t exist anymore.')
+      leases.push(id)
+      see(current)
+      const secret = await refresh(z.parse(z.record(z.string(), z.unknown()), current.secret))
+      return put({ ...current, value: current.value, secret }).then((saved) => saved ?? current)
+    },
     held: async (id: string) => seen.get(id) ?? 0,
     drain: async () => undefined,
   })
@@ -61,6 +73,7 @@ export function useFakeRecords({ by = 'this-device' }: { by?: string } = {}) {
   return {
     rows,
     outbox,
+    leases,
 
     async offline(on: boolean): Promise<void> {
       offline = on

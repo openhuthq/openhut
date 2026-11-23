@@ -4,6 +4,7 @@ import type { MemberListBody } from '@openhut/common/cloud/cloud.ts'
 import { viewersOf } from '@openhut/common/cloud/member-list.ts'
 import type { Roster } from '@openhut/common/records/allowed.ts'
 import { RecordsError, recordsClient, type RecordsClient } from '@openhut/common/records/client.ts'
+import { refreshWithLease, type Secret } from '@openhut/common/records/lease.ts'
 import { signer, type Keyring, type Opened, type Value } from '@openhut/common/records/seal.ts'
 import { COLLECTIONS, type Collection } from '@openhut/common/records/wire.ts'
 import type { Bytes } from '@openhut/common/vault/vault.ts'
@@ -56,6 +57,14 @@ export const recordsService = {
   async remove({ collection, workspace, id, queue }: { collection: Collection; workspace: string; id: string; queue?: boolean }): Promise<void> {
     const held = (await seenMap()).get(id) ?? await recordsService.get({ collection, workspace, id }).then((row) => row && { parent: row.parent ?? null })
     if (held) await send({ collection, workspace, id, parent: held.parent ?? undefined, value: null, queue, deleted: true })
+  },
+
+  async lease({ collection, workspace, id, refresh }: { collection: Collection; workspace: string; id: string; refresh: (secret: Secret) => Promise<Secret> }): Promise<Held> {
+    const records = await clientNow()
+    const row = await reach(() => records.get({ collection, workspace, id }))
+    if (!row || row.deleted) throw new HttpError(404, 'That record doesn’t exist anymore. It may have been deleted.')
+    await keep(row)
+    return keep(await reach(() => refreshWithLease({ records, row, refresh })))
   },
 
   held: async (id: string): Promise<number> => (await seenMap()).get(id)?.ver ?? 0,
