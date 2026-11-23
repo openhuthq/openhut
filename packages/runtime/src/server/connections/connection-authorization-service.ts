@@ -6,13 +6,14 @@ import { google, type GoogleKind } from '../integrations/google/google.ts'
 import { MCP_SERVERS, mcp, type SignIn } from '../integrations/mcp/mcp.ts'
 import type { Caller } from '../team/identity.ts'
 import { callbackBase, connectionService } from './connection-service.ts'
+import type { Secret } from './connection-records.ts'
 
 const SIGN_IN_MS = 15 * 60_000
 const pending = new Map<string, Pending>()
 
 export const connectionAuthorizationService = {
   async create({ actor, kind: chosen, name, url: given, organization, connectionId }: { actor: Caller } & CreateConnectionAuthorization): Promise<ConnectionAuthorization> {
-    const existing = connectionId ? await connectionService.owned({ actor, id: connectionId }) : undefined
+    const existing = connectionId ? await connectionService.owned({ id: connectionId }) : undefined
     const kind = existing ? signInKind(existing.kind) : chosen
     if (!kind) throw new HttpError(400, 'Pass the kind to sign in to, or the connectionId to reconnect.', { param: 'kind' })
     const url = kind === 'mcp' ? serverUrl({ existing, given }) : knownServer(kind)
@@ -56,7 +57,7 @@ export const connectionAuthorizationService = {
   },
 }
 
-async function signedIn({ sign, code }: { sign: Pending; code: string }): Promise<{ config: unknown; account: string }> {
+async function signedIn({ sign, code }: { sign: Pending; code: string }): Promise<{ config: Secret; account: string }> {
   if (sign.app) return github.installed({ app: sign.app, installationId: Number(code) })
   const redirectUri = connectionService.redirectUrl()
   if (isGoogle(sign.kind)) {

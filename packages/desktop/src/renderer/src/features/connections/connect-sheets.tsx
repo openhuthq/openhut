@@ -3,30 +3,27 @@ import { GOOGLE_KINDS, SIGN_IN_KINDS } from '@openhut/common/connections/connect
 import type { Me } from '@openhut/common/team/team.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { MultiSelect } from '@/components/ui/multi-select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useAuthorizeConnection, useBackToAsker, useConnections, useCreateConnection } from '@/features/connections/api'
 import { uniqueName, type Integration } from '@/features/connections/catalog'
 import { Field } from '@/features/connections/sheet'
 import { CopyButton } from '@/components/copy-button'
-import { useComputers } from '@/features/computers/api'
 import { useAgents, useCreateGrant } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { askOf, asked } from '@/features/connections/asked'
-import { copyOn } from '@/features/connections/copies'
-import type { OpenHutAgent, OpenHutConnection } from '@/lib/openhut'
+import type { Connection } from '@openhut/common/connections/connection.ts'
+import type { OpenHutAgent } from '@/lib/openhut'
 import { Busy, PILL, SetupSheet } from '@/components/kit'
 import { fieldError, formError } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
-import { WORDS } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 
 const ROLE_SQL = `create role openhut_reader login password 'choose-a-password';
 grant pg_read_all_data to openhut_reader;`
 
-type Ask = { url?: string; name?: string; auth?: string; computer?: string; line?: ReactNode }
+type Ask = { url?: string; name?: string; auth?: string; line?: ReactNode }
 type FlowProps = { me: Me; item: Integration; close: () => void; returned: string | undefined; ask: Ask }
 
 export function ConnectSheet({ me, item }: { me: Me; item: Integration }) {
@@ -41,8 +38,8 @@ export function ConnectSheet({ me, item }: { me: Me; item: Integration }) {
   }, [asker?.id, wanted.agentId, item.name])
   if (wanted.agentId && !agents.data) return null
   const host = asker && wanted.url && URL.canParse(wanted.url) ? new URL(wanted.url).host : undefined
-  const existing = asker ? (connections.data ?? []).filter((connection) => connection.kind === item.name && connection.usable && copyOn({ connection, computer: asker.computer }) && (item.name !== 'mcp' || connection.account.split(' · ')[0] === host)) : []
-  const ask = asker ? { url: wanted.url, name: wanted.name, auth: wanted.auth, computer: asker.computer, line: <AskedLine asker={asker} host={host} existing={existing} /> } : {}
+  const existing = asker ? (connections.data ?? []).filter((connection) => connection.kind === item.name && (item.name !== 'mcp' || connection.account.split(' · ')[0] === host)) : []
+  const ask = asker ? { url: wanted.url, name: wanted.name, auth: wanted.auth, line: <AskedLine asker={asker} host={host} existing={existing} /> } : {}
   const close = () => { asked.forget(); navigate('/connections') }
   const props = { me, item, returned, ask, close }
   switch (item.name) {
@@ -53,10 +50,10 @@ export function ConnectSheet({ me, item }: { me: Me; item: Integration }) {
   }
 }
 
-function AskedLine({ asker, host, existing }: { asker: OpenHutAgent; host: string | undefined; existing: OpenHutConnection[] }) {
+function AskedLine({ asker, host, existing }: { asker: OpenHutAgent; host: string | undefined; existing: Connection[] }) {
   const grant = useCreateGrant()
   const back = useBackToAsker()
-  const give = (connection: OpenHutConnection) => grant.mutateAsync({ agentId: asker.id, connectionId: copyOn({ connection, computer: asker.computer }) ?? connection.id })
+  const give = (connection: Connection) => grant.mutateAsync({ agentId: asker.id, connectionId: connection.id })
     .then(() => back({ agentId: asker.id, name: connection.name }), toastError)
   return <div className="flex flex-col gap-2">
     <span className="flex items-center gap-2 text-[13px] text-body"><Face agent={asker} size={20} />{asker.name} asked for this{host && <code className="text-[12.5px] text-ink">{host}</code>}</span>
@@ -74,16 +71,16 @@ const FOOT = (close: () => void, busy: boolean, label: string) => <><Button type
 function PostgresSheet({ item, close, returned, ask }: FlowProps) {
   const create = useCreateConnection()
   const [mode, setMode] = useState('dsn')
-  const putOn = usePutOn(item, ask)
+  const name = useNameField(item, ask)
   return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(create.error, ['dsn', 'name']) ?? returned}
     onSubmit={(event) => {
       const field = formValues(event)
       const dsn = mode === 'dsn' ? field('dsn') : `postgres://${encodeURIComponent(field('user'))}:${encodeURIComponent(field('password'))}@${field('host')}:${field('port') || '5432'}/${encodeURIComponent(field('database'))}`
-      create.mutate({ kind: 'postgres', name: field('name').trim(), dsn, computers: putOn.picked })
+      create.mutate({ kind: 'postgres', name: field('name').trim(), dsn })
     }}
     foot={FOOT(close, create.isPending, 'Test and connect')}>
     {ask.line}
-    {putOn.row(fieldError(create.error, 'name'))}
+    {name(fieldError(create.error, 'name'))}
     <ToggleGroup aria-label="How to enter it" className="w-fit" value={mode} onPick={setMode}>
       <ToggleGroupItem className="text-[13px]" value="dsn">Connection string</ToggleGroupItem>
       <ToggleGroupItem className="text-[13px]" value="fields">Host and port</ToggleGroupItem>
@@ -105,15 +102,15 @@ function PostgresSheet({ item, close, returned, ask }: FlowProps) {
 
 function ConvexSheet({ item, close, returned, ask }: FlowProps) {
   const create = useCreateConnection()
-  const putOn = usePutOn(item, ask)
+  const name = useNameField(item, ask)
   return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(create.error, ['deployKey', 'name']) ?? returned}
     onSubmit={(event) => {
       const field = formValues(event)
-      create.mutate({ kind: 'convex', name: field('name').trim(), deployKey: field('deployKey'), computers: putOn.picked })
+      create.mutate({ kind: 'convex', name: field('name').trim(), deployKey: field('deployKey') })
     }}
     foot={FOOT(close, create.isPending, 'Test and connect')}>
     {ask.line}
-    {putOn.row(fieldError(create.error, 'name'))}
+    {name(fieldError(create.error, 'name'))}
     <Field label="Deploy key" error={fieldError(create.error, 'deployKey')}><Input mono name="deployKey" type="password" required placeholder="prod:happy-otter-123|eyJ…" autoComplete="off" /></Field>
     <span className="flex items-center gap-2 text-[12px] text-mute">From Settings › Deploy keys.<a className={cn(buttonVariants({ variant: 'secondary' }), PILL)} href="https://dashboard.convex.dev" target="_blank" rel="noreferrer">Open Convex</a></span>
   </SetupSheet>
@@ -123,18 +120,18 @@ function McpSheet({ item, close, returned, ask }: FlowProps) {
   const create = useCreateConnection()
   const authorize = useAuthorizeConnection()
   const [auth, setAuth] = useState({ sign_in: 'oauth', public: 'none' }[ask.auth ?? ''] ?? 'header')
-  const putOn = usePutOn(item, ask)
+  const name = useNameField(item, ask)
   const error = create.error ?? authorize.error
   return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(error, ['url', 'header', 'name']) ?? returned}
     onSubmit={(event) => {
       const field = formValues(event)
       const server = { name: field('name').trim(), url: field('url') }
       if (auth === 'oauth') return authorize.mutate({ kind: 'mcp', ...server })
-      create.mutate({ kind: 'mcp', ...server, header: auth === 'header' ? `${field('headerName')}: ${field('headerValue')}` : undefined, computers: putOn.picked })
+      create.mutate({ kind: 'mcp', ...server, header: auth === 'header' ? `${field('headerName')}: ${field('headerValue')}` : undefined })
     }}
     foot={FOOT(close, create.isPending || authorize.isPending, 'Connect')}>
     {ask.line}
-    {putOn.row(fieldError(error, 'name'), auth === 'oauth')}
+    {name(fieldError(error, 'name'))}
     <Field label="URL" error={fieldError(error, 'url')}><Input mono name="url" type="url" required defaultValue={ask.url} placeholder="https://mcp.example.com/mcp" autoComplete="off" /></Field>
     <ToggleGroup aria-label="How it signs in" className="w-fit" value={auth} onPick={setAuth}>
       <ToggleGroupItem className="text-[13px]" value="none">Public</ToggleGroupItem>
@@ -173,18 +170,7 @@ export function useQuickConnect() {
 
 const QUICK = new Set(['posthog', 'linear', 'github', 'excalidraw'])
 
-function usePutOn(item: Integration, ask: Ask) {
-  const computers = useComputers().data ?? []
+function useNameField(item: Integration, ask: Ask) {
   const taken = (useConnections().data ?? []).map((connection) => connection.name)
-  const [picked, setPicked] = useState([ask.computer ?? 'local'])
-  const many = computers.length > 1
-  const row = (error: string | undefined, signIn = false) => <div className={cn('grid gap-2.5', many && 'grid-cols-[3fr_2fr]')}>
-    <Field label="Name" error={error}><Input name="name" required defaultValue={ask.name ?? uniqueName({ title: item.title, taken })} maxLength={60} autoComplete="off" /></Field>
-    {many && <div className="flex min-w-0 flex-col gap-1.5"><span className="text-xs font-medium text-mute">Computers</span>
-      {signIn
-        ? <span className="flex h-8 items-center text-[13px] text-mute">{WORDS.thisComputer} only for now</span>
-        : <MultiSelect label="Computers" value={picked} onChange={(next) => next.length > 0 && setPicked(next)} options={computers.map((computer) => ({ value: computer.id, label: computer.name, disabled: !computer.online, note: computer.online ? undefined : 'Offline' }))} />}
-    </div>}
-  </div>
-  return { picked: many ? picked : undefined, row }
+  return (error: string | undefined) => <Field label="Name" error={error}><Input name="name" required defaultValue={ask.name ?? uniqueName({ title: item.title, taken })} maxLength={60} autoComplete="off" /></Field>
 }

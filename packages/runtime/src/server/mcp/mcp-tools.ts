@@ -5,7 +5,7 @@ import { UpdateMemory } from '@openhut/common/agents/memory.ts'
 import { ProviderId, UpdateProvider } from '@openhut/common/models/provider.ts'
 import { ListChannels } from '@openhut/common/channels/channel.ts'
 import { ListRoutines } from '@openhut/common/routines/routine.ts'
-import { CreateConnection, CreateConnectionAuthorization, ListConnectionEvents, ListConnectionTools, UpdateConnection } from '@openhut/common/connections/connection.ts'
+import { CreateConnection, CreateConnectionAuthorization, ListConnectionEvents, ListConnectionTools } from '@openhut/common/connections/connection.ts'
 import { describeIssues } from '../platform/validation.ts'
 
 const Id = z.object({ id: z.string().check(z.maxLength(60)) })
@@ -41,12 +41,6 @@ export const MCP_TOOLS = [
     call: ({ api, input }) => api({ method: 'POST', url: '/api/connection-authorizations', payload: input }),
   }),
   tool({ name: 'list_connection_tools', description: 'The tools a connection gives agents.', input: ListConnectionTools, call: ({ api, input }) => api({ method: 'GET', url: `/api/connection-tools${query(input)}` }) }),
-  tool({
-    name: 'update_connection',
-    description: 'Share a connection you own with everyone on the team, or stop sharing it.',
-    input: z.extend(UpdateConnection, { id: z.string() }),
-    call: ({ api, input: { id, everyone } }) => api({ method: 'PATCH', url: `/api/connections/${id}`, payload: { everyone } }),
-  }),
   tool({ name: 'delete_connection', description: 'Delete a connection. Every agent loses it on its next call.', input: Id, call: ({ api, input }) => api({ method: 'DELETE', url: `/api/connections/${input.id}` }) }),
   tool({
     name: 'list_connection_events',

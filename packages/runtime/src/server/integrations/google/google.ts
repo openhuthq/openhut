@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import * as z from 'zod/mini'
 import type { GOOGLE_KINDS } from '@openhut/common/connections/connection.ts'
 import { cloud } from '../../platform/cloud.ts'
-import type { Connector, ToolSpec } from '../connector.ts'
+import type { Connector, ConnectorContext, ToolSpec } from '../connector.ts'
 import { mcp } from '../mcp/mcp.ts'
 
 const SCOPE = 'https://www.googleapis.com/auth/'
@@ -53,7 +53,7 @@ export const google = {
       tools: async (ctx) => {
         const headers = await bearer(ctx)
         const lists = await Promise.all(servers.map(async (url) => {
-          const tools = await mcp.connector({ url, redirectUrl: () => '' }).tools({ config: { headers }, save: async () => undefined })
+          const tools = await mcp.connector({ url, redirectUrl: () => '' }).tools({ config: { headers }, refresh: ctx.refresh })
           for (const tool of tools) toolHomes.set(`${kind}:${tool.name}`, url)
           return tools
         }))
@@ -64,22 +64,24 @@ export const google = {
         if (servers.length > 1 && !toolHomes.has(`${kind}:${ctx.tool}`)) await google.connector(kind).tools(ctx)
         const url = servers.length === 1 ? servers[0] : toolHomes.get(`${kind}:${ctx.tool}`)
         if (!url) return { text: `No tool named ${ctx.tool}. Call list_tools to see this connection's tools.`, isError: true }
-        return mcp.connector({ url, redirectUrl: () => '' }).call({ config: { headers }, save: async () => undefined, tool: ctx.tool, args: ctx.args })
+        return mcp.connector({ url, redirectUrl: () => '' }).call({ config: { headers }, refresh: ctx.refresh, tool: ctx.tool, args: ctx.args })
       },
     }
   },
 }
 
-async function bearer({ config, save }: { config: unknown; save: (config: unknown) => Promise<void> }): Promise<Record<string, string>> {
+async function bearer({ config, refresh }: ConnectorContext): Promise<Record<string, string>> {
   let stored = z.parse(Config, config)
-  if (stored.expiresAt - 60_000 < Date.now()) {
-    const token = await cloud.token({ provider: 'google', grantType: 'refresh_token', refreshToken: stored.refreshToken }).catch((error: unknown) => {
-      throw new Error(`Google refused to refresh this sign-in (${error instanceof Error ? error.message : String(error)}). Its owner can press Reconnect on its page.`)
-    })
-    stored = { ...stored, accessToken: token.accessToken, refreshToken: token.refreshToken ?? stored.refreshToken, expiresAt: Date.parse(token.expiresAt) }
-    await save(stored)
-  }
+  if (stored.expiresAt - 60_000 < Date.now()) stored = z.parse(Config, await refresh(renew))
   return { authorization: `Bearer ${stored.accessToken}` }
+}
+
+async function renew(latest: Record<string, unknown>): Promise<GoogleConfig> {
+  const stored = z.parse(Config, latest)
+  const token = await cloud.token({ provider: 'google', grantType: 'refresh_token', refreshToken: stored.refreshToken }).catch((error: unknown) => {
+    throw new Error(`Google refused to refresh this sign-in (${error instanceof Error ? error.message : String(error)}). Press Reconnect on its page.`)
+  })
+  return { ...stored, accessToken: token.accessToken, refreshToken: token.refreshToken ?? stored.refreshToken, expiresAt: Date.parse(token.expiresAt) }
 }
 
 function unique(tools: ToolSpec[]): ToolSpec[] {

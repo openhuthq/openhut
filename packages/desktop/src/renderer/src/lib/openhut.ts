@@ -2,8 +2,6 @@ import * as z from 'zod/mini'
 import { ApiError, List } from '@openhut/common/api.ts'
 import { Admin } from '@openhut/common/admin/admin.ts'
 import { Agent, Grant } from '@openhut/common/agents/agent.ts'
-import { Connection, type CreateConnection } from '@openhut/common/connections/connection.ts'
-import { PROVIDERS, Provider, type ProviderId } from '@openhut/common/models/provider.ts'
 import { Me } from '@openhut/common/team/team.ts'
 import { WORDS } from '@/lib/platform'
 
@@ -12,9 +10,6 @@ export type Computer = { id: string; name: string; url: string; route?: 'relay' 
 export type TailnetPeer = { name: string; dns: string }
 export type Where = { computer?: string; of?: string }
 export type OpenHutAgent = Agent & { computer: string; online: boolean }
-export type Copy = { computer: string; id: string; online: boolean }
-export type OpenHutConnection = Connection & { computers: Copy[] }
-export type ProviderRow = { computer: string; online: boolean; providers: Provider[] }
 export type Enrollment = { peer: TailnetPeer; lines: string[]; url: string | null; startedAt: number; status: 'running' | 'failed'; error: string; retryAt: number | null; retried: boolean; waitingAt?: number | null; log?: string }
 
 type Schema<T> = { safeParse: (data: unknown) => { success: true; data: T } | { success: false } }
@@ -31,8 +26,6 @@ type Bridge = {
 const bridge: Bridge | undefined = Reflect.get(window, 'openhut')
 const LOCAL = 'local'
 const AGENT_LIST = List(Agent)
-const CONNECTION_LIST = List(Connection)
-const PROVIDER_LIST = List(Provider)
 const JoinCode = z.object({ code: z.string() })
 
 export const APP_VERSION = bridge?.version ?? ''
@@ -73,21 +66,7 @@ export const openhut = {
     },
   },
   connections: {
-    list: async (): Promise<OpenHutConnection[]> => (await request({ schema: CONNECTION_LIST, path: '/api/connections' })).data.map((connection) => ({ ...connection, computers: [{ computer: LOCAL, id: connection.id, online: true }] })),
-    connect: ({ computer: _computer, ...body }: CreateConnection & { computer?: string }): Promise<Connection> => request({ schema: Connection, path: '/api/connections', method: 'POST', body }),
-    async addTo({ id }: { id: string; computer: string }): Promise<Connection> {
-      const found = (await openhut.connections.list()).find((each) => each.id === id)
-      if (!found) throw new RequestError({ message: 'That connection isn\'t here anymore. Refresh and try again.', status: 404 })
-      return found
-    },
     grant: ({ connection, agent }: { connection: string; agent: string }): Promise<Grant> => request({ schema: Grant, path: '/api/grants', method: 'POST', body: { agentId: agent, connectionId: connection } }),
-  },
-  providers: {
-    list: async (): Promise<ProviderRow[]> => [{ computer: LOCAL, online: true, providers: (await request({ schema: PROVIDER_LIST, path: '/api/providers' })).data }],
-    connect: ({ id, apiKey }: { id: ProviderId; apiKey: string; computers?: string[] }): Promise<Provider> => request({ schema: Provider, path: providerPath(id), method: 'PATCH', body: { apiKey } }),
-    refresh: (id: ProviderId): Promise<Provider> => request({ schema: Provider, path: `${providerPath(id)}/refresh`, method: 'POST' }),
-    setModels: ({ id, models }: { id: ProviderId; models: { id: string; on: boolean }[] }): Promise<Provider> => request({ schema: Provider, path: providerPath(id), method: 'PATCH', body: { models } }),
-    disconnect: (id: ProviderId): Promise<Provider> => request({ schema: Provider, path: providerPath(id), method: 'DELETE' }),
   },
   computers: {
     async list(): Promise<Computer[]> {
@@ -112,20 +91,8 @@ export const enrollments = {
   follow: (listener: (list: Enrollment[]) => void) => bridge?.computers?.onEnrollments(listener),
 }
 
-export function mergeProviders(rows: ProviderRow[]): (Provider & { computers: string[] })[] {
-  return PROVIDERS.flatMap((info) => {
-    const have = rows.filter((row) => row.online && row.providers.some((each) => each.id === info.id && each.connected))
-    const lead = have[0]?.providers.find((each) => each.id === info.id) ?? rows.flatMap((row) => row.providers).find((each) => each.id === info.id)
-    return lead ? [{ ...lead, computers: have.map((row) => row.computer) }] : []
-  })
-}
-
 function here(agent: Agent): OpenHutAgent {
   return { ...agent, computer: LOCAL, online: true }
-}
-
-function providerPath(id: ProviderId): string {
-  return `/api/providers/${id}`
 }
 
 function older({ version, than }: { version: string; than: string }): boolean {

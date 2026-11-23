@@ -23,14 +23,10 @@ export const Connection = z.object({
   signIn: z.boolean(),
   ownerId: z.string(),
   ownerName: z.string(),
-  everyone: z.boolean(),
-  usable: z.boolean(),
   canDelete: z.boolean(),
   agents: z.number(),
   status: ConnectionStatus,
   lastSuccessAt: z.nullable(Timestamp),
-  keyHere: z._default(z.boolean(), true),
-  changedBy: z._default(z.nullable(z.string()), null),
   createdAt: Timestamp,
 })
 export type Connection = z.infer<typeof Connection>
@@ -81,9 +77,6 @@ export const CreateConnection = z.object({
   header: z.optional(z.string().check(z.maxLength(4000))),
 })
 export type CreateConnection = z.input<typeof CreateConnection>
-
-export const UpdateConnection = z.object({ everyone: z.boolean() })
-export type UpdateConnection = z.infer<typeof UpdateConnection>
 
 export const CreateConnectionAuthorization = z.object({
   kind: z.optional(z.enum(SIGN_IN_KINDS)),

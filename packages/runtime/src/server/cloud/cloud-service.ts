@@ -663,7 +663,7 @@ async function teamsOf(token: string): Promise<{ id: string }[]> {
 }
 
 async function keepToRotate(): Promise<void> {
-  const value = JSON.stringify((await connectionService.synced()).map(({ id, name, kind }) => ({ id, name, kind })))
+  const value = JSON.stringify(await connectionService.rotatable())
   await db.insertInto('install_setting').values({ name: ROTATE, value }).onConflict((oc) => oc.column('name').doUpdateSet({ value })).execute()
 }
 

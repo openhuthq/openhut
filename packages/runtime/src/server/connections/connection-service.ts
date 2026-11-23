@@ -4,11 +4,11 @@ import { SIGN_IN_KINDS, type Connection, type ConnectionKind, type ConnectionSta
 import { config } from '../platform/config.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
-import { log, emit } from '../platform/events.ts'
+import { emit, listen, log } from '../platform/events.ts'
 import { deleted } from '../platform/responses.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
-import { newId, seal, unseal } from '../platform/secrets.ts'
-import type { Connector, ToolSpec } from '../integrations/connector.ts'
+import { newId, unseal } from '../platform/secrets.ts'
+import type { Connector, ConnectorContext, ToolSpec } from '../integrations/connector.ts'
 import { convex } from '../integrations/convex/convex.ts'
 import { excalidraw } from '../integrations/excalidraw/excalidraw.ts'
 import { github } from '../integrations/github/github.ts'
@@ -16,8 +16,12 @@ import { google } from '../integrations/google/google.ts'
 import { MCP_SERVERS, mcp } from '../integrations/mcp/mcp.ts'
 import { postgres } from '../integrations/postgres/postgres.ts'
 import type { Caller } from '../team/identity.ts'
+import { PROVIDERS } from '@openhut/common/models/provider.ts'
+import { providers } from '../models/providers/index.ts'
+import { settings } from '../platform/settings.ts'
+import { connectionRecords, type Secret } from './connection-records.ts'
 
-const COLUMNS = ['id', 'kind', 'name', 'account', 'sign_in', 'owner_id', 'everyone', 'created_at', 'changed_by'] as const
+const COLUMNS = ['id', 'kind', 'name', 'account', 'sign_in', 'owner_id', 'created_at'] as const
 const MAX_REPLY = 64_000
 const PER_AGENT_CONNECTION = 2
 const TOOLS_FRESH_MS = 5 * 60_000
@@ -42,21 +46,26 @@ const CONNECTORS: Record<ConnectionKind, Connector> = {
   google_search: google.connector('google_search'),
 }
 
+listen((event) => {
+  if (event.target?.type === 'connection') toolCache.delete(event.target.id)
+})
+
 export const connectionService = {
   redirectUrl,
 
   async reachable({ agent }: { agent: { id: string; owner_id: string } }): Promise<ReachableConnection[]> {
-    return usableBy(agent.owner_id).innerJoin('connection_grant as g', 'g.connection_id', 'c.id').select(['c.id', 'c.kind', 'c.name'])
+    return db.selectFrom('connection as c').innerJoin('connection_grant as g', 'g.connection_id', 'c.id').select(['c.id', 'c.kind', 'c.name'])
       .where('g.agent_id', '=', agent.id).orderBy('c.created_at').execute()
   },
 
   async list({ actor }: { actor: Caller }): Promise<Connection[]> {
+    await connectionRecords.pull().catch((err: unknown) => log.warn({ event: 'connection.pull_failed', error: messageOf(err) }))
     const rows = await db.selectFrom('connection').select(COLUMNS).orderBy('created_at').execute()
-    return connectionsOf({ actor, rows })
+    return connectionsOf({ rows })
   },
 
   async get({ actor, id }: { actor: Caller; id: string }): Promise<Connection> {
-    const [connection] = await connectionsOf({ actor, rows: [await rowOf(id)] })
+    const [connection] = await connectionsOf({ rows: [await rowOf(id)] })
     return connection
   },
 
@@ -65,19 +74,16 @@ export const connectionService = {
     return connectionService.save({ actor, kind, name, config, account, signIn: false })
   },
 
-  async save({ actor, kind, name, config, account, signIn, id }: { actor: Caller; kind: ConnectionKind; name: string; config: unknown; account: string; signIn: boolean; id?: string }): Promise<Connection> {
-    const sealed = seal(JSON.stringify(config))
+  async save({ actor, kind, name, config, account, signIn, id }: { actor: Caller; kind: ConnectionKind; name: string; config: Secret; account: string; signIn: boolean; id?: string }): Promise<Connection> {
     if (id) {
-      await db.updateTable('connection').set({ config: sealed, account, changed_by: null }).where('id', '=', id).execute()
-      toolCache.delete(id)
+      await connectionRecords.edit({ id, change: ({ value }) => ({ value: { ...value, account }, secret: config }) })
       emit({ name: 'connection.reconnected', actor, target: { type: 'connection', id, kind } })
       return connectionService.get({ actor, id })
     }
-    const row = await db.insertInto('connection')
-      .values({ id: newId('cn'), kind, name: name.trim().slice(0, 60) || kind, account, sign_in: signIn, owner_id: actor.id, config: sealed })
-      .returning('id').executeTakeFirstOrThrow()
-    emit({ name: 'connection.created', actor, target: { type: 'connection', id: row.id, kind } })
-    return connectionService.get({ actor, id: row.id })
+    const made = newId('cn')
+    await connectionRecords.put({ id: made, value: { kind, name: name.trim().slice(0, 60) || kind, account, signIn, createdAt: new Date().toISOString() }, secret: config })
+    emit({ name: 'connection.created', actor, target: { type: 'connection', id: made, kind } })
+    return connectionService.get({ actor, id: made })
   },
 
   unsealed: (sealed: string): Record<string, unknown> => {
@@ -85,53 +91,31 @@ export const connectionService = {
     return typeof config === 'object' && config !== null ? { ...config } : {}
   },
 
-  async owned({ actor, id }: { actor: Caller; id: string }): Promise<Row & { config: string }> {
-    const row = await db.selectFrom('connection').select([...COLUMNS, 'config']).where('id', '=', (await rowOf(id)).id).executeTakeFirstOrThrow()
-    if (row.owner_id !== actor.id) throw new HttpError(403, 'Only the person who connected it can reconnect it.')
-    return row
-  },
-
-  async update({ actor, id, everyone }: { actor: Caller; id: string; everyone: boolean }): Promise<Connection> {
-    const row = await rowOf(id)
-    if (row.owner_id !== actor.id) throw new HttpError(403, 'Only its owner can share a connection.')
-    await db.updateTable('connection').set({ everyone }).where('id', '=', id).execute()
-    emit({ name: 'connection.shared', actor, target: { type: 'connection', id, everyone } })
-    return connectionService.get({ actor, id })
+  async owned({ id }: { id: string }): Promise<Row & { config: string }> {
+    return db.selectFrom('connection').select([...COLUMNS, 'config']).where('id', '=', (await rowOf(id)).id).executeTakeFirstOrThrow()
   },
 
   async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'connection'>> {
     const row = await rowOf(id)
-    await db.deleteFrom('connection').where('id', '=', id).execute()
-    toolCache.delete(id)
+    await connectionRecords.remove(id)
     emit({ name: 'connection.deleted', actor, target: { type: 'connection', id, name: row.name } })
     return deleted({ id, object: 'connection' })
   },
 
   async wipe(): Promise<void> {
     await db.deleteFrom('connection').execute()
+    for (const { id } of PROVIDERS) await settings.forgetProvider(id)
     toolCache.clear()
   },
 
-  async synced(): Promise<SyncedConnection[]> {
-    const rows = await db.selectFrom('connection').select(['id', 'kind', 'name', 'account', 'sign_in', 'config']).orderBy('created_at').execute()
-    return rows.map((row) => ({ id: row.id, kind: row.kind, name: row.name, account: row.account, signIn: row.sign_in, config: row.config ? connectionService.unsealed(row.config) : null }))
-  },
-
-  async applySynced({ id, value, by }: { id: string; value: SyncedConnection | null; by: string | null }): Promise<void> {
-    if (!value) {
-      await db.deleteFrom('connection').where('id', '=', id).execute()
-    } else {
-      const owner = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirstOrThrow()
-      const fields = { kind: value.kind, name: value.name, account: value.account, sign_in: value.signIn, config: value.config ? seal(JSON.stringify(value.config)) : '', changed_by: by }
-      await db.insertInto('connection').values({ id, owner_id: owner.id, ...fields }).onConflict((oc) => oc.column('id').doUpdateSet(fields)).execute()
-    }
-    toolCache.delete(id)
-    emit({ name: 'connection.synced', target: { type: 'connection', id } })
+  async rotatable(): Promise<{ id: string; kind: string; name: string }[]> {
+    const rows = await db.selectFrom('connection').select(['id', 'kind', 'name']).orderBy('created_at').execute()
+    const keyed = PROVIDERS.filter((info) => info.id !== 'claude' || settings.seatToken()).filter((info) => providers[info.id].connected())
+    return [...rows, ...keyed.map((info) => ({ id: info.id, kind: 'provider', name: info.name }))]
   },
 
   async listTools({ actor, connectionId }: { actor: Caller; connectionId: string }): Promise<ConnectionTool[]> {
     const connection = await connectionService.get({ actor, id: connectionId })
-    if (!connection.usable) throw new HttpError(403, `Only people who can use ${connection.name} see its tools. Ask ${connection.ownerName} to share it.`)
     const tools = await toolsOf({ id: connection.id, kind: connection.kind }).catch((err: unknown) => {
       throw new HttpError(502, `${connection.name} didn't list its tools: ${messageOf(err)}`)
     })
@@ -185,7 +169,7 @@ export const connectionService = {
   },
 }
 
-async function keyedConfig({ kind, dsn, deployKey, url, header }: Omit<CreateConnection, 'name'>): Promise<{ config: unknown; account: string }> {
+async function keyedConfig({ kind, dsn, deployKey, url, header }: Omit<CreateConnection, 'name'>): Promise<{ config: Secret; account: string }> {
   if (kind === 'convex') {
     if (!deployKey) throw new HttpError(400, 'Paste the deploy key.', { param: 'deployKey' })
     return { config: { deployKey: deployKey.trim() }, account: await convex.probe(deployKey.trim()) }
@@ -211,11 +195,10 @@ async function toolsOf(connection: { id: string; kind: ConnectionKind }): Promis
   return tools
 }
 
-function withConnector<T>(connection: { id: string; kind: ConnectionKind }, fn: (ctx: { config: unknown; save: (config: unknown) => Promise<void> }) => Promise<T>): Promise<T> {
+function withConnector<T>(connection: { id: string; kind: ConnectionKind }, fn: (ctx: ConnectorContext) => Promise<T>): Promise<T> {
   const work = async () => {
     const row = await db.selectFrom('connection').select('config').where('id', '=', connection.id).executeTakeFirstOrThrow()
-    if (!row.config) throw new HttpError(409, 'This connection’s key is only on your admins’ computers, so agents here can’t use it.')
-    return fn({ config: JSON.parse(unseal(row.config)), save: async (config) => { await db.updateTable('connection').set({ config: seal(JSON.stringify(config)) }).where('id', '=', connection.id).execute() } })
+    return fn({ config: JSON.parse(unseal(row.config)), refresh: (renew) => connectionRecords.refresh({ id: connection.id, renew }) })
   }
   if (!isSignIn(connection.kind)) return work()
   const next = (queues.get(connection.id) ?? Promise.resolve()).catch(() => undefined).then(work)
@@ -223,41 +206,33 @@ function withConnector<T>(connection: { id: string; kind: ConnectionKind }, fn: 
   return next.finally(() => { if (queues.get(connection.id) === next) queues.delete(connection.id) })
 }
 
-function usableBy(personId: string) {
-  return db.selectFrom('connection as c').innerJoin('person as p', (join) => join.on('p.id', '=', personId).on('p.removed_at', 'is', null))
-    .where((eb) => eb.or([eb('c.owner_id', '=', personId), eb('c.everyone', '=', true)]))
-}
-
 async function rowOf(id: string): Promise<Row> {
-  const row = /^cn_[a-z0-9]{8}$/.test(id) ? await db.selectFrom('connection').select(COLUMNS).where('id', '=', id).executeTakeFirst() : undefined
+  const row = /^cn_[a-z0-9]{8,16}$/.test(id) ? await db.selectFrom('connection').select(COLUMNS).where('id', '=', id).executeTakeFirst() : undefined
   if (!row) throw new HttpError(404, 'That connection doesn\'t exist. It may have been deleted.')
   return row
 }
 
-async function connectionsOf({ actor, rows }: { actor: Caller; rows: Row[] }): Promise<Connection[]> {
+async function connectionsOf({ rows }: { rows: Row[] }): Promise<Connection[]> {
   if (!rows.length) return []
   const ids = rows.map((row) => row.id)
-  const [owners, counts, usable, successes, failures] = await Promise.all([
+  const [owners, counts, successes, failures] = await Promise.all([
     db.selectFrom('person').select(['id', 'email']).where('id', 'in', rows.map((row) => row.owner_id)).execute(),
     db.selectFrom('connection_grant').select((eb) => ['connection_id', eb.fn.countAll<string>().as('n')]).where('connection_id', 'in', ids).groupBy('connection_id').execute(),
-    usableBy(actor.id).select('c.id').where('c.id', 'in', ids).execute(),
     db.selectFrom('connection_event').select((eb) => ['connection_id', eb.fn.max('at').as('at')]).where('connection_id', 'in', ids).where('outcome', '=', 'allowed').groupBy('connection_id').execute(),
     db.selectFrom('connection_event').select('connection_id').distinct().where('connection_id', 'in', ids).where('outcome', '=', 'failed').execute(),
   ])
   const ownerName = new Map(owners.map((owner) => [owner.id, owner.email]))
   const agents = new Map(counts.map((count) => [count.connection_id, Number(count.n)]))
-  const canUse = new Set(usable.map((connection) => connection.id))
   const lastSuccess = new Map(successes.map((success) => [success.connection_id, success.at]))
   const failing = new Set(failures.map((failure) => failure.connection_id))
-  const keyless = new Set((await db.selectFrom('connection').select('id').where('id', 'in', ids).where('config', '=', '').execute()).map((row) => row.id))
   return rows.map((row) => {
     const success = lastSuccess.get(row.id)
     return {
       id: row.id, object: 'connection', kind: row.kind, name: row.name, account: row.account, signIn: row.sign_in,
       ownerId: row.owner_id, ownerName: ownerName.get(row.owner_id) ?? 'someone',
-      everyone: row.everyone, usable: canUse.has(row.id), canDelete: true, agents: agents.get(row.id) ?? 0,
+      canDelete: true, agents: agents.get(row.id) ?? 0,
       status: statusOf({ succeeded: !!success, failed: failing.has(row.id) }), lastSuccessAt: success ? new Date(success).toISOString() : null,
-      keyHere: !keyless.has(row.id), changedBy: row.changed_by, createdAt: new Date(row.created_at).toISOString(),
+      createdAt: new Date(row.created_at).toISOString(),
     }
   })
 }
@@ -270,7 +245,6 @@ function statusOf({ succeeded, failed }: { succeeded: boolean; failed: boolean }
 
 const isSignIn = (kind: ConnectionKind): boolean => (SIGN_IN_KINDS as readonly string[]).includes(kind)
 
-export type SyncedConnection = { id: string; kind: ConnectionKind; name: string; account: string; signIn: boolean; config: Record<string, unknown> | null }
 export type ReachableConnection = { id: string; kind: ConnectionKind; name: string }
 export type AgentTool = { name: string; connection: ReachableConnection; spec: ToolSpec }
 
