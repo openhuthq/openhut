@@ -75,7 +75,7 @@ jobs:
           git diff --stat
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -am "Release $VERSION: the app and runtime version"
+          git diff --quiet || git commit -am "Release $VERSION: the app and runtime version"
       - name: Push the bump, then the tag, which starts the desktop workflow
         env:
           RELEASE_TAG_KEY: ${{ secrets.RELEASE_TAG_KEY }}

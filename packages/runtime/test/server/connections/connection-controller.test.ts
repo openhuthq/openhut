@@ -7,13 +7,24 @@ import { connectionAuthorizationController } from '../../../src/server/connectio
 
 await migrate()
 
-test('a sign-in that comes back expired goes back into the app with the reason', async () => {
+test('a sign-in finishes in the browser: an expired one says so there, a GitHub launch page posts the manifest, and the app can only see its own sign-in', async () => {
   const app = Fastify()
   app.setValidatorCompiler(validateWithZod)
   await app.register(connectionAuthorizationController, { prefix: '/api/connection-authorizations' })
   const back = () => app.inject({ method: 'GET', url: '/api/connection-authorizations/callback?state=gone&code=x' })
 
   const local = await back()
-  assert.equal(local.statusCode, 302)
-  assert.match(local.headers.location ?? '', /^\/connections\?error=This%20sign-in%20expired/)
+  assert.equal(local.statusCode, 200)
+  assert.match(local.headers['content-type'] ?? '', /text\/html/)
+  assert.match(local.body, /This sign-in expired/)
+  const launch = await app.inject({ method: 'GET', url: '/api/connection-authorizations/launch?state=gone' })
+  assert.match(launch.body, /This sign-in expired/)
+  assert.doesNotMatch(launch.body, /<form/)
+})
+
+test('the launch page escapes what it posts', async () => {
+  const { posting } = await import('../../../src/server/platform/page.ts')
+  const html = posting({ url: 'https://github.com/settings/apps/new?state=a&b', field: 'manifest', value: '{"name":"x\\"><script>"}' })
+  assert.match(html, /action="https:\/\/github.com\/settings\/apps\/new\?state=a&#38;b"/)
+  assert.doesNotMatch(html, /value="[^"]*<script>/)
 })

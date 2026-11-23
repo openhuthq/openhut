@@ -87,7 +87,7 @@ function ManageSheet({ connection, agents }: { connection: Connection; agents: O
     safe={`Added ${shortDate.format(new Date(connection.createdAt))}`}
     foot={<>
       <ConfirmButton variant="danger" disabled={!connection.canDelete} question={`Delete ${connection.name}?`} detail="Every agent stops being able to use it." action="Delete" onConfirm={() => remove.mutate(undefined, { onError: toastError })}>Delete</ConfirmButton>
-      {connection.signIn && <Button variant="secondary" disabled={authorize.isPending} onClick={() => authorize.mutate({ connectionId: connection.id }, { onError: toastError })}>{authorize.isPending ? 'Opening…' : 'Reconnect'}</Button>}
+      {connection.signIn && <Button variant="secondary" disabled={authorize.isPending} onClick={() => authorize.mutate({ connectionId: connection.id }, { onError: toastError })}>{authorize.isPending ? 'Finish in your browser…' : 'Reconnect'}</Button>}
       <Button variant="primary" onClick={close}>Done</Button>
     </>}>
     <ItemGroup className="rounded-lg">

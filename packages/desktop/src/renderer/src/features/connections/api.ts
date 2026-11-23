@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
 import { Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, type CreateConnection, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
@@ -37,18 +38,34 @@ export function useCreateConnection() {
   })
 }
 
+const SIGN_IN_POLL_MS = 1500
+const SIGN_IN_WAIT_MS = 15 * 60_000
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 export function useAuthorizeConnection() {
+  const client = useQueryClient()
+  const live = useRef(true)
+  useEffect(() => {
+    live.current = true
+    return () => { live.current = false }
+  }, [])
   return useMutation({
     mutationFn: async (body: CreateConnectionAuthorization) => {
       if (isPhone()) throw new Error('Sign-ins finish on your Mac, so connect this app from OpenHut there. Agents on your phone can use it right after.')
-      return request({ schema: ConnectionAuthorization, path: '/api/connection-authorizations', method: 'POST', body })
+      const started = await request({ schema: ConnectionAuthorization, path: '/api/connection-authorizations', method: 'POST', body })
+      window.open(started.authorizationUrl, '_blank', 'noopener')
+      for (let waited = 0; live.current && waited < SIGN_IN_WAIT_MS; waited += SIGN_IN_POLL_MS) {
+        await sleep(SIGN_IN_POLL_MS)
+        const now = await request({ schema: ConnectionAuthorization, path: `/api/connection-authorizations/${encodeURIComponent(started.id)}` })
+        if (now.status === 'failed') throw new Error(now.error ?? 'The sign-in didn’t finish. Try again.')
+        if (now.status === 'done') return now
+      }
+      return null
     },
-    onSuccess: (authorization) => {
-      if (!authorization.manifest) return location.assign(authorization.authorizationUrl)
-      const form = Object.assign(document.createElement('form'), { method: 'post', action: authorization.authorizationUrl })
-      form.append(Object.assign(document.createElement('input'), { type: 'hidden', name: 'manifest', value: authorization.manifest }))
-      document.body.append(form)
-      form.submit()
+    onSuccess: (done) => {
+      if (!done?.connectionId) return
+      void client.invalidateQueries({ queryKey: CONNECTIONS_KEY })
+      navigate(`/connections/${done.connectionId}?connected=1`, true)
     },
   })
 }
