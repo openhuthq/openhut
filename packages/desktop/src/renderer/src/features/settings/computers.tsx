@@ -1,9 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { LaptopIcon, Tick02Icon, PlusSignIcon, ServerStack01Icon } from '@hugeicons/core-free-icons'
-import type { Computer, OpenHutAgent, TailnetPeer } from '@openhut/client'
+import * as z from 'zod/mini'
 import type { Admin } from '@openhut/common/admin/admin.ts'
+import type { Cloud, CloudWorkspaceView, DeviceRequest } from '@openhut/common/cloud/cloud.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { CopyButton } from '@/components/copy-button'
+import { ConfirmButton } from '@/components/confirm-button'
+import { DeviceIcon, DeviceMeta } from '@/components/custom/device'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { ErrorNote } from '@/components/error-note'
@@ -12,27 +16,30 @@ import { Meter } from '@/components/ui/meter'
 import { Glyph } from '@/components/glyph'
 import { I, PILL } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
-import { useComputerAdmins, useComputers, useDeviceKeys, useRemoveComputer, useUpdateComputer } from '@/features/computers/api'
+import { useComputerAdmins, useComputers, useUpdateComputer } from '@/features/computers/api'
 import { useEnroll, useEnrollments, type Enrollment } from '@/features/computers/enroll'
 import { detailsOf, failureOf, percentOf, phaseOf, stageOf } from '@/features/computers/enroll-steps'
 import { useTailnet } from '@/features/settings/desktop'
-import { WORDS } from '@/lib/platform'
 import { byEligibility, stateOf, type Peer } from '@/features/settings/peers'
-import { PairDialog, Waiting } from '@/features/settings/invite'
-import { joinCommand } from '@/features/settings/invitation'
-import { Chevron, Command, Intro, Row, Rows, useConfirming } from '@/features/settings/kit'
+import { Chevron, Command, Intro, Row, Rows } from '@/features/settings/kit'
 import { UpdateStatus } from '@/features/settings/update-pill'
-import { isPhone } from '@/lib/native'
-import { APP_VERSION } from '@/lib/openhut'
+import { KeysToReplace } from '@/features/cloud/cloud'
+import { REMOVE_DETAIL, useCloud, useRemoveMac } from '@/features/cloud/api'
+import { useApprove, useDeny } from '@/features/cloud/workspaces'
+import { request } from '@/lib/api-client'
+import { ago, shortDateTime } from '@/lib/format'
+import { isPhone, useConfirmed } from '@/lib/native'
+import { APP_VERSION, type Computer, type TailnetPeer } from '@/lib/openhut'
+import { WORDS } from '@/lib/platform'
 import { open, useOpen } from '@/lib/router'
-import { toastError } from '@/lib/toast'
+import { toast, toastError } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
 import { cn } from '@/lib/utils'
-import { EnableCloud } from '@/features/cloud/sign-in'
-import { CloudDevices, CloudOff, deviceNote, devicesOf, KeysToReplace } from '@/features/cloud/cloud'
-import { useCloud } from '@/features/cloud/api'
 
 const GET_TAILSCALE = 'https://tailscale.com/download'
+const JoinCode = z.object({ code: z.string() })
+
+type Device = Cloud['devices'][number]
 
 export function ComputersSettings() {
   const [step, name = ''] = (useOpen() ?? '').split(':')
@@ -51,49 +58,43 @@ function ComputerList() {
   const admins = useComputerAdmins().data
   const agents = useAgents().data ?? []
   const enrollments = useEnrollments().data
-  const tailscale = useTailnet().data?.state
-  const tailscaleOff = !!tailscale && tailscale !== 'running'
-  const devices = devicesOf(useCloud().data)
-  const keys = useDeviceKeys(devices.length ? computers.data ?? [] : [])
-  const deviceOf = (computer: Computer) => devices.find((device) => computer.id === 'local' ? device.here : device.key === keys[computer.id])
-  const merged = (computers.data ?? []).flatMap((computer) => deviceOf(computer)?.key ?? [])
+  const { devices, requests, home } = mineOf(useCloud().data)
+  const local = computers.data?.[0]
+  const admin = admins?.find((each) => each.computer.id === local?.id)?.admin
+  const here = devices.find((device) => device.here)
   return <>
     <KeysToReplace />
     <Intro>Your computers</Intro>
     <ErrorNote message={computers.error?.message} />
     <Rows>
-      {computers.data?.map((computer) => {
-        const admin = admins?.find((each) => each.computer.id === computer.id)?.admin
-        const device = deviceOf(computer)
-        const title = device?.name ?? computer.name
-        if (admin?.server.update?.status === 'running') return <UpdatingRow key={computer.id} computer={computer} title={title} />
-        const note = deviceNote({ device, note: noteOf({ computer, admin, tailscaleOff, count: agents.filter((agent) => agent.computer === computer.id).length }) })
-        if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={title} note={note}>{!isPhone() && <UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Up to date</span>} />}</Row>
-        return <RemovableRow key={computer.id} computer={computer} title={title} admin={admin} note={note} agents={agents.filter((agent) => agent.computer === computer.id)} />
-      })}
+      {local && admin?.server.update?.status === 'running' && <Row icon={<ComputerMark computer={local} />} title={here?.name ?? local.name} note="Updating…"><Spinner className="mt-0" /></Row>}
+      {local && admin?.server.update?.status !== 'running' && <Row icon={<ComputerMark computer={local} />} title={here?.name ?? local.name} note={noteOf({ computer: local, admin, count: agents.filter((agent) => agent.runsHere).length, device: here })}>
+        {!isPhone() && <UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Up to date</span>} />}
+      </Row>}
+      {home && requests.map((each) => <RequestRow key={each.device} workspace={home} asked={each} />)}
+      {devices.filter((device) => !device.here).map((device) => <DeviceRow key={device.key} device={device} />)}
       {enrollments.map((enrollment) => <EnrollRow key={enrollment.peer.dns} enrollment={enrollment} />)}
-      <CloudDevices merged={merged} />
       {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note="A Linux computer that stays on seals each agent in its own box and keeps answering while this computer sleeps."><Chevron /></Row>}
-      <CloudOff />
     </Rows>
   </>
 }
 
-const ROUTES = { tailnet: 'Tailscale', relay: 'OpenHut Relay' }
-
-function noteOf({ computer, admin, count, tailscaleOff }: { computer: Computer; admin: Admin | undefined; count: number; tailscaleOff: boolean }) {
-  if (!computer.online && computer.route === 'tailnet' && tailscaleOff) return 'Offline · Tailscale is off on this computer'
-  if (!computer.online) return 'Offline'
-  if (computer.appTooOld) return 'Update OpenHut to use this computer'
-  if (computer.runtimeTooOld) return 'Update this computer to use it'
-  const failed = admin?.server.update?.status === 'failed' ? admin.server.update : null
-  if (failed) return `Couldn't update to ${failed.to}. ${sentence(failed.reason ?? 'The update stopped before it finished.')}`
-  return [computer.route && ROUTES[computer.route], computer.id === 'local' && !WORDS.sandboxed ? 'Agents have your access' : 'Each agent sealed in its own box', agentCount(count), admin && `OpenHut ${computer.id === 'local' ? admin.server.version : admin.server.build}`].filter(Boolean).join(' · ')
+function mineOf(cloud: Cloud | undefined): { devices: Device[]; requests: DeviceRequest[]; home: CloudWorkspaceView | undefined } {
+  if (cloud?.status !== 'on' && cloud?.status !== 'offline') return { devices: [], requests: [], home: undefined }
+  const home = cloud.workspaces.find((workspace) => workspace.home && workspace.own)
+  return { devices: cloud.devices, requests: home?.requests.filter((each) => each.email === cloud.email) ?? [], home }
 }
 
-function labelOf({ ready, onRelay }: { ready: boolean; onRelay: boolean }) {
-  if (!ready) return 'Turn on SSH'
-  return onRelay ? 'Switch to Tailscale' : 'Add'
+function noteOf({ computer, admin, count, device }: { computer: Computer; admin: Admin | undefined; count: number; device: Device | undefined }) {
+  if (!computer.online) return 'Offline'
+  if (computer.appTooOld) return 'Update OpenHut to use this computer'
+  const failed = admin?.server.update?.status === 'failed' ? admin.server.update : null
+  if (failed) return `Couldn't update to ${failed.to}. ${sentence(failed.reason ?? 'The update stopped before it finished.')}`
+  return [isPhone() ? 'Your computer' : 'This computer', WORDS.sandboxed ? 'Each agent sealed in its own box' : 'Agents have your access', agentCount(count), admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')
+}
+
+function addedOf(device: Device | undefined) {
+  return device?.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))}` : undefined
 }
 
 function sentence(text: string) {
@@ -117,26 +118,40 @@ function Mark({ icon, dot }: { icon: typeof LaptopIcon; dot?: string }) {
   </span>
 }
 
-
-function RemovableRow({ computer, title, admin, note, agents }: { computer: Computer; title: string; admin: Admin | undefined; note: string; agents: OpenHutAgent[] }) {
-  const remove = useRemoveComputer()
+function DeviceRow({ device }: { device: Device }) {
+  const remove = useRemoveMac()
   const update = useUpdateComputer()
-  const { confirming, setConfirming, box } = useConfirming()
-  return <div ref={box}><Row icon={<ComputerMark computer={computer} />} title={title} note={confirming ? 'Its agents stop and disappear from this app. They stay on that computer.' : note}>
-    {confirming
-      ? <>
-        <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
-        <Button type="button" variant="danger" className={PILL} disabled={remove.isPending} onClick={() => remove.mutate({ id: computer.id, agents: agents.map((agent) => agent.id) }, { onError: toastError })}>Remove</Button>
-      </>
-      : <>
-        {admin?.server.updateAvailable && (update.isPending
-          ? <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>
-          : <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate(computer, { onError: toastError })}>{admin.server.update?.status === 'failed' ? 'Try again' : 'Update'}</Button>)}
-        <Button type="button" variant="danger" className={PILL} onClick={() => setConfirming(true)}>Remove</Button>
-      </>}
-  </Row></div>
+  const server = device.kind === 'server'
+  const name = device.name ?? (server ? 'Computer that runs agents' : 'Computer')
+  const detail = device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))}. ${REMOVE_DETAIL}` : REMOVE_DETAIL
+  return <Row icon={<DeviceIcon kind={device.kind} />} title={name} note={[server ? 'Runs agents' : 'Mac', addedOf(device)].filter(Boolean).join(' · ')}>
+    {server && !isPhone() && update.isPending && <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>}
+    {server && !isPhone() && !update.isPending && <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate({ id: tunnelKeyOf(device.key), name }, { onSuccess: () => toast(`${name} is updating`), onError: toastError })}>Update</Button>}
+    {!isPhone() && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${name}?`} detail={detail} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
+  </Row>
 }
 
+function RequestRow({ workspace, asked }: { workspace: CloudWorkspaceView; asked: DeviceRequest }) {
+  const approve = useApprove()
+  const deny = useDeny()
+  const { asking, confirm } = useConfirmed()
+  const title = asked.name ?? 'New computer'
+  const busy = approve.isPending || deny.isPending || asking
+  const approved = () => void confirm(`Approve ${title}`).then((ok) => { if (ok) approve.mutate({ id: workspace.id, device: asked.device }, { onSuccess: () => toast(`${title} is unlocking`), onError: toastError }) })
+  return <Row icon={<DeviceIcon kind="mac" />} title={title} note={<>Wants to join · <DeviceMeta device={{ kind: 'mac', name: title, os: asked.os ?? undefined, when: `${ago(asked.at)} ago` }} /></>}>
+    <Button type="button" variant="ghost" className={PILL} disabled={busy} onClick={() => deny.mutate({ id: workspace.id, device: asked.device }, { onSuccess: () => toast('Denied'), onError: toastError })}>Deny</Button>
+    <Button type="button" variant="primary" className={PILL} disabled={busy} onClick={approved}>{approve.isPending ? 'Approving…' : 'Approve'}</Button>
+  </Row>
+}
+
+function tunnelKeyOf(deviceKey: string): string {
+  return Array.from(atob(deviceKey).slice(32), (char) => char.charCodeAt(0).toString(16).padStart(2, '0')).join('')
+}
+
+function useKnown(): (name: string) => boolean {
+  const { devices, requests } = mineOf(useCloud().data)
+  return (name) => devices.some((device) => device.name === name) || requests.some((each) => each.name === name)
+}
 
 function EnrollRow({ enrollment }: { enrollment: Enrollment }) {
   const failed = enrollment.status === 'failed'
@@ -147,16 +162,12 @@ function EnrollRow({ enrollment }: { enrollment: Enrollment }) {
   </Row>
 }
 
-function UpdatingRow({ computer, title }: { computer: Computer; title: string }) {
-  return <Row icon={<ComputerMark computer={computer} />} title={title} note="Updating…"><Spinner className="mt-0" /></Row>
-}
-
 function TailscaleStep() {
   const tailnet = useTailnet()
   const { start } = useEnroll()
   const recheck = () => void tailnet.refetch()
   const data = tailnet.data
-  const add = (peer: Peer) => { start({ name: peer.name, dns: peer.dns } satisfies TailnetPeer); open(`adding:${peer.name}`) }
+  const add = (peer: Peer) => { void start({ name: peer.name, dns: peer.dns } satisfies TailnetPeer); open(`adding:${peer.name}`) }
   return <TailscaleDialog title="Add over Tailscale" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}>
     {!data && <Scene mood="looking" title="Looking for your computers…" />}
     {data?.state === 'missing' && <Empty title="Install Tailscale" line="OpenHut uses it to find your other computers.">
@@ -171,9 +182,7 @@ function TailscaleStep() {
 }
 
 function Peers({ peers, tailnet, recheck, checking, onAdd }: { peers: Peer[]; tailnet: string; recheck: () => void; checking: boolean; onAdd: (peer: Peer) => void }) {
-  const computers = useComputers().data ?? []
-  const added = new Set(computers.filter((computer) => computer.route !== 'relay').map((computer) => computer.name))
-  const onRelay = new Set(computers.filter((computer) => computer.route === 'relay').map((computer) => computer.name))
+  const known = useKnown()
   const enrolling = new Set(useEnrollments().data.map((each) => each.peer.dns))
   const shown = byEligibility(peers).filter((peer) => stateOf(peer) === 'ready' || stateOf(peer) === 'ssh-off')
   const hidden = peers.length - shown.length
@@ -184,15 +193,12 @@ function Peers({ peers, tailnet, recheck, checking, onAdd }: { peers: Peer[]; ta
     <p className="m-0 px-2.5 text-body">Pick a Linux computer on {tailnet || 'your Tailscale'}.</p>
     <Rows>{shown.map((peer) => {
       const ready = stateOf(peer) === 'ready'
-      const note = ['Linux', peer.ip, !ready && 'Tailscale SSH is off', onRelay.has(peer.name) && 'On OpenHut Relay now'].filter(Boolean).join(' · ')
+      const note = ['Linux', peer.ip, !ready && 'Tailscale SSH is off'].filter(Boolean).join(' · ')
       const icon = <I icon={ServerStack01Icon} size={20} className={ready ? 'text-hue-blue' : 'text-mute'} />
-      const label = labelOf({ ready, onRelay: onRelay.has(peer.name) })
       return <Row key={peer.dns} icon={icon} title={peer.name} note={note}>
-        {added.has(peer.name)
-          ? <Button type="button" variant="ghost" className={PILL} disabled><I icon={Tick02Icon} size={14} className="text-pass" />Added</Button>
-          : enrolling.has(peer.dns)
-            ? <Button type="button" variant="ghost" className={PILL} onClick={() => open(`adding:${peer.name}`)}>Adding…</Button>
-            : <Button type="button" variant="secondary" className={PILL} onClick={() => ready ? onAdd(peer) : open(`ssh:${peer.name}`)}>{label}</Button>}
+        {known(peer.name) && <Button type="button" variant="ghost" className={PILL} disabled><I icon={Tick02Icon} size={14} className="text-pass" />Added</Button>}
+        {!known(peer.name) && enrolling.has(peer.dns) && <Button type="button" variant="ghost" className={PILL} onClick={() => open(`adding:${peer.name}`)}>Adding…</Button>}
+        {!known(peer.name) && !enrolling.has(peer.dns) && <Button type="button" variant="secondary" className={PILL} onClick={() => ready ? onAdd(peer) : open(`ssh:${peer.name}`)}>{ready ? 'Add' : 'Turn on SSH'}</Button>}
       </Row>
     })}</Rows>
     {hidden > 0 && <p className="m-0 px-2.5 pt-1 text-[12px]/[16px] text-mute">{hidden === 1 ? '1 offline or non-Linux device isn\'t' : `${hidden} offline or non-Linux devices aren't`} shown.</p>}
@@ -218,6 +224,13 @@ function Scene({ mood, title, line, children }: { mood: Mood; title: string; lin
   </div>
 }
 
+function Waiting({ children, note }: { children: ReactNode; note: string }) {
+  return <div className="flex flex-col gap-1">
+    <p className="m-0 flex items-center gap-2"><Spinner className="mt-0" />{children}</p>
+    <p className="m-0 pl-[22px] text-[12px]/[16px] text-mute">{note}</p>
+  </div>
+}
+
 function TurnOnSsh({ name }: { name: string }) {
   const tailnet = useTailnet({ poll: true })
   const peer = tailnet.data?.state === 'running' ? tailnet.data.peers.find((each) => each.name === name) : undefined
@@ -234,15 +247,15 @@ function TurnOnSsh({ name }: { name: string }) {
 
 function Adding({ name }: { name: string }) {
   const enrollment = useEnrollments().data.find((each) => each.peer.name === name)
-  const computer = useComputers().data?.find((each) => each.name === name)
+  const known = useKnown()(name)
   const { start, dismiss } = useEnroll()
   const now = useNow(enrollment?.status === 'running')
   const hide = <Button type="button" variant="secondary" onClick={() => open()}>Hide</Button>
-  const joined = !!computer && !enrollment
+  const joined = known && !enrollment
   useEffect(() => { if (joined) open() }, [joined])
   if (joined) return null
   if (enrollment?.status === 'failed') {
-    const retry = <Button type="button" variant="primary" onClick={() => start(enrollment.peer)}>Try again</Button>
+    const retry = <Button type="button" variant="primary" onClick={() => void start(enrollment.peer)}>Try again</Button>
     const remove = <Button type="button" variant="secondary" onClick={() => { dismiss(enrollment.peer.dns); open() }}>Remove</Button>
     const details = detailsOf({ enrollment, version: APP_VERSION })
     return <TailscaleDialog title="Add over Tailscale" back={remove} foot={<><CopyButton text={details} label="Copy details" />{retry}</>}>
@@ -277,29 +290,31 @@ function TailscaleDialog({ title, back, foot, children }: { title: string; back?
 }
 
 function AddComputer() {
-  const cloud = useCloud().data
-  const signedIn = !!cloud && cloud.status !== 'off'
   return <TailscaleDialog title="Add a computer">
     <Rows>
       <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Tailscale" note="Use the Tailscale you already have. Nothing goes through OpenHut."><Chevron /></Row>
-      {signedIn
-        ? <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="The easiest way. No Tailscale needed. End-to-end encrypted."><Chevron /></Row>
-        : <Row icon={<Hut mood="asleep" className="size-6 opacity-50 grayscale" />} title="OpenHut Relay" note="The easiest way. No Tailscale needed. Needs OpenHut Cloud."><EnableCloud /></Row>}
+      <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="The easiest way. No Tailscale needed. End-to-end encrypted."><Chevron /></Row>
     </Rows>
   </TailscaleDialog>
 }
 
 function AddByCommand() {
-  return <PairDialog
-    title="Add over OpenHut Relay"
-    back={() => open('add')}
-    check={(device) => `Allow it only if ${device.name} shows the same numbers.`}
-    waiting={(code) => <>
+  const code = useMutation({ mutationFn: () => request({ schema: JoinCode, path: '/api/cloud/join-codes', method: 'POST' }) })
+  const { mutate } = code
+  useEffect(() => mutate(), [mutate])
+  return <TailscaleDialog title="Add over OpenHut Relay" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}>
+    <ErrorNote message={code.error?.message} />
+    {code.isPending && <Waiting note="It works once, for 10 minutes.">Making a code…</Waiting>}
+    {code.data && <>
       <p className="m-0 text-body">Run this on your Linux computer.</p>
-      <Command text={joinCommand(code)} />
-      <Waiting>Waiting for it to join…</Waiting>
+      <Command text={joinCommand(code.data.code)} />
+      <Waiting note="It works once, for 10 minutes. Approve it here when it asks.">Waiting for it to ask to join…</Waiting>
     </>}
-  />
+  </TailscaleDialog>
+}
+
+function joinCommand(code: string) {
+  return `curl -fsSL openhut.dev | OPENHUT_JOIN='${code.replaceAll("'", '')}' sh`
 }
 
 function useNow(ticking: boolean) {
@@ -311,4 +326,3 @@ function useNow(ticking: boolean) {
   }, [ticking])
   return now
 }
-

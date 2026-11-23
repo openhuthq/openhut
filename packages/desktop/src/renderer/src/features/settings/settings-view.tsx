@@ -6,7 +6,6 @@ import { TeamMark } from '@/components/custom/team-mark'
 import { useWorkspaces } from '@/features/cloud/workspaces'
 import { TeamSettings } from '@/features/people/workspace'
 import { ComputersSettings } from '@/features/settings/computers'
-import { DevicesSettings } from '@/features/settings/devices'
 import { PHONES } from '@/lib/flags'
 import { GeneralSettings } from '@/features/settings/general'
 import { leave, ModelsSettings, ModelsStep, stepOf } from '@/features/settings/models'
@@ -61,7 +60,7 @@ function Tab({ tab }: { tab: string }) {
     case 'account': return <AccountSettings />
     case 'team': return <TeamSettings />
     case 'computers': return <ComputersSettings />
-    case 'phones': return PHONES ? <DevicesSettings /> : <PhonesSoon />
+    case 'phones': return <PhonesSoon />
     case 'models': return <ModelsSettings />
     case 'mcp': return <McpSettings />
     case 'updates': return <UpdatesSettings />

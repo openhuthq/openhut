@@ -1,6 +1,6 @@
 import { createContext, useState, type FormEvent, type ReactElement } from 'react'
 import { Delete02Icon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
-import type { OpenHutAgent } from '@openhut/client'
+import type { OpenHutAgent } from '@/lib/openhut'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'

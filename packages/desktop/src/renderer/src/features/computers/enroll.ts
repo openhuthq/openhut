@@ -1,9 +1,9 @@
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import type { TailnetPeer } from '@openhut/client'
-import { enrollments, openhut, type Enrollment as Shared } from '@/lib/openhut'
+import { enrollments, openhut, type Enrollment, type TailnetPeer } from '@/lib/openhut'
 import { COMPUTERS_KEY } from '@/lib/query-keys'
+import { toastError } from '@/lib/toast'
 
-export type Enrollment = Shared
+export type { Enrollment }
 
 export const ENROLL_KEY = ['enrollments']
 
@@ -12,7 +12,7 @@ export function useEnrollments() {
 }
 
 export function followEnrollments(client: QueryClient) {
-  const take = (list: Shared[]) => client.setQueryData<Enrollment[]>(ENROLL_KEY, list)
+  const take = (list: Enrollment[]) => client.setQueryData<Enrollment[]>(ENROLL_KEY, list)
   void enrollments.list().then(take)
   enrollments.follow(take)
 }
@@ -20,7 +20,7 @@ export function followEnrollments(client: QueryClient) {
 export function useEnroll() {
   const client = useQueryClient()
   return {
-    start: (peer: TailnetPeer) => openhut.computers.add(peer).then(() => client.invalidateQueries({ queryKey: COMPUTERS_KEY }), () => undefined),
+    start: (peer: TailnetPeer) => openhut.computers.add(peer).then(() => client.invalidateQueries({ queryKey: COMPUTERS_KEY }), toastError),
     dismiss: (dns: string) => void enrollments.dismiss(dns),
   }
 }

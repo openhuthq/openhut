@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { mergeProviders, type ProviderRow } from '@openhut/client'
+import { mergeProviders, openhut, type ProviderRow } from '@/lib/openhut'
 import { CodexSignIn } from '@openhut/common/admin/admin.ts'
 import type { Provider, ProviderId } from '@openhut/common/models/provider.ts'
 import { foundNotice } from '@/features/models/labels'
 import { request } from '@/lib/api-client'
-import { openhut } from '@/lib/openhut'
 import { toastError } from '@/lib/toast'
 import { AGENTS_KEY, PROVIDERS_KEY } from '@/lib/query-keys'
 

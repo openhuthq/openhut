@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
 import { ChatFile, HomeFile, Thread, ThreadWithMessages } from '@openhut/common/threads/thread.ts'
 import { request, requestBlob } from '@/lib/api-client'
-import { openhut } from '@/lib/openhut'
 import { THREADS_KEY } from '@/lib/query-keys'
 import { RASTER } from '@/features/threads/files'
 
@@ -12,8 +11,7 @@ const HOME_FILES = List(HomeFile)
 export function useThreads() {
   return useQuery({
     queryKey: THREADS_KEY,
-    queryFn: async () => (await Promise.all((await openhut.computers.list()).filter((computer) => computer.online)
-      .map((computer) => request({ schema: THREAD_LIST, computer: computer.id, path: '/api/threads' }).then((page) => page.data, () => [])))).flat(),
+    queryFn: async () => (await request({ schema: THREAD_LIST, path: '/api/threads' })).data,
   })
 }
 
