@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Key01Icon, Logout03Icon, PencilEdit02Icon } from '@hugeicons/core-free-icons'
+import { LockSync01Icon, Logout03Icon, PencilEdit02Icon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/confirm-button'
@@ -15,7 +15,7 @@ import { TeamPeople } from '@/features/people/people'
 import { Row, Rows } from '@/features/settings/kit'
 import { cn } from '@/lib/utils'
 
-const KEYS_NOTE = 'Use after a lost computer or a teammate you don’t trust. Everyone else stays in.'
+const keysNote = (team: string) => `New encryption for ${team}. A lost computer or someone you removed can’t read anything new. Everyone else stays in.`
 
 export function TeamSettings() {
   const { active } = useWorkspaces()
@@ -87,10 +87,10 @@ export function TeamDangerRows() {
   const workspace = useWorkspaces().active
   const admin = workspace.role !== 'member'
   const rows: { title: string; note: string; action: string; dialog: string; danger: boolean }[] = [
-    ...admin ? [{ title: 'Reset encryption', note: KEYS_NOTE, action: 'Reset', dialog: 'keys', danger: false }] : [],
+    ...admin ? [{ title: 'Reset encryption', note: keysNote(workspace.name), action: 'Reset', dialog: 'keys', danger: false }] : [],
     ...workspace.own ? [] : [{ title: 'Leave', note: 'You lose access. What you made stays with the team.', action: 'Leave', dialog: 'leave', danger: true }],
   ]
-  return rows.map((row) => <Row key={row.dialog} icon={<I icon={row.dialog === 'keys' ? Key01Icon : Logout03Icon} size={20} className={row.danger ? 'text-fail' : 'text-hue-amber'} />} title={row.title} note={row.note}>
+  return rows.map((row) => <Row key={row.dialog} icon={<I icon={row.dialog === 'keys' ? LockSync01Icon : Logout03Icon} size={20} className={row.danger ? 'text-fail' : 'text-hue-amber'} />} title={row.title} note={row.note}>
     <Button type="button" variant={row.danger ? 'danger' : 'ghost'} className={PILL} onClick={() => open(row.dialog)}>{row.action}</Button>
   </Row>)
 }
@@ -101,7 +101,7 @@ function KeysConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
     notify({ title: 'Encryption reset', note: 'Everyone else stays in.' })
     if (workspace.own) navigate('/settings/general?open=kit')
   }
-  return <ConfirmDialog open onOpenChange={(still) => still || open()} question={`Reset encryption for ${workspace.name}?`} detail={workspace.own ? `${KEYS_NOTE} You save a new recovery kit after.` : KEYS_NOTE} action="Change keys" onConfirm={() => changeKeys.mutateAsync(workspace.id).then(changed)} />
+  return <ConfirmDialog open onOpenChange={(still) => still || open()} question={`Reset encryption for ${workspace.name}?`} detail={workspace.own ? `${keysNote(workspace.name)} You save a new recovery kit after.` : keysNote(workspace.name)} action="Reset encryption" onConfirm={() => changeKeys.mutateAsync(workspace.id).then(changed)} />
 }
 
 function LeaveConfirm({ workspace }: { workspace: CloudWorkspaceView }) {

@@ -68,11 +68,6 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
       gets: ['Search contacts and the directory', 'Read profiles: names, emails and phone numbers'],
       safe: ['Read-only: agents can’t add or change contacts.', ...SIGNED_IN('Google')],
     },
-    {
-      name: 'google_search', short: 'One search across Workspace', safeLine: 'Read-only.', eta: 'One approval', title: 'Google Search', blurb: 'One search across Gmail, Drive, Calendar and Chat.',
-      gets: ['Search mail, files, events and chats at once', 'Read what it finds'],
-      safe: ['Read-only: it can find and read, not change.', ...SIGNED_IN('Google')],
-    },
   ] },
   { shelf: 'Any MCP', items: [
     {
