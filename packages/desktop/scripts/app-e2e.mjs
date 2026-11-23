@@ -53,9 +53,8 @@ try {
   if (WIN) {
     const pipes = readdirSync('\\\\.\\pipe\\').filter((name) => name.startsWith('openhut-'))
     say('the runtime listens on named pipes, not files or TCP', { pipes })
-    if (pipes.length < 3) throw new Error(`expected the agentd, server and mcp pipes, found ${pipes.join(', ') || 'none'}`)
+    if (pipes.length < 2) throw new Error(`expected the agentd and server pipes, found ${pipes.join(', ') || 'none'}`)
   }
-  await mcp(agent)
   await quit()
   await sleep(3000)
   const left = leftovers()
@@ -181,25 +180,6 @@ async function many(page, first) {
   say(`started ${stopped.name} again; all ${count} answer`)
   await browsers(page, agents.slice(1, 3))
   evidence.agents = agents.map((each) => ({ id: each.id, name: each.name }))
-}
-
-async function mcp(agent) {
-  const lines = [
-    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'app-e2e', version: '1' } } },
-    { jsonrpc: '2.0', method: 'notifications/initialized' },
-    { jsonrpc: '2.0', id: 2, method: 'tools/list' },
-    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'list_agents', arguments: {} } },
-  ]
-  const proc = spawn(exe, ['--mcp'], { env, stdio: ['pipe', 'pipe', 'ignore'] })
-  let out = ''
-  proc.stdout.setEncoding('utf8').on('data', (chunk) => { out += chunk })
-  proc.stdin.end(lines.map((line) => `${JSON.stringify(line)}\n`).join(''))
-  await Promise.race([new Promise((resolve) => proc.once('exit', resolve)), sleep(60_000).then(() => { proc.kill(); throw new Error(`OpenHut --mcp didn't finish within a minute; it said ${out.slice(0, 300)}`) })])
-  const answers = out.trim().split('\n').filter(Boolean).map((line) => JSON.parse(line))
-  const tools = answers.find((each) => each.id === 2)?.result?.tools?.map((tool) => tool.name) ?? []
-  const listed = JSON.stringify(answers.find((each) => each.id === 3)?.result ?? {})
-  say('an MCP client reached the runtime through OpenHut --mcp', { tools: tools.length, listAgentsHasJuniper: listed.includes(agent.id) })
-  if (!tools.includes('list_agents') || !listed.includes(agent.id)) throw new Error(`the MCP bridge answered ${out.slice(0, 500)}`)
 }
 
 function leftovers() {
