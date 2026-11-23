@@ -1,4 +1,3 @@
-import { AccountSettings } from '@/features/cloud/cloud'
 import { ComputersSettings } from '@/features/settings/computers'
 import { GeneralSettings } from '@/features/settings/general'
 import { PeopleSettings } from '@/features/people/workspace'
@@ -10,7 +9,7 @@ import { AppWindow, HOVER, I, PICKED } from '@/components/kit'
 import { navigate, useOpen } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
-const MOVED: Record<string, string> = { devices: 'computers', cloud: 'account', backup: 'account', team: 'general', mcp: 'general' }
+const MOVED: Record<string, string> = { devices: 'computers', cloud: 'general', backup: 'general', account: 'general', team: 'general', mcp: 'general' }
 
 export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: () => void }) {
   const tab = MOVED[asked] ?? asked
@@ -34,7 +33,6 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
 
 function Tab({ tab }: { tab: string }) {
   switch (tab) {
-    case 'account': return <AccountSettings />
     case 'people': return <PeopleSettings />
     case 'computers': return <ComputersSettings />
     case 'phones': return <PhonesSoon />

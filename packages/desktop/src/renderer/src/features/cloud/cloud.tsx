@@ -17,7 +17,7 @@ import { navigate, open, useOpen, useSearch } from '@/lib/router'
 import { useApprove, useDeleteData, useDeny, useGate, useRotated } from '@/features/cloud/workspaces'
 import { toast, toastError } from '@/lib/toast'
 
-export function AccountSettings() {
+export function YouSettings() {
   const { cloud } = useGate()
   const opened = useOpen()
   const helper = usePasskeys()
@@ -25,14 +25,12 @@ export function AccountSettings() {
   const error = new URLSearchParams(useSearch()).get('error') ?? undefined
   const email = cloud.email ?? ''
   const young = Boolean(cloud.youngUntil)
-  return <>
-    <div className="flex items-center gap-3.5 px-1">
-      <PersonFace name={nameOf(email)} email={email} size={48} />
-      <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[18px]/[1.2] font-semibold tracking-[-.01em]">{nameOf(email)}</span><span className="flex items-center gap-1.5 text-[12px] text-mute"><Google />{email}</span></span>
-      {cloud.status === 'offline' && <Status tone="wait">Offline</Status>}
-      <SignOut />
-    </div>
+  return <Section title="You">
     <Rows>
+      <Row icon={<PersonFace name={nameOf(email)} email={email} size={20} />} title={nameOf(email)} note={<span className="flex items-center gap-1.5"><Google />{email}</span>}>
+        {cloud.status === 'offline' && <Status tone="wait">Offline</Status>}
+        <SignOut />
+      </Row>
       <Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>{kitNote(cloud.kit)}{cloud.keyStore === 'file' && ' · Stored in a file, not the keychain'}</span>}>
         {!young && <Button type="button" variant="ghost" className={PILL} onClick={() => open('kit')}>New kit</Button>}
       </Row>
@@ -40,12 +38,13 @@ export function AccountSettings() {
         {!cloud.passkey && !young && <Button type="button" variant="ghost" className={PILL} disabled={addPasskey.isPending} onClick={() => addPasskey.mutate(email, { onError: toastError })}>Add</Button>}
       </Row>}
     </Rows>
-    <Section title="Danger zone">
-      <Rows><DeleteAccount cloud={cloud} /></Rows>
-    </Section>
     <ErrorNote message={error} />
     {opened === 'kit' && <KitDialog />}
-  </>
+  </Section>
+}
+
+export function DeleteAccountRow() {
+  return <DeleteAccount cloud={useGate().cloud} />
 }
 
 function KitDialog() {
