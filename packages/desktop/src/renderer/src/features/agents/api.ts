@@ -4,7 +4,7 @@ import { Deleted, List } from '@openhut/common/api.ts'
 import { Agent, Grant, type CreateAgent, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import { Memory, type UpdateMemory } from '@openhut/common/agents/memory.ts'
 import { Skill } from '@openhut/common/agents/skill.ts'
-import { Channel, Conversation, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
+import { Channel, Conversation, TelegramInvite, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
 import { openhut, type OpenHutAgent } from '@/lib/openhut'
 import { request } from '@/lib/api-client'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
@@ -155,6 +155,12 @@ export function useUpdateChannel() {
       writeChannel(client, channel)
       void client.invalidateQueries({ queryKey: conversationsKey(channel.id) })
     },
+  })
+}
+
+export function useTelegramInvite() {
+  return useMutation({
+    mutationFn: (channel: Channel) => request({ schema: TelegramInvite, of: channel.agentId, path: `${channelPath(channel.id)}/telegram-invites`, method: 'POST' }),
   })
 }
 

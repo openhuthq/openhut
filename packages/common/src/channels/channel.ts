@@ -25,6 +25,7 @@ export const Channel = z.object({
   ownerAddress: z.string(),
   open: z.boolean(),
   allowed: z.array(z.string()),
+  names: z.optional(z.record(z.string(), z.string())),
   qr: z.nullable(z.string()),
   createdAt: Timestamp,
 })
@@ -52,9 +53,9 @@ export const CreateChannel = z.discriminatedUnion('kind', [
     kind: z.literal('telegram'),
     agentId: z.string().check(z.maxLength(40)),
     botToken: z.string().check(z.regex(/^\d{6,}:[\w-]{30,}$/, 'Paste the token BotFather gave you, like 123456789:AAE….')),
-    ownerAddress: TelegramId,
-    open: z.boolean(),
-    allowed: z.array(TelegramId).check(z.maxLength(50)),
+    ownerAddress: z.optional(TelegramId),
+    open: z._default(z.boolean(), false),
+    allowed: z._default(z.array(TelegramId).check(z.maxLength(50)), []),
   }),
   z.object({
     kind: z.literal('discord'),
@@ -92,9 +93,13 @@ export const ChannelRecord = z.object({
   ownerAddress: z.string(),
   open: z.boolean(),
   allowed: z.array(z.string()),
+  names: z.optional(z.record(z.string(), z.string())),
   createdAt: z.string(),
 })
 export type ChannelRecord = z.infer<typeof ChannelRecord>
 
 export const ChannelSecrets = z.object({ botToken: z.optional(z.string()), appToken: z.optional(z.string()) })
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>
+
+export const TelegramInvite = z.object({ object: z.literal('telegram_invite'), url: z.string(), expiresAt: Timestamp })
+export type TelegramInvite = z.infer<typeof TelegramInvite>
