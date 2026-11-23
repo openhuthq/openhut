@@ -1,20 +1,19 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Clock01Icon, Refresh01Icon } from '@hugeicons/core-free-icons'
+import { Refresh01Icon } from '@hugeicons/core-free-icons'
 import { gateOf } from '@/app/gate-state'
 import { ErrorNote } from '@/components/error-note'
-import { Hut } from '@/components/hut'
-import { DRAG, I } from '@/components/kit'
+import { I } from '@/components/kit'
 import { Button } from '@/components/ui/button'
+import { Meter } from '@/components/ui/meter'
 import { Spinner } from '@/components/ui/spinner'
 import { notifyUnlock, useCloud } from '@/features/cloud/api'
 import { SaveKit, SignIn } from '@/features/cloud/sign-in'
-import { Window } from '@/features/cloud/step'
+import { PRIMARY, Stage, Step } from '@/features/cloud/step'
 import { Unlock } from '@/features/cloud/unlock'
 import { activeOf, GateContext, useChosen } from '@/features/cloud/workspaces'
 import { JoinLinkDialog } from '@/features/join/cloud-join'
 import { useFirstRun, type FirstRun } from '@/features/settings/desktop'
-import { Progress } from '@/features/settings/kit'
 import { isPhone, UnlockCanceled } from '@/lib/native'
 import { useOpen } from '@/lib/router'
 import { cn } from '@/lib/utils'
@@ -28,6 +27,7 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   const chosen = useChosen()
   const opened = useOpen()
   const [saving, setSaving] = useState(false)
+  const [readying, setReadying] = useState(false)
   const step = gateOf({ cloud: cloud.data, setup: run.data, down: Boolean(me.error ?? cloud.error) })
   const done = run.data?.done
   useEffect(() => {
@@ -37,25 +37,18 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
     if (step === 'unlock') void notifyUnlock()
   }, [step])
   if (step === 'loading') return me.error ?? cloud.error ? <Down error={me.error ?? cloud.error} retrying={me.isFetching} onRetry={() => { void me.refetch(); void cloud.refetch() }} /> : <Waiting />
-  if (isPhone() && step !== 'ready') return <Window><Hut mood="key" className="size-[84px]" /><p className="m-0 max-w-[300px] text-[15px]/[1.5] text-body">Finish setting up OpenHut on your computer, then come back.</p></Window>
+  if (isPhone() && step !== 'ready') return <Stage><Step title="Finish on your computer." line="Set up OpenHut there, then come back." /></Stage>
   if (step === 'kit' && !saving) setSaving(true)
-  if (saving) return <Card><SaveKit onDone={() => setSaving(false)} /></Card>
-  if (step === 'getting-ready') return <GettingReady run={run.data} onRetry={() => void run.refetch()} />
-  if (step === 'sign-in') return <><SignIn cloud={cloud.data} />{opened === 'join-link' && <JoinLinkDialog />}</>
+  if (saving) return <Stage><SaveKit onDone={() => setSaving(false)} /></Stage>
+  if (step === 'getting-ready' && !readying) setReadying(true)
+  if (readying && step !== 'getting-ready' && step !== 'ready') setReadying(false)
+  if (step === 'getting-ready' || (readying && step === 'ready')) return <Stage><GettingReady run={run.data} ready={step === 'ready'} onRetry={() => void run.refetch()} onOpen={() => setReadying(false)} /></Stage>
+  if (step === 'sign-in') return <><Stage><SignIn cloud={cloud.data} /></Stage>{opened === 'join-link' && <JoinLinkDialog />}</>
   if (!cloud.data) return <Waiting />
-  if (step === 'unlock') return <Card><Unlock cloud={cloud.data} /></Card>
+  if (step === 'unlock') return <Stage><Unlock cloud={cloud.data} /></Stage>
   const active = activeOf({ workspaces: cloud.data.workspaces, chosen })
   if (!active) return <Waiting />
   return <GateContext value={{ cloud: cloud.data, active }}>{children}</GateContext>
-}
-
-function Card({ children }: { children: ReactNode }) {
-  return <div className="flex h-dvh flex-col bg-canvas text-ink">
-    <div className={cn('flex h-[52px] shrink-0 items-center justify-center text-[13px] font-semibold text-mute', DRAG)}>{document.title}</div>
-    <div className="flex flex-1 items-center justify-center px-6 pb-12">
-      <div className="flex h-[min(560px,100%)] w-full max-w-[520px] flex-col overflow-hidden rounded-xl border border-hair bg-card">{children}</div>
-    </div>
-  </div>
 }
 
 function Waiting() {
@@ -70,13 +63,16 @@ function Down({ error, retrying, onRetry }: { error: Error | null; retrying: boo
   </div>
 }
 
-function GettingReady({ run, onRetry }: { run: FirstRun | undefined; onRetry: () => void }) {
-  return <Window>
-    <Hut className={cn('size-20', !run?.failed && '[&>svg]:animate-[hop_1.6s_ease-in-out_infinite]')} />
-    <h1 className="m-0 text-[20px]/[1.3] font-semibold">Getting OpenHut ready</h1>
-    <div className="mt-2 w-[480px] max-w-full rounded-lg border border-hair bg-card p-4 text-left"><Progress rows={run?.steps ?? []} /></div>
-    {run?.failed
-      ? <Button variant="secondary" className="gap-2" onClick={onRetry}><I icon={Refresh01Icon} size={14} />Try again</Button>
-      : <span className="inline-flex items-center gap-1.5 text-[12px] text-mute"><I icon={Clock01Icon} size={13} />Only the first time. After this it starts in about ten seconds.</span>}
-  </Window>
+function GettingReady({ run, ready, onRetry, onOpen }: { run: FirstRun | undefined; ready: boolean; onRetry: () => void; onOpen: () => void }) {
+  const steps = run?.steps ?? []
+  const now = steps.find(([, , state]) => state === 'now' || state === 'failed')
+  const doneCount = steps.filter(([, , state]) => state === 'done').length
+  const value = ready ? 100 : Math.round(((doneCount + (now?.[3] ?? 0)) / Math.max(steps.length, 1)) * 100)
+  const action = run?.failed
+    ? <Button variant="primary" className={PRIMARY} onClick={onRetry}><I icon={Refresh01Icon} size={16} />Try again</Button>
+    : <Button variant="primary" className={cn(PRIMARY, !ready && 'bg-[#2a2b2e] disabled:opacity-100')} disabled={!ready} autoFocus={ready} onClick={onOpen}>{!ready && <Spinner className="mt-0 border-white/30 border-t-white" />}{ready ? 'Open OpenHut' : 'Setting up'}</Button>
+  return <Step happy={ready} title={ready ? 'Ready.' : 'Getting ready.'} line={ready ? 'Your agents live here now.' : 'Only the first time.'} action={action}>
+    <Meter className="w-[320px] max-w-full" size="xs" value={value} aria-label="Getting ready" />
+    <span key={now?.[0]} className={cn('animate-[fadein_.35s_ease-out] text-[14px] font-medium', now?.[2] === 'failed' ? 'text-fail' : 'text-ink')}>{ready ? 'All done' : now?.[0] ?? 'Starting'}</span>
+  </Step>
 }
