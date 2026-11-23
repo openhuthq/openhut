@@ -38,6 +38,11 @@ contextBridge.exposeInMainWorld('openhut', {
   kit: {
     save: (input) => ipcRenderer.invoke('kit.save', input),
   },
+  invite: {
+    forget: () => ipcRenderer.invoke('invite.forget'),
+    clearClipboard: () => ipcRenderer.invoke('invite.clear-clipboard'),
+  },
+  focus: () => ipcRenderer.invoke('focus'),
   computers: {
     add: (input) => ipcRenderer.invoke('computers.add', input),
     enrollments: () => ipcRenderer.invoke('computers.enrollments'),

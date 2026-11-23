@@ -60,7 +60,7 @@ export const roomKeys = {
     const plain = await lockInvite({ secret: card.secret, workspace: ws, plain: new TextEncoder().encode(JSON.stringify({ workspace: ws, name, from: account.email, email, role, anchor: await anchorOf(firstOf(room)), expiresAt })) })
     const sealed = plain && await letter({ sender: await keysService.device(), to: card.publicKey, workspace: ws, purpose: 'invite', version: 1, plain })
     if (!sealed) throw new HttpError(500, 'Couldn’t make the invite. Try again.')
-    return { list, id: await inviteId(card.publicKey), key, body: toBase64(sealed), link: `${INVITE_URL}#${ws}.${toBase64(card.secret)}`, expiresAt }
+    return { list, id: await inviteId(card.publicKey), key, body: toBase64(sealed), link: `${INVITE_URL}#${toBase64(new TextEncoder().encode(email))}#${ws}.${toBase64(card.secret)}`, expiresAt }
   },
 
   async revoke({ ws, email }: { ws: string; email: string }): Promise<MemberList> {

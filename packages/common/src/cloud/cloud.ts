@@ -276,6 +276,8 @@ export const Cloud = z.object({
 export type Cloud = z.infer<typeof Cloud>
 
 export const CloudAuthorization = z.object({ object: z.literal('cloud_authorization'), authorizationUrl: z.string() })
+export const StartCloudSignIn = z.nullish(z.object({ loginHint: z.optional(Email) }))
+export type StartCloudSignIn = z.infer<typeof StartCloudSignIn>
 export type CloudAuthorization = z.infer<typeof CloudAuthorization>
 
 export const RecoveryKit = z.object({ object: z.literal('recovery_kit'), words: z.array(z.string()), ask: z.array(z.number().check(z.int())), kitId: z.string(), madeAt: Timestamp, device: z.string() })

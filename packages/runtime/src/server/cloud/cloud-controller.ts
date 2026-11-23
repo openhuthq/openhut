@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import * as z from 'zod/mini'
-import { AddPasskey, ApproveRequest, ChangeRole, DenyRequestQuery, DeviceKey, SetHere, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
+import { AddPasskey, ApproveRequest, ChangeRole, DenyRequestQuery, DeviceKey, SetHere, StartCloudSignIn, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
 import { requireSignIn } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
 import { presence } from './presence.ts'
@@ -8,7 +8,7 @@ import { presence } from './presence.ts'
 export const cloudController: FastifyPluginAsync = async (app) => {
   app.get('/', SignedIn, async () => cloudService.status())
 
-  app.post('/sessions', SignedIn, async () => cloudService.start())
+  app.post<{ Body: StartCloudSignIn }>('/sessions', SignInRequest, async (req) => cloudService.start(req.body ?? {}))
 
   app.get<{ Querystring: { state?: string; code?: string; error?: string } }>('/callback', async (req, reply) => reply.type('text/html; charset=utf-8').send(await cloudService.finish(req.query)))
 
@@ -60,6 +60,7 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 }
 
 const SignedIn = { onRequest: requireSignIn }
+const SignInRequest = { onRequest: requireSignIn, schema: { body: StartCloudSignIn } }
 const UnlockRequest = { onRequest: requireSignIn, schema: { body: UnlockCloud } }
 const NotMeRequest = { onRequest: requireSignIn, schema: { params: z.object({ key: DeviceKey }) } }
 const DeviceRequest = { onRequest: requireSignIn, schema: { params: z.object({ id: z.string(), key: DeviceKey }) } }

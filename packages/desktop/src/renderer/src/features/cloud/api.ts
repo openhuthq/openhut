@@ -5,6 +5,7 @@ import { request } from '@/lib/api-client'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
+import { desktop } from '@/features/settings/desktop'
 
 const CLOUD_KEY = ['cloud']
 const SIGN_IN_KEY = ['cloud-sign-in']
@@ -22,6 +23,7 @@ export function useCloud() {
     queryKey: CLOUD_KEY,
     queryFn: async () => {
       const cloud = await request({ schema: Cloud, computer: 'local', path: '/api/cloud' })
+      if (client.getQueryData(SIGN_IN_KEY) && cloud.status !== 'off') void desktop?.focus?.().catch(() => undefined)
       if (client.getQueryData(SIGN_IN_KEY) && (cloud.status !== 'off' || cloud.signInError)) client.setQueryData(SIGN_IN_KEY, false)
       return cloud
     },
@@ -125,7 +127,7 @@ export function notifyDesktop(input: { title: string; body: string; path: string
 export function useSignIn() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: () => request({ schema: CloudAuthorization, computer: 'local', path: '/api/cloud/sessions', method: 'POST' }),
+    mutationFn: (loginHint?: string) => request({ schema: CloudAuthorization, computer: 'local', path: '/api/cloud/sessions', method: 'POST', body: loginHint ? { loginHint } : undefined }),
     onSuccess: ({ authorizationUrl }) => {
       window.open(authorizationUrl, '_blank', 'noopener')
       client.setQueryData(SIGN_IN_KEY, true)
@@ -138,13 +140,13 @@ export function useCancelSignIn() {
   return () => client.setQueryData(SIGN_IN_KEY, false)
 }
 
-export function useSignOut() {
+export function useSignOut({ stay = false }: { stay?: boolean } = {}) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: () => request({ schema: Cloud, computer: 'local', path: '/api/cloud/session', method: 'DELETE' }),
     onSuccess: (cloud) => {
       client.setQueryData(CLOUD_KEY, cloud)
-      navigate('/', true)
+      if (!stay) navigate('/', true)
       void client.invalidateQueries()
     },
   })

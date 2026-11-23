@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.openhut.app</id>
+  <name>OpenHut</name>
+  <summary>Self-hosted agents for a team</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <developer id="dev.openhut">
+    <name>OpenHut</name>
+  </developer>
+  <description>
+    <p>Run agents for your team on your own computers. Everything you share through OpenHut Cloud is end-to-end encrypted.</p>
+  </description>
+  <launchable type="desktop-id">openhut.desktop</launchable>
+  <icon type="stock">openhut</icon>
+  <url type="homepage">https://openhut.dev</url>
+  <content_rating type="oars-1.1"/>
+</component>

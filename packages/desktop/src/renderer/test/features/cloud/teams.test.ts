@@ -14,3 +14,8 @@ test('your own workspace shows agents of no team and agents on other computers; 
   assert.equal(inWorkspace({ agent: { computer: 'local', workspace: null }, active: team }), false)
   assert.equal(inWorkspace({ agent: { computer: 'server', workspace: null }, active: team }), false)
 })
+
+test('a team\'s agent on a teammate\'s computer shows in that team, not in your own workspace', () => {
+  assert.equal(inWorkspace({ agent: { computer: 'mo-mac', workspace: 'mo' }, active: team }), true)
+  assert.equal(inWorkspace({ agent: { computer: 'mo-mac', workspace: 'mo' }, active: home }), false)
+})

@@ -54,6 +54,8 @@ export const settings = {
   timeZone: (): string => rows.get('time_zone') || Intl.DateTimeFormat().resolvedOptions().timeZone,
   setTimeZone: (zone: string) => write('time_zone', zone),
   access: (): string | undefined => rows.get('access'),
+  signIns: (): Record<string, number> => z.safeParse(z.record(z.string(), z.number()), JSON.parse(rows.get('sign_ins') ?? '{}')).data ?? {},
+  setSignIns: (pending: Record<string, number>) => write('sign_ins', JSON.stringify(pending)),
 }
 
 async function forget(name: string): Promise<void> {
