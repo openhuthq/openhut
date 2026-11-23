@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { ArrowRight01Icon, Key01Icon, Logout03Icon, PencilEdit02Icon } from '@hugeicons/core-free-icons'
+import { useEffect, useRef } from 'react'
+import { Key01Icon, Logout03Icon, PencilEdit02Icon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/confirm-button'
@@ -10,7 +10,7 @@ import { useChangeKeys, useRemoveMember, useRename, useSetWebsite, useWorkspaces
 import { navigate, open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
-import { I, PILL } from '@/components/kit'
+import { I, PILL, Section } from '@/components/kit'
 import { TeamPeople } from '@/features/people/people'
 import { Row, Rows } from '@/features/settings/kit'
 import { cn } from '@/lib/utils'
@@ -85,19 +85,17 @@ function InlineEdit({ value, label, placeholder, onSave }: { value: string; labe
 }
 
 function TeamMore({ workspace }: { workspace: CloudWorkspaceView }) {
-  const [shown, setShown] = useState(false)
   const admin = workspace.role !== 'member'
   const rows: { title: string; note: string; action: string; dialog: string; danger: boolean }[] = [
     ...admin ? [{ title: 'Reset encryption', note: KEYS_NOTE, action: 'Reset', dialog: 'keys', danger: false }] : [],
     ...workspace.own ? [] : [{ title: 'Leave', note: 'You lose access. What you made stays with the team.', action: 'Leave', dialog: 'leave', danger: true }],
   ]
   if (!rows.length) return null
-  return <div className="flex flex-col gap-1.5">
-    <Button type="button" variant="ghost" aria-expanded={shown} className="w-fit gap-1.5 px-1.5 text-[12.5px] font-normal text-mute" onClick={() => setShown(!shown)}><I icon={ArrowRight01Icon} size={12} className={cn('transition-transform', shown && 'rotate-90')} />More options</Button>
-    {shown && <Rows>{rows.map((row) => <Row key={row.dialog} icon={<I icon={row.dialog === 'keys' ? Key01Icon : Logout03Icon} size={20} className={row.danger ? 'text-fail' : 'text-hue-amber'} />} title={row.title} note={row.note}>
+  return <Section title="Danger zone">
+    <Rows>{rows.map((row) => <Row key={row.dialog} icon={<I icon={row.dialog === 'keys' ? Key01Icon : Logout03Icon} size={20} className={row.danger ? 'text-fail' : 'text-hue-amber'} />} title={row.title} note={row.note}>
       <Button type="button" variant={row.danger ? 'danger' : 'ghost'} className={PILL} onClick={() => open(row.dialog)}>{row.action}</Button>
-    </Row>)}</Rows>}
-  </div>
+    </Row>)}</Rows>
+  </Section>
 }
 
 function KeysConfirm({ workspace }: { workspace: CloudWorkspaceView }) {

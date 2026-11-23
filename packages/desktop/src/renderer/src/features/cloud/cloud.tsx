@@ -39,8 +39,10 @@ export function AccountSettings() {
       {helper?.passkeys && helper.prf && <Row icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title="Touch ID" note={cloud.passkey ? 'On' : 'Unlock a new Mac with your fingerprint'}>
         {!cloud.passkey && !young && <Button type="button" variant="ghost" className={PILL} disabled={addPasskey.isPending} onClick={() => addPasskey.mutate(email, { onError: toastError })}>Add</Button>}
       </Row>}
-      <DeleteAccount cloud={cloud} />
     </Rows>
+    <Section title="Danger zone">
+      <Rows><DeleteAccount cloud={cloud} /></Rows>
+    </Section>
     <ErrorNote message={error} />
     {opened === 'kit' && <KitDialog />}
   </>
