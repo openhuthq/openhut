@@ -70,7 +70,7 @@ const LABEL = 'pb-1.5 text-[12px]/[16px] text-mute'
 function BrowserRows({ agent, watching }: { agent: Agent; watching: boolean }) {
   const features = useFeatures(agent.id)
   const updateAgent = useUpdateAgent(agent.id)
-  if (!features.browser && !agent.browser) return null
+  if (!features.browser && !agent.browser) return agent.runsHere ? <Section title="Browser"><p className="m-0 text-[12px]/[16px] text-mute">Install Google Chrome on this computer, then turn Browser on.</p></Section> : null
   const toggle = <span className="flex items-center gap-2">
     {agent.browser && agent.canEdit && <a className="text-[12px] text-body underline-offset-2 hover:underline" href={agentPath({ agentId: agent.id, dialog: 'browser' })}>Open</a>}
     <Switch checked={agent.browser} aria-label="Browser" disabled={!agent.canEdit || updateAgent.isPending} onCheckedChange={() => updateAgent.mutate({ browser: !agent.browser }, { onError: toastError })} />

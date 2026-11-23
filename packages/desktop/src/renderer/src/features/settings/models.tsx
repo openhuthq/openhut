@@ -230,6 +230,8 @@ function usageLine(usage: SeatUsage | undefined) {
   return `${Math.round(fiveHour.percent)}% of the 5-hour limit used${reset}`
 }
 
+const DOWNLOAD_POLL_MS = 1000
+
 function SeatSignIn() {
   const start = useStartSeatSignIn()
   const complete = useCompleteSeatSignIn()
@@ -241,6 +243,15 @@ function SeatSignIn() {
     mutate(undefined, { onSuccess: (signIn) => { if (signIn.url) openPage(signIn.url) } })
   }, [mutate])
   const signIn = start.data
+  const admin = useAdmin()
+  const { refetch } = admin
+  const waiting = start.isPending
+  useEffect(() => {
+    if (!waiting) return
+    const timer = setInterval(() => { void refetch() }, DOWNLOAD_POLL_MS)
+    return () => clearInterval(timer)
+  }, [waiting, refetch])
+  const download = admin.data?.seat.download
   return <DialogCard className="w-[520px]" onClose={() => open()}>
     <form className="contents" onSubmit={(event) => signIn && complete.mutate({ id: signIn.id, code: formValues(event)('code') }, { onSuccess: () => open() })}>
       <div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-lg bg-[#D97757]/12"><Glyph name="claude" size={20} /></span><CardTitle>Sign in with Claude</CardTitle></div>
@@ -248,7 +259,7 @@ function SeatSignIn() {
         ? <FieldError>{start.error.message}</FieldError>
         : <p className="m-0 text-[13px]/[18px] text-body">{signIn?.url
           ? <>claude.ai opened in your browser. Press Authorize there, then paste the code it shows. <a href={signIn.url} target="_blank" rel="noreferrer">Open claude.ai again</a></>
-          : <span className="inline-flex items-center gap-2"><Spinner className="mt-0" />Starting the Claude sign-in. This takes about 10 seconds.</span>}</p>}
+          : <span className="inline-flex items-center gap-2"><Spinner className="mt-0" />{download ? `Getting Claude Code ready · ${download.total ? Math.floor((download.done / download.total) * 100) : 0}%` : 'Starting the Claude sign-in. This takes about 10 seconds.'}</span>}</p>}
       <Input mono name="code" required minLength={10} autoComplete="off" spellCheck={false} aria-label="Code from claude.ai" placeholder="Paste the code from claude.ai" disabled={!signIn} autoFocus />
       {complete.error && <FieldError>{complete.error.message}</FieldError>}
       <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => open()}>Cancel</Button><Button type="submit" variant="primary" disabled={!signIn || complete.isPending}>{complete.isPending ? 'Signing in…' : 'Sign in'}</Button></div>

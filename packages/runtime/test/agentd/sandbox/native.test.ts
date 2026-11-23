@@ -31,6 +31,7 @@ test('hostOf sends Hermes to the bundled Python and /tmp to the agent own tmp', 
   assert.match(hostOf({ spec, guest: '/opt/hermes/bin/hermes' }), /runtime[\\/]python[\\/](bin[\\/]python3|python\.exe)$/)
   assert.equal(hostOf({ spec, guest: '/tmp/hermes-locks' }), join(data, 'native', 'ag_test0001', 'tmp', 'hermes-locks'))
   assert.equal(hostOf({ spec, guest: '/usr/bin/env' }), '/usr/bin/env')
+  assert.equal(hostOf({ spec, guest: join(data, 'install', 'agent-browser', 'config.json') }), join(data, 'install', 'agent-browser', 'config.json'))
 })
 
 test('laying an agent out again never deletes what its shared folders hold', () => {

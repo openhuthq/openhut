@@ -11,7 +11,7 @@ import { newId, transferPublicKey } from '../platform/secrets.ts'
 import { codex } from '../integrations/codex/codex.ts'
 import { providerService } from '../models/provider-service.ts'
 import type { Caller } from '../team/identity.ts'
-import { seatSignIn } from './seat-sign-in.ts'
+import { claudeCli, seatSignIn } from './seat-sign-in.ts'
 import { seatLimits } from './seat-limits.ts'
 
 const LATEST_TTL_MS = 60_000
@@ -35,7 +35,7 @@ export const adminService = {
     const [{ health, installing, last }, states, agents, latestBuild, available] = await Promise.all([probe(), containerStates(), db.selectFrom('agent').select('id').execute(), adminService.latestBuild(), features()])
     return {
       object: 'admin',
-      seat: { set: !!settings.seatToken(), mode: config.modelMode, updatedAt: settings.seatAt() },
+      seat: { set: !!settings.seatToken(), mode: config.modelMode, updatedAt: settings.seatAt(), download: claudeCli.progress() },
       codex: { set: !!settings.codexTokens(), updatedAt: settings.codexAt() },
       server: {
         version: health.version, build: health.build, latestBuild, updateAvailable: isNewer({ latest: latestBuild, current: health.build }), update: await currentUpdate({ installing, last }), healthy: health.ok, agentd: health.agentd, firewall: health.firewall,

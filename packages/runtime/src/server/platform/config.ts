@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url'
 import * as z from 'zod/mini'
 
 const PackageJson = z.object({ version: z.string() })
-const NativeRuntime = z.object({ claude: z.object({ version: z.string() }) })
+const NativeRuntime = z.object({ claude: z.object({ version: z.string(), sha256: z.record(z.string(), z.string()) }) })
+const PLATFORM = `${process.platform}-${process.arch === 'arm64' ? 'arm64' : 'x64'}`
 const PORT = Number(process.env.PORT ?? 8787)
 const DATA = process.env.OPENHUT_DATA ?? '/data/app'
 const BUILD = fileOr(new URL('../../../../../BUILD', import.meta.url), 'dev')
@@ -50,15 +51,21 @@ export const config = {
   join: JOIN,
   relayUrl: RELAY_URL,
   claudeBin: fileURLToPath(new URL('../../../../../bin/claude', import.meta.url)),
-  claudeHostBin: process.env.OPENHUT_BIN ? join(process.env.OPENHUT_BIN, process.platform === 'win32' ? 'claude.exe' : 'claude') : fileURLToPath(new URL(`../../../../../bin/${process.platform === 'darwin' ? 'claude-darwin' : 'claude'}`, import.meta.url)),
-  claudeVersion: claudeVersionOf(new URL('../../../../../install/native-runtime.json', import.meta.url)),
+  claudeHostBin: process.env.OPENHUT_CLAUDE ?? (process.env.OPENHUT_BIN ? join(process.env.OPENHUT_BIN, process.platform === 'win32' ? 'claude.exe' : 'claude') : fileURLToPath(new URL(`../../../../../bin/${process.platform === 'darwin' ? 'claude-darwin' : 'claude'}`, import.meta.url))),
+  claudePlatform: PLATFORM,
+  ...claudeOf(new URL('../../../../../install/native-runtime.json', import.meta.url)),
   hermesRuntime: process.env.AGENTD_HERMES,
   started: Math.floor(Date.now() / 1000),
 }
 delete process.env.OPENHUT_SECRET
 
-function claudeVersionOf(url: URL): string | undefined {
-  try { return z.parse(NativeRuntime, JSON.parse(readFileSync(url, 'utf8'))).claude.version } catch { return undefined }
+function claudeOf(url: URL): { claudeVersion?: string; claudeSha256?: string } {
+  try {
+    const { claude } = z.parse(NativeRuntime, JSON.parse(readFileSync(url, 'utf8')))
+    return { claudeVersion: claude.version, claudeSha256: claude.sha256[PLATFORM] }
+  } catch {
+    return {}
+  }
 }
 
 function installKindOf(kind: 'desktop' | 'server'): 'mac' | 'linux' | 'server' {

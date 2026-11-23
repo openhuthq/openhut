@@ -2,7 +2,7 @@ import { build } from 'esbuild'
 import { execFileSync } from 'node:child_process'
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { packAgentBrowser, packClaude, packHermes } from './pack-hermes.mjs'
+import { packAgentBrowser, packHermes } from './pack-hermes.mjs'
 
 const ROOT = join(import.meta.dirname, '../../..')
 const OUT = join(import.meta.dirname, '../dist/backend')
@@ -26,6 +26,5 @@ writeFileSync(join(OUT, 'packages/runtime/package.json'), JSON.stringify({ versi
 for (const path of ['install/agent-image', 'install/agent-browser', 'install/native-runtime.json', 'vendor/hermes-plugins']) cpSync(join(ROOT, path), join(OUT, path), { recursive: true })
 for (const name of NATIVE) cpSync(join(ROOT, 'node_modules', name), join(OUT, 'node_modules', name), { recursive: true, dereference: true })
 await packHermes(join(OUT, 'runtime'))
-await packClaude(join(OUT, 'bin/native'))
 await packAgentBrowser(join(OUT, 'bin/native'))
 

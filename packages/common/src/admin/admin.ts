@@ -16,7 +16,7 @@ export const MIN_RUNTIME_VERSION = '0.1.0'
 
 export const Admin = z.object({
   object: z.literal('admin'),
-  seat: z.object({ set: z.boolean(), mode: z.enum(['claude', 'test']), updatedAt: z.nullable(Timestamp) }),
+  seat: z.object({ set: z.boolean(), mode: z.enum(['claude', 'test']), updatedAt: z.nullable(Timestamp), download: z.optional(z.nullable(z.object({ done: z.number(), total: z.number() }))) }),
   codex: z.object({ set: z.boolean(), updatedAt: z.nullable(Timestamp) }),
   server: z.object({
     version: z.string(),

@@ -183,7 +183,7 @@ jobs:
       - name: Build the AppImage and deb, and add them to the draft release
         if: matrix.name == 'linux'
         working-directory: packages/desktop
-        run: umask 022 && npm run build && npm run pack-backend && npx electron-builder --linux --x64 --publish "$([ "$TAGGED" = true ] && echo always || echo never)"
+        run: umask 022 && npm run build && npm run pack-backend && npx electron-builder --linux --x64 -c.electronFuses.runAsNode=true --publish "$([ "$TAGGED" = true ] && echo always || echo never)"
       - name: Open it, sign in, meet the first agent, run five at once, chat, restart, and keep the evidence
         if: matrix.name == 'linux'
         working-directory: packages/desktop

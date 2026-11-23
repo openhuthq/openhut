@@ -1,11 +1,10 @@
-import { execFile } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import type { Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
-import { BIN, box, conf, DATA, EXE, writeIfChanged } from './host.ts'
+import { BIN, box, conf, EXE, writeIfChanged } from './host.ts'
 import { BROWSER_STREAM_PORT_BASE, type Exec, type Mount } from './sandbox/sandbox.ts'
 import { isRecord, jsonOrUndefined } from './util.ts'
 
@@ -17,7 +16,12 @@ export const MAX_FPS = 30
 
 const AGENT_BROWSER = join(BIN, `agent-browser${EXE}`)
 const DIR = fileURLToPath(new URL('../../../../install/agent-browser', import.meta.url))
-const INSTALLED_CHROME = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/opt/google/chrome/chrome', `${process.env.ProgramFiles}\\Google\\Chrome\\Application\\chrome.exe`, `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`]
+const INSTALLED_CHROME = [
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+  '/opt/google/chrome/chrome', '/usr/lib/chromium/chromium', '/usr/bin/chromium', '/opt/microsoft/msedge/msedge', '/opt/brave.com/brave/brave',
+  ...[process.env.ProgramFiles, process.env['ProgramFiles(x86)'], process.env.LOCALAPPDATA].flatMap((root) => [`${root}\\Google\\Chrome\\Application\\chrome.exe`, `${root}\\Microsoft\\Edge\\Application\\msedge.exe`, `${root}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`]),
+]
+const NO_CHROME = 'Install Google Chrome on this computer, then turn Browser on.'
 let chrome: string | undefined
 
 export const browser = {
@@ -25,12 +29,13 @@ export const browser = {
   tmpMib: 1024,
 
   installed(): boolean {
-    return box.name === 'memory' || existsSync(AGENT_BROWSER)
+    return box.name === 'memory' || (existsSync(AGENT_BROWSER) && (box.name !== 'native' || !!installedChrome()))
   },
 
   async prepare(): Promise<void> {
+    if (box.name === 'native') chrome = installedChrome()
+    if (box.name === 'native' && !chrome) throw new Error(NO_CHROME)
     if (!browser.installed()) throw new Error("agent-browser isn't installed on this server; run the installer again")
-    if (box.name === 'native') chrome ??= await installChrome()
   },
 
   mounts(id: string): Mount[] {
@@ -79,31 +84,8 @@ export const browser = {
   },
 }
 
-async function installChrome(): Promise<string> {
-  const installed = INSTALLED_CHROME.find((path) => existsSync(path))
-  if (installed) return installed
-  const home = `${DATA}/browser`
-  const found = () => findChrome(`${home}/.agent-browser/browsers`)
-  const downloaded = found()
-  if (downloaded) return downloaded
-  console.log('browser: downloading Chrome for agents, once')
-  await new Promise<void>((done, fail) => execFile(AGENT_BROWSER, ['install'], { env: { ...process.env, HOME: home, USERPROFILE: home }, timeout: 15 * 60_000 }, (error) => error ? fail(error) : done()))
-  const path = found()
-  if (!path) throw new Error("Chrome didn't install for the browser; try turning Browser on again")
-  return path
-}
-
-function findChrome(dir: string, depth = 5): string | undefined {
-  if (depth < 0 || !existsSync(dir)) return undefined
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name)
-    if (entry.isFile() && ['chrome', 'chrome.exe', 'Google Chrome for Testing'].includes(entry.name)) return path
-    if (entry.isDirectory()) {
-      const inner = findChrome(path, depth - 1)
-      if (inner) return inner
-    }
-  }
-  return undefined
+function installedChrome(): string | undefined {
+  return INSTALLED_CHROME.find((path) => existsSync(path))
 }
 
 const PING_MS = 10_000

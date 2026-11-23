@@ -52,7 +52,7 @@ const SCRIPTS = DEV
   ? { agentd: 'packages/runtime/src/agentd/agentd.ts', server: 'packages/runtime/src/server/app.ts' }
   : { agentd: 'packages/runtime/src/agentd/agentd.mjs', server: 'packages/runtime/src/server/platform/app.mjs' }
 const RUNTIME = process.env.AGENTD_HERMES ?? join(BACKEND, DEV ? 'packages/desktop/dist/backend/runtime' : 'runtime')
-const NATIVE_CLAUDE = join(BACKEND, DEV ? 'packages/desktop/dist/backend/bin/native' : 'bin/native', WIN ? 'claude.exe' : 'claude')
+const NATIVE_BIN = join(BACKEND, DEV ? 'packages/desktop/dist/backend/bin/native' : 'bin/native')
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? (LOOKS_DEV ? 8091 : 8081))
 const HOME = app.getPath('userData')
 const ASSETS = DEV ? ROOT : join(HOME, 'assets', app.getVersion())
@@ -615,7 +615,7 @@ async function boot() {
   }
   keepData()
   await assets()
-  const shared = { ...CLOUD, OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_BIN: dirname(NATIVE_CLAUDE) }
+  const shared = { ...CLOUD, OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_BIN: NATIVE_BIN, OPENHUT_CLAUDE: join(DATA, 'claude', WIN ? 'claude.exe' : 'claude') }
   if (!PIPES) rmSync(SOCK, { force: true })
   start('agentd', { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT) })
   await waitFor(() => listening(SOCK), 30)
