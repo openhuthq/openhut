@@ -25,12 +25,14 @@ const WIN = process.platform === 'win32'
 if (WIN) process.env.NODE_PENDING_PIPE_INSTANCES ??= '64'
 const CONTAINER = (!MAC && !WIN) || process.env.OPENHUT_SANDBOX === 'gvisor'
 process.umask(0o022)
-app.setName(DEV ? 'OpenHut Dev' : 'OpenHut')
+app.setName('OpenHut')
 const TEST_HOME = process.env.OPENHUT_TEST_HOME
-if (DEV) app.setPath('userData', join(app.getPath('appData'), 'OpenHut Dev'))
-if (TEST_HOME) app.setPath('userData', TEST_HOME)
-app.setAppLogsPath(TEST_HOME ? join(TEST_HOME, 'logs') : DEV && MAC ? join(app.getPath('home'), 'Library/Logs/OpenHut Dev') : undefined)
+const USER_DATA = TEST_HOME || (DEV ? join(app.getPath('appData'), 'OpenHut Dev') : app.getPath('userData'))
+app.setPath('userData', process.env.OPENHUT_SECOND_APP ? USER_DATA : join(app.getPath('appData'), 'OpenHut'))
 if (!app.requestSingleInstanceLock()) app.exit(0)
+if (DEV) app.setName('OpenHut Dev')
+app.setPath('userData', USER_DATA)
+app.setAppLogsPath(TEST_HOME ? join(TEST_HOME, 'logs') : DEV && MAC ? join(app.getPath('home'), 'Library/Logs/OpenHut Dev') : undefined)
 if (!DEV) app.setAsDefaultProtocolClient('openhut')
 
 const HERE = dirname(fileURLToPath(import.meta.url))
