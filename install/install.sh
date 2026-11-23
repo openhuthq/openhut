@@ -89,7 +89,7 @@ runtime() {
 }
 updater() {
   [ "$(docker container inspect -f '{{.Config.Image}}' openhut-updater 2>/dev/null || true)" = "$RUNTIME_IMAGE" ] && return
-  docker rm -f openhut-updater >/dev/null 2>&1 || true
+  docker rm -f -v openhut-updater >/dev/null 2>&1 || true
   docker run -d --name openhut-updater --restart unless-stopped --read-only --tmpfs /tmp:size=64m \
     --cap-drop ALL --security-opt no-new-privileges --security-opt label=disable \
     -v /var/run/docker.sock:/var/run/docker.sock -v openhut-data:/data -e "OPENHUT_URL=$OPENHUT_URL" \
