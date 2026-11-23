@@ -59,7 +59,7 @@ export function CloudJoin() {
 function refusal({ error, email }: { error: Error; email: string | null }): { title: string; body: string } {
   const status = error instanceof RequestError ? error.status : 0
   if (status === 403) return { title: 'This invite is for another email', body: `It’s for ${error instanceof RequestError && error.param ? error.param : 'another email'}. You’re signed in as ${email ?? 'someone else'}.` }
-  if (status === 404 || status === 410) return { title: 'This invite link no longer works', body: 'It was used already or it expired. Ask for a new one.' }
+  if (status === 404 || status === 410) return { title: 'This invite link no longer works', body: `${error.message} Ask for a new one.` }
   return { title: 'This invite didn’t open', body: error.message }
 }
 

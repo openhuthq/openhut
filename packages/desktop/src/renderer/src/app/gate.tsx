@@ -35,6 +35,7 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   const [readying, setReadying] = useState(false)
   const error = me.error ?? cloud.error
   const installing = error instanceof RequestError && error.status === 503
+  const failure = error instanceof RequestError && error.status === 502 ? error.message : undefined
   const { refetch: refetchMe } = me
   const { refetch: refetchCloud } = cloud
   const step = gateOf({ cloud: cloud.data, setup: run.data, down: Boolean(error) })
@@ -60,7 +61,7 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   if (offer) return <Stage><TouchIdOffer onDone={() => setOffer(false)} /></Stage>
   if (step === 'getting-ready' && !readying) setReadying(true)
   if (readying && step !== 'getting-ready' && step !== 'ready') setReadying(false)
-  if (step === 'getting-ready' || (readying && step === 'ready')) return <Stage><GettingReady run={run.data} ready={step === 'ready'} onRetry={() => void run.refetch()} onOpen={() => setReadying(false)} /></Stage>
+  if (step === 'getting-ready' || (readying && step === 'ready')) return <Stage><GettingReady run={run.data} failure={failure} ready={step === 'ready'} onRetry={() => { void run.refetch(); void me.refetch(); void cloud.refetch() }} onOpen={() => setReadying(false)} /></Stage>
   if (step === 'sign-in') return <><Stage><SignIn cloud={cloud.data} /></Stage>{opened === 'join-link' && <JoinLinkDialog />}</>
   if (!cloud.data) return <Waiting />
   if (step === 'unlock') return <Stage><Unlock cloud={cloud.data} /></Stage>
@@ -81,7 +82,8 @@ function Down({ error, retrying, onRetry }: { error: Error | null; retrying: boo
   </div>
 }
 
-function GettingReady({ run, ready, onRetry, onOpen }: { run: FirstRun | undefined; ready: boolean; onRetry: () => void; onOpen: () => void }) {
+function GettingReady({ run, failure, ready, onRetry, onOpen }: { run: FirstRun | undefined; failure?: string; ready: boolean; onRetry: () => void; onOpen: () => void }) {
+  if (failure) return <Step title="OpenHut couldn’t start." line={failure} action={<Button variant="primary" className={BIG} onClick={onRetry}><I icon={Refresh01Icon} size={16} />Try again</Button>} />
   const steps = run?.steps ?? []
   const now = steps.find(([, , state]) => state === 'now' || state === 'failed')
   const doneCount = steps.filter(([, , state]) => state === 'done').length

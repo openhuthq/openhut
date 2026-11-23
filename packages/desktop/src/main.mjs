@@ -95,6 +95,7 @@ let tray
 let blocker
 let setup
 let booted
+let bootFailed = ''
 let linked = ownLink(process.argv.find((arg) => arg.startsWith(`${SCHEME}:`)))
 let fresh = false
 let opened = false
@@ -607,7 +608,9 @@ async function bootContainer() {
   if (existsSync(join(HOME, LOCAL_KEY)) && await waitFor(answers, 90)) return true
   if (!await dockerUp()) throw new Error('Docker isn\'t running, or your user can\'t use it. Install Docker, add yourself to the docker group (sudo usermod -aG docker $USER), sign in again, then open OpenHut.')
   const key = randomBytes(32).toString('hex')
-  const script = await (await fetch(INSTALL_URL, { signal: AbortSignal.timeout(60_000) })).text()
+  const fetched = await fetch(INSTALL_URL, { signal: AbortSignal.timeout(60_000) })
+  if (!fetched.ok) throw new Error(`OpenHut couldn't download its installer (${fetched.status} from ${INSTALL_URL}). This build may not be released yet: download OpenHut from openhut.dev.`)
+  const script = await fetched.text()
   const log = createWriteStream(join(LOGS, 'install.log'), { flags: 'a' })
   const env = { ...process.env, OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update(key).digest('hex'), OPENHUT_APP_VERSION: app.getVersion(), OPENHUT_PERSONAL: '1' }
   const child = spawn('sh', ['-s'], { env, stdio: ['pipe', 'pipe', 'pipe'] })
@@ -851,6 +854,7 @@ async function toLocal({ req, path }) {
   const target = path + new URL(req.url).search
   if (!CONTAINER && await booted !== true) return refuse(502, `OpenHut's runtime didn't start. The logs are in ${LOGS}.`)
   if (!CONTAINER) return toSocket({ req, path: target }).catch((error) => refuse(502, `OpenHut's runtime didn't answer (${error.code ?? error.message}). Try again, or restart OpenHut.`))
+  if (bootFailed) return refuse(502, `OpenHut couldn't be set up on this computer. ${bootFailed}`)
   if (!localKey && !existsSync(join(HOME, LOCAL_KEY))) return refuse(503, `OpenHut is still being set up on ${LOCAL.name.toLowerCase()}.`)
   const headers = new Headers(req.headers)
   for (const name of ['host', 'origin', 'cookie', 'connection']) headers.delete(name)
@@ -955,6 +959,9 @@ app.whenReady().then(async () => {
   booted = boot().catch((error) => {
     appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't start: ${error.message}\n`)
     return error.message
+  }).then((started) => {
+    bootFailed = started === true ? '' : String(started || 'OpenHut didn\'t start.')
+    return started
   })
   if (fresh) {
     const invite = inviteLink(linked && `https://openhut.dev${linked}`) ?? (TEST_HOME ? null : inviteLink(clipboard.readText()))
