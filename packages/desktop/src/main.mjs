@@ -904,8 +904,11 @@ async function toSocket({ req, path }) {
 }
 
 function socketRequest({ req, path, body }) {
+  const headers = Object.fromEntries(req.headers)
+  delete headers['transfer-encoding']
+  if (body) headers['content-length'] = String(body.length)
   return new Promise((resolve, reject) => {
-    const out = request({ socketPath: SERVER_SOCK, path, method: req.method, headers: Object.fromEntries(req.headers) }, (res) => {
+    const out = request({ socketPath: SERVER_SOCK, path, method: req.method, headers }, (res) => {
       const headers = webHeaders(res.headers)
       resolve(new Response([204, 304].includes(res.statusCode) ? null : Readable.toWeb(res), { status: res.statusCode, headers }))
     })
