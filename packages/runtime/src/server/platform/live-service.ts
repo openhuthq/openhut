@@ -5,7 +5,7 @@ import { who } from '../team/identity.ts'
 import { listen, log, type AppEvent } from './events.ts'
 import { HttpError, messageOf } from './http-error.ts'
 
-const PUSHED = new Set(['agent', 'thread', 'channel', 'connection', 'grant', 'skill', 'memory', 'provider', 'admin', 'routine', 'cloud', 'presence'])
+const PUSHED = new Set(['agent', 'thread', 'channel', 'connection', 'grant', 'skill', 'memory', 'provider', 'admin', 'routine', 'change_request', 'cloud', 'presence'])
 const MAX_BUFFERED = 1 << 20
 const MAX_REASON = 120
 const followers = new Map<WebSocket, { answered: boolean }>()

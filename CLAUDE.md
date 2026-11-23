@@ -4,7 +4,7 @@ Self-hosted agents: the OpenHut app (Mac and Linux) is a thin window over severa
 on each computer you add (`private/brain/decisions/app-aggregates-runtimes.md`). A runtime runs many Hermes agents, each in its
 own process (a plain process that runs as you on a Mac or Windows PC, a gVisor sandbox in Docker on Linux), with their own Slack app and WhatsApp number. Agents reach team
 data only through the runtime's gateway, which holds every key and checks each agent's grants on every call. You manage
-it from the app, or by asking an agent to change its own name, instructions or channels, which you approve in the app. No sign-in and no people: the app reaches the local
+it from the app, or by asking an agent to change its own name, instructions, channels or connections, which you approve in the app (`private/brain/decisions/agents-change-themselves.md`). No sign-in and no people: the app reaches the local
 runtime on a 0600 Unix socket, and a remote one end-to-end encrypted either straight over your tailnet (installed and paired over Tailscale SSH, no cloud) or through the relay after it joined with a code (`private/brain/decisions/two-ways-to-reach-a-computer.md`).
 Scope and decisions: `private/brain/decisions/openhut-v1-scope.md`.
 
