@@ -14,7 +14,7 @@ export type Mouse = { action: keyof typeof MOUSE_EVENTS; x: number; y: number; b
 export type Key = { action: 'down' | 'up'; key: string; code?: string; modifiers?: number }
 export type Action = { action: string; url: string; at: number }
 
-export function useLive({ computer, path, canvas }: { computer: string; path: string; canvas: RefObject<HTMLCanvasElement | null> }) {
+export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTMLCanvasElement | null> }) {
   const [state, setState] = useState<'connecting' | 'live' | 'closed'>('connecting')
   const [page, setPage] = useState({ url: '', title: '' })
   const [held, setHeld] = useState(false)
@@ -34,7 +34,6 @@ export function useLive({ computer, path, canvas }: { computer: string; path: st
     const pending = new Map<string, Omit<Action, 'at'>>()
     const connect = () => {
       const open = openChannel({
-        computer,
         path,
         onLine: (line) => {
           const message = parse(line)
@@ -77,7 +76,7 @@ export function useLive({ computer, path, canvas }: { computer: string; path: st
       clearTimeout(retry)
       channel.current?.close()
     }
-  }, [computer, path, canvas])
+  }, [path, canvas])
   const send = (message: object) => channel.current?.send(JSON.stringify(message))
   return { state, page, held, mine, actions, error, fps: rate, hold: (held: boolean) => send({ type: 'hold', held }), mouse: (event: Mouse) => send(mouseInput(event)), key: (event: Key) => send(keyInput(event)) }
 }

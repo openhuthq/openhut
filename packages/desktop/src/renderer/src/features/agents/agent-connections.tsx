@@ -1,6 +1,6 @@
 import { Cancel01Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
-import type { OpenHutConnection } from '@openhut/client'
+import type { OpenHutConnection } from '@/lib/openhut'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ErrorNote } from '@/components/error-note'

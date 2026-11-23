@@ -1,4 +1,4 @@
-import type { Computer, OpenHutAgent, OpenHutConnection } from '@openhut/client'
+import type { Computer, OpenHutAgent, OpenHutConnection } from '@/lib/openhut'
 import type { Me } from '@openhut/common/team/team.ts'
 import { useState } from 'react'
 import { ArrowRight01Icon, Search01Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
