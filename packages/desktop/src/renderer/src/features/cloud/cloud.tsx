@@ -1,4 +1,4 @@
-import { Delete02Icon, FingerPrintIcon, FileLockIcon, Key01Icon, Logout03Icon } from '@hugeicons/core-free-icons'
+import { Delete02Icon, FingerPrintIcon, Key01Icon, LifebuoyIcon, Logout03Icon } from '@hugeicons/core-free-icons'
 import type { Cloud, CloudWorkspaceView, DeviceRequest } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
@@ -31,7 +31,7 @@ export function YouSettings() {
         {cloud.status === 'offline' && <Status tone="wait">Offline</Status>}
         <SignOut />
       </Row>
-      <Row icon={<I icon={FileLockIcon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>Your 12 words to get back in if you lose every computer. {kitNote(cloud.kit)}.</span>}>
+      <Row icon={<I icon={LifebuoyIcon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>Your 12 words to get back in if you lose every computer. {kitNote(cloud.kit)}.</span>}>
         {!young && <Button type="button" variant="ghost" className={PILL} onClick={() => open('kit')}>New kit</Button>}
       </Row>
       {helper?.passkeys && helper.prf && <Row icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title="Touch ID" note={cloud.passkey ? 'On' : 'Unlock a new Mac with your fingerprint'}>
