@@ -27,7 +27,7 @@ export function TeamPeople({ workspace }: { workspace: CloudWorkspaceView }) {
   const { email } = useWorkspaces()
   const admin = workspace.role !== 'member'
   return <>
-    <Section title="People" action={admin ? <InviteButton workspace={workspace} /> : undefined}>
+    <Section title={workspace.members.length === 1 ? '1 member' : `${workspace.members.length} members`} action={admin ? <InviteButton workspace={workspace} /> : undefined}>
       <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
         {workspace.members.map((member) => <div key={member.email}>
           <PersonRow member={member} workspace={workspace} you={member.email === email} admin={admin} />
