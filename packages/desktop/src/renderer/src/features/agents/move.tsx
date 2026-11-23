@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { OpenHutAgent } from '@openhut/client'
+import type { OpenHutAgent } from '@/lib/openhut'
 import { useMoveAgent } from '@/features/agents/api'
 import { nameOf, useComputers } from '@/features/computers/api'
 

@@ -5,9 +5,7 @@ import { desktop } from '@/features/settings/desktop'
 import { RequestError } from '@/lib/api-client'
 import { followEnrollments } from '@/features/computers/enroll'
 import { followUpdate, updates } from '@/features/settings/update'
-import { followComputers } from '@/lib/live'
-import { openhut } from '@/lib/openhut'
-import { AGENTS_KEY, COMPUTERS_KEY, CONNECTIONS_KEY, PROVIDERS_KEY } from '@/lib/query-keys'
+import { followEvents } from '@/lib/live'
 import sprite from '@/logos.svg?raw'
 import '@fontsource-variable/inter/wght.css'
 import '@fontsource/geist-mono/400.css'
@@ -27,8 +25,7 @@ followEnrollments(client)
 followUpdate({ bridge: updates, client })
 addEventListener('pointerdown', () => { document.documentElement.dataset.pointer = '' }, true)
 addEventListener('keydown', (event) => { if (event.key === 'Tab') delete document.documentElement.dataset.pointer }, true)
-followComputers(client)
-openhut.subscribe(() => { for (const queryKey of [AGENTS_KEY, CONNECTIONS_KEY, COMPUTERS_KEY, PROVIDERS_KEY]) void client.invalidateQueries({ queryKey }) })
+followEvents(client)
 document.body.insertAdjacentHTML('afterbegin', sprite)
 const root = document.getElementById('root')
 if (root) createRoot(root).render(<QueryClientProvider client={client}><App /></QueryClientProvider>)

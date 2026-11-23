@@ -1,10 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { generateKeyPairSync, sign } from 'node:crypto'
 import { createServer, type AddressInfo } from 'node:net'
 import Fastify from 'fastify'
-import { connect, generateKeyPair, toHex, type TunnelError } from '@openhut/tunnel'
-import { canonical, type Access, type Unsigned } from '@openhut/common/access/access.ts'
+import { boxKey, identity, toBase64 } from '@openhut/common/vault/vault.ts'
+import { connect, toHex, type TunnelError } from '@openhut/tunnel'
 
 const port = await new Promise<number>((resolve) => {
   const probe = createServer().listen(0, '127.0.0.1', () => {
@@ -13,42 +12,44 @@ const port = await new Promise<number>((resolve) => {
   })
 })
 process.env.OPENHUT_TAILNET_PORT = String(port)
-const { accessService } = await import('../../../src/server/access/access-service.ts')
+const { keyStore } = await import('../../../src/server/cloud/key-store.ts')
+const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
 const { migrate } = await import('../../../src/server/platform/db.ts')
-const { computerId, relayKeyHex } = await import('../../../src/server/platform/secrets.ts')
-const { relayService } = await import('../../../src/server/relay/relay-service.ts')
+const { relayIdOf, relayService, tunnelKey } = await import('../../../src/server/relay/relay-service.ts')
 const { who } = await import('../../../src/server/team/identity.ts')
 
 await migrate()
-const owner = generateKeyPairSync('ed25519')
-const ownerKey = Buffer.from(owner.publicKey.export({ format: 'jwk' }).x ?? '', 'base64url').toString('hex')
-const mac = generateKeyPair()
-const unsigned: Unsigned = { object: 'access', owner: ownerKey, version: 1, clients: [{ key: toHex(mac.publicKey), name: 'Mac', addedAt: '2026-11-22T09:00:00.000Z' }], computers: [] }
-const list: Access = { ...unsigned, signature: sign(null, Buffer.from(canonical(unsigned)), owner.privateKey).toString('hex') }
-await accessService.put({ access: list, local: true })
+const mac = await identity()
+const macKey = await boxKey(mac.secret)
+await keysService.open({ sub: 'google-mo', email: 'mo@example.com' })
+const list = await keysService.addDevice({ device: toBase64(mac.publicKey), name: null })
+const account = keysService.account()
+if (list && account) await keyStore.write({ ...await keyStore.read(), account: { ...account, list } })
 
 const app = Fastify()
-app.get('/caller', async (req) => who(req))
+app.get('/api/threads/:id', async (req) => who(req))
 await app.ready()
 await relayService.start({ server: app.server })
-const computer = { id: computerId, key: relayKeyHex }
+const key = (await tunnelKey()).publicKey
+const computer = { id: relayIdOf(key), key: toHex(key) }
 const url = `ws://127.0.0.1:${port}`
 
-test('the Mac on the list reaches the runtime straight over the tailnet port, as the owner and never local', async () => {
-  const tunnel = await connect({ relayUrl: '', url, computer, key: mac })
-  const caller = await tunnel.fetch('/caller')
+test('a Mac on your list reaches the runtime straight over the tailnet port, as you and never local', async () => {
+  const tunnel = await connect({ relayUrl: '', url, computer, key: macKey, token: '' })
+  const caller = await tunnel.fetch('/api/threads/th_one')
   assert.equal(caller.status, 200)
   assert.equal(((await caller.json()) as { local: boolean }).local, false)
   assert.equal(relayService.state().tailnet?.open, 1)
   tunnel.close()
 })
 
-test('a key that isn\'t on the list never gets past the handshake', async () => {
-  await assert.rejects(connect({ relayUrl: '', url, computer, key: generateKeyPair(), timeout: 3000 }), (error: TunnelError) => error.type === 'closed')
+test('a key no list holds is told it was removed', async () => {
+  const tunnel = await connect({ relayUrl: '', url, computer, key: await boxKey((await identity()).secret), token: '', timeout: 3000 })
+  await assert.rejects(tunnel.fetch('/api/threads/th_one'), (error: TunnelError) => error.type === 'removed')
 })
 
 test('nothing listening counts as offline', async () => {
-  await assert.rejects(connect({ relayUrl: '', url: 'ws://127.0.0.1:1', computer, key: mac, timeout: 3000 }), (error: TunnelError) => error.type === 'offline')
+  await assert.rejects(connect({ relayUrl: '', url: 'ws://127.0.0.1:1', computer, key: macKey, token: '', timeout: 3000 }), (error: TunnelError) => error.type === 'offline')
 })
 
 test.after(async () => {

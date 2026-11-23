@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { connect, TunnelError, type TunnelSocket } from '../src/index.ts'
-import { nativeKey, newDevice, startComputer, startRelay, waitFor } from './relay.ts'
+import { nativeKey, newDevice, startComputer, startRelay, TOKEN, waitFor } from './relay.ts'
 
 test('a request and its response cross the tunnel, with only the allowed headers and the body length', async () => {
   const seen: Record<string, string>[] = []
@@ -14,8 +14,8 @@ test('a request and its response cross the tunnel, with only the allowed headers
     }
   })
   const device = newDevice()
-  ctx.statuses.set(device.hex, 'client')
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  ctx.listed.add(device.hex)
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key, token: TOKEN })
   const response = await tunnel.fetch('/api/agents?limit=2', { method: 'POST', body: JSON.stringify({ name: 'Ada' }), headers: { 'content-type': 'application/json', authorization: 'Bearer nope' } })
   assert.equal(response.status, 201)
   assert.equal(response.headers.get('x-answer'), '42')
@@ -42,8 +42,8 @@ test('a streamed response arrives in chunks before it ends', async () => {
     }), { headers: { 'content-type': 'text/event-stream' } })
   })
   const device = newDevice()
-  ctx.statuses.set(device.hex, 'client')
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  ctx.listed.add(device.hex)
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key, token: TOKEN })
   const response = await tunnel.fetch('/events', { headers: { accept: 'text/event-stream', 'last-event-id': '7' } })
   assert.equal(response.headers.get('content-type'), 'text/event-stream')
   const reader = response.body?.getReader()
@@ -60,8 +60,8 @@ test('a streamed response arrives in chunks before it ends', async () => {
 test('a device whose key only offers async agree completes IK and exchanges requests', async () => {
   const ctx = await startComputer()
   const native = nativeKey()
-  ctx.statuses.set(native.hex, 'client')
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: native.key })
+  ctx.listed.add(native.hex)
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: native.key, token: TOKEN })
   assert.equal(native.agreed.length, 2)
   assert.equal(native.agreed[0], ctx.computer.key)
   for (const path of ['/one', '/two']) assert.deepEqual(await (await tunnel.fetch(path)).json(), { path, body: '' })
@@ -73,18 +73,18 @@ test('a device whose key only offers async agree completes IK and exchanges requ
 test('a computer that is not connected to the relay is offline', async () => {
   const relay = await startRelay()
   const device = newDevice()
-  await assert.rejects(connect({ relayUrl: relay.url, computer: { id: 'ab'.repeat(32), key: 'cd'.repeat(32) }, key: device.key }), (error: TunnelError) => error.type === 'offline')
+  await assert.rejects(connect({ relayUrl: relay.url, computer: { id: 'ab'.repeat(32), key: 'cd'.repeat(32) }, key: device.key, token: TOKEN }), (error: TunnelError) => error.type === 'offline')
   await relay.close()
 })
 
 test('the computer reconnects to the relay after the socket drops', async () => {
   const ctx = await startComputer()
   const device = newDevice()
-  ctx.statuses.set(device.hex, 'client')
+  ctx.listed.add(device.hex)
   ctx.relay.kickComputer()
   await waitFor(() => !ctx.relay.online())
   await waitFor(ctx.relay.online)
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key, token: TOKEN })
   assert.equal((await tunnel.fetch('/after')).status, 200)
   tunnel.close()
   await ctx.close()
@@ -96,7 +96,7 @@ test('a closing notice from the relay is acted on at once, without waiting for t
   server.on('connection', socket => socket.send(JSON.stringify({ type: 'closing', code: 4004, reason: 'offline 0' })))
   const { port } = server.address() as { port: number }
   const started = Date.now()
-  await assert.rejects(connect({ relayUrl: `ws://127.0.0.1:${port}`, computer: { id: 'ab'.repeat(32), key: 'cd'.repeat(32) }, key: newDevice().key }), (error: TunnelError) => error.type === 'offline')
+  await assert.rejects(connect({ relayUrl: `ws://127.0.0.1:${port}`, computer: { id: 'ab'.repeat(32), key: 'cd'.repeat(32) }, key: newDevice().key, token: TOKEN }), (error: TunnelError) => error.type === 'offline')
   assert.ok(Date.now() - started < 1000)
   for (const client of server.clients) client.terminate()
   server.close()
@@ -108,7 +108,7 @@ test('a handshake that never gets an answer fails as closed after the timeout an
   const gone = new Promise(resolve => server.on('connection', socket => socket.on('close', resolve)))
   const { port } = server.address() as { port: number }
   const started = Date.now()
-  await assert.rejects(connect({ relayUrl: `ws://127.0.0.1:${port}`, computer: { id: 'ab'.repeat(32), key: 'cd'.repeat(32) }, key: newDevice().key, timeout: 100 }), (error: TunnelError) => error.type === 'closed')
+  await assert.rejects(connect({ relayUrl: `ws://127.0.0.1:${port}`, computer: { id: 'ab'.repeat(32), key: 'cd'.repeat(32) }, key: newDevice().key, token: TOKEN, timeout: 100 }), (error: TunnelError) => error.type === 'closed')
   assert.ok(Date.now() - started < 1000)
   await gone
   server.close()
@@ -125,8 +125,8 @@ function inbox(socket: TunnelSocket) {
 test('a socket echoes text, binary and a message over 65 000 bytes across the tunnel', async () => {
   const ctx = await startComputer()
   const device = newDevice()
-  ctx.statuses.set(device.hex, 'client')
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  ctx.listed.add(device.hex)
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key, token: TOKEN })
   const socket = tunnel.socket('/api/browsers/agt_1/live?fps=30')
   assert.equal(socket.binaryType, 'arraybuffer')
   const { got } = inbox(socket)
@@ -150,8 +150,8 @@ test('a socket echoes text, binary and a message over 65 000 bytes across the tu
 test('closing a socket on the device closes the computer\'s side, and the tunnel still works', async () => {
   const ctx = await startComputer()
   const device = newDevice()
-  ctx.statuses.set(device.hex, 'client')
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  ctx.listed.add(device.hex)
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key, token: TOKEN })
   const socket = tunnel.socket('/live')
   const { closes } = inbox(socket)
   socket.send('one')
@@ -169,8 +169,8 @@ test('the computer closing a socket reaches the device with its code and reason'
     socket: async ({ send, close }) => ({ send: data => data === 'bye' ? close({ code: 4409, reason: 'The browser is off.' }) : send(data), close: () => {} })
   })
   const device = newDevice()
-  ctx.statuses.set(device.hex, 'client')
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  ctx.listed.add(device.hex)
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key, token: TOKEN })
   const socket = tunnel.socket('/live')
   const { got, closes } = inbox(socket)
   socket.send('still here')
@@ -186,8 +186,8 @@ test('the computer closing a socket reaches the device with its code and reason'
 test('a lost tunnel closes its sockets', async () => {
   const ctx = await startComputer()
   const device = newDevice()
-  ctx.statuses.set(device.hex, 'client')
-  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key })
+  ctx.listed.add(device.hex)
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key: device.key, token: TOKEN })
   const socket = tunnel.socket('/live')
   const { closes } = inbox(socket)
   socket.send('ping')

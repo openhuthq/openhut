@@ -1,4 +1,4 @@
-import type { OpenHutAgent } from '@openhut/client'
+import type { OpenHutAgent } from '@/lib/openhut'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
 
 type Placed = Pick<OpenHutAgent, 'workspace' | 'computer'>

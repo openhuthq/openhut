@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import curve from 'noise-handshake/dh.js'
-import { fromHex, generateKeyPair, initiator, pairingProof, responder, sixDigits, toHex, verifyProof } from '../src/noise.ts'
+import { fromHex, generateKeyPair, initiator, responder, toHex } from '../src/noise.ts'
 import { nativeKey } from './relay.ts'
 
 type Vector = {
@@ -63,14 +63,4 @@ test('a device key that only offers async agree completes IK with empty payloads
 
 test('a device key with neither a secret nor agree is refused', () => {
   assert.throws(() => initiator({ key: { publicKey: new Uint8Array(32) }, remote: generateKeyPair().publicKey }), /secret key or an agree function/)
-})
-
-test('the pairing proof verifies only with the right secret, and six digits are zero-padded', async () => {
-  const handshakeHash = new Uint8Array(64).fill(7)
-  const secret = 'ab'.repeat(32)
-  const proof = await pairingProof({ secret, handshakeHash })
-  assert.equal(await verifyProof({ secret, handshakeHash, proof }), true)
-  assert.equal(await verifyProof({ secret: 'cd'.repeat(32), handshakeHash, proof }), false)
-  assert.equal(await verifyProof({ secret, handshakeHash, proof: 'zz' }), false)
-  assert.match(await sixDigits(handshakeHash), /^\d{6}$/)
 })

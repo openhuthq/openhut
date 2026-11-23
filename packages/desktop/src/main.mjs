@@ -4,7 +4,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { createServer, request } from 'node:http'
 import { connect } from 'node:net'
 import { appendFileSync, chmodSync, cpSync, createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { cpus, homedir, hostname, totalmem } from 'node:os'
+import { cpus, homedir, totalmem } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { Readable } from 'node:stream'
 import { text } from 'node:stream/consumers'
@@ -14,9 +14,6 @@ import updater from 'electron-updater'
 import WebSocket from 'ws'
 import { inviteLink } from './invite-link.mjs'
 import { linkPath } from './open-link.mjs'
-import { deviceName, ownerKeys } from './owner-keys.mjs'
-import { reacher } from './reach.mjs'
-import { fanOut } from './mcp-fan-out.mjs'
 import { cosigned, RELEASE_KEY } from './release-key.mjs'
 import { useChannel } from './update-channel.mjs'
 
@@ -67,42 +64,31 @@ const WINDOW_STATE = join(HOME, 'window.json')
 const PREFS = join(HOME, 'prefs.json')
 const SECRET = join(HOME, 'secret.bin')
 const HANDOFF = join(DATA, 'app', 'secret.handoff')
-const COMPUTERS = join(HOME, 'computers.json')
-const LOCAL = { id: 'local', name: MAC ? 'This Mac' : 'This computer', url: CONTAINER ? 'http://127.0.0.1:8787' : '' }
+const LOCAL = { name: MAC ? 'This Mac' : 'This computer', url: 'http://127.0.0.1:8787' }
 const LOCAL_KEY = 'keys/local.key'
 const EDGE_INSTALL_URL = 'https://openhut.dev/edge'
 const INSTALL_URL = process.env.OPENHUT_INSTALL_URL || bakedInstallUrl()
-const RELAY_URL = (process.env.OPENHUT_CLOUD_URL || 'https://cloud.openhut.dev').replace(/^http/, 'ws')
-const TAILNET_PORT = 8788
-const PUT_ACCESS = `put='c=$(curl -sS -o /dev/null -w %{http_code} --unix-socket /data/app/openhut.sock -X PUT -H content-type:application/json --data-binary @- http://openhut/api/access); [ "$c" = 200 ] || [ "$c" = 409 ]'; if docker container inspect openhut >/dev/null 2>&1; then docker exec -i openhut sh -c "$put"; else sh -c "$put"; fi`
+const JOIN_CODE = /^[\w.~:/?#=&%-]{1,500}$/
 const AUTOSTART = join(app.getPath('appData'), 'autostart/openhut.desktop')
 const DEFAULT_PREFS = { keepAwake: true, betaUpdates: false }
 const CANVAS = '#f4f3f5'
-const POLL_MS = 5000
+const WATCH_RETRY_MS = 30_000
+const REFRESH_MS = 500
+const TROUBLE_MS = 10_000
+const WATCHED = new Set(['agent', 'thread'])
 const HEALTHY_MS = 120_000
 const RENDERER = join(HERE, '../dist/renderer')
 const APP_ORIGIN = 'app://openhut'
 const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
 const MAX_LOG = 10 << 20
 const PIPE_TRIES = 20
-const { createOpenHut } = await import(pathToFileURL(DEV ? join(ROOT, 'packages/client/src/openhut.ts') : join(BACKEND, 'client.mjs')).href)
-const { connect: tunnelTo } = await import(pathToFileURL(DEV ? join(ROOT, 'packages/tunnel/src/index.ts') : join(BACKEND, 'tunnel.mjs')).href)
-const openhut = createOpenHut({
-  transport: (computer) => (path, init) => serve(new Request(`${APP_ORIGIN}/c/${computer.id}${path}`, init)),
-  store: { computers: async () => computers(), add: (peer) => enroll({ peer }), remove: async (id) => { forget({ id }) } },
-  openUrl: (url) => shell.openExternal(url),
-  appVersion: app.getVersion(),
-  owner,
-})
-const tunnels = reacher({ connect: tunnelTo, relayUrl: RELAY_URL, key: async () => (await owner()).device, direct: keyedFetch })
 const children = new Map()
 const restarts = { agentd: 0, server: 0 }
 const logs = {}
 const serverEnv = {}
-const keys = new Map()
-const watched = { threads: new Map(), strikes: new Map(), menu: '' }
+const watched = { threads: new Map(), strikes: new Map(), menu: '', tries: 0 }
 let quitting = false
-let owning
+let localKey
 let main
 let tray
 let blocker
@@ -180,14 +166,9 @@ handle('update.install', () => {
   if (updating.ready) setImmediate(() => updater.autoUpdater.quitAndInstall())
   return { installing: !!updating.ready }
 })
-handle('computers.list', computers)
 handle('computers.add', answer(enroll))
-handle('computers.remove', answer(forget))
 handle('computers.enrollments', () => [...enrollments.values()])
 handle('computers.dismiss', ({ dns } = {}) => { enrollments.delete(dns); shareEnrollments(); return { dns } })
-handle('devices.list', answer(() => openhut.access.list()))
-handle('devices.remove', answer(({ key } = {}) => openhut.access.remove(String(key))))
-handle('devices.allow', answer(allow))
 handle('passkey.status', () => passkey(['status']))
 handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
 handle('passkey.open', () => passkey(['open']))
@@ -224,36 +205,6 @@ function passkey(args) {
 }
 ipcMain.on('browser-live', (event, path) => void relayLive({ port: event.ports[0], path: fromApp(event) ? path : '' }))
 
-function owner() {
-  return owning ??= ownerKeys({ dir: join(HOME, 'keys'), safeStorage, name: deviceName(hostname()) }).catch((error) => {
-    owning = undefined
-    throw error
-  })
-}
-
-async function allow({ id, name } = {}) {
-  const path = `/api/invitations/${encodeURIComponent(String(id))}`
-  const { status, device } = await api(path)
-  if (status === 'expired') throw new Error('This code expired. Make a new one.')
-  if (status !== 'joined' || !/^[0-9a-f]{64}$/.test(device?.key ?? '')) throw new Error('Nothing is waiting to join with this code.')
-  const joined = { ...device, name: String(name || device.name) }
-  const before = storedComputers()
-  if (joined.kind === 'computer') rememberJoined(joined)
-  try {
-    await openhut.access.allow({ name: joined.name, kind: joined.kind === 'computer' ? 'computer' : 'client', key: joined.key })
-  } catch (err) {
-    if (joined.kind === 'computer') writeFileSync(COMPUTERS, JSON.stringify(before, null, 2))
-    throw err
-  }
-  return api(path)
-}
-
-function rememberJoined({ name, key }) {
-  const stored = storedComputers()
-  const id = stored.find((each) => each.key === key)?.id ?? randomBytes(4).toString('hex')
-  writeFileSync(COMPUTERS, JSON.stringify([...stored.filter((each) => each.key !== key), { id, name: String(name), key }], null, 2))
-}
-
 function answer(fn) {
   return (arg) => Promise.resolve().then(() => fn(arg)).catch((error) => ({ error: error.message }))
 }
@@ -266,30 +217,9 @@ function bakedInstallUrl() {
   }
 }
 
-function storedComputers() {
-  try {
-    return JSON.parse(readFileSync(COMPUTERS, 'utf8'))
-  } catch {
-    return []
-  }
-}
-
-function computers() {
-  return [LOCAL, ...storedComputers().map(({ id, name, url = '', tailnet: on }) => ({ id, name, url, route: on ? 'tailnet' : 'relay' }))]
-}
-
-async function keyOf(computer) {
-  if (!keys.has(computer.id)) keys.set(computer.id, (await safeStorage.decryptStringAsync(readFileSync(join(HOME, computer.keyFile)))).result)
-  return keys.get(computer.id)
-}
-
-function forget({ id } = {}) {
-  const computer = storedComputers().find((each) => each.id === id)
-  if (!computer) throw new Error(id === LOCAL.id ? `${LOCAL.name} always stays in the list.` : 'That computer isn\'t in the list.')
-  writeFileSync(COMPUTERS, JSON.stringify(storedComputers().filter((each) => each.id !== id), null, 2))
-  keys.delete(id)
-  tunnels.drop(id)
-  return { id, deleted: true }
+async function containerKey() {
+  localKey ??= (await safeStorage.decryptStringAsync(readFileSync(join(HOME, LOCAL_KEY)))).result
+  return localKey
 }
 
 const enrollments = new Map()
@@ -299,13 +229,13 @@ function shareEnrollments() {
   main?.webContents.send('computers.enrollments', [...enrollments.values()])
 }
 
-async function enroll({ peer, retried = false } = {}) {
+async function enroll({ peer, join, retried = false } = {}) {
   const dns = String(peer?.dns ?? '').replace(/\.$/, '')
   const entry = { peer: { name: String(peer?.name || dns), dns }, lines: [], url: null, startedAt: Date.now(), status: 'running', error: '', retryAt: null, retried, waitingAt: null, log: '' }
   enrollments.set(dns, entry)
   shareEnrollments()
   try {
-    const added = await install({ peer, dns, entry })
+    const added = await install({ peer, join: String(join ?? ''), dns, entry })
     enrollments.delete(dns)
     shareEnrollments()
     if (!main?.isFocused()) notify({ title: `${entry.peer.name} is ready`, body: 'Its agents can run there now.', path: '/settings/computers' })
@@ -315,20 +245,19 @@ async function enroll({ peer, retried = false } = {}) {
     Object.assign(entry, { status: 'failed', error: error.message, retryAt })
     shareEnrollments()
     if (!retryAt) void boxLog(dns).then((log) => { entry.log = log; shareEnrollments() })
-    if (retryAt) setTimeout(() => { if (enrollments.get(dns) === entry) enroll({ peer, retried: true }).catch(() => undefined) }, RETRY_MS)
+    if (retryAt) setTimeout(() => { if (enrollments.get(dns) === entry) enroll({ peer, join, retried: true }).catch(() => undefined) }, RETRY_MS)
     throw error
   }
 }
 
-async function install({ peer, dns, entry }) {
+async function install({ peer, join, dns, entry }) {
   if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(dns)) throw new Error('Pick a computer from your Tailscale list.')
+  if (!JOIN_CODE.test(join)) throw new Error('This join code doesn\'t look right. Close this and add the computer again.')
   if (!TAILSCALE) throw new Error('Tailscale isn\'t installed on this computer. Install it from tailscale.com/download and sign in.')
   if (!/^https?:\/\/[\w.:/-]+$/.test(INSTALL_URL)) throw new Error('OPENHUT_INSTALL_URL isn\'t a plain http(s) address.')
-  let key = ''
   const say = (line) => {
     entry.lines.push(line)
     entry.url = /https:\/\/login\.tailscale\.com\/\S+/.exec(line)?.[0] ?? entry.url
-    key = /^OPENHUT_KEY=([0-9a-f]{64})$/.exec(line.trim())?.[1] ?? key
     shareEnrollments()
   }
   const name = peer.name || dns
@@ -336,28 +265,9 @@ async function install({ peer, dns, entry }) {
   const ip = found.state === 'running' ? found.peers.find((each) => each.dns === dns)?.ip : undefined
   if (!ip) throw new Error(`Can't find ${name} on your Tailscale. Check it's on.`)
   say(`Installing OpenHut on ${dns} over Tailscale SSH`)
-  await tailscaleSsh({ args: ['ssh', `root@${dns}`, `script=$(curl -fsSL '${INSTALL_URL}') || exit 1; printf '%s\\n' "$script" | OPENHUT_ROUTE=tailnet OPENHUT_APP_VERSION=${app.getVersion()} sh`], input: '', say })
-  if (!key) throw new Error(`OpenHut is installed, but ${name} didn't say its key.`)
-  entry.waitingAt = Date.now()
-  say(`Pairing with ${name}`)
-  const before = storedComputers()
-  const id = before.find((each) => each.key === key)?.id ?? randomBytes(4).toString('hex')
-  writeFileSync(COMPUTERS, JSON.stringify([...before.filter((each) => each.key !== key), { id, name, key, tailnet: { dns, ip, port: TAILNET_PORT } }], null, 2))
-  tunnels.drop(id)
-  try {
-    const list = await openhut.access.allow({ name, kind: 'computer', key })
-    await tailscaleSsh({ args: ['ssh', `root@${dns}`, PUT_ACCESS], input: JSON.stringify(list), say: () => undefined })
-    if (!await waitFor(async () => (await toComputer({ req: new Request(`${APP_ORIGIN}/c/${id}/api/admin`), id, path: '/api/admin' })).ok, 30)) throw new Error(`OpenHut is running on ${name}, but this ${LOCAL.name.replace(/^This /, '')} can't reach port ${TAILNET_PORT} on it. Check your Tailscale access rules allow it.`)
-  } catch (error) {
-    if (!before.some((each) => each.key === key)) {
-      writeFileSync(COMPUTERS, JSON.stringify(storedComputers().filter((each) => each.key !== key), null, 2))
-      await openhut.access.sync().catch(() => undefined)
-    }
-    tunnels.drop(id)
-    throw error
-  }
-  say(`${name} is ready`)
-  return { id, name, url: '', route: 'tailnet' }
+  await tailscaleSsh({ args: ['ssh', `root@${dns}`, `read -r OPENHUT_JOIN; export OPENHUT_JOIN; script=$(curl -fsSL '${INSTALL_URL}') || exit 1; printf '%s\\n' "$script" | OPENHUT_ROUTE=tailnet OPENHUT_APP_VERSION=${app.getVersion()} sh`], input: `${join}\n`, say })
+  say(`${name} is ready. Approve it when it asks to join.`)
+  return { name, route: 'tailnet' }
 }
 
 function boxLog(dns) {
@@ -405,7 +315,7 @@ function setPrefs(patch) {
     else writeFileSync(PREFS, JSON.stringify({ ...prefs(), [name]: on }))
   }
   if (!DEV && known.some(([name]) => name === 'betaUpdates')) checkForUpdate()
-  poll().catch(() => undefined)
+  refresh().catch(() => undefined)
   return prefsNow()
 }
 
@@ -418,7 +328,7 @@ function openAtLogin(on) {
 
 async function api(path, { method = 'GET', body } = {}) {
   const req = new Request(`${APP_ORIGIN}${path}`, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body && JSON.stringify(body) })
-  const res = await toComputer({ req, id: LOCAL.id, path })
+  const res = await toLocal({ req, path })
   const answer = await res.json()
   if (res.status >= 400) throw new Error(answer?.error?.message ?? `The server answered ${res.status}.`)
   return answer
@@ -437,28 +347,37 @@ function agentd(ask) {
   })
 }
 
-async function poll() {
-  const [agents, list] = await Promise.all([openhut.agents.list(), openhut.computers.list(), openhut.access.sync().catch(() => undefined)])
-  const wants = prefs()
-  keepAwake(wants.keepAwake && agents.some((agent) => agent.computer === LOCAL.id && agent.status === 'running'))
-  for (const agent of agents.filter((each) => each.online)) {
-    const strikes = needsYou(agent) ? (watched.strikes.get(agent.id) ?? 0) + 1 : 0
-    watched.strikes.set(agent.id, strikes)
-    if (strikes === 2) notify({ title: `${agent.name} stopped answering`, body: agent.healthDetail || 'It isn\'t running. OpenHut keeps trying to start it.', path: `/agents/${agent.id}` })
-  }
-  app.setBadgeCount(agents.filter((agent) => agent.online && watched.strikes.get(agent.id) >= 2).length)
-  await Promise.all(list.filter((computer) => computer.online).map(async (computer) => {
-    for (const thread of (await answerOf({ computer: computer.id, path: '/api/threads' })).data ?? []) {
-      const before = watched.threads.get(thread.id)
-      watched.threads.set(thread.id, thread.updatedAt)
-      if (before && before !== thread.updatedAt && !looking()) await notifyReply({ computer: computer.id, thread, agent: agents.find((each) => each.id === thread.agentId) })
+async function refresh() {
+  const agents = (await api('/api/agents')).data ?? []
+  keepAwake(prefs().keepAwake && agents.some((agent) => agent.runsHere && agent.status === 'running'))
+  const now = Date.now()
+  for (const agent of agents) {
+    if (!agent.runsHere || !needsYou(agent)) {
+      watched.strikes.delete(agent.id)
+      continue
     }
-  }).map((each) => each.catch(() => undefined)))
-  trayMenu({ agents, computers: list })
+    const strike = watched.strikes.get(agent.id) ?? { since: now, told: false }
+    watched.strikes.set(agent.id, strike)
+    if (strike.told || now - strike.since < TROUBLE_MS) continue
+    strike.told = true
+    notify({ title: `${agent.name} stopped answering`, body: agent.healthDetail || 'It isn\'t running. OpenHut keeps trying to start it.', path: `/agents/${agent.id}` })
+  }
+  app.setBadgeCount([...watched.strikes.values()].filter((strike) => strike.told).length)
+  if ([...watched.strikes.values()].some((strike) => !strike.told)) later(TROUBLE_MS)
+  for (const thread of (await api('/api/threads')).data ?? []) {
+    const before = watched.threads.get(thread.id)
+    watched.threads.set(thread.id, thread.updatedAt)
+    if (before && before !== thread.updatedAt && !looking()) await notifyReply({ thread, agent: agents.find((each) => each.id === thread.agentId) }).catch(() => undefined)
+  }
+  trayMenu({ agents })
 }
 
-async function answerOf({ computer, path }) {
-  return (await openhut.fetch({ computer, path })).json()
+function later(ms = REFRESH_MS) {
+  if (watched.timer) return
+  watched.timer = setTimeout(() => {
+    watched.timer = undefined
+    refresh().catch(() => undefined)
+  }, ms)
 }
 
 function needsYou(agent) {
@@ -469,8 +388,8 @@ function looking() {
   return !!main && !main.isDestroyed() && main.isVisible() && main.isFocused()
 }
 
-async function notifyReply({ computer, thread, agent }) {
-  const last = (await answerOf({ computer, path: `/api/threads/${encodeURIComponent(thread.id)}` })).messages?.at(-1)
+async function notifyReply({ thread, agent }) {
+  const last = (await api(`/api/threads/${encodeURIComponent(thread.id)}`)).messages?.at(-1)
   if (last?.role !== 'assistant') return
   const words = last.parts.filter((part) => part.type === 'text').map((part) => part.text).join('').trim()
   if (words) notify({ title: agent?.name ?? 'Your agent', body: words.slice(0, 200), path: `/agents/${thread.agentId}` })
@@ -499,14 +418,10 @@ function stateOf(agent) {
   return agent.health === 'answering' || agent.health === null ? 'running' : agent.health
 }
 
-function trayMenu({ agents, computers: list }) {
+function trayMenu({ agents }) {
   if (!tray) return
-  const rows = list.flatMap((computer) => {
-    const theirs = agents.filter((agent) => agent.computer === computer.id)
-    const head = list.length > 1 ? [{ label: computer.online ? computer.name : `${computer.name}  ·  Offline`, enabled: false }] : []
-    return [...head, ...theirs.map((agent) => ({ label: `${agent.name}  ·  ${computer.online ? STATE_WORDS[stateOf(agent)] : 'Offline'}`, enabled: computer.online, click: () => show(`/agents/${agent.id}`) }))]
-  })
-  const mine = agents.filter((agent) => agent.online && agent.canEdit)
+  const rows = agents.map((agent) => ({ label: `${agent.name}  ·  ${agent.runsHere ? STATE_WORDS[stateOf(agent)] : `On ${agent.runsOnName ?? 'another computer'}`}`, enabled: true, click: () => show(`/agents/${agent.id}`) }))
+  const mine = agents.filter((agent) => agent.canEdit)
   const key = JSON.stringify([rows.map((row) => [row.label, row.enabled]), mine.map((agent) => agent.wanted)])
   if (key === watched.menu) return
   watched.menu = key
@@ -522,10 +437,10 @@ function trayMenu({ agents, computers: list }) {
 }
 
 async function setAll({ agents, wanted }) {
-  await Promise.all(agents.filter((agent) => agent.wanted !== wanted).map((agent) => openhut.agents.update({ id: agent.id, change: { wanted } })))
+  await Promise.all(agents.filter((agent) => agent.wanted !== wanted).map((agent) => api(`/api/agents/${encodeURIComponent(agent.id)}`, { method: 'PATCH', body: { wanted } })))
     .catch((error) => notify({ title: 'OpenHut', body: error.message }))
   main?.webContents.send('changed')
-  await poll().catch(() => undefined)
+  await refresh().catch(() => undefined)
 }
 
 function bridgeCommand() {
@@ -534,17 +449,11 @@ function bridgeCommand() {
 
 async function serveMcp() {
   if (!PIPES) rmSync(MCP_SOCK, { force: true })
-  const mcp = fanOut({
-    local: LOCAL.id,
-    computers: () => openhut.computers.list(),
-    post: ({ computer, msg }) => serve(new Request(`${APP_ORIGIN}/c/${computer}/mcp`, { method: 'POST', body: JSON.stringify(msg), headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' } })).catch((error) => refuse(502, error.message)),
-  })
   const server = createServer(async (req, res) => {
     if (req.url !== '/mcp') return res.writeHead(404).end()
     if (req.method !== 'POST') return res.writeHead(405).end()
-    const answer = await mcp(await text(req))
-    if (!answer) return res.writeHead(202).end()
-    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(answer))
+    const answer = await toLocal({ req: new Request(`${APP_ORIGIN}/mcp`, { method: 'POST', body: await text(req), headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' } }), path: '/mcp' })
+    res.writeHead(answer.status, { 'content-type': answer.headers.get('content-type') ?? 'application/json' }).end(await answer.text())
   })
   const umask = process.umask(0o177)
   const listening = new Promise((resolve, reject) => server.once('error', reject).listen(MCP_SOCK, resolve))
@@ -562,8 +471,29 @@ function watch() {
     tray = new Tray(join(HERE, 'trayTemplate.png'))
     tray.setToolTip('OpenHut')
   }
-  poll().catch(() => undefined)
-  setInterval(() => poll().catch(() => undefined), POLL_MS)
+  followEvents()
+}
+
+async function followEvents() {
+  const ws = await liveSocket('/api/events').catch(() => undefined)
+  const retry = () => setTimeout(followEvents, Math.min(WATCH_RETRY_MS, 1000 * 2 ** watched.tries++))
+  if (!ws) return retry()
+  ws.onmessage = ({ data }) => {
+    const event = parsed(String(data))
+    if (event?.type === 'beat') return ws.send('beat')
+    if (event?.type === 'hello') watched.tries = 0
+    if (event?.type === 'hello' || WATCHED.has(event?.data?.object)) later()
+  }
+  ws.onclose = retry
+  ws.onerror = () => undefined
+}
+
+function parsed(text) {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return undefined
+  }
 }
 
 function firstRun() {
@@ -700,7 +630,7 @@ async function bootContainer() {
   if (code !== 0) throw new Error(`Installing OpenHut in Docker stopped (exit ${code}). See install.log.`)
   mkdirSync(join(HOME, 'keys'), { recursive: true, mode: 0o700 })
   writeFileSync(join(HOME, LOCAL_KEY), await safeStorage.encryptStringAsync(key), { mode: 0o600 })
-  keys.set(LOCAL.id, key)
+  localKey = key
   return waitFor(answers, 120)
 }
 
@@ -919,46 +849,36 @@ async function releaseSigned(info) {
 
 function serve(req) {
   const { pathname } = new URL(req.url)
-  const routed = /^\/c\/([\w-]+)(\/api\/.*|\/mcp)$/.exec(pathname)
-  if (routed) return toComputer({ req, id: routed[1], path: routed[2] })
-  return pathname.startsWith('/api/') || pathname === '/mcp' ? toComputer({ req, id: LOCAL.id, path: pathname }) : serveRenderer(req)
+  return /^\/(api|c\/[\w-]+\/api)\//.test(pathname) || pathname === '/mcp' ? toLocal({ req, path: pathname }) : serveRenderer(req)
 }
 
 function refuse(status, message) {
   return new Response(JSON.stringify({ error: { type: status >= 500 ? 'api_error' : 'invalid_request_error', message } }), { status, headers: { 'content-type': 'application/json' } })
 }
 
-async function toComputer({ req, id, path }) {
+async function toLocal({ req, path }) {
   const origin = req.headers.get('origin')
   if (!['GET', 'HEAD'].includes(req.method) && origin !== null && origin !== APP_ORIGIN) return refuse(403, 'Only the OpenHut app can change things here.')
   const target = path + new URL(req.url).search
-  if (id === LOCAL.id && !CONTAINER && await booted !== true) return refuse(502, `OpenHut's runtime didn't start. The logs are in ${LOGS}.`)
-  if (id === LOCAL.id && !CONTAINER) return toSocket({ req, path: target }).catch((error) => refuse(502, `OpenHut's runtime didn't answer (${error.code ?? error.message}). Try again, or restart OpenHut.`))
-  if (id === LOCAL.id && !keys.has(id) && !existsSync(join(HOME, LOCAL_KEY))) return refuse(503, `OpenHut is still being set up on ${LOCAL.name.toLowerCase()}.`)
-  const computer = id === LOCAL.id ? { ...LOCAL, keyFile: LOCAL_KEY } : storedComputers().find((each) => each.id === id)
-  if (!computer) return refuse(404, 'That computer isn\'t in your list.')
+  if (!CONTAINER && await booted !== true) return refuse(502, `OpenHut's runtime didn't start. The logs are in ${LOGS}.`)
+  if (!CONTAINER) return toSocket({ req, path: target }).catch((error) => refuse(502, `OpenHut's runtime didn't answer (${error.code ?? error.message}). Try again, or restart OpenHut.`))
+  if (!localKey && !existsSync(join(HOME, LOCAL_KEY))) return refuse(503, `OpenHut is still being set up on ${LOCAL.name.toLowerCase()}.`)
   const headers = new Headers(req.headers)
   for (const name of ['host', 'origin', 'cookie', 'connection']) headers.delete(name)
   headers.set('openhut-app-version', updating.ready?.version || app.getVersion())
   headers.set('openhut-time-zone', Intl.DateTimeFormat().resolvedOptions().timeZone)
-  const body = computer.key && !['GET', 'HEAD'].includes(req.method) ? await req.arrayBuffer() : req.body
-  const res = await tunnels.reach({ computer, path: target, init: { method: req.method, headers, body } }).catch(() => undefined)
-  if (!res) return refuse(502, `${computer.name} isn't answering. It may be off.`)
+  headers.set('authorization', `Bearer ${await containerKey()}`)
+  const res = await fetch(`${LOCAL.url}${target}`, { method: req.method, headers, body: req.body, duplex: 'half', redirect: 'manual' }).catch(() => undefined)
+  if (!res) return refuse(502, `OpenHut on ${LOCAL.name.toLowerCase()} isn't answering. Check that Docker is running.`)
   const out = new Headers(res.headers)
   for (const name of ['content-encoding', 'content-length', 'transfer-encoding', 'connection']) out.delete(name)
   return new Response([204, 304].includes(res.status) ? null : res.body, { status: res.status, headers: out })
 }
 
-async function keyedFetch({ computer, path, init }) {
-  const headers = new Headers(init.headers)
-  headers.set('authorization', `Bearer ${await keyOf(computer)}`)
-  return fetch(`${computer.url}${path}`, { ...init, headers, duplex: 'half', redirect: 'manual' })
-}
-
 async function relayLive({ port, path }) {
   const ws = await liveSocket(String(path)).catch(() => null)
   if (!ws) {
-    port.postMessage(ws === null ? { closed: 1006, reason: '' } : { closed: 4404, reason: 'That computer isn\'t in your list.' })
+    port.postMessage(ws === null ? { closed: 1006, reason: '' } : { closed: 4404, reason: 'There\'s no live view at that address.' })
     return port.close()
   }
   port.on('message', ({ data }) => ws.readyState === WebSocket.OPEN && ws.send(String(data)))
@@ -973,13 +893,9 @@ async function relayLive({ port, path }) {
 }
 
 async function liveSocket(path) {
-  const [, id = LOCAL.id, target] = /^(?:\/c\/([\w-]+))?(\/api\/(?:browsers\/[\w-]+\/live(?:\?fps=\d+)?|events))$/.exec(path) ?? []
-  if (!target) return undefined
-  if (id === LOCAL.id && !CONTAINER) return new WebSocket(`ws://localhost${target}`, { createConnection: () => connect(SERVER_SOCK) })
-  const computer = id === LOCAL.id ? { ...LOCAL, keyFile: LOCAL_KEY } : storedComputers().find((each) => each.id === id)
-  if (!computer) return undefined
-  if (computer.key) return tunnels.socket({ computer, path: target })
-  return new WebSocket(`${computer.url.replace(/^http/, 'ws')}${target}`, { headers: { authorization: `Bearer ${await keyOf(computer)}`, 'openhut-app-version': app.getVersion() } })
+  if (!/^\/api\/(browsers\/[\w-]+\/live(\?fps=\d+)?|events)$/.test(path)) return undefined
+  if (!CONTAINER) return new WebSocket(`ws://localhost${path}`, { createConnection: () => connect(SERVER_SOCK) })
+  return new WebSocket(`${LOCAL.url.replace(/^http/, 'ws')}${path}`, { headers: { authorization: `Bearer ${await containerKey()}`, 'openhut-app-version': app.getVersion() } })
 }
 
 async function toSocket({ req, path }) {

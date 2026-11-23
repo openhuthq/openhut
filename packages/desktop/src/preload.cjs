@@ -23,11 +23,6 @@ contextBridge.exposeInMainWorld('openhut', {
     ipcRenderer.postMessage('browser-live', path, [port2])
     return { send: (line) => port1.postMessage(line), close: () => port1.close() }
   },
-  devices: {
-    list: () => ipcRenderer.invoke('devices.list'),
-    remove: (input) => ipcRenderer.invoke('devices.remove', input),
-    allow: (input) => ipcRenderer.invoke('devices.allow', input),
-  },
   cloud: {
     notify: (input) => ipcRenderer.invoke('cloud.notify', input),
   },
@@ -40,9 +35,7 @@ contextBridge.exposeInMainWorld('openhut', {
     save: (input) => ipcRenderer.invoke('kit.save', input),
   },
   computers: {
-    list: () => ipcRenderer.invoke('computers.list'),
     add: (input) => ipcRenderer.invoke('computers.add', input),
-    remove: (input) => ipcRenderer.invoke('computers.remove', input),
     enrollments: () => ipcRenderer.invoke('computers.enrollments'),
     dismiss: (input) => ipcRenderer.invoke('computers.dismiss', input),
     onEnrollments: (listener) => ipcRenderer.on('computers.enrollments', (_event, list) => listener(list)),

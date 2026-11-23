@@ -2,7 +2,6 @@ import type { QueryClient, QueryFilters } from '@tanstack/react-query'
 import * as z from 'zod/mini'
 import { LIVE_BEAT_MS, LiveEvent } from '@openhut/common/live.ts'
 import { openChannel, type Channel } from '@/lib/live-socket'
-import { storedComputers } from '@/lib/openhut'
 import { AGENTS_KEY, COMPUTERS_KEY, CONNECTIONS_KEY, GRANTS_KEY, PROVIDERS_KEY, THREADS_KEY } from '@/lib/query-keys'
 
 const FILTERS: Record<string, QueryFilters[]> = {
@@ -24,16 +23,13 @@ const OFFLINE = [{ queryKey: COMPUTERS_KEY }, { queryKey: AGENTS_KEY }]
 const GIVE_UP = [4401, 4403, 4404]
 const SILENT_MS = LIVE_BEAT_MS * 2.5
 const CHECK_MS = 10_000
-const SYNC_MS = 30_000
 const FLUSH_MS = 250
 const FIRST_WAIT_MS = 1000
 const MAX_WAIT_MS = 30_000
 const MAX_WAIT_UNHEARD_MS = 300_000
 
-type Follow = { channel?: Channel; retry?: ReturnType<typeof setTimeout>; heardAt: number; heard: boolean; live: boolean; tries: number }
-
-export function followComputers(client: QueryClient): void {
-  const follows = new Map<string, Follow>()
+export function followEvents(client: QueryClient): void {
+  const follow: { channel?: Channel; retry?: ReturnType<typeof setTimeout>; heardAt: number; heard: boolean; live: boolean; tries: number } = { heardAt: 0, heard: false, live: false, tries: 0 }
   const pending = new Map<string, QueryFilters>()
   let flush: ReturnType<typeof setTimeout> | undefined
 
@@ -47,12 +43,11 @@ export function followComputers(client: QueryClient): void {
     }, FLUSH_MS)
   }
 
-  const open = (computer: string, follow: Follow) => {
+  const open = () => {
     clearTimeout(follow.retry)
     follow.retry = undefined
     follow.heardAt = Date.now()
     const channel: Channel = openChannel({
-      computer,
       path: '/api/events',
       onLine: (line) => {
         follow.heardAt = Date.now()
@@ -66,55 +61,35 @@ export function followComputers(client: QueryClient): void {
         follow.tries = 0
       },
       onClose: (code) => {
-        if (follow.channel === channel) drop({ computer, follow, code })
+        if (follow.channel === channel) drop(code)
       },
     })
     follow.channel = channel
   }
 
-  const drop = ({ computer, follow, code }: { computer: string; follow: Follow; code: number }) => {
+  const drop = (code: number) => {
     follow.channel = undefined
     if (follow.live) invalidate(OFFLINE)
     follow.live = false
-    if (GIVE_UP.includes(code) || !follows.has(computer)) return
+    if (GIVE_UP.includes(code)) return
     follow.tries += 1
     const wait = Math.min(follow.heard ? MAX_WAIT_MS : MAX_WAIT_UNHEARD_MS, FIRST_WAIT_MS * 2 ** follow.tries)
-    follow.retry = setTimeout(() => open(computer, follow), Math.random() * wait)
-  }
-
-  const sync = async () => {
-    const ids = new Set((await storedComputers()).map((computer) => computer.id))
-    for (const [computer, follow] of follows) {
-      if (ids.has(computer)) continue
-      follows.delete(computer)
-      clearTimeout(follow.retry)
-      follow.channel?.close()
-    }
-    for (const computer of ids) {
-      if (follows.has(computer)) continue
-      const follow: Follow = { heardAt: 0, heard: false, live: false, tries: 0 }
-      follows.set(computer, follow)
-      open(computer, follow)
-    }
+    follow.retry = setTimeout(open, Math.random() * wait)
   }
 
   const check = () => {
-    for (const [computer, follow] of follows) {
-      if (follow.channel && Date.now() - follow.heardAt > SILENT_MS) {
-        follow.channel.close()
-        drop({ computer, follow, code: 1006 })
-      }
-    }
+    if (!follow.channel || Date.now() - follow.heardAt <= SILENT_MS) return
+    follow.channel.close()
+    drop(1006)
   }
 
   const wake = () => {
     if (document.visibilityState !== 'visible') return
     check()
-    for (const [computer, follow] of follows) if (!follow.channel && follow.retry && follow.heard) open(computer, follow)
+    if (!follow.channel && follow.retry && follow.heard) open()
   }
 
-  void sync().catch(() => undefined)
-  setInterval(() => void sync().catch(() => undefined), SYNC_MS)
+  open()
   setInterval(check, CHECK_MS)
   document.addEventListener('visibilitychange', wake)
 }

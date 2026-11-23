@@ -6,24 +6,15 @@ import { useJoinRuntimes } from '@/features/cloud/live'
 import { CloudToasts } from '@/features/cloud/unlock'
 import { ConnectionsView } from '@/features/connections/connections-view'
 import { CloudJoin, JoinLinkDialog } from '@/features/join/cloud-join'
-import { Join } from '@/features/join/join'
 import { useMe } from '@/features/people/api'
 import { SettingsView } from '@/features/settings/settings-view'
-import { isPhone, leave, onBack, update } from '@/lib/native'
-import { usePhone } from '@/lib/phone'
+import { leave, onBack, update } from '@/lib/native'
+import '@/lib/phone'
 import { navigate, open, useOpen, usePath } from '@/lib/router'
 
 type Background = { path: string; route: ShellRoute }
 
 export function App() {
-  const phone = usePhone()
-  if (!isPhone()) return <Dashboard />
-  if (phone.status === 'loading') return null
-  if (phone.status !== 'paired' || phone.link) return <Join removed={phone.status === 'removed'} link={phone.link} paired={phone.status === 'paired'} />
-  return <Dashboard />
-}
-
-function Dashboard() {
   const path = usePath()
   const route = routeOf(path)
   const background = useRef<Background>({ path: '/', route: { page: 'home', adding: false } })

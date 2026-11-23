@@ -27,7 +27,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   Query), which calls `/api/*` on `app://openhut`; the main process forwards it to the runtime's socket. Tailwind v4 with shared components in `src/renderer/src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`private/brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.
 - **`packages/tunnel`** — `@openhut/tunnel`, the encrypted tunnel (through the relay, or fed by any pipe through `sessions()`, which the runtime's tailnet port uses): Noise IK on `noise-handshake`,
-  the frame codec, `connect` (device, runs in browsers too) and `serve` (computer).
+  the frame codec, `connect` (device) and `serve` (computer); both show the access token as `x-openhut-token`, so `connect` runs in Node only for now.
 - **`packages/e2e`** — `@openhut/e2e`, the end-to-end run: the cloud server on PGlite, a bare Linux server in Docker, the
   curl install of a remote runtime that joins with a one-use code (`OPENHUT_JOIN`), a tampered upgrade, the upgrade and a restart. Results go to `packages/e2e/results/` (gitignored).
 - **`packages/docs`** — `@openhut/docs`, the docs at openhut.dev/docs: Fumadocs on TanStack Start, prerendered. MDX in
@@ -89,7 +89,7 @@ its data in `~/Library/Application Support/OpenHut Dev`, apart from the installe
 ## Build the desktop app
 
 `npm -w @openhut/desktop run dist` builds the renderer, bundles the runtime's server and agentd with esbuild into
-`packages/desktop/dist/backend` with the Hermes runtime, Node, Claude Code and agent-browser for the build's platform (`scripts/pack-hermes.mjs`, pinned in `install/native-runtime.json`; nothing downloads on first run) (`scripts/pack-backend.mjs`; on Linux it packs only the client and the MCP bridge, since the install in Docker brings the rest), and runs electron-builder (`electron-builder.yml`): an arm64,
+`packages/desktop/dist/backend` with the Hermes runtime, Node, Claude Code and agent-browser for the build's platform (`scripts/pack-hermes.mjs`, pinned in `install/native-runtime.json`; nothing downloads on first run) (`scripts/pack-backend.mjs`; on Linux it packs only the MCP bridge, since the install in Docker brings the rest), and runs electron-builder (`electron-builder.yml`): an arm64,
 macOS 14+ `release/mac-arm64/OpenHut.app`, `release/OpenHut-arm64.dmg` and the versioned zip. It signs with the Developer ID
 in the login keychain (hardened runtime, `build/entitlements.mac.plist`) and never notarizes (`notarize: false`): only the
 release workflow (`.github/workflows/desktop.yml`, `scripts/notarize.sh`) notarizes, staples and checks a build. The packaged app runs the real model unless `OPENHUT_MODEL` is set.

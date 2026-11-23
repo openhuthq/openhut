@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { OpenHutAgent, OpenHutConnection } from '@openhut/client'
+import type { OpenHutAgent, OpenHutConnection } from '@/lib/openhut'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'

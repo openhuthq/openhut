@@ -87,6 +87,11 @@ export async function identity(secret: Bytes = newKey()): Promise<Identity> {
   return { secret, publicKey: concat([fromBase64(x ?? ''), boxPublic]) }
 }
 
+export async function boxKey(secret: Bytes): Promise<{ publicKey: Bytes; secretKey: Bytes }> {
+  const box = await deviceKem.deriveKeyPair(secret)
+  return { publicKey: new Uint8Array(await deviceKem.serializePublicKey(box.publicKey)), secretKey: new Uint8Array(await deviceKem.serializePrivateKey(box.privateKey)) }
+}
+
 export async function sign({ secret, bytes }: { secret: Bytes; bytes: Bytes }): Promise<Bytes> {
   const key = await subtle.importKey('pkcs8', concat([ED25519_PKCS8, secret]), 'Ed25519', false, ['sign'])
   return new Uint8Array(await subtle.sign('Ed25519', key, bytes))

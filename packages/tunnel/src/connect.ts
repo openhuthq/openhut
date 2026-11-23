@@ -1,7 +1,6 @@
 import { FrameType, REQUEST_HEADERS, chunks, decodeFrame, decodeJson, encodeFrame, encodeJson, messageChunks, messageJoiner, stringRecord, type Frame, type SocketMessage } from './frames.ts'
-import { fromHex, initiator, pairingProof, sixDigits, type DeviceKey, type Transport } from './noise.ts'
+import { fromHex, initiator, type DeviceKey, type Transport } from './noise.ts'
 
-export type Invitation = { secret: string; name: string; kind: 'client' | 'computer'; computer?: { id: string; name: string } }
 export type TunnelSocket = {
   binaryType: 'arraybuffer'
   readyState: number
@@ -13,8 +12,6 @@ export type TunnelSocket = {
 export type Tunnel = {
   fetch: (path: string, init?: RequestInit) => Promise<Response>
   socket: (path: string) => TunnelSocket
-  digits: string
-  control: AsyncIterable<Record<string, unknown>>
   close: () => void
   readonly failure: TunnelError | undefined
 }
@@ -35,37 +32,15 @@ export class TunnelError extends Error {
 const nullBody = new Set([204, 205, 304])
 const empty = new Uint8Array(0)
 
-function queue<T>() {
-  const items: T[] = []
-  let wake = () => {}
-  let done = false
-  return {
-    push: (item: T) => {
-      items.push(item)
-      wake()
-    },
-    end: () => {
-      done = true
-      wake()
-    },
-    async *[Symbol.asyncIterator]() {
-      while (items.length || !done) {
-        const item = items.shift()
-        if (item) yield item
-        else await new Promise<void>(resolve => { wake = resolve })
-      }
-    }
-  }
-}
+const NodeSocket = WebSocket as unknown as new (url: string, init: { headers: Record<string, string> }) => WebSocket
 
-export async function connect(input: { relayUrl: string; computer: { id: string; key: string }; key: DeviceKey; url?: string; invitation?: Invitation; timeout?: number }): Promise<Tunnel> {
+export async function connect(input: { relayUrl: string; computer: { id: string; key: string }; key: DeviceKey; token: string; url?: string; timeout?: number }): Promise<Tunnel> {
   const handshake = initiator({ key: input.key, remote: fromHex(input.computer.key) })
   const first = await handshake.write()
-  const socket = new WebSocket(input.url ?? `${input.relayUrl}/v1/relay/${input.computer.id}?role=device`)
+  const socket = new NodeSocket(input.url ?? `${input.relayUrl}/v1/relay/${input.computer.id}?role=device`, { headers: { 'x-openhut-token': input.token } })
   socket.binaryType = 'arraybuffer'
   const streams = new Map<number, Pending>()
   const sockets = new Map<number, OpenSocket>()
-  const control = queue<Record<string, unknown>>()
   let session: Transport | undefined
   let failure: TunnelError | undefined
   let next = 1
@@ -80,7 +55,6 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
     }
     streams.clear()
     for (const open of sockets.values()) open.ended({ code: 1006, reason: error.message })
-    control.end()
   }
 
   const send = (frame: Frame) => {
@@ -90,7 +64,7 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
   }
 
   const dispatch = ({ type, stream, payload }: Frame) => {
-    if (type === FrameType.control) return control.push(decodeJson(payload))
+    if (type === FrameType.control) return
     if (type === FrameType.socketMessage) return sockets.get(stream)?.receive(payload)
     if (type === FrameType.socketClose) return sockets.get(stream)?.ended(closingOf(payload))
     const pending = streams.get(stream)
@@ -153,13 +127,7 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
     }, input.timeout ?? 15_000)
   })
 
-  const transport = await ready.finally(() => clearTimeout(late))
-  const digits = await sixDigits(transport.handshakeHash)
-  if (input.invitation) {
-    const { secret, ...hello } = input.invitation
-    const proof = await pairingProof({ secret, handshakeHash: transport.handshakeHash })
-    send({ type: FrameType.control, stream: 0, payload: encodeJson({ type: 'hello', proof, ...hello }) })
-  }
+  await ready.finally(() => clearTimeout(late))
 
   const fetch = async (path: string, init?: RequestInit) => {
     if (failure) throw failure
@@ -213,7 +181,7 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
     return opened
   }
 
-  return { fetch, socket: open, digits, control, close: () => socket.close(), get failure() { return failure } }
+  return { fetch, socket: open, close: () => socket.close(), get failure() { return failure } }
 }
 
 function closingOf(payload: Uint8Array): Closing {
