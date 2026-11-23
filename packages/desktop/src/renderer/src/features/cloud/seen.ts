@@ -40,5 +40,5 @@ export function joinRequests({ cloud }: { cloud: Cloud }): JoinRequest[] {
   if (cloud.status !== 'on' && cloud.status !== 'offline') return []
   return cloud.workspaces.flatMap((workspace) => workspace.requests
     .filter((request) => workspace.own && workspace.home ? request.email === cloud.email : workspace.role !== 'member' && request.email !== cloud.email)
-    .map((request) => ({ workspace, request, mine: request.email === cloud.email, path: request.email === cloud.email ? '/settings/computers' : '/settings/people' })))
+    .map((request) => ({ workspace, request, mine: request.email === cloud.email, path: request.email === cloud.email ? '/settings/computers' : '/settings/general' })))
 }

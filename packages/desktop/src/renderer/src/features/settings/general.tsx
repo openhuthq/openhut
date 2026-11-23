@@ -1,29 +1,19 @@
 import type { IconSvgElement } from '@hugeicons/react'
-import { ChartColumnIcon, Coffee01Icon, Login01Icon } from '@hugeicons/core-free-icons'
-import type { Admin } from '@openhut/common/admin/admin.ts'
+import { Coffee01Icon, Login01Icon } from '@hugeicons/core-free-icons'
 import { Switch } from '@/components/ui/switch'
-import { ErrorNote } from '@/components/error-note'
-import { I, Section } from '@/components/kit'
-import { useAdmin, useUpdateAdmin } from '@/features/settings/api'
+import { I } from '@/components/kit'
 import { desktop, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
 import { Row, Rows } from '@/features/settings/kit'
 import { TeamGeneral } from '@/features/people/workspace'
 import { toastError } from '@/lib/toast'
 
 export function GeneralSettings() {
-  const admin = useAdmin()
   return <>
     <TeamGeneral />
-    <ErrorNote message={admin.error?.message} />
     <Rows>
       {desktop && <PrefSwitch icon={Login01Icon} hue="text-hue-green" name="openAtLogin" title="Open at login" note="Agents start in the background, without opening this window." />}
       {desktop && <PrefSwitch icon={Coffee01Icon} hue="text-hue-amber" name="keepAwake" title="Keep this computer awake" note="While agents run, so they keep answering. The screen can still turn off." />}
     </Rows>
-    <Section title="Data">
-      <Rows>
-        {admin.data && <UsageData admin={admin.data} />}
-      </Rows>
-    </Section>
   </>
 }
 
@@ -32,14 +22,5 @@ export function PrefSwitch({ icon, hue, name, title, note }: { icon: IconSvgElem
   const setPrefs = useSetPrefs()
   return <Row icon={<I icon={icon} size={20} className={hue} />} title={title} note={note}>
     <Switch checked={!!prefs.data?.[name]} aria-label={title} disabled={!prefs.data || setPrefs.isPending} onCheckedChange={() => prefs.data && setPrefs.mutate({ [name]: !prefs.data[name] }, { onError: toastError })} />
-  </Row>
-}
-
-function UsageData({ admin }: { admin: Admin }) {
-  const updateAdmin = useUpdateAdmin()
-  const test = admin.seat.mode === 'test'
-  return <Row icon={<I icon={ChartColumnIcon} size={20} className="text-hue-violet" />} title="Share anonymous usage data" note={test ? 'Off in test builds.' : 'Which features you use. Never your messages or files.'}>
-    <Switch checked={admin.usageData} aria-label="Share anonymous usage data" disabled={updateAdmin.isPending}
-      onCheckedChange={() => updateAdmin.mutate({ usageData: !admin.usageData }, { onError: toastError })} />
   </Row>
 }
