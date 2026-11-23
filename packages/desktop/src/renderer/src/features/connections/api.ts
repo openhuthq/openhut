@@ -4,7 +4,8 @@ import { type Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTo
 import type { OpenHutConnection } from '@openhut/client'
 import { request } from '@/lib/api-client'
 import { openhut } from '@/lib/openhut'
-import { CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
+import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
+import { asked } from '@/features/connections/asked'
 import { isPhone } from '@/lib/native'
 import { navigate } from '@/lib/router'
 
@@ -94,4 +95,13 @@ export function useDeleteConnection(connection: OpenHutConnection) {
       void client.invalidateQueries({ queryKey: GRANTS_KEY })
     },
   })
+}
+
+export function useBackToAsker() {
+  const client = useQueryClient()
+  return async ({ agentId, name }: { agentId: string; name: string }) => {
+    asked.done({ agentId, line: `Connected ${name}.` })
+    await client.invalidateQueries({ queryKey: AGENTS_KEY })
+    navigate(`/agents/${encodeURIComponent(agentId)}`)
+  }
 }

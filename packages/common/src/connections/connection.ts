@@ -6,6 +6,10 @@ export const GOOGLE_KINDS = ['gmail', 'drive', 'google', 'google_chat', 'google_
 export const SIGN_IN_KINDS = ['posthog', 'linear', 'github', ...GOOGLE_KINDS, 'mcp'] as const
 export const ConnectionKind = z.enum(['postgres', 'convex', 'posthog', 'linear', 'github', ...GOOGLE_KINDS, 'excalidraw', 'mcp'])
 export type ConnectionKind = z.infer<typeof ConnectionKind>
+export const CONNECTION_TITLES: Record<ConnectionKind, string> = {
+  postgres: 'Postgres', convex: 'Convex', posthog: 'PostHog', linear: 'Linear', github: 'GitHub', gmail: 'Gmail', drive: 'Google Drive',
+  google: 'Google Workspace', google_chat: 'Google Chat', google_contacts: 'Google Contacts', google_search: 'Google Search', excalidraw: 'Excalidraw', mcp: 'MCP server',
+}
 
 export const ConnectionStatus = z.enum(['connected', 'failing', 'no_calls'])
 export type ConnectionStatus = z.infer<typeof ConnectionStatus>

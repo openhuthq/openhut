@@ -11,7 +11,8 @@ import { testAnthropic, testModel } from './test-model.ts'
 import { brokerService, upstreams } from './broker.ts'
 import { cardService } from '../cards/card-service.ts'
 import { routineService } from '../routines/routine-service.ts'
-import { ASKABLE, askCard, MCP_AUTH } from '@openhut/common/asks/ask.ts'
+import { askCard, MCP_AUTH } from '@openhut/common/asks/ask.ts'
+import { ConnectionKind } from '@openhut/common/connections/connection.ts'
 
 const PER_AGENT = 8
 const MAX_BODY = 1 << 20
@@ -78,7 +79,7 @@ function agentMcp(agent: GatewayAgent): McpServer {
   server.registerTool('ask_to_connect', {
     description: 'Ask the person to connect an app you need and can\'t reach yet. You get a card: put it in your reply. One app at a time.',
     inputSchema: {
-      app: z.enum(ASKABLE),
+      app: z.enum(ConnectionKind.options),
       why: z.string().min(1).max(300).describe('One or two sentences for the person: what you will do with it, and how to make the access if they need to (a read-only role, a token\'s scopes).'),
       url: z.url({ protocol: /^https$/ }).max(500).optional().describe('For app mcp: the server\'s URL.'),
       name: z.string().min(1).max(60).optional().describe('For app mcp: what to call it, like DigitalOcean.'),

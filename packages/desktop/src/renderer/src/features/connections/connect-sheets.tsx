@@ -5,14 +5,16 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MultiSelect } from '@/components/ui/multi-select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { useAuthorizeConnection, useConnections, useCreateConnection } from '@/features/connections/api'
+import { useAuthorizeConnection, useBackToAsker, useConnections, useCreateConnection } from '@/features/connections/api'
 import { uniqueName, type Integration } from '@/features/connections/catalog'
 import { Field } from '@/features/connections/sheet'
 import { CopyButton } from '@/components/copy-button'
 import { useComputers } from '@/features/computers/api'
-import { useAgents } from '@/features/agents/api'
+import { useAgents, useCreateGrant } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { askOf, asked } from '@/features/connections/asked'
+import { copyOn } from '@/features/connections/copies'
+import type { OpenHutAgent, OpenHutConnection } from '@openhut/client'
 import { Busy, PILL, SetupSheet } from '@/components/kit'
 import { fieldError, formError } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
@@ -30,16 +32,37 @@ type FlowProps = { me: Me; item: Integration; close: () => void; returned: strin
 export function ConnectSheet({ me, item }: { me: Me; item: Integration }) {
   const returned = new URLSearchParams(location.search).get('error') ?? undefined
   const wanted = askOf(location.search)
-  const asker = (useAgents().data ?? []).find((agent) => agent.id === wanted.agentId)
-  useEffect(() => { if (asker) asked.remember({ agentId: asker.id, kind: item.name }) }, [asker?.id, item.name])
-  const ask = asker ? { url: wanted.url, name: wanted.name, auth: wanted.auth, computer: asker.computer, line: <span className="flex items-center gap-2 text-[13px] text-body"><Face agent={asker} size={20} />{asker.name} asked for this. It can use it once you connect.</span> } : {}
-  const props = { me, item, returned, ask, close: () => navigate('/connections') }
+  const agents = useAgents()
+  const connections = useConnections()
+  const asker = agents.data?.find((agent) => agent.id === wanted.agentId)
+  useEffect(() => {
+    if (asker) asked.remember({ agentId: asker.id, kind: item.name })
+    else if (!wanted.agentId) asked.forget()
+  }, [asker?.id, wanted.agentId, item.name])
+  if (wanted.agentId && !agents.data) return null
+  const host = asker && wanted.url && URL.canParse(wanted.url) ? new URL(wanted.url).host : undefined
+  const existing = asker ? (connections.data ?? []).filter((connection) => connection.kind === item.name && connection.usable && copyOn({ connection, computer: asker.computer }) && (item.name !== 'mcp' || connection.name === wanted.name)) : []
+  const ask = asker ? { url: wanted.url, name: wanted.name, auth: wanted.auth, computer: asker.computer, line: <AskedLine asker={asker} host={host} existing={existing} /> } : {}
+  const close = () => { asked.forget(); navigate('/connections') }
+  const props = { me, item, returned, ask, close }
   switch (item.name) {
     case 'postgres': return <PostgresSheet {...props} />
     case 'convex': return <ConvexSheet {...props} />
     case 'mcp': return <McpSheet {...props} />
     default: return <QuickSheet {...props} />
   }
+}
+
+function AskedLine({ asker, host, existing }: { asker: OpenHutAgent; host: string | undefined; existing: OpenHutConnection[] }) {
+  const grant = useCreateGrant()
+  const back = useBackToAsker()
+  const give = (connection: OpenHutConnection) => grant.mutateAsync({ agentId: asker.id, connectionId: copyOn({ connection, computer: asker.computer }) ?? connection.id })
+    .then(() => back({ agentId: asker.id, name: connection.name }), toastError)
+  return <div className="flex flex-col gap-2">
+    <span className="flex items-center gap-2 text-[13px] text-body"><Face agent={asker} size={20} />{asker.name} asked for this{host && <code className="text-[12.5px] text-ink">{host}</code>}</span>
+    {existing.map((connection) => <span key={connection.id} className="flex items-center gap-2 text-[13px] text-body">Already connected: {connection.name}
+      <Button type="button" variant="secondary" size="sm" disabled={grant.isPending} onClick={() => void give(connection)}>Give {asker.name} access</Button></span>)}
+  </div>
 }
 
 function sheetOf(item: Integration) {
@@ -127,9 +150,10 @@ function McpSheet({ item, close, returned, ask }: FlowProps) {
 
 function QuickSheet({ item, close, returned, ask }: FlowProps) {
   const quick = useQuickConnect()
+  const again = quick.error || returned ? 'Try again' : 'Connect'
   return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(quick.error, []) ?? returned}
     foot={<><Button type="button" variant="secondary" onClick={close}>Cancel</Button>
-      <Button type="button" variant="primary" disabled={quick.pending} onClick={() => quick.connect(item)}>{quick.pending ? 'Connecting…' : quick.error || returned ? 'Try again' : 'Connect'}</Button></>}>{ask.line}</SetupSheet>
+      <Button type="button" variant="primary" disabled={quick.pending} onClick={() => quick.connect(item)}>{quick.pending ? 'Connecting…' : again}</Button></>}>{ask.line}</SetupSheet>
 }
 
 export function useQuickConnect() {

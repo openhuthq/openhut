@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { GOOGLE_KINDS, type ConnectionAuthorization, type CreateConnectionAuthorization, type SIGN_IN_KINDS } from '@openhut/common/connections/connection.ts'
+import { CONNECTION_TITLES as TITLES, GOOGLE_KINDS, SIGN_IN_KINDS, type ConnectionAuthorization, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { github, type GithubApp } from '../integrations/github/github.ts'
 import { google, type GoogleKind } from '../integrations/google/google.ts'
@@ -8,7 +8,6 @@ import type { Caller } from '../team/identity.ts'
 import { callbackBase, connectionService } from './connection-service.ts'
 
 const SIGN_IN_MS = 15 * 60_000
-const TITLES: Record<SignInKind, string> = { posthog: 'PostHog', linear: 'Linear', github: 'GitHub', gmail: 'Gmail', drive: 'Google Drive', google: 'Google Workspace', google_chat: 'Google Chat', google_contacts: 'Google Contacts', google_search: 'Google Search', mcp: 'MCP server' }
 const pending = new Map<string, Pending>()
 
 export const connectionAuthorizationService = {
@@ -90,7 +89,7 @@ function signInKind(kind: string): SignInKind {
   throw new HttpError(400, 'This connection uses a key, not a sign-in. Delete it and add it again with a new key.')
 }
 
-const isSignInKind = (kind: string): kind is SignInKind => Object.hasOwn(TITLES, kind)
+const isSignInKind = (kind: string): kind is SignInKind => SIGN_IN_KINDS.some((each) => each === kind)
 const isGoogle = (kind: SignInKind): kind is GoogleKind => (GOOGLE_KINDS as readonly string[]).includes(kind)
 
 type SignInKind = (typeof SIGN_IN_KINDS)[number]

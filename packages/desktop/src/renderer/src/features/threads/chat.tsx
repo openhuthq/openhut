@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type C
 import * as z from 'zod/mini'
 import { useChat } from '@ai-sdk/react'
 import { useQueryClient } from '@tanstack/react-query'
-import { said } from '@/features/connections/asked'
+import { asked } from '@/features/connections/asked'
 import { AGENTS_KEY } from '@/lib/query-keys'
 import { usePath } from '@/lib/router'
 import { DefaultChatTransport, type UIMessage } from 'ai'
@@ -80,14 +80,15 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   const path = usePath()
   const client = useQueryClient()
   useEffect(() => {
-    const line = said.get(agent.id)
+    const line = asked.said(agent.id)
     if (!line || busy) return
     if (agent.health !== 'answering') {
       const timer = setTimeout(() => void client.invalidateQueries({ queryKey: AGENTS_KEY }), 1_500)
       return () => clearTimeout(timer)
     }
-    said.delete(agent.id)
-    send(line)
+    asked.sent(agent.id)
+    touch(thread)
+    void chat.sendMessage({ text: line })
   }, [agent.id, agent.health, busy, path])
   const shown = agent.runsHere ? chat.messages : chat.messages.filter((message) => message.role === 'user' || message.parts.some((part) => part.type !== 'step-start'))
   const last = shown.at(-1)

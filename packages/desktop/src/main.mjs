@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import updater from 'electron-updater'
 import WebSocket from 'ws'
 import { inviteLink } from './invite-link.mjs'
+import { linkPath } from './open-link.mjs'
 import { deviceName, ownerKeys } from './owner-keys.mjs'
 import { reacher } from './reach.mjs'
 import { fanOut } from './mcp-fan-out.mjs'
@@ -793,16 +794,6 @@ function saveBounds() {
   if (main && !main.isDestroyed()) writeFileSync(WINDOW_STATE, JSON.stringify(main.getNormalBounds()))
 }
 
-function linkPath(url) {
-  try {
-    const { protocol, hostname, hash } = new URL(url ?? '')
-    if (protocol !== 'openhut:' || hash.length < 2) return undefined
-    if (hostname === 'join') return `/join${hash}`
-    return hostname === 'open' && /^#\/connections\/new\/[a-z_]+\?[^#]*$/.test(hash) ? hash.slice(1) : undefined
-  } catch {
-    return undefined
-  }
-}
 
 function openLink(url) {
   linked = linkPath(url)

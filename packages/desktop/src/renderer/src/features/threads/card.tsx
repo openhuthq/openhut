@@ -5,7 +5,7 @@ import { createRenderer } from '@json-render/react'
 import { cardCatalog } from '@openhut/common/cards/card.ts'
 import { askedPath } from '@openhut/common/asks/ask.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { BRAND_ICONS, type BrandName } from '@/components/brand-icons'
+import { isBrand } from '@/components/brand-icons'
 import { Glyph } from '@/components/glyph'
 import { integration } from '@/features/connections/catalog'
 
@@ -15,11 +15,11 @@ const VARIANTS = { primary: 'primary', danger: 'destructive' } as const
 
 export const MessageCard = createRenderer(cardCatalog, {
   Card: ({ element: { props }, children }) => {
-    const brand = props.brand && props.brand in BRAND_ICONS ? props.brand as BrandName : undefined
+    const brand = props.brand && isBrand(props.brand) ? props.brand : undefined
     const subtitle = props.subtitle ?? (brand && integration(brand)?.short)
     return <div className="flex max-w-[560px] min-w-0 flex-col gap-3 rounded-lg border border-hair bg-sidebar p-4">
     <div className="flex min-w-0 items-center gap-3">
-      {brand && <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-hair bg-card"><Glyph name={brand} size={20} /></span>}
+      {brand && <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-card shadow-[inset_0_0_0_1px_var(--hair)]"><Glyph name={brand} size={20} /></span>}
       <div className="min-w-0">
         <div className="text-[15px] font-semibold text-ink">{props.title}</div>
         {subtitle && <div className="truncate text-[13px] text-mute">{subtitle}</div>}
@@ -63,7 +63,7 @@ export const MessageCard = createRenderer(cardCatalog, {
   },
   LinkButton: ({ element: { props } }) => {
     const inApp = askedPath(props.url)
-    if (inApp) return <span className="flex flex-wrap items-center gap-3"><a href={inApp} className={buttonVariants({ variant: 'primary', size: 'sm' })}>{props.label}</a><span className="text-[12.5px] text-mute">Opens in OpenHut. Agents never see the key.</span></span>
+    if (inApp) return <span className="flex flex-wrap items-center gap-3"><a href={inApp} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>{props.label}</a><span className="text-[12.5px] text-mute">Opens in OpenHut</span></span>
     return <a href={props.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>{props.label}<span className="text-[11px] text-mute">↗</span></a>
   },
 })
