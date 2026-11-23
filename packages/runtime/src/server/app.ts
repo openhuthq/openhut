@@ -18,7 +18,6 @@ import { channelController } from './channels/channel-controller.ts'
 import { connectionAuthorizationController, connectionController, connectionEventController, connectionToolController } from './connections/connection-controller.ts'
 import { providerController } from './models/provider-controller.ts'
 import { gatewayServer } from './gateway/gateway-server.ts'
-import { mcpController } from './mcp/mcp-controller.ts'
 import { threadController } from './threads/thread-controller.ts'
 import { threadService } from './threads/thread-service.ts'
 import { routineController } from './routines/routine-controller.ts'
@@ -72,7 +71,6 @@ await app.register(adminController, { prefix: '/api/admin' })
 await app.register(eventsController, { prefix: '/api/events' })
 await app.register(updateController, { prefix: '/api/updates' })
 await app.register(cloudController, { prefix: '/api/cloud' })
-await app.register(mcpController, { prefix: '/mcp' })
 
 app.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody({ status: 404, message: `There's no ${req.method} ${req.url.split('?')[0]}.` })))
 

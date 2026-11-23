@@ -92,7 +92,7 @@ export function CreateTeamDialog() {
   const close = () => open()
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    create.mutate(String(new FormData(event.currentTarget).get('name') ?? '').trim(), { onSuccess: () => navigate('/settings/team') })
+    create.mutate(String(new FormData(event.currentTarget).get('name') ?? '').trim(), { onSuccess: () => navigate('/settings/people') })
   }
   return <Dialog size="narrow" label="Create a team" onClose={close}>
     <DialogHead title="Create a team" onClose={close} />
@@ -163,7 +163,7 @@ function TeamSwitcher() {
       <DropdownMenuSeparator />
       {!joined && <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('new-team')}><I icon={PlusSignIcon} size={15} className="text-mute" />Create a team</DropdownMenuItem>}
       <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />{joined ? 'Join another team' : 'Join a team'}</DropdownMenuItem>
-      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/team')}><I icon={Settings02Icon} size={15} className="text-mute" />Team settings</DropdownMenuItem>
+      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/general')}><I icon={Settings02Icon} size={15} className="text-mute" />Team settings</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
 }

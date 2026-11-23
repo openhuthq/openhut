@@ -9,12 +9,14 @@ import { useAdmin, useUpdateAdmin } from '@/features/settings/api'
 import { bytes, desktop, useMachine, usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
 import { home } from '@/features/settings/home'
 import { Row, Rows } from '@/features/settings/kit'
+import { TeamGeneral } from '@/features/people/workspace'
 import { WORDS } from '@/lib/platform'
 import { toastError } from '@/lib/toast'
 
 export function GeneralSettings() {
   const admin = useAdmin()
   return <>
+    <TeamGeneral />
     <ErrorNote message={admin.error?.message} />
     <Rows>
       {desktop && <PrefSwitch icon={Login01Icon} hue="text-hue-green" name="openAtLogin" title="Open at login" note="Agents start in the background, without opening this window." />}

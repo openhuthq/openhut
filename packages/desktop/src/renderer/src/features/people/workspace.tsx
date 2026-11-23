@@ -22,23 +22,29 @@ import { cn } from '@/lib/utils'
 const KEYS_NOTE = 'Use after a lost computer or a teammate you don’t trust. Everyone else stays in.'
 
 
-export function TeamSettings() {
+export function TeamGeneral() {
+  const cloud = useCloud().data
+  const { active } = useWorkspaces()
+  const opened = useOpen()
+  if (cloud?.status === 'off' || !active) return null
+  const admin = active.role !== 'member'
+  return <>
+    <TeamHeader workspace={active} editing={admin ? opened ?? undefined : undefined} />
+    <TeamMore workspace={active} />
+    {opened === 'keys' && admin && <KeysConfirm workspace={active} />}
+    {opened === 'leave' && !active.own && <LeaveConfirm workspace={active} />}
+    {opened === 'delete' && admin && !active.own && <DeleteConfirm workspace={active} />}
+  </>
+}
+
+export function PeopleSettings() {
   const cloud = useCloud().data
   const { active } = useWorkspaces()
   const opened = useOpen()
   if (!cloud) return null
   const enabling = opened === 'enable' && <CloudSetup />
   if (cloud.status === 'off' || !active) return <>{enabling}<Pitch /></>
-  const admin = active.role !== 'member'
-  return <>
-    {enabling}
-    <TeamHeader workspace={active} editing={admin ? opened ?? undefined : undefined} />
-    <TeamPeople workspace={active} />
-    <TeamMore workspace={active} />
-    {opened === 'keys' && admin && <KeysConfirm workspace={active} />}
-    {opened === 'leave' && !active.own && <LeaveConfirm workspace={active} />}
-    {opened === 'delete' && admin && !active.own && <DeleteConfirm workspace={active} />}
-  </>
+  return <>{enabling}<TeamPeople workspace={active} /></>
 }
 
 function TeamHeader({ workspace, editing }: { workspace: CloudWorkspaceView; editing?: string }) {

@@ -4,7 +4,7 @@ Self-hosted agents: the OpenHut app (Mac and Linux) is a thin window over severa
 on each computer you add (`private/brain/decisions/app-aggregates-runtimes.md`). A runtime runs many Hermes agents, each in its
 own process (a plain process that runs as you on a Mac or Windows PC, a gVisor sandbox in Docker on Linux), with their own Slack app and WhatsApp number. Agents reach team
 data only through the runtime's gateway, which holds every key and checks each agent's grants on every call. You manage
-it from the app or from your own AI assistant over the control MCP. No sign-in and no people: the app reaches the local
+it from the app, or by asking an agent to change its own name, instructions or channels, which you approve in the app. No sign-in and no people: the app reaches the local
 runtime on a 0600 Unix socket, and a remote one end-to-end encrypted either straight over your tailnet (installed and paired over Tailscale SSH, no cloud) or through the relay after it joined with a code (`private/brain/decisions/two-ways-to-reach-a-computer.md`).
 Scope and decisions: `private/brain/decisions/openhut-v1-scope.md`.
 
@@ -16,7 +16,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `src/server/` is the API (Fastify, Kysely on PGlite), grouped by domain: `platform/` (config, db, secrets, settings,
   errors, evlog logging, the typed agentd client), `team/` (identity: the socket or the enrolled key, and the one owner),
   `agents/` (agents, grants, their Hermes files), `channels/`, `connections/`, `gateway/` (the agents' MCP gateway and
-  key broker on :8081), `mcp/` (the control MCP on `/mcp`, whose tools call the API in-process), `admin/`, and
+  key broker on :8081), `admin/`, and
   `integrations/<service>/`. `src/agentd/` is the root helper: the only process that starts agents (gVisor on Linux, native on
   Mac and Windows: a plain Hermes process per agent, or memory, `private/brain/decisions/sandbox-module.md`), on a Unix socket. Tests mirror them in `test/server/` and `test/agentd/`.
 - **`packages/desktop`** — `@openhut/desktop`, the Mac and Linux app (`private/brain/decisions/desktop-app.md`): Electron main (`src/main.mjs`, starts agentd and the server,
@@ -86,7 +86,7 @@ its data in `~/Library/Application Support/OpenHut Dev`, apart from the installe
 ## Build the desktop app
 
 `npm -w @openhut/desktop run dist` builds the renderer, bundles the runtime's server and agentd with esbuild into
-`packages/desktop/dist/backend` with the Hermes runtime, Node, Claude Code and agent-browser for the build's platform (`scripts/pack-hermes.mjs`, pinned in `install/native-runtime.json`; nothing downloads on first run) (`scripts/pack-backend.mjs`; on Linux it packs only the client and the MCP bridge, since the install in Docker brings the rest), and runs electron-builder (`electron-builder.yml`): an arm64,
+`packages/desktop/dist/backend` with the Hermes runtime, Node, Claude Code and agent-browser for the build's platform (`scripts/pack-hermes.mjs`, pinned in `install/native-runtime.json`; nothing downloads on first run) (`scripts/pack-backend.mjs`; on Linux it packs only the client, since the install in Docker brings the rest), and runs electron-builder (`electron-builder.yml`): an arm64,
 macOS 14+ `release/mac-arm64/OpenHut.app`, `release/OpenHut-arm64.dmg` and the versioned zip. It signs with the Developer ID
 in the login keychain (hardened runtime, `build/entitlements.mac.plist`) and never notarizes (`notarize: false`): only the
 release workflow (`.github/workflows/desktop.yml`, `scripts/notarize.sh`) notarizes, staples and checks a build. The packaged app runs the real model unless `OPENHUT_MODEL` is set.
