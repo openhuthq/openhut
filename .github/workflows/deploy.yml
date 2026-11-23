@@ -1,7 +1,9 @@
 name: Deploy
 
 on:
-  push:
+  workflow_run:
+    workflows: [Desktop app]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -13,20 +15,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
+  target:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      sha: ${{ steps.pick.outputs.sha }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - run: npm run typecheck
-      - run: npm test
+      - name: Deploy only a main commit that passed Desktop app
+        id: pick
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PASSED: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          sha=${PASSED:-$(gh run list --repo "$GITHUB_REPOSITORY" --workflow desktop.yml --branch main --event push --status success --limit 1 --json headSha -q '.[0].headSha')}
+          [ -n "$sha" ] || { echo "::error::No main commit has passed Desktop app yet, so nothing is deployed."; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Deploying ${sha::8}" >> "$GITHUB_STEP_SUMMARY"
 
   image:
-    needs: test
+    needs: target
     permissions:
       contents: read
       packages: write
@@ -34,14 +43,17 @@ jobs:
     secrets: inherit
     with:
       tags: edge
+      ref: ${{ needs.target.outputs.sha }}
 
   deploy:
-    needs: [test, image]
+    needs: [target, image]
+    environment: deploy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ needs.target.outputs.sha }}
       - name: Check out private/
         env:
           KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}

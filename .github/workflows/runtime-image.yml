@@ -17,6 +17,10 @@ on:
         description: Space-separated tags to push to ghcr.io/openhuthq/runtime, like "0.6.0" or "edge" (a leading v is dropped)
         type: string
         required: true
+      ref:
+        description: The commit to build; empty builds the commit the caller runs on
+        type: string
+        default: ''
     outputs:
       image:
         description: The pushed image by digest, ghcr.io/openhuthq/runtime@sha256:…, for install.sh to pin
@@ -43,6 +47,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24
@@ -67,7 +72,7 @@ jobs:
       - name: Build the image for linux/amd64
         run: |
           start=$(date +%s)
-          BUILD="ci-${GITHUB_SHA::8}" BASE=http://127.0.0.1:8098 scripts/release.sh
+          BUILD="ci-$(git rev-parse --short=8 HEAD)" BASE=http://127.0.0.1:8098 scripts/release.sh
           scripts/image.sh dist localhost:5000/openhut/runtime:ci --platform linux/amd64 --push --cache-from type=gha,scope=runtime-amd64 --cache-to type=gha,scope=runtime-amd64,mode=min
           echo "Built in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
       - name: Install it as a server would, from install.sh
@@ -115,6 +120,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 24
@@ -144,7 +150,7 @@ jobs:
           build=$(sed -n 's/^OPENHUT_BUILD="\(.*\)"$/\1/p' dist/install.sh)
           extra=; for tag in $TAGS; do extra="$extra -t $REPO:${tag#v}"; done
           scripts/image.sh dist "$REPO:$build" --platform linux/amd64,linux/arm64 --push $extra \
-            --label org.opencontainers.image.source="https://github.com/$GITHUB_REPOSITORY" --label org.opencontainers.image.revision="$GITHUB_SHA" \
+            --label org.opencontainers.image.source="https://github.com/$GITHUB_REPOSITORY" --label org.opencontainers.image.revision="$(git rev-parse HEAD)" \
             --cache-from type=gha,scope=runtime-multi --cache-to type=gha,scope=runtime-multi,mode=min
           image=$(sed -n 's/^RUNTIME_IMAGE="${RUNTIME_IMAGE:-\(.*\)}"$/\1/p' dist/install.sh)
           echo "image=$image" >> "$GITHUB_OUTPUT"
