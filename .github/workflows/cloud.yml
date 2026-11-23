@@ -2,7 +2,7 @@ name: Cloud
 
 on:
   push:
-    branches: [main]
+    branches: [main, abuaboud/sign-in-first]
     paths:
       - private
       - packages/common/**
