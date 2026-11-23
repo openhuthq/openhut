@@ -1,101 +1,128 @@
-import { useState } from 'react'
-import { Delete02Icon, Key01Icon, Logout03Icon, PencilEdit02Icon } from '@hugeicons/core-free-icons'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowRight01Icon, Delete02Icon, Key01Icon, Logout03Icon, PencilEdit02Icon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Tooltip } from '@/components/ui/tooltip'
 import { TeamMark } from '@/components/custom/team-mark'
 import { useCloud } from '@/features/cloud/api'
 import { Pitch } from '@/features/cloud/sign-in'
 import { CloudSetup } from '@/features/cloud/setup'
-import { JoinRow } from '@/features/join/cloud-join'
-import { isPhone } from '@/lib/native'
-import { peopleNote, useChangeKeys, useDeleteWorkspace, useRemoveMember, useRename, useWorkspaces } from '@/features/cloud/workspaces'
+import { useChangeKeys, useDeleteWorkspace, useRemoveMember, useRename, useSetWebsite, useWorkspaces } from '@/features/cloud/workspaces'
 import { navigate, open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
-import { I, PILL, Section } from '@/components/kit'
+import { I, PILL } from '@/components/kit'
+import { TeamPeople } from '@/features/people/people'
 import { Row, Rows } from '@/features/settings/kit'
 import { cn } from '@/lib/utils'
 
 const KEYS_NOTE = 'Use after a lost computer or a teammate you don’t trust. Everyone else stays in.'
 
-const ROLE = { owner: 'the owner', admin: 'an admin', member: 'a member' }
-const NAME = 'm-0 min-w-0 text-[18px]/[1.3] font-semibold tracking-[-.01em]'
 
-export function TeamSettings() {
+export function TeamGeneral() {
+  const cloud = useCloud().data
+  const { active } = useWorkspaces()
+  const opened = useOpen()
+  if (cloud?.status === 'off' || !active) return null
+  const admin = active.role !== 'member'
+  return <>
+    <TeamHeader workspace={active} editing={admin ? opened ?? undefined : undefined} />
+    <TeamMore workspace={active} />
+    {opened === 'keys' && admin && <KeysConfirm workspace={active} />}
+    {opened === 'leave' && !active.own && <LeaveConfirm workspace={active} />}
+    {opened === 'delete' && admin && !active.own && <DeleteConfirm workspace={active} />}
+  </>
+}
+
+export function PeopleSettings() {
   const cloud = useCloud().data
   const { active } = useWorkspaces()
   const opened = useOpen()
   if (!cloud) return null
   const enabling = opened === 'enable' && <CloudSetup />
-  const join = !isPhone() && <JoinRow />
-  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch />{join}</>
-  return <>
-    {enabling}
-    <div className="flex items-center gap-3.5 px-1">
-      <TeamMark name={active.name} className="size-12 rounded-xl text-[22px]" />
-      <span className="grid min-w-0 flex-1 gap-0.5">
-        <TeamName workspace={active} editing={opened === 'rename'} />
-        <span className="text-[12px] text-mute">{peopleNote(active)} · you’re {ROLE[active.role]}</span>
-      </span>
-    </div>
-    {join}
-    <TeamDanger />
-  </>
+  if (cloud.status === 'off' || !active) return <>{enabling}<Pitch /></>
+  return <>{enabling}<TeamPeople workspace={active} /></>
 }
 
-function TeamName({ workspace, editing }: { workspace: CloudWorkspaceView; editing: boolean }) {
+function TeamHeader({ workspace, editing }: { workspace: CloudWorkspaceView; editing?: string }) {
   const rename = useRename()
-  const { name } = workspace
-  const can = workspace.role !== 'member'
-  const shown = rename.isPending ? rename.variables.name : name
-  if (!editing || !can) return <span className="flex min-w-0 items-center gap-1">
-    <h3 className={cn(NAME, 'truncate')} title={can ? 'Double-click to rename' : undefined} onDoubleClick={can ? () => open('rename') : undefined}>{shown}</h3>
-    {can && <Button type="button" variant="ghost" size="icon-xs" aria-label="Rename team" title="Rename" onClick={() => open('rename')}><I icon={PencilEdit02Icon} size={14} /></Button>}
-  </span>
-  return <Input autoFocus defaultValue={name} maxLength={60} aria-label="Team name" spellCheck={false} onFocus={(event) => event.currentTarget.select()} className={cn(NAME, 'h-8 px-1.5')}
+  const setWebsite = useSetWebsite()
+  const admin = workspace.role !== 'member'
+  const saveName = (value: string) => {
+    if (value && value !== workspace.name) rename.mutate({ id: workspace.id, name: value }, { onSuccess: () => toast('Team renamed'), onError: toastError })
+  }
+  const saveSite = (value: string) => {
+    if (value === (workspace.website ?? '')) return
+    setWebsite.mutate({ id: workspace.id, website: value || null }, { onSuccess: () => toast(value ? 'Website saved' : 'Website removed'), onError: toastError })
+  }
+  const pencil = (what: string, label: string) => admin && <Tooltip label={label}><Button type="button" variant="ghost" size="icon-xs" aria-label={label} className={cn(editing === what && 'invisible')} onClick={() => open(what)}><I icon={PencilEdit02Icon} size={13} className="text-mute" /></Button></Tooltip>
+  return <div className="flex items-center gap-3.5 px-1">
+    <TeamMark workspace={workspace} className="size-12 rounded-xl text-[22px]" />
+    <span className="grid min-w-0 flex-1 gap-0.5">
+      <span className="flex min-w-0 items-center gap-1.5 text-[18px]/[1.3] font-semibold tracking-[-.01em]">
+        {editing === 'rename' ? <InlineEdit value={workspace.name} label="Team name" onSave={saveName} /> : <span className="truncate" onDoubleClick={admin ? () => open('rename') : undefined}>{workspace.name}</span>}
+        {pencil('rename', 'Rename')}
+      </span>
+      <span className="flex min-w-0 items-center gap-1 text-[12.5px]/[18px] text-mute">
+        {editing === 'site' ? <InlineEdit value={workspace.website ?? ''} label="Team website" placeholder="example.com" onSave={saveSite} />
+          : workspace.website ? <span className="truncate" onDoubleClick={admin ? () => open('site') : undefined}>{workspace.website}</span>
+          : admin ? <Button type="button" variant="text" className="h-auto p-0 text-[12.5px]/[18px] font-normal text-hue-blue" onClick={() => open('site')}>Add website</Button> : null}
+        {workspace.website && pencil('site', 'Change website')}
+      </span>
+    </span>
+  </div>
+}
+
+function InlineEdit({ value, label, placeholder, onSave }: { value: string; label: string; placeholder?: string; onSave: (value: string) => void }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    const field = ref.current
+    if (!field) return
+    field.focus()
+    const range = document.createRange()
+    range.selectNodeContents(field)
+    getSelection()?.removeAllRanges()
+    getSelection()?.addRange(range)
+  }, [])
+  return <span ref={ref} role="textbox" aria-label={label} data-placeholder={placeholder} contentEditable="plaintext-only" suppressContentEditableWarning spellCheck={false} className="min-w-[2ch] truncate outline-none empty:before:text-mute-2 empty:before:content-[attr(data-placeholder)]"
     onKeyDown={(event) => {
-      if (event.key === 'Escape') event.currentTarget.value = name
+      if (event.key === 'Escape') event.currentTarget.textContent = value
       if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); event.currentTarget.blur() }
     }}
     onBlur={(event) => {
-      const value = event.currentTarget.value.trim()
-      if (value && value !== name) rename.mutate({ id: workspace.id, name: value }, { onSuccess: () => toast('Team renamed'), onError: toastError })
+      onSave((event.currentTarget.textContent ?? '').trim().slice(0, 120))
       open()
-    }} />
+    }}>{value}</span>
 }
 
-function TeamDanger() {
-  const { active } = useWorkspaces()
-  const opened = useOpen()
+function TeamMore({ workspace }: { workspace: CloudWorkspaceView }) {
+  const [shown, setShown] = useState(false)
+  const admin = workspace.role !== 'member'
+  const owner = workspace.role === 'owner'
+  const rows: { title: string; note: string; action: string; dialog: string; danger: boolean; off?: boolean }[] = [
+    ...admin ? [{ title: 'Reset encryption', note: KEYS_NOTE, action: 'Reset', dialog: 'keys', danger: false }] : [],
+    ...workspace.own ? [] : [{ title: 'Leave', note: owner ? 'Make someone else the owner first.' : 'You lose access. What you made stays with the team.', action: 'Leave', dialog: 'leave', danger: true, off: owner }],
+    ...workspace.own || !admin ? [] : [{ title: 'Delete team', note: 'Deletes everything in it for everyone.', action: 'Delete team', dialog: 'delete', danger: true }],
+  ]
+  if (!rows.length) return null
+  return <div className="flex flex-col gap-1.5">
+    <Button type="button" variant="ghost" aria-expanded={shown} className="w-fit gap-1.5 px-1.5 text-[12.5px] font-normal text-mute" onClick={() => setShown(!shown)}><I icon={ArrowRight01Icon} size={12} className={cn('transition-transform', shown && 'rotate-90')} />More options</Button>
+    {shown && <Rows>{rows.map((row) => <Row key={row.dialog} icon={<I icon={row.dialog === 'keys' ? Key01Icon : row.dialog === 'leave' ? Logout03Icon : Delete02Icon} size={20} className={row.danger ? 'text-fail' : 'text-hue-amber'} />} title={row.title} note={row.note}>
+      <Button type="button" variant={row.danger ? 'danger' : 'ghost'} className={PILL} disabled={row.off} onClick={() => open(row.dialog)}>{row.action}</Button>
+    </Row>)}</Rows>}
+  </div>
+}
+
+function KeysConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
   const changeKeys = useChangeKeys()
-  const [changing, setChanging] = useState(false)
-  if (!active) return null
-  const name = active.name
-  const owner = active.role === 'owner'
-  const admin = active.role !== 'member'
   const changed = () => {
     notify({ title: 'Encryption reset', note: 'Everyone else stays in.' })
-    if (active.own) navigate('/settings/account?open=kit')
+    if (workspace.own) navigate('/settings/account?open=kit')
   }
-  return <Section title="Danger zone">
-    <Rows>
-      {admin && <Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Reset encryption" note={KEYS_NOTE}>
-        <Button type="button" variant="secondary" className={cn(PILL, 'text-fail')} disabled={changeKeys.isPending} onClick={() => setChanging(true)}>Reset encryption</Button>
-      </Row>}
-      {!active.own && <Row icon={<I icon={Logout03Icon} size={20} className="text-fail" />} title={`Leave ${name}`} note={owner ? 'Make someone else the owner first.' : 'For good. What you made stays with the team.'}>
-        <Button type="button" variant="secondary" className={cn(PILL, 'text-fail')} disabled={owner} onClick={() => open('leave')}>Leave</Button>
-      </Row>}
-      {!active.own && admin && <Row icon={<I icon={Delete02Icon} size={20} className="text-fail" />} title="Delete team" note="Deletes everything in it for everyone.">
-        <Button type="button" variant="secondary" className={cn(PILL, 'text-fail')} onClick={() => open('delete')}>Delete team</Button>
-      </Row>}
-    </Rows>
-    <ConfirmDialog open={changing} onOpenChange={setChanging} question={`Reset encryption for ${name}?`} detail={active.own ? `${KEYS_NOTE} You save a new recovery kit after.` : KEYS_NOTE} action="Change keys" onConfirm={() => changeKeys.mutateAsync(active.id).then(changed)} />
-    {opened === 'leave' && !active.own && <LeaveConfirm workspace={active} />}
-    {opened === 'delete' && admin && !active.own && <DeleteConfirm workspace={active} />}
-  </Section>
+  return <ConfirmDialog open onOpenChange={(still) => still || open()} question={`Reset encryption for ${workspace.name}?`} detail={workspace.own ? `${KEYS_NOTE} You save a new recovery kit after.` : KEYS_NOTE} action="Change keys" onConfirm={() => changeKeys.mutateAsync(workspace.id).then(changed)} />
 }
 
 function LeaveConfirm({ workspace }: { workspace: CloudWorkspaceView }) {

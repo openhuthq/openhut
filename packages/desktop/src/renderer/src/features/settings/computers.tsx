@@ -12,7 +12,7 @@ import { Meter } from '@/components/ui/meter'
 import { Glyph } from '@/components/glyph'
 import { I, PILL } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
-import { useComputerAdmins, useComputers, useRemoveComputer, useUpdateComputer } from '@/features/computers/api'
+import { useComputerAdmins, useComputers, useDeviceKeys, useRemoveComputer, useUpdateComputer } from '@/features/computers/api'
 import { useEnroll, useEnrollments, type Enrollment } from '@/features/computers/enroll'
 import { detailsOf, failureOf, percentOf, phaseOf, stageOf } from '@/features/computers/enroll-steps'
 import { useTailnet } from '@/features/settings/desktop'
@@ -29,7 +29,7 @@ import { toastError } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
 import { cn } from '@/lib/utils'
 import { EnableCloud } from '@/features/cloud/sign-in'
-import { AddMac, CloudDevices } from '@/features/cloud/cloud'
+import { CloudDevices, CloudOff, deviceNote, devicesOf, KeysToReplace } from '@/features/cloud/cloud'
 import { useCloud } from '@/features/cloud/api'
 
 const GET_TAILSCALE = 'https://tailscale.com/download'
@@ -38,9 +38,7 @@ export function ComputersSettings() {
   const [step, name = ''] = (useOpen() ?? '').split(':')
   return <>
     <ComputerList />
-    <Rows><CloudDevices /></Rows>
     {step === 'add' && <AddComputer />}
-    {step === 'add-mac' && <AddMac />}
     {step === 'command' && <AddByCommand />}
     {step === 'tailscale' && <TailscaleStep />}
     {step === 'ssh' && <TurnOnSsh name={name} />}
@@ -55,19 +53,28 @@ function ComputerList() {
   const enrollments = useEnrollments().data
   const tailscale = useTailnet().data?.state
   const tailscaleOff = !!tailscale && tailscale !== 'running'
+  const devices = devicesOf(useCloud().data)
+  const keys = useDeviceKeys(devices.length ? computers.data ?? [] : [])
+  const deviceOf = (computer: Computer) => devices.find((device) => computer.id === 'local' ? device.here : device.key === keys[computer.id])
+  const merged = (computers.data ?? []).flatMap((computer) => deviceOf(computer)?.key ?? [])
   return <>
-    <Intro>Computers that run your agents</Intro>
+    <KeysToReplace />
+    <Intro>Your computers</Intro>
     <ErrorNote message={computers.error?.message} />
     <Rows>
       {computers.data?.map((computer) => {
         const admin = admins?.find((each) => each.computer.id === computer.id)?.admin
-        if (admin?.server.update?.status === 'running') return <UpdatingRow key={computer.id} computer={computer} />
-        const note = noteOf({ computer, admin, tailscaleOff, count: agents.filter((agent) => agent.computer === computer.id).length })
-        if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={computer.name} note={note}>{!isPhone() && <UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Up to date</span>} />}</Row>
-        return <RemovableRow key={computer.id} computer={computer} admin={admin} note={note} agents={agents.filter((agent) => agent.computer === computer.id)} />
+        const device = deviceOf(computer)
+        const title = device?.name ?? computer.name
+        if (admin?.server.update?.status === 'running') return <UpdatingRow key={computer.id} computer={computer} title={title} />
+        const note = deviceNote({ device, note: noteOf({ computer, admin, tailscaleOff, count: agents.filter((agent) => agent.computer === computer.id).length }) })
+        if (computer.id === 'local') return <Row key={computer.id} icon={<ComputerMark computer={computer} />} title={title} note={note}>{!isPhone() && <UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Up to date</span>} />}</Row>
+        return <RemovableRow key={computer.id} computer={computer} title={title} admin={admin} note={note} agents={agents.filter((agent) => agent.computer === computer.id)} />
       })}
       {enrollments.map((enrollment) => <EnrollRow key={enrollment.peer.dns} enrollment={enrollment} />)}
+      <CloudDevices merged={merged} />
       {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note="A Linux computer that stays on seals each agent in its own box and keeps answering while this computer sleeps."><Chevron /></Row>}
+      <CloudOff />
     </Rows>
   </>
 }
@@ -111,11 +118,11 @@ function Mark({ icon, dot }: { icon: typeof LaptopIcon; dot?: string }) {
 }
 
 
-function RemovableRow({ computer, admin, note, agents }: { computer: Computer; admin: Admin | undefined; note: string; agents: OpenHutAgent[] }) {
+function RemovableRow({ computer, title, admin, note, agents }: { computer: Computer; title: string; admin: Admin | undefined; note: string; agents: OpenHutAgent[] }) {
   const remove = useRemoveComputer()
   const update = useUpdateComputer()
   const { confirming, setConfirming, box } = useConfirming()
-  return <div ref={box}><Row icon={<ComputerMark computer={computer} />} title={computer.name} note={confirming ? 'Its agents stop and disappear from this app. They stay on that computer.' : note}>
+  return <div ref={box}><Row icon={<ComputerMark computer={computer} />} title={title} note={confirming ? 'Its agents stop and disappear from this app. They stay on that computer.' : note}>
     {confirming
       ? <>
         <Button type="button" variant="secondary" className={PILL} onClick={() => setConfirming(false)}>Cancel</Button>
@@ -140,8 +147,8 @@ function EnrollRow({ enrollment }: { enrollment: Enrollment }) {
   </Row>
 }
 
-function UpdatingRow({ computer }: { computer: Computer }) {
-  return <Row icon={<ComputerMark computer={computer} />} title={computer.name} note="Updating…"><Spinner className="mt-0" /></Row>
+function UpdatingRow({ computer, title }: { computer: Computer; title: string }) {
+  return <Row icon={<ComputerMark computer={computer} />} title={title} note="Updating…"><Spinner className="mt-0" /></Row>
 }
 
 function TailscaleStep() {

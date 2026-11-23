@@ -4,7 +4,7 @@ import { hostname } from 'node:os'
 import * as z from 'zod/mini'
 import { checkProof, MemberList, parseJson, signProof, type CloudSession, type Letter, type Member, type MemberListBody } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, bodyOf, check, firstOf, keyVersionOf, nextOf, signList, withoutDevices, youngUntil } from '@openhut/common/cloud/member-list.ts'
-import { equal, fromBase64, fromWords, identity, letter, lock, newKey, newWords, pairingWorkspace, read, slot, toBase64, unlock, type Bytes, type Identity, type LetterPurpose } from '@openhut/common/vault/vault.ts'
+import { equal, fromBase64, fromWords, identity, letter, lock, newKey, newWords, read, slot, toBase64, unlock, type Bytes, type Identity, type LetterPurpose } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { keyStore, Keys, type Account, type AskRoom, type Move, type Room, type Session, type Stored } from './key-store.ts'
@@ -67,7 +67,7 @@ export const keysService = {
 
   async joinAsRuntime({ session, workspace, chain }: { session: CloudSession; workspace: Account['workspace']; chain: MemberList[] }): Promise<void> {
     const list = chain.at(-1)
-    if (!list || !chain[0]) throw new HttpError(502, 'OpenHut Cloud didn’t say who’s in this workspace. Try again.')
+    if (!list || !chain[0]) throw new HttpError(502, 'OpenHut Cloud didn’t say who’s in this team. Try again.')
     const account = { sub: session.sub, email: session.email, key: '', runtime: true, workspace, list, first: chain[0] }
     await keyStore.write({ device: (await keyStore.read()).device, machine, account, session: { token: session.token, expiresAt: session.expiresAt } })
   },
@@ -169,16 +169,9 @@ export const keysService = {
     await keyStore.write({ device: toBase64(newKey()), machine })
   },
 
-  async pairingLetter({ to, secret }: { to: string; secret: string }): Promise<Sent> {
+  async accountLetter(to: string): Promise<Sent> {
     const account = keysService.mustBeOn()
-    const workspace = await pairingWorkspace({ secret, newDevice: fromBase64(to), oldDevice: (await keysService.device()).publicKey, workspace: account.workspace.id })
-    return sealTo({ to, purpose: 'pairing', workspace: workspace ?? '', plain: fromBase64(account.key) })
-  },
-
-  async readPairing({ secret, workspace, found }: { secret: string; workspace: string; found: Letter }): Promise<Bytes | null> {
-    const me = await keysService.device()
-    const context = await pairingWorkspace({ secret, newDevice: me.publicKey, oldDevice: fromBase64(found.from), workspace })
-    return context ? openLetter({ found, workspace: context }) : null
+    return sealTo({ to, purpose: 'account-key', workspace: account.workspace.id, plain: fromBase64(account.key) })
   },
 
   async passkeyBox(prf: Bytes): Promise<{ body: string; by: string; signature: string; savedAt?: number }> {

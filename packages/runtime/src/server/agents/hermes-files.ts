@@ -1,4 +1,5 @@
 import type { Audience, ChannelKind } from '@openhut/common/channels/channel.ts'
+import { ASK_PROMPT } from '@openhut/common/asks/ask.ts'
 import { CARD_PROMPT } from '@openhut/common/cards/card.ts'
 import type { AgentFiles } from '../platform/agentd.ts'
 import { config } from '../platform/config.ts'
@@ -38,7 +39,7 @@ export function renderFiles({ agent, ownerName, token, channelKey, channels, con
   connections: { name: string; kind: string }[]
 }): AgentFiles {
   const gateway = config.agentGateway ?? `http://${agentSubnet(agent.net)}.1:${config.gatewayPort}`
-  const disabled = ['browser', 'delegation', 'cronjob', ...(agent.code_execution ? [] : ['code_execution'])]
+  const disabled = ['browser', 'delegation', 'cronjob', 'connections', ...(agent.code_execution ? [] : ['code_execution'])]
   const setups = [providers[agent.slots.primary.provider].setup({ gateway, token })]
   const yaml = [
     modelYaml({ gateway, token, slots: agent.slots, setups: setups.map((setup) => setup.yaml) }),
@@ -57,7 +58,7 @@ export function renderFiles({ agent, ownerName, token, channelKey, channels, con
     ...channels.flatMap((channel) => envOf({ channel, token })),
   ].join('\n') + '\n'
   const auth = config.modelMode === 'claude' ? setups.find((setup) => setup.auth)?.auth ?? EMPTY_AUTH : EMPTY_AUTH
-  return { 'config.yaml': yaml, '.env': env, 'SOUL.md': `${agent.instructions}\n${connectedApps(connections)}${agent.web_browser ? BROWSER_NOTE : ''}${CARD_PROMPT}`, 'auth.json': `${JSON.stringify(auth)}\n` }
+  return { 'config.yaml': yaml, '.env': env, 'SOUL.md': `${agent.instructions}\n${connectedApps(connections)}${agent.web_browser ? BROWSER_NOTE : ''}${ASK_PROMPT}${CARD_PROMPT}`, 'auth.json': `${JSON.stringify(auth)}\n` }
 }
 
 function pluginsYaml(setups: Setup[]): string {

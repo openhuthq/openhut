@@ -33,7 +33,7 @@ export function MoveHere({ agent }: { agent: Agent }) {
     setKept(true)
   }
   return <div className="absolute right-3 bottom-[84px] z-40 flex w-[380px] max-w-[calc(100%-24px)] flex-col phone:left-3 phone:w-auto phone:max-w-none gap-2.5 rounded-[18px] border border-hair bg-card p-3.5 text-[13px] shadow-[0_8px_24px_oklch(0%_0_0/.10)]" role="status">
-    <span className="flex items-center gap-2.5"><DeviceIcon kind="mac" /><span className="grid gap-px"><span className="font-semibold">{agent.runsNowhere ? `No computer runs ${agent.name} now` : `${agent.name} still runs on ${agent.runsOnName ?? 'your other computer'}`}</span><span className="text-mute">{agent.runsNowhere ? 'The computer it ran on left this workspace.' : 'Only one computer can run an agent.'}</span></span></span>
+    <span className="flex items-center gap-2.5"><DeviceIcon kind="mac" /><span className="grid gap-px"><span className="font-semibold">{agent.runsNowhere ? `No computer runs ${agent.name} now` : `${agent.name} still runs on ${agent.runsOnName ?? 'your other computer'}`}</span><span className="text-mute">{agent.runsNowhere ? 'The computer it ran on left this team.' : 'Only one computer can run an agent.'}</span></span></span>
     <span className="flex justify-end gap-2">
       {!agent.runsNowhere && <Button type="button" variant="secondary" className={PILL} onClick={keep}>Keep it there</Button>}
       <Button type="button" variant="primary" className={PILL} disabled={update.isPending} onClick={() => update.mutate({ runsHere: true }, { onError: toastError })}>Run it here</Button>

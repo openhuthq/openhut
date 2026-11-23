@@ -18,7 +18,7 @@ export const cloud = {
   roomUrl: (workspace: string): string => `${config.cloudUrl.replace(/^http/, 'ws')}/v1/workspaces/${workspace}`,
 
   room: async ({ workspace, path, ...rest }: Call & { workspace: string }): Promise<Reply> => {
-    if (held.has(workspace) && rest.method === 'POST' && path === '/letters') throw new HttpError(409, 'This workspace’s history doesn’t match another member’s, so no keys go out until it does. Check with your team.')
+    if (held.has(workspace) && rest.method === 'POST' && path === '/letters') throw new HttpError(409, 'This team’s history doesn’t match another member’s, so no keys go out until it does. Check with your teammates.')
     return call({ ...rest, path: `/v1/workspaces/${workspace}${path}` })
   },
 

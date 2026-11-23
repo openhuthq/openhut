@@ -1,9 +1,9 @@
-import { app, autoUpdater as squirrel, BrowserWindow, crashReporter, dialog, ipcMain, Menu, net, Notification, powerSaveBlocker, protocol, safeStorage, screen, shell, Tray, utilityProcess } from 'electron'
+import { app, autoUpdater as squirrel, BrowserWindow, clipboard, crashReporter, dialog, ipcMain, Menu, net, Notification, powerSaveBlocker, protocol, safeStorage, screen, shell, Tray, utilityProcess } from 'electron'
 import { execFile, spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer, request } from 'node:http'
 import { connect } from 'node:net'
-import { appendFileSync, chmodSync, cpSync, createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, cpSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { cpus, homedir, hostname, totalmem } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { Readable } from 'node:stream'
@@ -12,9 +12,10 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import updater from 'electron-updater'
 import WebSocket from 'ws'
+import { inviteLink } from './invite-link.mjs'
+import { linkPath } from './open-link.mjs'
 import { deviceName, ownerKeys } from './owner-keys.mjs'
 import { reacher } from './reach.mjs'
-import { fanOut } from './mcp-fan-out.mjs'
 import { cosigned, RELEASE_KEY } from './release-key.mjs'
 import { useChannel } from './update-channel.mjs'
 
@@ -27,15 +28,12 @@ process.umask(0o022)
 app.setName('OpenHut')
 const TEST_HOME = process.env.OPENHUT_TEST_HOME
 const USER_DATA = TEST_HOME || (DEV ? join(app.getPath('appData'), 'OpenHut Dev') : app.getPath('userData'))
-const MCP_BRIDGE = process.argv.includes('--mcp')
-if (!MCP_BRIDGE) {
-  app.setPath('userData', process.env.OPENHUT_SECOND_APP ? USER_DATA : join(app.getPath('appData'), 'OpenHut'))
-  if (!app.requestSingleInstanceLock()) app.exit(0)
-}
+app.setPath('userData', process.env.OPENHUT_SECOND_APP ? USER_DATA : join(app.getPath('appData'), 'OpenHut'))
+if (!app.requestSingleInstanceLock()) app.exit(0)
 if (DEV) app.setName('OpenHut Dev')
 app.setPath('userData', USER_DATA)
 app.setAppLogsPath(TEST_HOME ? join(TEST_HOME, 'logs') : DEV && MAC ? join(app.getPath('home'), 'Library/Logs/OpenHut Dev') : undefined)
-if (!MCP_BRIDGE && !DEV) app.setAsDefaultProtocolClient('openhut')
+if (!DEV) app.setAsDefaultProtocolClient('openhut')
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '../../..')
@@ -47,7 +45,6 @@ const RUNTIME = process.env.AGENTD_HERMES ?? join(BACKEND, DEV ? 'packages/deskt
 const NATIVE_CLAUDE = join(BACKEND, DEV ? 'packages/desktop/dist/backend/bin/native' : 'bin/native', WIN ? 'claude.exe' : 'claude')
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
 const HOME = app.getPath('userData')
-const BRIDGE = join(HOME, 'bin/openhut-mcp')
 const ASSETS = DEV ? ROOT : join(HOME, 'assets', app.getVersion())
 const LOGS = app.getPath('logs')
 const DATA = join(HOME, 'data')
@@ -60,11 +57,6 @@ const PIPES = WIN && `\\\\.\\pipe\\openhut-${createHash('sha256').update(HOME).d
 const sockAt = (name) => PIPES ? `${PIPES}-${name}` : join(HOME, `${name}.sock`)
 const SOCK = sockAt('agentd')
 const SERVER_SOCK = sockAt('server')
-const MCP_SOCK = sockAt('mcp')
-if (MCP_BRIDGE) {
-  await (await import('./mcp-bridge.mjs')).bridge({ sock: MCP_SOCK, path: '/mcp', down: 'OpenHut isn\'t running', input: createReadStream(null, { fd: 0 }) })
-  app.exit(0)
-}
 const WINDOW_STATE = join(HOME, 'window.json')
 const PREFS = join(HOME, 'prefs.json')
 const SECRET = join(HOME, 'secret.bin')
@@ -78,7 +70,7 @@ const RELAY_URL = (process.env.OPENHUT_CLOUD_URL || 'https://cloud.openhut.dev')
 const TAILNET_PORT = 8788
 const PUT_ACCESS = `put='c=$(curl -sS -o /dev/null -w %{http_code} --unix-socket /data/app/openhut.sock -X PUT -H content-type:application/json --data-binary @- http://openhut/api/access); [ "$c" = 200 ] || [ "$c" = 409 ]'; if docker container inspect openhut >/dev/null 2>&1; then docker exec -i openhut sh -c "$put"; else sh -c "$put"; fi`
 const AUTOSTART = join(app.getPath('appData'), 'autostart/openhut.desktop')
-const DEFAULT_PREFS = { keepAwake: true, notifyReplies: true, notifyFailures: true, betaUpdates: false }
+const DEFAULT_PREFS = { keepAwake: true, betaUpdates: false }
 const CANVAS = '#f4f3f5'
 const POLL_MS = 5000
 const HEALTHY_MS = 120_000
@@ -111,7 +103,8 @@ let tray
 let blocker
 let setup
 let booted
-let linked = joinPath(process.argv.find((arg) => arg.startsWith('openhut:')))
+let linked = linkPath(process.argv.find((arg) => arg.startsWith('openhut:')))
+let invited = null
 let opened = false
 let fetching = null
 const updating = { checking: false, available: null, progress: 0, ready: null, error: null }
@@ -193,10 +186,10 @@ handle('devices.allow', answer(allow))
 handle('passkey.status', () => passkey(['status']))
 handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
 handle('passkey.open', () => passkey(['open']))
-handle('cloud.notify', () => new Promise((resolve) => {
+handle('cloud.notify', ({ title = 'Unlock OpenHut Cloud', body = 'Restore your agents and chats on this computer.', path = '/settings/account?open=enable' } = {}) => new Promise((resolve) => {
   if (!Notification.isSupported()) return resolve({ shown: false })
-  const note = new Notification({ title: 'Unlock OpenHut Cloud', body: 'Restore your agents and chats on this computer.' })
-  note.on('click', () => show('/settings/account?open=enable'))
+  const note = new Notification({ title: String(title), body: String(body) })
+  note.on('click', () => show(String(path).startsWith('/settings/') ? String(path) : '/settings/account'))
   note.on('show', () => resolve({ shown: true }))
   note.on('failed', () => resolve({ shown: false }))
   setTimeout(() => resolve({ shown: false }), 3000)
@@ -446,14 +439,14 @@ async function poll() {
   for (const agent of agents.filter((each) => each.online)) {
     const strikes = needsYou(agent) ? (watched.strikes.get(agent.id) ?? 0) + 1 : 0
     watched.strikes.set(agent.id, strikes)
-    if (strikes === 2 && wants.notifyFailures) notify({ title: `${agent.name} stopped answering`, body: agent.healthDetail || 'It isn\'t running. OpenHut keeps trying to start it.', path: `/agents/${agent.id}` })
+    if (strikes === 2) notify({ title: `${agent.name} stopped answering`, body: agent.healthDetail || 'It isn\'t running. OpenHut keeps trying to start it.', path: `/agents/${agent.id}` })
   }
   app.setBadgeCount(agents.filter((agent) => agent.online && watched.strikes.get(agent.id) >= 2).length)
   await Promise.all(list.filter((computer) => computer.online).map(async (computer) => {
     for (const thread of (await answerOf({ computer: computer.id, path: '/api/threads' })).data ?? []) {
       const before = watched.threads.get(thread.id)
       watched.threads.set(thread.id, thread.updatedAt)
-      if (before && before !== thread.updatedAt && wants.notifyReplies && !looking()) await notifyReply({ computer: computer.id, thread, agent: agents.find((each) => each.id === thread.agentId) })
+      if (before && before !== thread.updatedAt && !looking()) await notifyReply({ computer: computer.id, thread, agent: agents.find((each) => each.id === thread.agentId) })
     }
   }).map((each) => each.catch(() => undefined)))
   trayMenu({ agents, computers: list })
@@ -530,31 +523,6 @@ async function setAll({ agents, wanted }) {
   await poll().catch(() => undefined)
 }
 
-function bridgeCommand() {
-  return WIN ? { command: process.execPath, args: ['--mcp'] } : { command: BRIDGE, args: [] }
-}
-
-async function serveMcp() {
-  if (!PIPES) rmSync(MCP_SOCK, { force: true })
-  const mcp = fanOut({
-    local: LOCAL.id,
-    computers: () => openhut.computers.list(),
-    post: ({ computer, msg }) => serve(new Request(`${APP_ORIGIN}/c/${computer}/mcp`, { method: 'POST', body: JSON.stringify(msg), headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' } })).catch((error) => refuse(502, error.message)),
-  })
-  const server = createServer(async (req, res) => {
-    if (req.url !== '/mcp') return res.writeHead(404).end()
-    if (req.method !== 'POST') return res.writeHead(405).end()
-    const answer = await mcp(await text(req))
-    if (!answer) return res.writeHead(202).end()
-    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(answer))
-  })
-  const umask = process.umask(0o177)
-  const listening = new Promise((resolve, reject) => server.once('error', reject).listen(MCP_SOCK, resolve))
-  process.umask(umask)
-  await listening
-  if (!PIPES) chmodSync(MCP_SOCK, 0o600)
-}
-
 function webHeaders(headers) {
   return new Headers(Object.entries(headers).flatMap(([name, value]) => [value].flat().map((each) => [name, String(each)])))
 }
@@ -577,7 +545,7 @@ function firstRun(start) {
       setup.failed = true
     })
   }
-  return setup ?? { failed: false, agentId: '', steps: [] }
+  return { ...setup ?? { failed: false, agentId: '', steps: [] }, invite: invited }
 }
 
 async function meet(run) {
@@ -755,9 +723,7 @@ function goBack(version) {
 }
 
 async function assets() {
-  mkdirSync(dirname(BRIDGE), { recursive: true })
-  cpSync(DEV ? join(HERE, '../bin/openhut-mcp') : join(BACKEND, 'bin/openhut-mcp'), BRIDGE)
-  chmodSync(BRIDGE, 0o755)
+  rmSync(join(HOME, 'bin'), { recursive: true, force: true })
   if (DEV || CONTAINER || existsSync(ASSETS)) return
   rmSync(`${ASSETS}.tmp`, { recursive: true, force: true })
   cpSync(join(BACKEND, 'vendor/hermes-plugins'), join(`${ASSETS}.tmp`, 'vendor/hermes-plugins'), { recursive: true })
@@ -782,7 +748,7 @@ function window(path = '/agents') {
     width: 1280, height: 820, ...savedBounds(), minWidth: 900, minHeight: 600, show: false, title: 'OpenHut',
     ...(MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 18 } } : { autoHideMenuBar: true }),
     backgroundColor: CANVAS,
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-mcp=${JSON.stringify(bridgeCommand())}`, `--openhut-version=${app.getVersion()}`] },
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-version=${app.getVersion()}`] },
   })
   win.on('close', saveBounds)
   win.once('ready-to-show', () => win.show())
@@ -795,17 +761,9 @@ function saveBounds() {
   if (main && !main.isDestroyed()) writeFileSync(WINDOW_STATE, JSON.stringify(main.getNormalBounds()))
 }
 
-function joinPath(url) {
-  try {
-    const { protocol, hostname, hash } = new URL(url ?? '')
-    return protocol === 'openhut:' && hostname === 'join' && hash.length > 1 ? `/join${hash}` : undefined
-  } catch {
-    return undefined
-  }
-}
 
 function openLink(url) {
-  linked = joinPath(url)
+  linked = linkPath(url)
   if (linked && opened) show(linked)
 }
 
@@ -937,9 +895,9 @@ async function releaseSigned(info) {
 
 function serve(req) {
   const { pathname } = new URL(req.url)
-  const routed = /^\/c\/([\w-]+)(\/api\/.*|\/mcp)$/.exec(pathname)
+  const routed = /^\/c\/([\w-]+)(\/api\/.*)$/.exec(pathname)
   if (routed) return toComputer({ req, id: routed[1], path: routed[2] })
-  return pathname.startsWith('/api/') || pathname === '/mcp' ? toComputer({ req, id: LOCAL.id, path: pathname }) : serveRenderer(req)
+  return pathname.startsWith('/api/') ? toComputer({ req, id: LOCAL.id, path: pathname }) : serveRenderer(req)
 }
 
 function refuse(status, message) {
@@ -1069,7 +1027,10 @@ app.whenReady().then(async () => {
     appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't start: ${error.message}\n`)
     return error.message
   })
-  if (fresh) window('/welcome')
+  if (fresh) {
+    invited = inviteLink(linked && `https://openhut.dev${linked}`) ?? (TEST_HOME ? null : inviteLink(clipboard.readText()))
+    window('/welcome')
+  }
   const started = await booted
   if (started !== true) {
     const back = previousVersion()
@@ -1084,7 +1045,6 @@ app.whenReady().then(async () => {
   if (!fresh && (!hidden || linked)) window(linked)
   opened = true
   watch()
-  serveMcp().catch((error) => appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't serve ${MCP_SOCK}: ${error.message}\n`))
   if (!DEV) update()
   app.on('activate', () => show())
   app.on('second-instance', (_event, argv) => {

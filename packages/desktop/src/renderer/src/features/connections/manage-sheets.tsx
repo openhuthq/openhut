@@ -8,8 +8,9 @@ import { Loaded } from '@/components/loaded'
 import { StatusBadge } from '@/components/status-badge'
 import { useAgents, useConnectionGrants, useCreateGrant, useDeleteGrant } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
-import { useAuthorizeConnection, useConnectionEvents, useConnections, useConnectionTools, useDeleteConnection } from '@/features/connections/api'
+import { useAuthorizeConnection, useBackToAsker, useConnectionEvents, useConnections, useConnectionTools, useDeleteConnection } from '@/features/connections/api'
 import { connectionOf, copyOn } from '@/features/connections/copies'
+import { asked } from '@/features/connections/asked'
 import { integration, titleOf } from '@/features/connections/catalog'
 import { Section, SetupSheet } from '@/components/kit'
 import { Success } from '@/features/connections/sheet'
@@ -55,9 +56,12 @@ export function ConnectionSheet({ connectionId, connected }: { connectionId: str
 function AccessSheet({ connection, agents }: { connection: OpenHutConnection; agents: OpenHutAgent[] }) {
   const createGrant = useCreateGrant()
   const editable = agents.filter((agent) => agent.canEdit && copyOn({ connection, computer: agent.computer }))
-  const [picked, setPicked] = useState<string[]>(editable.slice(0, 1).map((agent) => agent.id))
+  const askedBy = editable.find((agent) => agent.id === asked.by(connection.kind))
+  const [picked, setPicked] = useState<string[]>(askedBy ? [askedBy.id] : editable.slice(0, 1).map((agent) => agent.id))
   const item = integration(connection.kind)
-  const done = () => Promise.all(picked.map((agentId) => createGrant.mutateAsync({ agentId, connectionId: connection.id }))).then(close, toastError)
+  const toAsker = useBackToAsker()
+  const back = () => askedBy && picked.includes(askedBy.id) ? toAsker({ agentId: askedBy.id, name: connection.name }) : close()
+  const done = () => Promise.all(picked.map((agentId) => createGrant.mutateAsync({ agentId, connectionId: connection.id }))).then(back, toastError)
   return <SetupSheet brand={connection.kind} title={`Who can use ${connection.name}`} blurb={item?.short ?? ''} onClose={close}
     foot={<Button variant="primary" disabled={createGrant.isPending} onClick={() => void done()}>Done</Button>}>
     <Success>{successLine(connection)}</Success>

@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import * as z from 'zod/mini'
-import { AddPasskey, AddRuntime, AllowDevice, ApproveDevice, ChangeRole, CreateWorkspace, DeleteWorkspace, DeviceKey, RenameWorkspace, RuntimeInvite, SetHere, UnlockCloud } from '@openhut/common/cloud/cloud.ts'
+import { AddPasskey, AddRuntime, ChangeRole, CreateWorkspace, DeleteWorkspace, DeviceKey, RuntimeInvite, SetHere, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
 import { requireSignIn } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
 import { syncService } from './sync-service.ts'
@@ -26,15 +26,13 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.post<{ Body: RuntimeInvite }>('/join', JoinRequest, async (req) => cloudService.join(req.body))
 
-  app.post('/pairings', SignedIn, async () => cloudService.startPairing())
-
-  app.post<{ Body: AllowDevice }>('/devices', AllowRequest, async (req) => cloudService.allow(req.body))
-
   app.delete<{ Params: { key: string } }>('/devices/:key', NotMeRequest, async (req) => cloudService.notMe({ device: req.params.key }))
 
   app.post<{ Body: AddPasskey }>('/passkeys', PasskeyRequest, async (req) => cloudService.addPasskey(req.body))
 
-  app.patch<{ Params: { id: string }; Body: RenameWorkspace }>('/workspaces/:id', RenameRequest, async (req) => cloudService.rename({ workspace: req.params.id, name: req.body.name }))
+  app.patch<{ Params: { id: string }; Body: UpdateWorkspace }>('/workspaces/:id', UpdateRequest, async (req) => cloudService.update({ workspace: req.params.id, ...req.body }))
+
+  app.get<{ Params: { id: string } }>('/workspaces/:id/icon', SignedIn, async (req, reply) => cloudService.icon({ workspace: req.params.id, reply }))
 
   app.delete('/', SignedIn, async () => cloudService.deleteData())
 
@@ -60,7 +58,7 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.post<{ Params: { id: string } }>('/workspaces/:id/keys', SignedIn, async (req) => cloudService.changeKeys({ workspace: req.params.id }))
 
-  app.post<{ Params: { id: string; device: string }; Body: ApproveDevice }>('/workspaces/:id/requests/:device/approvals', ApproveRequest, async (req) => cloudService.approve({ workspace: req.params.id, device: req.params.device, words: req.body.words }))
+  app.post<{ Params: { id: string; device: string } }>('/workspaces/:id/requests/:device/approvals', SignedIn, async (req) => cloudService.approve({ workspace: req.params.id, device: req.params.device }))
 
   app.delete<{ Params: { id: string; device: string } }>('/workspaces/:id/requests/:device', SignedIn, async (req) => cloudService.deny({ workspace: req.params.id, device: req.params.device }))
 
@@ -71,13 +69,11 @@ const SignedIn = { onRequest: requireSignIn }
 const UnlockRequest = { onRequest: requireSignIn, schema: { body: UnlockCloud } }
 const AddRuntimeRequest = { onRequest: requireSignIn, schema: { body: AddRuntime } }
 const JoinRequest = { onRequest: requireSignIn, schema: { body: RuntimeInvite } }
-const AllowRequest = { onRequest: requireSignIn, schema: { body: AllowDevice } }
 const NotMeRequest = { onRequest: requireSignIn, schema: { params: z.object({ key: DeviceKey }) } }
 const DeviceRequest = { onRequest: requireSignIn, schema: { params: z.object({ id: z.string(), key: DeviceKey }) } }
 const PasskeyRequest = { onRequest: requireSignIn, schema: { body: AddPasskey } }
-const RenameRequest = { onRequest: requireSignIn, schema: { body: RenameWorkspace } }
+const UpdateRequest = { onRequest: requireSignIn, schema: { body: UpdateWorkspace } }
 const RoleRequest = { onRequest: requireSignIn, schema: { body: ChangeRole } }
 const CreateRequest = { onRequest: requireSignIn, schema: { body: CreateWorkspace } }
 const DeleteRequest = { onRequest: requireSignIn, schema: { body: DeleteWorkspace } }
 const HereRequest = { onRequest: requireSignIn, schema: { body: SetHere } }
-const ApproveRequest = { onRequest: requireSignIn, schema: { body: ApproveDevice } }

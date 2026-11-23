@@ -5,9 +5,6 @@ import { wordlist } from '@scure/bip39/wordlists/english.js'
 export type Bytes = Uint8Array<ArrayBuffer>
 export type Identity = { secret: Bytes; publicKey: Bytes }
 export type Suite = { hpke: CipherSuite; enc: number; aead: 'AES-GCM'; hash: 'SHA-256'; nonce: number; tag: number }
-export type Pairing = { secret: string; fingerprint: string; hint: string }
-export type PairingSide = 'new' | 'old'
-export type PairTranscript = { secret: string; newDevice: Bytes; oldDevice: Bytes; workspace: string }
 
 export const LETTER_PURPOSES = ['workspace-key', 'account-key', 'connection-key', 'invite', 'pairing'] as const
 export type LetterPurpose = (typeof LETTER_PURPOSES)[number]
@@ -17,8 +14,6 @@ export const HEADER = 6
 const SIGNATURE = 64
 const KEY = 32
 const UINT32 = 0xffffffff
-const PAIR_DIGITS = 20
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ*~$=U'
 
 const deviceKem = new DhkemX25519HkdfSha256()
 export const suites: Record<number, Suite> = {
@@ -147,67 +142,6 @@ export async function fromWords(words: string[]): Promise<Bytes | null> {
   const phrase = words.map((word) => word.trim().toLowerCase()).join(' ')
   if (words.length !== 12 || !validateMnemonic(phrase, wordlist)) return null
   return derive({ key: new Uint8Array(mnemonicToEntropy(phrase, wordlist)), info: 'openhut/kit' })
-}
-
-export async function newPairing({ device, hint }: { device: Bytes; hint: string }): Promise<Pairing> {
-  const secret = Array.from(newKey(PAIR_DIGITS), (byte) => CROCKFORD[byte & 31]).join('')
-  return { secret, fingerprint: await fingerprint(device), hint }
-}
-
-export async function fingerprint(device: Bytes): Promise<string> {
-  return toBase64(await sha256(concat([text.encode('openhut/device\0'), device])))
-}
-
-export async function askCommit({ device, reveal }: { device: Bytes; reveal: Bytes }): Promise<Bytes> {
-  return sha256(concat([text.encode('openhut/ask\0'), device, reveal]))
-}
-
-export async function deviceWords({ device, nonce, reveal }: { device: Bytes; nonce: Bytes; reveal: Bytes }): Promise<string[]> {
-  const hash = await sha256(concat([text.encode('openhut/words\0'), device, nonce, reveal]))
-  const bits = Math.floor([...hash.subarray(0, 6)].reduce((all, byte) => all * 256 + byte, 0) / 16)
-  return [3, 2, 1, 0].map((at) => wordlist[Math.floor(bits / 2048 ** at) % 2048] ?? '')
-}
-
-export function longCode(secret: string): string {
-  return `${secret.match(/.{5}/g)?.join('-')}-${checkSymbol(secret)}`
-}
-
-export function fromLongCode(typed: string): string | null {
-  const code = typed.toUpperCase().replace(/[\s\-·]/g, '').replaceAll('O', '0').replace(/[IL]/g, '1')
-  const secret = code.slice(0, PAIR_DIGITS)
-  return code.length === PAIR_DIGITS + 1 && isSecret(secret) && checkSymbol(secret) === code[PAIR_DIGITS] ? secret : null
-}
-
-export async function pairProof(input: PairTranscript & { side: PairingSide }): Promise<Bytes | null> {
-  const bytes = pairBytes(input)
-  return bytes && new Uint8Array(await subtle.sign('HMAC', await pairKey(input.secret), bytes))
-}
-
-export async function checkPairProof({ tag, ...input }: PairTranscript & { side: PairingSide; tag: Bytes }): Promise<boolean> {
-  const bytes = pairBytes(input)
-  return bytes !== null && isSecret(input.secret) && subtle.verify('HMAC', await pairKey(input.secret), tag, bytes)
-}
-
-export async function pairingWorkspace(transcript: PairTranscript): Promise<string | null> {
-  const bytes = pairBytes({ ...transcript, side: 'letter' })
-  return bytes && toBase64(new Uint8Array(await subtle.sign('HMAC', await pairKey(transcript.secret), bytes)))
-}
-
-function pairBytes({ side, newDevice, oldDevice, workspace }: PairTranscript & { side: PairingSide | 'letter' }): Bytes | null {
-  if (newDevice.length !== 64 || oldDevice.length !== 64) return null
-  return concat([text.encode('openhut/pair\0'), field(side), newDevice, oldDevice, field(workspace)])
-}
-
-async function pairKey(secret: string): Promise<CryptoKey> {
-  return subtle.importKey('raw', await derive({ key: text.encode(secret), info: 'openhut/pair' }), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'])
-}
-
-function isSecret(secret: string): boolean {
-  return secret.length === PAIR_DIGITS && [...secret].every((char) => CROCKFORD.indexOf(char) >= 0 && CROCKFORD.indexOf(char) < 32)
-}
-
-function checkSymbol(secret: string): string {
-  return CROCKFORD[[...secret].reduce((rest, char) => (rest * 32 + CROCKFORD.indexOf(char)) % 37, 0)]
 }
 
 export async function slot({ key, path }: { key: Bytes; path: string }): Promise<string> {

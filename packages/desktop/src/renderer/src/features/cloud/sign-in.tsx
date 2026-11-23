@@ -16,7 +16,7 @@ import { PRIMARY, Step } from '@/features/cloud/step'
 import { Row, Rows } from '@/features/settings/kit'
 import { shortDate } from '@/lib/format'
 import { isPhone } from '@/lib/native'
-import { open } from '@/lib/router'
+import { navigate, open } from '@/lib/router'
 import { copyText } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 
@@ -37,12 +37,6 @@ export function Lead({ children }: { children: ReactNode }) {
   return <p className="m-0 max-w-[460px] text-[13.5px]/[20px] text-body">{children}</p>
 }
 
-const PITCH = {
-  title: 'Your team on OpenHut',
-  note: 'Share agents with your team, on every computer.',
-  why: 'OpenHut Cloud is off on this computer. Turn it on to invite people and share agents. It backs up your agents too, end-to-end encrypted.',
-}
-
 function Characters() {
   return <span className="flex items-end justify-center gap-2">
     <Creature id="helpdesk-1" size={52} />
@@ -59,39 +53,52 @@ function Benefit({ icon, hue, title, note }: { icon: Parameters<typeof I>[0]['ic
 
 export function Pitch() {
   const cloud = useCloud().data
-  const locked = cloud?.status === 'locked'
-  return <Pane>
-    {locked ? <Hut mood="key" className="size-[84px]" /> : <Characters />}
-    <Title>{locked ? `You’re signed in, ${nameOf(cloud.email ?? '')}` : PITCH.title}</Title>
-    <Lead>{locked ? 'One more step: the key that reads your agents and chats.' : PITCH.note}</Lead>
-    {!locked && <p className="m-0 max-w-[420px] text-[12.5px]/[18px] text-mute">{PITCH.why}</p>}
-    {isPhone()
-      ? <span className="text-[13px] text-mute">{locked ? 'Unlock OpenHut on your computer.' : 'Enable OpenHut Cloud on your computer.'}</span>
-      : <Button type="button" variant="primary" className={BIG} onClick={() => open('enable')}>{locked ? 'Unlock' : 'Enable cloud'}</Button>}
-  </Pane>
-}
-
-export function Why({ onNext }: { onNext: () => void }) {
-  return <Step art={<Characters />} title="OpenHut Cloud" action={<Button type="button" variant="primary" className={PRIMARY} autoFocus onClick={onNext}>Continue</Button>}>
-    <div className="w-full max-w-[360px] text-left">
-      <Rows>
-        <Benefit icon={CloudUploadIcon} hue="blue" title="Backups" note="Lose your computer, keep everything" />
-        <Benefit icon={ComputerPhoneSyncIcon} hue="blue" title="Every computer" note="Your agents on all your computers" />
-        <Benefit icon={UserGroupIcon} hue="amber" title="Teams" note="Share agents with your team" />
-        <Benefit icon={SquareLock02Icon} hue="amber" title="End-to-end encrypted" note="We can’t read your data" />
-      </Rows>
-    </div>
-  </Step>
-}
-
-export function SignUpIn({ back, error }: { back: () => void; error?: string }) {
   const signIn = useSignIn()
   const waiting = useSigningIn()
   const cancel = useCancelSignIn()
-  return <Step art={<Hut mood={waiting ? 'looking' : 'key'} className="size-[96px]" />} title={waiting ? 'Finish signing in in your browser' : 'Sign in'} line={waiting ? 'This page moves on by itself when you’re done.' : 'With Google. It only shares your email.'} back={waiting ? cancel : back} backLabel={waiting ? 'Cancel' : undefined}
-    action={<Button type="button" variant="primary" className={cn(PRIMARY, 'gap-2')} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}><Google size={14} />{waiting ? 'Open the browser again' : 'Continue with Google'}</Button>}>
-    <ErrorNote message={signIn.error?.message ?? error} />
-  </Step>
+  if (cloud?.status === 'locked') return <Pane>
+    <Hut mood="key" className="size-[84px]" />
+    <Title>{`You’re signed in, ${nameOf(cloud.email ?? '')}`}</Title>
+    <Lead>One more step: the key that reads your agents and chats.</Lead>
+    {isPhone() ? <span className="text-[13px] text-mute">Unlock OpenHut on your computer.</span> : <Button type="button" variant="primary" className={BIG} onClick={() => open('enable')}>Unlock</Button>}
+  </Pane>
+  if (waiting) return <Pane>
+    <Hut mood="looking" className="size-[84px]" />
+    <Title>Finish signing in in your browser</Title>
+    <Lead>This page moves on by itself when you’re done.</Lead>
+    <div className="flex flex-col items-center gap-2">
+      <Button type="button" variant="primary" className={cn(BIG, 'gap-2')} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}><Google size={14} />Open the browser again</Button>
+      <Button type="button" variant="ghost" className={cn(BIG, 'mt-0')} onClick={cancel}>Cancel</Button>
+    </div>
+  </Pane>
+  return <Pane>
+    <Characters />
+    <Title>Sign in to see your team</Title>
+    <Lead>Or join one with an invite link.</Lead>
+    <div className="my-2 w-full max-w-[400px] text-left">
+      <Rows>
+        <Benefit icon={UserGroupIcon} hue="amber" title="Share agents" note="Your teammates chat with the agents you share" />
+        <Benefit icon={ComputerPhoneSyncIcon} hue="blue" title="On every computer" note="Your agents follow you" />
+        <Benefit icon={CloudUploadIcon} hue="blue" title="Backed up" note="Lose your computer, keep everything" />
+        <Benefit icon={SquareLock02Icon} hue="amber" title="End-to-end encrypted" note="We can’t read your data" />
+      </Rows>
+    </div>
+    {isPhone()
+      ? <span className="text-[13px] text-mute">Sign in on your computer.</span>
+      : <div className="flex flex-col items-center gap-2">
+        <Button type="button" variant="primary" className={cn(BIG, 'gap-2')} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}><Google size={14} />Sign in with Google</Button>
+        <Button type="button" variant="secondary" className={cn(BIG, 'mt-0')} onClick={() => open('join-link')}>Join with a link</Button>
+      </div>}
+    <ErrorNote message={signIn.error?.message ?? cloud?.signInError ?? undefined} />
+  </Pane>
+}
+
+export function SignInOnTeam({ what }: { what: string }) {
+  return <Pane>
+    <Title>Not signed in</Title>
+    <Lead>{`Sign in on the People tab to see ${what}.`}</Lead>
+    <Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/people')}>Go to People</Button>
+  </Pane>
 }
 
 export function MacIsIn({ cloud, onNext }: { cloud: Cloud; onNext: () => void }) {

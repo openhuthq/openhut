@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AllowedDevice, Cloud, CloudAuthorization, CloudPairing, RecoveryKit, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
+import { Cloud, CloudAuthorization, RecoveryKit, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { request } from '@/lib/api-client'
 import { WORDS } from '@/lib/platform'
 import { navigate } from '@/lib/router'
@@ -38,7 +38,7 @@ export function useSigningIn(): boolean {
 }
 
 export function enableCloud() {
-  navigate('/settings/account?open=enable')
+  navigate('/settings/people')
 }
 
 function landAfterSignIn(cloud: Cloud) {
@@ -96,14 +96,6 @@ export function useAddPasskey() {
   })
 }
 
-export function usePairing(enabled: boolean) {
-  return useQuery({ queryKey: ['cloud-pairing'], queryFn: () => request({ schema: CloudPairing, computer: 'local', path: '/api/cloud/pairings', method: 'POST' }), enabled, staleTime: 14 * 60_000, refetchInterval: 14 * 60_000, retry: false })
-}
-
-export function useAllow() {
-  return useMutation({ mutationFn: (code: string) => request({ schema: AllowedDevice, computer: 'local', path: '/api/cloud/devices', method: 'POST', body: { code } }) })
-}
-
 const NEW_KIT_HINT = 'If anyone else has your recovery kit, make a new kit so the old one stops working.'
 export const REMOVE_DETAIL = `It can’t get anything new from OpenHut Cloud. Do this only if it’s lost, sold or not yours. ${NEW_KIT_HINT}`
 
@@ -113,7 +105,7 @@ export function useRemoveMac() {
     mutationFn: (key: string) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/devices/${encodeURIComponent(key)}`, method: 'DELETE' }),
     onSuccess: (cloud) => {
       client.setQueryData(CLOUD_KEY, cloud)
-      notify({ title: 'Device removed', note: NEW_KIT_HINT, action: { label: 'Make a new kit', onClick: () => navigate('/settings/account?open=kit') } })
+      notify({ title: 'Device removed', note: NEW_KIT_HINT, action: { label: 'New kit', onClick: () => navigate('/settings/account?open=kit') } })
     },
     onError: toastError,
   })
@@ -130,10 +122,14 @@ export function useStartOver() {
   })
 }
 
-const bridge: { notify: () => Promise<{ shown?: boolean }> } | undefined = Reflect.get(window, 'openhut')?.cloud
+const bridge: { notify: (input?: { title: string; body: string; path: string }) => Promise<{ shown?: boolean }> } | undefined = Reflect.get(window, 'openhut')?.cloud
 
 export async function notifyUnlock(): Promise<boolean> {
   return Boolean((await bridge?.notify().catch(() => undefined))?.shown)
+}
+
+export function notifyDesktop(input: { title: string; body: string; path: string }): void {
+  void bridge?.notify(input).catch(() => undefined)
 }
 
 export function useSignIn() {

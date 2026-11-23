@@ -17,6 +17,7 @@ import { newId, unseal } from '../platform/secrets.ts'
 import { agentService, runsHere } from '../agents/agent-service.ts'
 import { keysService } from '../cloud/keys-service.ts'
 import type { Caller } from '../team/identity.ts'
+import { changeRequestService } from '../agents/change-request-service.ts'
 
 const MAX_THREADS = 200
 const TURN_MS = 15 * 60_000
@@ -146,6 +147,8 @@ export const threadService = {
         for await (const chunk of joinText(pipeJsonRender(relayed({ agent, session: `openhut-${id}`, message: together({ messages, shared: agent.shared }), signal: abort.signal, tap })))) writer.write(chunk)
         const calls = await callsSince({ agentId: agent.id, after: lastCall?.id ?? '0' })
         if (calls.length) writer.write({ type: 'data-calls', data: calls })
+        const changes = await changeRequestService.inThread({ agentId: agent.id, threadId: id, since: new Date(started) })
+        if (changes.length) writer.write({ type: 'data-changes', data: changes })
         writer.write({ type: 'finish' })
       },
       onError: messageOf,

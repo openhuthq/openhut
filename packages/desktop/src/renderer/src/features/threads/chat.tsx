@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
 import * as z from 'zod/mini'
 import { useChat } from '@ai-sdk/react'
+import { useQueryClient } from '@tanstack/react-query'
+import { asked } from '@/features/connections/asked'
+import { AGENTS_KEY } from '@/lib/query-keys'
+import { usePath } from '@/lib/router'
 import { DefaultChatTransport, type UIMessage } from 'ai'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -34,6 +38,7 @@ import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
 import { ConfirmIcon } from '@/components/confirm-button'
 import { attachCalls, kindOf, stepsOf, type Step } from '@/features/threads/steps'
 import { CardReply, MessageCard } from '@/features/threads/card'
+import { ChangeCards, PendingElsewhere } from '@/features/agents/change-requests'
 import { copyText } from '@/lib/clipboard'
 import { openhut } from '@/lib/openhut'
 import { toast, toastError } from '@/lib/toast'
@@ -41,7 +46,7 @@ import { usePhoneBack } from '@/app/phone-page'
 import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
 
-type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; spec: SpecDataPart }>
+type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; spec: SpecDataPart; changes: string[] }>
 type AgentPart = AgentMessage['parts'][number]
 type Attachment = { key: string; name: string; image: boolean; thumb?: string; file?: ChatFile }
 
@@ -73,6 +78,19 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
     void chat.sendMessage(files.length ? { text, files } : { text })
     attachments.clear()
   }
+  const path = usePath()
+  const client = useQueryClient()
+  useEffect(() => {
+    const line = asked.said(agent.id)
+    if (!line || busy) return
+    if (agent.health !== 'answering') {
+      const timer = setTimeout(() => void client.invalidateQueries({ queryKey: AGENTS_KEY }), 1_500)
+      return () => clearTimeout(timer)
+    }
+    asked.sent(agent.id)
+    touch(thread)
+    void chat.sendMessage({ text: line })
+  }, [agent.id, agent.health, busy, path])
   const shown = agent.runsHere ? chat.messages : chat.messages.filter((message) => message.role === 'user' || message.parts.some((part) => part.type !== 'step-start'))
   const last = shown.at(-1)
   const clear = chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
@@ -82,6 +100,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
       {shown.map((message) => <Message key={message.id} agent={agent} message={message} live={busy && message === last} />)}
     </> : <ChatEmpty agent={agent} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
+    <PendingElsewhere agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
     {!agent.runsHere && chat.status !== 'submitted' && last?.role === 'user' && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
     {chat.error && <Alert variant="error-outline" role="alert"><span>{chat.error.message}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Try again</Button></Alert>}
   </ChatFrame></CardReply></ChatFiles>
@@ -289,6 +308,7 @@ function AgentReply({ agent, message, live }: { agent: Agent; message: AgentMess
         if (block.type === 'card') return hasSpec && <MessageCard key={index} spec={spec} loading={live} />
         return <Steps key={index} steps={block.steps} live={live && index === blocks.length - 1} />
       })}
+      {changesOf(message).length > 0 && <ChangeCards agent={agent} ids={changesOf(message)} />}
       {live && !blocks.length && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
       {!live && !blocks.length && <span className="text-[13.5px] text-mute-2 italic">No reply.</span>}
     </div></CopyMenu>
@@ -486,11 +506,16 @@ function Details({ text }: { text: string }) {
   </Collapsible>
 }
 
+function changesOf(message: AgentMessage): string[] {
+  return message.parts.flatMap((part) => part.type === 'data-changes' ? part.data : [])
+}
+
 function uiMessageOf(message: ChatMessage): AgentMessage {
   return { id: message.id, role: message.role, metadata: message.metadata, parts: message.parts.flatMap((part): AgentPart[] => {
     if (part.type === 'text' && typeof part.text === 'string') return [{ type: 'text', text: part.text }]
     if (part.type === 'data-tool') return [{ type: 'data-tool', data: z.safeParse(ToolProgress, part.data).data ?? {} }]
     if (part.type === 'data-calls') return [{ type: 'data-calls', data: z.safeParse(z.array(ChatCall), part.data).data ?? [] }]
+    if (part.type === 'data-changes') return [{ type: 'data-changes', data: z.safeParse(z.array(z.string()), part.data).data ?? [] }]
     if (part.type === 'data-spec') return [{ type: 'data-spec', data: part.data as SpecDataPart }]
     if (part.type === 'file' && typeof part.url === 'string' && typeof part.mediaType === 'string') return [{ type: 'file', url: part.url, mediaType: part.mediaType, filename: typeof part.filename === 'string' ? part.filename : undefined }]
     return []

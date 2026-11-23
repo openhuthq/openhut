@@ -3,26 +3,23 @@ import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { Hut } from '@/components/hut'
 import { useCloud } from '@/features/cloud/api'
-import { AllSet, MacIsIn, SaveKit, SignUpIn, Why } from '@/features/cloud/sign-in'
+import { AllSet, MacIsIn, SaveKit } from '@/features/cloud/sign-in'
 import { Guide, PRIMARY, Step } from '@/features/cloud/step'
 import { Unlock } from '@/features/cloud/unlock'
 import { open } from '@/lib/router'
 
-type Stage = 'why' | 'sign-in' | 'in' | 'kit' | 'done'
+type Stage = 'in' | 'kit' | 'done'
 
 export function CloudSetup() {
   const cloud = useCloud().data
   const [stage, setStage] = useState<Stage>(startOf(cloud))
   const [unlocking, setUnlocking] = useState(cloud?.status === 'locked')
-  if (!cloud) return null
+  if (!cloud || cloud.status === 'off') return null
   if (cloud.status === 'locked' && !unlocking) setUnlocking(true)
   const close = () => open()
-  const off = cloud.status === 'off'
-  const shown: Stage = off ? (stage === 'why' ? 'why' : 'sign-in') : stage === 'why' || stage === 'sign-in' ? 'in' : stage
-  const at = shown === 'in' && unlocking && cloud.status !== 'locked' ? 3 : { why: 0, 'sign-in': 1, in: 2, kit: 3, done: 4 }[shown]
-  return <Guide label="OpenHut Cloud" at={at} of={unlocking ? 4 : 5} onClose={close}>
-    {shown === 'why' && <Why onNext={() => setStage('sign-in')} />}
-    {shown === 'sign-in' && <SignUpIn back={() => setStage('why')} error={cloud.signInError ?? undefined} />}
+  const shown = stage
+  const at = shown === 'in' && unlocking && cloud.status !== 'locked' ? 1 : { in: 0, kit: 1, done: 2 }[shown]
+  return <Guide label="OpenHut Cloud" at={at} of={unlocking ? 2 : 3} onClose={close}>
     {shown === 'in' && cloud.status === 'locked' && <Unlock cloud={cloud} />}
     {shown === 'in' && cloud.status !== 'locked' && (unlocking ? <Unlocked cloud={cloud} onDone={close} /> : <MacIsIn cloud={cloud} onNext={() => cloud.kit ? close() : setStage('kit')} />)}
     {shown === 'kit' && <SaveKit onBack={() => setStage('in')} onDone={() => setStage('done')} />}
@@ -32,7 +29,7 @@ export function CloudSetup() {
 
 function startOf(cloud: Cloud | undefined): Stage {
   if (cloud?.status === 'on' || cloud?.status === 'offline') return cloud.kit ? 'in' : 'kit'
-  return cloud?.status === 'locked' ? 'in' : 'why'
+  return 'in'
 }
 
 function Unlocked({ cloud, onDone }: { cloud: Cloud; onDone: () => void }) {

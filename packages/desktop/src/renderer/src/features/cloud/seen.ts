@@ -32,3 +32,13 @@ export function freshDevice({ cloud, seen, now }: { cloud: Cloud; seen: string[]
   const since = Date.parse(cloud.devices.find((device) => device.here)?.addedAt ?? '') || 0
   return cloud.devices.find((device) => !device.here && device.addedAt && Date.parse(device.addedAt) > since && now - Date.parse(device.addedAt) < ALERT_MS && !seen.includes(device.key))
 }
+
+type Workspace = Cloud['workspaces'][number]
+export type JoinRequest = { workspace: Workspace; request: Workspace['requests'][number]; mine: boolean; path: string }
+
+export function joinRequests({ cloud }: { cloud: Cloud }): JoinRequest[] {
+  if (cloud.status !== 'on' && cloud.status !== 'offline') return []
+  return cloud.workspaces.flatMap((workspace) => workspace.requests
+    .filter((request) => workspace.own && workspace.home ? request.email === cloud.email : workspace.role !== 'member' && request.email !== cloud.email)
+    .map((request) => ({ workspace, request, mine: request.email === cloud.email, path: request.email === cloud.email ? '/settings/computers' : '/settings/people' })))
+}

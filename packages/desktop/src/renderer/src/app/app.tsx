@@ -6,6 +6,7 @@ import { routeOf } from '@/app/routes'
 import { Shell, type ShellRoute } from '@/app/shell'
 import { useJoinRuntimes } from '@/features/cloud/live'
 import { CloudGate } from '@/features/cloud/unlock'
+import { CreateTeamDialog } from '@/features/agents/sidebar'
 import { ConnectionsView } from '@/features/connections/connections-view'
 import { FirstRun } from '@/features/first-run/first-run'
 import { CloudJoin, JoinLinkDialog } from '@/features/join/cloud-join'
@@ -49,6 +50,7 @@ function Dashboard() {
     {route.page === 'connections' && <ConnectionsView onClose={close} />}
     <JoinRuntimes />
     {opened === 'join-link' && <JoinLinkDialog />}
+    {opened === 'new-team' && <CreateTeamDialog />}
   </CloudGate>
 }
 

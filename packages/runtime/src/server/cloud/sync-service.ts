@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
 import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
-import { checkProof, CloudWorkspace, DeleteNotice, DeviceRequest, parseJson, Record, signProof, type Backup, type SetHere } from '@openhut/common/cloud/cloud.ts'
+import { checkProof, CloudWorkspace, DeleteNotice, DeviceRequest, parseJson, Record, siteHost, type Backup, type SetHere } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, bodyOf, newUntil } from '@openhut/common/cloud/member-list.ts'
 import { FileValue, openRecord, sealRecord, SYNCED, type AgentValue, type Opened, type Synced } from '@openhut/common/cloud/record.ts'
-import { askCommit, fromBase64, newKey, readHeader, slot, toBase64 } from '@openhut/common/vault/vault.ts'
+import { fromBase64, readHeader, slot, toBase64 } from '@openhut/common/vault/vault.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
@@ -39,7 +39,7 @@ const Requests = z.object({ data: z.array(DeviceRequest) })
 const Gone = z.object({ deleted: DeleteNotice })
 const Newer = z.object({ data: z.array(z.unknown()) })
 const NAME = 'cloud_name'
-const CHANGED = 'Someone changed this workspace a moment ago. Try again.'
+const CHANGED = 'Someone changed this team a moment ago. Try again.'
 const GONE = [4001, 4003, 4010]
 const Missing = z.object({ error: z.object({ param: z.literal('file') }) })
 const Message = z.discriminatedUnion('type', [
@@ -52,7 +52,7 @@ type Item = Local & { id: string }
 type Sent = 'sent' | 'later' | 'refused'
 type State = {
   ws: string; home: boolean; call: Call; socket: ReconnectingWebSocket | undefined; ready: boolean; timer: NodeJS.Timeout | undefined; headTimer: NodeJS.Timeout | undefined; keyTimer?: NodeJS.Timeout; failures: number
-  wanted: [string, number][] | null; refused: Map<string, { kind: Synced; hash: string; name: string }>; dirty: Set<Synced>; backup: Backup; name: string | null
+  wanted: [string, number][] | null; refused: Map<string, { kind: Synced; hash: string; name: string }>; dirty: Set<Synced>; backup: Backup; name: string | null; site: string | null
   requests: DeviceRequest[]; leaving?: boolean; log: { seq: number; hash: string }; echo: Map<string, number>
 }
 export type Gone = { name: string; why: 'removed' | 'deleted' }
@@ -136,6 +136,8 @@ export const syncService = {
 
   name: (ws: string): string => states.get(ws)?.name ?? defaultName(ws),
 
+  site: (ws: string): string | null => states.get(ws)?.site ?? null,
+
   async refreshName(ws: string): Promise<void> {
     const s = states.get(ws)
     if (s) await named(s)
@@ -192,7 +194,7 @@ export const syncService = {
 function defaultName(ws: string): string {
   const owner = roomKeys.members(ws)?.members.find((member) => member.role === 'owner')?.email ?? ''
   const first = (owner.split('@')[0] ?? '').split(/[._+-]/)[0] ?? ''
-  return `${first.charAt(0).toUpperCase()}${first.slice(1)}’s workspace`
+  return `${first.charAt(0).toUpperCase()}${first.slice(1)}’s team`
 }
 
 function homeState(): State | undefined {
@@ -201,7 +203,7 @@ function homeState(): State | undefined {
 }
 
 function open(home: boolean, ws: string): void {
-  const s: State = { ws, home, call: (input) => room(s, input), socket: undefined, ready: false, timer: undefined, headTimer: undefined, failures: 0, wanted: null, refused: new Map(), dirty: new Set(), name: null, requests: [], log: { seq: 0, hash: '' }, echo: new Map(), backup: home ? backup : { ...backup, state: 'idle', at: null, problem: null } }
+  const s: State = { ws, home, call: (input) => room(s, input), socket: undefined, ready: false, timer: undefined, headTimer: undefined, failures: 0, wanted: null, refused: new Map(), dirty: new Set(), name: null, site: null, requests: [], log: { seq: 0, hash: '' }, echo: new Map(), backup: home ? backup : { ...backup, state: 'idle', at: null, problem: null } }
   states.set(ws, s)
   const socket = new ReconnectingWebSocket(cloud.roomUrl(ws), [], { WebSocket: globalThis.WebSocket })
   s.socket = socket
@@ -268,7 +270,12 @@ function run(step: () => Promise<void>): Promise<void> {
 
 async function named(s: State): Promise<void> {
   const reply = await room(s, { method: 'GET', path: '' })
-  s.name = await roomKeys.openName({ ws: s.ws, locked: CloudWorkspace.safeParse(reply.json).data?.name ?? null }) ?? s.name
+  const view = CloudWorkspace.safeParse(reply.json).data
+  const before = [s.name, s.site].join('|')
+  s.name = await roomKeys.openMeta({ ws: s.ws, field: 'name', locked: view?.name }) ?? s.name
+  const site = view && (view.site ? await roomKeys.openMeta({ ws: s.ws, field: 'site', locked: view.site }) : '')
+  if (typeof site === 'string') s.site = siteHost(site)
+  if ([s.name, s.site].join('|') !== before) emit({ name: 'cloud.changed', target: { type: 'cloud', id: s.ws } })
   if (s.name) await db.insertInto('install_setting').values({ name: `${NAME}:${s.ws}`, value: s.name }).onConflict((oc) => oc.column('name').doUpdateSet({ value: s.name ?? '' })).execute()
 }
 
@@ -572,24 +579,8 @@ async function drop({ ws, why }: { ws: string; why: Gone['why'] | null }): Promi
 
 async function asked(s: State): Promise<void> {
   const before = JSON.stringify(s.requests)
-  const found = Requests.safeParse((await room(s, { method: 'GET', path: '/requests' })).json).data?.data ?? []
-  const admin = roomKeys.roleIn(s.ws) !== 'member' && !syncService.waiting(s.ws)
-  const fresh = admin ? found.filter((each) => !each.nonce && each.commit) : []
-  for (const each of fresh) {
-    const nonce = toBase64(newKey(16))
-    const me = await keysService.device()
-    await room(s, { method: 'PUT', path: `/requests/${encodeURIComponent(each.device)}/nonce`, body: { nonce, by: toBase64(me.publicKey), signature: await signProof({ signer: me, proof: 'words', parts: [s.ws, each.device, each.commit ?? '', nonce] }) } })
-  }
-  const all = fresh.length ? Requests.safeParse((await room(s, { method: 'GET', path: '/requests' })).json).data?.data ?? [] : found
-  s.requests = await Promise.all(all.map(async (each) => await wordsReady({ ws: s.ws, request: each }) ? each : { ...each, nonce: null, reveal: null }))
+  s.requests = Requests.safeParse((await room(s, { method: 'GET', path: '/requests' })).json).data?.data ?? []
   if (JSON.stringify(s.requests) !== before) emit({ name: 'cloud.changed', target: { type: 'cloud', id: s.ws } })
-}
-
-async function wordsReady({ ws, request: { device, commit, nonce, reveal } }: { ws: string; request: DeviceRequest }): Promise<boolean> {
-  const signer = nonce && roomKeys.members(ws)?.members.find((member) => member.devices.includes(nonce.by))
-  if (!commit || !nonce || !reveal || !signer || signer.role === 'member') return false
-  const opened = toBase64(await askCommit({ device: fromBase64(device), reveal: fromBase64(reveal) })) === commit
-  return opened && checkProof({ device: nonce.by, proof: 'words', parts: [ws, device, commit, nonce.nonce], signature: nonce.signature })
 }
 
 async function room(s: State, { method, path, body }: { method: 'GET' | 'PUT' | 'POST' | 'DELETE'; path: string; body?: unknown }): Promise<{ status: number; json: unknown }> {

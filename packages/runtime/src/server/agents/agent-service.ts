@@ -39,6 +39,7 @@ const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
 const RENDERED = ['instructions', 'model', 'codeExecution', 'browser'] as const
 const DEFAULT_MODEL = 'claude:sonnet'
+const held = new Map<string, boolean>()
 const Moved = z.object({
   agent: z.object({ id: z.string().check(z.regex(/^ag_[a-z0-9]{8}$/)), name: z.string().check(z.minLength(1), z.maxLength(40)), instructions: z.string().check(z.maxLength(20_000)), model: z.pipe(z.pipe(z.string(), z.transform((key) => LEGACY_MODELS[key] ?? key)), ModelKey), codeExecution: z.boolean(), browser: z.boolean() }),
   channels: z.array(z.object({ kind: ChannelKind, status: z.enum(['connected', 'linking']), account: z.nullable(z.string()), ownerAddress: z.string(), open: z.boolean(), allowed: z.string(), secrets: z.string() })),
@@ -74,7 +75,7 @@ export const agentService = {
     const clean = cleanName(name)
     requireModel(model)
     const team = workspace && workspace !== keysService.account()?.workspace.id ? workspace : null
-    if (team && !roomKeys.room(team)) throw new HttpError(400, 'This computer isn’t in that workspace.', { param: 'workspace' })
+    if (team && !roomKeys.room(team)) throw new HttpError(400, 'This computer isn’t in that team.', { param: 'workspace' })
     const net = await freeNet()
     const row = await db.insertInto('agent').values({
       id: newId('ag'), name: clean, owner_id: actor.id, model: model ?? DEFAULT_MODEL, net, channel_key: seal(randomBytes(24).toString('hex')), face, workspace: team,
@@ -116,7 +117,7 @@ export const agentService = {
 
   async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'agent'>> {
     const row = await rowOf(id)
-    if (!canManage(row)) throw new HttpError(403, `Only an owner or admin of this workspace can delete ${row.name}.`)
+    if (!canManage(row)) throw new HttpError(403, `Only an owner or admin of this team can delete ${row.name}.`)
     await agentd.remove({ id })
     await db.deleteFrom('agent').where('id', '=', id).execute()
     emit({ name: 'agent.deleted', actor, target: { type: 'agent', id, name: row.name } })
@@ -246,7 +247,21 @@ export const agentService = {
     return Boolean(row && writable({ row, author, workspace, me }))
   },
 
+  holdReapply(id: string): void {
+    held.set(id, held.get(id) ?? false)
+  },
+
+  async releaseReapply(id: string): Promise<void> {
+    const due = held.get(id)
+    held.delete(id)
+    if (due) await agentService.reapply({ id })
+  },
+
   async reapply({ id }: { id: string }): Promise<void> {
+    if (held.has(id)) {
+      held.set(id, true)
+      return
+    }
     const row = await rowOf(id)
     await agentd.apply({ id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' && runsHere({ row, me: await meIfNeeded([row]) }) })
     probes.delete(id)
@@ -460,7 +475,7 @@ function requireRole({ row, patch }: { row: AgentRow; patch: UpdateAgent }): voi
   const mine = !row.owner || row.owner === keysService.account()?.email
   if (patch.shared === false && row.shared && !mine) throw new HttpError(403, `Only ${row.owner} can make ${row.name} private.`, { param: 'shared' })
   const limited = (['codeExecution', 'browser', 'runsHere', 'shared'] as const).find((field) => patch[field] !== undefined)
-  if (limited && !canManage(row)) throw new HttpError(403, `Only an owner or admin of this workspace can change where ${row.name} runs, what it can run, or who can use it.`, { param: limited })
+  if (limited && !canManage(row)) throw new HttpError(403, `Only an owner or admin of this team can change where ${row.name} runs, what it can run, or who can use it.`, { param: limited })
 }
 
 function agentOf({ row, ownerName, state, health, editable, here }: { row: AgentRow; ownerName: string | undefined; state: string | undefined; health: Health; editable: boolean; here: boolean }): Agent {

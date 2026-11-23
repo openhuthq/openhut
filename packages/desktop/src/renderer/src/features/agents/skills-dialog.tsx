@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm'
 import { ArrowLeft01Icon, Cancel01Icon, Delete02Icon, SparklesIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { SKILL_MAX_LENGTH, type Skill } from '@openhut/common/agents/skill.ts'
-import { BRAND_ICONS, type BrandName } from '@/components/brand-icons'
+import { isBrand } from '@/components/brand-icons'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
@@ -86,10 +86,6 @@ function SkillMark({ skill }: { skill: Skill }) {
   const brand = skill.name.split('-')[0]
   if (isBrand(brand)) return <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-card shadow-[inset_0_0_0_1px_var(--hair)]"><Glyph name={brand} size={16} /></span>
   return <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-soft text-body">{skillIcon(skill.path.split('/').at(-2) ?? '')}</span>
-}
-
-function isBrand(name: string): name is BrandName {
-  return Object.hasOwn(BRAND_ICONS, name)
 }
 
 function SkillDetail({ agent, skillId, draft, setDraft, onClose, back }: { agent: Agent; skillId: string; draft: string | undefined; setDraft: (body: string | undefined) => void; onClose: () => void; back: boolean }) {

@@ -117,7 +117,7 @@ export function useCreateGrant() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (body: { agentId: string; connectionId: string }) => openhut.connections.grant({ agent: body.agentId, connection: body.connectionId }),
-    onSuccess: (grant) => writeGrant(client, grant, (grants) => [...grants, grant]),
+    onSuccess: (grant) => writeGrant(client, grant, (grants) => [...grants.filter((each) => each.id !== grant.id), grant]),
   })
 }
 

@@ -1,7 +1,7 @@
 import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { createCipheriv, createDecipheriv, createHash, createHmac, createPublicKey, hkdfSync, verify } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createPublicKey, hkdfSync, verify } from 'node:crypto'
 import * as vault from '../../src/vault/vault.ts'
 
 const vectors = JSON.parse(readFileSync(new URL('./vectors.json', import.meta.url), 'utf8'))
@@ -176,143 +176,10 @@ test('12 words give back the same key and a typo in one word is caught', async (
   assert.equal(hex(fixed.key), v1.words.key)
 })
 
-test('a new pairing has a 100-bit secret and the fingerprint of the new device', async () => {
-  const mac = await vault.identity()
-  const pairing = await vault.newPairing({ device: mac.publicKey, hint: 'mo@example.com' })
-  assert.match(pairing.secret, /^[0-9A-HJKMNP-TV-Z]{20}$/)
-  assert.equal(pairing.fingerprint, await vault.fingerprint(mac.publicKey))
-})
-
-test('the long code round-trips, forgives case, O and I, and catches every one-character typo', async () => {
-  const { secret } = await vault.newPairing({ device: (await vault.identity()).publicKey, hint: '' })
-  const code = vault.longCode(secret)
-  assert.match(code, /^([0-9A-Z]{5}-){4}[0-9A-Z*~$=]$/)
-  assert.equal(vault.fromLongCode(code), secret)
-  assert.equal(vault.fromLongCode(code.toLowerCase().replaceAll('-', ' ')), secret)
-  assert.equal(vault.fromLongCode('O1234-56789-ABCDE-FGHJK-H'), '0123456789ABCDEFGHJK')
-  assert.equal(vault.fromLongCode('0i234-56789-ABCDE-FGHJK-H'), '0123456789ABCDEFGHJK')
-  const plain = code.replaceAll('-', '')
-  for (let index = 0; index < plain.length; index++) {
-    for (const other of '0123456789ABCDEFGHJKMNPQRSTVWXYZ*~$=U') {
-      if (other !== plain[index]) assert.equal(vault.fromLongCode(plain.slice(0, index) + other + plain.slice(index + 1)), null)
-    }
-  }
-  for (let index = 0; index < plain.length - 1; index++) {
-    const swapped = plain.slice(0, index) + plain[index + 1] + plain[index] + plain.slice(index + 2)
-    if (swapped !== plain) assert.equal(vault.fromLongCode(swapped), null)
-  }
-  assert.equal(vault.fromLongCode(plain.slice(0, -1)), null)
-})
-
-test('a pair proof binds the side, both device keys and the workspace, and a wrong secret or swapped key fails', async () => {
-  const [mac, phone, cloud] = await Promise.all([vault.identity(), vault.identity(), vault.identity()])
-  const { secret } = await vault.newPairing({ device: mac.publicKey, hint: '' })
-  const pair = { secret, newDevice: mac.publicKey, oldDevice: phone.publicKey, workspace: 'ws_00000001' }
-  const tag = must(await vault.pairProof({ ...pair, side: 'new' }))
-  assert.equal(await vault.checkPairProof({ ...pair, side: 'new', tag }), true)
-  for (const changed of [{ side: 'old' as const }, { newDevice: cloud.publicKey }, { oldDevice: cloud.publicKey }, { workspace: 'ws_00000002' }, { secret: (await vault.newPairing({ device: mac.publicKey, hint: '' })).secret }, { secret: 'not a secret' }]) {
-    assert.equal(await vault.checkPairProof({ ...pair, side: 'new', tag, ...changed }), false)
-  }
-  for (const bad of [tag.slice(0, 16), new Uint8Array(), must(await vault.pairProof({ ...pair, side: 'old' }))]) {
-    assert.equal(await vault.checkPairProof({ ...pair, side: 'new', tag: bad }), false)
-  }
-  assert.equal(await vault.pairProof({ ...pair, side: 'new', newDevice: mac.publicKey.slice(0, 32) }), null)
-  assert.equal(await vault.checkPairProof({ ...pair, side: 'new', tag, oldDevice: vault.concat([phone.publicKey, vault.newKey(1)]) }), false)
-})
-
-test('a pair proof cannot be moved between two splits of the same bytes', async () => {
-  const [mac, phone] = await Promise.all([vault.identity(), vault.identity()])
-  const { secret } = await vault.newPairing({ device: mac.publicKey, hint: '' })
-  const tag = must(await vault.pairProof({ secret, side: 'old', newDevice: mac.publicKey, oldDevice: phone.publicKey, workspace: 'ws_1' }))
-  assert.equal(await vault.checkPairProof({ secret, side: 'old', newDevice: mac.publicKey, oldDevice: phone.publicKey, workspace: 'ws_1', tag }), true)
-  const both = vault.concat([mac.publicKey, phone.publicKey])
-  for (const [newDevice, oldDevice] of [[both.slice(0, 63), both.slice(63)], [both.slice(0, 65), both.slice(65)]]) {
-    assert.equal(await vault.checkPairProof({ secret, side: 'old', newDevice, oldDevice, workspace: 'ws_1', tag }), false)
-    assert.equal(await vault.pairProof({ secret, side: 'old', newDevice, oldDevice, workspace: 'ws_1' }), null)
-  }
-  assert.equal(vault.equal({ a: vault.concat([vault.field('ws_1'), vault.field('23')]), b: vault.concat([vault.field('ws_12'), vault.field('3')]) }), false)
-})
-
-test('a pairing letter opens only in its own pairing, so a letter from an earlier pairing is refused', async () => {
-  const [mac, phone] = await Promise.all([vault.identity(), vault.identity()])
-  const key = vault.newKey()
-  const pairing = async () => {
-    const { secret } = await vault.newPairing({ device: mac.publicKey, hint: '' })
-    return must(await vault.pairingWorkspace({ secret, newDevice: mac.publicKey, oldDevice: phone.publicKey, workspace: 'ws_00000001' }))
-  }
-  const [earlier, now] = [await pairing(), await pairing()]
-  assert.notEqual(earlier, now)
-  const old = must(await vault.letter({ sender: phone, to: mac.publicKey, workspace: earlier, purpose: 'pairing', version: 1, plain: key }))
-  const fresh = must(await vault.letter({ sender: phone, to: mac.publicKey, workspace: now, purpose: 'pairing', version: 1, plain: key }))
-  const reading = { recipient: mac, from: phone.publicKey, workspace: now, purpose: 'pairing' as const, allowed: [phone.publicKey] }
-  assert.deepEqual(await vault.read({ ...reading, body: fresh }), key)
-  assert.equal(await vault.read({ ...reading, body: old }), null)
-  const accountKey = must(await vault.letter({ sender: phone, to: mac.publicKey, workspace: now, purpose: 'account-key', version: 1, plain: key }))
-  assert.equal(await vault.read({ ...reading, body: accountKey }), null)
-})
-
-test('the pairing vector matches, and its proofs derive with plain node:crypto', async () => {
-  const { secret, longCode, device, oldDevice, workspace, fingerprint, newProof, oldProof, letterWorkspace } = v1.pair
-  const pair = { secret, newDevice: bytes(device), oldDevice: bytes(oldDevice), workspace }
-  assert.equal(vault.longCode(secret), longCode)
-  assert.equal(await vault.fingerprint(bytes(device)), fingerprint)
-  assert.equal(hex(must(await vault.pairProof({ ...pair, side: 'new' }))), newProof)
-  assert.equal(hex(must(await vault.pairProof({ ...pair, side: 'old' }))), oldProof)
-  assert.equal(await vault.checkPairProof({ ...pair, side: 'old', tag: bytes(oldProof) }), true)
-  assert.equal(await vault.pairingWorkspace(pair), letterWorkspace)
-  const key = Buffer.from(hkdfSync('sha256', Buffer.from(secret), Buffer.alloc(0), Buffer.from('openhut/pair'), 32))
-  const transcript = Buffer.concat([utf8('openhut/pair\0'), vault.field('new'), bytes(device), bytes(oldDevice), vault.field(workspace)])
-  assert.equal(createHmac('sha256', key).update(transcript).digest('hex'), newProof)
-})
-
-test('two sides with different keys get different codes, so a key the cloud swaps in reads nothing', async () => {
-  const [mac, phone, cloud] = await Promise.all([vault.identity(), vault.identity(), vault.identity()])
-  const { secret } = await vault.newPairing({ device: mac.publicKey, hint: '' })
-  const pair = { secret, newDevice: mac.publicKey, oldDevice: phone.publicKey, workspace: 'ws_00000001' }
-  const real = must(await vault.pairingWorkspace(pair))
-  for (const swapped of [{ newDevice: cloud.publicKey }, { oldDevice: cloud.publicKey }, { secret: (await vault.newPairing({ device: mac.publicKey, hint: '' })).secret }]) {
-    assert.notEqual(must(await vault.pairingWorkspace({ ...pair, ...swapped })), real)
-  }
-  const key = vault.newKey()
-  const toCloud = must(await vault.letter({ sender: phone, to: cloud.publicKey, workspace: must(await vault.pairingWorkspace({ ...pair, newDevice: cloud.publicKey })), purpose: 'pairing', version: 1, plain: key }))
-  assert.equal(await vault.read({ recipient: cloud, from: phone.publicKey, workspace: real, purpose: 'pairing', body: toCloud, allowed: [phone.publicKey] }), null)
-})
-
 test('slots are a keyed hash of the path', async () => {
   const { key, path, slot } = v1.slot
   assert.equal(await vault.slot({ key: bytes(key), path }), slot)
   assert.notEqual(await vault.slot({ key: vault.newKey(), path }), slot)
-})
-
-test('a device shows 4 words from its key, the admin’s nonce and the secret it committed to: the vector matches an independent SHA-256, and another key, nonce or secret gives other words', async () => {
-  const { device, reveal, commit, nonce, words } = v1.deviceWords
-  const sha = (...parts: Uint8Array[]) => createHash('sha256').update(Buffer.concat(parts)).digest('hex')
-  assert.equal(sha(utf8('openhut/ask\0'), bytes(device), bytes(reveal)), commit)
-  assert.equal(hex(await vault.askCommit({ device: bytes(device), reveal: bytes(reveal) })), commit)
-  assert.deepEqual(await vault.deviceWords({ device: bytes(device), nonce: bytes(nonce), reveal: bytes(reveal) }), words)
-  const other = (await vault.identity()).publicKey
-  assert.notDeepEqual(await vault.deviceWords({ device: other, nonce: bytes(nonce), reveal: bytes(reveal) }), words)
-  assert.notDeepEqual(await vault.deviceWords({ device: bytes(device), nonce: vault.newKey(16), reveal: bytes(reveal) }), words)
-  assert.notDeepEqual(await vault.deviceWords({ device: bytes(device), nonce: bytes(nonce), reveal: vault.newKey() }), words)
-  assert.ok(words.every((word: string) => /^[a-z]{3,8}$/.test(word)))
-})
-
-test('a cloud that swaps the device can’t steer the 4 words: it picks the nonce it shows before the secret is revealed, and its own device’s secret is committed before the admin’s nonce, so a bounded search finds no match', async () => {
-  const real = (await vault.identity()).publicKey
-  const swapped = (await vault.identity()).publicKey
-  const swappedSecret = vault.newKey()
-  const swappedCommit = await vault.askCommit({ device: swapped, reveal: swappedSecret })
-  const adminNonce = vault.newKey(16)
-  const shown = (await vault.deviceWords({ device: swapped, nonce: adminNonce, reveal: swappedSecret })).join(' ')
-  const tries = Array.from({ length: 4096 }, () => vault.newKey(16))
-  const secret = vault.newKey()
-  const steered = await Promise.all(tries.map(async (picked) => (await vault.deviceWords({ device: real, nonce: picked, reveal: secret })).join(' ')))
-  assert.ok(!steered.includes(shown))
-  const devices = await Promise.all(Array.from({ length: 256 }, async () => (await vault.identity()).publicKey))
-  const substituted = await Promise.all(devices.map(async (device) => (await vault.deviceWords({ device, nonce: adminNonce, reveal: swappedSecret })).join(' ')))
-  assert.ok(!substituted.includes(shown))
-  const reopened = await Promise.all(tries.slice(0, 256).map(async (other) => hex(await vault.askCommit({ device: swapped, reveal: other }))))
-  assert.ok(!reopened.includes(hex(swappedCommit)))
 })
 
 test('an invite letter locks with a key from the link secret: the vector matches, and another secret or workspace opens nothing', async (t) => {

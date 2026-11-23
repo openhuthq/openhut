@@ -4,7 +4,7 @@ description: Optional. We store your data, but we can't read it. Only you and yo
 icon: hut
 ---
 
-OpenHut works without an account. Turn it on from **Settings › Account** or **Settings › People** with **Enable cloud**. A short guide walks you through it: what you get, **Continue with Google** (one step signs you up the first time and signs you in after that), then your recovery kit. You can close the guide at any step; if you close it after signing in, **Save kit** on either page picks up where you stopped. Until you do, OpenHut never talks to the cloud.
+OpenHut works without an account. Turn it on from **Settings › Team** with **Sign in with Google**. A short guide walks you through it: what you get, **Continue with Google** (one step signs you up the first time and signs you in after that), then your recovery kit. You can close the guide at any step; if you close it after signing in, **Save kit** on either page picks up where you stopped. Until you do, OpenHut never talks to the cloud.
 
 ## What syncs
 
@@ -21,13 +21,13 @@ One agent runs on one computer at a time. Open it on another Mac and you can cha
 
 ## What we can't read
 
-Everything above, and the names of your workspaces, is locked on your Mac before it leaves it. The key that opens it is made on your Mac and never reaches us. Without it, what we store is noise.
+Everything above, and the names of your teams, is locked on your Mac before it leaves it. The key that opens it is made on your Mac and never reaches us. Without it, what we store is noise.
 
 ## What we can see
 
 - Your email, from Google, so we know who signed in.
-- Who is in each workspace: emails, roles, and devices with their names. Your devices sign this list, so we can't change it.
-- Timing: when your devices sync, how much they store, and when someone in a workspace is online or typing.
+- Who is in each team: emails, roles, and devices with their names. Your devices sign this list, so we can't change it.
+- Timing: when your devices sync, how much they store, and when someone in a team is online or typing.
 
 We ask Google only for your email. We never see your Google password, and signing in doesn't give us your mail or files.
 
@@ -35,16 +35,17 @@ We ask Google only for your email. We never see your Google password, and signin
 
 We can't reset your key. Right after you sign in, OpenHut asks you to save a recovery kit: one small file with 12 words. With your Google account, it unlocks your cloud on a new Mac. Keep it offline, like a password.
 
-To make a new kit, **Settings › Account › Make a new kit**. This also changes your keys, so the old kit stops working right away.
+To make a new kit, **Settings › Account › New kit**. This also changes your keys, so the old kit stops working right away.
 
 ## A new Mac
 
 Sign in on the new Mac with the same Google account. **Settings › Account** then asks you to unlock. The app keeps working while it waits. Pick one way in:
 
-- **Your phone or another Mac.** The new Mac shows a code. Scan it with the OpenHut app on your phone, or type it on a Mac that's already in.
-- **An admin.** The new Mac shows 4 words. An admin of your team types them under your name in **Settings › People** and clicks **Approve**.
+- **Request access.** The new Mac asks, and shows **Requires approval**. On another Mac of yours, the request shows up in **Settings › Computers**, with a notice that it wants to join; click **Approve**. If your teams have admins, they see it under your name in **Settings › Team** too. The new Mac unlocks by itself. Nothing to type or compare: check the computer's name and when it asked before you approve. A request expires after an hour.
 - **Your recovery kit.** Drop the file, or type the 12 words.
-- **Touch ID.** If you set up Touch ID in **Settings › Account** on another Mac, unlock with your fingerprint. Needs macOS 15 or later. Resetting your own workspace's encryption or making a new kit removes it, so add it again after.
+- **Touch ID.** If you set up Touch ID in **Settings › Account** on another Mac, unlock with your fingerprint. Needs macOS 15 or later. Resetting your own team's encryption or making a new kit removes it, so add it again after.
+
+The key travels as a letter locked to the new Mac's own key, so only that Mac can open it, and we can't.
 
 Your agents and chats come back, with the same names and history.
 
@@ -54,7 +55,7 @@ When a Mac joins your account, your other devices show **New Mac added**. If it 
 
 ## Teams
 
-Everyone has a workspace. To share one, **Settings › People › Invite**: pick an email and a role, then send the link. A link works once, for 48 hours, and only for that email.
+Everyone has a team of their own. To share it, **Settings › Team › Invite**: pick an email and a role, then send the link. A link works once, for 48 hours, and only for that email.
 
 Each agent is **Private** or **Shared**. Your teammates see and chat with Shared agents. Private ones stay yours, locked so even teammates can't open them.
 
@@ -66,7 +67,7 @@ If you don't trust them, an admin can also **Reset encryption** in **Settings �
 
 ## Your phone
 
-The phone app is a remote for your Mac. It talks to the agents on your computers through the relay, end-to-end encrypted. It has no cloud account of its own: turn the cloud on from your Mac. The phone can still let a new Mac in, by scanning its code. See [Phones](/phones).
+The phone app is a remote for your Mac. It talks to the agents on your computers through the relay, end-to-end encrypted. It has no cloud account of its own: turn the cloud on from your Mac. The phone can approve a new Mac's request too. See [Phones](/phones).
 
 ## Sign out
 

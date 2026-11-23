@@ -1,10 +1,11 @@
 import { useSyncExternalStore } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { OpenHutAgent } from '@openhut/client'
 import { Cloud, CloudInvite, CloudInvitePreview, CloudWorkspaceView, type CreateCloudInvite, type Role } from '@openhut/common/cloud/cloud.ts'
-import { request } from '@/lib/api-client'
+import { request, requestBlob } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
+import { useAgents } from '@/features/agents/api'
 import { useCloud } from '@/features/cloud/api'
+import { visibleTeams } from '@/features/cloud/teams'
 
 const ACTIVE_KEY = 'openhut.workspace'
 const CHANGED = 'openhut:workspace'
@@ -36,14 +37,9 @@ function subscribe(listener: () => void) {
 export function useWorkspaces(): { all: CloudWorkspaceView[]; active: CloudWorkspaceView | undefined; email: string | null } {
   const cloud = useCloud().data
   const id = useSyncExternalStore(subscribe, chosen)
-  const all = cloud?.status === 'off' ? [] : cloud?.workspaces ?? []
+  const agents = useAgents().data
+  const all = visibleTeams({ workspaces: cloud?.status === 'off' ? [] : cloud?.workspaces ?? [], agents })
   return { all, active: all.find((each) => each.id === id) ?? all.find((each) => each.home) ?? all[0], email: cloud?.email ?? null }
-}
-
-export function inWorkspace({ agent, active }: { agent: Pick<OpenHutAgent, 'workspace' | 'computer'>; active: CloudWorkspaceView | undefined }): boolean {
-  if (!active) return true
-  if (agent.computer !== 'local') return active.home
-  return active.home ? !agent.workspace || agent.workspace === active.id : agent.workspace === active.id
 }
 
 export function useInvite() {
@@ -77,6 +73,24 @@ export function useRename() {
   })
 }
 
+export function useSetWebsite() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, website }: { id: string; website: string | null }) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/workspaces/${encodeURIComponent(id)}`, method: 'PATCH', body: { website } }),
+    onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
+  })
+}
+
+export function useTeamIcon({ id, website }: { id: string; website: string | null }) {
+  return useQuery({
+    queryKey: ['team-icon', id, website],
+    queryFn: async () => URL.createObjectURL(await requestBlob({ computer: 'local', path: `/api/cloud/workspaces/${encodeURIComponent(id)}/icon` })),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
+  }).data
+}
+
 export function useSetRole() {
   const client = useQueryClient()
   return useMutation({
@@ -108,7 +122,7 @@ export const useChangeKeys = () => useCloudCall((id: string) => request({ schema
 
 export const useDeleteWorkspace = () => useCloudCall(({ id, name }: { id: string; name: string }) => request({ schema: Cloud, computer: 'local', path: room(id), method: 'DELETE', body: { name } }))
 
-export const useApprove = () => useCloudCall(({ id, device, words }: { id: string; device: string; words: string[] }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}/approvals`, method: 'POST', body: { words } }))
+export const useApprove = () => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}/approvals`, method: 'POST' }))
 
 export const useDeny = () => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}`, method: 'DELETE' }))
 
@@ -120,3 +134,14 @@ export const useDeleteData = () => useCloudCall(() => request({ schema: Cloud, c
 
 export const useRotated = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud/rotations', method: 'DELETE' }))
 
+
+export function useCreateTeam() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (name: string) => request({ schema: CloudWorkspaceView, computer: 'local', path: '/api/cloud/workspaces', method: 'POST', body: { name } }),
+    onSuccess: async (workspace) => {
+      await client.invalidateQueries({ queryKey: CLOUD_KEY })
+      chooseWorkspace(workspace.id)
+    },
+  })
+}

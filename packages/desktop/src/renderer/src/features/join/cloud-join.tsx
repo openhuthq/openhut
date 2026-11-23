@@ -1,8 +1,5 @@
 import { useEffect, useSyncExternalStore, type FormEvent } from 'react'
-import { Link01Icon } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
-import { I, PILL } from '@/components/kit'
-import { Row, Rows } from '@/features/settings/kit'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Hut } from '@/components/hut'
@@ -66,7 +63,7 @@ export function CloudJoin() {
     <Hut mood="party" className="size-[84px]" />
     <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Join {invite.name}</h1>
     <p className="m-0 max-w-[420px] text-[14px] text-body">{nameOf(invite.from)} invited you as {invite.role === 'admin' ? 'an admin' : 'a member'}.</p>
-    <Button type="button" variant="primary" className="mt-2 h-10 w-[300px] justify-center phone:h-12 phone:w-full" disabled={join.isPending} onClick={() => join.mutate(link, { onSuccess: done })}>{join.isPending ? 'Joining…' : 'Join workspace'}</Button>
+    <Button type="button" variant="primary" className="mt-2 h-10 w-[300px] justify-center phone:h-12 phone:w-full" disabled={join.isPending} onClick={() => join.mutate(link, { onSuccess: done })}>{join.isPending ? 'Joining…' : 'Join team'}</Button>
     <span className="inline-flex items-center gap-1.5 text-[12px] text-mute"><Google />Signed in as {cloud.email}</span>
   </Window>
 }
@@ -78,21 +75,17 @@ function refusal({ error, email }: { error: Error; email: string | null }): { ti
   return { title: 'This invite didn’t open', body: error.message }
 }
 
-export function JoinRow() {
-  return <Rows>
-    <Row icon={<I icon={Link01Icon} size={20} className="text-hue-blue" />} title="Join a team" note="Got an invite link? Paste it here.">
-      <Button type="button" variant="secondary" className={PILL} onClick={() => open('join-link')}>Join with a link</Button>
-    </Row>
-  </Rows>
+export function joinPathOf(text: string): string | undefined {
+  const link = text.trim()
+  return link.includes('#') && !link.endsWith('#') ? `/join${link.slice(link.indexOf('#'))}` : undefined
 }
 
 export function JoinLinkDialog() {
   const close = () => open()
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const text = String(new FormData(event.currentTarget).get('link') ?? '').trim()
-    const hash = text.slice(text.indexOf('#'))
-    if (text.includes('#')) navigate(`/join${hash}`)
+    const path = joinPathOf(String(new FormData(event.currentTarget).get('link') ?? ''))
+    if (path) navigate(path)
   }
   return <Dialog size="narrow" label="Join with a link" onClose={close}>
     <DialogHead title="Join with a link" onClose={close} />

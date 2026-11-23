@@ -17,7 +17,7 @@ const text = z.string().max(3000)
 const cell = z.union([z.string().max(500), z.number()])
 
 const components = {
-  Card: { props: z.object({ title: z.string().max(150), subtitle: z.string().max(300).optional() }) },
+  Card: { props: z.object({ title: z.string().max(150), subtitle: z.string().max(300).optional(), brand: z.string().max(40).optional() }) },
   Text: { props: z.object({ content: text }) },
   Fields: { props: z.object({}) },
   Field: { props: z.object({ label: z.string().max(100), value: cell }) },
@@ -71,7 +71,7 @@ Inside the block, write one JSON Patch per line: the root first, then each eleme
 \`\`\`
 
 Components (props in braces):
-- Card {title, subtitle?}: always the root.
+- Card {title, subtitle?, brand?}: always the root. brand is an app's name (github, postgres, slack) to show its logo.
 - Text {content}: markdown.
 - Fields, with Field {label, value} children.
 - Table {headers: string[], rows: string[][]}
