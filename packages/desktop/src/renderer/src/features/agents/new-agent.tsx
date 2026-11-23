@@ -1,10 +1,12 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { Cancel01Icon, DiceFaces03Icon, LaptopIcon, ServerStack01Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, DiceFaces03Icon, LaptopIcon, ServerStack01Icon, ShuffleIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { Provider } from '@openhut/common/models/provider.ts'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { ErrorNote } from '@/components/error-note'
 import { Choice, DialogCard, I, MenuCard } from '@/components/kit'
 import { useAgents, useCreateAgent } from '@/features/agents/api'
 import { useWorkspaces } from '@/features/cloud/workspaces'
@@ -12,6 +14,8 @@ import { nameOf, runsOnNote, useComputers } from '@/features/computers/api'
 import { useComputerProviders } from '@/features/models/api'
 import { ModelPicker } from '@/features/models/model-picker'
 import { FacePicker } from '@/features/agents/face-picker'
+import { Face } from '@/features/agents/face'
+import { randomLook, SWATCHES } from '@/lib/face'
 import { formValues } from '@/lib/form'
 import { SOFT_TRIGGER } from '@/features/models/model-picker'
 import { TOUCH, useMedia } from '@/lib/media'
@@ -53,7 +57,7 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   return <DialogCard onClose={onClose} className="max-h-[calc(100vh-32px)] w-[480px] items-center p-6 text-center [&_form>*]:shrink-0">
     <form className="contents" onSubmit={(event) => {
       const field = formValues(event)
-      createAgent.mutate({ body: { name: field('name').trim(), face: field('face'), ...(model && { model }), ...(computer === 'local' && active && !active.home && { workspace: active.id }) }, computer })
+      createAgent.mutate({ body: { name: field('name').trim(), face: field('face'), ...(model && { model }), ...(computer === 'local' && !active.home && { workspace: active.id }) }, computer })
     }}>
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" className="absolute top-3 right-3 rounded-full" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
       <DialogTitle className="text-[15px]/[22px] font-medium">New agent</DialogTitle>
@@ -82,6 +86,39 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
       {createAgent.error ? <p role="alert" className="m-0 text-xs text-fail">{createAgent.error.message}</p> : <span className="text-[12px]/[16px] text-mute phone:hidden">You can set its job and where to talk to it next.</span>}
     </form>
   </DialogCard>
+}
+
+const COLOURS = ['rose', 'orange', 'green', 'blue', 'lilac', 'teal'].map((id) => SWATCHES.findIndex((each) => each.id === id))
+
+export function FirstAgent() {
+  const createAgent = useCreateAgent()
+  const { active } = useWorkspaces()
+  const providers = useComputerProviders('local')
+  const [round, setRound] = useState(() => Math.floor(Math.random() * 1e6))
+  const [colour, setColour] = useState(0)
+  const [spun, setSpun] = useState(0)
+  const faceOf = (index: number) => JSON.stringify({ ...randomLook({ seed: `face_${round}` }), body: COLOURS[index] })
+  const face = faceOf(colour)
+  return <form className="flex flex-col items-center gap-4 text-center" onSubmit={(event) => {
+    const field = formValues(event)
+    const model = firstModel(providers)
+    createAgent.mutate({ body: { name: field('name').trim(), face: field('face'), ...(model && { model }), ...(!active.home && { workspace: active.id }) }, computer: 'local' })
+  }}>
+    <Input type="hidden" name="face" value={face} />
+    <Button type="button" variant="bare" aria-label="Shuffle" title="Shuffle" className="relative mb-1 animate-[pop_.6s_var(--ease-spring)_both]" onClick={() => { setRound(round + 1); setSpun(spun + 1) }}>
+      <span className="block animate-[bob_3.2s_ease-in-out_.8s_infinite]"><span key={spun} className={cn('block', spun > 0 && 'animate-hop')}><Face agent={{ id: '', instructions: '', face }} size={150} label="Agent face" /></span></span>
+      <span className="absolute right-1 bottom-3 grid size-8 place-items-center rounded-full border border-hair bg-card text-ink shadow-menu"><I icon={ShuffleIcon} size={15} /></span>
+    </Button>
+    <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Make your first agent</h1>
+    <p className="m-0 -mt-2 text-[14px]/[1.5] text-body">Give it a name and a face. You’ll tell it its job next.</p>
+    <Field label={<span className="text-[12px] font-medium text-mute">Name</span>} className="mt-1 w-[352px] max-w-full text-left">{(control) => <Input {...control} name="name" required maxLength={40} defaultValue={NAMES[0]} autoComplete="off" spellCheck={false} className="h-10 rounded-lg text-[15px] font-medium" />}</Field>
+    <div role="radiogroup" aria-label="Colour" className="flex gap-2">
+      {COLOURS.map((swatch, index) => <Button key={swatch} type="button" variant="bare" role="radio" aria-checked={index === colour} aria-label={SWATCHES[swatch].name} title={SWATCHES[swatch].name} onClick={() => setColour(index)}
+        className={cn('grid size-[52px] place-items-center rounded-xl', index === colour ? 'bg-card shadow-[inset_0_0_0_1.5px_var(--ink)]' : 'bg-sidebar hover:bg-picked')}><Face agent={{ id: '', instructions: '', face: faceOf(index) }} size={40} /></Button>)}
+    </div>
+    <Button type="submit" variant="primary" className="mt-2 h-10 w-[352px] max-w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
+    <ErrorNote message={createAgent.error?.message} />
+  </form>
 }
 
 function Setting({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {

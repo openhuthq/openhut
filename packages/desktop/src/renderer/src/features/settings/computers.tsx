@@ -28,9 +28,8 @@ import { open, useOpen } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
 import { cn } from '@/lib/utils'
-import { EnableCloud } from '@/features/cloud/sign-in'
-import { CloudDevices, CloudOff, deviceNote, devicesOf, KeysToReplace } from '@/features/cloud/cloud'
-import { useCloud } from '@/features/cloud/api'
+import { CloudDevices, deviceNote, KeysToReplace } from '@/features/cloud/cloud'
+import { useGate } from '@/features/cloud/workspaces'
 
 const GET_TAILSCALE = 'https://tailscale.com/download'
 
@@ -53,7 +52,7 @@ function ComputerList() {
   const enrollments = useEnrollments().data
   const tailscale = useTailnet().data?.state
   const tailscaleOff = !!tailscale && tailscale !== 'running'
-  const devices = devicesOf(useCloud().data)
+  const devices = useGate().cloud.devices
   const keys = useDeviceKeys(devices.length ? computers.data ?? [] : [])
   const deviceOf = (computer: Computer) => devices.find((device) => computer.id === 'local' ? device.here : device.key === keys[computer.id])
   const merged = (computers.data ?? []).flatMap((computer) => deviceOf(computer)?.key ?? [])
@@ -74,7 +73,6 @@ function ComputerList() {
       {enrollments.map((enrollment) => <EnrollRow key={enrollment.peer.dns} enrollment={enrollment} />)}
       <CloudDevices merged={merged} />
       {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note="A Linux computer that stays on seals each agent in its own box and keeps answering while this computer sleeps."><Chevron /></Row>}
-      <CloudOff />
     </Rows>
   </>
 }
@@ -277,14 +275,10 @@ function TailscaleDialog({ title, back, foot, children }: { title: string; back?
 }
 
 function AddComputer() {
-  const cloud = useCloud().data
-  const signedIn = !!cloud && cloud.status !== 'off'
   return <TailscaleDialog title="Add a computer">
     <Rows>
       <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Tailscale" note="Use the Tailscale you already have. Nothing goes through OpenHut."><Chevron /></Row>
-      {signedIn
-        ? <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="The easiest way. No Tailscale needed. End-to-end encrypted."><Chevron /></Row>
-        : <Row icon={<Hut mood="asleep" className="size-6 opacity-50 grayscale" />} title="OpenHut Relay" note="The easiest way. No Tailscale needed. Needs OpenHut Cloud."><EnableCloud /></Row>}
+      <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="The easiest way. No Tailscale needed. End-to-end encrypted."><Chevron /></Row>
     </Rows>
   </TailscaleDialog>
 }

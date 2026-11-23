@@ -6,20 +6,7 @@ import { devices } from '@/lib/openhut'
 import { AGENTS_KEY, COMPUTERS_KEY } from '@/lib/query-keys'
 
 const ADMIN_KEY = ['admin']
-const DEVICES_KEY = ['devices']
 const INVITATION_POLL_MS = 1000
-
-export function useDevices() {
-  return useQuery({ queryKey: DEVICES_KEY, queryFn: () => devices.list() })
-}
-
-export function useRemoveDevice() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (key: string) => devices.remove(key),
-    onSuccess: (list) => client.setQueryData(DEVICES_KEY, list),
-  })
-}
 
 export function useNewInvitation() {
   return useMutation({ mutationFn: () => request({ schema: Invitation, computer: 'local', path: '/api/invitations', method: 'POST' }) })
@@ -42,10 +29,7 @@ export function useAllow() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => devices.allow(id),
-    onSuccess: () => {
-      void client.invalidateQueries({ queryKey: DEVICES_KEY })
-      void client.invalidateQueries({ queryKey: COMPUTERS_KEY })
-    },
+    onSuccess: () => client.invalidateQueries({ queryKey: COMPUTERS_KEY }),
   })
 }
 

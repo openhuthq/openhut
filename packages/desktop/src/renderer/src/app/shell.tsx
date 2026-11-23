@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Creature } from '@/components/creature'
-import { I, ICON_BUTTON, PILL } from '@/components/kit'
+import { I, ICON_BUTTON } from '@/components/kit'
 import { Settings02Icon } from '@hugeicons/core-free-icons'
 import { PhonePage } from '@/app/phone-page'
 import { agentPath, type Route } from '@/app/routes'
 import { useAgents, useShareLocalFaces } from '@/features/agents/api'
 import { AgentView } from '@/features/agents/agent-view'
-import { NewAgentDialog } from '@/features/agents/new-agent'
+import { FirstAgent, NewAgentDialog } from '@/features/agents/new-agent'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
 import { Hut } from '@/components/hut'
 import { nameOf } from '@/features/cloud/api'
@@ -51,11 +49,11 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
   order.current = contacts.map(({ agent }) => agent.id)
   const controls = { collapsed, expand: () => setCollapsed(false), newAgent }
   return <SidebarContext value={controls}><div className="flex h-dvh overflow-hidden bg-card pt-[env(safe-area-inset-top)] phone:bg-sidebar pb-[env(safe-area-inset-bottom)] text-left">
-    <Sidebar contacts={contacts} activeId={activeId} collapsed={collapsed} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} team={Boolean(active && (active.members.length > 1 || active.invites.length > 0))} />
+    <Sidebar contacts={contacts} activeId={activeId} collapsed={collapsed} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} team={active.members.length > 1 || active.invites.length > 0} />
     {route.page === 'agent' && (phone
       ? <PhonePage key={route.agentId}><AgentView agentId={route.agentId} dialog={route.dialog} detail={route.detail} /></PhonePage>
       : <AgentView key={route.agentId} agentId={route.agentId} dialog={route.dialog} detail={route.detail} />)}
-    {route.page === 'home' && agents.data && <Home first={contacts[0]?.agent.id} adding={route.adding} overlaid={!!overlay} waiting={active?.waiting ? active : undefined} />}
+    {route.page === 'home' && agents.data && <Home first={contacts[0]?.agent.id} adding={route.adding} overlaid={!!overlay} waiting={active.waiting ? active : undefined} />}
     {route.page === 'missing' && <Redirect to="/" />}
   </div></SidebarContext>
 }
@@ -72,12 +70,9 @@ function Home({ first, adding, overlaid, waiting }: { first: string | undefined;
     <h1 className="mt-2 mb-0 text-[20px]/[1.3] font-semibold text-ink">Almost in</h1>
     <p className="m-0 text-[14px]/[1.5] text-body">{nameOf(owner ?? '')}’s {HERE} lets you in as soon as it’s on.</p>
   </section>
-  return <section className="relative flex flex-1 flex-col items-center justify-center gap-2 bg-card px-8 pb-12 text-center">
+  return <section className="relative flex flex-1 flex-col items-center justify-center bg-card px-8 pb-12">
     <PhoneTop />
-    <Creature id="first-agent" size={64} />
-    <h1 className="mt-2 mb-0 text-[20px]/[1.3] font-semibold text-ink">Make your first agent</h1>
-    <p className="m-0 text-[14px]/[1.5] text-body">Tell it its job and where to talk to it.</p>
-    <Button type="button" variant="primary" className={cn(PILL, 'mt-2 h-8 px-3.5 text-[13px]')} onClick={() => navigate('/new')}>New agent</Button>
+    <FirstAgent />
     {adding && <NewAgentDialog onClose={() => navigate('/')} />}
   </section>
 }

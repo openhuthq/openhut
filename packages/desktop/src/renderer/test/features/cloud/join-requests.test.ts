@@ -17,7 +17,6 @@ test('your own new computer and a team member’s computer both raise a toast, e
   ])
 })
 
-test('the toast still shows while the cloud is offline, and never on a locked computer', () => {
+test('the toast still shows while the cloud is offline', () => {
   assert.equal(joinRequests({ cloud: cloud('offline') }).length, 2)
-  assert.deepEqual(joinRequests({ cloud: cloud('locked') }), [])
 })

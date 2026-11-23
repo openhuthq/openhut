@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('openhut', {
   showFolder: () => ipcRenderer.invoke('show-folder'),
   prefs: () => ipcRenderer.invoke('prefs'),
   setPrefs: (patch) => ipcRenderer.invoke('set-prefs', patch),
-  firstRun: (start) => ipcRenderer.invoke('first-run', start),
+  firstRun: () => ipcRenderer.invoke('first-run'),
   update: {
     state: () => ipcRenderer.invoke('update.state'),
     check: () => ipcRenderer.invoke('update.check'),

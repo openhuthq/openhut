@@ -80,7 +80,6 @@ const DEFAULT_PREFS = { keepAwake: true, betaUpdates: false }
 const CANVAS = '#f4f3f5'
 const POLL_MS = 5000
 const HEALTHY_MS = 120_000
-const FIRST_AGENT = 'Juniper'
 const RENDERER = join(HERE, '../dist/renderer')
 const APP_ORIGIN = 'app://openhut'
 const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
@@ -110,7 +109,7 @@ let blocker
 let setup
 let booted
 let linked = linkPath(process.argv.find((arg) => arg.startsWith('openhut:')))
-let invited = null
+let fresh = false
 let opened = false
 let fetching = null
 const updating = { checking: false, available: null, progress: 0, ready: null, error: null }
@@ -174,7 +173,7 @@ handle('machine', machine)
 handle('show-folder', () => shell.openPath(HOME))
 handle('prefs', prefsNow)
 handle('set-prefs', setPrefs)
-handle('first-run', (start) => firstRun(start === true))
+handle('first-run', () => firstRun())
 handle('update.state', updateState)
 handle('update.check', () => DEV ? updateState() : checkForUpdate())
 handle('update.install', () => {
@@ -192,10 +191,10 @@ handle('devices.allow', answer(allow))
 handle('passkey.status', () => passkey(['status']))
 handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
 handle('passkey.open', () => passkey(['open']))
-handle('cloud.notify', ({ title = 'Unlock OpenHut Cloud', body = 'Restore your agents and chats on this computer.', path = '/settings/account?open=enable' } = {}) => new Promise((resolve) => {
+handle('cloud.notify', ({ title = 'Unlock OpenHut', body = 'Bring your agents and chats to this computer.', path = '/' } = {}) => new Promise((resolve) => {
   if (!Notification.isSupported()) return resolve({ shown: false })
   const note = new Notification({ title: String(title), body: String(body) })
-  note.on('click', () => show(String(path).startsWith('/settings/') ? String(path) : '/settings/account'))
+  note.on('click', () => show(String(path).startsWith('/settings/') ? String(path) : '/'))
   note.on('show', () => resolve({ shown: true }))
   note.on('failed', () => resolve({ shown: false }))
   setTimeout(() => resolve({ shown: false }), 3000)
@@ -567,16 +566,16 @@ function watch() {
   setInterval(() => poll().catch(() => undefined), POLL_MS)
 }
 
-function firstRun(start) {
-  if (start && (!setup || setup.failed)) {
-    setup = { failed: false, agentId: '', steps: [['Checked this computer', '', 'now'], ['Starting OpenHut', '', 'next'], ['Setting up agents', '', 'next'], ['Meeting your first agent', '', 'next']] }
+function firstRun() {
+  if (fresh && (!setup || setup.failed)) {
+    setup = { done: false, failed: false, steps: [['Checked this computer', '', 'now'], ['Starting OpenHut', '', 'next'], ['Setting up agents', '', 'next']] }
     meet(setup).catch((error) => {
       const step = setup.steps.find((each) => each[2] === 'now')
       if (step) step.splice(1, 2, error.message, 'failed')
       setup.failed = true
     })
   }
-  return { ...setup ?? { failed: false, agentId: '', steps: [] }, invite: invited }
+  return { fresh, ...setup ?? { done: !fresh, failed: false, steps: [] } }
 }
 
 async function meet(run) {
@@ -598,15 +597,7 @@ async function meet(run) {
   const passed = (fence.checks ?? []).filter((check) => check.pass).length
   if (!fence.ok) throw new Error(fence.error ?? `Agents couldn't be sealed off (${(fence.checks ?? []).filter((check) => !check.pass).map((check) => check.name).join(', ')}). Try again.`)
   step(2, fence.skipped ? 'ready' : `${passed} of ${fence.checks.length} checks passed`)
-  const agents = (await api('/api/agents')).data
-  const agent = agents[0] ?? await api('/api/agents', { method: 'POST', body: { name: FIRST_AGENT } })
-  await api(`/api/agents/${agent.id}`, { method: 'PATCH', body: { wanted: 'running' } })
-  run.steps[3][1] = `${agent.name} is starting`
-  let health = ''
-  const ready = await waitFor(async () => ['answering', 'no_seat'].includes(health = (await api(`/api/agents/${agent.id}`)).health), 300)
-  if (!ready) throw new Error(`${agent.name} didn't answer within 5 minutes`)
-  step(3, health === 'no_seat' ? 'Connect Claude so it can answer' : `${agent.name} is answering`)
-  run.agentId = agent.id
+  run.done = true
 }
 
 function follow({ run, index, read }) {
@@ -1054,15 +1045,15 @@ app.whenReady().then(async () => {
     await dialog.showMessageBox({ type: 'error', message: 'OpenHut needs Docker', detail: 'On Linux, OpenHut runs each agent in its own gVisor sandbox in Docker. Install Docker (sudo apt install docker.io), let your user run it (sudo usermod -aG docker $USER), sign in again, then open OpenHut.', buttons: ['Quit'] })
     return app.quit()
   }
-  const fresh = !existsSync(CONTAINER ? join(HOME, LOCAL_KEY) : join(DATA, 'app'))
+  fresh = !existsSync(CONTAINER ? join(HOME, LOCAL_KEY) : join(DATA, 'app'))
   const hidden = process.argv.includes('--hidden') || (MAC && app.getLoginItemSettings().wasOpenedAtLogin)
   booted = boot().catch((error) => {
     appendFileSync(join(LOGS, 'server.log'), `openhut: couldn't start: ${error.message}\n`)
     return error.message
   })
   if (fresh) {
-    invited = inviteLink(linked && `https://openhut.dev${linked}`) ?? (TEST_HOME ? null : inviteLink(clipboard.readText()))
-    window('/welcome')
+    const invite = inviteLink(linked && `https://openhut.dev${linked}`) ?? (TEST_HOME ? null : inviteLink(clipboard.readText()))
+    window(invite ? invite.slice('https://openhut.dev'.length) : '/')
   }
   const started = await booted
   if (started !== true) {

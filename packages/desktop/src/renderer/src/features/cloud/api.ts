@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Cloud, CloudAuthorization, RecoveryKit, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { request } from '@/lib/api-client'
-import { WORDS } from '@/lib/platform'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
@@ -22,14 +21,11 @@ export function useCloud() {
     queryKey: CLOUD_KEY,
     queryFn: async () => {
       const cloud = await request({ schema: Cloud, computer: 'local', path: '/api/cloud' })
-      const settling = client.getQueryData(SIGN_IN_KEY) && (cloud.status !== 'off' || cloud.signInError)
-      if (settling) {
-        client.setQueryData(SIGN_IN_KEY, false)
-        landAfterSignIn(cloud)
-      }
+      if (client.getQueryData(SIGN_IN_KEY) && (cloud.status !== 'off' || cloud.signInError)) client.setQueryData(SIGN_IN_KEY, false)
       return cloud
     },
     refetchInterval: (query) => signingIn && query.state.data?.status === 'off' ? SIGN_IN_POLL_MS : pollOf(query.state.data),
+    refetchIntervalInBackground: true,
   })
 }
 
@@ -37,26 +33,12 @@ export function useSigningIn(): boolean {
   return useQuery({ queryKey: SIGN_IN_KEY, queryFn: () => false, initialData: false, staleTime: Infinity }).data
 }
 
-export function enableCloud() {
-  navigate('/settings/team')
-}
-
-function landAfterSignIn(cloud: Cloud) {
-  if (location.pathname === '/join') return
-  if (new URLSearchParams(location.search).get('open') === 'enable') return
-  if (cloud.status === 'locked' || !cloud.kit) navigate('/settings/account?open=enable', true)
-}
-
 function pollOf(cloud: Cloud | undefined): number | false {
   if (cloud?.status === 'locked') return PAIRING_POLL_MS
   if (cloud?.status === 'offline' || cloud?.backup.state === 'failed') return OFFLINE_POLL_MS
   if (cloud?.backup.state !== 'idle' && cloud) return BUSY_POLL_MS
   if (cloud?.status !== 'on') return false
-  return justBackedUp(cloud) ? BUSY_POLL_MS * 5 : ON_POLL_MS
-}
-
-export function justBackedUp(cloud: Cloud): boolean {
-  return Boolean(cloud.backup.at && Date.now() - Date.parse(cloud.backup.at) < SHOW_DONE_MS)
+  return cloud.backup.at && Date.now() - Date.parse(cloud.backup.at) < SHOW_DONE_MS ? BUSY_POLL_MS * 5 : ON_POLL_MS
 }
 
 type PasskeyReply = { prf?: string; error?: string; passkeys?: boolean; message?: string }
@@ -111,17 +93,6 @@ export function useRemoveMac() {
   })
 }
 
-export function useStartOver() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: () => request({ schema: Cloud, computer: 'local', path: '/api/cloud/key-boxes', method: 'DELETE' }),
-    onSuccess: (cloud) => {
-      client.setQueryData(CLOUD_KEY, cloud)
-      navigate('/settings/account?open=kit', true)
-    },
-  })
-}
-
 const bridge: { notify: (input?: { title: string; body: string; path: string }) => Promise<{ shown?: boolean }> } | undefined = Reflect.get(window, 'openhut')?.cloud
 
 export async function notifyUnlock(): Promise<boolean> {
@@ -152,7 +123,11 @@ export function useSignOut() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: () => request({ schema: Cloud, computer: 'local', path: '/api/cloud/session', method: 'DELETE' }),
-    onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
+    onSuccess: (cloud) => {
+      client.setQueryData(CLOUD_KEY, cloud)
+      navigate('/', true)
+      void client.invalidateQueries()
+    },
   })
 }
 
