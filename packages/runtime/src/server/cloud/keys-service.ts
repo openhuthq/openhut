@@ -26,6 +26,7 @@ export const keysService = {
   },
 
   account: (): Account | undefined => stored()?.account,
+  vault: (): Bytes | null => stored()?.account?.vault ? fromBase64(stored()?.account?.vault ?? '') : null,
   locked: (): { sub: string; email: string } | undefined => stored()?.locked,
   kitState: (): { saved: { box: string; savedAt: string } | null; pending: string | null } => ({ saved: kitOf(stored()) ?? null, pending: stored()?.kit?.confirmed === false ? stored()?.kit?.box ?? null : null }),
 
@@ -147,7 +148,7 @@ export const keysService = {
     const devices = [toBase64(device.publicKey), kit]
     const at = Date.now()
     const list = await signList({ signer: device, body: { workspace: id, version: 1, previous: null, members: [{ email, role: 'owner', devices, kit }], invites: [], removed: [], at, added: Object.fromEntries(devices.map((each) => [each, at])), names: { [devices[0]]: deviceName() } } })
-    const account = { sub, email, key: toBase64(key), workspace: { id, key: toBase64(newKey()), version: 1 }, list, first: list }
+    const account = { sub, email, key: toBase64(key), vault: toBase64(newKey()), workspace: { id, key: toBase64(newKey()), version: 1 }, list, first: list }
     await keyStore.write({ device: current.device, machine, account, session: current.session })
     return account
   },

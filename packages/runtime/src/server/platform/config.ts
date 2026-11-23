@@ -12,6 +12,7 @@ const JOIN = process.env.OPENHUT_JOIN || undefined
 const TEST_MODEL = process.env.OPENHUT_MODEL === 'test'
 const HOST_NET = process.env.OPENHUT_AGENT_HOST_NET === '1'
 const CLOUD_URL = process.env.OPENHUT_CLOUD_URL || 'https://cloud.openhut.dev'
+const API_URL = process.env.OPENHUT_API_URL || 'https://api.openhut.dev'
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
 
 export const config = {
@@ -22,6 +23,7 @@ export const config = {
   releaseUrl: process.env.OPENHUT_URL ?? 'https://openhut.dev',
   telemetry: !TEST_MODEL && BUILD !== 'dev',
   cloudUrl: CLOUD_URL,
+  apiUrl: API_URL,
   telemetryUrl: `${CLOUD_URL}/v1/events`,
   socket: process.env.OPENHUT_SOCKET ?? join(DATA, 'openhut.sock'),
   installKind: installKindOf(process.env.OPENHUT_SOCKET ? 'desktop' : 'server'),

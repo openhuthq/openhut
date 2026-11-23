@@ -94,4 +94,7 @@ export async function migrate(): Promise<void> {
   await sql`alter table cloud_record add column if not exists signer text`.execute(db)
   await sql`alter table cloud_record add column if not exists agent_id text`.execute(db)
   await sql`alter table cloud_record add column if not exists seq integer not null default 0`.execute(db)
+  await sql`create table if not exists record_held (id text primary key, ver integer not null, parent text)`.execute(db)
+  await sql`create table if not exists record_outbox (
+    seq bigserial primary key, id text unique not null, collection text not null, workspace text not null, parent text, body text not null, deleted boolean not null default false)`.execute(db)
 }

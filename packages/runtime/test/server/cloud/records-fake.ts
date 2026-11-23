@@ -45,18 +45,19 @@ export function useFakeRecords({ by = 'this-device' }: { by?: string } = {}) {
   Object.assign(recordsService, {
     list: async ({ collection, workspace, parent }: { collection: Held['collection']; workspace: string; parent?: string }) =>
       [...rows.values()].filter((row) => row.collection === collection && row.workspace === workspace && (parent === undefined || row.parent === parent) && !row.deleted).map(see),
-    get: async ({ collection, id }: { collection: Held['collection']; id: string }) => {
+    get: async ({ collection, workspace, id }: { collection: Held['collection']; workspace: string; id: string }) => {
       const row = rows.get(id)
-      return row?.collection === collection ? see(row) : null
+      return row?.collection === collection && row.workspace === workspace ? see(row) : null
     },
-    batchGet: async ({ collection, ids }: { collection: Held['collection']; ids: string[] }) =>
-      ids.flatMap((id) => rows.get(id) ?? []).filter((row) => row.collection === collection).map(see),
+    batchGet: async ({ collection, workspace, ids }: { collection: Held['collection']; workspace: string; ids: string[] }) =>
+      ids.flatMap((id) => rows.get(id) ?? []).filter((row) => row.collection === collection && row.workspace === workspace).map(see),
     put: (input: PutRecord) => put(input),
-    remove: async ({ collection, id, queue }: { collection: Held['collection']; id: string; queue?: boolean }) => {
+    remove: async ({ collection, workspace, id, queue }: { collection: Held['collection']; workspace: string; id: string; queue?: boolean }) => {
       const current = rows.get(id)
-      if (current?.collection === collection && !current.deleted) await put({ ...current, value: null, queue, deleted: true, reapply: (latest) => latest.deleted ? null : { value: null } })
+      if (current?.collection === collection && current.workspace === workspace && !current.deleted) await put({ ...current, value: null, queue, deleted: true, reapply: (latest) => latest.deleted ? null : { value: null } })
     },
     held: async (id: string) => seen.get(id) ?? 0,
+    drain: async () => undefined,
   })
 
   return {

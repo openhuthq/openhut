@@ -18,7 +18,7 @@ export const Outgoing = z.object({ to: z.string(), purpose: z.enum(LETTER_PURPOS
 const Stored = z.object({
   device: z.string(),
   machine: z.string(),
-  account: z.optional(z.object({ sub: z.string(), email: z.string(), key: z.string(), runtime: z.optional(z.boolean()), ...Room.shape, teams: z.optional(z.array(Room)), links: z.optional(z.record(z.string(), z.string())) })),
+  account: z.optional(z.object({ sub: z.string(), email: z.string(), key: z.string(), vault: z.optional(z.string()), runtime: z.optional(z.boolean()), ...Room.shape, teams: z.optional(z.array(Room)), links: z.optional(z.record(z.string(), z.string())) })),
   kit: z.optional(KIT),
   moves: z.optional(z.array(z.object({ method: z.enum(['POST', 'DELETE']), path: z.string(), body: z.unknown() }))),
   locked: z.optional(z.object({ sub: z.string(), email: z.string() })),
