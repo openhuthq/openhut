@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore, type FormEvent } from 'react'
-import { CheckmarkCircle02Icon, File01Icon, SquareLock02Icon } from '@hugeicons/core-free-icons'
+import { CheckmarkCircle02Icon, ComputerPhoneSyncIcon, File01Icon, SourceCodeIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import type { Cloud, RecoveryKit } from '@openhut/common/cloud/cloud.ts'
 import { kitText, readKit } from '@openhut/common/vault/kit-file.ts'
 import { migrating } from '@/app/gate-state'
@@ -19,7 +19,12 @@ import { open, usePath } from '@/lib/router'
 import { copyText } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 
-const PROMISE = <><I icon={SquareLock02Icon} size={15} className="text-mute" />Encrypted on your device. Not even we can read it.</>
+const POINTS = [
+  [ComputerPhoneSyncIcon, 'Your agents and chats follow you to every computer you add'],
+  [SquareLock02Icon, 'Encrypted on your device. No one can read it, including us'],
+  [SourceCodeIcon, 'Open source, so anyone can check how it works'],
+] as const
+const INVITED = 'Sign in with the email your invite went to. Everything you share there stays end-to-end encrypted.'
 const SWAP = 'col-start-1 row-start-1 inline-flex items-center justify-center gap-2 transition-[opacity,translate] duration-300 ease-[cubic-bezier(.22,1,.36,1)]'
 
 export function SignIn({ cloud }: { cloud: Cloud | undefined }) {
@@ -35,10 +40,11 @@ export function SignIn({ cloud }: { cloud: Cloud | undefined }) {
     <span className={cn(SWAP, busy && '-translate-y-2.5 opacity-0')}><Google size={17} />Continue with Google</span>
     <span className={cn(SWAP, !busy && 'translate-y-2.5 opacity-0')} aria-hidden={!busy}><Spinner className="mt-0 border-white/30 border-t-white" />Finish in your browser</span>
   </Button>
-  const quiet = invited ? <span className="inline-flex items-center gap-1.5 text-mute">{PROMISE}</span> : !isPhone() && <Button type="button" variant="text" onClick={() => open('join-link')}>I have an invite link</Button>
+  const quiet = !invited && !isPhone() && <Button type="button" variant="text" onClick={() => open('join-link')}>I have an invite link</Button>
   const link = waiting ? <span className="text-mute">Google opened in your browser · <Button type="button" variant="text" className="font-normal text-mute" onClick={cancel}>Cancel</Button></span> : quiet
-  const [title, line] = invited ? ['You’re invited.', 'Sign in with the email your invite went to.'] : [moving ? 'Sign in to keep going.' : 'Your agents, everywhere.', moving ?? PROMISE]
+  const [title, line] = invited ? ['You’re invited.', INVITED] : [moving ? 'Sign in to keep going.' : 'Your agents, everywhere.', moving]
   return <Step title={title} line={line} action={action} link={link}>
+    {!invited && <ul className="m-0 flex list-none flex-col gap-3 p-0 text-left">{POINTS.map(([icon, text]) => <li key={text} className="flex items-center gap-3 text-[15px]/[1.4] text-body"><I icon={icon} size={18} className="shrink-0 text-mute" />{text}</li>)}</ul>}
     {isPhone() && <p className="m-0 text-[13px] text-mute">Sign in to OpenHut on your computer.</p>}
     {online ? <ErrorNote className="max-w-[420px]" message={signIn.error?.message ?? cloud?.signInError ?? undefined} /> : <p className="m-0 text-[13px] text-mute">OpenHut needs the internet the first time.</p>}
   </Step>

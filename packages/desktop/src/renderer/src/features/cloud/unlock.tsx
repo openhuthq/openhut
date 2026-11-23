@@ -14,12 +14,11 @@ import { I, PILL } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { nameOf, notifyDesktop, REMOVE_DETAIL, useCloud, useRemoveMac, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
-import { PRIMARY, Step } from '@/features/cloud/step'
+import { PRIMARY, SECONDARY, Step } from '@/features/cloud/step'
 import { chooseWorkspace, useAsk, useCancelAsk } from '@/features/cloud/workspaces'
 import { Mismatch } from '@/features/cloud/presence'
 import { freshDevice, joinRequests, markSeen, seenDevices } from '@/features/cloud/seen'
 import { Spinner } from '@/components/ui/spinner'
-import { Chevron, Row, Rows } from '@/features/settings/kit'
 import { navigate } from '@/lib/router'
 import { longDate, shortDateTime } from '@/lib/format'
 import { toastError } from '@/lib/toast'
@@ -38,16 +37,14 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
   if (way === 'ask' || cloud.asking) return <Requested cloud={cloud} onBack={() => setWay(null)} />
   const macCan = Boolean(helper?.passkeys && helper.prf)
   const canPasskey = macCan && cloud.passkey
-  return <Step title={`Welcome back, ${nameOf(cloud.email ?? '')}.`} line="Unlock this computer once." back={back} link={leave}
-    action={cloud.canAsk && <Button type="button" variant="primary" className={PRIMARY} onClick={() => setWay('ask')}>Request access</Button>}>
-    <div className="w-full max-w-[420px] text-left">
-      <Rows>
-        {canPasskey && <Row onClick={() => passkey.mutate(undefined, { onError: toastError })} disabled={passkey.isPending} icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title={passkey.isPending ? 'Unlocking…' : 'Use Touch ID'} note="With the passkey you saved"><Chevron /></Row>}
-        {cloud.kitInCloud && <Row onClick={() => setWay('kit')} icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Use your recovery kit" note="The file or the 12 words"><Chevron /></Row>}
-      </Rows>
-    </div>
-    {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
-  </Step>
+  const ask = cloud.canAsk ? 'Approve it from a computer you already use, or use your recovery kit.' : 'Use your recovery kit to unlock it.'
+  return <Step title={`Welcome back, ${nameOf(cloud.email ?? '')}`} line={`This computer is new to your account. ${ask}`} back={back} link={leave}
+    action={<div className="flex flex-col items-center gap-2.5">
+      {cloud.canAsk && <Button type="button" variant="primary" className={PRIMARY} onClick={() => setWay('ask')}>Ask my other computer</Button>}
+      {cloud.kitInCloud && <Button type="button" variant={cloud.canAsk ? 'secondary' : 'primary'} className={cloud.canAsk ? SECONDARY : PRIMARY} onClick={() => setWay('kit')}><I icon={Key01Icon} size={16} />Use my recovery kit</Button>}
+      {canPasskey && <Button type="button" variant="secondary" className={SECONDARY} disabled={passkey.isPending} onClick={() => passkey.mutate(undefined, { onError: toastError })}><I icon={FingerPrintIcon} size={16} />{passkey.isPending ? 'Unlocking…' : 'Use Touch ID'}</Button>}
+      {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
+    </div>} />
 }
 
 function Requested({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
