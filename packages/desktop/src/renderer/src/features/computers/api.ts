@@ -31,9 +31,16 @@ export function useComputerAdmins() {
 }
 
 export function runsOnNote(computer: Computer) {
-  if (!computer.online) return 'Offline'
-  if (computer.id !== 'local') return 'Sealed in its own box · always on'
-  return `${WORDS.sandboxed ? 'Sealed in its own box' : 'With your access'} · while this computer is awake`
+  if (!computer.online) return computer.kind === 'server' ? 'Offline · it isn’t answering' : 'Offline · open OpenHut on it to use it'
+  if (computer.kind === 'server') return 'Sealed in its own box · always on'
+  if (computer.kind === 'desktop') return 'Another of your computers · while it’s awake'
+  return `${WORDS.sandboxed ? 'Sealed in its own box' : 'With your access'} · while this ${WORDS.here} is awake`
+}
+
+export function whereNote(computer: Computer) {
+  if (computer.kind === 'server') return `Always on, so it keeps answering while this ${WORDS.here} sleeps.`
+  if (computer.kind === 'desktop') return `Answers while that computer is awake, even when this ${WORDS.here} sleeps.`
+  return `Answers while this ${WORDS.here} is awake.`
 }
 
 export function nameOf({ computers, id }: { computers: Computer[] | undefined; id: string }) {

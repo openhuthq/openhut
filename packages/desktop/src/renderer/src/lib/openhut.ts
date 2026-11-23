@@ -5,9 +5,9 @@ import { Agent, Grant } from '@openhut/common/agents/agent.ts'
 import { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { Me } from '@openhut/common/team/team.ts'
 import { WORDS } from '@/lib/platform'
+import { computersOf, type Computer, type Features } from '@/lib/computers'
 
-export type Features = { whatsapp: boolean; browser: boolean }
-export type Computer = { id: string; name: string; url: string; route?: 'relay' | 'tailnet'; online: boolean; features: Features; appTooOld: boolean; runtimeTooOld: boolean }
+export type { Computer, Features }
 export type TailnetPeer = { name: string; dns: string }
 export type Where = { computer?: string; of?: string }
 export type OpenHutAgent = Agent & { computer: string; online: boolean }
@@ -72,8 +72,7 @@ export const openhut = {
       const admin = await request({ schema: Admin, path: '/api/admin' }).catch(() => undefined)
       const appTooOld = !!APP_VERSION && !!admin?.minAppVersion && older({ version: APP_VERSION, than: admin.minAppVersion })
       const cloud = await request({ schema: Cloud, path: '/api/cloud' }).catch(() => undefined)
-      const servers = (cloud?.devices ?? []).filter((device) => device.kind === 'server' && !device.here).map((device) => ({ id: device.key, name: device.name ?? 'Server', url: '', online: device.online, features: { whatsapp: true, browser: true }, appTooOld: false, runtimeTooOld: false }))
-      return [{ id: LOCAL, name: WORDS.thisComputer, url: '', online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false }, appTooOld, runtimeTooOld: false }, ...servers]
+      return computersOf({ here: { id: LOCAL, name: WORDS.thisComputer, kind: 'here', url: '', online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false }, appTooOld, runtimeTooOld: false }, devices: cloud?.devices ?? [] })
     },
     async add(peer: TailnetPeer): Promise<unknown> {
       if (!bridge?.computers) throw new Error('Open the OpenHut app on this computer to do this.')
