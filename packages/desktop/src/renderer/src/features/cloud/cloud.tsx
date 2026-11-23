@@ -16,6 +16,7 @@ import { ago, shortDate, shortDateTime } from '@/lib/format'
 import { navigate, open, useOpen, useSearch } from '@/lib/router'
 import { useApprove, useDeleteData, useDeny, useGate, useRotated } from '@/features/cloud/workspaces'
 import { toast, toastError } from '@/lib/toast'
+import { useAnswer } from '@/features/cloud/review'
 
 export function YouSettings() {
   const { cloud } = useGate()
@@ -109,14 +110,12 @@ export function CloudDevices({ merged }: { merged: string[] }) {
 }
 
 export function JoinRequestRow({ workspace, request }: { workspace: CloudWorkspaceView; request: DeviceRequest }) {
-  const approve = useApprove()
-  const deny = useDeny()
-  const { asking, confirm } = useConfirmed()
   const title = request.name ?? 'New computer'
-  const busy = approve.isPending || deny.isPending || asking
+  const answer = useAnswer({ workspace: workspace.id, request, label: title })
   return <Row icon={<DeviceIcon kind="mac" />} title={title} note={<>Wants to join · <DeviceMeta device={{ kind: 'mac', name: title, os: request.os ?? undefined, when: `${ago(request.at)} ago` }} /></>}>
-    <Button type="button" variant="ghost" className={PILL} disabled={busy} onClick={() => deny.mutate({ id: workspace.id, device: request.device }, { onSuccess: () => toast('Denied'), onError: toastError })}>Deny</Button>
-    <Button type="button" variant="primary" className={PILL} disabled={busy} onClick={() => void confirm(`Approve ${title}`).then((ok) => { if (ok) approve.mutate({ id: workspace.id, device: request.device }, { onSuccess: () => toast(`${title} is unlocking`), onError: toastError }) })}>{approve.isPending ? 'Approving…' : 'Approve'}</Button>
+    <Button type="button" variant="ghost" className={PILL} disabled={answer.busy} onClick={answer.notMe}>Not me</Button>
+    <Button type="button" variant="primary" className={PILL} disabled={answer.busy} onClick={answer.approve}>{request.checked ? 'Review' : 'Approve'}</Button>
+    {answer.dialog}
   </Row>
 }
 

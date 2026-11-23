@@ -20,6 +20,7 @@ import { notify } from '@/components/custom/toast'
 import { open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
+import { useAnswer } from '@/features/cloud/review'
 
 const ROLE = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 
@@ -84,11 +85,9 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
 
 function Request({ workspace, request, name, mine, admin }: { workspace: CloudWorkspaceView; request: DeviceRequest; name: string; mine: boolean; admin: boolean }) {
   const { device, at } = request
-  const approve = useApprove()
-  const deny = useDeny()
-  const { asking, confirm } = useConfirmed()
-  if (!admin && !mine) return null
   const title = request.name ?? 'computer'
+  const answer = useAnswer({ workspace: workspace.id, request, label: mine ? title : `${name}’s ${title}` })
+  if (!admin && !mine) return null
   return <div className="-mt-1 flex flex-wrap items-center gap-3 pr-4 pb-3 pl-[68px] phone:items-start phone:pl-4">
     <DeviceIcon kind="mac" />
     <span className="grid min-w-0 flex-1 gap-1.5">
@@ -97,9 +96,10 @@ function Request({ workspace, request, name, mine, admin }: { workspace: CloudWo
       {mine && <span className="text-[12px] text-body">If it isn’t yours, deny it.</span>}
     </span>
     <span className="flex gap-2 phone:w-full phone:justify-end phone:*:h-11 phone:*:flex-1 phone:*:justify-center phone:*:rounded-xl">
-      <Button type="button" variant="ghost" className={PILL} disabled={deny.isPending} onClick={() => deny.mutate({ id: workspace.id, device }, { onSuccess: () => toast('Denied'), onError: toastError })}>{mine ? 'Not me' : 'Deny'}</Button>
-      {admin && !mine && <Button type="button" variant="primary" disabled={asking || approve.isPending} className={cn(PILL, 'gap-1.5 bg-[#12a150] text-white hover:bg-[#0f8a44]')} onClick={() => void confirm(`Approve ${name}’s ${title}`).then((ok) => { if (ok) approve.mutate({ id: workspace.id, device }, { onSuccess: () => toast(`${name}’s ${title} is in`), onError: toastError }) })}><I icon={FingerPrintIcon} size={14} />Approve</Button>}
+      <Button type="button" variant="ghost" className={PILL} disabled={answer.busy} onClick={mine ? answer.notMe : answer.deny}>{mine ? 'Not me' : 'Deny'}</Button>
+      {admin && !mine && <Button type="button" variant="primary" disabled={answer.busy} className={cn(PILL, 'gap-1.5 bg-[#12a150] text-white hover:bg-[#0f8a44]')} onClick={answer.approve}><I icon={FingerPrintIcon} size={14} />{request.checked ? 'Review' : 'Approve'}</Button>}
     </span>
+    {answer.dialog}
   </div>
 }
 

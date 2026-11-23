@@ -21,7 +21,7 @@ const Stored = z.object({
   kit: z.optional(KIT),
   locked: z.optional(z.object({ sub: z.string(), email: z.string() })),
   session: z.optional(z.object({ token: z.string(), refresh: z.optional(z.string()), expiresAt: z.string() })),
-  asking: z.optional(z.array(z.object({ id: z.string(), admins: z.array(z.string()), own: z.optional(z.boolean()) }))),
+  asking: z.optional(z.array(z.object({ id: z.string(), admins: z.array(z.string()), own: z.optional(z.boolean()), nonce: z.optional(z.string()) }))),
 })
 export type Stored = z.infer<typeof Stored>
 export type Account = NonNullable<Stored['account']>

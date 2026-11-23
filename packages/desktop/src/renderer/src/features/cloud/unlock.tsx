@@ -12,11 +12,13 @@ import { ErrorNote } from '@/components/error-note'
 import { I, PILL } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { cancelPasskey, nameOf, notifyDesktop, PasskeyQuiet, useCloud, usePasskeys, usePasskeyUnlock, useRemoveMac, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
+import { cancelPasskey, nameOf, notifyDesktop, PasskeyQuiet, useAddPasskey, useCloud, usePasskeys, usePasskeyUnlock, useRemoveMac, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
 import { BIG, Step } from '@/features/cloud/step'
 import { chooseWorkspace, useAsk, useCancelAsk, useDeleteData } from '@/features/cloud/workspaces'
 import { Mismatch } from '@/features/cloud/presence'
 import { joinRequests, knownDevices, newDevices, rememberDevices } from '@/features/cloud/seen'
+import { FaceTile } from '@/features/cloud/review'
+import { RequestError } from '@/lib/api-client'
 import { Spinner } from '@/components/ui/spinner'
 import { navigate, usePath } from '@/lib/router'
 import { longDate } from '@/lib/format'
@@ -43,11 +45,11 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
     prompted.current = true
     touch(true)
   })
-  if (cloud.needsSignIn) return <Step title="This computer was removed." line="Sign in again to unlock it." link={leave}
+  if (cloud.needsSignIn) return <Step title="This computer was removed." line="If that was a mistake, sign in again and ask one of your computers." link={leave}
     action={<Button type="button" variant="primary" className={BIG} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}>Sign in again</Button>} />
   if (way === 'kit') return <KitEntry cloud={cloud} onBack={() => setWay(null)} />
   if (way === 'start-over') return <StartOver onBack={() => setWay(null)} />
-  if (way === 'ask' || cloud.asking) return <Requested cloud={cloud} onBack={() => setWay(null)} />
+  if (way === 'ask' || cloud.asking) return <Requested cloud={cloud} onBack={() => setWay(null)} onKit={cloud.kitInCloud ? () => setWay('kit') : undefined} onTouch={canPasskey ? () => { setWay(null); touch(false) } : undefined} />
   const ask = canPasskey ? 'Use Touch ID, or another way below.' : cloud.canAsk ? 'Approve it from a computer you already use, or use your recovery kit.' : 'Use your recovery kit to unlock it.'
   const lost = <Button type="button" variant="text" className="font-normal text-mute" onClick={() => setWay('start-over')}>Lost your computers and kit? Start over</Button>
   return <Step title={`Welcome back, ${nameOf(cloud.email ?? '')}`} line={`This computer is new to your account. ${ask}`} back={back} link={<span className="flex flex-col items-center gap-1">{leave}{lost}</span>}
@@ -67,27 +69,46 @@ function StartOver({ onBack }: { onBack: () => void }) {
   </Step>
 }
 
-function Requested({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
+function Requested({ cloud, onBack, onKit, onTouch }: { cloud: Cloud; onBack: () => void; onKit?: () => void; onTouch?: () => void }) {
   const ask = useAsk()
   const cancel = useCancelAsk()
   const asking = cloud.asking
   const asked = useRef(false)
+  const [asleep, setAsleep] = useState(false)
+  const reviewed = Boolean(asking?.reviewed)
+  useEffect(() => {
+    if (reviewed || !asking?.rooms.length) return
+    const timer = setTimeout(() => setAsleep(true), 20_000)
+    return () => clearTimeout(timer)
+  }, [reviewed, asking?.rooms.length])
   useEffect(() => {
     if (asking || asked.current) return
     asked.current = true
     ask.mutate()
   }, [asking, ask])
   const back = () => cancel.mutate(undefined, { onSettled: onBack })
+  const leaveFor = (next?: () => void) => next && (() => cancel.mutate(undefined, { onSettled: next }))
+  const kit = onKit && <Button type="button" variant="secondary" className={BIG} onClick={leaveFor(onKit)}><I icon={Key01Icon} size={16} />Use my recovery kit</Button>
+  const again = <Button type="button" variant="primary" className={BIG} disabled={ask.isPending} onClick={() => { setAsleep(false); ask.mutate(undefined, { onError: toastError }) }}>Ask again</Button>
+  const other = ask.error instanceof RequestError && ask.error.param === 'waiting'
+  if (other) return <Step title="Another computer is waiting." line={`${ask.error?.message ?? ''} Approve or turn that one down, then ask from here.`} back={onBack}
+    action={<div className="flex flex-col items-center gap-2.5">{onTouch && <Button type="button" variant="primary" className={BIG} onClick={onTouch}><I icon={FingerPrintIcon} size={16} />Use Touch ID</Button>}{onKit && <Button type="button" variant="secondary" className={BIG} onClick={onKit}><I icon={Key01Icon} size={16} />Use my recovery kit</Button>}</div>} />
+  if (asking?.missed) return <Step title="Those faces didn’t match." line="The request was turned down. If that was you, ask again. After two misses, wait an hour." back={back}
+    action={<div className="flex flex-col items-center gap-2.5">{again}{kit}</div>}><ErrorNote message={ask.error?.message} /></Step>
+  if (asleep && !reviewed && !asking?.denied) return <Step title="Your other computers look asleep." line="Nobody has opened the request yet. Wake one up, or get in another way." back={back}
+    action={<div className="flex flex-col items-center gap-2.5">{kit}<Button type="button" variant="text" className="font-normal text-mute" onClick={() => setAsleep(false)}>Keep waiting</Button></div>} />
   const rooms = asking?.rooms ?? []
   const admins = rooms.filter((room) => !room.own).flatMap((room) => room.admins)
   const own = rooms.some((room) => room.own)
   const where = [own && 'on another of your computers, in Settings › Computers', admins.length > 0 && `by ${who(admins)}`].filter(Boolean).join(', or ')
   if (asking?.denied) return <Step title="Not approved." line="It was denied, or the request expired after an hour." back={back}
     action={<Button type="button" variant="primary" className={BIG} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Request again</Button>} />
-  return <Step title="Waiting for approval." line={rooms.length ? 'It unlocks by itself once approved.' : 'Sending your request…'}
+  const faces = asking?.faces
+  return <Step title={faces ? 'Waiting for approval.' : 'Request sent.'} line={faces ? 'On your other computer, tap these two faces.' : rooms.length ? 'Open the notification on one of your computers. Two faces will show here when you do.' : 'Sending your request…'}
     link={<Button type="button" variant="text" className="font-normal text-mute" disabled={cancel.isPending} onClick={back}>Cancel</Button>}>
+    {faces && <span className="flex gap-3">{faces.map((index) => <FaceTile key={index} index={index} size={72} />)}</span>}
     <span className="flex items-center gap-2 rounded-xl border border-hair bg-card px-3.5 py-2.5 text-[13px]"><DeviceIcon kind="mac" />{asking?.name ?? 'This computer'}<span className="text-mute">· {cloud.email}</span></span>
-    {!ask.isError && <Spinner className="mt-1" />}
+    {!ask.isError && !faces && <Spinner className="mt-1" />}
     <ErrorNote message={ask.error?.message ?? asking?.error ?? undefined} />
     {rooms.length > 0 && <span className="max-w-[420px] text-[12.5px] text-mute">Approve it {where}.</span>}
   </Step>
@@ -106,7 +127,7 @@ function JoinRequests({ cloud }: { cloud: Cloud }) {
     for (const { workspace, request, mine, path } of pending) {
       if (told.current.has(request.device)) continue
       told.current.add(request.device)
-      if (!document.hasFocus()) notifyDesktop({ title: `${request.name ?? 'A new computer'} wants to join`, body: mine ? 'Approve or deny it in Settings › Computers.' : `${nameOf(request.email)} asked to join ${workspace.name}.`, path })
+      notifyDesktop({ title: `${request.name ?? 'A new computer'} wants to join`, body: mine ? `${request.email}. Review it, or say Not me.` : `${nameOf(request.email)} asked to join ${workspace.name}.`, path })
     }
   }, [pending])
   const here = usePath()
@@ -210,7 +231,7 @@ export function CloudToasts() {
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
   if (!cloud) return null
-  return <><JoinRequests cloud={cloud} /><Mismatch /><GoneNotice cloud={cloud} /><Joins cloud={cloud} /><SelfJoins cloud={cloud} /></>
+  return <><JoinRequests cloud={cloud} /><Mismatch /><GoneNotice cloud={cloud} /><Joins cloud={cloud} /><SelfJoins cloud={cloud} /><TouchIdBack cloud={cloud} /></>
 }
 
 function Joins({ cloud }: { cloud: Cloud }) {
@@ -225,6 +246,21 @@ function Joins({ cloud }: { cloud: Cloud }) {
       for (const email of was ? workspace.members.map((member) => member.email).filter((each) => !was.includes(each) && each !== cloud.email) : []) notify({ lead: <PersonFace name={nameOf(email)} email={email} size={26} />, title: `${nameOf(email)} joined ${workspace.name}`, note: email })
     }
   }, [cloud.workspaces, cloud.email])
+  return null
+}
+
+function TouchIdBack({ cloud }: { cloud: Cloud }) {
+  const helper = usePasskeys()
+  const add = useAddPasskey()
+  const [later, setLater] = useState(false)
+  const shown = cloud.touchIdOff && !later && Boolean(helper?.passkeys && helper.prf)
+  useStickyToast({ id: 'touch-id-back', notice: shown ? {
+    lead: <I icon={FingerPrintIcon} size={18} />,
+    title: 'Turn Touch ID back on?',
+    note: 'The new encryption turned it off for all your Macs. Turn it on here and they can use it again.',
+    action: { label: 'Turn on', onClick: () => add.mutate(null, { onSuccess: () => notify({ title: 'Touch ID is on again' }), onError: (error) => { if (!(error instanceof PasskeyQuiet)) toastError(error) } }) },
+    cancel: { label: 'Not now', onClick: () => setLater(true) },
+  } : null, onDismiss: () => setLater(true) })
   return null
 }
 

@@ -35,6 +35,7 @@ import { open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
 import { cn } from '@/lib/utils'
+import { useAnswer } from '@/features/cloud/review'
 
 const GET_TAILSCALE = 'https://tailscale.com/download'
 const JoinCode = z.object({ code: z.string() })
@@ -132,15 +133,12 @@ function DeviceRow({ device }: { device: Device }) {
 }
 
 function RequestRow({ workspace, asked }: { workspace: CloudWorkspaceView; asked: DeviceRequest }) {
-  const approve = useApprove()
-  const deny = useDeny()
-  const { asking, confirm } = useConfirmed()
   const title = asked.name ?? 'New computer'
-  const busy = approve.isPending || deny.isPending || asking
-  const approved = () => void confirm(`Approve ${title}`).then((ok) => { if (ok) approve.mutate({ id: workspace.id, device: asked.device }, { onSuccess: () => toast(`${title} is unlocking`), onError: toastError }) })
+  const answer = useAnswer({ workspace: workspace.id, request: asked, label: title })
   return <Row icon={<DeviceIcon kind="mac" />} title={title} note={<>Wants to join · <DeviceMeta device={{ kind: 'mac', name: title, os: asked.os ?? undefined, when: `${ago(asked.at)} ago` }} /></>}>
-    <Button type="button" variant="ghost" className={PILL} disabled={busy} onClick={() => deny.mutate({ id: workspace.id, device: asked.device }, { onSuccess: () => toast('Denied'), onError: toastError })}>Deny</Button>
-    <Button type="button" variant="primary" className={PILL} disabled={busy} onClick={approved}>{approve.isPending ? 'Approving…' : 'Approve'}</Button>
+    <Button type="button" variant="ghost" className={PILL} disabled={answer.busy} onClick={answer.notMe}>Not me</Button>
+    <Button type="button" variant="primary" className={PILL} disabled={answer.busy} onClick={answer.approve}>{asked.checked ? 'Review' : 'Approve'}</Button>
+    {answer.dialog}
   </Row>
 }
 

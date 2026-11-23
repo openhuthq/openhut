@@ -75,8 +75,16 @@ export async function deviceKey(): Promise<DeviceKey | undefined> {
   }
 }
 
+type TouchId = { prompt: (reason: string) => Promise<{ ok: boolean }> }
+
 export async function confirmed(reason: string): Promise<boolean> {
-  if (!isPhone()) return true
+  const touchId: TouchId | undefined = Reflect.get(window, 'openhut')?.touchId
+  if (!isPhone() && !touchId) return true
+  if (touchId) {
+    const { ok } = await touchId.prompt(reason.charAt(0).toLowerCase() + reason.slice(1))
+    if (!ok) toast('Not confirmed. Nothing was sent.')
+    return ok
+  }
   return plugin.confirm({ reason }).then(() => true, () => {
     toast('Not confirmed. Nothing was sent.')
     return false

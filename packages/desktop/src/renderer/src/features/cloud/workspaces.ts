@@ -134,9 +134,11 @@ export const useChangeKeys = () => useCloudCall((id: string) => request({ schema
 
 export const useDeleteWorkspace = () => useCloudCall(({ id, name }: { id: string; name: string }) => request({ schema: Cloud, computer: 'local', path: room(id), method: 'DELETE', body: { name } }))
 
-export const useApprove = () => useCloudCall(({ id, device }: { id: string; device: string }) => rememberedThen(device, () => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}/approvals`, method: 'POST' })))
+export const useApprove = () => useCloudCall(({ id, device, faces }: { id: string; device: string; faces?: number[] }) => rememberedThen(device, () => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}/approvals`, method: 'POST', body: { faces } })))
 
-export const useDeny = () => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}`, method: 'DELETE' }))
+export const useReview = () => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}/reviews`, method: 'POST' }))
+
+export const useDeny = () => useCloudCall(({ id, device, why }: { id: string; device: string; why?: 'mismatch' | 'not-me' }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}${why ? `?why=${why}` : ''}`, method: 'DELETE' }))
 
 export const useAsk = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud/requests', method: 'POST' }))
 
