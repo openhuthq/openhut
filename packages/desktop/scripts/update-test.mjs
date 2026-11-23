@@ -53,7 +53,7 @@ try {
   child = launch()
   let page = await connect()
   const admin = await until(async () => {
-    const reply = await admin(page)
+    const reply = await adminOf(page)
     return reply?.server?.healthy ? reply : null
   }, 60, 'the old app\'s runtime to be healthy')
   say('the old app is running', { version: await page.eval('window.openhut.version'), runtimeBuild: admin.server.build })
@@ -94,7 +94,7 @@ try {
   child = launch()
   page = await connect()
   const after = await until(async () => {
-    const reply = await admin(page)
+    const reply = await adminOf(page)
     return reply?.server?.healthy ? reply : null
   }, 60, 'the new app\'s runtime to be healthy')
   const agents = await page.eval("fetch('/api/agents').then((r) => r.json())")
@@ -158,7 +158,7 @@ async function connect() {
   }
 }
 
-async function admin(page) {
+async function adminOf(page) {
   const reply = await page.eval("fetch('/api/admin').then(async (r) => ({ status: r.status, body: r.ok ? await r.json() : await r.text() }), () => null)")
   if (reply?.status === 401 || reply?.status === 403) throw new Error(`GET /api/admin answered ${reply.status}, which waiting won't change: ${String(reply.body).slice(0, 300)}`)
   return reply?.status === 200 ? reply.body : null
