@@ -13,7 +13,7 @@ const cloud = (status: string) => ({ status, email: me, workspaces: [home, team,
 test('your own new computer and a team member’s computer both raise a toast, each opening where you approve it', () => {
   assert.deepEqual(joinRequests({ cloud: cloud('on') }).map(({ request, mine, path }) => [request.device, mine, path]), [
     ['new-mac', true, '/settings/computers'],
-    ['ana-mac', false, '/settings/general'],
+    ['ana-mac', false, '/settings/people'],
   ])
 })
 
