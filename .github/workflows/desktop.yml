@@ -165,11 +165,11 @@ jobs:
           for dir in dist/native-cache/hermes/*/hermes/scripts/whatsapp-bridge dist/backend/runtime/hermes/scripts/whatsapp-bridge release/win-unpacked/resources/backend/runtime/hermes/scripts/whatsapp-bridge; do
             echo "$dir: $(ls $dir 2>&1 | head -5 | tr '\n' ' ') node_modules: $(ls $dir/node_modules 2>/dev/null | wc -l)"
           done
-      - name: Install it, meet the first agent, run five at once, chat, use the MCP, restart, and keep the evidence
+      - name: Install it, meet the first agent, run five at once, chat, restart, and keep the evidence
         if: matrix.name == 'windows'
         working-directory: packages/desktop
         run: node scripts/app-e2e.mjs --installer release/OpenHut-Setup-x64.exe --out app-e2e
-      - name: Open it, meet the first agent, run five at once, chat, use the MCP, restart, and keep the evidence
+      - name: Open it, meet the first agent, run five at once, chat, restart, and keep the evidence
         if: matrix.name == 'macos'
         working-directory: packages/desktop
         run: node scripts/app-e2e.mjs --app release/mac-arm64/OpenHut.app --out app-e2e
