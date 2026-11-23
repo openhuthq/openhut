@@ -11,7 +11,8 @@ import { DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 
-type Confirmation = { question: string; detail: string; action: string; list?: string[]; typed?: string; onConfirm: () => unknown }
+export type Point = { icon: IconSvgElement; text: string }
+type Confirmation = { question: string; detail: string; action: string; list?: string[]; points?: Point[]; typed?: string; onConfirm: () => unknown }
 
 export function ConfirmButton({ variant = 'danger', size, label, disabled, className, children, ...confirmation }: Confirmation & ButtonVariants & {
   label?: string
@@ -26,7 +27,7 @@ export function ConfirmButton({ variant = 'danger', size, label, disabled, class
   </>
 }
 
-export function ConfirmDialog({ open, onOpenChange, question, detail, action, list, typed, onConfirm }: Confirmation & { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function ConfirmDialog({ open, onOpenChange, question, detail, action, list, points, typed, onConfirm }: Confirmation & { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
@@ -45,6 +46,7 @@ export function ConfirmDialog({ open, onOpenChange, question, detail, action, li
   return <AlertDialog open={open} onOpenChange={onOpenChange}>
     <DialogHead title={question} subtitle={detail} />
     {list && <ul className="m-0 flex list-none flex-col gap-2 px-5 pb-4 text-[13px]/[18px] text-ink">{list.map((item) => <li key={item} className="flex items-center gap-2"><I icon={Cancel01Icon} size={14} className="shrink-0 text-fail" />{item}</li>)}</ul>}
+    {points && <ul className="m-0 mx-5 mb-4 flex list-none flex-col gap-3 rounded-xl bg-soft p-3.5 text-[13px]/[18px] text-ink">{points.map((point) => <li key={point.text} className="flex items-center gap-3"><span className="grid size-7 shrink-0 place-items-center rounded-lg bg-card text-body shadow-[0_0_0_1px_var(--hair)]"><I icon={point.icon} size={15} /></span>{point.text}</li>)}</ul>}
     {typed && <label className="flex flex-col gap-1.5 px-5 pb-4 text-[13px]/[18px] text-body"><span>Type <span className="font-medium text-ink">{typed}</span> to confirm</span><Input value={text} onChange={(event) => setText(event.target.value)} autoComplete="off" spellCheck={false} autoFocus /></label>}
     {error && <p role="alert" className="m-0 px-5 pb-4 text-[13px]/[18px] text-fail">{error}</p>}
     <DialogFoot>

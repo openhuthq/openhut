@@ -24,7 +24,7 @@ import { byEligibility, stateOf, type Peer } from '@/features/settings/peers'
 import { Chevron, Command, Intro, Row, Rows } from '@/features/settings/kit'
 import { UpdateStatus } from '@/features/settings/update-pill'
 import { KeysToReplace } from '@/features/cloud/cloud'
-import { REMOVE_DETAIL, useCloud, useRemoveMac } from '@/features/cloud/api'
+import { REMOVE_DETAIL, REMOVE_POINTS, useCloud, useRemoveMac } from '@/features/cloud/api'
 import { useApprove, useDeny } from '@/features/cloud/workspaces'
 import { request } from '@/lib/api-client'
 import { ago, shortDateTime } from '@/lib/format'
@@ -124,11 +124,11 @@ function DeviceRow({ device }: { device: Device }) {
   const update = useUpdateComputer()
   const server = device.kind === 'server'
   const name = device.name ?? (server ? 'Computer that runs agents' : 'Computer')
-  const detail = device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))}. ${REMOVE_DETAIL}` : REMOVE_DETAIL
+  const detail = device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))} · ${REMOVE_DETAIL}` : REMOVE_DETAIL
   return <Row icon={<DeviceIcon kind={device.kind} />} title={name} note={[server ? 'Runs agents' : 'Mac', addedOf(device)].filter(Boolean).join(' · ')}>
     {server && !isPhone() && update.isPending && <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>}
     {server && !isPhone() && !update.isPending && <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate({ id: tunnelKeyOf(device.key), name }, { onSuccess: () => toast(`${name} is updating`), onError: toastError })}>Update</Button>}
-    {!isPhone() && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${name}?`} detail={detail} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
+    {!isPhone() && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${name}?`} detail={detail} points={REMOVE_POINTS} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
   </Row>
 }
 

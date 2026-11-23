@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CloudOffIcon, FingerPrintIcon, Key01Icon } from '@hugeicons/core-free-icons'
 import { Cloud, CloudAuthorization, RecoveryKit, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { request } from '@/lib/api-client'
 import { navigate } from '@/lib/router'
@@ -91,8 +92,13 @@ export function useRemovePasskey() {
   })
 }
 
-const NEW_KIT_HINT = 'If anyone else has your recovery kit, make a new kit so the old one stops working.'
-export const REMOVE_DETAIL = `It can’t get anything new from OpenHut Cloud, and Touch ID stops opening OpenHut until you turn it on again on a Mac you trust. Do this only if it’s lost, sold or not yours. ${NEW_KIT_HINT}`
+const NEW_KIT_HINT = 'If someone else has your kit, make a new one.'
+export const REMOVE_DETAIL = 'Only if it’s lost, sold or not yours.'
+export const REMOVE_POINTS = [
+  { icon: CloudOffIcon, text: 'It can’t get anything new from OpenHut Cloud' },
+  { icon: FingerPrintIcon, text: 'Touch ID turns off until you add it again' },
+  { icon: Key01Icon, text: 'Make a new kit if someone else has yours' },
+]
 
 export function useRemoveMac() {
   const client = useQueryClient()
