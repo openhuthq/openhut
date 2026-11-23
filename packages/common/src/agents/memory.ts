@@ -25,3 +25,6 @@ export type UpdateMemory = z.infer<typeof UpdateMemory>
 export function memoryLength(entries: string[]): number {
   return [...entries.join(MEMORY_DELIMITER)].length
 }
+
+export const MemoryRecord = z.object({ notes: z.nullable(z.string()), people: z.nullable(z.string()) })
+export type MemoryRecord = z.infer<typeof MemoryRecord>

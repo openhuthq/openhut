@@ -19,3 +19,6 @@ export type ListSkills = z.infer<typeof ListSkills>
 
 export const UpdateSkill = z.object({ body: z.string().check(z.minLength(1), z.maxLength(SKILL_MAX_LENGTH)) })
 export type UpdateSkill = z.infer<typeof UpdateSkill>
+
+export const SkillRecord = z.object({ path: z.string().check(z.minLength(1), z.maxLength(200)), body: z.string().check(z.maxLength(SKILL_MAX_LENGTH)) })
+export type SkillRecord = z.infer<typeof SkillRecord>

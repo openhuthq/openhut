@@ -27,6 +27,7 @@ import { forward, forwardController } from './relay/forward.ts'
 import { relayService } from './relay/relay-service.ts'
 import { cloudController } from './cloud/cloud-controller.ts'
 import { cloudService } from './cloud/cloud-service.ts'
+import { runSet } from './cloud/run-set.ts'
 import { settings } from './platform/settings.ts'
 import { listenLocally } from './team/identity.ts'
 
@@ -91,6 +92,7 @@ await gatewayServer.start().catch(async (err: unknown) => {
   await agentService.stopAll()
   process.exit(1)
 })
+await runSet.start()
 await agentService.boot()
 routineService.runDashboardWith((input) => threadService.runRoutine(input))
 routineService.start()

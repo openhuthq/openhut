@@ -60,10 +60,8 @@ export const openhut = {
   fetch: ({ path, init }: Where & { path: string; init?: RequestInit }): Promise<Response> => fetch(path, init),
   agents: {
     list: async (): Promise<OpenHutAgent[]> => (await request({ schema: AGENT_LIST, path: '/api/agents' })).data.map(here),
-    async move({ id, to }: { id: string; to: string }): Promise<{ agent: OpenHutAgent; ungranted: string[] }> {
-      if (to !== LOCAL) throw new RequestError({ message: 'Moving an agent to another computer comes back with the next update.', status: 409, param: 'to' })
-      return { agent: here(await request({ schema: Agent, path: `/api/agents/${encodeURIComponent(id)}`, method: 'PATCH', body: { runsHere: true } })), ungranted: [] }
-    },
+    move: async ({ id, to }: { id: string; to: string }): Promise<OpenHutAgent> =>
+      here(await request({ schema: Agent, path: `/api/agents/${encodeURIComponent(id)}`, method: 'PATCH', body: to === LOCAL ? { runsHere: true } : { runsOn: to } })),
   },
   connections: {
     grant: ({ connection, agent }: { connection: string; agent: string }): Promise<Grant> => request({ schema: Grant, path: '/api/grants', method: 'POST', body: { agentId: agent, connectionId: connection } }),

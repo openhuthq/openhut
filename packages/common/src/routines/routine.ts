@@ -27,3 +27,14 @@ export type Routine = z.infer<typeof Routine>
 
 export const ListRoutines = z.object({ agentId: z.string() })
 export type ListRoutines = z.infer<typeof ListRoutines>
+
+export const RoutineRecord = z.object({
+  name: z.string(),
+  plan: z.string(),
+  at: z.nullable(z.string()),
+  cron: z.nullable(z.string()),
+  until: z.nullable(z.string()),
+  origin: z.string(),
+  createdAt: z.string(),
+})
+export type RoutineRecord = z.infer<typeof RoutineRecord>

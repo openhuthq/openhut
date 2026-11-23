@@ -4,6 +4,7 @@ import { CloudWorkspace, DeviceRequest, parseJson, siteHost } from '@openhut/com
 import { anchorOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
 import { padded } from '@openhut/common/records/seal.ts'
 import { Collection } from '@openhut/common/records/wire.ts'
+import { AgentHealth, AgentStatus } from '@openhut/common/agents/agent.ts'
 import { fromBase64, lock, toBase64, unlock } from '@openhut/common/vault/vault.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { cloud } from '../platform/cloud.ts'
@@ -14,6 +15,7 @@ import { messageOf } from '../platform/http-error.ts'
 import { keysService } from './keys-service.ts'
 import { presence } from './presence.ts'
 import { changed, recordsService } from './records.ts'
+import { runSet } from './run-set.ts'
 import { roomKeys, type Call } from './room-keys.ts'
 
 export const BEAT_MS = 10_000
@@ -21,7 +23,7 @@ const GONE = [4001, 4003, 4010]
 const LIVE: Record<Collection, string[]> = {
   workspace: [], agent: ['agent'], control: ['agent', 'grant'], message: ['thread'], memory: ['memory'], connection: ['connection'], skill: ['skill'], routine: ['routine'], channel: ['channel'], file: ['thread'],
 }
-const Beat = z.object({ at: z.number(), build: z.string(), version: z.string(), kind: z.string() })
+const Beat = z.object({ at: z.number(), build: z.string(), version: z.string(), kind: z.string(), agents: z.optional(z.record(z.string(), z.object({ status: AgentStatus, health: z.nullable(AgentHealth) }))) })
 const Requests = z.object({ data: z.array(DeviceRequest) })
 const Message = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ready') }),
@@ -110,7 +112,7 @@ export const cloudEvents = {
     requests.delete(ws)
     presence.closed(ws)
     await roomKeys.dropRoom(ws)
-    if (!own) await (why === 'removed' ? agentService.keepWorkspace(ws) : agentService.dropWorkspace(ws))
+    if (!own) await runSet.refresh().catch((err: unknown) => log.warn({ event: 'run_set.refresh_failed', error: messageOf(err) }))
     emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
   },
 }
@@ -130,6 +132,7 @@ function heard(text: string): void {
     })
     void beatAll()
     void recordsService.drain()
+    void runSet.refresh().catch((err: unknown) => log.warn({ event: 'run_set.refresh_failed', error: messageOf(err) }))
   }
   if (message?.type === 'notice') noticed(message)
   if (message?.type === 'beat') void beatHeard(message)
@@ -151,9 +154,9 @@ function noticed({ object, id, ver = 0, workspace }: { object: string; id: strin
 async function beatAll(): Promise<void> {
   if (!ready) return
   const me = await keysService.deviceKey()
-  const value: Beat = { at: Date.now(), build: config.build, version: config.version, kind: config.installKind }
   for (const room of roomKeys.rooms()) {
     const ws = room.workspace.id
+    const value: Beat = { at: Date.now(), build: config.build, version: config.version, kind: config.installKind, agents: await agentService.statuses({ workspace: ws }) }
     const listed = roomKeys.members(ws)?.members.some((member) => member.devices.includes(me))
     const plain = padded({ json: JSON.stringify(value) })
     const body = listed && room.workspace.key && plain && await lock({ key: fromBase64(room.workspace.key), version: room.workspace.version, bind: beatBind({ ws, from: me }), plain })

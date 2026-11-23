@@ -1,7 +1,7 @@
 import * as z from 'zod/mini'
 import type { Secret } from '@openhut/common/records/lease.ts'
 import { HttpError } from '../../../src/server/platform/http-error.ts'
-import { changed, idOf, recordsService, type Held, type PutRecord } from '../../../src/server/cloud/records.ts'
+import { changed, idOf, keyOf, recordsService, type Held, type PutRecord } from '../../../src/server/cloud/records.ts'
 
 export type FakeRecords = ReturnType<typeof useFakeRecords>
 type Write = Omit<PutRecord, 'collection' | 'id' | 'parent'> & { collection: Held['collection']; id: string; parent?: string; deleted?: boolean }
@@ -14,12 +14,13 @@ export function useFakeRecords({ by = 'this-device' }: { by?: string } = {}) {
   let offline = false
 
   const see = (row: Held): Held => {
-    if (row.ver < (seen.get(row.id) ?? 0)) throw new HttpError(502, 'OpenHut Cloud sent an older copy than this computer has seen.')
-    seen.set(row.id, row.ver)
+    const key = keyOf({ collection: row.collection, id: row.id })
+    if (row.ver < (seen.get(key) ?? 0)) throw new HttpError(502, 'OpenHut Cloud sent an older copy than this computer has seen.')
+    seen.set(key, row.ver)
     return row
   }
   const store = (row: Held): Held => {
-    rows.set(row.id, row)
+    rows.set(keyOf({ collection: row.collection, id: row.id }), row)
     changed({ collection: row.collection, id: row.id, ver: row.ver, workspace: row.workspace })
     return row
   }
@@ -32,8 +33,9 @@ export function useFakeRecords({ by = 'this-device' }: { by?: string } = {}) {
     if (offline) throw new HttpError(502, 'OpenHut Cloud didn’t answer. Check this computer’s internet connection.')
     let patch = { value: input.value, secret: input.secret }
     for (;;) {
-      const current = rows.get(input.id)
-      if (!current || current.ver === (seen.get(input.id) ?? 0)) {
+      const key = keyOf(input)
+      const current = rows.get(key)
+      if (!current || current.ver === (seen.get(key) ?? 0)) {
         const { collection, id, workspace, parent, personal } = input
         return see(store({ collection, id, workspace, parent, ver: (current?.ver ?? 0) + 1, by, value: deleted ? null : patch.value, secret: deleted ? undefined : patch.secret, personal, deleted: deleted || undefined }))
       }
@@ -49,12 +51,12 @@ export function useFakeRecords({ by = 'this-device' }: { by?: string } = {}) {
     list: async ({ collection, workspace, parent }: { collection: Held['collection']; workspace: string; parent?: string }) =>
       [...rows.values()].filter((row) => row.collection === collection && row.workspace === workspace && (parent === undefined || row.parent === parent) && !row.deleted).map(see),
     get: async ({ collection, workspace, id }: { collection: Held['collection']; workspace: string; id: string }) => {
-      const row = rows.get(id)
+      const row = rows.get(keyOf({ collection, id }))
       return row?.collection === collection && row.workspace === workspace ? see(row) : null
     },
     put: (input: PutRecord) => put({ ...input, id: idOf(input) }),
     remove: async ({ collection, workspace, id, queue }: { collection: Held['collection']; workspace: string; id: string; queue?: boolean }) => {
-      const current = rows.get(id)
+      const current = rows.get(keyOf({ collection, id }))
       if (current?.collection === collection && current.workspace === workspace && !current.deleted) await put({ ...current, value: null, queue, deleted: true, reapply: (latest) => latest.deleted ? null : { value: null } })
     },
     lease: async ({ collection, workspace, id, refresh }: { collection: Held['collection']; workspace: string; id: string; refresh: (secret: Secret) => Promise<Secret> }) => {
@@ -82,7 +84,7 @@ export function useFakeRecords({ by = 'this-device' }: { by?: string } = {}) {
     },
 
     write(row: Omit<Held, 'ver' | 'by'> & { by?: string }): Held {
-      return store({ by: 'other-device', ...row, ver: (rows.get(row.id)?.ver ?? 0) + 1 })
+      return store({ by: 'other-device', ...row, ver: (rows.get(keyOf({ collection: row.collection, id: row.id }))?.ver ?? 0) + 1 })
     },
   }
 }

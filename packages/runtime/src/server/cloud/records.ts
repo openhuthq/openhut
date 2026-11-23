@@ -55,7 +55,7 @@ export const recordsService = {
   put: (input: PutRecord): Promise<Held | null> => send({ ...input, id: idOf(input) }),
 
   async remove({ collection, workspace, id, queue }: { collection: Collection; workspace: string; id: string; queue?: boolean }): Promise<void> {
-    const held = (await seenMap()).get(id) ?? await recordsService.get({ collection, workspace, id }).then((row) => row && { parent: row.parent ?? null })
+    const held = (await seenMap()).get(keyOf({ collection, id })) ?? await recordsService.get({ collection, workspace, id }).then((row) => row && { parent: row.parent ?? null })
     if (held) await send({ collection, workspace, id, parent: held.parent ?? undefined, value: null, queue, deleted: true })
   },
 
@@ -85,6 +85,10 @@ export const recordsService = {
   },
 }
 
+export function keyOf({ collection, id }: { collection: string; id: string }): string {
+  return collection === 'control' || collection === 'memory' ? `${collection}:${id}` : id
+}
+
 export function idOf(input: PutRecord): string {
   return input.id === undefined ? input.parent : input.id
 }
@@ -94,11 +98,11 @@ export function changed(change: Change): void {
 }
 
 async function send(input: Write): Promise<Held | null> {
-  const waiting = await db.selectFrom('record_outbox').select('seq').where('id', '=', input.id).executeTakeFirst()
+  const waiting = await db.selectFrom('record_outbox').select('seq').where('id', '=', keyOf(input)).executeTakeFirst()
   if (input.queue && waiting) return queue(input).then(() => null)
   try {
     const saved = await write(input)
-    if (waiting) await db.deleteFrom('record_outbox').where('id', '=', input.id).execute()
+    if (waiting) await db.deleteFrom('record_outbox').where('id', '=', keyOf(input)).execute()
     return saved
   } catch (error) {
     if (input.queue && unreachable(error)) return queue(input).then(() => null)
@@ -108,7 +112,7 @@ async function send(input: Write): Promise<Held | null> {
 
 async function write({ collection, id, workspace, parent, value, secret, personal, reapply, deleted }: Write): Promise<Held> {
   const records = await clientNow()
-  const where = { collection, workspace, parent: parent ?? null, id, current: (await seenMap()).get(id)?.ver ?? 0 }
+  const where = { collection, workspace, parent: parent ?? null, id, current: (await seenMap()).get(keyOf({ collection, id }))?.ver ?? 0 }
   let gaveUp = false
   try {
     const saved = deleted
@@ -129,7 +133,7 @@ async function write({ collection, id, workspace, parent, value, secret, persona
 
 async function queue({ collection, id, workspace, parent, value, secret, personal, deleted = false }: Write): Promise<void> {
   const body = seal(JSON.stringify({ value, secret, personal }))
-  await db.insertInto('record_outbox').values({ id, collection, workspace, parent: parent ?? null, body, deleted })
+  await db.insertInto('record_outbox').values({ id: keyOf({ collection, id }), collection, workspace, parent: parent ?? null, body, deleted })
     .onConflict((oc) => oc.column('id').doUpdateSet({ body, deleted, parent: parent ?? null })).execute()
   log.warn({ event: 'records.queued', collection, id })
 }
@@ -137,7 +141,7 @@ async function queue({ collection, id, workspace, parent, value, secret, persona
 async function drainOnce(): Promise<void> {
   for (const row of await db.selectFrom('record_outbox').selectAll().orderBy('seq').execute()) {
     const queued = z.parse(Queued, JSON.parse(unseal(row.body)))
-    const input = { ...queued, collection: z.parse(z.enum(COLLECTIONS), row.collection), id: row.id, workspace: row.workspace, parent: row.parent ?? undefined, deleted: row.deleted }
+    const input = { ...queued, collection: z.parse(z.enum(COLLECTIONS), row.collection), id: row.id === keyOf({ collection: row.collection, id: row.parent ?? '' }) ? row.parent ?? row.id : row.id, workspace: row.workspace, parent: row.parent ?? undefined, deleted: row.deleted }
     try {
       await write({ ...input, reapply: (current) => current.deleted ? null : queued })
     } catch (error) {
@@ -150,9 +154,10 @@ async function drainOnce(): Promise<void> {
 
 async function keep(row: Opened): Promise<Held> {
   const map = await seenMap()
-  if ((map.get(row.id)?.ver ?? 0) < row.ver) {
-    map.set(row.id, { ver: row.ver, parent: row.parent })
-    await db.insertInto('record_held').values({ id: row.id, ver: row.ver, parent: row.parent })
+  const key = keyOf({ collection: row.object, id: row.id })
+  if ((map.get(key)?.ver ?? 0) < row.ver) {
+    map.set(key, { ver: row.ver, parent: row.parent })
+    await db.insertInto('record_held').values({ id: key, ver: row.ver, parent: row.parent })
       .onConflict((oc) => oc.column('id').doUpdateSet({ ver: sql<number>`greatest(record_held.ver, excluded.ver)`, parent: row.parent })).execute()
   }
   const { workspace, own, vault } = row.value
@@ -182,7 +187,7 @@ async function clientNow(): Promise<RecordsClient> {
       return found?.key ? { version: found.version, keys: roomKeys.ring(workspace) } : null
     },
     roster: (workspace) => rosterOf(roomKeys.members(workspace)),
-    seen: (id) => map.get(id),
+    seen: (id, collection) => map.get(keyOf({ collection, id })),
   })
 }
 

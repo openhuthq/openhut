@@ -4,6 +4,9 @@ import { db, migrate } from '../../../src/server/platform/db.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { settings } from '../../../src/server/platform/settings.ts'
 import { routineService } from '../../../src/server/routines/routine-service.ts'
+import { recordsService, type Held } from '../../../src/server/cloud/records.ts'
+import { runSet } from '../../../src/server/cloud/run-set.ts'
+import { fakeAgentd, HOME, signIn } from '../agents/signed-in.ts'
 
 await migrate()
 await settings.setTimeZone('Europe/Berlin')
@@ -12,20 +15,22 @@ await db.insertInto('agent').values([
   { id: 'ag_rtnfirst', name: 'Dev', owner_id: 'usr_rtnowner', instructions: '#', model: 'claude:sonnet', net: 61, channel_key: seal('k'.repeat(48)), wanted: 'running' },
   { id: 'ag_rtnother', name: 'Ops', owner_id: 'usr_rtnowner', instructions: '#', model: 'claude:sonnet', net: 62, channel_key: seal('k'.repeat(48)), wanted: 'running' },
 ]).execute()
-await db.insertInto('thread').values({ id: 'th_rtnchat1', agent_id: 'ag_rtnfirst', person_id: 'usr_rtnowner', title: 'Dev' }).execute()
 await db.insertInto('channel').values([
   { id: 'ch_rtnwhats', agent_id: 'ag_rtnfirst', kind: 'whatsapp', status: 'connected', account: null, owner_address: '15550001111', open: true, allowed: '', secrets: '' },
   { id: 'ch_rtnslack', agent_id: 'ag_rtnfirst', kind: 'slack', status: 'connected', account: null, owner_address: '', open: false, allowed: 'C0FINANCE1', secrets: '' },
 ]).execute()
+fakeAgentd()
+signIn({ email: 'rtn@example.com' })
+await runSet.refresh()
 
 const owner = { id: 'usr_rtnowner', email: 'rtn@example.com', local: true, role: 'owner' as const }
-const app = { platform: 'api_server', chat_id: 'openhut-th_rtnchat1' }
+const app = { platform: 'api_server', chat_id: 'openhut-msg_rtnchat1' }
 const whatsapp = { platform: 'whatsapp', chat_id: '15550001111@s.whatsapp.net', chat_type: 'dm', chat_name: 'Mo' }
 const slack = { platform: 'slack', chat_id: 'C0FINANCE1', chat_type: 'group', chat_name: 'finance', thread_id: '1732.1' }
 const minutes = (n: number) => new Date(Date.now() + n * 60_000)
 const idOf = (reply: string) => /Scheduled (rt_[a-z0-9]+)/.exec(reply)?.[1] ?? ''
 const rowOf = (id: string) => db.selectFrom('routine').selectAll().where('id', '=', id).executeTakeFirst()
-const runs: { agentId: string; threadId: string; text: string }[] = []
+const runs: { agentId: string; text: string }[] = []
 routineService.runDashboardWith(async (input) => {
   runs.push(input)
   return 'Acme paid #4471.'
@@ -33,7 +38,7 @@ routineService.runDashboardWith(async (input) => {
 
 test('a routine needs a chat of the agent\'s own, and one of at or cron', async () => {
   await assert.rejects(routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'x', plan: 'y', at: minutes(5).toISOString() } }), /chat you're in/)
-  await assert.rejects(routineService.schedule({ agentId: 'ag_rtnother', input: { name: 'x', plan: 'y', at: minutes(5).toISOString(), origin: app } }), /chat you're in/)
+  await assert.rejects(routineService.schedule({ agentId: 'ag_rtnother', input: { name: 'x', plan: 'y', at: minutes(5).toISOString(), origin: { ...app, chat_id: 'telegram-123' } } }), /chat you're in/)
   await assert.rejects(routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'x', plan: 'y', at: minutes(5).toISOString(), origin: { ...whatsapp, chat_id: '15559998888@s.whatsapp.net' } } }), /WhatsApp chat any more/)
   await assert.rejects(routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'x', plan: 'y', at: minutes(5).toISOString(), origin: { ...slack, chat_id: 'C0RANDOM01' } } }), /any more/)
   await assert.rejects(routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'x', plan: 'y', origin: app } }), /either at/)
@@ -54,7 +59,6 @@ test('a dashboard routine runs in its thread, says what it found, and a once rou
   await routineService.tick({ now: minutes(2) })
   await new Promise((resolve) => setTimeout(resolve, 50))
   assert.equal(runs.length, 1)
-  assert.equal(runs[0].threadId, 'th_rtnchat1')
   assert.match(runs[0].text, /^\[Routine rt_[a-z0-9]+ · run ru_[a-z0-9]+\] Time for "Check Acme paid"\. Your plan: Look at Stripe\./)
   assert.match(runs[0].text, /This runs once and ends by itself\.$/)
   assert.doesNotMatch(runs[0].text, /cancel_routine/)
@@ -129,16 +133,15 @@ test('a chat the agent left fails the run, and until passing ends a routine', as
   await db.updateTable('channel').set({ allowed: 'C0FINANCE1' }).where('id', '=', 'ch_rtnslack').execute()
 })
 
-test('a routine moves with its agent, its dashboard thread renamed', async () => {
+test('a routine is backed up as a record, and a routine record from another computer is scheduled here', async () => {
   const id = idOf(await routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'Weekly digest', plan: 'Sum up.', cron: '0 9 * * 1', origin: app } }))
-  const exported = await routineService.exportFor({ agentId: 'ag_rtnfirst' })
-  await db.insertInto('thread').values({ id: 'th_rtnmoved', agent_id: 'ag_rtnother', person_id: 'usr_rtnowner', title: 'Ops' }).execute()
-  await routineService.importFor({ agentId: 'ag_rtnother', routines: exported, threads: new Map([['th_rtnchat1', 'th_rtnmoved']]) })
-  const moved = (await routineService.list({ actor: owner, agentId: 'ag_rtnother' })).find((each) => each.name === 'Weekly digest')
-  assert.ok(moved)
-  assert.equal(moved.name, 'Weekly digest')
-  assert.equal(JSON.parse((await db.selectFrom('routine').select('origin').where('id', '=', moved.id).executeTakeFirstOrThrow()).origin).chat_id, 'openhut-th_rtnmoved')
-  await routineService.cancel({ agentId: 'ag_rtnfirst', id, reason: 'moved' })
+  const held = await recordsService.get({ collection: 'routine', workspace: HOME, id })
+  assert.deepEqual([held?.parent, (held?.value as { name?: string })?.name], ['ag_rtnfirst', 'Weekly digest'])
+  await routineService.applyRecords({ agentId: 'ag_rtnother', records: [{ ...held, id: 'rt_fromthere', parent: 'ag_rtnother' } as Held] })
+  const arrived = (await routineService.list({ actor: owner, agentId: 'ag_rtnother' })).find((each) => each.id === 'rt_fromthere')
+  assert.equal(arrived?.name, 'Weekly digest')
+  await routineService.cancel({ agentId: 'ag_rtnfirst', id, reason: 'done' })
+  assert.equal((await recordsService.get({ collection: 'routine', workspace: HOME, id }))?.deleted, true)
 })
 
 test('changing the time zone moves the next run of repeating routines', async () => {

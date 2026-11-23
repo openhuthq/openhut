@@ -258,7 +258,7 @@ export function useMoveAgent() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (input: { id: string; to: string }) => openhut.agents.move(input),
-    onSuccess: ({ agent }) => {
+    onSuccess: (agent) => {
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agent.id ? agent : each))
       void client.invalidateQueries({ queryKey: [...AGENTS_KEY, agent.id] })
       void client.resetQueries({ queryKey: ['threads', 'agent', agent.id] })

@@ -17,7 +17,7 @@ export const MCP_TOOLS = [
   tool({ name: 'create_agent', description: 'Create an agent (stopped). You own it.', input: CreateAgent, call: ({ api, input }) => api({ method: 'POST', url: '/api/agents', payload: input }) }),
   tool({
     name: 'update_agent',
-    description: 'Rename an agent, change its instructions, its model (a model key like claude:sonnet; it uses that one model for everything), switch its code execution or its web browser on or off (it restarts if running), or start or stop it with wanted.',
+    description: 'Rename an agent, change its instructions, its model (a model key like claude:sonnet; it uses that one model for everything), switch its code execution or its web browser on or off (it restarts if running),, start or stop it with wanted, or move it to another of your own computers with runsOn (the device key of that computer) or back here with runsHere.',
     input: z.object({ id: z.string(), ...UpdateAgentFields }),
     call: ({ api, input: { id, ...patch } }) => api({ method: 'PATCH', url: `/api/agents/${id}`, payload: patch }),
   }),

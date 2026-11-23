@@ -32,7 +32,7 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
   device: Signer
   keys: Keys
   roster: (workspace: string) => Roster | null | undefined
-  seen?: (id: string) => Seen | undefined
+  seen?: (id: string, collection: Collection) => Seen | undefined
   fetch?: typeof globalThis.fetch
 }) {
   async function call({ method, path, body }: { method: 'GET' | 'PUT'; path: string; body?: unknown }): Promise<Reply> {
@@ -44,7 +44,7 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
   async function checked({ json, expect, agents }: { json: unknown; expect: Expect; agents: Agents }): Promise<Checked | null> {
     const row = SealedRow.safeParse(json).data
     const list = row && roster(row.workspace)
-    const held = row && seen(row.id)
+    const held = row && seen(row.id, row.object)
     if (!row || !list || row.object !== expect.collection || row.workspace !== expect.workspace) return null
     if ((expect.parent !== undefined && row.parent !== expect.parent) || (expect.id !== undefined && row.id !== expect.id)) return null
     if (held && (row.ver < held.ver || row.parent !== held.parent)) return null
