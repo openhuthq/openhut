@@ -20,12 +20,11 @@ const LOCAL = Symbol('local')
 const DEVICE = Symbol('device')
 const INNER = randomBytes(32)
 const OWN_DEVICES = new Set([
-  'GET /api/threads', 'POST /api/threads', 'GET /api/threads/:id', 'DELETE /api/threads/:id', 'POST /api/threads/:id/chat',
+  'GET /api/threads', 'GET /api/threads/:id', 'DELETE /api/threads/:id', 'POST /api/threads/:id/chat',
   'GET /api/threads/:id/files', 'POST /api/threads/:id/files', 'DELETE /api/threads/:id/files', 'POST /api/threads/:id/files/lookups',
   'GET /api/browsers/:id/live', 'GET /api/channels/:id', 'GET /api/connection-events', 'POST /api/updates',
 ])
-const TEAMMATES = new Set(['POST /api/threads', 'GET /api/threads/:id', 'POST /api/threads/:id/chat'])
-const AgentBody = z.object({ agentId: z.string() })
+const TEAMMATES = new Set(['GET /api/threads/:id', 'POST /api/threads/:id/chat'])
 const IdParams = z.object({ id: z.string() })
 
 export async function who(req: FastifyRequest): Promise<Caller> {
@@ -102,10 +101,7 @@ function arrival(req: FastifyRequest): { local: boolean; device?: string } {
 }
 
 async function sharedWith({ req, workspaces }: { req: FastifyRequest; workspaces: string[] }): Promise<boolean> {
-  const thread = z.safeParse(IdParams, req.params).data?.id
-  const agentId = thread
-    ? (await db.selectFrom('thread').select('agent_id').where('id', '=', thread).executeTakeFirst())?.agent_id
-    : z.safeParse(AgentBody, req.body).data?.agentId
+  const agentId = z.safeParse(IdParams, req.params).data?.id
   const agent = agentId ? await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', agentId).executeTakeFirst() : undefined
   return !!agent?.shared && !!agent.workspace && workspaces.includes(agent.workspace)
 }

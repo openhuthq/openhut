@@ -108,8 +108,7 @@ async function firstAgent(page) {
 }
 
 async function chat(page, agent, text) {
-  const thread = await page.eval(`fetch('/api/threads', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agentId: '${agent.id}' }) }).then((r) => r.json())`)
-  const stream = await page.eval(`fetch('/api/threads/${thread.id}/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ trigger: 'submit-message', message: { id: 'm1', role: 'user', parts: [{ type: 'text', text: ${JSON.stringify(JSON.stringify(text))} }] } }) }).then((r) => r.text())`)
+    const stream = await page.eval(`fetch('/api/threads/${agent.id}/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ trigger: 'submit-message', message: { id: 'm1', role: 'user', parts: [{ type: 'text', text: ${JSON.stringify(JSON.stringify(text))} }] } }) }).then((r) => r.text())`)
   const echoed = stream.includes('ECHO') && stream.includes(text)
   const crossed = NAMES.filter((name) => name !== agent.name && stream.includes(`hello from ${name}`))
   say(`chatted with ${agent.name} through the gateway`, { text, echoed, crossed, tail: stream.slice(-200) })
@@ -149,8 +148,7 @@ async function browsers(page, pair) {
 async function tool(page, agent, text, expect) {
   let stream = ''
   await until(async () => {
-    const thread = await page.eval(`fetch('/api/threads', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agentId: '${agent.id}' }) }).then((r) => r.json())`)
-    stream = await page.eval(`fetch('/api/threads/${thread.id}/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ trigger: 'submit-message', message: { id: 'm1', role: 'user', parts: [{ type: 'text', text: ${JSON.stringify(JSON.stringify(text))} }] } }) }).then((r) => r.text())`)
+        stream = await page.eval(`fetch('/api/threads/${agent.id}/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ trigger: 'submit-message', message: { id: 'm1', role: 'user', parts: [{ type: 'text', text: ${JSON.stringify(JSON.stringify(text))} }] } }) }).then((r) => r.text())`)
     return !stream.includes("isn't reachable")
   }, 180, `${agent.name} to come back after turning Browser on`)
   const ok = stream.includes(expect)

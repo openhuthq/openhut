@@ -26,7 +26,6 @@ answerErrors(app)
 app.setValidatorCompiler(validateWithZod)
 app.get('/caller', async (req) => who(req))
 for (const url of ['/api/threads/:id', '/api/threads/:id/chat']) app.route({ method: url.endsWith('chat') ? 'POST' : 'GET', url, handler: async (req) => who(req) })
-app.post('/api/threads', async (req) => who(req))
 await app.register(meController, { prefix: '/api/me' })
 await app.register(agentController, { prefix: '/api/agents' })
 await app.register(cloudController, { prefix: '/api/cloud' })
@@ -66,10 +65,6 @@ async function listDevices(): Promise<void> {
   await db.insertInto('agent').values([
     { id: 'ag_tshared', name: 'Shared', owner_id: owner.id, instructions: '# Shared', model: 'sonnet', net: 41, channel_key: 'k', workspace: TEAM, shared: true },
     { id: 'ag_tprivate', name: 'Private', owner_id: owner.id, instructions: '# Private', model: 'sonnet', net: 42, channel_key: 'k', workspace: TEAM, shared: false },
-  ]).execute()
-  await db.insertInto('thread').values([
-    { id: 'th_tshared', agent_id: 'ag_tshared', person_id: owner.id, title: 'Shared' },
-    { id: 'th_tprivate', agent_id: 'ag_tprivate', person_id: owner.id, title: 'Private' },
   ]).execute()
 }
 
@@ -112,7 +107,7 @@ test('the control MCP\'s calls inside the runtime keep a local caller, and a mad
 
 test('over the tunnel your own viewer may chat, but gets 403 on agent writes and on every records and trust route', async () => {
   await listDevices()
-  const chat = await ask({ createConnection: device(VIEWER), method: 'POST', path: '/api/threads/th_tprivate/chat', body: {} })
+  const chat = await ask({ createConnection: device(VIEWER), method: 'POST', path: '/api/threads/ag_tprivate/chat', body: {} })
   assert.deepEqual([chat.status, chat.body.local, chat.body.email], [200, false, 'mo@example.com'])
   for (const [method, path, body] of [
     ['POST', '/api/agents', { name: 'Sneaky' }],
@@ -128,13 +123,11 @@ test('over the tunnel your own viewer may chat, but gets 403 on agent writes and
 })
 
 test('over the tunnel a teammate chats only with agents shared in their workspace, and a stranger gets nothing', async () => {
-  const shared = await ask({ createConnection: device(TEAMMATE), path: '/api/threads/th_tshared' })
+  const shared = await ask({ createConnection: device(TEAMMATE), path: '/api/threads/ag_tshared' })
   assert.deepEqual([shared.status, shared.body.email, shared.body.local], [200, 'sara@example.com', false])
-  assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'POST', path: '/api/threads', body: { agentId: 'ag_tshared' } })).status, 200)
-  assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'POST', path: '/api/threads/th_tprivate/chat', body: {} })).status, 403)
-  assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'POST', path: '/api/threads', body: { agentId: 'ag_tprivate' } })).status, 403)
+  assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'POST', path: '/api/threads/ag_tprivate/chat', body: {} })).status, 403)
   assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'PATCH', path: '/api/agents/ag_tshared', body: { wanted: 'stopped' } })).status, 403)
-  assert.equal((await ask({ createConnection: device(tunnelKeyOf(toBase64(stranger.publicKey))), path: '/api/threads/th_tshared' })).status, 401)
+  assert.equal((await ask({ createConnection: device(tunnelKeyOf(toBase64(stranger.publicKey))), path: '/api/threads/ag_tshared' })).status, 401)
 })
 
 test.after(async () => {
