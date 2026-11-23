@@ -21,8 +21,6 @@ import { cn } from '@/lib/utils'
 
 type Me = { error: Error | null; isFetching: boolean; refetch: () => unknown }
 
-const INSTALL_POLL_MS = 3000
-
 export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   const cloud = useCloud()
   const run = useFirstRun()
@@ -35,10 +33,7 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   const helper = usePasskeys()
   const [readying, setReadying] = useState(false)
   const error = me.error ?? cloud.error
-  const installing = error instanceof RequestError && error.status === 503
   const failure = error instanceof RequestError && error.status === 502 ? error.message : undefined
-  const { refetch: refetchMe } = me
-  const { refetch: refetchCloud } = cloud
   const step = gateOf({ cloud: cloud.data, setup: run.data, down: Boolean(error) })
   const done = run.data?.done
   useEffect(() => {
@@ -47,12 +42,7 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   useEffect(() => {
     if (step === 'unlock') void notifyUnlock()
   }, [step])
-  useEffect(() => {
-    if (!installing) return
-    const timer = setInterval(() => { void refetchMe(); void refetchCloud() }, INSTALL_POLL_MS)
-    return () => clearInterval(timer)
-  }, [installing, refetchMe, refetchCloud])
-  if (step === 'loading') return error && !installing ? <Down error={error} retrying={me.isFetching} onRetry={() => { void me.refetch(); void cloud.refetch() }} /> : <Waiting note={installing ? 'Setting up OpenHut on this computer. The first time takes a few minutes.' : undefined} />
+  if (step === 'loading') return error ? <Down error={error} retrying={me.isFetching} onRetry={() => { void me.refetch(); void cloud.refetch() }} /> : <Waiting />
   if (isPhone() && step !== 'ready') return <Stage><Step title="Finish on your computer." line="Set up OpenHut there, then come back." /></Stage>
   if (step === 'kit' && !saving && !invited) setSaving(true)
   if (saving) return <Stage><SaveKit onDone={() => {
@@ -71,8 +61,8 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   return <GateContext value={{ cloud: cloud.data, active }}>{children}</GateContext>
 }
 
-function Waiting({ note }: { note?: string }) {
-  return <div className="grid h-dvh place-items-center bg-sidebar"><span className="flex animate-[fadein_.3s_1s_both] flex-col items-center gap-3 px-8 text-center"><Spinner className="size-5" />{note && <span className="max-w-[320px] text-[14px] text-body">{note}</span>}</span></div>
+function Waiting() {
+  return <div className="grid h-dvh place-items-center bg-sidebar"><span className="animate-[fadein_.3s_1s_both]"><Spinner className="size-5" /></span></div>
 }
 
 function Down({ error, retrying, onRetry }: { error: Error | null; retrying: boolean; onRetry: () => void }) {
