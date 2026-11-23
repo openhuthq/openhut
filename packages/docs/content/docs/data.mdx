@@ -41,4 +41,4 @@ On the agent, **Add** it under **Can use**. If it isn't on the agent's computer 
 
 Open a connection to see its tools and every call, refused ones too.
 
-Postgres queries are one `SELECT`, at most 15 seconds and 1000 rows.
+Postgres queries are one `SELECT`, at most 15 seconds and 1000 rows. Agents can also see a query's plan with `EXPLAIN`, never `EXPLAIN ANALYZE`, so the query doesn't run.
