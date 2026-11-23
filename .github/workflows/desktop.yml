@@ -137,6 +137,16 @@ jobs:
           echo "The previous release requires: $requirement"
           mkdir -p shipped && ditto -x -k release/OpenHut-*-arm64.zip shipped
           for app in release/mac-arm64/OpenHut.app shipped/OpenHut.app; do codesign --verify --deep --strict -R "=$requirement" "$app"; done
+      - name: Check out private/ and install the cloud API the update test and app e2e sign in to
+        if: matrix.name != 'linux'
+        shell: bash
+        env:
+          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
+          npm --prefix private/api ci --no-audit --no-fund
       - name: The previous version updates to this one
         if: matrix.name == 'macos' && env.FULL == 'true'
         working-directory: packages/desktop
@@ -146,8 +156,8 @@ jobs:
         run: |
           npx electron-builder --mac zip --arm64 -c.extraMetadata.version=0.0.1 -c.directories.output=release-old --publish never
           mkdir -p feed && cp release/latest-mac.yml release/OpenHut-*-arm64.zip release/OpenHut-*-arm64.zip.blockmap release/OpenHut-arm64.dmg feed/
-          node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via button
-          node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via quit
+          node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via button --cloud ../../private/api
+          node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via quit --cloud ../../private/api
       - name: Add the Mac app to the draft release
         if: matrix.name == 'macos' && env.TAGGED == 'true'
         working-directory: packages/desktop/release
@@ -165,16 +175,6 @@ jobs:
           for dir in dist/native-cache/hermes/*/hermes/scripts/whatsapp-bridge dist/backend/runtime/hermes/scripts/whatsapp-bridge release/win-unpacked/resources/backend/runtime/hermes/scripts/whatsapp-bridge; do
             echo "$dir: $(ls $dir 2>&1 | head -5 | tr '\n' ' ') node_modules: $(ls $dir/node_modules 2>/dev/null | wc -l)"
           done
-      - name: Check out private/ and install the cloud API the app e2e signs in to
-        if: matrix.name != 'linux'
-        shell: bash
-        env:
-          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
-        run: |
-          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
-          npm --prefix private/api ci --no-audit --no-fund
       - name: Install it, sign in, meet the first agent, run five at once, chat, restart, and keep the evidence
         if: matrix.name == 'windows'
         working-directory: packages/desktop
