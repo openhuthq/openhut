@@ -27,5 +27,6 @@ export interface Database {
     id: Generated<string>; at: Timestamp; agent_id: string; connection_id: string | null; tool: string; reason: string
     outcome: 'allowed' | 'denied' | 'failed'; ms: number
   }
-  cloud_record: { id: string; workspace: Generated<string>; kind: string; ref: string; ver: number; hash: string; signer: Generated<string | null>; agent_id: Generated<string | null>; seq: Generated<number> }
+  record_held: { id: string; ver: number; parent: string | null }
+  record_outbox: { seq: Generated<string>; id: string; collection: string; workspace: string; parent: string | null; body: string; deleted: Generated<boolean> }
 }

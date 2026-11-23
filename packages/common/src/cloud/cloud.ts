@@ -223,7 +223,7 @@ export type Backup = z.infer<typeof Backup>
 export const AskAdmin = z.object({ name: z.string().check(z.maxLength(64)), os: z.string().check(z.maxLength(32)) })
 export type AskAdmin = z.infer<typeof AskAdmin>
 
-export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null) })
+export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null), server: z._default(z.boolean(), false) })
 export type DeviceRequest = z.infer<typeof DeviceRequest>
 
 export const DeleteNotice = z.object({ by: DeviceKey, signedAt: z.number(), signature: Signature })

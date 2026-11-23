@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { lockHere, openHere, openRecord, ownerProven, proveOwner, sealRecord, type AgentValue, type Synced } from '../../src/cloud/record.ts'
+import { openRecord, ownerProven, proveOwner, sealRecord, type AgentValue, type Synced } from '../../src/cloud/record.ts'
 import { recordBind, signRecord, type Member, type Record } from '../../src/cloud/cloud.ts'
 import { identity, lock, newKey, toBase64 } from '../../src/vault/vault.ts'
 
@@ -106,21 +106,6 @@ test('small records are padded to a size bucket, so a one-letter edit is the sam
   const long = await sealed({ value: { ...helpdesk, name: 'A much longer name for it' } })
   assert.equal(short.body.length, long.body.length)
   assert.deepEqual((await open(long))?.value, { ...helpdesk, name: 'A much longer name for it' })
-})
-
-test('a Here is locked to its sender, padded to one fixed size, and opens only with the workspace key', async () => {
-  const from = toBase64(mo.publicKey)
-  const value = { agent: 'ag_helpdesk', field: 'instructions' as const, typing: false, at: 1, seq: 7, log: 'x'.repeat(43), list: 3, listHash: 'y'.repeat(43) }
-  const idle = { ...value, agent: null, field: null, seq: 123456, list: 999 }
-  const body = await lockHere({ workspace, key, version: 1, from, value })
-  const other = await lockHere({ workspace, key, version: 1, from, value: idle })
-  assert.ok(body && other)
-  assert.equal(body.length, other.length)
-  assert.deepEqual(await openHere({ workspace, keys: { 1: key }, from, body }), value)
-  assert.equal(await openHere({ workspace, keys: { 1: key }, from: toBase64(ana.publicKey), body }), null)
-  assert.equal(await openHere({ workspace, keys: { 1: newKey() }, from, body }), null)
-  assert.equal(Buffer.from(body, 'base64url').includes('ag_helpdesk'), false)
-  assert.equal(await lockHere({ workspace, key, version: 1, from, value: { ...value, agent: 'ag_x'.repeat(200) } }), null)
 })
 
 test('an owner proof holds only for the owner’s own device, this workspace, this agent and the Shared or Private it was signed for', async () => {

@@ -8,50 +8,57 @@ import Fastify from 'fastify'
 import { fromBase64, identity, lock, newWords, toBase64 } from '@openhut/common/vault/vault.ts'
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
 import { checkProof } from '@openhut/common/cloud/cloud.ts'
+import { roomRequest } from './flat.ts'
 
 const seen: { erased?: Record<string, unknown>; state?: string; deviceKey?: string; refreshed: number; members?: unknown; email: string; kit?: unknown; passkey?: unknown; lists: unknown[]; workspaces: unknown[]; failKit?: boolean; dropKit?: boolean; refuseBox?: boolean; confirmed?: unknown; cut?: boolean; down?: boolean; failDelete?: boolean; quiet?: boolean } = { email: 'mo@example.com', lists: [], workspaces: [], refreshed: 0 }
 const cloud = createServer(async (req, res) => {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
-  const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown> : {}
+  const { url, method, body, boxes } = roomRequest({ url: req.url, method: req.method, body: chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown> : {} })
   const reply = (status: number, json: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(json))
-  if (req.url === '/v1/account' && req.method === 'DELETE') return reply(200, { id: `dev-${seen.email}`, object: 'account', deleted: true, erased: seen.erased = body })
-  if (req.url === '/v1/auth/sign-in/social') {
+  const boxed = boxes.find((box) => box.name.startsWith('workspace/'))
+  const versionOf = (list: unknown) => (JSON.parse(Buffer.from(String((list as { bytes?: string }).bytes ?? ''), 'base64url').toString() || '{}') as { version?: number }).version ?? 0
+  if (boxed && seen.refuseBox) return reply(403, {})
+  if (url.endsWith('/members') && method === 'PUT' && seen.lists.some((list) => versionOf(list) >= versionOf(body))) return reply(409, { error: { type: 'invalid_request_error', message: 'That member list is already there.' } })
+  if (boxed) seen.workspaces[0] = { id: boxed.name.slice(10), key: boxed.body, by: boxed.by, signature: boxed.signature }
+  if (url === '/v1/account' && method === 'DELETE') return reply(200, { id: `dev-${seen.email}`, object: 'account', deleted: true, erased: seen.erased = body })
+  if (url === '/v1/auth/sign-in/social') {
     Object.assign(seen, { state: body.state, deviceKey: body.device })
     return reply(200, { url: 'https://accounts.example/auth', redirect: false })
   }
-  if (req.url === '/v1/auth/openhut/session') {
+  if (url === '/v1/auth/openhut/session') {
     const signed = await checkProof({ device: seen.deviceKey ?? '', proof: 'session', parts: [String(body.code)], signature: String(body.signature) })
     return reply(signed ? 200 : 400, { object: 'cloud_session', token: 'session-token', refresh: 'refresh-token', sub: `dev-${seen.email}`, email: seen.email, expiresAt: new Date(Date.now() + 60_000).toISOString() })
   }
-  if (req.url === '/v1/auth/openhut/token') {
+  if (url === '/v1/auth/openhut/token') {
     const signed = body.session === 'refresh-token' && await checkProof({ device: seen.deviceKey ?? '', proof: 'refresh', parts: ['refresh-token', String(body.signedAt)], signature: String(body.signature) })
     if (signed) seen.refreshed++
     return reply(signed ? 200 : 401, { object: 'cloud_session', token: 'session-token', refresh: 'refresh-token', sub: `dev-${seen.email}`, email: seen.email, expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
   }
-  if (seen.down && req.url?.startsWith('/v1/key-boxes/kit')) return req.socket.destroy()
-  if (req.url === '/v1/key-boxes/kit' && req.method === 'PUT' && seen.cut) {
+  if (seen.down && url.startsWith('/v1/key-boxes/kit')) return req.socket.destroy()
+  if (url === '/v1/key-boxes/kit' && method === 'PUT' && seen.cut) {
     seen.down = true
     return req.socket.destroy()
   }
-  if (req.url === '/v1/key-boxes/kit' && req.method === 'PUT') {
+  if (url === '/v1/key-boxes/kit' && method === 'PUT') {
     seen.kit = { object: 'key_box', kind: 'kit', body: body.body, by: body.by, signature: body.signature, savedAt: new Date(Number(body.savedAt)).toISOString() }
     if (seen.dropKit) return req.socket.destroy()
     return seen.failKit ? reply(502, {}) : reply(200, seen.kit)
   }
-  if (req.url === '/v1/key-boxes/passkey' && req.method === 'DELETE') return reply(200, { object: 'key_box', kind: 'passkey', deleted: true, passkey: seen.passkey = undefined })
-  if (req.url === '/v1/key-boxes/kit' && req.method === 'DELETE') return seen.failDelete ? reply(500, {}) : reply(200, { kind: 'kit', deleted: !(seen.kit = undefined) })
-  if (req.url === '/v1/key-boxes/kit-confirmed' && req.method === 'PUT') return reply(200, seen.confirmed = { object: 'key_box', kind: 'kit-confirmed', body: body.body, by: body.by, signature: body.signature, savedAt: new Date(Number(body.savedAt)).toISOString() })
-  if (req.url === '/v1/key-boxes/kit-confirmed' && req.method === 'DELETE') return reply(200, { kind: 'kit-confirmed', deleted: !(seen.confirmed = undefined) })
-  if (req.url === '/v1/key-boxes/kit-confirmed') return seen.confirmed ? reply(200, seen.confirmed) : reply(404, {})
-  if (req.url === '/v1/key-boxes/kit') return seen.kit ? reply(200, seen.kit) : reply(404, {})
-  if (req.url === '/v1/key-boxes/passkey' && req.method === 'PUT') return reply(200, seen.passkey = { object: 'key_box', kind: 'passkey', body: body.body, by: body.by, signature: body.signature })
-  if (req.url === '/v1/key-boxes/passkey' && req.method === 'GET') return seen.passkey ? reply(200, seen.passkey) : reply(404, {})
-  if (req.url === '/v1/workspaces' && req.method === 'POST') return seen.refuseBox ? reply(403, {}) : reply(200, seen.workspaces[0] = body)
-  if (req.url === '/v1/workspaces') return reply(200, { object: 'list', data: seen.workspaces })
-  if (req.url?.includes('/member-lists')) return reply(200, { object: 'list', data: seen.lists })
-  if (req.url?.endsWith('/members') && req.method === 'GET') return seen.members ? reply(200, seen.members) : reply(404, { error: { type: 'invalid_request_error', message: 'none' } })
-  if (req.url?.endsWith('/members') && req.method === 'PUT') return reply(200, seen.members = seen.lists[seen.lists.length] = body)
+  if (url === '/v1/key-boxes/passkey' && method === 'DELETE') return reply(200, { object: 'key_box', kind: 'passkey', deleted: true, passkey: seen.passkey = undefined })
+  if (url === '/v1/key-boxes/kit' && method === 'DELETE') return seen.failDelete ? reply(500, {}) : reply(200, { kind: 'kit', deleted: !(seen.kit = undefined) })
+  if (url === '/v1/key-boxes/kit-confirmed' && method === 'PUT') return reply(200, seen.confirmed = { object: 'key_box', kind: 'kit-confirmed', body: body.body, by: body.by, signature: body.signature, savedAt: new Date(Number(body.savedAt)).toISOString() })
+  if (url === '/v1/key-boxes/kit-confirmed' && method === 'DELETE') return reply(200, { kind: 'kit-confirmed', deleted: !(seen.confirmed = undefined) })
+  if (url === '/v1/key-boxes/kit-confirmed') return seen.confirmed ? reply(200, seen.confirmed) : reply(404, {})
+  if (url === '/v1/key-boxes/kit') return seen.kit ? reply(200, seen.kit) : reply(404, {})
+  if (url === '/v1/key-boxes/passkey' && method === 'PUT') return reply(200, seen.passkey = { object: 'key_box', kind: 'passkey', body: body.body, by: body.by, signature: body.signature })
+  if (url === '/v1/key-boxes/passkey' && method === 'GET') return seen.passkey ? reply(200, seen.passkey) : reply(404, {})
+  if (url === '/v1/workspaces' && method === 'POST') return seen.refuseBox ? reply(403, {}) : reply(200, seen.workspaces[0] = body)
+  if (url === '/v1/workspaces') return reply(200, { object: 'list', data: seen.workspaces })
+  if (url.includes('/member-lists')) return reply(200, { object: 'list', data: seen.lists })
+  if (url.endsWith('/members') && method === 'GET') return seen.members ? reply(200, seen.members) : reply(404, { error: { type: 'invalid_request_error', message: 'none' } })
+  if (url.endsWith('/members') && method === 'PUT') return reply(200, seen.members = seen.lists[seen.lists.length] = body)
+  if (seen.quiet) return reply(503, {})
   reply(404, {})
 })
 new WebSocketServer({ server: cloud }).on('connection', (ws) => ws.on('message', (data) => {
@@ -60,7 +67,7 @@ new WebSocketServer({ server: cloud }).on('connection', (ws) => ws.on('message',
 cloud.listen(0, '127.0.0.1')
 await once(cloud, 'listening')
 const address = cloud.address()
-process.env.OPENHUT_CLOUD_URL = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`
+process.env.OPENHUT_API_URL = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`
 
 const { migrate } = await import('../../../src/server/platform/db.ts')
 const { validateWithZod } = await import('../../../src/server/platform/validation.ts')
@@ -69,7 +76,7 @@ const { cloudController } = await import('../../../src/server/cloud/cloud-contro
 const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
 const { roomKeys } = await import('../../../src/server/cloud/room-keys.ts')
 const { cloudService } = await import('../../../src/server/cloud/cloud-service.ts')
-const { syncService } = await import('../../../src/server/cloud/sync-service.ts')
+const { recordsService } = await import('../../../src/server/cloud/records.ts')
 await migrate()
 
 const app = Fastify()
@@ -210,10 +217,9 @@ test('a kit stuck unconfirmed on a Mac that crashed mid-save gives way to the ki
   await checked(() => keysService.kitState().saved?.box === theirs.box)
   assert.deepEqual([keysService.kitState().pending, keysService.kitState().saved?.box], [null, theirs.box])
   seen.quiet = true
-  syncService.disconnect()
-  syncService.connect()
+  assert.equal(await recordsService.put({ collection: 'agent', id: 'ag_unsent01', workspace: account.workspace.id, value: { name: 'Unsent' }, queue: true }), null)
   const refused = await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })
-  assert.deepEqual([refused.statusCode, keysService.account()?.email], [409, 'ana@example.com'], 'sign-out keeps everything while the backup can’t be checked')
+  assert.deepEqual([refused.statusCode, keysService.account()?.email], [409, 'ana@example.com'], 'sign-out keeps everything while a change isn’t in the cloud yet')
   assert.match(refused.json().error.message, /aren’t backed up yet/)
   seen.quiet = false
   await newMac()

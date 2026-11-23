@@ -11,6 +11,7 @@ import { connect, generateKeyPair, toHex, type Tunnel, type TunnelError } from '
 import { startRelay, waitFor } from '@openhut/tunnel/test/relay.ts'
 import { canonical, type Access, type Unsigned } from '@openhut/common/access/access.ts'
 import type { Invitation } from '@openhut/common/access/invitation.ts'
+import { roomRequest } from '../cloud/flat.ts'
 
 const relay = await startRelay()
 const room = { invites: new Map<string, { status: number; json: unknown }>(), puts: [] as MemberList[], putStatus: 200, asked: [] as string[] }
@@ -18,14 +19,15 @@ const fake = createServer(async (req, res) => {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
   const reply = (status: number, json: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(json))
-  const url = new URL(req.url ?? '', 'http://room')
+  const flat = roomRequest({ url: req.url, method: req.method, body: chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown> : {} })
+  const url = new URL(flat.url, 'http://room')
   const invite = /\/invites\/([^/]+)$/.exec(url.pathname)?.[1]
   if (invite) room.asked.push(url.search)
   const found = invite ? room.invites.get(invite + (url.searchParams.get('after') === '0' ? '' : url.search)) : undefined
   if (found) return reply(found.status, found.json)
   if (invite) return reply(404, { error: { type: 'invalid_request_error', message: 'gone' } })
-  if (req.method === 'PUT' && req.url?.endsWith('/members')) {
-    room.puts.push(JSON.parse(Buffer.concat(chunks).toString()) as MemberList)
+  if (flat.method === 'PUT' && flat.url.endsWith('/members')) {
+    room.puts.push(flat.body as MemberList)
     return reply(room.putStatus, {})
   }
   reply(404, { error: { type: 'invalid_request_error', message: 'nothing here' } })
@@ -33,6 +35,7 @@ const fake = createServer(async (req, res) => {
 await once(fake, 'listening')
 const fakeAddress = fake.address()
 process.env.OPENHUT_CLOUD_URL = `http://127.0.0.1:${typeof fakeAddress === 'object' && fakeAddress ? fakeAddress.port : 0}`
+process.env.OPENHUT_API_URL = process.env.OPENHUT_CLOUD_URL
 const { config } = await import('../../../src/server/platform/config.ts')
 config.relayUrl = relay.url
 const { accessService } = await import('../../../src/server/access/access-service.ts')

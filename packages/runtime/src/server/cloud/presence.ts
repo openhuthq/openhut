@@ -1,6 +1,7 @@
-import type { HereField, Member, Presence, SetHere } from '@openhut/common/cloud/cloud.ts'
-import { lockHere, openHere, type HereValue } from '@openhut/common/cloud/record.ts'
-import type { Bytes } from '@openhut/common/vault/vault.ts'
+import * as z from 'zod/mini'
+import { HereField, parseJson, type Member, type Presence, type SetHere } from '@openhut/common/cloud/cloud.ts'
+import { padded } from '@openhut/common/records/seal.ts'
+import { fromBase64, lock, toBase64, unlock, type Bytes } from '@openhut/common/vault/vault.ts'
 import { cloud } from '../platform/cloud.ts'
 import { emit } from '../platform/events.ts'
 
@@ -9,9 +10,20 @@ const BEAT_MS = 10_000
 const TYPING_MS = 3000
 const TYPING_LIFE_MS = 8000
 const TICK_MS = 1000
+const HERE_BYTES = 512
 
-export type HereContext = { workspace: string; key: Bytes; version: number; keys: Record<number, Bytes>; me: string; members: Member[]; email: string; seq: number; log: string; list: number; listHash: string }
-export type HereIo = { rooms: () => string[]; roomOf: (agent: string) => Promise<string | null>; context: (ws: string) => Promise<HereContext | null>; send: (input: { ws: string; text: string }) => boolean; catchUp: (ws: string) => void }
+export const HereValue = z.object({
+  agent: z.nullable(z.string().check(z.maxLength(40))),
+  field: z.nullable(HereField),
+  typing: z.boolean(),
+  at: z.number().check(z.int()),
+  list: z.number().check(z.int(), z.minimum(0)),
+  listHash: z.string().check(z.maxLength(43)),
+})
+export type HereValue = z.infer<typeof HereValue>
+
+export type HereContext = { workspace: string; key: Bytes; version: number; keys: Record<number, Bytes>; me: string; members: Member[]; email: string; list: number; listHash: string }
+export type HereIo = { rooms: () => string[]; roomOf: (agent: string) => Promise<string | null>; context: (ws: string) => Promise<HereContext | null>; send: (input: { ws: string; body: string }) => boolean; catchUp: (ws: string) => void }
 type Seen = { email: string; agent: string | null; field: HereField | null; typing: boolean; since: number; heardAt: number; typingAt: number; sentAt: number }
 type State = Pick<SetHere, 'agent' | 'field' | 'typing'>
 type Last = { state: State; at: number }
@@ -20,8 +32,7 @@ let io: HereIo | null = null
 let mine: SetHere & { ws: string | null; postedAt: number; since: number | null } = { agent: null, field: null, typing: false, ws: null, postedAt: 0, since: null }
 const sent = new Map<string, Last>()
 const seen = new Map<string, Map<string, Seen>>()
-const suspects = new Map<string, number>()
-const behind = new Map<string, { list: number; seq: number }>()
+const behind = new Map<string, number>()
 const mismatched = new Map<string, Set<string>>()
 
 let ticking: Promise<void> = Promise.resolve()
@@ -99,20 +110,15 @@ export const presence = {
 
 function compare({ ws, from, email, value, ctx }: { ws: string; from: string; email: string; value: HereValue; ctx: HereContext }): void {
   const forked = value.list === ctx.list && value.listHash !== ctx.listHash
-  const split = value.seq === ctx.seq && value.log !== ctx.log
   const key = `${ws}/${from}`
-  const ahead = value.list > ctx.list || value.seq > ctx.seq
-  const earlier = behind.get(key)
-  const lagging = ahead && Boolean(earlier && (ctx.list < earlier.list || ctx.seq < earlier.seq))
-  const confirmed = forked || lagging || (split && suspects.get(key) === value.seq)
-  if (split) suspects.set(key, value.seq)
-  else suspects.delete(key)
+  const ahead = value.list > ctx.list
+  const lagging = ahead && ctx.list < (behind.get(key) ?? 0)
   if (ahead) {
-    behind.set(key, { list: value.list, seq: value.seq })
+    behind.set(key, value.list)
     io?.catchUp(ws)
   } else behind.delete(key)
-  if (confirmed) flag({ ws, email, on: true })
-  else if (!split && value.list === ctx.list) flag({ ws, email, on: false })
+  if (forked || lagging) flag({ ws, email, on: true })
+  else if (value.list === ctx.list) flag({ ws, email, on: false })
 }
 
 function flag({ ws, email, on }: { ws: string; email: string; on: boolean }): void {
@@ -155,8 +161,8 @@ async function sendTo({ ws, now }: { ws: string; now: number }): Promise<void> {
   const state: State = { agent: here ? mine.agent : null, field: here ? mine.field : null, typing: here && mine.typing }
   const ctx = due({ state, last: sent.get(ws), now }) && io ? await io.context(ws) : null
   if (!ctx || !io) return
-  const body = await lockHere({ workspace: ws, key: ctx.key, version: ctx.version, from: ctx.me, value: { ...state, at: now, seq: ctx.seq, log: ctx.log, list: ctx.list, listHash: ctx.listHash } })
-  if (body && io.send({ ws, text: JSON.stringify({ type: 'here', body }) })) sent.set(ws, { state, at: now })
+  const body = await lockHere({ workspace: ws, key: ctx.key, version: ctx.version, from: ctx.me, value: { ...state, at: now, list: ctx.list, listHash: ctx.listHash } })
+  if (body && io.send({ ws, body })) sent.set(ws, { state, at: now })
 }
 
 function due({ state, last, now }: { state: State; last: Last | undefined; now: number }): boolean {
@@ -170,6 +176,21 @@ function due({ state, last, now }: { state: State; last: Last | undefined; now: 
 function stale(ws: string): void {
   const last = sent.get(ws)
   if (last) sent.set(ws, { ...last, at: 0 })
+}
+
+export async function lockHere({ workspace, key, version, from, value }: { workspace: string; key: Bytes; version: number; from: string; value: HereValue }): Promise<string | null> {
+  const plain = HereValue.safeParse(value).success ? padded({ json: JSON.stringify(value), size: HERE_BYTES }) : null
+  const locked = plain && await lock({ key, version, bind: hereBind({ workspace, from }), plain })
+  return locked ? toBase64(locked) : null
+}
+
+export async function openHere({ workspace, keys, from, body }: { workspace: string; keys: Record<number, Bytes>; from: string; body: string }): Promise<HereValue | null> {
+  const plain = await unlock({ keys, bind: hereBind({ workspace, from }), locked: fromBase64(body) })
+  return plain?.length === HERE_BYTES ? HereValue.safeParse(parseJson(new TextDecoder().decode(plain))).data ?? null : null
+}
+
+function hereBind({ workspace, from }: { workspace: string; from: string }): string {
+  return `workspace/${workspace}/here/${from}`
 }
 
 function changed(): void {

@@ -5,8 +5,7 @@ import { anchorOf, check, signList } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64, identity, letter, newKey, toBase64, type Identity } from '@openhut/common/vault/vault.ts'
 import { migrate } from '../../../src/server/platform/db.ts'
 import { accountDevice, keysService } from '../../../src/server/cloud/keys-service.ts'
-import { roomKeys } from '../../../src/server/cloud/room-keys.ts'
-import { keyStore } from '../../../src/server/cloud/key-store.ts'
+import { roomKeys, type Call } from '../../../src/server/cloud/room-keys.ts'
 
 await migrate()
 const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
@@ -103,7 +102,7 @@ test('in a team room this Mac lists the account key as its kit, moves the mark w
   await roomKeys.addTeam({ ws, list: v2, first: v1 })
   const puts: MemberList[] = []
   await roomKeys.refresh({ ws, call: async ({ method, path, body }) => {
-    if (method === 'PUT' && path === '/members') puts.push(body as MemberList)
+    if (method === 'POST' && path === '/member-lists') puts.push((body as { list: MemberList }).list)
     return { status: 200, json: { object: 'list', data: [] } }
   } })
   const v3 = puts[0]
@@ -118,7 +117,7 @@ test('in a team room this Mac lists the account key as its kit, moves the mark w
   assert.ok(kit && kit !== oldKit)
   assert.equal(changed.letters.some((each) => each.to === kit || each.to === oldKit), false)
   await roomKeys.refresh({ ws, call: async ({ method, path, body }) => {
-    if (method === 'PUT' && path === '/members') puts.push(body as MemberList)
+    if (method === 'POST' && path === '/member-lists') puts.push((body as { list: MemberList }).list)
     return { status: 200, json: { object: 'list', data: [] } }
   } })
   const v4 = puts[1]
@@ -149,7 +148,7 @@ test('in a team room this Mac lists the account key as its kit, moves the mark w
   assert.deepEqual(after?.members.find((member) => member.email === 'mo@example.com'), { email: 'mo@example.com', role: 'member', devices: [mine, kit, fresh], kit })
 })
 
-test('Change keys is saved before its PUT: when the list landed but the answer was lost, the next refresh takes the new key and queues its letters; a letter that fails stays queued', async () => {
+test('a rotation whose answer was lost still lands: its bundle carries a letter to this device, so the next refresh takes the new key', async () => {
   await keysService.forgetHere()
   await keysService.open({ sub: 'dev-zoe', email: 'zoe@example.com' })
   await keysService.setSession({ token: 't', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
@@ -162,15 +161,16 @@ test('Change keys is saved before its PUT: when the list landed but the answer w
   const v2 = await signList({ signer: await keysService.device(), body: { ...body, version: 2, previous: await anchorOf(team.list), at, members: [...body.members, { email: 'sara@example.com', role: 'member', devices: [toBase64(sara.publicKey)] }], added: { ...body.added, [toBase64(sara.publicKey)]: at } } })
   assert.ok(await roomKeys.advance({ lists: [v2], ws }))
   const { list, room, letters } = await roomKeys.teamChange({ ws, rotate: true })
-  await roomKeys.setRotating({ room, letters: letters.map((each) => ({ ...each, workspace: ws })) })
-  assert.equal(roomKeys.room(ws)?.workspace.version, 1)
+  const mine = await keysService.deviceKey()
+  assert.deepEqual(letters.map((each) => each.to).sort(), [mine, toBase64(sara.publicKey)].sort())
   assert.ok(await roomKeys.advance({ lists: [list], ws }))
+  assert.equal(roomKeys.room(ws)?.workspace.version, 1)
+  const found = letters.filter((each) => each.to === mine).map((each) => ({ ...each, id: 'let_mine', object: 'letter' as const, from: mine, workspace: ws }))
+  const deleted: string[] = []
+  const call: Call = async ({ method, path }) => method === 'GET' ? { status: 200, json: { object: 'list', data: found } } : { status: 200, json: deleted.push(path) }
+  assert.equal(await roomKeys.rekey({ ws, call }), false)
   assert.deepEqual([roomKeys.room(ws)?.workspace.version, roomKeys.room(ws)?.workspace.key], [2, room.workspace.key])
-  assert.deepEqual(keyStore.current()?.rotating ?? [], [])
-  const queued = () => keyStore.current()?.outbox?.some((each) => each.to === toBase64(sara.publicKey))
-  assert.ok(queued())
-  assert.equal(await roomKeys.post(), 0)
-  assert.ok(queued(), 'a letter the cloud refused stays queued')
+  assert.deepEqual(deleted, ['/letters/let_mine'])
 })
 
 test('an admin revokes an invite: the next list drops it and moves its key to removed, so its link can no longer sign a join', async () => {

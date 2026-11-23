@@ -82,7 +82,6 @@ export async function migrate(): Promise<void> {
   await sql`update agent set owner_id = o.id from person o where o.role = 'owner' and owner_id <> o.id`.execute(db)
   await sql`update connection set owner_id = o.id from person o where o.role = 'owner' and owner_id <> o.id`.execute(db)
   await sql`update thread set person_id = o.id from person o where o.role = 'owner' and person_id <> o.id`.execute(db)
-  await sql`create table if not exists cloud_record (id text primary key, kind text not null, ref text not null, ver integer not null, hash text not null)`.execute(db)
   await sql`alter table agent add column if not exists runs_on text`.execute(db)
   await sql`alter table agent add column if not exists changed_by text`.execute(db)
   await sql`alter table connection add column if not exists changed_by text`.execute(db)
@@ -90,8 +89,9 @@ export async function migrate(): Promise<void> {
   await sql`alter table agent add column if not exists shared boolean not null default false`.execute(db)
   await sql`alter table agent add column if not exists owner text`.execute(db)
   await sql`alter table agent add column if not exists owner_proof text`.execute(db)
-  await sql`alter table cloud_record add column if not exists workspace text not null default ''`.execute(db)
-  await sql`alter table cloud_record add column if not exists signer text`.execute(db)
-  await sql`alter table cloud_record add column if not exists agent_id text`.execute(db)
-  await sql`alter table cloud_record add column if not exists seq integer not null default 0`.execute(db)
+  await sql`drop table if exists cloud_record`.execute(db)
+  await sql`delete from install_setting where name like 'cloud_seq%' or name like 'cloud_name:%'`.execute(db)
+  await sql`create table if not exists record_held (id text primary key, ver integer not null, parent text)`.execute(db)
+  await sql`create table if not exists record_outbox (
+    seq bigserial primary key, id text unique not null, collection text not null, workspace text not null, parent text, body text not null, deleted boolean not null default false)`.execute(db)
 }
