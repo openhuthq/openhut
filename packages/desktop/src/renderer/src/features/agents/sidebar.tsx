@@ -3,6 +3,7 @@ import { Delete02Icon, LaptopIcon, Link01Icon, Message01Icon, PencilEdit02Icon, 
 import type { OpenHutAgent } from '@/lib/openhut'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
+import { Tooltip } from '@/components/ui/tooltip'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { Glyph } from '@/components/glyph'
@@ -140,5 +141,5 @@ function TeamSwitcher() {
 
 function Where({ agent, computers }: { agent: OpenHutAgent; computers: Parameters<typeof nameOf>[0]['computers'] }) {
   const label = agent.runsHere ? 'Runs on this computer' : `Runs on ${agent.runsOnName ?? nameOf({ computers, id: agent.computer })}`
-  return <span title={label} aria-label={label} className="grid text-mute-2"><I icon={agent.runsHere ? LaptopIcon : ServerStack01Icon} size={13} /></span>
+  return <Tooltip label={label}><span aria-label={label} className="grid text-mute-2"><I icon={agent.runsHere ? LaptopIcon : ServerStack01Icon} size={13} /></span></Tooltip>
 }

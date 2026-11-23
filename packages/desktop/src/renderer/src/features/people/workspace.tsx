@@ -10,7 +10,7 @@ import { useChangeKeys, useRemoveMember, useRename, useSetWebsite, useWorkspaces
 import { navigate, open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
-import { I, PILL, Section } from '@/components/kit'
+import { I, PILL } from '@/components/kit'
 import { TeamPeople } from '@/features/people/people'
 import { Row, Rows } from '@/features/settings/kit'
 import { cn } from '@/lib/utils'
@@ -23,7 +23,6 @@ export function TeamSettings() {
   const admin = active.role !== 'member'
   return <>
     <TeamHeader workspace={active} editing={admin ? opened ?? undefined : undefined} />
-    <TeamMore workspace={active} />
     {opened === 'keys' && admin && <KeysConfirm workspace={active} />}
     {opened === 'leave' && !active.own && <LeaveConfirm workspace={active} />}
   </>
@@ -84,25 +83,23 @@ function InlineEdit({ value, label, placeholder, onSave }: { value: string; labe
     }}>{value}</span>
 }
 
-function TeamMore({ workspace }: { workspace: CloudWorkspaceView }) {
+export function TeamDangerRows() {
+  const workspace = useWorkspaces().active
   const admin = workspace.role !== 'member'
   const rows: { title: string; note: string; action: string; dialog: string; danger: boolean }[] = [
     ...admin ? [{ title: 'Reset encryption', note: KEYS_NOTE, action: 'Reset', dialog: 'keys', danger: false }] : [],
     ...workspace.own ? [] : [{ title: 'Leave', note: 'You lose access. What you made stays with the team.', action: 'Leave', dialog: 'leave', danger: true }],
   ]
-  if (!rows.length) return null
-  return <Section title="Danger zone">
-    <Rows>{rows.map((row) => <Row key={row.dialog} icon={<I icon={row.dialog === 'keys' ? Key01Icon : Logout03Icon} size={20} className={row.danger ? 'text-fail' : 'text-hue-amber'} />} title={row.title} note={row.note}>
-      <Button type="button" variant={row.danger ? 'danger' : 'ghost'} className={PILL} onClick={() => open(row.dialog)}>{row.action}</Button>
-    </Row>)}</Rows>
-  </Section>
+  return rows.map((row) => <Row key={row.dialog} icon={<I icon={row.dialog === 'keys' ? Key01Icon : Logout03Icon} size={20} className={row.danger ? 'text-fail' : 'text-hue-amber'} />} title={row.title} note={row.note}>
+    <Button type="button" variant={row.danger ? 'danger' : 'ghost'} className={PILL} onClick={() => open(row.dialog)}>{row.action}</Button>
+  </Row>)
 }
 
 function KeysConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
   const changeKeys = useChangeKeys()
   const changed = () => {
     notify({ title: 'Encryption reset', note: 'Everyone else stays in.' })
-    if (workspace.own) navigate('/settings/account?open=kit')
+    if (workspace.own) navigate('/settings/general?open=kit')
   }
   return <ConfirmDialog open onOpenChange={(still) => still || open()} question={`Reset encryption for ${workspace.name}?`} detail={workspace.own ? `${KEYS_NOTE} You save a new recovery kit after.` : KEYS_NOTE} action="Change keys" onConfirm={() => changeKeys.mutateAsync(workspace.id).then(changed)} />
 }
