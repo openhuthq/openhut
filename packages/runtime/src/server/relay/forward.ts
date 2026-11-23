@@ -15,16 +15,14 @@ const MAX_REASON = 120
 const Id = z.object({ id: z.string() })
 const ByAgent = z.object({ agentId: z.string() })
 const tunnels = new Map<string, Promise<Tunnel>>()
-const learned = new Map<string, string>()
 const RUNNER_OF: Partial<Record<string, (req: FastifyRequest) => Promise<string | undefined>>> = {
-  'POST /api/threads': (req) => runnerOf(z.safeParse(ByAgent, req.body).data?.agentId),
-  'GET /api/threads/:id': threadRunner,
-  'DELETE /api/threads/:id': threadRunner,
-  'POST /api/threads/:id/chat': threadRunner,
-  'GET /api/threads/:id/files': threadRunner,
-  'POST /api/threads/:id/files': threadRunner,
-  'DELETE /api/threads/:id/files': threadRunner,
-  'POST /api/threads/:id/files/lookups': threadRunner,
+  'GET /api/threads/:id': (req) => runnerOf(idOf(req)),
+  'DELETE /api/threads/:id': (req) => runnerOf(idOf(req)),
+  'POST /api/threads/:id/chat': (req) => runnerOf(idOf(req)),
+  'GET /api/threads/:id/files': (req) => runnerOf(idOf(req)),
+  'POST /api/threads/:id/files': (req) => runnerOf(idOf(req)),
+  'DELETE /api/threads/:id/files': (req) => runnerOf(idOf(req)),
+  'POST /api/threads/:id/files/lookups': (req) => runnerOf(idOf(req)),
   'GET /api/channels/:id': async (req) => runnerOf(await channelService.agentOf({ id: idOf(req) })),
   'GET /api/connection-events': (req) => runnerOf(z.safeParse(ByAgent, req.query).data?.agentId),
 }
@@ -35,9 +33,7 @@ export const forward = {
     const key = find && !fromTunnel(req) ? await find(req) : undefined
     if (!key) return undefined
     await who(req)
-    const answer = await fetchOn({ key, path: req.url, init: { method: req.method, headers: headersOf(req), body: bodyOf(req) } })
-    if (req.method === 'POST' && req.routeOptions.url === '/api/threads' && answer.ok) learned.set(z.safeParse(Id, await answer.clone().json()).data?.id ?? '', key)
-    return reply.send(answer)
+    return reply.send(await fetchOn({ key, path: req.url, init: { method: req.method, headers: headersOf(req), body: bodyOf(req) } }))
   },
 
   async socket({ socket, req, agentId }: { socket: WebSocket; req: FastifyRequest; agentId: string }): Promise<boolean> {
@@ -63,12 +59,6 @@ export const forwardController: FastifyPluginAsync = async (app) => {
     if (!memberOf(req.params.key)?.own) throw new HttpError(404, 'That computer isn’t one of yours.', { param: 'key' })
     return reply.send(await fetchOn({ key: req.params.key, path: '/api/updates', init: { method: 'POST' } }))
   })
-}
-
-async function threadRunner(req: FastifyRequest): Promise<string | undefined> {
-  const id = idOf(req)
-  const thread = await db.selectFrom('thread').select('agent_id').where('id', '=', id).executeTakeFirst()
-  return thread ? runnerOf(thread.agent_id) : learned.get(id) ?? runnerOf(id)
 }
 
 async function runnerOf(agentId: string | undefined): Promise<string | undefined> {

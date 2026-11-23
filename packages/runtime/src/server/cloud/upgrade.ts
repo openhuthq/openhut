@@ -8,6 +8,7 @@ import { db } from '../platform/db.ts'
 import { log } from '../platform/events.ts'
 import { messageOf } from '../platform/http-error.ts'
 import { unseal } from '../platform/secrets.ts'
+import { threadService } from '../threads/thread-service.ts'
 import { keysService } from './keys-service.ts'
 import { recordsService } from './records.ts'
 import { roomKeys } from './room-keys.ts'
@@ -58,6 +59,7 @@ export const upgrade = {
       await memoryService.backUp({ agentId: row.id }).catch((err: unknown) => log.warn({ event: 'upgrade.memory_failed', agent: row.id, error: messageOf(err) }))
       await skillService.backUp({ agentId: row.id }).catch((err: unknown) => log.warn({ event: 'upgrade.skills_failed', agent: row.id, error: messageOf(err) }))
     }
+    await threadService.uploadThreads()
     for (const uploader of uploaders) await uploader()
     await recordsService.drain()
     await db.insertInto('install_setting').values({ name: DONE, value: new Date().toISOString() }).onConflict((oc) => oc.column('name').doNothing()).execute()

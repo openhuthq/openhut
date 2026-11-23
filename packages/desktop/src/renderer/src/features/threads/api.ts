@@ -18,10 +18,7 @@ export function useThreads() {
 export function useAgentThread(agentId: string) {
   return useQuery({
     queryKey: [...THREADS_KEY, 'agent', agentId],
-    queryFn: async () => {
-      const thread = await request({ schema: Thread, of: agentId, path: '/api/threads', method: 'POST', body: { agentId } })
-      return request({ schema: ThreadWithMessages, of: agentId, path: threadPath(thread.id) })
-    },
+    queryFn: () => request({ schema: ThreadWithMessages, of: agentId, path: threadPath(agentId) }),
     staleTime: Infinity,
   })
 }
@@ -38,7 +35,7 @@ export function useClearChat(agentId: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: ({ threadId, uploads }: { threadId: string; uploads: string[] }) => request({ schema: Deleted('thread'), of: agentId, path: threadPath(threadId), method: 'DELETE', body: { uploads } }),
-    onSuccess: () => client.resetQueries({ queryKey: [...THREADS_KEY, 'agent', agentId] }),
+    onSuccess: () => client.setQueryData<ThreadWithMessages>([...THREADS_KEY, 'agent', agentId], (thread) => thread && { ...thread, messages: [] }),
   })
 }
 

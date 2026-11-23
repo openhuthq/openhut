@@ -21,10 +21,8 @@ export type Thread = z.infer<typeof Thread>
 export const ThreadWithMessages = z.extend(Thread, { messages: z.array(ChatMessage) })
 export type ThreadWithMessages = z.infer<typeof ThreadWithMessages>
 
-export const CreateThread = z.object({
-  agentId: z.string().check(z.maxLength(40)),
-})
-export type CreateThread = z.infer<typeof CreateThread>
+export const MessageValue = z.object({ message: ChatMessage, session: z.optional(z.string().check(z.maxLength(120))) })
+export type MessageValue = z.infer<typeof MessageValue>
 
 export const SendChat = z.object({
   trigger: z.enum(['submit-message', 'regenerate-message']),

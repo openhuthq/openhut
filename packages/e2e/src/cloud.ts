@@ -142,34 +142,24 @@ async function signIn(each: Runtime, email: string) {
   await fetch(link)
 }
 
-async function threadOf(each: Runtime, agentId: string): Promise<{ id: string }> {
-  const threads = await each.call('/api/threads') as { data: { id: string; agentId: string }[] }
-  return threads.data.find((t) => t.agentId === agentId) ?? await each.call('/api/threads', { agentId }) as { id: string }
-}
-
 async function say(each: Runtime, { agentId, text, files = [] }: { agentId: string; text: string; files?: { path: string; name: string; mediaType: string }[] }) {
-  const thread = await threadOf(each, agentId)
   const parts = [...files.map((file) => ({ type: 'file', url: file.path, filename: file.name, mediaType: file.mediaType })), { type: 'text', text }]
-  await each.call(`/api/threads/${thread.id}/chat`, { trigger: 'submit-message', message: { id: `msg_${randomBytes(6).toString('hex')}`, role: 'user', parts } })
+  await each.call(`/api/threads/${agentId}/chat`, { trigger: 'submit-message', message: { id: `msg_${randomBytes(6).toString('hex')}`, role: 'user', parts } })
 }
 
 async function attach(each: Runtime, { agentId, name, body }: { agentId: string; name: string; body: string }) {
-  const thread = await threadOf(each, agentId)
-  const res = await fetch(`${each.url}/api/threads/${thread.id}/files?${new URLSearchParams({ name, type: 'text/plain' })}`, { method: 'POST', headers: { authorization: 'Bearer host', 'content-type': 'application/octet-stream' }, body })
+  const res = await fetch(`${each.url}/api/threads/${agentId}/files?${new URLSearchParams({ name, type: 'text/plain' })}`, { method: 'POST', headers: { authorization: 'Bearer host', 'content-type': 'application/octet-stream' }, body })
   if (!res.ok) throw new Error(`the upload answered ${res.status}: ${await res.text()}`)
   return await res.json() as { path: string; name: string; mediaType: string }
 }
 
 async function fetched(each: Runtime, { agentId, path }: { agentId: string; path: string }): Promise<string | undefined> {
-  const thread = await threadOf(each, agentId)
-  const res = await fetch(`${each.url}/api/threads/${thread.id}/files?${new URLSearchParams({ path })}`, { headers: { authorization: 'Bearer host' } })
+  const res = await fetch(`${each.url}/api/threads/${agentId}/files?${new URLSearchParams({ path })}`, { headers: { authorization: 'Bearer host' } })
   return res.ok ? await res.text() : undefined
 }
 
 async function said(each: Runtime, agentId: string): Promise<string> {
-  const threads = await each.call('/api/threads') as { data: { id: string; agentId: string }[] }
-  const texts = await Promise.all(threads.data.filter((t) => t.agentId === agentId).map(async (t) => JSON.stringify((await each.call(`/api/threads/${t.id}`)).messages ?? [])))
-  return texts.join('\n')
+  return JSON.stringify((await each.call(`/api/threads/${agentId}`)).messages ?? [])
 }
 
 function check(id: string, name: string, expected: string, fn: () => Promise<string>) {
