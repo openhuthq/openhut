@@ -3,7 +3,7 @@ set -eu
 cd "$(dirname "$0")/.."
 case "${1:-}" in
   key) exec node scripts/release-key.ts key "${2:?release.sh key <new key file>}" ;;
-  sign) exec node scripts/release-key.ts sign "${RELEASE_KEY:?RELEASE_KEY must name the offline release key file}" "${2:?release.sh sign <release folder> [version]}" ${3:+"$3"} ;;
+  sign) exec node scripts/release-key.ts sign "${RELEASE_KEY:?RELEASE_KEY must name the release key file}" "${2:?release.sh sign <release folder> [version]}" ${3:+"$3"} ;;
 esac
 BASE="${BASE:-https://openhut.dev}"
 OUT="${OUT:-dist}"
