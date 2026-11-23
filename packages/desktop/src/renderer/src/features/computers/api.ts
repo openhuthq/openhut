@@ -18,7 +18,6 @@ export function useComputers() {
 export function useFeatures(agentId: string): Features {
   const here = useAgents().data?.find((each) => each.id === agentId)?.runsHere ?? true
   const local = useComputers().data?.[0]?.features ?? { whatsapp: false, browser: false }
-  // ponytail: an agent that runs elsewhere is assumed to have both; the runner answers 409 if not. P1's runner beat brings real features.
   return here ? local : ANYWHERE
 }
 
