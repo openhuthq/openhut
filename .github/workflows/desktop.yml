@@ -187,7 +187,11 @@ jobs:
       - name: Open it, sign in, meet the first agent, run five at once, chat, restart, and keep the evidence
         if: matrix.name == 'linux'
         working-directory: packages/desktop
-        run: sudo apt-get install -y -qq xvfb && xvfb-run -a -s "-screen 0 1280x800x24" node scripts/app-e2e.mjs --app release/linux-unpacked --out app-e2e --cloud ../../private/api
+        run: |
+          sudo apt-get install -y -qq xvfb
+          status=0; xvfb-run -a -s "-screen 0 1280x800x24" node scripts/app-e2e.mjs --app release/linux-unpacked --out /tmp/e2e --cloud ../../private/api || status=$?
+          mkdir -p app-e2e && cp -R /tmp/e2e/. app-e2e/
+          exit $status
       - uses: actions/upload-artifact@v4
         if: always()
         with:
