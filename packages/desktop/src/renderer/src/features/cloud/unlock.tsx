@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from 'react'
-import { Alert02Icon, Cancel01Icon, FingerPrintIcon, Key01Icon, SmartPhone01Icon } from '@hugeicons/core-free-icons'
+import { Alert02Icon, Cancel01Icon, FingerPrintIcon, Key01Icon } from '@hugeicons/core-free-icons'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { kitWord, nearestWord, readKit, validKit } from '@openhut/common/vault/kit-file.ts'
@@ -28,7 +28,6 @@ import { cn } from '@/lib/utils'
 export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
   const [way, pick] = useState<'kit' | 'ask' | 'start-over' | null>(null)
   const prompted = useRef(false)
-  const [noneHere, setNoneHere] = useState(false)
   const signOut = useSignOut()
   const signIn = useSignIn()
   const helper = usePasskeys()
@@ -36,10 +35,7 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
   const leave = <Button type="button" variant="text" className="font-normal text-mute" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
   const macCan = Boolean(helper?.passkeys && helper.prf)
   const canPasskey = macCan && cloud.passkey
-  const touch = (quiet: boolean) => passkey.mutate(quiet, { onError: (error) => {
-    if (quiet && error instanceof PasskeyQuiet) setNoneHere(true)
-    if (!(error instanceof PasskeyQuiet)) toastError(error)
-  } })
+  const touch = (quiet: boolean) => passkey.mutate(quiet, { onError: (error) => { if (!(error instanceof PasskeyQuiet)) toastError(error) } })
   const setWay = (next: typeof way) => {
     if (passkey.isPending) cancelPasskey()
     pick(next)
@@ -54,11 +50,11 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
   if (way === 'kit') return <KitEntry cloud={cloud} onBack={() => setWay(null)} />
   if (way === 'start-over') return <StartOver onBack={() => setWay(null)} />
   if (way === 'ask' || cloud.asking) return <Requested cloud={cloud} onBack={() => setWay(null)} onKit={cloud.kitInCloud ? () => setWay('kit') : undefined} onTouch={canPasskey ? () => { setWay(null); touch(false) } : undefined} />
-  const ask = canPasskey && noneHere ? 'Your passkey isn’t on this computer. Scan a code with the iPhone that has it, or pick another way.' : canPasskey ? 'Use Touch ID, or another way below.' : cloud.canAsk ? 'Approve it from a computer you already use, or use your recovery kit.' : 'Use your recovery kit to unlock it.'
+  const ask = canPasskey ? 'Use Touch ID, or another way below.' : cloud.canAsk ? 'Approve it from a computer you already use, or use your recovery kit.' : 'Use your recovery kit to unlock it.'
   const lost = <Button type="button" variant="text" className="font-normal text-mute" onClick={() => setWay('start-over')}>Lost your computers and kit? Start over</Button>
   return <Step title={`Welcome back, ${nameOf(cloud.email ?? '')}`} line={`This computer is new to your account. ${ask}`} back={back} link={<span className="flex flex-col items-center gap-1">{leave}{lost}</span>}
     action={<div className="flex flex-col items-center gap-2.5">
-      {canPasskey && <Button type="button" variant="primary" className={BIG} disabled={passkey.isPending} onClick={() => touch(false)}><I icon={noneHere ? SmartPhone01Icon : FingerPrintIcon} size={16} />{passkey.isPending ? 'Waiting…' : noneHere ? 'Use my phone' : 'Use Touch ID'}</Button>}
+      {canPasskey && <Button type="button" variant="primary" className={BIG} disabled={passkey.isPending} onClick={() => touch(false)}><I icon={FingerPrintIcon} size={16} />{passkey.isPending ? 'Waiting for Touch ID…' : 'Use Touch ID'}</Button>}
       {cloud.canAsk && <Button type="button" variant={canPasskey ? 'secondary' : 'primary'} className={BIG} onClick={() => setWay('ask')}>Ask my other computer</Button>}
       {cloud.kitInCloud && <Button type="button" variant={canPasskey || cloud.canAsk ? 'secondary' : 'primary'} className={BIG} onClick={() => setWay('kit')}><I icon={Key01Icon} size={16} />Use my recovery kit</Button>}
       {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
