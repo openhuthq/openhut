@@ -1,3 +1,4 @@
+import { sql } from 'kysely'
 import type { AgentRecord, ControlRecord } from '@openhut/common/agents/agent.ts'
 import type { ChannelRecord } from '@openhut/common/channels/channel.ts'
 import type { RoutineRecord } from '@openhut/common/routines/routine.ts'
@@ -62,6 +63,7 @@ export const upgrade = {
     await threadService.uploadThreads()
     for (const uploader of uploaders) await uploader()
     await recordsService.drain()
+    await sql`drop table if exists thread`.execute(db)
     await db.insertInto('install_setting').values({ name: DONE, value: new Date().toISOString() }).onConflict((oc) => oc.column('name').doNothing()).execute()
     log.info({ event: 'upgrade.uploaded', agents: rows.length })
   },

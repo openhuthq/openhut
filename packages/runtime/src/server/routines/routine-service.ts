@@ -391,13 +391,19 @@ async function parentOf(id: string): Promise<string | undefined> {
 }
 
 async function upload(row: RoutineRow): Promise<void> {
-  const agent = await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', row.agent_id).executeTakeFirst()
-  if (!agent) return
   const value: RoutineRecord = { name: row.name, plan: row.plan, at: iso(row.at), cron: row.cron, until: iso(row.until), origin: row.origin, createdAt: new Date(row.created_at).toISOString() }
-  await recordsService.put({ collection: 'routine', id: row.id, parent: row.agent_id, ...recordPlace(agent), value, queue: true }).catch((err: unknown) => log.warn({ event: 'routine.backup_failed', routine: row.id, error: messageOf(err) }))
+  await backUp({ row, step: (agent) => recordsService.put({ collection: 'routine', id: row.id, parent: row.agent_id, ...recordPlace(agent), value, queue: true }) })
 }
 
 async function forget(row: Pick<RoutineRow, 'id' | 'agent_id'>): Promise<void> {
-  const agent = await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', row.agent_id).executeTakeFirst()
-  if (agent) await recordsService.remove({ collection: 'routine', workspace: recordPlace(agent).workspace, id: row.id, queue: true }).catch((err: unknown) => log.warn({ event: 'routine.backup_failed', routine: row.id, error: messageOf(err) }))
+  await backUp({ row, step: (agent) => recordsService.remove({ collection: 'routine', workspace: recordPlace(agent).workspace, id: row.id, queue: true }) })
+}
+
+async function backUp({ row, step }: { row: Pick<RoutineRow, 'id' | 'agent_id'>; step: (agent: Parameters<typeof recordPlace>[0]) => Promise<unknown> }): Promise<void> {
+  try {
+    const agent = await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', row.agent_id).executeTakeFirst()
+    if (agent) await step(agent)
+  } catch (err) {
+    log.warn({ event: 'routine.backup_failed', routine: row.id, error: messageOf(err) })
+  }
 }

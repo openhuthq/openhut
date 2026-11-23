@@ -12,7 +12,6 @@ export function useMove(agent: OpenHutAgent | undefined) {
     if (!agent) return
     setLine('')
     move.mutate({ id: agent.id, to }, {
-      onSuccess: ({ ungranted }) => setLine(ungranted.length ? `${agent.name} can't use ${ungranted.join(', ')} on ${nameOf({ computers, id: to })} yet. Add ${ungranted.length === 1 ? 'it' : 'them'} there, then add ${ungranted.length === 1 ? 'it' : 'them'} again under Can use.` : ''),
       onError: (error) => setLine(`${error.message} It's back on ${nameOf({ computers, id: from })}.`),
     })
   }

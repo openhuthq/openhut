@@ -4,6 +4,7 @@ import Fastify from 'fastify'
 import { boxKey, identity, toBase64 } from '@openhut/common/vault/vault.ts'
 import { serve, toHex } from '@openhut/tunnel'
 import { startRelay, TOKEN, waitFor } from '@openhut/tunnel/test/relay.ts'
+import { useFakeRecords } from '../cloud/records-fake.ts'
 
 const relay = await startRelay()
 const { config } = await import('../../../src/server/platform/config.ts')
@@ -35,10 +36,11 @@ const list = await keysService.addDevice({ device: toBase64(runner.publicKey), n
 if (list) await keyStore.write({ ...await keyStore.read(), account: { ...account, list } })
 await keysService.setSession({ token: TOKEN, expiresAt: new Date(Date.now() + 3600_000).toISOString() })
 await db.insertInto('person').values({ id: 'usr_fwdowner', email: 'mo', role: 'owner', removed_at: null }).onConflict((oc) => oc.doNothing()).execute()
-await db.insertInto('agent').values([
-  { id: 'ag_fwdthere', name: 'There', owner_id: 'usr_fwdowner', instructions: '# There', model: 'sonnet', net: 51, channel_key: 'k', runs_on: toBase64(runner.publicKey) },
-  { id: 'ag_fwdhere', name: 'Here', owner_id: 'usr_fwdowner', instructions: '# Here', model: 'sonnet', net: 52, channel_key: 'k' },
-]).execute()
+await db.insertInto('agent').values({ id: 'ag_fwdhere', name: 'Here', owner_id: 'usr_fwdowner', instructions: '# Here', model: 'claude:sonnet', net: 52, channel_key: 'k' }).execute()
+const records = useFakeRecords()
+const workspace = keysService.mustBeOn().workspace.id
+records.write({ collection: 'agent', id: 'ag_fwdthere', workspace, parent: 'mo@example.com', personal: true, value: { name: 'There', instructions: '# There', face: null, wanted: 'running', createdAt: new Date().toISOString() } })
+records.write({ collection: 'control', id: 'ag_fwdthere', workspace, parent: 'ag_fwdthere', personal: true, value: { runsOn: toBase64(runner.publicKey), model: 'claude:sonnet', codeExecution: true, browser: false, grants: [] } })
 
 const app = Fastify()
 answerErrors(app)

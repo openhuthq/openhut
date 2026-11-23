@@ -90,7 +90,7 @@ test('the runner beat goes out sealed on ready, and a teammate’s beat and pres
   assert.ok(beat)
   assert.equal(beat.workspace, ws)
   assert.doesNotMatch(Buffer.from(beat.body, 'base64url').toString('latin1'), /build|version/)
-  assert.deepEqual(Object.keys(await opened(beat) as object).sort(), ['at', 'build', 'kind', 'version'])
+  assert.deepEqual(Object.keys(await opened(beat) as object).sort(), ['agents', 'at', 'build', 'kind', 'version'], 'agent statuses ride the beat')
 
   const from = toBase64(phone.publicKey)
   const plain = padded({ json: JSON.stringify({ at: Date.now(), build: 'phone-build', version: '1.0.0', kind: 'phone' }) })
