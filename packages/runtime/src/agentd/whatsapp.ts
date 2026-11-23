@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import type { Socket } from 'node:net'
+import type { Duplex } from 'node:stream'
 import { join } from 'node:path'
 import { box, DATA } from './host.ts'
 import { RUNTIME } from './sandbox/native.ts'
@@ -17,7 +17,7 @@ export const whatsapp = {
     return box.name !== 'native' && whatsapp.installed() ?[{ host: BRIDGE, guest: '/opt/data/scripts/whatsapp-bridge', readOnly: true }] : []
   },
 
-  async pair({ id, sock, running, ended }: { id: string; sock: Socket; running: boolean; ended: () => void }): Promise<undefined> {
+  async pair({ id, sock, running, ended }: { id: string; sock: Duplex; running: boolean; ended: () => void }): Promise<undefined> {
     if (!whatsapp.installed()) throw new Error("the WhatsApp bridge isn't installed on this server; run the installer again")
     if (!running) throw new Error("the agent isn't running")
     const proc = await box.exec({ id, command: PAIR_COMMAND })

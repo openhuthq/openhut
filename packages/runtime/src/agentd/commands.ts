@@ -1,4 +1,4 @@
-import type { Socket } from 'node:net'
+import type { Duplex } from 'node:stream'
 import { agents, FILES, type AgentFiles } from './agents.ts'
 import { browser, MAX_FPS } from './browser.ts'
 import { fenceLines, proveFence, type FenceReport } from './fence.ts'
@@ -163,7 +163,7 @@ async function checkFence(): Promise<FenceReport> {
 }
 
 type Fields = Record<string, unknown>
-export type Stream = { sock: Socket; rest: string; queue: (work: () => Promise<unknown>) => Promise<unknown> }
+export type Stream = { sock: Duplex; rest: string; queue: (work: () => Promise<unknown>) => Promise<unknown> }
 export type Command = {
   parse: (value: Fields) => Record<string, unknown>
   run: (request: never, stream: Stream) => Promise<object | undefined>

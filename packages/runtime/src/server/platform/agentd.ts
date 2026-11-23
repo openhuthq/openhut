@@ -1,4 +1,5 @@
 import { connect } from 'node:net'
+import { duplexPair, type Duplex } from 'node:stream'
 import * as z from 'zod/mini'
 import { config } from './config.ts'
 import { log } from './events.ts'
@@ -11,6 +12,9 @@ export const LastUpdate = z.object({ exit: z.number(), at: z.string(), reason: z
 export type LastUpdate = z.infer<typeof LastUpdate>
 const Failure = z.object({ ok: z.literal(false), error: z.string() })
 const Change = z.enum(['created', 'started', 'restarted', 'stopped', 'none'])
+const SERVE = new URL(`../../agentd/serve.${import.meta.url.endsWith('.ts') ? 'ts' : 'mjs'}`, import.meta.url).href
+const local = config.agentdInProcess ? await import(SERVE) as typeof import('../../agentd/serve.ts') : undefined
+await local?.boot()
 
 export const agentd = {
   health: () => ask({ request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), imageReady: z.optional(z.boolean()), updating: z.optional(z.boolean()), lastUpdate: z.optional(z.nullable(LastUpdate)), features: z.optional(Features) }) }),
@@ -41,8 +45,17 @@ export function pairWhatsapp({ id, onLine, onEnd }: { id: string; onLine: (line:
   return stream({ request: { cmd: 'wa-pair', id }, onLine, onEnd })
 }
 
+function open(): Duplex {
+  if (!local) return connect(config.agentdSocket)
+  const [socket, agentdSide] = duplexPair()
+  socket.once('close', () => agentdSide.destroy())
+  agentdSide.once('close', () => socket.destroy())
+  local.serve(agentdSide)
+  return socket
+}
+
 function stream({ request, onLine, onEnd }: { request: Record<string, unknown>; onLine: (line: string) => void; onEnd: () => void }): Stream {
-  const socket = connect(config.agentdSocket)
+  const socket = open()
   let pending = ''
   socket.setEncoding('utf8')
   socket.on('data', (chunk: string) => {
@@ -56,6 +69,7 @@ function stream({ request, onLine, onEnd }: { request: Record<string, unknown>; 
   socket.on('end', () => {
     if (pending) onLine(pending)
     pending = ''
+    socket.destroy()
   })
   socket.on('error', () => socket.destroy())
   socket.on('close', onEnd)
@@ -83,18 +97,21 @@ async function ask<S extends z.ZodMiniType>({ request, body, doing, schema }: { 
 
 function send({ request, body = '', doing }: { request: Record<string, unknown>; body?: string; doing: string }): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const socket = connect(config.agentdSocket)
+    const socket = open()
     let buffer = ''
-    socket.setTimeout(TIMEOUT_MS, () => {
+    const timer = setTimeout(() => {
       socket.destroy()
       reject(new HttpError(504, `OpenHut didn't ${doing} in time. Try again.`))
-    })
+    }, TIMEOUT_MS)
     socket.setEncoding('utf8')
     socket.on('data', (chunk: string) => { buffer += chunk })
     socket.on('end', () => {
+      clearTimeout(timer)
+      socket.destroy()
       try { resolve(JSON.parse(buffer)) } catch { reject(new HttpError(502, `OpenHut couldn't ${doing}. Try again.`)) }
     })
     socket.on('error', (err) => {
+      clearTimeout(timer)
       log.error({ event: 'agentd.unreachable', error: err.message })
       reject(new HttpError(503, 'Agents can\'t run on this computer right now. Restart OpenHut on it.'))
     })

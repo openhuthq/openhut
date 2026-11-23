@@ -7,7 +7,6 @@ import { appendFileSync, cpSync, createWriteStream, existsSync, mkdirSync, readd
 import { cpus, homedir, totalmem } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { Readable } from 'node:stream'
-import { text } from 'node:stream/consumers'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import updater from 'electron-updater'
@@ -48,9 +47,7 @@ app.on('second-instance', (_event, argv) => app.whenReady().then(() => {
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '../../..')
 const BACKEND = DEV ? ROOT : join(process.resourcesPath, 'backend')
-const SCRIPTS = DEV
-  ? { agentd: 'packages/runtime/src/agentd/agentd.ts', server: 'packages/runtime/src/server/app.ts' }
-  : { agentd: 'packages/runtime/src/agentd/agentd.mjs', server: 'packages/runtime/src/server/platform/app.mjs' }
+const SCRIPTS = { server: DEV ? 'packages/runtime/src/server/app.ts' : 'packages/runtime/src/server/platform/app.mjs' }
 const RUNTIME = process.env.AGENTD_HERMES ?? join(BACKEND, DEV ? 'packages/desktop/dist/backend/runtime' : 'runtime')
 const NATIVE_BIN = join(BACKEND, DEV ? 'packages/desktop/dist/backend/bin/native' : 'bin/native')
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? (LOOKS_DEV ? 8091 : 8081))
@@ -65,7 +62,6 @@ const SKIPPED = join(HOME, 'skipped-version')
 const BUNDLE = join(dirname(app.getPath('exe')), '../..')
 const PIPES = WIN && `\\\\.\\pipe\\openhut-${createHash('sha256').update(HOME).digest('hex').slice(0, 12)}`
 const sockAt = (name) => PIPES ? `${PIPES}-${name}` : join(HOME, `${name}.sock`)
-const SOCK = sockAt('agentd')
 const SERVER_SOCK = sockAt('server')
 const WINDOW_STATE = join(HOME, 'window.json')
 const PREFS = join(HOME, 'prefs.json')
@@ -90,7 +86,7 @@ const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src
 const MAX_LOG = 10 << 20
 const PIPE_TRIES = 20
 const children = new Map()
-const restarts = { agentd: 0, server: 0 }
+const restarts = { server: 0 }
 const logs = {}
 const serverEnv = {}
 const watched = { threads: new Map(), strikes: new Map(), menu: '', tries: 0 }
@@ -394,15 +390,6 @@ async function api(path, { method = 'GET', body } = {}) {
   return answer
 }
 
-function agentd(ask) {
-  return new Promise((resolve, reject) => {
-    const sock = connect(SOCK)
-    sock.on('error', reject)
-    sock.write(`${JSON.stringify(ask)}\n`)
-    text(sock).then((answer) => resolve(JSON.parse(answer)), reject)
-  })
-}
-
 async function refresh() {
   const agents = (await api('/api/agents')).data ?? []
   keepAwake(prefs().keepAwake && agents.some((agent) => agent.runsHere && agent.status === 'running'))
@@ -557,26 +544,8 @@ async function meet(run) {
   if (started !== true) throw new Error('OpenHut didn\'t start. Try again. Help › Show Logs has the details.')
   await api('/api/me')
   step(1, `version ${app.getVersion()}`)
-  let fence = {}
-  const pulling = follow({ run, index: 2, read: async () => (await agentd({ cmd: 'progress' })).pull })
-  await waitFor(async () => (fence = await agentd({ cmd: 'fence' })).ok, 900).finally(pulling)
-  const passed = (fence.checks ?? []).filter((check) => check.pass).length
-  if (!fence.ok) throw new Error(fence.error ?? `Agents couldn't be sealed off (${(fence.checks ?? []).filter((check) => !check.pass).map((check) => check.name).join(', ')}). Try again.`)
-  step(2, fence.skipped ? 'ready' : `${passed} of ${fence.checks.length} checks passed`)
+  step(2, 'ready')
   run.done = true
-}
-
-function follow({ run, index, read }) {
-  const tick = setInterval(() => read().then((pull) => {
-    if (!pull || run.steps[index][2] !== 'now') return
-    run.steps[index].splice(1, 3, noteOf(pull), 'now', pull.total ? Math.min(1, pull.done / pull.total) : undefined)
-  }, () => undefined), 500)
-  return () => clearInterval(tick)
-}
-
-function noteOf({ done, total }) {
-  if (!total) return 'Downloading'
-  return done >= total ? 'Setting up' : `Downloading · ${Math.floor((done / total) * 100)}%`
 }
 
 function listening(path) {
@@ -616,13 +585,10 @@ async function boot() {
   keepData()
   await assets()
   const shared = { ...CLOUD, OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_BIN: NATIVE_BIN, OPENHUT_CLAUDE: join(DATA, 'claude', WIN ? 'claude.exe' : 'claude') }
-  if (!PIPES) rmSync(SOCK, { force: true })
-  start('agentd', { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_SOCK: SOCK, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT) })
-  await waitFor(() => listening(SOCK), 30)
   if (!PIPES) rmSync(SERVER_SOCK, { force: true })
   await rootSecret()
   serverEnv.PORT = String(await signInCallbacks())
-  start('server', Object.assign(serverEnv, { ...shared, AGENTD_SOCK: SOCK, AGENTD_HERMES: RUNTIME, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_AGENT_HOST_NET: '1' }))
+  start('server', Object.assign(serverEnv, { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_AGENT_HOST_NET: '1' }))
   if (!await waitFor(() => listening(SERVER_SOCK), 60)) return false
   if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   return true

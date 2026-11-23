@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import type { Socket } from 'node:net'
+import type { Duplex } from 'node:stream'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -70,7 +70,7 @@ export const browser = {
     for (const id of ids) writeIfChanged(`${conf(id)}/${POLICY_FILE}`, FREE_POLICY)
   },
 
-  async open({ sock, id, fps, rest, running }: { sock: Socket; id: string; fps: number; rest: string; running: boolean }): Promise<undefined> {
+  async open({ sock, id, fps, rest, running }: { sock: Duplex; id: string; fps: number; rest: string; running: boolean }): Promise<undefined> {
     if (!running) {
       sock.end(`${JSON.stringify({ type: 'closed' })}\n`)
       return undefined
@@ -95,7 +95,7 @@ const INPUT = new Set(['input_mouse', 'input_keyboard'])
 const viewers = new Map<string, Set<Viewer>>()
 const holds = new Map<string, Hold>()
 
-export function live({ id, sock, bridge, rest, setHeld }: { id: string; sock: Socket; bridge: Exec; rest: string; setHeld: (held: boolean) => void }): void {
+export function live({ id, sock, bridge, rest, setHeld }: { id: string; sock: Duplex; bridge: Exec; rest: string; setHeld: (held: boolean) => void }): void {
   const viewer: Viewer = { say: (message) => sock.write(`${typeof message === 'string' ? message : JSON.stringify(message)}\n`) }
   const others = viewers.get(id) ?? new Set()
   viewers.set(id, others.add(viewer))

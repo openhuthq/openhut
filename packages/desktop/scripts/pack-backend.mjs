@@ -19,7 +19,7 @@ const bundle = (entry, outfile, options = {}) => build({
 
 mkdirSync(join(OUT, 'node_modules'), { recursive: true })
 writeFileSync(join(OUT, 'INSTALL_URL'), `${process.env.OPENHUT_INSTALL_URL || 'https://openhut.dev/edge'}\n`)
-await bundle('packages/runtime/src/agentd/agentd.ts', 'packages/runtime/src/agentd/agentd.mjs')
+await bundle('packages/runtime/src/agentd/serve.ts', 'packages/runtime/src/agentd/serve.mjs')
 await bundle('packages/runtime/src/server/app.ts', 'packages/runtime/src/server/platform/app.mjs')
 writeFileSync(join(OUT, 'BUILD'), `${JSON.parse(readFileSync(join(import.meta.dirname, '../package.json'), 'utf8')).version}-${execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT }).toString().trim()}\n`)
 writeFileSync(join(OUT, 'packages/runtime/package.json'), JSON.stringify({ version: JSON.parse(readFileSync(join(ROOT, 'packages/runtime/package.json'), 'utf8')).version }))

@@ -45,7 +45,7 @@ try {
     const reply = await page.eval("fetch('/api/admin').then((r) => r.ok ? r.json() : null, () => null)")
     return reply?.server?.healthy ? reply : null
   }, 120, 'the runtime to be healthy')
-  say('the runtime (server and agentd) is up and healthy', { build: admin.server.build })
+  say('the runtime is up and healthy', { build: admin.server.build })
   if (args.cloud) {
     await signIn({ page, api: API })
     say('signed in to the dev cloud as mo@example.com and saved the kit')
@@ -68,8 +68,8 @@ try {
   await many(page, agent)
   if (WIN) {
     const pipes = readdirSync('\\\\.\\pipe\\').filter((name) => name.startsWith('openhut-'))
-    say('the runtime listens on named pipes, not files or TCP', { pipes })
-    if (pipes.length < 2) throw new Error(`expected the agentd and server pipes, found ${pipes.join(', ') || 'none'}`)
+    say('the runtime listens on a named pipe, not a file or TCP', { pipes })
+    if (!pipes.length) throw new Error('expected the server pipe, found none')
   }
   await quit()
   await sleep(3000)
