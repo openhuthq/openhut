@@ -2,7 +2,7 @@ import * as z from 'zod/mini'
 import { ApiError, List, Timestamp } from '../api.ts'
 import { Base64, DeviceKey, Signature } from '../cloud/cloud.ts'
 
-export const COLLECTIONS = ['agent', 'control', 'message', 'memory', 'connection', 'skill', 'routine', 'channel', 'file'] as const
+export const COLLECTIONS = ['workspace', 'agent', 'control', 'message', 'memory', 'connection', 'skill', 'routine', 'channel', 'file'] as const
 export const Collection = z.enum(COLLECTIONS)
 export type Collection = z.infer<typeof Collection>
 export const PER_AGENT: Collection[] = ['control', 'message', 'memory', 'skill', 'routine', 'channel', 'file']

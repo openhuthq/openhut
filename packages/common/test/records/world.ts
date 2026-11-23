@@ -23,7 +23,7 @@ export const roster: Roster = {
     { email: 'mo@example.com', role: 'owner', devices: [keyOf('moMac'), keyOf('moServer'), keyOf('moPhone')] },
     { email: 'ana@example.com', role: 'member', devices: [keyOf('anaMac'), keyOf('anaPhone')] },
   ],
-  removed: [keyOf('gone')],
+  former: [{ key: keyOf('gone'), email: 'mo@example.com' }],
   viewers: [keyOf('moPhone'), keyOf('anaPhone')],
 }
 

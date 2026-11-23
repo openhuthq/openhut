@@ -51,6 +51,16 @@ test('a private agent’s chat written by a teammate is dropped', async () => {
   assert.deepEqual((await mo.list({ ...chat, parent: 'ag_private' })).data, [])
 })
 
+test('a record by a since-removed server still reads, but that server can’t write a new one', async () => {
+  const { cloud, mo } = await world()
+  const old = await seal({ where: { ...chat, id: 'msg_0000001' }, ver: 1, value: { workspace: { text: 'before the swap' } }, keys: keysOf('moMac'), signer: signerOf('gone') })
+  assert.ok(old)
+  cloud.rows.set('message/msg_0000001', { id: 'msg_0000001', object: 'message', ...old })
+  assert.deepEqual((await mo.list(chat)).data.map((row) => [row.id, row.by]), [['msg_0000001', keyOf('gone')]])
+  await assert.rejects(clientOf({ device: 'gone', cloud }).put({ ...chat, id: 'msg_0000002', value: { workspace: { text: 'after' } } }), /team’s rules/)
+  assert.equal(cloud.rows.has('message/msg_0000002'), false)
+})
+
 test('a runtime refuses an older version than it holds, or an agent whose owner changed', async () => {
   const { cloud, mo } = await world()
   const first = await mo.put({ ...chat, id: 'msg_0000001', value: { workspace: { text: 'v1' } } })
@@ -102,7 +112,7 @@ test('an agent has one control row, and one placing it on someone else’s compu
   const garbled = await mo.put({ ...control, current: elsewhere.ver, value: { workspace: { runsOn: 7 } } })
   assert.equal(await mo.get(control), null)
   await mo.put({ ...control, current: garbled.ver, value: { workspace: { runsOn: keyOf('moServer'), grants: [] } } })
-  await mo.put({ ...control, id: 'ctl_0000002', value: { workspace: { runsOn: keyOf('moServer'), grants: [] } } })
+  await assert.rejects(mo.put({ ...control, id: 'ctl_0000002', value: { workspace: { runsOn: keyOf('moServer'), grants: [] } } }), /team’s rules/)
   assert.deepEqual((await mo.list(control)).data.map((row) => row.id), ['ag_shared1'])
 })
 
@@ -110,6 +120,6 @@ test('sealing without the key, or the cloud refusing, throws a sentence', async 
   const { cloud } = await world()
   const phone = clientOf({ device: 'moPhone', cloud })
   await assert.rejects(phone.put({ collection: 'connection', workspace: team, id: 'cn_gmail001', value: { own: { name: 'Gmail' }, vault: { token: 'x' } } }), /doesn’t hold the key/)
-  const refusing = clientOf({ device: 'moMac', cloud: { ...cloud, fetch: async () => new Response(JSON.stringify({ error: { type: 'invalid_request_error', message: 'Only the agent’s owner can change its control.' } }), { status: 403 }) } })
+  const refusing = clientOf({ device: 'moMac', cloud: { ...cloud, fetch: async (input, init) => init?.method !== 'PUT' ? cloud.fetch(input, init) : new Response(JSON.stringify({ error: { type: 'invalid_request_error', message: 'Only the agent’s owner can change its control.' } }), { status: 403 }) } })
   await assert.rejects(refusing.put({ ...chat, id: 'msg_0000001', value: { workspace: {} } }), /Only the agent’s owner/)
 })

@@ -49,7 +49,7 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
     if ((expect.parent !== undefined && row.parent !== expect.parent) || (expect.id !== undefined && row.id !== expect.id)) return null
     if (held && (row.ver < held.ver || row.parent !== held.parent)) return null
     const agent = PER_AGENT.includes(row.object) && row.parent ? await agentOf({ workspace: row.workspace, id: row.parent, agents }) : null
-    return allowed({ row, roster: list, agent }) ? { row, roster: list, agent } : null
+    return allowed({ row, roster: list, mode: 'read', agent }) ? { row, roster: list, agent } : null
   }
 
   function agentOf({ workspace, id, agents }: { workspace: string; id: string; agents: Agents }): Promise<AgentFacts | null> {
@@ -92,6 +92,11 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
   async function write({ where, ver, value }: { where: Where; ver: number; value: Value | null }): Promise<{ saved: Opened } | { latest: Opened | null }> {
     const sealed = await seal({ where, ver, value, keys, signer: device })
     if (!sealed) throw new RecordsError({ status: 400, type: 'invalid_request_error', message: 'This device doesn’t hold the key to seal that record.' })
+    const list = roster(where.workspace)
+    const agent = PER_AGENT.includes(where.collection) && where.parent ? await agentOf({ workspace: where.workspace, id: where.parent, agents: new Map() }) : null
+    if (!list || !allowed({ row: { id: where.id, object: where.collection, ...sealed }, roster: list, mode: 'write', agent })) {
+      throw new RecordsError({ status: 403, type: 'invalid_request_error', message: 'The team’s rules don’t let this device write that record.' })
+    }
     const reply = await call({ method: 'PUT', path: `${where.collection}/${encodeURIComponent(where.id)}`, body: sealed })
     if (reply.status === 409) {
       const current = SealedConflict.safeParse(reply.json).data?.current
