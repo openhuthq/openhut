@@ -1,4 +1,3 @@
-import { rmSync } from 'node:fs'
 import type { Socket } from 'node:net'
 import { agents, FILES, type AgentFiles } from './agents.ts'
 import { browser, MAX_FPS } from './browser.ts'
@@ -6,9 +5,8 @@ import { fenceLines, proveFence, type FenceReport } from './fence.ts'
 import { firewall } from './firewall.ts'
 import { newMessages, usage } from './hermes-db.ts'
 import { agentHome, type Kind } from './home/home.ts'
-import { MAX_HOME_BASE64, packHome, unpackHome } from './home/pack.ts'
 import { MAX_FILE_BASE64 } from './home/uploads.ts'
-import { AGENT_OWNER, AGENT_USER, box, home, ID, IMAGE, RESOLV, TMP_MIB } from './host.ts'
+import { AGENT_USER, box, home, ID, IMAGE, RESOLV, TMP_MIB } from './host.ts'
 import { imageReady } from './sandbox/gvisor.ts'
 import { installing, lastUpdate, update } from './update.ts'
 import { isRecord } from './util.ts'
@@ -90,24 +88,6 @@ export const commands = {
   stat: {
     parse: (v: Fields) => ({ id: agentId(v.id), paths: pathsOf({ value: v.paths, kinds: ['file', 'upload'] }) }),
     run: async ({ id, paths }: { id: string; paths: string[] }) => ({ files: agentHome.stat({ id, paths }) }),
-  },
-  'home-export': {
-    parse: (v: Fields) => ({ id: agentId(v.id) }),
-    run: async ({ id }: { id: string }) => {
-      if (await agents.isRunning(id)) throw new Error('stop the agent before packing its home')
-      return { tar: await packHome(home(id)) }
-    },
-  },
-  'home-import': {
-    body: MAX_HOME_BASE64,
-    parse: (v: Fields) => ({ id: agentId(v.id) }),
-    run: async ({ id, body }: { id: string; body: string }) => {
-      if (await agents.exists(id)) throw new Error(`ag-${id} already exists here`)
-      rmSync(home(id), { recursive: true, force: true })
-      agents.makeHome(id)
-      await unpackHome({ dir: home(id), tar: body, owner: AGENT_OWNER })
-      return { imported: id }
-    },
   },
   usage: {
     parse: (v: Fields) => ({ since: sinceOf(v.since) }),

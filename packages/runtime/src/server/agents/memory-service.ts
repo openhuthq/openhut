@@ -1,27 +1,29 @@
-import type { MemoryValue } from '@openhut/common/cloud/record.ts'
-import { Memory, MEMORY_DELIMITER, MEMORY_LIMITS, memoryLength, type MemoryBlock, type MemoryTarget, type UpdateMemory } from '@openhut/common/agents/memory.ts'
+import { Memory, MemoryRecord, MEMORY_DELIMITER, MEMORY_LIMITS, memoryLength, type MemoryBlock, type MemoryTarget, type UpdateMemory } from '@openhut/common/agents/memory.ts'
 import { agentd } from '../platform/agentd.ts'
+import { db } from '../platform/db.ts'
 import { emit } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
+import { recordsService, type Held } from '../cloud/records.ts'
 import type { Caller } from '../team/identity.ts'
-import { agentService } from './agent-service.ts'
+import { agentService, mayEdit, placeOf, type AgentFacts } from './agent-service.ts'
 
 const TARGETS: MemoryTarget[] = ['notes', 'people']
 const LABEL: Record<MemoryTarget, string> = { notes: 'Notes', people: 'What it knows about people' }
 const FILE: Record<MemoryTarget, string> = { notes: 'memories/MEMORY.md', people: 'memories/USER.md' }
 const BARE_DELIMITER = /(^|\n)§(\n|$)/
+const sent = new Map<string, string>()
 
 export const memoryService = {
-  async get({ actor, agentId }: { actor: Caller; agentId: string }): Promise<Memory> {
-    await agentService.get({ actor, id: agentId })
-    const [notes, people] = await Promise.all(TARGETS.map((target) => agentd.read({ id: agentId, path: FILE[target] })))
-    return { id: agentId, object: 'memory', agentId, notes: blockOf({ target: 'notes', raw: notes?.toString('utf8') ?? null }), people: blockOf({ target: 'people', raw: people?.toString('utf8') ?? null }) }
+  async get({ agentId }: { actor: Caller; agentId: string }): Promise<Memory> {
+    return memoryOf({ agentId, raw: await rawOf(await agentService.find({ id: agentId })) })
   },
 
   async update({ actor, agentId, patch }: { actor: Caller; agentId: string; patch: UpdateMemory }): Promise<Memory> {
-    await agentService.requireEditable({ actor, id: agentId })
-    if (!(await agentService.get({ actor, id: agentId })).runsHere) throw new HttpError(409, 'This agent runs on your other computer, so its memory changes there.')
-    const current = await memoryService.get({ actor, agentId })
+    const facts = await agentService.find({ id: agentId })
+    if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} can change ${facts.value.name}'s memory.`)
+    const raw = await rawOf(facts)
+    const current = memoryOf({ agentId, raw })
+    const next: MemoryRecord = { ...raw }
     for (const target of TARGETS) {
       const entries = patch[target]?.map((entry) => entry.trim())
       if (!entries) continue
@@ -29,29 +31,50 @@ export const memoryService = {
       if (entries.some((entry) => !entry || BARE_DELIMITER.test(entry))) throw new HttpError(400, 'Each entry needs some text. Type something, or remove it.', { param: target })
       const over = memoryLength(entries) - MEMORY_LIMITS[target]
       if (over > 0) throw new HttpError(400, `${LABEL[target]} are ${over.toLocaleString('en')} characters over the ${MEMORY_LIMITS[target].toLocaleString('en')} limit. Shorten or remove an entry.`, { param: target })
-      await agentd.write({ id: agentId, path: FILE[target], body: entries.join(MEMORY_DELIMITER) })
+      next[target] = entries.join(MEMORY_DELIMITER)
       emit({ name: 'memory.updated', actor, target: { type: 'memory', id: agentId, file: target, entries: entries.length } })
     }
-    return memoryService.get({ actor, agentId })
+    const changed = (value: MemoryRecord): MemoryRecord => ({ ...value, ...Object.fromEntries(TARGETS.filter((target) => patch[target]).map((target) => [target, next[target]])) })
+    await recordsService.put({ collection: 'memory', parent: agentId, workspace: facts.workspace, personal: facts.personal, value: next, reapply: (latest) => ({ value: changed(MemoryRecord.safeParse(latest.value).data ?? raw) }) })
+    if (facts.row) await memoryService.applyRecord({ agentId, record: { value: next } })
+    return memoryOf({ agentId, raw: next })
   },
 
-  async synced({ agentIds }: { agentIds: string[] }): Promise<MemoryValue[]> {
-    const values: MemoryValue[] = []
-    for (const id of agentIds) {
-      const notes = await agentd.read({ id, path: FILE.notes })
-      const people = await agentd.read({ id, path: FILE.people })
-      if (notes?.length || people?.length) values.push({ agentId: id, notes: notes?.toString('utf8') ?? null, people: people?.toString('utf8') ?? null })
-    }
-    return values
+  async backUp({ agentId }: { agentId: string }): Promise<void> {
+    const row = await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', agentId).executeTakeFirst()
+    if (!row) return
+    const value = await disk(agentId)
+    const text = JSON.stringify(value)
+    if ((value.notes === null && value.people === null) || sent.get(agentId) === text) return
+    await recordsService.put({ collection: 'memory', parent: agentId, ...placeOf(row), value, queue: true, reapply: () => null })
+    sent.set(agentId, text)
   },
 
-  async applySynced(value: MemoryValue): Promise<void> {
+  async applyRecord({ agentId, record }: { agentId: string; record: Pick<Held, 'value'> | null }): Promise<void> {
+    const value = MemoryRecord.safeParse(record?.value).data
+    if (!value) return
+    const now = await disk(agentId)
     for (const target of TARGETS) {
       const text = value[target]
-      if (text !== null) await agentd.write({ id: value.agentId, path: FILE[target], body: text, create: true })
+      if (text !== null && text !== now[target]) await agentd.write({ id: agentId, path: FILE[target], body: text, create: true })
     }
-    emit({ name: 'memory.synced', target: { type: 'memory', id: value.agentId } })
+    sent.set(agentId, JSON.stringify({ ...now, ...Object.fromEntries(TARGETS.filter((target) => value[target] !== null).map((target) => [target, value[target]])) }))
   },
+}
+
+async function rawOf(facts: AgentFacts): Promise<MemoryRecord> {
+  if (facts.row) return disk(facts.id)
+  const held = await recordsService.get({ collection: 'memory', workspace: facts.workspace, id: facts.id })
+  return MemoryRecord.safeParse(held?.value).data ?? { notes: null, people: null }
+}
+
+async function disk(agentId: string): Promise<MemoryRecord> {
+  const [notes, people] = await Promise.all(TARGETS.map((target) => agentd.read({ id: agentId, path: FILE[target] })))
+  return { notes: notes?.toString('utf8') ?? null, people: people?.toString('utf8') ?? null }
+}
+
+function memoryOf({ agentId, raw }: { agentId: string; raw: MemoryRecord }): Memory {
+  return { id: agentId, object: 'memory', agentId, notes: blockOf({ target: 'notes', raw: raw.notes }), people: blockOf({ target: 'people', raw: raw.people }) }
 }
 
 function blockOf({ target, raw }: { target: MemoryTarget; raw: string | null }): MemoryBlock {

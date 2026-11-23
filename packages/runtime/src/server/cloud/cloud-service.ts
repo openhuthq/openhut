@@ -192,7 +192,6 @@ export const cloudService = {
     const owned = teams.filter((ws) => roomKeys.roleIn(ws) === 'owner')
     const token = await keysService.token()
     const proof = await keysService.accountProof()
-    for (const ws of teams) await agentService.keepWorkspace(ws)
     for (const ws of teams) {
       const done = owned.includes(ws)
         ? cloud.room({ method: 'DELETE', workspace: ws, path: '', token, body: await keysService.deleteProof(ws) }).then(() => cloudEvents.drop({ ws, why: null }))
@@ -540,9 +539,7 @@ async function joinWith({ account: restored, typed }: { account: Account; typed:
 
 async function leaveHere(): Promise<void> {
   if (!await recordsService.sent()) throw new HttpError(409, 'Your agents aren’t backed up yet. Sign out once this computer is online and the backup is done, so nothing is lost.')
-  const me = await keysService.deviceKey()
   cloudEvents.stop()
-  await agentService.forgetDevice({ device: me })
   await agentService.wipe()
   await connectionService.wipe()
   await keysService.forgetHere()

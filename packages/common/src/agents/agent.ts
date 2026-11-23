@@ -1,6 +1,5 @@
 import * as z from 'zod/mini'
 import { Timestamp, atLeastOneField } from '../api.ts'
-import { CreateExport } from '../admin/admin.ts'
 import { ModelKey } from '../models/provider.ts'
 
 export const AgentStatus = z.enum(['running', 'stopped', 'missing'])
@@ -63,6 +62,7 @@ export const UpdateAgentFields = {
   browser: z.optional(z.boolean()),
   face: z.optional(Face),
   runsHere: z.optional(z.literal(true)),
+  runsOn: z.optional(z.string().check(z.minLength(1), z.maxLength(200))),
   shared: z.optional(z.boolean()),
 }
 export const UpdateAgent = z.object(UpdateAgentFields).check(atLeastOneField)
@@ -84,17 +84,20 @@ export const ListGrants = z.object({ agentId: z.optional(z.string()), connection
 export type ListGrants = z.infer<typeof ListGrants>
 
 
-export const MAX_SEALED_AGENT = 256 << 20
-
-export const ExportAgent = z.pick(CreateExport, { publicKey: true })
-export type ExportAgent = z.infer<typeof ExportAgent>
-
-export const ImportAgent = z.object({ sealed: z.string().check(z.maxLength(MAX_SEALED_AGENT)) })
-export type ImportAgent = z.infer<typeof ImportAgent>
-
-export const AgentImport = z.object({
-  object: z.literal('agent_import'),
-  agent: Agent,
-  ungranted: z.array(z.string()),
+export const AgentRecord = z.object({
+  name: AgentName,
+  instructions: z.string().check(z.maxLength(20_000)),
+  face: z._default(z.nullable(Face), null),
+  wanted: Wanted,
+  createdAt: z.string(),
 })
-export type AgentImport = z.infer<typeof AgentImport>
+export type AgentRecord = z.infer<typeof AgentRecord>
+
+export const ControlRecord = z.object({
+  runsOn: z.string(),
+  model: ModelKey,
+  codeExecution: z.boolean(),
+  browser: z.boolean(),
+  grants: z.array(z.object({ connection: z.string(), at: z.string() })),
+})
+export type ControlRecord = z.infer<typeof ControlRecord>

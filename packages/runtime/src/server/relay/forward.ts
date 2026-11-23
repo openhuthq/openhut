@@ -2,6 +2,8 @@ import type { WebSocket } from '@fastify/websocket'
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import * as z from 'zod/mini'
 import { connect, type Tunnel } from '@openhut/tunnel'
+import { agentService } from '../agents/agent-service.ts'
+import { channelService } from '../channels/channel-service.ts'
 import { keysService } from '../cloud/keys-service.ts'
 import { config } from '../platform/config.ts'
 import { db } from '../platform/db.ts'
@@ -23,7 +25,7 @@ const RUNNER_OF: Partial<Record<string, (req: FastifyRequest) => Promise<string 
   'POST /api/threads/:id/files': threadRunner,
   'DELETE /api/threads/:id/files': threadRunner,
   'POST /api/threads/:id/files/lookups': threadRunner,
-  'GET /api/channels/:id': async (req) => runnerOf((await db.selectFrom('channel').select('agent_id').where('id', '=', idOf(req)).executeTakeFirst())?.agent_id),
+  'GET /api/channels/:id': async (req) => runnerOf(await channelService.agentOf({ id: idOf(req) })),
   'GET /api/connection-events': (req) => runnerOf(z.safeParse(ByAgent, req.query).data?.agentId),
 }
 
@@ -70,9 +72,10 @@ async function threadRunner(req: FastifyRequest): Promise<string | undefined> {
 }
 
 async function runnerOf(agentId: string | undefined): Promise<string | undefined> {
-  const row = agentId ? await db.selectFrom('agent').select('runs_on').where('id', '=', agentId).executeTakeFirst() : undefined
-  if (!row?.runs_on || row.runs_on === await keysService.deviceKey()) return undefined
-  return tunnelKeyOf(row.runs_on)
+  if (!agentId || await db.selectFrom('agent').select('id').where('id', '=', agentId).executeTakeFirst()) return undefined
+  const runsOn = (await agentService.find({ id: agentId }).catch(() => null))?.control?.runsOn
+  if (!runsOn || runsOn === await keysService.deviceKey()) return undefined
+  return tunnelKeyOf(runsOn)
 }
 
 async function fetchOn({ key, path, init }: { key: string; path: string; init: RequestInit }): Promise<Response> {

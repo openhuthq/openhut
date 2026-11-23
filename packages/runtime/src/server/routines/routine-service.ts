@@ -2,7 +2,7 @@ import type { Selectable } from 'kysely'
 import { Cron } from 'croner'
 import * as z from 'zod/mini'
 import type { Deleted } from '@openhut/common/api.ts'
-import { ROUTINE_NAME_MAX, ROUTINE_PLAN_MAX, type Routine } from '@openhut/common/routines/routine.ts'
+import { ROUTINE_NAME_MAX, ROUTINE_PLAN_MAX, RoutineRecord, type Routine } from '@openhut/common/routines/routine.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { emit, log } from '../platform/events.ts'
@@ -10,7 +10,9 @@ import { HttpError, messageOf } from '../platform/http-error.ts'
 import { deleted } from '../platform/responses.ts'
 import { newId } from '../platform/secrets.ts'
 import { settings } from '../platform/settings.ts'
-import { agentService } from '../agents/agent-service.ts'
+import { agentService, mayEdit, placeOf as recordPlace, type AgentFacts } from '../agents/agent-service.ts'
+import { recordsService, type Held } from '../cloud/records.ts'
+import { roomKeys } from '../cloud/room-keys.ts'
 import type { Caller } from '../team/identity.ts'
 
 const TICK_MS = 60_000
@@ -26,7 +28,7 @@ const CRON_SAMPLE = 100
 const SILENT = /^\s*\[?(SILENT|NO[_ ]REPLY)\]?\s*$/i
 const OFFSET = /(Z|[+-]\d\d:?\d\d)$/i
 const DASHBOARD = 'api_server'
-const THREAD_SESSION = /^openhut-(th_[a-z0-9]+)$/
+const CHAT_SESSION = /^openhut-\S+$/
 const PLATFORM_NAMES: Record<string, string> = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram' }
 
 export const Origin = z.looseObject({
@@ -48,7 +50,7 @@ const ranToday = new Map<string, { day: string; count: number; capLogged: boolea
 const dashboardRuns = new Set<string>()
 let ticking: NodeJS.Timeout | undefined
 let inTick = false
-let dashboardRunner: (input: { agentId: string; threadId: string; text: string }) => Promise<string> = async () => { throw new Error('No dashboard runner.') }
+let dashboardRunner: (input: { agentId: string; text: string }) => Promise<string> = async () => { throw new Error('No dashboard runner.') }
 
 export const routineService = {
   async schedule({ agentId, input }: { agentId: string; input: ScheduleInput }): Promise<string> {
@@ -70,6 +72,7 @@ export const routineService = {
     const row = await db.insertInto('routine').values({
       id: newId('rt'), agent_id: agentId, name, plan, at, cron: input.cron ?? null, until, origin: JSON.stringify({ ...origin.data, place }), next_run_at: nextRunAt,
     }).returningAll().executeTakeFirstOrThrow()
+    await upload(row)
     changed({ name: 'routine.scheduled', agentId, routineId: row.id, properties: { cron: row.cron, at: at?.toISOString() } })
     return `Scheduled ${row.id}, next ${nextRunAt ? shortTime(nextRunAt) : 'never'}. Reports go to ${place}.`
   },
@@ -81,8 +84,9 @@ export const routineService = {
   },
 
   async cancel({ agentId, id, reason }: { agentId: string; id: string; reason: string }): Promise<string> {
-    const gone = await db.deleteFrom('routine').where('id', '=', id).where('agent_id', '=', agentId).executeTakeFirst()
-    if (!gone.numDeletedRows) throw new HttpError(404, `No routine ${id}. Call list_routines to see yours.`)
+    const gone = await db.deleteFrom('routine').where('id', '=', id).where('agent_id', '=', agentId).returningAll().executeTakeFirst()
+    if (!gone) throw new HttpError(404, `No routine ${id}. Call list_routines to see yours.`)
+    await forget(gone)
     changed({ name: 'routine.ended', agentId, routineId: id, properties: { reason: reason.slice(0, 200) || 'cancelled' } })
     return 'Stopped.'
   },
@@ -108,6 +112,7 @@ export const routineService = {
     changed({ name: 'routine.run', agentId, routineId: row.id, properties: { run: runId, status } })
     if (!row.cron) {
       await db.deleteFrom('routine').where('id', '=', row.id).execute()
+      await forget(row)
       changed({ name: 'routine.ended', agentId, routineId: row.id, properties: { reason: 'ran once' } })
       return
     }
@@ -115,34 +120,43 @@ export const routineService = {
   },
 
   async list({ actor, agentId }: { actor: Caller; agentId: string }): Promise<Routine[]> {
-    await agentService.requireEditable({ actor, id: agentId })
-    const rows = await db.selectFrom('routine').selectAll().where('agent_id', '=', agentId).orderBy('next_run_at', (ob) => ob.asc().nullsLast()).execute()
-    return rows.map(routineOf)
+    const facts = await editable({ actor, id: agentId })
+    if (facts.row) {
+      const rows = await db.selectFrom('routine').selectAll().where('agent_id', '=', agentId).orderBy('next_run_at', (ob) => ob.asc().nullsLast()).execute()
+      return rows.map(routineOf)
+    }
+    const held = await recordsService.list({ collection: 'routine', workspace: facts.workspace, parent: agentId })
+    return held.flatMap((each) => {
+      const value = RoutineRecord.safeParse(each.value).data
+      return value ? [routineOf({ ...value, at: dateOf(value.at), until: dateOf(value.until), id: each.id, agent_id: agentId, next_run_at: null, run_id: null, run_status: null, run_picked_at: null, run_at: null, run_text: null, failures: 0, created_at: new Date(value.createdAt) })] : []
+    })
   },
 
   async stop({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'routine'>> {
-    const row = await db.selectFrom('routine').selectAll().where('id', '=', id).executeTakeFirst()
-    if (!row) throw new HttpError(404, `There's no routine ${id}.`)
-    await agentService.requireEditable({ actor, id: row.agent_id })
+    const row = await db.selectFrom('routine').select('agent_id').where('id', '=', id).executeTakeFirst()
+    const agentId = row?.agent_id ?? await parentOf(id)
+    if (!agentId) throw new HttpError(404, `There's no routine ${id}.`)
+    const facts = await editable({ actor, id: agentId })
+    await recordsService.remove({ collection: 'routine', workspace: facts.workspace, id })
     await db.deleteFrom('routine').where('id', '=', id).execute()
-    changed({ name: 'routine.ended', agentId: row.agent_id, routineId: id, properties: { reason: 'stopped by the owner' } })
+    changed({ name: 'routine.ended', agentId, routineId: id, properties: { reason: 'stopped by the owner' } })
     return deleted({ id, object: 'routine' })
   },
 
-  async exportFor({ agentId }: { agentId: string }): Promise<Moved[]> {
-    const rows = await db.selectFrom('routine').selectAll().where('agent_id', '=', agentId).execute()
-    return rows.map((row) => ({ name: row.name, plan: row.plan, at: row.at && new Date(row.at).toISOString(), cron: row.cron, until: row.until && new Date(row.until).toISOString(), origin: row.origin }))
-  },
-
-  async importFor({ agentId, routines, threads }: { agentId: string; routines: Moved[]; threads: Map<string, string> }): Promise<void> {
+  async applyRecords({ agentId, records }: { agentId: string; records: Held[] }): Promise<void> {
     const now = new Date()
-    for (const each of routines) {
-      const origin = z.safeParse(Origin, JSON.parse(each.origin)).data
-      if (!origin) continue
-      const thread = THREAD_SESSION.exec(origin.chat_id)?.[1]
-      const moved = origin.platform === DASHBOARD && thread ? { ...origin, chat_id: `openhut-${threads.get(thread) ?? thread}` } : origin
-      const nextRunAt = each.cron ? nextOf({ cron: each.cron, after: now }) : each.at && new Date(each.at) > now ? new Date(each.at) : now
-      await db.insertInto('routine').values({ id: newId('rt'), agent_id: agentId, name: each.name, plan: each.plan, at: each.at, cron: each.cron, until: each.until, origin: JSON.stringify(moved), next_run_at: nextRunAt }).execute()
+    const wanted = new Set<string>()
+    for (const each of records) {
+      const value = RoutineRecord.safeParse(each.value).data
+      if (!value) continue
+      wanted.add(each.id)
+      const fields = { name: value.name, plan: value.plan, at: value.at, cron: value.cron, until: value.until, origin: value.origin }
+      const nextRunAt = value.cron ? nextOf({ cron: value.cron, after: now }) : value.at && new Date(value.at) > now ? new Date(value.at) : now
+      await db.insertInto('routine').values({ id: each.id, agent_id: agentId, ...fields, next_run_at: nextRunAt, created_at: new Date(value.createdAt) })
+        .onConflict((oc) => oc.column('id').doUpdateSet(fields)).execute()
+    }
+    for (const row of await db.selectFrom('routine').select('id').where('agent_id', '=', agentId).execute()) {
+      if (!wanted.has(row.id) && await recordsService.held(row.id) > 0) await db.deleteFrom('routine').where('id', '=', row.id).execute()
     }
   },
 
@@ -182,14 +196,13 @@ export const routineService = {
 }
 
 async function tickOnce(now: Date): Promise<void> {
-  const expired = await db.deleteFrom('routine').where('until', '<=', now).returning(['id', 'agent_id']).execute()
+  const expired = await db.deleteFrom('routine').where('until', '<=', now).returningAll().execute()
+  for (const row of expired) await forget(row)
   for (const row of expired) changed({ name: 'routine.ended', agentId: row.agent_id, routineId: row.id, properties: { reason: 'until passed' } })
   await sweep(now)
   const due = await db.selectFrom('routine').selectAll().where('next_run_at', '<=', now).where((eb) => eb.or([eb('run_status', 'is', null), eb('run_status', '<>', 'open')])).orderBy('next_run_at').execute()
   for (const row of due) await fire({ row, now })
 }
-
-export type Moved = { name: string; plan: string; at: string | null; cron: string | null; until: string | null; origin: string }
 
 async function fire({ row, now }: { row: RoutineRow; now: Date }): Promise<void> {
   const agent = await db.selectFrom('agent').select(['id', 'wanted']).where('id', '=', row.agent_id).executeTakeFirst()
@@ -213,18 +226,17 @@ async function fire({ row, now }: { row: RoutineRow; now: Date }): Promise<void>
 
 async function runOnDashboard({ row, origin }: { row: RoutineRow; origin: Stored }): Promise<void> {
   const runId = row.run_id ?? ''
-  const threadId = THREAD_SESSION.exec(origin.chat_id)?.[1] ?? ''
-  if (dashboardRuns.has(threadId)) return
-  dashboardRuns.add(threadId)
+  if (dashboardRuns.has(row.agent_id)) return
+  dashboardRuns.add(row.agent_id)
   try {
     await routineService.picked({ agentId: row.agent_id, runId })
-    const said = await dashboardRunner({ agentId: row.agent_id, threadId, text: runText(row) })
+    const said = await dashboardRunner({ agentId: row.agent_id, text: runText(row) })
     await routineService.report({ agentId: row.agent_id, runId, said })
   } catch (err) {
     await fail({ routineId: row.id, runId, text: 'No answer in time.' })
     log.warn({ event: 'routine.run', agent: row.agent_id, routine: row.id, run: runId, status: 'failed', error: messageOf(err) })
   } finally {
-    dashboardRuns.delete(threadId)
+    dashboardRuns.delete(row.agent_id)
   }
 }
 
@@ -263,9 +275,7 @@ async function openRun(agentId: string): Promise<boolean> {
 
 async function placeOf({ agentId, origin }: { agentId: string; origin: Origin }): Promise<string> {
   if (origin.platform === DASHBOARD) {
-    const thread = THREAD_SESSION.exec(origin.chat_id)?.[1]
-    const row = thread && await db.selectFrom('thread').select('id').where('id', '=', thread).where('agent_id', '=', agentId).executeTakeFirst()
-    if (!row) throw new HttpError(400, 'You can only set up routines from a chat you\'re in.')
+    if (!CHAT_SESSION.test(origin.chat_id)) throw new HttpError(400, 'You can only set up routines from a chat you\'re in.')
     return 'the OpenHut app'
   }
   const channel = await db.selectFrom('channel').selectAll().where('agent_id', '=', agentId).where('kind', '=', origin.platform as 'slack').where('status', '=', 'connected').executeTakeFirst()
@@ -360,7 +370,34 @@ function shortTime(date: Date): string {
 
 const digits = (value: string): string => value.replace(/@.*$/, '').replace(/\D/g, '')
 const iso = (value: Date | string | null): string | null => value ? new Date(value).toISOString() : null
+const dateOf = (value: string | null): Date | null => value ? new Date(value) : null
 
 function changed({ name, agentId, routineId, properties }: { name: string; agentId: string; routineId: string; properties?: Record<string, unknown> }): void {
   emit({ name, target: { type: 'routine', id: routineId, agentId }, properties })
+}
+
+async function editable({ actor, id }: { actor: Caller; id: string }): Promise<AgentFacts> {
+  const facts = await agentService.find({ id })
+  if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} can see and stop ${facts.value.name}'s routines.`)
+  return facts
+}
+
+async function parentOf(id: string): Promise<string | undefined> {
+  for (const room of roomKeys.rooms()) {
+    const held = await recordsService.get({ collection: 'routine', workspace: room.workspace.id, id }).catch(() => null)
+    if (held && !held.deleted) return held.parent
+  }
+  return undefined
+}
+
+async function upload(row: RoutineRow): Promise<void> {
+  const agent = await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', row.agent_id).executeTakeFirst()
+  if (!agent) return
+  const value: RoutineRecord = { name: row.name, plan: row.plan, at: iso(row.at), cron: row.cron, until: iso(row.until), origin: row.origin, createdAt: new Date(row.created_at).toISOString() }
+  await recordsService.put({ collection: 'routine', id: row.id, parent: row.agent_id, ...recordPlace(agent), value, queue: true }).catch((err: unknown) => log.warn({ event: 'routine.backup_failed', routine: row.id, error: messageOf(err) }))
+}
+
+async function forget(row: Pick<RoutineRow, 'id' | 'agent_id'>): Promise<void> {
+  const agent = await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', row.agent_id).executeTakeFirst()
+  if (agent) await recordsService.remove({ collection: 'routine', workspace: recordPlace(agent).workspace, id: row.id, queue: true }).catch((err: unknown) => log.warn({ event: 'routine.backup_failed', routine: row.id, error: messageOf(err) }))
 }

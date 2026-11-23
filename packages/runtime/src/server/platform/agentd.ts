@@ -29,8 +29,6 @@ export const agentd = {
     ask({ request: { cmd: 'write', id, path, create, replace }, body: Buffer.from(body).toString('base64'), doing: 'save the file in the agent\'s home', schema: z.object({ path: z.string() }) }),
   delete: ({ id, paths }: { id: string; paths: string[] }) => ask({ request: { cmd: 'delete', id, paths }, doing: 'delete the files', schema: z.object({ removed: z.array(z.string()) }) }),
   stat: ({ id, paths }: { id: string; paths: string[] }) => ask({ request: { cmd: 'stat', id, paths }, doing: 'look for the files', schema: z.object({ files: z.array(z.object({ path: z.string(), size: z.number() })) }) }),
-  exportHome: ({ id }: { id: string }) => ask({ request: { cmd: 'home-export', id }, doing: 'pack the agent\'s home', schema: z.object({ tar: z.string() }) }),
-  importHome: ({ id, tar }: { id: string; tar: string }) => ask({ request: { cmd: 'home-import', id }, body: tar, doing: 'unpack the agent\'s home', schema: z.object({ imported: z.string() }) }),
   newMessages: ({ since }: { since: number }) => ask({ request: { cmd: 'messages', since }, doing: 'look for new messages', schema: z.object({ messages: z.array(z.object({ agentId: z.string(), source: z.string(), at: z.number() })) }) }),
   usage: ({ since }: { since: number }) => ask({ request: { cmd: 'usage', since }, doing: 'read the agents\' usage', schema: z.object({ usage: z.record(z.string(), z.number()) }) }),
 }
