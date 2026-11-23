@@ -78,8 +78,16 @@ export function useAddPasskey() {
   })
 }
 
+export function useRemovePasskey() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => request({ schema: Cloud, computer: 'local', path: '/api/cloud/passkeys', method: 'DELETE' }),
+    onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
+  })
+}
+
 const NEW_KIT_HINT = 'If anyone else has your recovery kit, make a new kit so the old one stops working.'
-export const REMOVE_DETAIL = `It can’t get anything new from OpenHut Cloud. Do this only if it’s lost, sold or not yours. ${NEW_KIT_HINT}`
+export const REMOVE_DETAIL = `It can’t get anything new from OpenHut Cloud, and Touch ID stops opening OpenHut until you turn it on again on a Mac you trust. Do this only if it’s lost, sold or not yours. ${NEW_KIT_HINT}`
 
 export function useRemoveMac() {
   const client = useQueryClient()

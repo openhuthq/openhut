@@ -84,6 +84,13 @@ test('against the real cloud API: dev sign-in, save the kit, make an agent, chat
     assert.equal(record?.personal, true)
     assert.ok(keysService.vault(), 'a Mac holds the account’s vault key for connection secrets')
 
+    const saved = keysService.kitState().saved
+    await keysService.setKit(undefined)
+    const over = await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })
+    assert.equal(over.statusCode, 409, 'a computer that hasn’t picked up the cloud kit can’t write a new one over it')
+    assert.match(over.json<{ error: { message: string } }>().error.message, /already has a recovery kit/)
+    await keysService.setKit(saved ?? undefined)
+
     const token = await keysService.token()
     const lists = () => fetch(`${cloud.url}/v1/member-lists?workspace=${workspace}`, { headers: { authorization: `Bearer ${token}` } })
     assert.equal((await lists()).status, 200)

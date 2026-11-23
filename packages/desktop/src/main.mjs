@@ -605,7 +605,7 @@ async function bootContainer() {
   const key = randomBytes(32).toString('hex')
   const script = await (await fetch(INSTALL_URL, { signal: AbortSignal.timeout(60_000) })).text()
   const log = createWriteStream(join(LOGS, 'install.log'), { flags: 'a' })
-  const env = { ...process.env, OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update(key).digest('hex'), OPENHUT_APP_VERSION: app.getVersion() }
+  const env = { ...process.env, OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update(key).digest('hex'), OPENHUT_APP_VERSION: app.getVersion(), OPENHUT_PERSONAL: '1' }
   const child = spawn('sh', ['-s'], { env, stdio: ['pipe', 'pipe', 'pipe'] })
   for (const stream of [child.stdout, child.stderr]) stream.pipe(log, { end: false })
   child.stdin.end(script)

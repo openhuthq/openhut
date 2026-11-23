@@ -99,7 +99,7 @@ export const roomKeys = {
     if (!account || !room || !body || !mine) throw new HttpError(409, 'Enable OpenHut Cloud and open this team first.')
     if (emails.some((email) => email !== account.email && (mine === 'member' || body.members.find((member) => member.email === email)?.role === 'owner'))) throw new HttpError(403, 'Only an owner or admin can remove people, and nobody can remove the owner.')
     if (leaving && mine === 'owner') throw new HttpError(403, 'Make someone else the owner first.')
-    if (leaving && roomKeys.isOwn(ws)) throw new HttpError(403, 'This is your own team. To remove it, delete your cloud account in Settings › Backup.')
+    if (leaving && roomKeys.isOwn(ws)) throw new HttpError(403, 'This is your own team. To remove it, delete your account in Settings › General.')
     if (rotate && mine === 'member') throw new HttpError(403, 'Only an owner or admin can reset encryption.')
     const gone = [...body.members.filter((member) => emails.includes(member.email)).flatMap((member) => member.devices), ...devices.filter((device) => body.members.some((member) => member.devices.includes(device)))]
     if (devices.some((device) => !body.members.some((member) => member.email === account.email && member.devices.includes(device))) && mine === 'member') throw new HttpError(403, 'Only an owner or admin can remove someone else’s device.')
