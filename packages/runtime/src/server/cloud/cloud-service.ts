@@ -12,6 +12,7 @@ import { cloud, type Box, type Letter as Sealed, type Reply } from '../platform/
 import { config } from '../platform/config.ts'
 import { db } from '../platform/db.ts'
 import { log } from '../platform/events.ts'
+import { page } from '../platform/page.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { callbackBase, connectionService } from '../connections/connection-service.ts'
 import { keyStore, type Account, type AskRoom } from './key-store.ts'
@@ -650,10 +651,6 @@ async function rotate({ changed: { list, next, letters }, drop }: { changed: Awa
   for (const team of next.teams ?? []) await cloudEvents.refreshKeys(team.workspace.id)
 }
 
-function page(sentence: string): string {
-  const text = sentence.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`)
-  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>OpenHut</title><body style="margin:0;display:grid;place-items:center;min-height:90vh;font:15px/1.5 -apple-system,system-ui,sans-serif;color:#0b0b0b;background:#fff"><p style="max-width:420px;padding:0 16px;text-align:center">${text}</p></body>`
-}
 
 async function openRoom({ account }: { account: Account }): Promise<boolean> {
   const made = await keysService.memberLists({ list: account.list, boxes: [await keysService.workspaceBox({ account })] })

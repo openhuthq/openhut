@@ -92,5 +92,9 @@ export const ConnectionAuthorization = z.object({
   kind: z.enum(SIGN_IN_KINDS),
   authorizationUrl: z.string(),
   manifest: z.optional(z.string()),
+  id: z._default(z.string(), ''),
+  status: z._default(z.enum(['pending', 'done', 'failed']), 'pending'),
+  connectionId: z.optional(z.string()),
+  error: z.optional(z.string()),
 })
 export type ConnectionAuthorization = z.infer<typeof ConnectionAuthorization>
