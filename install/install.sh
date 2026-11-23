@@ -50,6 +50,7 @@ write_env() {
     if joining; then echo "OPENHUT_JOIN='$JOIN_CODE'"; fi
     [ -z "$LISTEN" ] || echo "OPENHUT_HOST=$LISTEN"
     [ -z "${OPENHUT_CLOUD_URL:-}" ] || echo "OPENHUT_CLOUD_URL=$OPENHUT_CLOUD_URL"
+    [ "${OPENHUT_PERSONAL:-}" != 1 ] || echo "OPENHUT_PERSONAL=1"
   } > /etc/openhut/env.new
   mv /etc/openhut/env.new /etc/openhut/env
   . /etc/openhut/env
@@ -133,7 +134,7 @@ if [ ! -f /.dockerenv ] && [ ! -d "$PREFIX" ]; then
   fi
   $D start openhut >/dev/null
   ! tailnet || serve_tailnet
-  printf '%s\n' "$JOIN_CODE" | $D exec -i -e OPENHUT_CONTAINER=1 -e "OPENHUT_ROUTE=$ROUTE" -e "OPENHUT_CLIENT_KEY_SHA256=${OPENHUT_CLIENT_KEY_SHA256:-}" -e "OPENHUT_APP_VERSION=${OPENHUT_APP_VERSION:-}" openhut sh -c "read -r OPENHUT_JOIN; export OPENHUT_JOIN; apk add -q curl && curl -fsSL $OPENHUT_URL | sh" || exit 1
+  printf '%s\n' "$JOIN_CODE" | $D exec -i -e OPENHUT_CONTAINER=1 -e "OPENHUT_ROUTE=$ROUTE" -e "OPENHUT_CLIENT_KEY_SHA256=${OPENHUT_CLIENT_KEY_SHA256:-}" -e "OPENHUT_APP_VERSION=${OPENHUT_APP_VERSION:-}" -e "OPENHUT_PERSONAL=${OPENHUT_PERSONAL:-}" openhut sh -c "read -r OPENHUT_JOIN; export OPENHUT_JOIN; apk add -q curl && curl -fsSL $OPENHUT_URL | sh" || exit 1
   exit 0
 fi
 

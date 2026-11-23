@@ -26,6 +26,7 @@ export const config = {
   apiUrl: API_URL,
   socket: process.env.OPENHUT_SOCKET ?? join(DATA, 'openhut.sock'),
   installKind: installKindOf(process.env.OPENHUT_SOCKET ? 'desktop' : 'server'),
+  personal: Boolean(process.env.OPENHUT_SOCKET) || process.env.OPENHUT_PERSONAL === '1',
   clientKeySha256: process.env.OPENHUT_CLIENT_KEY_SHA256,
   modelMode: TEST_MODEL ? 'test' as const : 'claude' as const,
   agentApi: process.env.OPENHUT_AGENT_API,

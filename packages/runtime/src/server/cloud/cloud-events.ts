@@ -59,6 +59,10 @@ presence.wire({
   catchUp: (ws) => void run(() => refreshKeys(ws)),
 })
 
+recordsService.onRefused((workspace) => {
+  if (workspace === keysService.account()?.workspace.id) void run(() => removedNow(workspace))
+})
+
 export const cloudEvents = {
   start(): void {
     if (socket || !keysService.account() || !keysService.session()) return
@@ -212,6 +216,10 @@ async function checkRemoved(): Promise<void> {
   if (!home) return
   const { status } = await keysService.call({ method: 'GET', path: `/v1/member-lists?workspace=${home}` })
   if (status !== 403 && status !== 410) return
+  await removedNow(home)
+}
+
+async function removedNow(home: string): Promise<void> {
   cloudEvents.stop()
   await keysService.removedHere()
   emit({ name: 'cloud.changed', target: { type: 'cloud', id: home } })

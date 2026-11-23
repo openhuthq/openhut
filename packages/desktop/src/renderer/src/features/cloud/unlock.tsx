@@ -12,11 +12,11 @@ import { ErrorNote } from '@/components/error-note'
 import { I, PILL } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { nameOf, notifyDesktop, useCloud, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
+import { nameOf, notifyDesktop, useCloud, usePasskeys, usePasskeyUnlock, useRemoveMac, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
 import { BIG, Step } from '@/features/cloud/step'
 import { chooseWorkspace, useAsk, useCancelAsk, useDeleteData } from '@/features/cloud/workspaces'
 import { Mismatch } from '@/features/cloud/presence'
-import { joinRequests } from '@/features/cloud/seen'
+import { joinRequests, knownDevices, newDevices, rememberDevices } from '@/features/cloud/seen'
 import { Spinner } from '@/components/ui/spinner'
 import { navigate, usePath } from '@/lib/router'
 import { longDate } from '@/lib/format'
@@ -199,7 +199,7 @@ export function CloudToasts() {
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
   if (!cloud) return null
-  return <><JoinRequests cloud={cloud} /><Mismatch /><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
+  return <><JoinRequests cloud={cloud} /><Mismatch /><GoneNotice cloud={cloud} /><Joins cloud={cloud} /><SelfJoins cloud={cloud} /></>
 }
 
 function Joins({ cloud }: { cloud: Cloud }) {
@@ -214,6 +214,21 @@ function Joins({ cloud }: { cloud: Cloud }) {
       for (const email of was ? workspace.members.map((member) => member.email).filter((each) => !was.includes(each) && each !== cloud.email) : []) notify({ lead: <PersonFace name={nameOf(email)} email={email} size={26} />, title: `${nameOf(email)} joined ${workspace.name}`, note: email })
     }
   }, [cloud.workspaces, cloud.email])
+  return null
+}
+
+function SelfJoins({ cloud }: { cloud: Cloud }) {
+  const remove = useRemoveMac()
+  useEffect(() => {
+    if (cloud.status !== 'on') return
+    const fresh = newDevices({ devices: cloud.devices, known: knownDevices() })
+    rememberDevices(cloud.devices.map((device) => device.key))
+    for (const device of fresh) {
+      const name = device.name ?? 'A new computer'
+      notifyDesktop({ title: `${name} joined your account`, body: 'If that wasn’t you, open OpenHut and choose Not me.', path: '/settings/computers' })
+      notify({ lead: <DeviceIcon kind="mac" />, title: `${name} joined your account`, note: cloud.email ?? undefined, action: { label: 'Not me', onClick: () => remove.mutate(device.key, { onError: toastError }) } })
+    }
+  }, [cloud.devices, cloud.status, cloud.email, remove])
   return null
 }
 

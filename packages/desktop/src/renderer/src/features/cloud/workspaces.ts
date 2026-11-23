@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Cloud, CloudInvite, CloudInvitePreview, type CloudWorkspaceView, type CreateCloudInvite, type Role } from '@openhut/common/cloud/cloud.ts'
 import { request, requestBlob } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
+import { rememberDevices } from '@/features/cloud/seen'
 
 const ACTIVE_KEY = 'openhut.workspace'
 const CHANGED = 'openhut:workspace'
@@ -133,7 +134,7 @@ export const useChangeKeys = () => useCloudCall((id: string) => request({ schema
 
 export const useDeleteWorkspace = () => useCloudCall(({ id, name }: { id: string; name: string }) => request({ schema: Cloud, computer: 'local', path: room(id), method: 'DELETE', body: { name } }))
 
-export const useApprove = () => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}/approvals`, method: 'POST' }))
+export const useApprove = () => useCloudCall(({ id, device }: { id: string; device: string }) => rememberedThen(device, () => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}/approvals`, method: 'POST' })))
 
 export const useDeny = () => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}`, method: 'DELETE' }))
 
@@ -145,3 +146,7 @@ export const useDeleteData = () => useCloudCall(() => request({ schema: Cloud, c
 
 export const useRotated = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud/rotations', method: 'DELETE' }))
 
+function rememberedThen<T>(device: string, call: () => Promise<T>): Promise<T> {
+  rememberDevices([device])
+  return call()
+}

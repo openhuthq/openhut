@@ -25,7 +25,7 @@ const API_PORT = LOCAL_CLOUD ? await freePort(Number(process.env.OPENHUT_API_POR
 const CLOUD_URL = REMOTE_CLOUD ?? `http://127.0.0.1:${CLOUD_PORT}`
 const API_URL = process.env.OPENHUT_API_URL ?? (LOCAL_CLOUD ? `http://127.0.0.1:${API_PORT}` : 'https://api.openhut.dev')
 const LABEL = LOCAL_CLOUD ? 'Dev · local cloud' : `Dev · ${new URL(CLOUD_URL).hostname}`
-const shared = { ...process.env, PORT: String(PORT), OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_BIN: BIN, AGENTD_HERMES: RUNTIME, AGENTD_SOCK: SOCK, OPENHUT_CLOUD_URL: CLOUD_URL, OPENHUT_API_URL: API_URL }
+const shared = { ...process.env, PORT: String(PORT), OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_BIN: BIN, AGENTD_HERMES: RUNTIME, AGENTD_SOCK: SOCK, OPENHUT_CLOUD_URL: CLOUD_URL, OPENHUT_API_URL: API_URL, OPENHUT_PERSONAL: '1' }
 
 if (!existsSync(RUNTIME)) console.warn(`No agent runtime at ${RUNTIME}, so agents won't start. Run npm -w @openhut/desktop run pack-backend (needs uv).`)
 const children: ChildProcess[] = []

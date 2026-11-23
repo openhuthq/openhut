@@ -38,6 +38,7 @@ const pending = new Map<string, number>()
 let signInError: string | null = null
 let boxesDiffer = false
 let checkedAt = 0
+let cloudHasKit: boolean | undefined
 let boxes: Promise<unknown> = Promise.resolve()
 let passkeySaved = false
 let asking: { settled: string[]; approved: boolean; error: string | null; timer: NodeJS.Timeout } | undefined
@@ -52,6 +53,7 @@ export const cloudService = {
     const members = roomKeys.members()
     const locked = !account ? keysService.locked() : undefined
     if (on && Date.now() - checkedAt > CHECK_MS) checkSoon()
+    if (on && cloudHasKit === undefined && !keysService.kitState().saved) cloudHasKit = await cloudBox('kit').then((got) => got.status === 200, () => undefined)
     const here = await keysService.deviceKey()
     const lists = on && account ? roomKeys.rooms().map((room) => roomKeys.members(room.workspace.id)) : []
     const accountKey = await keysService.accountDeviceKey()
@@ -66,7 +68,7 @@ export const cloudService = {
       object: 'cloud', status: locked ? 'locked' : on ? (cloudEvents.ready() ? 'on' : 'offline') : 'off', email: locked?.email ?? (on && account ? account.email : null),
       device: here,
       workspace: on && account && members ? { id: account.workspace.id, version: members.version, members: members.members } : null,
-      keyStore: keyStore.kind(), kit: on ? kitOf() : null, kitInCloud: inCloud ? inCloud.found : Boolean(keysService.kitState().saved), cloudKit: inCloud?.kit ?? null, backup: IDLE,
+      keyStore: keyStore.kind(), kit: on ? kitOf() : null, kitInCloud: inCloud ? inCloud.found : Boolean(keysService.kitState().saved) || cloudHasKit === true, cloudKit: inCloud?.kit ?? null, backup: IDLE,
       signInError, keptAccount: on ? null : (keysService.kitState().saved ? keysService.account()?.email ?? null : null), devices, passkey: on ? passkeySaved : passkeyInCloud, youngUntil: null, needsSignIn: Boolean(locked && !session),
       workspaces: on && account ? roomKeys.rooms().map(({ workspace: { id, key } }) => {
         const body = roomKeys.members(id)
@@ -95,7 +97,7 @@ export const cloudService = {
         ? [me].filter((member) => member.devices.some((device) => device !== member.kit && !body?.runtimes?.includes(device)))
         : body?.members.filter((member) => member.role !== 'member' && member.email !== email) ?? []
       if (!approvers.length) continue
-      const asked = await keysService.call({ method: 'POST', path: '/v1/join-requests', body: { workspace: id, name: deviceName(), os: deviceOs(), server: config.installKind === 'server' } })
+      const asked = await keysService.call({ method: 'POST', path: '/v1/join-requests', body: { workspace: id, name: deviceName(), os: deviceOs(), server: !config.personal } })
       if (asked.status !== 200) refused = z.safeParse(z.object({ error: z.object({ message: z.string() }) }), asked.json).data?.error.message ?? 'OpenHut Cloud couldn’t send your request. Try again.'
       if (asked.status !== 200) continue
       rooms.push({ id, admins: approvers.map((member) => member.email), own: home })
@@ -245,11 +247,12 @@ export const cloudService = {
 
   async signOut(): Promise<Cloud> {
     await stopAsking()
-    if (keysService.account()?.key && keysService.session()) await leaveHere()
+    if (keysService.account()?.key && keysService.session()) await leaveHere().catch((err: unknown) => log.warn({ event: 'cloud.leave_failed', error: messageOf(err) }))
     await keysService.setSession(undefined)
     await keysService.setLocked(undefined)
     cloudEvents.stop()
     signInError = null
+    cloudHasKit = undefined
     return cloudService.status()
   },
 
@@ -259,6 +262,7 @@ export const cloudService = {
       if (keysService.kitState().saved) await rotate({ changed: await keysService.change(), drop: ['passkey'] })
       const { words, box, ask } = await keysService.newKit()
       const kept = boxIn(await getBox('kit'))
+      if (kept && !keysService.kitState().saved) throw new HttpError(409, 'Your account already has a recovery kit, and this computer hasn’t picked it up yet. Use the kit you saved, or make a new one on the computer that made it.')
       const savedAt = Math.max(Date.now(), (Date.parse(kept?.savedAt ?? '') || 0) + 1)
       await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString(), confirmed: false })
       const signer = keysService.mustBeOn()
@@ -271,6 +275,7 @@ export const cloudService = {
         throw err
       }
       await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString() })
+      cloudHasKit = true
       await confirmKit({ account: signer, body: box, savedAt }).catch(warnCheck)
       return { object: 'recovery_kit' as const, words, ask, kitId: await kitId(box), madeAt: new Date(savedAt).toISOString(), device: deviceName() }
     })
@@ -281,7 +286,7 @@ export const cloudService = {
     const kind = 'words' in body ? 'kit' : 'passkey'
     const box = boxIn(await getBox(kind))
     if (!box && kind === 'kit') throw new HttpError(409, `There’s no recovery kit for this account yet. Save one on the computer you set up first, then type its words here.`)
-    if (!box) throw new HttpError(409, `Touch ID isn’t set up for this account yet. Add it in Settings › Backup on a Mac that’s already unlocked.`)
+    if (!box) throw new HttpError(409, `Touch ID isn’t set up for this account yet. Turn it on in Settings › General on a Mac that’s already unlocked.`)
     const workspaces = await boxesOf()
     const account = 'words' in body
       ? await keysService.restore({ words: body.words, kit: box.body, workspaces })
@@ -299,6 +304,13 @@ export const cloudService = {
     return cloudService.status()
   },
 
+  async removePasskey(): Promise<Cloud> {
+    const account = keysService.mustBeOn()
+    if (!await serial(() => deleteBoxes({ account, kinds: ['passkey'] }))) throw new HttpError(502, 'OpenHut Cloud couldn’t turn Touch ID off. Try again.')
+    passkeySaved = false
+    return cloudService.status()
+  },
+
   async notMe({ device }: { device: string }): Promise<Cloud> {
     const account = keysService.mustBeOn()
     const mine = (ws: string) => Boolean(roomKeys.members(ws)?.members.some((member) => member.email === account.email && member.devices.includes(device)))
@@ -306,6 +318,7 @@ export const cloudService = {
     if (!mine(account.workspace.id) && !teams.length) throw new HttpError(400, 'Pick one of your other devices to remove.', { param: 'device' })
     if (mine(account.workspace.id)) await serial(async () => putList({ workspace: account.workspace.id, list: await keysService.dropDevices([device]) }))
     for (const ws of teams) await change({ ws, devices: [device] })
+    if (await serial(() => deleteBoxes({ account, kinds: ['passkey'] }))) passkeySaved = false
     await keepToRotate()
     return cloudService.status()
   },
@@ -432,6 +445,7 @@ async function compareBoxes(): Promise<void> {
   if (![200, 404].includes(kit.status) || workspaces.status !== 200) return
   if (!Boxes.safeParse(workspaces.json).data?.data.some((each) => each.id === `${WORKSPACE_BOX}${account.workspace.id}`)) return lockOut(account)
   const cloudKit = await dropPending({ account, cloudKit: boxIn(kit) })
+  cloudHasKit = Boolean(cloudKit)
   const mine = keysService.kitState().saved?.box
   const kitMine = Boolean(cloudKit && await keysService.boxIsMine({ account, name: 'kit', box: cloudKit }))
   const marker = cloudKit && kitMine ? await markerOf({ account, kit: cloudKit }) : undefined
@@ -558,7 +572,7 @@ async function checkAsked(): Promise<void> {
     if (got.status === 403 && own) return removed()
     const found = Letters.safeParse(got.json).data?.data ?? []
     if (own && await unlockedBy({ workspace, found })) return
-    const chain = (!own || config.installKind === 'server') && found.length ? await chainOf(workspace) : []
+    const chain = (!own || !config.personal) && found.length ? await chainOf(workspace) : []
     if (chain.length && await roomKeys.joinApproved({ ws: workspace, chain, found })) {
       for (const each of found) await keysService.call({ method: 'DELETE', path: `/v1/letters/${each.id}` })
       now.settled.push(workspace)

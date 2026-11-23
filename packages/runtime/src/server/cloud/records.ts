@@ -33,12 +33,14 @@ const listeners = new Set<(change: Change) => void>()
 let seen: Promise<Map<string, Seen>> | undefined
 let draining: Promise<void> = Promise.resolve()
 
+let refused: (workspace: string) => void = () => undefined
+
 export const recordsService = {
   async list({ collection, workspace, parent }: { collection: Collection; workspace: string; parent?: string }): Promise<Held[]> {
     const records = await clientNow()
     const all: Held[] = []
     for (let startingAfter: string | undefined, more = true; more;) {
-      const page = await reach(() => records.list({ collection, workspace, parent, startingAfter }))
+      const page = await reach(() => records.list({ collection, workspace, parent, startingAfter }), workspace)
       for (const row of page.data) all.push(await keep(row))
       startingAfter = page.next ?? undefined
       more = page.next !== null
@@ -48,7 +50,7 @@ export const recordsService = {
 
   async get({ collection, workspace, id }: { collection: Collection; workspace: string; id: string }): Promise<Held | null> {
     const records = await clientNow()
-    const row = await reach(() => records.get({ collection, workspace, id }))
+    const row = await reach(() => records.get({ collection, workspace, id }), workspace)
     return row && keep(row)
   },
 
@@ -68,6 +70,10 @@ export const recordsService = {
   },
 
   held: async (id: string): Promise<number> => (await seenMap()).get(id)?.ver ?? 0,
+
+  onRefused(listener: (workspace: string) => void): void {
+    refused = listener
+  },
 
   onChange(listener: (change: Change) => void): () => void {
     listeners.add(listener)
@@ -200,10 +206,11 @@ function seenMap(): Promise<Map<string, Seen>> {
   return seen
 }
 
-async function reach<T>(step: () => Promise<T>): Promise<T> {
+async function reach<T>(step: () => Promise<T>, workspace?: string): Promise<T> {
   try {
     return await step()
   } catch (error) {
+    if (workspace && error instanceof RecordsError && error.status === 403) refused(workspace)
     throw httpOf(error)
   }
 }

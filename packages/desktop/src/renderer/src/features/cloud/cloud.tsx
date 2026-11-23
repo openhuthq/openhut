@@ -7,7 +7,7 @@ import { PersonFace } from '@/components/custom/person-face'
 import { DeviceIcon, DeviceMeta } from '@/components/custom/device'
 import { notify } from '@/components/custom/toast'
 import { ConfirmButton } from '@/components/confirm-button'
-import { nameOf, REMOVE_DETAIL, useAddPasskey, usePasskeys, useRemoveMac, useSignOut } from '@/features/cloud/api'
+import { nameOf, REMOVE_DETAIL, useAddPasskey, usePasskeys, useRemoveMac, useRemovePasskey, useSignOut } from '@/features/cloud/api'
 import { SaveKit } from '@/features/cloud/sign-in'
 import { Guide } from '@/features/cloud/step'
 import { Chevron, Row, Rows } from '@/features/settings/kit'
@@ -22,6 +22,7 @@ export function YouSettings() {
   const opened = useOpen()
   const helper = usePasskeys()
   const addPasskey = useAddPasskey()
+  const removePasskey = useRemovePasskey()
   const error = new URLSearchParams(useSearch()).get('error') ?? undefined
   const email = cloud.email ?? ''
   const young = Boolean(cloud.youngUntil)
@@ -34,8 +35,10 @@ export function YouSettings() {
       <Row icon={<I icon={LifebuoyIcon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>Your 12 words to get back in if you lose every computer. {kitNote(cloud.kit)}.</span>}>
         {!young && <Button type="button" variant="ghost" className={PILL} onClick={() => open('kit')}>New kit</Button>}
       </Row>
-      {helper?.passkeys && helper.prf && <Row icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title="Touch ID" note={cloud.passkey ? 'On' : 'Unlock a new Mac with your fingerprint'}>
-        {!cloud.passkey && !young && <Button type="button" variant="ghost" className={PILL} disabled={addPasskey.isPending} onClick={() => addPasskey.mutate(email, { onError: toastError })}>Add</Button>}
+      {helper?.passkeys && helper.prf && <Row icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title="Touch ID" note={cloud.passkey ? 'On · in iCloud Keychain. Your Macs on this Apple Account open OpenHut with one touch.' : 'Unlock OpenHut on your next Mac with your fingerprint'}>
+        {cloud.passkey
+          ? <ConfirmButton variant="ghost" className={PILL} disabled={removePasskey.isPending} question="Turn Touch ID off?" detail="Your Macs stop opening OpenHut with Touch ID. Your recovery kit still works, and you can turn it on again here." action="Turn off" onConfirm={() => removePasskey.mutateAsync()}>Remove</ConfirmButton>
+          : !young && <Button type="button" variant="ghost" className={PILL} disabled={addPasskey.isPending} onClick={() => addPasskey.mutate(email, { onError: toastError })}>Add</Button>}
       </Row>}
     </Rows>
     <ErrorNote message={error} />

@@ -24,6 +24,8 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.post<{ Body: AddPasskey }>('/passkeys', PasskeyRequest, async (req) => cloudService.addPasskey(req.body))
 
+  app.delete('/passkeys', async () => cloudService.removePasskey())
+
   app.patch<{ Params: { id: string }; Body: UpdateWorkspace }>('/workspaces/:id', UpdateRequest, async (req) => cloudService.update({ workspace: req.params.id, ...req.body }))
 
   app.get<{ Params: { id: string } }>('/workspaces/:id/icon', SignedIn, async (req, reply) => cloudService.icon({ workspace: req.params.id, reply }))
