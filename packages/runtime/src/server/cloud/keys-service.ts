@@ -86,7 +86,7 @@ export const keysService = {
     const { signature } = box
     if (box.by !== by || !signature) return false
     if (!box.savedAt || !await checkV1({ device: by, proof: 'key-box', parts: [account.sub, name, box.body, String(Date.parse(box.savedAt))], signature })) return false
-    if (name === 'kit' || name === 'kit-confirmed') return true
+    if (name === 'kit' || name === 'kit-confirmed' || name === 'passkey') return true
     const plain = await unlock({ keys: { 1: fromBase64(account.key) }, bind: bind({ sub: account.sub, name: `workspace/${room.workspace.id}` }), locked: fromBase64(box.body) })
     return Boolean(plain && equal({ a: plain, b: await boxedSecret({ account, room }) }))
   },

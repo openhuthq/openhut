@@ -68,6 +68,10 @@ test('key boxes are signed by the account key, and a box another account key mad
   assert.equal(await keysService.boxIsMine({ account, name: 'kit', box: { ...kit, savedAt: new Date(savedAt + 1).toISOString() } }), false)
   assert.equal(await keysService.boxIsMine({ account, name: 'passkey', box: kit }), false)
   assert.equal(await keysService.boxIsMine({ account: other, name: 'kit', box: kit }), false)
+  const made = await keysService.signBox({ account, name: 'passkey', body: toBase64(newKey()), savedAt: Date.now() })
+  const passkey = { ...made, savedAt: new Date(made.savedAt).toISOString() }
+  assert.equal(await keysService.boxIsMine({ account, name: 'passkey', box: passkey }), true, 'a real passkey box stays mine, so Touch ID keeps reading On')
+  assert.equal(await keysService.boxIsMine({ account: other, name: 'passkey', box: passkey }), false)
 })
 
 test('signing in with another Google account is refused, and the first account keeps its keys and kit', async () => {
