@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { SquareLock02Icon, UserGroupIcon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, LaptopIcon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, ServerStack01Icon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { SquareLock02Icon, UserGroupIcon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, LaptopIcon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogClose, DialogTitle } from '@/components/ui/dialog'
@@ -14,6 +14,7 @@ import { Choice, DialogCard, DRAG, GLASS, HOVER, I, MenuCard, PILL, ROW, ROW_VAL
 import { agentPath, type AgentDialog } from '@/app/routes'
 import { useAgents, useChannels, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
 import { nameOf, runsOnNote, useComputers, useFeatures } from '@/features/computers/api'
+import { iconOf } from '@/features/computers/computer-picker'
 import { ChangedBy, useChangedByOther } from '@/features/cloud/live'
 import { EditLock, FieldBox, useHolder } from '@/features/cloud/presence'
 import { CanUse } from '@/features/agents/agent-connections'
@@ -163,7 +164,7 @@ function RunsOn({ agent }: { agent: Agent }) {
         {!agent.runsHere && <Choice icon={<I icon={LaptopIcon} size={15} />} name={elsewhereOf(agent)} selected disabled />}
         {(computers ?? []).map((computer) => !agent.runsHere && computer.id === id
           ? agent.canManage && <Choice key={computer.id} icon={<I icon={LaptopIcon} size={15} />} name="Run it here" disabled={!agent.canEdit || update.isPending} onClick={() => update.mutate({ runsHere: true }, { onError: toastError })} />
-          : <Choice key={computer.id} icon={<I icon={computer.id === 'local' ? LaptopIcon : ServerStack01Icon} size={15} />} name={computer.id === id ? computer.name : `Move to ${computer.name}`}
+          : <Choice key={computer.id} icon={<I icon={iconOf(computer)} size={15} />} name={computer.id === id ? computer.name : `Move to ${computer.name}`}
           note={runsOnNote(computer)}
           selected={computer.id === id} disabled={computer.id === id || !computer.online || !agent.canEdit || !agent.canManage} onClick={() => move.go(computer.id)} />)}
         <DropdownMenuSeparator />
@@ -173,7 +174,7 @@ function RunsOn({ agent }: { agent: Agent }) {
     {move.line
       ? <p role="status" className="m-0 px-2.5 py-1 text-[12.5px]/[1.45] text-body">{move.line}</p>
       : note && <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{note}</p>}
-    {id === 'local' && !WORDS.sandboxed && <TeamHint agent={agent} server={(computers ?? []).find((each) => each.id !== 'local' && each.online)} onMove={(to) => move.go(to)} />}
+    {id === 'local' && !WORDS.sandboxed && <TeamHint agent={agent} server={(computers ?? []).find((each) => each.kind === 'server' && each.online)} onMove={(to) => move.go(to)} />}
   </>
 }
 

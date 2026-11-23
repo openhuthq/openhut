@@ -10,6 +10,7 @@ import { request } from '@/lib/api-client'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
 import { localFace } from '@/features/agents/face'
+import { keepThere } from '@/features/cloud/live'
 
 const GRANT_LIST = List(Grant)
 const CHANNEL_LIST = List(Channel)
@@ -50,10 +51,11 @@ export function useCreateAgent() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: async ({ body, computer }: { body: CreateAgent; computer: string }) => {
-      const agent = await request({ schema: Agent, computer, path: '/api/agents', method: 'POST', body })
-      return request({ schema: Agent, computer, path: agentPath(agent.id), method: 'PATCH', body: { wanted: 'running' } })
+      const agent = await request({ schema: Agent, path: '/api/agents', method: 'POST', body })
+      return request({ schema: Agent, path: agentPath(agent.id), method: 'PATCH', body: { wanted: 'running', ...(computer !== 'local' && { runsOn: computer }) } })
     },
     onSuccess: (agent, { computer }) => {
+      if (computer !== 'local') keepThere(agent.id)
       client.setQueryData([...AGENTS_KEY, agent.id], agent)
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents && [...agents, { ...agent, computer, online: true }])
       navigate(`/agents/${encodeURIComponent(agent.id)}`)
@@ -266,7 +268,8 @@ export function useMoveAgent() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (input: { id: string; to: string }) => openhut.agents.move(input),
-    onSuccess: (agent) => {
+    onSuccess: (agent, { to }) => {
+      if (to !== 'local') keepThere(agent.id)
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agent.id ? agent : each))
       void client.invalidateQueries({ queryKey: [...AGENTS_KEY, agent.id] })
       void client.resetQueries({ queryKey: ['threads', 'agent', agent.id] })

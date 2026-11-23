@@ -29,7 +29,7 @@ export function MoveHere({ agent }: { agent: Agent }) {
   const update = useUpdateAgent(agent.id)
   const hidden = agent.runsHere || agent.wanted !== 'running' || (kept && !agent.runsNowhere) || !agent.canEdit || !agent.canManage
   const keep = () => {
-    remember(agent.id)
+    keepThere(agent.id)
     setKept(true)
   }
   useStickyToast({ id: `move-${agent.id}`, notice: hidden ? null : {
@@ -84,7 +84,7 @@ function stored(id: string): boolean {
   }
 }
 
-function remember(id: string): void {
+export function keepThere(id: string): void {
   try {
     localStorage.setItem(KEPT + id, '1')
   } catch {
