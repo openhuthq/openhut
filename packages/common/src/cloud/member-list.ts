@@ -79,7 +79,6 @@ async function follows({ previous, next }: { previous: Link; next: Link }): Prom
   if (signer?.role !== 'owner' && signer?.role !== 'admin' && keyVersionOf(b) !== keyVersionOf(a)) return false
   if (invite) return joins({ previous: a, next: b, invite })
   if (!signer) return false
-  if (youngUntil(a, by) > (b.at ?? 0) && !youngMay({ previous: a, next: b, signer, by })) return false
   if (signer.kit === by) return kitAdds({ previous: a, next: b, signer })
   if (signer.role === 'owner') return true
   if (signer.role === 'admin') return same(ownerOf(a), ownerOf(b))
@@ -101,20 +100,9 @@ function dated({ previous: a, next: b }: { previous: MemberListBody; next: Membe
   return kept.every((key) => addedOf(b, key) === addedOf(a, key) && b.names?.[key] === a.names?.[key]) && fresh.every((key) => b.added?.[key] === b.at)
 }
 
-export function youngUntil(body: MemberListBody, key: string): number {
-  const since = addedOf(body, key)
-  const mine = body.members.find((member) => member.devices.includes(key))?.devices ?? []
-  return since > 0 && mine.some((each) => addedOf(body, each) < since) ? since + YOUNG_MS : 0
-}
-
 export function newUntil(body: MemberListBody, key: string): number {
   const since = addedOf(body, key)
   return since > 0 && devicesOf(body).some((each) => addedOf(body, each) < since) ? since + YOUNG_MS : 0
-}
-
-function youngMay({ previous: a, next: b, signer, by }: { previous: MemberListBody; next: MemberListBody; signer: Member; by: string }): boolean {
-  const devices = b.members.find((member) => member.email === signer.email)?.devices ?? []
-  return onlyDevices({ previous: a, next: b, signer, devices }) && signer.devices.every((key) => key === by || devices.includes(key)) && a.removed.every((key) => b.removed.includes(key))
 }
 
 function kitAdds({ previous: a, next: b, signer }: { previous: MemberListBody; next: MemberListBody; signer: Member }): boolean {

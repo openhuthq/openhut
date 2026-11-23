@@ -24,7 +24,6 @@ export const roster: Roster = {
     { email: 'ana@example.com', role: 'member', devices: [keyOf('anaMac'), keyOf('anaPhone')] },
   ],
   removed: [keyOf('gone')],
-  runtimes: [keyOf('moServer')],
   viewers: [keyOf('moPhone'), keyOf('anaPhone')],
 }
 
@@ -34,7 +33,7 @@ const ring = (key: Bytes | undefined): Keyring | undefined => key && { version: 
 
 export function keysOf(device: Device): Keys {
   const person = device.startsWith('mo') ? personal.mo : personal.ana
-  const viewer = roster.viewers?.includes(keyOf(device)) ?? false
+  const viewer = roster.viewers.includes(keyOf(device))
   return ({ use, workspace }) => ({ workspace: workspace === team ? teamKeys : undefined, own: ring(person.own), vault: viewer ? undefined : ring(person.vault) })[use]
 }
 
@@ -58,12 +57,8 @@ export function fakeCloud() {
       return reply(200, row)
     }
     const all = [...rows.values()].filter((row) => row.object === collection).sort((a, b) => a.id.localeCompare(b.id))
-    if (init?.method === 'POST') {
-      const { ids } = JSON.parse(String(init.body)) as { ids: string[] }
-      return reply(200, { object: 'list', url: url.pathname, hasMore: false, data: all.filter((row) => ids.includes(row.id)) })
-    }
     if (id) return rows.has(`${collection}/${id}`) ? reply(200, rows.get(`${collection}/${id}`)) : reply(404, { error: { type: 'invalid_request_error', message: 'No such record.' } })
-    const after = url.searchParams.get('starting_after')
+    const after = url.searchParams.get('startingAfter')
     const limit = Number(url.searchParams.get('limit') ?? 100)
     const parent = url.searchParams.get('parent')
     const matching = all.filter((row) => row.workspace === url.searchParams.get('workspace') && (!parent || row.parent === parent) && (!after || row.id > after))

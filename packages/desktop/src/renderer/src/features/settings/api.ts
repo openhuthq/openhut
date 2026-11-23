@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Admin, SeatSignIn, SeatUsage, type UpdateAdmin } from '@openhut/common/admin/admin.ts'
+import { Admin, SeatSignIn, SeatUsage } from '@openhut/common/admin/admin.ts'
 import { request } from '@/lib/api-client'
 import { Invitation } from '@/features/settings/invitation'
 import { devices } from '@/lib/openhut'
@@ -55,14 +55,6 @@ export function useAdmin() {
 
 export function useSeatUsage(enabled: boolean) {
   return useQuery({ queryKey: ['seat-usage'], queryFn: () => request({ schema: SeatUsage, computer: 'local', path: '/api/admin/seat-usage' }), retry: false, enabled })
-}
-
-export function useUpdateAdmin() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (body: UpdateAdmin) => request({ schema: Admin, computer: 'local', path: '/api/admin', method: 'PATCH', body }),
-    onSuccess: (admin) => client.setQueryData(ADMIN_KEY, admin),
-  })
 }
 
 export function useStartSeatSignIn() {

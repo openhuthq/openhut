@@ -55,13 +55,6 @@ export const settings = {
   forgetCatalog: (provider: string) => forget(`provider_models_${provider}`),
   appliedBuild: (): string | undefined => rows.get('build'),
   setAppliedBuild: (build: string) => write('build', build),
-  usageData: (): boolean => rows.get('usage_data') !== 'off',
-  setUsageData: (on: boolean) => write('usage_data', on ? 'on' : 'off'),
-  instanceId: (): string | undefined => rows.get('instance_id') || undefined,
-  setInstanceId: async (id: string): Promise<string> => {
-    await write('instance_id', id)
-    return id
-  },
   update: (): string | undefined => rows.get('update') || undefined,
   setUpdate: (record: string) => write('update', record),
   timeZone: (): string => rows.get('time_zone') || Intl.DateTimeFormat().resolvedOptions().timeZone,

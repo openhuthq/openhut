@@ -6,7 +6,7 @@ import { PER_AGENT, SealedConflict, SealedRow, type Collection } from './wire.ts
 
 export type Seen = { ver: number; parent: string | null }
 export type RecordsClient = ReturnType<typeof recordsClient>
-type Expect = { collection: Collection; workspace: string; parent?: string | null; ids?: string[] }
+type Expect = { collection: Collection; workspace: string; parent?: string | null; id?: string }
 type Agents = Map<string, Promise<AgentFacts | null>>
 type Reply = { status: number; json: unknown }
 type Checked = { row: SealedRow; roster: Roster; agent: AgentFacts | null }
@@ -35,7 +35,7 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
   seen?: (id: string) => Seen | undefined
   fetch?: typeof globalThis.fetch
 }) {
-  async function call({ method, path, body }: { method: 'GET' | 'PUT' | 'POST'; path: string; body?: unknown }): Promise<Reply> {
+  async function call({ method, path, body }: { method: 'GET' | 'PUT'; path: string; body?: unknown }): Promise<Reply> {
     const headers = { authorization: `Bearer ${await token()}`, ...(body === undefined ? {} : { 'content-type': 'application/json' }) }
     const response = await send(`${baseUrl}/v1/${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
     return { status: response.status, json: await response.json().catch(() => null) }
@@ -46,7 +46,7 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
     const list = row && roster(row.workspace)
     const held = row && seen(row.id)
     if (!row || !list || row.object !== expect.collection || row.workspace !== expect.workspace) return null
-    if ((expect.parent !== undefined && row.parent !== expect.parent) || (expect.ids && !expect.ids.includes(row.id))) return null
+    if ((expect.parent !== undefined && row.parent !== expect.parent) || (expect.id !== undefined && row.id !== expect.id)) return null
     if (held && (row.ver < held.ver || row.parent !== held.parent)) return null
     const agent = PER_AGENT.includes(row.object) && row.parent ? await agentOf({ workspace: row.workspace, id: row.parent, agents }) : null
     return allowed({ row, roster: list, agent }) ? { row, roster: list, agent } : null
@@ -60,7 +60,7 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
 
   async function fetchAgent({ workspace, id, agents }: { workspace: string; id: string; agents: Agents }): Promise<AgentFacts | null> {
     const reply = await call({ method: 'GET', path: `agent/${encodeURIComponent(id)}` })
-    const ok = reply.status === 200 ? await checked({ json: reply.json, expect: { collection: 'agent', workspace, ids: [id] }, agents }) : null
+    const ok = reply.status === 200 ? await checked({ json: reply.json, expect: { collection: 'agent', workspace, id }, agents }) : null
     return ok && await verify(ok.row) ? agentFacts({ ...ok.row, id }) : null
   }
 
@@ -86,7 +86,7 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
     const reply = await call({ method: 'GET', path: `${collection}/${encodeURIComponent(id)}` })
     if (reply.status === 404) return null
     if (reply.status !== 200) throw failure(reply)
-    return accept({ json: reply.json, expect: { collection, workspace, ids: [id] } })
+    return accept({ json: reply.json, expect: { collection, workspace, id } })
   }
 
   async function write({ where, ver, value }: { where: Where; ver: number; value: Value | null }): Promise<{ saved: Opened } | { latest: Opened | null }> {
@@ -95,7 +95,7 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
     const reply = await call({ method: 'PUT', path: `${where.collection}/${encodeURIComponent(where.id)}`, body: sealed })
     if (reply.status === 409) {
       const current = SealedConflict.safeParse(reply.json).data?.current
-      const expect = { collection: where.collection, workspace: where.workspace, parent: where.parent, ids: [where.id] }
+      const expect = { collection: where.collection, workspace: where.workspace, parent: where.parent, id: where.id }
       return { latest: current ? await accept({ json: current, expect }) : await get(where) }
     }
     if (reply.status !== 200) throw failure(reply)
@@ -119,13 +119,8 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
     get,
 
     async list({ collection, workspace, parent, startingAfter, limit }: { collection: Collection; workspace: string; parent?: string; startingAfter?: string; limit?: number }): Promise<{ data: Opened[]; next: string | null }> {
-      const query = new URLSearchParams({ workspace, ...(parent ? { parent } : {}), ...(startingAfter ? { starting_after: startingAfter } : {}), ...(limit ? { limit: String(limit) } : {}) })
+      const query = new URLSearchParams({ workspace, ...(parent ? { parent } : {}), ...(startingAfter ? { startingAfter } : {}), ...(limit ? { limit: String(limit) } : {}) })
       return many({ reply: await call({ method: 'GET', path: `${collection}?${query}` }), expect: { collection, workspace, parent } })
-    },
-
-    async batchGet({ collection, workspace, ids }: { collection: Collection; workspace: string; ids: string[] }): Promise<Opened[]> {
-      const reply = await call({ method: 'POST', path: `${collection}/batch-get`, body: { ids } })
-      return (await many({ reply, expect: { collection, workspace, ids } })).data
     },
 
     put({ collection, workspace, parent = null, id, current = 0, value, reapply }: Omit<Where, 'parent'> & { parent?: string | null; current?: number; value: Value; reapply?: (latest: Opened) => Value | null | Promise<Value | null> }): Promise<Opened> {

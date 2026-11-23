@@ -138,8 +138,8 @@ const remote = async ({ name, id = helpdeskId, ver = (room.records.get(id)?.ver 
 
 test('first sign-in uploads everything once; an edit made offline goes out once on reconnect', async () => {
   syncService.connect()
-  await until(() => room.records.size === 5 && syncService.status().at !== null, 'the first backup and its head')
-  assert.deepEqual([...room.puts.values()], [1, 1, 1, 1, 1])
+  await until(() => room.records.size === 4 && syncService.status().at !== null, 'the first backup and its head')
+  assert.deepEqual([...room.puts.values()], [1, 1, 1, 1])
   assert.equal(await nameInRoom(), 'Helpdesk')
   assert.equal(JSON.stringify([...room.records.values()]).includes('Helpdesk'), false)
 
@@ -187,10 +187,10 @@ test('an evil room’s forged, replayed or old records change nothing, and a rec
 })
 
 test('a record placed at another record’s slot is dropped, then overwritten with what this computer has', async () => {
-  const usageSlot = await slot({ key, path: 'setting/usage_data' })
-  const ver = room.records.get(usageSlot)?.ver ?? 0
-  push(store(await remote({ name: 'Wrong slot', id: usageSlot })))
-  await until(() => (room.records.get(usageSlot)?.ver ?? 0) === ver + 2, 'the setting to be backed up over it')
+  const settingSlot = await slot({ key, path: 'setting/time_zone' })
+  const ver = room.records.get(settingSlot)?.ver ?? 0
+  push(store(await remote({ name: 'Wrong slot', id: settingSlot })))
+  await until(() => (room.records.get(settingSlot)?.ver ?? 0) === ver + 2, 'the setting to be backed up over it')
   assert.equal(await nameHere(), 'After a gap')
   await until(() => syncService.status().state === 'idle', 'the overwrite’s backup to finish')
   await sleep(500)

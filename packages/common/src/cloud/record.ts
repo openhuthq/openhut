@@ -5,6 +5,7 @@ import { ModelKey, ProviderId, ProviderModel } from '../models/provider.ts'
 import { ChatMessage, fileInHome, AGENT_HOME } from '../threads/thread.ts'
 import { checkProof, checkRecord, DeviceKey, HereField, Locked, Member, parseJson, recordBind, Signature, Signed, signProof, signRecord, type Record as CloudRecord } from './cloud.ts'
 import { fromBase64, lock, newKey, readHeader, toBase64, unlock, type Bytes, type Identity } from '../vault/vault.ts'
+import { padded } from '../records/seal.ts'
 
 const AgentId = z.string().check(z.regex(/^ag_[a-z0-9]{8}$/))
 const Hash = z.string().check(z.regex(/^[A-Za-z0-9_-]{43}$/))
@@ -104,8 +105,6 @@ const Body = z.object({
 const Hidden = z.object({ hidden: Locked, owner: Member.shape.email })
 const text = new TextEncoder()
 const words = new TextDecoder()
-const SMALL = 64 << 10
-const MIN_BUCKET = 1024
 
 export function refOf(opened: Opened): string | null {
   if (!opened.value) return null
@@ -173,15 +172,6 @@ export async function lockHere({ workspace, key, version, from, value }: { works
 export async function openHere({ workspace, keys, from, body }: { workspace: string; keys: Record<number, Bytes>; from: string; body: string }): Promise<HereValue | null> {
   const plain = await unlock({ keys, bind: hereBind({ workspace, from }), locked: fromBase64(body) })
   return plain?.length === HERE_BYTES ? HereValue.safeParse(parseJson(words.decode(plain))).data ?? null : null
-}
-
-export function padded({ json, size }: { json: string; size?: number }): Bytes | null {
-  const bytes = text.encode(json)
-  const target = size ?? (bytes.length > SMALL ? bytes.length : Math.max(MIN_BUCKET, 2 ** Math.ceil(Math.log2(bytes.length))))
-  if (bytes.length > target) return null
-  const out = new Uint8Array(target).fill(0x20)
-  out.set(bytes)
-  return out
 }
 
 function ownerParts({ workspace, value, n }: { workspace: string; value: AgentValue; n: number }): string[] {

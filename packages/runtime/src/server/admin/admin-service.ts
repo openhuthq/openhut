@@ -7,7 +7,7 @@ import { HttpError } from '../platform/http-error.ts'
 import { createHash } from 'node:crypto'
 import { agentd, containerStates, features, type LastUpdate } from '../platform/agentd.ts'
 import { settings } from '../platform/settings.ts'
-import { emit, setUsageData } from '../platform/events.ts'
+import { emit } from '../platform/events.ts'
 import { computerId, newId, openSealed, relayKeyHex, sealFor, transferPublicKey } from '../platform/secrets.ts'
 import { codex } from '../integrations/codex/codex.ts'
 import { connectionService } from '../connections/connection-service.ts'
@@ -49,11 +49,8 @@ export const adminService = {
         version: health.version, build: health.build, latestBuild, updateAvailable: isNewer({ latest: latestBuild, current: health.build }), update: await currentUpdate({ installing, last }), healthy: health.ok, agentd: health.agentd, firewall: health.firewall,
         running: agents.filter((agent) => states?.[agent.id] === 'running').length, total: agents.length,
       },
-      tailnetUrl: null,
-      google: { clientId: null, redirectUri: connectionService.redirectUrl() },
-      usageData: settings.usageData(),
       publicKey: transferPublicKey,
-      relay: { key: relayKeyHex, computerId, url: config.relayUrl || null },
+      relay: { key: relayKeyHex, computerId, url: config.relayUrl },
       features: available,
       minAppVersion: MIN_APP_VERSION,
     }
@@ -148,7 +145,6 @@ export const adminService = {
 
   async update({ actor, patch }: { actor: Caller; patch: UpdateAdmin }): Promise<Admin> {
     if (patch.seatToken !== undefined) await settings.setSeatToken(patch.seatToken)
-    if (patch.usageData !== undefined) await setUsage(patch.usageData)
     emit({ name: 'admin.updated', actor, target: { type: 'admin', id: 'install', fields: Object.keys(patch) } })
     return adminService.status()
   },
@@ -165,11 +161,6 @@ async function transferOf({ actor, connectionId, subscription }: { actor: Caller
   if (subscription === 'claude' && token) return { type: 'claude', token, at: settings.seatAt() ?? new Date(0).toISOString() }
   if (subscription === 'codex' && tokens) return { type: 'codex', tokens, at: settings.codexAt() ?? new Date(0).toISOString() }
   throw new HttpError(409, subscription ? `This computer isn't signed in to ${subscription === 'claude' ? 'Claude' : 'ChatGPT'}, so there's nothing to copy.` : 'Send a connectionId or a subscription to export.', { param: subscription ? 'subscription' : 'connectionId' })
-}
-
-async function setUsage(on: boolean): Promise<void> {
-  await settings.setUsageData(on)
-  setUsageData(on)
 }
 
 export function isNewer({ latest, current }: { latest: string | null; current: string }): boolean {

@@ -5,13 +5,11 @@ import { db, migrate } from './platform/db.ts'
 import { emit, log } from './platform/events.ts'
 import { answerErrors, errorBody, messageOf } from './platform/http-error.ts'
 import { validateWithZod } from './platform/validation.ts'
-import { forOlderApps } from './platform/responses.ts'
 import { adminController, healthController, updateController } from './admin/admin-controller.ts'
 import { agentController, grantController } from './agents/agent-controller.ts'
 import { memoryController } from './agents/memory-controller.ts'
 import { browserController } from './agents/browser-controller.ts'
 import { eventsController } from './platform/events-controller.ts'
-import { startTelemetry } from './platform/telemetry.ts'
 import { skillController } from './agents/skill-controller.ts'
 import { agentService } from './agents/agent-service.ts'
 import { channelController } from './channels/channel-controller.ts'
@@ -41,7 +39,6 @@ if (config.installKind === 'server' && !/^[0-9a-f]{64}$/i.test(config.clientKeyS
 const app = Fastify({ logger: false, bodyLimit: 1 << 20, trustProxy: ['127.0.0.1', '::1'], forceCloseConnections: true })
 answerErrors(app)
 app.setValidatorCompiler(validateWithZod)
-app.addHook('preSerialization', async (req, _reply, payload) => forOlderApps({ req, payload }))
 app.addHook('onRequest', async (req) => {
   const zone = req.headers['openhut-time-zone']
   if (typeof zone === 'string' && zone) await routineService.setTimeZone(zone)
@@ -87,7 +84,6 @@ process.once('SIGTERM', async () => {
   process.exit(0)
 })
 emit({ name: 'app.started', properties: { at: config.installKind === 'server' ? config.port : config.socket, build: config.build, version: config.version, kind: config.installKind } })
-await startTelemetry()
 relayService.start({ server: app.server }).catch((err: unknown) => log.error({ event: 'relay.start_failed', error: messageOf(err) }))
 await gatewayServer.start().catch(async (err: unknown) => {
   log.error({ event: 'gateway.bind_failed', port: config.gatewayPort, error: messageOf(err) })

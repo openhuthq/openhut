@@ -23,13 +23,10 @@ export type SealedList = z.infer<typeof SealedList>
 export const ListSealedQuery = z.object({
   workspace: Id,
   parent: z.optional(z.string().check(z.minLength(1), z.maxLength(320))),
-  starting_after: z.optional(Id),
+  startingAfter: z.optional(Id),
   limit: z.optional(z.coerce.number().check(z.int(), z.minimum(1), z.maximum(100))),
 })
 export type ListSealedQuery = z.infer<typeof ListSealedQuery>
-
-export const BatchGet = z.object({ ids: z.array(Id).check(z.minLength(1), z.maxLength(100)) })
-export type BatchGet = z.infer<typeof BatchGet>
 
 export const SealedConflict = z.object({ ...ApiError.shape, current: z.optional(SealedRow) })
 export type SealedConflict = z.infer<typeof SealedConflict>

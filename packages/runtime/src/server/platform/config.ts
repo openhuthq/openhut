@@ -12,6 +12,7 @@ const JOIN = process.env.OPENHUT_JOIN || undefined
 const TEST_MODEL = process.env.OPENHUT_MODEL === 'test'
 const HOST_NET = process.env.OPENHUT_AGENT_HOST_NET === '1'
 const CLOUD_URL = process.env.OPENHUT_CLOUD_URL || 'https://cloud.openhut.dev'
+const RELAY_URL = process.env.OPENHUT_RELAY_URL || CLOUD_URL.replace(/^http/, 'ws')
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
 
 export const config = {
@@ -20,9 +21,7 @@ export const config = {
   host: process.env.OPENHUT_HOST ?? '127.0.0.1',
   gatewayPort: GATEWAY_PORT,
   releaseUrl: process.env.OPENHUT_URL ?? 'https://openhut.dev',
-  telemetry: !TEST_MODEL && BUILD !== 'dev',
   cloudUrl: CLOUD_URL,
-  telemetryUrl: `${CLOUD_URL}/v1/events`,
   socket: process.env.OPENHUT_SOCKET ?? join(DATA, 'openhut.sock'),
   installKind: installKindOf(process.env.OPENHUT_SOCKET ? 'desktop' : 'server'),
   clientKeySha256: process.env.OPENHUT_CLIENT_KEY_SHA256,
@@ -45,7 +44,7 @@ export const config = {
   build: BUILD,
   join: JOIN,
   tailnetPort: Number(process.env.OPENHUT_TAILNET_PORT ?? 0),
-  relayUrl: relayUrlOf({ tailnet: !!process.env.OPENHUT_TAILNET_PORT, cloudSet: !!process.env.OPENHUT_CLOUD_URL, dev: BUILD === 'dev' }),
+  relayUrl: RELAY_URL,
   claudeBin: fileURLToPath(new URL('../../../../../bin/claude', import.meta.url)),
   claudeHostBin: process.env.OPENHUT_BIN ? join(process.env.OPENHUT_BIN, process.platform === 'win32' ? 'claude.exe' : 'claude') : fileURLToPath(new URL(`../../../../../bin/${process.platform === 'darwin' ? 'claude-darwin' : 'claude'}`, import.meta.url)),
   claudeVersion: claudeVersionOf(new URL('../../../../../install/native-runtime.json', import.meta.url)),
@@ -61,17 +60,6 @@ function claudeVersionOf(url: URL): string | undefined {
 function installKindOf(kind: 'desktop' | 'server'): 'mac' | 'linux' | 'server' {
   if (kind === 'server') return 'server'
   return process.platform === 'darwin' ? 'mac' : 'linux'
-}
-
-function relayUrlOf({ tailnet, cloudSet, dev }: { tailnet: boolean; cloudSet: boolean; dev: boolean }): string | undefined {
-  if (tailnet) return undefined
-  if (cloudSet) return CLOUD_URL.replace(/^http/, 'ws')
-  return relayOf(JOIN) ?? (dev ? undefined : CLOUD_URL.replace(/^http/, 'ws'))
-}
-
-function relayOf(code: string | undefined): string | undefined {
-  if (!code) return undefined
-  try { return new URL(code).searchParams.get('r') ?? undefined } catch { return undefined }
 }
 
 function fileOr(url: URL, fallback: string): string {
