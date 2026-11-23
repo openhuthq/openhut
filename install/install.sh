@@ -205,7 +205,7 @@ if [ "$MODE" != swap ] && { [ -n "${OPENHUT_UPDATER:-}" ] || { [ ! -f /.dockeren
     -v /var/run/docker.sock:/var/run/docker.sock -v openhut-data:/data \
     -e "RUNTIME_IMAGE=$RUNTIME_IMAGE" -e "OPENHUT_URL=$OPENHUT_URL" -e OPENHUT_UPDATER -e OPENHUT_CLIENT_KEY_SHA256 -e OPENHUT_APP_VERSION \
     -e OPENHUT_PERSONAL -e OPENHUT_MODEL -e OPENHUT_CLOUD_URL -e OPENHUT_API_URL -e RESOLVER -e AGENT_IMAGE \
-    --entrypoint sh "$RUNTIME_IMAGE" -c 'read -r OPENHUT_JOIN || true; export OPENHUT_JOIN; exec sh /opt/openhut/install/install.sh swap'
+    --entrypoint sh "$RUNTIME_IMAGE" -c 'read -r OPENHUT_JOIN || true; export OPENHUT_JOIN; exec sh /opt/openhut/install/install.sh swap 2>&1'
   exit
 fi
 if [ "$MODE" = swap ]; then

@@ -4,8 +4,8 @@ ARG ALPINE=alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb144
 ARG DIND=docker:28-dind@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac
 
 FROM --platform=$BUILDPLATFORM $ALPINE AS tree
-ADD openhut.tgz /opt/openhut/
-RUN chown -R root:root /opt/openhut && chmod -R go-w /opt/openhut
+RUN --mount=type=bind,source=openhut.tgz,target=/tmp/openhut.tgz mkdir -p /opt/openhut && \
+    tar -xzf /tmp/openhut.tgz -C /opt/openhut && chown -R root:root /opt/openhut && chmod -R go-w /opt/openhut
 
 FROM --platform=$BUILDPLATFORM $ALPINE AS agent
 ARG TARGETARCH

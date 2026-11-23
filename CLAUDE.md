@@ -37,8 +37,14 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `.github/workflows/deploy.yml` deploys on every push to `main`. The e2e run serves its releases with the same Worker
   under `wrangler dev`. Deploys: `private/brain/openhut-deploy.md`.
 
-`install/` is the installer of a remote runtime and what it runs on the server (firewall, systemd units, boot script); `scripts/release.sh`
-builds what `openhut.dev` serves; `vendor/` is the pinned Hermes plugin.
+`install/` is the remote runtime: `install/Dockerfile` builds the prebuilt server image `ghcr.io/openhuthq/runtime` (dockerd, gVisor,
+Node, the release tree, Claude Code, agent-browser, the WhatsApp bridge and the pinned Hermes agent image, so nothing downloads on the
+server), and `install.sh` is what `curl openhut.dev | sh` runs: it pulls that image by the digest pinned in the signed installer and
+runs it as the container `openhut` (`--privileged` for the agents' Docker and gVisor, read-only root, data in the volumes `openhut-data`
+and `openhut`, 127.0.0.1:8787 only), plus `openhut-updater`, the only holder of the host's Docker socket, for Update now
+(`private/brain/decisions/runtime-image.md`). `scripts/release.sh` builds what `openhut.dev` serves, `scripts/image.sh` builds the image
+from it and pins its digest into `install.sh`, and `.github/workflows/runtime-image.yml` builds, smoke-tests and pushes it (PRs, `main`
+as `edge`, tags); `vendor/` is the pinned Hermes plugin.
 
 ## Conventions (Skyfleet's)
 
