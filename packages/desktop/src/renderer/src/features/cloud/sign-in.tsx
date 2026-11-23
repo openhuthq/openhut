@@ -93,14 +93,6 @@ export function Pitch() {
   </Pane>
 }
 
-export function SignInOnTeam({ what }: { what: string }) {
-  return <Pane>
-    <Title>Not signed in</Title>
-    <Lead>{`Sign in on the People tab to see ${what}.`}</Lead>
-    <Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/people')}>Go to People</Button>
-  </Pane>
-}
-
 export function MacIsIn({ cloud, onNext }: { cloud: Cloud; onNext: () => void }) {
   const { state, done, total } = cloud.backup
   const busy = state === 'backing_up'

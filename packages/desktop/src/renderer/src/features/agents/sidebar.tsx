@@ -92,7 +92,7 @@ export function CreateTeamDialog() {
   const close = () => open()
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    create.mutate(String(new FormData(event.currentTarget).get('name') ?? '').trim(), { onSuccess: () => navigate('/settings/people') })
+    create.mutate(String(new FormData(event.currentTarget).get('name') ?? '').trim(), { onSuccess: () => navigate('/settings/general') })
   }
   return <Dialog size="narrow" label="Create a team" onClose={close}>
     <DialogHead title="Create a team" onClose={close} />

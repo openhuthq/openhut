@@ -38,7 +38,7 @@ export function useSigningIn(): boolean {
 }
 
 export function enableCloud() {
-  navigate('/settings/people')
+  navigate('/settings/account')
 }
 
 function landAfterSignIn(cloud: Cloud) {
