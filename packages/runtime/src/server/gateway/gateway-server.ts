@@ -23,6 +23,7 @@ const PER_AGENT = 8
 const MAX_BODY = 1 << 20
 const LIMITS = { requestTimeout: 60_000, headersTimeout: 10_000, connectionsCheckingInterval: 2_000 }
 const RunReport = z.object({ picked: z.literal(true).optional(), said: z.string().max(200_000).optional() })
+const TelegramJoin = z.object({ code: z.string().max(64), userId: z.string().regex(/^[1-9]\d{4,14}$/), name: z.string().max(100).default('there'), chatId: z.number() })
 const RenderCard = z.object({ text: z.string().max(200_000), channel: z.string().max(40), chatId: z.string().max(200).optional(), threadId: z.string().max(200).optional() })
 
 export const gatewayServer = {
@@ -57,6 +58,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   if (path === '/routines/due' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: [...await routineService.due({ agentId: agent.id }), ...await changeRequestService.due({ agentId: agent.id })] })
   const run = /^\/routines\/runs\/((?:ru|chg)_[a-z0-9]+)$/.exec(path)
   if (run && req.method === 'POST') return json(res, 200, await reportRun({ agentId: agent.id, runId: run[1], body: await readBody(req) }))
+  if (path === '/telegram/joins' && req.method === 'POST') return json(res, 200, await telegramJoin({ agentId: agent.id, body: await readBody(req) }))
   if (path === '/cards/render' && req.method === 'POST') return json(res, 200, await cardService.render({ agent, ...renderRequest(await readBody(req)) }))
   if (path.startsWith('/test-llm/') && config.modelMode === 'test') return testModel({ path, body: await readBody(req), res })
   json(res, 404, errorBody({ status: 404, message: `No route ${path}.` }))
@@ -165,6 +167,13 @@ export function toolList({ granted, app }: { granted: AgentTool[]; app: string |
   const lines = tools.map((tool) => `${tool.name} [${tool.connection.name}, ${tool.connection.id}]: ${tool.spec.description}`.slice(0, 140))
   if (lines.length) return lines.slice(0, 100).join('\n')
   return granted.length ? `No app named ${app}. Leave app out to list every tool.` : 'No tools: nobody has granted this agent a connection yet.'
+}
+
+async function telegramJoin({ agentId, body }: { agentId: string; body: unknown }) {
+  const parsed = TelegramJoin.safeParse(body)
+  if (!parsed.success) throw new HttpError(400, 'Send the invite code, the Telegram user and the chat.')
+  const { code, ...person } = parsed.data
+  return channelService.telegramJoin({ agentId, code, person })
 }
 
 function renderRequest(body: unknown): z.infer<typeof RenderCard> {

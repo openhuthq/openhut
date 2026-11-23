@@ -11,6 +11,7 @@ SPEC = re.compile(r"```spec\n[\s\S]*?```")
 DESKTOP = "api_server"
 MALFORMED = "I tried to show this as a card, but it couldn't be sent."
 RUN = re.compile(r"\[Routine rt_[a-z0-9]+ · run (ru_[a-z0-9]+)\]")
+INVITE = re.compile(r"^/start(?:@\w+)?\s+([\w-]{16,64})$")
 POLL_SECONDS = 15
 ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "user_id", "user_name")
 STAMPED = ("schedule_routine", "update_self", "add_channel", "update_channel", "remove_channel", "request_connection")
@@ -21,6 +22,7 @@ def register(ctx):
     ctx.register_hook("transform_llm_output", render)
     ctx.register_hook("pre_tool_call", stamp)
     ctx.register_hook("post_llm_call", reported)
+    ctx.register_hook("pre_gateway_dispatch", invited)
     ctx.register_slack_action_handler(re.compile(r"^card"), lambda ack, body, action: clicked(ctx, ack, body, action))
     if os.environ.get("OPENHUT_GATEWAY"):
         threading.Thread(target=poll, args=(ctx,), name="openhut-routines", daemon=True).start()
@@ -46,6 +48,21 @@ def stamp(tool_name="", **_):
         return None
     origin = {field: get_session_env("HERMES_SESSION_" + field.upper()) for field in ORIGIN_FIELDS}
     return {"action": "modify", "args": {"origin": {key: value for key, value in origin.items() if value}}}
+
+
+def invited(event=None, **_):
+    source = getattr(event, "source", None)
+    platform = getattr(source, "platform", None)
+    if str(getattr(platform, "value", platform) or "") != "telegram":
+        return None
+    match = INVITE.match(str(getattr(event, "text", "") or "").strip())
+    if not match or not getattr(source, "user_id", None):
+        return None
+    try:
+        gateway("/telegram/joins", {"code": match.group(1), "userId": str(source.user_id), "name": source.user_name or "there", "chatId": int(source.chat_id)})
+    except Exception:
+        pass
+    return {"action": "skip", "reason": "openhut invite"}
 
 
 def poll(ctx):

@@ -1,6 +1,6 @@
 import type { Selectable } from 'kysely'
 import type { Deleted } from '@openhut/common/api.ts'
-import { ADDRESS, ChannelRecord, ChannelSecrets, type Channel, type ChannelKind, type Conversation, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
+import { ADDRESS, ChannelRecord, ChannelSecrets, type Channel, type ChannelKind, type Conversation, type CreateChannel, type TelegramInvite, type UpdateChannel } from '@openhut/common/channels/channel.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { log, emit } from '../platform/events.ts'
@@ -18,8 +18,11 @@ import { runSet } from '../cloud/run-set.ts'
 import type { Caller } from '../team/identity.ts'
 import { audienceOf } from './audience.ts'
 import { whatsappPairing } from './whatsapp-pairing.ts'
+import { telegramCodes, type Person } from './telegram-codes.ts'
+import { activity } from '../gateway/activity.ts'
 
 const CHANNEL_KINDS = new Set<ChannelKind>(['slack', 'discord'])
+const QUIET_MS = 10_000
 const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram', discord: 'Discord' } as const
 
 export const channelService = {
@@ -35,6 +38,8 @@ export const channelService = {
   async get({ actor, id }: { actor: Caller; id: string }): Promise<Channel> {
     const row = await db.selectFrom('channel').selectAll().where('id', '=', id).executeTakeFirst()
     if (!row) return channelOf({ held: await recordOf(id), qr: null })
+    if (row.kind === 'telegram' && row.status === 'linking') return channelOf({ held: await recordOf(id), qr: await owned({ actor, agentId: row.agent_id }).then(() => claimLink(row), () => null) })
+    if (row.kind === 'telegram') return channelOf({ held: await recordOf(id), qr: null })
     if (row.kind !== 'whatsapp' || row.status !== 'linking') return rowChannel({ row, qr: null })
     const agent = await agentService.requireEditable({ actor, id: row.agent_id }).catch(() => null)
     if (!agent || (agent.owner ?? actor.email) !== actor.email) return rowChannel({ row, qr: null })
@@ -59,7 +64,41 @@ export const channelService = {
     const held = await recordsService.put({ collection: 'channel', id, parent: facts.id, workspace: facts.workspace, personal: facts.personal, value: { kind: body.kind, status, account, ...audience, createdAt: new Date().toISOString() } satisfies ChannelRecord, secret })
     emit({ name: 'channel.created', actor, target: { type: 'channel', id, kind: body.kind, agentId: facts.id } })
     await runSet.apply({ workspace: facts.workspace, id: facts.id })
-    return channelOf({ held: held ?? await recordOf(id), qr: null })
+    const row = await db.selectFrom('channel').selectAll().where('id', '=', id).executeTakeFirst()
+    return channelOf({ held: held ?? await recordOf(id), qr: row?.kind === 'telegram' && row.status === 'linking' ? claimLink(row) : null })
+  },
+
+  async telegramInvite({ actor, id }: { actor: Caller; id: string }): Promise<TelegramInvite> {
+    const held = await recordOf(id)
+    const value = ChannelRecord.parse(held.value)
+    await owned({ actor, agentId: held.parent ?? '' })
+    if (value.kind !== 'telegram' || value.status !== 'connected' || !value.account) throw new HttpError(409, 'Finish connecting Telegram first, then invite people.')
+    return { object: 'telegram_invite', ...telegramCodes.invite({ channelId: id, agentId: held.parent ?? '', account: value.account }) }
+  },
+
+  async telegramJoin({ agentId, code, person }: { agentId: string; code: string; person: Person }): Promise<{ object: 'telegram_join'; joined: boolean }> {
+    const invite = telegramCodes.take({ code, agentId, kind: 'invite' })
+    const row = await db.selectFrom('channel').selectAll().where('agent_id', '=', agentId).where('kind', '=', 'telegram').executeTakeFirst()
+    const botToken = row && TelegramSecrets.parse(JSON.parse(unseal(row.secrets))).botToken
+    if (!invite || !row || !botToken || row.id !== invite.channelId) {
+      if (botToken) await telegram.send({ botToken, chatId: person.chatId, text: 'That invite link expired or was already used. Ask for a new one.' }).catch(() => undefined)
+      throw new HttpError(404, 'That invite link expired or was already used. Ask for a new one.')
+    }
+    const held = await recordOf(row.id)
+    const current = ChannelRecord.parse(held.value)
+    const known = current.ownerAddress === person.userId || current.allowed.includes(person.userId)
+    if (!known) {
+      const facts = await agentService.find({ id: agentId })
+      const add = (value: ChannelRecord): ChannelRecord => ({ ...value, allowed: [...new Set([...value.allowed, person.userId])], names: { ...value.names, [person.userId]: person.name } })
+      await recordsService.put({ collection: 'channel', id: row.id, parent: agentId, workspace: facts.workspace, personal: facts.personal, value: add(current), secret: held.secret, reapply: (latest) => ({ value: add(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
+      emit({ name: 'channel.updated', target: { type: 'channel', id: row.id, kind: 'telegram', agentId } })
+      agentService.holdReapply(agentId)
+      await runSet.apply({ workspace: facts.workspace, id: agentId })
+      void activity.quiet({ agentId, ms: QUIET_MS }).then(() => agentService.releaseReapply(agentId))
+        .catch((err: unknown) => log.warn({ event: 'telegram.join_reapply_failed', agent: agentId, error: messageOf(err) }))
+    }
+    await telegram.send({ botToken, chatId: person.chatId, text: `Hi ${person.name}, you're in. Ask me anything.` }).catch(() => undefined)
+    return { object: 'telegram_join', joined: !known }
   },
 
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateChannel }): Promise<Channel> {
@@ -166,7 +205,7 @@ async function setupOf({ body, facts }: { body: CreateChannel; facts: AgentFacts
     }
     case 'telegram': {
       const account = await telegram.verify({ botToken: body.botToken })
-      return { status: 'connected', account, secret: { botToken: body.botToken } }
+      return { status: body.ownerAddress ? 'connected' : 'linking', account, secret: { botToken: body.botToken } }
     }
     case 'discord': {
       const account = await discord.verify({ botToken: body.botToken, channels: body.allowed })
@@ -187,16 +226,35 @@ async function disconnect(row: Row): Promise<void> {
       await agentd.delete({ id: row.agent_id, paths: ['platforms/whatsapp/session'] }).catch((err: unknown) => log.warn({ event: 'channel.disconnect_failed', agent: row.agent_id, error: messageOf(err) }))
       return
     case 'slack': return
-    case 'telegram': return
+    case 'telegram':
+      telegramCodes.stop(row.id)
+      return
     case 'discord': return
   }
+}
+
+function claimLink(row: Row): string | null {
+  if (!row.account) return null
+  const botToken = TelegramSecrets.parse(JSON.parse(unseal(row.secrets))).botToken
+  return telegramCodes.claim({ channelId: row.id, agentId: row.agent_id, account: row.account, botToken, onClaim: (person) => claimed({ row, botToken, person }) })
+}
+
+async function claimed({ row, botToken, person }: { row: Row; botToken: string; person: Person }): Promise<void> {
+  const facts = await agentService.find({ id: row.agent_id })
+  const held = await recordOf(row.id)
+  const own = (value: ChannelRecord): ChannelRecord => ({ ...value, status: 'connected', ownerAddress: person.userId, names: { ...value.names, [person.userId]: person.name } })
+  await recordsService.put({ collection: 'channel', id: row.id, parent: row.agent_id, workspace: facts.workspace, personal: facts.personal, value: own(ChannelRecord.parse(held.value)), secret: held.secret, reapply: (latest) => ({ value: own(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
+  await db.updateTable('channel').set({ status: 'connected', owner_address: person.userId }).where('id', '=', row.id).execute()
+  await telegram.send({ botToken, chatId: person.chatId, text: `Hi ${person.name}, you're in. Ask me anything.` }).catch(() => undefined)
+  emit({ name: 'channel.linked', target: { type: 'channel', id: row.id, kind: 'telegram', agentId: row.agent_id } })
+  await runSet.apply({ workspace: facts.workspace, id: row.agent_id }).catch((err: unknown) => log.warn({ event: 'telegram.claim_apply_failed', agent: row.agent_id, error: messageOf(err) }))
 }
 
 function audienceOfBody(body: CreateChannel): Pick<ChannelRecord, 'ownerAddress' | 'open' | 'allowed'> {
   switch (body.kind) {
     case 'slack': return { ownerAddress: '', open: false, allowed: [] }
     case 'discord': return { ownerAddress: '', open: false, allowed: [...new Set(body.allowed)] }
-    default: return { ownerAddress: body.ownerAddress, open: body.open, allowed: body.allowed }
+    default: return { ownerAddress: body.ownerAddress ?? '', open: body.open, allowed: body.allowed }
   }
 }
 
@@ -208,7 +266,7 @@ function channelsOf(records: Held[]): Channel[] {
 
 function channelOf({ held, qr }: { held: Held; qr: string | null }): Channel {
   const value = ChannelRecord.parse(held.value)
-  return { id: held.id, object: 'channel', agentId: held.parent ?? '', kind: value.kind, status: value.status, account: value.account, ownerAddress: value.ownerAddress, open: value.open, allowed: value.allowed, qr, createdAt: value.createdAt }
+  return { id: held.id, object: 'channel', agentId: held.parent ?? '', kind: value.kind, status: value.status, account: value.account, ownerAddress: value.ownerAddress, open: value.open, allowed: value.allowed, names: value.names, qr, createdAt: value.createdAt }
 }
 
 function rowChannel({ row, qr }: { row: Row; qr: string | null }): Channel {

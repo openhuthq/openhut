@@ -15,6 +15,8 @@ export const channelController: FastifyPluginAsync = async (app) => {
 
   app.patch<{ Params: { id: string }; Body: UpdateChannel }>('/:id', UpdateRequest, async (req) => channelService.update({ actor: await who(req), id: req.params.id, patch: req.body }))
 
+  app.post<{ Params: { id: string } }>('/:id/telegram-invites', async (req) => channelService.telegramInvite({ actor: await who(req), id: req.params.id }))
+
   app.delete<{ Params: { id: string } }>('/:id', async (req) => channelService.delete({ actor: await who(req), id: req.params.id }))
 }
 

@@ -350,7 +350,7 @@ async function filesOf(row: AgentRow): Promise<AgentFiles> {
   const slots = resolveSlots({ model: row.model, catalog: providerService.catalog })
   return renderFiles({
     agent: { ...row, slots }, ownerName: row.owner ?? keysService.account()?.email ?? 'its owner', token: agentToken({ id: row.id, epoch: row.token_epoch }), channelKey: unseal(row.channel_key),
-    channels: channels.map(renderedChannel), connections: await connectionService.reachable({ agent: row }),
+    channels: channels.filter((channel) => channel.kind !== 'telegram' || channel.status === 'connected').map(renderedChannel), connections: await connectionService.reachable({ agent: row }),
   })
 }
 
