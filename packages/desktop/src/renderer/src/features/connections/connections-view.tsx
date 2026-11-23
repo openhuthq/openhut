@@ -2,11 +2,9 @@ import type { Connection } from '@openhut/common/connections/connection.ts'
 import type { OpenHutAgent } from '@/lib/openhut'
 import type { Me } from '@openhut/common/team/team.ts'
 import { useState } from 'react'
-import { ArrowRight01Icon, Search01Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, ArrowRight01Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ErrorNote } from '@/components/error-note'
@@ -22,43 +20,36 @@ import { AppWindow, I, PILL } from '@/components/kit'
 import { usePath, useSearch } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
-const CONNECTED = 'Connected'
-
 export function ConnectionsView({ onClose }: { onClose: () => void }) {
   const me = useMe()
   const connections = useConnections()
   const agents = useAgents()
   const quick = useQuickConnect()
-  const [shelf, setShelf] = useState('All')
-  const [query, setQuery] = useState('')
+  const [connectedOnly, setConnectedOnly] = useState(false)
   const [, , id = '', kind = ''] = usePath().split('/')
   const search = new URLSearchParams(useSearch())
   const list = connections.data ?? []
   const returned = id ? undefined : search.get('error') ?? undefined
   const count = list.length
-  const words = query.trim().toLowerCase()
-  const shown = SHELVES.filter((each) => shelf === 'All' || each.shelf === shelf).flatMap((each) => each.items)
-    .filter((item) => !words || `${item.title} ${item.short}`.toLowerCase().includes(words))
+  const shown = SHELVES.flatMap((each) => each.items)
   const sheet = me.data && id ? <Sheet me={me.data} id={decodeURIComponent(id)} kind={kind} connected={search.has('connected')} /> : null
   return <AppWindow label="Connections" onClose={onClose}>
     {sheet ?? <div className="no-scrollbar fade-b flex min-h-0 flex-1 flex-col overflow-y-auto px-8 pt-[22px] pb-7 phone:px-5">
       <div className="mt-[30px] flex items-center gap-3 phone:mt-0 phone:mr-12"><h2 className="m-0 text-[17px]/[24px] font-medium">{count ? 'Connections' : 'Connect apps'}</h2>
-        {connections.data && <Button type="button" variant="text" className="ml-auto text-[12px]" onClick={() => setShelf(CONNECTED)}>{count} connected<I icon={ArrowRight01Icon} size={12} /></Button>}
+        {connections.data && (connectedOnly
+          ? <Button type="button" variant="text" className="ml-auto text-[12px]" onClick={() => setConnectedOnly(false)}><I icon={ArrowLeft01Icon} size={12} />All apps</Button>
+          : <Button type="button" variant="text" className="ml-auto text-[12px]" onClick={() => setConnectedOnly(true)}>{count} connected<I icon={ArrowRight01Icon} size={12} /></Button>)}
       </div>
-      <label className="mt-4 flex h-9 items-center gap-2 text-mute"><I icon={Search01Icon} size={16} /><Input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search apps" aria-label="Search apps" className="h-9 border-0 bg-transparent px-0 text-[13px] [-webkit-appearance:none]" /></label>
-      <ToggleGroup variant="pill" aria-label="Category" className="mt-2 flex flex-wrap gap-2" value={shelf} onPick={setShelf}>
-        {['All', ...SHELVES.filter((each) => each.items.length > 1).map((each) => each.shelf)].map((name) => <ToggleGroupItem key={name} value={name} className="h-7 border-0 bg-soft px-2.5 text-[13px] font-normal text-ink">{name}</ToggleGroupItem>)}
-      </ToggleGroup>
       <ErrorNote message={returned} />
-      {shelf === CONNECTED
+      {connectedOnly
         ? <div className="mt-6 flex flex-col gap-3"><span className="text-[12px] text-mute">Connected</span>
           <Loaded query={connections}>{(loaded) => loaded.length
             ? <ItemGroup>
               {loaded.map((connection) => <Row key={connection.id} connection={connection} agents={agents.data ?? []} />)}
             </ItemGroup>
-            : <p className="m-0 text-[13px] text-balance text-body">Nothing connected yet. Pick an app under All.</p>}</Loaded>
+            : <p className="m-0 text-[13px] text-balance text-body">Nothing connected yet. Pick an app under All apps.</p>}</Loaded>
         </div>
-        : <div className="mt-6 flex flex-col gap-3.5"><span className="text-[12px] text-mute">{shelf === 'All' ? 'Apps' : shelf}</span>
+        : <div className="mt-6 flex flex-col gap-3.5"><span className="text-[12px] text-mute">Apps</span>
           <div className="grid grid-cols-2 gap-x-8 phone:grid-cols-1">{shown.map((item) => {
             const href = `/connections/new/${item.name}`
             return <div key={item.name} className="flex min-h-16 min-w-0 items-center gap-3">
@@ -69,7 +60,6 @@ export function ConnectionsView({ onClose }: { onClose: () => void }) {
                 : <a href={href} className={cn(buttonVariants({ variant: 'secondary' }), PILL, 'w-24 shrink-0 justify-center')}>Connect</a>}
             </div>
           })}</div>
-          {!shown.length && <p className="m-0 text-[14px] text-body">Nothing matches “{query}”.</p>}
         </div>}
     </div>}
   </AppWindow>
