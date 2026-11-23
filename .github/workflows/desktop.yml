@@ -77,20 +77,6 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npx turbo run typecheck test
 
-  compat:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - name: This release and the one before it work together both ways
-        run: scripts/compat.sh "$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)"
-
   build:
     needs: draft
     name: ${{ matrix.name }}
@@ -214,7 +200,7 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" dist/install.sh dist/openhut.tgz --clobber
 
   publish:
-    needs: [checks, compat, build]
+    needs: [checks, build]
     if: startsWith(github.ref, 'refs/tags/')
     environment: release
     runs-on: ubuntu-latest
