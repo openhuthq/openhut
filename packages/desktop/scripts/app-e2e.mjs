@@ -1,5 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
@@ -27,6 +28,7 @@ const say = (step, detail = {}) => {
 
 let child
 let api
+const site = createServer((req, res) => res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><title>OpenHut e2e page</title><h1>OpenHut e2e page</h1>')).listen(0, '127.0.0.1')
 try {
   if (args.cloud) {
     api = await bootCloud({ dir: args.cloud, api: API })
@@ -90,6 +92,7 @@ try {
 } finally {
   if (child && child.exitCode === null) await quit().catch(() => child.kill())
   api?.kill()
+  site.close()
   writeFileSync(join(args.out, 'evidence.json'), JSON.stringify(evidence, null, 2))
   console.log(`app-e2e: ${evidence.pass ? 'PASS' : 'FAIL'}; evidence in ${args.out}`)
 }
@@ -161,7 +164,7 @@ async function browsers(page, pair) {
   }
   for (const agent of pair) await page.eval(`fetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ browser: true, codeExecution: true }) }).then((r) => r.json())`)
   await answering(page, pair.map((each) => each.id), 'the two browser agents to answer')
-  await Promise.all(pair.map((agent) => tool(page, agent, `browser: open https://example.com/?agent=${agent.name}`, 'Example Domain')))
+  await Promise.all(pair.map((agent) => tool(page, agent, `browser: open http://127.0.0.1:${site.address().port}/?agent=${agent.name}`, 'OpenHut e2e page')))
   await Promise.all(pair.map((agent) => tool(page, agent, 'browser: get url', `agent=${agent.name}`)))
   say(`${pair.map((each) => each.name).join(' and ')} each opened a page in their own browser at the same time, and each still sees its own page`)
 }
