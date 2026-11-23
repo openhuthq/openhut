@@ -6,13 +6,15 @@ icon: hut
 
 ## The app
 
-Stop your agents and quit OpenHut, then move it to the Trash (on Linux, delete the AppImage, or remove the .deb package).
+Your agents, chats and connections are in your [account](/cloud), so removing the app deletes none of them. Agents that run on this computer stop until you move them to another one.
 
-To delete its agents and data too, remove its folder: `~/Library/Application Support/OpenHut` on a Mac, `~/.config/OpenHut` on Linux. **Settings › General** shows where it is. This can't be undone.
+To take this computer off your account, **Settings › Account › Sign out** first: it removes this device and wipes it. Then quit OpenHut and move it to the Trash (on Linux, delete the AppImage, or remove the .deb package).
+
+To delete what's left on disk, remove its folder: `~/Library/Application Support/OpenHut` on a Mac, `~/.config/OpenHut` on Linux. **Settings › General** shows where it is. This deletes the agents' own files on this computer, like their home folders and browser logins, which aren't in your account. It can't be undone. To delete your account too, see [Delete your account](/cloud#delete-your-account).
 
 ## A computer you added
 
-In the app, **Settings › Computers**, then **⋯ › Remove**. Its agents stop, and nothing on it is deleted.
+In the app, **Settings › Computers**, then **⋯ › Remove**. Its agents stop and it's cut off from your account; nothing on it is deleted.
 
 To wipe it, run this on the computer:
 
@@ -20,4 +22,4 @@ To wipe it, run this on the computer:
 docker rm -f openhut && docker volume rm openhut
 ```
 
-This removes OpenHut, every agent there and all its data. It can't be undone. Docker stays installed.
+This removes OpenHut and its agents' own files there. It can't be undone. What's in your account stays. Docker stays installed.
