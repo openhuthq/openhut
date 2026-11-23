@@ -74,7 +74,7 @@ async function refreshOnce(): Promise<void> {
       await keep({ agent, control: placed }).catch((err: unknown) => log.warn({ event: 'run_set.apply_failed', agent: agent.id, error: messageOf(err) }))
     }
   }
-  const home = keysService.mustBeOn().workspace.id
+  const home = keysService.signedIn().workspace.id
   for (const row of await db.selectFrom('agent').select(['id', 'workspace']).execute()) {
     if (!kept.has(row.id)) await applyOne({ workspace: row.workspace ?? home, id: row.id })
   }
@@ -93,7 +93,7 @@ async function applyOne({ workspace, id }: { workspace: string; id: string }): P
 async function keep({ agent, control }: { agent: Held; control: Held }): Promise<void> {
   const value = AgentRecord.parse(agent.value)
   const placed = ControlRecord.parse(control.value)
-  const home = keysService.mustBeOn().workspace.id
+  const home = keysService.signedIn().workspace.id
   const fields = {
     name: value.name, instructions: value.instructions, face: value.face, wanted: value.wanted, model: placed.model, code_execution: placed.codeExecution, web_browser: placed.browser,
     runs_on: placed.runsOn, workspace: agent.workspace === home ? null : agent.workspace, shared: !agent.personal, owner: agent.parent ?? null,
@@ -132,7 +132,7 @@ async function grantsOf({ agentId, connections }: { agentId: string; connections
 async function ownerId(): Promise<string> {
   const found = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirst()
   if (found) return found.id
-  await db.insertInto('person').values({ id: newId('usr'), email: keysService.mustBeOn().email, role: 'owner', removed_at: null }).onConflict((oc) => oc.doNothing()).execute()
+  await db.insertInto('person').values({ id: newId('usr'), email: keysService.signedIn().email, role: 'owner', removed_at: null }).onConflict((oc) => oc.doNothing()).execute()
   return (await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirstOrThrow()).id
 }
 

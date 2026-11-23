@@ -1,4 +1,5 @@
-import { useSyncExternalStore, type ReactNode } from 'react'
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Tick02Icon } from '@hugeicons/core-free-icons'
 import { I, PILL } from '@/components/kit'
 import { Button } from '@/components/ui/button'
@@ -17,9 +18,9 @@ let next = 0
 const listeners = new Set<() => void>()
 
 export function Toast({ lead, title, note, children, alert }: { lead: ReactNode; title: string; note?: ReactNode; children?: ReactNode; alert?: boolean }) {
-  return <div role={alert ? 'alert' : 'status'} className="flex w-full items-center gap-3 rounded-[18px] border border-hair bg-card p-2.5 pr-3 shadow-[0_8px_24px_oklch(0%_0_0/.10)] animate-grow">
-    <span className="grid size-9 shrink-0 place-items-center">{lead}</span>
-    <span className="grid min-w-0 flex-1 gap-px text-[13px]"><span className="font-semibold">{title}</span>{note && <span className={typeof note === 'string' ? 'line-clamp-3 text-mute' : 'grid text-mute'}>{note}</span>}</span>
+  return <div role={alert ? 'alert' : 'status'} className="flex w-full items-center gap-2.5 rounded-2xl border border-hair bg-card py-2 pr-2 pl-3 shadow-[0_6px_20px_oklch(0%_0_0/.12)] animate-grow">
+    <span className="grid size-6 shrink-0 place-items-center">{lead}</span>
+    <span className="grid min-w-0 flex-1 gap-px text-[13px]"><span className="line-clamp-2 font-medium">{title}</span>{note && <span className={typeof note === 'string' ? 'line-clamp-3 text-mute' : 'grid text-mute'}>{note}</span>}</span>
     {children}
   </div>
 }
@@ -40,10 +41,16 @@ export function notify({ lead = <Tinted icon={Tick02Icon} hue={GREEN} />, title,
 
 export function Toasts({ children }: { children?: ReactNode }) {
   const shown = useSyncExternalStore((listener) => { listeners.add(listener); return () => { listeners.delete(listener) } }, () => notices)
-  return <div data-toasts className="pointer-events-none fixed top-14 right-[294px] z-[60] flex w-[380px] max-w-[calc(100%-32px)] flex-col gap-2 phone:top-[calc(10px+env(safe-area-inset-top,0px))] phone:right-4 *:pointer-events-auto">
+  return <div data-toasts className="pointer-events-none fixed right-4 bottom-4 z-[60] flex w-[360px] max-w-[calc(100%-32px)] flex-col-reverse gap-2 phone:top-[calc(10px+env(safe-area-inset-top,0px))] phone:bottom-auto phone:flex-col *:pointer-events-auto">
     {children}
     {shown.map((each) => <Toast key={each.key} lead={each.lead} title={each.title} note={each.note}>{each.action && <Button type="button" variant="secondary" className={PILL} onClick={each.action.onClick}>{each.action.label}</Button>}</Toast>)}
   </div>
+}
+
+export function InToasts({ children }: { children: ReactNode }) {
+  const [host, setHost] = useState<Element | null>(null)
+  useEffect(() => setHost(document.querySelector('[data-toasts]')), [])
+  return host ? createPortal(children, host) : null
 }
 
 function emit(): void {

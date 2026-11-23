@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { gateOf, migrating } from '../../src/app/gate-state.ts'
+import { checksKit, gateOf, migrating } from '../../src/app/gate-state.ts'
 
 const kit = { savedAt: '2026-11-23T10:00:00Z', differs: false }
 const on = { status: 'on' as const, kit, youngUntil: null }
@@ -42,4 +42,10 @@ test('an install with agents and no account is told its agents come along, unles
   assert.equal(migrating({ agents: 1, invited: false }), 'Your agent comes with you, end-to-end encrypted.')
   assert.equal(migrating({ agents: 3, invited: false }), 'Your 3 agents come with you, end-to-end encrypted.')
   assert.equal(migrating({ agents: 3, invited: true }), undefined)
+})
+
+test('a saved or copied kit counts as saved right away; only writing the words down asks for two of them back', () => {
+  assert.equal(checksKit('file'), false)
+  assert.equal(checksKit('copy'), false)
+  assert.equal(checksKit('words'), true)
 })

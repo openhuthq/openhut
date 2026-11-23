@@ -13,7 +13,7 @@ export function signIn({ email = 'mo@example.com', me = 'dev_mac', others = ['de
   const list: MemberListBody = { workspace: HOME, version: 1, previous: null, members: [{ email, role: 'owner', devices: [me, ...others] }, { email: 'teammate@example.com', role: 'member', devices: ['dev_mate'] }], invites: [], removed: [], runtimes: others }
   const account = { email, workspace: { id: HOME, key: 'a2V5', version: 1 } } as unknown as Account
   const room = { workspace: { id: HOME, key: 'a2V5', version: 1 } } as unknown as Room
-  Object.assign(keysService, { account: () => account, mustBeOn: () => account, session: () => ({}), deviceKey: async () => device.me })
+  Object.assign(keysService, { account: () => account, mustBeOn: () => account, signedIn: () => account, session: () => ({}), deviceKey: async () => device.me })
   Object.assign(roomKeys, { rooms: () => [room], room: (ws?: string) => ws === HOME ? room : undefined, members: (ws?: string) => ws === HOME ? list : undefined, roleIn: (ws?: string) => ws === HOME ? 'owner' : undefined })
   return { fake, list, device }
 }

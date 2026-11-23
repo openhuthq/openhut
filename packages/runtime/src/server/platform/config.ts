@@ -13,7 +13,7 @@ const TEST_MODEL = process.env.OPENHUT_MODEL === 'test'
 const HOST_NET = process.env.OPENHUT_AGENT_HOST_NET === '1'
 const CLOUD_URL = process.env.OPENHUT_CLOUD_URL || 'https://cloud.openhut.dev'
 const RELAY_URL = process.env.OPENHUT_RELAY_URL || CLOUD_URL.replace(/^http/, 'ws')
-const API_URL = process.env.OPENHUT_API_URL || 'https://api.openhut.dev'
+const API_URL = process.env.OPENHUT_API_URL || 'https://cloud.openhut.dev/api'
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
 
 export const config = {

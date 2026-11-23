@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from 'react'
 import { Alert02Icon, Cancel01Icon, FingerPrintIcon, Key01Icon } from '@hugeicons/core-free-icons'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { kitWord, nearestWord, readKit, validKit } from '@openhut/common/vault/kit-file.ts'
 import { agentPath } from '@/app/routes'
-import { ConfirmButton } from '@/components/confirm-button'
 import { DeviceIcon } from '@/components/custom/device'
 import { DropZone } from '@/components/custom/drop-zone'
 import { PersonFace } from '@/components/custom/person-face'
@@ -13,19 +12,19 @@ import { ErrorNote } from '@/components/error-note'
 import { I, PILL } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { nameOf, notifyDesktop, REMOVE_DETAIL, useCloud, useRemoveMac, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
+import { nameOf, notifyDesktop, useCloud, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
 import { PRIMARY, SECONDARY, Step } from '@/features/cloud/step'
-import { chooseWorkspace, useAsk, useCancelAsk } from '@/features/cloud/workspaces'
+import { chooseWorkspace, useAsk, useCancelAsk, useDeleteData } from '@/features/cloud/workspaces'
 import { Mismatch } from '@/features/cloud/presence'
-import { freshDevice, joinRequests, markSeen, seenDevices } from '@/features/cloud/seen'
+import { joinRequests } from '@/features/cloud/seen'
 import { Spinner } from '@/components/ui/spinner'
-import { navigate } from '@/lib/router'
-import { longDate, shortDateTime } from '@/lib/format'
+import { navigate, usePath } from '@/lib/router'
+import { longDate } from '@/lib/format'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
-  const [way, setWay] = useState<'kit' | 'ask' | null>(null)
+  const [way, setWay] = useState<'kit' | 'ask' | 'start-over' | null>(null)
   const signOut = useSignOut()
   const signIn = useSignIn()
   const helper = usePasskeys()
@@ -34,17 +33,27 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
   if (cloud.needsSignIn) return <Step title="This computer was removed." line="Sign in again to unlock it." link={leave}
     action={<Button type="button" variant="primary" className={PRIMARY} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}>Sign in again</Button>} />
   if (way === 'kit') return <KitEntry cloud={cloud} onBack={() => setWay(null)} />
+  if (way === 'start-over') return <StartOver onBack={() => setWay(null)} />
   if (way === 'ask' || cloud.asking) return <Requested cloud={cloud} onBack={() => setWay(null)} />
   const macCan = Boolean(helper?.passkeys && helper.prf)
   const canPasskey = macCan && cloud.passkey
   const ask = cloud.canAsk ? 'Approve it from a computer you already use, or use your recovery kit.' : 'Use your recovery kit to unlock it.'
-  return <Step title={`Welcome back, ${nameOf(cloud.email ?? '')}`} line={`This computer is new to your account. ${ask}`} back={back} link={leave}
+  const lost = <Button type="button" variant="text" className="font-normal text-mute" onClick={() => setWay('start-over')}>Lost your computers and kit? Start over</Button>
+  return <Step title={`Welcome back, ${nameOf(cloud.email ?? '')}`} line={`This computer is new to your account. ${ask}`} back={back} link={<span className="flex flex-col items-center gap-1">{leave}{lost}</span>}
     action={<div className="flex flex-col items-center gap-2.5">
       {cloud.canAsk && <Button type="button" variant="primary" className={PRIMARY} onClick={() => setWay('ask')}>Ask my other computer</Button>}
       {cloud.kitInCloud && <Button type="button" variant={cloud.canAsk ? 'secondary' : 'primary'} className={cloud.canAsk ? SECONDARY : PRIMARY} onClick={() => setWay('kit')}><I icon={Key01Icon} size={16} />Use my recovery kit</Button>}
       {canPasskey && <Button type="button" variant="secondary" className={SECONDARY} disabled={passkey.isPending} onClick={() => passkey.mutate(undefined, { onError: toastError })}><I icon={FingerPrintIcon} size={16} />{passkey.isPending ? 'Unlocking…' : 'Use Touch ID'}</Button>}
       {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
     </div>} />
+}
+
+function StartOver({ onBack }: { onBack: () => void }) {
+  const remove = useDeleteData()
+  return <Step title="Start over?" line="This deletes your account and everything in it, then starts fresh. It can’t be undone: your data was encrypted on your devices, so nobody can recover it." back={onBack}
+    action={<Button type="button" variant="danger" className={PRIMARY} disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete and start over'}</Button>}>
+    <ErrorNote message={remove.error?.message} />
+  </Step>
 }
 
 function Requested({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
@@ -89,7 +98,8 @@ function JoinRequests({ cloud }: { cloud: Cloud }) {
       if (!document.hasFocus()) notifyDesktop({ title: `${request.name ?? 'A new computer'} wants to join`, body: mine ? 'Approve or deny it in Settings › Computers.' : `${nameOf(request.email)} asked to join ${workspace.name}.`, path })
     }
   }, [pending])
-  const shown = pending.find(({ request }) => !dismissed.includes(request.device))
+  const here = usePath()
+  const shown = pending.find(({ request, path }) => path !== here && !dismissed.includes(request.device))
   if (!shown) return null
   const { workspace, request, mine, path } = shown
   const go = () => {
@@ -100,20 +110,6 @@ function JoinRequests({ cloud }: { cloud: Cloud }) {
   return <Toast alert lead={<DeviceIcon kind="mac" />} title={`${request.name ?? 'A new computer'} wants to join`} note={mine ? request.email : `${nameOf(request.email)} · ${workspace.name}`}>
     <Button type="button" variant="secondary" className={PILL} onClick={go}>Open</Button>
     <Button type="button" variant="text" className="shrink-0 px-1 text-mute" aria-label="Later" title="Later" onClick={() => setDismissed((all) => [...all, request.device])}><I icon={Cancel01Icon} size={14} /></Button>
-  </Toast>
-}
-
-export function NewMacAlert({ cloud }: { cloud: Cloud }) {
-  const seen = useSyncExternalStore(seenDevices.subscribe, seenDevices.get)
-  const remove = useRemoveMac()
-  const fresh = freshDevice({ cloud, seen, now: Date.now() })
-  if (!fresh?.addedAt || cloud.status !== 'on') return null
-  const when = shortDateTime.format(new Date(fresh.addedAt))
-  return <Toast alert lead={<DeviceIcon kind={fresh.kind} />} title="New computer added" note={fresh.name ? <><span className="truncate">{fresh.name}</span><span>{when}</span></> : when}>
-    {cloud.youngUntil
-      ? <span className="w-[104px] shrink-0 text-right text-[12px]/[1.3] text-mute">Remove it from an older device</span>
-      : <ConfirmButton variant="secondary" className="shrink-0 rounded-xl px-3.5 text-[12.5px] text-fail" disabled={remove.isPending} question={`Remove ${fresh.name ?? 'this computer'}?`} detail={`Added ${when}. ${REMOVE_DETAIL}`} action="Remove" onConfirm={() => remove.mutate(fresh.key)}>Not me</ConfirmButton>}
-    <Button type="button" variant="text" className="shrink-0 px-1 text-mute" aria-label="It’s mine" title="It’s mine" onClick={() => markSeen([fresh.key])}><I icon={Cancel01Icon} size={14} /></Button>
   </Toast>
 }
 
@@ -201,7 +197,7 @@ export function CloudToasts() {
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
   if (!cloud) return null
-  return <><Toasts><JoinRequests cloud={cloud} /><NewMacAlert cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
+  return <><Toasts><JoinRequests cloud={cloud} /><Mismatch /></Toasts><GoneNotice cloud={cloud} /><Joins cloud={cloud} /></>
 }
 
 function Joins({ cloud }: { cloud: Cloud }) {

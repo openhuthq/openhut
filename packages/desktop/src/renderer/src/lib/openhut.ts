@@ -2,6 +2,7 @@ import * as z from 'zod/mini'
 import { ApiError, List } from '@openhut/common/api.ts'
 import { Admin } from '@openhut/common/admin/admin.ts'
 import { Agent, Grant } from '@openhut/common/agents/agent.ts'
+import { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { Me } from '@openhut/common/team/team.ts'
 import { WORDS } from '@/lib/platform'
 
@@ -70,7 +71,9 @@ export const openhut = {
     async list(): Promise<Computer[]> {
       const admin = await request({ schema: Admin, path: '/api/admin' }).catch(() => undefined)
       const appTooOld = !!APP_VERSION && !!admin?.minAppVersion && older({ version: APP_VERSION, than: admin.minAppVersion })
-      return [{ id: LOCAL, name: WORDS.thisComputer, url: '', online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false }, appTooOld, runtimeTooOld: false }]
+      const cloud = await request({ schema: Cloud, path: '/api/cloud' }).catch(() => undefined)
+      const servers = (cloud?.devices ?? []).filter((device) => device.kind === 'server' && !device.here).map((device) => ({ id: device.key, name: device.name ?? 'Server', url: '', online: device.online, features: { whatsapp: true, browser: true }, appTooOld: false, runtimeTooOld: false }))
+      return [{ id: LOCAL, name: WORDS.thisComputer, url: '', online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false }, appTooOld, runtimeTooOld: false }, ...servers]
     },
     async add(peer: TailnetPeer): Promise<unknown> {
       if (!bridge?.computers) throw new Error('Open the OpenHut app on this computer to do this.')
@@ -90,7 +93,7 @@ export const enrollments = {
 }
 
 function here(agent: Agent): OpenHutAgent {
-  return { ...agent, computer: LOCAL, online: true }
+  return { ...agent, computer: agent.runsHere || !agent.runsOn ? LOCAL : agent.runsOn, online: true }
 }
 
 function older({ version, than }: { version: string; than: string }): boolean {

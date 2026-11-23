@@ -17,3 +17,9 @@ export function migrating({ agents, invited }: { agents: number; invited: boolea
   if (!agents || invited) return undefined
   return `Your ${agents === 1 ? 'agent comes' : `${agents} agents come`} with you, end-to-end encrypted.`
 }
+
+export type KitWay = 'file' | 'copy' | 'words'
+
+export function checksKit(way: KitWay): boolean {
+  return way === 'words'
+}

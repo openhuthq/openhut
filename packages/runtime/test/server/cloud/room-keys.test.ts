@@ -102,7 +102,7 @@ test('in a team room this Mac lists the account key as its kit, moves the mark w
   await roomKeys.addTeam({ ws, list: v2, first: v1 })
   const puts: MemberList[] = []
   await roomKeys.refresh({ ws, call: async ({ method, path, body }) => {
-    if (method === 'POST' && path === '/member-lists') puts.push((body as { list: MemberList }).list)
+    if (method === 'POST' && path === '/v1/member-lists') puts.push((body as { list: MemberList }).list)
     return { status: 200, json: { object: 'list', data: [] } }
   } })
   const v3 = puts[0]
@@ -117,7 +117,7 @@ test('in a team room this Mac lists the account key as its kit, moves the mark w
   assert.ok(kit && kit !== oldKit)
   assert.equal(changed.letters.some((each) => each.to === kit || each.to === oldKit), false)
   await roomKeys.refresh({ ws, call: async ({ method, path, body }) => {
-    if (method === 'POST' && path === '/member-lists') puts.push((body as { list: MemberList }).list)
+    if (method === 'POST' && path === '/v1/member-lists') puts.push((body as { list: MemberList }).list)
     return { status: 200, json: { object: 'list', data: [] } }
   } })
   const v4 = puts[1]
@@ -134,7 +134,7 @@ test('in a team room this Mac lists the account key as its kit, moves the mark w
   assert.ok(current && team)
   const words = await keysService.newKit()
   await keysService.setKit({ box: words.box, savedAt: new Date().toISOString() })
-  const workspaces = [{ ...await keysService.workspaceBox({ account: current }), chain: homeChain }, { ...await keysService.workspaceBox({ account: current, room: team }), chain: [v1, v2, v3, v4] }]
+  const workspaces = [{ id: current.workspace.id, key: (await keysService.workspaceBox({ account: current })).body, chain: homeChain }, { id: team.workspace.id, key: (await keysService.workspaceBox({ account: current, room: team })).body, chain: [v1, v2, v3, v4] }]
   await keysService.setSession(undefined)
   await keysService.forgetHere()
   await keysService.setLocked({ sub: 'dev-mo', email: 'mo@example.com' })
@@ -170,7 +170,7 @@ test('a rotation whose answer was lost still lands: its bundle carries a letter 
   const call: Call = async ({ method, path }) => method === 'GET' ? { status: 200, json: { object: 'list', data: found } } : { status: 200, json: deleted.push(path) }
   assert.equal(await roomKeys.rekey({ ws, call }), false)
   assert.deepEqual([roomKeys.room(ws)?.workspace.version, roomKeys.room(ws)?.workspace.key], [2, room.workspace.key])
-  assert.deepEqual(deleted, ['/letters/let_mine'])
+  assert.deepEqual(deleted, ['/v1/letters/let_mine'])
 })
 
 test('an admin revokes an invite: the next list drops it and moves its key to removed, so its link can no longer sign a join', async () => {

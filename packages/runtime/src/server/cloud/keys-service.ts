@@ -2,10 +2,11 @@ import { spawnSync } from 'node:child_process'
 import { randomInt } from 'node:crypto'
 import { hostname } from 'node:os'
 import * as z from 'zod/mini'
-import { checkProof, MemberList, parseJson, signProof, type CloudSession, type Letter, type Member } from '@openhut/common/cloud/cloud.ts'
+import { MemberList, parseJson, type Letter, type Member } from '@openhut/common/cloud/cloud.ts'
+import { checkV1, signV1 } from '@openhut/common/cloud/v1/identity.ts'
 import { anchorOf, bodyOf, check, firstOf, keyVersionOf, nextOf, signList, withoutDevices } from '@openhut/common/cloud/member-list.ts'
 import { equal, fromBase64, fromWords, identity, letter, lock, newKey, newWords, read, slot, toBase64, unlock, type Bytes, type Identity, type LetterPurpose } from '@openhut/common/vault/vault.ts'
-import { cloud, type Letter as Sealed } from '../platform/cloud.ts'
+import { cloud, type Box, type Bundle, type Call, type CloudSession, type Letter as Sealed, type Reply } from '../platform/cloud.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { keyStore, Keys, type Account, type AskRoom, type Room, type Session, type Stored } from './key-store.ts'
 
@@ -44,9 +45,13 @@ export const keysService = {
     return next.token
   },
 
-  async joinSession(join: string): Promise<CloudSession> {
+  call: async (input: Omit<Call, 'token' | 'signer'>): Promise<Reply> => cloud.call({ ...input, token: await keysService.token(), signer: await keysService.device() }),
+
+  memberLists: ({ list, letters = [], boxes = [] }: Bundle): Promise<Reply> => keysService.call({ method: 'POST', path: '/v1/member-lists', body: { list, letters, boxes } }),
+
+  async joinSession(code: string): Promise<CloudSession> {
     const device = await keysService.device()
-    const session = await cloud.join({ join, device: toBase64(device.publicKey), signature: await signProof({ signer: device, proof: 'session', parts: [join] }) })
+    const session = await cloud.session({ grant: 'join_code', code, device: toBase64(device.publicKey), signature: await signV1({ signer: device, proof: 'session', parts: [code] }) })
     await keysService.setSession({ token: session.token, refresh: session.refresh, expiresAt: session.expiresAt })
     return session
   },
@@ -61,24 +66,26 @@ export const keysService = {
     return signList({ signer: await keysService.device(), body: { ...base, members, runtimes: [...body.runtimes ?? [], device], added: { ...body.added, [device]: base.at ?? 0 }, ...name && { names: { ...body.names, [device]: name.slice(0, 64) } } } })
   },
 
-  async workspaceBox({ account, room = account }: { account: Account; room?: Room }): Promise<{ id: string; key: string; by: string; signature: string }> {
-    const name = `workspace/${room.workspace.id}`
-    const box = toBase64(await lock({ key: fromBase64(account.key), version: 1, bind: bind({ sub: account.sub, name }), plain: await boxedSecret({ account, room }) }) ?? new Uint8Array())
-    const { by, signature } = await keysService.signBox({ account, name, body: box })
-    return { id: room.workspace.id, key: box, by, signature }
+  async workspaceBox({ account, room = account }: { account: Account; room?: Room }): Promise<Box> {
+    const box = toBase64(await lock({ key: fromBase64(account.key), version: 1, bind: bind({ sub: account.sub, name: `workspace/${room.workspace.id}` }), plain: await boxedSecret({ account, room }) }) ?? new Uint8Array())
+    return keysService.signBox({ account, name: `workspace-${room.workspace.id}`, body: box, savedAt: Date.now() })
   },
 
-  async signBox({ account, name, body, savedAt }: { account: Account; name: string; body: string; savedAt?: number }): Promise<{ body: string; by: string; signature: string; savedAt?: number }> {
+  async signBox({ account, name, body, savedAt }: { account: Account; name: string; body: string; savedAt: number }): Promise<Box> {
     const signer = await accountDevice(fromBase64(account.key))
-    return { body, by: toBase64(signer.publicKey), signature: await signProof({ signer, proof: 'key-box', parts: boxParts({ account, name, body, savedAt }) }), savedAt }
+    return { name, body, by: toBase64(signer.publicKey), signature: await signV1({ signer, proof: 'key-box', parts: [account.sub, name, body, String(savedAt)] }), savedAt }
+  },
+
+  async deleteBox({ account, name }: { account: Account; name: string }): Promise<{ by: string; signature: string }> {
+    const signer = await accountDevice(fromBase64(account.key))
+    return { by: toBase64(signer.publicKey), signature: await signV1({ signer, proof: 'key-box', parts: [account.sub, `delete/${name}`] }) }
   },
 
   async boxIsMine({ account, room = account, name, box }: { account: Account; room?: Room; name: string; box: { body: string; by?: string; signature?: string; savedAt?: string } }): Promise<boolean> {
     const by = toBase64((await accountDevice(fromBase64(account.key))).publicKey)
     const { signature } = box
     if (box.by !== by || !signature) return false
-    const signed = (savedAt?: number) => checkProof({ device: by, proof: 'key-box', parts: boxParts({ account, name, body: box.body, savedAt }), signature })
-    if (!(box.savedAt && await signed(Date.parse(box.savedAt))) && !await signed()) return false
+    if (!box.savedAt || !await checkV1({ device: by, proof: 'key-box', parts: [account.sub, name, box.body, String(Date.parse(box.savedAt))], signature })) return false
     if (name === 'kit' || name === 'kit-confirmed') return true
     const plain = await unlock({ keys: { 1: fromBase64(account.key) }, bind: bind({ sub: account.sub, name: `workspace/${room.workspace.id}` }), locked: fromBase64(box.body) })
     return Boolean(plain && equal({ a: plain, b: await boxedSecret({ account, room }) }))
@@ -122,17 +129,17 @@ export const keysService = {
     if (other && other.sub !== sub) throw new HttpError(409, `This computer is set up for ${other.email}. Sign in with that account.`)
   },
 
-  async open({ sub, email }: { sub: string; email: string }): Promise<Account> {
+  async open({ sub, email, home = toBase64(newKey(12)) }: { sub: string; email: string; home?: string }): Promise<Account> {
     const current = await keyStore.read()
     if (current.account?.sub === sub) return current.account
     keysService.ownedBy({ sub })
     const device = await identity(fromBase64(current.device))
-    const id = toBase64(newKey(12))
+    const id = home
     const key = newKey()
     const kit = toBase64((await accountDevice(key)).publicKey)
     const devices = [toBase64(device.publicKey), kit]
     const at = Date.now()
-    const list = await signList({ signer: device, body: { workspace: id, version: 1, previous: null, members: [{ email, role: 'owner', devices, kit }], invites: [], removed: [], at, added: Object.fromEntries(devices.map((each) => [each, at])), names: { [devices[0]]: deviceName() } } })
+    const list = await signList({ signer: device, body: { workspace: id, version: 1, previous: null, members: [{ email, role: 'owner', devices, kit, viewers: [] }], invites: [], removed: [], at, added: Object.fromEntries(devices.map((each) => [each, at])), names: { [devices[0]]: deviceName() } } })
     const account = { sub, email, key: toBase64(key), vault: toBase64(newKey()), workspace: { id, key: toBase64(newKey()), version: 1 }, list, first: list }
     await keyStore.write({ device: current.device, machine, account, session: current.session })
     return account
@@ -152,7 +159,7 @@ export const keysService = {
     return sealTo({ to, purpose: 'account-key', workspace: account.workspace.id, plain: fromBase64(account.key) })
   },
 
-  async passkeyBox(prf: Bytes): Promise<{ body: string; by: string; signature: string; savedAt?: number }> {
+  async passkeyBox(prf: Bytes): Promise<Box> {
     const account = keysService.mustBeOn()
     const body = await lock({ key: prf, version: 1, bind: bind({ sub: account.sub, name: 'passkey' }), plain: fromBase64(account.key) })
     if (!body) throw new HttpError(400, 'Your password manager’s passkey can’t unlock OpenHut. Use Touch ID or your recovery kit.')
@@ -199,21 +206,16 @@ export const keysService = {
     return { list, next, letters }
   },
 
+  signedIn(): Account {
+    const account = stored()?.account
+    if (!account || !stored()?.session) throw new HttpError(409, 'Sign in to OpenHut first.')
+    return account
+  },
+
   mustBeOn(): Account {
     const account = stored()?.account
     if (!account?.key || !stored()?.session) throw new HttpError(409, `Enable OpenHut Cloud on this computer first.`)
     return account
-  },
-
-  async deleteProof(ws: string): Promise<{ signedAt: number; signature: string }> {
-    const signedAt = Date.now()
-    return { signedAt, signature: await signProof({ signer: await keysService.device(), proof: 'delete', parts: [ws, String(signedAt)] }) }
-  },
-
-  async accountProof(): Promise<{ by: string; signature: string }> {
-    const account = keysService.mustBeOn()
-    const signer = await accountDevice(fromBase64(account.key))
-    return { by: toBase64(signer.publicKey), signature: await signProof({ signer, proof: 'key-box', parts: [account.sub, 'delete-account', ''] }) }
   },
 
   forgetHere: async (): Promise<void> => keyStore.write({ device: toBase64(newKey()), machine }),
@@ -310,10 +312,6 @@ export async function sealTo({ to, purpose, workspace, plain }: { to: string; pu
   return { to, purpose, body: toBase64(body ?? new Uint8Array()) }
 }
 
-function boxParts({ account, name, body, savedAt }: { account: Account; name: string; body: string; savedAt?: number }): string[] {
-  return savedAt === undefined ? [account.sub, name, body] : [account.sub, name, body, String(savedAt)]
-}
-
 function bind({ sub, name }: { sub: string; name: string }): string {
   return `account/${sub}/${name}`
 }
@@ -333,6 +331,6 @@ function stored(): Stored | undefined {
 async function renew(refresh: string | undefined): Promise<CloudSession> {
   if (!refresh) throw new HttpError(502, 'You were signed out. Sign in again.')
   const signedAt = Date.now()
-  const signature = await signProof({ signer: await keysService.device(), proof: 'refresh', parts: [refresh, String(signedAt)] })
-  return cloud.refresh({ session: refresh, signedAt, signature })
+  const signature = await signV1({ signer: await keysService.device(), proof: 'refresh', parts: [refresh, String(signedAt)] })
+  return cloud.session({ grant: 'refresh_token', refreshToken: refresh, signedAt, signature })
 }

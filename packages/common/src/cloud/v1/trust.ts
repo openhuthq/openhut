@@ -26,7 +26,7 @@ export type ListMemberLists = z.infer<typeof ListMemberLists>
 export const CreateInvite = z.object({ workspace: WorkspaceId, ...NewInvite.shape })
 export type CreateInvite = z.infer<typeof CreateInvite>
 
-export const CreateJoinRequest = z.object({ workspace: WorkspaceId, ...AskAdmin.shape })
+export const CreateJoinRequest = z.object({ workspace: WorkspaceId, ...AskAdmin.shape, server: z._default(z.boolean(), false) })
 export type CreateJoinRequest = z.infer<typeof CreateJoinRequest>
 export const JoinRequest = z.object({
   id: DeviceKey,
@@ -36,6 +36,7 @@ export const JoinRequest = z.object({
   asked: z.boolean(),
   name: z.nullable(z.string()),
   os: z.nullable(z.string()),
+  server: z.boolean(),
   at: Timestamp,
 })
 export type JoinRequest = z.infer<typeof JoinRequest>

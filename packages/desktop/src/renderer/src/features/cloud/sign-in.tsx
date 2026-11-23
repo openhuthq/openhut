@@ -1,13 +1,12 @@
 import { useState, useSyncExternalStore, type FormEvent } from 'react'
-import { CheckmarkCircle02Icon, ComputerPhoneSyncIcon, File01Icon, SourceCodeIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
+import { ComputerPhoneSyncIcon, File01Icon, SourceCodeIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import type { Cloud, RecoveryKit } from '@openhut/common/cloud/cloud.ts'
 import { kitText, readKit } from '@openhut/common/vault/kit-file.ts'
-import { migrating } from '@/app/gate-state'
+import { checksKit, migrating, type KitWay } from '@/app/gate-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { CopyButton } from '@/components/copy-button'
-import { DropZone } from '@/components/custom/drop-zone'
 import { ErrorNote } from '@/components/error-note'
 import { I } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
@@ -63,8 +62,8 @@ function useOnline(): boolean {
 
 type KitBridge = { save: (input: { name: string; body: string }) => Promise<{ canceled?: boolean; text?: string }> }
 const kitBridge: KitBridge | undefined = Reflect.get(window, 'openhut')?.kit
-type KitStep = 'save' | 'paste' | 'drop' | 'words' | 'type'
-const LINK = 'font-normal text-ink'
+type KitStep = 'save' | 'words' | 'type'
+const LINK = 'font-normal text-mute'
 
 export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () => void }) {
   const cloud = useCloud().data
@@ -73,20 +72,18 @@ export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () =>
   const [replaced, setReplaced] = useState(false)
   const [step, setStep] = useState<KitStep>('save')
   const [error, setError] = useState<string>()
-  const [saved, setSaved] = useState(false)
   const email = cloud?.email ?? ''
   const old = Boolean(cloud?.kit && !cloud.kit.differs)
   const young = cloud?.youngUntil
   const name = `OpenHut Recovery Kit (${email}).txt`
   const textOf = (made: RecoveryKit) => kitText({ email, madeAt: made.madeAt, device: made.device, kitId: made.kitId, words: made.words })
-  const same = (other: string | undefined) => Boolean(kit) && readKit(other ?? '')?.words.join(' ') === kit?.words.join(' ')
   const go = (next: KitStep) => {
     setError(undefined)
     setStep(next)
   }
-  const finish = () => {
-    setSaved(true)
-    go('save')
+  const saved = (way: KitWay) => {
+    if (checksKit(way)) return go('type')
+    onDone()
   }
   const ready = async () => {
     if (kit) return kit
@@ -99,67 +96,52 @@ export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () =>
   const save = async () => {
     const made = await ready()
     const text = textOf(made)
-    if (!kitBridge) {
-      download({ name, text })
-      return go('drop')
-    }
-    const saved = await kitBridge.save({ name, body: text })
-    if (saved.canceled) return
-    if (readKit(saved.text ?? '')?.words.join(' ') !== made.words.join(' ')) return setError('The saved file doesn’t match your kit. Save it again.')
-    finish()
+    if (!kitBridge) return saved(download({ name, text }))
+    const kept = await kitBridge.save({ name, body: text })
+    if (kept.canceled) return
+    if (readKit(kept.text ?? '')?.words.join(' ') !== made.words.join(' ')) return setError('The saved file doesn’t match your kit. Save it again.')
+    saved('file')
   }
   const copy = async () => {
-    if (await copyText(textOf(await ready()))) go('paste')
+    if (await copyText(textOf(await ready()))) saved('copy')
   }
   const words = async () => {
     await ready()
     go('words')
   }
-  const check = (pasted: string) => same(pasted) ? finish() : setError(readKit(pasted) ? 'That’s a different kit. Use the one you just saved.' : 'That doesn’t look like your kit. Try again.')
-  if (step === 'words' && kit) return <KitWords kit={kit} replaced={replaced} onBack={isPhone() ? onBack : () => go('save')} onSaved={() => go('type')} />
-  if (step === 'type' && kit) return <ConfirmKit kit={kit} onBack={() => go('words')} onDone={finish} />
-  if (step === 'paste' || step === 'drop') return <KitCheck how={step} error={error} onText={check} onBack={() => go('save')} />
-  const ways = !young && !isPhone() && !saved && <span className="text-mute"><Button type="button" variant="text" className={LINK} disabled={make.isPending} onClick={() => run(copy)}>Copy it</Button> · <Button type="button" variant="text" className={LINK} disabled={make.isPending} onClick={() => run(words)}>write it down</Button></span>
+  if (step === 'words' && kit) return <KitWords kit={kit} replaced={replaced} onBack={isPhone() ? onBack : () => go('save')} onSaved={() => saved('words')} />
+  if (step === 'type' && kit) return <ConfirmKit kit={kit} onBack={() => go('words')} onDone={onDone} />
+  const ways = !young && !isPhone() && <span className="text-mute"><Button type="button" variant="text" className={LINK} disabled={make.isPending} onClick={() => run(copy)}>Copy</Button> · <Button type="button" variant="text" className={LINK} disabled={make.isPending} onClick={() => run(words)}>Write it down</Button></span>
   const label = isPhone() ? 'Show the words' : 'Save kit'
-  return <Step happy={saved} title={old && !kit ? 'New recovery kit.' : 'Save your recovery kit.'} line="Lose every computer? This gets you back in." back={saved ? undefined : onBack} link={ways}
-    action={!young && <Button type="button" variant="primary" className={PRIMARY} autoFocus={saved} disabled={make.isPending} onClick={saved ? onDone : () => run(isPhone() ? words : save)}>{saved ? 'Continue' : label}</Button>}>
-    {!young && <KitCard email={email} saved={saved} />}
-    {old && !kit && <p className="m-0 font-medium text-ink">{cloud?.passkey ? 'The old kit and Touch ID stop working.' : 'The old kit stops working.'}</p>}
+  return <Step title={old && !kit ? 'Save a new recovery kit' : 'Save your recovery kit'} line="Keep it somewhere safe. You’ll only need it if you ever lose all your computers." back={onBack} link={ways}
+    action={!young && <Button type="button" variant="primary" className={PRIMARY} disabled={make.isPending} onClick={() => run(isPhone() ? words : save)}>{label}</Button>}>
+    {!young && <KitCard email={email} />}
+    {old && !kit && <p className="m-0 text-mute">{cloud?.passkey ? 'Your old kit and Touch ID will stop working.' : 'Your old kit will stop working.'}</p>}
     {young && <p className="m-0 max-w-[420px] text-[12.5px] text-mute">This computer was added less than 3 days ago. Make a kit after {shortDate.format(new Date(young))}, or on an older one.</p>}
     <ErrorNote message={error} />
   </Step>
 }
 
-function KitCard({ email, saved }: { email: string; saved: boolean }) {
+function KitCard({ email }: { email: string }) {
   return <div className="flex w-full max-w-[420px] items-center gap-3 rounded-xl border border-hair bg-card px-4 py-3.5 text-left">
     <I icon={File01Icon} size={22} className="text-hue-amber" />
     <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[14px] font-medium text-ink">OpenHut Recovery Kit</span><span className="truncate text-[12.5px] text-mute">12 words · {email}</span></span>
-    <span className={cn('inline-flex items-center gap-1 text-[12.5px] font-medium text-pass transition-opacity duration-300', !saved && 'opacity-0')}><I icon={CheckmarkCircle02Icon} size={15} />Saved</span>
   </div>
-}
-
-function KitCheck({ how, error, onText, onBack }: { how: 'paste' | 'drop'; error?: string; onText: (text: string) => void; onBack: () => void }) {
-  return <Step title={how === 'paste' ? 'Paste it back.' : 'Drop it back.'} line="So we know it’s saved." back={onBack}>
-    <DropZone className="w-full max-w-[420px]" onText={onText}>{() => <>
-      <span className="font-medium text-ink">{how === 'paste' ? 'Paste it here' : 'Drop your kit here'}</span>
-      <span className="text-[12.5px] text-mute">{how === 'paste' ? 'or drop the file' : 'or paste it'}</span>
-    </>}</DropZone>
-    <ErrorNote message={error} />
-  </Step>
 }
 
 function numbered(kit: RecoveryKit): string {
   return kit.words.map((word, index) => `${index + 1}. ${word}`).join('\n')
 }
 
-function download({ name, text }: { name: string; text: string }) {
+function download({ name, text }: { name: string; text: string }): KitWay {
   const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })), download: name })
   link.click()
   URL.revokeObjectURL(link.href)
+  return 'file'
 }
 
 function KitWords({ kit, replaced, onBack, onSaved }: { kit: RecoveryKit; replaced: boolean; onBack?: () => void; onSaved: () => void }) {
-  return <Step title="Your 12 words." line={replaced ? 'Your old words stop working now.' : 'Write them down and keep them safe.'} back={onBack}
+  return <Step title="Your 12 words" line={replaced ? 'Write them down. Your old words stop working now.' : 'Write them down and keep them somewhere safe.'} back={onBack}
     link={<CopyButton text={numbered(kit)} label="Copy" variant="text" size="none" className="font-normal text-mute" />}
     action={<Button type="button" variant="primary" className={PRIMARY} onClick={onSaved}>I wrote them down</Button>}>
     <div className="grid w-full max-w-[420px] grid-cols-3 gap-2 text-left phone:grid-cols-2">{kit.words.map((word, index) => <span key={index} className="flex items-center gap-2 rounded-lg border border-hair bg-card px-3 py-2 font-mono text-[13px]"><span className="w-4 text-right text-[11px] text-mute">{index + 1}</span>{word}</span>)}</div>
@@ -175,7 +157,7 @@ function ConfirmKit({ kit, onBack, onDone }: { kit: RecoveryKit; onBack: () => v
     if (right) onDone()
     setWrong(!right)
   }
-  return <Step title="Check your words." line="Type two of them." back={onBack} action={<Button type="submit" form="check-kit" variant="primary" className={PRIMARY}>Check</Button>}>
+  return <Step title="Quick check" line="Type two of your words." back={onBack} action={<Button type="submit" form="check-kit" variant="primary" className={PRIMARY}>Check</Button>}>
     <form id="check-kit" onSubmit={submit} className="flex w-full max-w-[320px] flex-col gap-3 text-left">
       {kit.ask.map((index, i) => <label key={index} className="flex flex-col gap-1.5"><span className="font-medium">Word {index + 1}</span><Input name={`word-${index}`} className="font-mono" autoComplete="off" spellCheck={false} autoFocus={i === 0} required /></label>)}
       <ErrorNote message={wrong ? 'Those don’t match. Check the word numbers.' : undefined} />

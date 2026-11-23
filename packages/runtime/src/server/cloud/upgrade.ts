@@ -31,7 +31,7 @@ export const upgrade = {
 
   async run(): Promise<void> {
     if (await upgrade.done()) return
-    const account = keysService.mustBeOn()
+    const account = keysService.signedIn()
     const me = await keysService.deviceKey()
     const rows = await db.selectFrom('agent').selectAll().where((eb) => eb.or([eb('runs_on', 'is', null), eb('runs_on', '=', me)])).orderBy('created_at').execute()
     for (const row of rows) {

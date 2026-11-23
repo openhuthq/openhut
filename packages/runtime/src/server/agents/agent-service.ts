@@ -71,7 +71,7 @@ export const agentService = {
   async create({ actor, name, instructions, model, face, workspace }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'face' | 'workspace'>): Promise<Agent> {
     const clean = cleanName(name)
     requireModel(model)
-    const ws = workspace ?? keysService.mustBeOn().workspace.id
+    const ws = workspace ?? keysService.signedIn().workspace.id
     if (!roomKeys.room(ws)) throw new HttpError(400, 'This computer isn’t in that team.', { param: 'workspace' })
     if ((await agentd.health()).imageReady === false) throw new HttpError(409, 'OpenHut is still downloading what agents need to run. This happens once and takes a few minutes. Try again shortly.')
     const id = newId('ag')
@@ -214,7 +214,7 @@ export function mayEdit({ facts, actor }: { facts: AgentFacts; actor: Caller }):
 }
 
 export function placeOf(row: Pick<AgentRow, 'workspace' | 'shared'>): { workspace: string; personal: boolean } {
-  return { workspace: row.workspace ?? keysService.mustBeOn().workspace.id, personal: !row.shared }
+  return { workspace: row.workspace ?? keysService.signedIn().workspace.id, personal: !row.shared }
 }
 
 async function requireOwner({ actor, id }: { actor: Caller; id: string }): Promise<AgentFacts> {
@@ -291,7 +291,7 @@ async function agentOf({ facts, actor, states }: { facts: AgentFacts; actor: Cal
     id: facts.id, object: 'agent', name: value.name, ownerId: facts.owner, ownerName: facts.owner, model: control?.model ?? DEFAULT_MODEL, wanted: value.wanted,
     status: here ? statusOf(states?.[facts.id]) : beat?.status ?? 'missing', health: health.health, healthDetail: health.detail, summary: summaryOf(value.instructions), net: here ? row.net : 0,
     instructions: value.instructions, codeExecution: control?.codeExecution ?? true, browser: control?.browser ?? false, face: value.face, canEdit: mayEdit({ facts, actor }),
-    runsHere: here, runsNowhere: !here && (!control || !runner || !!list?.removed.includes(control.runsOn)), runsOnName: here || !control ? null : list?.names?.[control.runsOn] ?? (runner ? `${runner.email}’s computer` : null),
+    runsHere: here, runsNowhere: !here && (!control || !runner || !!list?.removed.includes(control.runsOn)), runsOn: control?.runsOn ?? null, runsOnName: here || !control ? null : list?.names?.[control.runsOn] ?? (runner ? `${runner.email}’s computer` : null),
     changedBy: author && author !== actor.email ? author : null, workspace: facts.workspace === keysService.account()?.workspace.id ? null : facts.workspace, shared: !facts.personal, owner: facts.owner,
     canManage: mine, createdAt: value.createdAt,
   }

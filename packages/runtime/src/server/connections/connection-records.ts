@@ -139,6 +139,8 @@ async function apply(held: Held): Promise<void> {
   if (held.deleted) return forget(held.id)
   const { value, secret } = opened(held)
   if (value.kind === 'provider') return applyProvider({ id: z.parse(ProviderId, value.name), secret, models: value.models })
+  const kept = await db.selectFrom('connection').select(['kind', 'name', 'account', 'sign_in', 'config']).where('id', '=', held.id).executeTakeFirst()
+  if (kept && kept.kind === value.kind && kept.name === value.name && kept.account === (value.account ?? '') && Boolean(kept.sign_in) === (value.signIn ?? false) && unseal(kept.config) === JSON.stringify(secret)) return
   const fields = { kind: value.kind, name: value.name, account: value.account ?? '', sign_in: value.signIn ?? false, config: seal(JSON.stringify(secret)) }
   await db.insertInto('connection').values({ id: held.id, owner_id: await ownerId(), created_at: value.createdAt ?? new Date(), ...fields })
     .onConflict((oc) => oc.column('id').doUpdateSet(fields)).execute()
