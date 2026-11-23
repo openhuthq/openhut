@@ -12,7 +12,7 @@ import { ErrorNote } from '@/components/error-note'
 import { I, PILL } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { nameOf, notifyDesktop, useCloud, usePasskeys, usePasskeyUnlock, useRemoveMac, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
+import { cancelPasskey, nameOf, notifyDesktop, PasskeyQuiet, useCloud, usePasskeys, usePasskeyUnlock, useRemoveMac, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
 import { BIG, Step } from '@/features/cloud/step'
 import { chooseWorkspace, useAsk, useCancelAsk, useDeleteData } from '@/features/cloud/workspaces'
 import { Mismatch } from '@/features/cloud/presence'
@@ -24,26 +24,37 @@ import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
-  const [way, setWay] = useState<'kit' | 'ask' | 'start-over' | null>(null)
+  const [way, pick] = useState<'kit' | 'ask' | 'start-over' | null>(null)
+  const prompted = useRef(false)
   const signOut = useSignOut()
   const signIn = useSignIn()
   const helper = usePasskeys()
   const passkey = usePasskeyUnlock()
   const leave = <Button type="button" variant="text" className="font-normal text-mute" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
+  const macCan = Boolean(helper?.passkeys && helper.prf)
+  const canPasskey = macCan && cloud.passkey
+  const touch = (quiet: boolean) => passkey.mutate(quiet, { onError: (error) => { if (!(error instanceof PasskeyQuiet)) toastError(error) } })
+  const setWay = (next: typeof way) => {
+    if (passkey.isPending) cancelPasskey()
+    pick(next)
+  }
+  useEffect(() => {
+    if (!canPasskey || prompted.current || cloud.needsSignIn || cloud.asking) return
+    prompted.current = true
+    touch(true)
+  })
   if (cloud.needsSignIn) return <Step title="This computer was removed." line="Sign in again to unlock it." link={leave}
     action={<Button type="button" variant="primary" className={BIG} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}>Sign in again</Button>} />
   if (way === 'kit') return <KitEntry cloud={cloud} onBack={() => setWay(null)} />
   if (way === 'start-over') return <StartOver onBack={() => setWay(null)} />
   if (way === 'ask' || cloud.asking) return <Requested cloud={cloud} onBack={() => setWay(null)} />
-  const macCan = Boolean(helper?.passkeys && helper.prf)
-  const canPasskey = macCan && cloud.passkey
-  const ask = cloud.canAsk ? 'Approve it from a computer you already use, or use your recovery kit.' : 'Use your recovery kit to unlock it.'
+  const ask = canPasskey ? 'Use Touch ID, or another way below.' : cloud.canAsk ? 'Approve it from a computer you already use, or use your recovery kit.' : 'Use your recovery kit to unlock it.'
   const lost = <Button type="button" variant="text" className="font-normal text-mute" onClick={() => setWay('start-over')}>Lost your computers and kit? Start over</Button>
   return <Step title={`Welcome back, ${nameOf(cloud.email ?? '')}`} line={`This computer is new to your account. ${ask}`} back={back} link={<span className="flex flex-col items-center gap-1">{leave}{lost}</span>}
     action={<div className="flex flex-col items-center gap-2.5">
-      {cloud.canAsk && <Button type="button" variant="primary" className={BIG} onClick={() => setWay('ask')}>Ask my other computer</Button>}
-      {cloud.kitInCloud && <Button type="button" variant={cloud.canAsk ? 'secondary' : 'primary'} className={cloud.canAsk ? BIG : BIG} onClick={() => setWay('kit')}><I icon={Key01Icon} size={16} />Use my recovery kit</Button>}
-      {canPasskey && <Button type="button" variant="secondary" className={BIG} disabled={passkey.isPending} onClick={() => passkey.mutate(undefined, { onError: toastError })}><I icon={FingerPrintIcon} size={16} />{passkey.isPending ? 'Unlocking…' : 'Use Touch ID'}</Button>}
+      {canPasskey && <Button type="button" variant="primary" className={BIG} disabled={passkey.isPending} onClick={() => touch(false)}><I icon={FingerPrintIcon} size={16} />{passkey.isPending ? 'Waiting for Touch ID…' : 'Use Touch ID'}</Button>}
+      {cloud.canAsk && <Button type="button" variant={canPasskey ? 'secondary' : 'primary'} className={BIG} onClick={() => setWay('ask')}>Ask my other computer</Button>}
+      {cloud.kitInCloud && <Button type="button" variant={canPasskey || cloud.canAsk ? 'secondary' : 'primary'} className={BIG} onClick={() => setWay('kit')}><I icon={Key01Icon} size={16} />Use my recovery kit</Button>}
       {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
     </div>} />
 }

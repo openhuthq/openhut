@@ -42,7 +42,7 @@ function pollOf(cloud: Cloud | undefined): number | false {
 }
 
 type PasskeyReply = { prf?: string; error?: string; passkeys?: boolean; message?: string }
-type PasskeyBridge = { status: () => Promise<PasskeyReply>; create: (input: { email: string }) => Promise<PasskeyReply>; open: () => Promise<PasskeyReply> }
+type PasskeyBridge = { status: () => Promise<PasskeyReply>; create: (input: { email: string }) => Promise<PasskeyReply>; open: (input?: { quiet: boolean }) => Promise<PasskeyReply>; cancel: () => Promise<void> }
 const passkey: PasskeyBridge | undefined = Reflect.get(window, 'openhut')?.passkey
 
 export function useUnlock() {
@@ -57,23 +57,28 @@ export function usePasskeys() {
   return useQuery({ queryKey: ['passkey-helper'], queryFn: async () => passkey ? await passkey.status() : { error: 'missing' }, staleTime: Infinity }).data
 }
 
-export async function passkeyPrf(create?: { email: string }): Promise<string> {
-  const reply = create ? await passkey?.create(create) : await passkey?.open()
+export class PasskeyQuiet extends Error {}
+
+export async function passkeyPrf({ create, quiet = false }: { create?: { email: string }; quiet?: boolean } = {}): Promise<string> {
+  const reply = create ? await passkey?.create(create) : await passkey?.open({ quiet })
   if (reply?.prf) return reply.prf
   if (reply?.error === 'no-prf') throw new Error('Your password manager’s passkey can’t unlock OpenHut. Use Touch ID or your recovery kit.')
-  if (reply?.error === 'canceled') throw new Error('Canceled.')
+  if (reply?.error === 'canceled' || reply?.error === 'none-here') throw new PasskeyQuiet('Canceled.')
+  if (reply?.message?.includes('not associated')) throw new Error('This copy of OpenHut can’t use Touch ID. Use the app from openhut.dev, or unlock another way.')
   throw new Error(reply?.message ? `Touch ID didn’t work: ${reply.message}` : 'Touch ID isn’t set up here. Unlock another way.')
 }
 
+export const cancelPasskey = (): void => void passkey?.cancel()
+
 export function usePasskeyUnlock() {
   const unlock = useUnlock()
-  return useMutation({ mutationFn: async () => unlock.mutateAsync({ prf: await passkeyPrf() }) })
+  return useMutation({ mutationFn: async (quiet?: boolean) => unlock.mutateAsync({ prf: await passkeyPrf({ quiet }) }) })
 }
 
 export function useAddPasskey() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: async (email: string) => request({ schema: Cloud, computer: 'local', path: '/api/cloud/passkeys', method: 'POST', body: { prf: await passkeyPrf({ email }) } }),
+    mutationFn: async (email: string) => request({ schema: Cloud, computer: 'local', path: '/api/cloud/passkeys', method: 'POST', body: { prf: await passkeyPrf({ create: { email } }) } }),
     onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
   })
 }
