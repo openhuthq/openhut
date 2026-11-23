@@ -65,6 +65,7 @@
     "@json-render/core": "0.23.2",
     "@json-render/react": "0.23.2",
     "electron-updater": "6.8.12",
+    "sonner": "^2.0.7",
     "ws": "8.21.0"
   }
 }

@@ -11,7 +11,7 @@ import { ErrorNote } from '@/components/error-note'
 import { I } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
 import { useCancelSignIn, useCloud, useNewKit, useSignIn, useSigningIn } from '@/features/cloud/api'
-import { PRIMARY, Step } from '@/features/cloud/step'
+import { BIG, Step } from '@/features/cloud/step'
 import { shortDate } from '@/lib/format'
 import { isPhone } from '@/lib/native'
 import { open, usePath } from '@/lib/router'
@@ -35,7 +35,7 @@ export function SignIn({ cloud }: { cloud: Cloud | undefined }) {
   const invited = usePath() === '/join'
   const moving = migrating({ agents, invited })
   const busy = waiting || signIn.isPending
-  const action = isPhone() ? undefined : <Button type="button" variant="primary" className={cn(PRIMARY, 'grid', busy && 'bg-[#2a2b2e]')} disabled={!online || signIn.isPending} onClick={() => signIn.mutate()}>
+  const action = isPhone() ? undefined : <Button type="button" variant="primary" className={cn(BIG, 'grid', busy && 'bg-[#2a2b2e]')} disabled={!online || signIn.isPending} onClick={() => signIn.mutate()}>
     <span className={cn(SWAP, busy && '-translate-y-2.5 opacity-0')}><Google size={17} />Continue with Google</span>
     <span className={cn(SWAP, !busy && 'translate-y-2.5 opacity-0')} aria-hidden={!busy}><Spinner className="mt-0 border-white/30 border-t-white" />Finish in your browser</span>
   </Button>
@@ -114,7 +114,7 @@ export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () =>
   const ways = !young && !isPhone() && <span className="text-mute"><Button type="button" variant="text" className={LINK} disabled={make.isPending} onClick={() => run(copy)}>Copy</Button> · <Button type="button" variant="text" className={LINK} disabled={make.isPending} onClick={() => run(words)}>Write it down</Button></span>
   const label = isPhone() ? 'Show the words' : 'Save kit'
   return <Step title={old && !kit ? 'Save a new recovery kit' : 'Save your recovery kit'} line="Keep it somewhere safe. You’ll only need it if you ever lose all your computers." back={onBack} link={ways}
-    action={!young && <Button type="button" variant="primary" className={PRIMARY} disabled={make.isPending} onClick={() => run(isPhone() ? words : save)}>{label}</Button>}>
+    action={!young && <Button type="button" variant="primary" className={BIG} disabled={make.isPending} onClick={() => run(isPhone() ? words : save)}>{label}</Button>}>
     {!young && <KitCard email={email} />}
     {old && !kit && <p className="m-0 text-mute">{cloud?.passkey ? 'Your old kit and Touch ID will stop working.' : 'Your old kit will stop working.'}</p>}
     {young && <p className="m-0 max-w-[420px] text-[12.5px] text-mute">This computer was added less than 3 days ago. Make a kit after {shortDate.format(new Date(young))}, or on an older one.</p>}
@@ -143,7 +143,7 @@ function download({ name, text }: { name: string; text: string }): KitWay {
 function KitWords({ kit, replaced, onBack, onSaved }: { kit: RecoveryKit; replaced: boolean; onBack?: () => void; onSaved: () => void }) {
   return <Step title="Your 12 words" line={replaced ? 'Write them down. Your old words stop working now.' : 'Write them down and keep them somewhere safe.'} back={onBack}
     link={<CopyButton text={numbered(kit)} label="Copy" variant="text" size="none" className="font-normal text-mute" />}
-    action={<Button type="button" variant="primary" className={PRIMARY} onClick={onSaved}>I wrote them down</Button>}>
+    action={<Button type="button" variant="primary" className={BIG} onClick={onSaved}>I wrote them down</Button>}>
     <div className="grid w-full max-w-[420px] grid-cols-3 gap-2 text-left phone:grid-cols-2">{kit.words.map((word, index) => <span key={index} className="flex items-center gap-2 rounded-lg border border-hair bg-card px-3 py-2 font-mono text-[13px]"><span className="w-4 text-right text-[11px] text-mute">{index + 1}</span>{word}</span>)}</div>
   </Step>
 }
@@ -157,7 +157,7 @@ function ConfirmKit({ kit, onBack, onDone }: { kit: RecoveryKit; onBack: () => v
     if (right) onDone()
     setWrong(!right)
   }
-  return <Step title="Quick check" line="Type two of your words." back={onBack} action={<Button type="submit" form="check-kit" variant="primary" className={PRIMARY}>Check</Button>}>
+  return <Step title="Quick check" line="Type two of your words." back={onBack} action={<Button type="submit" form="check-kit" variant="primary" className={BIG}>Check</Button>}>
     <form id="check-kit" onSubmit={submit} className="flex w-full max-w-[320px] flex-col gap-3 text-left">
       {kit.ask.map((index, i) => <label key={index} className="flex flex-col gap-1.5"><span className="font-medium">Word {index + 1}</span><Input name={`word-${index}`} className="font-mono" autoComplete="off" spellCheck={false} autoFocus={i === 0} required /></label>)}
       <ErrorNote message={wrong ? 'Those don’t match. Check the word numbers.' : undefined} />

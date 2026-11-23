@@ -30,6 +30,7 @@ export function AccountSettings() {
       <PersonFace name={nameOf(email)} email={email} size={48} />
       <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[18px]/[1.2] font-semibold tracking-[-.01em]">{nameOf(email)}</span><span className="flex items-center gap-1.5 text-[12px] text-mute"><Google />{email}</span></span>
       {cloud.status === 'offline' && <Status tone="wait">Offline</Status>}
+      <SignOut />
     </div>
     <Rows>
       <Row icon={<I icon={Key01Icon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>{kitNote(cloud.kit)}{cloud.keyStore === 'file' && ' · Stored in a file, not the keychain'}</span>}>
@@ -38,7 +39,6 @@ export function AccountSettings() {
       {helper?.passkeys && helper.prf && <Row icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title="Touch ID" note={cloud.passkey ? 'On' : 'Unlock a new Mac with your fingerprint'}>
         {!cloud.passkey && !young && <Button type="button" variant="ghost" className={PILL} disabled={addPasskey.isPending} onClick={() => addPasskey.mutate(email, { onError: toastError })}>Add</Button>}
       </Row>}
-      <SignOutRow />
       <DeleteAccount cloud={cloud} />
     </Rows>
     <ErrorNote message={error} />
@@ -52,11 +52,9 @@ function KitDialog() {
   </Guide>
 }
 
-function SignOutRow() {
+function SignOut() {
   const signOut = useSignOut()
-  return <Row icon={<I icon={Logout03Icon} size={20} className="text-hue-slate" />} title="Sign out" note="Takes your agents and chats off this computer">
-    <ConfirmButton variant="ghost" className={PILL} disabled={signOut.isPending} question="Sign out?" detail="Your agents, chats and connections are deleted from this computer. They’re backed up, and come back when you sign in again." action="Sign out" onConfirm={() => signOut.mutateAsync()}>{signOut.isPending ? 'Signing out…' : 'Sign out'}</ConfirmButton>
-  </Row>
+  return <ConfirmButton variant="secondary" disabled={signOut.isPending} question="Sign out?" detail="Your agents, chats and connections are deleted from this computer. They’re backed up, and come back when you sign in again." action="Sign out" onConfirm={() => signOut.mutateAsync()}><I icon={Logout03Icon} size={16} />{signOut.isPending ? 'Signing out…' : 'Sign out'}</ConfirmButton>
 }
 
 function DeleteAccount({ cloud }: { cloud: Cloud }) {

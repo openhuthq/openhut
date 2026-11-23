@@ -45,8 +45,7 @@ function FrameHut({ happy }: { happy: boolean }) {
   </span>
 }
 
-export const SECONDARY = 'h-[46px] w-[300px] justify-center gap-2 rounded-[10px] text-[15px]'
-export const PRIMARY = `${SECONDARY} shadow-[0_1px_2px_rgb(11_11_12/.25),0_8px_18px_-10px_rgb(11_11_12/.7)]`
+export const BIG = 'h-[46px] w-[300px] justify-center gap-2 rounded-lg text-[15px]'
 
 export function Stage({ children }: { children: ReactNode }) {
   return <Window><div className="w-full max-w-[560px] py-6">{children}</div></Window>

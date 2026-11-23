@@ -3,7 +3,7 @@ import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Cloud, RuntimeInvite } from '@openhut/common/cloud/cloud.ts'
 import { PILL } from '@/components/kit'
 import { DeviceIcon } from '@/components/custom/device'
-import { InToasts, Toast } from '@/components/custom/toast'
+import { useStickyToast } from '@/components/custom/toast'
 import { PersonFace } from '@/components/custom/person-face'
 import { Button } from '@/components/ui/button'
 import { useUpdateAgent } from '@/features/agents/api'
@@ -27,17 +27,19 @@ export function OfflineChip({ className }: { className?: string }) {
 export function MoveHere({ agent }: { agent: Agent }) {
   const [kept, setKept] = useState(() => stored(agent.id))
   const update = useUpdateAgent(agent.id)
-  if (agent.runsHere || agent.wanted !== 'running' || (kept && !agent.runsNowhere) || !agent.canEdit || !agent.canManage) return null
+  const hidden = agent.runsHere || agent.wanted !== 'running' || (kept && !agent.runsNowhere) || !agent.canEdit || !agent.canManage
   const keep = () => {
     remember(agent.id)
     setKept(true)
   }
-  return <InToasts><Toast lead={<DeviceIcon kind="mac" />} title={agent.runsNowhere ? `No computer runs ${agent.name} now` : `${agent.name} still runs on ${agent.runsOnName ?? 'your other computer'}`} note={agent.runsNowhere ? 'The computer it ran on left this team.' : 'Only one computer can run an agent.'}>
-    <span className="flex shrink-0 flex-col gap-1">
-      <Button type="button" variant="primary" className={PILL} disabled={update.isPending} onClick={() => update.mutate({ runsHere: true }, { onError: toastError })}>Run here</Button>
-      {!agent.runsNowhere && <Button type="button" variant="text" className="h-auto px-1 text-[12px] text-mute" onClick={keep}>Keep it there</Button>}
-    </span>
-  </Toast></InToasts>
+  useStickyToast({ id: `move-${agent.id}`, notice: hidden ? null : {
+    lead: <DeviceIcon kind="mac" />,
+    title: agent.runsNowhere ? `No computer runs ${agent.name} now` : `${agent.name} still runs on ${agent.runsOnName ?? 'your other computer'}`,
+    note: agent.runsNowhere ? 'The computer it ran on left this team.' : 'Only one computer can run an agent.',
+    action: { label: 'Run here', onClick: () => update.mutate({ runsHere: true }, { onError: toastError }) },
+    cancel: agent.runsNowhere ? undefined : { label: 'Keep it there', onClick: keep },
+  } })
+  return null
 }
 
 export function ChangedBy({ email }: { email: string }) {

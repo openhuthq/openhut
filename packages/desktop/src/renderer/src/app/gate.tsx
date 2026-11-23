@@ -9,7 +9,7 @@ import { Meter } from '@/components/ui/meter'
 import { Spinner } from '@/components/ui/spinner'
 import { notifyUnlock, useCloud } from '@/features/cloud/api'
 import { SaveKit, SignIn } from '@/features/cloud/sign-in'
-import { PRIMARY, Stage, Step } from '@/features/cloud/step'
+import { BIG, Stage, Step } from '@/features/cloud/step'
 import { Unlock } from '@/features/cloud/unlock'
 import { activeOf, GateContext, useChosen } from '@/features/cloud/workspaces'
 import { JoinLinkDialog } from '@/features/join/cloud-join'
@@ -69,8 +69,8 @@ function GettingReady({ run, ready, onRetry, onOpen }: { run: FirstRun | undefin
   const doneCount = steps.filter(([, , state]) => state === 'done').length
   const value = ready ? 100 : Math.round(((doneCount + (now?.[3] ?? 0)) / Math.max(steps.length, 1)) * 100)
   const action = run?.failed
-    ? <Button variant="primary" className={PRIMARY} onClick={onRetry}><I icon={Refresh01Icon} size={16} />Try again</Button>
-    : <Button variant="primary" className={cn(PRIMARY, !ready && 'bg-[#2a2b2e] disabled:opacity-100')} disabled={!ready} autoFocus={ready} onClick={onOpen}>{!ready && <Spinner className="mt-0 border-white/30 border-t-white" />}{ready ? 'Open OpenHut' : 'Setting up'}</Button>
+    ? <Button variant="primary" className={BIG} onClick={onRetry}><I icon={Refresh01Icon} size={16} />Try again</Button>
+    : <Button variant="primary" className={cn(BIG, !ready && 'bg-[#2a2b2e] disabled:opacity-100')} disabled={!ready} autoFocus={ready} onClick={onOpen}>{!ready && <Spinner className="mt-0 border-white/30 border-t-white" />}{ready ? 'Open OpenHut' : 'Setting up'}</Button>
   return <Step happy={ready} title={ready ? 'Ready.' : 'Getting ready.'} line={ready ? 'Your agents live here now.' : 'Only the first time.'} action={action}>
     <Meter className="w-[320px] max-w-full" size="xs" value={value} aria-label="Getting ready" />
     <span key={now?.[0]} className={cn('animate-[fadein_.35s_ease-out] text-[14px] font-medium', now?.[2] === 'failed' ? 'text-fail' : 'text-ink')}>{ready ? 'All done' : now?.[0] ?? 'Starting'}</span>

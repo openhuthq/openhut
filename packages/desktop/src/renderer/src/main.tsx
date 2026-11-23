@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App } from '@/app/app'
 import { DEV_LABEL, DevPill } from '@/components/dev-pill'
+import { Toaster } from '@/components/ui/sonner'
 import hutDev from '@/hut-dev.svg'
 import { desktop } from '@/features/settings/desktop'
 import { RequestError } from '@/lib/api-client'
@@ -34,4 +35,4 @@ if (DEV_LABEL) {
   document.querySelector<HTMLLinkElement>('link[rel=icon]')?.setAttribute('href', hutDev)
 }
 const root = document.getElementById('root')
-if (root) createRoot(root).render(<QueryClientProvider client={client}><App /><DevPill /></QueryClientProvider>)
+if (root) createRoot(root).render(<QueryClientProvider client={client}><App /><DevPill /><Toaster /></QueryClientProvider>)
