@@ -17,7 +17,6 @@ import { deleted } from '../platform/responses.ts'
 import { connectionService } from '../connections/connection-service.ts'
 import type { Caller } from '../team/identity.ts'
 import { audienceOf } from '../channels/audience.ts'
-import { SlackSecrets } from '../integrations/slack/slack.ts'
 import { DiscordSecrets } from '../integrations/discord/discord.ts'
 import { resolveSlots } from '../models/model-slots.ts'
 import { providerService } from '../models/provider-service.ts'
@@ -358,7 +357,7 @@ function renderedChannel(channel: Selectable<Database['channel']>): RenderedChan
   const audience = audienceOf(channel)
   switch (channel.kind) {
     case 'whatsapp': return { kind: 'whatsapp', audience }
-    case 'slack': return { kind: 'slack', audience, ...SlackSecrets.parse(JSON.parse(unseal(channel.secrets))) }
+    case 'slack': return { kind: 'slack', audience }
     case 'telegram': return { kind: 'telegram', audience }
     case 'discord': return { kind: 'discord', audience, ...DiscordSecrets.parse(JSON.parse(unseal(channel.secrets))) }
   }

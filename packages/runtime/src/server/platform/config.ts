@@ -32,6 +32,7 @@ export const config = {
   agentGateway: HOST_NET ? `http://127.0.0.1:${GATEWAY_PORT}` : undefined,
   agentHostNet: HOST_NET,
   slackApi: 'https://slack.com/api',
+  slackFiles: 'https://files.slack.com',
   telegramApi: 'https://api.telegram.org',
   discordApi: 'https://discord.com/api/v10',
   anthropicApi: TEST_MODEL ? `http://127.0.0.1:${GATEWAY_PORT}/test-anthropic` : 'https://api.anthropic.com',

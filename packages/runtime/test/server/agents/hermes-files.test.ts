@@ -25,10 +25,13 @@ test('no channels: approvals are off, no Slack or WhatsApp settings', () => {
   assert.doesNotMatch(files['.env'], /SLACK_|WHATSAPP_/)
 })
 
-test('Slack in picked channels: tokens, everyone in them, only those channels', () => {
-  const files = render([{ kind: 'slack', botToken: 'xoxb-1-x', appToken: 'xapp-1-x', audience: { ownerAddress: '', open: false, allowed: ['C012ABCDEF', 'G034GHIJKL'] } }])
-  assert.match(files['.env'], /^SLACK_BOT_TOKEN=xoxb-1-x$/m)
-  assert.match(files['.env'], /^SLACK_APP_TOKEN=xapp-1-x$/m)
+test('Slack in picked channels: stand-in tokens through the gateway, everyone in them, only those channels', () => {
+  const files = render([{ kind: 'slack', audience: { ownerAddress: '', open: false, allowed: ['C012ABCDEF', 'G034GHIJKL'] } }])
+  assert.match(files['.env'], /^SLACK_BOT_TOKEN=xoxb-oh-ag_[a-z0-9]+\./m)
+  assert.match(files['.env'], /^SLACK_APP_TOKEN=xapp-oh-ag_[a-z0-9]+\./m)
+  assert.match(files['.env'], /^OPENHUT_SLACK_API=http:\/\/[^ ]+\/u\/slack\/api\/$/m)
+  assert.match(files['.env'], /^OPENHUT_SLACK_FILES=http:\/\/[^ ]+\/u\/slackfiles$/m)
+  assert.doesNotMatch(files['.env'], /xoxb-(?!oh-)|xapp-(?!oh-)/)
   assert.match(files['.env'], /^SLACK_ALLOW_ALL_USERS=true$/m)
   assert.match(files['.env'], /^SLACK_ALLOWED_CHANNELS=C012ABCDEF,G034GHIJKL$/m)
   assert.match(files['.env'], /^SLACK_HOME_CHANNEL=C012ABCDEF$/m)
@@ -37,7 +40,7 @@ test('Slack in picked channels: tokens, everyone in them, only those channels', 
 })
 
 test('Slack before any channel is picked: no Slack settings, so it answers nowhere', () => {
-  const files = render([{ kind: 'slack', botToken: 'xoxb-1-x', appToken: 'xapp-1-x', audience: { ownerAddress: '', open: false, allowed: [] } }])
+  const files = render([{ kind: 'slack', audience: { ownerAddress: '', open: false, allowed: [] } }])
   assert.doesNotMatch(files['.env'], /SLACK_/)
 })
 

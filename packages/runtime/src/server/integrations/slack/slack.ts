@@ -22,6 +22,8 @@ const DM_SCOPES = ['im:history']
 const TYPES = ['public_channel,private_channel', 'mpim']
 const PAGES = 20
 
+export const STAND_IN = { bot: 'xoxb-oh-', app: 'xapp-oh-' } as const
+
 export const slack = {
   async verify({ botToken, appToken, configToken, icon, agentName }: { botToken: string; appToken: string; configToken?: string; icon?: string; agentName: string }): Promise<string> {
     const bot = await checkBot(botToken)
@@ -72,9 +74,9 @@ export const slack = {
     return sent.ok
   },
 
-  env({ botToken, appToken, channels }: { botToken: string; appToken: string; channels: string[] }): string[] {
+  env({ token, gateway, channels }: { token: string; gateway: string; channels: string[] }): string[] {
     if (!channels.length) return []
-    return [`SLACK_BOT_TOKEN=${botToken}`, `SLACK_APP_TOKEN=${appToken}`, 'SLACK_ALLOW_ALL_USERS=true', `SLACK_ALLOWED_CHANNELS=${channels.join(',')}`, `SLACK_HOME_CHANNEL=${channels[0]}`]
+    return [`SLACK_BOT_TOKEN=${STAND_IN.bot}${token}`, `SLACK_APP_TOKEN=${STAND_IN.app}${token}`, `OPENHUT_SLACK_API=${gateway}/u/slack/api/`, `OPENHUT_SLACK_FILES=${gateway}/u/slackfiles`, 'SLACK_ALLOW_ALL_USERS=true', `SLACK_ALLOWED_CHANNELS=${channels.join(',')}`, `SLACK_HOME_CHANNEL=${channels[0]}`]
   },
 
   yaml: 'slack:\n  require_mention: true\n  unauthorized_dm_behavior: ignore\n  gateway_restart_notification: false\n',
