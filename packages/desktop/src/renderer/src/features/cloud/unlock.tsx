@@ -7,15 +7,13 @@ import { agentPath } from '@/app/routes'
 import { ConfirmButton } from '@/components/confirm-button'
 import { DeviceIcon } from '@/components/custom/device'
 import { DropZone } from '@/components/custom/drop-zone'
-import { PersonFace, PersonFaces } from '@/components/custom/person-face'
+import { PersonFace } from '@/components/custom/person-face'
 import { AMBER, notify, Tinted, Toast, Toasts } from '@/components/custom/toast'
 import { ErrorNote } from '@/components/error-note'
-import { Hut } from '@/components/hut'
 import { I, PILL } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { nameOf, notifyDesktop, REMOVE_DETAIL, useCloud, useRemoveMac, usePasskeys, usePasskeyUnlock, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
-import { Mascot } from '@/features/cloud/sign-in'
 import { PRIMARY, Step } from '@/features/cloud/step'
 import { chooseWorkspace, useAsk, useCancelAsk } from '@/features/cloud/workspaces'
 import { Mismatch } from '@/features/cloud/presence'
@@ -33,16 +31,14 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
   const signIn = useSignIn()
   const helper = usePasskeys()
   const passkey = usePasskeyUnlock()
-  const leave = <Button type="button" variant="text" className="text-[12px] font-normal text-mute" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
-  if (cloud.needsSignIn) return <Step art={<Hut mood="worried" className="size-[96px]" />} title="This computer was removed" line="Sign in again to unlock it."
-    action={<Button type="button" variant="primary" className={PRIMARY} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}>Sign in again</Button>}>
-    {leave}
-  </Step>
+  const leave = <Button type="button" variant="text" className="font-normal text-mute" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
+  if (cloud.needsSignIn) return <Step title="This computer was removed." line="Sign in again to unlock it." link={leave}
+    action={<Button type="button" variant="primary" className={PRIMARY} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}>Sign in again</Button>} />
   if (way === 'kit') return <KitEntry cloud={cloud} onBack={() => setWay(null)} />
   if (way === 'ask' || cloud.asking) return <Requested cloud={cloud} onBack={() => setWay(null)} />
   const macCan = Boolean(helper?.passkeys && helper.prf)
   const canPasskey = macCan && cloud.passkey
-  return <Step art={<Hut mood="key" className="size-[96px]" />} title={`You’re signed in, ${nameOf(cloud.email ?? '')}`} line="One more step: the key that reads your agents and chats." back={back}
+  return <Step title={`Welcome back, ${nameOf(cloud.email ?? '')}.`} line="Unlock this computer once." back={back} link={leave}
     action={cloud.canAsk && <Button type="button" variant="primary" className={PRIMARY} onClick={() => setWay('ask')}>Request access</Button>}>
     <div className="w-full max-w-[420px] text-left">
       <Rows>
@@ -51,7 +47,6 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
       </Rows>
     </div>
     {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
-    <span className="mt-auto">{leave}</span>
   </Step>
 }
 
@@ -70,13 +65,14 @@ function Requested({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
   const admins = rooms.filter((room) => !room.own).flatMap((room) => room.admins)
   const own = rooms.some((room) => room.own)
   const where = [own && 'on another of your computers, in Settings › Computers', admins.length > 0 && `by ${who(admins)}`].filter(Boolean).join(', or ')
-  if (asking?.denied) return <Step art={<Hut mood="worried" className="size-[96px]" />} title="Not approved" line="It was denied, or the request expired after an hour." back={back}
+  if (asking?.denied) return <Step title="Not approved." line="It was denied, or the request expired after an hour." back={back}
     action={<Button type="button" variant="primary" className={PRIMARY} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Request again</Button>} />
-  return <Step art={admins.length && !own ? <PersonFaces people={admins.map((email) => ({ name: nameOf(email), email }))} size={64} /> : <Hut mood="looking" className="size-[96px]" />} title="Requires approval" line={rooms.length ? `Approve it ${where}. It unlocks by itself.` : 'Sending your request…'} back={back}>
+  return <Step title="Waiting for approval." line={rooms.length ? 'It unlocks by itself once approved.' : 'Sending your request…'}
+    link={<Button type="button" variant="text" className="font-normal text-mute" disabled={cancel.isPending} onClick={back}>Cancel</Button>}>
     <span className="flex items-center gap-2 rounded-xl border border-hair bg-card px-3.5 py-2.5 text-[13px]"><DeviceIcon kind="mac" />{asking?.name ?? 'This computer'}<span className="text-mute">· {cloud.email}</span></span>
     {!ask.isError && <Spinner className="mt-1" />}
     <ErrorNote message={ask.error?.message ?? asking?.error ?? undefined} />
-    <Button type="button" variant="text" className="text-[12px] font-normal text-mute" disabled={cancel.isPending} onClick={back}>Cancel</Button>
+    {rooms.length > 0 && <span className="max-w-[420px] text-[12.5px] text-mute">Approve it {where}.</span>}
   </Step>
 }
 
@@ -140,11 +136,10 @@ function KitEntry({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
     unlock.mutate({ words: kit.words }, { onError: (err) => setProblem({ tone: 'fail', text: err.message }) })
   }
   if (typing) return <KitWordsEntry onBack={() => setTyping(false)} />
-  return <Step art={<Mascot kind="kit" size={84} />} title="Use your recovery kit" line="Drop the file here." back={onBack}>
+  return <Step title="Use your recovery kit." line="Drop the file here." back={onBack}>
     <div className="flex w-full max-w-[440px] flex-col gap-3">
       {problem && <p role="alert" className={cn('m-0 rounded-xl px-3.5 py-3 text-left text-[13.5px]/[1.45]', problem.tone === 'warn' ? 'bg-warning-subtle text-warning-strong' : 'bg-[color-mix(in_oklch,var(--fail)_10%,transparent)] text-ink')}>{problem.text}</p>}
-      <DropZone className="py-5" onText={tryKit}>{(hot) => <>
-        <Hut key={problem?.text} mood={unlock.isPending ? 'key' : hot ? 'surprised' : problem ? 'worried' : 'looking'} className={cn('calm mb-1 size-12', unlock.isPending && 'key-turn', problem && !hot && 'blink-slow')} />
+      <DropZone className="py-5" onText={tryKit}>{() => <>
         <span className="text-[15px] font-medium text-ink">{unlock.isPending ? 'Unlocking…' : 'Drop your kit here'}</span>
         {!unlock.isPending && <span className="text-[12.5px] text-mute">or paste it</span>}
       </>}</DropZone>
@@ -181,7 +176,7 @@ function KitWordsEntry({ onBack }: { onBack: () => void }) {
     if (!validKit(words)) return setTypo({ at: -1, text: 'These words don’t fit together. Check each one against your kit, in order.' })
     unlock.mutate({ words })
   }
-  return <Step art={<Hut key={typo?.text} mood={typo ? 'worried' : 'key'} className={cn('calm size-[96px]', typo && 'blink-slow')} />} title="Type your 12 words" line="In order." back={onBack}
+  return <Step title="Type your 12 words." line="In order." back={onBack}
     action={<Button type="submit" form="kit-words" variant="primary" disabled={words.some((word) => !word) || unlock.isPending} className={PRIMARY}>{unlock.isPending ? 'Unlocking…' : 'Unlock'}</Button>}>
     <form id="kit-words" onSubmit={submit} className="flex w-full flex-col items-center gap-3">
       <div className="grid w-full max-w-[440px] grid-cols-3 gap-2">{words.map((word, index) => <label key={index} className={cn('flex h-10 items-center gap-2 rounded-xl border border-hair bg-card px-3 text-[13px] focus-within:border-ink', typo?.at === index && 'border-fail text-fail focus-within:border-fail')}>

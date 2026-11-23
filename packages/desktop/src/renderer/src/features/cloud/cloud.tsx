@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Delete02Icon, FingerPrintIcon, Key01Icon, Logout03Icon } from '@hugeicons/core-free-icons'
 import type { Cloud, CloudWorkspaceView, DeviceRequest } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
@@ -9,7 +8,7 @@ import { DeviceIcon, DeviceMeta } from '@/components/custom/device'
 import { notify } from '@/components/custom/toast'
 import { ConfirmButton } from '@/components/confirm-button'
 import { nameOf, REMOVE_DETAIL, useAddPasskey, usePasskeys, useRemoveMac, useSignOut } from '@/features/cloud/api'
-import { AllSet, SaveKit } from '@/features/cloud/sign-in'
+import { SaveKit } from '@/features/cloud/sign-in'
 import { Guide } from '@/features/cloud/step'
 import { Chevron, Row, Rows } from '@/features/settings/kit'
 import { isPhone, useConfirmed } from '@/lib/native'
@@ -40,21 +39,16 @@ export function AccountSettings() {
         {!cloud.passkey && !young && <Button type="button" variant="ghost" className={PILL} disabled={addPasskey.isPending} onClick={() => addPasskey.mutate(email, { onError: toastError })}>Add</Button>}
       </Row>}
       <SignOutRow />
+      <DeleteAccount cloud={cloud} />
     </Rows>
     <ErrorNote message={error} />
-    <Section title="Danger zone">
-      <Rows>
-        <DeleteAccount cloud={cloud} />
-      </Rows>
-    </Section>
     {opened === 'kit' && <KitDialog />}
   </>
 }
 
 function KitDialog() {
-  const [saved, setSaved] = useState(false)
   return <Guide label="Recovery kit" at={0} of={1} onClose={() => open()}>
-    {saved ? <AllSet onDone={() => open()} /> : <SaveKit onDone={() => setSaved(true)} />}
+    <SaveKit onDone={() => open()} />
   </Guide>
 }
 

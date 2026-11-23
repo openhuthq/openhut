@@ -1,7 +1,7 @@
 const K = '#0b0b0b'
 
 export const MOODS = ['looking', 'key', 'building', 'asleep', 'worried', 'party', 'surprised'] as const
-export type Mood = (typeof MOODS)[number]
+export type Mood = (typeof MOODS)[number] | 'happy'
 
 type Parts = { eyes?: string; mouth?: string; hat?: string; prop?: string }
 
@@ -41,6 +41,10 @@ const PARTS: Record<Mood, Parts> = {
     eyes: `<ellipse cx="44" cy="75" rx="6.4" ry="7.8" fill="${K}"/><ellipse cx="64" cy="75" rx="6.4" ry="7.8" fill="${K}"/><circle cx="46.4" cy="72" r="2.6" fill="#fff"/><circle cx="66.4" cy="72" r="2.6" fill="#fff"/>`,
     mouth: `<ellipse cx="54" cy="88.5" rx="2.8" ry="3.2" fill="none" stroke="${K}" stroke-width="2.8"/>`,
     prop: `<g class="c-prop"><path d="M87 61l6-4M89 69h7" stroke="${K}" stroke-width="3" stroke-linecap="round"/></g>`,
+  },
+  happy: {
+    eyes: `<path d="M39 77q5-7 10 0M59 77q5-7 10 0" stroke="${K}" stroke-width="3.6" fill="none" stroke-linecap="round"/>`,
+    mouth: `<path d="M48 84q6 6 12 0" stroke="${K}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`,
   },
   party: {
     eyes: `<path d="M39 77q5-7 10 0M59 77q5-7 10 0" stroke="${K}" stroke-width="3.6" fill="none" stroke-linecap="round"/>`,
