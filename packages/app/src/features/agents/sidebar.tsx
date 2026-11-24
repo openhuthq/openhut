@@ -38,8 +38,14 @@ const LIVE = { on: 'bg-pass', wait: 'animate-[blinkdot_1s_infinite] bg-amber', b
 
 export type Contact = { agent: OpenHutAgent; thread: Thread | undefined }
 
-export type SidebarControls = { collapsed: boolean; expand: () => void; newAgent: () => void }
-export const SidebarContext = createContext<SidebarControls | null>(null)
+export const SidebarContext = createContext<{ collapsed: boolean } | null>(null)
+
+export function ShowSidebar({ onExpand, onNew }: { onExpand: () => void; onNew: () => void }) {
+  return <span className={cn('absolute top-[env(safe-area-inset-top)] left-0 z-10 flex h-[52px] items-center gap-0.5 pl-[84px] phone:hidden animate-[fadein_120ms_80ms_ease-out_backwards]', DRAG)}>
+    <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Show sidebar" title="Show sidebar ⌘\" onClick={onExpand}><I icon={SidebarLeftIcon} size={16} /></Button>
+    <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="New agent" title="New agent" onClick={onNew}><I icon={PlusSignIcon} size={16} /></Button>
+  </span>
+}
 
 export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team }: {
   contacts: Contact[]; activeId: string | undefined; collapsed: boolean; onCollapse: () => void; onNew: () => void; team: boolean
