@@ -6,6 +6,7 @@ import type { Agent } from '@openhut/common/agents/agent.ts'
 import { SKILL_MAX_LENGTH, type Skill } from '@openhut/common/agents/skill.ts'
 import { isBrand } from '@/components/brand-icons'
 import { Badge } from '@/components/ui/badge'
+import { EmptyState } from '@/components/empty-state'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
@@ -66,7 +67,7 @@ export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: str
           {skill.id in drafts && <span className="size-1.5 shrink-0 rounded-full bg-ink" title="Unsaved changes" aria-label="Unsaved changes" />}
         </Button>)}
         {!skills.data && !skills.error && <Loading />}
-        {skills.data && !shown.length && <p className="m-0 px-2 py-1 text-[13px] text-mute">{filter === 'builtIn' ? `${agent.name} has no built-in skills.` : `${agent.name} hasn't learned a skill yet.`}</p>}
+        {skills.data && !shown.length && <EmptyState inline line={filter === 'builtIn' ? `${agent.name} has no built-in skills.` : `${agent.name} hasn't learned a skill yet.`} />}
       </nav>
     </aside>
     <section className={cn('flex min-w-0 flex-1 flex-col', phone && (selected ? 'animate-[levelin_.3s_cubic-bezier(.22,1,.36,1)]' : 'hidden'))}>
