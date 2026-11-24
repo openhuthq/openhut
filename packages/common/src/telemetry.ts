@@ -15,21 +15,46 @@ export const TELEMETRY_EVENTS = {
   memory_edited: [],
   dashboard_page_viewed: ['page'],
   message_sent: ['channel', 'agent_name'],
+  download_clicked: ['platform', 'location'],
+  github_clicked: ['location'],
 } as const satisfies Record<string, readonly string[]>
 
 export const TELEMETRY_MAX_BATCH = 100
+// What a browser on openhut.dev may send without an instance (private/site/public/track.js).
+export const BROWSER_EVENTS: readonly TelemetryName[] = ['download_clicked', 'github_clicked']
 export const INSTALL_KINDS = ['mac', 'linux', 'server'] as const
 
 export type TelemetryName = keyof typeof TELEMETRY_EVENTS
 export type TelemetryEvent = { name: TelemetryName; properties: Record<string, string | number>; at: number }
 export type InstallKind = typeof INSTALL_KINDS[number]
-export type TelemetryBatch = { instance: string; version: string; kind?: InstallKind; events: TelemetryEvent[] }
+// From an install: instance and version. openhut.dev (site: true, with the Cloud's stats token) may also send none, and adds the sender's country.
+export type TelemetryBatch = { instance?: string; version?: string; kind?: InstallKind; country?: string; events: TelemetryEvent[] }
+
+// GET /api/v1/stats on the Cloud (behind its stats token), which openhut.dev/stats shows.
+export type Stats = {
+  installs: number
+  activeToday: number
+  countries: number
+  messages: number
+  downloads: number
+  kinds: { kind: string; n: number }[]
+  channels: { channel: string; n: number }[]
+  places: { country: string; n: number }[]
+  active: { day: string; n: number }[]
+  newInstalls: { day: string; n: number }[]
+  messagesByDay: { day: string; n: number }[]
+  downloadPresses: { key: string; n: number }[]
+  events: { day: string; name: string; n: number }[]
+}
 
 const VALUE = /^[A-Za-z0-9][\w.+-]{0,31}$/
 const MAX_COUNT = 10_000_000
+const MAX_AGE_MS = 30 * 86_400_000
+const MAX_AHEAD_MS = 3_600_000
 const NAME = /^[^\u0000-\u001f\u007f]{1,64}$/
 const INSTANCE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const VERSION = /^[\w.+-]{1,32}$/
+const COUNTRY = /^[A-Z]{2}$/
 
 export function isTelemetryName(name: string): name is TelemetryName {
   return Object.hasOwn(TELEMETRY_EVENTS, name)
@@ -44,20 +69,28 @@ export function telemetryEvent({ name, properties = {}, at = Date.now() }: { nam
     const pattern = patternOf(key)
     return typeof value === 'string' && pattern.test(value) ? [[key, value]] : []
   })
-  return { name, properties: Object.fromEntries(kept), at: Number.isFinite(at) ? at : Date.now() }
+  const now = Date.now()
+  if (!Number.isFinite(at) || at < now - MAX_AGE_MS || at > now + MAX_AHEAD_MS) return undefined
+  return { name, properties: Object.fromEntries(kept), at: Math.trunc(at) }
 }
 
-export function telemetryBatch(value: unknown): TelemetryBatch | undefined {
+export function telemetryBatch(value: unknown, { site = false }: { site?: boolean } = {}): TelemetryBatch | undefined {
   if (!isRecord(value) || !Array.isArray(value.events) || value.events.length > TELEMETRY_MAX_BATCH) return undefined
-  const { instance, version } = value
-  if (typeof instance !== 'string' || !INSTANCE.test(instance) || typeof version !== 'string' || !VERSION.test(version)) return undefined
+  const { instance, version, country } = value
+  const anonymous = site && instance === undefined && version === undefined
+  if (!anonymous && (typeof instance !== 'string' || !INSTANCE.test(instance) || typeof version !== 'string' || !VERSION.test(version))) return undefined
   const kind = INSTALL_KINDS.find((each) => each === value.kind)
   const events = value.events.flatMap((each) => {
     if (!isRecord(each) || typeof each.name !== 'string') return []
     const event = telemetryEvent({ name: each.name, properties: isRecord(each.properties) ? each.properties : {}, at: typeof each.at === 'number' ? each.at : undefined })
     return event ? [event] : []
   })
-  return kind ? { instance, version, kind, events } : { instance, version, events }
+  return {
+    ...(!anonymous && { instance, version }),
+    ...(kind && { kind }),
+    ...(site && typeof country === 'string' && COUNTRY.test(country) && { country }),
+    events,
+  }
 }
 
 function patternOf(key: string): RegExp {
