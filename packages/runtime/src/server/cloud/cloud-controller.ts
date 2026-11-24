@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import * as z from 'zod/mini'
-import { AddPasskey, ApproveRequest, ChangeRole, DenyRequestQuery, DeviceKey, SetHere, StartCloudSignIn, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
+import { AddPasskey, ApproveRequest, ChangeRole, DenyRequestQuery, DeviceKey, PasteSignInCode, RemoveDeviceQuery, SetHere, StartCloudSignIn, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
 import { requireSignIn } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
 import { presence } from './presence.ts'
@@ -12,6 +12,8 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.get<{ Querystring: { state?: string; code?: string; error?: string } }>('/callback', async (req, reply) => reply.type('text/html; charset=utf-8').send(await cloudService.finish(req.query)))
 
+  app.post<{ Body: PasteSignInCode }>('/sessions/codes', PasteRequest, async (req) => cloudService.pasted(req.body))
+
   app.delete('/session', SignedIn, async () => cloudService.signOut())
 
   app.post('/kits', SignedIn, async () => cloudService.newKit())
@@ -20,7 +22,7 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.post<{ Body: UnlockCloud }>('/unlock', UnlockRequest, async (req) => cloudService.unlock(req.body))
 
-  app.delete<{ Params: { key: string } }>('/devices/:key', NotMeRequest, async (req) => cloudService.notMe({ device: req.params.key }))
+  app.delete<{ Params: { key: string }; Querystring: RemoveDeviceQuery }>('/devices/:key', NotMeRequest, async (req) => cloudService.notMe({ device: req.params.key, lost: req.query.lost === 'true' }))
 
   app.post<{ Body: AddPasskey }>('/passkeys', PasskeyRequest, async (req) => cloudService.addPasskey(req.body))
 
@@ -60,9 +62,10 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 }
 
 const SignedIn = { onRequest: requireSignIn }
+const PasteRequest = { onRequest: requireSignIn, schema: { body: PasteSignInCode } }
 const SignInRequest = { onRequest: requireSignIn, schema: { body: StartCloudSignIn } }
 const UnlockRequest = { onRequest: requireSignIn, schema: { body: UnlockCloud } }
-const NotMeRequest = { onRequest: requireSignIn, schema: { params: z.object({ key: DeviceKey }) } }
+const NotMeRequest = { onRequest: requireSignIn, schema: { params: z.object({ key: DeviceKey }), querystring: RemoveDeviceQuery } }
 const DeviceRequest = { onRequest: requireSignIn, schema: { params: z.object({ id: z.string(), key: DeviceKey }) } }
 const PasskeyRequest = { onRequest: requireSignIn, schema: { body: AddPasskey } }
 const UpdateRequest = { onRequest: requireSignIn, schema: { body: UpdateWorkspace } }

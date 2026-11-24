@@ -12,6 +12,7 @@ if ! api http://127.0.0.1:8787/api/cloud | grep -q '"status":"on"'; then
   url=$(api -X POST http://127.0.0.1:8787/api/cloud/sessions -d '{}' | sed -n 's/.*"authorizationUrl":"\([^"]*\)".*/\1/p')
   link=$(curl -fsS "$url" | grep -o 'href="[^"]*">mo@example.com<' | sed 's/^href="//; s/">mo@example.com<$//; s/&amp;/\&/g')
   back=$(curl -s -o /dev/null -D - "$link" | sed -n 's/^[Ll]ocation: //p' | tr -d '\r')
+  back=$(node -e 'const u = new URL(process.argv[1]); console.log(u.searchParams.get("to") ?? u.href)' "$back")
   rt curl -fsS -o /dev/null "$back" || fail "sign in to the dev cloud at $url"
   wait_for 40 "api http://127.0.0.1:8787/api/cloud | grep -q '\"status\":\"on\"'" || fail "the runtime didn't sign in"
   echo "smoke: signed in as mo@example.com"

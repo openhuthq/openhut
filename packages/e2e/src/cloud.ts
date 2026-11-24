@@ -140,7 +140,8 @@ async function signIn(each: Runtime, email: string) {
   const page = await (await fetch(url)).text()
   const link = new RegExp(`href="([^"]+)">${email}<`).exec(page)?.[1]?.replaceAll('&amp;', '&') ?? ''
   assert.ok(link, `the dev sign-in page offers ${email}`)
-  await fetch(link)
+  const back = new URL((await fetch(link)).url).searchParams.get('to')
+  if (back) await fetch(back)
 }
 
 async function say(each: Runtime, { agentId, text, files = [] }: { agentId: string; text: string; files?: { path: string; name: string; mediaType: string }[] }) {

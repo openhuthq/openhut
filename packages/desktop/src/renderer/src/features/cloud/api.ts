@@ -100,13 +100,22 @@ export const REMOVE_POINTS = [
   { icon: Key01Icon, text: 'Make a new kit if someone else has yours' },
 ]
 
-export function useRemoveMac({ then }: { then?: string } = {}) {
+export const LOST_POINTS = [
+  { icon: CloudOffIcon, text: 'It’s removed, and your encryption resets, so it can’t read anything new even with what it kept' },
+  { icon: Key01Icon, text: 'You save a new recovery kit; the old one stops working' },
+  { icon: FingerPrintIcon, text: 'Touch ID turns off until you add it again' },
+]
+
+export function useRemoveMac() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (key: string) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/devices/${encodeURIComponent(key)}`, method: 'DELETE' }),
-    onSuccess: (cloud) => {
+    mutationFn: ({ key, lost = false }: { key: string; lost?: boolean }) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/devices/${encodeURIComponent(key)}${lost ? '?lost=true' : ''}`, method: 'DELETE' }),
+    onSuccess: (cloud, { lost }) => {
       client.setQueryData(CLOUD_KEY, cloud)
-      if (then) return navigate(then)
+      if (lost) {
+        notify({ title: 'Removed and locked out', note: 'Your encryption is new, so it can’t read anything from now on. Save your new recovery kit.' })
+        return navigate('/settings/general?open=kit')
+      }
       notify({ title: 'Device removed', note: NEW_KIT_HINT, action: { label: 'New kit', onClick: () => navigate('/settings/general?open=kit') } })
     },
     onError: toastError,
@@ -134,6 +143,17 @@ export function useSignIn() {
     onSuccess: ({ authorizationUrl }) => {
       window.open(authorizationUrl, '_blank', 'noopener')
       client.setQueryData(SIGN_IN_KEY, true)
+    },
+  })
+}
+
+export function usePasteSignInCode() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (code: string) => request({ schema: Cloud, computer: 'local', path: '/api/cloud/sessions/codes', method: 'POST', body: { code } }),
+    onSuccess: (cloud) => {
+      client.setQueryData(CLOUD_KEY, cloud)
+      client.setQueryData(SIGN_IN_KEY, false)
     },
   })
 }

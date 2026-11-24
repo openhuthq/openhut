@@ -33,7 +33,8 @@ export async function devSignIn({ authorizationUrl, email }: { authorizationUrl:
   const link = new RegExp(`href="([^"]+)">${email}<`).exec(page)?.[1]?.replaceAll('&amp;', '&')
   if (!link) throw new Error(`The dev sign-in page has no link for ${email}.`)
   const back = await fetch(link, { redirect: 'manual' })
-  const location = new URL(back.headers.get('location') ?? 'http://none/')
+  const last = new URL(back.headers.get('location') ?? 'http://none/')
+  const location = new URL(last.searchParams.get('to') ?? last)
   return `${location.pathname}${location.search}`
 }
 

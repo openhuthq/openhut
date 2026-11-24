@@ -10,3 +10,14 @@ export function linkPath(url) {
     return undefined
   }
 }
+
+export function signInCallback(url) {
+  try {
+    const { protocol, hostname, searchParams } = new URL(url ?? '')
+    if (protocol !== 'openhut:' || hostname !== 'signed-in' || !searchParams.get('state')) return undefined
+    const kept = new URLSearchParams([...searchParams].filter(([name]) => ['state', 'code', 'error'].includes(name)))
+    return `/api/cloud/callback?${kept}`
+  } catch {
+    return undefined
+  }
+}

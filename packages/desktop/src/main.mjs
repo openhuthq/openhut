@@ -14,7 +14,7 @@ import WebSocket from 'ws'
 import { DEV_NAME, devBuild, devCloud, devLabel } from './dev-build.mjs'
 import { linkHandler } from './desktop-entry.mjs'
 import { invitePath } from './invite-link.mjs'
-import { linkPath } from './open-link.mjs'
+import { linkPath, signInCallback } from './open-link.mjs'
 import { cosigned, RELEASE_KEY } from './release-key.mjs'
 import { useChannel } from './update-channel.mjs'
 
@@ -727,6 +727,11 @@ function ownLink(url) {
 }
 
 function openLink(url) {
+  const callback = url?.startsWith(`${SCHEME}:`) && signInCallback(url.replace(SCHEME, 'openhut'))
+  if (callback) {
+    request({ socketPath: SERVER_SOCK, path: callback, method: 'GET' }, (answer) => answer.resume()).on('error', () => undefined).end()
+    return show()
+  }
   linked = ownLink(url)
   keepInvite(linked)
   if ((linked || url?.startsWith(`${SCHEME}:`)) && (opened || main)) show(linked)

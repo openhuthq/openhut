@@ -103,7 +103,7 @@ export function CloudDevices({ merged }: { merged: string[] }) {
   return <>
     {home?.requests.filter((each) => each.email === cloud.email).map((each) => <JoinRequestRow key={each.device} workspace={home} request={each} />)}
     {cloud.devices.filter((device) => !merged.includes(device.key)).map((device) => <Row key={device.key} icon={<DeviceIcon kind={device.kind} />} title={device.name ?? (device.kind === 'server' ? 'Computer that runs agents' : 'Computer')} note={deviceNote({ device })}>
-      {!device.here && !isPhone() && !cloud.youngUntil && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${device.name ?? 'this device'}?`} detail={device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))} · ${REMOVE_DETAIL}` : REMOVE_DETAIL} points={REMOVE_POINTS} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
+      {!device.here && !isPhone() && !cloud.youngUntil && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${device.name ?? 'this device'}?`} detail={device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))} · ${REMOVE_DETAIL}` : REMOVE_DETAIL} points={REMOVE_POINTS} action="Remove" onConfirm={() => remove.mutate({ key: device.key })}>Remove</ConfirmButton>}
     </Row>)}
     {cloud.youngUntil && <p className="m-0 px-1 text-[12.5px] text-mute">This computer was added less than 3 days ago. Remove devices from an older one, or after {shortDate.format(new Date(cloud.youngUntil))}.</p>}
   </>

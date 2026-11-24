@@ -9,7 +9,7 @@ import { bootCloud, devSignIn, hasCloud, webBrowser } from './real-cloud.ts'
 
 const skip = hasCloud ? false : 'private/api isn’t checked out here'
 
-test('against the real cloud API: a knock is let in only with the right pair, user presence asked by the runtime, and within 15 minutes; a wrong pick turns it down for good', { skip }, async () => {
+test('against the real cloud API: a knock is let in only with the right pair, user presence asked by the runtime, and within 15 minutes; a wrong pick turns it down for good and alerts every other computer through the Cloud; a Mac closed mid-request shows it when reopened', { skip }, async () => {
   const cloud = await bootCloud()
   const { fakeAgentd } = await import('../agents/signed-in.ts')
   fakeAgentd()
@@ -19,6 +19,7 @@ test('against the real cloud API: a knock is let in only with the right pair, us
   const { cloudController } = await import('../../../src/server/cloud/cloud-controller.ts')
   const { cloudEvents } = await import('../../../src/server/cloud/cloud-events.ts')
   const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
+  const { cloud: runtimeCloud } = await import('../../../src/server/platform/cloud.ts')
   const { userPresence } = await import('../../../src/server/cloud/user-presence.ts')
   const { memberOf, tunnelKeyOf } = await import('../../../src/server/team/identity.ts')
   await migrate()
@@ -33,19 +34,23 @@ test('against the real cloud API: a knock is let in only with the right pair, us
     for (let i = 0; i < 100 && (await app.inject({ method: 'GET', url: '/api/cloud', headers })).json<{ status: string }>().status !== 'on'; i++) await sleep(50)
     const home = keysService.mustBeOn().workspace.id
 
-    const { device, client } = await webBrowser({ url: cloud.url, email: 'mo@example.com' })
-    const url = `/api/cloud/workspaces/${home}/requests/${encodeURIComponent(device)}`
-    const knock = async () => {
-      const nonce = randomBytes(32).toString('base64url')
-      const knocked = client.knock({ team: home, nonce })
-      assert.equal((await knocked.ask({ name: 'Chrome', os: 'web' })).asked, true)
-      await cloudEvents.refreshRequests(home)
-      assert.equal((await app.inject({ method: 'POST', url: `${url}/reviews`, headers })).statusCode, 200)
-      assert.equal(await knocked.reveal(), true)
-      await cloudEvents.refreshRequests(home)
-      return facesOf({ device, nonce })
+    const browser = async () => {
+      const { device, client } = await webBrowser({ url: cloud.url, email: 'mo@example.com' })
+      const url = `/api/cloud/workspaces/${home}/requests/${encodeURIComponent(device)}`
+      const knock = async () => {
+        const nonce = randomBytes(32).toString('base64url')
+        const knocked = client.knock({ team: home, nonce })
+        assert.equal((await knocked.ask({ name: 'Chrome', os: 'web' })).asked, true)
+        await cloudEvents.refreshRequests(home)
+        assert.equal((await app.inject({ method: 'POST', url: `${url}/reviews`, headers })).statusCode, 200)
+        assert.equal(await knocked.reveal(), true)
+        await cloudEvents.refreshRequests(home)
+        return facesOf({ device, nonce })
+      }
+      const approve = (faces: number[]) => app.inject({ method: 'POST', url: `${url}/approvals`, headers, payload: { faces } })
+      return { device, client, knock, approve, url }
     }
-    const approve = (faces: number[]) => app.inject({ method: 'POST', url: `${url}/approvals`, headers, payload: { faces } })
+    const { device, knock, approve } = await browser()
 
     const asked: string[] = []
     userPresence.ask = async (reason) => { asked.push(reason); return false }
@@ -73,7 +78,35 @@ test('against the real cloud API: a knock is let in only with the right pair, us
     const letIn = await approve(again)
     assert.equal(letIn.statusCode, 200, letIn.body)
     assert.equal(memberOf(tunnelKeyOf(device))?.own, true)
+
+    cloudEvents.start()
+    for (let i = 0; i < 100 && !cloudEvents.ready(); i++) await sleep(50)
+    const other = await browser()
+    await other.knock()
+    const fromAnotherComputer = await runtimeCloud.team(home).deny({ device: other.device, why: 'mismatch' })
+    assert.equal(fromAnotherComputer.status, 200)
+    for (let i = 0; i < 100 && !cloudEvents.turnedDown().length; i++) await sleep(50)
+    assert.deepEqual(cloudEvents.turnedDown().map(({ device, name, why, workspace }) => ({ device, name, why, workspace })), [{ device: other.device, name: 'Chrome', why: 'mismatch', workspace: home }], 'a wrong pick on another computer alerts this one through the Cloud')
+    const status = (await app.inject({ method: 'GET', url: '/api/cloud', headers })).json<{ turnedDown: unknown[] }>()
+    assert.equal(status.turnedDown.length, 1)
+
+    const third = await browser()
+    await third.knock()
+    assert.equal((await app.inject({ method: 'DELETE', url: `${third.url}?why=not-me`, headers })).statusCode, 200)
+    await sleep(300)
+    assert.equal(cloudEvents.turnedDown().length, 1, 'the computer that turned it down already said so; only the others get the alert')
+
+    cloudEvents.stop()
+    const closed = await browser()
+    assert.equal((await closed.client.knock({ team: home, nonce: randomBytes(32).toString('base64url') }).ask({ name: 'Firefox', os: 'web' })).asked, true)
+    await sleep(300)
+    assert.equal(cloudEvents.requests(home).some((each) => each.device === closed.device), false, 'the Mac is closed and heard nothing')
+    cloudEvents.start()
+    for (let i = 0; i < 100 && !cloudEvents.requests(home).some((each) => each.device === closed.device); i++) await sleep(50)
+    const shown = (await app.inject({ method: 'GET', url: '/api/cloud', headers })).json<{ workspaces: Array<{ id: string; requests: Array<{ device: string; name: string }> }> }>()
+    assert.deepEqual(shown.workspaces.find((each) => each.id === home)?.requests.map(({ device, name }) => ({ device, name })), [{ device: closed.device, name: 'Firefox' }], 'reopened, the Mac shows the request it missed')
   } finally {
+    cloudEvents.stop()
     await app.close()
     await cloud.close()
   }

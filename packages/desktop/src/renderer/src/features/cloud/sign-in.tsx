@@ -9,7 +9,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { ErrorNote } from '@/components/error-note'
 import { I } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
-import { PasskeyQuiet, useAddPasskey, useCancelSignIn, useCloud, useNewKit, useSignIn, useSigningIn } from '@/features/cloud/api'
+import { PasskeyQuiet, useAddPasskey, useCancelSignIn, useCloud, useNewKit, usePasteSignInCode, useSignIn, useSigningIn } from '@/features/cloud/api'
 import { notify } from '@/components/custom/toast'
 import { toast, toastError } from '@/lib/toast'
 import { desktop } from '@/lib/desktop'
@@ -53,8 +53,23 @@ export function SignIn({ cloud }: { cloud: Cloud | undefined }) {
   return <Step title={title} line={line} action={action} link={link}>
     {!invited && <ul className="m-0 flex list-none flex-col gap-3 p-0 text-left">{POINTS.map(([icon, text]) => <li key={text} className="flex items-center gap-3 text-[15px]/[1.4] text-body"><I icon={icon} size={18} className="shrink-0 text-mute" />{text}</li>)}</ul>}
     {isPhone() && <p className="m-0 text-[13px] text-mute">Sign in to OpenHut on your computer.</p>}
+    {waiting && <PasteCode />}
     {online ? <ErrorNote className="max-w-[420px]" message={signIn.error?.message ?? cloud?.signInError ?? undefined} /> : <p className="m-0 text-[13px] text-mute">OpenHut needs the internet the first time.</p>}
   </Step>
+}
+
+function PasteCode() {
+  const paste = usePasteSignInCode()
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const code = String(new FormData(event.currentTarget).get('code') ?? '').trim()
+    if (code) paste.mutate(code)
+  }
+  return <form onSubmit={submit} className="flex w-full max-w-[420px] flex-col items-center gap-2">
+    <span className="text-[13px] text-mute">Browser didn’t come back? Paste the code from its last page.</span>
+    <span className="flex w-full gap-2"><Input name="code" aria-label="Sign-in code" autoComplete="off" spellCheck={false} className="flex-1" /><Button type="submit" variant="secondary" disabled={paste.isPending}>{paste.isPending ? 'Signing in…' : 'Sign in'}</Button></span>
+    <ErrorNote message={paste.error?.message} />
+  </form>
 }
 
 function useOnline(): boolean {
