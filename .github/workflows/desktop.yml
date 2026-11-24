@@ -317,6 +317,15 @@ jobs:
           status=0; xvfb-run -a -s "-screen 0 1280x800x24" node scripts/app-e2e.mjs --app release/linux-unpacked --out /tmp/e2e --cloud ../../private/api || status=$?
           mkdir -p app-e2e && cp -R /tmp/e2e/. app-e2e/
           exit $status
+      - name: The previous AppImage updates to this one
+        if: matrix.name == 'linux' && !cancelled()
+        working-directory: packages/desktop
+        run: |
+          sudo apt-get install -y -qq libfuse2t64
+          npx electron-builder --linux AppImage --x64 -c.electronFuses.runAsNode=true -c.extraMetadata.version=0.0.1 -c.directories.output=release-old --publish never
+          mkdir -p feed && cp release/latest-linux.yml release/OpenHut-x64.AppImage release/openhut-x64.deb feed/
+          xvfb-run -a -s "-screen 0 1280x800x24" node scripts/update-test.mjs --from release-old/OpenHut-x64.AppImage --feed feed --via button --cloud ../../private/api
+          xvfb-run -a -s "-screen 0 1280x800x24" node scripts/update-test.mjs --from release-old/OpenHut-x64.AppImage --feed feed --via quit --cloud ../../private/api
       - uses: actions/upload-artifact@v4
         if: always()
         with:

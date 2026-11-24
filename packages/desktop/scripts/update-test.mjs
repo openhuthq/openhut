@@ -1,5 +1,6 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { createReadStream, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { chmodSync, copyFileSync, createReadStream, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
@@ -9,20 +10,23 @@ import { bootCloud, devCloudUrl, signIn } from './dev-cloud.mjs'
 import { RELEASE_KEY } from '../src/release-key.mjs'
 
 const { values: args } = parseArgs({ options: { from: { type: 'string' }, feed: { type: 'string' }, via: { type: 'string', default: 'button' }, keep: { type: 'boolean', default: false }, broken: { type: 'boolean', default: false }, cloud: { type: 'string' } } })
-if (!args.from || !args.feed || !['button', 'quit'].includes(args.via)) {
-  console.error('usage: node scripts/update-test.mjs --from <old OpenHut.app> --feed <folder or URL with latest-mac.yml and the new zip> [--via button|quit] [--broken] [--keep] [--cloud <private/api>]')
+const LINUX = process.platform === 'linux'
+const YML = LINUX ? 'latest-linux.yml' : 'latest-mac.yml'
+if (!args.from || !args.feed || !['button', 'quit'].includes(args.via) || (LINUX && args.broken)) {
+  console.error('usage: node scripts/update-test.mjs --from <old OpenHut.app or OpenHut-x64.AppImage> --feed <folder or URL with latest-mac.yml and the new zip, or latest-linux.yml and the new AppImage> [--via button|quit] [--broken (Mac only)] [--keep] [--cloud <private/api>]')
   process.exit(2)
 }
 const remote = /^https?:\/\//.test(args.feed)
-const yml = remote ? await (await fetch(new URL('latest-mac.yml', args.feed))).text() : readFileSync(join(args.feed, 'latest-mac.yml'), 'utf8')
+const yml = remote ? await (await fetch(new URL(YML, args.feed))).text() : readFileSync(join(args.feed, YML), 'utf8')
 const want = /^version: (.+)$/m.exec(yml)[1].trim()
 const missing = remote ? [] : [...yml.matchAll(/^\s*-?\s*(?:url|path): (.+)$/gm)].map((match) => match[1].trim()).filter((name) => !existsSync(join(args.feed, name)))
 if (missing.length) {
-  console.error(`update-test: ${args.feed} lacks ${[...new Set(missing)].join(', ')}, which its latest-mac.yml names, so the signed release.json wouldn't cover them and the app would refuse the update`)
+  console.error(`update-test: ${args.feed} lacks ${[...new Set(missing)].join(', ')}, which its ${YML} names, so the signed release.json wouldn't cover them and the app would refuse the update`)
   process.exit(2)
 }
 const root = mkdtempSync(join(tmpdir(), 'openhut-update-'))
-const app = join(root, 'Applications/OpenHut.app')
+const app = join(root, LINUX ? 'OpenHut.AppImage' : 'Applications/OpenHut.app')
+const newSha = /url: \S+\.AppImage\s+sha512: (\S+)/.exec(yml)?.[1]
 const home = join(root, 'home')
 const cdpPort = 9300 + Math.floor(Math.random() * 500)
 const evidence = { via: args.via, want, broken: args.broken, steps: [], waits: [] }
@@ -31,7 +35,10 @@ const say = (step, detail = {}) => {
   console.log(`update-test: ${step}${Object.keys(detail).length ? ` ${JSON.stringify(detail)}` : ''}`)
 }
 
-execFileSync('ditto', [args.from, app])
+if (LINUX) {
+  copyFileSync(args.from, app)
+  chmodSync(app, 0o755)
+} else execFileSync('ditto', [args.from, app])
 const feed = createServer((req, res) => {
   const file = join(args.feed, basename(decodeURIComponent(new URL(req.url, 'http://feed').pathname)))
   if (!existsSync(file) || !statSync(file).isFile()) return res.writeHead(404).end()
@@ -49,7 +56,7 @@ let child
 let api
 try {
   if (args.cloud) api = await bootCloud({ dir: args.cloud, api: API })
-  say('installed the old app', { version: plistVersion(), signature: signedBy() })
+  say('installed the old app', { version: onDisk(), signature: signedBy() })
   child = launch()
   let page = await connect()
   const admin = await until(async () => {
@@ -68,17 +75,17 @@ try {
     const state = await page.eval('window.openhut.update.state()')
     if (state.error) throw new Error(`the update failed with "${state.error}"; see ${home}/logs/updates.log`)
     return state.ready ? state : null
-  }, 300, 'Squirrel to verify the new version')
-  say('Squirrel verified the new version and the app shows it ready', ready)
+  }, 300, 'the updater to download and verify the new version')
+  say('the updater verified the new version and the app shows it ready', ready)
   const exited = new Promise((resolve) => child.once('exit', resolve))
   if (args.via === 'button') await page.eval('window.openhut.update.install()').catch(() => undefined)
   else child.kill('SIGTERM')
   await Promise.race([exited, sleep(60_000).then(() => { throw new Error('the old app didn\'t quit within a minute') })])
   child = undefined
   say(args.via === 'button' ? 'pressed Restart to update; the app quit' : 'quit the app')
-  await until(async () => plistVersion() === want, 120, `the bundle on disk to become ${want}`)
-  execFileSync('codesign', ['--verify', '--deep', '--strict', app])
-  say('the bundle on disk is the new version and its signature verifies', { version: plistVersion(), signature: signedBy() })
+  await until(async () => onDisk() === want, 120, `the app on disk to become ${want}`)
+  if (!LINUX) execFileSync('codesign', ['--verify', '--deep', '--strict', app])
+  say('the app on disk is the new version and its signature verifies', { version: onDisk(), signature: signedBy() })
   if (args.broken) {
     const old = plistVersion.call(null, args.from)
     child = launch({ OPENHUT_TEST_DIALOG: 'Go back' })
@@ -129,7 +136,9 @@ try {
 }
 
 function launch(extra = {}) {
-  const proc = spawn(join(app, 'Contents/MacOS/OpenHut'), [`--remote-debugging-port=${cdpPort}`], { env: { ...env, ...extra }, stdio: 'ignore' })
+  const proc = LINUX
+    ? spawn(app, [`--remote-debugging-port=${cdpPort}`, '--no-sandbox', '--password-store=basic'], { env: { ...env, ...extra }, stdio: 'ignore' })
+    : spawn(join(app, 'Contents/MacOS/OpenHut'), [`--remote-debugging-port=${cdpPort}`], { env: { ...env, ...extra }, stdio: 'ignore' })
   proc.on('exit', (code, signal) => say('app process exited', { code, signal }))
   return proc
 }
@@ -190,6 +199,12 @@ function plistVersion(bundle = app) {
   return read.status === 0 ? read.stdout.trim() : ''
 }
 
+function onDisk() {
+  if (!LINUX) return plistVersion()
+  return createHash('sha512').update(readFileSync(app)).digest('base64') === newSha ? want : 'the old version'
+}
+
 function signedBy() {
+  if (LINUX) return 'unsigned (AppImage)'
   return /TeamIdentifier=(\S+)/.exec(spawnSync('codesign', ['-dv', app], { encoding: 'utf8' }).stderr)?.[1] ?? 'none'
 }
