@@ -19,6 +19,7 @@ import { randomLook, SWATCHES } from '@/lib/face'
 import { formValues } from '@/lib/form'
 import { SOFT_TRIGGER } from '@/features/models/model-picker'
 import { TOUCH, useMedia } from '@/lib/media'
+import { navigate } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
 const NAMES = ['Juniper', 'Scout', 'Pepper', 'Atlas', 'Maple', 'Biscuit', 'Nova', 'Otto']
@@ -93,6 +94,7 @@ export function FirstAgent() {
   const [spun, setSpun] = useState(0)
   const faceOf = (index: number) => JSON.stringify({ ...randomLook({ seed: `face_${round}` }), body: COLOURS[index] })
   const face = faceOf(colour)
+  const thinking = providers && !firstModel(providers)
   return <form className="flex flex-col items-center gap-4 text-center" onSubmit={(event) => {
     const field = formValues(event)
     const model = firstModel(providers)
@@ -104,7 +106,7 @@ export function FirstAgent() {
       <span className="absolute right-1 bottom-3 grid size-8 place-items-center rounded-full border border-hair bg-card text-ink shadow-menu"><I icon={ShuffleIcon} size={15} /></span>
     </Button>
     <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Make your first agent</h1>
-    <p className="m-0 -mt-2 text-[14px]/[1.5] text-body">Give it a name and a face. You’ll tell it its job next.</p>
+    <p className="m-0 -mt-2 text-[14px]/[1.5] text-body">Give it a name and a face. You can tell it its job in your first chat.</p>
     <Field label={<span className="text-[12px] font-medium text-mute">Name</span>} className="mt-1 w-[352px] max-w-full text-left">{(control) => <Input {...control} name="name" required maxLength={40} defaultValue={NAMES[0]} autoComplete="off" spellCheck={false} className="h-10 rounded-lg text-[15px] font-medium" />}</Field>
     <div role="radiogroup" aria-label="Colour" className="flex gap-2">
       {COLOURS.map((swatch, index) => <Button key={swatch} type="button" variant="bare" role="radio" aria-checked={index === colour} aria-label={SWATCHES[swatch].name} title={SWATCHES[swatch].name} onClick={() => setColour(index)}
@@ -114,6 +116,10 @@ export function FirstAgent() {
       <span className="text-[12px] font-medium text-mute">Where should it run?</span>
       <ComputerPicker computers={computers} value={computer} onPick={setComputer} title="It runs on" className="h-10 w-full rounded-lg" />
       <span className="text-[12px]/[16px] text-mute">{whereNote(computers.find((each) => each.id === computer) ?? computers[0])}</span>
+    </div>}
+    {thinking && <div className="flex w-[352px] max-w-full items-center gap-3 rounded-lg border border-hair bg-card px-3 py-2.5 text-left">
+      <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[13px]/[18px] font-medium">What should it think with?</span><span className="text-[12px]/[16px] text-mute">Sign in with Claude or ChatGPT, or add an API key. It can’t answer without one.</span></span>
+      <Button type="button" variant="secondary" className="shrink-0" onClick={() => navigate('/settings/models')}>Connect</Button>
     </div>}
     <Button type="submit" variant="primary" className="mt-2 h-10 w-[352px] max-w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
     <ErrorNote message={createAgent.error?.message} />
