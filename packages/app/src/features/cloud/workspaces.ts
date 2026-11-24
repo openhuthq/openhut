@@ -1,6 +1,6 @@
 import { createContext, use, useSyncExternalStore } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Cloud, CloudInvite, CloudInvitePreview, type CloudWorkspaceView, type CreateCloudInvite, type Role } from '@openhut/common/cloud/cloud.ts'
+import { Cloud, CloudInvite, CloudInvitePreview, WebLink, type CloudWorkspaceView, type CreateCloudInvite, type Role } from '@openhut/common/cloud/cloud.ts'
 import { request, requestBlob } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
 
@@ -146,3 +146,8 @@ export const useCancelAsk = () => useCloudCall(() => request({ schema: Cloud, co
 export const useDeleteData = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud', method: 'DELETE' }))
 
 export const useRotated = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud/rotations', method: 'DELETE' }))
+
+export async function continueInWeb(): Promise<void> {
+  const { url } = await request({ schema: WebLink, computer: 'local', path: '/api/cloud/web-links', method: 'POST', body: { path: `${location.pathname}${location.search}` } })
+  window.open(url, '_blank', 'noopener')
+}

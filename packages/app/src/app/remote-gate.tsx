@@ -5,6 +5,8 @@ import { ErrorNote } from '@/components/error-note'
 import { Spinner } from '@/components/ui/spinner'
 import { FirstRun, forgetFirstRun, Offline, PhoneFirstRun } from '@/app/first-run'
 import { Knocking, YoureIn } from '@/features/cloud/knock'
+import { nameOf } from '@/features/cloud/api'
+import { Teammate } from '@/app/teammate'
 import { BIG, Stage, Step } from '@/features/cloud/step'
 import { followEvents } from '@/lib/live'
 import { remote } from '@/lib/remote'
@@ -12,7 +14,7 @@ import { Offline as Away, phoneBrowser, screenOf } from '@/lib/web-first-run'
 
 const WAIT_MS = 3000
 const OFFLINE_MS = 5000
-const POLLED = ['waiting', 'first-run']
+const POLLED = ['waiting', 'first-run', 'continuing']
 
 export function RemoteGate({ children }: { children: ReactNode }) {
   const client = useQueryClient()
@@ -27,9 +29,12 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   useEffect(() => { if (step && step !== 'first-run') forgetFirstRun() }, [step])
   const screen = screenOf({ step, opened: Boolean(opened.data), error: opened.error, phone: phoneBrowser({ userAgent: navigator.userAgent, width: innerWidth }) })
   if (opened.data && knocked) return <Stage><YoureIn line="Your computer let this browser in." onOpen={() => setKnocked(false)} /></Stage>
+  if (opened.data && state.data?.step === 'ready' && state.data.teammate) return <Teammate />
   if (opened.data) return children
   const failure = error ?? (state.error ?? opened.error)?.message
-  if (state.data?.step === 'signed-out') return <Stage><Step title="Use OpenHut in your browser." line="Sign in with the Google account you use on your Mac.">
+  const invited = state.data?.step === 'signed-out' || state.data?.step === 'waiting' ? state.data.invited : null
+  const host = nameOf(invited?.from ?? '') || 'Your teammate'
+  if (state.data?.step === 'signed-out') return <Stage><Step title={invited ? `You’re invited to ${invited.team ?? 'a team'}.` : 'Use OpenHut in your browser.'} line={invited ? `Sign in with Google${invited.email ? ` as ${invited.email}` : ''} to chat with the agents ${host} shares. Nothing to install.` : 'Sign in with the Google account you use on your Mac.'}>
     <Button className={BIG} disabled={signingIn} onClick={() => { setSigningIn(true); remote.signIn().catch((err: Error) => { setError(err.message); setSigningIn(false) }) }}>{signingIn ? <Spinner /> : null}Continue with Google</Button>
     {failure && <ErrorNote message={failure} />}
   </Step></Stage>
@@ -37,9 +42,12 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   if (screen === 'phone' && state.data?.step === 'first-run') return <PhoneFirstRun email={state.data.email} />
   if (screen === 'offline' && opened.error instanceof Away) return <Offline computer={opened.error.computer} seen={opened.error.seen} />
   if (state.data?.step === 'waiting' && !knocked) setKnocked(true)
+  if (state.data?.step === 'continuing') return <Stage><Step title="Opening OpenHut…" line="Your computer is letting this browser in. This takes a few seconds."><Spinner /></Step></Stage>
+  if (state.data?.step === 'waiting' && invited) return <Stage><Knocking faces={state.data.faces} line={`${host}’s computer lets you in. Tell ${host} these two:`} note={`${host} picks the same two on their computer. We’ll keep knocking for 15 minutes.`} /></Stage>
   if (state.data?.step === 'waiting') return <Stage><Knocking faces={state.data.faces} /></Stage>
-  if (state.data?.step === 'over') return <Stage><Step title={state.data.missed ? 'Those faces didn’t match.' : 'Nobody let you in.'} line={state.data.missed ? 'The request was turned down. If that was you, knock again.' : 'The knock was turned down, or 15 minutes passed.'}
-    action={<Button className={BIG} onClick={() => remote.knock().then(() => state.refetch(), (err: Error) => setError(err.message))}>Knock again</Button>}>{failure && <ErrorNote message={failure} />}</Step></Stage>
+  const over = state.data?.step === 'over' ? state.data : undefined
+  if (over) return <Stage><Step title={over.missed ? 'Those faces didn’t match.' : 'Nobody let you in.'} line={over.missed ? 'The request was turned down. If that was you, knock again.' : 'The knock was turned down, or 15 minutes passed.'}
+    action={<Button className={BIG} onClick={() => remote.knock(over.workspace).then(() => state.refetch(), (err: Error) => setError(err.message))}>Knock again</Button>}>{failure && <ErrorNote message={failure} />}</Step></Stage>
   return <Stage><Step title={failure ? 'Can’t reach your computer.' : 'Connecting to your computer…'} line={failure ?? 'Your agents run on your Mac. This browser talks to it end to end encrypted.'}>
     {failure ? <Button className={BIG} onClick={() => { setError(undefined); void state.refetch(); void opened.refetch() }}>Try again</Button> : <Spinner />}
   </Step></Stage>

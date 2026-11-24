@@ -1,5 +1,5 @@
 import { createContext, useState, useSyncExternalStore, type ReactElement } from 'react'
-import { Cancel01Icon, Delete02Icon, LaptopIcon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, ServerStack01Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { BrowserIcon, Cancel01Icon, Delete02Icon, LaptopIcon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, ServerStack01Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
@@ -9,7 +9,8 @@ import { ConfirmDialog } from '@/components/confirm-button'
 import { Glyph } from '@/components/glyph'
 import { TeamMark } from '@/components/custom/team-mark'
 import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
-import { chooseWorkspace, peopleNote, useWorkspaces } from '@/features/cloud/workspaces'
+import { chooseWorkspace, continueInWeb, peopleNote, useWorkspaces } from '@/features/cloud/workspaces'
+import { REMOTE } from '@/lib/remote'
 import { shownTeams } from '@/features/cloud/shown-teams'
 import { useCloud } from '@/features/cloud/api'
 import { dismissGone, dismissedGone, onGoneDismissed, removedLine } from '@/features/cloud/seen'
@@ -151,6 +152,7 @@ function TeamSwitcher() {
       <DropdownMenuSeparator />
       <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />Join a team</DropdownMenuItem>
       <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/general')}><I icon={Settings02Icon} size={15} className="text-mute" />Team settings</DropdownMenuItem>
+      {!REMOTE && <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => void continueInWeb().catch(toastError)}><I icon={BrowserIcon} size={15} className="text-mute" />Continue in web</DropdownMenuItem>}
     </DropdownMenuContent>
   </DropdownMenu>
 }

@@ -38,7 +38,10 @@ export function TeamPeople({ workspace }: { workspace: CloudWorkspaceView }) {
     </Section>
     {workspace.invites.length > 0 && <Section title="Invited">
       <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
-        {workspace.invites.map((invite) => <InviteRow key={invite.email} invite={invite} workspace={workspace} admin={admin} />)}
+        {workspace.invites.map((invite) => <div key={invite.email}>
+          <InviteRow invite={invite} workspace={workspace} admin={admin} />
+          {workspace.requests.filter((each) => each.email === invite.email).map((each) => <Request key={each.device} workspace={workspace} request={each} name={nameOf(invite.email)} mine={false} admin={admin} />)}
+        </div>)}
       </div>
     </Section>}
   </>

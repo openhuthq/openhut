@@ -3,15 +3,18 @@ import { ComputersOffline, openhutCloud } from '@openhut/common/cloud/openhut-cl
 import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
 import { toBase64 } from '@openhut/common/vault/public.ts'
 import type { Channel } from '@/lib/live-socket'
-import { accountStepOf, lastSeenOf, Offline } from './web-first-run.ts'
+import { inviteOf } from '../features/join/invite.ts'
+import { accountStepOf, continueCodeOf, lastSeenOf, Offline } from './web-first-run.ts'
 import { config } from './config.ts'
 
 export const REMOTE = !config.local
 const RETURN = '/signed-in'
+const CONTINUE_MS = 70_000
 
 type Pair = { publicKey: CryptoKey; privateKey: CryptoKey }
 type Keys = { signing: Pair; tunnel: Pair }
-export type RemoteState = { step: 'signed-out' } | { step: 'first-run'; email: string } | { step: 'waiting'; email: string; faces: number[] } | { step: 'over'; email: string; missed: boolean } | { step: 'ready'; email: string; workspace: string }
+export type Invited = { workspace: string; team: string | null; from: string | null; email: string | null }
+export type RemoteState = { step: 'signed-out'; invited: Invited | null } | { step: 'first-run'; email: string } | { step: 'continuing'; email: string } | { step: 'waiting'; email: string; faces: number[]; invited: Invited | null } | { step: 'over'; email: string; missed: boolean; workspace: string } | { step: 'ready'; email: string; workspace: string; teammate: boolean }
 
 let tunnel: Tunnel | undefined
 
@@ -66,29 +69,40 @@ export const remote = {
 
   async state(): Promise<RemoteState> {
     const back = new URL(location.href)
+    const link = back.pathname === '/join' ? inviteOf(back.hash) : undefined
+    if (link) await store.set('invite', { workspace: link.workspace, team: link.team ?? null, from: link.from ?? null, email: link.email ?? null } satisfies Invited)
+    const continued = continueCodeOf(back.hash)
+    if (continued) {
+      history.replaceState(null, '', `${back.pathname}${back.search}`)
+      if (await cloud.signIn({ joinCode: continued }).then(() => true, () => false)) await store.set('continued', Date.now())
+    }
     const code = back.pathname === RETURN ? back.searchParams.get('code') : null
     if (code) {
       await cloud.signIn({ googleCode: code, state: back.searchParams.get('state') ?? '' }).catch(() => null)
       history.replaceState(null, '', '/')
     }
+    const invited = await store.get<Invited | null>('invite') ?? null
     const me = await cloud.me()
-    if (!me) return { step: 'signed-out' }
-    const step = accountStepOf(me)
-    if (step === 'first-run') return { step, email: me.email }
-    if (step === 'ready') {
+    if (!me) return { step: 'signed-out', invited }
+    const account = accountStepOf(me, invited?.workspace)
+    if (account.step === 'first-run') return { step: 'first-run', email: me.email }
+    const { workspace } = account
+    const ready = async (): Promise<RemoteState> => {
       await store.set('nonce', null)
-      return { step: 'ready', email: me.email, workspace: me.home ?? '' }
+      if (invited?.workspace === workspace) await store.set('invite', null)
+      return { step: 'ready', email: me.email, workspace, teammate: workspace !== me.home }
     }
-    if (!await store.get<string | null>('nonce')) await remote.knock(me.home ?? undefined)
-    const state = await cloud.knock({ team: me.home ?? '', nonce: await store.get<string>('nonce') ?? '' }).state()
-    if (state.step === 'approved') return { step: 'ready', email: me.email, workspace: me.home ?? '' }
-    return state.step === 'waiting' ? { step: 'waiting', email: me.email, faces: state.faces } : { step: 'over', email: me.email, missed: state.missed }
+    if (account.step === 'ready') return ready()
+    if (Date.now() - (await store.get<number>('continued') ?? 0) < CONTINUE_MS && workspace === me.home) return { step: 'continuing', email: me.email }
+    if (!await store.get<string | null>('nonce')) await remote.knock(workspace)
+    const state = await cloud.knock({ team: workspace, nonce: await store.get<string>('nonce') ?? '' }).state()
+    if (state.step === 'approved') return ready()
+    return state.step === 'waiting' ? { step: 'waiting', email: me.email, faces: state.faces, invited } : { step: 'over', email: me.email, missed: state.missed, workspace }
   },
 
-  async knock(workspace?: string): Promise<void> {
-    const home = workspace ?? (await cloud.me())?.home ?? ''
+  async knock(workspace: string): Promise<void> {
     const nonce = toBase64(crypto.getRandomValues(new Uint8Array(32)))
-    await cloud.knock({ team: home, nonce }).ask({ name: browserName(), os: 'web' })
+    await cloud.knock({ team: workspace, nonce }).ask({ name: browserName(), os: 'web' })
     await store.set('nonce', nonce)
   },
 

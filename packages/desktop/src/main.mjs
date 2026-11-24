@@ -737,6 +737,16 @@ function openLink(url) {
   if ((linked || url?.startsWith(`${SCHEME}:`)) && (opened || main)) show(linked)
 }
 
+async function continueInWeb() {
+  const at = main && !main.isDestroyed() ? new URL(main.webContents.getURL()) : null
+  try {
+    const { url } = await api('/api/cloud/web-links', { method: 'POST', body: { path: at ? `${at.pathname}${at.search}` : '/' } })
+    await shell.openExternal(url)
+  } catch (err) {
+    dialog.showMessageBox({ type: 'info', message: 'Couldn’t open OpenHut in your browser', detail: err instanceof Error ? err.message : String(err) })
+  }
+}
+
 function show(path) {
   const win = main && !main.isDestroyed() ? main : window()
   if (win.isMinimized()) win.restore()
@@ -772,10 +782,12 @@ function menu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     MAC ? { label: NAME, submenu: [
       { role: 'about' }, { type: 'separator' },
-      { label: 'Settings…', accelerator: 'CommandOrControl+,', click: () => show('/settings/general') }, { type: 'separator' },
+      { label: 'Settings…', accelerator: 'CommandOrControl+,', click: () => show('/settings/general') },
+      { label: 'Continue in Web', click: () => void continueInWeb() }, { type: 'separator' },
       { role: 'services' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' },
     ] } : { label: 'File', submenu: [
-      { label: 'Settings…', accelerator: 'CommandOrControl+,', click: () => show('/settings/general') }, { type: 'separator' }, { role: 'quit' },
+      { label: 'Settings…', accelerator: 'CommandOrControl+,', click: () => show('/settings/general') },
+      { label: 'Continue in Web', click: () => void continueInWeb() }, { type: 'separator' }, { role: 'quit' },
     ] },
     { role: 'editMenu' },
     ...(DEV ? [{ role: 'viewMenu' }] : []),
