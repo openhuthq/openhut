@@ -43,7 +43,9 @@ export function useAgent(agentId: string) {
   return useQuery({
     queryKey: [...AGENTS_KEY, agentId],
     queryFn: async () => {
+      const was = client.getQueryData<Agent>([...AGENTS_KEY, agentId])
       const agent = await request({ schema: Agent, of: agentId, path: agentPath(agentId) })
+      if (settling(was) && !settling(agent)) void client.invalidateQueries({ queryKey: ['skills', agentId] })
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (list) => list?.map((each) => each.id === agent.id ? { ...each, status: agent.status, health: agent.health, healthDetail: agent.healthDetail, wanted: agent.wanted } : each))
       return agent
     },
