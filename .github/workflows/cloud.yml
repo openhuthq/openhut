@@ -72,6 +72,8 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.CLOUD_SSH_KEY }}
       - run: ssh-keyscan -t ed25519 46.224.128.49 >> ~/.ssh/known_hosts
+      - name: The signed stable release whose App the image serves (R5; the build refuses any other)
+        run: private/api/deploy/fetch-release.sh
       - name: Kamal deploy
         env:
           KAMAL_REGISTRY_USERNAME: ${{ github.actor }}
