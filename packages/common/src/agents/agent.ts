@@ -18,6 +18,7 @@ export const Agent = z.object({
   ownerId: z.string(),
   ownerName: z.string(),
   model: ModelKey,
+  modelName: z._default(z.nullable(z.string()), null),
   wanted: Wanted,
   status: AgentStatus,
   health: z.nullable(AgentHealth),

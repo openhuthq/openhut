@@ -233,6 +233,11 @@ export function mayEdit({ facts, actor }: { facts: AgentFacts; actor: Caller }):
   return facts.owner === actor.email || roomKeys.members(facts.workspace)?.members.find((member) => member.email === actor.email)?.role === 'owner'
 }
 
+function modelNameOf(key: string): string | null {
+  const split = splitModelKey(key)
+  return split ? providerService.catalog(split.provider).find((model) => model.id === split.model)?.name ?? null : null
+}
+
 export function placeOf(row: Pick<AgentRow, 'workspace' | 'shared'>): { workspace: string; personal: boolean } {
   return { workspace: row.workspace ?? keysService.signedIn().workspace.id, personal: !row.shared }
 }
@@ -308,7 +313,7 @@ async function agentOf({ facts, actor, states }: { facts: AgentFacts; actor: Cal
   const author = facts.by ? list?.members.find((member) => member.devices.includes(facts.by ?? ''))?.email : undefined
   const mine = facts.owner === actor.email
   return {
-    id: facts.id, object: 'agent', name: value.name, ownerId: facts.owner, ownerName: facts.owner, model: control?.model ?? DEFAULT_MODEL, wanted: value.wanted,
+    id: facts.id, object: 'agent', name: value.name, ownerId: facts.owner, ownerName: facts.owner, model: control?.model ?? DEFAULT_MODEL, modelName: modelNameOf(control?.model ?? DEFAULT_MODEL), wanted: value.wanted,
     status: here ? statusOf(states?.[facts.id]) : beat?.status ?? 'missing', health: health.health, healthDetail: health.detail, summary: summaryOf(value.instructions), net: here ? row.net : 0,
     instructions: value.instructions, codeExecution: control?.codeExecution ?? true, browser: control?.browser ?? false, face: value.face, canEdit: mayEdit({ facts, actor }),
     runsHere: here, runsNowhere: !here && (!control || !runner || !!list?.removed.includes(control.runsOn)), runsOn: control?.runsOn ?? null, runsOnName: here || !control ? null : list?.names?.[control.runsOn] ?? (runner ? `${runner.email}’s computer` : null), runsOnServer: !!control && !!list?.runtimes?.includes(control.runsOn),

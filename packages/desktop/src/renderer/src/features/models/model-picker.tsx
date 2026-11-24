@@ -88,7 +88,7 @@ function ModelRow({ provider, model, selected, onClick }: { provider: Provider; 
   </DropdownMenuItem>
 }
 
-export function ModelValue({ providers, value, none }: { providers: Provider[] | undefined; value: string | null; none?: PickerNone }) {
+export function ModelValue({ providers, value, none, known }: { providers: Provider[] | undefined; value: string | null; none?: PickerNone; known?: string | null }) {
   const { split, model } = find({ providers, key: value })
   if (!split) return <>
     <span className="grid w-3.5 shrink-0 place-items-center">{none?.icon}</span>
@@ -97,7 +97,7 @@ export function ModelValue({ providers, value, none }: { providers: Provider[] |
   </>
   return <>
     <span className="grid w-3.5 shrink-0 place-items-center"><Glyph name={split.provider} size={14} /></span>
-    <span className="min-w-0 flex-1 truncate text-left">{model?.name ?? split.model}</span>
+    <span className="min-w-0 flex-1 truncate text-left">{model?.name ?? known ?? split.model}</span>
     <I icon={UnfoldMoreIcon} size={12} className="text-mute" />
   </>
 }
