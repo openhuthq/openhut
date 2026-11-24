@@ -52,7 +52,10 @@ export function Dialog({ size = 'default', dismissable = true, label, onClose, o
   return <DialogPrimitive.Root open disablePointerDismissal={!dismissable} onOpenChange={(open, details) => {
     if (open) return
     if (details.reason === 'outside-press' && details.event.target instanceof Element && details.event.target.closest('[data-toasts]')) return
+    const back = popup.current?.querySelector<HTMLElement>('[data-back]')
     if (details.reason === 'escape-key' && onEscape) onEscape()
+    // Esc steps back one view inside the dialog (a sheet over Apps, a Models step) before it closes the dialog.
+    else if (details.reason === 'escape-key' && back?.checkVisibility()) back.click()
     else if (dismissable || details.reason !== 'escape-key') onClose()
   }}>
     <DialogPrimitive.Portal>
