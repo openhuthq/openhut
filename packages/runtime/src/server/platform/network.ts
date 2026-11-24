@@ -1,13 +1,25 @@
 import { lookup as lookupAll, type LookupAddress, type LookupOptions } from 'node:dns'
 import { lookup } from 'node:dns/promises'
-import { BlockList, isIP } from 'node:net'
+import { BlockList, createServer, isIP } from 'node:net'
 import { Agent, buildConnector } from 'undici'
-import { AGENT_API_PORT_BASE } from '../../agentd/sandbox/sandbox.ts'
+import { AGENT_API_PORT_BASE, BROWSER_STREAM_PORT_BASE, WHATSAPP_PORT_BASE } from '../../agentd/sandbox/sandbox.ts'
 import { config } from './config.ts'
 
 export const AGENTS_RANGE = '10.200.0.0'
 export const agentSubnet = (net: number): string => `10.200.${net}`
 export const agentApiUrl = (net: number): string => config.agentApi ?? (config.agentGateway ? `http://127.0.0.1:${AGENT_API_PORT_BASE + net}` : `http://${agentSubnet(net)}.2:8642`)
+
+export async function portsFree(net: number): Promise<boolean> {
+  if (!config.agentHostNet) return true
+  return (await Promise.all([AGENT_API_PORT_BASE, WHATSAPP_PORT_BASE, BROWSER_STREAM_PORT_BASE].map((base) => portFree(base + net)))).every(Boolean)
+}
+
+export function portFree(port: number): Promise<boolean> {
+  return new Promise((done) => {
+    const server = createServer().once('error', () => done(false))
+    server.listen(port, '127.0.0.1', () => server.close(() => done(true)))
+  })
+}
 
 const BLOCKED = blockList()
 const connector = buildConnector({ lookup: guardedLookup, timeout: 10_000 })
