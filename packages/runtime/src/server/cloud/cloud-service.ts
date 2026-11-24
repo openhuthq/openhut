@@ -84,7 +84,7 @@ export const cloudService = {
       asking: asked ? { rooms: askRooms.filter((room) => !asked.settled.includes(room.id)).map(({ admins, own }) => ({ admins, own: Boolean(own) })), denied: asked.settled.length === askRooms.length, error: asked.error, name: deviceName(), reviewed: asked.reviewed, missed: asked.missed, faces: asked.revealed && askRooms[0]?.nonce ? facesOf({ device: here, nonce: askRooms[0].nonce }) : null } : null,
       canAsk: Boolean(locked && session),
       rotate: on ? await toRotate() : [],
-      gone: cloudEvents.gone(),
+      gone: await cloudEvents.gone(),
     }
   },
 
