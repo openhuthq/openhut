@@ -102,12 +102,13 @@ export const REMOVE_POINTS = [
   { icon: Key01Icon, text: 'Make a new kit if someone else has yours' },
 ]
 
-export function useRemoveMac() {
+export function useRemoveMac({ then }: { then?: string } = {}) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: (key: string) => request({ schema: Cloud, computer: 'local', path: `/api/cloud/devices/${encodeURIComponent(key)}`, method: 'DELETE' }),
     onSuccess: (cloud) => {
       client.setQueryData(CLOUD_KEY, cloud)
+      if (then) return navigate(then)
       notify({ title: 'Device removed', note: NEW_KIT_HINT, action: { label: 'New kit', onClick: () => navigate('/settings/general?open=kit') } })
     },
     onError: toastError,

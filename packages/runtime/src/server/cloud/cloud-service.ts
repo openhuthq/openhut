@@ -346,8 +346,8 @@ export const cloudService = {
     const mine = (ws: string) => Boolean(roomKeys.members(ws)?.members.some((member) => member.email === account.email && member.devices.includes(device)))
     const teams = roomKeys.rooms().map((room) => room.workspace.id).filter((ws) => ws !== account.workspace.id && mine(ws))
     if (!mine(account.workspace.id) && !teams.length) throw new HttpError(400, 'Pick one of your other devices to remove.', { param: 'device' })
-    if (mine(account.workspace.id)) await serial(async () => putList({ workspace: account.workspace.id, list: await keysService.dropDevices([device]) }))
-    for (const ws of teams) await change({ ws, devices: [device] })
+    await caughtUp({ ws: account.workspace.id, step: async () => { if (mine(account.workspace.id)) await serial(async () => putList({ workspace: account.workspace.id, list: await keysService.dropDevices([device]) })) } })
+    for (const ws of teams) await caughtUp({ ws, step: async () => { if (mine(ws)) await change({ ws, devices: [device] }) } })
     if (await serial(() => deleteBoxes({ account, kinds: ['passkey'] }))) passkeySaved = false
     await keepToRotate()
     return cloudService.status()
@@ -408,19 +408,27 @@ async function change({ ws, emails, devices, rotate = false }: { ws: string; ema
 cloudEvents.onDropped((ws) => serial(() => rotateTeam(ws)).catch((err: unknown) => log.warn({ event: 'cloud.rotate_failed', workspace: ws, error: messageOf(err) })))
 
 async function rotateTeam(ws: string): Promise<void> {
-  for (let tries = 1; ; tries++) {
-    const account = keysService.account()
-    if (!account || roomKeys.roleIn(ws) !== 'owner') return
-    const { list, room, letters } = await roomKeys.teamChange({ ws, rotate: true })
-    const boxes = ws === account.workspace.id ? [await keysService.workspaceBox({ account: { ...account, workspace: room.workspace } })] : []
-    const put = await keysService.memberLists({ list, letters, boxes }).catch(() => ({ status: 0 }))
-    if (put.status === 200) {
-      await roomKeys.advance({ lists: [list], ws })
+  await caughtUp({
+    ws, step: async () => {
+      const account = keysService.account()
+      if (!account || roomKeys.roleIn(ws) !== 'owner') return
+      const { list, room, letters } = await roomKeys.teamChange({ ws, rotate: true })
+      const boxes = ws === account.workspace.id ? [await keysService.workspaceBox({ account: { ...account, workspace: room.workspace } })] : []
+      await putList({ workspace: ws, list, letters, boxes })
       await roomKeys.setRoom(room)
-      return log.info({ event: 'cloud.rotated', workspace: ws, why: 'a device left' })
+      log.info({ event: 'cloud.rotated', workspace: ws, why: 'a device left' })
+    },
+  })
+}
+
+async function caughtUp({ ws, step }: { ws: string; step: () => Promise<void> }): Promise<void> {
+  for (let tries = 1; ; tries++) {
+    try {
+      return await step()
+    } catch (err) {
+      if (!(err instanceof HttpError) || err.status !== 409 || tries === 3) throw err
+      await roomKeys.refresh({ ws, call: keysService.call })
     }
-    if (put.status !== 409 || tries === 3) throw await refusal({ ws, status: put.status })
-    await roomKeys.refresh({ ws, call: keysService.call })
   }
 }
 
