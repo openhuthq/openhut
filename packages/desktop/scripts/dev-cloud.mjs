@@ -18,7 +18,9 @@ export async function signIn({ page, api }) {
   if (!link) throw new Error('the dev sign-in page has no link for mo@example.com')
   const back = new URL((await fetch(link, { redirect: 'manual' })).headers.get('location') ?? '', api)
   await page.eval(`fetch(${JSON.stringify(`/api/cloud/callback${back.search}`)}).then((r) => r.text())`)
-  await waitFor(async () => (await page.eval("fetch('/api/cloud').then((r) => r.json())")).status === 'on' || null, 120, 'the cloud to say signed in')
+  let last
+  await waitFor(async () => (last = await page.eval("fetch('/api/cloud').then((r) => r.json())")).status === 'on' || null, 120, 'the cloud to say signed in')
+    .catch((error) => { throw new Error(`${error.message}; /api/cloud last said ${JSON.stringify(last).slice(0, 400)}`) })
   const kit = await page.eval("fetch('/api/cloud/kits', { method: 'POST' }).then((r) => r.status)")
   if (kit !== 200) throw new Error(`saving the recovery kit answered ${kit}`)
 }
