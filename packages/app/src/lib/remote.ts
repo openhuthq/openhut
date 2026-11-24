@@ -27,6 +27,14 @@ export type RemoteState = { step: 'setup' } | { step: 'signed-out'; invited: Inv
 let tunnel: Tunnel | undefined
 let target: { team: string; computer?: string } | undefined
 let reopening: Promise<Tunnel> | undefined
+let cut = false
+const watchers = new Set<() => void>()
+
+function setCut(now: boolean): void {
+  if (cut === now) return
+  cut = now
+  for (const watcher of watchers) watcher()
+}
 
 function kv<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -88,8 +96,13 @@ async function joinAsWindow(): Promise<RemoteState> {
 function live(): Promise<Tunnel> {
   if (tunnel && !tunnel.failure) return Promise.resolve(tunnel)
   if (!target) return Promise.reject(new Error('Not connected to your computer yet.'))
-  reopening ??= cloud.open(target).then((opened) => (tunnel = opened), async (err: unknown) => {
-    throw await reachable() ? err : new CloudOffline()
+  reopening ??= cloud.open(target).then((opened) => {
+    setCut(false)
+    return (tunnel = opened)
+  }, async (err: unknown) => {
+    const offline = !await reachable()
+    setCut(offline)
+    throw offline ? new CloudOffline() : err
   }).finally(() => { reopening = undefined })
   return reopening
 }
@@ -101,6 +114,13 @@ async function viaShell(path: string, init?: RequestInit): Promise<Response> {
 }
 
 export const remote = {
+  cut: (): boolean => cut,
+  watchCut(watcher: () => void): () => void {
+    watchers.add(watcher)
+    return () => watchers.delete(watcher)
+  },
+  reconnect: (): Promise<unknown> => live().catch(() => undefined),
+
   async signIn(): Promise<void> {
     const started = await cloud.signIn({ google: { returnTo: `${location.origin}${RETURN}` } }).catch(() => null)
     if (started?.object !== 'redirect') throw new Error('OpenHut Cloud didn’t start the sign-in. Try again.')
