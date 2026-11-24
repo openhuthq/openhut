@@ -6,7 +6,7 @@ import type { AddressInfo } from 'node:net'
 import { userInfo } from 'node:os'
 import { duplexPair } from 'node:stream'
 import Fastify from 'fastify'
-import { signList } from '@openhut/common/cloud/member-list.ts'
+import { bodyOf, signList } from '@openhut/common/cloud/member-list.ts'
 import { identity, newKey, toBase64 } from '@openhut/common/vault/vault.ts'
 import { agentController } from '../../../src/server/agents/agent-controller.ts'
 import { cloudController } from '../../../src/server/cloud/cloud-controller.ts'
@@ -49,22 +49,29 @@ const ask = (options: RequestOptions & { body?: unknown }) => new Promise<{ stat
 
 const viewer = await identity()
 const teammate = await identity()
+const housemate = await identity()
 const stranger = await identity()
 const VIEWER = tunnelKeyOf(toBase64(viewer.publicKey))
 const TEAMMATE = tunnelKeyOf(toBase64(teammate.publicKey))
+const HOUSEMATE = tunnelKeyOf(toBase64(housemate.publicKey))
 const TEAM = toBase64(newKey(12))
 
 async function listDevices(): Promise<void> {
   const account = await keysService.open({ sub: 'google-mo', email: 'mo@example.com' })
   const list = await keysService.addDevice({ device: toBase64(viewer.publicKey), name: null }) ?? account.list
   const me = await keysService.device()
+  const body = bodyOf(list)
+  assert.ok(body)
+  const home = await signList({ signer: me, body: { ...body, version: body.version + 1, members: [...body.members, { email: 'ana@example.com', role: 'member', devices: [toBase64(housemate.publicKey)] }] } })
   const team = await signList({ signer: me, body: { workspace: TEAM, version: 1, previous: null, members: [{ email: 'mo@example.com', role: 'owner', devices: [toBase64(me.publicKey)] }, { email: 'sara@example.com', role: 'member', devices: [toBase64(teammate.publicKey)] }], invites: [], removed: [] } })
-  await keyStore.write({ ...await keyStore.read(), account: { ...account, list, teams: [{ workspace: { id: TEAM, key: toBase64(newKey()), version: 1 }, list: team, first: team }] } })
+  await keyStore.write({ ...await keyStore.read(), account: { ...account, list: home, teams: [{ workspace: { id: TEAM, key: toBase64(newKey()), version: 1 }, list: team, first: team }] } })
   await db.insertInto('person').values({ id: 'usr_tunnelown', email: 'owner', role: 'owner', removed_at: null }).onConflict((oc) => oc.doNothing()).execute()
   const owner = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirstOrThrow()
   await db.insertInto('agent').values([
     { id: 'ag_tshared', name: 'Shared', owner_id: owner.id, instructions: '# Shared', model: 'sonnet', net: 41, channel_key: 'k', workspace: TEAM, shared: true },
     { id: 'ag_tprivate', name: 'Private', owner_id: owner.id, instructions: '# Private', model: 'sonnet', net: 42, channel_key: 'k', workspace: TEAM, shared: false },
+    { id: 'ag_thomeshared', name: 'Home shared', owner_id: owner.id, instructions: '# Home', model: 'sonnet', net: 43, channel_key: 'k', workspace: null, shared: true },
+    { id: 'ag_thomeprivate', name: 'Home private', owner_id: owner.id, instructions: '# Home', model: 'sonnet', net: 44, channel_key: 'k', workspace: null, shared: false },
   ]).execute()
 }
 
@@ -121,6 +128,15 @@ test('over the tunnel a teammate chats only with agents shared in their workspac
   assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'POST', path: '/api/threads/ag_tprivate/chat', body: {} })).status, 403)
   assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'PATCH', path: '/api/agents/ag_tshared', body: { wanted: 'stopped' } })).status, 403)
   assert.equal((await ask({ createConnection: device(tunnelKeyOf(toBase64(stranger.publicKey))), path: '/api/threads/ag_tshared' })).status, 401)
+})
+
+test('a teammate in the owner\'s own team chats with its shared agents, while teammates from other teams and private agents stay out', async () => {
+  const shared = await ask({ createConnection: device(HOUSEMATE), path: '/api/threads/ag_thomeshared' })
+  assert.deepEqual([shared.status, shared.body.email, shared.body.local], [200, 'ana@example.com', false])
+  assert.equal((await ask({ createConnection: device(HOUSEMATE), method: 'POST', path: '/api/threads/ag_thomeshared/chat', body: {} })).status, 200)
+  assert.equal((await ask({ createConnection: device(HOUSEMATE), path: '/api/threads/ag_thomeprivate' })).status, 403)
+  assert.equal((await ask({ createConnection: device(HOUSEMATE), path: '/api/threads/ag_tshared' })).status, 403)
+  assert.equal((await ask({ createConnection: device(TEAMMATE), path: '/api/threads/ag_thomeshared' })).status, 403)
 })
 
 test.after(async () => {

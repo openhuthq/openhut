@@ -96,7 +96,8 @@ function arrival(req: FastifyRequest): { local: boolean; device?: string } {
 async function sharedWith({ req, workspaces }: { req: FastifyRequest; workspaces: string[] }): Promise<boolean> {
   const agentId = z.safeParse(IdParams, req.params).data?.id
   const agent = agentId ? await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', agentId).executeTakeFirst() : undefined
-  return !!agent?.shared && !!agent.workspace && workspaces.includes(agent.workspace)
+  const place = agent?.workspace ?? keyStore.current()?.account?.workspace.id
+  return !!agent?.shared && !!place && workspaces.includes(place)
 }
 
 async function owner(): Promise<Owner> {
