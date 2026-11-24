@@ -55,7 +55,7 @@ export function ModelsSettings() {
   return <>
     <ErrorNote message={admin.error?.message} />
     {providers && <>
-      {none && <p className={HINT}>Connect one so your agents can think. Most people use Claude.</p>}
+      {none && <p className={cn(HINT, 'px-2.5')}>Connect one so your agents can think. Most people use Claude.</p>}
       <Section title="Subscriptions"><Rows>{SUBSCRIPTIONS.map((info) => row(info.id))}</Rows></Section>
       <Section title="API keys">
         <Rows>{KEYS.map((info) => row(info.id))}</Rows>
