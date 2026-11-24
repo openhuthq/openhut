@@ -6,7 +6,6 @@ import { checksKit, migrating, type KitWay } from '@/app/gate-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
-import { CopyButton } from '@/components/copy-button'
 import { ErrorNote } from '@/components/error-note'
 import { I } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
@@ -18,7 +17,7 @@ import { shortDate } from '@/lib/format'
 import { isPhone } from '@/lib/native'
 import { open, usePath } from '@/lib/router'
 import { inviteOf } from '@/features/join/invite'
-import { copyText } from '@/lib/clipboard'
+import { copySecret } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
 
 const POINTS = [
@@ -107,7 +106,7 @@ export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () =>
     saved('file')
   }
   const copy = async () => {
-    if (await copyText(textOf(await ready()))) saved('copy')
+    if (await copySecret(textOf(await ready()))) saved('copy')
   }
   const words = async () => {
     await ready()
@@ -140,13 +139,13 @@ function numbered(kit: RecoveryKit): string {
 function download({ name, text }: { name: string; text: string }): KitWay {
   const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })), download: name })
   link.click()
-  URL.revokeObjectURL(link.href)
+  setTimeout(() => URL.revokeObjectURL(link.href), 60_000)
   return 'file'
 }
 
 function KitWords({ kit, replaced, onBack, onSaved }: { kit: RecoveryKit; replaced: boolean; onBack?: () => void; onSaved: () => void }) {
   return <Step title="Your 12 words" line={replaced ? 'Write them down. Your old words stop working now.' : 'Write them down and keep them somewhere safe.'} back={onBack}
-    link={<CopyButton text={numbered(kit)} label="Copy" variant="text" size="none" className="font-normal text-mute" />}
+    link={<Button type="button" variant="text" className="font-normal text-mute" onClick={() => void copySecret(numbered(kit))}>Copy</Button>}
     action={<Button type="button" variant="primary" className={BIG} onClick={onSaved}>I wrote them down</Button>}>
     <div className="grid w-full max-w-[420px] grid-cols-3 gap-2 text-left phone:grid-cols-2">{kit.words.map((word, index) => <span key={index} className="flex items-center gap-2 rounded-lg border border-hair bg-card px-3 py-2 font-mono text-[13px]"><span className="w-4 text-right text-[11px] text-mute">{index + 1}</span>{word}</span>)}</div>
   </Step>
