@@ -1,7 +1,7 @@
 import { ComputersSettings } from '@/features/settings/computers'
 import { GeneralSettings, SecuritySettings } from '@/features/settings/general'
 import { PeopleSettings } from '@/features/people/workspace'
-import { leave, ModelsSettings, ModelsStep, stepOf } from '@/features/settings/models'
+import { ModelsSettings, ModelsStep, stepOf } from '@/features/settings/models'
 import { UpdatesSettings } from '@/features/settings/updates'
 import { AppsSettings, AppsSheet } from '@/features/connections/connections-view'
 import { tabsFor } from '@/features/settings/tabs'
@@ -23,7 +23,7 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
   const step = tab === 'models' ? stepOf(opened) : undefined
   const [section, sheet] = usePath().split('/').slice(1)
   const apps = section === 'connections' && Boolean(sheet)
-  return <AppWindow label="Settings" nav={nav} onClose={onClose} onEscape={step ? () => leave(step) : undefined}>
+  return <AppWindow label="Settings" nav={nav} onClose={onClose}>
     {step && <ModelsStep id={step} />}
     {!step && apps && <AppsSheet />}
     {!step && !apps && <>

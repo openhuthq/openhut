@@ -134,6 +134,7 @@ A dropdown trigger (Model, Computer) follows the secondary button: soft fill, no
 - Popovers keep their side and size while open.
 - One button per action on a screen — no empty-state button that repeats a header button.
 - Moving between views inside a dialog swaps content; the dialog never closes and reopens. A dialog family (Settings and its Apps, Add a computer and its steps) renders one `Dialog` whose children change with the route; a dialog opened from inside another opens on top of it.
+- Esc steps back one view before it closes anything: on a sheet inside a dialog (an app's connect sheet, a Models step) it clicks the view's back control (`data-back`) and returns to the list; only at the top view does it close the dialog. A dialog on top of another (Add key over New agent, Add a computer over Settings) closes alone.
 
 ### Known trade-off
 
