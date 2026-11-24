@@ -26,6 +26,7 @@ import { ago } from '@/lib/format'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate, open } from '@/lib/router'
 import { toastError } from '@/lib/toast'
+import { desktop } from '@/lib/desktop'
 import { cn } from '@/lib/utils'
 
 const ROUND = 'float phone:size-10 phone:rounded-full phone:bg-card phone:text-ink'
@@ -41,7 +42,7 @@ export type Contact = { agent: OpenHutAgent; thread: Thread | undefined }
 export const SidebarContext = createContext<{ collapsed: boolean } | null>(null)
 
 export function ShowSidebar({ onExpand, onNew }: { onExpand: () => void; onNew: () => void }) {
-  return <span className={cn('absolute top-[env(safe-area-inset-top)] left-0 z-10 flex h-[52px] items-center gap-0.5 pl-[84px] phone:hidden animate-[fadein_120ms_80ms_ease-out_backwards]', DRAG)}>
+  return <span className={cn('absolute top-[env(safe-area-inset-top)] left-0 z-10 flex h-[52px] items-center gap-0.5 pl-3 mac:pl-[84px] phone:hidden animate-[fadein_120ms_80ms_ease-out_backwards]', DRAG)}>
     <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Show sidebar" title="Show sidebar ⌘\" onClick={onExpand}><I icon={SidebarLeftIcon} size={16} /></Button>
     <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="New agent" title="New agent" onClick={onNew}><I icon={PlusSignIcon} size={16} /></Button>
   </span>
@@ -111,7 +112,7 @@ function RowMenu({ agent, children }: { agent: OpenHutAgent; children: ReactElem
 }
 
 function Gear() {
-  return <a href="/settings/general" aria-label="Settings" title="Settings ⌘," className={cn(SURFACE, 'grid phone:hidden size-10 shrink-0 place-items-center rounded-lg')}><I icon={Settings02Icon} size={17} /></a>
+  return <a href="/settings/general" aria-label="Settings" title={desktop ? 'Settings ⌘,' : 'Settings'} className={cn(SURFACE, 'grid phone:hidden size-10 shrink-0 place-items-center rounded-lg')}><I icon={Settings02Icon} size={17} /></a>
 }
 
 function Live({ agent, className }: { agent: OpenHutAgent; className: string }) {
