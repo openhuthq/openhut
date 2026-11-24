@@ -39,9 +39,14 @@ export function useShareLocalFaces(agents: OpenHutAgent[] | undefined) {
 }
 
 export function useAgent(agentId: string) {
+  const client = useQueryClient()
   return useQuery({
     queryKey: [...AGENTS_KEY, agentId],
-    queryFn: () => request({ schema: Agent, of: agentId, path: agentPath(agentId) }),
+    queryFn: async () => {
+      const agent = await request({ schema: Agent, of: agentId, path: agentPath(agentId) })
+      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (list) => list?.map((each) => each.id === agent.id ? { ...each, status: agent.status, health: agent.health, healthDetail: agent.healthDetail, wanted: agent.wanted } : each))
+      return agent
+    },
     refetchInterval: (query) => settling(query.state.data) ? 3_000 : false,
   })
 }

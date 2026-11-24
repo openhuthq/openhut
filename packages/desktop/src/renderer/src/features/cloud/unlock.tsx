@@ -282,10 +282,11 @@ function SelfJoins({ cloud }: { cloud: Cloud }) {
     rememberDevices(cloud.devices.map((device) => device.key))
     for (const device of fresh) {
       const name = device.name ?? 'A new computer'
-      const title = device.joined?.how === 'recovery' ? `${name} used your recovery kit or Touch ID to join` : `${name} joined your account`
-      const how = device.joined?.how === 'approved' ? joinedNote(device.joined) : null
+      const recovered = device.joined?.how === 'recovery'
+      const title = recovered ? 'A computer used your recovery kit or Touch ID to join' : `${name} joined your account`
+      const how = recovered ? `${name}${device.os ? `, ${device.os}` : ''}` : joinedNote(device.joined)
       notifyDesktop({ title, body: 'If that wasn’t you, open OpenHut and choose Not mine.', path: '/settings/computers' })
-      notify({ lead: <DeviceIcon kind={device.kind} />, title, note: `${[device.kind === 'server' ? 'Linux server' : 'Computer', how].filter(Boolean).join(' · ')}. If it isn’t yours, remove it.`, action: { label: 'Not mine · Remove', onClick: () => remove.mutate(device.key, { onError: toastError }) } })
+      notify({ lead: <DeviceIcon kind={device.kind} />, title, note: `${[device.os ?? (device.kind === 'server' ? 'Linux server' : 'Computer'), how].filter(Boolean).join(' · ')}. Not you? Remove it, then change your keys.`, action: { label: 'Not mine · Remove', onClick: () => remove.mutate(device.key, { onError: toastError }) } })
     }
   }, [cloud.devices, cloud.status, cloud.email, remove])
   return null
