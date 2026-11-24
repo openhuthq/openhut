@@ -1,14 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { Letter, MemberList, MemberListBody } from '@openhut/common/cloud/cloud.ts'
-import { anchorOf, check, signList } from '@openhut/common/cloud/member-list.ts'
-import { fromBase64, identity, newKey, toBase64, type Identity } from '@openhut/common/vault/public.ts'
-import { letter } from '@openhut/common/vault/secret.ts'
-import { migrate } from '../../../src/server/platform/db.ts'
-import { accountDevice, keysService } from '../../../src/server/cloud/keys-service.ts'
-import { roomKeys, type Cloudside } from '../../../src/server/cloud/room-keys.ts'
+import type { Letter, MemberList, MemberListBody } from '../../src/cloud/cloud.ts'
+import { anchorOf, check, signList } from '../../src/cloud/member-list.ts'
+import { fromBase64, identity, newKey, toBase64, type Identity } from '../../src/vault/public.ts'
+import { letter } from '../../src/vault/secret.ts'
+import { accountDevice, keysService } from '../../src/keyring/keys.ts'
+import { roomKeys, type Cloudside } from '../../src/keyring/rooms.ts'
+import { useStore, type Stored } from '../../src/keyring/store.ts'
 
-await migrate()
+let stored: Stored | undefined
+useStore({ deviceName: () => 'Test Mac', store: { machine: 'm', kind: () => 'file', current: () => stored, read: async () => (stored ??= { device: toBase64(newKey()), machine: 'm' }), write: async (next) => { stored = next } } })
 const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
 await keysService.setSession({ token: 't', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
 const me = await keysService.device()
