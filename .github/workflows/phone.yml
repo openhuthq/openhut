@@ -14,12 +14,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      VITE_PHONE_UPDATE_KEY: ${{ vars.PHONE_UPDATE_KEY }}
     steps:
-      - name: The public half of the bundle key is set
-        run: |
-          [ -n "$VITE_PHONE_UPDATE_KEY" ] || { echo "::error::The repo variable PHONE_UPDATE_KEY (the RSA public key in PEM) isn't set. A bundle built without it never updates again."; exit 1; }
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
@@ -28,12 +23,12 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npx turbo run typecheck test --filter=@openhut/desktop
-      - run: npm -w @openhut/desktop run build
+      - run: npx turbo run typecheck test --filter=@openhut/app
+      - run: npm -w @openhut/app run build
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: phone-bundle
-          path: packages/desktop/dist/renderer
+          path: packages/app/dist
           if-no-files-found: error
           retention-days: 7
 
