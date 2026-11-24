@@ -405,6 +405,25 @@ async function change({ ws, emails, devices, rotate = false }: { ws: string; ema
   if (rotate) await roomKeys.setRoom(room)
 }
 
+cloudEvents.onDropped((ws) => serial(() => rotateTeam(ws)).catch((err: unknown) => log.warn({ event: 'cloud.rotate_failed', workspace: ws, error: messageOf(err) })))
+
+async function rotateTeam(ws: string): Promise<void> {
+  for (let tries = 1; ; tries++) {
+    const account = keysService.account()
+    if (!account || roomKeys.roleIn(ws) !== 'owner') return
+    const { list, room, letters } = await roomKeys.teamChange({ ws, rotate: true })
+    const boxes = ws === account.workspace.id ? [await keysService.workspaceBox({ account: { ...account, workspace: room.workspace } })] : []
+    const put = await keysService.memberLists({ list, letters, boxes }).catch(() => ({ status: 0 }))
+    if (put.status === 200) {
+      await roomKeys.advance({ lists: [list], ws })
+      await roomKeys.setRoom(room)
+      return log.info({ event: 'cloud.rotated', workspace: ws, why: 'a device left' })
+    }
+    if (put.status !== 409 || tries === 3) throw await refusal({ ws, status: put.status })
+    await roomKeys.refresh({ ws, call: keysService.call })
+  }
+}
+
 async function refusal({ ws, status }: { ws: string; status: number }): Promise<HttpError> {
   if (status === 409) return new HttpError(409, CHANGED)
   if (status !== 403) return new HttpError(502, 'OpenHut Cloud couldn’t save the change. Try again.')
