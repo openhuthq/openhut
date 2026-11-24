@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import type { FastifyReply } from 'fastify'
 import * as z from 'zod/mini'
 import { type Backup, KeyBox, Letter, MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type UnlockCloud, siteHost } from '@openhut/common/cloud/cloud.ts'
+import type { Health } from '@openhut/common/admin/admin.ts'
 import { JoinCode, Me, signV1 } from '@openhut/common/cloud/v1/identity.ts'
 import { JoinRequest } from '@openhut/common/cloud/v1/trust.ts'
 import { commitOf, facesOf } from '@openhut/common/cloud/faces.ts'
@@ -46,6 +47,7 @@ let passkeySaved = false
 let passkeyDropped = false
 let asking: { settled: string[]; approved: boolean; error: string | null; timer: NodeJS.Timeout; reviewed: boolean; revealed: boolean; missed: boolean } | undefined
 let polling = false
+let joinError: string | null = null
 const Rotate = z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() }))
 
 export const cloudService = {
@@ -346,13 +348,25 @@ export const cloudService = {
     return code
   },
 
+  joining(): Health['join'] {
+    if (!config.join) return undefined
+    if (keysService.account()) return { state: 'joined', error: null }
+    if (joinError) return { state: 'failed', error: joinError }
+    const rooms = keysService.asked().length
+    if (!rooms) return { state: 'starting', error: null }
+    return { state: asking && !asking.approved && asking.settled.length >= rooms ? 'denied' : 'asking', error: null }
+  },
+
   async rotated(): Promise<Cloud> {
     await db.deleteFrom('install_setting').where('name', '=', ROTATE).execute()
     return cloudService.status()
   },
 
   connect(): void {
-    if (config.join && !keysService.account()) void joinAsServer(config.join).catch((err: unknown) => log.error({ event: 'cloud.join_failed', error: messageOf(err) }))
+    if (config.join && !keysService.account()) void joinAsServer(config.join).catch((err: unknown) => {
+      joinError = messageOf(err)
+      log.error({ event: 'cloud.join_failed', error: joinError })
+    })
     cloudEvents.start()
     checkSoon()
   },

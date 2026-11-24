@@ -10,6 +10,7 @@ import { emit } from '../platform/events.ts'
 import { newId, transferPublicKey } from '../platform/secrets.ts'
 import { codex } from '../integrations/codex/codex.ts'
 import { providerService } from '../models/provider-service.ts'
+import { cloudService } from '../cloud/cloud-service.ts'
 import type { Caller } from '../team/identity.ts'
 import { claudeCli, seatSignIn } from './seat-sign-in.ts'
 import { seatLimits } from './seat-limits.ts'
@@ -148,7 +149,7 @@ async function probe(): Promise<{ health: Health; installing: boolean; last: Las
   const reply = await agentd.health().catch(() => undefined)
   const firewall = reply?.firewall ?? false
   return {
-    health: { ok: !!reply && firewall, version: config.version, build: config.build, agentd: !!reply, firewall, started: config.started },
+    health: { ok: !!reply && firewall, version: config.version, build: config.build, agentd: !!reply, firewall, started: config.started, join: cloudService.joining() },
     installing: reply ? reply.updating ?? false : true,
     last: reply?.lastUpdate ?? null,
   }

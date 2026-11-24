@@ -44,6 +44,7 @@ export const Health = z.object({
   agentd: z.boolean(),
   firewall: z.boolean(),
   started: z.number(),
+  join: z.optional(z.object({ state: z.enum(['starting', 'asking', 'denied', 'failed', 'joined']), error: z.nullable(z.string()) })),
 })
 export type Health = z.infer<typeof Health>
 
