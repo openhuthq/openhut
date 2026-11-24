@@ -5,10 +5,11 @@ import { Forwarded, Notice, Ready } from '@openhut/common/cloud/v1/events.ts'
 import { commitOf, facesOf } from '@openhut/common/cloud/faces.ts'
 import { anchorOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
 import type { MemberListBody } from '@openhut/common/cloud/cloud.ts'
-import { padded } from '@openhut/common/records/seal.ts'
+import { padded } from '@openhut/common/records/row.ts'
+import { keyring } from '@openhut/common/keyring/keyring.ts'
 import { Collection } from '@openhut/common/records/wire.ts'
 import { AgentHealth, AgentStatus } from '@openhut/common/agents/agent.ts'
-import { fromBase64, lock, toBase64, unlock } from '@openhut/common/vault/vault.ts'
+import { fromBase64, toBase64 } from '@openhut/common/vault/public.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { CloudError } from '@openhut/common/cloud/openhut-cloud.ts'
 import { cloud } from '../platform/cloud.ts'
@@ -63,7 +64,7 @@ presence.wire({
     const room = roomKeys.room(ws)
     const body = bodyOf(room?.list)
     if (!account || !room?.workspace.key || !body) return null
-    return { workspace: ws, key: fromBase64(room.workspace.key), version: room.workspace.version, keys: roomKeys.ring(ws), me: await keysService.deviceKey(), members: body.members, email: account.email, list: body.version, listHash: await anchorOf(room.list) }
+    return { workspace: ws, me: await keysService.deviceKey(), members: body.members, email: account.email, list: body.version, listHash: await anchorOf(room.list) }
   },
   send: ({ ws, body }) => sent({ type: 'presence', workspace: ws, body }),
   catchUp: (ws) => void run(() => refreshKeys(ws)),
@@ -208,14 +209,14 @@ async function beatAll(): Promise<void> {
     const value: Beat = { at: Date.now(), build: config.build, version: config.version, kind: config.installKind, os: deviceOs(), agents: await agentService.statuses({ workspace: ws }) }
     const listed = roomKeys.members(ws)?.members.some((member) => member.devices.includes(me))
     const plain = padded({ json: JSON.stringify(value) })
-    const body = listed && room.workspace.key && plain && await lock({ key: fromBase64(room.workspace.key), version: room.workspace.version, bind: beatBind({ ws, from: me }), plain })
-    if (body) sent({ type: 'beat', workspace: ws, body: toBase64(body) })
+    const body = listed && plain && await keyring.lock({ team: ws, bind: beatBind({ ws, from: me }), plain })
+    if (body) sent({ type: 'beat', workspace: ws, body })
   }
 }
 
 async function beatHeard({ workspace, from, body }: { workspace: string; from: string; body: string }): Promise<void> {
   const listed = roomKeys.members(workspace)?.members.some((member) => member.devices.includes(from))
-  const plain = listed ? await unlock({ keys: roomKeys.ring(workspace), bind: beatBind({ ws: workspace, from }), locked: fromBase64(body) }) : null
+  const plain = listed ? await keyring.unlock({ team: workspace, bind: beatBind({ ws: workspace, from }), body }) : null
   const value = plain && Beat.safeParse(parseJson(new TextDecoder().decode(plain).trimEnd())).data
   if (!value) return
   const room = beats.get(workspace) ?? new Map<string, Beat>()

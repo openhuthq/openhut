@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Base64, checkRecord, DeviceKey, Here, KeyBox, Letter, Record, recordBind, RecordKind, Signed, signRecord, siteHost } from '../../src/cloud/cloud.ts'
-import { identity, lock, newKey, toBase64 } from '../../src/vault/vault.ts'
+import { identity, newKey, toBase64 } from '../../src/vault/public.ts'
+import { lock } from '../../src/vault/secret.ts'
 
 const locked = toBase64((await lock({ key: newKey(), version: 1, bind: 'record/rec_00000001', plain: new TextEncoder().encode('{ }') })) ?? new Uint8Array())
 const record = { id: 'rec_00000001', object: 'record', ver: 1, seq: 0, deleted: false, body: locked }

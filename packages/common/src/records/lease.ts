@@ -1,6 +1,6 @@
 import * as z from 'zod/mini'
 import { RecordsError, type RecordsClient } from '../cloud/records.ts'
-import { whereOf, type Opened } from './seal.ts'
+import { whereOf, type Opened } from './row.ts'
 
 export const LEASE_MS = 5 * 60_000
 export const POLL_MS = 1000

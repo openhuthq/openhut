@@ -6,7 +6,7 @@ import type { MemberList, MemberListBody } from '@openhut/common/cloud/cloud.ts'
 import { bodyOf, withoutDevices } from '@openhut/common/cloud/member-list.ts'
 import { open } from '@openhut/common/records/seal.ts'
 import type { SealedRow } from '@openhut/common/records/wire.ts'
-import { fromBase64, type Identity } from '@openhut/common/vault/vault.ts'
+import { fromBase64, type Identity } from '@openhut/common/vault/public.ts'
 import { bootCloud, devSignIn, hasCloud } from './real-cloud.ts'
 
 const skip = hasCloud ? false : 'private/api isn’t checked out here'

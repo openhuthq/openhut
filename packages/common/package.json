@@ -8,7 +8,8 @@
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "node --test \"test/**/*.test.ts\""
+    "test": "node --test \"test/**/*.test.ts\"",
+    "mutate": "PROPERTY_CASES=40 node scripts/mutate.ts 'node --test \"test/vault/**/*.test.ts\" \"test/records/**/*.test.ts\" \"test/keyring/**/*.test.ts\" test/cloud/member-list.test.ts' src/vault/public.ts src/vault/secret.ts src/vault/kit-file.ts src/keyring/keyring.ts src/keyring/keys.ts src/keyring/rooms.ts src/keyring/store.ts"
   },
   "dependencies": {
     "@hpke/core": "1.10.1",

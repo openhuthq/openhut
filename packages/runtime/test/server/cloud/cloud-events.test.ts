@@ -5,8 +5,9 @@ import { createServer } from 'node:http'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
-import { padded } from '@openhut/common/records/seal.ts'
-import { fromBase64, identity, lock, newKey, toBase64, unlock } from '@openhut/common/vault/vault.ts'
+import { padded } from '@openhut/common/records/row.ts'
+import { fromBase64, identity, newKey, toBase64 } from '@openhut/common/vault/public.ts'
+import { lock, unlock } from '@openhut/common/vault/secret.ts'
 
 const requests: unknown[] = []
 const refuse = new Map<string, number>()
@@ -112,11 +113,11 @@ test('the runner beat goes out sealed on ready, and a teammate’s beat and pres
 
   const list = roomKeys.members(ws)
   assert.ok(list)
-  const here = await lockHere({ workspace: ws, key, version: 1, from, value: { agent: 'ag_events01', field: 'instructions', typing: true, at: Date.now(), list: list.version, listHash: await anchorOf(roomKeys.room(ws)?.list ?? account.list) } })
+  const here = await lockHere({ workspace: ws, from, value: { agent: 'ag_events01', field: 'instructions', typing: true, at: Date.now(), list: list.version, listHash: await anchorOf(roomKeys.room(ws)?.list ?? account.list) } })
   peer?.send(JSON.stringify({ object: 'presence', workspace: ws, from, body: here }))
   await until(() => presence.view().people.length === 1, 'the teammate’s presence')
   assert.deepEqual(presence.view().people.map((each) => [each.agentId, each.field, each.typing]), [['ag_events01', 'instructions', true]])
-  const away = await lockHere({ workspace: ws, key, version: 1, from, value: { agent: null, field: null, typing: false, at: Date.now(), list: list.version, listHash: await anchorOf(roomKeys.room(ws)?.list ?? account.list) } })
+  const away = await lockHere({ workspace: ws, from, value: { agent: null, field: null, typing: false, at: Date.now(), list: list.version, listHash: await anchorOf(roomKeys.room(ws)?.list ?? account.list) } })
   peer?.send(JSON.stringify({ object: 'presence', workspace: ws, from, body: away }))
   await until(() => presence.view().people.length === 0, 'the teammate to leave')
 })
@@ -140,15 +141,16 @@ test('the beat repeats every 10 s while idle', async () => {
 test('a Here is locked to its sender, padded to one fixed size, and opens only with the workspace key', async () => {
   const from = toBase64(phone.publicKey)
   const value = { agent: 'ag_helpdesk', field: 'instructions' as const, typing: false, at: 1, list: 3, listHash: 'y'.repeat(43) }
-  const body = await lockHere({ workspace: ws, key, version: 1, from, value })
-  const other = await lockHere({ workspace: ws, key, version: 1, from, value: { ...value, agent: null, field: null, list: 999 } })
+  const body = await lockHere({ workspace: ws, from, value })
+  const other = await lockHere({ workspace: ws, from, value: { ...value, agent: null, field: null, list: 999 } })
   assert.ok(body && other)
   assert.equal(body.length, other.length)
-  assert.deepEqual(await openHere({ workspace: ws, keys: { 1: key }, from, body }), value)
-  assert.equal(await openHere({ workspace: ws, keys: { 1: key }, from: me, body }), null)
-  assert.equal(await openHere({ workspace: ws, keys: { 1: newKey() }, from, body }), null)
+  assert.deepEqual(await openHere({ workspace: ws, from, body }), value)
+  assert.equal(await openHere({ workspace: ws, from: me, body }), null)
+  const foreign = await lock({ key: newKey(), version: 1, bind: `workspace/${ws}/here/${from}`, plain: padded({ json: JSON.stringify(value), size: 512 }) ?? new Uint8Array() })
+  assert.equal(await openHere({ workspace: ws, from, body: toBase64(foreign ?? new Uint8Array()) }), null)
   assert.equal(Buffer.from(body, 'base64url').includes('ag_helpdesk'), false)
-  assert.equal(await lockHere({ workspace: ws, key, version: 1, from, value: { ...value, agent: 'ag_x'.repeat(200) } }), null)
+  assert.equal(await lockHere({ workspace: ws, from, value: { ...value, agent: 'ag_x'.repeat(200) } }), null)
 })
 
 async function aTeam(id: string, key: string): Promise<void> {

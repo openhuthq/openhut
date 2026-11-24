@@ -1,7 +1,8 @@
 import * as z from 'zod/mini'
 import { ApiError, List } from '../api.ts'
 import { agentFacts, allowed, runsOnAllowed, type AgentFacts, type Roster } from '../records/allowed.ts'
-import { open, seal, verify, type Keys, type Opened, type Signer, type Value, type Where } from '../records/seal.ts'
+import { verify, type Opened, type Value, type Where } from '../records/row.ts'
+import type { PutSealed } from '../records/wire.ts'
 import { PER_AGENT, SealedConflict, SealedRow, type Collection } from '../records/wire.ts'
 
 export type Seen = { ver: number; parent: string | null }
@@ -27,14 +28,14 @@ export class RecordsError extends Error {
 }
 
 export type Send = (input: { method: 'GET' | 'PUT'; workspace: string; kind: Collection; id?: string; query?: Record<string, string | number | undefined>; body?: unknown }) => Promise<Reply>
+export type Sealer = { by: string; seal: (input: { where: Where; ver: number; value: Value | null }) => Promise<PutSealed | null>; open: (row: SealedRow) => Promise<Opened | null> }
 export type RecordsOptions = {
-  device: Signer
-  keys: Keys
+  sealer: Sealer
   roster: (workspace: string) => Roster | null | undefined
   seen?: (id: string, collection: Collection) => Seen | undefined
 }
 
-export function recordsClient({ send: call, device, keys, roster, seen = () => undefined }: RecordsOptions & { send: Send }) {
+export function recordsClient({ send: call, sealer, roster, seen = () => undefined }: RecordsOptions & { send: Send }) {
 
   async function checked({ json, expect, agents }: { json: unknown; expect: Expect; agents: Agents }): Promise<Checked | null> {
     const row = SealedRow.safeParse(json).data
@@ -62,7 +63,7 @@ export function recordsClient({ send: call, device, keys, roster, seen = () => u
 
   async function accept({ json, expect, agents = new Map() }: { json: unknown; expect: Expect; agents?: Agents }): Promise<Opened | null> {
     const ok = await checked({ json, expect, agents })
-    const opened = ok && await open({ row: ok.row, keys })
+    const opened = ok && await sealer.open(ok.row)
     if (!ok || !opened) return null
     const runsOn = ok.row.object === 'control' ? placedOn(opened.value) : null
     if (runsOn === null || runsOn === undefined) return opened
@@ -86,7 +87,7 @@ export function recordsClient({ send: call, device, keys, roster, seen = () => u
   }
 
   async function write({ where, ver, value }: { where: Where; ver: number; value: Value | null }): Promise<{ saved: Opened } | { latest: Opened | null }> {
-    const sealed = await seal({ where, ver, value, keys, signer: device })
+    const sealed = await sealer.seal({ where, ver, value })
     if (!sealed) throw new RecordsError({ status: 400, type: 'invalid_request_error', message: 'This device doesn’t hold the key to seal that record.' })
     const list = roster(where.workspace)
     const agent = PER_AGENT.includes(where.collection) && where.parent ? await agentOf({ workspace: where.workspace, id: where.parent, agents: new Map() }) : null
@@ -100,7 +101,7 @@ export function recordsClient({ send: call, device, keys, roster, seen = () => u
       return { latest: current ? await accept({ json: current, expect }) : await get(where) }
     }
     if (reply.status !== 200) throw failure(reply)
-    const saved = await open({ row: { id: where.id, object: where.collection, ...sealed }, keys })
+    const saved = await sealer.open({ id: where.id, object: where.collection, ...sealed })
     if (!saved) throw new RecordsError({ status: 500, message: 'This record didn’t open after sealing it.' })
     return { saved }
   }
@@ -115,7 +116,7 @@ export function recordsClient({ send: call, device, keys, roster, seen = () => u
   }
 
   return {
-    by: device.key,
+    by: sealer.by,
 
     get,
 

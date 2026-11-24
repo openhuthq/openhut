@@ -40,7 +40,7 @@ export async function devSignIn({ authorizationUrl, email }: { authorizationUrl:
 
 export async function webBrowser({ url, email }: { url: string; email: string }) {
   const { openhutCloud } = await import('@openhut/common/cloud/openhut-cloud.ts')
-  const { toBase64 } = await import('@openhut/common/vault/vault.ts')
+  const { toBase64 } = await import('@openhut/common/vault/public.ts')
   const signing = await crypto.subtle.generateKey('Ed25519', false, ['sign', 'verify']) as webcrypto.CryptoKeyPair
   const tunnel = await crypto.subtle.generateKey('X25519', false, ['deriveBits']) as webcrypto.CryptoKeyPair
   const raw = async (key: webcrypto.CryptoKey) => new Uint8Array(await crypto.subtle.exportKey('raw', key))

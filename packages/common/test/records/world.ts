@@ -1,9 +1,10 @@
 import { openhutCloud } from '../../src/cloud/openhut-cloud.ts'
-import { sign } from '../../src/vault/vault.ts'
-import { signer, type Keyring, type Keys, type Where } from '../../src/records/seal.ts'
+import { sign } from '../../src/vault/public.ts'
+import { signer, type Keyring, type Keys, type Where } from '../../src/records/row.ts'
+import { open, seal } from '../../src/records/seal.ts'
 import type { Roster } from '../../src/records/allowed.ts'
 import { Collection, PutSealed, type SealedRow } from '../../src/records/wire.ts'
-import { identity, newKey, toBase64, type Bytes } from '../../src/vault/vault.ts'
+import { identity, newKey, toBase64, type Bytes } from '../../src/vault/public.ts'
 
 export const team = 'ws_team_0001'
 export const devices = {
@@ -72,7 +73,13 @@ export function clientOf({ device, cloud, seen }: { device: Device; cloud: Retur
   const session = { object: 'session', token: 'token', refreshToken: 'refresh', sub: 'sub', email: 'mo@example.com', device: keyOf(device), expiresAt: new Date(Date.now() + 3_600_000).toISOString() }
   const store = { get: async <T>(key: string) => (key === 'session' ? session : undefined) as T | undefined, set: async () => undefined }
   const key = { id: async () => keyOf(device), sign: (bytes: Uint8Array) => sign({ secret: devices[device].secret, bytes: Uint8Array.from(bytes) }), noise: async () => ({ publicKey: new Uint8Array(32), secretKey: new Uint8Array(32) }) }
-  return openhutCloud.computer({ url: 'https://api.test', key, store, fetch: cloud.fetch }).records({ device: signerOf(device), keys: keysOf(device), roster: (ws) => ws === team ? roster : undefined, seen })
+  return openhutCloud.computer({ url: 'https://api.test', key, store, fetch: cloud.fetch }).records({ sealer: sealerOf(device), roster: (ws) => ws === team ? roster : undefined, seen })
 }
 
 export const agentWhere = (id = 'ag_shared1', owner = 'mo@example.com'): Where => ({ collection: 'agent', workspace: team, parent: owner, id })
+
+export function sealerOf(device: Device) {
+  const keys = keysOf(device)
+  const by = signerOf(device)
+  return { by: by.key, seal: (input: { where: Where; ver: number; value: Parameters<typeof seal>[0]['value'] }) => seal({ ...input, keys, signer: by }), open: (row: Parameters<typeof open>[0]['row']) => open({ row, keys }) }
+}

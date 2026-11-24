@@ -1,4 +1,4 @@
-import { boxKey, fromBase64, identity, sign, toBase64 } from '@openhut/common/vault/vault.ts'
+import { boxKey, fromBase64, identity, sign, toBase64 } from '@openhut/common/vault/public.ts'
 import { CloudError, openhutCloud, type Reply } from '@openhut/common/cloud/openhut-cloud.ts'
 import type { Session } from '@openhut/common/cloud/v1/identity.ts'
 import { keyStore } from '../cloud/key-store.ts'

@@ -88,4 +88,4 @@ Only one of your devices can delete your account. A Google sign-in alone can't.
 
 ## Check the app
 
-Each release lists the SHA-256 of every file of the app's code in `SHA256SUMS`, so you can check that the app you run is built from [the source](https://github.com/openhuthq/openhut) at that version. The code that locks and unlocks everything is `packages/common/src/vault/vault.ts`. The wire format is in [the protocol](https://github.com/openhuthq/openhut/blob/main/docs/cloud-protocol.md).
+Each release lists the SHA-256 of every file of the app's code in `SHA256SUMS`, so you can check that the app you run is built from [the source](https://github.com/openhuthq/openhut) at that version. The code that locks and unlocks everything is `packages/common/src/vault/secret.ts`, used only by the keyring in `packages/common/src/keyring/`. The wire format is in [the protocol](https://github.com/openhuthq/openhut/blob/main/docs/cloud-protocol.md).

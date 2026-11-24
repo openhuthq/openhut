@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { agentFacts, allowed, runsOnAllowed, type AgentFacts, type Mode, type Roster } from '../../src/records/allowed.ts'
-import { seal, type KeyUse } from '../../src/records/seal.ts'
+import { seal } from '../../src/records/seal.ts'
+import type { KeyUse } from '../../src/records/row.ts'
 import { COLLECTIONS, type Collection, type SealedRow } from '../../src/records/wire.ts'
 import { keyOf, keysOf, roster, signerOf, team, type Device } from './world.ts'
 

@@ -1,6 +1,6 @@
 import { validateMnemonic } from '@scure/bip39'
 import { wordlist } from '@scure/bip39/wordlists/english.js'
-import { fromBase64, sha256 } from './vault.ts'
+import { fromBase64, sha256 } from './public.ts'
 
 export const KIT_MARK = 'openhut-kit/1'
 

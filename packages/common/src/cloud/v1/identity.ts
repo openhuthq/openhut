@@ -1,7 +1,7 @@
 import * as z from 'zod/mini'
 import { Timestamp } from '../../api.ts'
 import { DeviceKey, Locked, Member, Role, Signature } from '../cloud.ts'
-import { check, concat, field, fromBase64, sha256, sign, toBase64, type Bytes, type Identity } from '../../vault/vault.ts'
+import { check, concat, field, fromBase64, sha256, sign, toBase64, type Bytes, type Identity } from '../../vault/public.ts'
 
 export const Email = Member.shape.email
 export const WorkspaceId = z.string().check(z.regex(/^[A-Za-z0-9_-]{8,64}$/, 'Send a workspace id of 8 to 64 base64url characters.'))

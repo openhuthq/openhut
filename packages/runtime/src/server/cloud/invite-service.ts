@@ -1,5 +1,6 @@
 import { InviteLetter, type OpenedInvite, parseJson, type Cloud, type CloudInvite, type CloudInvitePreview, type CreateCloudInvite } from '@openhut/common/cloud/cloud.ts'
-import { fromBase64, identity, openInvite, read, type Identity } from '@openhut/common/vault/vault.ts'
+import { fromBase64, identity, type Identity } from '@openhut/common/vault/public.ts'
+import { keyring } from '@openhut/common/keyring/keyring.ts'
 import { cloud } from '../platform/cloud.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { cloudService, mustBeOn, putList } from './cloud-service.ts'
@@ -50,18 +51,15 @@ async function readInvite(link: string): Promise<Opened> {
   if (!ws || !secret) throw new HttpError(400, 'That isn’t an OpenHut invite link. Copy the whole link and try again.', { param: 'link' })
   if (!keysService.account() || !keysService.session()) throw new HttpError(409, 'Sign in to OpenHut Cloud to join.')
   if (roomKeys.room(ws)) throw new HttpError(409, 'You’re already in this team.', { param: 'link' })
-  const card = await identity(fromBase64(secret))
-  const id = await inviteId(card.publicKey)
+  const id = await inviteId((await identity(fromBase64(secret))).publicKey)
   const invite = await fetchInvite({ ws, id })
   for (let page = invite; page.hasMore && page.memberLists.length;) {
     page = await fetchInvite({ ws, id, after: invite.memberLists.length })
     invite.memberLists.push(...page.memberLists)
   }
-  const sealed = await read({ recipient: card, from: fromBase64(invite.from), workspace: ws, purpose: 'invite', body: fromBase64(invite.body), allowed: [fromBase64(invite.from)] })
-  const plain = sealed && await openInvite({ secret: card.secret, workspace: ws, locked: sealed })
-  const letter = plain && InviteLetter.safeParse(parseJson(new TextDecoder().decode(plain))).data
-  if (!letter || letter.email !== invite.email || letter.workspace !== ws) throw new HttpError(400, 'This invite doesn’t check out. Ask for a new link.')
-  return { ws, card, invite, letter }
+  const opened = await keyring.readInvite({ team: ws, secret, from: invite.from, body: invite.body })
+  if (!opened || opened.letter.email !== invite.email || opened.letter.workspace !== ws) throw new HttpError(400, 'This invite doesn’t check out. Ask for a new link.')
+  return { ws, invite, ...opened }
 }
 
 async function fetchInvite({ ws, id, after = 0 }: { ws: string; id: string; after?: number }): Promise<OpenedInvite> {
