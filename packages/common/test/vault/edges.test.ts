@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { wordlist } from '@scure/bip39/wordlists/english.js'
-import { check, concat, header, HEADER, identity, isLocked, newKey, readHeader, sign, subtle, suites } from '../../src/vault/public.ts'
+import { check, concat, header, HEADER, identity, isLocked, newKey, readHeader, sign, suites } from '../../src/vault/public.ts'
 import { letter, lock, read, unlock } from '../../src/vault/secret.ts'
 import { nearestWord, readKit } from '../../src/vault/kit-file.ts'
 
@@ -75,7 +75,7 @@ test('a kit file reads its mark case-insensitively, keeps the first valid window
   assert.equal(nearestWord(wordlist[5]), wordlist[5])
 })
 
-test('check refuses a small-order public key even when the signature verifies against it, sign bit set or not', async () => {
+test('check refuses a small-order public key with a signature made for it, sign bit set or not (some Ed25519 builds would accept it)', async () => {
   const bytes = Uint8Array.of(1, 2, 3)
   const base = Uint8Array.from({ length: 32 }, (_, index) => (index ? 0x66 : 0x58))
   const forged = concat([base, Uint8Array.of(1), new Uint8Array(31)])
@@ -84,7 +84,6 @@ test('check refuses a small-order public key even when the signature verifies ag
     const point = new Uint8Array(32)
     point[0] = 1
     point[31] = high
-    assert.equal(await subtle.verify('Ed25519', await subtle.importKey('raw', point, 'Ed25519', false, ['verify']), forged, bytes), true, 'the forgery verifies at the curve level')
     assert.equal(await check({ publicKey: concat([point, box]), bytes, signature: forged }), false)
   }
 })

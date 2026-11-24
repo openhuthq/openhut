@@ -75,8 +75,8 @@ export async function sign({ secret, bytes }: { secret: Bytes; bytes: Bytes }): 
 
 export async function check({ publicKey, bytes, signature }: { publicKey: Bytes; bytes: Bytes; signature: Bytes }): Promise<boolean> {
   if (publicKey.length !== 64 || signature.length !== SIGNATURE || smallOrder(publicKey) || smallOrder(signature)) return false
-  const key = await subtle.importKey('raw', publicKey.slice(0, 32), 'Ed25519', false, ['verify'])
-  return subtle.verify('Ed25519', key, signature, bytes)
+  const key = await subtle.importKey('raw', publicKey.slice(0, 32), 'Ed25519', false, ['verify']).catch(() => null)
+  return key ? subtle.verify('Ed25519', key, signature, bytes) : false
 }
 
 function smallOrder(point: Uint8Array): boolean {
