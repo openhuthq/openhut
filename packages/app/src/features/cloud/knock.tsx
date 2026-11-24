@@ -27,11 +27,6 @@ export function Knocking({ faces, onKit, line, action, link, children }: { faces
   </Step>
 }
 
-export function YoureIn({ line, onOpen }: { line?: string; onOpen: () => void }) {
-  return <Step happy title="You’re in." line={line ?? `Your ${WORDS.here === 'Mac' ? 'Mac' : 'computer'} handed this ${WORDS.here === 'Mac' ? 'Mac' : 'device'} its keys.`}
-    action={<Button type="button" variant="primary" className={BIG} autoFocus onClick={onOpen}>Open OpenHut</Button>} />
-}
-
 export function pairsOf({ faces, random = Math.random }: { faces: number[]; random?: () => number }): number[][] {
   const others = Array.from({ length: FACES }, (_, i) => i).filter((each) => !faces.includes(each)).sort(() => random() - .5)
   return [faces, others.slice(0, 2), others.slice(2, 4)].sort(() => random() - .5)
