@@ -129,7 +129,7 @@ export const remote = {
 
   async state(): Promise<RemoteState> {
     const back = new URL(location.href)
-    const link = back.pathname === '/join' ? inviteOf(back.hash) : undefined
+    const link = back.pathname === '/join' && !desktop?.window ? inviteOf(back.hash) : undefined
     if (link) await store.set('invite', { workspace: link.workspace, team: link.team ?? null, from: link.from ?? null, email: link.email ?? null } satisfies Invited)
     const continued = continueCodeOf(back.hash)
     if (continued) {
@@ -141,7 +141,7 @@ export const remote = {
       await cloud.signIn({ googleCode: code, state: back.searchParams.get('state') ?? '' }).catch(() => null)
       history.replaceState(null, '', '/')
     }
-    const invited = await store.get<Invited | null>('invite') ?? null
+    const invited = desktop?.window ? null : await store.get<Invited | null>('invite') ?? null
     const me = await cloud.me()
     if (!me && !await reachable()) throw new CloudOffline()
     if (desktop?.window && (!me || accountStepOf(me).step !== 'ready')) return joinAsWindow()
