@@ -15,7 +15,7 @@ import { config } from '../platform/config.ts'
 import { db } from '../platform/db.ts'
 import { emit, log } from '../platform/events.ts'
 import { messageOf } from '../platform/http-error.ts'
-import { keysService } from './keys-service.ts'
+import { deviceOs, keysService } from './keys-service.ts'
 import { presence } from './presence.ts'
 import { changed, recordsService } from './records.ts'
 import { runSet } from './run-set.ts'
@@ -27,7 +27,7 @@ const REFUSED_AGAIN_MS = 2000
 const LIVE: Record<Collection, string[]> = {
   workspace: [], agent: ['agent'], control: ['agent', 'grant'], message: ['thread'], memory: ['memory'], connection: ['connection'], skill: ['skill'], routine: ['routine'], channel: ['channel'], file: ['thread'],
 }
-const Beat = z.object({ at: z.number(), build: z.string(), version: z.string(), kind: z.string(), agents: z.optional(z.record(z.string(), z.object({ status: AgentStatus, health: z.nullable(AgentHealth), detail: z.optional(z.string()) }))) })
+const Beat = z.object({ at: z.number(), build: z.string(), version: z.string(), kind: z.string(), os: z.optional(z.string()), agents: z.optional(z.record(z.string(), z.object({ status: AgentStatus, health: z.nullable(AgentHealth), detail: z.optional(z.string()) }))) })
 const Requests = z.object({ data: z.array(JoinRequest) })
 const Named = z.object({ name: z.optional(z.nullable(z.string())), site: z.optional(z.nullable(z.string())) })
 
@@ -161,7 +161,7 @@ async function beatAll(): Promise<void> {
   const me = await keysService.deviceKey()
   for (const room of roomKeys.rooms()) {
     const ws = room.workspace.id
-    const value: Beat = { at: Date.now(), build: config.build, version: config.version, kind: config.installKind, agents: await agentService.statuses({ workspace: ws }) }
+    const value: Beat = { at: Date.now(), build: config.build, version: config.version, kind: config.installKind, os: deviceOs(), agents: await agentService.statuses({ workspace: ws }) }
     const listed = roomKeys.members(ws)?.members.some((member) => member.devices.includes(me))
     const plain = padded({ json: JSON.stringify(value) })
     const body = listed && room.workspace.key && plain && await lock({ key: fromBase64(room.workspace.key), version: room.workspace.version, bind: beatBind({ ws, from: me }), plain })
