@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils'
 import { useAnswer } from '@/features/cloud/review'
 
 const GET_TAILSCALE = 'https://tailscale.com/download'
-const JoinCode = z.object({ code: z.string() })
+const JoinCode = z.object({ code: z.string(), expiresAt: z.string() })
 
 type Device = Cloud['devices'][number]
 
@@ -299,10 +299,14 @@ function AddByCommand() {
   const code = useMutation({ mutationFn: () => request({ schema: JoinCode, path: '/api/cloud/join-codes', method: 'POST' }) })
   const { mutate } = code
   useEffect(() => mutate(), [mutate])
-  return <TailscaleDialog title="Add over OpenHut Relay" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}>
+  const now = useNow(Boolean(code.data))
+  const expired = code.data && now > Date.parse(code.data.expiresAt)
+  return <TailscaleDialog title="Add over OpenHut Relay" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}
+    foot={expired && <Button type="button" variant="primary" onClick={() => mutate()}>Make a new command</Button>}>
     <ErrorNote message={code.error?.message} />
     {code.isPending && <Waiting note="It works once, for 10 minutes.">Making a code…</Waiting>}
-    {code.data && <>
+    {expired && <Scene mood="worried" title="Didn't hear from it" line="The command works for 10 minutes, and that time is up. If you ran it, the server printed why it couldn't join. Make a new command and run it again." />}
+    {code.data && !expired && <>
       <p className="m-0 text-body">Run this on your Linux computer.</p>
       <Command text={joinCommand(code.data.code)} />
       <Waiting note="It works once, for 10 minutes. Approve it here when it asks.">Waiting for it to ask to join…</Waiting>

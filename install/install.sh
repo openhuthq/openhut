@@ -75,8 +75,24 @@ go_back() {
 fresh() { h=$($IN curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$h" | grep -q '"ok":true' &&
   [ "$(echo "$h" | sed -n 's/.*"started":\([0-9]*\).*/\1/p')" -ge "$STARTED_AFTER" ]; }
 up() { i=0; until fresh; do i=$((i+1)); [ $i -gt "$1" ] && return 1; printf .; sleep 3; done; }
+join_state() {
+  $IN curl -sS http://127.0.0.1:8787/health 2>/dev/null | node -e 'let s="";process.stdin.on("data",(c)=>{s+=c}).on("end",()=>{let j;try{j=JSON.parse(s).join}catch{}console.log(j?`${j.state} ${j.error??""}`:"starting ")})' 2>/dev/null || echo "starting "
+}
+asked() {
+  printf 'Asking to join'
+  i=0; until STATE=$(join_state) && [ "${STATE%% *}" != starting ]; do
+    i=$((i+1)); [ $i -gt 45 ] && { printf '\n'; echo "OpenHut is running, but it hasn't asked to join yet. See: docker logs openhut"; return; }
+    printf .; sleep 2
+  done
+  printf '\n'
+  case "${STATE%% *}" in
+    joined) echo "OpenHut is running and is one of your computers already." ;;
+    failed) die "couldn't join. ${STATE#* } (In the OpenHut app: Settings > Computers > Add a computer.)" ;;
+    *) echo "OpenHut is running and asking to join your computers. Approve it in the OpenHut app: Settings > Computers." ;;
+  esac
+}
 running() {
-  if [ -n "${ASKED:-}" ]; then echo "OpenHut is running and asking to join your computers. Check the six digits in the OpenHut app and accept it there."
+  if [ -n "${ASKED:-}" ]; then asked
   elif joining; then echo "OpenHut is running."
   else echo "OpenHut is running for the app key sha256:$(printf '%s' "$CLIENT_KEY" | cut -c1-8)..."; fi
 }
