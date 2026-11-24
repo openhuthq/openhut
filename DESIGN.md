@@ -132,6 +132,7 @@ A dropdown trigger (Model, Computer) follows the secondary button: soft fill, no
 - One line of help at most; prefer a sensible default over explanatory text.
 - No shadows, no nested borders.
 - Popovers keep their side and size while open.
+- One button per action on a screen — no empty-state button that repeats a header button.
 
 ### Known trade-off
 
