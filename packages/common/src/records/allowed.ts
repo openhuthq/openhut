@@ -16,14 +16,14 @@ export function allowed({ row, roster, mode, agent, current }: { row: Row; roste
   const writer = writerOf({ roster, device: row.by, mode })
   const moved = current && (current.object !== row.object || current.workspace !== row.workspace || current.parent !== row.parent)
   if (!writer || roster.workspace !== row.workspace || moved || roster.viewers.includes(row.by)) return false
-  if (row.object === 'agent') return agentMay({ row, current, writer })
+  if (row.object === 'agent') return agentMay({ row, current, writer, mode })
   if (row.object === 'connection') return row.parent === null && writer.role === 'owner'
   if (row.object === 'workspace') return row.id === row.workspace && row.parent === null && writer.role !== 'member'
   if (!agent || agent.id !== row.parent || agent.workspace !== row.workspace) return false
   const owner = writer.email === agent.owner
   if (agent.private && !owner) return false
   if ((row.object === 'control' || row.object === 'memory') && row.id !== row.parent) return false
-  if (row.object === 'memory' || row.object === 'skill' || row.object === 'routine') return true
+  if (row.object === 'memory' || row.object === 'skill' || row.object === 'routine') return mode === 'read' || owner || writer.role === 'owner'
   return owner
 }
 
@@ -31,10 +31,11 @@ export function runsOnAllowed({ roster, agent, runsOn }: { roster: Roster; agent
   return roster.workspace === agent.workspace && writerOf({ roster, device: runsOn, mode: 'write' })?.email === agent.owner && !roster.viewers.includes(runsOn)
 }
 
-function agentMay({ row, current, writer }: { row: Row; current?: Row | null; writer: Member }): boolean {
+function agentMay({ row, current, writer, mode }: { row: Row; current?: Row | null; writer: Member; mode: Mode }): boolean {
   const owner = writer.email === row.parent
   if (current === null) return owner
   if (row.deleted) return owner || writer.role !== 'member'
+  if (mode === 'write') return owner || writer.role === 'owner'
   return owner || (!privateRow(row) && !(current && privateRow(current)))
 }
 

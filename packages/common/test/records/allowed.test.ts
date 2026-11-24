@@ -24,14 +24,15 @@ test('only listed, current devices of the row’s workspace may write', async ()
   assert.equal(await may({ by: 'gone' }), false)
   assert.equal(judge({ row: await row(), roster: { ...roster, workspace: 'ws_other_001' }, agent: shared }), false)
   assert.equal(await may({ by: 'moMac' }), true)
-  assert.equal(await may({ collection: 'skill', by: 'anaMac' }), true)
+  assert.equal(await may({ collection: 'skill', by: 'anaMac' }), false)
+  assert.equal(await may({ collection: 'skill', by: 'anaMac', mode: 'read' }), true, 'skills a teammate wrote before stay readable')
 })
 
 test('a row never moves to another parent, collection or workspace', async () => {
-  const current = await row({ collection: 'skill', by: 'anaMac' })
-  assert.equal(await may({ collection: 'skill', by: 'anaMac', current }), true)
+  const current = await row({ collection: 'skill', by: 'moMac' })
+  assert.equal(await may({ collection: 'skill', by: 'moMac', current }), true)
   assert.equal(judge({ row: { ...await row({ collection: 'skill', by: 'anaMac' }), parent: 'ag_other01' }, roster, agent: { ...shared, id: 'ag_other01' }, current }), false)
-  assert.equal(await may({ collection: 'routine', by: 'anaMac', current }), false)
+  assert.equal(await may({ collection: 'routine', by: 'moMac', current }), false)
 })
 
 test('a removed device’s rows still read as its person’s, but it writes nothing new', async () => {
@@ -65,10 +66,11 @@ test('messages, files, control and channels are written only by the agent owner�
   assert.equal(await may({ by: 'anaMac', current: runner, deleted: true }), false)
 })
 
-test('memory is written by any member’s Mac or server, whoever wrote it last', async () => {
+test('memory is written by the owner’s Macs and servers or the team owner’s; a teammate’s older memory still reads', async () => {
   const runner = await row({ collection: 'memory', id: 'ag_shared1', by: 'moServer' })
-  assert.equal(await may({ collection: 'memory', id: 'ag_shared1', by: 'anaMac', current: runner }), true)
-  assert.equal(await may({ collection: 'memory', id: 'ag_shared1', by: 'anaMac', current: null }), true)
+  assert.equal(await may({ collection: 'memory', id: 'ag_shared1', by: 'moMac', current: runner }), true)
+  assert.equal(await may({ collection: 'memory', id: 'ag_shared1', by: 'anaMac', current: runner }), false)
+  assert.equal(await may({ collection: 'memory', id: 'ag_shared1', by: 'anaMac', current: runner, mode: 'read' }), true)
 })
 
 test('an agent has one control and one memory record, whose id is the agent’s', async () => {
@@ -86,14 +88,16 @@ test('runsOn names only the owner’s Macs and servers', () => {
   assert.equal(runsOnAllowed({ roster, agent: shared, runsOn: keyOf('gone') }), false)
 })
 
-test('an agent is created by its owner, edited by teammates while shared, and deleted by its owner or an admin', async () => {
+test('an agent is created and changed by its owner or the team owner, never a teammate, and deleted by its owner or an admin; a teammate’s older edit still reads', async () => {
   const agent = (by: Device, extra: { use?: KeyUse; deleted?: boolean; parent?: string } = {}) => row({ collection: 'agent', parent: 'mo@example.com', by, ...extra })
   const current = await agent('moMac')
   const privately = await agent('moMac', { use: 'own' })
   assert.equal(judge({ row: await agent('moMac'), roster, current: null }), true)
   assert.equal(judge({ row: await agent('anaMac'), roster, current: null }), false)
-  assert.equal(judge({ row: await agent('anaMac'), roster, current }), true)
-  assert.equal(judge({ row: await agent('anaMac'), roster }), true)
+  assert.equal(judge({ row: await agent('anaMac'), roster, current }), false, 'a teammate-signed rename is refused')
+  assert.equal(judge({ row: await agent('anaMac'), roster }), false)
+  assert.equal(judge({ row: await agent('anaMac'), roster, current, mode: 'read' }), true, 'one written before this rule still reads')
+  assert.equal(judge({ row: await agent('anaMac'), roster: withRole('ana@example.com', 'owner'), current }), true, 'a team owner may change it')
   assert.equal(judge({ row: await agent('anaMac', { use: 'own' }), roster, current }), false)
   assert.equal(judge({ row: await agent('anaMac'), roster, current: privately }), false)
   assert.equal(judge({ row: await agent('anaMac', { deleted: true }), roster, current }), false)

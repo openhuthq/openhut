@@ -76,10 +76,11 @@ test('a runtime refuses an older version than it holds, or an agent whose owner 
 })
 
 test('a 409 hands the latest row to reapply and retries once; without reapply it throws with the latest', async () => {
-  const { mo, ana } = await world()
+  const { cloud, mo, ana } = await world()
+  const server = clientOf({ device: 'moServer', cloud })
   const memory = { ...chat, collection: 'memory', id: 'ag_shared1' } as const
   const base = await mo.put({ ...memory, value: { workspace: { notes: ['a'] } } })
-  await ana.put({ ...memory, current: base.ver, value: { workspace: { notes: ['a', 'b'] } } })
+  await server.put({ ...memory, current: base.ver, value: { workspace: { notes: ['a', 'b'] } } })
   const seen: unknown[] = []
   const merged = await mo.put({ ...memory, current: base.ver, value: { workspace: { notes: ['a', 'c'] } }, reapply: (latest) => {
     seen.push(latest.value)
@@ -114,6 +115,14 @@ test('an agent has one control row, and one placing it on someone else’s compu
   await mo.put({ ...control, current: garbled.ver, value: { workspace: { runsOn: keyOf('moServer'), grants: [] } } })
   await assert.rejects(mo.put({ ...control, id: 'ctl_0000002', value: { workspace: { runsOn: keyOf('moServer'), grants: [] } } }), /team’s rules/)
   assert.deepEqual((await mo.list(control)).data.map((row) => row.id), ['ag_shared1'])
+})
+
+test('a teammate’s runtime refuses to sign a rename of a shared agent, and the owner’s goes through', async () => {
+  const { mo, ana } = await world()
+  await assert.rejects(ana.put({ ...agentWhere(), value: { workspace: { name: 'Renamed by Ana' } } }), (err: unknown) => err instanceof RecordsError && err.status === 403)
+  assert.deepEqual((await mo.get({ ...agentWhere() }))?.value, { workspace: { name: 'Helpdesk' } })
+  await mo.put({ ...agentWhere(), current: (await mo.get({ ...agentWhere() }))?.ver, value: { workspace: { name: 'Help' } } })
+  assert.deepEqual((await ana.get({ ...agentWhere() }))?.value, { workspace: { name: 'Help' } })
 })
 
 test('sealing without the key, or the cloud refusing, throws a sentence', async () => {
