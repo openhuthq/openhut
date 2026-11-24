@@ -1,0 +1,41 @@
+name: Packs
+
+# R2: the app, runtime and native packs (scripts/pack.ts), built and timed on Linux (target ≤5 min). Not signed or published yet (R4).
+# The release workflow calls this (workflow_call) and gets the packs as the `packs` artifact.
+on:
+  push:
+    branches: [main, feat/r2-packs]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  packs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: echo "START=$(date +%s)" >> "$GITHUB_ENV"
+      - run: npm ci --no-audit --no-fund
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/cache@v4
+        with:
+          path: packages/desktop/dist/native-cache
+          key: native-runtime-${{ runner.os }}-${{ hashFiles('install/native-runtime.json', 'packages/desktop/scripts/pack-hermes.mjs') }}
+      - name: Build the packs
+        run: |
+          umask 022
+          npm -w @openhut/desktop run build && npm -w @openhut/desktop run pack-backend && node scripts/pack.ts packs
+          ls -l packs
+          { echo "Packs built in $(( $(date +%s) - START ))s from checkout (target 300s)"; echo '```'; shasum -a 512 packs/*.tgz; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          cat "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packs
+          path: packs
+          retention-days: 7
