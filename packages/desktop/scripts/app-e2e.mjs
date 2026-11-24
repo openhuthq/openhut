@@ -23,7 +23,7 @@ const cdpPort = 9300 + Math.floor(Math.random() * 500)
 const guestPort = cdpPort + 500
 const INVITEE = 'sara@example.com'
 const API = devCloudUrl()
-const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test', ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: API } }
+const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test', OPENHUT_UPDATE_FEED: 'http://127.0.0.1:9/', ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: API } }
 const evidence = { platform: `${process.platform} ${osVersion()}`, steps: [], waits: [] }
 mkdirSync(args.out, { recursive: true })
 const say = (step, detail = {}) => {
