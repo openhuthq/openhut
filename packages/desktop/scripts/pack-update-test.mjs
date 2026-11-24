@@ -2,7 +2,8 @@
 // with scripts/pack.ts (its renderer marked), signs them with a throwaway test key, logs them in a stand-in Rekor, serves the R4 feed,
 // and drives the app over CDP through Settings › Updates: waiting for the safety check, refused, ready, details, the swap, halted.
 // Screenshots go to --out. Linux (xvfb) for now: node scripts/pack-update-test.mjs --app release/linux-unpacked/openhut --out <dir> [--cloud ../../private/api]
-import { execFileSync, spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
+import { promisify } from 'node:util'
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -28,7 +29,8 @@ const feedDir = join(root, 'feed')
 const packs = join(root, 'packs')
 const cdpPort = 9300 + Math.floor(Math.random() * 500)
 const say = (step, detail) => console.log(`pack-update-test: ${step}${detail ? ` ${JSON.stringify(detail)}` : ''}`)
-const node = (script, argv, env = {}) => execFileSync(process.execPath, [join(repo, 'scripts', script), ...argv], { encoding: 'utf8', env: { ...process.env, ...env } }).trim()
+// Async: the stand-in Rekor answers from this process, so a blocking child would hang it.
+const node = async (script, argv, env = {}) => (await promisify(execFile)(process.execPath, [join(repo, 'scripts', script), ...argv], { encoding: 'utf8', env: { ...process.env, ...env }, maxBuffer: 64 << 20 })).stdout.trim()
 
 let clock = Math.floor(Date.now() / 1000)
 const { rekorKey, server: rekor } = fakeRekor(() => clock)
@@ -45,7 +47,7 @@ mkdirSync(join(feedDir, 'channels/stable'), { recursive: true })
 // electron-updater still asks for a new shell; an older version means none.
 writeFileSync(join(feedDir, 'latest-linux.yml'), 'version: 0.0.1\nfiles: []\npath: none\nsha512: none\n')
 const keyFile = join(root, 'test-release.pem')
-const testKey = node('release-key.ts', ['key', keyFile])
+const testKey = await node('release-key.ts', ['key', keyFile])
 const API = devCloudUrl()
 const env = { ...process.env, ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: API }, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_UPDATE_FEED: `http://127.0.0.1:${feed.address().port}/`, OPENHUT_MODEL: 'test', OPENHUT_SANDBOX: 'memory', OPENHUT_RELEASE_KEY: testKey, OPENHUT_REKOR_KEY: rekorKey }
 
@@ -64,11 +66,11 @@ try {
   const original = readFileSync(index, 'utf8')
   writeFileSync(index, original.replace('<head>', '<head><meta name="openhut-pack" content="N">'))
   try {
-    node('pack.ts', [packs])
+    await node('pack.ts', [packs])
   } finally {
     writeFileSync(index, original)
   }
-  sign(100)
+  await sign(100)
   publish()
   say('N\'s packs are signed and logged just now (sequence 100)')
 
@@ -92,7 +94,7 @@ try {
   await shot(page, 'm5-4-refused')
 
   clock -= 2 * 3600
-  sign(101)
+  await sign(101)
   clock += 2 * 3600
   publish()
   say('ready', await state((now) => now.ready?.pack))
@@ -114,7 +116,7 @@ try {
   if (after.version !== '9.9.9' || after.marker !== 'N' || after.state.current?.sequence !== 101 || after.state.pending) throw new Error('the app isn\'t running N\'s packs')
   if (existsSync(join(home, 'logs/updates.log')) && /download-progress|downloadUpdate/.test(readFileSync(join(home, 'logs/updates.log'), 'utf8'))) throw new Error('electron-updater downloaded something')
 
-  node('release-key.ts', ['point', keyFile, packs, join(root, 'halt'), '--halt', '--sequence', '102', '--rekor', rekorUrl])
+  await node('release-key.ts', ['point', keyFile, packs, join(root, 'halt'), '--halt', '--sequence', '102', '--rekor', rekorUrl])
   for (const ext of ['', '.sig', '.rekor']) copyFileSync(join(root, 'halt', `release.json${ext}`), join(feedDir, `channels/stable/release.json${ext}`))
   say('halted', await state((now) => now.halted))
   await shot(page, 'm5-5-halted')
