@@ -38,7 +38,7 @@ chown -R root:root /bridge && chmod -R go-w,a+rX /bridge
 EOF
 
 FROM $DIND AS base
-RUN apk add --no-cache nodejs npm iptables ip6tables iproute2 curl zstd tar su-exec flock >/dev/null && \
+RUN apk add --no-cache nodejs npm iptables ip6tables iproute2 curl zstd tar su-exec flock util-linux-misc >/dev/null && \
     addgroup -S openhut && adduser -S -D -G openhut openhut
 
 FROM base AS downloads

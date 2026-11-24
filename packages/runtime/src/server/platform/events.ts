@@ -1,6 +1,7 @@
 import { initLogger, log } from 'evlog'
+import { config } from './config.ts'
 
-initLogger({ env: { service: 'openhut' }, pretty: process.stdout.isTTY === true, redact: true })
+initLogger({ env: { service: 'openhut', environment: config.build === 'dev' ? 'development' : 'production' }, pretty: process.stdout.isTTY === true, redact: true })
 
 export { log }
 
