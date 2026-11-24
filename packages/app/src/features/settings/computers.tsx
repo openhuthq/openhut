@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { LaptopIcon, Tick02Icon, PlusSignIcon, ServerStack01Icon } from '@hugeicons/core-free-icons'
 import * as z from 'zod/mini'
 import type { Admin } from '@openhut/common/admin/admin.ts'
@@ -33,7 +33,10 @@ import { APP_VERSION, type Computer, type TailnetPeer } from '@/lib/openhut'
 import { open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
-import { WORDS } from '@/lib/platform'
+import { desktop } from '@/lib/desktop'
+import { isBrowser } from '@/lib/computers'
+import { remote } from '@/lib/remote'
+import { iconOf } from '@/features/computers/computer-picker'
 import { cn } from '@/lib/utils'
 import { useAnswer } from '@/features/cloud/review'
 
@@ -63,6 +66,9 @@ function ComputerList() {
   const local = computers.data?.[0]
   const admin = admins?.find((each) => each.computer.id === local?.id)?.admin
   const here = devices.find((device) => device.here)
+  const current = useQuery({ queryKey: ['browser-key'], queryFn: remote.deviceKey, staleTime: Infinity }).data
+  const others = devices.filter((device) => !device.here)
+  const browsers = others.filter(isBrowser)
   return <>
     <KeysToReplace />
     <Intro>Your computers</Intro>
@@ -73,10 +79,14 @@ function ComputerList() {
         {!isPhone() && <UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Up to date</span>} />}
       </Row>}
       {home && requests.map((each) => <RequestRow key={each.device} workspace={home} asked={each} />)}
-      {devices.filter((device) => !device.here).map((device) => <DeviceRow key={device.key} device={device} twin={devices.some((each) => each.key !== device.key && each.name === device.name)} admin={admins?.find((each) => each.computer.id === tunnelKeyOf(device.key))?.admin} />)}
+      {others.filter((device) => !isBrowser(device)).map((device) => <DeviceRow key={device.key} device={device} twin={devices.some((each) => each.key !== device.key && each.name === device.name)} admin={admins?.find((each) => each.computer.id === tunnelKeyOf(device.key))?.admin} />)}
       {enrollments.map((enrollment) => <EnrollRow key={enrollment.peer.dns} enrollment={enrollment} />)}
-      {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note={`Add a Linux server. It stays on, seals each agent in its own box, and answers while this ${WORDS.here} sleeps.`}><Chevron /></Row>}
+      {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note="Add a Linux server. It stays on and seals each agent in its own box."><Chevron /></Row>}
     </Rows>
+    {browsers.length > 0 && <>
+      <Intro>Browsers</Intro>
+      <Rows>{browsers.map((device) => <DeviceRow key={device.key} device={device} current={device.key === current} twin={false} admin={undefined} />)}</Rows>
+    </>}
   </>
 }
 
@@ -91,7 +101,8 @@ function noteOf({ computer, admin, count, device }: { computer: Computer; admin:
   if (computer.appTooOld) return 'Update OpenHut to use this computer'
   const failed = admin?.server.update?.status === 'failed' ? admin.server.update : null
   if (failed) return `Couldn't update to ${failed.to}. ${sentence(failed.reason ?? 'The update stopped before it finished.')}`
-  return [isPhone() ? 'Your computer' : 'This computer', 'Agents have your access', agentCount(count), admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')
+  const server = device?.kind === 'server'
+  return [isPhone() ? 'Your computer' : desktop ? 'This computer' : server ? 'Linux server · connected now' : 'Connected now', !server && 'Agents have your access', agentCount(count), admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')
 }
 
 function addedOf(device: Device | undefined) {
@@ -110,7 +121,7 @@ function agentCount(count: number) {
 }
 
 export function ComputerMark({ computer }: { computer: Computer }) {
-  return <Mark icon={computer.id === 'local' ? LaptopIcon : ServerStack01Icon} dot={computer.online ? 'bg-pass' : 'bg-mute-2'} />
+  return <Mark icon={iconOf(computer)} dot={computer.online ? 'bg-pass' : 'bg-mute-2'} />
 }
 
 function Mark({ icon, dot }: { icon: typeof LaptopIcon; dot?: string }) {
@@ -120,14 +131,15 @@ function Mark({ icon, dot }: { icon: typeof LaptopIcon; dot?: string }) {
   </span>
 }
 
-function DeviceRow({ device, twin, admin }: { device: Device; twin: boolean; admin: Admin | undefined }) {
+function DeviceRow({ device, twin, admin, current }: { device: Device; twin: boolean; admin: Admin | undefined; current?: boolean }) {
   const remove = useRemoveMac()
   const update = useUpdateComputer()
   const server = device.kind === 'server'
   const base = device.name ?? (server ? 'Computer that runs agents' : 'Computer')
   const name = twin ? `${base} (${tunnelKeyOf(device.key).slice(0, 4)})` : base
   const detail = device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))} · ${REMOVE_DETAIL}` : REMOVE_DETAIL
-  return <Row icon={<DeviceIcon kind={device.kind} />} title={name} note={sentence([device.os ?? (server ? 'Linux' : null), server && 'Server · runs agents', joinedNote(device.joined, device.os), presenceOf(device), admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')).replace(/\.$/, '')}>
+  const browser = isBrowser(device)
+  return <Row icon={<DeviceIcon kind={browser ? 'browser' : device.kind} />} title={name} note={sentence([current ? 'This browser' : device.os === 'web' ? null : device.os ?? (server ? 'Linux' : null), server && 'Server · runs agents', joinedNote(device.joined, device.os), !browser && presenceOf(device), admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')).replace(/\.$/, '')}>
     {server && !isPhone() && update.isPending && <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>}
     {server && !isPhone() && !update.isPending && admin?.server.updateAvailable && <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate({ id: tunnelKeyOf(device.key), name }, { onSuccess: () => toast(`${name} is updating`), onError: toastError })}>Update</Button>}
     {!isPhone() && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${name}?`} detail={detail} points={REMOVE_POINTS} action="Remove" onConfirm={() => remove.mutate({ key: device.key })}>Remove</ConfirmButton>}

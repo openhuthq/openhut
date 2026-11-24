@@ -34,12 +34,14 @@ export function runsOnNote(computer: Computer) {
   if (!computer.online) return computer.kind === 'server' ? 'Offline · it isn’t answering' : 'Offline · open OpenHut on it to use it'
   if (computer.kind === 'server') return 'Sealed in its own box · always on'
   if (computer.kind === 'desktop') return 'Another of your computers · while it’s awake'
+  if (computer.server) return 'Linux server · always on'
   return `With your access · while this ${WORDS.here} is awake`
 }
 
 export function whereNote(computer: Computer) {
   if (computer.kind === 'server') return `Always on, so it keeps answering while this ${WORDS.here} sleeps.`
   if (computer.kind === 'desktop') return `Answers while that computer is awake, even when this ${WORDS.here} sleeps.`
+  if (computer.server) return 'Always on, so it keeps answering while you’re away.'
   return `Answers while this ${WORDS.here} is awake.`
 }
 

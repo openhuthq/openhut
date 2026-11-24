@@ -7,7 +7,7 @@ import type { Computer } from '@/lib/openhut'
 import { cn } from '@/lib/utils'
 
 export function iconOf(computer: Computer) {
-  return computer.kind === 'server' ? ServerStack01Icon : LaptopIcon
+  return computer.kind === 'server' || computer.server ? ServerStack01Icon : LaptopIcon
 }
 
 export function ComputerPicker({ computers, value, onPick, title, className }: { computers: Computer[]; value: string; onPick: (id: string) => void; title: string; className?: string }) {

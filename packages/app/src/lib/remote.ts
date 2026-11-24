@@ -114,6 +114,7 @@ async function viaShell(path: string, init?: RequestInit): Promise<Response> {
 }
 
 export const remote = {
+  deviceKey: (): Promise<string> => key.id(),
   cut: (): boolean => cut,
   watchCut(watcher: () => void): () => void {
     watchers.add(watcher)

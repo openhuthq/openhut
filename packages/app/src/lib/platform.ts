@@ -16,5 +16,6 @@ export function fromPhone(name: string): string {
 
 const guess = typeof navigator !== 'undefined' && /Mac|Android/.test(navigator.userAgent) ? 'darwin' : 'linux'
 
-export const WORDS = wordsFor(desktop?.platform ?? guess)
+// Outside the desktop shell the browser's own OS says nothing about the computer it talks to.
+export const WORDS = wordsFor(desktop?.platform ?? '')
 export const OWN_TITLE_BAR = (desktop?.platform ?? guess) === 'darwin'
