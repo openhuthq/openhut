@@ -1,6 +1,8 @@
 import { connect, webKey, type Tunnel } from '@openhut/tunnel'
 import { bodyOf } from '@openhut/common/cloud/member-list.ts'
 import type { MemberList } from '@openhut/common/cloud/cloud.ts'
+import { commitOfWeb, facesOfWeb } from '@openhut/common/cloud/faces-web.ts'
+import type { JoinRequest } from '@openhut/common/cloud/v1/trust.ts'
 import { proofOf, requestParts, SIGNATURE_HEADER, type Me, type Session } from '@openhut/common/cloud/v1/identity.ts'
 import { fromBase64, toBase64 } from '@openhut/common/vault/vault.ts'
 import type { Channel } from '@/lib/live-socket'
@@ -13,7 +15,7 @@ const RETURN = '/signed-in'
 
 type Pair = { publicKey: CryptoKey; privateKey: CryptoKey }
 type Keys = { signing: Pair; tunnel: Pair }
-export type RemoteState = { step: 'signed-out' } | { step: 'waiting'; email: string } | { step: 'ready'; email: string; workspace: string }
+export type RemoteState = { step: 'signed-out' } | { step: 'waiting'; email: string; faces: number[] } | { step: 'over'; email: string; missed: boolean } | { step: 'ready'; email: string; workspace: string }
 
 let tunnel: Tunnel | undefined
 
@@ -96,10 +98,26 @@ export const remote = {
     const me = await cloud<Me>('GET', '/v1/me')
     if (me.status !== 200) return { step: 'signed-out' }
     const home = me.json.workspaces.find((each) => each.id === me.json.home)
-    if (home?.access === 'listed') return { step: 'ready', email: me.json.email, workspace: home.id }
-    const asked = await cloud('POST', '/v1/join-requests', { workspace: me.json.home, name: browserName(), os: 'web' })
-    if (asked.status !== 200 && asked.status !== 409) throw new Error('OpenHut Cloud didn’t take the request. Try again.')
-    return { step: 'waiting', email: me.json.email }
+    if (home?.access === 'listed') {
+      await write('nonce', null)
+      return { step: 'ready', email: me.json.email, workspace: home.id }
+    }
+    const device = await deviceOf(await keys())
+    const nonce = await read<string | null>('nonce')
+    if (!nonce) await remote.knock(me.json.home ?? undefined)
+    const mine = (await cloud<{ data: JoinRequest[] }>('GET', `/v1/join-requests?workspace=${me.json.home}`)).json?.data.find((each) => each.id === device)
+    const knocked = nonce ?? await read<string>('nonce') ?? ''
+    if (!mine?.asked) return { step: 'over', email: me.json.email, missed: Boolean(mine?.missed) }
+    if (mine.reviewed && !mine.nonce) await cloud('POST', '/v1/join-requests/nonces', { workspace: me.json.home, nonce: knocked })
+    return { step: 'waiting', email: me.json.email, faces: await facesOfWeb({ device, nonce: knocked }) }
+  },
+
+  async knock(workspace?: string): Promise<void> {
+    const home = workspace ?? (await cloud<Me>('GET', '/v1/me')).json.home
+    const nonce = toBase64(crypto.getRandomValues(new Uint8Array(32)))
+    const asked = await cloud<{ error?: { message: string } }>('POST', '/v1/join-requests', { workspace: home, name: browserName(), os: 'web', commit: await commitOfWeb({ device: await deviceOf(await keys()), nonce }) })
+    if (asked.status !== 200) throw new Error(asked.json?.error?.message ?? 'OpenHut Cloud didn’t take the request. Try again.')
+    await write('nonce', nonce)
   },
 
   async open(workspace: string): Promise<void> {

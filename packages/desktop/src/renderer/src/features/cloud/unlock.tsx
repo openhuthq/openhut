@@ -124,7 +124,6 @@ function JoinRequests({ cloud }: { cloud: Cloud }) {
   const letIn = ({ workspace, request, mine, path }: Pending) => {
     if (!mine) chooseWorkspace(workspace.id)
     later(request.device)
-    if (!request.checked) return navigate(path)
     review.mutate({ id: workspace.id, device: request.device }, { onSuccess: () => navigate(`${path}?open=${encodeURIComponent(`review:${request.device}`)}`), onError: toastError })
   }
   const letInRef = useRef(letIn)

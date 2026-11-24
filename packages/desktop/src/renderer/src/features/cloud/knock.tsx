@@ -29,8 +29,8 @@ export function Knocking({ faces, onKit, children }: { faces: number[] | null; o
   </Step>
 }
 
-export function YoureIn({ onOpen }: { onOpen: () => void }) {
-  return <Step happy title="You’re in." line={`Your ${WORDS.here === 'Mac' ? 'Mac' : 'computer'} handed this ${WORDS.here === 'Mac' ? 'Mac' : 'device'} its keys.`}
+export function YoureIn({ line, onOpen }: { line?: string; onOpen: () => void }) {
+  return <Step happy title="You’re in." line={line ?? `Your ${WORDS.here === 'Mac' ? 'Mac' : 'computer'} handed this ${WORDS.here === 'Mac' ? 'Mac' : 'device'} its keys.`}
     action={<Button type="button" variant="primary" className={BIG} autoFocus onClick={onOpen}>Open OpenHut</Button>} />
 }
 

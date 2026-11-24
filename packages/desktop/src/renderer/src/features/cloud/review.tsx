@@ -17,7 +17,7 @@ export function useAnswer({ workspace, request, label }: { workspace: string; re
   const review = useReview()
   const name = `review:${request.device}`
   const reviewing = useOpen() === name
-  const letIn = (faces?: number[]) => approve.mutate({ id: workspace, device: request.device, faces }, {
+  const letIn = (faces: number[]) => approve.mutate({ id: workspace, device: request.device, faces }, {
     onSuccess: () => { open(); toast(request.server ? `${label} is joining. Its agents can run there in a moment.` : `${label} is unlocking`) },
     onError: (error) => {
       if (!(error instanceof RequestError && error.param === 'faces')) return toastError(error)
@@ -28,7 +28,7 @@ export function useAnswer({ workspace, request, label }: { workspace: string; re
   const notMe = () => deny.mutate({ id: workspace, device: request.device, why: 'not-me' }, { onSuccess: () => { open(); toast('Turned down. That session was signed out.') }, onError: toastError })
   return {
     busy: approve.isPending || deny.isPending || review.isPending,
-    approve: () => request.checked ? review.mutate({ id: workspace, device: request.device }, { onSuccess: () => open(name), onError: toastError }) : letIn(),
+    approve: () => review.mutate({ id: workspace, device: request.device }, { onSuccess: () => open(name), onError: toastError }),
     deny: () => deny.mutate({ id: workspace, device: request.device }, { onSuccess: () => toast('Denied'), onError: toastError }),
     notMe,
     dialog: reviewing && <PickPair label={label} request={request} busy={approve.isPending || deny.isPending} onPick={letIn} onNotMe={notMe} onClose={() => open()} />,

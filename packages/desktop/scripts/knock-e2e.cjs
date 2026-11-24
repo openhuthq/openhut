@@ -17,7 +17,7 @@ app.whenReady().then(async () => {
   const text = (win) => win.webContents.executeJavaScript('document.body.innerText').catch(() => '')
   const until = async (win, pattern, ms = 30000) => { for (const end = Date.now() + ms; Date.now() < end; await sleep(300)) { const t = await text(win); if (pattern.test(t)) return t } throw new Error(`timed out waiting for ${pattern}; page says: ${(await text(win)).slice(0, 300)}`) }
   const click = (win, selector, label) => win.webContents.executeJavaScript(`(() => { const b = [...document.querySelectorAll(${JSON.stringify(selector)})].find((each) => (each.getAttribute('aria-label') ?? each.innerText).trim() === ${JSON.stringify(label)}); if (!b) return false; b.click(); return true })()`)
-  const shot = async (win, name) => { await sleep(700); writeFileSync(`${OUT}/${name}.jpg`, (await win.webContents.capturePage()).toJPEG(88)); log(`screenshot ${name}.jpg`) }
+  const shot = async (win, name) => { await win.webContents.insertCSS('*,*::before,*::after{animation:none!important;transition:none!important}'); await sleep(700); writeFileSync(`${OUT}/${name}.jpg`, (await win.webContents.capturePage()).toJPEG(88)); log(`screenshot ${name}.jpg`) }
   try {
     const knocker = open(NEW)
     await until(knocker, /Ask my other computer|Knock knock/)
@@ -49,7 +49,7 @@ app.whenReady().then(async () => {
     log(`6 the Mac: ${(await text(mac)).split('\n').filter((line) => /joined/.test(line))[0]}`)
     await shot(mac, 'c-04-joined-toast')
     await click(knocker, 'button', 'Open OpenHut')
-    await until(knocker, /Make your first agent|New agent|Ask/i, 45000)
+    await until(knocker, /Make your first agent|New agent|\nApps\n/i, 45000)
     log('7 new device opens the dashboard')
     await shot(knocker, 'c-05-new-device-dashboard')
     log('PASS')

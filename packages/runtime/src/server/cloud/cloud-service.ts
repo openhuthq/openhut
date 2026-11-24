@@ -138,7 +138,8 @@ export const cloudService = {
     const asked = cloudEvents.requests(mustBeOn(workspace)).find((each) => each.device === device)
     if (!asked) throw new HttpError(404, 'That device isn’t waiting anymore. It was let in, denied, or it expired.')
     if (Date.now() - Date.parse(asked.at) > KNOCK_MS) throw new HttpError(410, 'That request expired after 15 minutes. Ask the new device to knock again.')
-    if (asked.checked && (!asked.faces || [...faces ?? []].sort((a, b) => a - b).join() !== asked.faces.join())) {
+    if (!asked.checked) throw new HttpError(400, 'That device didn’t show two faces, so it can’t be matched. Update OpenHut on it, then knock again.', { param: 'commit' })
+    if ((!asked.faces || [...faces ?? []].sort((a, b) => a - b).join() !== asked.faces.join())) {
       await cloudService.deny({ workspace, device, why: 'mismatch' })
       throw new HttpError(400, 'Those faces don’t match the ones on the new device, so the request was turned down.', { param: 'faces' })
     }
