@@ -1,5 +1,6 @@
 import * as z from 'zod/mini'
 import { DeviceKey } from '@openhut/common/cloud/cloud.ts'
+import { keyring } from '@openhut/common/keyring/keyring.ts'
 import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
 import { cloudService, putList } from '../cloud/cloud-service.ts'
 import { deviceName, keysService } from '../cloud/keys-service.ts'
@@ -20,12 +21,13 @@ export const ownWindow = {
     if (!DeviceKey.safeParse(key).success) throw new HttpError(400, 'Send the window’s public key as 64 bytes of base64url.', { param: 'key' })
     const ws = keysService.mustBeOn().workspace.id
     const old = settings.ownWindow()
-    if (old && old !== key && !await userPresence.ask('make this window your OpenHut window')) throw new HttpError(403, 'Not confirmed. The old window stays your OpenHut window.', { param: 'presence' })
-    if (old && old !== key && listed(old)) await putList({ workspace: ws, list: (await roomKeys.teamChange({ ws, devices: [old] })).list })
+    const replacing = Boolean(old && old !== key)
+    if ((replacing || removed({ ws, key })) && !await userPresence.ask('make this window your OpenHut window')) throw new HttpError(403, 'Not confirmed. The old window stays your OpenHut window.', { param: 'presence' })
+    if (old && replacing && listed(old)) await putList({ workspace: ws, list: (await keyring.remove({ team: ws, devices: [old] })).list })
     const list = await keysService.addDevice({ device: key, name: `${deviceName()} window`, runtime: false })
     if (list) await putList({ workspace: ws, list })
     await settings.setOwnWindow(key)
-    log.info({ event: 'window.own', replaced: Boolean(old && old !== key) })
+    log.info({ event: 'window.own', replaced: replacing })
     return { ...await cloudService.joinCode(), computer: await keysService.deviceKey() }
   },
 
@@ -41,6 +43,10 @@ export const ownWindow = {
     if (parent) parent.on('message', (event) => void answer(event.data))
     else process.on('message', (message) => void answer(message))
   },
+}
+
+function removed({ ws, key }: { ws: string; key: string }): boolean {
+  return Boolean(roomKeys.members(ws)?.removed.includes(key))
 }
 
 function listed(key: string): boolean {

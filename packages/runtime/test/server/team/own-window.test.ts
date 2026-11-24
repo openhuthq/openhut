@@ -72,7 +72,7 @@ test('the desktop window: the shell hands its key over IPC, the runtime lists it
     assert.deepEqual(asked, [], 'the first window comes in without presence: it can only arrive over the shell’s own IPC channel')
     assert.equal(join.computer, await keysService.deviceKey(), 'the window learns which computer is its own runtime')
     const me = await first.client.signIn({ joinCode: join.code })
-    assert.equal(me.email, 'mo@example.com')
+    assert.equal(me.object === 'me' && me.email, 'mo@example.com')
     assert.equal((await first.client.me())?.workspaces.find((each) => each.id === home)?.access, 'listed', 'one Google sign-in (the runtime’s) and the window is in, with no knock')
     assert.equal(memberOf(tunnelKeyOf(first.device))?.own, true)
     await assert.rejects(first.client.signIn({ joinCode: join.code }), /expired or was used/, 'the join code works once')
@@ -129,6 +129,14 @@ test('the desktop window: the shell hands its key over IPC, the runtime lists it
     const now = over(reinstalled.device)
     assert.equal((await now({ path: '/caller' })).status, 200)
     assert.equal((await now({ ...approval, body: { faces } })).status, 404, 'the new window reaches the trust routes: this request is just gone')
+
+    assert.equal((await now({ method: 'DELETE', path: `/api/cloud/devices/${encodeURIComponent(reinstalled.device)}` })).status, 200, 'you remove the own window from your list')
+    presence(false)
+    await assert.rejects(ownWindow.take({ key: reinstalled.device }), /Not confirmed/, 'a removed window key isn’t listed again over IPC without presence')
+    assert.equal(memberOf(tunnelKeyOf(reinstalled.device)), undefined)
+    presence(true)
+    await assert.rejects(ownWindow.take({ key: reinstalled.device }), /couldn’t save/, 'even with presence the Cloud never lists a removed key again; a new window key has to take over')
+    assert.equal(memberOf(tunnelKeyOf(reinstalled.device)), undefined)
   } finally {
     cloudEvents.stop()
     await app.close()
