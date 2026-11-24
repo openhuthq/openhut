@@ -55,6 +55,7 @@ export function recordsClient({ send: call, device, keys, roster, seen = () => u
 
   async function fetchAgent({ workspace, id, agents }: { workspace: string; id: string; agents: Agents }): Promise<AgentFacts | null> {
     const reply = await call({ method: 'GET', workspace, kind: 'agent', id })
+    if (reply.status === 0) throw failure(reply)
     const ok = reply.status === 200 ? await checked({ json: reply.json, expect: { collection: 'agent', workspace, id }, agents }) : null
     return ok && await verify(ok.row) ? agentFacts({ ...ok.row, id }) : null
   }
@@ -140,5 +141,5 @@ function placedOn(value: Value): unknown {
 
 function failure(reply: Reply): RecordsError {
   const error = ApiError.safeParse(reply.json).data?.error
-  return new RecordsError({ status: reply.status, type: error?.type, message: error?.message ?? `The cloud answered with status ${reply.status}.` })
+  return new RecordsError({ status: reply.status, type: error?.type, message: error?.message ?? (reply.status ? `The cloud answered with status ${reply.status}.` : 'OpenHut Cloud didn’t answer. Check this computer’s internet connection.') })
 }

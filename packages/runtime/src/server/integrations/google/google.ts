@@ -1,7 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import * as z from 'zod/mini'
 import type { GOOGLE_KINDS } from '@openhut/common/connections/connection.ts'
-import { keysService } from '../../cloud/keys-service.ts'
 import { cloud } from '../../platform/cloud.ts'
 import type { Connector, ConnectorContext, ToolSpec } from '../connector.ts'
 import { mcp } from '../mcp/mcp.ts'
@@ -33,15 +32,15 @@ export const google = {
 
   async beginSignIn({ kind, redirectUri, state }: { kind: GoogleKind; redirectUri: string; state: string }): Promise<{ authorizationUrl: string; verifier: string }> {
     const verifier = randomBytes(32).toString('base64url')
-    const { authorizationUrl } = await cloud.authorization({
-      token: await deviceToken(), provider: 'google', scopes: PRODUCTS[kind].scopes.map((scope) => `${SCOPE}${scope}`), redirectUrl: redirectUri, state,
+    const { authorizationUrl } = await cloud.oauth.authorize({
+      provider: 'google', scopes: PRODUCTS[kind].scopes.map((scope) => `${SCOPE}${scope}`), redirectUrl: redirectUri, state,
       codeChallenge: createHash('sha256').update(verifier).digest('base64url'),
     })
     return { authorizationUrl, verifier }
   },
 
   async finishSignIn({ code, verifier }: { code: string; verifier: string }): Promise<GoogleConfig> {
-    const token = await cloud.token({ token: await deviceToken(), provider: 'google', grantType: 'authorization_code', code, codeVerifier: verifier })
+    const token = await cloud.oauth.token({ provider: 'google', grantType: 'authorization_code', code, codeVerifier: verifier })
     if (!token.refreshToken) throw new Error('Google didn’t send a refresh token. Remove OpenHut from your Google account’s third-party access, then sign in again.')
     return { accessToken: token.accessToken, refreshToken: token.refreshToken, expiresAt: Date.parse(token.expiresAt), email: token.email ?? 'a Google account' }
   },
@@ -79,14 +78,10 @@ async function bearer({ config, refresh }: ConnectorContext): Promise<Record<str
 
 async function renew(latest: Record<string, unknown>): Promise<GoogleConfig> {
   const stored = z.parse(Config, latest)
-  const token = await cloud.token({ token: await deviceToken(), provider: 'google', grantType: 'refresh_token', refreshToken: stored.refreshToken }).catch((error: unknown) => {
+  const token = await cloud.oauth.token({ provider: 'google', grantType: 'refresh_token', refreshToken: stored.refreshToken }).catch((error: unknown) => {
     throw new Error(`Google refused to refresh this sign-in (${error instanceof Error ? error.message : String(error)}). Press Reconnect on its page.`)
   })
   return { ...stored, accessToken: token.accessToken, refreshToken: token.refreshToken ?? stored.refreshToken, expiresAt: Date.parse(token.expiresAt) }
-}
-
-function deviceToken(): Promise<string | undefined> {
-  return keysService.token().catch(() => undefined)
 }
 
 function unique(tools: ToolSpec[]): ToolSpec[] {

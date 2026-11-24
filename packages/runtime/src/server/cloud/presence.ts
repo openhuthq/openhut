@@ -2,7 +2,7 @@ import * as z from 'zod/mini'
 import { HereField, parseJson, type Member, type Presence, type SetHere } from '@openhut/common/cloud/cloud.ts'
 import { padded } from '@openhut/common/records/seal.ts'
 import { fromBase64, lock, toBase64, unlock, type Bytes } from '@openhut/common/vault/vault.ts'
-import { cloud } from '../platform/cloud.ts'
+import { hold } from '../platform/cloud.ts'
 import { emit } from '../platform/events.ts'
 
 const LIFE_MS = 30_000
@@ -102,7 +102,7 @@ export const presence = {
     seen.clear()
     sent.clear()
     behind.clear()
-    for (const ws of mismatched.keys()) cloud.hold({ workspace: ws, on: false })
+    for (const ws of mismatched.keys()) hold({ workspace: ws, on: false })
     mismatched.clear()
     changed()
   },
@@ -128,7 +128,7 @@ function flag({ ws, email, on }: { ws: string; email: string; on: boolean }): vo
   else emails.delete(email)
   if (emails.size) mismatched.set(ws, emails)
   else mismatched.delete(ws)
-  if (Boolean(was) !== Boolean(emails.size)) cloud.hold({ workspace: ws, on: emails.size > 0 })
+  if (Boolean(was) !== Boolean(emails.size)) hold({ workspace: ws, on: emails.size > 0 })
 }
 
 function tick(): Promise<void> {

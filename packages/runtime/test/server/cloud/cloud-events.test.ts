@@ -11,13 +11,13 @@ import { fromBase64, identity, lock, newKey, toBase64, unlock } from '@openhut/c
 const requests: unknown[] = []
 const refuse = new Map<string, number>()
 const http = createServer((req, res) => {
-  const team = new URL(req.url ?? '/', 'http://x').searchParams.get('workspace') ?? ''
-  const left = req.url?.startsWith('/v1/member-lists') ? refuse.get(team) ?? 0 : 0
+  const [, , , team = '', kind] = new URL(req.url ?? '/', 'http://x').pathname.split('/')
+  const left = kind === 'member-list' ? refuse.get(team) ?? 0 : 0
   if (left > 0) {
     refuse.set(team, left - 1)
     return res.writeHead(403, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { type: 'forbidden', message: 'Not in this team.' } }))
   }
-  const json = req.url?.startsWith('/v1/join-requests') ? { object: 'list', data: requests } : { object: 'list', data: [] }
+  const json = kind === 'join-request' ? { object: 'list', data: requests } : { object: 'list', data: [] }
   res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(json))
 })
 const sockets = new WebSocketServer({ server: http })

@@ -13,7 +13,7 @@ const server = createServer(async (req, res) => {
   const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown> : {}
   const reply = (status: number, json: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(json))
   const url = new URL(req.url ?? '/', 'http://cloud')
-  const [, , collection = '', id] = url.pathname.split('/')
+  const [, , , team = '', collection = '', id] = url.pathname.split('/')
   if (req.method === 'PUT') {
     const current = rows.get(`${collection}/${id}`)
     if (body.ver !== (current?.ver ?? 0) + 1) return reply(409, { error: { type: 'invalid_request_error', message: 'Someone else changed this record first.' }, current })
@@ -25,7 +25,7 @@ const server = createServer(async (req, res) => {
   if (req.method === 'POST') return reply(200, { object: 'list', url: url.pathname, hasMore: false, data: all.filter((row) => (body.ids as string[]).includes(row.id)) })
   if (id) return rows.has(`${collection}/${id}`) ? reply(200, rows.get(`${collection}/${id}`)) : reply(404, { error: { type: 'invalid_request_error', message: 'No such record.' } })
   const parent = url.searchParams.get('parent')
-  reply(200, { object: 'list', url: url.pathname, hasMore: false, data: all.filter((row) => row.workspace === url.searchParams.get('workspace') && (!parent || row.parent === parent)) })
+  reply(200, { object: 'list', url: url.pathname, hasMore: false, data: all.filter((row) => row.workspace === team && (!parent || row.parent === parent)) })
 })
 server.listen(0, '127.0.0.1')
 await once(server, 'listening')

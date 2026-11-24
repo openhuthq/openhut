@@ -3,16 +3,16 @@ import { randomInt } from 'node:crypto'
 import { hostname } from 'node:os'
 import * as z from 'zod/mini'
 import { MemberList, parseJson, type Letter, type Member } from '@openhut/common/cloud/cloud.ts'
-import { checkV1, signV1 } from '@openhut/common/cloud/v1/identity.ts'
+import { checkV1, signV1, type NamedKeyBox } from '@openhut/common/cloud/v1/identity.ts'
+import type { NewLetter } from '@openhut/common/cloud/v1/trust.ts'
 import { anchorOf, bodyOf, check, firstOf, keyVersionOf, nextOf, signList, withoutDevices } from '@openhut/common/cloud/member-list.ts'
 import { equal, fromBase64, fromWords, identity, letter, lock, newKey, newWords, read, slot, toBase64, unlock, type Bytes, type Identity, type LetterPurpose } from '@openhut/common/vault/vault.ts'
 import { config } from '../platform/config.ts'
-import { cloud, type Box, type Bundle, type Call, type CloudSession, type Letter as Sealed, type Reply } from '../platform/cloud.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { keyStore, Keys, type Account, type AskRoom, type Room, type Session, type Stored } from './key-store.ts'
 
-const REFRESH_EARLY_MS = 5 * 60_000
-export type Sent = Sealed
+export type Sent = NewLetter
+export type Box = NamedKeyBox
 type Boxed = { id: string; key: string; chain: MemberList[] }
 const Secret = z.object({ ...Keys.shape, vault: z.optional(z.string()), anchor: z.string(), team: z.optional(z.boolean()) })
 const { machine } = keyStore
@@ -36,26 +36,6 @@ export const keysService = {
   setAsked: async (asking: AskRoom[]): Promise<void> => keyStore.write({ ...await keyStore.read(), asking: asking.length ? asking : undefined }),
 
   setLocked: async (locked: { sub: string; email: string } | undefined): Promise<void> => keyStore.write({ ...await keyStore.read(), locked }),
-
-  async token(): Promise<string> {
-    const session = stored()?.session
-    if (!session) throw new HttpError(409, 'Enable OpenHut Cloud first.')
-    if (Date.parse(session.expiresAt) - Date.now() > REFRESH_EARLY_MS) return session.token
-    const next = await renew(session.refresh)
-    await keysService.setSession({ token: next.token, refresh: next.refresh, expiresAt: next.expiresAt })
-    return next.token
-  },
-
-  call: async (input: Omit<Call, 'token' | 'signer'>): Promise<Reply> => cloud.call({ ...input, token: await keysService.token(), signer: await keysService.device() }),
-
-  memberLists: ({ list, letters = [], boxes = [] }: Bundle): Promise<Reply> => keysService.call({ method: 'POST', path: '/v1/member-lists', body: { list, letters, boxes } }),
-
-  async joinSession(code: string): Promise<CloudSession> {
-    const device = await keysService.device()
-    const session = await cloud.session({ grant: 'join_code', code, device: toBase64(device.publicKey), signature: await signV1({ signer: device, proof: 'session', parts: [code] }) })
-    await keysService.setSession({ token: session.token, refresh: session.refresh, expiresAt: session.expiresAt })
-    return session
-  },
 
   async addDevice({ device, name, runtime = true }: { device: string; name: string | null; runtime?: boolean }): Promise<MemberList | null> {
     const account = (await keyStore.read()).account
@@ -330,9 +310,3 @@ function stored(): Stored | undefined {
   return keyStore.current()
 }
 
-async function renew(refresh: string | undefined): Promise<CloudSession> {
-  if (!refresh) throw new HttpError(502, 'You were signed out. Sign in again.')
-  const signedAt = Date.now()
-  const signature = await signV1({ signer: await keysService.device(), proof: 'refresh', parts: [refresh, String(signedAt)] })
-  return cloud.session({ grant: 'refresh_token', refreshToken: refresh, signedAt, signature })
-}

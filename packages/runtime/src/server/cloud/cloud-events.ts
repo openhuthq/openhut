@@ -2,7 +2,6 @@ import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
 import { type DeviceRequest, parseJson, siteHost } from '@openhut/common/cloud/cloud.ts'
 import { Forwarded, Notice, Ready } from '@openhut/common/cloud/v1/events.ts'
-import { JoinRequest } from '@openhut/common/cloud/v1/trust.ts'
 import { commitOf, facesOf } from '@openhut/common/cloud/faces.ts'
 import { anchorOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
 import type { MemberListBody } from '@openhut/common/cloud/cloud.ts'
@@ -11,6 +10,7 @@ import { Collection } from '@openhut/common/records/wire.ts'
 import { AgentHealth, AgentStatus } from '@openhut/common/agents/agent.ts'
 import { fromBase64, lock, toBase64, unlock } from '@openhut/common/vault/vault.ts'
 import { agentService } from '../agents/agent-service.ts'
+import { CloudError } from '@openhut/common/cloud/openhut-cloud.ts'
 import { cloud } from '../platform/cloud.ts'
 import { config } from '../platform/config.ts'
 import { db } from '../platform/db.ts'
@@ -29,7 +29,6 @@ const LIVE: Record<Collection, string[]> = {
   workspace: [], agent: ['agent'], control: ['agent', 'grant'], message: ['thread'], memory: ['memory'], connection: ['connection'], skill: ['skill'], routine: ['routine'], channel: ['channel'], file: ['thread'],
 }
 const Beat = z.object({ at: z.number(), build: z.string(), version: z.string(), kind: z.string(), os: z.optional(z.string()), agents: z.optional(z.record(z.string(), z.object({ status: AgentStatus, health: z.nullable(AgentHealth), detail: z.optional(z.string()) }))) })
-const Requests = z.object({ data: z.array(JoinRequest) })
 const Named = z.object({ name: z.optional(z.nullable(z.string())), site: z.optional(z.nullable(z.string())) })
 
 export type Beat = z.infer<typeof Beat>
@@ -74,12 +73,14 @@ recordsService.onRefused((workspace) => {
 export const cloudEvents = {
   start(): void {
     if (socket || !keysService.account() || !keysService.session()) return
-    const opened = new ReconnectingWebSocket(cloud.eventsUrl(), [], { WebSocket: globalThis.WebSocket })
-    socket = opened
-    opened.addEventListener('open', () => {
-      keysService.token().then((token) => opened.send(JSON.stringify({ type: 'hello', token })), (err: unknown) => log.warn({ event: 'cloud.refresh_failed', error: messageOf(err) }))
+    let opened: ReconnectingWebSocket | undefined
+    cloud.watch({
+      socket: (url) => (opened = new ReconnectingWebSocket(url, [], { WebSocket: globalThis.WebSocket })),
+      onMessage: heard,
+      onHello: (err) => { if (err) log.warn({ event: 'cloud.refresh_failed', error: messageOf(err) }) },
     })
-    opened.addEventListener('message', (event) => heard(String(event.data)))
+    if (!opened) return
+    socket = opened
     opened.addEventListener('close', (event) => {
       ready = false
       for (const room of roomKeys.rooms()) presence.closed(room.workspace.id)
@@ -226,14 +227,14 @@ function refusedOnce(ws: string): void {
   setTimeout(() => void run(async () => {
     doubted.delete(ws)
     if (!socket || !roomKeys.room(ws)) return
-    if ((await roomKeys.refresh({ ws, call: keysService.call })).gone) await cloudEvents.drop({ ws, why: 'removed' })
+    if ((await roomKeys.refresh({ ws })).gone) await cloudEvents.drop({ ws, why: 'removed' })
   }), REFUSED_AGAIN_MS).unref()
 }
 
 async function refreshKeys(ws: string): Promise<void> {
   if (!roomKeys.room(ws)) return
   const before = roomKeys.members(ws)
-  const { changed: moved, gone: out } = await roomKeys.refresh({ ws, call: keysService.call })
+  const { changed: moved, gone: out } = await roomKeys.refresh({ ws })
   const list = roomKeys.members(ws)
   const me = await keysService.deviceKey()
   const home = ws === keysService.account()?.workspace.id
@@ -258,7 +259,7 @@ async function refreshName(ws: string): Promise<void> {
 
 async function refreshRequests(ws: string): Promise<void> {
   const before = JSON.stringify(requests.get(ws) ?? [])
-  const asked = Requests.safeParse((await keysService.call({ method: 'GET', path: `/v1/join-requests?workspace=${ws}` })).json).data?.data ?? []
+  const asked = await cloud.team(ws).requests()
   requests.set(ws, asked.filter((each) => each.asked).map((each) => ({ device: each.id, email: each.email, at: each.at, name: each.name, os: each.os, server: each.server, checked: Boolean(each.commit), reviewed: each.reviewed, faces: each.commit && each.nonce && commitOf({ device: each.id, nonce: each.nonce }) === each.commit ? facesOf({ device: each.id, nonce: each.nonce }) : null, location: each.location, newCountry: each.newCountry })))
   if (JSON.stringify(requests.get(ws)) !== before) emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
 }
@@ -266,7 +267,7 @@ async function refreshRequests(ws: string): Promise<void> {
 async function checkRemoved(): Promise<void> {
   const home = keysService.account()?.workspace.id
   if (!home) return
-  const { status } = await keysService.call({ method: 'GET', path: `/v1/member-lists?workspace=${home}` })
+  const status = await cloud.team(home).lists().then(() => 200, (error: unknown) => error instanceof CloudError ? error.status : 0)
   if (status !== 403 && status !== 410) return
   await removedNow(home)
 }

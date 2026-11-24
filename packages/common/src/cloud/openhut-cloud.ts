@@ -9,33 +9,34 @@ import { commitOfWeb, facesOfWeb } from './faces-web.ts'
 import { bodyOf } from './member-list.ts'
 import { recordsClient, type RecordsOptions } from './records.ts'
 import type { Kind } from './rules.ts'
-import { JoinCode, KeyBox, Me, proofOf, requestParts, Session, SIGNATURE_HEADER, type V1Proof } from './v1/identity.ts'
+import { JoinCode, KeyBox, Me, proofOf, requestParts, Session, SIGNATURE_HEADER, type NamedKeyBox, type V1Proof } from './v1/identity.ts'
 import { JoinRequest, type NewLetter, type PostMemberList } from './v1/trust.ts'
 
 export type Store = {
   get: <T>(key: string) => Promise<T | undefined>
   set: (key: string, value: unknown) => Promise<void>
 }
-export type Signer = { id: string; sign: (bytes: Uint8Array) => Promise<Uint8Array> }
+export type Signer = { id: () => Promise<string>; sign: (bytes: Uint8Array) => Promise<Uint8Array> }
 export type DeviceIdentity = Signer & { noise: () => Promise<NoiseDeviceKey> }
 export type ComputerIdentity = Signer & { noise: () => Promise<NoiseComputerKey> }
 export type Fetch = typeof globalThis.fetch
+export type Url = string | (() => string)
 export type Reply = { status: number; json: unknown }
 
-export type SignIn = { google: { returnTo: string } } | { googleCode: string; state: string } | { joinCode: string }
+export type SignIn = { google: { returnTo: string; state?: string } } | { googleCode: string; state?: string } | { joinCode: string }
 export type Redirect = { object: 'redirect'; url: string }
+export type SignedIn = Me & { maker?: string }
 export type KnockState = { step: 'approved' } | { step: 'waiting'; faces: number[] } | { step: 'over'; missed: boolean }
-export type Knock = { team: string; ask: (input: { name: string; os: string; server?: boolean }) => Promise<JoinRequest>; mine: () => Promise<JoinRequest | undefined>; state: () => Promise<KnockState>; cancel: () => Promise<void> }
+export type Knock = { team: string; reveal: () => Promise<boolean>; ask: (input: { name: string; os: string; server?: boolean }) => Promise<JoinRequest>; mine: () => Promise<JoinRequest | undefined>; state: () => Promise<KnockState>; cancel: () => Promise<void> }
 export type Watch = { send: (input: { type: 'presence' | 'beat'; workspace: string; body: string }) => void; close: () => void }
 export type WatchSocket = { send: (text: string) => void; close: () => void; addEventListener: (type: 'open' | 'message', listener: (event: { data?: unknown }) => void) => void }
 
 export type Device = {
-  id: string
-  signIn: (input: SignIn) => Promise<Redirect | Me>
+  signIn: (input: SignIn) => Promise<Redirect | SignedIn>
   me: () => Promise<Me | null>
   firstComputerCode: () => Promise<JoinCode>
   knock: (input: { team: string; nonce: string }) => Knock
-  open: (input: { team: string; computer?: string; timeout?: number }) => Promise<Tunnel>
+  open: (input: { team: string; computer?: string; timeout?: number } | { box: string; timeout?: number }) => Promise<Tunnel>
 }
 
 export type Team = {
@@ -50,11 +51,6 @@ export type Team = {
   take: (id: string) => Promise<Reply>
   invite: (invite: NewInvite) => Promise<Reply>
   openInvite: (input: { id: string; after?: number }) => Promise<OpenedInvite | Reply>
-  boxes: () => Promise<KeyBox[]>
-  box: (name: string) => Promise<Reply>
-  putBox: (input: { name: string; body: string; by: string; signature: string; savedAt: number }) => Promise<Reply>
-  dropBox: (input: { name: string; by: string; signature: string }) => Promise<Reply>
-  records: (options: RecordsOptions) => ReturnType<typeof recordsClient>
 }
 
 export type Computer = Device & {
@@ -62,11 +58,15 @@ export type Computer = Device & {
   team: (id: string) => Team
   joinCode: () => Promise<JoinCode>
   deleteAccount: () => Promise<Reply>
-  watch: (input: { socket: (url: string) => WatchSocket; onMessage: (message: unknown) => void; onHello?: (error?: unknown) => void }) => Watch
+  keyBoxes: {
+    list: () => Promise<KeyBox[] | null>
+    get: (name: string) => Promise<Reply>
+    put: (box: NamedKeyBox) => Promise<Reply>
+    drop: (input: { name: string; by: string; signature: string }) => Promise<Reply>
+  }
+  watch: (input: { socket: (url: string) => WatchSocket; onMessage: (text: string) => void; onHello?: (error?: unknown) => void }) => Watch
+  records: (options: RecordsOptions) => ReturnType<typeof recordsClient>
   oauth: { authorize: (body: CreateOAuthAuthorization) => Promise<OAuthAuthorization>; token: (body: CreateOAuthToken) => Promise<OAuthToken> }
-  signInUrl: (input: { returnTo: string; state: string }) => Promise<string>
-  session: () => Promise<Session | undefined>
-  signOut: () => Promise<void>
 }
 
 export const TRUST_CALLS = ['serve', 'team', 'joinCode', 'deleteAccount', 'watch', 'oauth'] as const satisfies readonly Exclude<keyof Computer, keyof Device>[]
@@ -85,10 +85,10 @@ const REFRESH_EARLY_MS = 5 * 60_000
 const TIMEOUT_MS = 20_000
 const Page = z.object({ data: z.array(z.unknown()), hasMore: z.optional(z.boolean()) })
 
-type Call = { name: EndpointName; params?: Record<string, string>; query?: Record<string, string | number | undefined>; body?: unknown; auth?: boolean }
+type Call = { name: EndpointName; params?: Record<string, string>; query?: Record<string, string | number | undefined>; body?: unknown; auth?: boolean | 'optional' }
 
-function wire({ url, key, store, fetch: send = globalThis.fetch }: { url: string; key: Signer; store: Store; fetch?: Fetch }) {
-  const base = url.replace(/\/$/, '')
+function wire({ url, key, store, fetch: send = globalThis.fetch }: { url: Url; key: Signer; store: Store; fetch?: Fetch }) {
+  const base = () => (typeof url === 'function' ? url() : url).replace(/\/$/, '')
   let renewing: Promise<Session | undefined> | undefined
 
   const sign = async (proof: V1Proof, parts: string[]) => toBase64(await key.sign(proofOf({ proof, parts })))
@@ -103,7 +103,7 @@ function wire({ url, key, store, fetch: send = globalThis.fetch }: { url: string
       const signedAt = Date.now()
       headers[SIGNATURE_HEADER] = `${signedAt}.${await sign('request', await requestParts({ method: endpoint.method, path, signedAt, body: payload }))}`
     }
-    const response = await send(`${base}${path}`, { method: endpoint.method, headers, body: payload || undefined, signal: AbortSignal.timeout(TIMEOUT_MS) }).catch(() => null)
+    const response = await send(`${base()}${path}`, { method: endpoint.method, headers, body: payload || undefined, signal: AbortSignal.timeout(TIMEOUT_MS) }).catch(() => null)
     if (!response) return { status: 0, json: null }
     return { status: response.status, json: await response.json().catch(() => null) }
   }
@@ -127,6 +127,7 @@ function wire({ url, key, store, fetch: send = globalThis.fetch }: { url: string
   async function call({ auth = true, ...input }: Call): Promise<Reply> {
     if (!auth) return raw(input)
     const held = await session()
+    if (!held && auth === 'optional') return raw(input)
     if (!held) return { status: 401, json: { error: { type: 'invalid_request_error', message: 'Sign in to OpenHut first.' } } }
     return raw({ ...input, token: held.token })
   }
@@ -138,11 +139,11 @@ function wire({ url, key, store, fetch: send = globalThis.fetch }: { url: string
     throw new CloudError(answer)
   }
 
-  async function start({ grant, code }: { grant: 'google' | 'join_code'; code: string }): Promise<Me> {
-    const body = grant === 'google' ? { grant, code, signature: await sign('session', [code]) } : { grant, code, device: key.id, signature: await sign('session', [code]) }
+  async function start({ grant, code }: { grant: 'google' | 'join_code'; code: string }): Promise<SignedIn> {
+    const body = grant === 'google' ? { grant, code, signature: await sign('session', [code]) } : { grant, code, device: await key.id(), signature: await sign('session', [code]) }
     const made = await ok({ name: 'createSession', body, auth: false, reply: Session })
     await store.set('session', made)
-    return ok({ name: 'me', reply: Me })
+    return { ...await ok({ name: 'me', reply: Me }), ...made.maker && { maker: made.maker } }
   }
 
   return { call, ok, start, session, sign, base, token: async () => (await session())?.token ?? '' }
@@ -151,29 +152,28 @@ function wire({ url, key, store, fetch: send = globalThis.fetch }: { url: string
 export type Wire = ReturnType<typeof wire>
 
 function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net: Wire }): Device {
-  const sockets = net.base.replace(/^http/, 'ws')
+  const sockets = () => net.base().replace(/^http/, 'ws')
 
   async function computersOf(team: string): Promise<string[]> {
     const signedIn = await net.session()
+    const me = await key.id()
     const lists = await listsOf({ net, team })
     const body = bodyOf(lists.at(-1))
     const mine = body?.members.find((each) => each.email === signedIn?.email)
-    return mine?.devices.filter((device) => device !== key.id && device !== mine.kit && !body?.removed.includes(device) && !(mine.viewers ?? []).includes(device)) ?? []
+    return mine?.devices.filter((device) => device !== me && device !== mine.kit && !body?.removed.includes(device) && !(mine.viewers ?? []).includes(device)) ?? []
   }
 
   return {
-    id: key.id,
-
     async signIn(input) {
       if ('joinCode' in input) return net.start({ grant: 'join_code', code: input.joinCode })
       if ('googleCode' in input) {
-        if (input.state !== await store.get<string>('sign-in-state')) throw new CloudError({ status: 400, json: null, message: 'This sign-in didn’t start here. Start it again.' })
+        if (input.state !== undefined && input.state !== await store.get<string>('sign-in-state')) throw new CloudError({ status: 400, json: null, message: 'This sign-in didn’t start here. Start it again.' })
         await store.set('sign-in-state', undefined)
         return net.start({ grant: 'google', code: input.googleCode })
       }
-      const state = toBase64(crypto.getRandomValues(new Uint8Array(16)))
-      await store.set('sign-in-state', state)
-      const started = await net.ok({ name: 'startSignIn', auth: false, body: { device: key.id, returnTo: input.google.returnTo, state }, reply: SignInStarted })
+      const state = input.google.state ?? toBase64(crypto.getRandomValues(new Uint8Array(16)))
+      if (!input.google.state) await store.set('sign-in-state', state)
+      const started = await net.ok({ name: 'startSignIn', auth: false, body: { device: await key.id(), returnTo: input.google.returnTo, state }, reply: SignInStarted })
       return { object: 'redirect', url: started.url }
     },
 
@@ -185,34 +185,41 @@ function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net:
     firstComputerCode: () => net.ok({ name: 'createJoinCode', reply: JoinCode }),
 
     knock({ team, nonce }) {
-      const mine = async () => (await requestsOf({ net, team })).find((each) => each.id === key.id)
+      const mine = async () => {
+        const me = await key.id()
+        return (await requestsOf({ net, team })).find((each) => each.id === me)
+      }
+      const reveal = async () => (await net.call({ name: 'putRecord', params: { team, kind: 'join-request', id: await key.id() }, body: { nonce } })).status === 200
       return {
         team,
         mine,
+        reveal,
         async ask({ name, os, server = false }) {
-          return net.ok({ name: 'putRecord', params: { team, kind: 'join-request', id: key.id }, body: { name, os, server, commit: await commitOfWeb({ device: key.id, nonce }) }, reply: JoinRequest })
+          const me = await key.id()
+          return net.ok({ name: 'putRecord', params: { team, kind: 'join-request', id: me }, body: { name, os, server, commit: await commitOfWeb({ device: me, nonce }) }, reply: JoinRequest })
         },
         async state() {
           const me = await net.ok({ name: 'me', reply: Me })
           if (me.workspaces.some((each) => each.id === team && each.access === 'listed')) return { step: 'approved' }
           const asked = await mine()
           if (!asked?.asked) return { step: 'over', missed: Boolean(asked?.missed) }
-          if (asked.reviewed && !asked.nonce) await net.call({ name: 'putRecord', params: { team, kind: 'join-request', id: key.id }, body: { nonce } })
-          return { step: 'waiting', faces: await facesOfWeb({ device: key.id, nonce }) }
+          if (asked.reviewed && !asked.nonce) await reveal()
+          return { step: 'waiting', faces: await facesOfWeb({ device: asked.id, nonce }) }
         },
         async cancel() {
-          await net.call({ name: 'deleteRecord', params: { team, kind: 'join-request', id: key.id } })
+          await net.call({ name: 'deleteRecord', params: { team, kind: 'join-request', id: await key.id() } })
         },
       }
     },
 
-    async open({ team, computer, timeout = 8000 }) {
+    async open(input) {
       const token = await net.token()
       const noise = await key.noise()
-      for (const device of computer ? [computer] : await computersOf(team)) {
-        const box = fromBase64(device).subarray(32)
+      const { timeout = 8000 } = input
+      const boxes = 'box' in input ? [fromHex(input.box)] : (input.computer ? [input.computer] : await computersOf(input.team)).map((device) => fromBase64(device).subarray(32))
+      for (const box of boxes) {
         const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', box)))
-        const opened = await connect({ relayUrl: sockets, url: `${sockets}${pathOf({ name: 'tunnel', params: { computer: id } })}?role=device`, computer: { id, key: hex(box) }, key: noise, token, timeout }).catch(() => undefined)
+        const opened = await connect({ relayUrl: sockets(), url: `${sockets()}${pathOf({ name: 'tunnel', params: { computer: id } })}?role=device`, computer: { id, key: hex(box) }, key: noise, token, timeout }).catch(() => undefined)
         if (opened) return opened
       }
       throw new CloudError({ status: 404, json: null, message: 'None of your computers is online. Open OpenHut on your Mac, then try again.' })
@@ -223,11 +230,13 @@ function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net:
 async function listsOf({ net, team, after = 0 }: { net: Wire; team: string; after?: number }): Promise<MemberList[]> {
   const out: MemberList[] = []
   for (let from = after; ;) {
-    const page = Page.safeParse((await net.call({ name: 'listRecords', params: { team, kind: 'member-list' }, query: { after: from } })).json).data
-    const lists = (page?.data ?? []).flatMap((each) => MemberList.safeParse(each).data ?? [])
+    const reply = await net.call({ name: 'listRecords', params: { team, kind: 'member-list' }, query: { after: from } })
+    const page = reply.status === 200 ? Page.safeParse(reply.json).data : undefined
+    if (!page) throw new CloudError(reply)
+    const lists = page.data.flatMap((each) => MemberList.safeParse(each).data ?? [])
     out.push(...lists)
     const last = bodyOf(lists.at(-1))
-    if (!page?.hasMore || !last) return out
+    if (!page.hasMore || !last) return out
     from = last.version
   }
 }
@@ -235,6 +244,10 @@ async function listsOf({ net, team, after = 0 }: { net: Wire; team: string; afte
 async function requestsOf({ net, team }: { net: Wire; team: string }): Promise<JoinRequest[]> {
   const page = Page.safeParse((await net.call({ name: 'listRecords', params: { team, kind: 'join-request' } })).json).data
   return (page?.data ?? []).flatMap((each) => JoinRequest.safeParse(each).data ?? [])
+}
+
+function fromHex(text: string): Uint8Array<ArrayBuffer> {
+  return Uint8Array.from(text.match(/../g) ?? [], (pair) => Number.parseInt(pair, 16))
 }
 
 function hex(bytes: Uint8Array): string {
@@ -251,8 +264,10 @@ function teamOf({ net, id }: { net: Wire; id: string }): Team {
     review: (device) => net.call({ name: 'putRecord', params: record('join-request', device), body: { reviewed: true } }),
     deny: ({ device, why }) => net.call({ name: 'deleteRecord', params: record('join-request', device), query: { why } }),
     async letters() {
-      const page = Page.safeParse((await net.call({ name: 'listRecords', params: { team: id, kind: 'letter' } })).json).data
-      return (page?.data ?? []).flatMap((each) => Letter.safeParse(each).data ?? [])
+      const reply = await net.call({ name: 'listRecords', params: { team: id, kind: 'letter' } })
+      const page = reply.status === 200 ? Page.safeParse(reply.json).data : undefined
+      if (!page) throw new CloudError(reply)
+      return page.data.flatMap((each) => Letter.safeParse(each).data ?? [])
     },
     send: ({ id: letter = toBase64(crypto.getRandomValues(new Uint8Array(16))), ...body }) => net.call({ name: 'putRecord', params: record('letter', letter), body }),
     take: (letter) => net.call({ name: 'deleteRecord', params: record('letter', letter) }),
@@ -261,20 +276,17 @@ function teamOf({ net, id }: { net: Wire; id: string }): Team {
       const reply = await net.call({ name: 'getRecord', params: record('invite', invite), query: { after } })
       return OpenedInvite.safeParse(reply.json).data ?? reply
     },
-    async boxes() {
-      const page = Page.safeParse((await net.call({ name: 'listRecords', params: { team: id, kind: 'key-box' } })).json).data
-      return (page?.data ?? []).flatMap((each) => KeyBox.safeParse(each).data ?? [])
-    },
-    box: (name) => net.call({ name: 'getRecord', params: record('key-box', name) }),
-    putBox: ({ name, ...body }) => net.call({ name: 'putRecord', params: record('key-box', name), body }),
-    dropBox: ({ name, ...body }) => net.call({ name: 'deleteRecord', params: record('key-box', name), body }),
-    records: (options) => recordsClient({ ...options, send: ({ method, workspace, kind, id: row, query, body }) => net.call({ name: method === 'PUT' ? 'putRecord' : row === undefined ? 'listRecords' : 'getRecord', params: { team: workspace, kind, ...row !== undefined && { id: row } }, query, body }) }),
   }
 }
 
-function computerOf({ url, key, store, fetch }: { url: string; key: ComputerIdentity; store: Store; fetch?: Fetch }): Computer {
+function computerOf({ url, key, store, fetch }: { url: Url; key: ComputerIdentity; store: Store; fetch?: Fetch }): Computer {
   const net = wire({ url, key, store, fetch })
-  const sockets = net.base.replace(/^http/, 'ws')
+  const sockets = () => net.base().replace(/^http/, 'ws')
+  const onHome = async (step: (team: string) => Promise<Reply>): Promise<Reply> => {
+    const me = await net.call({ name: 'me' })
+    const home = Me.safeParse(me.json).data?.home
+    return home ? step(home) : me.status === 200 ? { status: 404, json: null } : me
+  }
   return {
     ...deviceOf({ key: { ...key, noise: async () => key.noise() }, store, net }),
 
@@ -283,7 +295,7 @@ function computerOf({ url, key, store, fetch }: { url: string; key: ComputerIden
       let stopped = false
       void key.noise().then(async (noise) => {
         const computerId = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', Uint8Array.from(noise.publicKey))))
-        if (!stopped) stop = serve({ ...handlers, relayUrl: sockets, computerId, key: noise, token: net.token })
+        if (!stopped) stop = serve({ ...handlers, relayUrl: sockets(), computerId, key: noise, token: net.token })
       })
       return () => {
         stopped = true
@@ -295,40 +307,40 @@ function computerOf({ url, key, store, fetch }: { url: string; key: ComputerIden
     joinCode: () => net.ok({ name: 'createJoinCode', reply: JoinCode }),
     deleteAccount: () => net.call({ name: 'deleteMe' }),
 
+    keyBoxes: {
+      async list() {
+        const reply = await onHome((team) => net.call({ name: 'listRecords', params: { team, kind: 'key-box' } }))
+        const page = reply.status === 200 ? Page.safeParse(reply.json).data : undefined
+        return page ? page.data.flatMap((each) => KeyBox.safeParse(each).data ?? []) : null
+      },
+      get: (box) => onHome((team) => net.call({ name: 'getRecord', params: { team, kind: 'key-box', id: box } })),
+      put: ({ name: box, ...body }) => onHome((team) => net.call({ name: 'putRecord', params: { team, kind: 'key-box', id: box }, body })),
+      drop: ({ name: box, ...body }) => onHome((team) => net.call({ name: 'deleteRecord', params: { team, kind: 'key-box', id: box }, body })),
+    },
+
     watch({ socket, onMessage, onHello }) {
-      const opened = socket(`${sockets}${pathOf({ name: 'watch' })}`)
+      const opened = socket(`${sockets()}${pathOf({ name: 'watch' })}`)
       opened.addEventListener('open', () => {
         net.token().then((token) => {
           opened.send(JSON.stringify({ type: 'hello', token }))
           onHello?.()
         }, (error: unknown) => onHello?.(error))
       })
-      opened.addEventListener('message', (event) => {
-        try {
-          onMessage(JSON.parse(String(event.data)))
-        } catch {
-          onMessage(null)
-        }
-      })
+      opened.addEventListener('message', (event) => onMessage(String(event.data)))
       return { send: (message) => opened.send(JSON.stringify(message)), close: () => opened.close() }
     },
 
+    records: (options) => recordsClient({ ...options, send: ({ method, workspace, kind, id: row, query, body }) => net.call({ name: method === 'PUT' ? 'putRecord' : row === undefined ? 'listRecords' : 'getRecord', params: { team: workspace, kind, ...row !== undefined && { id: row } }, query, body }) }),
+
     oauth: {
-      authorize: (body) => net.ok({ name: 'createOAuthAuthorization', body, reply: OAuthAuthorization }),
-      token: (body) => net.ok({ name: 'createOAuthToken', body, reply: OAuthToken }),
+      authorize: (body) => net.ok({ name: 'createOAuthAuthorization', body, auth: 'optional', reply: OAuthAuthorization }),
+      token: (body) => net.ok({ name: 'createOAuthToken', body, auth: 'optional', reply: OAuthToken }),
     },
-
-    async signInUrl({ returnTo, state }) {
-      return (await net.ok({ name: 'startSignIn', auth: false, body: { device: key.id, returnTo, state }, reply: SignInStarted })).url
-    },
-
-    session: () => net.session(),
-    signOut: () => store.set('session', undefined),
   }
 }
 
 export const openhutCloud = {
-  device: ({ url, key, store, fetch }: { url: string; key: DeviceIdentity; store: Store; fetch?: Fetch }): Device => deviceOf({ key, store, net: wire({ url, key, store, fetch }) }),
+  device: ({ url, key, store, fetch }: { url: Url; key: DeviceIdentity; store: Store; fetch?: Fetch }): Device => deviceOf({ key, store, net: wire({ url, key, store, fetch }) }),
   computer: computerOf,
 }
 

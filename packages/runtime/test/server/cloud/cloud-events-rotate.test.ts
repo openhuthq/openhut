@@ -66,19 +66,19 @@ test('against the real cloud API: when a teammate takes one of their devices off
     for (let i = 0; i < 100 && roomKeys.room(home)?.workspace.version !== 2; i++) await sleep(50)
     assert.equal(roomKeys.room(home)?.workspace.version, 2)
     assert.notEqual(roomKeys.room(home)?.workspace.key, oldKey)
-    const letters = await kit.call<{ data: { to: string }[] }>(sara, 'GET', `/v1/letters?workspace=${home}`)
+    const letters = await kit.call<{ data: { to: string }[] }>(sara, 'GET', `/v1/teams/${home}/letter`)
     assert.equal(letters.status, 200)
     assert.ok(letters.json.data.some((each) => each.to === sara.key))
 
     await recordsService.put({ collection: 'workspace', id: home, workspace: home, value: { name: 'Written after the phone left' } })
     await recordsService.drain()
-    const read = await kit.call<SealedRow>(sara, 'GET', `/v1/workspace/${home}`)
+    const read = await kit.call<SealedRow>(sara, 'GET', `/v1/teams/${home}/workspace/${home}`)
     assert.equal(read.status, 200)
     const row = read.json
     const ring = (version: number, key: string) => () => ({ version, keys: { [version]: fromBase64(key) } })
     assert.deepEqual((await open({ row, keys: ring(2, roomKeys.room(home)?.workspace.key ?? '') }))?.value.workspace, { name: 'Written after the phone left' })
     assert.equal((await open({ row, keys: ring(1, oldKey) }))?.value.workspace, undefined)
-    assert.equal((await kit.call(saraPhone, 'GET', `/v1/workspace?workspace=${home}`)).status, 403)
+    assert.equal((await kit.call(saraPhone, 'GET', `/v1/teams/${home}/workspace`)).status, 403)
   } finally {
     cloudEvents.stop()
     await app.close()

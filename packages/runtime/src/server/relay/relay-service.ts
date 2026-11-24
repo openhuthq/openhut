@@ -5,10 +5,10 @@ import { Readable, duplexPair } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import WebSocket, { type RawData } from 'ws'
-import { serve, type ComputerKey, type Handlers, type SocketPeer, type TunnelRequest, type TunnelSocketRequest } from '@openhut/tunnel'
+import { type ComputerKey, type Handlers, type SocketPeer, type TunnelRequest, type TunnelSocketRequest } from '@openhut/tunnel'
 import { boxKey } from '@openhut/common/vault/vault.ts'
 import { keysService } from '../cloud/keys-service.ts'
-import { config } from '../platform/config.ts'
+import { cloud } from '../platform/cloud.ts'
 import { listen, log } from '../platform/events.ts'
 import { messageOf } from '../platform/http-error.ts'
 import { memberOf, tagDevice } from '../team/identity.ts'
@@ -17,7 +17,7 @@ const NULL_BODY = new Set([204, 205, 304])
 const HOP_BY_HOP = new Set(['connection', 'keep-alive', 'transfer-encoding'])
 const SYNC_MS = 10_000
 
-let relay: { close: () => void } | undefined
+let relay: (() => void) | undefined
 let handlers: Handlers | undefined
 let syncing: Promise<void> | undefined
 
@@ -39,7 +39,7 @@ export const relayService = {
   },
 
   stop(): void {
-    relay?.close()
+    relay?.()
     relay = undefined
     handlers = undefined
   },
@@ -58,14 +58,13 @@ export function relayIdOf(key: Uint8Array): string {
 }
 
 async function turn(): Promise<void> {
-  const wanted = !!handlers && !!config.relayUrl && !!keysService.session()
-  if (wanted && !relay && handlers && config.relayUrl) {
-    const key = await tunnelKey()
-    relay = serve({ relayUrl: config.relayUrl, computerId: relayIdOf(key.publicKey), token: () => keysService.token(), key, ...handlers })
+  const wanted = !!handlers && !!keysService.session()
+  if (wanted && !relay && handlers) {
+    relay = cloud.serve(handlers)
     log.info({ event: 'relay.on' })
   }
   if (!wanted && relay) {
-    relay.close()
+    relay()
     relay = undefined
     log.info({ event: 'relay.off' })
   }

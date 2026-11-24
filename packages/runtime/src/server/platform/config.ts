@@ -12,8 +12,6 @@ const BUILD = fileOr(new URL('../../../../../BUILD', import.meta.url), 'dev')
 const JOIN = process.env.OPENHUT_JOIN || undefined
 const TEST_MODEL = process.env.OPENHUT_MODEL === 'test'
 const HOST_NET = process.env.OPENHUT_AGENT_HOST_NET === '1'
-const CLOUD_URL = process.env.OPENHUT_CLOUD_URL || 'https://cloud.openhut.dev'
-const RELAY_URL = process.env.OPENHUT_RELAY_URL || CLOUD_URL.replace(/^http/, 'ws')
 const API_URL = process.env.OPENHUT_API_URL || 'https://cloud.openhut.dev/api'
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
 
@@ -23,7 +21,6 @@ export const config = {
   host: process.env.OPENHUT_HOST ?? '127.0.0.1',
   gatewayPort: GATEWAY_PORT,
   releaseUrl: process.env.OPENHUT_URL ?? 'https://openhut.dev',
-  cloudUrl: CLOUD_URL,
   apiUrl: API_URL,
   socket: process.env.OPENHUT_SOCKET ?? join(DATA, 'openhut.sock'),
   installKind: installKindOf(process.env.OPENHUT_SOCKET ? 'desktop' : 'server'),
@@ -52,7 +49,6 @@ export const config = {
   join: JOIN,
   appScheme: process.env.OPENHUT_APP_SCHEME || undefined,
   name: process.env.OPENHUT_NAME || undefined,
-  relayUrl: RELAY_URL,
   claudeBin: fileURLToPath(new URL('../../../../../bin/claude', import.meta.url)),
   claudeHostBin: process.env.OPENHUT_CLAUDE ?? (process.env.OPENHUT_BIN ? join(process.env.OPENHUT_BIN, process.platform === 'win32' ? 'claude.exe' : 'claude') : fileURLToPath(new URL(`../../../../../bin/${process.platform === 'darwin' ? 'claude-darwin' : 'claude'}`, import.meta.url))),
   claudePlatform: PLATFORM,

@@ -1,15 +1,15 @@
 import { randomBytes } from 'node:crypto'
 import type { FastifyReply } from 'fastify'
 import * as z from 'zod/mini'
-import { type Backup, KeyBox, Letter, MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type UnlockCloud, faceName, KNOCK_MS, siteHost } from '@openhut/common/cloud/cloud.ts'
+import { type Backup, KeyBox, type Letter, type MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type UnlockCloud, faceName, KNOCK_MS, siteHost } from '@openhut/common/cloud/cloud.ts'
 import type { Health } from '@openhut/common/admin/admin.ts'
-import { JoinCode, Me, signV1 } from '@openhut/common/cloud/v1/identity.ts'
-import { JoinRequest } from '@openhut/common/cloud/v1/trust.ts'
-import { commitOf, facesOf } from '@openhut/common/cloud/faces.ts'
+import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
+import { facesOf } from '@openhut/common/cloud/faces.ts'
 import { addedOf, bodyOf, nextOf, signList, withoutDevices } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64, toBase64 } from '@openhut/common/vault/vault.ts'
 import { kitId } from '@openhut/common/vault/kit-file.ts'
-import { cloud, type Box, type Letter as Sealed, type Reply } from '../platform/cloud.ts'
+import { CloudError, type Reply } from '@openhut/common/cloud/openhut-cloud.ts'
+import { cloud, fromCloud, sending } from '../platform/cloud.ts'
 import { config } from '../platform/config.ts'
 import { db } from '../platform/db.ts'
 import { log } from '../platform/events.ts'
@@ -18,7 +18,7 @@ import { settings } from '../platform/settings.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { callbackBase, connectionService } from '../connections/connection-service.ts'
 import { keyStore, type Account, type AskRoom } from './key-store.ts'
-import { accountDevice, deviceName, deviceOs, keysService, openLetter, sealTo } from './keys-service.ts'
+import { accountDevice, deviceName, deviceOs, keysService, openLetter, sealTo, type Box, type Sent as Sealed } from './keys-service.ts'
 import { roomKeys } from './room-keys.ts'
 import { guessSite, teamIcon } from './team-icon.ts'
 import { hinted, takeSignIn, withSignIn } from './sign-ins.ts'
@@ -28,14 +28,9 @@ import { agentService } from '../agents/agent-service.ts'
 import { userPresence } from './user-presence.ts'
 
 const CHECK_MS = 60_000
-const Boxes = z.object({ data: z.array(z.object({ id: z.string(), body: z.string(), by: z.string(), signature: z.string() })) })
 const WORKSPACE_BOX = 'workspace-'
-const Newer = z.object({ data: z.array(z.unknown()) })
 const IDLE: Backup = { state: 'idle', done: 0, total: 0, current: null, at: null, agent: null, problem: null }
 const CHANGED = 'Someone changed this team a moment ago. Try again.'
-const Lists = z.object({ data: z.array(MemberList), hasMore: z.optional(z.boolean()) })
-const Letters = z.object({ data: z.array(Letter) })
-const Asked = z.object({ data: z.array(JoinRequest) })
 const ROTATE = 'cloud_rotate'
 const ASK_POLL_MS = 2000
 let signInError: string | null = null
@@ -95,7 +90,6 @@ export const cloudService = {
     const teams = await teamsOf()
     const own = (await boxesOf()).filter((box) => !teams.includes(box.id))
     const nonce = randomBytes(32).toString('base64url')
-    const commit = commitOf({ device: await keysService.deviceKey(), nonce })
     const rooms: AskRoom[] = []
     let refused: string | null = null
     let waiting = false
@@ -107,7 +101,7 @@ export const cloudService = {
         ? [me].filter((member) => member.devices.some((device) => device !== member.kit && !body?.runtimes?.includes(device)))
         : body?.members.filter((member) => member.role !== 'member' && member.email !== email) ?? []
       if (!approvers.length) continue
-      const asked = await keysService.call({ method: 'POST', path: '/v1/join-requests', body: { workspace: id, name: deviceName(), os: deviceOs(), server: !config.personal, commit } })
+      const asked = await cloud.knock({ team: id, nonce }).ask({ name: deviceName(), os: deviceOs(), server: !config.personal }).then(() => ({ status: 200, json: null }), (error: unknown) => error instanceof CloudError ? { status: error.status, json: error.json } : { status: 0, json: null })
       waiting ||= asked.status === 409
       if (asked.status !== 200) refused = z.safeParse(z.object({ error: z.object({ message: z.string() }) }), asked.json).data?.error.message ?? 'OpenHut Cloud couldn’t send your request. Try again.'
       if (asked.status !== 200) continue
@@ -122,13 +116,12 @@ export const cloudService = {
   async cancelAsk(): Promise<Cloud> {
     const rooms = keysService.asked()
     await stopAsking()
-    const me = encodeURIComponent(await keysService.deviceKey())
-    for (const { id: workspace } of rooms) await keysService.call({ method: 'DELETE', path: `/v1/join-requests/${me}?workspace=${workspace}` }).catch(() => undefined)
+    for (const { id: workspace, nonce } of rooms) await cloud.knock({ team: workspace, nonce: nonce ?? '' }).cancel().catch(() => undefined)
     return cloudService.status()
   },
 
   async review({ workspace, device }: { workspace: string; device: string }): Promise<Cloud> {
-    const reviewed = await keysService.call({ method: 'POST', path: `/v1/join-requests/${encodeURIComponent(device)}/reviews?workspace=${mustBeOn(workspace)}` })
+    const reviewed = await cloud.team(mustBeOn(workspace)).review(device)
     if (reviewed.status !== 200) throw new HttpError(reviewed.status === 404 ? 404 : 502, reviewed.status === 404 ? 'That device isn’t waiting anymore. It was let in, denied, or it expired.' : 'OpenHut Cloud couldn’t open the request. Try again.')
     await cloudEvents.refreshRequests(workspace)
     return cloudService.status()
@@ -150,7 +143,8 @@ export const cloudService = {
       const list = await keysService.addDevice({ device, name: asked.name, runtime: false })
       if (list) await putList({ workspace, list })
       if (asked.os === 'web') return cloudService.status()
-      const sent = await keysService.call({ method: 'POST', path: '/v1/letters', body: { workspace, ...await keysService.accountLetter(device) } })
+      sending(workspace)
+      const sent = await cloud.team(workspace).send(await keysService.accountLetter(device))
       if (sent.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t let that computer in. Try again.')
       return cloudService.status()
     }
@@ -161,7 +155,7 @@ export const cloudService = {
   },
 
   async deny({ workspace, device, why }: { workspace: string; device: string; why?: 'mismatch' | 'not-me' }): Promise<Cloud> {
-    const denied = await keysService.call({ method: 'DELETE', path: `/v1/join-requests/${encodeURIComponent(device)}?workspace=${mustBeOn(workspace)}${why ? `&why=${why}` : ''}` })
+    const denied = await cloud.team(mustBeOn(workspace)).deny({ device, why })
     if (denied.status !== 200 && denied.status !== 404) throw new HttpError(502, 'OpenHut Cloud couldn’t deny it. Try again.')
     await cloudEvents.refreshRequests(workspace)
     return cloudService.status()
@@ -191,7 +185,7 @@ export const cloudService = {
     const teams = roomKeys.rooms().map((room) => room.workspace.id).filter((ws) => ws !== account.workspace.id)
     for (const ws of teams) await change({ ws, emails: [account.email] }).catch((err: unknown) => log.warn({ event: 'cloud.leave_failed', error: messageOf(err) }))
     cloudEvents.stop()
-    const wiped = await keysService.call({ method: 'DELETE', path: '/v1/account' })
+    const wiped = await cloud.deleteAccount()
     if (wiped.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t delete your account. Try again.')
     await keysService.forgetHere()
     return cloudService.status()
@@ -230,9 +224,9 @@ export const cloudService = {
   },
 
   async start({ loginHint }: { loginHint?: string } = {}): Promise<CloudAuthorization> {
-    const device = await keysService.device()
     const state = randomBytes(24).toString('base64url')
-    const { url } = await cloud.signIn({ provider: 'google', device: toBase64(device.publicKey), redirectUrl: `${callbackBase()}/api/cloud/callback`, state })
+    const started = await cloud.signIn({ google: { returnTo: `${callbackBase()}/api/cloud/callback`, state } }).catch(fromCloud)
+    const url = started.object === 'redirect' ? started.url : ''
     await settings.setSignIns(withSignIn({ pending: settings.signIns(), state, now: Date.now() }))
     if (loginHint) invited.set(state, loginHint.toLowerCase())
     signInError = null
@@ -250,14 +244,21 @@ export const cloudService = {
       return page(`${signInError} You can go back to OpenHut.`)
     }
     try {
-      const device = await keysService.device()
-      const session = await cloud.session({ grant: 'google', code, signature: await signV1({ signer: device, proof: 'session', parts: [code] }) })
+      const kept = keysService.session()
+      const session = await cloud.signIn({ googleCode: code }).catch(fromCloud)
+      if (session.object !== 'me') throw new HttpError(502, 'OpenHut Cloud didn’t finish the sign-in. Try again.')
+      const back = async () => keysService.setSession(kept)
       if (expected && session.email.toLowerCase() !== expected) {
+        await back()
         signInError = `This invite is for ${expected}. You signed in as ${session.email}, so nothing was set up.`
         return page(`This invite is for ${expected}, and you signed in as ${session.email}. Nothing was set up for ${session.email}. Go back to OpenHut and sign in as ${expected}.`, { title: 'Wrong Google account' })
       }
-      keysService.ownedBy(session)
-      await keysService.setSession({ token: session.token, refresh: session.refresh, expiresAt: session.expiresAt })
+      try {
+        keysService.ownedBy(session)
+      } catch (err) {
+        await back()
+        throw err
+      }
       const who = { sub: session.sub, email: session.email }
       if (keysService.account()?.sub !== session.sub) {
         if (await accountExists()) {
@@ -266,8 +267,8 @@ export const cloudService = {
           return signedIn(session.email)
         }
       }
-      const me = Me.safeParse((await keysService.call({ method: 'GET', path: '/v1/me' })).json).data
-      if (!me?.home) throw new HttpError(502, 'OpenHut Cloud didn’t send your home team. Try again.')
+      const me = session
+      if (!me.home) throw new HttpError(502, 'OpenHut Cloud didn’t send your home team. Try again.')
       const home = me.home
       const opened = await serial(async () => openRoom({ account: await keysService.open({ ...who, home }) }))
       if (!opened) {
@@ -304,7 +305,7 @@ export const cloudService = {
       await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString(), confirmed: false })
       const signer = keysService.mustBeOn()
       try {
-        const saved = await keysService.call({ method: 'PUT', path: '/v1/key-boxes/kit', body: await keysService.signBox({ account: signer, name: 'kit', body: box, savedAt }) })
+        const saved = await cloud.keyBoxes.put(await keysService.signBox({ account: signer, name: 'kit', body: box, savedAt }))
         boxesDiffer = saved.status === 403
         if (saved.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t save your recovery kit. Try again.')
       } catch (err) {
@@ -334,7 +335,7 @@ export const cloudService = {
   },
 
   async addPasskey({ prf }: { prf: string }): Promise<Cloud> {
-    const saved = await keysService.call({ method: 'PUT', path: '/v1/key-boxes/passkey', body: await keysService.passkeyBox(fromBase64(prf)) })
+    const saved = await cloud.keyBoxes.put(await keysService.passkeyBox(fromBase64(prf)))
     boxesDiffer ||= saved.status === 403
     if (saved.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t save Touch ID. Try again.')
     passkeySaved = true
@@ -363,10 +364,7 @@ export const cloudService = {
 
   async joinCode(): Promise<JoinCode> {
     keysService.mustBeOn()
-    const made = await keysService.call({ method: 'POST', path: '/v1/join-codes' })
-    const code = JoinCode.safeParse(made.json).data
-    if (!code) throw new HttpError(502, 'OpenHut Cloud couldn’t make a join code. Try again.')
-    return code
+    return cloud.joinCode().catch((): never => { throw new HttpError(502, 'OpenHut Cloud couldn’t make a join code. Try again.') })
   },
 
   async joining(): Promise<Health['join']> {
@@ -401,7 +399,7 @@ export function mustBeOn(workspace: string): string {
 }
 
 export async function putList({ workspace, list, letters, boxes }: { workspace: string; list: MemberList; letters?: Sealed[]; boxes?: Box[] }): Promise<void> {
-  const put = await keysService.memberLists({ list, letters, boxes }).catch(() => ({ status: 0 }))
+  const put = await cloud.team(workspace).publish({ list, letters: letters ?? [], boxes: boxes ?? [] })
   if (put.status !== 200) throw await refusal({ ws: workspace, status: put.status })
   await roomKeys.advance({ lists: [list], ws: workspace })
 }
@@ -435,7 +433,7 @@ async function caughtUp({ ws, step }: { ws: string; step: () => Promise<void> })
       return await step()
     } catch (err) {
       if (!(err instanceof HttpError) || err.status !== 409 || tries === 3) throw err
-      await roomKeys.refresh({ ws, call: keysService.call })
+      await roomKeys.refresh({ ws })
     }
   }
 }
@@ -443,8 +441,8 @@ async function caughtUp({ ws, step }: { ws: string; step: () => Promise<void> })
 async function refusal({ ws, status }: { ws: string; status: number }): Promise<HttpError> {
   if (status === 409) return new HttpError(409, CHANGED)
   if (status !== 403) return new HttpError(502, 'OpenHut Cloud couldn’t save the change. Try again.')
-  const newer = await keysService.call({ method: 'GET', path: `/v1/member-lists?workspace=${ws}&startingAfter=${roomKeys.members(ws)?.version ?? 0}` }).catch(() => null)
-  if (newer?.status === 403 || (Newer.safeParse(newer?.json).data?.data.length ?? 0) > 0) return new HttpError(409, CHANGED)
+  const newer = await cloud.team(ws).lists({ after: roomKeys.members(ws)?.version ?? 0 }).then((lists) => lists.length > 0, (error: unknown) => error instanceof CloudError && error.status === 403)
+  if (newer) return new HttpError(409, CHANGED)
   return new HttpError(403, 'OpenHut Cloud couldn’t save the change. Try again.')
 }
 
@@ -457,20 +455,20 @@ async function serverApproval({ device, name }: { device: string; name: string |
 
 async function joinAsServer(code: string): Promise<void> {
   if (keysService.session() && keysService.locked()) return void resumeAsking()
-  const session = await keysService.joinSession(code)
-  const who = { sub: session.sub, email: session.email }
+  const me = await cloud.signIn({ joinCode: code }).catch(fromCloud)
+  if (me.object !== 'me') throw new HttpError(502, 'OpenHut Cloud didn’t take the join code. Make a new one and try again.')
+  const who = { sub: me.sub, email: me.email }
   if (await accountExists()) {
     await keysService.setLocked(who)
     await cloudService.ask()
     return
   }
-  const me = Me.safeParse((await keysService.call({ method: 'GET', path: '/v1/me' })).json).data
-  if (!me?.home) throw new HttpError(502, 'OpenHut Cloud didn’t send your home team. Try again.')
+  if (!me.home) throw new HttpError(502, 'OpenHut Cloud didn’t send your home team. Try again.')
   const home = me.home
   if (!await serial(async () => openRoom({ account: await keysService.open({ ...who, home }) }))) throw new HttpError(409, 'Another computer set up this account a moment ago. Run the command again.')
   log.info({ event: 'cloud.first_computer', workspace: home })
   cloudEvents.start()
-  if (session.maker) void letInMaker({ workspace: home, device: session.maker }).catch((err: unknown) => log.warn({ event: 'cloud.let_in_failed', error: messageOf(err) }))
+  if (me.maker) void letInMaker({ workspace: home, device: me.maker }).catch((err: unknown) => log.warn({ event: 'cloud.let_in_failed', error: messageOf(err) }))
 }
 
 async function letInMaker({ workspace, device }: { workspace: string; device: string }): Promise<void> {
@@ -502,13 +500,13 @@ function kitOf(): { savedAt: string; differs: boolean } | null {
 }
 
 async function accountExists(): Promise<boolean> {
-  const me = Me.safeParse((await keysService.call({ method: 'GET', path: '/v1/me' })).json).data
+  const me = await cloud.me()
   if (!me) throw new HttpError(502, 'OpenHut Cloud couldn’t check for a backup. Try again.')
   return me.workspaces.length > 0 || (await getBox('kit')).status === 200
 }
 
 async function getBox(name: string): Promise<Reply> {
-  return keysService.call({ method: 'GET', path: `/v1/key-boxes/${name}` }).catch(() => ({ status: 0, json: null }))
+  return cloud.keyBoxes.get(name).catch(() => ({ status: 0, json: null }))
 }
 
 function boxIn(reply: Reply): KeyBox | undefined {
@@ -554,9 +552,9 @@ async function compareBoxes(): Promise<void> {
   const account = keysService.account()
   if (!account) return
   const kit = await getBox('kit')
-  const workspaces = await keysService.call({ method: 'GET', path: '/v1/key-boxes' })
-  if (![200, 404].includes(kit.status) || workspaces.status !== 200) return
-  if (!Boxes.safeParse(workspaces.json).data?.data.some((each) => each.id === `${WORKSPACE_BOX}${account.workspace.id}`)) return lockOut(account)
+  const workspaces = await cloud.keyBoxes.list()
+  if (![200, 404].includes(kit.status) || !workspaces) return
+  if (!workspaces.some((each) => each.id === `${WORKSPACE_BOX}${account.workspace.id}`)) return lockOut(account)
   const cloudKit = await dropPending({ account, cloudKit: boxIn(kit) })
   cloudHasKit = Boolean(cloudKit)
   const mine = keysService.kitState().saved?.box
@@ -584,13 +582,13 @@ async function markerOf({ account, kit }: { account: Account; kit: KeyBox }): Pr
 }
 
 async function confirmKit({ account, body, savedAt }: { account: Account; body: string; savedAt: number }): Promise<void> {
-  await keysService.call({ method: 'PUT', path: '/v1/key-boxes/kit-confirmed', body: await keysService.signBox({ account, name: 'kit-confirmed', body, savedAt }) })
+  await cloud.keyBoxes.put(await keysService.signBox({ account, name: 'kit-confirmed', body, savedAt }))
 }
 
 async function deleteBoxes({ account, kinds }: { account: Account; kinds: string[] }): Promise<boolean> {
   let deleted = true
   for (const kind of kinds) {
-    const gone = await keysService.call({ method: 'DELETE', path: `/v1/key-boxes/${kind}`, body: await keysService.deleteBox({ account, name: kind }) })
+    const gone = await cloud.keyBoxes.drop({ name: kind, ...await keysService.deleteBox({ account, name: kind }) })
     deleted &&= gone.status === 200 || gone.status === 404
   }
   return deleted
@@ -603,27 +601,21 @@ async function lockOut({ sub, email }: Account): Promise<void> {
 }
 
 async function boxesOf(): Promise<{ id: string; key: string; chain: MemberList[] }[]> {
-  const listed = Boxes.safeParse((await keysService.call({ method: 'GET', path: '/v1/key-boxes' })).json).data?.data ?? []
+  const listed = await cloud.keyBoxes.list() ?? []
   const boxes = listed.filter((box) => box.id.startsWith(WORKSPACE_BOX)).map((box) => ({ id: box.id.slice(WORKSPACE_BOX.length), key: box.body }))
   return Promise.all(boxes.map(async (box) => ({ ...box, chain: await chainOf(box.id) })))
 }
 
 async function chainOf(workspace: string): Promise<MemberList[]> {
-  const chain: MemberList[] = []
-  for (let more = true; more;) {
-    const page = Lists.safeParse((await keysService.call({ method: 'GET', path: `/v1/member-lists?workspace=${workspace}&startingAfter=${bodyOf(chain.at(-1))?.version ?? 0}` })).json).data
-    chain.push(...page?.data ?? [])
-    more = Boolean(page?.hasMore && page.data.length)
-  }
-  return chain
+  return cloud.team(workspace).lists().catch(() => [])
 }
 
 async function joinWith({ account: restored, typed }: { account: Account; typed: boolean }): Promise<Cloud> {
   const signedHere = restored.list.by === toBase64((await accountDevice(fromBase64(restored.key))).publicKey)
-  const joined = signedHere ? await keysService.memberLists({ list: restored.list }) : { status: 200 }
+  const joined = signedHere ? await cloud.team(restored.workspace.id).publish({ list: restored.list, letters: [], boxes: [] }) : { status: 200 }
   if (joined.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t add this computer. Try again.')
   const teams = []
-  for (const team of restored.teams ?? []) if ((await keysService.memberLists({ list: team.list })).status === 200) teams.push(team)
+  for (const team of restored.teams ?? []) if ((await cloud.team(team.workspace.id).publish({ list: team.list, letters: [], boxes: [] })).status === 200) teams.push(team)
   const account = { ...restored, teams }
   const kit = boxIn(await getBox('kit'))
   const kept = kit && (typed || (await markerOf({ account, kit })).confirmed)
@@ -664,7 +656,7 @@ function listedUnder({ account, device }: { account: Account; device: string }):
 
 async function deleteLocked(): Promise<Cloud> {
   mustBeLocked()
-  const wiped = await keysService.call({ method: 'DELETE', path: '/v1/account' })
+  const wiped = await cloud.deleteAccount()
   if (wiped.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t delete your account. Try again.')
   await keysService.forgetHere()
   return cloudService.status()
@@ -682,22 +674,23 @@ async function checkAsked(): Promise<void> {
   if (!keysService.locked()) return stopAsking()
   const me = await keysService.deviceKey()
   for (const { id: workspace, own, nonce } of keysService.asked().filter((each) => !now.settled.includes(each.id))) {
-    const got = await keysService.call({ method: 'GET', path: `/v1/letters?workspace=${workspace}` })
+    const got = await cloud.team(workspace).letters().then((found) => ({ status: 200, found }), (error: unknown) => ({ status: error instanceof CloudError ? error.status : 0, found: [] as Letter[] }))
     if (got.status === 403 && own) return removed()
-    const found = Letters.safeParse(got.json).data?.data ?? []
+    const { found } = got
     if (own && await unlockedBy({ workspace, found })) return
     const chain = (!own || !config.personal) && found.length ? await chainOf(workspace) : []
     if (chain.length && await roomKeys.joinApproved({ ws: workspace, chain, found })) {
-      for (const each of found) await keysService.call({ method: 'DELETE', path: `/v1/letters/${each.id}` })
+      for (const each of found) await cloud.team(workspace).take(each.id)
       now.settled.push(workspace)
       now.approved = true
       cloudService.connect()
       continue
     }
-    const mine = (Asked.safeParse((await keysService.call({ method: 'GET', path: `/v1/join-requests?workspace=${workspace}` })).json).data?.data ?? []).find((each) => each.id === me)
+    const knock = cloud.knock({ team: workspace, nonce: nonce ?? '' })
+    const mine = await knock.mine()
     now.reviewed ||= Boolean(mine?.reviewed)
     now.missed ||= Boolean(mine?.missed && !mine.asked)
-    if (mine?.reviewed && mine.commit && !mine.nonce && nonce) now.revealed = (await keysService.call({ method: 'POST', path: '/v1/join-requests/nonces', body: { workspace, nonce } })).status === 200 || now.revealed
+    if (mine?.reviewed && mine.commit && !mine.nonce && nonce) now.revealed = await knock.reveal() || now.revealed
     if (mine?.nonce) now.revealed = true
     if (!mine?.asked) now.settled.push(workspace)
   }
@@ -713,7 +706,7 @@ async function unlockedBy({ workspace, found }: { workspace: string; found: Lett
     const account = key && await keysService.restoreWith({ key, workspaces: [...boxes.filter((box) => box.id === workspace), ...boxes.filter((box) => box.id !== workspace)] })
     if (!account || !listedUnder({ account, device: each.from })) continue
     await joinWith({ account, typed: false })
-    await keysService.call({ method: 'DELETE', path: `/v1/letters/${each.id}` }).catch(() => undefined)
+    await cloud.team(workspace).take(each.id).catch(() => undefined)
     await stopAsking()
     return true
   }
@@ -739,7 +732,7 @@ async function stopAsking(): Promise<void> {
 
 async function rotate({ changed: { list, next, letters }, drop }: { changed: Awaited<ReturnType<typeof keysService.change>>; drop: ('kit' | 'kit-confirmed' | 'passkey')[] }): Promise<void> {
   const boxes: Box[] = await Promise.all([next, ...(next.teams ?? []).filter((each) => each.workspace.key)].map((room) => keysService.workspaceBox({ account: next, room })))
-  const put = await keysService.memberLists({ list, letters, boxes })
+  const put = await cloud.team(next.workspace.id).publish({ list, letters, boxes })
   if (put.status === 409) throw new HttpError(409, 'Your devices changed on another computer just now. Try again.')
   if (put.status !== 200) throw new HttpError(put.status === 403 ? 403 : 502, 'OpenHut Cloud couldn’t save the change. Try again.')
   await keysService.adopt({ account: next })
@@ -751,7 +744,7 @@ async function rotate({ changed: { list, next, letters }, drop }: { changed: Awa
 
 
 async function openRoom({ account }: { account: Account }): Promise<boolean> {
-  const made = await keysService.memberLists({ list: account.list, boxes: [await keysService.workspaceBox({ account })] })
+  const made = await cloud.team(account.workspace.id).publish({ list: account.list, letters: [], boxes: [await keysService.workspaceBox({ account })] })
   if (made.status === 403) {
     log.warn({ event: 'cloud.room_refused', workspace: account.workspace.id, reply: JSON.stringify(made.json).slice(0, 300) })
     return false
@@ -761,7 +754,7 @@ async function openRoom({ account }: { account: Account }): Promise<boolean> {
 }
 
 async function teamsOf(): Promise<string[]> {
-  const me = Me.safeParse((await keysService.call({ method: 'GET', path: '/v1/me' })).json).data
+  const me = await cloud.me()
   return me?.workspaces.map((each) => each.id).filter((id) => id !== me.home) ?? []
 }
 
