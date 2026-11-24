@@ -134,7 +134,8 @@ function DeviceRow({ device }: { device: Device }) {
 function RequestRow({ workspace, asked }: { workspace: CloudWorkspaceView; asked: DeviceRequest }) {
   const title = asked.name ?? 'New computer'
   const answer = useAnswer({ workspace: workspace.id, request: asked, label: title })
-  return <Row icon={<DeviceIcon kind="mac" />} title={title} note={<>Wants to join · <DeviceMeta device={{ kind: 'mac', name: title, os: asked.os ?? undefined, when: `${ago(asked.at)} ago` }} /></>}>
+  const kind = asked.server ? 'server' : 'mac'
+  return <Row icon={<DeviceIcon kind={kind} />} title={title} note={<>Wants to join · <DeviceMeta device={{ kind, name: title, os: asked.os ?? undefined, when: `${ago(asked.at)} ago` }} /></>}>
     <Button type="button" variant="ghost" className={PILL} disabled={answer.busy} onClick={answer.notMe}>Not me</Button>
     <Button type="button" variant="primary" className={PILL} disabled={answer.busy} onClick={answer.approve}>{asked.checked ? 'Review' : 'Approve'}</Button>
     {answer.dialog}
@@ -300,13 +301,19 @@ function AddByCommand() {
   const { mutate } = code
   useEffect(() => mutate(), [mutate])
   const now = useNow(Boolean(code.data))
-  const expired = code.data && now > Date.parse(code.data.expiresAt)
+  const { requests, home } = mineOf(useCloud().data)
+  const asked = home && code.data ? requests.filter((each) => each.server).at(-1) : undefined
+  const expired = !asked && code.data && now > Date.parse(code.data.expiresAt)
   return <TailscaleDialog title="Add over OpenHut Relay" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}
     foot={expired && <Button type="button" variant="primary" onClick={() => mutate()}>Make a new command</Button>}>
     <ErrorNote message={code.error?.message} />
     {code.isPending && <Waiting note="It works once, for 10 minutes.">Making a code…</Waiting>}
     {expired && <Scene mood="worried" title="Didn't hear from it" line="The command works for 10 minutes, and that time is up. If you ran it, the server printed why it couldn't join. Make a new command and run it again." />}
-    {code.data && !expired && <>
+    {asked && home && <>
+      <p className="m-0 text-body">It's asking to join. Press Review, then tap the two faces it printed.</p>
+      <Rows><RequestRow workspace={home} asked={asked} /></Rows>
+    </>}
+    {code.data && !expired && !asked && <>
       <p className="m-0 text-body">Run this on your Linux computer.</p>
       <Command text={joinCommand(code.data.code)} />
       <Waiting note="It works once, for 10 minutes. Approve it here when it asks.">Waiting for it to ask to join…</Waiting>

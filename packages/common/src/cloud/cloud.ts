@@ -224,6 +224,11 @@ export const AskAdmin = z.object({ name: z.string().check(z.maxLength(64)), os: 
 export type AskAdmin = z.infer<typeof AskAdmin>
 
 export const FACES = 12
+const FACE_COLORS = ['Teal', 'Cream', 'Coral', 'Orange', 'Green', 'Mint', 'Blue', 'Rose', 'Yellow', 'Lilac', 'Periwinkle', 'Pink']
+const FACE_WEAR = ['a cap', 'a headset', 'a beanie', 'a crown', 'an antenna', 'a party hat', 'a top hat', 'a sprout', 'a halo', 'glasses', 'shades', 'a monocle']
+export function faceName(index: number): string {
+  return `${FACE_COLORS[(index * 5) % FACE_COLORS.length]} face with ${FACE_WEAR[index % FACE_WEAR.length]}`
+}
 export const ApproveRequest = z.object({ faces: z.optional(z.array(z.number().check(z.int(), z.minimum(0), z.maximum(FACES - 1))).check(z.length(2))) })
 export type ApproveRequest = z.infer<typeof ApproveRequest>
 export const DenyRequestQuery = z.object({ why: z.optional(z.enum(['mismatch', 'not-me'])) })
