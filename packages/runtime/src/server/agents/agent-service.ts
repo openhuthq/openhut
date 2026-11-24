@@ -92,7 +92,7 @@ export const agentService = {
     const { codeExecution, browser, model, runsHere, runsOn, shared, ...fields } = patch
     const controls = codeExecution !== undefined || browser !== undefined || model !== undefined || runsHere !== undefined || runsOn !== undefined || shared !== undefined
     if (controls && facts.owner !== actor.email) throw new HttpError(403, `Only ${facts.owner} can change where ${facts.value.name} runs, its model, what it can run, or who can use it.`, { param: Object.keys(patch)[0] })
-    if (!controls && facts.personal && facts.owner !== actor.email) throw new HttpError(403, `Only ${facts.owner} can change ${facts.value.name}.`)
+    if (!controls && !mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} can change ${facts.value.name}. You can chat with it.`)
     requireModel(model === facts.control?.model ? undefined : model)
     const me = await keysService.deviceKey()
     const target = runsHere ? me : runsOn ?? facts.control?.runsOn ?? me
@@ -227,7 +227,7 @@ export const agentService = {
 }
 
 export function mayEdit({ facts, actor }: { facts: AgentFacts; actor: Caller }): boolean {
-  return facts.owner === actor.email || !facts.personal
+  return facts.owner === actor.email || roomKeys.members(facts.workspace)?.members.find((member) => member.email === actor.email)?.role === 'owner'
 }
 
 export function placeOf(row: Pick<AgentRow, 'workspace' | 'shared'>): { workspace: string; personal: boolean } {

@@ -96,14 +96,15 @@ test('the upgrade uploads what this computer runs once: the agent, its owner-sig
   assert.equal(await upgrade.done(), true)
 })
 
-test('a new agent is two records, runs here, and only its owner changes where it runs or what it can use', async () => {
+test('a new agent is two records, runs here, and only its owner changes it, even shared: a teammate chats', async () => {
   const made = await agentService.create({ actor: owner, name: 'Juniper' })
   assert.deepEqual([made.runsHere, made.owner, made.shared], [true, 'tokenowner@example.com', false])
   assert.ok(await db.selectFrom('agent').select('id').where('id', '=', made.id).executeTakeFirst())
   await assert.rejects(agentService.update({ actor: mate, id: made.id, patch: { model: 'claude:opus' } }), { status: 403 })
   await assert.rejects(agentService.update({ actor: owner, id: made.id, patch: { runsOn: 'dev_mate' } }), { status: 400, param: 'runsOn' })
   await agentService.update({ actor: owner, id: made.id, patch: { shared: true } })
-  assert.equal((await agentService.update({ actor: mate, id: made.id, patch: { name: 'June' } })).name, 'June')
+  await assert.rejects(agentService.update({ actor: mate, id: made.id, patch: { name: 'June' } }), { status: 403 })
+  assert.equal((await agentService.update({ actor: owner, id: made.id, patch: { name: 'June' } })).name, 'June')
   await assert.rejects(agentService.createGrant({ actor: mate, agentId: made.id, connectionId: 'cn_none' }), { status: 403 })
 })
 
