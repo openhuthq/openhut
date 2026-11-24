@@ -1,4 +1,4 @@
-import { connect, serve, type ComputerKey as NoiseComputerKey, type DeviceKey as NoiseDeviceKey, type Handlers, type Tunnel } from '@openhut/tunnel'
+import { connect, serve, TunnelError, type ComputerKey as NoiseComputerKey, type DeviceKey as NoiseDeviceKey, type Handlers, type Tunnel } from '@openhut/tunnel'
 import * as z from 'zod/mini'
 import { ApiError } from '../api.ts'
 import { OAuthAuthorization, OAuthToken, type CreateOAuthAuthorization, type CreateOAuthToken } from './oauth.ts'
@@ -81,6 +81,16 @@ export class CloudError extends Error {
   }
 }
 
+export class ComputersOffline extends Error {
+  readonly names: (string | null)[]
+  readonly reasons: string[]
+  constructor({ names, reasons }: { names: (string | null)[]; reasons: string[] }) {
+    super('None of your computers is online. Open OpenHut on your Mac, then try again.')
+    this.names = names
+    this.reasons = reasons
+  }
+}
+
 const REFRESH_EARLY_MS = 5 * 60_000
 const TIMEOUT_MS = 20_000
 const Page = z.object({ data: z.array(z.unknown()), hasMore: z.optional(z.boolean()) })
@@ -154,13 +164,14 @@ export type Wire = ReturnType<typeof wire>
 function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net: Wire }): Device {
   const sockets = () => net.base().replace(/^http/, 'ws')
 
-  async function computersOf(team: string): Promise<string[]> {
+  async function computersOf(team: string): Promise<{ device: string; name: string | null }[]> {
     const signedIn = await net.session()
     const me = await key.id()
     const lists = await listsOf({ net, team })
     const body = bodyOf(lists.at(-1))
     const mine = body?.members.find((each) => each.email === signedIn?.email)
-    return mine?.devices.filter((device) => device !== me && device !== mine.kit && !body?.removed.includes(device) && !(mine.viewers ?? []).includes(device)) ?? []
+    const devices = mine?.devices.filter((device) => device !== me && device !== mine.kit && !body?.removed.includes(device) && !(mine.viewers ?? []).includes(device)) ?? []
+    return devices.map((device) => ({ device, name: body?.names?.[device] ?? null }))
   }
 
   return {
@@ -216,13 +227,18 @@ function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net:
       const token = await net.token()
       const noise = await key.noise()
       const { timeout = 8000 } = input
-      const boxes = 'box' in input ? [fromHex(input.box)] : (input.computer ? [input.computer] : await computersOf(input.team)).map((device) => fromBase64(device).subarray(32))
+      const computers = 'box' in input ? [] : input.computer ? [{ device: input.computer, name: null }] : await computersOf(input.team)
+      const boxes = 'box' in input ? [fromHex(input.box)] : computers.map(({ device }) => fromBase64(device).subarray(32))
+      const reasons: string[] = []
       for (const box of boxes) {
         const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', box)))
-        const opened = await connect({ relayUrl: sockets(), url: `${sockets()}${pathOf({ name: 'tunnel', params: { computer: id } })}?role=device`, computer: { id, key: hex(box) }, key: noise, token, timeout }).catch(() => undefined)
+        const opened = await connect({ relayUrl: sockets(), url: `${sockets()}${pathOf({ name: 'tunnel', params: { computer: id } })}?role=device`, computer: { id, key: hex(box) }, key: noise, token, timeout }).catch((error: unknown) => {
+          if (error instanceof TunnelError && error.reason) reasons.push(error.reason)
+          return undefined
+        })
         if (opened) return opened
       }
-      throw new CloudError({ status: 404, json: null, message: 'None of your computers is online. Open OpenHut on your Mac, then try again.' })
+      throw new ComputersOffline({ names: computers.map(({ name }) => name), reasons })
     },
   }
 }

@@ -1,17 +1,13 @@
-import { connect, TunnelError, webKey, type Tunnel } from '@openhut/tunnel'
-import { bodyOf } from '@openhut/common/cloud/member-list.ts'
-import type { MemberList } from '@openhut/common/cloud/cloud.ts'
-import { commitOfWeb, facesOfWeb } from '@openhut/common/cloud/faces-web.ts'
-import type { JoinRequest } from '@openhut/common/cloud/v1/trust.ts'
-import { proofOf, requestParts, SIGNATURE_HEADER, type JoinCode, type Me, type Session } from '@openhut/common/cloud/v1/identity.ts'
-import { fromBase64, toBase64 } from '@openhut/common/vault/vault.ts'
+import { webKey, type Tunnel } from '@openhut/tunnel'
+import { ComputersOffline, openhutCloud } from '@openhut/common/cloud/openhut-cloud.ts'
+import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
+import { toBase64 } from '@openhut/common/vault/vault.ts'
 import type { Channel } from '@/lib/live-socket'
 import { accountStepOf, lastSeenOf, Offline } from './web-first-run.ts'
 
 const env: Partial<ImportMetaEnv> = import.meta.env ?? {}
 export const REMOTE = env.MODE === 'web'
 const API = env.VITE_OPENHUT_API_URL ?? 'https://cloud.openhut.dev/api'
-const RELAY = env.VITE_OPENHUT_RELAY_URL ?? 'wss://cloud.openhut.dev'
 const RETURN = '/signed-in'
 
 type Pair = { publicKey: CryptoKey; privateKey: CryptoKey }
@@ -20,7 +16,7 @@ export type RemoteState = { step: 'signed-out' } | { step: 'first-run'; email: s
 
 let tunnel: Tunnel | undefined
 
-function store<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+function kv<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     const open = indexedDB.open('openhut', 1)
     open.onupgradeneeded = () => open.result.createObjectStore('kv')
@@ -32,121 +28,79 @@ function store<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBR
     }
   })
 }
-const read = <T>(key: string) => store<T | undefined>('readonly', (kv) => kv.get(key))
-const write = (key: string, value: unknown) => store('readwrite', (kv) => kv.put(value, key))
+const store = {
+  get: <T>(key: string) => kv<T | undefined>('readonly', (each) => each.get(key)),
+  set: async (key: string, value: unknown) => { await kv('readwrite', (each) => each.put(value, key)) },
+}
 
 async function keys(): Promise<Keys> {
-  const saved = await read<Keys>('keys')
+  const saved = await store.get<Keys>('keys')
   if (saved) return saved
   const made = {
     signing: await crypto.subtle.generateKey('Ed25519', false, ['sign', 'verify']) as Pair,
     tunnel: await crypto.subtle.generateKey('X25519', false, ['deriveBits']) as Pair,
   }
-  await write('keys', made)
+  await store.set('keys', made)
   return made
 }
 
-async function deviceOf({ signing, tunnel: box }: Keys): Promise<string> {
-  const raw = async (key: CryptoKey) => new Uint8Array(await crypto.subtle.exportKey('raw', key))
-  return toBase64(new Uint8Array([...await raw(signing.publicKey), ...await raw(box.publicKey)]))
-}
-
-async function sign(bytes: Uint8Array): Promise<string> {
-  return toBase64(new Uint8Array(await crypto.subtle.sign('Ed25519', (await keys()).signing.privateKey, Uint8Array.from(bytes))))
-}
-
-async function session(): Promise<Session | undefined> {
-  const saved = await read<Session>('session')
-  if (!saved || Date.parse(saved.expiresAt) - Date.now() > 60_000) return saved
-  const signedAt = Date.now()
-  const renewed = await fetch(`${API}/v1/sessions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ grant: 'refresh_token', refreshToken: saved.refreshToken, signedAt, signature: await sign(proofOf({ proof: 'refresh', parts: [saved.refreshToken, String(signedAt)] })) }) })
-  if (!renewed.ok) return undefined
-  const fresh: Session = await renewed.json()
-  await write('session', fresh)
-  return fresh
-}
-
-async function cloud<T>(method: string, path: string, body?: unknown): Promise<{ status: number; json: T }> {
-  const signed = await session()
-  if (!signed) return { status: 401, json: null as T }
-  const payload = body === undefined ? '' : JSON.stringify(body)
-  const headers: Record<string, string> = { authorization: `Bearer ${signed.token}`, 'content-type': 'application/json' }
-  if (method !== 'GET') {
-    const signedAt = Date.now()
-    headers[SIGNATURE_HEADER] = `${signedAt}.${await sign(proofOf({ proof: 'request', parts: await requestParts({ method, path, signedAt, body: payload }) }))}`
-  }
-  const res = await fetch(`${API}${path}`, { method, headers, body: payload || undefined })
-  return { status: res.status, json: await res.json().catch(() => null) }
-}
+const cloud = openhutCloud.device({
+  url: API,
+  store,
+  key: {
+    async id() {
+      const { signing, tunnel: box } = await keys()
+      const raw = async (key: CryptoKey) => new Uint8Array(await crypto.subtle.exportKey('raw', key))
+      return toBase64(new Uint8Array([...await raw(signing.publicKey), ...await raw(box.publicKey)]))
+    },
+    sign: async (bytes) => new Uint8Array(await crypto.subtle.sign('Ed25519', (await keys()).signing.privateKey, Uint8Array.from(bytes))),
+    noise: async () => webKey((await keys()).tunnel),
+  },
+})
 
 export const remote = {
   async signIn(): Promise<void> {
-    const state = toBase64(crypto.getRandomValues(new Uint8Array(16)))
-    sessionStorage.setItem('openhut-state', state)
-    const res = await fetch(`${API}/v1/auth/sign-in/social`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: 'google', device: await deviceOf(await keys()), redirectUrl: `${location.origin}${RETURN}`, state }) })
-    if (!res.ok) throw new Error('OpenHut Cloud didn’t start the sign-in. Try again.')
-    location.assign((await res.json() as { url: string }).url)
+    const started = await cloud.signIn({ google: { returnTo: `${location.origin}${RETURN}` } }).catch(() => null)
+    if (started?.object !== 'redirect') throw new Error('OpenHut Cloud didn’t start the sign-in. Try again.')
+    location.assign(started.url)
   },
 
   async state(): Promise<RemoteState> {
     const back = new URL(location.href)
     const code = back.pathname === RETURN ? back.searchParams.get('code') : null
-    if (code && back.searchParams.get('state') === sessionStorage.getItem('openhut-state')) {
-      const res = await fetch(`${API}/v1/sessions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ grant: 'google', code, signature: await sign(proofOf({ proof: 'session', parts: [code] })) }) })
-      if (res.ok) await write('session', await res.json())
+    if (code) {
+      await cloud.signIn({ googleCode: code, state: back.searchParams.get('state') ?? '' }).catch(() => null)
       history.replaceState(null, '', '/')
     }
-    const me = await cloud<Me>('GET', '/v1/me')
-    if (me.status !== 200) return { step: 'signed-out' }
-    const step = accountStepOf(me.json)
-    if (step === 'first-run') return { step, email: me.json.email }
+    const me = await cloud.me()
+    if (!me) return { step: 'signed-out' }
+    const step = accountStepOf(me)
+    if (step === 'first-run') return { step, email: me.email }
     if (step === 'ready') {
-      await write('nonce', null)
-      return { step: 'ready', email: me.json.email, workspace: me.json.home ?? '' }
+      await store.set('nonce', null)
+      return { step: 'ready', email: me.email, workspace: me.home ?? '' }
     }
-    const device = await deviceOf(await keys())
-    const nonce = await read<string | null>('nonce')
-    if (!nonce) await remote.knock(me.json.home ?? undefined)
-    const mine = (await cloud<{ data: JoinRequest[] }>('GET', `/v1/join-requests?workspace=${me.json.home}`)).json?.data.find((each) => each.id === device)
-    const knocked = nonce ?? await read<string>('nonce') ?? ''
-    if (!mine?.asked) return { step: 'over', email: me.json.email, missed: Boolean(mine?.missed) }
-    if (mine.reviewed && !mine.nonce) await cloud('POST', '/v1/join-requests/nonces', { workspace: me.json.home, nonce: knocked })
-    return { step: 'waiting', email: me.json.email, faces: await facesOfWeb({ device, nonce: knocked }) }
+    if (!await store.get<string | null>('nonce')) await remote.knock(me.home ?? undefined)
+    const state = await cloud.knock({ team: me.home ?? '', nonce: await store.get<string>('nonce') ?? '' }).state()
+    if (state.step === 'approved') return { step: 'ready', email: me.email, workspace: me.home ?? '' }
+    return state.step === 'waiting' ? { step: 'waiting', email: me.email, faces: state.faces } : { step: 'over', email: me.email, missed: state.missed }
   },
 
   async knock(workspace?: string): Promise<void> {
-    const home = workspace ?? (await cloud<Me>('GET', '/v1/me')).json.home
+    const home = workspace ?? (await cloud.me())?.home ?? ''
     const nonce = toBase64(crypto.getRandomValues(new Uint8Array(32)))
-    const asked = await cloud<{ error?: { message: string } }>('POST', '/v1/join-requests', { workspace: home, name: browserName(), os: 'web', commit: await commitOfWeb({ device: await deviceOf(await keys()), nonce }) })
-    if (asked.status !== 200) throw new Error(asked.json?.error?.message ?? 'OpenHut Cloud didn’t take the request. Try again.')
-    await write('nonce', nonce)
+    await cloud.knock({ team: home, nonce }).ask({ name: browserName(), os: 'web' })
+    await store.set('nonce', nonce)
   },
 
-  async joinCode(): Promise<JoinCode> {
-    const made = await cloud<JoinCode & { error?: { message: string } }>('POST', '/v1/join-codes')
-    if (made.status !== 200) throw new Error(made.json?.error?.message ?? 'OpenHut Cloud couldn’t make a command. Try again.')
-    return made.json
-  },
+  joinCode: (): Promise<JoinCode> => cloud.firstComputerCode(),
 
   async open(workspace: string): Promise<void> {
-    const signed = await session()
-    const lists = await cloud<{ data: MemberList[] }>('GET', `/v1/member-lists?workspace=${workspace}`)
-    const body = bodyOf(lists.json?.data.at(-1))
-    const mine = await deviceOf(await keys())
-    const own = body?.members.find((each) => each.email === signed?.email)
-    const computers = own?.devices.filter((device) => device !== mine && device !== own.kit && !body?.removed.includes(device)) ?? []
-    let seen: number | null = null
-    for (const device of computers) {
-      const box = fromBase64(device).subarray(32)
-      const id = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', box)), (byte) => byte.toString(16).padStart(2, '0')).join('')
-      const key = Array.from(box, (byte) => byte.toString(16).padStart(2, '0')).join('')
-      tunnel = await connect({ relayUrl: RELAY, computer: { id, key }, key: await webKey((await keys()).tunnel), token: signed?.token ?? '', timeout: 8000 }).catch((err: unknown) => {
-        seen = Math.max(seen ?? 0, err instanceof TunnelError ? lastSeenOf(err.reason) ?? 0 : 0) || null
-        return undefined
-      })
-      if (tunnel) return
-    }
-    throw new Offline({ computer: computers.length === 1 ? body?.names?.[computers[0] ?? ''] ?? null : null, seen })
+    tunnel = await cloud.open({ team: workspace }).catch((err: unknown) => {
+      if (!(err instanceof ComputersOffline)) throw err
+      const seen = Math.max(0, ...err.reasons.map((reason) => lastSeenOf(reason) ?? 0)) || null
+      throw new Offline({ computer: err.names.length === 1 ? err.names[0] ?? null : null, seen })
+    })
   },
 
   fetch(path: string, init?: RequestInit): Promise<Response> {
