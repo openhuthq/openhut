@@ -74,6 +74,7 @@ async function listDevices(): Promise<void> {
   await db.insertInto('agent').values([
     { id: 'ag_tshared', name: 'Shared', owner_id: owner.id, instructions: '# Shared', model: 'sonnet', net: 41, channel_key: 'k', workspace: TEAM, shared: true },
     { id: 'ag_tprivate', name: 'Private', owner_id: owner.id, instructions: '# Private', model: 'sonnet', net: 42, channel_key: 'k', workspace: TEAM, shared: false },
+    { id: 'ag_tpicked', name: 'Picked', owner_id: owner.id, instructions: '# Picked', model: 'sonnet', net: 45, channel_key: 'k', workspace: TEAM, shared: false, people: '["sara@example.com"]' },
     { id: 'ag_thomeshared', name: 'Home shared', owner_id: owner.id, instructions: '# Home', model: 'sonnet', net: 43, channel_key: 'k', workspace: null, shared: true },
     { id: 'ag_thomeprivate', name: 'Home private', owner_id: owner.id, instructions: '# Home', model: 'sonnet', net: 44, channel_key: 'k', workspace: null, shared: false },
   ]).execute()
@@ -164,9 +165,16 @@ test('SEC2: a powerful change from your browser waits for this computer’s appr
 })
 
 test('SEC10: over the tunnel a teammate lists only the agents shared in their teams, and reaches nothing else of the owner’s', async () => {
-  const all = [{ id: 'shared', workspace: TEAM, personal: false }, { id: 'private', workspace: TEAM, personal: true }, { id: 'home', workspace: 'home', personal: false }]
-  assert.deepEqual(visibleTo({ actor: { teammate: [TEAM] }, all }).map((each) => each.id), ['shared'])
-  assert.deepEqual(visibleTo({ actor: {}, all }).map((each) => each.id), ['shared', 'private', 'home'])
+  const control = (people: string[]) => ({ runsOn: 'k', model: 'claude:sonnet', codeExecution: true, browser: false, grants: [], people, sidebars: [] })
+  const all = [
+    { id: 'shared', workspace: TEAM, personal: false, owner: 'mo@example.com', control: control([]) },
+    { id: 'private', workspace: TEAM, personal: true, owner: 'mo@example.com', control: control([]) },
+    { id: 'picked', workspace: TEAM, personal: true, owner: 'mo@example.com', control: control(['sara@example.com']) },
+    { id: 'home', workspace: 'home', personal: false, owner: 'mo@example.com', control: control([]) },
+  ]
+  assert.deepEqual(visibleTo({ actor: { teammate: [TEAM], email: 'sara@example.com' }, all }).map((each) => each.id), ['shared', 'picked'])
+  assert.deepEqual(visibleTo({ actor: { teammate: [TEAM], email: 'ana@example.com' }, all }).map((each) => each.id), ['shared'], 'only the people picked see a picked agent')
+  assert.deepEqual(visibleTo({ actor: { email: 'mo@example.com' }, all }).map((each) => each.id), ['shared', 'private', 'picked', 'home'])
   const caller = await ask({ createConnection: device(TEAMMATE), path: '/api/agents' })
   assert.notEqual(caller.status, 403, 'a teammate may list, and the list holds only what is shared with them')
   for (const [method, path] of [['GET', '/api/agents/ag_tshared'], ['GET', '/api/me'], ['GET', '/api/cloud'], ['GET', '/api/admin'], ['POST', '/api/cloud/web-links']] as const) {
@@ -178,6 +186,8 @@ test('over the tunnel a teammate chats only with agents shared in their workspac
   const shared = await ask({ createConnection: device(TEAMMATE), path: '/api/threads/ag_tshared' })
   assert.deepEqual([shared.status, shared.body.email, shared.body.local], [200, 'sara@example.com', false])
   assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'POST', path: '/api/threads/ag_tprivate/chat', body: {} })).status, 403)
+  assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'POST', path: '/api/threads/ag_tpicked/chat', body: {} })).status, 200, 'a person picked on Access chats with it')
+  assert.equal((await ask({ createConnection: device(HOUSEMATE), path: '/api/threads/ag_tpicked' })).status, 403)
   assert.equal((await ask({ createConnection: device(TEAMMATE), method: 'PATCH', path: '/api/agents/ag_tshared', body: { wanted: 'stopped' } })).status, 403)
   assert.equal((await ask({ createConnection: device(tunnelKeyOf(toBase64(stranger.publicKey))), path: '/api/threads/ag_tshared' })).status, 401)
 })

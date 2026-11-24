@@ -38,6 +38,9 @@ export const Agent = z.object({
   changedBy: z._default(z.nullable(z.string()), null),
   workspace: z._default(z.nullable(z.string()), null),
   shared: z._default(z.boolean(), false),
+  people: z._default(z.array(z.string()), []),
+  sidebars: z._default(z.array(z.string()), []),
+  inSidebar: z._default(z.boolean(), true),
   owner: z._default(z.nullable(z.string()), null),
   canManage: z._default(z.boolean(), true),
   createdAt: Timestamp,
@@ -46,6 +49,7 @@ export type Agent = z.infer<typeof Agent>
 
 const AgentName = z.string().check(z.minLength(1), z.maxLength(40))
 const Face = z.string().check(z.maxLength(60_000))
+const Emails = z.array(z.email().check(z.maxLength(320), z.toLowerCase())).check(z.maxLength(200))
 
 export const CreateAgent = z.object({
   name: AgentName,
@@ -53,6 +57,9 @@ export const CreateAgent = z.object({
   model: z.optional(ModelKey),
   face: z.optional(Face),
   workspace: z.optional(z.string().check(z.regex(/^[A-Za-z0-9_-]{8,64}$/))),
+  shared: z.optional(z.boolean()),
+  people: z.optional(Emails),
+  sidebars: z.optional(Emails),
 })
 export type CreateAgent = z.infer<typeof CreateAgent>
 
@@ -67,6 +74,8 @@ export const UpdateAgentFields = {
   runsHere: z.optional(z.literal(true)),
   runsOn: z.optional(z.string().check(z.minLength(1), z.maxLength(200))),
   shared: z.optional(z.boolean()),
+  people: z.optional(Emails),
+  sidebars: z.optional(Emails),
 }
 export const UpdateAgent = z.object(UpdateAgentFields).check(atLeastOneField)
 export type UpdateAgent = z.infer<typeof UpdateAgent>
@@ -102,5 +111,22 @@ export const ControlRecord = z.object({
   codeExecution: z.boolean(),
   browser: z.boolean(),
   grants: z.array(z.object({ connection: z.string(), at: z.string() })),
+  people: z._default(z.array(z.string()), []),
+  sidebars: z._default(z.array(z.string()), []),
 })
 export type ControlRecord = z.infer<typeof ControlRecord>
+
+// Who can open an agent: everyone on its team when shared, otherwise its owner and the people picked.
+// ponytail: a runtime older than this one that rewrites the control record drops people/sidebars (zod strips them), so "only people I pick" falls back to "only you", never wider.
+export type Access = { owner: string; shared: boolean; people: readonly string[]; sidebars: readonly string[] }
+
+export function canUse(access: Access, email: string): boolean {
+  return email === access.owner || access.shared || access.people.includes(email)
+}
+
+// Whose sidebar it sits in: picked people, or for a team agent the people added to sidebars (nobody listed means everyone).
+export function inSidebar(access: Access, email: string): boolean {
+  if (email === access.owner) return true
+  if (!access.shared) return access.people.includes(email)
+  return access.sidebars.length === 0 || access.sidebars.includes(email)
+}

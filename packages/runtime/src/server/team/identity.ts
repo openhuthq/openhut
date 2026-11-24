@@ -7,6 +7,7 @@ import { userInfo } from 'node:os'
 import type { Duplex } from 'node:stream'
 import type { FastifyRequest } from 'fastify'
 import * as z from 'zod/mini'
+import { canUse } from '@openhut/common/agents/agent.ts'
 import { bodyOf } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64 } from '@openhut/common/vault/public.ts'
 import { keyStore } from '../cloud/key-store.ts'
@@ -25,7 +26,7 @@ const TRUST = /^(POST|PUT|PATCH|DELETE) \/api\/cloud(\/|$)/
 const TEAMMATES = new Set(['GET /api/threads/:id', 'POST /api/threads/:id/chat'])
 const TEAMMATE_LISTS = new Set(['GET /api/agents'])
 const SERVER_KIT = 'POST /api/cloud/kits'
-const CHANGES = ['instructions', 'codeExecution', 'browser', 'runsHere', 'runsOn', 'shared', 'model']
+const CHANGES = ['instructions', 'codeExecution', 'browser', 'runsHere', 'runsOn', 'shared', 'people', 'sidebars', 'model']
 const STEP_UP: Record<string, (body: unknown) => boolean> = {
   'POST /api/agents': () => config.installKind !== 'server',
   'PATCH /api/agents/:id': (body) => typeof body === 'object' && body !== null && CHANGES.some((field) => field in body),
@@ -49,7 +50,7 @@ export async function who(req: FastifyRequest): Promise<Caller> {
   const member = memberOf(device)
   if (!member) throw new HttpError(401, 'This device isn’t on your list anymore, so it can’t reach this computer.')
   const route = routeOf(req)
-  const allowed = member.own ? isOwnWindow(device) || !TRUST.test(route) || firstKitOnAServer(route) : TEAMMATE_LISTS.has(route) || (TEAMMATES.has(route) && await sharedWith({ req, workspaces: member.workspaces }))
+  const allowed = member.own ? isOwnWindow(device) || !TRUST.test(route) || firstKitOnAServer(route) : TEAMMATE_LISTS.has(route) || (TEAMMATES.has(route) && await sharedWith({ req, email: member.email, workspaces: member.workspaces }))
   if (!allowed) throw new HttpError(403, member.own ? 'Do this on your computer: devices, keys, the recovery kit and sign-in change only in the OpenHut app there.' : 'You can only chat with the agents your team shares.')
   return { id: (await owner()).id, email: member.email, local: false, ...!member.own && { teammate: member.workspaces } }
 }
@@ -137,11 +138,11 @@ function firstKitOnAServer(route: string): boolean {
   return route === SERVER_KIT && config.installKind === 'server' && !keysService.kitState().saved
 }
 
-async function sharedWith({ req, workspaces }: { req: FastifyRequest; workspaces: string[] }): Promise<boolean> {
+async function sharedWith({ req, email, workspaces }: { req: FastifyRequest; email: string; workspaces: string[] }): Promise<boolean> {
   const agentId = z.safeParse(IdParams, req.params).data?.id
-  const agent = agentId ? await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', agentId).executeTakeFirst() : undefined
+  const agent = agentId ? await db.selectFrom('agent').select(['workspace', 'shared', 'people', 'owner']).where('id', '=', agentId).executeTakeFirst() : undefined
   const place = agent?.workspace ?? keyStore.current()?.account?.workspace.id
-  return !!agent?.shared && !!place && workspaces.includes(place)
+  return !!agent && canUse({ owner: agent.owner ?? '', shared: agent.shared, people: peopleOf(agent.people), sidebars: [] }, email) && !!place && workspaces.includes(place)
 }
 
 async function owner(): Promise<Owner> {
@@ -164,3 +165,12 @@ async function claimOwner(): Promise<Owner> {
 
 type Owner = { id: string; email: string }
 export type Caller = Owner & { local: boolean; teammate?: string[] }
+
+export function peopleOf(json: string): string[] {
+  try {
+    const people: unknown = JSON.parse(json)
+    return Array.isArray(people) ? people.filter((each): each is string => typeof each === 'string') : []
+  } catch {
+    return []
+  }
+}

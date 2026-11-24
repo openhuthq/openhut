@@ -21,3 +21,14 @@ export function noteOf({ where, computers, here }: { where: Pick<Computer, 'kind
   const sealed = computers.some((each) => each.kind === 'server') ? 'Pick your Linux server to seal it in its own box.' : 'Add a Linux server in Settings › Computers to seal it in its own box.'
   return `It runs like any app you install, with your access, while this ${here} is awake. ${sealed}`
 }
+
+export type PeopleSearch = { kind: 'alone' } | { kind: 'none'; query: string } | { kind: 'found'; emails: string[] }
+
+// The people a Share field offers: teammates other than the owner and those already added, matched on email or name.
+export function searchPeople({ members, owner, added, query }: { members: readonly string[]; owner: string; added: readonly string[]; query: string }): PeopleSearch {
+  const others = members.filter((email) => email !== owner)
+  if (!others.length) return { kind: 'alone' }
+  const typed = query.trim().toLowerCase()
+  const emails = others.filter((email) => !added.includes(email) && email.toLowerCase().includes(typed))
+  return typed && !emails.length ? { kind: 'none', query: query.trim() } : { kind: 'found', emails }
+}

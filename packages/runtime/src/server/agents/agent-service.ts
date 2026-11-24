@@ -1,5 +1,5 @@
 import type { Selectable } from 'kysely'
-import { AgentRecord, ControlRecord, type Agent, type CreateAgent, type AgentHealth, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
+import { AgentRecord, ControlRecord, canUse, inSidebar, type Access, type Agent, type CreateAgent, type AgentHealth, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import { viewersOf } from '@openhut/common/cloud/member-list.ts'
 import type { Deleted } from '@openhut/common/api.ts'
 import { splitModelKey } from '@openhut/common/models/provider.ts'
@@ -15,7 +15,7 @@ import { log, emit } from '../platform/events.ts'
 import { liveService } from '../platform/live-service.ts'
 import { deleted } from '../platform/responses.ts'
 import { connectionService } from '../connections/connection-service.ts'
-import type { Caller } from '../team/identity.ts'
+import { peopleOf, type Caller } from '../team/identity.ts'
 import { audienceOf } from '../channels/audience.ts'
 import { DiscordSecrets } from '../integrations/discord/discord.ts'
 import { resolveSlots } from '../models/model-slots.ts'
@@ -71,17 +71,18 @@ export const agentService = {
     return row
   },
 
-  async create({ actor, name, instructions, model, face, workspace }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'face' | 'workspace'>): Promise<Agent> {
+  async create({ actor, name, instructions, model, face, workspace, shared = false, people = [], sidebars = [] }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'face' | 'workspace' | 'shared' | 'people' | 'sidebars'>): Promise<Agent> {
     const clean = cleanName(name)
     requireModel(model)
     const ws = workspace ?? keysService.signedIn().workspace.id
     if (!roomKeys.room(ws)) throw new HttpError(400, 'This computer isn’t in that team.', { param: 'workspace' })
     if ((await agentd.health()).imageReady === false) throw new HttpError(409, 'OpenHut is still downloading what agents need to run. This happens once and takes a few minutes. Try again shortly.')
+    const access = teamOnly({ workspace: ws, owner: actor.email, people, sidebars })
     const id = newId('ag')
     const value: AgentRecord = { name: clean, instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000), face: face ?? null, wanted: 'stopped', createdAt: new Date().toISOString() }
-    await recordsService.put({ collection: 'agent', id, workspace: ws, parent: actor.email, personal: true, value })
-    const control: ControlRecord = { runsOn: await keysService.deviceKey(), model: model ?? DEFAULT_MODEL, codeExecution: true, browser: false, grants: [] }
-    await recordsService.put({ collection: 'control', parent: id, workspace: ws, personal: true, value: control })
+    await recordsService.put({ collection: 'agent', id, workspace: ws, parent: actor.email, personal: !shared, value })
+    const control: ControlRecord = { runsOn: await keysService.deviceKey(), model: model ?? DEFAULT_MODEL, codeExecution: true, browser: false, grants: [], ...access }
+    await recordsService.put({ collection: 'control', parent: id, workspace: ws, personal: !shared, value: control })
     await runSet.apply({ workspace: ws, id })
     emit({ name: 'agent.created', actor, target: { type: 'agent', id, name: clean, model: control.model } })
     return agentService.get({ actor, id })
@@ -89,8 +90,8 @@ export const agentService = {
 
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateAgent }): Promise<Agent> {
     const facts = await agentService.find({ id })
-    const { codeExecution, browser, model, runsHere, runsOn, shared, ...fields } = patch
-    const controls = codeExecution !== undefined || browser !== undefined || model !== undefined || runsHere !== undefined || runsOn !== undefined || shared !== undefined
+    const { codeExecution, browser, model, runsHere, runsOn, shared, people, sidebars, ...fields } = patch
+    const controls = codeExecution !== undefined || browser !== undefined || model !== undefined || runsHere !== undefined || runsOn !== undefined || shared !== undefined || people !== undefined || sidebars !== undefined
     if (controls && facts.owner !== actor.email) throw new HttpError(403, `Only ${facts.owner} can change where ${facts.value.name} runs, its model, what it can run, or who can use it.`, { param: Object.keys(patch)[0] })
     if (!controls && !mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} can change ${facts.value.name}. You can chat with it.`)
     requireModel(model === facts.control?.model ? undefined : model)
@@ -99,6 +100,7 @@ export const agentService = {
     if (target !== facts.control?.runsOn) requireRunner({ facts, runsOn: target, me })
     if (browser && target === me && !(await features()).browser) throw new HttpError(409, config.installKind === 'server' ? 'This computer can\'t give agents a browser. Run the agent on a Linux computer you added to use one.' : 'Install Google Chrome on this computer, then turn Browser on.', { param: 'browser' })
     const personal = shared === undefined ? facts.personal : !shared
+    const access = people || sidebars ? teamOnly({ workspace: facts.workspace, owner: facts.owner, people: people ?? facts.control?.people ?? [], sidebars: sidebars ?? facts.control?.sidebars ?? [] }) : {}
     const resealed = personal !== facts.personal
     const name = fields.name === undefined ? undefined : cleanName(fields.name)
     if (Object.keys(fields).length || resealed) {
@@ -106,7 +108,7 @@ export const agentService = {
       await recordsService.put({ collection: 'agent', id, workspace: facts.workspace, parent: facts.owner, personal, value: change(facts.value), reapply: (latest) => ({ value: change(AgentRecord.parse(latest.value)) }) })
     }
     if (controls) {
-      const change = (value: ControlRecord): ControlRecord => ({ ...value, ...model && { model }, ...codeExecution !== undefined && { codeExecution }, ...browser !== undefined && { browser }, runsOn: target })
+      const change = (value: ControlRecord): ControlRecord => ({ ...value, ...model && { model }, ...codeExecution !== undefined && { codeExecution }, ...browser !== undefined && { browser }, runsOn: target, ...access })
       await editControl({ facts, personal, change })
     }
     if (resealed) await reseal({ facts, personal })
@@ -267,9 +269,21 @@ function requireRunner({ facts, runsOn, me }: { facts: AgentFacts; runsOn: strin
   if (!ok) throw new HttpError(400, `${facts.value.name} can only run on one of ${facts.owner}'s own computers.`, { param: 'runsOn' })
 }
 
-export function visibleTo<T extends Pick<AgentFacts, 'personal' | 'workspace'>>({ actor, all }: { actor: Pick<Caller, 'teammate'>; all: T[] }): T[] {
+export function visibleTo<T extends Pick<AgentFacts, 'personal' | 'workspace' | 'owner' | 'control'>>({ actor, all }: { actor: Pick<Caller, 'teammate' | 'email'>; all: T[] }): T[] {
   const { teammate } = actor
-  return teammate ? all.filter((facts) => !facts.personal && teammate.includes(facts.workspace)) : all
+  return teammate ? all.filter((facts) => teammate.includes(facts.workspace) && canUse(accessOf(facts), actor.email)) : all
+}
+
+function accessOf(facts: Pick<AgentFacts, 'personal' | 'owner' | 'control'>): Access {
+  return { owner: facts.owner, shared: !facts.personal, people: facts.control?.people ?? [], sidebars: facts.control?.sidebars ?? [] }
+}
+
+function teamOnly({ workspace, owner, people, sidebars }: { workspace: string; owner: string; people: string[]; sidebars: string[] }): { people: string[]; sidebars: string[] } {
+  const members = new Set(roomKeys.members(workspace)?.members.map((member) => member.email))
+  const clean = (emails: string[]) => [...new Set(emails.map((email) => email.toLowerCase()))].filter((email) => email !== owner)
+  const outside = [...clean(people), ...clean(sidebars)].find((email) => !members.has(email))
+  if (outside) throw new HttpError(400, `${outside} isn’t on this team yet. Invite them first.`, { param: 'people' })
+  return { people: clean(people), sidebars: clean(sidebars) }
 }
 
 function workspaces(): string[] {
@@ -304,7 +318,7 @@ function heldFacts({ row, me }: { row: AgentRow; me: string }): AgentFacts {
   return {
     id: row.id, workspace, owner: row.owner ?? keysService.account()?.email ?? '', personal, by: null, row,
     value: { name: row.name, instructions: row.instructions, face: row.face, wanted: row.wanted, createdAt: new Date(row.created_at).toISOString() },
-    control: { runsOn: row.runs_on ?? me, model: row.model, codeExecution: row.code_execution, browser: row.web_browser, grants: [] },
+    control: { runsOn: row.runs_on ?? me, model: row.model, codeExecution: row.code_execution, browser: row.web_browser, grants: [], people: peopleOf(row.people), sidebars: [] },
   }
 }
 
@@ -323,7 +337,7 @@ async function agentOf({ facts, actor, states }: { facts: AgentFacts; actor: Cal
     status: here ? statusOf(states?.[facts.id]) : beat?.status ?? 'missing', health: health.health, healthDetail: health.detail, summary: summaryOf(value.instructions), net: here ? row.net : 0,
     instructions: value.instructions, codeExecution: control?.codeExecution ?? true, browser: control?.browser ?? false, face: value.face, canEdit: mayEdit({ facts, actor }),
     runsHere: here, runsNowhere: !here && (!control || !runner || !!list?.removed.includes(control.runsOn)), runsOn: control?.runsOn ?? null, runsOnName: here || !control ? null : list?.names?.[control.runsOn] ?? (runner ? `${runner.email}’s computer` : null), runsOnServer: !!control && !!list?.runtimes?.includes(control.runsOn),
-    changedBy: author && author !== actor.email ? author : null, workspace: facts.workspace === keysService.account()?.workspace.id ? null : facts.workspace, shared: !facts.personal, owner: facts.owner,
+    changedBy: author && author !== actor.email ? author : null, workspace: facts.workspace === keysService.account()?.workspace.id ? null : facts.workspace, shared: !facts.personal, people: facts.control?.people ?? [], sidebars: facts.control?.sidebars ?? [], inSidebar: inSidebar(accessOf(facts), actor.email), owner: facts.owner,
     canManage: mine, createdAt: value.createdAt,
   }
 }
