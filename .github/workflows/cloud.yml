@@ -2,7 +2,8 @@ name: Cloud
 
 on:
   workflow_run:
-    workflows: [CI]
+    # CI: main's green pushes (when private/ changed). Promote: stable moved, so the image's App (R5: stable's) must follow.
+    workflows: [CI, Promote]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -18,7 +19,7 @@ concurrency:
 
 jobs:
   changed:
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'push' || github.event.workflow_run.name == 'Promote'))
     runs-on: ubuntu-latest
     outputs:
       deploy: ${{ steps.since.outputs.deploy }}
@@ -32,6 +33,7 @@ jobs:
         id: since
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
         run: |
           sha=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --event push --status success --limit 1 --json headSha -q '.[0].headSha')
           [ -n "$sha" ] || { echo "::error::No main commit has passed CI yet."; exit 1; }
@@ -40,6 +42,11 @@ jobs:
           last=$([ -n "$run" ] && gh run download "$run" --repo "$GITHUB_REPOSITORY" -n cloud-deployed -D "$RUNNER_TEMP/last" >/dev/null && cat "$RUNNER_TEMP/last/deployed.txt" || true)
           echo "Newest green: ${sha::8}; last deployed: ${last:-none}"
           if [ -z "$last" ] || ! git cat-file -e "$last^{commit}" 2>/dev/null; then echo deploy=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "$WORKFLOW" = Promote ]; then
+            halt=$(curl -fsS https://dl.openhut.dev/channels/stable/release.json | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).halt')
+            echo "Promote moved stable (halt: $halt); a halt keeps the App that is live."
+            echo "deploy=$([ "$halt" = true ] && echo false || echo true)" >> "$GITHUB_OUTPUT"; exit 0
+          fi
           if [ "$sha" = "$last" ] || git merge-base --is-ancestor "$sha" "$last"; then echo "${sha::8} is already live or older than what is."; echo deploy=false >> "$GITHUB_OUTPUT"; exit 0; fi
           [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && { echo deploy=true >> "$GITHUB_OUTPUT"; exit 0; }
           changed=$(git diff --name-only "$last" "$sha" -- private packages/common .github/workflows/cloud.yml)
