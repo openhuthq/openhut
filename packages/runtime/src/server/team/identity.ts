@@ -18,11 +18,7 @@ import { newId } from '../platform/secrets.ts'
 
 const LOCAL = Symbol('local')
 const DEVICE = Symbol('device')
-const OWN_DEVICES = new Set([
-  'GET /api/threads', 'GET /api/threads/:id', 'DELETE /api/threads/:id', 'POST /api/threads/:id/chat',
-  'GET /api/threads/:id/files', 'POST /api/threads/:id/files', 'DELETE /api/threads/:id/files', 'POST /api/threads/:id/files/lookups',
-  'GET /api/browsers/:id/live', 'GET /api/channels/:id', 'GET /api/connection-events', 'POST /api/updates',
-])
+const TRUST = /^(POST|PUT|PATCH|DELETE) \/api\/cloud(\/|$)/
 const TEAMMATES = new Set(['GET /api/threads/:id', 'POST /api/threads/:id/chat'])
 const IdParams = z.object({ id: z.string() })
 
@@ -33,8 +29,8 @@ export async function who(req: FastifyRequest): Promise<Caller> {
   const member = memberOf(device)
   if (!member) throw new HttpError(401, 'This device isn’t on your list anymore, so it can’t reach this computer.')
   const route = `${req.method} ${req.routeOptions.url ?? ''}`
-  const allowed = member.own ? OWN_DEVICES.has(route) : TEAMMATES.has(route) && await sharedWith({ req, workspaces: member.workspaces })
-  if (!allowed) throw new HttpError(403, member.own ? 'Only this computer’s own app can do that. From another device you can chat, watch the browser, link WhatsApp, read files and the connection log, and update.' : 'You can only chat with the agents your team shares.')
+  const allowed = member.own ? !TRUST.test(route) : TEAMMATES.has(route) && await sharedWith({ req, workspaces: member.workspaces })
+  if (!allowed) throw new HttpError(403, member.own ? 'Do this on your computer: devices, keys, the recovery kit and sign-in change only in the OpenHut app there.' : 'You can only chat with the agents your team shares.')
   return { id: (await owner()).id, email: member.email, local: false }
 }
 
