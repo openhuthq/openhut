@@ -29,7 +29,7 @@ let child
 let api
 try {
   if (args.cloud) {
-    api = await bootCloud({ dir: args.cloud, api: API })
+    api = await bootCloud({ dir: args.cloud, api: API, log: join(home, 'logs', 'cloud-api.log') })
     say('the dev cloud API is up', { url: API })
   }
   if (args.installer) {
