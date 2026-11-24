@@ -1,13 +1,18 @@
 import { spawn } from 'node:child_process'
-import { resolve } from 'node:path'
+import { createWriteStream, mkdirSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 
 export function devCloudUrl() {
   return `http://127.0.0.1:${8800 + Math.floor(Math.random() * 500)}`
 }
 
-export async function bootCloud({ dir, api }) {
-  const proc = spawn(process.execPath, ['src/server.ts'], { cwd: resolve(dir), env: { ...process.env, PORT: new URL(api).port, API_URL: api, DEV_SIGN_IN: '1', DATABASE_URL: '', OPENHUT_API_DATA: '' }, stdio: ['ignore', 'ignore', 'inherit'] })
+export async function bootCloud({ dir, api, log }) {
+  const proc = spawn(process.execPath, ['src/server.ts'], { cwd: resolve(dir), env: { ...process.env, PORT: new URL(api).port, API_URL: api, DEV_SIGN_IN: '1', DATABASE_URL: '', OPENHUT_API_DATA: '' }, stdio: ['ignore', log ? 'pipe' : 'ignore', 'inherit'] })
+  if (log) {
+    mkdirSync(dirname(log), { recursive: true })
+    proc.stdout.pipe(createWriteStream(log))
+  }
   await waitFor(async () => fetch(`${api}/v1/events`).then(() => true, () => null), 120, 'the dev cloud API to listen')
   return proc
 }

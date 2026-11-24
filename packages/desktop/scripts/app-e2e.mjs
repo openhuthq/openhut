@@ -31,7 +31,7 @@ let api
 const site = createServer((req, res) => res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><title>OpenHut e2e page</title><h1>OpenHut e2e page</h1>')).listen(0, '127.0.0.1')
 try {
   if (args.cloud) {
-    api = await bootCloud({ dir: args.cloud, api: API })
+    api = await bootCloud({ dir: args.cloud, api: API, log: join(home, 'logs', 'cloud-api.log') })
     say('the dev cloud API is up', { url: API })
   }
   if (args.installer) {
