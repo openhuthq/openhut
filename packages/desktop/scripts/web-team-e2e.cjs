@@ -96,8 +96,6 @@ app.whenReady().then(async () => {
     const code = (await mo.until(/OPENHUT_JOIN='[^']+'/)).match(/OPENHUT_JOIN='([^']+)'/)[1]
     const box = server(code, data)
     log(`2 mo runs the server command (cloud ${CLOUD}, web ${WEB}); the server is the account’s only computer`)
-    await mo.until(/You’re in\./, 90000)
-    await mo.click('Open OpenHut')
     await mo.until(/Save your recovery kit|recovery kit/i, 60000)
     log('3 W5 gap: the browser reaches the recovery kit over the tunnel')
     await mo.shot('f2-03-kit')
@@ -133,8 +131,6 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 60 && !asked.faces; i++, await sleep(1000)) asked = (await box.api('GET', '/api/cloud')).workspaces.find((each) => each.id === home)?.requests.find((each) => each.device === asked.device)
     await box.api('POST', `/api/cloud/workspaces/${home}/requests/${encodeURIComponent(asked.device)}/approvals`, { faces: asked.faces })
     log('8 mo’s computer matches the two faces and lets sara’s browser in')
-    await sara.until(/You’re in\./, 60000)
-    await sara.click('Open OpenHut')
     const shared = await sara.until(/Shared with you[\s\S]*Helper/, 60000)
     const leak = /Diary/.test(shared)
     log(`9 sara sees only the shared agent (${leak ? 'DIARY LEAKED' : 'Helper, not Diary'})`)

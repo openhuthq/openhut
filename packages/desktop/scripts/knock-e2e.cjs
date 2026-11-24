@@ -42,13 +42,9 @@ app.whenReady().then(async () => {
     await click(mac, 'button', (await text(mac)).includes('Touch ID to let it in') ? 'Touch ID to let it in' : 'Let it in')
     log('4 picked the pair and let it in')
 
-    await until(knocker, /You’re in\./, 45000)
-    log('5 new device: You’re in.')
-    await shot(knocker, 'c-03-youre-in')
     await until(mac, /joined/, 45000)
     log(`6 the Mac: ${(await text(mac)).split('\n').filter((line) => /joined/.test(line))[0]}`)
     await shot(mac, 'c-04-joined-toast')
-    await click(knocker, 'button', 'Open OpenHut')
     await until(knocker, /Make your first agent|New agent|\nApps\n/i, 45000)
     log('7 new device opens the dashboard')
     await shot(knocker, 'c-05-new-device-dashboard')

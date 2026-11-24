@@ -7,7 +7,7 @@ import { I } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogHead } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
-import { BIG, Step } from '@/features/cloud/step'
+import { Step } from '@/features/cloud/step'
 import { faceLook } from '@/lib/face'
 import { WORDS } from '@/lib/platform'
 import { cn } from '@/lib/utils'
@@ -25,11 +25,6 @@ export function Knocking({ faces, onKit, line, action, link, children }: { faces
     {faces ? <span className="flex gap-8">{faces.map((index) => <Named key={index} index={index} size={112} />)}</span> : <Spinner className="mt-1" />}
     {children}
   </Step>
-}
-
-export function YoureIn({ line, onOpen }: { line?: string; onOpen: () => void }) {
-  return <Step happy title="You’re in." line={line ?? `Your ${WORDS.here === 'Mac' ? 'Mac' : 'computer'} handed this ${WORDS.here === 'Mac' ? 'Mac' : 'device'} its keys.`}
-    action={<Button type="button" variant="primary" className={BIG} autoFocus onClick={onOpen}>Open OpenHut</Button>} />
 }
 
 export function pairsOf({ faces, random = Math.random }: { faces: number[]; random?: () => number }): number[][] {
