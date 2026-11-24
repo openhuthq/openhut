@@ -1,7 +1,5 @@
 name: Cloud
 
-run-name: Cloud ${{ github.event.workflow_run.head_sha || github.sha }}
-
 on:
   workflow_run:
     workflows: [Desktop app]
@@ -24,20 +22,27 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       deploy: ${{ steps.since.outputs.deploy }}
+      sha: ${{ steps.since.outputs.sha }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - name: Deploy only when private/ or packages/common changed since the last deploy (a passing Desktop app run already ran their tests)
+          ref: main
+      - name: Main's newest green commit, deployed only when private/ or packages/common changed since the last deploy and never older than it
         id: since
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && { echo deploy=true >> "$GITHUB_OUTPUT"; exit 0; }
-          last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow cloud.yml --status success --limit 1 --json displayTitle -q '.[0].displayTitle' | sed -n 's/^Cloud \([0-9a-f]\{40\}\)$/\1/p')
+          sha=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow desktop.yml --branch main --event push --status success --limit 1 --json headSha -q '.[0].headSha')
+          [ -n "$sha" ] || { echo "::error::No main commit has passed Desktop app yet."; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=cloud-deployed&per_page=1" -q '.artifacts[0].workflow_run.id // ""')
+          last=$([ -n "$run" ] && gh run download "$run" --repo "$GITHUB_REPOSITORY" -n cloud-deployed -D "$RUNNER_TEMP/last" >/dev/null && cat "$RUNNER_TEMP/last/deployed.txt" || true)
+          echo "Newest green: ${sha::8}; last deployed: ${last:-none}"
           if [ -z "$last" ] || ! git cat-file -e "$last^{commit}" 2>/dev/null; then echo deploy=true >> "$GITHUB_OUTPUT"; exit 0; fi
-          changed=$(git diff --name-only "$last" HEAD -- private packages/common .github/workflows/cloud.yml)
+          if [ "$sha" = "$last" ] || git merge-base --is-ancestor "$sha" "$last"; then echo "${sha::8} is already live or older than what is."; echo deploy=false >> "$GITHUB_OUTPUT"; exit 0; fi
+          [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && { echo deploy=true >> "$GITHUB_OUTPUT"; exit 0; }
+          changed=$(git diff --name-only "$last" "$sha" -- private packages/common .github/workflows/cloud.yml)
           echo "Since ${last::8}: ${changed:-nothing}"
           echo "deploy=$([ -n "$changed" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
@@ -50,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ needs.changed.outputs.sha }}
       - name: Check out private/
         env:
           KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
@@ -72,3 +77,12 @@ jobs:
           KAMAL_REGISTRY_USERNAME: ${{ github.actor }}
           KAMAL_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: kamal deploy -c private/api/deploy/kamal.yml
+      - name: Record the sha now live, for the next run's comparison
+        run: echo "$SHA" > deployed.txt
+        env:
+          SHA: ${{ needs.changed.outputs.sha }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cloud-deployed
+          path: deployed.txt
+          retention-days: 90
