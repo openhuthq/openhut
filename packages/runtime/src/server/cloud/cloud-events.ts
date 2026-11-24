@@ -5,6 +5,7 @@ import { Forwarded, Notice, Ready } from '@openhut/common/cloud/v1/events.ts'
 import { JoinRequest } from '@openhut/common/cloud/v1/trust.ts'
 import { commitOf, facesOf } from '@openhut/common/cloud/faces.ts'
 import { anchorOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
+import type { MemberListBody } from '@openhut/common/cloud/cloud.ts'
 import { padded } from '@openhut/common/records/seal.ts'
 import { Collection } from '@openhut/common/records/wire.ts'
 import { AgentHealth, AgentStatus } from '@openhut/common/agents/agent.ts'
@@ -38,6 +39,7 @@ let socket: ReconnectingWebSocket | undefined
 let ready = false
 let timer: NodeJS.Timeout | undefined
 let queue: Promise<void> = Promise.resolve()
+let rotate: ((ws: string) => Promise<void>) | undefined
 const names = new Map<string, { name: string | null; site: string | null }>()
 const requests = new Map<string, DeviceRequest[]>()
 const beats = new Map<string, Map<string, Beat>>()
@@ -96,6 +98,10 @@ export const cloudEvents = {
   },
 
   ready: (): boolean => ready,
+
+  onDropped(listener: (ws: string) => Promise<void>): void {
+    rotate = listener
+  },
 
   name: (ws: string): string => names.get(ws)?.name ?? defaultName(ws),
   named: (ws: string): string | null => names.get(ws)?.name ?? null,
@@ -204,6 +210,7 @@ function refusedOnce(ws: string): void {
 
 async function refreshKeys(ws: string): Promise<void> {
   if (!roomKeys.room(ws)) return
+  const before = roomKeys.members(ws)
   const { changed: moved, gone: out } = await roomKeys.refresh({ ws, call: keysService.call })
   const list = roomKeys.members(ws)
   const me = await keysService.deviceKey()
@@ -212,6 +219,12 @@ async function refreshKeys(ws: string): Promise<void> {
   if (home && list && !list.members.some((member) => member.devices.includes(me))) return removedNow(ws)
   if (list) presence.members({ ws, emails: list.members.map((member) => member.email) })
   if (moved) emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
+  if (moved && roomKeys.roleIn(ws) === 'owner' && droppedByOthers({ before, after: list, email: keysService.account()?.email })) void rotate?.(ws)
+}
+
+function droppedByOthers({ before, after, email }: { before: MemberListBody | null | undefined; after: MemberListBody | null | undefined; email: string | undefined }): boolean {
+  const kept = new Set(after?.members.flatMap((member) => member.devices) ?? [])
+  return Boolean(after && before?.members.some((member) => member.email !== email && member.devices.some((device) => !kept.has(device))))
 }
 
 async function refreshName(ws: string): Promise<void> {
