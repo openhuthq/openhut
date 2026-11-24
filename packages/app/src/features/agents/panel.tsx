@@ -24,7 +24,7 @@ import { Face } from '@/features/agents/face'
 import { useMove } from '@/features/agents/move'
 import { RoutinesRow } from '@/features/routines/routines-dialog'
 import { useWorkspaces } from '@/features/cloud/workspaces'
-import { PeopleField, type AccessValue } from '@/features/agents/access'
+import { AccessPicker, type AccessValue } from '@/features/agents/access'
 import { ModelRows } from '@/features/agents/model-rows'
 import { AgentStatus } from '@/features/agents/status'
 import { formValues } from '@/lib/form'
@@ -194,30 +194,16 @@ function Access({ agent }: { agent: Agent }) {
   const { all, email } = useWorkspaces()
   const home = useAgents().data?.find((each) => each.id === agent.id)
   const update = useUpdateAgent(agent.id)
-  const [sharing, setSharing] = useState(false)
-  const [picking, setPicking] = useState<AccessValue>()
+  const [sharing, setSharing] = useState<AccessValue>()
   const workspace = all.find((each) => agent.workspace ? each.id === agent.workspace : each.home)
-  if (!workspace || (home?.computer ?? 'local') !== 'local') return null
-  const mine = !agent.owner || agent.owner === email
-  const pick = (shared: boolean) => update.mutate({ shared }, { onError: toastError })
-  const value = agent.shared ? `Everyone on ${workspace.name}` : agent.people.length ? `You and ${agent.people.length} more` : 'Only you'
+  if (!workspace || !email || (home?.computer ?? 'local') !== 'local') return null
+  const save = (next: AccessValue) => update.mutate(next, { onError: toastError })
   return <>
-    <DropdownMenu>
-      <DropdownMenuTrigger className={ROW} disabled={update.isPending}><I icon={agent.shared ? Globe02Icon : SquareLock02Icon} size={15} className="text-mute" />Access<span className={VALUE}><span className="truncate">{value}</span><I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
-      <MenuCard title={`Who can open ${agent.name}`}>
-        <Choice icon={<I icon={SquareLock02Icon} size={15} />} name="Only people I pick" note={agent.people.length ? `You and ${agent.people.length} more` : 'Only you'} selected={!agent.shared} disabled={!agent.shared || !mine} onClick={() => pick(false)} />
-        <Choice icon={<I icon={Globe02Icon} size={15} />} name={`Everyone on ${workspace.name}`} note="Anyone on the team can chat with it. Only you can change it." selected={agent.shared} disabled={agent.shared || !agent.canManage} onClick={() => setSharing(true)} />
-        {agent.canManage && <><DropdownMenuSeparator /><DropdownMenuItem className="h-8 gap-2 text-[13px]" onClick={() => setPicking({ shared: agent.shared, people: agent.people, sidebars: agent.sidebars })}><I icon={UserGroupIcon} size={14} />{agent.shared ? 'Add to sidebars of…' : 'Share with…'}</DropdownMenuItem></>}
-      </MenuCard>
-    </DropdownMenu>
-    <ConfirmDialog open={sharing} onOpenChange={setSharing} question={`Share ${agent.name} with ${workspace.name}?`} action="Share" onConfirm={() => pick(true)}
+    <AccessPicker workspace={workspace} owner={agent.owner ?? email} value={{ shared: agent.shared, people: agent.people, sidebars: agent.sidebars }} title={`Who can open ${agent.name}`} disabled={!agent.canManage || update.isPending}
+      onChange={(next) => next.shared && !agent.shared ? setSharing(next) : save(next)} className={ROW}
+      trigger={(preview) => <><I icon={agent.shared ? Globe02Icon : SquareLock02Icon} size={15} className="text-mute" />Access<span className={VALUE}>{preview}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></>} />
+    <ConfirmDialog open={!!sharing} onOpenChange={(on) => { if (!on) setSharing(undefined) }} question={`Share ${agent.name} with ${workspace.name}?`} action="Share" onConfirm={() => sharing && save(sharing)}
       detail={`Everyone in ${workspace.name} can read its chats and use what it can use. Only you can change it.`} />
-    {picking && email && <DialogCard onClose={() => setPicking(undefined)} className="w-[420px]">
-      <DialogTitle className="text-[15px]/[22px] font-medium">{agent.shared ? `Whose sidebar ${agent.name} is in` : `Share ${agent.name}`}</DialogTitle>
-      <PeopleField workspace={workspace} owner={agent.owner ?? email} value={picking} onChange={setPicking} />
-      <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setPicking(undefined)}>Cancel</Button>
-        <Button type="button" variant="primary" disabled={update.isPending} onClick={() => update.mutate({ people: picking.people, sidebars: picking.sidebars }, { onSuccess: () => setPicking(undefined), onError: toastError })}>Save</Button></div>
-    </DialogCard>}
   </>
 }
 

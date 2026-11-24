@@ -29,13 +29,13 @@ test('Models marks the one new agents use: Claude Sonnet first, else the first c
   assert.equal(inUse(undefined), undefined)
 })
 
-test('the Share field: a team of one says so, a search with no match says so, and people already added are not offered again', () => {
+test('Add people lists teammates other than the owner, picked or not, and says when a search finds no one', () => {
   const owner = 'mo@example.com'
-  assert.deepEqual(searchPeople({ members: [owner], owner, added: [], query: '' }), { kind: 'found', emails: [] })
-  assert.deepEqual(searchPeople({ members: [owner], owner, added: [], query: 'sara@example.com' }), { kind: 'none', query: 'sara@example.com' })
-  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com'], owner, added: [], query: ' zzq ' }), { kind: 'none', query: 'zzq' })
-  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com', 'ana@example.com'], owner, added: ['ana@example.com'], query: '' }), { kind: 'found', emails: ['sara@example.com'] })
-  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com', 'ana@example.com'], owner, added: [], query: 'SAR' }), { kind: 'found', emails: ['sara@example.com'] })
+  assert.deepEqual(searchPeople({ members: [owner], owner, query: '' }), { kind: 'found', emails: [] })
+  assert.deepEqual(searchPeople({ members: [owner], owner, query: 'sara@example.com' }), { kind: 'none', query: 'sara@example.com' })
+  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com'], owner, query: ' zzq ' }), { kind: 'none', query: 'zzq' })
+  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com', 'ana@example.com'], owner, query: '' }), { kind: 'found', emails: ['sara@example.com', 'ana@example.com'] })
+  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com', 'ana@example.com'], owner, query: 'SAR' }), { kind: 'found', emails: ['sara@example.com'] })
 })
 
 test('Share offers Invite only for a typed email', () => {

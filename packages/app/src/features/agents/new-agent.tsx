@@ -18,7 +18,7 @@ import { ComputerPicker } from '@/features/computers/computer-picker'
 import { useComputerProviders } from '@/features/models/api'
 import { ModelPicker, SOFT_TRIGGER } from '@/features/models/model-picker'
 import { FacePicker } from '@/features/agents/face-picker'
-import { AccessPicker, PeopleField, type AccessValue } from '@/features/agents/access'
+import { AccessPicker, type AccessValue } from '@/features/agents/access'
 import { formValues } from '@/lib/form'
 import { TOUCH, useMedia } from '@/lib/media'
 import { navigate, open, useOpen } from '@/lib/router'
@@ -96,9 +96,8 @@ function AgentForm() {
           {unready ? <NeedsSignIn model={model} /> : undefined}
         </ModelPicker>
       </Row>
-      {email && <Row title="Access"><AccessPicker team={active.name} value={access} onChange={setAccess} className={PICKER} /></Row>}
+      {email && <Row title="Access"><AccessPicker workspace={active} owner={email} value={access} onChange={setAccess} className={PICKER} /></Row>}
     </div>
-    {email && <PeopleField workspace={active} owner={email} value={access} onChange={setAccess} />}
     <Button type="submit" variant="primary" className="h-10 w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !providers}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
     <ErrorNote message={createAgent.error?.message} />
   </form>

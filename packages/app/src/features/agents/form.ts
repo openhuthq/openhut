@@ -15,17 +15,15 @@ export function inUse(providers: Provider[] | undefined): ProviderId | undefined
   return providers?.find((provider) => picked?.startsWith(`${provider.id}:`))?.id
 }
 
-// Where a new agent runs unless the person picks another: the always-on Linux server when one is online, else this computer.
 export function defaultComputer(computers: Pick<Computer, 'id' | 'kind' | 'online'>[]): string {
   return computers.find((each) => each.kind === 'server' && each.online)?.id ?? 'local'
 }
 
 export type PeopleSearch = { kind: 'none'; query: string } | { kind: 'found'; emails: string[] }
 
-// The people a Share field offers: teammates other than the owner and those already added, matched on email or name.
-export function searchPeople({ members, owner, added, query }: { members: readonly string[]; owner: string; added: readonly string[]; query: string }): PeopleSearch {
+export function searchPeople({ members, owner, query }: { members: readonly string[]; owner: string; query: string }): PeopleSearch {
   const typed = query.trim().toLowerCase()
-  const emails = members.filter((email) => email !== owner && !added.includes(email) && email.toLowerCase().includes(typed))
+  const emails = members.filter((email) => email !== owner && email.toLowerCase().includes(typed))
   return typed && !emails.length ? { kind: 'none', query: query.trim() } : { kind: 'found', emails }
 }
 
