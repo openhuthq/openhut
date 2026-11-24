@@ -47,6 +47,7 @@ let passkeyDropped = false
 let asking: { settled: string[]; approved: boolean; error: string | null; timer: NodeJS.Timeout; reviewed: boolean; revealed: boolean; missed: boolean } | undefined
 let polling = false
 let joinError: string | null = null
+const requestedOs = new Map<string, string>()
 const invited = new Map<string, string>()
 const Rotate = z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() }))
 
@@ -67,7 +68,7 @@ export const cloudService = {
     const [inCloud, passkeyInCloud] = locked && session ? await Promise.all([kitInCloud(), boxInCloud('passkey')]) : [null, false]
     const devices = lists.flatMap((body) => {
       const mine = body?.members.find((member) => member.email === account?.email)
-      return body && mine ? mine.devices.filter((key) => key !== mine.kit && key !== accountKey).map((key) => ({ key, here: key === here, addedAt: addedOf(body, key) ? new Date(addedOf(body, key)).toISOString() : null, name: body.names?.[key] ?? null, kind: body.runtimes?.includes(key) ? 'server' as const : 'mac' as const, joined: joinedOf({ key, accountKey, names: body.names }), os: key === here ? deviceOs() : cloudEvents.beats(body.workspace).get(key)?.os ?? null, heard: key === here || cloudEvents.beats(body.workspace).has(key), online: key === here || Date.now() - (cloudEvents.beats(body.workspace).get(key)?.at ?? 0) < 3 * BEAT_MS })) : []
+      return body && mine ? mine.devices.filter((key) => key !== mine.kit && key !== accountKey).map((key) => ({ key, here: key === here, addedAt: addedOf(body, key) ? new Date(addedOf(body, key)).toISOString() : null, name: body.names?.[key] ?? null, kind: body.runtimes?.includes(key) ? 'server' as const : 'mac' as const, joined: joinedOf({ key, accountKey, names: body.names }), os: key === here ? deviceOs() : cloudEvents.beats(body.workspace).get(key)?.os ?? requestedOs.get(key) ?? null, heard: key === here || cloudEvents.beats(body.workspace).has(key), online: key === here || Date.now() - (cloudEvents.beats(body.workspace).get(key)?.at ?? 0) < 3 * BEAT_MS })) : []
     }).filter(({ key }, index, all) => all.findIndex((each) => each.key === key) === index).sort((a, b) => (a.addedAt ?? '').localeCompare(b.addedAt ?? ''))
     return {
       object: 'cloud', status: locked ? 'locked' : on ? (cloudEvents.ready() ? 'on' : 'offline') : 'off', email: locked?.email ?? (on && account ? account.email : null),
@@ -137,6 +138,7 @@ export const cloudService = {
     if (!asked) throw new HttpError(404, 'That device isn’t waiting anymore. It was let in, denied, or it expired.')
     if (asked.checked && (!asked.faces || [...faces ?? []].sort((a, b) => a - b).join() !== asked.faces.join())) throw new HttpError(400, 'Those faces don’t match the ones on the new computer.', { param: 'faces' })
     const mine = roomKeys.isOwn(workspace) && asked.email === keysService.account()?.email
+    if (asked.os) requestedOs.set(device, asked.os)
     if (mine && !asked.server) {
       const list = await keysService.addDevice({ device, name: asked.name, runtime: false })
       if (list) await putList({ workspace, list })

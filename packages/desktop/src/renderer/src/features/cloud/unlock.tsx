@@ -135,7 +135,7 @@ function JoinRequests({ cloud }: { cloud: Cloud }) {
     for (const { workspace, request, mine, path } of pending) {
       if (told.current.has(request.device)) continue
       told.current.add(request.device)
-      notifyDesktop({ title: `${request.name ?? 'A new computer'} wants to join`, body: mine ? `${request.email}. Review it, or say Not me.` : `${nameOf(request.email)} asked to join ${workspace.name}.`, path })
+      notifyDesktop({ title: `${request.name ?? 'A new computer'}${request.os ? ` (${request.os})` : ''} wants to join`, body: mine ? `${request.email}. Review it, or say Not me.` : `${nameOf(request.email)} asked to join ${workspace.name}.`, path })
     }
   }, [pending])
   const here = usePath()
@@ -143,8 +143,8 @@ function JoinRequests({ cloud }: { cloud: Cloud }) {
   const later = (device: string) => setDismissed((all) => [...all, device])
   useStickyToast({ id: 'join-request', notice: shown ? {
     lead: <DeviceIcon kind={shown.request.server ? 'server' : 'mac'} />,
-    title: `${shown.request.name ?? 'A new computer'} wants to join`,
-    note: shown.mine ? shown.request.email : `${nameOf(shown.request.email)} · ${shown.workspace.name}`,
+    title: `${shown.request.name ?? 'A new computer'}${shown.request.os ? ` (${shown.request.os})` : ''} wants to join`,
+    note: `${shown.mine ? shown.request.email : `${nameOf(shown.request.email)} · ${shown.workspace.name}`} · asked ${askedAgo(shown.request.at)}`,
     action: { label: shown.request.checked ? 'Review' : 'Open', onClick: () => {
       const { workspace, request, mine, path } = shown
       if (!mine) chooseWorkspace(workspace.id)
@@ -274,19 +274,29 @@ function TouchIdBack({ cloud }: { cloud: Cloud }) {
   return null
 }
 
+const OS_WAIT_MS = 20_000
+
+function askedAgo(at: string): string {
+  const seconds = Math.max(0, Math.round((Date.now() - Date.parse(at)) / 1000))
+  if (seconds < 60) return 'just now'
+  return `${Math.round(seconds / 60)} min ago`
+}
+
 function SelfJoins({ cloud }: { cloud: Cloud }) {
   const remove = useRemoveMac()
   useEffect(() => {
     if (cloud.status !== 'on') return
     const fresh = newDevices({ devices: cloud.devices, known: knownDevices() })
-    rememberDevices(cloud.devices.map((device) => device.key))
-    for (const device of fresh) {
+    const waiting = fresh.filter((device) => !device.os && Date.now() - Date.parse(device.addedAt ?? '') < OS_WAIT_MS)
+    rememberDevices(cloud.devices.filter((device) => !waiting.includes(device)).map((device) => device.key))
+    for (const device of fresh.filter((each) => !waiting.includes(each))) {
       const name = device.name ?? 'A new computer'
       const recovered = device.joined?.how === 'recovery'
-      const title = recovered ? 'A computer used your recovery kit or Touch ID to join' : `${name} joined your account`
-      const how = recovered ? `${name}${device.os ? `, ${device.os}` : ''}` : joinedNote(device.joined)
+      const kind = device.os ?? (device.kind === 'server' ? 'Linux server' : 'Computer')
+      const title = recovered ? `A computer used your ${device.os?.startsWith('macOS') ? 'recovery kit or Touch ID' : 'recovery kit'} to join` : `${name} joined your account`
+      const how = recovered ? name : joinedNote(device.joined)
       notifyDesktop({ title, body: 'If that wasn’t you, open OpenHut and choose Not mine.', path: '/settings/computers' })
-      notify({ lead: <DeviceIcon kind={device.kind} />, title, note: `${[device.os ?? (device.kind === 'server' ? 'Linux server' : 'Computer'), how].filter(Boolean).join(' · ')}. Not you? Remove it, then change your keys.`, action: { label: 'Not mine · Remove', onClick: () => remove.mutate(device.key, { onError: toastError }) } })
+      notify({ lead: <DeviceIcon kind={device.kind} />, title, note: `${[kind, how].filter(Boolean).join(' · ')}. Not you? Remove it, then reset encryption in Settings › People.`, action: { label: 'Not mine · Remove', onClick: () => remove.mutate(device.key, { onSuccess: () => navigate('/settings/people?open=keys'), onError: toastError }) } })
     }
   }, [cloud.devices, cloud.status, cloud.email, remove])
   return null
