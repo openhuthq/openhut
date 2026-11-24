@@ -116,7 +116,7 @@ jobs:
           npm --prefix private/site run typecheck
 
   app:
-    # M3: the Cloud image and the shell carry the same App dist (scripts/app-sum.ts). The phone joins when it ships; the signed release joins with R4.
+    # M3: the shell carries main's App dist (scripts/app-sum.ts); the Cloud image carries the signed stable release's (R5: the web App follows stable only).
     needs: changes
     runs-on: ubuntu-latest
     steps:
@@ -133,12 +133,14 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund --ignore-scripts
-      - name: The image, the shell and the App build carry the same dist sha256
+      - name: The shell carries the App build's dist sha256; the image carries the stable release's App
         run: |
           npm -w @openhut/desktop run build
+          node scripts/app-sum.ts packages/app/dist packages/desktop/dist/renderer | tee -a "$GITHUB_STEP_SUMMARY"
+          private/api/deploy/fetch-release.sh
           docker build -q -f private/api/Dockerfile -t openhut-cloud:ci .
           docker cp "$(docker create openhut-cloud:ci)":/app/web image-web
-          node scripts/app-sum.ts packages/app/dist packages/desktop/dist/renderer image-web | tee -a "$GITHUB_STEP_SUMMARY"
+          node scripts/app-sum.ts private/api/deploy/release/renderer image-web | tee -a "$GITHUB_STEP_SUMMARY"
 
   server:
     needs: changes
