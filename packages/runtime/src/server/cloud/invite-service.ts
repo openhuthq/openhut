@@ -20,7 +20,7 @@ export const inviteService = {
     await putList({ workspace, list: made.list })
     const posted = await keysService.call({ method: 'POST', path: '/v1/invites', body: { workspace, id: made.id, email, role, key: made.key, body: made.body } })
     if (posted.status !== 200) throw new HttpError(502, `OpenHut Cloud didn’t keep the invite (HTTP ${posted.status}). Try again.`)
-    await roomKeys.keepLink({ ws: workspace, email, link: made.link })
+    await roomKeys.keepLink({ ws: workspace, email, link: made.link, until: made.expiresAt })
     return { object: 'cloud_invite', id: made.id, workspace, email, role, link: made.link, expiresAt: made.expiresAt }
   },
 

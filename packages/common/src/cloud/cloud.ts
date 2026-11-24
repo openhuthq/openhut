@@ -248,7 +248,7 @@ export const CloudWorkspaceView = z.object({
   role: Role,
   waiting: z.boolean(),
   members: z.array(Member),
-  invites: z.array(z.object({ email: Email, role: InviteRole, link: z.nullable(z.string()) })),
+  invites: z.array(z.object({ email: Email, role: InviteRole, link: z.nullable(z.string()), until: z._default(z.nullable(Timestamp), null) })),
   requests: z._default(z.array(DeviceRequest), []),
   names: z._default(z.record(z.string(), z.string()), {}),
 })

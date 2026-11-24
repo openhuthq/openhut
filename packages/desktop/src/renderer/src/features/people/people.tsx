@@ -13,7 +13,7 @@ import { I, PILL, Section } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { nameOf } from '@/features/cloud/api'
 import { useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useRevokeInvite, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
-import { ago } from '@/lib/format'
+import { ago, shortDateTime } from '@/lib/format'
 import { copyText } from '@/lib/clipboard'
 import { useConfirmed } from '@/lib/native'
 import { notify } from '@/components/custom/toast'
@@ -49,7 +49,7 @@ function InviteRow({ invite, workspace, admin }: { invite: CloudWorkspaceView['i
   const name = nameOf(invite.email)
   return <div className="flex items-center gap-3 px-4 py-3">
     <span className="opacity-40"><PersonFace name={name} email={invite.email} size={40} /></span>
-    <span className="grid min-w-0 flex-1 gap-px"><span className="text-[13.5px] font-medium">{name}</span><span className="truncate text-[12px] text-mute">{invite.email}</span></span>
+    <span className="grid min-w-0 flex-1 gap-px"><span className="text-[13.5px] font-medium">{name}</span><span className="truncate text-[12px] text-mute">{[invite.email, invite.until && (Date.parse(invite.until) > Date.now() ? `link works until ${shortDateTime.format(new Date(invite.until))}` : 'link ran out')].filter(Boolean).join(' · ')}</span></span>
     {invite.link && <Button type="button" variant="ghost" className={PILL} onClick={() => void copy({ link: invite.link ?? '', email: invite.email })}>Copy link</Button>}
     {admin && <ConfirmButton className={PILL} disabled={revoke.isPending} question={`Revoke ${name}’s invite?`} detail="The link stops working. You can invite them again later." action="Revoke" onConfirm={() => revoke.mutateAsync({ id: workspace.id, email: invite.email }).then(() => toast(`${name}’s invite revoked`))}>Revoke</ConfirmButton>}
   </div>
@@ -124,6 +124,7 @@ function InviteButton({ workspace }: { workspace: CloudWorkspaceView }) {
             <SelectContent><SelectItem value="member">Member</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent>
           </Select>
         </div>
+        <span className="text-[12px] text-body">{role === 'admin' ? 'An admin chats with shared agents and can also invite people and add computers.' : 'A member chats with the agents the team shares, and makes their own.'}</span>
         <Button type="submit" variant="secondary" className="h-8 w-full gap-1.5 phone:h-11 phone:justify-center" disabled={invite.isPending}><I icon={Link01Icon} size={14} />{invite.isPending ? 'Making the link…' : 'Copy invite link'}</Button>
         <ErrorNote message={invite.error?.message} />
         <span className="text-[12px] text-mute">Send the link yourself, by chat or email. It works once, for 2 days. Your agents stay private until you share them.</span>
