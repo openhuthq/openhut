@@ -147,14 +147,14 @@ async function invite(mo) {
 
 async function joinScreen(page, how) {
   const text = await until(async () => {
-    const now = await page.eval("location.pathname === '/join' && document.body.innerText")
+    const now = await page.eval("location.pathname === '/join' && document.body?.innerText")
     return now && /You.re invited|Join /.test(now) ? now : null
   }, 60, `the join screen (${how})`)
   say(`the invitee's app shows the join screen, ${how}`, { text: text.slice(0, 200) })
 }
 
 async function textOf(page) {
-  return (await page.eval('document.body.innerText')).slice(0, 300)
+  return String(await page.eval('document.body?.innerText') ?? '').slice(0, 300)
 }
 
 async function buttonOf(page, label) {
