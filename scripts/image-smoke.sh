@@ -8,6 +8,10 @@ fail() { echo "smoke: $*" >&2; $D exec openhut sh -c 'tail -n 40 /var/log/openhu
 wait_for() { i=0; until eval "$2" >/dev/null 2>&1; do i=$((i+1)); [ "$i" -gt "$1" ] && return 1; sleep 3; done; }
 
 wait_for 100 'rt curl -fsS http://127.0.0.1:8787/health' || fail "no /health"
+# The Claude sign-in runs `claude setup-token` under script(1) for a terminal (seat-sign-in.ts); run that same command, without the app's database, and it must hand back a claude.ai link.
+rt sh -c 'command -v script' >/dev/null || fail "no script(1) in the image, so the Claude sign-in can't start"
+link=$(rt sh -c 'd=$(mktemp -d); cd "$d"; HOME=$d CLAUDE_CONFIG_DIR=$d BROWSER=/bin/true TERM=xterm-256color timeout 30 script -qfec "stty cols 4000 rows 60; exec $OPENHUT_CLAUDE setup-token" /dev/null </dev/null | tr "\033\007" "\n\n" | grep -o "https://claude\.[a-z]*/[^ ]*oauth/authorize?[^ ]*" | head -n 1; rm -rf "$d"')
+case "$link" in https://claude.ai/*|https://claude.com/*) echo "smoke: the Claude sign-in starts at ${link%%\?*}" ;; *) fail "the Claude sign-in gave no claude.ai link: $link" ;; esac
 if ! api http://127.0.0.1:8787/api/cloud | grep -q '"status":"on"'; then
   url=$(api -X POST http://127.0.0.1:8787/api/cloud/sessions -d '{}' | sed -n 's/.*"authorizationUrl":"\([^"]*\)".*/\1/p')
   link=$(curl -fsS "$url" | grep -o 'href="[^"]*">mo@example.com<' | sed 's/^href="//; s/">mo@example.com<$//; s/&amp;/\&/g')

@@ -38,7 +38,7 @@ chown -R root:root /bridge && chmod -R go-w,a+rX /bridge
 EOF
 
 FROM $DIND AS base
-RUN apk add --no-cache nodejs npm iptables ip6tables iproute2 curl zstd tar su-exec flock >/dev/null && \
+RUN apk add --no-cache nodejs npm iptables ip6tables iproute2 curl zstd tar su-exec flock util-linux-misc >/dev/null && \
     addgroup -S openhut && adduser -S -D -G openhut openhut
 
 FROM base AS downloads
@@ -49,6 +49,8 @@ ARG GVISOR_SHA512_arm64=a0b5d911512ef5fe70e833821e653a90c4d06c7027246ee49423f1d2
 ARG CLAUDE=2.1.311
 ARG CLAUDE_SHA256_amd64=86dc1fcc69498159eaf15f446613e847010f9036bfbbdffd4c49350be8489ada
 ARG CLAUDE_SHA256_arm64=2e2496c9a8065df93acb0fca2d341f59a6b8777649b2e025ab8c9bcd5eef61f3
+ARG CLAUDE_MUSL_SHA256_amd64=cd40dd327145ee47aa0deacd571801c1d782388f709d71242eee6b91de8ed11f
+ARG CLAUDE_MUSL_SHA256_arm64=172150e3f9ea07e8e2e2e29862d7d9a25f5c234d8e909e4063df237665bf09b9
 ARG AGENT_BROWSER=0.43.0
 ARG AGENT_BROWSER_SHA512_amd64=598f2fcb649a6b7a11b7a5c49b3e1269ed56e6a4bd4e361c6d7e8813e7716fcb3600f7cbf57c908cc1c2ea3059ae1c2a0c122f51e4cc093fcfd9cab75cb3d207
 ARG AGENT_BROWSER_SHA512_arm64=f030b6df82c69570a7f00d985c693ac28cb5b938f27b1bed1ddfd33901cbad5dac7d43190fae3b1d31c427217edb3d49d68477e0b681e63a8727d7744440be0b
@@ -57,13 +59,15 @@ RUN set -eu; grep -q "\"version\": \"$CLAUDE\"" /tmp/native-runtime.json || { ec
 RUN <<EOF
 set -eu
 case "$TARGETARCH" in amd64) A=x86_64 N=x64 ;; arm64) A=aarch64 N=arm64 ;; *) exit 1 ;; esac
-eval "G=\$GVISOR_SHA512_$TARGETARCH C=\$CLAUDE_SHA256_$TARGETARCH B=\$AGENT_BROWSER_SHA512_$TARGETARCH"
+eval "G=\$GVISOR_SHA512_$TARGETARCH C=\$CLAUDE_SHA256_$TARGETARCH M=\$CLAUDE_MUSL_SHA256_$TARGETARCH B=\$AGENT_BROWSER_SHA512_$TARGETARCH"
 fetch() { curl -fsSL --retry 4 --retry-all-errors "$1" -o "$2"; }
 fetch "https://storage.googleapis.com/gvisor/releases/release/$GVISOR/$A/gvisor.tar.zstd" /tmp/gvisor.tar.zstd
 printf '%s  %s\n' "$G" /tmp/gvisor.tar.zstd | sha512sum -c - >/dev/null
 mkdir -p /out/usr/local/bin /out/opt/openhut/bin && tar --zstd -xf /tmp/gvisor.tar.zstd -C /out/usr/local/bin --no-same-owner
 fetch "https://downloads.claude.ai/claude-code-releases/$CLAUDE/linux-$N/claude" /out/opt/openhut/bin/claude
 printf '%s  %s\n' "$C" /out/opt/openhut/bin/claude | sha256sum -c - >/dev/null
+fetch "https://downloads.claude.ai/claude-code-releases/$CLAUDE/linux-$N-musl/claude" /out/opt/openhut/bin/claude-musl
+printf '%s  %s\n' "$M" /out/opt/openhut/bin/claude-musl | sha256sum -c - >/dev/null
 fetch "https://registry.npmjs.org/@agent-browser/cli-linux-$N-gnu/-/cli-linux-$N-gnu-$AGENT_BROWSER.tgz" /tmp/agent-browser.tgz
 printf '%s  %s\n' "$B" /tmp/agent-browser.tgz | sha512sum -c - >/dev/null
 tar -xzf /tmp/agent-browser.tgz -C /tmp package/bin/agent-browser && mv /tmp/package/bin/agent-browser /out/opt/openhut/bin/agent-browser
@@ -79,7 +83,8 @@ COPY --from=tree /opt/openhut/install/updater.sh /opt/openhut/install/verify-ins
 COPY --from=tree /opt/openhut/packages/desktop/src/release-key.mjs /usr/local/lib/openhut-updater/packages/desktop/src/
 RUN mkdir -p /etc/docker && echo '{"runtimes":{"runsc":{"path":"/usr/local/bin/runsc"}}}' > /etc/docker/daemon.json && \
     ln -s /data/etc /etc/openhut && ln -s /data/log /var/log/openhut && ln -s /run/agentd-etc /etc/agentd
-ENV OPENHUT_HOST=0.0.0.0 OPENHUT_RUNTIME=image DOCKER_TLS_CERTDIR=
+# Agents get the glibc claude; the seat sign-in runs claude here, on Alpine, so it takes the musl build.
+ENV OPENHUT_HOST=0.0.0.0 OPENHUT_RUNTIME=image DOCKER_TLS_CERTDIR= OPENHUT_CLAUDE=/opt/openhut/bin/claude-musl
 EXPOSE 8787
 ENTRYPOINT ["/opt/openhut/install/image-start.sh"]
 

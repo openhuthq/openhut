@@ -7,7 +7,7 @@ import type { Sandboxes, SandboxSpec } from './sandbox/sandbox.ts'
 
 type FenceCheck = { name: string; target: string; expect: 'refused' | 'allowed'; got: string; pass: boolean }
 export type FenceReport = { ok: boolean; sandbox: string; skipped?: string; checks: FenceCheck[] }
-type Probe = Omit<FenceCheck, 'got' | 'pass'>
+type Probe = Omit<FenceCheck, 'got' | 'pass'> & { waits?: true }
 
 const FENCE_NET = 0
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
@@ -47,12 +47,12 @@ export function probesFor({ host, hostPort, lan, tailnet }: { host: string; host
     { name: 'tailnet address', target: `https://${tailnet}/`, expect: 'refused' },
     { name: 'host listener', target: `http://${host}:${hostPort}/`, expect: 'refused' },
     { name: 'public https', target: 'https://example.com/', expect: 'allowed' },
-    { name: 'gateway', target: `http://${host}:${GATEWAY_PORT}/`, expect: 'allowed' },
+    { name: 'gateway', target: `http://${host}:${GATEWAY_PORT}/`, expect: 'allowed', waits: true },
   ]
 }
 
 export function scriptOf(probes: Probe[]) {
-  const lines = probes.map((p, i) => `(printf '${i} %s\\n' "$(curl -sS -m ${PROBE_SECONDS} -w ' =>%{http_code}' '${p.target}' 2>&1 | tail -c 300 | tr -c '[:print:]' ' ')") &`)
+  const lines = probes.map((p, i) => `(printf '${i} %s\\n' "$(curl -sS -m ${PROBE_SECONDS}${p.waits ? ' --retry 15 --retry-connrefused --retry-delay 1' : ''} -w ' =>%{http_code}' '${p.target}' 2>&1 | tail -c 300 | tr -c '[:print:]' ' ')") &`)
   return [...lines, 'wait'].join('\n')
 }
 
