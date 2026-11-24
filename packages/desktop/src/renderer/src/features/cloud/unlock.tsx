@@ -5,6 +5,7 @@ import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { kitWord, nearestWord, readKit, validKit } from '@openhut/common/vault/kit-file.ts'
 import { agentPath } from '@/app/routes'
 import { DeviceIcon } from '@/components/custom/device'
+import { joinedNote } from '@/features/settings/computers'
 import { DropZone } from '@/components/custom/drop-zone'
 import { PersonFace } from '@/components/custom/person-face'
 import { AMBER, notify, Tinted, useStickyToast } from '@/components/custom/toast'
@@ -281,8 +282,10 @@ function SelfJoins({ cloud }: { cloud: Cloud }) {
     rememberDevices(cloud.devices.map((device) => device.key))
     for (const device of fresh) {
       const name = device.name ?? 'A new computer'
-      notifyDesktop({ title: `${name} joined your account`, body: 'If that wasn’t you, open OpenHut and choose Not me.', path: '/settings/computers' })
-      notify({ lead: <DeviceIcon kind={device.kind} />, title: `${name} joined your account`, note: `${device.kind === 'server' ? 'Linux server' : 'Computer'} · ${cloud.email ?? ''}. If it isn’t yours, remove it.`, action: { label: 'Not mine · Remove', onClick: () => remove.mutate(device.key, { onError: toastError }) } })
+      const title = device.joined?.how === 'recovery' ? `${name} used your recovery kit or Touch ID to join` : `${name} joined your account`
+      const how = device.joined?.how === 'approved' ? joinedNote(device.joined) : null
+      notifyDesktop({ title, body: 'If that wasn’t you, open OpenHut and choose Not mine.', path: '/settings/computers' })
+      notify({ lead: <DeviceIcon kind={device.kind} />, title, note: `${[device.kind === 'server' ? 'Linux server' : 'Computer', how].filter(Boolean).join(' · ')}. If it isn’t yours, remove it.`, action: { label: 'Not mine · Remove', onClick: () => remove.mutate(device.key, { onError: toastError }) } })
     }
   }, [cloud.devices, cloud.status, cloud.email, remove])
   return null

@@ -57,14 +57,14 @@ export const keysService = {
     return session
   },
 
-  async addDevice({ device, name }: { device: string; name: string | null }): Promise<MemberList | null> {
+  async addDevice({ device, name, runtime = true }: { device: string; name: string | null; runtime?: boolean }): Promise<MemberList | null> {
     const account = (await keyStore.read()).account
     const body = bodyOf(account?.list)
     if (!account || !body) return null
     if (body.members.some((member) => member.devices.includes(device))) return null
     const members = body.members.map((member) => member.email === account.email ? { ...member, devices: [...member.devices, device] } : member)
     const base = await nextOf({ list: account.list, body, me: await keysService.deviceKey() })
-    return signList({ signer: await keysService.device(), body: { ...base, members, runtimes: [...body.runtimes ?? [], device], added: { ...body.added, [device]: base.at ?? 0 }, ...name && { names: { ...body.names, [device]: name.slice(0, 64) } } } })
+    return signList({ signer: await keysService.device(), body: { ...base, members, ...runtime && { runtimes: [...body.runtimes ?? [], device] }, added: { ...body.added, [device]: base.at ?? 0 }, ...name && { names: { ...body.names, [device]: name.slice(0, 64) } } } })
   },
 
   async workspaceBox({ account, room = account }: { account: Account; room?: Room }): Promise<Box> {
@@ -250,10 +250,11 @@ async function restoreFrom({ key, workspace, sub, email, device }: { key: Bytes;
   const last = chain.at(-1)
   if (!secret || !body || !last || body.workspace !== workspace.id) return null
   const me = toBase64((await identity(fromBase64(device))).publicKey)
+  const { anchor: _anchor, team: _team, vault, ...keys } = secret
+  if (body.members.some((member) => member.email === email && member.devices.includes(me))) return { sub, email, key: toBase64(key), vault, workspace: { id: workspace.id, ...keys }, list: last, first: chain[0] }
   const at = Date.now()
   const members = body.members.map((member) => member.email === email && !member.devices.includes(me) ? { ...member, devices: [...member.devices, me] } : member)
   const list = await signList({ signer: await accountDevice(key), body: { ...body, version: body.version + 1, previous: await anchorOf(last), members, at, added: { ...body.added, [me]: at }, names: { ...body.names, [me]: deviceName() } } })
-  const { anchor: _anchor, team: _team, vault, ...keys } = secret
   return { sub, email, key: toBase64(key), vault, workspace: { id: workspace.id, ...keys }, list, first: chain[0] }
 }
 
