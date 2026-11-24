@@ -8,7 +8,9 @@ import { toastError } from '@/lib/toast'
 
 export function ModelRows({ agent }: { agent: Agent }) {
   const computer = useAgents().data?.find((each) => each.id === agent.id)?.computer ?? 'local'
-  const providers = useComputerProviders(computer)
+  const theirs = useComputerProviders(computer)
+  const mine = useComputerProviders('local')
+  const providers = theirs ?? mine
   const update = useUpdateAgent(agent.id)
   const model = (update.isPending ? update.variables.model : undefined) ?? agent.model
   return <ModelPicker providers={providers} value={model} onPick={(key) => key && update.mutate({ model: key }, { onError: toastError })} disabled={!agent.canEdit} className={ROW} label="Model" title={`${agent.name} thinks with`}>

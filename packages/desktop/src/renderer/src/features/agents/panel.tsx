@@ -15,7 +15,7 @@ import { agentPath, type AgentDialog } from '@/app/routes'
 import { useAgents, useChannels, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
 import { nameOf, runsOnNote, useComputers, useFeatures } from '@/features/computers/api'
 import { iconOf } from '@/features/computers/computer-picker'
-import { ChangedBy, useChangedByOther } from '@/features/cloud/live'
+import { ChangedBy, firstName, useChangedByOther } from '@/features/cloud/live'
 import { EditLock, FieldBox, useHolder } from '@/features/cloud/presence'
 import { CanUse } from '@/features/agents/agent-connections'
 import { BrowserPreview } from '@/features/agents/browser'
@@ -49,6 +49,7 @@ export function Panel({ agent, naming, watching }: { agent: Agent; naming: boole
       <span className="flex items-center text-[12px]/[16px] text-mute">What it does<span className="ml-auto text-mute opacity-0 group-hover:opacity-100"><I icon={PencilEdit02Icon} size={13} /></span></span>
       <span className={cn('line-clamp-2 text-left text-[13px]/[1.45]', agent.summary ? 'text-ink' : 'text-body')}>{agent.summary || `Tell ${agent.name} what its job is.`}</span>
     </Button></FieldBox>
+    {!agent.canEdit && <p className="m-0 text-[12px]/[16px] text-mute">Shared by {firstName(agent.owner ?? 'its owner')}. You can chat with it, and only they can change it.</p>}
     <div className="-mx-2.5 flex flex-col gap-px">
       <ModelRows agent={agent} />
       <RunsOn agent={agent} />
@@ -62,7 +63,7 @@ export function Panel({ agent, naming, watching }: { agent: Agent; naming: boole
     <BrowserRows agent={agent} watching={watching} />
     <ChannelRows agent={agent} />
     <CanUse agent={agent} />
-    <AgentActions agent={agent} />
+    {agent.canManage && <AgentActions agent={agent} />}
   </aside>
 }
 
@@ -195,11 +196,11 @@ function Access({ agent }: { agent: Agent }) {
       <DropdownMenuTrigger className={ROW} disabled={update.isPending}><I icon={agent.shared ? UserGroupIcon : SquareLock02Icon} size={15} className="text-mute" />Access<span className={VALUE}>{agent.shared ? 'Shared' : 'Private'}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
       <MenuCard title={`Who can use ${agent.name}`}>
         <Choice icon={<I icon={SquareLock02Icon} size={15} />} name="Private" note="Only you" selected={!agent.shared} disabled={!agent.shared || !mine} onClick={() => pick(false)} />
-        <Choice icon={<I icon={UserGroupIcon} size={15} />} name="Shared" note={`Everyone in ${workspace.name} can use and edit it`} selected={agent.shared} disabled={agent.shared || !agent.canManage} onClick={() => setSharing(true)} />
+        <Choice icon={<I icon={UserGroupIcon} size={15} />} name="Shared" note={`Everyone in ${workspace.name} can chat with it. Only you can change it.`} selected={agent.shared} disabled={agent.shared || !agent.canManage} onClick={() => setSharing(true)} />
       </MenuCard>
     </DropdownMenu>
     <ConfirmDialog open={sharing} onOpenChange={setSharing} question={`Share ${agent.name} with ${workspace.name}?`} action="Share" onConfirm={() => pick(true)}
-      detail={`Everyone in ${workspace.name} can chat with ${agent.name}, change it, and read its chat, including what you've said to it so far. They can ask it to use everything it has access to.`} />
+      detail={`Everyone in ${workspace.name} can chat with ${agent.name} and read its chat, including what you've said to it so far. They can ask it to use everything it has access to. Only you can change it.`} />
   </>
 }
 
