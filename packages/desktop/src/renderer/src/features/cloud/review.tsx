@@ -56,13 +56,13 @@ function MatchFaces({ label, request, busy, onMatch, onMiss, onNotMe }: { label:
     <div className="grid gap-4 px-5 pb-5">
       {faces
         ? <div className="grid grid-cols-4 gap-2">{shown.map((index) => <Button key={index} type="button" variant="bare" aria-pressed={picked.includes(index)} disabled={busy}
-            className={cn('grid place-items-center gap-1 rounded-xl border-[1.5px] border-hair bg-white', server ? 'px-1 py-2' : 'aspect-square', picked.includes(index) && 'border-ink ring-2 ring-ink/10')} onClick={() => tap(index)}>
+            className={cn('grid place-items-center gap-1 rounded-xl border-[1.5px] border-hair bg-white px-1 py-2', picked.includes(index) && 'border-ink ring-2 ring-ink/10')} onClick={() => tap(index)}>
               <FaceTile index={index} />
-              {server && <span className="text-center text-[11px]/[13px] text-mute">{faceName(index)}</span>}
+              <span className="text-center text-[11px]/[13px] text-mute">{faceName(index)}</span>
             </Button>)}</div>
         : <span className="inline-flex items-center gap-2 text-[13px] text-mute"><Spinner className="mt-0 size-3" />{server ? 'Waiting for the server to print its faces…' : 'Waiting for the new computer to show its faces…'}</span>}
       <div className="flex items-center justify-between gap-2">
-        <Button type="button" variant="text" className="font-normal text-mute" disabled={busy} onClick={onNotMe}>{server ? 'Not printed there: Not mine' : 'Not on the screen: Not me'}</Button>
+        <Button type="button" variant="text" className="font-normal text-mute" disabled={busy} onClick={onNotMe}>{server ? 'Not printed there · Deny' : 'Not on its screen · Deny'}</Button>
         <Button type="button" variant="secondary" onClick={() => open()}>Cancel</Button>
       </div>
     </div>
