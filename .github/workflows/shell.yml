@@ -21,6 +21,8 @@ on:
       - packages/desktop/scripts/notarize.sh
       - packages/desktop/scripts/app-e2e.mjs
       - packages/desktop/scripts/update-test.mjs
+      - packages/desktop/test/packs.test.ts
+      - scripts/pack.ts
       - install/native-runtime.json
       - install/agent-image/**
       - install/agent-browser/**
@@ -49,6 +51,23 @@ env:
   OPENHUT_INSTALL_URL: ${{ startsWith(github.ref, 'refs/tags/') && format('https://github.com/{0}/releases/download/{1}/install.sh', github.repository, github.ref_name) || 'https://openhut.dev/edge' }}
 
 jobs:
+  pack-update:
+    # M5: the shell's pack updater (packages/desktop/src/packs.mjs) on each OS, with real packs from scripts/pack.ts signed by a test key
+    # and logged in a stand-in Rekor: N−1 → N, a broken pack rolls back by itself, a fleet follows a pointer back to N−1, "next" signs
+    # and a revoked key doesn't. No electron-updater and no real key.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, windows-2022, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: node --test packages/desktop/test/packs.test.ts
+
   draft:
     environment: ${{ (startsWith(github.ref, 'refs/tags/') || inputs.full) && 'release' || '' }}
     runs-on: ubuntu-latest

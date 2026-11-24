@@ -10,7 +10,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGzip } from 'node:zlib'
 
-const DIST = join(import.meta.dirname, '../packages/desktop/dist')
+const DIST = process.env.OPENHUT_PACK_DIST ?? join(import.meta.dirname, '../packages/desktop/dist')
 const BACKEND = join(DIST, 'backend')
 const MTIME = 946684800 // 2000-01-01, any fixed time works
 const PLATFORM = `${process.platform}-${process.arch}`

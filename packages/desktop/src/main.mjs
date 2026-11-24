@@ -5,7 +5,7 @@ import { createServer, request } from 'node:http'
 import { connect } from 'node:net'
 import { appendFileSync, cpSync, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { cpus, homedir, totalmem } from 'node:os'
-import { dirname, join, relative } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { Readable } from 'node:stream'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -16,6 +16,7 @@ import { linkHandler } from './desktop-entry.mjs'
 import { invitePath } from './invite-link.mjs'
 import { linkPath, signInCallback } from './open-link.mjs'
 import { cosigned, RELEASE_KEY } from './release-key.mjs'
+import { activePack, commit as commitPack, poll as pollPacks, rollback as rollbackPack, SHELL_API } from './packs.mjs'
 import { useChannel } from './update-channel.mjs'
 
 const DEV = !app.isPackaged
@@ -34,7 +35,8 @@ const CLOUD = LOOKS_DEV ? devCloud(process.env) : {}
 const USER_DATA = TEST_HOME || join(app.getPath('appData'), LOOKS_DEV ? 'OpenHut Dev' : 'OpenHut')
 app.setName('OpenHut')
 app.setPath('userData', process.env.OPENHUT_SECOND_APP ? USER_DATA : join(app.getPath('appData'), 'OpenHut'))
-if (!app.requestSingleInstanceLock()) app.exit(0)
+const LOCKED = app.requestSingleInstanceLock()
+if (!LOCKED) app.exit(0)
 app.setName(NAME)
 app.setPath('userData', USER_DATA)
 app.setAppLogsPath(TEST_HOME ? join(TEST_HOME, 'logs') : LOOKS_DEV && MAC ? join(app.getPath('home'), 'Library/Logs/OpenHut Dev') : undefined)
@@ -48,12 +50,23 @@ app.on('second-instance', (_event, argv) => app.whenReady().then(() => {
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '../../..')
 const BACKEND = DEV ? ROOT : join(process.resourcesPath, 'backend')
+// M5: the pack set packs.mjs installed (pending or committed), or null for the packs inside the installer.
+const PACK = DEV || !LOCKED ? null : (() => {
+  try {
+    return activePack({ home: app.getPath('userData'), data: join(app.getPath('userData'), 'data'), backend: BACKEND })
+  } catch (error) {
+    console.error(`openhut: running the installer's packs: ${error.message}`)
+    return null
+  }
+})()
+const PACKED = PACK?.app ?? BACKEND
+const VERSION = PACK?.version ?? app.getVersion()
 const SCRIPTS = { server: DEV ? 'packages/runtime/src/server/app.ts' : 'packages/runtime/src/server/platform/app.mjs' }
-const RUNTIME = process.env.AGENTD_HERMES ?? join(BACKEND, DEV ? 'packages/desktop/dist/backend/runtime' : 'runtime')
-const NATIVE_BIN = join(BACKEND, DEV ? 'packages/desktop/dist/backend/bin/native' : 'bin/native')
+const RUNTIME = process.env.AGENTD_HERMES ?? PACK?.runtime ?? join(BACKEND, DEV ? 'packages/desktop/dist/backend/runtime' : 'runtime')
+const NATIVE_BIN = PACK?.native ?? join(BACKEND, DEV ? 'packages/desktop/dist/backend/bin/native' : 'bin/native')
 const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? (LOOKS_DEV ? 8091 : 8081))
 const HOME = app.getPath('userData')
-const ASSETS = DEV ? ROOT : join(HOME, 'assets', app.getVersion())
+const ASSETS = DEV ? ROOT : join(HOME, 'assets', PACK ? `${app.getVersion()}+${PACK.sequence}` : app.getVersion())
 const LOGS = app.getPath('logs')
 const DATA = join(HOME, 'data')
 const BEFORE = join(DATA, 'app.before-update')
@@ -81,7 +94,7 @@ const REFRESH_MS = 500
 const TROUBLE_MS = 10_000
 const WATCHED = new Set(['agent', 'thread'])
 const HEALTHY_MS = 120_000
-const RENDERER = join(HERE, '../dist/renderer')
+const RENDERER = PACK ? join(PACK.app, 'renderer') : join(HERE, '../dist/renderer')
 const APP_ORIGIN = 'app://openhut'
 const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
 const MAX_LOG = 10 << 20
@@ -101,7 +114,7 @@ let linked = ownLink(process.argv.find((arg) => arg.startsWith(`${SCHEME}:`)))
 let fresh = false
 let carriedInvite = false
 let opened = false
-const updating = { checking: false, available: null, progress: 0, ready: null, installing: false, error: null }
+const updating = { checking: false, available: null, progress: 0, ready: null, installing: false, error: null, waiting: null, refused: null, halted: null }
 let downloaded = ''
 const UPDATE_EVERY_MS = 30 * 60_000
 let updateCheck = { at: 0, quiet: false }
@@ -109,7 +122,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: t
 crashReporter.start({ uploadToServer: false })
 
 function start(name, env) {
-  const script = join(BACKEND, SCRIPTS[name])
+  const script = join(PACKED, SCRIPTS[name])
   const child = DEV
     ? spawn('node', [script], { cwd: ROOT, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
     : utilityProcess.fork(script, [], { env: { ...process.env, ...env }, stdio: 'pipe', serviceName: `OpenHut ${name}` })
@@ -176,6 +189,11 @@ handle('update.state', updateState)
 handle('update.check', () => DEV ? updateState() : checkForUpdate())
 handle('update.install', () => {
   if (!updating.ready || updating.installing) return { installing: updating.installing }
+  if (updating.ready.pack) {
+    app.relaunch()
+    app.quit()
+    return { installing: true }
+  }
   if (ASKS_PASSWORD) installDeb()
   else setImmediate(() => updater.autoUpdater.quitAndInstall())
   return { installing: true }
@@ -685,9 +703,9 @@ async function assets() {
   rmSync(join(HOME, 'bin'), { recursive: true, force: true })
   if (DEV || existsSync(ASSETS)) return
   rmSync(`${ASSETS}.tmp`, { recursive: true, force: true })
-  cpSync(join(BACKEND, 'vendor/hermes-plugins'), join(`${ASSETS}.tmp`, 'vendor/hermes-plugins'), { recursive: true })
+  cpSync(join(PACKED, 'vendor/hermes-plugins'), join(`${ASSETS}.tmp`, 'vendor/hermes-plugins'), { recursive: true })
   renameSync(`${ASSETS}.tmp`, ASSETS)
-  const older = readdirSync(dirname(ASSETS)).filter((name) => name !== app.getVersion() && !name.endsWith('.tmp'))
+  const older = readdirSync(dirname(ASSETS)).filter((name) => name !== basename(ASSETS) && !name.endsWith('.tmp'))
   for (const name of older.sort((a, b) => statSync(join(dirname(ASSETS), b)).mtimeMs - statSync(join(dirname(ASSETS), a)).mtimeMs).slice(1)) rmSync(join(dirname(ASSETS), name), { recursive: true, force: true })
 }
 
@@ -707,7 +725,7 @@ function window(path = '/agents') {
     width: 1280, height: 820, ...savedBounds(), minWidth: 900, minHeight: 600, show: false, title: NAME,
     ...(MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 18 } } : { autoHideMenuBar: true }),
     backgroundColor: CANVAS,
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-version=${app.getVersion()}`, ...(LOOKS_DEV ? [`--openhut-dev=${devLabel(CLOUD.OPENHUT_CLOUD_URL)}`] : [])] },
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-version=${VERSION}`, ...(LOOKS_DEV ? [`--openhut-dev=${devLabel(CLOUD.OPENHUT_CLOUD_URL)}`] : [])] },
   })
   win.on('close', saveBounds)
   win.on('focus', () => win.flashFrame(false))
@@ -790,7 +808,7 @@ function menu() {
 }
 
 function updateState() {
-  return { current: app.getVersion(), asksPassword: ASKS_PASSWORD, ...updating }
+  return { current: VERSION, shell: app.getVersion(), shellApi: SHELL_API, asksPassword: ASKS_PASSWORD, ...updating }
 }
 
 function setUpdate(patch) {
@@ -856,6 +874,8 @@ function update() {
   })
   checkForUpdate()
   setInterval(checkQuietly, UPDATE_EVERY_MS)
+  void checkPacks()
+  setInterval(checkPacks, PACK_EVERY_MS)
   app.on('browser-window-focus', checkQuietly)
 }
 
@@ -873,6 +893,26 @@ function installDeb() {
     main?.show()
     main?.focus()
   })
+}
+
+// M5: packs come from the channel pointer, not electron-updater (which now only brings a new shell).
+const PACK_EVERY_MS = 15 * 60_000
+async function checkPacks() {
+  const testKey = TEST_HOME && process.env.OPENHUT_RELEASE_KEY
+  try {
+    const result = await pollPacks({
+      home: HOME, feed: process.env.OPENHUT_UPDATE_FEED || 'https://dl.openhut.dev/', channel: prefs().betaUpdates ? 'beta' : 'stable',
+      ...testKey && { keys: { current: testKey, next: process.env.OPENHUT_NEXT_KEY ?? '', revoked: [] } },
+      ...TEST_HOME && process.env.OPENHUT_REKOR_KEY && { rekorKey: process.env.OPENHUT_REKOR_KEY },
+    })
+    appendFileSync(join(LOGS, 'updates.log'), `openhut: packs: ${JSON.stringify({ ...result, packs: undefined })}\n`)
+    if (result.action === 'install') setUpdate({ ready: { version: result.version, pack: true, signed: result.signed }, waiting: null, refused: null, halted: null })
+    if (result.action === 'wait') setUpdate({ waiting: { version: result.version, retryAt: result.retryAt, signed: result.signed }, refused: null, halted: null })
+    if (result.action === 'refuse') setUpdate({ refused: result.reason })
+    if (result.action === 'halt') setUpdate({ halted: { at: Date.now() }, waiting: null, ...updating.ready?.pack && { ready: null } })
+  } catch (error) {
+    appendFileSync(join(LOGS, 'updates.log'), `openhut: packs: ${error.message}\n`)
+  }
 }
 
 async function releaseSigned(info) {
@@ -996,6 +1036,13 @@ app.whenReady().then(async () => {
     return error.message
   })
   const started = await booted
+  if (PACK?.pending && started !== true) {
+    rollbackPack({ home: HOME, data: DATA })
+    appendFileSync(join(LOGS, 'updates.log'), `openhut: packs ${PACK.version} (sequence ${PACK.sequence}) didn't start, so OpenHut went back by itself\n`)
+    app.relaunch()
+    return app.quit()
+  }
+  if (PACK?.pending) commitPack({ home: HOME, data: DATA })
   if (started !== true) {
     const back = previousVersion()
     const buttons = [...(back ? [`Go back to ${back}`] : []), 'Open Logs', 'Quit']
