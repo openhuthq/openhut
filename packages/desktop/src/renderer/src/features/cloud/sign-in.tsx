@@ -44,7 +44,7 @@ export function SignIn({ cloud }: { cloud: Cloud | undefined }) {
     <span className={cn(SWAP, !busy && 'translate-y-2.5 opacity-0')} aria-hidden={!busy}><Spinner className="mt-0 border-white/30 border-t-white" />Finish in your browser</span>
   </Button>
   const quiet = !invited && !isPhone() && <Button type="button" variant="text" onClick={() => open('join-link')}>I have an invite link</Button>
-  const link = waiting ? <span className="text-mute">Google opened in your browser · <Button type="button" variant="text" className="font-normal text-mute" onClick={cancel}>Cancel</Button></span> : quiet
+  const link = waiting ? <span className="text-mute">Google opened in your browser · <Button type="button" variant="text" className="font-normal text-mute" disabled={signIn.isPending} onClick={() => signIn.mutate(hint)}>Open it again</Button> · <Button type="button" variant="text" className="font-normal text-mute" onClick={cancel}>Cancel</Button></span> : quiet
   const [title, line] = invited ? ['You’re invited.', hint ? `Sign in as ${hint} to join. Everything in the team stays end-to-end encrypted.` : INVITED] : [moving ? 'Sign in to keep going.' : 'Your agents, everywhere.', moving]
   return <Step title={title} line={line} action={action} link={link}>
     {!invited && <ul className="m-0 flex list-none flex-col gap-3 p-0 text-left">{POINTS.map(([icon, text]) => <li key={text} className="flex items-center gap-3 text-[15px]/[1.4] text-body"><I icon={icon} size={18} className="shrink-0 text-mute" />{text}</li>)}</ul>}

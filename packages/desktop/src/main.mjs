@@ -589,7 +589,7 @@ async function boot() {
   if (!PIPES) rmSync(SERVER_SOCK, { force: true })
   await rootSecret()
   serverEnv.PORT = String(await signInCallbacks())
-  start('server', Object.assign(serverEnv, { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_AGENT_HOST_NET: '1' }))
+  start('server', Object.assign(serverEnv, { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_APP_SCHEME: SCHEME, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_AGENT_HOST_NET: '1' }))
   if (!await waitFor(() => listening(SERVER_SOCK), 60)) return false
   if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   return true
@@ -700,7 +700,7 @@ function ownLink(url) {
 function openLink(url) {
   linked = ownLink(url)
   keepInvite(linked)
-  if (linked && (opened || main)) show(linked)
+  if ((linked || url?.startsWith(`${SCHEME}:`)) && (opened || main)) show(linked)
 }
 
 function show(path) {

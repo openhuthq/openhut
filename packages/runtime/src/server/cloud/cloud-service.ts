@@ -27,7 +27,6 @@ import { recordsService } from './records.ts'
 import { agentService } from '../agents/agent-service.ts'
 
 const CHECK_MS = 60_000
-const SIGNED_IN = 'You’re signed in. You can go back to OpenHut.'
 const Boxes = z.object({ data: z.array(z.object({ id: z.string(), body: z.string(), by: z.string(), signature: z.string() })) })
 const WORKSPACE_BOX = 'workspace-'
 const Newer = z.object({ data: z.array(z.unknown()) })
@@ -244,7 +243,7 @@ export const cloudService = {
         if (await accountExists()) {
           log.info({ event: 'cloud.locked', why: 'this account already has a team or a kit' })
           await keysService.setLocked(who)
-          return page(SIGNED_IN)
+          return signedIn(session.email)
         }
       }
       const me = Me.safeParse((await keysService.call({ method: 'GET', path: '/v1/me' })).json).data
@@ -252,10 +251,10 @@ export const cloudService = {
       const account = await keysService.open({ ...who, home: me.home })
       if (!await openRoom({ account })) {
         await keysService.relock(who)
-        return page(SIGNED_IN)
+        return signedIn(session.email)
       }
       cloudService.connect()
-      return page(SIGNED_IN)
+      return signedIn(session.email)
     } catch (err) {
       signInError = messageOf(err)
       return page(`${signInError} Go back to OpenHut.`)
@@ -413,6 +412,10 @@ async function joinAsServer(code: string): Promise<void> {
   const session = await keysService.joinSession(code)
   await keysService.setLocked({ sub: session.sub, email: session.email })
   await cloudService.ask()
+}
+
+function signedIn(email: string): string {
+  return page(`Signed in as ${email}. Go back to OpenHut to carry on. You can close this tab.`, { title: 'You’re signed in', back: config.appScheme && `${config.appScheme}://open` })
 }
 
 function kitOf(): { savedAt: string; differs: boolean } | null {

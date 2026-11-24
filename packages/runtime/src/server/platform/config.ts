@@ -50,6 +50,7 @@ export const config = {
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))).version,
   build: BUILD,
   join: JOIN,
+  appScheme: process.env.OPENHUT_APP_SCHEME || undefined,
   name: process.env.OPENHUT_NAME || undefined,
   relayUrl: RELAY_URL,
   claudeBin: fileURLToPath(new URL('../../../../../bin/claude', import.meta.url)),
