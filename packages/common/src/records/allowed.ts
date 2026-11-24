@@ -1,5 +1,5 @@
 import type { Member } from '../cloud/cloud.ts'
-import { sealedWith } from './seal.ts'
+import { sealedWith } from './row.ts'
 import type { SealedRow } from './wire.ts'
 
 export type Roster = { workspace: string; members: Member[]; viewers: string[]; former: { key: string; email: string }[] }

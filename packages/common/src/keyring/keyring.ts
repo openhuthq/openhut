@@ -1,7 +1,7 @@
 import type { MemberList, MemberListBody } from '../cloud/cloud.ts'
 import type { SealedKind } from '../cloud/rules.ts'
 import type { PostMemberList } from '../cloud/v1/trust.ts'
-import type { Opened, Value } from '../records/seal.ts'
+import type { Opened, Value } from '../records/row.ts'
 import type { PutSealed, SealedRow } from '../records/wire.ts'
 
 export type Change = PostMemberList

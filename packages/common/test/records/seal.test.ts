@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { open, seal, sealedWith, signedBytes, verify, type Keys, type Value, type Where } from '../../src/records/seal.ts'
+import { open, seal } from '../../src/records/seal.ts'
+import { sealedWith, signedBytes, verify, type Keys, type Value, type Where } from '../../src/records/row.ts'
 import type { SealedRow } from '../../src/records/wire.ts'
 import { fromBase64, toBase64 } from '../../src/vault/public.ts'
 import { agentWhere, devices, keysOf, signerOf, team, teamKeys, type Device } from './world.ts'
