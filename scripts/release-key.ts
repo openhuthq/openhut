@@ -5,10 +5,10 @@ import { parseArgs } from 'node:util'
 
 const { values: flags, positionals } = parseArgs({
   allowPositionals: true,
-  options: { sequence: { type: 'string' }, channel: { type: 'string' }, 'shell-api': { type: 'string' }, rollout: { type: 'string' }, halt: { type: 'boolean' }, rekor: { type: 'string' } },
+  options: { sequence: { type: 'string' }, channel: { type: 'string' }, 'shell-api': { type: 'string' }, halt: { type: 'boolean' }, rekor: { type: 'string' } },
 })
 const [command, path, dir, given] = positionals
-const usage = 'usage: release-key.ts key <new key file> | sign <key file> <release folder> [version] [--sequence N] [--channel stable|beta] [--shell-api MIN-MAX] [--rollout 0-100] [--halt] [--rekor https://rekor.sigstore.dev]'
+const usage = 'usage: release-key.ts key <new key file> | sign <key file> <release folder> [version] [--sequence N] [--channel stable|beta] [--shell-api MIN-MAX] [--halt] [--rekor https://rekor.sigstore.dev]'
 
 if (command === 'key' && path && !existsSync(path)) {
   const pair = generateKeyPairSync('ed25519')
@@ -34,12 +34,11 @@ if (command === 'key' && path && !existsSync(path)) {
     sequence: Number(flags.sequence ?? Math.floor(Date.now() / 1000)),
     channel: flags.channel ?? (version.includes('-') ? 'beta' : 'stable'),
     shellApi: { min, max },
-    rollout: Number(flags.rollout ?? 100),
     halt: flags.halt ?? false,
     packs,
     files,
   }
-  if (!Number.isSafeInteger(release.sequence) || !['stable', 'beta'].includes(release.channel) || !(min <= max) || !(release.rollout >= 0 && release.rollout <= 100)) {
+  if (!Number.isSafeInteger(release.sequence) || !['stable', 'beta'].includes(release.channel) || !(min <= max)) {
     console.error(usage)
     process.exit(2)
   }

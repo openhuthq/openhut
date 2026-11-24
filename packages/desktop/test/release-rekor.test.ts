@@ -72,9 +72,9 @@ test('release.json v2 is signed, logged to Rekor and installed only once its ent
     return { manifest: read('release.json'), signature: read('release.json.sig'), rekor: JSON.parse(read('release.json.rekor')) }
   }
   try {
-    const feed = await signed('feed', { 'openhut-app.tgz': 'the app pack', 'openhut-app.json': '{"pack":"app"}', 'openhut.tgz': 'the server runtime' }, '--rollout', '10')
+    const feed = await signed('feed', { 'openhut-app.tgz': 'the app pack', 'openhut-app.json': '{"pack":"app"}', 'openhut.tgz': 'the server runtime' })
     const v2 = JSON.parse(feed.manifest)
-    assert.deepEqual({ ...v2, files: undefined, packs: undefined }, { schema: 2, version: '9.9.9', sequence: 42, channel: 'stable', shellApi: { min: 1, max: 2 }, rollout: 10, halt: false, files: undefined, packs: undefined })
+    assert.deepEqual({ ...v2, files: undefined, packs: undefined }, { schema: 2, version: '9.9.9', sequence: 42, channel: 'stable', shellApi: { min: 1, max: 2 }, halt: false, files: undefined, packs: undefined })
     const sha512 = (body: string) => createHash('sha512').update(body).digest('base64')
     assert.deepEqual(v2.packs, { app: { file: 'openhut-app.tgz', sha512: sha512('the app pack'), manifest: 'openhut-app.json', manifestSha512: sha512('{"pack":"app"}') } }, 'openhut.tgz has no manifest, so it is a file, not a pack')
     assert.equal(cosigned({ ...feed, key, version: '9.9.9', files: [{ url: 'v9.9.9/openhut.tgz', sha512: sha512('the server runtime') }] }), true, 'v1 checks still pass on a v2 release.json')
