@@ -1,18 +1,6 @@
 name: Runtime image
 
 on:
-  pull_request:
-    paths:
-      - install/**
-      - packages/runtime/**
-      - packages/common/**
-      - packages/tunnel/**
-      - vendor/**
-      - package-lock.json
-      - scripts/release.sh
-      - scripts/image.sh
-      - scripts/image-smoke.sh
-      - .github/workflows/runtime-image.yml
   workflow_dispatch:
     inputs:
       tags:
