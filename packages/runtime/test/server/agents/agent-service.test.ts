@@ -161,3 +161,10 @@ test('an agent this computer couldn\'t set up says so as its health, with the re
   await agentService.reapply({ id: made.id })
   assert.notEqual((await agentService.get({ actor: owner, id: made.id })).health, 'setup_failed')
 })
+
+test('on boot, a sandbox left by an earlier install for an agent this computer doesn’t run is removed', async () => {
+  agentd.applied.set('ag_stray0001', false)
+  await agentService.boot()
+  assert.equal(agentd.applied.has('ag_stray0001'), false)
+  assert.equal(agentd.applied.has('ag_tokentst'), true)
+})

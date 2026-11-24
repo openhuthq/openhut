@@ -150,7 +150,7 @@ function useMemoryCount(agent: Agent) {
 }
 
 function skillsNote(skills: { builtIn: boolean }[] | undefined): string | undefined {
-  if (!skills) return undefined
+  if (!skills?.length) return undefined
   const learned = skills.filter((skill) => !skill.builtIn).length
   const builtIn = skills.length - learned
   return [learned && `${learned} learned`, builtIn && `${builtIn} built in`].filter(Boolean).join(' · ') || '0'

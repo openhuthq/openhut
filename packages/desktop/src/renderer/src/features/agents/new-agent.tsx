@@ -104,9 +104,9 @@ export function FirstAgent() {
     create({ ...picked, model: firstModel(providers) })
   }}>
     {waiting && <SeatSignIn start={seat} onClose={() => setWaiting(undefined)} onDone={() => { create({ ...waiting, model: DEFAULT_MODEL }); setWaiting(undefined) }} />}
-    <FacePicker initial={null} />
     <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Make your first agent</h1>
     <p className="m-0 -mt-2 text-[14px]/[1.5] text-body">Give it a name and a face. You can tell it its job in your first chat.</p>
+    <FacePicker initial={null} />
     <Field label={<span className="text-[12px] font-medium text-mute">Name</span>} className="mt-1 w-[352px] max-w-full text-left">{(control) => <Input {...control} name="name" required maxLength={40} defaultValue={NAMES[0]} autoComplete="off" spellCheck={false} className="h-10 rounded-lg text-[15px] font-medium" />}</Field>
     {computers.length > 1 && <div className="flex w-[352px] max-w-full flex-col gap-1.5 text-left">
       <span className="text-[12px] font-medium text-mute">Where should it run?</span>

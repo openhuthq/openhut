@@ -105,7 +105,7 @@ export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () =>
     const made = await ready()
     const text = textOf(made)
     if (!kitBridge) {
-      toast(`Saved to Downloads as ${name}. Move it somewhere safe, like a password manager or a USB stick.`)
+      toast('Saved to your Downloads folder. Move it somewhere safe, like a password manager or a USB stick.')
       return saved(download({ name, text }))
     }
     const kept = await kitBridge.save({ name, body: text })
