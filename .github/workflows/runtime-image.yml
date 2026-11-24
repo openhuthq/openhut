@@ -115,6 +115,14 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+      - name: A release build sets the runtime version in this checkout
+        if: inputs.build != ''
+        env:
+          BUILD_INPUT: ${{ inputs.build }}
+        run: node scripts/set-version.ts "$BUILD_INPUT"
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
         with:
           platforms: arm64

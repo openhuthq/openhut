@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: Stable bumps main; beta bumps a new branch release/v<version> from main
+        description: Both tag the newest main commit that passed Desktop app; the tag run sets the version, nothing is committed
         type: choice
         options: [stable, beta]
         default: stable
@@ -14,7 +14,8 @@ on:
         required: true
 
 permissions:
-  contents: write
+  contents: read
+  actions: read
 
 concurrency:
   group: cut-release
@@ -54,35 +55,22 @@ jobs:
             if (top && cmp(want, parse(top)) <= 0) fail(`v${VERSION} is not higher than v${top}.`)
             console.log(`v${VERSION} is higher than ${top ? `v${top}` : "no release"}.`)
           '
-          if git ls-remote --exit-code origin "refs/heads/release/v$VERSION" >/dev/null; then
-            echo "::error::The branch release/v$VERSION already exists."
-            exit 1
-          fi
-      - name: Bump the app and runtime version
+      - name: Find main's newest commit that passed Desktop app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          node -e '
-            const fs = require("fs")
-            const v = process.env.VERSION
-            const edit = (file, change) => {
-              const json = JSON.parse(fs.readFileSync(file, "utf8"))
-              change(json)
-              fs.writeFileSync(file, JSON.stringify(json, null, 2) + "\n")
-            }
-            edit("packages/desktop/package.json", (p) => { p.version = v })
-            edit("packages/runtime/package.json", (p) => { p.version = v })
-            edit("package-lock.json", (l) => { l.packages["packages/desktop"].version = v; l.packages["packages/runtime"].version = v })
-          '
-          git diff --stat
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git diff --quiet || git commit -am "Release $VERSION: the app and runtime version"
-      - name: Push the bump, then the tag, which starts the desktop workflow
+          read -r sha url <<< "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow desktop.yml --branch main --event push --status success --limit 1 --json headSha,url -q '.[0] | "\(.headSha) \(.url)"')"
+          [ -n "$sha" ] || { echo "::error::No commit on main has passed Desktop app yet, so there's nothing releasable."; exit 1; }
+          git merge-base --is-ancestor "$sha" origin/main || { echo "::error::${sha::8} passed Desktop app but isn't on main any more."; exit 1; }
+          behind=$(git rev-list --count "$sha..origin/main")
+          echo "SHA=$sha" >> "$GITHUB_ENV"
+          echo "Tagging ${sha::8}, which passed $url ($behind newer commits on main aren't green yet)" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Push the tag, which starts the desktop workflow
         env:
           RELEASE_TAG_KEY: ${{ secrets.RELEASE_TAG_KEY }}
         run: |
-          git push origin "HEAD:refs/heads/$([ "$CHANNEL" = stable ] && echo main || echo "release/v$VERSION")"
-          git tag "v$VERSION"
+          git tag "v$VERSION" "$SHA"
           printf '%s\n' "$RELEASE_TAG_KEY" > "$RUNNER_TEMP/tag-key" && chmod 600 "$RUNNER_TEMP/tag-key"
           GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tag-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" git push "git@github.com:$GITHUB_REPOSITORY.git" "refs/tags/v$VERSION"
           rm "$RUNNER_TEMP/tag-key"
-          echo "Pushed v$VERSION; the desktop workflow builds it: https://github.com/$GITHUB_REPOSITORY/actions/workflows/desktop.yml" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pushed v$VERSION at ${SHA::8}; the desktop workflow builds it with that version: https://github.com/$GITHUB_REPOSITORY/actions/workflows/desktop.yml" >> "$GITHUB_STEP_SUMMARY"
