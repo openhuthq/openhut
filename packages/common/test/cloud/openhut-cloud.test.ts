@@ -29,5 +29,5 @@ test('every endpoint is under /v1 except health, and paths fill their params', (
 test('the rules table has a row for every kind: the trust kinds, each sealed kind, blobs and presence', () => {
   assert.deepEqual(new Set(KINDS), new Set([...TRUST_KINDS, ...SEALED_KINDS, 'blob', 'presence']))
   assert.equal(RULES.presence.stored, false)
-  assert.deepEqual(RULES['member-list'].write, ['admin'])
+  assert.equal(RULES['member-list'].check, 'chain')
 })

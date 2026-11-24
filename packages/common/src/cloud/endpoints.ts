@@ -1,3 +1,7 @@
+import * as z from 'zod/mini'
+import { AskAdmin, DeviceKey } from './cloud.ts'
+import { CreateJoinRequest } from './v1/trust.ts'
+
 export type Auth = 'none' | 'device' | 'token' | 'signed' | 'computer'
 export type Endpoint = { call: 'signIn' | 'records' | 'tunnel' | 'connections' | 'ops'; method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'WSS'; path: string; auth: Auth; does: string }
 
@@ -29,3 +33,15 @@ export function pathOf({ name, params = {} }: { name: EndpointName; params?: Rec
     return encodeURIComponent(value)
   })
 }
+
+export const CreateSignIn = z.object({ device: DeviceKey, returnTo: z.string().check(z.maxLength(500)), state: z.string().check(z.minLength(8), z.maxLength(200)) })
+export type CreateSignIn = z.infer<typeof CreateSignIn>
+export const SignInStarted = z.object({ object: z.literal('sign_in'), url: z.string() })
+export type SignInStarted = z.infer<typeof SignInStarted>
+
+export const PutJoinRequest = z.union([
+  z.object({ ...AskAdmin.shape, server: CreateJoinRequest.shape.server, commit: CreateJoinRequest.shape.commit }),
+  z.object({ nonce: CreateJoinRequest.shape.commit.def.innerType }),
+  z.object({ reviewed: z.literal(true) }),
+])
+export type PutJoinRequest = z.infer<typeof PutJoinRequest>
