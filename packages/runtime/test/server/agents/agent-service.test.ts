@@ -123,7 +123,7 @@ test('changing runsOn stops the agent here; changing it back starts it again', a
   assert.equal(agentd.applied.has(made.id), false)
   const back = await recordsService.get({ collection: 'control', workspace: HOME, id: made.id })
   fake.write({ collection: 'control', id: made.id, workspace: HOME, parent: made.id, personal: true, value: { ...back?.value as object, runsOn: device.me } })
-  for (let i = 0; i < 50 && !await db.selectFrom('agent').select('id').where('id', '=', made.id).executeTakeFirst(); i++) await new Promise((resolve) => setTimeout(resolve, 10))
+  for (let i = 0; i < 100 && !(await db.selectFrom('agent').select('id').where('id', '=', made.id).executeTakeFirst() && agentd.applied.has(made.id)); i++) await new Promise((resolve) => setTimeout(resolve, 10))
   assert.ok(await db.selectFrom('agent').select('id').where('id', '=', made.id).executeTakeFirst(), 'the change notice brought it back')
   assert.equal(agentd.applied.has(made.id), true)
 })
