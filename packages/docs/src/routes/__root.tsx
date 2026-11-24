@@ -21,7 +21,6 @@ export const Route = createRootRoute({
       { name: 'twitter:card', content: 'summary_large_image' },
     ],
     links: [{ rel: 'icon', href: '/docs/hut.svg' }, { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' }, { rel: 'manifest', href: '/site.webmanifest' }],
-    scripts: [{ src: 'https://cdn.databuddy.cc/databuddy.js', async: true, 'data-client-id': '40a6e1dc-4e64-4fd6-8b92-415a77397465', 'data-track-web-vitals': '', 'data-track-errors': '' }],
   }),
   component: Root,
 })
