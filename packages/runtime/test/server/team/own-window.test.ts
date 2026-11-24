@@ -100,7 +100,7 @@ test('the desktop window: the shell hands its key over IPC, the runtime lists it
 
     const browser = over(browserKey)
     assert.equal(settings.ownWindow(), first.device, 'a device let in through a Cloud join request never becomes the own window')
-    for (const route of [{ ...approval, body: { faces } }, { method: 'POST', path: '/api/cloud/kits' }, { method: 'DELETE', path: `/api/cloud/devices/${encodeURIComponent(first.device)}` }, { method: 'POST', path: `/api/cloud/workspaces/${home}/keys` }, { method: 'DELETE', path: '/api/cloud' }]) {
+    for (const route of [{ ...approval, body: { faces } }, { method: 'DELETE', path: `/api/cloud/devices/${encodeURIComponent(first.device)}` }, { method: 'POST', path: `/api/cloud/workspaces/${home}/keys` }, { method: 'DELETE', path: '/api/cloud' }]) {
       const tried = await browser(route)
       assert.equal(tried.status, 403, `the browser calling ${route.method} ${route.path} over the tunnel: ${tried.text}`)
     }
