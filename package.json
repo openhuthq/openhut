@@ -18,7 +18,6 @@
     "build": "turbo run build",
     "app": "npm -w @openhut/desktop run build && npm -w @openhut/desktop start",
     "e2e:app": "npm -w @openhut/desktop run prove",
-    "e2e:server": "npm -w @openhut/e2e run e2e",
     "release": "scripts/release.sh",
     "postinstall": "[ ! -f scripts/private.sh ] || sh scripts/private.sh"
   },

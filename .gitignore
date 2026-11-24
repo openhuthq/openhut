@@ -5,7 +5,6 @@ dist/
 .old/
 .env
 /BUILD
-packages/e2e/results/
 .wrangler/
 packages/desktop/release/
 .DS_Store

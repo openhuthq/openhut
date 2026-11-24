@@ -1,5 +1,8 @@
 # OpenHut v1: verification plan
 
+> Historical (2026-11). The Docker server e2e this plan ran was deleted in M6; the runtime image smoke test
+> (`scripts/image-smoke.sh`) covers the install, a server joining and an agent in gVisor.
+
 ## The goal being verified
 
 One command installs OpenHut on a server. OpenHut deploys many Hermes agents. Each agent:
@@ -20,7 +23,7 @@ The test story comes from scoping. A **Dev** agent may query the team's Orders d
 
 | Part | In this repo | Blueprint parts not in the slice |
 |---|---|---|
-| Control plane | An npm-workspaces + Turborepo monorepo laid out like Skyfleet: `packages/runtime` (`src/server`: Fastify, Kysely on PGlite, domain modules; `src/agentd`), `packages/desktop` (the Electron app; its renderer in `src/renderer` is React, Vite, TanStack Query), `packages/common` (the Zod Mini API contract), `packages/e2e`. Node 22.18+ runs the TypeScript directly. The API is resource-oriented with Stripe's shapes (`private/brain/decisions/openhut-api-follows-skyfleet.md`) | |
+| Control plane | An npm-workspaces + Turborepo monorepo laid out like Skyfleet: `packages/runtime` (`src/server`: Fastify, Kysely on PGlite, domain modules; `src/agentd`), `packages/desktop` (the Electron app; its renderer in `src/renderer` is React, Vite, TanStack Query), `packages/common` (the Zod Mini API contract). Node 22.18+ runs the TypeScript directly. The API is resource-oriented with Stripe's shapes (`private/brain/decisions/openhut-api-follows-skyfleet.md`) | |
 | Desktop app | `private/brain/decisions/desktop-app.md`. Electron for macOS 14+ on Apple silicon and x64 Linux. The main process serves the renderer on `app://openhut` (CSP `img-src 'self' data: blob:`) and runs the server and agentd as utility processes, restarting either with backoff. The server runs in local mode: a Unix socket in the app's folder, created under umask 0177 and `chmod 0600` after listen (`packages/runtime/test/server/app.test.ts`); the main process proxies `/api/*` to it and refuses a non-GET request whose `Origin` is anything but `app://openhut`. Agents run in microsandbox VMs that outlive the app; the gateway listens on 127.0.0.1:8081, and if it can't bind the server logs `gateway.bind_failed`, stops every running agent and exits | Windows, Intel Macs |
 | Identity | `private/brain/decisions/app-aggregates-runtimes.md`. Local runtime (the desktop app): the server listens on a 0600 Unix socket and every request on it is the one owner. Remote runtime (installed by curl): the server listens on 127.0.0.1:8787 (0.0.0.0 inside the install's container, published on the host's 127.0.0.1 only). The app reaches it through the relay once it joins with a code; installed with `OPENHUT_CLIENT_KEY_SHA256` instead, a request is the owner only with `Authorization: Bearer <key>` whose SHA-256 matches (`timingSafeEqual`). The installer takes the hash in `OPENHUT_CLIENT_KEY_SHA256`, keeps it in `/etc/openhut/env` (0600) and prints only its first 8 hex characters. No people, roles, passwords, sessions, setup codes or invites. Nothing needs a public address: no webhook triggers (public inbound waits for the managed-cloud relay), and connection sign-ins return to `127.0.0.1`, which on the Mac the app turns into `app://openhut` | Adding a computer over Tailscale SSH |
 | Agent gateway `:8081` | `list_tools` / `describe_tool` / `call_tool`. Per-agent HMAC token, the only check. Live `reachable()` = the agent's grants that its owner can still use. Per agent: at most 16 connections (firewall), 8 requests in flight, 1 MB per request, headers within 10 s, 60 s per request. One audit row per call, including refused, busy and malformed calls. It is also the credentials broker (`private/brain/decisions/credentials-broker.md`): `/u/anthropic` (`POST /v1/messages`, `/v1/messages/count_tokens`, with the Claude seat), `/u/codex` (`POST /responses`, `/responses/compact`, `GET /models`, with the ChatGPT token) and `/u/telegram/bot<agent token>/<method>` (every method but `logOut`, `close`, `setWebhook`; a method name must be letters only, so a percent-encoded name is refused; the bot token is swapped into the path). The agent's own token is the stand-in for every real key; the gateway strips the agent's auth headers and adds the real one A connection's page shows its calls (`/api/connection-events`); calls no connection allowed are listed by agent (`/api/connection-events?agentId=`, readable for deleted agents too). Events page with `limit`/`startingAfter` and a real `hasMore` | Connectors other than Postgres |
@@ -36,11 +39,11 @@ The test story comes from scoping. A **Dev** agent may query the team's Orders d
 
 ## Install and the e2e run
 
-How the installer works, and how `npm run e2e:server` runs it on Docker Desktop (a bare server, the install, adding it again with a new key, a tampered upgrade, the real upgrade, a restart, the caches and what lands in `packages/e2e/results/`), is in `private/brain/openhut-gotchas.md`. The run has five phases, each a run of `e2e.ts` with its results in `e2e-<phase>.json`: `main` (after the install), `after-upgrade`, `after-restart`, `update-broken` (Update now with a release whose app can't start: the installer puts the previous build back) and `update` (Update now from Admin's API). The e2e runs the remote runtime only: gVisor, the firewall and the enrolled key; the desktop app is verified by hand (see "Not verified here").
+How the installer works, and how the server e2e runs it on Docker Desktop (a bare server, the install, adding it again with a new key, a tampered upgrade, the real upgrade, a restart, the caches and what lands in its results folder), is in `private/brain/openhut-gotchas.md`. The run has five phases, each a run of `e2e.ts` with its results in `e2e-<phase>.json`: `main` (after the install), `after-upgrade`, `after-restart`, `update-broken` (Update now with a release whose app can't start: the installer puts the previous build back) and `update` (Update now from Admin's API). The e2e runs the remote runtime only: gVisor, the firewall and the enrolled key; the desktop app is verified by hand (see "Not verified here").
 
 ## Checks
 
-Each check is one `node:test` test in `packages/e2e/src/e2e.ts`, which names what it proves and what it expects; a run's `packages/e2e/results/e2e-report.md` lists them all with the actual values. One worth naming:
+Each check is one `node:test` test in its `e2e.ts`, which names what it proves and what it expects; a run's `e2e-report.md` lists them all with the actual values. One worth naming:
 - **F8** asks agentd for its fence report and requires exactly the six checks above, all passing on gVisor. F4 and H5 probe the same ground from a real agent: every blocked target must time out from the agent (dropped, not reset) while the server reaches it, including stand-in listeners at 10.99.0.10:443 and 169.254.169.254:443 and one the run holds open on the server itself.
 
 ## Mock parity
@@ -89,7 +92,7 @@ The approved mock is the **Mock** tab of the OpenHut blueprint artifact (https:/
 
 ## Pass criteria
 
-1. `npm run e2e:server` exits 0 on a fresh run: every check in all five phases passes, and the report says the tree matches what the run tested. `npx turbo run build typecheck test` passes.
+1. the server e2e exits 0 on a fresh run: every check in all five phases passes, and the report says the tree matches what the run tested. `npx turbo run build typecheck test` passes.
 2. The result files exist and match the report.
 3. Three reviewer agents return **zero comments**. Each is briefed only with this plan, the code, the results and read-only access to the live server:
    - **Senior software engineer**: is the code correct and minimal, and does it do what this plan claims?
