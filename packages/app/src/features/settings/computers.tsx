@@ -326,7 +326,7 @@ function AddByCommand() {
     foot={expired && <Button type="button" variant="primary" onClick={() => mutate()}>Make a new command</Button>}>
     <ErrorNote message={code.error?.message} />
     {code.isPending && <Waiting note="It works once, for 10 minutes.">Making a code…</Waiting>}
-    {expired && <Scene mood="worried" title="Didn't hear from it" line="The command works for 10 minutes, and that time is up. If you ran it, the server printed why it couldn't join. Make a new command and run it again." />}
+    {expired && <Scene mood="worried" title="This command expired" line="Make a new one and run it on your server." />}
     {asked && home && <>
       <p className="m-0 text-body">It's asking to join. Press Review, then tap the two faces it printed.</p>
       <Rows><RequestRow workspace={home} asked={asked} /></Rows>

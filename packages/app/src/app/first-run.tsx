@@ -78,9 +78,9 @@ export function ServerCommand({ step, onCode, onBack }: { step: { code?: string;
         <p className="m-0 text-body">Run this on any Linux server or VPS you have. It becomes your first computer.</p>
         <Command text={joinCommand(step.code)} />
         <p className="m-0 text-[12px]/[16px] text-mute">Ubuntu, Debian or Alpine, x86_64 or arm64, with sudo. It installs Docker if needed and takes about 2 GB. You pay whoever hosts the server.</p>
-        <Waiting note="The command works once, for 10 minutes. This moves on by itself.">Waiting for your server…</Waiting>
+        <Waiting note="It works once, for 10 minutes.">Waiting for your server…</Waiting>
       </>}
-      {expired && <Scene mood="worried" title="Didn't hear from it" line="The command works for 10 minutes, and that time is up. If you ran it, the server printed why it couldn't join. Make a new command and run it again." />}
+      {expired && <Scene mood="worried" title="This command expired" line="Make a new one and run it on your server." />}
     </div>
     <DialogFoot start={<Button type="button" variant="secondary" onClick={onBack}>Back</Button>}>{expired && <Button type="button" variant="primary" disabled={make.isPending} onClick={() => mutate()}>Make a new command</Button>}</DialogFoot>
   </Dialog>
