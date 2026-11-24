@@ -41,8 +41,9 @@ export function SignIn({ cloud }: { cloud: Cloud | undefined }) {
   const hint = invite?.email
   const moving = migrating({ agents, invited })
   const busy = waiting || signIn.isPending
-  const action = isPhone() ? undefined : <Button type="button" variant="primary" className={cn(BIG, 'grid', busy && 'bg-[#2a2b2e]')} disabled={!online || signIn.isPending} onClick={() => signIn.mutate(hint)}>
-    <span className={cn(SWAP, busy && '-translate-y-2.5 opacity-0')}><Google size={17} />{hint ? `Sign in as ${hint}` : 'Continue with Google'}</span>
+  const ready = Boolean(cloud)
+  const action = isPhone() ? undefined : <Button type="button" variant="primary" className={cn(BIG, 'grid', busy && 'bg-[#2a2b2e]')} disabled={!online || !ready || signIn.isPending} onClick={() => signIn.mutate(hint)}>
+    <span className={cn(SWAP, busy && '-translate-y-2.5 opacity-0')}>{ready ? <><Google size={17} />{hint ? `Sign in as ${hint}` : 'Continue with Google'}</> : <><Spinner className="mt-0 border-white/30 border-t-white" />Getting ready…</>}</span>
     <span className={cn(SWAP, !busy && 'translate-y-2.5 opacity-0')} aria-hidden={!busy}><Spinner className="mt-0 border-white/30 border-t-white" />Finish in your browser</span>
   </Button>
   const quiet = !invited && !isPhone() && <Button type="button" variant="text" onClick={() => open('join-link')}>I have an invite link</Button>

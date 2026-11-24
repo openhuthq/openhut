@@ -27,7 +27,7 @@ export function useCloud() {
       if (client.getQueryData(SIGN_IN_KEY) && (cloud.status !== 'off' || cloud.signInError)) client.setQueryData(SIGN_IN_KEY, false)
       return cloud
     },
-    refetchInterval: (query) => signingIn && query.state.data?.status === 'off' ? SIGN_IN_POLL_MS : pollOf(query.state.data),
+    refetchInterval: (query) => !query.state.data || (signingIn && query.state.data.status === 'off') ? SIGN_IN_POLL_MS : pollOf(query.state.data),
     refetchIntervalInBackground: true,
   })
 }
