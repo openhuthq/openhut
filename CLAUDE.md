@@ -107,7 +107,7 @@ Which loop proves which change:
   This is the default, and it's proof enough for review.
 - `main.mjs`, `preload.cjs`, anything behind `window.openhut`: `npm run app`, then `npm run e2e:app`.
 - Packaging, signing, installers, OS-specific behavior: a manual Shell run on the branch (`gh workflow run shell.yml --ref <branch>`).
-  CI never packages, and it is the merge gate, never the loop: don't wait on it to see a change working.
+  It also runs by itself when a main push changes the shell. CI never packages, and it is the merge gate, never the loop: don't wait on it to see a change working.
 
 The dashboard reaches the desktop app only through `packages/desktop/src/renderer/src/lib/desktop.ts` (`desktop` is
 `undefined` in a browser, and every caller handles that); a test keeps it the only place. Prefer moving work out of

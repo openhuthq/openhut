@@ -1,10 +1,32 @@
 name: Shell
 
 # Packages the Electron shell: macOS, Windows and Linux installers, signing, notarization, packaged app e2e and the
-# update test. Rare and manual: run it when the shell itself changes. Run on a v* tag ref (Cut a release does that),
-# it signs, uploads to the tag's draft release and publishes it. CI (ci.yml) never packages.
+# update test. It runs only when a main push changes the shell, or by hand; never on a PR, and CI (ci.yml) never
+# packages. Run by hand on a v* tag ref (Cut a release does that), it signs, uploads to the tag's draft release and
+# publishes it, and installed apps take the new shell through their in-app update.
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - packages/desktop/src/*.mjs
+      - packages/desktop/src/*.cjs
+      - packages/desktop/src/renderer/src/lib/desktop.ts
+      - packages/desktop/package.json
+      - packages/desktop/electron-builder*.yml
+      - packages/desktop/build/**
+      - packages/desktop/native/**
+      - packages/desktop/scripts/pack-*.mjs
+      - packages/desktop/scripts/after-pack.cjs
+      - packages/desktop/scripts/notarize.sh
+      - packages/desktop/scripts/app-e2e.mjs
+      - packages/desktop/scripts/update-test.mjs
+      - install/native-runtime.json
+      - install/agent-image/**
+      - install/agent-browser/**
+      - vendor/**
+      - scripts/ci-identity.sh
+      - .github/workflows/shell.yml
   workflow_dispatch:
     inputs:
       full:
