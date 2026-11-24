@@ -17,7 +17,7 @@ import { unseal } from '../platform/secrets.ts'
 import { agentService, runsHere } from '../agents/agent-service.ts'
 import { keysService } from '../cloud/keys-service.ts'
 import { recordsService } from '../cloud/records.ts'
-import type { Caller } from '../team/identity.ts'
+import { peopleOf, type Caller } from '../team/identity.ts'
 import { changeRequestService } from '../agents/change-request-service.ts'
 
 const TURN_MS = 15 * 60_000
@@ -136,7 +136,7 @@ export const threadService = {
     const started = Date.now()
     const answerId = nextId()
     const session = sessionOf(said)
-    const message = await seeded({ said, session, message: together({ messages: said.map((each) => each.message), shared: agent.shared }) })
+    const message = await seeded({ said, session, message: together({ messages: said.map((each) => each.message), shared: agent.shared || peopleOf(agent.people).length > 0 }) })
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         writer.write({ type: 'start', messageId: answerId })

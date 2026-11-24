@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { ServerStack01Icon, SquareLock02Icon, UserGroupIcon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, LaptopIcon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { Globe02Icon, ServerStack01Icon, SquareLock02Icon, UserGroupIcon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, LaptopIcon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogClose, DialogTitle } from '@/components/ui/dialog'
@@ -24,6 +24,7 @@ import { Face } from '@/features/agents/face'
 import { useMove } from '@/features/agents/move'
 import { RoutinesRow } from '@/features/routines/routines-dialog'
 import { useWorkspaces } from '@/features/cloud/workspaces'
+import { PeopleField, type AccessValue } from '@/features/agents/access'
 import { ModelRows } from '@/features/agents/model-rows'
 import { AgentStatus } from '@/features/agents/status'
 import { formValues } from '@/lib/form'
@@ -194,20 +195,29 @@ function Access({ agent }: { agent: Agent }) {
   const home = useAgents().data?.find((each) => each.id === agent.id)
   const update = useUpdateAgent(agent.id)
   const [sharing, setSharing] = useState(false)
+  const [picking, setPicking] = useState<AccessValue>()
   const workspace = all.find((each) => agent.workspace ? each.id === agent.workspace : each.home)
   if (!workspace || (home?.computer ?? 'local') !== 'local') return null
   const mine = !agent.owner || agent.owner === email
   const pick = (shared: boolean) => update.mutate({ shared }, { onError: toastError })
+  const value = agent.shared ? `Everyone on ${workspace.name}` : agent.people.length ? `You and ${agent.people.length} more` : 'Only you'
   return <>
     <DropdownMenu>
-      <DropdownMenuTrigger className={ROW} disabled={update.isPending}><I icon={agent.shared ? UserGroupIcon : SquareLock02Icon} size={15} className="text-mute" />Access<span className={VALUE}>{agent.shared ? 'Shared' : 'Private'}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
-      <MenuCard title={`Who can use ${agent.name}`}>
-        <Choice icon={<I icon={SquareLock02Icon} size={15} />} name="Private" note="Only you" selected={!agent.shared} disabled={!agent.shared || !mine} onClick={() => pick(false)} />
-        <Choice icon={<I icon={UserGroupIcon} size={15} />} name="Shared" note={`Everyone in ${workspace.name} can chat with it. Only you can change it.`} selected={agent.shared} disabled={agent.shared || !agent.canManage} onClick={() => setSharing(true)} />
+      <DropdownMenuTrigger className={ROW} disabled={update.isPending}><I icon={agent.shared ? Globe02Icon : SquareLock02Icon} size={15} className="text-mute" />Access<span className={VALUE}><span className="truncate">{value}</span><I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
+      <MenuCard title={`Who can open ${agent.name}`}>
+        <Choice icon={<I icon={SquareLock02Icon} size={15} />} name="Only people I pick" note={agent.people.length ? `You and ${agent.people.length} more` : 'Only you'} selected={!agent.shared} disabled={!agent.shared || !mine} onClick={() => pick(false)} />
+        <Choice icon={<I icon={Globe02Icon} size={15} />} name={`Everyone on ${workspace.name}`} note="Anyone on the team can chat with it. Only you can change it." selected={agent.shared} disabled={agent.shared || !agent.canManage} onClick={() => setSharing(true)} />
+        {agent.canManage && <><DropdownMenuSeparator /><DropdownMenuItem className="h-8 gap-2 text-[13px]" onClick={() => setPicking({ shared: agent.shared, people: agent.people, sidebars: agent.sidebars })}><I icon={UserGroupIcon} size={14} />{agent.shared ? 'Add to sidebars of…' : 'Share with…'}</DropdownMenuItem></>}
       </MenuCard>
     </DropdownMenu>
     <ConfirmDialog open={sharing} onOpenChange={setSharing} question={`Share ${agent.name} with ${workspace.name}?`} action="Share" onConfirm={() => pick(true)}
       detail={`Everyone in ${workspace.name} can read its chats and use what it can use. Only you can change it.`} />
+    {picking && email && <DialogCard onClose={() => setPicking(undefined)} className="w-[420px]">
+      <DialogTitle className="text-[15px]/[22px] font-medium">{agent.shared ? `Whose sidebar ${agent.name} is in` : `Share ${agent.name}`}</DialogTitle>
+      <PeopleField workspace={workspace} owner={agent.owner ?? email} value={picking} onChange={setPicking} />
+      <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setPicking(undefined)}>Cancel</Button>
+        <Button type="button" variant="primary" disabled={update.isPending} onClick={() => update.mutate({ people: picking.people, sidebars: picking.sidebars }, { onSuccess: () => setPicking(undefined), onError: toastError })}>Save</Button></div>
+    </DialogCard>}
   </>
 }
 

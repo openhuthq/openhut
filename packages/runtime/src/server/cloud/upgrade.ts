@@ -47,7 +47,7 @@ export const upgrade = {
       await recordsService.put({ collection: 'agent', id: row.id, workspace, parent: account.email, personal, value, reapply: () => { there = true; return null } })
       if (there) continue
       const grants = await db.selectFrom('connection_grant').select(['connection_id', 'created_at']).where('agent_id', '=', row.id).execute()
-      const control: ControlRecord = { runsOn: me, model: row.model, codeExecution: row.code_execution, browser: row.web_browser, grants: await Promise.all(grants.map(async (grant) => ({ connection: await connectionIdOf(grant.connection_id), at: new Date(grant.created_at).toISOString() }))) }
+      const control: ControlRecord = { runsOn: me, model: row.model, codeExecution: row.code_execution, browser: row.web_browser, grants: await Promise.all(grants.map(async (grant) => ({ connection: await connectionIdOf(grant.connection_id), at: new Date(grant.created_at).toISOString() }))), people: [], sidebars: [] }
       await recordsService.put({ collection: 'control', ...place, value: control })
       for (const channel of await db.selectFrom('channel').selectAll().where('agent_id', '=', row.id).execute()) {
         const record: ChannelRecord = { kind: channel.kind, status: channel.status, account: channel.account, ...audienceOf(channel), createdAt: new Date(channel.created_at).toISOString() }

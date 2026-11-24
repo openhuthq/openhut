@@ -18,6 +18,7 @@ import { ComputerPicker } from '@/features/computers/computer-picker'
 import { useComputerProviders } from '@/features/models/api'
 import { ModelPicker, SOFT_TRIGGER } from '@/features/models/model-picker'
 import { FacePicker } from '@/features/agents/face-picker'
+import { AccessPicker, PeopleField, type AccessValue } from '@/features/agents/access'
 import { formValues } from '@/lib/form'
 import { TOUCH, useMedia } from '@/lib/media'
 import { open, useOpen } from '@/lib/router'
@@ -45,7 +46,8 @@ export function FirstAgent() {
 
 function AgentForm() {
   const createAgent = useCreateAgent()
-  const { active } = useWorkspaces()
+  const { active, email } = useWorkspaces()
+  const [access, setAccess] = useState<AccessValue>({ shared: false, people: [], sidebars: [] })
   const touch = useMedia(TOUCH)
   const computers = useComputers().data ?? []
   const [computer, setComputer] = useState('local')
@@ -73,7 +75,7 @@ function AgentForm() {
     if (id === 'claude') setSigning('only')
     else open(id)
   }
-  const create = ({ name, face }: { name: string; face: string }) => createAgent.mutate({ body: { name, face, model, ...(!active.home && { workspace: active.id }) }, computer })
+  const create = ({ name, face }: { name: string; face: string }) => createAgent.mutate({ body: { name, face, model, ...access, ...(!active.home && { workspace: active.id }) }, computer })
   const where = computers.find((each) => each.id === computer) ?? computers[0]
   return <form className="flex w-full flex-col items-center gap-4" onSubmit={(event) => {
     const field = formValues(event)
@@ -95,7 +97,9 @@ function AgentForm() {
           {unready ? <NeedsSignIn model={model} /> : undefined}
         </ModelPicker>
       </Row>
+      {email && <Row title="Access"><AccessPicker team={active.name} value={access} onChange={setAccess} className={PICKER} /></Row>}
     </div>
+    {email && <PeopleField workspace={active} owner={email} value={access} onChange={setAccess} />}
     {where && <p className="m-0 w-full text-left text-[12px]/[16px] text-mute">{noteOf({ where, computers, here: WORDS.here })}</p>}
     <Button type="submit" variant="primary" className="h-10 w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !providers}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
     <ErrorNote message={createAgent.error?.message} />

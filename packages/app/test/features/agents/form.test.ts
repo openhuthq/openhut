@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { firstModel, inUse, noteOf } from '../../../src/features/agents/form.ts'
+import { firstModel, inUse, noteOf, searchPeople } from '../../../src/features/agents/form.ts'
 
 const provider = (id: string, connected: boolean, models: string[]) => ({ id, connected, models: models.map((model) => ({ id: model, on: true })) }) as never
 
@@ -25,4 +25,12 @@ test('Models marks the one new agents use: Claude Sonnet first, else the first c
   assert.equal(inUse([provider('claude', false, ['sonnet']), provider('openrouter', true, ['x-ai/grok'])]), 'openrouter')
   assert.equal(inUse([provider('openai', false, ['gpt'])]), undefined)
   assert.equal(inUse(undefined), undefined)
+})
+
+test('the Share field: a team of one says so, a search with no match says so, and people already added are not offered again', () => {
+  const owner = 'mo@example.com'
+  assert.deepEqual(searchPeople({ members: [owner], owner, added: [], query: '' }), { kind: 'alone' })
+  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com'], owner, added: [], query: ' zzq ' }), { kind: 'none', query: 'zzq' })
+  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com', 'ana@example.com'], owner, added: ['ana@example.com'], query: '' }), { kind: 'found', emails: ['sara@example.com'] })
+  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com', 'ana@example.com'], owner, added: [], query: 'SAR' }), { kind: 'found', emails: ['sara@example.com'] })
 })
