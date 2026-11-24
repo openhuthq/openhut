@@ -1,7 +1,7 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query'
 
 export type Ready = { version: string }
-export type UpdateState = { current: string; asksPassword?: boolean; checking: boolean; available: string | null; progress?: number; ready: Ready | null; error: 'signature' | 'failed' | null }
+export type UpdateState = { current: string; asksPassword?: boolean; checking: boolean; available: string | null; progress?: number; ready: Ready | null; installing?: boolean; error: 'signature' | 'failed' | 'not-installed' | null }
 export type UpdateBridge = { state: () => Promise<UpdateState>; check: () => Promise<UpdateState>; install: () => Promise<unknown>; onChange: (listener: (state: UpdateState) => void) => void }
 
 export const UPDATE_KEY = ['app-update']
@@ -20,6 +20,8 @@ export function downloadUrl(platform: string | undefined) {
 
 export function readyNote(state: UpdateState | null | undefined) {
   if (!state?.ready) return undefined
+  if (state.installing) return 'Installing… your computer is asking for your password'
+  if (state.error === 'not-installed') return `OpenHut ${state.ready.version} wasn't installed. Try again when you're ready to enter your password`
   return state.asksPassword ? `OpenHut ${state.ready.version} is ready. Your computer will ask for your password to install it` : `OpenHut ${state.ready.version} is ready`
 }
 
@@ -28,6 +30,8 @@ export function progressTitle(progress: number | undefined) {
 }
 
 export function updateNote(state: UpdateState) {
+  if (state.installing) return 'Installing… your computer is asking for your password.'
+  if (state.ready && state.error === 'not-installed') return 'Update not installed.'
   if (state.ready) return `Version ${state.ready.version} is ready.`
   if (state.error === 'signature') return 'This update didn\'t come from OpenHut, so it wasn\'t installed. Download OpenHut again.'
   if (state.error) return 'Couldn\'t update. Try again, or download the new version.'

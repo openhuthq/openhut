@@ -101,7 +101,8 @@ let linked = ownLink(process.argv.find((arg) => arg.startsWith(`${SCHEME}:`)))
 let fresh = false
 let carriedInvite = false
 let opened = false
-const updating = { checking: false, available: null, progress: 0, ready: null, error: null }
+const updating = { checking: false, available: null, progress: 0, ready: null, installing: false, error: null }
+let downloaded = ''
 const UPDATE_EVERY_MS = 30 * 60_000
 let updateCheck = { at: 0, quiet: false }
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
@@ -166,8 +167,10 @@ handle('first-run', () => firstRun())
 handle('update.state', updateState)
 handle('update.check', () => DEV ? updateState() : checkForUpdate())
 handle('update.install', () => {
-  if (updating.ready) setImmediate(() => updater.autoUpdater.quitAndInstall())
-  return { installing: !!updating.ready }
+  if (!updating.ready || updating.installing) return { installing: updating.installing }
+  if (ASKS_PASSWORD) installDeb()
+  else setImmediate(() => updater.autoUpdater.quitAndInstall())
+  return { installing: true }
 })
 handle('computers.add', answer(enroll))
 handle('computers.enrollments', () => [...enrollments.values()])
@@ -817,10 +820,29 @@ function update() {
   })
   const ready = () => keepApp(() => setUpdate({ checking: false, error: null, ready: { version: updating.available ?? '' } }))
   if (MAC) squirrel.on('update-downloaded', ready)
-  else auto.on('update-downloaded', ready)
+  else auto.on('update-downloaded', (info) => {
+    downloaded = info?.downloadedFile ?? ''
+    ready()
+  })
   checkForUpdate()
   setInterval(checkQuietly, UPDATE_EVERY_MS)
   app.on('browser-window-focus', checkQuietly)
+}
+
+function installDeb() {
+  const log = (line) => appendFileSync(join(LOGS, 'updates.log'), `openhut: ${line}\n`)
+  setUpdate({ installing: true, error: null })
+  log(`installing ${downloaded} with pkexec dpkg -i`)
+  execFile('pkexec', ['dpkg', '-i', downloaded], { maxBuffer: 8 << 20 }, (error, stdout, stderr) => {
+    log(`pkexec dpkg -i exited with ${error ? error.code : 0}: ${`${stdout}${stderr}`.trim().slice(-2000)}`)
+    if (!error) {
+      if (!TEST_HOME) app.relaunch()
+      return app.quit()
+    }
+    setUpdate({ installing: false, error: 'not-installed' })
+    main?.show()
+    main?.focus()
+  })
 }
 
 async function releaseSigned(info) {

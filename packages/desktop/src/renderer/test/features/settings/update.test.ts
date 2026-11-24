@@ -77,3 +77,11 @@ test('the update card names how far the download is in plain words', () => {
   assert.equal(progressTitle(50), 'Downloading the update')
   assert.equal(progressTitle(95), 'Almost ready')
 })
+
+test('a .deb install says the computer is asking for the password, and a cancelled one says it wasn\'t installed', () => {
+  const ready = { ...idle, asksPassword: true, ready: { version: '0.6.4' } }
+  assert.equal(updateNote({ ...ready, installing: true }), 'Installing… your computer is asking for your password.')
+  assert.equal(readyNote({ ...ready, installing: true }), 'Installing… your computer is asking for your password')
+  assert.equal(updateNote({ ...ready, error: 'not-installed' }), 'Update not installed.')
+  assert.match(readyNote({ ...ready, error: 'not-installed' }) ?? '', /^OpenHut 0.6.4 wasn't installed/)
+})
