@@ -3,7 +3,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+$/
 
 export const INVITE_PAGE = 'https://openhut.dev/join'
 
-type Bridge = { invite?: { forget: () => Promise<unknown>; clearClipboard: () => Promise<unknown> } }
+type Bridge = { invite?: { forget: () => Promise<unknown>; keep?: (path: string) => Promise<unknown>; clearClipboard: () => Promise<unknown> } }
 
 export type Invite = { link: string; workspace: string; email: string | undefined }
 
@@ -16,6 +16,11 @@ export function inviteOf(hash: string): Invite | undefined {
 export function forgetInvite() {
   const bridge: Bridge | undefined = Reflect.get(globalThis, 'openhut')
   void bridge?.invite?.forget().catch(() => undefined)
+}
+
+export function keepInvite(path: string) {
+  const bridge: Bridge | undefined = Reflect.get(globalThis, 'openhut')
+  void bridge?.invite?.keep?.(path).catch(() => undefined)
 }
 
 export function clearCarriedInvite() {

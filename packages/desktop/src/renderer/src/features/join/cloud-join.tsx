@@ -9,7 +9,7 @@ import { useAgents } from '@/features/agents/api'
 import { nameOf, useSignOut } from '@/features/cloud/api'
 import { Window } from '@/features/cloud/step'
 import { chooseWorkspace, useGate, useInvitePreview, useJoin } from '@/features/cloud/workspaces'
-import { forgetInvite, INVITE_PAGE, inviteOf } from '@/features/join/invite'
+import { forgetInvite, INVITE_PAGE, inviteOf, keepInvite } from '@/features/join/invite'
 import { navigate, open } from '@/lib/router'
 
 const BIG = 'mt-2 h-10 w-[300px] justify-center phone:h-12 phone:w-full'
@@ -117,7 +117,9 @@ function Card({ mood, title, body, action, link }: { mood: 'party' | 'worried'; 
 function refusal({ error, email }: { error: Error; email: string | null }): { title: string; body: string } {
   const status = error instanceof RequestError ? error.status : 0
   if (status === 403) return { title: 'This invite is for another email', body: `It’s for ${error instanceof RequestError && error.param ? error.param : 'another email'}. You’re signed in as ${email ?? 'someone else'}. Sign in with the email it was sent to.` }
-  if (status === 404 || status === 410) return { title: 'This invite link no longer works', body: error.message }
+  if (status === 410) return { title: 'This invite link no longer works', body: 'Invites last 2 days, and this one ran out. Ask whoever sent it for a new one.' }
+  if (status === 404) return { title: 'This invite link no longer works', body: 'It was used already, or it was taken back. Ask whoever sent it for a new one.' }
+  if (status === 0 || status >= 500) return { title: 'This invite didn’t open', body: 'Couldn’t join just now. Check your internet, then try again. Your invite is still here.' }
   return { title: 'This invite didn’t open', body: `${error.message} Your invite is still here.` }
 }
 
@@ -131,7 +133,9 @@ export function JoinLinkDialog() {
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const path = joinPathOf(String(new FormData(event.currentTarget).get('link') ?? ''))
-    if (path) navigate(path)
+    if (!path) return
+    keepInvite(path)
+    navigate(path)
   }
   return <Dialog size="narrow" label="Join with a link" onClose={close}>
     <DialogHead title="Join with a link" onClose={close} />

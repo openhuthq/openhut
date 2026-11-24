@@ -181,17 +181,22 @@ function Access({ agent }: { agent: Agent }) {
   const { all, email } = useWorkspaces()
   const home = useAgents().data?.find((each) => each.id === agent.id)
   const update = useUpdateAgent(agent.id)
+  const [sharing, setSharing] = useState(false)
   const workspace = all.find((each) => agent.workspace ? each.id === agent.workspace : each.home)
   if (!workspace || (home?.computer ?? 'local') !== 'local') return null
   const mine = !agent.owner || agent.owner === email
   const pick = (shared: boolean) => update.mutate({ shared }, { onError: toastError })
-  return <DropdownMenu>
+  return <>
+    <DropdownMenu>
       <DropdownMenuTrigger className={ROW} disabled={update.isPending}><I icon={agent.shared ? UserGroupIcon : SquareLock02Icon} size={15} className="text-mute" />Access<span className={VALUE}>{agent.shared ? 'Shared' : 'Private'}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
       <MenuCard title={`Who can use ${agent.name}`}>
         <Choice icon={<I icon={SquareLock02Icon} size={15} />} name="Private" note="Only you" selected={!agent.shared} disabled={!agent.shared || !mine} onClick={() => pick(false)} />
-        <Choice icon={<I icon={UserGroupIcon} size={15} />} name="Shared" note={`Everyone in ${workspace.name} can use and edit it`} selected={agent.shared} disabled={agent.shared || !agent.canManage} onClick={() => pick(true)} />
+        <Choice icon={<I icon={UserGroupIcon} size={15} />} name="Shared" note={`Everyone in ${workspace.name} can use and edit it`} selected={agent.shared} disabled={agent.shared || !agent.canManage} onClick={() => setSharing(true)} />
       </MenuCard>
     </DropdownMenu>
+    <ConfirmDialog open={sharing} onOpenChange={setSharing} question={`Share ${agent.name} with ${workspace.name}?`} action="Share" onConfirm={() => pick(true)}
+      detail={`Everyone in ${workspace.name} can chat with ${agent.name}, change it, and read its chat, including what you've said to it so far. They can ask it to use everything it has access to.`} />
+  </>
 }
 
 function noteOf(agent: Agent): string | undefined {

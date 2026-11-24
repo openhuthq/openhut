@@ -187,6 +187,7 @@ handle('cloud.notify', ({ title = 'Unlock OpenHut', body = 'Bring your agents an
 }))
 handle('kit.save', saveKit)
 handle('invite.forget', () => rmSync(PENDING_INVITE, { force: true }))
+handle('invite.keep', (path) => keepInvite(String(path ?? '')))
 handle('invite.clear-clipboard', clearCarriedInvite)
 handle('focus', () => {
   show()

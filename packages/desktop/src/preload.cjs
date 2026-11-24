@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('openhut', {
   },
   invite: {
     forget: () => ipcRenderer.invoke('invite.forget'),
+    keep: (path) => ipcRenderer.invoke('invite.keep', path),
     clearClipboard: () => ipcRenderer.invoke('invite.clear-clipboard'),
   },
   focus: () => ipcRenderer.invoke('focus'),
