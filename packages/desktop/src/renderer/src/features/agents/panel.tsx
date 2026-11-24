@@ -27,6 +27,7 @@ import { useWorkspaces } from '@/features/cloud/workspaces'
 import { ModelRows } from '@/features/agents/model-rows'
 import { AgentStatus } from '@/features/agents/status'
 import { formValues } from '@/lib/form'
+import { WORDS } from '@/lib/platform'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
@@ -84,10 +85,13 @@ function AgentActions({ agent }: { agent: Agent }) {
   const updateAgent = useUpdateAgent(agent.id)
   const change = (patch: Parameters<typeof updateAgent.mutate>[0]) => updateAgent.mutate(patch, { onError: toastError })
   const locked = !agent.canEdit || !agent.canManage || updateAgent.isPending
+  const home = useAgents().data?.find((each) => each.id === agent.id)
+  const asYou = agent.runsHere && (home?.computer ?? 'local') === 'local'
   return <div className="mt-auto flex flex-col pt-2">
     <span className={LABEL}>Allowed to</span>
     <div className="-mx-2.5 flex flex-col gap-px">
       <label className={ROW}><I icon={SourceCodeIcon} size={15} className="text-mute" />Run code<Switch className="ml-auto" checked={agent.codeExecution} aria-label="Run code" disabled={locked} onCheckedChange={() => change({ codeExecution: !agent.codeExecution })} /></label>
+      {asYou && <span className="px-2.5 pb-1 text-[12px]/[16px] text-mute">Runs as you on this {WORDS.here}, with your files.</span>}
     </div>
   </div>
 }
