@@ -14,7 +14,6 @@ on:
       - 'scripts/image.sh'
       - 'packages/e2e/**'
       - '.github/workflows/server-e2e.yml'
-  pull_request:
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
