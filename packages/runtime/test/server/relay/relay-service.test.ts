@@ -34,6 +34,7 @@ app.post('/api/threads/:id/chat', async (req, reply) => {
   reply.raw.end('data: two\n\n')
 })
 app.post('/api/agents', async (req) => who(req))
+app.delete('/api/cloud/devices/:key', async (req) => who(req))
 await app.register(websocket)
 app.get('/api/browsers/:id/live', { websocket: true }, (socket, req) => {
   void who(req).then((caller) => socket.send(JSON.stringify({ local: caller.local })), () => socket.close(4403, 'Not yours.'))
@@ -79,10 +80,11 @@ test('your listed viewer\'s request through the relay reaches an allowed route a
   tunnel.close()
 })
 
-test('the same viewer gets 403 through the relay on a route that isn\'t chat, files, browser, WhatsApp, log or updates', async () => {
+test('through the relay your own device can make an agent, but gets 403 on a trust route like removing a device', async () => {
   const tunnel = await connect({ relayUrl: relay.url, computer: await computer(), key: phoneKey, token: TOKEN })
-  const refused = await tunnel.fetch('/api/agents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Sneaky' }) })
-  assert.equal(refused.status, 403)
+  const made = await tunnel.fetch('/api/agents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'From the browser' }) })
+  assert.equal(made.status, 200)
+  assert.equal((await tunnel.fetch('/api/cloud/devices/someone', { method: 'DELETE' })).status, 403)
   tunnel.close()
 })
 
