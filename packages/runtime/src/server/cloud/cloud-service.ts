@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { FastifyReply } from 'fastify'
 import * as z from 'zod/mini'
-import { type Backup, KeyBox, Letter, MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type UnlockCloud, siteHost } from '@openhut/common/cloud/cloud.ts'
+import { type Backup, KeyBox, Letter, MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type UnlockCloud, faceName, siteHost } from '@openhut/common/cloud/cloud.ts'
 import type { Health } from '@openhut/common/admin/admin.ts'
 import { JoinCode, Me, signV1 } from '@openhut/common/cloud/v1/identity.ts'
 import { JoinRequest } from '@openhut/common/cloud/v1/trust.ts'
@@ -348,13 +348,15 @@ export const cloudService = {
     return code
   },
 
-  joining(): Health['join'] {
+  async joining(): Promise<Health['join']> {
     if (!config.join) return undefined
     if (keysService.account()) return { state: 'joined', error: null }
     if (joinError) return { state: 'failed', error: joinError }
-    const rooms = keysService.asked().length
-    if (!rooms) return { state: 'starting', error: null }
-    return { state: asking && !asking.approved && asking.settled.length >= rooms ? 'denied' : 'asking', error: null }
+    const rooms = keysService.asked()
+    if (!rooms.length) return { state: 'starting', error: null }
+    if (asking && !asking.approved && asking.settled.length >= rooms.length) return { state: 'denied', error: null }
+    const nonce = asking?.revealed ? rooms[0]?.nonce : undefined
+    return { state: 'asking', error: null, ...nonce && { faces: facesOf({ device: await keysService.deviceKey(), nonce }).map(faceName) } }
   },
 
   async rotated(): Promise<Cloud> {
