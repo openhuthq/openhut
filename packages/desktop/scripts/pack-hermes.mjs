@@ -49,7 +49,7 @@ function caches(dir) {
 }
 
 async function build(out) {
-  const work = join(tmpdir(), `openhut-hermes-${process.pid}`)
+  const work = join(tmpdir(), 'openhut-hermes') // no pid: Python and uv write this path into files, and packs must build byte for byte the same
   rmSync(work, { recursive: true, force: true })
   mkdirSync(work, { recursive: true })
   const src = join(work, 'hermes-agent')
