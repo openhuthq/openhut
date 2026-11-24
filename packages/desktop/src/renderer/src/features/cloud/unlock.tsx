@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cancelPasskey, nameOf, notifyDesktop, PasskeyQuiet, useAddPasskey, useCloud, usePasskeys, usePasskeyUnlock, useRemoveMac, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
 import { BIG, Step } from '@/features/cloud/step'
-import { chooseWorkspace, useAsk, useCancelAsk, useDeleteData } from '@/features/cloud/workspaces'
+import { chooseWorkspace, useAsk, useCancelAsk, useDeleteData, useReview } from '@/features/cloud/workspaces'
 import { Mismatch } from '@/features/cloud/presence'
 import { joinRequests, knownDevices, newDevices, rememberDevices } from '@/features/cloud/seen'
 import { FaceTile } from '@/features/cloud/review'
@@ -100,18 +100,24 @@ function Requested({ cloud, onBack, onKit, onTouch }: { cloud: Cloud; onBack: ()
   const rooms = asking?.rooms ?? []
   const admins = rooms.filter((room) => !room.own).flatMap((room) => room.admins)
   const own = rooms.some((room) => room.own)
-  const where = [own && 'on another of your computers, in Settings › Computers', admins.length > 0 && `by ${who(admins)}`].filter(Boolean).join(', or ')
   if (asking?.denied) return <Step title="Not approved." line="It was denied, or the request expired after an hour." back={back}
     action={<Button type="button" variant="primary" className={BIG} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Request again</Button>} />
   const faces = asking?.faces
-  return <Step title={faces ? 'Waiting for approval.' : 'Request sent.'} line={faces ? 'On your other computer, tap these two faces.' : rooms.length ? 'Open the notification on one of your computers. Two faces will show here when you do.' : 'Sending your request…'}
+  return <Step title={faces ? 'Waiting for approval.' : 'Request sent.'} line={waitingLine({ faces: Boolean(faces), asked: rooms.length > 0, own, admins })}
     link={<Button type="button" variant="text" className="font-normal text-mute" disabled={cancel.isPending} onClick={back}>Cancel</Button>}>
     {faces && <span className="flex gap-3">{faces.map((index) => <FaceTile key={index} index={index} size={96} />)}</span>}
     <span className="flex items-center gap-2 rounded-xl border border-hair bg-card px-3.5 py-2.5 text-[13px]"><DeviceIcon kind="mac" />{asking?.name ?? 'This computer'}<span className="text-mute">· {cloud.email}</span></span>
     {!ask.isError && !faces && <Spinner className="mt-1" />}
     <ErrorNote message={ask.error?.message ?? asking?.error ?? undefined} />
-    {rooms.length > 0 && <span className="max-w-[420px] text-[12.5px] text-mute">Approve it {where}.</span>}
+    {own && admins.length > 0 && <span className="max-w-[420px] text-[12.5px] text-mute">{who(admins)} can approve it too.</span>}
   </Step>
+}
+
+function waitingLine({ faces, asked, own, admins }: { faces: boolean; asked: boolean; own: boolean; admins: string[] }): string {
+  if (faces) return 'On your other computer, tap these two faces.'
+  if (!asked) return 'Sending your request…'
+  if (own) return 'Open the notification on one of your computers. Two faces will show here when you do.'
+  return `Ask ${who(admins)} to approve it. Two faces will show here when they open it.`
 }
 
 function who(admins: string[]): string {
@@ -120,6 +126,7 @@ function who(admins: string[]): string {
 }
 
 function JoinRequests({ cloud }: { cloud: Cloud }) {
+  const review = useReview()
   const [dismissed, setDismissed] = useState<string[]>([])
   const pending = joinRequests({ cloud })
   const told = useRef(new Set<string>())
@@ -134,13 +141,15 @@ function JoinRequests({ cloud }: { cloud: Cloud }) {
   const shown = pending.find(({ request, path }) => path !== here && !dismissed.includes(request.device))
   const later = (device: string) => setDismissed((all) => [...all, device])
   useStickyToast({ id: 'join-request', notice: shown ? {
-    lead: <DeviceIcon kind="mac" />,
+    lead: <DeviceIcon kind={shown.request.server ? 'server' : 'mac'} />,
     title: `${shown.request.name ?? 'A new computer'} wants to join`,
     note: shown.mine ? shown.request.email : `${nameOf(shown.request.email)} · ${shown.workspace.name}`,
-    action: { label: 'Open', onClick: () => {
-      if (!shown.mine) chooseWorkspace(shown.workspace.id)
-      later(shown.request.device)
-      navigate(shown.path)
+    action: { label: shown.request.checked ? 'Review' : 'Open', onClick: () => {
+      const { workspace, request, mine, path } = shown
+      if (!mine) chooseWorkspace(workspace.id)
+      later(request.device)
+      if (!request.checked) return navigate(path)
+      review.mutate({ id: workspace.id, device: request.device }, { onSuccess: () => navigate(`${path}?open=${encodeURIComponent(`review:${request.device}`)}`), onError: toastError })
     } },
     cancel: { label: 'Later', onClick: () => later(shown.request.device) },
   } : null })
@@ -273,7 +282,7 @@ function SelfJoins({ cloud }: { cloud: Cloud }) {
     for (const device of fresh) {
       const name = device.name ?? 'A new computer'
       notifyDesktop({ title: `${name} joined your account`, body: 'If that wasn’t you, open OpenHut and choose Not me.', path: '/settings/computers' })
-      notify({ lead: <DeviceIcon kind="mac" />, title: `${name} joined your account`, note: cloud.email ?? undefined, action: { label: 'Not me', onClick: () => remove.mutate(device.key, { onError: toastError }) } })
+      notify({ lead: <DeviceIcon kind={device.kind} />, title: `${name} joined your account`, note: `${device.kind === 'server' ? 'Linux server' : 'Computer'} · ${cloud.email ?? ''}. If it isn’t yours, remove it.`, action: { label: 'Not mine · Remove', onClick: () => remove.mutate(device.key, { onError: toastError }) } })
     }
   }, [cloud.devices, cloud.status, cloud.email, remove])
   return null

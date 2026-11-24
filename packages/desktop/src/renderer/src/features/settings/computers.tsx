@@ -33,6 +33,7 @@ import { APP_VERSION, type Computer, type TailnetPeer } from '@/lib/openhut'
 import { open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
+import { WORDS } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 import { useAnswer } from '@/features/cloud/review'
 
@@ -72,9 +73,9 @@ function ComputerList() {
         {!isPhone() && <UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Up to date</span>} />}
       </Row>}
       {home && requests.map((each) => <RequestRow key={each.device} workspace={home} asked={each} />)}
-      {devices.filter((device) => !device.here).map((device) => <DeviceRow key={device.key} device={device} />)}
+      {devices.filter((device) => !device.here).map((device) => <DeviceRow key={device.key} device={device} twin={devices.some((each) => each.key !== device.key && each.name === device.name)} admin={admins?.find((each) => each.computer.id === tunnelKeyOf(device.key))?.admin} />)}
       {enrollments.map((enrollment) => <EnrollRow key={enrollment.peer.dns} enrollment={enrollment} />)}
-      {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note="A Linux computer that stays on seals each agent in its own box and keeps answering while this computer sleeps."><Chevron /></Row>}
+      {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note={`Add a Linux server. It stays on, seals each agent in its own box, and answers while this ${WORDS.here} sleeps.`}><Chevron /></Row>}
     </Rows>
   </>
 }
@@ -118,15 +119,16 @@ function Mark({ icon, dot }: { icon: typeof LaptopIcon; dot?: string }) {
   </span>
 }
 
-function DeviceRow({ device }: { device: Device }) {
+function DeviceRow({ device, twin, admin }: { device: Device; twin: boolean; admin: Admin | undefined }) {
   const remove = useRemoveMac()
   const update = useUpdateComputer()
   const server = device.kind === 'server'
-  const name = device.name ?? (server ? 'Computer that runs agents' : 'Computer')
+  const base = device.name ?? (server ? 'Computer that runs agents' : 'Computer')
+  const name = twin ? `${base} (${tunnelKeyOf(device.key).slice(0, 4)})` : base
   const detail = device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))} · ${REMOVE_DETAIL}` : REMOVE_DETAIL
-  return <Row icon={<DeviceIcon kind={device.kind} />} title={name} note={[server && 'Runs agents', addedOf(device)].filter(Boolean).join(' · ')}>
+  return <Row icon={<DeviceIcon kind={device.kind} />} title={name} note={[server && 'Server · Linux · runs agents', device.online ? 'Online' : 'Offline', admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')}>
     {server && !isPhone() && update.isPending && <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>}
-    {server && !isPhone() && !update.isPending && <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate({ id: tunnelKeyOf(device.key), name }, { onSuccess: () => toast(`${name} is updating`), onError: toastError })}>Update</Button>}
+    {server && !isPhone() && !update.isPending && admin?.server.updateAvailable && <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate({ id: tunnelKeyOf(device.key), name }, { onSuccess: () => toast(`${name} is updating`), onError: toastError })}>Update</Button>}
     {!isPhone() && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${name}?`} detail={detail} points={REMOVE_POINTS} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
   </Row>
 }
@@ -143,7 +145,7 @@ function RequestRow({ workspace, asked }: { workspace: CloudWorkspaceView; asked
 }
 
 function tunnelKeyOf(deviceKey: string): string {
-  return Array.from(atob(deviceKey).slice(32), (char) => char.charCodeAt(0).toString(16).padStart(2, '0')).join('')
+  return Array.from(atob(deviceKey.replaceAll('-', '+').replaceAll('_', '/')).slice(32), (char) => char.charCodeAt(0).toString(16).padStart(2, '0')).join('')
 }
 
 function useKnown(): (name: string) => boolean {
@@ -317,6 +319,7 @@ function AddByCommand() {
     {code.data && !expired && !asked && <>
       <p className="m-0 text-body">Run this on your Linux computer.</p>
       <Command text={joinCommand(code.data.code)} />
+      <p className="m-0 text-[12px]/[16px] text-mute">Ubuntu, Debian or Alpine with sudo. It installs Docker if needed and takes about 2 GB. Every download is checked against its checksum. You can <a href="https://github.com/openhuthq/openhut/blob/main/install/install.sh" target="_blank" rel="noreferrer" className="text-ink underline underline-offset-2">read the script</a> first.</p>
       <Waiting note="It works once, for 10 minutes. Approve it here when it asks.">Waiting for it to ask to join…</Waiting>
     </>}
   </TailscaleDialog>

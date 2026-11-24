@@ -88,7 +88,7 @@ asked() {
     printf .; sleep 2
   done
   printf '\n'
-  [ "${STATE%% *}" != asking ] || echo "OpenHut is running and asking to join your computers. In the OpenHut app, open Settings > Computers and press Review on it."
+  [ "${STATE%% *}" != asking ] || echo "OpenHut is running and asking to join your computers. In the OpenHut app, open Settings > Computers and press Review on it. Two faces will show here for you to check."
   SHOWN=; i=0
   while [ "${STATE%% *}" = asking ]; do
     [ "${STATE#* }" = "$SHOWN" ] || { SHOWN="${STATE#* }"; echo "$SHOWN"; }
