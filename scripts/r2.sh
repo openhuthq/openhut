@@ -56,6 +56,7 @@ release() {
   for file in SHA256SUMS release.json release.json.sig release.json.rekor; do
     [ ! -f "$dir/$file" ] || put "v$v/$file" "$dir/$file" "$FOREVER" text/plain
   done
+  [ ! -f "$dir/release.json.rekor" ] || announce "$dir"
   case $v in
     *-*) feeds "$v" "$dir" beta; return ;;
   esac
@@ -73,6 +74,13 @@ feeds() {
     sed -e "s#^\(  *- url: \)#\1v$v/#" -e "s#^path: #path: v$v/#" "$dir/$feed" > "$dir/$feed.r2"
     put "$channel${feed#latest}" "$dir/$feed.r2" 'public, max-age=60' text/yaml
   done
+}
+
+# R3: every release.json CI logs in Rekor is announced at releases/<sha256>.json (with .sig and .rekor). The release monitor
+# (private/api/src/releases/release-monitor.ts) alerts on any Rekor entry signed by the release key that isn't announced here.
+announce() {
+  sha=$(shasum -a 256 "$1/release.json" | cut -d' ' -f1)
+  for ext in '' .sig .rekor; do put "releases/$sha.json$ext" "$1/release.json$ext" "$FOREVER" application/json; done
 }
 
 newer() {
