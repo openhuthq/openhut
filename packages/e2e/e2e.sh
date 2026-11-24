@@ -17,6 +17,7 @@ sign_in() {
   url=$(as_app -X POST http://127.0.0.1:8787/api/cloud/sessions -d '{}' | sed -n 's/.*"authorizationUrl":"\([^"]*\)".*/\1/p')
   link=$(curl -fsS "$url" | grep -o 'href="[^"]*">mo@example.com<' | sed 's/^href="//; s/">mo@example.com<$//; s/&amp;/\&/g')
   back=$(curl -s -o /dev/null -D - "$link" | sed -n 's/^[Ll]ocation: //p' | tr -d '\r')
+  back=$(node -e 'const u = new URL(process.argv[1]); console.log(u.searchParams.get("to") ?? u.href)' "$back")
   [ -n "$back" ] && in_host curl -fsS -o /dev/null "$back" || return 1
   i=0; until as_app http://127.0.0.1:8787/api/cloud | grep -q '"status":"on"'; do i=$((i+1)); [ $i -gt 40 ] && return 1; sleep 3; done
 }

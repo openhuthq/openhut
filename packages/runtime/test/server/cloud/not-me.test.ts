@@ -105,7 +105,7 @@ test('against the real cloud API: Not me takes the device off your home list and
     assert.equal(lost.statusCode, 200, lost.body)
     assert.ok((keyVersion() ?? 0) > (before.version ?? 0), 'lost or stolen resets the encryption')
     assert.equal(await kitOf(), null, 'and the old kit stops working, so a new one is due')
-    assert.equal((await kit.call(stolen, 'GET', `/v1/member-lists?workspace=${home}`)).status, 403)
+    assert.equal((await kit.call(stolen, 'GET', `/v1/teams/${home}/member-list`)).status, 403)
     const newKit = await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })
     assert.equal(newKit.statusCode, 200, newKit.body)
     assert.notEqual(newKit.json<{ kitId: string }>().kitId, firstKit)
