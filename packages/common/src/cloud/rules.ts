@@ -32,7 +32,7 @@ const sealed: Rule = { write: ['listed'], read: ['listed'], check: 'monotonic', 
 
 export const RULES = {
   'member-list': { write: ['listed', 'invited', 'knocking', 'founder'], read: ['listed', 'knocking', 'invited'], check: 'chain', stored: true },
-  'join-request': { write: ['knocking', 'own', 'admin'], read: ['self', 'own', 'admin'], check: 'one-open', stored: true },
+  'join-request': { write: ['knocking', 'invited', 'own', 'admin'], read: ['self', 'own', 'admin'], check: 'one-open', stored: true },
   letter: { write: ['listed'], read: ['recipient'], check: 'read-once', stored: true },
   invite: { write: ['admin'], read: ['invited'], check: 'expires', stored: true },
   'key-box': { write: ['home', 'fresh'], read: ['home', 'fresh'], check: 'account-signed', stored: true },

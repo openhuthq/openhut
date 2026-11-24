@@ -38,7 +38,7 @@ export async function devSignIn({ authorizationUrl, email }: { authorizationUrl:
   return `${location.pathname}${location.search}`
 }
 
-export async function webBrowser({ url, email }: { url: string; email: string }) {
+export async function browserKey({ url }: { url: string }) {
   const { openhutCloud } = await import('@openhut/common/cloud/openhut-cloud.ts')
   const { toBase64 } = await import('@openhut/common/vault/public.ts')
   const signing = await crypto.subtle.generateKey('Ed25519', false, ['sign', 'verify']) as webcrypto.CryptoKeyPair
@@ -49,11 +49,15 @@ export async function webBrowser({ url, email }: { url: string; email: string })
   const store = { get: async <T>(key: string) => kept.get(key) as T | undefined, set: async (key: string, value: unknown) => { kept.set(key, value) } }
   const key = { id: async () => device, sign: async (bytes: Uint8Array) => new Uint8Array(await crypto.subtle.sign('Ed25519', signing.privateKey, Uint8Array.from(bytes))), noise: async () => ({ publicKey: await raw(tunnel.publicKey), secretKey: new Uint8Array(32) }) }
   const fetch: typeof globalThis.fetch = (input, init) => globalThis.fetch(input, { ...init, headers: { ...init?.headers as Record<string, string>, origin: WEB } })
-  const client = openhutCloud.device({ url, key, store, fetch })
+  return { device, client: openhutCloud.device({ url, key, store, fetch }), asComputer: openhutCloud.computer({ url, key, store, fetch }) }
+}
+
+export async function webBrowser({ url, email }: { url: string; email: string }) {
+  const { device, client, asComputer } = await browserKey({ url })
   const started = await client.signIn({ google: { returnTo: `${WEB}/signed-in` } })
   const back = new URL(await devSignIn({ authorizationUrl: started.object === 'redirect' ? started.url : '', email }), WEB)
   await client.signIn({ googleCode: back.searchParams.get('code') ?? '', state: back.searchParams.get('state') ?? '' })
-  return { device, client, asComputer: openhutCloud.computer({ url, key, store, fetch }) }
+  return { device, client, asComputer }
 }
 
 const WEB = 'https://app.openhut.dev'

@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import * as z from 'zod/mini'
-import { AddPasskey, ApproveRequest, ChangeRole, DenyRequestQuery, DeviceKey, PasteSignInCode, RemoveDeviceQuery, SetHere, StartCloudSignIn, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
+import { AddPasskey, ApproveRequest, ChangeRole, CreateWebLink, DenyRequestQuery, DeviceKey, PasteSignInCode, RemoveDeviceQuery, SetHere, StartCloudSignIn, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
 import { requireSignIn } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
 import { presence } from './presence.ts'
@@ -19,6 +19,8 @@ export const cloudController: FastifyPluginAsync = async (app) => {
   app.post('/kits', SignedIn, async () => cloudService.newKit())
 
   app.post('/join-codes', SignedIn, async () => cloudService.joinCode())
+
+  app.post<{ Body: CreateWebLink }>('/web-links', WebLinkRequest, async (req) => cloudService.continueInWeb(req.body))
 
   app.post<{ Body: UnlockCloud }>('/unlock', UnlockRequest, async (req) => cloudService.unlock(req.body))
 
@@ -70,6 +72,7 @@ const DeviceRequest = { onRequest: requireSignIn, schema: { params: z.object({ i
 const PasskeyRequest = { onRequest: requireSignIn, schema: { body: AddPasskey } }
 const UpdateRequest = { onRequest: requireSignIn, schema: { body: UpdateWorkspace } }
 const RoleRequest = { onRequest: requireSignIn, schema: { body: ChangeRole } }
+const WebLinkRequest = { onRequest: requireSignIn, schema: { body: CreateWebLink } }
 const HereRequest = { onRequest: requireSignIn, schema: { body: SetHere } }
 const ApproveRequestRequest = { onRequest: requireSignIn, schema: { body: z.optional(ApproveRequest) } }
 const DenyRequestRequest = { onRequest: requireSignIn, schema: { querystring: DenyRequestQuery } }
