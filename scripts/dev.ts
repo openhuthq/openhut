@@ -56,7 +56,7 @@ console.log([
   `  Runtime  http://127.0.0.1:${PORT}, gateway on ${GATEWAY_PORT}, data in ${DATA}`,
   `  Cloud    ${CLOUD_URL} (Worker: relay, /v1), API ${API_URL}`,
   LOCAL_CLOUD ? '  Sign in  pick mo@example.com on the dev sign-in page (no Google)' : '  Sign in  with the cloud above',
-  '  Reset    npm run dev:reset wipes .data (runtime, local cloud DB, D1). Ctrl-C stops everything.',
+  '  Reset    npm run reset wipes .data (runtime, local cloud DB, D1). Ctrl-C stops everything.',
   '',
 ].join('\n'))
 for (const child of children) child.on('exit', (code) => stop(code ?? 0))

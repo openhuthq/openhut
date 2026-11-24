@@ -83,6 +83,36 @@ with no open blocker, run `gh pr merge --auto --merge`; it merges when the requi
 never forcing it. Every main commit gets its own full Desktop app run; Deploy then ships main's newest green commit (openhut.dev, the edge image, the cloud).
 Reviewer loop and flaky tests: `private/brain/openhut-deploy.md` (CI).
 
+## Web first, Electron last
+
+OpenHut is developed as a web app. The dashboard runs on localhost in a browser with hot reload, against the real
+runtime and a local cloud. Electron is the endgame: run it last, to check the final thing and what only the desktop
+has (Keychain, Touch ID, passkey, updates, deep links, the tray). The procedure is the `openhut-dev-loop` skill
+(`.agents/skills/`, linked from `.claude/skills`).
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | The web app: runtime, local cloud and Vite on localhost. The everyday loop |
+| `npm run seed` | Sample agents and connections in the running dev app (on a fresh `.data`) |
+| `npm run reset` | Wipe `.data` (runtime, local cloud DB, D1) |
+| `npm run check` | Typecheck and test only what changed since `origin/main` |
+| `npm run test` / `typecheck` / `build` | Everything |
+| `npm run app` | The real Electron app from this checkout |
+| `npm run e2e:app` | The app e2e on unpackaged Electron and a local dev cloud (this Mac) |
+| `npm run e2e:server` | The Docker server e2e, about 25 minutes |
+| `npm run release` | Build what openhut.dev serves |
+
+Which loop proves which change:
+- Screens, copy, forms, API, agents, cloud: `npm run dev` and a look in Chrome at the Vite URL, plus `npm run check`.
+  This is the default, and it's proof enough for review.
+- `main.mjs`, `preload.cjs`, anything behind `window.openhut`: `npm run app`, then `npm run e2e:app`.
+- Packaging, signing, installers, OS-specific behavior: the PR's Desktop app run. CI is the merge gate, never the loop:
+  don't wait on it to see a change working.
+
+The dashboard reaches the desktop app only through `packages/desktop/src/renderer/src/lib/desktop.ts` (`desktop` is
+`undefined` in a browser, and every caller handles that); a test keeps it the only place. Prefer moving work out of
+the main process into the runtime's `/api` over adding a `desktop` call, so it runs in the browser too.
+
 ## Local dev
 
 ```
@@ -97,9 +127,8 @@ and real outside services (connect Claude in Settings), the dev key `dev` enroll
 and the Worker from `private/cloud` (D1 migrations applied), so it needs `private/` and fails without it unless
 `OPENHUT_CLOUD_URL`/`OPENHUT_API_URL` name a cloud. Dev ports (API 8797, gateway 8091, Worker 8790, cloud API 8792) step
 to the next free one, so it runs beside the installed app and other checkouts; it prints the URLs and the sign-in account
-(mo@example.com). Ctrl-C stops everything; `npm run dev:reset` wipes `.data`. `node scripts/seed-ui.ts` (on a fresh `.data`) fills in sample
-agents and connections. The desktop app itself: `npm -w @openhut/desktop run build && npm -w @openhut/desktop start`.
-Every dev run (unpackaged, `OPENHUT_TEST_HOME`, or `npm -w @openhut/desktop run dist:dev`, app id `dev.openhut.app.dev`) is
+(mo@example.com). Ctrl-C stops everything.
+Every dev run of the app (`npm run app`, `OPENHUT_TEST_HOME`, or `npm -w @openhut/desktop run dist:dev`, app id `dev.openhut.app.dev`) is
 "OpenHut Dev": DEV icon and pill, `~/Library/Application Support/OpenHut Dev`, `openhut-dev://`, gateway 8091, the local cloud
 (`packages/desktop/src/dev-build.mjs`), and no updates from the release feed (an `OPENHUT_TEST_HOME` run still updates, for the update tests).
 
@@ -117,10 +146,9 @@ the Linux app runs agents natively like the Mac app, with no Docker (`private/br
 
 ## Test
 
-`npx turbo run build typecheck test` builds, typechecks and runs the unit tests. `npm run e2e` runs the whole thing on Docker Desktop (about 25 minutes):
-the install, every check, a tampered upgrade, the upgrade, a restart. Plan: `docs/verification-plan.md`.
-`npm run check:fast` typechecks and tests only what changed since main (`turbo --affected`; set `TURBO_SCM_BASE=origin/main`
-in a worktree). `npm run prove` builds the renderer and backend and runs the app e2e (`app-e2e.mjs --dev`) against
-the unpackaged app and a local dev cloud, on this Mac only. Its first run needs a click on the Keychain prompt
-(`private/brain/openhut-gotchas.md`). Packaged-app proof on every OS is the PR's Desktop app run: its `*-e2e`
-artifacts hold the screenshots and `evidence.json`.
+`npm run check` typechecks and tests what changed; `npx turbo run build typecheck test` does everything. `npm run e2e:server`
+runs the whole server path on Docker Desktop (about 25 minutes): the install, every check, a tampered upgrade, the upgrade,
+a restart. Plan: `docs/verification-plan.md`. `npm run e2e:app` builds the renderer and backend and runs the app e2e
+(`app-e2e.mjs --dev`) against the unpackaged app and a local dev cloud, on this Mac only. Its first run needs a click on
+the Keychain prompt (`private/brain/openhut-gotchas.md`). Packaged-app proof on every OS is the PR's Desktop app run: its
+`*-e2e` artifacts hold the screenshots and `evidence.json`.

@@ -42,9 +42,12 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. `node scripts/seed-ui.ts` on a fresh `.data` fills in sample agents and
+Open `http://localhost:5173`. `npm run seed` on a fresh `.data` fills in sample agents and
 connections. Agents run as real Hermes processes, which need the bundled runtime first:
 `npm -w @openhut/desktop run pack-backend` (needs `uv`). Connect Claude in Settings to talk to them.
+
+Work on the web app in your browser. `npm run app` starts the real desktop app from your checkout; use it last, for
+what only the desktop has (Keychain, Touch ID, updates, deep links, the tray).
 
 ## Check it
 
@@ -53,7 +56,7 @@ npx turbo run build typecheck test
 ```
 
 This must pass before you open a pull request. A change to the installer, agentd, the firewall or an upgrade also
-needs `npm run e2e` (Docker, about 25 minutes; plan in `docs/verification-plan.md`). A change to the dashboard needs a
+needs `npm run e2e:server` (Docker, about 25 minutes; plan in `docs/verification-plan.md`). A change to the dashboard needs a
 look in the browser, not just a green build.
 
 ## Pull requests

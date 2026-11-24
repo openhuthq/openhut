@@ -1,4 +1,5 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query'
+import { desktop } from '../../lib/desktop.ts'
 
 export type Ready = { version: string }
 export type UpdateState = { current: string; asksPassword?: boolean; checking: boolean; available: string | null; progress?: number; ready: Ready | null; installing?: boolean; error: 'signature' | 'failed' | 'not-installed' | null }
@@ -6,7 +7,7 @@ export type UpdateBridge = { state: () => Promise<UpdateState>; check: () => Pro
 
 export const UPDATE_KEY = ['app-update']
 
-export const updates: UpdateBridge | undefined = typeof window === 'undefined' ? undefined : Reflect.get(window, 'openhut')?.update
+export const updates: UpdateBridge | undefined = desktop?.update
 
 export function followUpdate({ bridge, client }: { bridge: UpdateBridge | undefined; client: Pick<QueryClient, 'setQueryData'> }) {
   if (!bridge) return

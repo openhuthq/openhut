@@ -14,7 +14,6 @@
     "build": "vite build src/renderer",
     "build:phone": "vite build src/renderer --mode phone",
     "build:phone-debug": "vite build src/renderer --mode phone-debug",
-    "dev": "vite src/renderer",
     "typecheck": "tsc -p src/renderer",
     "test": "node --test \"src/renderer/test/**/*.test.ts\" \"test/**/*.test.ts\"",
     "pack-backend": "node scripts/pack-backend.mjs",

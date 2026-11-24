@@ -51,7 +51,7 @@ jobs:
       - name: The whole run (install, cloud, tampered upgrade, upgrade, restart, update)
         run: |
           start=$(date +%s)
-          status=0; npm run e2e || status=$?
+          status=0; npm run e2e:server || status=$?
           echo "Ran in $(( ($(date +%s) - start) / 60 )) min" >> "$GITHUB_STEP_SUMMARY"
           [ ! -f packages/e2e/results/e2e-report.md ] || cat packages/e2e/results/e2e-report.md >> "$GITHUB_STEP_SUMMARY"
           exit $status

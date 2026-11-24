@@ -5,7 +5,7 @@ import { request } from '@/lib/api-client'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
-import { desktop } from '@/features/settings/desktop'
+import { desktop } from '@/lib/desktop'
 
 const CLOUD_KEY = ['cloud']
 const SIGN_IN_KEY = ['cloud-sign-in']
@@ -44,9 +44,7 @@ function pollOf(cloud: Cloud | undefined): number | false {
   return cloud.backup.at && Date.now() - Date.parse(cloud.backup.at) < SHOW_DONE_MS ? BUSY_POLL_MS * 5 : ON_POLL_MS
 }
 
-type PasskeyReply = { prf?: string; error?: string; passkeys?: boolean; message?: string }
-type PasskeyBridge = { status: () => Promise<PasskeyReply>; create: (input: { email: string }) => Promise<PasskeyReply>; open: (input?: { quiet: boolean }) => Promise<PasskeyReply>; cancel: () => Promise<void> }
-const passkey: PasskeyBridge | undefined = Reflect.get(window, 'openhut')?.passkey
+const passkey = desktop?.passkey
 
 export function useUnlock() {
   const client = useQueryClient()
@@ -115,7 +113,7 @@ export function useRemoveMac({ then }: { then?: string } = {}) {
   })
 }
 
-const bridge: { notify: (input?: { title: string; body: string; path: string }) => Promise<{ shown?: boolean }> } | undefined = Reflect.get(window, 'openhut')?.cloud
+const bridge = desktop?.cloud
 
 export async function notifyUnlock(): Promise<boolean> {
   return Boolean((await bridge?.notify().catch(() => undefined))?.shown)

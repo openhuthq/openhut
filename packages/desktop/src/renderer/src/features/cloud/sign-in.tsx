@@ -12,6 +12,7 @@ import { useAgents } from '@/features/agents/api'
 import { PasskeyQuiet, useAddPasskey, useCancelSignIn, useCloud, useNewKit, useSignIn, useSigningIn } from '@/features/cloud/api'
 import { notify } from '@/components/custom/toast'
 import { toast, toastError } from '@/lib/toast'
+import { desktop } from '@/lib/desktop'
 import { BIG, Step } from '@/features/cloud/step'
 import { Check } from '@/features/settings/kit'
 import { shortDate } from '@/lib/format'
@@ -67,8 +68,7 @@ function useOnline(): boolean {
   }, () => navigator.onLine)
 }
 
-type KitBridge = { save: (input: { name: string; body: string }) => Promise<{ canceled?: boolean; text?: string }> }
-const kitBridge: KitBridge | undefined = Reflect.get(window, 'openhut')?.kit
+const kitBridge = desktop?.kit
 type KitStep = 'save' | 'words' | 'type' | 'copied'
 const SECRET = 'Your 12 words and your Google account together open everything. Never share them.'
 const LINK = 'font-normal text-mute'
