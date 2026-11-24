@@ -155,8 +155,17 @@ async function invite(mo, agent) {
   say(`Mo's app lists ${INVITEE} in the team`, { members: seen.members.map((each) => each.email), invites: seen.invites.map((each) => each.email) })
   const shared = await until(async () => (await get(page, '/api/agents'))?.data?.find((each) => each.id === agent.id), 120, `the invitee's app to list Mo's shared ${agent.name}`)
   say(`the invitee's app lists Mo's shared ${agent.name}`, { owner: shared.ownerName, canEdit: shared.canEdit })
-  await chat(page, shared, `hello from ${INVITEE}`)
   await page.eval(`navigation.navigate('/agents/${agent.id}')`)
+  const text = `hello from ${INVITEE}`
+  await until(async () => page.eval(`(() => { const box = document.querySelector('textarea[aria-label="Message"]'); if (!box || box.disabled) return false; box.focus(); return true })()`), 60, `the chat box for ${shared.name} in the invitee's window`)
+  await page.send('Input.insertText', { text })
+  for (const type of ['keyDown', 'keyUp']) await page.send('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, ...type === 'keyDown' && { text: '\r' } })
+  say(`typed "${text}" in the invitee's chat box and pressed Enter`)
+  const answer = await until(async () => {
+    const body = String(await page.eval('document.body?.innerText') ?? '')
+    return body.includes('ECHO') && body.includes(text) ? body : null
+  }, 60, `${shared.name}'s answer in the invitee's window`)
+  say(`${shared.name} answered the invitee in the window`, { tail: answer.slice(-200) })
   await shot(page, '08-invitee-in')
   await quit(guest)
   say('quit the invitee\'s app')
