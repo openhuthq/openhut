@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Cancel01Icon, DiceFaces03Icon, ShuffleIcon } from '@hugeicons/core-free-icons'
 import type { Provider } from '@openhut/common/models/provider.ts'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,9 @@ import { DialogCard, I } from '@/components/kit'
 import { useAgents, useCreateAgent } from '@/features/agents/api'
 import { useWorkspaces } from '@/features/cloud/workspaces'
 import { useComputers, whereNote } from '@/features/computers/api'
+import { useStartSeatSignIn } from '@/features/settings/api'
+import { SeatSignIn } from '@/features/settings/models'
+import { WORDS } from '@/lib/platform'
 import { ComputerPicker } from '@/features/computers/computer-picker'
 import { useComputerProviders } from '@/features/models/api'
 import { ModelPicker } from '@/features/models/model-picker'
@@ -94,12 +97,21 @@ export function FirstAgent() {
   const [spun, setSpun] = useState(0)
   const faceOf = (index: number) => JSON.stringify({ ...randomLook({ seed: `face_${round}` }), body: COLOURS[index] })
   const face = faceOf(colour)
-  const thinking = providers && !firstModel(providers)
+  const noModel = Boolean(providers && !firstModel(providers))
+  const seat = useStartSeatSignIn()
+  const [waiting, setWaiting] = useState<{ name: string; face: string }>()
+  const here = computer === 'local'
+  const sealed = computers.some((each) => each.kind === 'server') ? 'Pick your Linux server above to seal it in its own box instead.' : 'Want it sealed in its own box instead? Add a Linux server later in Settings › Computers.'
+  const { mutate: prepare, isIdle } = seat
+  useEffect(() => { if (noModel && isIdle) prepare() }, [noModel, isIdle, prepare])
+  const create = ({ name, face, model }: { name: string; face: string; model: string | null }) => createAgent.mutate({ body: { name, face, ...(model && { model }), ...(!active.home && { workspace: active.id }) }, computer })
   return <form className="flex flex-col items-center gap-4 text-center" onSubmit={(event) => {
     const field = formValues(event)
-    const model = firstModel(providers)
-    createAgent.mutate({ body: { name: field('name').trim(), face: field('face'), ...(model && { model }), ...(!active.home && { workspace: active.id }) }, computer })
+    const picked = { name: field('name').trim(), face: field('face') }
+    if (noModel) return setWaiting(picked)
+    create({ ...picked, model: firstModel(providers) })
   }}>
+    {waiting && <SeatSignIn start={seat} onClose={() => setWaiting(undefined)} onDone={() => { create({ ...waiting, model: DEFAULT_MODEL }); setWaiting(undefined) }} />}
     <Input type="hidden" name="face" value={face} />
     <Button type="button" variant="bare" aria-label="Shuffle" title="Shuffle" className="relative mb-1 animate-[pop_.6s_var(--ease-spring)_both]" onClick={() => { setRound(round + 1); setSpun(spun + 1) }}>
       <span className="block animate-[bob_3.2s_ease-in-out_.8s_infinite]"><span key={spun} className={cn('block', spun > 0 && 'animate-hop')}><Face agent={{ id: '', instructions: '', face }} size={150} label="Agent face" /></span></span>
@@ -117,11 +129,9 @@ export function FirstAgent() {
       <ComputerPicker computers={computers} value={computer} onPick={setComputer} title="It runs on" className="h-10 w-full rounded-lg" />
       <span className="text-[12px]/[16px] text-mute">{whereNote(computers.find((each) => each.id === computer) ?? computers[0])}</span>
     </div>}
-    {thinking && <div className="flex w-[352px] max-w-full items-center gap-3 rounded-lg border border-hair bg-card px-3 py-2.5 text-left">
-      <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[13px]/[18px] font-medium">What should it think with?</span><span className="text-[12px]/[16px] text-mute">Sign in with Claude or ChatGPT, or add an API key. It can’t answer without one.</span></span>
-      <Button type="button" variant="secondary" className="shrink-0" onClick={() => navigate('/settings/models')}>Connect</Button>
-    </div>}
-    <Button type="submit" variant="primary" className="mt-2 h-10 w-[352px] max-w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
+    {here && <p className="m-0 w-[352px] max-w-full text-left text-[12px]/[16px] text-mute">It runs on this {WORDS.here} as you, so it can open your files and run code. {sealed}</p>}
+    <Button type="submit" variant="primary" className="mt-2 h-10 w-[352px] max-w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !providers}>{createAgent.isPending ? 'Creating…' : noModel ? 'Connect Claude and create' : 'Create agent'}</Button>
+    {noModel && <Button type="button" variant="text" className="-mt-2 font-normal text-mute" onClick={() => navigate('/settings/models')}>Use ChatGPT or an API key instead</Button>}
     <ErrorNote message={createAgent.error?.message} />
   </form>
 }

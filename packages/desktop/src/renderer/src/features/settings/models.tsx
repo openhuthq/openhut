@@ -232,17 +232,36 @@ function usageLine(usage: SeatUsage | undefined) {
 
 const DOWNLOAD_POLL_MS = 1000
 
-function SeatSignIn() {
-  const start = useStartSeatSignIn()
+export function SeatSignIn({ start: prepared, onClose = () => open(), onDone = () => open() }: { start?: ReturnType<typeof useStartSeatSignIn>; onClose?: () => void; onDone?: () => void }) {
+  const own = useStartSeatSignIn()
+  const start = prepared ?? own
   const complete = useCompleteSeatSignIn()
   const started = useRef(false)
-  const { mutate } = start
+  const shown = useRef(false)
+  const code = useRef<HTMLInputElement>(null)
+  const [picked, setPicked] = useState(false)
+  const { mutate, isIdle, isError } = start
   useEffect(() => {
-    if (started.current) return
+    if (started.current || !(isIdle || isError)) return
     started.current = true
-    mutate(undefined, { onSuccess: (signIn) => { if (signIn.url) openPage(signIn.url) } })
-  }, [mutate])
+    mutate()
+  }, [mutate, isIdle, isError])
   const signIn = start.data
+  useEffect(() => {
+    if (!signIn?.url || shown.current) return
+    shown.current = true
+    openPage(signIn.url)
+  }, [signIn?.url])
+  useEffect(() => {
+    const pick = () => void navigator.clipboard.readText().then((text) => {
+      const found = text.trim()
+      if (!code.current || code.current.value || !/^\S{10,}$/.test(found) || /^https?:/.test(found)) return
+      code.current.value = found
+      setPicked(true)
+    }, () => undefined)
+    addEventListener('focus', pick)
+    return () => removeEventListener('focus', pick)
+  }, [])
   const admin = useAdmin()
   const { refetch } = admin
   const waiting = start.isPending
@@ -252,17 +271,18 @@ function SeatSignIn() {
     return () => clearInterval(timer)
   }, [waiting, refetch])
   const download = admin.data?.seat.download
-  return <DialogCard className="w-[520px]" onClose={() => open()}>
-    <form className="contents" onSubmit={(event) => signIn && complete.mutate({ id: signIn.id, code: formValues(event)('code') }, { onSuccess: () => open() })}>
+  return <DialogCard className="w-[520px]" onClose={onClose}>
+    <form className="contents" onSubmit={(event) => signIn && complete.mutate({ id: signIn.id, code: formValues(event)('code') }, { onSuccess: onDone })}>
       <div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-lg bg-[#D97757]/12"><Glyph name="claude" size={20} /></span><CardTitle>Sign in with Claude</CardTitle></div>
       {start.error
         ? <FieldError>{start.error.message}</FieldError>
         : <p className="m-0 text-[13px]/[18px] text-body">{signIn?.url
-          ? <>claude.ai opened in your browser. Press Authorize there, then paste the code it shows. <a href={signIn.url} target="_blank" rel="noreferrer">Open claude.ai again</a></>
+          ? <>claude.ai opened in your browser. Press <b>Authorize</b>, then <b>Copy code</b>. We’ll pick it up when you come back. <a href={signIn.url} target="_blank" rel="noreferrer">Open claude.ai again</a></>
           : <span className="inline-flex items-center gap-2"><Spinner className="mt-0" />{download ? `Getting Claude Code ready · ${download.total ? Math.floor((download.done / download.total) * 100) : 0}%` : 'Starting the Claude sign-in. This takes about 10 seconds.'}</span>}</p>}
-      <Input mono name="code" required minLength={10} autoComplete="off" spellCheck={false} aria-label="Code from claude.ai" placeholder="Paste the code from claude.ai" disabled={!signIn} autoFocus />
+      <Input ref={code} mono name="code" required minLength={10} autoComplete="off" spellCheck={false} aria-label="Code from claude.ai" placeholder="Paste the code from claude.ai" disabled={!signIn} autoFocus onInput={() => setPicked(false)} />
+      {picked && <p className="m-0 -mt-1 text-[12px] text-mute">Pasted your code from claude.ai.</p>}
       {complete.error && <FieldError>{complete.error.message}</FieldError>}
-      <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => open()}>Cancel</Button><Button type="submit" variant="primary" disabled={!signIn || complete.isPending}>{complete.isPending ? 'Signing in…' : 'Sign in'}</Button></div>
+      <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" variant="primary" disabled={!signIn || complete.isPending}>{complete.isPending ? 'Signing in…' : 'Sign in'}</Button></div>
     </form>
   </DialogCard>
 }
