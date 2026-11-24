@@ -33,6 +33,7 @@ test('against the real cloud API: Not me takes the device off your home list and
   const { cloudEvents } = await import('../../../src/server/cloud/cloud-events.ts')
   const { putList } = await import('../../../src/server/cloud/cloud-service.ts')
   const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
+  const { keysService: inner } = await import('@openhut/common/keyring/keys.ts')
   const { roomKeys } = await import('../../../src/server/cloud/room-keys.ts')
   const kit = await import(new URL('test/kit.ts', PRIVATE).href) as Kit
   const { tokens } = await import(new URL('src/platform/auth.ts', PRIVATE).href) as Tokens
@@ -52,7 +53,7 @@ test('against the real cloud API: Not me takes the device off your home list and
     const account = keysService.mustBeOn()
     const home = account.workspace.id
     const key = await keysService.deviceKey()
-    const thisMac: Device = { email: account.email, sub: account.sub, home, identity: await keysService.device(), key, token: (await tokens.mint({ sub: account.sub, email: account.email, device: key })).token }
+    const thisMac: Device = { email: account.email, sub: account.sub, home, identity: await inner.device(), key, token: (await tokens.mint({ sub: account.sub, email: account.email, device: key })).token }
     const laptop = await kit.another({ email: account.email, sub: account.sub, home })
     const added = await keysService.addDevice({ device: laptop.key, name: 'Laptop', runtime: false })
     assert.ok(added)

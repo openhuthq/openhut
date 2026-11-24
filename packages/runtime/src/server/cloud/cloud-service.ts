@@ -5,8 +5,8 @@ import { type Backup, KeyBox, type Letter, type MemberList, type Role, type Clou
 import type { Health } from '@openhut/common/admin/admin.ts'
 import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
 import { facesOf } from '@openhut/common/cloud/faces.ts'
-import { addedOf, bodyOf, nextOf, signList, withoutDevices } from '@openhut/common/cloud/member-list.ts'
-import { fromBase64, toBase64 } from '@openhut/common/vault/public.ts'
+import { addedOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
+import { fromBase64 } from '@openhut/common/vault/public.ts'
 import { kitId } from '@openhut/common/vault/kit-file.ts'
 import { CloudError, type Reply } from '@openhut/common/cloud/openhut-cloud.ts'
 import { cloud, fromCloud, sending } from '../platform/cloud.ts'
@@ -18,7 +18,8 @@ import { settings } from '../platform/settings.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { callbackBase, connectionService } from '../connections/connection-service.ts'
 import { keyStore, type Account, type AskRoom } from './key-store.ts'
-import { accountDevice, deviceName, deviceOs, keysService, openLetter, sealTo, type Box, type Sent as Sealed } from './keys-service.ts'
+import { keyring } from '@openhut/common/keyring/keyring.ts'
+import { deviceName, deviceOs, keysService, type Box, type Sent as Sealed } from './keys-service.ts'
 import { roomKeys } from './room-keys.ts'
 import { guessSite, teamIcon } from './team-icon.ts'
 import { hinted, takeSignIn, withSignIn } from './sign-ins.ts'
@@ -149,7 +150,7 @@ export const cloudService = {
       if (sent.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t let that computer in. Try again.')
       return cloudService.status()
     }
-    const approved = mine ? await serverApproval({ device, name: asked.name }) : await roomKeys.approve({ ws: workspace, email: asked.email, device, name: asked.name })
+    const approved = await keyring.approve({ team: workspace, email: asked.email, device, name: asked.name })
     await putList({ workspace, list: approved.list, letters: [approved.letter] })
     await cloudEvents.refreshRequests(workspace)
     return cloudService.status()
@@ -309,7 +310,7 @@ export const cloudService = {
     return serial(async () => {
       keysService.mustBeOn()
       if (keysService.kitState().saved) await rotate({ changed: await keysService.change(), drop: ['passkey'] })
-      const { words, box, ask } = await keysService.newKit()
+      const { words, box, ask } = await keyring.kit()
       const kept = boxIn(await getBox('kit'))
       if (kept && !keysService.kitState().saved) throw new HttpError(409, 'Your account already has a recovery kit, and this computer hasn’t picked it up yet. Use the kit you saved, or make a new one on the computer that made it.')
       const savedAt = Math.max(Date.now(), (Date.parse(kept?.savedAt ?? '') || 0) + 1)
@@ -338,8 +339,8 @@ export const cloudService = {
     if (!box) throw new HttpError(409, `Touch ID isn’t set up for this account yet. Turn it on in Settings › General on a Mac that’s already unlocked.`)
     const workspaces = await boxesOf()
     const account = 'words' in body
-      ? await keysService.restore({ words: body.words, kit: box.body, workspaces })
-      : await keysService.fromPasskey({ prf: fromBase64(body.prf), box: box.body }).then((key) => key && keysService.restoreWith({ key, workspaces }))
+      ? await keyring.restore({ from: { words: body.words, kit: box.body }, workspaces: async () => workspaces })
+      : await keyring.restore({ from: { prf: fromBase64(body.prf), box: box.body }, workspaces: async () => workspaces })
     if (!account && 'words' in body) throw new HttpError(400, 'Those aren’t the words of your recovery kit. Check each word and try again.', { param: 'words' })
     if (!account) throw new HttpError(400, `Touch ID isn’t set up on this Mac. Unlock another way.`)
     return joinWith({ account, typed: 'words' in body })
@@ -417,7 +418,7 @@ export async function putList({ workspace, list, letters, boxes }: { workspace: 
 }
 
 async function change({ ws, emails, devices, rotate = false }: { ws: string; emails?: string[]; devices?: string[]; rotate?: boolean }): Promise<void> {
-  const { list, room, letters } = await roomKeys.teamChange({ ws, emails, devices, rotate })
+  const { list, room, letters } = rotate ? await keyring.rotate(ws) : await keyring.remove({ team: ws, emails, devices })
   await putList({ workspace: ws, list, letters })
   if (emails?.includes(keysService.account()?.email ?? '')) return cloudEvents.drop({ ws, why: null })
   if (rotate) await roomKeys.setRoom(room)
@@ -430,7 +431,7 @@ async function rotateTeam(ws: string): Promise<void> {
     ws, step: async () => {
       const account = keysService.account()
       if (!account || roomKeys.roleIn(ws) !== 'owner') return
-      const { list, room, letters } = await roomKeys.teamChange({ ws, rotate: true })
+      const { list, room, letters } = await keyring.rotate(ws)
       const boxes = ws === account.workspace.id ? [await keysService.workspaceBox({ account: { ...account, workspace: room.workspace } })] : []
       await putList({ workspace: ws, list, letters, boxes })
       await roomKeys.setRoom(room)
@@ -456,13 +457,6 @@ async function refusal({ ws, status }: { ws: string; status: number }): Promise<
   const newer = await cloud.team(ws).lists({ after: roomKeys.members(ws)?.version ?? 0 }).then((lists) => lists.length > 0, (error: unknown) => error instanceof CloudError && error.status === 403)
   if (newer) return new HttpError(409, CHANGED)
   return new HttpError(403, 'OpenHut Cloud couldn’t save the change. Try again.')
-}
-
-async function serverApproval({ device, name }: { device: string; name: string | null }): Promise<{ list: MemberList; letter: Sealed }> {
-  const account = keysService.mustBeOn()
-  const list = await keysService.addDevice({ device, name })
-  if (!list) throw new HttpError(409, 'That computer is already on your account.')
-  return { list, letter: await sealTo({ to: device, purpose: 'workspace-key', workspace: account.workspace.id, plain: await keysService.secret() }) }
 }
 
 async function joinAsServer(code: string): Promise<void> {
@@ -623,7 +617,7 @@ async function chainOf(workspace: string): Promise<MemberList[]> {
 }
 
 async function joinWith({ account: restored, typed }: { account: Account; typed: boolean }): Promise<Cloud> {
-  const signedHere = restored.list.by === toBase64((await accountDevice(fromBase64(restored.key))).publicKey)
+  const signedHere = await keyring.signedHere(restored)
   const joined = signedHere ? await cloud.team(restored.workspace.id).publish({ list: restored.list, letters: [], boxes: [] }) : { status: 200 }
   if (joined.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t add this computer. Try again.')
   const teams = []
@@ -647,11 +641,9 @@ async function leaveHere(): Promise<void> {
 
 async function dropHere(): Promise<void> {
   const me = await keysService.deviceKey()
-  const signer = await keysService.device()
   for (const room of roomKeys.rooms()) {
-    const body = bodyOf(room.list)
-    if (!body?.members.some((member) => member.devices.includes(me))) continue
-    const list = await signList({ signer, body: withoutDevices({ body: await nextOf({ list: room.list, body, me }), gone: [me] }) })
+    if (!bodyOf(room.list)?.members.some((member) => member.devices.includes(me))) continue
+    const { list } = await keyring.remove({ team: room.workspace.id, devices: [me] })
     await putList({ workspace: room.workspace.id, list })
   }
 }
@@ -713,9 +705,10 @@ async function checkAsked(): Promise<void> {
 
 async function unlockedBy({ workspace, found }: { workspace: string; found: Letter[] }): Promise<boolean> {
   for (const each of found.filter((one) => one.purpose === 'account-key')) {
-    const key = await openLetter({ found: each, workspace })
-    const boxes = key ? await boxesOf() : []
-    const account = key && await keysService.restoreWith({ key, workspaces: [...boxes.filter((box) => box.id === workspace), ...boxes.filter((box) => box.id !== workspace)] })
+    const account = await keyring.restore({ from: { letter: each, workspace }, workspaces: async () => {
+      const boxes = await boxesOf()
+      return [...boxes.filter((box) => box.id === workspace), ...boxes.filter((box) => box.id !== workspace)]
+    } })
     if (!account || !listedUnder({ account, device: each.from })) continue
     await joinWith({ account, typed: false })
     await cloud.team(workspace).take(each.id).catch(() => undefined)

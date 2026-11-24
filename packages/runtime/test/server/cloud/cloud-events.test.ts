@@ -40,6 +40,7 @@ const { migrate } = await import('../../../src/server/platform/db.ts')
 await migrate()
 const { listen } = await import('../../../src/server/platform/events.ts')
 const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
+const { keysService: inner } = await import('@openhut/common/keyring/keys.ts')
 const { roomKeys } = await import('../../../src/server/cloud/room-keys.ts')
 const { recordsService } = await import('../../../src/server/cloud/records.ts')
 const { cloudEvents, BEAT_MS } = await import('../../../src/server/cloud/cloud-events.ts')
@@ -60,7 +61,7 @@ const body = roomKeys.members(ws)
 assert.ok(body)
 const at = Math.max(Date.now(), body.at ?? 0)
 const phoneKey = toBase64(phone.publicKey)
-assert.ok(await roomKeys.advance({ ws, lists: [await signList({ signer: await keysService.device(), body: { ...body, version: 2, previous: await anchorOf(account.list), at, added: { ...body.added, [phoneKey]: at }, members: [...body.members, { email: 'ana@example.com', role: 'member', devices: [phoneKey] }] } })] }))
+assert.ok(await roomKeys.advance({ ws, lists: [await signList({ signer: await inner.device(), body: { ...body, version: 2, previous: await anchorOf(account.list), at, added: { ...body.added, [phoneKey]: at }, members: [...body.members, { email: 'ana@example.com', role: 'member', devices: [phoneKey] }] } })] }))
 const emitted: { name: string; type?: string; id?: string }[] = []
 listen((event) => emitted.push({ name: event.name, type: event.target?.type, id: event.target?.id }))
 
@@ -154,7 +155,7 @@ test('a Here is locked to its sender, padded to one fixed size, and opens only w
 })
 
 async function aTeam(id: string, key: string): Promise<void> {
-  const list = await signList({ signer: await keysService.device(), body: { workspace: id, version: 1, previous: null, members: [{ email: 'boss@example.com', role: 'owner', devices: [phoneKey] }, { email: 'mo@example.com', role: 'member', devices: [me] }], invites: [], removed: [] } })
+  const list = await signList({ signer: await inner.device(), body: { workspace: id, version: 1, previous: null, members: [{ email: 'boss@example.com', role: 'owner', devices: [phoneKey] }, { email: 'mo@example.com', role: 'member', devices: [me] }], invites: [], removed: [] } })
   await roomKeys.setRoom({ workspace: { id, key, version: 1 }, list, first: list })
 }
 

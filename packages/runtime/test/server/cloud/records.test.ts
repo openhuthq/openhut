@@ -36,6 +36,7 @@ const { migrate } = await import('../../../src/server/platform/db.ts')
 await migrate()
 const { db } = await import('../../../src/server/platform/db.ts')
 const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
+const { keysService: inner } = await import('@openhut/common/keyring/keys.ts')
 const { recordsService } = await import('../../../src/server/cloud/records.ts')
 const { seal } = await import('@openhut/common/records/seal.ts')
 const { signer } = await import('@openhut/common/records/row.ts')
@@ -49,7 +50,7 @@ const agent = { collection: 'agent', workspace: ws, id: 'ag_records1', parent: '
 
 async function sealedAt({ ver, value }: { ver: number; value: unknown }): Promise<SealedRow> {
   const keys = () => ({ version: 1, keys: { 1: fromBase64(account.workspace.key) } })
-  const sealed = await seal({ where: { ...agent }, ver, value: { workspace: value }, keys, signer: signer(await keysService.device()) })
+  const sealed = await seal({ where: { ...agent }, ver, value: { workspace: value }, keys, signer: signer(await inner.device()) })
   assert.ok(sealed)
   return { id: agent.id, object: 'agent', ...sealed }
 }

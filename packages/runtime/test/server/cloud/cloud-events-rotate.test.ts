@@ -33,6 +33,7 @@ test('against the real cloud API: when a teammate takes one of their devices off
   const { cloudEvents } = await import('../../../src/server/cloud/cloud-events.ts')
   const { putList } = await import('../../../src/server/cloud/cloud-service.ts')
   const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
+  const { keysService: inner } = await import('@openhut/common/keyring/keys.ts')
   const { roomKeys } = await import('../../../src/server/cloud/room-keys.ts')
   const { recordsService } = await import('../../../src/server/cloud/records.ts')
   const kit = await import(new URL('test/kit.ts', PRIVATE).href) as Kit
@@ -55,7 +56,7 @@ test('against the real cloud API: when a teammate takes one of their devices off
     const room = roomKeys.room(home)
     const body = bodyOf(room?.list)
     assert.ok(room && body)
-    const joined = await kit.grow({ chain: { list: room.list, body }, signer: await keysService.device(), change: (each) => ({ ...each, members: [...each.members, { email: sara.email, role: 'member', devices: [sara.key, saraPhone.key], viewers: [] }] }) })
+    const joined = await kit.grow({ chain: { list: room.list, body }, signer: await inner.device(), change: (each) => ({ ...each, members: [...each.members, { email: sara.email, role: 'member', devices: [sara.key, saraPhone.key], viewers: [] }] }) })
     await putList({ workspace: home, list: joined.list })
     const oldKey = roomKeys.room(home)?.workspace.key ?? ''
     assert.equal(roomKeys.room(home)?.workspace.version, 1)

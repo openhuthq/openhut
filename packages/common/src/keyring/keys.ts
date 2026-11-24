@@ -11,7 +11,7 @@ import { deviceName, keyStore, Keys, type Account, type AskRoom, type Room, type
 
 export type Sent = NewLetter
 export type Box = NamedKeyBox
-type Boxed = { id: string; key: string; chain: MemberList[] }
+export type Boxed = { id: string; key: string; chain: MemberList[] }
 const Secret = z.object({ ...Keys.shape, vault: z.optional(z.string()), anchor: z.string(), team: z.optional(z.boolean()) })
 
 export const keysService = {

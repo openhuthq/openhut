@@ -7,10 +7,10 @@ import { newKey, toBase64 } from '@openhut/common/vault/public.ts'
 import { config } from '../platform/config.ts'
 import { db } from '../platform/db.ts'
 import { seal, unseal } from '../platform/secrets.ts'
-import { Stored, useStore } from '@openhut/common/keyring/store.ts'
+import { Stored, useStore } from '@openhut/common/keyring/keyring.ts'
 import { deviceName } from './keys-service.ts'
 
-export type { Account, AskRoom, Room, Session, Stored } from '@openhut/common/keyring/store.ts'
+export type { Account, AskRoom, Room, Session, Stored } from '@openhut/common/keyring/keyring.ts'
 
 const ROW = 'cloud_keys'
 const FILE = join(config.dataDir, 'cloud-keys.sealed')

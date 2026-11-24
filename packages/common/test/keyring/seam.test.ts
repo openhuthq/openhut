@@ -18,3 +18,8 @@ test('only keyring/ imports vault/secret or record sealing: nobody else touches 
   const found = ROOTS.flatMap(sources).filter((file) => !ALLOWED.some((allowed) => file.startsWith(allowed)) && SECRET.test(readFileSync(new URL(file, ROOT), 'utf8')))
   assert.deepEqual(found, [])
 })
+
+test('outside keyring/, code reaches the keyring only through keyring.ts, its one interface', () => {
+  const found = ROOTS.flatMap(sources).filter((file) => !file.startsWith('packages/common/src/keyring/') && /from '[^']*keyring\/(keys|rooms|store)\.ts'/.test(readFileSync(new URL(file, ROOT), 'utf8')))
+  assert.deepEqual(found, [])
+})
