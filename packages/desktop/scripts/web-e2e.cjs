@@ -12,6 +12,7 @@ app.whenReady().then(async () => {
   const shot = async (name) => { await win.webContents.insertCSS("*,*::before,*::after{animation:none!important;transition:none!important}"); win.setSize(1280, 821); await sleep(300); win.setSize(1280, 820); await sleep(500); writeFileSync(`${OUT}/${name}.png`, (await win.webContents.capturePage()).toPNG()); log(`screenshot ${name}.png: ${(await text()).split("\n").filter(Boolean).slice(0, 3).join(" / ")}`) }
   const until = async (pattern, ms = 30000) => { for (const end = Date.now() + ms; Date.now() < end; await sleep(300)) { const t = await text(); if (pattern.test(t)) return t } throw new Error(`timed out waiting for ${pattern}; page says: ${(await text()).slice(0, 300)}`) }
   try {
+    await macSignedIn()
     await win.loadURL(WEB)
     log(`1 open ${WEB}: ${(await until(/Use OpenHut in your browser/)).split('\n').slice(0, 2).join(' / ')}`)
     await shot('1-sign-in')
@@ -61,3 +62,18 @@ app.whenReady().then(async () => {
   }
   app.exit(process.exitCode ?? 0)
 })
+
+// A fresh runtime (CI) signs the Mac in to the dev cloud as mo@example.com and saves its kit, as dev-cloud.mjs signIn does through a page.
+async function macSignedIn() {
+  const api = (path, init) => fetch(`${RUNTIME}${path}`, { ...init, headers: { authorization: 'Bearer dev', ...init?.headers } })
+  if ((await (await api('/api/cloud')).json()).status === 'on') return
+  const { authorizationUrl } = await (await api('/api/cloud/sessions', { method: 'POST' })).json()
+  const link = /href="([^"]+)">mo@example\.com</.exec(await (await fetch(authorizationUrl)).text())?.[1]?.replaceAll('&amp;', '&')
+  if (!link) throw new Error('the dev sign-in page has no link for mo@example.com')
+  const back = new URL((await fetch(new URL(link, authorizationUrl), { redirect: 'manual' })).headers.get('location') ?? '', authorizationUrl)
+  await api(`/api/cloud/callback${back.search}`)
+  for (const end = Date.now() + 60000; (await (await api('/api/cloud')).json()).status !== 'on'; await sleep(1000)) if (Date.now() > end) throw new Error('the Mac never signed in')
+  const kit = await api('/api/cloud/kits', { method: 'POST' })
+  if (kit.status !== 200) throw new Error(`saving the Mac's kit answered ${kit.status}`)
+  log('0 the Mac signed in to the dev cloud and saved its kit')
+}

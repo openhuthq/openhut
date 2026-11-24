@@ -186,8 +186,38 @@ jobs:
           scripts/r2.sh packs packs
           scripts/r2.sh pointer packs beta
 
+  browser:
+    # R1: the browser run is part of the gate: a fresh dev stack, the web App, and a browser signed in through the Mac (scripts/web-e2e.sh).
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: ''
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check out private/
+        env:
+          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: |
+          npm ci --no-audit --no-fund
+          npm --prefix private/api ci --no-audit --no-fund
+      - name: The browser run
+        run: OUT=$RUNNER_TEMP/web-e2e scripts/web-e2e.sh
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e
+          path: ${{ runner.temp }}/web-e2e
+
   gate:
-    needs: [changes, checks, private, server, app]
+    needs: [changes, checks, private, server, app, browser]
     if: always()
     runs-on: ubuntu-latest
     steps:
