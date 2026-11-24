@@ -1,11 +1,11 @@
 import { InviteLetter, type OpenedInvite, parseJson, type Cloud, type CloudInvite, type CloudInvitePreview, type CreateCloudInvite } from '@openhut/common/cloud/cloud.ts'
-import { fromBase64, identity, type Identity } from '@openhut/common/vault/public.ts'
+import type { Identity } from '@openhut/common/vault/public.ts'
 import { keyring } from '@openhut/common/keyring/keyring.ts'
 import { cloud } from '../platform/cloud.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { cloudService, mustBeOn, putList } from './cloud-service.ts'
 import { keysService } from './keys-service.ts'
-import { inviteId, roomKeys } from './room-keys.ts'
+import { roomKeys } from './room-keys.ts'
 import { cloudEvents } from './cloud-events.ts'
 
 const LINK = /#([A-Za-z0-9_-]{8,64})\.([A-Za-z0-9_-]{43})\s*$/
@@ -51,7 +51,7 @@ async function readInvite(link: string): Promise<Opened> {
   if (!ws || !secret) throw new HttpError(400, 'That isn’t an OpenHut invite link. Copy the whole link and try again.', { param: 'link' })
   if (!keysService.account() || !keysService.session()) throw new HttpError(409, 'Sign in to OpenHut Cloud to join.')
   if (roomKeys.room(ws)) throw new HttpError(409, 'You’re already in this team.', { param: 'link' })
-  const id = await inviteId((await identity(fromBase64(secret))).publicKey)
+  const id = await keyring.inviteId(secret)
   const invite = await fetchInvite({ ws, id })
   for (let page = invite; page.hasMore && page.memberLists.length;) {
     page = await fetchInvite({ ws, id, after: invite.memberLists.length })

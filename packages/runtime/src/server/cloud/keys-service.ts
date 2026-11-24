@@ -3,7 +3,7 @@ import { hostname } from 'node:os'
 import { config } from '../platform/config.ts'
 import './key-store.ts'
 
-export { accountDevice, keysService, openLetter, ownOf, readSecret, rotateKeys, sealTo, secretOf, type Box, type Sent } from '@openhut/common/keyring/keys.ts'
+export { keysService, type Box, type Sent } from '@openhut/common/keyring/keyring.ts'
 
 export function deviceOs(): string {
   if (process.platform !== 'darwin') return process.platform === 'win32' ? 'Windows' : 'Linux'

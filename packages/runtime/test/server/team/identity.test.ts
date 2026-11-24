@@ -12,6 +12,7 @@ import { agentController } from '../../../src/server/agents/agent-controller.ts'
 import { cloudController } from '../../../src/server/cloud/cloud-controller.ts'
 import { keyStore } from '../../../src/server/cloud/key-store.ts'
 import { keysService } from '../../../src/server/cloud/keys-service.ts'
+import { keysService as inner } from '@openhut/common/keyring/keys.ts'
 import { adminController } from '../../../src/server/admin/admin-controller.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
@@ -59,7 +60,7 @@ const TEAM = toBase64(newKey(12))
 async function listDevices(): Promise<void> {
   const account = await keysService.open({ sub: 'google-mo', email: 'mo@example.com' })
   const list = await keysService.addDevice({ device: toBase64(viewer.publicKey), name: null }) ?? account.list
-  const me = await keysService.device()
+  const me = await inner.device()
   const body = bodyOf(list)
   assert.ok(body)
   const home = await signList({ signer: me, body: { ...body, version: body.version + 1, members: [...body.members, { email: 'ana@example.com', role: 'member', devices: [toBase64(housemate.publicKey)] }] } })

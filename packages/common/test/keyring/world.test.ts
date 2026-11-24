@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { keyring, keysService, roomKeys, useStore, type Stored } from '../../src/keyring/keyring.ts'
+import { keyring, useStore, type Stored } from '../../src/keyring/keyring.ts'
+import { keysService } from '../../src/keyring/keys.ts'
+import { roomKeys } from '../../src/keyring/rooms.ts'
 import { padded } from '../../src/records/row.ts'
 import { fromBase64, identity, newKey, toBase64, type Bytes } from '../../src/vault/public.ts'
 

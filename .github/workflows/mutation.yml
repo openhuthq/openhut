@@ -19,5 +19,5 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Mutation testing on vault/ and keyring/ (a ratchet: K1 asks for 90%, measured 56.7% on 2026-11-24)
-        run: MUTATION_MIN=56 npm -w @openhut/common run mutate
+      - name: Mutation testing on vault/ and keyring/ (K1 asks for 90%)
+        run: MUTATION_MIN=90 npm -w @openhut/common run mutate

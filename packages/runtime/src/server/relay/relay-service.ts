@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import WebSocket, { type RawData } from 'ws'
 import { type ComputerKey, type Handlers, type SocketPeer, type TunnelRequest, type TunnelSocketRequest } from '@openhut/common/tunnel/index.ts'
-import { boxKey } from '@openhut/common/vault/public.ts'
+import { keyring } from '@openhut/common/keyring/keyring.ts'
 import { keysService } from '../cloud/keys-service.ts'
 import { cloud } from '../platform/cloud.ts'
 import { listen, log } from '../platform/events.ts'
@@ -50,7 +50,7 @@ export const relayService = {
 }
 
 export async function tunnelKey(): Promise<ComputerKey> {
-  return boxKey((await keysService.device()).secret)
+  return keyring.tunnelKey()
 }
 
 export function relayIdOf(key: Uint8Array): string {

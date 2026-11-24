@@ -44,9 +44,9 @@ export function kitText({ email, madeAt, device, kitId, words }: { email: string
 export function readKit(text: string): KitFile | null {
   const mark = MARK.exec(text)
   const rest = mark ? text.replace(mark[0], ' ') : text
-  const words = numbered(rest) ?? loose(rest)
+  const words = numbered(rest) || loose(rest)
   if (!words) return null
-  return { words, email: mark?.[1].toLowerCase() ?? null, kitId: mark?.[2].toUpperCase() ?? null, valid: validKit(words) }
+  return { words, email: mark?.[1].toLowerCase() || null, kitId: mark?.[2].toUpperCase() || null, valid: validKit(words) }
 }
 
 export function validKit(words: string[]): boolean {
@@ -76,7 +76,7 @@ function numbered(text: string): string[] | null {
 }
 
 function loose(text: string): string[] | null {
-  const tokens = text.toLowerCase().match(/[a-z]+/g) ?? []
+  const tokens = text.toLowerCase().match(/[a-z]+/g) || []
   const windows = tokens.map((_, start) => tokens.slice(start, start + 12)).filter((window) => window.length === 12 && window.every((word) => WORDS.has(word)))
   return windows.find(validKit) ?? windows[0] ?? null
 }

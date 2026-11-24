@@ -1,8 +1,8 @@
 import type { Team } from '@openhut/common/cloud/openhut-cloud.ts'
-import { inviteId, roomKeys as rooms, type Cloudside } from '@openhut/common/keyring/rooms.ts'
+import { roomKeys as rooms, type Cloudside } from '@openhut/common/keyring/keyring.ts'
 import { cloud, sending } from '../platform/cloud.ts'
 
-export { inviteId, type Cloudside }
+export type { Cloudside }
 
 function teamOf(ws: string): Cloudside {
   const team: Team = cloud.team(ws)
@@ -12,5 +12,4 @@ function teamOf(ws: string): Cloudside {
 export const roomKeys = {
   ...rooms,
   refresh: ({ ws, team = teamOf(ws) }: { ws: string; team?: Cloudside }) => rooms.refresh({ ws, team }),
-  rekey: ({ ws, team = teamOf(ws) }: { ws: string; team?: Cloudside }) => rooms.rekey({ ws, team }),
 }
