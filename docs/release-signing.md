@@ -26,21 +26,15 @@ Packs are the normal release (R4). With the repo variable `PUBLISH_PACKS` set to
 
 `release-key.ts point` does the re-signing and refuses a release.json the key didn't sign, a lower sequence, or pointing at a halt. `pointerAction()` in `packages/desktop/src/release-key.mjs` is what a device does with the pointer it polls (`refuse`, `halt`, `none`, `wait`, `install`); M5 wires it into the shell's pack apply.
 
-## Cut a shell release (owner)
+## A shell release (owner)
 
-**Actions › Cut a shell release › Run workflow**: pick the channel (`stable` or `beta`) and type the version (`0.5.0`, or `0.5.0-beta.2` for a beta). Nothing waits for a click after that. The workflow (`.github/workflows/release.yml`):
-
-- checks the version: a beta has a `-beta.N` part and a stable has none; a stable is higher than every stable tag, a beta higher than every tag (a stable hotfix like 0.4.2 may still follow a 0.5.0 beta);
-- commits "Release X: the app and runtime version" (both `package.json` files and the lock), on `main` for a stable, on a new branch `release/vX` from `main` for a beta (a beta never lands on `main`, since every push there deploys openhut.dev, whose `install.sh` moves remote runtimes to its version);
-- pushes the tag `vX` with the deploy key `RELEASE_TAG_KEY`, which is what starts the desktop workflow, exactly as a tag you push by hand.
-
-The desktop workflow then builds, checks and notarizes every app into a draft release, and its `publish` job signs `release.json`, uploads it with `release.json.sig`, puts the files on dl.openhut.dev and publishes the release.
-
-The bump is pushed with the workflow's own token, which starts no workflow, so a stable bump doesn't deploy openhut.dev early; the `publish` job deploys it once the release is public. The tag can't be pushed with that token: the `release tags` ruleset lets only Admins and deploy keys create `v*` tags, and GitHub doesn't accept the GitHub Actions app as a bypass actor on this repo. Tagging by hand (below) still works.
+Promote (`promote.yml`) is the release: it re-signs main's packs, and the shell updates them in place (M5). A new shell
+is needed only when the shell itself changes: push a `vX` tag (below) and run the Shell workflow on it, which packages,
+signs, notarizes and publishes the installers.
 
 ## Cut a beta
 
-A beta is a release whose version has a prerelease part. Cut it with the button above (channel `beta`), or by hand: bump `version` in `packages/desktop/package.json`, `packages/runtime/package.json` and `package-lock.json` to `0.5.0-beta.1` on a branch `release/v0.5.0-beta.1` (never `main`), then
+A beta is a release whose version has a prerelease part. Cut it by hand: bump `version` in `packages/desktop/package.json`, `packages/runtime/package.json` and `package-lock.json` to `0.5.0-beta.1` on a branch `release/v0.5.0-beta.1` (never `main`), then
 
 ```sh
 git tag v0.5.0-beta.1 && git push origin v0.5.0-beta.1
@@ -52,7 +46,7 @@ It builds, is checked and is signed exactly like a stable. The differences: its 
 
 Set up on 2026-11-22:
 
-- **Environment `release`**: no required reviewers (removed 2026-11-23: the owner is the only one who releases), deployment only from tags `v*` (betas like `v0.5.0-beta.1` match) and from `main`. The desktop workflow's `publish` job, the Cut a shell release job, Promote and the CI `beta` job run in it, so only those reach its secrets: `RELEASE_SIGNING_KEY` (above) and `RELEASE_TAG_KEY`, is the private half of the deploy key "Release tags from the Cut a release workflow" (now Cut a shell release) (write access); no copy exists anywhere else. To replace it, delete the deploy key, make a new ed25519 key, add it as a deploy key with write access and set it with `gh secret set RELEASE_TAG_KEY --env release`.
+- **Environment `release`**: no required reviewers (removed 2026-11-23: the owner is the only one who releases), deployment only from tags `v*` (betas like `v0.5.0-beta.1` match) and from `main`. The desktop workflow's `publish` job, Promote and the CI `beta` job run in it, so only those reach its secrets: `RELEASE_SIGNING_KEY` (above) and `RELEASE_TAG_KEY`, is the private half of the deploy key "Release tags from the Cut a release workflow" (write access; the workflow is gone since R9, the key can still tag); no copy exists anywhere else. To replace it, delete the deploy key, make a new ed25519 key, add it as a deploy key with write access and set it with `gh secret set RELEASE_TAG_KEY --env release`.
 - **Tag ruleset `release tags`** on `refs/tags/v*`: creation, update, deletion and force-push are restricted; the repository Admin role (`actor_id` 5) and deploy keys (`DeployKey`, added 2026-11-22 for Cut a release) bypass. The only deploy key is the one above.
 
 Still the owner's (needs the secret values): move `CSC_LINK`, `CSC_KEY_PASSWORD`, `NOTARY_KEY_P8_BASE64`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID` from repo secrets into the `release` environment (delete the repo copies), then run the `draft` and `build` jobs in it on tags (`environment: ${{ startsWith(github.ref, 'refs/tags/') && 'release' || '' }}`); a manual full build of a branch then can't sign. `CLOUDFLARE_API_TOKEN` stays a repo secret because the site deploy uses it too.

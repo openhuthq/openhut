@@ -1,7 +1,7 @@
 name: Packs
 
 # R2: the app, runtime and native packs (scripts/pack.ts), built and timed on Linux (target ≤5 min). Not signed or published yet (R4).
-# ci.yml calls it on main pushes, release.yml for each release (with the tag); the packs come back as the `packs` artifact.
+# ci.yml calls it on main pushes; the packs come back as the `packs` artifact.
 on:
   workflow_call:
     inputs:

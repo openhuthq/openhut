@@ -2,7 +2,7 @@ name: Shell
 
 # Packages the Electron shell: macOS, Windows and Linux installers, signing, notarization, packaged app e2e and the
 # update test. It runs only when a main push changes the shell, or by hand; never on a PR, and CI (ci.yml) never
-# packages. Run by hand on a v* tag ref (Cut a release does that), it signs, uploads to the tag's draft release and
+# packages. Run by hand on a v* tag ref, it signs, uploads to the tag's draft release and
 # publishes it, and installed apps take the new shell through their in-app update.
 
 on:
