@@ -259,7 +259,7 @@ async function refreshName(ws: string): Promise<void> {
 async function refreshRequests(ws: string): Promise<void> {
   const before = JSON.stringify(requests.get(ws) ?? [])
   const asked = Requests.safeParse((await keysService.call({ method: 'GET', path: `/v1/join-requests?workspace=${ws}` })).json).data?.data ?? []
-  requests.set(ws, asked.filter((each) => each.asked).map((each) => ({ device: each.id, email: each.email, at: each.at, name: each.name, os: each.os, server: each.server, checked: Boolean(each.commit), reviewed: each.reviewed, faces: each.commit && each.nonce && commitOf({ device: each.id, nonce: each.nonce }) === each.commit ? facesOf({ device: each.id, nonce: each.nonce }) : null })))
+  requests.set(ws, asked.filter((each) => each.asked).map((each) => ({ device: each.id, email: each.email, at: each.at, name: each.name, os: each.os, server: each.server, checked: Boolean(each.commit), reviewed: each.reviewed, faces: each.commit && each.nonce && commitOf({ device: each.id, nonce: each.nonce }) === each.commit ? facesOf({ device: each.id, nonce: each.nonce }) : null, location: each.location, newCountry: each.newCountry })))
   if (JSON.stringify(requests.get(ws)) !== before) emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
 }
 

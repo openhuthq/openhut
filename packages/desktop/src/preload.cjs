@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('openhut', {
   },
   cloud: {
     notify: (input) => ipcRenderer.invoke('cloud.notify', input),
+    knock: (input) => ipcRenderer.invoke('cloud.knock', input),
   },
   passkey: {
     status: () => ipcRenderer.invoke('passkey.status'),

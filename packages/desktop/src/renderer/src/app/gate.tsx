@@ -11,6 +11,7 @@ import { notifyUnlock, useCloud, usePasskeys } from '@/features/cloud/api'
 import { SaveKit, SignIn, TouchIdOffer } from '@/features/cloud/sign-in'
 import { BIG, Stage, Step } from '@/features/cloud/step'
 import { Unlock } from '@/features/cloud/unlock'
+import { YoureIn } from '@/features/cloud/knock'
 import { activeOf, GateContext, useChosen } from '@/features/cloud/workspaces'
 import { JoinLinkDialog } from '@/features/join/cloud-join'
 import { useFirstRun, type FirstRun } from '@/features/settings/desktop'
@@ -33,6 +34,7 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   const [offer, setOffer] = useState(false)
   const helper = usePasskeys()
   const [readying, setReadying] = useState(false)
+  const [knocked, setKnocked] = useState(false)
   const error = me.error ?? cloud.error
   const failure = error instanceof RequestError && error.status === 502 ? error.message : undefined
   const step = gateOf({ cloud: cloud.data, setup: run.data, down: Boolean(error) })
@@ -56,7 +58,9 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   if (step === 'getting-ready' || (readying && step === 'ready')) return <Stage><GettingReady run={run.data} failure={failure} ready={step === 'ready'} invited={invited} onRetry={() => { void run.refetch(); void me.refetch(); void cloud.refetch() }} onOpen={() => setReadying(false)} /></Stage>
   if (step === 'sign-in') return <><Stage><SignIn cloud={cloud.data} /></Stage>{opened === 'join-link' && <JoinLinkDialog />}</>
   if (!cloud.data) return <Waiting />
+  if (step === 'unlock' && knocked !== Boolean(cloud.data.asking)) setKnocked(Boolean(cloud.data.asking))
   if (step === 'unlock') return <Stage><Unlock cloud={cloud.data} /></Stage>
+  if (knocked) return <Stage><YoureIn onOpen={() => setKnocked(false)} /></Stage>
   const active = activeOf({ workspaces: cloud.data.workspaces, chosen })
   if (!active) return <Waiting />
   return <GateContext value={{ cloud: cloud.data, active }}>{children}</GateContext>
