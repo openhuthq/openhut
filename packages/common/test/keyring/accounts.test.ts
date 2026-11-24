@@ -259,6 +259,22 @@ test('Change keys sends my own devices the own key, and nobody else', async () =
   assert.equal((await open(sara)).own, undefined)
 })
 
+test('a sealed record opens back with each part under its own key, and another account can’t open the own or vault parts', async () => {
+  const account = await signedIn()
+  const where = { collection: 'agent' as const, workspace: account.workspace.id, parent: 'mo@example.com', id: 'ag_seal0001' }
+  const value = { workspace: { name: 'w' }, own: { notes: 'o' }, vault: { token: 'v' } }
+  const put = await (await keyring.sealer()).seal({ where, ver: 1, value })
+  assert.ok(put)
+  const row = { id: where.id, object: where.collection, ...put }
+  const opened = await (await keyring.sealer()).open(row)
+  assert.deepEqual([opened?.value, [...opened?.sealedWith ?? []].sort()], [value, ['own', 'vault', 'workspace']])
+  stored = { ...stored ?? { device: '', machine: 'm' }, account: { ...account, key: toBase64(newKey()), vault: toBase64(newKey()) } }
+  const partial = await (await keyring.sealer()).open(row)
+  assert.deepEqual(partial?.value.workspace, value.workspace)
+  assert.equal(partial?.value.own, undefined)
+  assert.equal(partial?.value.vault, undefined)
+})
+
 async function keyStoreRead(): Promise<Stored> {
   stored ??= { device: toBase64(newKey()), machine: 'm' }
   return stored

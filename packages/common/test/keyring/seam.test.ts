@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 
 const ROOT = new URL('../../../../', import.meta.url)
-const ROOTS = ['packages/runtime/src', 'packages/desktop/src', 'packages/desktop/scripts', 'packages/common/src', 'private/api/src', 'private/site/src']
+const ROOTS = ['packages/runtime/src', 'packages/app/src', 'packages/desktop/src', 'packages/desktop/scripts', 'packages/common/src', 'private/api/src', 'private/site/src']
 const ALLOWED = ['packages/common/src/keyring/', 'packages/common/src/vault/secret.ts', 'packages/common/src/records/seal.ts']
 const SECRET = /from '[^']*(vault\/secret|records\/seal)\.ts'/
 
