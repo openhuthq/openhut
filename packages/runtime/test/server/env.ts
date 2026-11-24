@@ -1,3 +1,4 @@
+import '../tmp.ts'
 import { createHash } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
