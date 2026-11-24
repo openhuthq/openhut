@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
@@ -32,12 +32,19 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   }, [opened.data, client])
   const step = state.data?.step
   useEffect(() => { if (step && step !== 'first-run') forgetFirstRun() }, [step])
+  const cut = useSyncExternalStore(remote.watchCut, remote.cut)
+  useEffect(() => {
+    if (!cut) return
+    const retry = setInterval(() => void remote.reconnect(), OFFLINE_MS)
+    return () => clearInterval(retry)
+  }, [cut])
   const screen = screenOf({ step, opened: Boolean(opened.data), error: opened.error, phone: phoneBrowser({ userAgent: navigator.userAgent, width: innerWidth }) })
+  if (opened.data && cut) return <CloudDown />
   if (opened.data && knocked) return <Stage><YoureIn line="Your computer let this browser in." onOpen={() => setKnocked(false)} /></Stage>
   if (opened.data && state.data?.step === 'ready' && state.data.teammate) return <Teammate />
   if (opened.data || state.data?.step === 'setup') return children
   const failure = error ?? (state.error ?? opened.error)?.message
-  if (state.error instanceof CloudOffline || opened.error instanceof CloudOffline) return <Stage><Step title="Can’t reach OpenHut Cloud." line="Check this computer’s internet connection. OpenHut tries again on its own."><Spinner /></Step></Stage>
+  if (state.error instanceof CloudOffline || opened.error instanceof CloudOffline) return <CloudDown />
   const invited = state.data?.step === 'signed-out' || state.data?.step === 'waiting' ? state.data.invited : null
   const host = nameOf(invited?.from ?? '') || 'Your teammate'
   if (state.data?.step === 'signed-out') return <Stage><Step title={invited ? `You’re invited to ${invited.team ?? 'a team'}.` : 'Use OpenHut in your browser.'} line={invited ? `Sign in with Google${invited.email ? ` as ${invited.email}` : ''} to chat with the agents ${host} shares. Nothing to install.` : 'Sign in with the Google account you use on your Mac.'}>
@@ -57,4 +64,8 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   return <Stage><Step title={failure ? 'Can’t reach your computer.' : 'Connecting to your computer…'} line={failure ?? 'Your agents run on your Mac. This browser talks to it end to end encrypted.'}>
     {failure ? <Button className={BIG} onClick={() => { setError(undefined); void state.refetch(); void opened.refetch() }}>Try again</Button> : <Spinner />}
   </Step></Stage>
+}
+
+function CloudDown() {
+  return <Stage><Step title="Can’t reach OpenHut Cloud." line="Check this computer’s internet connection. OpenHut tries again on its own."><Spinner /></Step></Stage>
 }
