@@ -45,7 +45,7 @@ export function updateNote(state: UpdateState) {
   if (state.halted) return 'OpenHut paused this update. This version keeps working.'
   if (state.ready?.signed) return `Version ${state.ready.version} is ready. Signed and publicly logged · verified.`
   if (state.ready) return `Version ${state.ready.version} is ready.`
-  if (state.waiting) return `Version ${state.waiting.version} is waiting before it installs: logged ${minutes(Date.now() - (state.waiting.signed?.loggedAt ?? Date.now()))} ago, installs in ${minutes(state.waiting.retryAt - Date.now())}.`
+  if (state.waiting) return `Version ${state.waiting.version} installs in ${minutes(state.waiting.retryAt - Date.now())}.`
   if (state.refused) return /Rekor|log/.test(state.refused) ? 'This update isn\'t in the public log, so OpenHut won\'t install it.' : 'This update didn\'t come from OpenHut, so it wasn\'t installed.'
   if (state.error === 'signature') return 'This update didn\'t come from OpenHut, so it wasn\'t installed. Download OpenHut again.'
   if (state.error) return 'Couldn\'t update. Try again, or download the new version.'
