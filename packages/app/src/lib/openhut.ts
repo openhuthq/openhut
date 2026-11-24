@@ -63,7 +63,7 @@ export const openhut = {
       const admin = await request({ schema: Admin, path: '/api/admin' }).catch(() => undefined)
       const appTooOld = !!APP_VERSION && !!admin?.minAppVersion && older({ version: APP_VERSION, than: admin.minAppVersion })
       const cloud = await request({ schema: Cloud, path: '/api/cloud' }).catch(() => undefined)
-      return computersOf({ here: { id: LOCAL, name: WORDS.thisComputer, kind: 'here', url: '', online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false }, appTooOld, runtimeTooOld: false }, devices: cloud?.devices ?? [] })
+      return computersOf({ here: { id: LOCAL, name: desktop ? WORDS.thisComputer : 'Your computer', kind: 'here', url: '', online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false }, appTooOld, runtimeTooOld: false }, devices: cloud?.devices ?? [], shell: !!desktop })
     },
     async add(peer: TailnetPeer): Promise<unknown> {
       if (!desktop?.computers) throw new Error('Open the OpenHut app on this computer to do this.')

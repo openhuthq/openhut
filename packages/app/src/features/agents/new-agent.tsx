@@ -69,7 +69,7 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
         <Button type="button" variant="secondary" size="icon" aria-label="Random name" title="Random name" className="size-10 shrink-0 rounded-lg text-ink" onClick={reroll}><I icon={DiceFaces03Icon} /></Button>
       </div>
       <div className="flex w-full flex-col gap-2.5 text-left">
-        {computers.length > 1 && <Setting title="Where should it run?" hint={whereNote(computers.find((each) => each.id === computer) ?? computers[0])}>
+        {(computers.length > 1 || computers[0]?.server) && <Setting title="Where should it run?" hint={whereNote(computers.find((each) => each.id === computer) ?? computers[0])}>
           <ComputerPicker computers={computers} value={computer} onPick={(id) => { setComputer(id); setPicked(undefined) }} title={`${typed.trim() || 'The agent'} runs on`} className="w-[200px]" />
         </Setting>}
         <Setting title="Model" hint="What it thinks with.">
@@ -92,7 +92,7 @@ export function FirstAgent() {
   const noModel = Boolean(providers && !firstModel(providers))
   const seat = useStartSeatSignIn()
   const [waiting, setWaiting] = useState<{ name: string; face: string }>()
-  const here = computer === 'local'
+  const here = computer === 'local' && !computers[0]?.server
   const sealed = computers.some((each) => each.kind === 'server') ? 'Pick your Linux server above to seal it in its own box instead.' : 'Want it sealed in its own box instead? Add a Linux server later in Settings › Computers.'
   const { mutate: prepare, isIdle } = seat
   useEffect(() => { if (noModel && isIdle) prepare() }, [noModel, isIdle, prepare])
@@ -108,7 +108,7 @@ export function FirstAgent() {
     <p className="m-0 -mt-2 text-[14px]/[1.5] text-body">Give it a name and a face. You can tell it its job in your first chat.</p>
     <FacePicker initial={null} />
     <Field label={<span className="text-[12px] font-medium text-mute">Name</span>} className="mt-1 w-[352px] max-w-full text-left">{(control) => <Input {...control} name="name" required maxLength={40} defaultValue={NAMES[0]} autoComplete="off" spellCheck={false} className="h-10 rounded-lg text-[15px] font-medium" />}</Field>
-    {computers.length > 1 && <div className="flex w-[352px] max-w-full flex-col gap-1.5 text-left">
+    {(computers.length > 1 || computers[0]?.server) && <div className="flex w-[352px] max-w-full flex-col gap-1.5 text-left">
       <span className="text-[12px] font-medium text-mute">Where should it run?</span>
       <ComputerPicker computers={computers} value={computer} onPick={setComputer} title="It runs on" className="h-10 w-full rounded-lg" />
       <span className="text-[12px]/[16px] text-mute">{whereNote(computers.find((each) => each.id === computer) ?? computers[0])}</span>
