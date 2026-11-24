@@ -46,7 +46,7 @@ export function FirstRun({ email, link }: { email: string; link?: ReactNode }) {
     setStep(next)
     setResumed(false)
   }
-  if (step?.step === 'mac' && resumed) return <Stage><Step mood="looking" title="Welcome back." line={`You were setting up OpenHut on a Mac. Open it there and sign in as ${email}; this page moves on by itself.`}
+  if (step?.step === 'mac' && resumed) return <Stage><Step mood="looking" title="Welcome back." line={`Open OpenHut on your computer and sign in as ${email}.`}
     action={<Button type="button" variant="secondary" className={BIG} onClick={() => go(null)}>Pick another way</Button>}><Listening /></Step></Stage>
   if (step?.step === 'mac') return <Stage><Step mood="looking" title="Waiting for your computer…" line={`Open OpenHut on your Mac and sign in as ${email}. This page moves on by itself.`}
     link={<><a href="openhut://open" className={cn(buttonVariants({ variant: 'text' }), LINK)}>I already have OpenHut</a><Button type="button" variant="text" className={LINK} onClick={() => go({ step: 'server' })}>Run on my server instead</Button><a href={HELP} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'text' }), LINK)}>Help</a></>}>
@@ -101,7 +101,7 @@ export function Offline({ computer, seen }: { computer: string | null; seen: num
 
 export function PhoneFirstRun({ email, link }: { email: string; link?: ReactNode }) {
   const url = location.origin
-  return <Stage><Step title="Set up on a computer." line="Your agents run on a Mac or a Linux server. Send yourself the link and open it there. After that, this phone can chat with them." link={link}
+  return <Stage><Step title="Set up on a computer." line="Send yourself the link and open it on your computer." link={link}
     action={<div className="flex flex-col items-center gap-2.5">
       <a href={`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Set up OpenHut')}&body=${encodeURIComponent(url)}`} className={cn(buttonVariants({ variant: 'primary' }), BIG)}><I icon={Mail01Icon} size={16} />Email me the link</a>
       <CopyButton text={url} label="Copy link" className={BIG} />

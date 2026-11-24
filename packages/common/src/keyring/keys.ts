@@ -141,7 +141,7 @@ export const keysService = {
   async passkeyBox(prf: Bytes): Promise<Box> {
     const account = keysService.mustBeOn()
     const body = await lock({ key: prf, version: 1, bind: bind({ sub: account.sub, name: 'passkey' }), plain: fromBase64(account.key) })
-    if (!body) throw new HttpError(400, 'Your password manager’s passkey can’t unlock OpenHut. Use Touch ID or your recovery kit.')
+    if (!body) throw new HttpError(400, 'Your password manager can’t unlock OpenHut. Use Touch ID or your recovery kit.')
     return keysService.signBox({ account, name: 'passkey', body: toBase64(body), savedAt: Date.now() })
   },
 
