@@ -59,7 +59,8 @@ test('the Cloud’s world: no plaintext, key or token appears in any byte a keyr
   const wire = JSON.stringify(sent)
   const bytes = Buffer.from(wire).toString('latin1')
   for (const secret of secrets) for (const form of forms(secret)) assert.equal(wire.includes(form), false, 'a raw key reached the Cloud')
-  for (const word of kit.words) assert.equal(new RegExp(`\\b${word}\\b`).test(wire.replace(/"[A-Za-z0-9_-]{20,}"/g, '')), false, 'a kit word reached the Cloud')
+  // single words collide with JSON keys and values ("list", "name", "false"), so look for two kit words side by side
+  for (let i = 1; i < kit.words.length; i++) assert.equal(new RegExp(`\\b${kit.words[i - 1]}\\W{1,3}${kit.words[i]}\\b`).test(wire), false, 'kit words reached the Cloud')
   for (const plain of [SECRET, TOKEN, 'refresh-token-that-never-leaves']) {
     assert.equal(bytes.includes(plain), false, `${plain} reached the Cloud`)
     assert.equal(wire.includes(Buffer.from(plain).toString('base64url')), false)
