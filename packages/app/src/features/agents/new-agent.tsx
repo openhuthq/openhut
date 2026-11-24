@@ -18,7 +18,7 @@ import { ComputerPicker } from '@/features/computers/computer-picker'
 import { useComputerProviders } from '@/features/models/api'
 import { ModelPicker, SOFT_TRIGGER } from '@/features/models/model-picker'
 import { FacePicker } from '@/features/agents/face-picker'
-import { AccessPicker, PeopleField, type AccessValue } from '@/features/agents/access'
+import { AccessPicker, type AccessValue } from '@/features/agents/access'
 import { formValues } from '@/lib/form'
 import { TOUCH, useMedia } from '@/lib/media'
 import { navigate, open, useOpen } from '@/lib/router'
@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils'
 
 const NAMES = ['Juniper', 'Scout', 'Pepper', 'Atlas', 'Maple', 'Biscuit', 'Nova', 'Otto']
 
-const PICKER = cn(SOFT_TRIGGER, 'w-auto min-w-[200px] max-w-full gap-2')
+const PICKER = cn(SOFT_TRIGGER, 'w-[270px] min-w-0 max-w-full gap-2 phone:w-auto phone:flex-1')
 
 export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   return <DialogCard onClose={onClose} className="max-h-[calc(100vh-32px)] w-[480px] p-6">
@@ -96,9 +96,8 @@ function AgentForm() {
           {unready ? <NeedsSignIn model={model} /> : undefined}
         </ModelPicker>
       </Row>
-      {email && <Row title="Access"><AccessPicker team={active.name} value={access} onChange={setAccess} className={PICKER} /></Row>}
+      {email && <Row title="Access"><AccessPicker workspace={active} owner={email} value={access} onChange={setAccess} className={PICKER} /></Row>}
     </div>
-    {email && <PeopleField workspace={active} owner={email} value={access} onChange={setAccess} />}
     <Button type="submit" variant="primary" className="h-10 w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !providers}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
     <ErrorNote message={createAgent.error?.message} />
   </form>
@@ -115,7 +114,7 @@ function NeedsSignIn({ model }: { model: string }) {
 
 function Row({ title, children }: { title: string; children: ReactNode }) {
   return <div className="flex min-h-12 items-center justify-between gap-3 py-2">
-    <span className="text-[13px] font-medium">{title}</span>
+    <span className="w-[72px] shrink-0 text-[13px] font-medium whitespace-nowrap">{title}</span>
     {children}
   </div>
 }

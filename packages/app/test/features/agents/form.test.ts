@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { defaultComputer, firstModel, inUse, looksLikeEmail, searchPeople } from '../../../src/features/agents/form.ts'
+import { defaultComputer, firstModel, inUse, looksLikeEmail, previewOf, searchPeople } from '../../../src/features/agents/form.ts'
 
 const provider = (id: string, connected: boolean, models: string[]) => ({ id, connected, models: models.map((model) => ({ id: model, on: true })) }) as never
 
@@ -29,17 +29,25 @@ test('Models marks the one new agents use: Claude Sonnet first, else the first c
   assert.equal(inUse(undefined), undefined)
 })
 
-test('the Share field: a team of one says so, a search with no match says so, and people already added are not offered again', () => {
+test('Add people lists teammates other than the owner, picked or not, and says when a search finds no one', () => {
   const owner = 'mo@example.com'
-  assert.deepEqual(searchPeople({ members: [owner], owner, added: [], query: '' }), { kind: 'found', emails: [] })
-  assert.deepEqual(searchPeople({ members: [owner], owner, added: [], query: 'sara@example.com' }), { kind: 'none', query: 'sara@example.com' })
-  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com'], owner, added: [], query: ' zzq ' }), { kind: 'none', query: 'zzq' })
-  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com', 'ana@example.com'], owner, added: ['ana@example.com'], query: '' }), { kind: 'found', emails: ['sara@example.com'] })
-  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com', 'ana@example.com'], owner, added: [], query: 'SAR' }), { kind: 'found', emails: ['sara@example.com'] })
+  assert.deepEqual(searchPeople({ members: [owner], owner, query: '' }), { kind: 'found', emails: [] })
+  assert.deepEqual(searchPeople({ members: [owner], owner, query: 'sara@example.com' }), { kind: 'none', query: 'sara@example.com' })
+  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com'], owner, query: ' zzq ' }), { kind: 'none', query: 'zzq' })
+  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com', 'ana@example.com'], owner, query: '' }), { kind: 'found', emails: ['sara@example.com', 'ana@example.com'] })
+  assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com', 'ana@example.com'], owner, query: 'SAR' }), { kind: 'found', emails: ['sara@example.com'] })
 })
 
 test('Share offers Invite only for a typed email', () => {
   assert.equal(looksLikeEmail('sara@example.com'), true)
   assert.equal(looksLikeEmail('sara'), false)
   assert.equal(looksLikeEmail('sara@example'), false)
+})
+
+test('the Access row shows exactly who is picked: your face alone, names up to three, then faces and +N', () => {
+  const owner = 'mo@example.com'
+  assert.deepEqual(previewOf({ owner, people: [] }), { faces: [owner], text: 'Only you', label: 'Only you' })
+  assert.deepEqual(previewOf({ owner, people: ['sara@example.com'] }), { faces: [owner, 'sara@example.com'], text: 'You and Sara', label: 'You and Sara' })
+  assert.deepEqual(previewOf({ owner, people: ['sara@example.com', 'ana@example.com'] }), { faces: [owner, 'sara@example.com', 'ana@example.com'], text: 'You, Sara and Ana', label: 'You, Sara and Ana' })
+  assert.deepEqual(previewOf({ owner, people: ['sara@example.com', 'ana@example.com', 'li@example.com', 'jo@example.com'] }), { faces: [owner, 'sara@example.com', 'ana@example.com'], text: '+2', label: 'You and 4 more' })
 })

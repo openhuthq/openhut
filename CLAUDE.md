@@ -57,6 +57,7 @@ as `edge`, tags); `vendor/` is the pinned Hermes plugin.
   `private/brain/openhut-server.md`), exported functions with more than one parameter take one object, no nested ternaries,
   no `any`, only `HttpError` throws with sentences for messages, tests mirror source paths, logging through evlog.
 - Single quotes, no semicolons, `.ts` imports; Node 22.18+ runs the TypeScript directly.
+- UI follows `DESIGN.md`; run its "Checks before merging UI" before a screen change merges.
 
 ## Private half
 
