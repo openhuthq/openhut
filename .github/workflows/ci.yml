@@ -42,7 +42,7 @@ jobs:
           echo "$changed"
           private=$(echo "$changed" | grep -E '^private$|^\.github/workflows/ci\.yml$' || true)
           # The runtime image smoke (the slow job) runs on a branch only when the image's own inputs changed; every main push runs it,
-          # and `gate` (so beta, the image publish and the Cloud deploy) waits on it there.
+          # and `gate` (so the image publish and the Cloud deploy) waits on it there.
           server=$(echo "$changed" | grep -E '^(install|packages/runtime|packages/common|vendor)/|^scripts/(release|image|image-smoke)\.sh$|^\.github/workflows/runtime-image\.yml$' || true)
           echo "Needs the private checks: ${private:-nothing}"
           echo "Needs the server image: ${server:-nothing}"
@@ -142,52 +142,13 @@ jobs:
     uses: ./.github/workflows/runtime-image.yml
     secrets: inherit
     with:
-      # R9: a main push that will be a beta also pushes the runtime image (tagged by commit) for the beta's install.sh to pin.
-      tags: ${{ github.ref == 'refs/heads/main' && vars.PUBLISH_PACKS == 'true' && github.sha || '' }}
+      # R9: every main push also pushes the runtime image (tagged by commit); Promote (promote.yml) pins it in that commit's install.sh.
+      tags: ${{ github.ref == 'refs/heads/main' && github.sha || '' }}
 
   packs:
-    # The pack build (scripts/pack.ts) and its time, on main only; it joins `gate`'s needs once it should block.
+    # The pack build (scripts/pack.ts) and its time, on main only; Promote signs and publishes this run's `packs` artifact.
     if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/packs.yml
-
-  beta:
-    # R4: every green main push becomes a beta: its packs, signed, logged in Rekor, announced and published as the beta pointer, which
-    # Promote (promote.yml) re-signs as stable. Off until the repo variable PUBLISH_PACKS is 'true': it publishes on every main push.
-    needs: [gate, packs, server]
-    if: github.ref == 'refs/heads/main' && vars.PUBLISH_PACKS == 'true' && needs.gate.result == 'success'
-    environment: release
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-      - uses: actions/download-artifact@v4
-        with:
-          name: packs
-          path: packs
-      - name: Add the server runtime, install.sh pinned to the image just pushed, and openhut.tgz
-        env:
-          IMAGE: ${{ needs.server.outputs.image }}
-          BUILD: ${{ needs.server.outputs.build }}
-        run: |
-          case "$IMAGE" in ghcr.io/openhuthq/runtime@sha256:*) ;; *) echo "::error::The runtime image job gave no image digest ($IMAGE)."; exit 1 ;; esac
-          BASE=https://openhut.dev/install.sh TGZ='https://dl.openhut.dev/packs/@SHA512@' scripts/release.sh
-          grep -qxF "RUNTIME_IMAGE=\"\${RUNTIME_IMAGE:-$IMAGE}\"" dist/install.sh && sh -n dist/install.sh
-          cp dist/install.sh dist/openhut.tgz packs/
-      - name: Sign, log and publish the packs as the beta
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
-        run: |
-          [ -n "$RELEASE_SIGNING_KEY" ] || { echo "::error::The release environment has no RELEASE_SIGNING_KEY."; exit 1; }
-          (umask 077 && printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release.pem")
-          node scripts/release-key.ts sign "$RUNNER_TEMP/release.pem" packs "$(node -p "require('./packages/desktop/package.json').version")" --channel beta --rekor https://rekor.sigstore.dev
-          rm "$RUNNER_TEMP/release.pem"
-          scripts/r2.sh packs packs
-          scripts/r2.sh pointer packs beta
 
   browser:
     # R1: the browser run is part of the gate: a fresh dev stack, the web App, and a browser signed in through the Mac (scripts/web-e2e.sh).

@@ -18,9 +18,9 @@ rm -P "$TMPDIR/release.pem"
 
 ## Promote, halt, roll back (owner)
 
-Packs are the normal release (R4). With the repo variable `PUBLISH_PACKS` set to `true`, every green `main` push signs its packs as a beta, logs and announces it, puts the packs on dl.openhut.dev at `packs/<sha512 hex>` and the pointer at `channels/beta/release.json` (with `.sig` and `.rekor`). **Actions › Promote › Run workflow** (`.github/workflows/promote.yml`) then:
+Packs are the normal release (R4). Every `main` push builds its packs (the CI run's `packs` artifact, kept 7 days) and pushes its runtime image tagged by commit; nothing is published until Promote. There is one channel, stable (the beta channel was removed 2026-11-25; the old `channels/beta/*` files on dl.openhut.dev are left as they are and no longer written). **Actions › Promote › Run workflow** (`.github/workflows/promote.yml`):
 
-- `promote`: re-signs the current beta as `channels/stable/` with a higher sequence. It builds nothing, and every stable device takes it at once, an hour after it's logged.
+- `promote`: takes main's newest green CI run, adds `install.sh` pinned to that run's runtime image and `openhut.tgz`, signs the release.json as stable, logs it in Rekor, puts the packs on dl.openhut.dev at `packs/<sha512 hex>`, announces it at `releases/<sha256>.json` and serves it at `channels/stable/release.json` (with `.sig`, `.rekor` and `install.sh`). Every device takes it at once, after `MIN_AGE_SECONDS` (0 for now). A finished Promote deploys the Cloud (`cloud.yml`).
 - `halt`: re-signs the current stable with `halt: true`. A device holding it as pending drops it on its next poll, without waiting the hour.
 - `rollback` with `to` = an earlier release.json's sha256: re-signs those bytes (N−1's packs) as stable under a higher sequence. Devices go back to them an hour later, with no electron-updater.
 
@@ -28,25 +28,15 @@ Packs are the normal release (R4). With the repo variable `PUBLISH_PACKS` set to
 
 ## A shell release (owner)
 
-Promote (`promote.yml`) is the release: it re-signs main's packs, and the shell updates them in place (M5). A new shell
+Promote (`promote.yml`) is the release: it signs main's packs, and the shell updates them in place (M5). A new shell
 is needed only when the shell itself changes: push a `vX` tag (below) and run the Shell workflow on it, which packages,
 signs, notarizes and publishes the installers.
-
-## Cut a beta
-
-A beta is a release whose version has a prerelease part. Cut it by hand: bump `version` in `packages/desktop/package.json`, `packages/runtime/package.json` and `package-lock.json` to `0.5.0-beta.1` on a branch `release/v0.5.0-beta.1` (never `main`), then
-
-```sh
-git tag v0.5.0-beta.1 && git push origin v0.5.0-beta.1
-```
-
-It builds, is checked and is signed exactly like a stable. The differences: its draft is a GitHub prerelease, so it never becomes GitHub's latest release and openhut.dev's `install.sh` and remote runtimes stay on the stable; and `scripts/r2.sh` writes only `beta.yml`, `beta-mac.yml` and `beta-linux.yml` on dl.openhut.dev, never `latest*.yml` or `latest/`. Only apps with **Settings › Updates › Try new features early** on read the beta feed. A stable release also moves the beta feed, unless the beta there is of a newer version (a 0.4.3 hotfix leaves 0.5.0-beta.2 there). The app never installs an older version, so a beta user who turns the setting off stays on their beta until a newer stable. Bump to the stable `0.5.0` (higher than every `0.5.0-beta.N`) for the release itself.
 
 ## GitHub settings
 
 Set up on 2026-11-22:
 
-- **Environment `release`**: no required reviewers (removed 2026-11-23: the owner is the only one who releases), deployment only from tags `v*` (betas like `v0.5.0-beta.1` match) and from `main`. The desktop workflow's `publish` job, Promote and the CI `beta` job run in it, so only those reach its secrets: `RELEASE_SIGNING_KEY` (above) and `RELEASE_TAG_KEY`, is the private half of the deploy key "Release tags from the Cut a release workflow" (write access; the workflow is gone since R9, the key can still tag); no copy exists anywhere else. To replace it, delete the deploy key, make a new ed25519 key, add it as a deploy key with write access and set it with `gh secret set RELEASE_TAG_KEY --env release`.
+- **Environment `release`**: no required reviewers (removed 2026-11-23: the owner is the only one who releases), deployment only from tags `v*` and from `main`. The desktop workflow's `publish` job and Promote run in it, so only those reach its secrets: `RELEASE_SIGNING_KEY` (above) and `RELEASE_TAG_KEY`, is the private half of the deploy key "Release tags from the Cut a release workflow" (write access; the workflow is gone since R9, the key can still tag); no copy exists anywhere else. To replace it, delete the deploy key, make a new ed25519 key, add it as a deploy key with write access and set it with `gh secret set RELEASE_TAG_KEY --env release`.
 - **Tag ruleset `release tags`** on `refs/tags/v*`: creation, update, deletion and force-push are restricted; the repository Admin role (`actor_id` 5) and deploy keys (`DeployKey`, added 2026-11-22 for Cut a release) bypass. The only deploy key is the one above.
 
 Still the owner's (needs the secret values): move `CSC_LINK`, `CSC_KEY_PASSWORD`, `NOTARY_KEY_P8_BASE64`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID` from repo secrets into the `release` environment (delete the repo copies), then run the `draft` and `build` jobs in it on tags (`environment: ${{ startsWith(github.ref, 'refs/tags/') && 'release' || '' }}`); a manual full build of a branch then can't sign. `CLOUDFLARE_API_TOKEN` stays a repo secret because the site deploy uses it too.
