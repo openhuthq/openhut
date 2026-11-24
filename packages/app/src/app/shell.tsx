@@ -13,7 +13,7 @@ import { nameOf } from '@/features/cloud/api'
 import { inWorkspace } from '@/features/cloud/teams'
 import { useWorkspaces } from '@/features/cloud/workspaces'
 import { HERE } from '@/features/settings/desktop'
-import { Sidebar, SidebarContext, type Contact } from '@/features/agents/sidebar'
+import { ShowSidebar, Sidebar, SidebarContext, type Contact } from '@/features/agents/sidebar'
 import { useThreads } from '@/features/threads/api'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate, Redirect } from '@/lib/router'
@@ -26,8 +26,10 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
   useShareLocalFaces(agents.data)
   const threads = useThreads()
   const { active } = useWorkspaces()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(savedCollapsed)
+  useEffect(() => saveCollapsed(collapsed), [collapsed])
   const phone = useMedia(PHONE)
+  const hidden = collapsed && !phone
   const order = useRef<string[]>([])
   const activeId = route.page === 'agent' ? route.agentId : undefined
   useEffect(() => {
@@ -46,9 +48,9 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
     .sort((a, b) => lastSeen(b) - lastSeen(a))
   const newAgent = () => navigate(activeId ? agentPath({ agentId: activeId, dialog: 'new' }) : '/new')
   order.current = contacts.map(({ agent }) => agent.id)
-  const controls = { collapsed, expand: () => setCollapsed(false), newAgent }
-  return <SidebarContext value={controls}><div className="flex h-dvh overflow-hidden bg-card pt-[env(safe-area-inset-top)] phone:bg-sidebar pb-[env(safe-area-inset-bottom)] text-left">
-    <Sidebar contacts={contacts} activeId={activeId} collapsed={collapsed} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} team={active.members.length > 1 || active.invites.length > 0} />
+  return <SidebarContext value={{ collapsed: hidden }}><div className="relative flex h-dvh overflow-hidden bg-card pt-[env(safe-area-inset-top)] phone:bg-sidebar pb-[env(safe-area-inset-bottom)] text-left">
+    {hidden && <ShowSidebar onExpand={() => setCollapsed(false)} onNew={newAgent} />}
+    <Sidebar contacts={contacts} activeId={activeId} collapsed={hidden} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} team={active.members.length > 1 || active.invites.length > 0} />
     {route.page === 'agent' && (phone
       ? <PhonePage key={route.agentId}><AgentView agentId={route.agentId} dialog={route.dialog} detail={route.detail} /></PhonePage>
       : <AgentView key={route.agentId} agentId={route.agentId} dialog={route.dialog} detail={route.detail} />)}
@@ -81,6 +83,16 @@ function PhoneTop() {
   return <span className="absolute top-3 left-4 hidden items-center gap-1.5 phone:flex">
     <a href="/settings/general" aria-label="Settings" className={cn(ICON_BUTTON, 'float grid size-10 rounded-full bg-card text-ink')}><I icon={Settings02Icon} size={20} /></a>
   </span>
+}
+
+const COLLAPSED_KEY = 'openhut.sidebar.collapsed'
+
+function savedCollapsed() {
+  try { return localStorage.getItem(COLLAPSED_KEY) === '1' } catch { return false }
+}
+
+function saveCollapsed(collapsed: boolean) {
+  try { localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0') } catch { return }
 }
 
 function lastSeen({ agent, thread }: Contact) {

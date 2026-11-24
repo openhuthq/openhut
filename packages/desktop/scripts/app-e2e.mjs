@@ -245,6 +245,22 @@ function freePort() {
   })
 }
 
+async function sidebarFolds(page) {
+  const labelled = (label) => `document.querySelector('button[aria-label=${JSON.stringify(label)}]')`
+  const folded = `document.querySelector('aside')?.inert === true`
+  await until(() => page.eval(`/Make your first agent/.test(document.body.innerText) && Boolean(${labelled('Hide sidebar')})`), 30, 'the first-agent screen')
+  await page.eval(`${labelled('Hide sidebar')}.click()`)
+  await until(() => page.eval(`${folded} && Boolean(${labelled('Show sidebar')})`), 5, 'the sidebar to fold with a Show sidebar button')
+  await shot(page, '00-first-agent-sidebar-folded')
+  await page.eval(`${labelled('Show sidebar')}.click()`)
+  await until(() => page.eval(`!(${folded}) && !${labelled('Show sidebar')}`), 5, 'Show sidebar to bring it back')
+  await page.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: '\\\\', metaKey: true }))`)
+  await until(() => page.eval(folded), 5, 'the shortcut to fold it')
+  await page.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: '\\\\', metaKey: true }))`)
+  await until(() => page.eval(`!(${folded})`), 5, 'the shortcut to bring it back')
+  say('on the first-agent screen the sidebar folds and comes back, by button and by shortcut')
+}
+
 async function firstAgent(page) {
   const clicked = await page.eval(`(() => { const start = [...document.querySelectorAll('button')].find((b) => /Start/.test(b.textContent)); start?.click(); return Boolean(start) })()`)
   if (!clicked) await page.eval('window.openhut.firstRun(true)')
@@ -265,6 +281,7 @@ async function firstAgent(page) {
     return run.done ? run : null
   }, 120, 'the first run to finish').catch((error) => { throw new Error(`${error.message}; first run was at ${JSON.stringify(last?.steps)}`) })
   say('first run finished: the runtime is ready', { steps: setup.steps })
+  await sidebarFolds(page)
   const made = await page.eval("openhutFetch('/api/agents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Juniper' }) }).then(async (r) => ({ status: r.status, body: await r.json() }))")
   if (made.status !== 200) throw new Error(`making the first agent answered ${made.status} ${JSON.stringify(made.body)}`)
   say('made the first agent, as Make your first agent does', { id: made.body.id })
