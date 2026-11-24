@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 
 const version = (process.argv[2] ?? '').replace(/^v/, '')
-if (!/^\d+\.\d+\.\d+(-beta\.\d+)?$/.test(version)) {
-  console.error(`usage: node scripts/set-version.ts <version like 0.6.3 or v0.6.3-beta.1>, got "${process.argv[2] ?? ''}"`)
+if (!/^\d+\.\d+\.\d+$/.test(version)) {
+  console.error(`usage: node scripts/set-version.ts <version like 0.6.3 or v0.6.3>, got "${process.argv[2] ?? ''}"`)
   process.exit(2)
 }
 

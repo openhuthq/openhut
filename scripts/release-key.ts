@@ -8,7 +8,7 @@ const { values: flags, positionals } = parseArgs({
   options: { sequence: { type: 'string' }, channel: { type: 'string' }, 'shell-api': { type: 'string' }, halt: { type: 'boolean' }, rekor: { type: 'string' }, keys: { type: 'string' } },
 })
 const [command, path, dir, given] = positionals
-const usage = 'usage: release-key.ts key <new key file> | sign <key file> <release folder> [version] [--sequence N] [--channel stable|beta] [--shell-api MIN-MAX] [--halt] [--rekor https://rekor.sigstore.dev] [--keys <JSON: current, next, revoked>]\n       | point <key file> <signed release folder> <out folder> [--channel stable|beta] [--sequence N] [--halt] [--rekor https://rekor.sigstore.dev]'
+const usage = 'usage: release-key.ts key <new key file> | sign <key file> <release folder> [version] [--sequence N] [--channel stable] [--shell-api MIN-MAX] [--halt] [--rekor https://rekor.sigstore.dev] [--keys <JSON: current, next, revoked>]\n       | point <key file> <signed release folder> <out folder> [--channel stable] [--sequence N] [--halt] [--rekor https://rekor.sigstore.dev]'
 
 if (command === 'key' && path && !existsSync(path)) {
   const pair = generateKeyPairSync('ed25519')
@@ -32,7 +32,7 @@ if (command === 'key' && path && !existsSync(path)) {
     schema: 2,
     version,
     sequence: Number(flags.sequence ?? Math.floor(Date.now() / 1000)),
-    channel: flags.channel ?? (version.includes('-') ? 'beta' : 'stable'),
+    channel: flags.channel ?? 'stable',
     shellApi: { min, max },
     halt: flags.halt ?? false,
     packs,
@@ -40,13 +40,13 @@ if (command === 'key' && path && !existsSync(path)) {
     // M5 key rotation: a release signed by "next" names the new pinned set, with the old "current" revoked.
     ...(flags.keys ? { keys: JSON.parse(flags.keys) } : {}),
   }
-  if (!Number.isSafeInteger(release.sequence) || !['stable', 'beta'].includes(release.channel) || !(min <= max)) {
+  if (!Number.isSafeInteger(release.sequence) || release.channel !== 'stable' || !(min <= max)) {
     console.error(usage)
     process.exit(2)
   }
   await signAndLog(key, dir, release)
 } else if (command === 'point' && path && dir && given) {
-  // R4: re-sign an already-built, already-signed release as a channel pointer (Promote, halt, or a pointer back to N−1). Builds nothing:
+  // R4: re-sign an already-built, already-signed release as the stable pointer (halt, or a pointer back to N−1). Builds nothing:
   // the packs and files stay exactly those the release names; only channel, sequence and halt change, under a higher sequence.
   const key = createPrivateKey(readFileSync(path))
   const manifest = readFileSync(join(dir, 'release.json'))
@@ -59,8 +59,8 @@ if (command === 'key' && path && !existsSync(path)) {
     console.error(`${dir}/release.json is a halt; point to the release itself (its releases/<sha256>.json from before the halt)`)
     process.exit(1)
   }
-  const release = { ...from, channel: flags.channel ?? from.channel, sequence: Number(flags.sequence ?? Math.floor(Date.now() / 1000)), halt: flags.halt ?? false }
-  if (from.schema !== 2 || !Number.isSafeInteger(release.sequence) || release.sequence <= from.sequence || !['stable', 'beta'].includes(release.channel)) {
+  const release = { ...from, channel: flags.channel ?? 'stable', sequence: Number(flags.sequence ?? Math.floor(Date.now() / 1000)), halt: flags.halt ?? false }
+  if (from.schema !== 2 || !Number.isSafeInteger(release.sequence) || release.sequence <= from.sequence || release.channel !== 'stable') {
     console.error(`${usage}\n(point needs a v2 release.json and a sequence above its ${from.sequence})`)
     process.exit(2)
   }

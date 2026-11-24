@@ -57,22 +57,17 @@ release() {
     [ ! -f "$dir/$file" ] || put "v$v/$file" "$dir/$file" "$FOREVER" text/plain
   done
   [ ! -f "$dir/release.json.rekor" ] || announce "$dir"
-  case $v in
-    *-*) feeds "$v" "$dir" beta; return ;;
-  esac
   for file in OpenHut-arm64.dmg OpenHut-x64.AppImage openhut-x64.deb OpenHut-Setup-x64.exe; do
     put "latest/$file" "$dir/$file" 'public, max-age=300'
   done
-  feeds "$v" "$dir" latest
-  beta=$(curl -fsS "$URL/beta-mac.yml" 2>/dev/null | sed -n 's/^version: //p' || true)
-  if [ "$beta" != "${beta%%-*}" ] && newer "${beta%%-*}" "$v"; then echo "r2: the beta feed stays on $beta"; else feeds "$v" "$dir" beta; fi
+  feeds "$v" "$dir"
 }
 
 feeds() {
-  v=$1 dir=$2 channel=$3
+  v=$1 dir=$2
   for feed in latest.yml latest-mac.yml latest-linux.yml; do
     sed -e "s#^\(  *- url: \)#\1v$v/#" -e "s#^path: #path: v$v/#" "$dir/$feed" > "$dir/$feed.r2"
-    put "$channel${feed#latest}" "$dir/$feed.r2" 'public, max-age=60' text/yaml
+    put "$feed" "$dir/$feed.r2" 'public, max-age=60' text/yaml
   done
 }
 
@@ -83,18 +78,18 @@ announce() {
   for ext in '' .sig .rekor; do put "releases/$sha.json$ext" "$1/release.json$ext" "$FOREVER" application/json; done
 }
 
-# R4: a channel's pointer (a release.json signed for it, or re-signed by Promote) is announced, then served at channels/<channel>/.
-# Packs are content-addressed at packs/<sha512 hex>, so a pointer re-signed by Promote needs no copies.
+# R4: the stable pointer (a release.json Promote signed, or re-signed for halt or rollback) is announced, then served at channels/stable/.
+# Packs are content-addressed at packs/<sha512 hex>, so a re-signed pointer needs no copies.
 pointer() {
   announce "$1"
-  for ext in '' .sig .rekor; do put "channels/$2/release.json$ext" "$1/release.json$ext" 'public, max-age=60' application/json; done
-  # R9: the install.sh this pointer names (a signed file, at packs/<sha512 hex>) is served at channels/<channel>/install.sh;
+  for ext in '' .sig .rekor; do put "channels/stable/release.json$ext" "$1/release.json$ext" 'public, max-age=60' application/json; done
+  # R9: the install.sh this pointer names (a signed file, at packs/<sha512 hex>) is served at channels/stable/install.sh;
   # openhut.dev/install.sh redirects to stable's. Servers' updater checks it against channels/stable/release.json again.
   hex=$(node -p "Buffer.from(JSON.parse(require('fs').readFileSync(process.argv[1])).files['install.sh'] ?? '', 'base64').toString('hex')" "$1/release.json")
   [ -n "$hex" ] || return 0
   curl -fsS -o "$1/install.sh.served" "$URL/packs/$hex"
   [ "$(shasum -a 512 "$1/install.sh.served" | cut -d' ' -f1)" = "$hex" ] || { echo "r2: packs/$hex isn't the install.sh $1/release.json names" >&2; exit 1; }
-  put "channels/$2/install.sh" "$1/install.sh.served" 'public, max-age=60' 'text/plain; charset=utf-8'
+  put "channels/stable/install.sh" "$1/install.sh.served" 'public, max-age=60' 'text/plain; charset=utf-8'
 }
 
 packs() {
@@ -105,15 +100,11 @@ packs() {
   done
 }
 
-newer() {
-  [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" = "$1" ]
-}
-
 case "${1:-}" in
   claude) claude ;;
   check) tmp=$(mktemp) && date > "$tmp" && big check/large-uploads "$tmp" 'no-store' text/plain && echo 'r2: large uploads work' ;;
   release) [ $# -eq 3 ] || { echo 'usage: scripts/r2.sh release <version> <folder with the release files>' >&2; exit 2; }; release "$2" "$3" ;;
-  pointer) [ $# -eq 3 ] || { echo 'usage: scripts/r2.sh pointer <folder with release.json, .sig and .rekor> <stable|beta>' >&2; exit 2; }; pointer "$2" "$3" ;;
+  pointer) [ $# -eq 2 ] || { echo 'usage: scripts/r2.sh pointer <folder with release.json, .sig and .rekor>' >&2; exit 2; }; pointer "$2" ;;
   packs) [ $# -eq 2 ] || { echo 'usage: scripts/r2.sh packs <folder with openhut-*.tgz and .json>' >&2; exit 2; }; packs "$2" ;;
-  *) echo 'usage: scripts/r2.sh claude | check | release <version> <folder> | pointer <folder> <channel> | packs <folder>' >&2; exit 2 ;;
+  *) echo 'usage: scripts/r2.sh claude | check | release <version> <folder> | pointer <folder> | packs <folder>' >&2; exit 2 ;;
 esac

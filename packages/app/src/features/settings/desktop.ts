@@ -5,7 +5,7 @@ import type { Peer } from '@/features/settings/peers'
 
 export type Tailnet = { state: 'running'; tailnet: string; self: { name: string; os: string; ip: string }; peers: Peer[] } | { state: 'missing' } | { state: 'stopped' }
 export type Machine = { chip: string; memory: number; folder: string; size: number }
-export type Prefs = { openAtLogin: boolean; keepAwake: boolean; betaUpdates: boolean }
+export type Prefs = { openAtLogin: boolean; keepAwake: boolean }
 export type FirstRun = { fresh: boolean; done: boolean; failed: boolean; steps: [string, string, 'done' | 'now' | 'next' | 'failed', number?][] }
 const PREFS_KEY = ['prefs']
 const FIRST_RUN_POLL_MS = 500

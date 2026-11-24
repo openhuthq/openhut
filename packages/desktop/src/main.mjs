@@ -17,7 +17,6 @@ import { invitePath } from './invite-link.mjs'
 import { linkPath, signInCallback } from './open-link.mjs'
 import { cosigned, RELEASE_KEY } from './release-key.mjs'
 import { activePack, commit as commitPack, poll as pollPacks, rollback as rollbackPack, SHELL_API } from './packs.mjs'
-import { useChannel } from './update-channel.mjs'
 
 const DEV = !app.isPackaged
 const MAC = process.platform === 'darwin'
@@ -87,7 +86,7 @@ const EDGE_INSTALL_URL = 'https://openhut.dev/edge'
 const INSTALL_URL = process.env.OPENHUT_INSTALL_URL || bakedInstallUrl()
 const JOIN_CODE = /^[\w.~:/?#=&%-]{1,500}$/
 const AUTOSTART = join(app.getPath('appData'), 'autostart/openhut.desktop')
-const DEFAULT_PREFS = { keepAwake: true, betaUpdates: false }
+const DEFAULT_PREFS = { keepAwake: true }
 const CANVAS = '#f4f3f5'
 const WATCH_RETRY_MS = 30_000
 const REFRESH_MS = 500
@@ -395,7 +394,6 @@ function setPrefs(patch) {
     if (name === 'openAtLogin') openAtLogin(on)
     else writeFileSync(PREFS, JSON.stringify({ ...prefs(), [name]: on }))
   }
-  if (!DEV && RELEASE_FEED && known.some(([name]) => name === 'betaUpdates')) checkForUpdate()
   refresh().catch(() => undefined)
   return prefsNow()
 }
@@ -859,24 +857,21 @@ function checkForUpdate() {
   if (updating.ready) return updateState()
   updateCheck = { at: Date.now(), quiet: false }
   setUpdate({ checking: true, error: null })
-  return lookForUpdate().then(updateState, updateState)
+  return updater.autoUpdater.checkForUpdates().then(updateState, updateState)
 }
 
 function checkQuietly() {
   if (updating.ready || updating.available || Date.now() - updateCheck.at < UPDATE_EVERY_MS) return
   updateCheck = { at: Date.now(), quiet: true }
-  lookForUpdate().catch(() => undefined)
-}
-
-function lookForUpdate() {
-  useChannel({ updater: updater.autoUpdater, beta: prefs().betaUpdates })
-  return updater.autoUpdater.checkForUpdates()
+  updater.autoUpdater.checkForUpdates().catch(() => undefined)
 }
 
 function update() {
   const auto = updater.autoUpdater
   const logger = new console.Console(createWriteStream(join(LOGS, 'updates.log'), { flags: 'a' }))
   auto.logger = logger
+  auto.channel = 'latest'
+  auto.allowDowngrade = false
   if (process.env.OPENHUT_UPDATE_FEED) auto.setFeedURL({ provider: 'generic', url: process.env.OPENHUT_UPDATE_FEED })
   if (TEST_HOME) auto.autoRunAppAfterInstall = false
   if (ASKS_PASSWORD) auto.autoInstallOnAppQuit = false
@@ -940,7 +935,7 @@ async function checkPacks() {
   const testKey = TEST_HOME && process.env.OPENHUT_RELEASE_KEY
   try {
     const result = await pollPacks({
-      home: HOME, feed: process.env.OPENHUT_UPDATE_FEED || 'https://dl.openhut.dev/', channel: prefs().betaUpdates ? 'beta' : 'stable',
+      home: HOME, feed: process.env.OPENHUT_UPDATE_FEED || 'https://dl.openhut.dev/', channel: 'stable',
       ...testKey && { keys: { current: testKey, next: process.env.OPENHUT_NEXT_KEY ?? '', revoked: [] } },
       ...TEST_HOME && process.env.OPENHUT_REKOR_KEY && { rekorKey: process.env.OPENHUT_REKOR_KEY },
     })

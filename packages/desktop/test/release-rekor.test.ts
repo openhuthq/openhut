@@ -65,8 +65,8 @@ test('release.json v2 is signed, logged to Rekor and installed once its entry is
     assert.equal(check({ manifest: feed.manifest.replace('"halt": false', '"halt": true') }).ok, false, 'a changed manifest')
     const other = await signed('other', { 'openhut-app.tgz': 'another app pack', 'openhut-app.json': '{}' })
     assert.equal(check({ rekor: other.rekor }).reason, 'the Rekor entry is for another release', 'a real entry for another release')
-    const halted = await signed('halted', { 'openhut-app.tgz': 'the app pack' }, '--halt', '--channel', 'beta')
-    assert.deepEqual([JSON.parse(halted.manifest).halt, JSON.parse(halted.manifest).channel], [true, 'beta'])
+    const halted = await signed('halted', { 'openhut-app.tgz': 'the app pack' }, '--halt')
+    assert.deepEqual([JSON.parse(halted.manifest).halt, JSON.parse(halted.manifest).channel], [true, 'stable'])
   } finally {
     server.close()
   }
