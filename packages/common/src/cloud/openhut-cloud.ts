@@ -105,7 +105,8 @@ function wire({ url, key, store, fetch: send = globalThis.fetch }: { url: Url; k
 
   const sign = async (proof: V1Proof, parts: string[]) => toBase64(await key.sign(proofOf({ proof, parts })))
 
-  async function raw({ name, params, query, body, token }: Omit<Call, 'auth'> & { token?: string }): Promise<Reply> {
+  async function raw(input: Omit<Call, 'auth'> & { token?: string }, retried = false): Promise<Reply> {
+    const { name, params, query, body, token } = input
     const endpoint = ENDPOINTS[name]
     const search = new URLSearchParams(Object.entries(query ?? {}).flatMap(([field, value]) => value === undefined ? [] : [[field, String(value)]])).toString()
     const path = `${pathOf({ name, params })}${search ? `?${search}` : ''}`
@@ -117,6 +118,9 @@ function wire({ url, key, store, fetch: send = globalThis.fetch }: { url: Url; k
     }
     const response = await send(`${base()}${path}`, { method: endpoint.method, headers, body: payload || undefined, signal: AbortSignal.timeout(TIMEOUT_MS) }).catch(() => null)
     if (!response) return { status: 0, json: null }
+    // A Cloud deploy's handover answers 503 with Retry-After: 1; wait and send it once more.
+    const wait = Number(response.headers.get('retry-after'))
+    if (response.status === 503 && !retried && wait > 0 && wait <= 5) return new Promise(done => setTimeout(() => done(raw(input, true)), wait * 1000))
     return { status: response.status, json: await response.json().catch(() => null) }
   }
 
