@@ -39,9 +39,7 @@ export function PeopleField({ workspace, owner, value, onChange, disabled }: { w
   const invite = <Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/people?open=invite')}>Invite</Button>
   const add = (email: string) => { onChange({ ...value, [field]: [...added, email] }); setQuery('') }
   return <div className="flex w-full flex-col gap-1.5 text-left">
-    {found.kind === 'alone'
-      ? <EmptyState inline line="Only you so far. Invite a teammate to share this agent." action={invite} className="px-0" />
-      : <Input value={query} disabled={disabled} onChange={(event) => setQuery(event.currentTarget.value)} aria-label={value.shared ? 'Add to sidebars of' : 'Share with'} placeholder={value.shared ? 'Add to sidebars of…' : 'Share with…'} autoComplete="off" spellCheck={false}
+    {found.kind !== 'alone' && <Input value={query} disabled={disabled} onChange={(event) => setQuery(event.currentTarget.value)} aria-label={value.shared ? 'Add to sidebars of' : 'Share with'} placeholder={value.shared ? 'Add to sidebars of…' : 'Share with…'} autoComplete="off" spellCheck={false}
         onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); if (found.kind === 'found' && found.emails[0] && query.trim()) add(found.emails[0]) } }} className="h-9 rounded-lg text-[13px]" />}
     {found.kind === 'none' && <EmptyState inline line={`No one on your team matches “${found.query}”. Invite them by email?`} action={invite} className="px-0" />}
     {found.kind === 'found' && query.trim() && <div role="listbox" aria-label="Teammates" className="flex flex-col rounded-lg border border-hair p-1">
