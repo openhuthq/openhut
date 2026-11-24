@@ -246,8 +246,9 @@ export const cloudService = {
       }
       const me = Me.safeParse((await keysService.call({ method: 'GET', path: '/v1/me' })).json).data
       if (!me?.home) throw new HttpError(502, 'OpenHut Cloud didn’t send your home team. Try again.')
-      const account = await keysService.open({ ...who, home: me.home })
-      if (!await openRoom({ account })) {
+      const home = me.home
+      const opened = await serial(async () => openRoom({ account: await keysService.open({ ...who, home }) }))
+      if (!opened) {
         await keysService.relock(who)
         return page(SIGNED_IN)
       }
