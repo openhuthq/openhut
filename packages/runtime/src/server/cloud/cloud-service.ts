@@ -142,6 +142,7 @@ export const cloudService = {
     if (mine && !asked.server) {
       const list = await keysService.addDevice({ device, name: asked.name, runtime: false })
       if (list) await putList({ workspace, list })
+      if (asked.os === 'web') return cloudService.status()
       const sent = await keysService.call({ method: 'POST', path: '/v1/letters', body: { workspace, ...await keysService.accountLetter(device) } })
       if (sent.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t let that computer in. Try again.')
       return cloudService.status()
