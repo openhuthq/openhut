@@ -1,13 +1,14 @@
-import { LaptopIcon, PlusSignIcon, ServerStack01Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { PlusSignIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Choice, I, MenuCard } from '@/components/kit'
+import { deviceIcon } from '@/components/custom/device'
 import { runsOnNote } from '@/features/computers/api'
 import { SOFT_TRIGGER } from '@/features/models/model-picker'
 import type { Computer } from '@/lib/openhut'
 import { cn } from '@/lib/utils'
 
 export function iconOf(computer: Computer) {
-  return computer.kind === 'server' || computer.server ? ServerStack01Icon : LaptopIcon
+  return deviceIcon(computer)
 }
 
 export function ComputerPicker({ computers, value, onPick, onAdd, title, className }: { computers: Computer[]; value: string; onPick: (id: string) => void; onAdd?: () => void; title: string; className?: string }) {

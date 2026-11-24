@@ -227,6 +227,11 @@ test('approving my own server lists it as a runtime and hands it the own and vau
   assert.deepEqual([shared.own, shared.vault, shared.key], [undefined, undefined, account.workspace.key])
   const body = bodyOf(theirs.list)
   assert.deepEqual([body?.added?.[key(saraMac)], body?.names?.[key(saraMac)]], [body?.at, 'Sara’s Mac'])
+  assert.ok(!body?.runtimes?.includes(key(saraMac)), 'a teammate’s Mac is not a server')
+  assert.ok(await roomKeys.advance({ lists: [theirs.list] }))
+  const saraServer = await identity()
+  const box = await keyring.approve({ team: account.workspace.id, email: 'sara@example.com', device: key(saraServer), name: 'hermes-agents', server: true })
+  assert.ok(bodyOf(box.list)?.runtimes?.includes(key(saraServer)), 'a server that knocked as a server is on the runtimes, so it shows as a server')
 })
 
 test('lock and unlock use the team key; an unknown team locks nothing, and words locked before a rotation still open after it', async () => {

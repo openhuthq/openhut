@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { Globe02Icon, ServerStack01Icon, SquareLock02Icon, UserGroupIcon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, LaptopIcon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { Globe02Icon, SquareLock02Icon, UserGroupIcon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { deviceIcon } from '@/components/custom/device'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogClose, DialogTitle } from '@/components/ui/dialog'
@@ -171,11 +172,11 @@ function RunsOn({ agent }: { agent: Agent }) {
   const note = noteOf(agent)
   return <>
     <DropdownMenu>
-      <DropdownMenuTrigger className={cn(ROW, 'h-auto min-h-8 py-1.5 whitespace-normal')} disabled={!!move.going}><I icon={agent.runsOnServer || (agent.runsHere && computers?.[0]?.server) ? ServerStack01Icon : LaptopIcon} size={15} className="shrink-0 text-mute" /><span className="shrink-0">Runs on</span><span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="text-right [overflow-wrap:anywhere]">{agent.runsHere ? nameOf({ computers, id }) : elsewhereOf(agent)}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
+      <DropdownMenuTrigger className={cn(ROW, 'h-auto min-h-8 py-1.5 whitespace-normal')} disabled={!!move.going}><I icon={deviceIcon({ kind: agent.runsOnServer || (agent.runsHere && computers?.[0]?.server) ? 'server' : 'mac' })} size={15} className="shrink-0 text-mute" /><span className="shrink-0">Runs on</span><span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="text-right [overflow-wrap:anywhere]">{agent.runsHere ? nameOf({ computers, id }) : elsewhereOf(agent)}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
       <MenuCard title={`${agent.name} runs on`}>
-        {!agent.runsHere && <Choice icon={<I icon={LaptopIcon} size={15} />} name={elsewhereOf(agent)} selected disabled />}
+        {!agent.runsHere && <Choice icon={<I icon={deviceIcon({ kind: agent.runsOnServer ? 'server' : 'mac' })} size={15} />} name={elsewhereOf(agent)} selected disabled />}
         {(computers ?? []).map((computer) => !agent.runsHere && computer.id === id
-          ? agent.canManage && <Choice key={computer.id} icon={<I icon={LaptopIcon} size={15} />} name="Run it here" disabled={!agent.canEdit || update.isPending} onClick={() => update.mutate({ runsHere: true }, { onError: toastError })} />
+          ? agent.canManage && <Choice key={computer.id} icon={<I icon={deviceIcon({ kind: 'mac', server: computers?.[0]?.server })} size={15} />} name="Run it here" disabled={!agent.canEdit || update.isPending} onClick={() => update.mutate({ runsHere: true }, { onError: toastError })} />
           : <Choice key={computer.id} icon={<I icon={iconOf(computer)} size={15} />} name={computer.id === id ? computer.name : `Move to ${computer.name}`}
           note={runsOnNote(computer)}
           selected={computer.id === id} disabled={computer.id === id || !computer.online || !agent.canEdit || !agent.canManage} onClick={() => move.go(computer.id)} />)}

@@ -1,3 +1,4 @@
+import { BrowserIcon, LaptopIcon, ServerStack01Icon, SmartPhone01Icon } from '@hugeicons/core-free-icons'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 
 export type Features = { whatsapp: boolean; browser: boolean }
@@ -19,4 +20,12 @@ export function computersOf({ here, devices, shell = true }: { here: Computer; d
     const server = device.kind === 'server'
     return { id: device.key, name: device.name ?? (server ? 'Server' : 'Your other computer'), kind: server ? 'server' : 'desktop', url: '', online: device.online, features: server ? ANYWHERE : UNKNOWN, appTooOld: false, runtimeTooOld: false }
   })]
+}
+
+export const DEVICE_ICONS = { mac: LaptopIcon, iphone: SmartPhone01Icon, server: ServerStack01Icon, browser: BrowserIcon }
+export const DEVICE_HUE = 'text-hue-blue'
+
+export function deviceIcon({ kind, server }: { kind: string; server?: boolean }) {
+  if (server || kind === 'server') return DEVICE_ICONS.server
+  return kind === 'browser' || kind === 'iphone' ? DEVICE_ICONS[kind] : DEVICE_ICONS.mac
 }

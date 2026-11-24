@@ -152,7 +152,7 @@ export const cloudService = {
       if (sent.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t let that computer in. Try again.')
       return cloudService.status()
     }
-    const approved = await keyring.approve({ team: workspace, email: asked.email, device, name: asked.name })
+    const approved = await keyring.approve({ team: workspace, email: asked.email, device, name: asked.name, server: asked.server })
     await putList({ workspace, list: approved.list, letters: asked.os === 'web' ? [] : [approved.letter] })
     await cloudEvents.refreshRequests(workspace)
     return cloudService.status()

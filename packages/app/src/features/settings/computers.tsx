@@ -1,13 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { LaptopIcon, Tick02Icon, PlusSignIcon, ServerStack01Icon } from '@hugeicons/core-free-icons'
+import { Tick02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import * as z from 'zod/mini'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import type { Cloud, CloudWorkspaceView, DeviceRequest } from '@openhut/common/cloud/cloud.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { CopyButton } from '@/components/copy-button'
 import { ConfirmButton } from '@/components/confirm-button'
-import { DeviceIcon, DeviceMeta } from '@/components/custom/device'
+import { DEVICE_HUE, DEVICE_ICONS, DeviceIcon, DeviceMeta } from '@/components/custom/device'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { ErrorNote } from '@/components/error-note'
@@ -125,9 +125,9 @@ export function ComputerMark({ computer }: { computer: Computer }) {
   return <Mark icon={iconOf(computer)} dot={computer.online ? 'bg-pass' : 'bg-mute-2'} />
 }
 
-function Mark({ icon, dot }: { icon: typeof LaptopIcon; dot?: string }) {
+function Mark({ icon, dot }: { icon: typeof DEVICE_ICONS.mac; dot?: string }) {
   return <span className="relative inline-grid place-items-center">
-    <I icon={icon} size={20} className="text-hue-blue" />
+    <I icon={icon} size={20} className={DEVICE_HUE} />
     {dot && <i className={cn('absolute -right-1 -bottom-0.5 size-2.5 rounded-full border-2 border-card', dot)} />}
   </span>
 }
@@ -185,7 +185,7 @@ function EnrollRow({ enrollment }: { enrollment: Enrollment }) {
   const failed = enrollment.status === 'failed'
   const now = useNow(!failed)
   const note = failed ? failureOf({ error: enrollment.error, url: enrollment.url, name: enrollment.peer.name }).sentence : `${phaseOf(enrollment.lines)} ${percentOf({ lines: enrollment.lines, waitingAt: enrollment.waitingAt, now })}%`
-  return <Row onClick={() => open(`adding:${enrollment.peer.name}`)} icon={<Mark icon={ServerStack01Icon} dot={failed ? 'bg-fail' : undefined} />} title={enrollment.peer.name} note={note}>
+  return <Row onClick={() => open(`adding:${enrollment.peer.name}`)} icon={<Mark icon={DEVICE_ICONS.server} dot={failed ? 'bg-fail' : undefined} />} title={enrollment.peer.name} note={note}>
     {failed ? <Chevron /> : <Spinner className="mt-0" />}
   </Row>
 }
@@ -222,7 +222,7 @@ function Peers({ peers, tailnet, recheck, checking, onAdd }: { peers: Peer[]; ta
     <Rows>{shown.map((peer) => {
       const ready = stateOf(peer) === 'ready'
       const note = ['Linux', peer.ip, !ready && 'Tailscale SSH is off'].filter(Boolean).join(' · ')
-      const icon = <I icon={ServerStack01Icon} size={20} className={ready ? 'text-hue-blue' : 'text-mute'} />
+      const icon = <I icon={DEVICE_ICONS.server} size={20} className={ready ? DEVICE_HUE : 'text-mute'} />
       return <Row key={peer.dns} icon={icon} title={peer.name} note={note}>
         {known(peer.name) && <Button type="button" variant="ghost" className={PILL} disabled><I icon={Tick02Icon} size={14} className="text-pass" />Added</Button>}
         {!known(peer.name) && enrolling.has(peer.dns) && <Button type="button" variant="ghost" className={PILL} onClick={() => open(`adding:${peer.name}`)}>Adding…</Button>}
