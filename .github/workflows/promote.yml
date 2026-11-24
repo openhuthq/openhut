@@ -51,7 +51,7 @@ jobs:
         with:
           ref: ${{ steps.green.outputs.sha || github.sha }}
           # release.sh numbers the build by counting commits, as the runtime image job did.
-          fetch-depth: ${{ inputs.action == 'promote' && 0 || 1 }}
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 24
