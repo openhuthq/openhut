@@ -6,7 +6,7 @@ import { createServer as tcpServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
-import { bootCloud, devCloudUrl, signIn } from './dev-cloud.mjs'
+import { bootCloud, bootWorker, devCloudUrl, signIn } from './dev-cloud.mjs'
 
 const { values: args } = parseArgs({ options: { installer: { type: 'string' }, app: { type: 'string' }, dev: { type: 'boolean', default: false }, out: { type: 'string', default: 'app-e2e' }, agents: { type: 'string', default: '5' }, cloud: { type: 'string' } } })
 if (!args.installer && !args.app && !args.dev) {
@@ -23,7 +23,8 @@ const cdpPort = 9300 + Math.floor(Math.random() * 500)
 const guestPort = cdpPort + 500
 const INVITEE = 'sara@example.com'
 const API = devCloudUrl()
-const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test', OPENHUT_UPDATE_FEED: 'http://127.0.0.1:9/', ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: API } }
+const CLOUD = devCloudUrl().replace(/\d+$/, (port) => String(Number(port) + 500))
+const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test', OPENHUT_UPDATE_FEED: 'http://127.0.0.1:9/', ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: CLOUD } }
 const evidence = { platform: `${process.platform} ${osVersion()}`, steps: [], waits: [] }
 mkdirSync(args.out, { recursive: true })
 const say = (step, detail = {}) => {
@@ -34,11 +35,17 @@ const say = (step, detail = {}) => {
 let child
 let guest
 let api
+let worker
 const site = createServer((req, res) => res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><title>OpenHut e2e page</title><h1>OpenHut e2e page</h1>')).listen(0, '127.0.0.1')
 try {
   if (args.cloud) {
-    api = await bootCloud({ dir: args.cloud, api: API, log: join(home, 'logs', 'cloud-api.log') })
-    say('the dev cloud API is up', { url: API })
+    const booted = await Promise.all([
+      bootCloud({ dir: args.cloud, api: API, log: join(home, 'logs', 'cloud-api.log') }),
+      bootWorker({ dir: resolve(args.cloud, '../cloud'), url: CLOUD, state: resolve(args.out, 'worker-state'), log: join(home, 'logs', 'cloud-worker.log') }),
+    ])
+    api = booted[0]
+    worker = booted[1]
+    say('the dev cloud API and Worker (relay) are up', { api: API, cloud: CLOUD })
   }
   if (args.installer) {
     const programs = join(process.env.LOCALAPPDATA, 'Programs')
@@ -88,7 +95,7 @@ try {
   await page.eval(`navigation.navigate('/agents/${agent.id}')`)
   await sleep(3000)
   await shot(page, '03-after-restart')
-  if (args.cloud) await invite(page)
+  if (args.cloud) await invite(page, agent)
   await quit(child)
   await sleep(3000)
   const gone = leftovers()
@@ -104,12 +111,16 @@ try {
 } finally {
   for (const each of [guest, child]) if (each && each.exitCode === null) await quit(each).catch(() => each.kill())
   api?.kill()
+  worker?.kill()
   site.close()
   writeFileSync(join(args.out, 'evidence.json'), JSON.stringify(evidence, null, 2))
   console.log(`app-e2e: ${evidence.pass ? 'PASS' : 'FAIL'}; evidence in ${args.out}`)
 }
 
-async function invite(mo) {
+async function invite(mo, agent) {
+  const sharing = await mo.eval(`fetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shared: true }) }).then(async (r) => ({ status: r.status, body: await r.json() }))`)
+  if (sharing.status !== 200 || !sharing.body.shared) throw new Error(`sharing ${agent.name} with the team answered ${sharing.status} ${JSON.stringify(sharing.body)}`)
+  say(`Mo shared ${agent.name} with the team`)
   const team = (await get(mo, '/api/cloud'))?.workspaces?.find((each) => each.home)
   if (!team) throw new Error(`Mo's app has no home team to invite to: ${JSON.stringify(await get(mo, '/api/cloud'))}`)
   const made = await post(mo, '/api/invitations/cloud', { workspace: team.id, email: INVITEE, role: 'member' })
@@ -142,6 +153,10 @@ async function invite(mo) {
   say('Mo\'s running app let the invitee in on its own: the invitee holds the team key', { team: joined.name, members: joined.members.map((each) => each.email) })
   const seen = await until(async () => (await get(mo, '/api/cloud'))?.workspaces?.find((each) => each.id === team.id && each.members.some((member) => member.email === INVITEE)), 60, `Mo's app to list ${INVITEE} as a member`)
   say(`Mo's app lists ${INVITEE} in the team`, { members: seen.members.map((each) => each.email), invites: seen.invites.map((each) => each.email) })
+  const shared = await until(async () => (await get(page, '/api/agents'))?.data?.find((each) => each.id === agent.id), 120, `the invitee's app to list Mo's shared ${agent.name}`)
+  say(`the invitee's app lists Mo's shared ${agent.name}`, { owner: shared.ownerName, canEdit: shared.canEdit })
+  await chat(page, shared, `hello from ${INVITEE}`)
+  await page.eval(`navigation.navigate('/agents/${agent.id}')`)
   await shot(page, '08-invitee-in')
   await quit(guest)
   say('quit the invitee\'s app')
