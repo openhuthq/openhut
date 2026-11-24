@@ -1,7 +1,7 @@
 #!/bin/sh
 set -u
 [ "$(uname)" = Darwin ] && [ -z "${E2E_AWAKE:-}" ] && E2E_AWAKE=1 exec caffeinate -is "$0" "$@"
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../.." && ROOT=$PWD
 R=packages/e2e/results
 HOST_IMAGE=$(sed -n 's/^ARG DIND=//p' install/Dockerfile)
 fail() { echo "e2e: $*"; exit 1; }
@@ -11,7 +11,15 @@ redact() { sed -E 's/(code=)[0-9a-f]+/\1<redacted>/'; }
 in_host() { docker exec openhut-host "$@"; }
 run_phase() { docker exec -e OPENHUT_E2E_KEY="$KEY" openhut-host node --test-force-exit --test-reporter=spec /opt/openhut/packages/e2e/src/e2e.ts "$1"; }
 tree_sha() { { git rev-parse HEAD; git diff HEAD --binary; git ls-files -o --exclude-standard -z | xargs -0 shasum -a 256; } | shasum -a 256 | cut -d' ' -f1; }
-stop_cloud() { [ -z "${CLOUD:-}" ] || kill -INT "$CLOUD" 2>/dev/null; CLOUD=; }
+stop_cloud() { [ -z "${CLOUD:-}" ] || kill -INT "$CLOUD" 2>/dev/null; CLOUD=; [ -z "${API:-}" ] || kill "$API" 2>/dev/null; API=; }
+sign_in() {
+  as_app() { in_host curl -fsS -H "authorization: Bearer $KEY" -H 'content-type: application/json' "$@"; }
+  url=$(as_app -X POST http://127.0.0.1:8787/api/cloud/sessions -d '{}' | sed -n 's/.*"authorizationUrl":"\([^"]*\)".*/\1/p')
+  link=$(curl -fsS "$url" | grep -o 'href="[^"]*">mo@example.com<' | sed 's/^href="//; s/">mo@example.com<$//; s/&amp;/\&/g')
+  back=$(curl -s -o /dev/null -D - "$link" | sed -n 's/^[Ll]ocation: //p' | tr -d '\r')
+  [ -n "$back" ] && in_host curl -fsS -o /dev/null "$back" || return 1
+  i=0; until as_app http://127.0.0.1:8787/api/cloud | grep -q '"status":"on"'; do i=$((i+1)); [ $i -gt 40 ] && return 1; sleep 3; done
+}
 stop_mirror() { [ -z "${MIRROR:-}" ] && return; kill -INT "$MIRROR" 2>/dev/null; i=0; while curl -fs -o /dev/null http://127.0.0.1:8099/ && [ $i -lt 50 ]; do i=$((i+1)); sleep 0.2; done; MIRROR=; }
 mirror() {
   stop_mirror
@@ -35,6 +43,10 @@ curl -fs -o /dev/null http://127.0.0.1:8790/ && fail ":8790 already answers; sto
   --var AUTH_URL:http://127.0.0.1:8790 --show-interactive-dev-session=false --log-level warn) >>"$R/cloud.log" 2>&1 &
 CLOUD=$!
 i=0; until curl -s -o /dev/null http://127.0.0.1:8790/; do i=$((i+1)); [ $i -gt 150 ] && fail "cloud on :8790"; sleep 0.2; done
+curl -fs -o /dev/null http://127.0.0.1:8792/health && fail ":8792 already answers; stop the cloud API an earlier run left behind"
+(cd private/api && HOST=0.0.0.0 PORT=8792 API_URL=http://127.0.0.1:8792 DEV_SIGN_IN=1 DATABASE_URL= OPENHUT_API_DATA="$ROOT/$R/api-state" exec node src/server.ts) >>"$R/api.log" 2>&1 &
+API=$!
+i=0; until curl -fs -o /dev/null http://127.0.0.1:8792/health; do i=$((i+1)); [ $i -gt 150 ] && fail "cloud API on :8792"; sleep 0.2; done
 
 docker rm -f openhut-host openhut-lan >/dev/null 2>&1
 docker run --rm --privileged -v openhut-docker:/var/lib/docker --entrypoint sh "$HOST_IMAGE" -c '
@@ -59,15 +71,17 @@ docker network connect --ip 10.99.0.2 fm-lan10 openhut-host && docker network co
 in_host timeout 300 apk add -q curl || fail "curl"
 
 echo "--- install: curl -fsSL http://host.docker.internal:8099 | OPENHUT_MODEL=test OPENHUT_CLIENT_KEY_SHA256=<the app key's hash> sh"
-in_host sh -c "curl -fsSL http://host.docker.internal:8099 | OPENHUT_MODEL=test OPENHUT_CLOUD_URL=http://host.docker.internal:8790 OPENHUT_CLIENT_KEY_SHA256=$KEY_SHA256 sh" 2>&1 | redact | tee "$R/install.log"
+in_host sh -c "curl -fsSL http://host.docker.internal:8099 | OPENHUT_MODEL=test OPENHUT_CLOUD_URL=http://host.docker.internal:8790 OPENHUT_API_URL=http://host.docker.internal:8792 OPENHUT_CLIENT_KEY_SHA256=$KEY_SHA256 sh" 2>&1 | redact | tee "$R/install.log"
 grep -q "OpenHut is running" "$R/install.log" || fail "install"
 copy_test() { in_host mkdir -p /opt/openhut/packages/e2e/src && docker cp packages/e2e/src/e2e.ts openhut-host:/opt/openhut/packages/e2e/src/e2e.ts >/dev/null &&
   in_host chown -R root:root /opt/openhut/packages/e2e; }
 copy_test || fail "copy test"
+echo "--- sign in: the server signs in to the dev cloud as mo@example.com, as the app does first"
+sign_in || fail "the server didn't sign in to the dev cloud (see $R/api.log)"
 
 run_phase main; main=$?
 
-echo "--- cloud: runtimes on this Mac sign in to the local room, add the server as a runtime device, share a connection key, back up, restore with the kit, invite, join, remove and restart"
+echo "--- cloud: the server saves a recovery kit; runtimes on this computer sign in as the same person and open with it, share a connection, chat with a file, restore, invite, join, remove and restart"
 RESULTS="$R" OPENHUT_E2E_KEY="$KEY" REMOTE_CONTAINER=openhut-host node --test --test-force-exit --test-reporter=spec packages/e2e/src/cloud.ts; cloud=$?
 
 echo "--- re-add: the app adds this computer again with a new key; the same build pairs instead of reinstalling, then the first key is added back"
