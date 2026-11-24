@@ -80,7 +80,7 @@ Open the PR with the first push, and leave one background `gh run watch <id> --e
 when CI ends (no polling loops: the account's API limit is 5000/h, shared by every agent). After one review round
 with no open blocker, run `gh pr merge --auto --merge`; it merges when the required `gate` check passes. The owner's
 "merge without asking" (2026-11-13) still stands. The main ruleset has no bypass, so a red gate means fixing it,
-never forcing it. Every main commit gets its own full Desktop app run; Deploy then ships main's newest green commit (openhut.dev, the edge image, the cloud).
+never forcing it. Every main commit gets its own full CI run (`ci.yml`, Linux only: typecheck, tests, private, server smoke); Deploy then ships main's newest green commit (openhut.dev, the edge image, the cloud).
 Reviewer loop and flaky tests: `private/brain/openhut-deploy.md` (CI).
 
 ## Web first, Electron last
@@ -106,8 +106,8 @@ Which loop proves which change:
 - Screens, copy, forms, API, agents, cloud: `npm run dev` and a look in Chrome at the Vite URL, plus `npm run check`.
   This is the default, and it's proof enough for review.
 - `main.mjs`, `preload.cjs`, anything behind `window.openhut`: `npm run app`, then `npm run e2e:app`.
-- Packaging, signing, installers, OS-specific behavior: the PR's Desktop app run. CI is the merge gate, never the loop:
-  don't wait on it to see a change working.
+- Packaging, signing, installers, OS-specific behavior: a manual Shell run on the branch (`gh workflow run shell.yml --ref <branch>`).
+  It also runs by itself when a main push changes the shell. CI never packages, and it is the merge gate, never the loop: don't wait on it to see a change working.
 
 The dashboard reaches the desktop app only through `packages/desktop/src/renderer/src/lib/desktop.ts` (`desktop` is
 `undefined` in a browser, and every caller handles that); a test keeps it the only place. Prefer moving work out of
@@ -138,7 +138,7 @@ Every dev run of the app (`npm run app`, `OPENHUT_TEST_HOME`, or `npm -w @openhu
 `packages/desktop/dist/backend` with the Hermes runtime (no `.pyc`), Node (Mac and Windows; Linux runs Node with Electron) and agent-browser for the build's platform; Claude Code downloads on the first Claude sign-in (`scripts/pack-hermes.mjs`, pinned in `install/native-runtime.json`; nothing downloads on first run) (`scripts/pack-backend.mjs`), and runs electron-builder (`electron-builder.yml`): an arm64,
 macOS 14+ `release/mac-arm64/OpenHut.app`, `release/OpenHut-arm64.dmg` and the versioned zip. It signs with the Developer ID
 in the login keychain (hardened runtime, `build/entitlements.mac.plist`) and never notarizes (`notarize: false`): only the
-release workflow (`.github/workflows/desktop.yml`, `scripts/notarize.sh`) notarizes, staples and checks a build. The packaged app runs the real model unless `OPENHUT_MODEL` is set.
+release workflow (`.github/workflows/shell.yml`, `scripts/notarize.sh`) notarizes, staples and checks a build. The packaged app runs the real model unless `OPENHUT_MODEL` is set.
 Icon sources: `build/icon.svg`, `build/background.svg`. Gotchas: `private/brain/openhut-gotchas.md` (Mac app, Linux app).
 
 On x86_64 Linux, `npm -w @openhut/desktop run dist:linux` builds `release/OpenHut-x64.AppImage` and `release/openhut-x64.deb`;
@@ -150,5 +150,5 @@ the Linux app runs agents natively like the Mac app, with no Docker (`private/br
 runs the whole server path on Docker Desktop (about 25 minutes): the install, every check, a tampered upgrade, the upgrade,
 a restart. Plan: `docs/verification-plan.md`. `npm run e2e:app` builds the renderer and backend and runs the app e2e
 (`app-e2e.mjs --dev`) against the unpackaged app and a local dev cloud, on this Mac only. Its first run needs a click on
-the Keychain prompt (`private/brain/openhut-gotchas.md`). Packaged-app proof on every OS is the PR's Desktop app run: its
+the Keychain prompt (`private/brain/openhut-gotchas.md`). Packaged-app proof on every OS is a Shell run (`shell.yml`, dispatch only): its
 `*-e2e` artifacts hold the screenshots and `evidence.json`.
