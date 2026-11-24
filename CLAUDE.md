@@ -80,7 +80,7 @@ Open the PR with the first push, and leave one background `gh run watch <id> --e
 when CI ends (no polling loops: the account's API limit is 5000/h, shared by every agent). After one review round
 with no open blocker, run `gh pr merge --auto --merge`; it merges when the required `gate` check passes. The owner's
 "merge without asking" (2026-11-13) still stands. The main ruleset has no bypass, so a red gate means fixing it,
-never forcing it. A merge deploys openhut.dev, the edge image and the cloud once main's own Desktop app run is green.
+never forcing it. Every main commit gets its own full Desktop app run; Deploy then ships main's newest green commit (openhut.dev, the edge image, the cloud).
 Reviewer loop and flaky tests: `private/brain/openhut-deploy.md` (CI).
 
 ## Local dev
