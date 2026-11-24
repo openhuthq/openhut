@@ -27,7 +27,7 @@ import { KeysToReplace } from '@/features/cloud/cloud'
 import { LOST_POINTS, REMOVE_DETAIL, REMOVE_POINTS, useCloud, useRemoveMac } from '@/features/cloud/api'
 import { useApprove, useDeny } from '@/features/cloud/workspaces'
 import { request } from '@/lib/api-client'
-import { ago, shortDateTime } from '@/lib/format'
+import { ago, shortDate } from '@/lib/format'
 import { isPhone, useConfirmed } from '@/lib/native'
 import { APP_VERSION, type Computer, type TailnetPeer } from '@/lib/openhut'
 import { open, useOpen } from '@/lib/router'
@@ -102,11 +102,7 @@ function noteOf({ computer, admin, count, device }: { computer: Computer; admin:
   const failed = admin?.server.update?.status === 'failed' ? admin.server.update : null
   if (failed) return `Couldn't update to ${failed.to}. ${sentence(failed.reason ?? 'The update stopped before it finished.')}`
   const server = device?.kind === 'server'
-  return [isPhone() ? 'Your computer' : desktop ? 'This computer' : server ? 'Linux server · connected now' : 'Connected now', !server && 'Agents have your access', agentCount(count), admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')
-}
-
-function addedOf(device: Device | undefined) {
-  return device?.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))}` : undefined
+  return [isPhone() ? 'Your computer' : desktop ? 'This computer' : server ? 'Linux server · connected now' : 'Connected now', !server && 'Agents have your access', agentCount(count), admin && `OpenHut ${admin.server.version}`].filter(Boolean).join(' · ')
 }
 
 function sentence(text: string) {
@@ -137,13 +133,13 @@ function DeviceRow({ device, twin, admin, current }: { device: Device; twin: boo
   const server = device.kind === 'server'
   const base = device.name ?? (server ? 'Computer that runs agents' : 'Computer')
   const name = twin ? `${base} (${tunnelKeyOf(device.key).slice(0, 4)})` : base
-  const detail = device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))} · ${REMOVE_DETAIL}` : REMOVE_DETAIL
+  const detail = device.addedAt ? `Added ${shortDate.format(new Date(device.addedAt))} · ${REMOVE_DETAIL}` : REMOVE_DETAIL
   const browser = isBrowser(device)
-  return <Row icon={<DeviceIcon kind={browser ? 'browser' : device.kind} />} title={name} note={sentence([current ? 'This browser' : device.os === 'web' ? null : device.os ?? (server ? 'Linux' : null), server && 'Server · runs agents', joinedNote(device.joined, device.os), !browser && presenceOf(device), admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')).replace(/\.$/, '')}>
+  return <Row icon={<DeviceIcon kind={browser ? 'browser' : device.kind} />} title={name} note={sentence([current ? 'This browser' : device.os === 'web' ? null : device.os ?? (server ? 'Linux' : null), server && 'Server · runs agents', joinedNote(device.joined, device.os), !browser && presenceOf(device), admin && `OpenHut ${admin.server.version}`].filter(Boolean).join(' · ')).replace(/\.$/, '')}>
     {server && !isPhone() && update.isPending && <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>}
     {server && !isPhone() && !update.isPending && admin?.server.updateAvailable && <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate({ id: tunnelKeyOf(device.key), name }, { onSuccess: () => toast(`${name} is updating`), onError: toastError })}>Update</Button>}
-    {!isPhone() && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${name}?`} detail={detail} points={REMOVE_POINTS} action="Remove" onConfirm={() => remove.mutate({ key: device.key })}>Remove</ConfirmButton>}
-    {!isPhone() && <ConfirmButton variant="ghost" className={PILL} disabled={remove.isPending} question={`${name} is lost or stolen?`} detail="Remove it and lock it out." points={LOST_POINTS} action="Remove and lock out" onConfirm={() => remove.mutate({ key: device.key, lost: true })}>Lost or stolen</ConfirmButton>}
+    {!isPhone() && <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={remove.isPending} question={`Remove ${name}?`} detail={detail} points={REMOVE_POINTS} action="Remove" onConfirm={() => remove.mutate({ key: device.key })}>Remove</ConfirmButton>}
+    {!isPhone() && <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={remove.isPending} question={`${name} is lost or stolen?`} detail="Remove it and lock it out." points={LOST_POINTS} action="Remove and lock out" onConfirm={() => remove.mutate({ key: device.key, lost: true })}>Lost or stolen</ConfirmButton>}
   </Row>
 }
 
