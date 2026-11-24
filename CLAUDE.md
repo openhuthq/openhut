@@ -6,7 +6,7 @@ own process (a plain process that runs as you in the app on a Mac, Windows or Li
 data only through the runtime's gateway, which holds every key and checks each agent's grants on every call. You manage
 it from the app, or by asking an agent to change its own name, instructions, channels or connections, which you approve in the app (`private/brain/decisions/agents-change-themselves.md`). Everyone signs in to OpenHut Cloud on first launch: always
 synced, always a team, end-to-end encrypted (`private/brain/decisions/sign-in-first.md`). Apps read sealed records from the cloud
-(`api.openhut.dev`) and decrypt them locally; a runtime keeps only the run set for the agents it runs. The app reaches the local
+(`cloud.openhut.dev/api`) and decrypt them locally; a runtime keeps only the run set for the agents it runs. The app reaches the local
 runtime on a 0600 Unix socket, and a remote one end-to-end encrypted through the relay (Tailscale only carries the first install, over Tailscale SSH), after it
 asked to join with a one-use code and you approved it.
 Scope and decisions: `private/brain/decisions/openhut-v1-scope.md`.
