@@ -17,7 +17,7 @@ OPENHUT_WEB=1 OPENHUT_API_URL=http://127.0.0.1:8792 node node_modules/vite/bin/v
 wait_for http://localhost:5190/
 
 run=(node_modules/.bin/electron packages/desktop/scripts/web-e2e.cjs)
-[ "$(uname)" = Linux ] && run=(xvfb-run -a node_modules/.bin/electron --no-sandbox packages/desktop/scripts/web-e2e.cjs)
+[ "$(uname)" = Linux ] && run=(xvfb-run -a node_modules/.bin/electron --no-sandbox --disable-gpu packages/desktop/scripts/web-e2e.cjs)
 start=$(date +%s)
 OUT=$OUT WEB=http://web.localhost:5190/ RUNTIME=http://127.0.0.1:8797 "${run[@]}"
 echo "browser run: $(( $(date +%s) - start ))s; evidence in $OUT"
