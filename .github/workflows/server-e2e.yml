@@ -1,19 +1,6 @@
 name: Server e2e
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'install/**'
-      - 'packages/runtime/**'
-      - 'packages/common/**'
-      - 'packages/tunnel/**'
-      - 'vendor/**'
-      - 'package-lock.json'
-      - 'scripts/release.sh'
-      - 'scripts/image.sh'
-      - 'packages/e2e/**'
-      - '.github/workflows/server-e2e.yml'
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:

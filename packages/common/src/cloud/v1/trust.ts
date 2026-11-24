@@ -43,6 +43,8 @@ export const JoinRequest = z.object({
   nonce: z._default(z.nullable(z.string()), null),
   reviewed: z._default(z.boolean(), false),
   missed: z._default(z.boolean(), false),
+  location: z._default(z.nullable(z.object({ city: z.nullable(z.string()), country: z.string(), countryCode: z.string() })), null),
+  newCountry: z._default(z.boolean(), false),
 })
 export type JoinRequest = z.infer<typeof JoinRequest>
 export const RevealJoinRequest = z.object({ workspace: WorkspaceId, nonce: Nonce })

@@ -82,6 +82,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: No high or critical advisory in what the cloud and the site ship, and their locks resolve only from the npm registry
+        run: |
+          for dir in api cloud site; do (cd private/$dir && npm audit --omit=dev --audit-level=high) || exit 1; done
+          ! grep -h '"resolved":' private/api/package-lock.json private/cloud/package-lock.json private/site/package-lock.json | grep -v '"https://registry.npmjs.org/'
       - name: The cloud API, the cloud Worker and the site typecheck and pass their tests
         run: |
           npm --prefix private/api run typecheck && npm --prefix private/api test
@@ -149,6 +153,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: No high or critical advisory in what we ship, and the lock resolves only from the npm registry (npm ci already failed if it was out of date)
+        run: |
+          npm audit --omit=dev --audit-level=high
+          ! grep '"resolved":' package-lock.json | grep -v '"https://registry.npmjs.org/\|"packages/'
       - uses: actions/cache/restore@v4
         with:
           path: .turbo/cache

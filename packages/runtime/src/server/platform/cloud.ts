@@ -15,11 +15,12 @@ export type Box = { name: string; by: string; signature: string; body: string; s
 export type Bundle = { list: MemberList; letters?: Letter[]; boxes?: Box[] }
 export type Call = { method: 'GET' | 'PUT' | 'POST' | 'DELETE'; path: string; token: string; signer: Identity; body?: unknown }
 export type Reply = { status: number; json: unknown }
+export type Device = { token?: string }
 export type CloudSession = { token: string; refresh: string; sub: string; email: string; expiresAt: string }
 
 export const cloud = {
-  authorization: (body: CreateOAuthAuthorization): Promise<OAuthAuthorization> => post({ base: config.cloudUrl, path: '/v1/oauth-authorizations', body, reply: OAuthAuthorization }),
-  token: (body: CreateOAuthToken): Promise<OAuthToken> => post({ base: config.cloudUrl, path: '/v1/oauth-tokens', body, reply: OAuthToken }),
+  authorization: ({ token, ...body }: CreateOAuthAuthorization & Device): Promise<OAuthAuthorization> => post({ base: config.cloudUrl, path: '/v1/oauth-authorizations', body, token, reply: OAuthAuthorization }),
+  token: ({ token, ...body }: CreateOAuthToken & Device): Promise<OAuthToken> => post({ base: config.cloudUrl, path: '/v1/oauth-tokens', body, token, reply: OAuthToken }),
   signIn: (body: { provider: 'google'; device: string; redirectUrl: string; state: string }): Promise<CloudSignIn> => post({ path: '/v1/auth/sign-in/social', body, reply: CloudSignIn }),
 
   async session(body: CreateSession): Promise<CloudSession> {
@@ -45,9 +46,9 @@ export const cloud = {
   },
 }
 
-async function post<T>({ base = config.apiUrl, path, body, reply }: { base?: string; path: string; body: unknown; reply: z.ZodMiniType<T> }): Promise<T> {
+async function post<T>({ base = config.apiUrl, path, body, token, reply }: { base?: string; path: string; body: unknown; token?: string; reply: z.ZodMiniType<T> }): Promise<T> {
   const response = await fetch(`${base}${path}`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(20_000),
+    method: 'POST', headers: { 'content-type': 'application/json', ...token !== undefined && { authorization: `Bearer ${token}` } }, body: JSON.stringify(body), signal: AbortSignal.timeout(20_000),
   }).catch((error: unknown) => unreachable(error))
   const json: unknown = await response.json().catch(() => undefined)
   const parsed = z.safeParse(reply, json)
