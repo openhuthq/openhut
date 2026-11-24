@@ -8,7 +8,7 @@ import { ConnectionsView } from '@/features/connections/connections-view'
 import { CloudJoin, JoinLinkDialog } from '@/features/join/cloud-join'
 import { useMe } from '@/features/people/api'
 import { SettingsView } from '@/features/settings/settings-view'
-import { leave, onBack, update } from '@/lib/native'
+import { leave, onBack } from '@/lib/native'
 import '@/lib/phone'
 import { navigate, open, useOpen, usePath } from '@/lib/router'
 
@@ -22,7 +22,6 @@ export function App() {
   const me = useMe()
   const opened = useOpen()
   useEffect(() => onBack(back), [])
-  useEffect(() => { void update() }, [])
   const close = () => navigate(background.current.path)
   return <Gate me={me}>
     {route.page === 'join' ? <CloudJoin /> : <>

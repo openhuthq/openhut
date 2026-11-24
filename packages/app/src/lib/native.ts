@@ -4,12 +4,9 @@ import { Browser } from '@capacitor/browser'
 import { Keyboard } from '@capacitor/keyboard'
 import { CapacitorBarcodeScanner, CapacitorBarcodeScannerTypeHint } from '@capacitor/barcode-scanner'
 import { Preferences } from '@capacitor/preferences'
-import { LiveUpdate } from '@capawesome/capacitor-live-update'
 import { useState } from 'react'
 import { toast } from '@/lib/toast'
-import { latestBundle } from '@/lib/updates'
 import { desktop } from '@/lib/desktop'
-import { config } from '@/lib/config'
 
 type DeviceKeyPlugin = {
   publicKey(): Promise<{ publicKey: string }>
@@ -131,35 +128,6 @@ export function onLink(handler: (url: string) => void): () => void {
   void App.getLaunchUrl().then((launch) => { if (launch?.url) handler(launch.url) })
   const listener = App.addListener('appUrlOpen', ({ url }) => handler(url))
   return () => void listener.then((it) => it.remove())
-}
-
-let updating: Promise<void> | undefined
-
-export function update(): Promise<void> {
-  updating ??= isPhone() && config.updates ? nextBundle(config.updates).catch((error: unknown) => console.warn(`Live update: ${error}`)) : Promise.resolve()
-  return updating
-}
-
-async function nextBundle({ url: updatesUrl, key }: { url: string; key: string }): Promise<void> {
-  const { currentBundleId, previousBundleId, rollback } = await LiveUpdate.ready()
-  const good = (await Preferences.get({ key: 'update.good' })).value
-  if (rollback && previousBundleId) {
-    console.warn(`Live update: ${previousBundleId} didn't start in time, back to ${good ?? 'the built-in bundle'}`)
-    if (!good || good === previousBundleId) return
-    await LiveUpdate.setNextBundle({ bundleId: good })
-    return LiveUpdate.reload()
-  }
-  if (currentBundleId) await Preferences.set({ key: 'update.good', value: currentBundleId })
-  const { versionName } = await LiveUpdate.getVersionName()
-  const highest = Number((await Preferences.get({ key: 'update.sequence' })).value ?? -1)
-  const verdict = await latestBundle({ updatesUrl, key, appVersion: versionName, highest })
-  if ('refused' in verdict) return console.info(`Live update: refused, ${verdict.refused}`)
-  const { bundleId, sequence, url, sha256, bundleSignature } = verdict.manifest
-  if ((await LiveUpdate.getBlockedBundles()).bundleIds.includes(bundleId)) return console.info(`Live update: refused, ${bundleId} rolled back before`)
-  await LiveUpdate.downloadBundle({ url, bundleId, checksum: sha256, signature: bundleSignature })
-  await LiveUpdate.setNextBundle({ bundleId })
-  await Preferences.set({ key: 'update.sequence', value: String(sequence) })
-  console.info(`Live update: ${bundleId} (sequence ${sequence}) starts on the next launch`)
 }
 
 function toHex(bytes: Uint8Array): string {
