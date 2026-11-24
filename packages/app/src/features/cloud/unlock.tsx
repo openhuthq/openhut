@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from 'react'
-import { Alert02Icon, Cancel01Icon, FingerPrintIcon, Key01Icon } from '@hugeicons/core-free-icons'
+import { Alert02Icon, Cancel01Icon, File01Icon, FingerPrintIcon, Key01Icon } from '@hugeicons/core-free-icons'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { kitWord, nearestWord, readKit, validKit } from '@openhut/common/vault/kit-file.ts'
@@ -11,10 +11,12 @@ import { PersonFace } from '@/components/custom/person-face'
 import { AMBER, notify, Tinted, useStickyToast } from '@/components/custom/toast'
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL } from '@/components/kit'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cancelPasskey, knockDesktop, nameOf, notifyDesktop, PasskeyQuiet, useAddPasskey, useCloud, usePasskeys, usePasskeyUnlock, useRemoveMac, useSignIn, useSignOut, useUnlock } from '@/features/cloud/api'
-import { BIG, Step } from '@/features/cloud/step'
+import { BIG, EntryScreen, INK, QUIET } from '@/features/cloud/step'
+import { Back } from '@/features/cloud/sign-in'
+import { WORDS } from '@/lib/platform'
 import { chooseWorkspace, useAsk, useCancelAsk, useDeleteData, useDeny, useReview } from '@/features/cloud/workspaces'
 import { Mismatch } from '@/features/cloud/presence'
 import { joinRequests, knownDevices, newDevices, rememberDevices } from '@/features/cloud/seen'
@@ -34,7 +36,7 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
   const signIn = useSignIn()
   const helper = usePasskeys()
   const passkey = usePasskeyUnlock()
-  const leave = <Button type="button" variant="text" className="font-normal text-mute" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Sign out</Button>
+  const leave = <Button type="button" variant="text" className={QUIET} disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}>Use another account</Button>
   const macCan = Boolean(helper?.passkeys && helper.prf)
   const canPasskey = macCan && cloud.passkey
   const touch = (quiet: boolean) => passkey.mutate(quiet, { onError: (error) => { if (!(error instanceof PasskeyQuiet)) toastError(error) } })
@@ -47,28 +49,35 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
     prompted.current = true
     touch(true)
   })
-  if (cloud.needsSignIn) return <Step title="This computer was removed." line="If that was a mistake, sign in again and ask one of your computers." link={leave}
-    action={<Button type="button" variant="primary" className={BIG} disabled={signIn.isPending} onClick={() => signIn.mutate(undefined, { onError: toastError })}>Sign in again</Button>} />
+  if (cloud.needsSignIn) return <EntryScreen mood="worried" title="This computer was removed." line="If that was a mistake, sign in again and ask one of your computers." foot={leave}
+    waiting={signIn.isPending && 'Finish in your browser'} action={<Button type="button" variant="primary" className={BIG} onClick={() => signIn.mutate(undefined, { onError: toastError })}>Sign in again</Button>} />
   if (way === 'kit') return <KitEntry cloud={cloud} onBack={() => setWay(null)} />
   if (way === 'start-over') return <StartOver onBack={() => setWay(null)} />
   if (way === 'ask' || cloud.asking) return <Requested cloud={cloud} onBack={() => setWay(null)} onKit={cloud.kitInCloud ? () => setWay('kit') : undefined} onTouch={canPasskey ? () => { setWay(null); touch(false) } : undefined} />
-  const ask = canPasskey ? 'Use Touch ID, or another way below.' : cloud.canAsk ? 'Approve it from a computer you already use, or use your recovery kit.' : 'Use your recovery kit to unlock it.'
-  const lost = <Button type="button" variant="text" className="font-normal text-mute" onClick={() => setWay('start-over')}>Lost your computers and kit? Start over</Button>
-  return <Step title={`Welcome back, ${nameOf(cloud.email ?? '')}`} line={`This computer is new to your account. ${ask}`} back={back} link={<span className="flex flex-col items-center gap-1">{leave}{lost}</span>}
-    action={<div className="flex flex-col items-center gap-2.5">
-      {canPasskey && <Button type="button" variant="primary" className={BIG} disabled={passkey.isPending} onClick={() => touch(false)}><I icon={FingerPrintIcon} size={16} />{passkey.isPending ? 'Waiting for Touch ID…' : 'Use Touch ID'}</Button>}
-      {cloud.canAsk && <Button type="button" variant={canPasskey ? 'secondary' : 'primary'} className={BIG} onClick={() => setWay('ask')}>Ask my other computer</Button>}
-      {cloud.kitInCloud && <Button type="button" variant={canPasskey || cloud.canAsk ? 'secondary' : 'primary'} className={BIG} onClick={() => setWay('kit')}><I icon={Key01Icon} size={16} />Use my recovery kit</Button>}
-      {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12px] text-mute">Touch ID isn’t available here.</span>}
-    </div>} />
+  const ways = [
+    canPasskey && { key: 'touch', label: 'Use Touch ID', icon: FingerPrintIcon, go: () => touch(false) },
+    cloud.canAsk && { key: 'ask', label: 'Ask my other computer', go: () => setWay('ask') },
+    cloud.kitInCloud && { key: 'kit', label: 'Use my recovery kit', icon: Key01Icon, go: () => setWay('kit') },
+  ].filter((each) => each !== false)
+  const [first, ...rest] = ways
+  return <EntryScreen title={`Welcome back, ${nameOf(cloud.email ?? '')}.`} line={`This ${WORDS.here} is new to your account.`}
+    foot={<>{back && <Back onClick={back} />}{leave}<Button type="button" variant="text" className={QUIET} onClick={() => setWay('start-over')}>Start over</Button></>}
+    waiting={passkey.isPending && 'Waiting for Touch ID…'}
+    action={<>
+      {first && <Button type="button" variant="primary" className={BIG} onClick={first.go}>{first.icon && <I icon={first.icon} size={16} />}{first.label}</Button>}
+      {rest.length > 0 && <span className="flex flex-wrap justify-center gap-x-[18px] gap-y-1">{rest.map((each) => <Button key={each.key} type="button" variant="text" className={INK} onClick={each.go}>{each.label}</Button>)}</span>}
+    </>}>
+    {cloud.passkey && !macCan && helper && !helper.error && <span className="text-[12.5px] text-mute">Touch ID isn’t available here.</span>}
+  </EntryScreen>
 }
 
 function StartOver({ onBack }: { onBack: () => void }) {
   const remove = useDeleteData()
-  return <Step title="Start over?" line="This deletes your account and everything in it. Nobody can get it back." back={onBack}
-    action={<Button type="button" variant="destructive" className={BIG} disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: () => navigate('/', true), onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete and start over'}</Button>}>
+  const email = useCloud().data?.email
+  return <EntryScreen mood="worried" title="Start over?" line="This deletes your account and everything in it. Nobody can get it back." foot={<Back onClick={onBack} />}
+    waiting={remove.isPending && 'Deleting your account…'} action={<Button type="button" variant="destructive" className={BIG} onClick={() => remove.mutate(undefined, { onSuccess: () => navigate('/', true), onError: toastError })}>{email ? `Delete ${email}` : 'Delete and start over'}</Button>}>
     <ErrorNote message={remove.error?.message} />
-  </Step>
+  </EntryScreen>
 }
 
 function Requested({ cloud, onBack, onKit, onTouch }: { cloud: Cloud; onBack: () => void; onKit?: () => void; onTouch?: () => void }) {
@@ -83,22 +92,22 @@ function Requested({ cloud, onBack, onKit, onTouch }: { cloud: Cloud; onBack: ()
   }, [asking, ask])
   const back = () => cancel.mutate(undefined, { onSettled: onBack })
   const leaveFor = (next?: () => void) => next && (() => cancel.mutate(undefined, { onSettled: next }))
-  const kit = onKit && <Button type="button" variant="secondary" className={BIG} onClick={leaveFor(onKit)}><I icon={Key01Icon} size={16} />Use my recovery kit</Button>
-  const again = <Button type="button" variant="primary" className={BIG} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Knock again</Button>
+  const kit = onKit && <Button type="button" variant="text" className={QUIET} onClick={leaveFor(onKit)}>Use my recovery kit</Button>
+  const again = <Button type="button" variant="primary" className={BIG} onClick={() => ask.mutate(undefined, { onError: toastError })}>Knock again</Button>
   const other = ask.error instanceof RequestError && ask.error.param === 'waiting'
-  if (other) return <Step title="Another computer is waiting." line={`${ask.error?.message ?? ''} Approve or turn that one down, then ask from here.`} back={onBack}
-    action={<div className="flex flex-col items-center gap-2.5">{onTouch && <Button type="button" variant="primary" className={BIG} onClick={onTouch}><I icon={FingerPrintIcon} size={16} />Use Touch ID</Button>}{onKit && <Button type="button" variant="secondary" className={BIG} onClick={onKit}><I icon={Key01Icon} size={16} />Use my recovery kit</Button>}</div>} />
-  if (asking?.missed) return <Step title="Those faces didn’t match." line="The request was turned down. If that was you, ask again. After two misses, wait an hour." back={back}
-    action={<div className="flex flex-col items-center gap-2.5">{again}{kit}</div>}><ErrorNote message={ask.error?.message} /></Step>
+  if (other) return <EntryScreen mood="worried" title="Another computer is waiting." line={`${ask.error?.message ?? ''} Approve or turn that one down, then ask from here.`}
+    foot={<><Back onClick={onBack} />{onKit && <Button type="button" variant="text" className={QUIET} onClick={onKit}>Use my recovery kit</Button>}</>}
+    action={onTouch && <Button type="button" variant="primary" className={BIG} onClick={onTouch}><I icon={FingerPrintIcon} size={16} />Use Touch ID</Button>} />
+  if (asking?.missed) return <EntryScreen mood="worried" title="Those faces didn’t match." line="The request was turned down. If that was you, ask again. After two misses, wait an hour." foot={<><Back onClick={back} />{kit}</>}
+    waiting={ask.isPending && 'Knocking…'} action={again}><ErrorNote message={ask.error?.message} /></EntryScreen>
   const rooms = asking?.rooms ?? []
   const admins = rooms.filter((room) => !room.own).flatMap((room) => room.admins)
   const own = rooms.some((room) => room.own)
-  if (asking?.denied) return <Step title="Nobody let you in." line="The knock was turned down, or 15 minutes passed." back={back}
-    action={<div className="flex flex-col items-center gap-2.5"><Button type="button" variant="primary" className={BIG} disabled={ask.isPending} onClick={() => ask.mutate(undefined, { onError: toastError })}>Knock again</Button>{kit}</div>} />
-  return <Knocking faces={asking?.faces ?? null} onKit={leaveFor(onKit)}>
+  if (asking?.denied) return <EntryScreen mood="worried" title="Nobody let you in." line="The knock was turned down, or 15 minutes passed." foot={<><Back onClick={back} />{kit}</>}
+    waiting={ask.isPending && 'Knocking…'} action={again} />
+  return <Knocking faces={asking?.faces ?? null} foot={<>{kit}<Button type="button" variant="text" className={QUIET} disabled={cancel.isPending} onClick={back}>Cancel</Button></>}>
     <ErrorNote message={ask.error?.message ?? asking?.error ?? undefined} />
-    {admins.length > 0 && <span className="max-w-[420px] text-[12.5px] text-mute">{own ? `${who(admins)} can let you in too.` : `Ask ${who(admins)} to let you in.`}</span>}
-    <Button type="button" variant="text" className="font-normal text-mute" disabled={cancel.isPending} onClick={back}>Cancel</Button>
+    {admins.length > 0 && <span className="text-[12.5px] text-mute">{own ? `${who(admins)} can let you in too.` : `Ask ${who(admins)} to let you in.`}</span>}
   </Knocking>
 }
 
@@ -166,20 +175,21 @@ function KitEntry({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
     setProblem(undefined)
     unlock.mutate({ words: kit.words }, { onError: (err) => setProblem({ tone: 'fail', text: err.message }) })
   }
-  if (typing) return <KitWordsEntry onBack={() => setTyping(false)} />
-  return <Step title="Use your recovery kit." line="Drop the file here." back={onBack}>
-    <div className="flex w-full max-w-[440px] flex-col gap-3">
-      {problem && <p role="alert" className={cn('m-0 rounded-xl px-3.5 py-3 text-left text-[13.5px]/[1.45]', problem.tone === 'warn' ? 'bg-warning-subtle text-warning-strong' : 'bg-[color-mix(in_oklch,var(--fail)_10%,transparent)] text-ink')}>{problem.text}</p>}
-      <DropZone className="py-5" onText={tryKit}>{() => <>
-        <span className="text-[15px] font-medium text-ink">{unlock.isPending ? 'Unlocking…' : 'Drop your kit file here, or choose it'}</span>
-        {!unlock.isPending && <span className="text-[12.5px] text-mute">or paste it</span>}
-      </>}</DropZone>
-      <span className="text-[12.5px] text-mute">No file? <Button type="button" variant="text" className="h-auto p-0 text-[12.5px] font-normal text-ink underline underline-offset-2" onClick={() => setTyping(true)}>Type the words</Button></span>
-    </div>
-  </Step>
+  if (typing) return <KitWordsEntry onBack={() => setTyping(false)} onFile={() => setTyping(false)} />
+  return <EntryScreen mood="key" title="Use your recovery kit." line="Drop the file anywhere on this window." foot={<><Button type="button" variant="text" className={QUIET} onClick={() => setTyping(true)}>Type the words instead</Button><Back onClick={onBack} /></>}
+    waiting={unlock.isPending && 'Unlocking…'} action={<label htmlFor={KIT_FILE} className={cn(buttonVariants({ variant: 'primary' }), BIG, 'cursor-pointer')}>Choose file</label>}>
+    {problem && <p role="alert" className={cn('m-0 w-full rounded-xl px-3.5 py-3 text-left text-[13.5px]/[1.45]', problem.tone === 'warn' ? 'bg-warning-subtle text-warning-strong' : 'bg-[color-mix(in_oklch,var(--fail)_10%,transparent)] text-ink')}>{problem.text}</p>}
+    <DropZone id={KIT_FILE} window className="gap-1 border-0 bg-soft py-[26px] text-[13px] text-mute hover:border-0" onText={tryKit}>{() => <>
+      <I icon={File01Icon} size={26} className="text-hue-amber" />
+      <span className="text-[15px] font-medium text-ink">OpenHut Recovery Kit.txt</span>
+      or paste its text
+    </>}</DropZone>
+  </EntryScreen>
 }
 
-function KitWordsEntry({ onBack }: { onBack: () => void }) {
+const KIT_FILE = 'kit-file'
+
+function KitWordsEntry({ onBack, onFile }: { onBack: () => void; onFile: () => void }) {
   const [words, setWords] = useState<string[]>(Array.from({ length: 12 }, () => ''))
   const [typo, setTypo] = useState<{ at: number; text: string }>()
   const unlock = useUnlock()
@@ -207,16 +217,16 @@ function KitWordsEntry({ onBack }: { onBack: () => void }) {
     if (!validKit(words)) return setTypo({ at: -1, text: 'These words don’t fit together. Check each one against your kit, in order.' })
     unlock.mutate({ words })
   }
-  return <Step title="Type your 12 words." line="In order." back={onBack}
-    action={<Button type="submit" form="kit-words" variant="primary" disabled={words.some((word) => !word) || unlock.isPending} className={BIG}>{unlock.isPending ? 'Unlocking…' : 'Unlock'}</Button>}>
+  return <EntryScreen mood="key" title="Type your 12 words." line="In order. Paste works too." foot={<><Button type="button" variant="text" className={QUIET} onClick={onFile}>Use the file instead</Button><Back onClick={onBack} /></>}
+    waiting={unlock.isPending && 'Unlocking…'} action={<Button type="submit" form="kit-words" variant="primary" disabled={words.some((word) => !word)} className={BIG}>Unlock</Button>}>
     <form id="kit-words" onSubmit={submit} className="flex w-full flex-col items-center gap-3">
-      <div className="grid w-full max-w-[440px] grid-cols-3 gap-2">{words.map((word, index) => <label key={index} className={cn('flex h-10 items-center gap-2 rounded-xl border border-hair bg-card px-3 text-[13px] focus-within:border-ink', typo?.at === index && 'border-fail text-fail focus-within:border-fail')}>
-        <span className="w-4 text-[11px] text-mute tabular-nums">{index + 1}</span>
-        <Input className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-[13px] text-inherit focus-visible:outline-none" value={word} autoFocus={index === 0} autoComplete="off" spellCheck={false} aria-label={`Word ${index + 1}`} aria-invalid={typo?.at === index || undefined} onChange={(event) => set(event.target, index)} onPaste={paste} />
+      <div className="grid w-full grid-cols-3 gap-1.5 phone:grid-cols-2">{words.map((word, index) => <label key={index} className={cn('flex h-9 items-center gap-2 rounded-lg border border-mid bg-card px-2.5 font-mono text-[13px] focus-within:border-2 focus-within:border-ink focus-within:px-[9px]', typo?.at === index && 'border-fail text-fail focus-within:border-fail')}>
+        <span className="w-3.5 text-right font-sans text-[11px] text-mute tabular-nums">{index + 1}</span>
+        <Input className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 font-mono text-[13px] text-inherit focus-visible:outline-none" value={word} autoFocus={index === 0} autoComplete="off" spellCheck={false} aria-label={`Word ${index + 1}`} aria-invalid={typo?.at === index || undefined} onChange={(event) => set(event.target, index)} onPaste={paste} />
       </label>)}</div>
-      <ErrorNote className="w-full max-w-[440px] text-left" message={typo?.text ?? unlock.error?.message} />
+      <ErrorNote className="w-full text-left" message={typo?.text ?? unlock.error?.message} />
     </form>
-  </Step>
+  </EntryScreen>
 }
 
 export function CloudToasts() {
