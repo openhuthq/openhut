@@ -16,7 +16,7 @@ OpenHut is developed as a web app. You see a change in a browser in seconds. Ele
 - `electron-builder*.yml`, `scripts/pack-*.mjs`, `install/**`, signing, installers: the PR's Desktop app run proves it. Don't build packages locally to check.
 
 **The web app (Continue in web)**
-- With `npm run dev` up and its runtime signed in, serve the web build: `VITE_OPENHUT_API_URL=http://127.0.0.1:<API port> VITE_OPENHUT_RELAY_URL=ws://127.0.0.1:<Worker port> node node_modules/vite/bin/vite.js packages/desktop/src/renderer --mode web --port 5190`.
+- With `npm run dev` up and its runtime signed in, serve the web build: `VITE_OPENHUT_API_URL=http://127.0.0.1:<cloud port> VITE_OPENHUT_RELAY_URL=ws://127.0.0.1:<cloud port> node node_modules/vite/bin/vite.js packages/desktop/src/renderer --mode web --port 5190`.
 - `RUNTIME=http://127.0.0.1:<runtime port> OUT=/tmp/web-e2e node_modules/.bin/electron packages/desktop/scripts/web-e2e.cjs` signs a fresh browser in, has the Mac approve it, opens the dashboard over the tunnel and saves screenshots. The Mac needs its kit saved first.
 
 **3. Ship**

@@ -94,7 +94,7 @@ has (Keychain, Touch ID, passkey, updates, deep links, the tray). The procedure 
 |---|---|
 | `npm run dev` | The web app: runtime, local cloud and Vite on localhost. The everyday loop |
 | `npm run seed` | Sample agents and connections in the running dev app (on a fresh `.data`) |
-| `npm run reset` | Wipe `.data` (runtime, local cloud DB, D1) |
+| `npm run reset` | Wipe `.data` (runtime and local cloud DB) |
 | `npm run check` | Typecheck and test only what changed since `origin/main` |
 | `npm run test` / `typecheck` / `build` | Everything |
 | `npm run app` | The real Electron app from this checkout |
@@ -123,9 +123,9 @@ npm run dev
 `npm run dev` starts agentd with native agents (real Hermes processes, as on the Mac app; they need the bundled runtime:
 `npm -w @openhut/desktop run pack-backend`, which needs `uv`), the server API on 127.0.0.1:8787 with `.data`, the real model
 and real outside services (connect Claude in Settings), the dev key `dev` enrolled, and Vite for the renderer with `/api` proxied to it with
-`Authorization: Bearer dev`. It also runs the cloud locally, never production: the API from `private/api` (PGlite, dev sign-in)
-and the Worker from `private/cloud` (D1 migrations applied), so it needs `private/` and fails without it unless
-`OPENHUT_CLOUD_URL`/`OPENHUT_API_URL` name a cloud. Dev ports (API 8797, gateway 8091, Worker 8790, cloud API 8792) step
+`Authorization: Bearer dev`. It also runs the cloud locally, never production: one Node process from `private/api` (PGlite, dev sign-in, the
+relay and the OAuth broker; no wrangler), so it needs `private/` and fails without it unless
+`OPENHUT_CLOUD_URL`/`OPENHUT_API_URL` name a cloud. Dev ports (API 8797, gateway 8091, cloud 8792) step
 to the next free one, so it runs beside the installed app and other checkouts; it prints the URLs and the sign-in account
 (mo@example.com). Ctrl-C stops everything.
 Every dev run of the app (`npm run app`, `OPENHUT_TEST_HOME`, or `npm -w @openhut/desktop run dist:dev`, app id `dev.openhut.app.dev`) is
