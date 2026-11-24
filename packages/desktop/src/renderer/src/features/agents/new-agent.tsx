@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Cancel01Icon, DiceFaces03Icon, ShuffleIcon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, DiceFaces03Icon } from '@hugeicons/core-free-icons'
 import type { Provider } from '@openhut/common/models/provider.ts'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
@@ -17,8 +17,6 @@ import { ComputerPicker } from '@/features/computers/computer-picker'
 import { useComputerProviders } from '@/features/models/api'
 import { ModelPicker } from '@/features/models/model-picker'
 import { FacePicker } from '@/features/agents/face-picker'
-import { Face } from '@/features/agents/face'
-import { randomLook, SWATCHES } from '@/lib/face'
 import { formValues } from '@/lib/form'
 import { SOFT_TRIGGER } from '@/features/models/model-picker'
 import { TOUCH, useMedia } from '@/lib/media'
@@ -84,7 +82,6 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   </DialogCard>
 }
 
-const COLOURS = ['rose', 'orange', 'green', 'blue', 'lilac', 'teal'].map((id) => SWATCHES.findIndex((each) => each.id === id))
 
 export function FirstAgent() {
   const createAgent = useCreateAgent()
@@ -92,11 +89,6 @@ export function FirstAgent() {
   const providers = useComputerProviders('local')
   const computers = useComputers().data ?? []
   const [computer, setComputer] = useState('local')
-  const [round, setRound] = useState(() => Math.floor(Math.random() * 1e6))
-  const [colour, setColour] = useState(0)
-  const [spun, setSpun] = useState(0)
-  const faceOf = (index: number) => JSON.stringify({ ...randomLook({ seed: `face_${round}` }), body: COLOURS[index] })
-  const face = faceOf(colour)
   const noModel = Boolean(providers && !firstModel(providers))
   const seat = useStartSeatSignIn()
   const [waiting, setWaiting] = useState<{ name: string; face: string }>()
@@ -112,18 +104,10 @@ export function FirstAgent() {
     create({ ...picked, model: firstModel(providers) })
   }}>
     {waiting && <SeatSignIn start={seat} onClose={() => setWaiting(undefined)} onDone={() => { create({ ...waiting, model: DEFAULT_MODEL }); setWaiting(undefined) }} />}
-    <Input type="hidden" name="face" value={face} />
-    <Button type="button" variant="bare" aria-label="Shuffle" title="Shuffle" className="relative mb-1 animate-[pop_.6s_var(--ease-spring)_both]" onClick={() => { setRound(round + 1); setSpun(spun + 1) }}>
-      <span className="block animate-[bob_3.2s_ease-in-out_.8s_infinite]"><span key={spun} className={cn('block', spun > 0 && 'animate-hop')}><Face agent={{ id: '', instructions: '', face }} size={150} label="Agent face" /></span></span>
-      <span className="absolute right-1 bottom-3 grid size-8 place-items-center rounded-full border border-hair bg-card text-ink shadow-menu"><I icon={ShuffleIcon} size={15} /></span>
-    </Button>
+    <FacePicker initial={null} />
     <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Make your first agent</h1>
     <p className="m-0 -mt-2 text-[14px]/[1.5] text-body">Give it a name and a face. You can tell it its job in your first chat.</p>
     <Field label={<span className="text-[12px] font-medium text-mute">Name</span>} className="mt-1 w-[352px] max-w-full text-left">{(control) => <Input {...control} name="name" required maxLength={40} defaultValue={NAMES[0]} autoComplete="off" spellCheck={false} className="h-10 rounded-lg text-[15px] font-medium" />}</Field>
-    <div role="radiogroup" aria-label="Colour" className="flex gap-2">
-      {COLOURS.map((swatch, index) => <Button key={swatch} type="button" variant="bare" role="radio" aria-checked={index === colour} aria-label={SWATCHES[swatch].name} title={SWATCHES[swatch].name} onClick={() => setColour(index)}
-        className={cn('grid size-[52px] place-items-center rounded-xl', index === colour ? 'bg-card shadow-[inset_0_0_0_1.5px_var(--ink)]' : 'bg-sidebar hover:bg-picked')}><Face agent={{ id: '', instructions: '', face: faceOf(index) }} size={40} /></Button>)}
-    </div>
     {computers.length > 1 && <div className="flex w-[352px] max-w-full flex-col gap-1.5 text-left">
       <span className="text-[12px] font-medium text-mute">Where should it run?</span>
       <ComputerPicker computers={computers} value={computer} onPick={setComputer} title="It runs on" className="h-10 w-full rounded-lg" />
