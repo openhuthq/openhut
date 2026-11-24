@@ -1,4 +1,7 @@
-name: Cut a release
+name: Cut a shell release
+
+# Tags a version and packages the shell (installers, notarization) from it. The normal release is Promote (promote.yml): packs from main,
+# re-signed as stable. R9 removes this workflow.
 
 on:
   workflow_dispatch:

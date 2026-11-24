@@ -83,6 +83,20 @@ announce() {
   for ext in '' .sig .rekor; do put "releases/$sha.json$ext" "$1/release.json$ext" "$FOREVER" application/json; done
 }
 
+# R4: a channel's pointer (a release.json signed for it, or re-signed by Promote) is announced, then served at channels/<channel>/.
+# Packs are content-addressed at packs/<sha512 hex>, so a pointer re-signed by Promote needs no copies.
+pointer() {
+  announce "$1"
+  for ext in '' .sig .rekor; do put "channels/$2/release.json$ext" "$1/release.json$ext" 'public, max-age=60' application/json; done
+}
+
+packs() {
+  for file in "$1"/openhut-*.tgz "$1"/openhut-*.json; do
+    key=packs/$(shasum -a 512 "$file" | cut -d' ' -f1)
+    if curl -fsI "$URL/$key" >/dev/null; then echo "r2: $key is there"; else put "$key" "$file" "$FOREVER"; fi
+  done
+}
+
 newer() {
   [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" = "$1" ]
 }
@@ -91,5 +105,7 @@ case "${1:-}" in
   claude) claude ;;
   check) tmp=$(mktemp) && date > "$tmp" && big check/large-uploads "$tmp" 'no-store' text/plain && echo 'r2: large uploads work' ;;
   release) [ $# -eq 3 ] || { echo 'usage: scripts/r2.sh release <version> <folder with the release files>' >&2; exit 2; }; release "$2" "$3" ;;
-  *) echo 'usage: scripts/r2.sh claude | check | release <version> <folder>' >&2; exit 2 ;;
+  pointer) [ $# -eq 3 ] || { echo 'usage: scripts/r2.sh pointer <folder with release.json, .sig and .rekor> <stable|beta>' >&2; exit 2; }; pointer "$2" "$3" ;;
+  packs) [ $# -eq 2 ] || { echo 'usage: scripts/r2.sh packs <folder with openhut-*.tgz and .json>' >&2; exit 2; }; packs "$2" ;;
+  *) echo 'usage: scripts/r2.sh claude | check | release <version> <folder> | pointer <folder> <channel> | packs <folder>' >&2; exit 2 ;;
 esac

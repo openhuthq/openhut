@@ -84,3 +84,22 @@ export function verifyRelease({ manifest, signature, key, rekor, rekorKey = REKO
     return { ok: false, reason: 'malformed release or Rekor entry' }
   }
 }
+
+// R4: what a device does with the channel pointer it just polled (channels/<channel>/release.json, .sig and .rekor on the feed). One rule
+// for every device, so Promote reaches everyone at once. `installed` is the sequence of the release it runs.
+//   refuse  the pointer doesn't verify, is for another channel, or needs another shell: keep running, install nothing (fail closed)
+//   halt    a signed, logged pointer with halt: drop any pending install now. Halt skips the hour (it only stops installs)
+//   none    nothing newer: an old or replayed pointer (a replayed halt too), or the release already running
+//   wait    newer, but logged under an hour ago: keep it pending until retryAt
+//   install newer and an hour old: apply exactly release.packs, even when its version is lower (a pointer back to N−1)
+export function pointerAction({ pointer, channel, installed, shellApi, key = RELEASE_KEY, rekorKey = REKOR_KEY, now = Date.now() }) {
+  const check = verifyRelease({ ...pointer, key, rekorKey, now })
+  if (!check.ok && !check.retryAt) return { action: 'refuse', reason: check.reason }
+  const release = JSON.parse(pointer.manifest)
+  if (release.channel !== channel) return { action: 'refuse', reason: `a ${release.channel} release on the ${channel} channel` }
+  if (!(release.sequence > installed)) return { action: 'none' }
+  if (release.halt) return { action: 'halt', sequence: release.sequence }
+  if (!(release.shellApi?.min <= shellApi && shellApi <= release.shellApi?.max)) return { action: 'refuse', reason: 'needs another shell' }
+  if (!check.ok) return { action: 'wait', retryAt: check.retryAt, sequence: release.sequence }
+  return { action: 'install', sequence: release.sequence, version: release.version, packs: release.packs }
+}
