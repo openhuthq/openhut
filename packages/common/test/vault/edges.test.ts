@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { wordlist } from '@scure/bip39/wordlists/english.js'
-import { check, concat, header, HEADER, identity, isLocked, newKey, readHeader, sign, suites } from '../../src/vault/public.ts'
+import { check, concat, header, HEADER, identity, isLocked, newKey, readHeader, sign, subtle, suites } from '../../src/vault/public.ts'
 import { letter, lock, read, unlock } from '../../src/vault/secret.ts'
 import { nearestWord, readKit } from '../../src/vault/kit-file.ts'
 
@@ -73,4 +73,34 @@ test('a kit file reads its mark case-insensitively, keeps the first valid window
   assert.equal(readKit(words.slice(0, 11).join(' ')), null)
   assert.equal(nearestWord('abandom'), 'abandon')
   assert.equal(nearestWord(wordlist[5]), wordlist[5])
+})
+
+test('check refuses a small-order public key even when the signature verifies against it, sign bit set or not', async () => {
+  const bytes = Uint8Array.of(1, 2, 3)
+  const base = Uint8Array.from({ length: 32 }, (_, index) => (index ? 0x66 : 0x58))
+  const forged = concat([base, Uint8Array.of(1), new Uint8Array(31)])
+  const box = (await identity()).publicKey.slice(32)
+  for (const high of [0, 0x80]) {
+    const point = new Uint8Array(32)
+    point[0] = 1
+    point[31] = high
+    assert.equal(await subtle.verify('Ed25519', await subtle.importKey('raw', point, 'Ed25519', false, ['verify']), forged, bytes), true, 'the forgery verifies at the curve level')
+    assert.equal(await check({ publicKey: concat([point, box]), bytes, signature: forged }), false)
+  }
+})
+
+test('read opens an empty letter, and refuses a purpose outside the list even when both sides agree on it', async () => {
+  const [sender, recipient] = await Promise.all([identity(), identity()])
+  const empty = await letter({ sender, to: recipient.publicKey, workspace: 'w', purpose: 'pairing', version: 1, plain: new Uint8Array() })
+  assert.ok(empty)
+  assert.deepEqual(await read({ recipient, from: sender.publicKey, workspace: 'w', purpose: 'pairing', body: empty, allowed: [sender.publicKey] }), new Uint8Array())
+  const odd = await letter({ sender, to: recipient.publicKey, workspace: 'w', purpose: 'nope' as 'pairing', version: 1, plain: Uint8Array.of(9) })
+  assert.ok(odd)
+  assert.equal(await read({ recipient, from: sender.publicKey, workspace: 'w', purpose: 'nope' as 'pairing', body: odd, allowed: [sender.publicKey] }), null)
+})
+
+test('a kit needs all twelve numbered words or twelve kit words in a row, and a tie picks the first word in the list', () => {
+  assert.equal(readKit('1. abandon 2. ability'), null)
+  assert.equal(readKit('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon zebrax'), null)
+  assert.equal(nearestWord('cxt'), 'cat')
 })

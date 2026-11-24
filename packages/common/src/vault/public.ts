@@ -60,7 +60,7 @@ export async function identity(secret: Bytes = newKey()): Promise<Identity> {
   const { x } = await subtle.exportKey('jwk', signing)
   const box = await deviceKem.deriveKeyPair(secret)
   const boxPublic = new Uint8Array(await deviceKem.serializePublicKey(box.publicKey))
-  return { secret, publicKey: concat([fromBase64(x ?? ''), boxPublic]) }
+  return { secret, publicKey: concat([fromBase64(x || ''), boxPublic]) }
 }
 
 export async function boxKey(secret: Bytes): Promise<{ publicKey: Bytes; secretKey: Bytes }> {
@@ -75,8 +75,8 @@ export async function sign({ secret, bytes }: { secret: Bytes; bytes: Bytes }): 
 
 export async function check({ publicKey, bytes, signature }: { publicKey: Bytes; bytes: Bytes; signature: Bytes }): Promise<boolean> {
   if (publicKey.length !== 64 || signature.length !== SIGNATURE || smallOrder(publicKey) || smallOrder(signature)) return false
-  const key = await subtle.importKey('raw', publicKey.slice(0, 32), 'Ed25519', false, ['verify']).catch(() => null)
-  return key ? subtle.verify('Ed25519', key, signature, bytes) : false
+  const key = await subtle.importKey('raw', publicKey.slice(0, 32), 'Ed25519', false, ['verify'])
+  return subtle.verify('Ed25519', key, signature, bytes)
 }
 
 function smallOrder(point: Uint8Array): boolean {
@@ -114,5 +114,5 @@ export function fromBase64(value: string): Bytes {
 }
 
 function fromHex(hex: string): Bytes {
-  return Uint8Array.from(hex.match(/../g) ?? [], (pair) => Number.parseInt(pair, 16))
+  return Uint8Array.from(hex.match(/../g) || [], (pair) => Number.parseInt(pair, 16))
 }

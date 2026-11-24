@@ -17,10 +17,10 @@ export type Cloudside = Pick<Team, 'lists' | 'letters' | 'take' | 'publish' | 's
 export const roomKeys = {
   rooms: (): Room[] => {
     const account = keyStore.current()?.account
-    return account ? [account, ...account.teams ?? []] : []
+    return account ? [account, ...account.teams || []] : []
   },
 
-  room: (ws?: string): Room | undefined => roomKeys.rooms().find((room) => room.workspace.id === (ws ?? keyStore.current()?.account?.workspace.id)),
+  room: (ws?: string): Room | undefined => roomKeys.rooms().find((room) => room.workspace.id === (ws || keyStore.current()?.account?.workspace.id)),
   members: (ws?: string): MemberListBody | undefined => bodyOf(roomKeys.room(ws)?.list),
   roleIn: (ws?: string): Role | undefined => roomKeys.members(ws)?.members.find((member) => member.email === keyStore.current()?.account?.email)?.role,
   link: ({ ws, email }: { ws: string; email: string }): string | undefined => keyStore.current()?.account?.links?.[`${ws}/${email}`],
@@ -30,7 +30,7 @@ export const roomKeys = {
   ring(ws: string): Record<number, Bytes> {
     const workspace = roomKeys.room(ws)?.workspace
     if (!workspace?.key) return {}
-    return Object.fromEntries([...Object.entries(workspace.old ?? {}), [String(workspace.version), workspace.key]].map(([version, key]) => [Number(version), fromBase64(key)]))
+    return Object.fromEntries([...Object.entries(workspace.old || {}), [String(workspace.version), workspace.key]].map(([version, key]) => [Number(version), fromBase64(key)]))
   },
 
   async own(ws?: string): Promise<Bytes | null> {
@@ -39,14 +39,13 @@ export const roomKeys = {
   },
 
   async advance({ lists, ws }: { lists: MemberList[]; ws?: string }): Promise<MemberListBody | null> {
-    const current = await keyStore.read()
     const room = roomKeys.room(ws)
-    if (!current.account || !room || !lists.length) return null
-    const body = await check({ anchor: await anchorOf(room.list), chain: [room.list, ...lists] })
     const last = lists.at(-1)
+    if (!room || !last) return null
+    const body = await check({ anchor: await anchorOf(room.list), chain: [room.list, ...lists] })
     const now = keyStore.current()
     const fresh = roomKeys.room(room.workspace.id)
-    if (!body || !last || !now || !fresh || fresh.list.bytes !== room.list.bytes) return null
+    if (!body || !now || !fresh || fresh.list.bytes !== room.list.bytes) return null
     const next = withRoom(now, { workspace: fresh.workspace, list: last, first: fresh.first })
     await keyStore.write(next.account ? { ...next, account: { ...next.account, joinedBy: { ...next.account.joinedBy, ...joinersOf([room.list, ...lists]) } } } : next)
     return body
@@ -94,13 +93,11 @@ export const roomKeys = {
   isOwn: (ws: string): boolean => keyStore.current()?.account?.workspace.id === ws,
 
   async teamChange({ ws, emails = [], devices = [], rotate = false }: { ws: string; emails?: string[]; devices?: string[]; rotate?: boolean }): Promise<{ list: MemberList; room: Room; letters: Sent[] }> {
-    const account = keyStore.current()?.account
-    const room = roomKeys.room(ws)
-    const body = bodyOf(room?.list)
-    const mine = roomKeys.roleIn(ws)
+    const held = inRoom(ws)
+    if (!held) throw new HttpError(409, 'Enable OpenHut Cloud and open this team first.')
+    const { account, room, body, role: mine } = held
     const me = await keysService.deviceKey()
-    const leaving = Boolean(account && emails.includes(account.email))
-    if (!account || !room || !body || !mine) throw new HttpError(409, 'Enable OpenHut Cloud and open this team first.')
+    const leaving = emails.includes(account.email)
     if (emails.some((email) => email !== account.email && (mine === 'member' || body.members.find((member) => member.email === email)?.role === 'owner'))) throw new HttpError(403, 'Only an owner or admin can remove people, and nobody can remove the owner.')
     if (leaving && mine === 'owner') throw new HttpError(403, 'Make someone else the owner first.')
     if (leaving && roomKeys.isOwn(ws)) throw new HttpError(403, 'This is your own team. To remove it, delete your account in Settings › General.')
@@ -122,24 +119,26 @@ export const roomKeys = {
     if (!room.workspace.key) throw new HttpError(409, 'This computer is still joining the team. Try again in a moment.')
     if (!target || body.members.some((member) => member.devices.includes(device))) throw new HttpError(409, `${email} isn’t waiting with that device anymore.`)
     const base = await nextOf({ list: room.list, body, me: await keysService.deviceKey() })
-    const list = await signList({ signer: await keysService.device(), body: { ...base, members: body.members.map((member) => member === target ? { ...member, devices: [...member.devices, device] } : member), added: { ...body.added, [device]: base.at ?? 0 }, ...name && { names: { ...body.names, [device]: name.slice(0, 64) } } } })
+    const list = await signList({ signer: await keysService.device(), body: { ...base, members: body.members.map((member) => member === target ? { ...member, devices: [...member.devices, device] } : member), added: { ...body.added, [device]: base.at || 0 }, ...name && { names: { ...body.names, [device]: name.slice(0, 64) } } } })
     return { list, letter: await sealTo({ to: device, purpose: 'workspace-key', workspace: ws, plain: await secretOf({ room, own: false }) }) }
   },
 
   async joinApproved({ ws, chain, found }: { ws: string; chain: MemberList[]; found: Letter[] }): Promise<boolean> {
     const current = await keyStore.read()
-    const who = current.account ?? current.locked
+    const who = current.account || current.locked
+    if (!who) return false
     const me = await keysService.deviceKey()
     for (const each of found.filter((one) => one.purpose === 'workspace-key')) {
       const plain = await openLetter({ found: each, workspace: ws })
       const secret = plain && readSecret(plain)
-      const body = secret && chain[0] && await check({ anchor: secret.anchor, chain })
-      const last = chain.at(-1)
-      const sender = body ? body.members.find((member) => member.devices.includes(each.from)) : undefined
-      if (!who || !secret || !body || !last || !chain[0] || !sender || sender.role === 'member' || body.workspace !== ws || secret.version !== keyVersionOf(body)) continue
+      if (!secret) continue
+      const body = await check({ anchor: secret.anchor, chain })
+      if (!body) continue
+      const sender = body.members.find((member) => member.devices.includes(each.from))
+      if (!sender || sender.role === 'member' || body.workspace !== ws || secret.version !== keyVersionOf(body)) continue
       if (!body.members.some((member) => member.email === who.email && member.devices.includes(me))) continue
       const { anchor: _anchor, team: _team, vault, ...fresh } = secret
-      const room = { workspace: { id: ws, ...fresh }, list: last, first: chain[0] }
+      const room = { workspace: { id: ws, ...fresh }, list: chain[chain.length - 1], first: chain[0] }
       const now = await keyStore.read()
       await keyStore.write(now.account ? withRoom(now, room) : { ...now, locked: undefined, account: { sub: who.sub, email: who.email, key: '', vault, ...room } })
       return true
@@ -163,11 +162,11 @@ export const roomKeys = {
     const current = await keyStore.read()
     const account = current.account
     if (!account) return
-    if (account.workspace.id !== ws) return keyStore.write({ ...current, account: { ...account, teams: (account.teams ?? []).filter((each) => each.workspace.id !== ws), links: Object.fromEntries(Object.entries(account.links ?? {}).filter(([key]) => !key.startsWith(`${ws}/`))) } })
+    if (account.workspace.id !== ws) return keyStore.write({ ...current, account: { ...account, teams: (account.teams || []).filter((each) => each.workspace.id !== ws), links: Object.fromEntries(Object.entries(account.links || {}).filter(([key]) => !key.startsWith(`${ws}/`))) } })
     if (account.key) return keyStore.write({ device: toBase64(newKey()), machine: keyStore.machine })
-    const [next, ...rest] = account.teams ?? []
+    const [next, ...rest] = account.teams || []
     if (next) return keyStore.write({ ...current, account: { ...account, ...next, teams: rest } })
-    return keyStore.write({ device: current.device, machine: keyStore.machine, session: current.session, locked: current.locked ?? { sub: account.sub, email: account.email } })
+    return keyStore.write({ device: current.device, machine: keyStore.machine, session: current.session, locked: current.locked || { sub: account.sub, email: account.email } })
   },
 
   setRoom: async (room: Room): Promise<void> => keyStore.write(withRoom(await keyStore.read(), room)),
@@ -181,12 +180,11 @@ export const roomKeys = {
   async joinList({ card, chain, anchor, ws }: { card: Identity; chain: MemberList[]; anchor: string; ws: string }): Promise<MemberList> {
     const account = keysService.mustBeOn()
     const body = await check({ anchor, chain })
-    const last = chain.at(-1)
-    const invite = body?.invites.find((each) => each.key === toBase64(card.publicKey) && each.email === account.email)
-    if (!body || !last || !invite || body.workspace !== ws) throw new HttpError(400, 'This invite link doesn’t work. Ask for a new one.')
+    const invite = body?.workspace === ws ? body.invites.find((each) => each.key === toBase64(card.publicKey) && each.email === account.email) : undefined
+    if (!body || !invite) throw new HttpError(400, 'This invite link doesn’t work. Ask for a new one.')
     const me = await keysService.deviceKey()
-    const next = await nextOf({ list: last, body, me })
-    return signList({ signer: card, body: { ...next, members: [...body.members, { email: account.email, role: invite.role, devices: [me], viewers: [] }], invites: body.invites.filter((each) => each !== invite), removed: [...body.removed.filter((key) => key !== me), invite.key], added: { ...body.added, [me]: next.at ?? 0 }, names: { ...body.names, [me]: deviceName() } } })
+    const next = await nextOf({ list: chain[chain.length - 1], body, me })
+    return signList({ signer: card, body: { ...next, members: [...body.members, { email: account.email, role: invite.role, devices: [me], viewers: [] }], invites: body.invites.filter((each) => each !== invite), removed: [...body.removed.filter((key) => key !== me), invite.key], added: { ...body.added, [me]: next.at || 0 }, names: { ...body.names, [me]: deviceName() } } })
   },
 
   async addTeam({ ws, list, first }: { ws: string; list: MemberList; first: MemberList }): Promise<void> {
@@ -231,7 +229,7 @@ export const roomKeys = {
 
   async refresh({ ws, team }: { ws: string; team: Cloudside }): Promise<{ changed: boolean; behind: boolean; gone: boolean }> {
     const before = roomKeys.members(ws)
-    const lists = await team.lists({ after: before?.version ?? 0 }).catch((error: unknown) => error instanceof CloudError && error.status === 403 ? null : [])
+    const lists = await team.lists({ after: before?.version || 0 }).catch((error: unknown) => error instanceof CloudError && error.status === 403 ? null : [])
     if (!lists) return { changed: false, behind: false, gone: true }
     const after = await roomKeys.advance({ lists, ws })
     if (before && after) await welcome({ ws, team, before, after })
@@ -250,8 +248,8 @@ export const roomKeys = {
 function taken({ workspace, secret, mine }: { workspace: Room['workspace']; secret: NonNullable<ReturnType<typeof readSecret>>; mine: boolean }): Room['workspace'] {
   const { key, version } = secret
   const old = { ...secret.old, ...workspace.old, ...workspace.key && { [workspace.version]: workspace.key } }
-  const slotKey = workspace.key ? workspace.slot ?? workspace.key : secret.slot
-  const own = mine ? secret.own ?? workspace.own : workspace.own
+  const slotKey = workspace.key ? workspace.slot || workspace.key : secret.slot
+  const own = mine ? secret.own || workspace.own : workspace.own
   return { id: workspace.id, key, version, ...Object.keys(old).length && { old }, ...slotKey && { slot: slotKey }, ...own && { own } }
 }
 
@@ -278,7 +276,7 @@ async function listKit({ ws, team }: { ws: string; team: Cloudside }): Promise<v
   if (!adds && !gone.length && mine.kit === kit) return
   const next = withoutDevices({ body: await nextOf({ list: room.list, body, me }), gone })
   const members = next.members.map((member) => member.email === mine.email ? { ...member, devices: adds ? [...member.devices, kit] : member.devices, kit } : member)
-  const list = await signList({ signer: await keysService.device(), body: { ...next, members, added: { ...next.added, ...adds && { [kit]: next.at ?? 0 } } } })
+  const list = await signList({ signer: await keysService.device(), body: { ...next, members, added: { ...next.added, ...adds && { [kit]: next.at || 0 } } } })
   if ((await team.publish({ list, letters: [], boxes: [] })).status === 200) await roomKeys.advance({ lists: [list], ws })
 }
 
@@ -291,12 +289,18 @@ async function welcome({ ws, team, before, after }: { ws: string; team: Cloudsid
 }
 
 
-function adminRoom({ ws, sentence }: { ws: string; sentence: string }): { room: Room; body: MemberListBody } {
+function inRoom(ws: string): { account: Account; room: Room; body: MemberListBody; role: Role } | null {
+  const account = keyStore.current()?.account
   const room = roomKeys.room(ws)
   const body = bodyOf(room?.list)
-  const mine = roomKeys.roleIn(ws)
-  if (!room || !body || !mine || mine === 'member') throw new HttpError(403, sentence)
-  return { room, body }
+  const role = body?.members.find((member) => member.email === account?.email)?.role
+  return account && room && body && role ? { account, room, body, role } : null
+}
+
+function adminRoom({ ws, sentence }: { ws: string; sentence: string }): { room: Room; body: MemberListBody } {
+  const held = inRoom(ws)
+  if (!held || held.role === 'member') throw new HttpError(403, sentence)
+  return held
 }
 
 function joinersOf(chain: MemberList[]): Record<string, string> {
@@ -307,8 +311,8 @@ function joinersOf(chain: MemberList[]): Record<string, string> {
 function withRoom(current: Stored, room: Room): Stored {
   const account = current.account
   if (!account) return current
-  if (room.workspace.id === account.workspace.id) return { ...current, account: { ...account, workspace: room.workspace, list: room.list, first: room.first ?? account.first } }
-  return { ...current, account: { ...account, teams: [...(account.teams ?? []).filter((each) => each.workspace.id !== room.workspace.id), room] } }
+  if (room.workspace.id === account.workspace.id) return { ...current, account: { ...account, workspace: room.workspace, list: room.list, first: room.first || account.first } }
+  return { ...current, account: { ...account, teams: [...(account.teams || []).filter((each) => each.workspace.id !== room.workspace.id), room] } }
 }
 
 export async function inviteId(key: Bytes): Promise<string> {

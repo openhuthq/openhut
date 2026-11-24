@@ -49,5 +49,5 @@ export const keyStore = {
 }
 
 export function deviceName(): string {
-  return held?.deviceName() ?? ''
+  return held?.deviceName() || ''
 }

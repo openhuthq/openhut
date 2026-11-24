@@ -1,6 +1,6 @@
 import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39'
 import { wordlist } from '@scure/bip39/wordlists/english.js'
-import { HEADER, KEY, LETTER_PURPOSES, NEWEST, SIGNATURE, check, concat, deviceKem, equal, field, fromBase64, header, isLocked, newKey, readHeader, sign, subtle, suites, text, toBase64, type Bytes, type Identity, type LetterPurpose, type Suite } from './public.ts'
+import { HEADER, KEY, LETTER_PURPOSES, NEWEST, SIGNATURE, check, concat, deviceKem, equal, field, fromBase64, header, newKey, readHeader, sign, subtle, suites, text, toBase64, type Bytes, type Identity, type LetterPurpose, type Suite } from './public.ts'
 
 export async function lock({ key, version, bind, plain }: { key: Bytes; version: number; bind: string; plain: Bytes }): Promise<Bytes | null> {
   const head = header({ version })
@@ -14,8 +14,9 @@ export async function lock({ key, version, bind, plain }: { key: Bytes; version:
 
 export async function unlock({ keys, bind, locked }: { keys: Record<number, Bytes>; bind: string; locked: Bytes }): Promise<Bytes | null> {
   const head = readHeader(locked)
-  const key = head && keys[head.version]
-  if (!head || !key || !isLocked(locked)) return null
+  if (!head) return null
+  const key = keys[head.version]
+  if (!key) return null
   const suite = suites[head.suite]
   const nonce = locked.slice(HEADER, HEADER + suite.nonce)
   const aes = await recordKey({ suite, key, nonce, bind }).catch(() => null)
