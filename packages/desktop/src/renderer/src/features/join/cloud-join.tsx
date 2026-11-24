@@ -58,7 +58,9 @@ export function CloudJoin() {
     if (status === 403) return <Card mood="worried" title={title} body={body}
       action={<Button type="button" variant="primary" className={BIG} disabled={signOut.isPending} onClick={() => signOut.mutate()}>{signOut.isPending ? 'Signing out…' : 'Use another Google account'}</Button>}
       link={<Button type="button" variant="text" className={QUIET} onClick={leave}>Not now</Button>} />
-    if (status === 404 || status === 410) return <Card mood="worried" title={title} body={body} action={<Button type="button" variant="secondary" className={BIG} onClick={leave}>Back to OpenHut</Button>} />
+    const stranger = parsed?.email && cloud.email && parsed.email.toLowerCase() !== cloud.email.toLowerCase()
+    if (status === 404 || status === 410) return <Card mood="worried" title={title} body={body} action={<Button type="button" variant="secondary" className={BIG} onClick={leave}>Back to OpenHut</Button>}
+      link={stranger && <Button type="button" variant="text" className={QUIET} disabled={signOut.isPending} onClick={() => signOut.mutate()}>{signOut.isPending ? 'Signing out…' : `Sign out of ${cloud.email}`}</Button>} />
     return <Card mood="worried" title={title} body={body}
       action={<Button type="button" variant="primary" className={BIG} disabled={preview.isFetching} onClick={retry}>{preview.isFetching ? 'Trying…' : 'Try again'}</Button>}
       link={<Button type="button" variant="text" className={QUIET} onClick={() => navigate('/', true)}>Back to OpenHut</Button>} />
