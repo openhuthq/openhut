@@ -334,6 +334,7 @@ jobs:
           name: ${{ matrix.name }}-e2e
           path: |
             packages/desktop/app-e2e/*.png
+            packages/desktop/update-test-*.png
             packages/desktop/app-e2e/evidence.json
             packages/desktop/app-e2e/home/logs/
             packages/desktop/app-e2e/home2/logs/

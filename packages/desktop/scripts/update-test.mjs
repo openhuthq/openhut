@@ -124,12 +124,15 @@ try {
   evidence.error = error.message
   console.error(`update-test: FAIL ${error.message}`)
   process.exitCode = 1
+  if (!LINUX) spawnSync('screencapture', ['-x', resolve(`update-test-${args.via}-failure.png`)])
 } finally {
   if (child && child.exitCode === null) {
     child.kill('SIGTERM')
     await Promise.race([new Promise((resolve) => child.once('exit', resolve)), sleep(15_000)])
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
   }
   api?.kill()
+  feed.closeAllConnections()
   feed.close()
   if (!args.keep) rmSync(root, { recursive: true, force: true })
   else console.log(`update-test: kept ${root}`)
