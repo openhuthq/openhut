@@ -267,7 +267,7 @@ export const Cloud = z.object({
   backup: Backup,
   signInError: z.nullable(z.string()),
   keptAccount: z.nullable(Email),
-  devices: z.array(z.object({ key: DeviceKey, here: z.boolean(), addedAt: z.nullable(Timestamp), name: z.nullable(z.string()), kind: z.enum(['mac', 'server']), online: z._default(z.boolean(), false) })),
+  devices: z.array(z.object({ key: DeviceKey, here: z.boolean(), addedAt: z.nullable(Timestamp), name: z.nullable(z.string()), kind: z.enum(['mac', 'server']), online: z._default(z.boolean(), false), joined: z._default(z.nullable(z.union([z.object({ how: z.literal('recovery') }), z.object({ how: z.literal('approved'), by: z.nullable(z.string()) })])), null) })),
   passkey: z.boolean(),
   touchIdOff: z._default(z.boolean(), false),
   youngUntil: z._default(z.nullable(Timestamp), null),

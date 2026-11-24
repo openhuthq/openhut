@@ -208,3 +208,23 @@ test('an admin revokes an invite: the next list drops it and moves its key to re
   assert.ok(await roomKeys.advance({ lists: [revoked], ws }))
   await assert.rejects(roomKeys.revoke({ ws, email: 'ana@example.com' }), (err: Error & { status?: number }) => err.status === 404)
 })
+
+test('a new device remembers who signed the version that added it: another of your computers, or your recovery key', async () => {
+  await keysService.forgetHere()
+  await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
+  const current = keysService.account()
+  assert.ok(current)
+  const self = await keysService.device()
+  const recovery = await accountDevice(fromBase64(current.key))
+  const [approved, restored] = await Promise.all([identity(), identity()])
+  const add = (device: Identity) => (body: MemberListBody) => {
+    const at = (body.at ?? 0) + 4 * DAY
+    const key = toBase64(device.publicKey)
+    return { members: body.members.map((member) => ({ ...member, devices: [...member.devices, key] })), added: { ...body.added, [key]: at } }
+  }
+  assert.ok(await roomKeys.advance({ lists: [await next({ signer: self, change: add(approved) })] }))
+  assert.ok(await roomKeys.advance({ lists: [await next({ signer: recovery, change: add(restored) })] }))
+  assert.equal(roomKeys.joinedBy(toBase64(approved.publicKey)), toBase64(self.publicKey))
+  assert.equal(roomKeys.joinedBy(toBase64(restored.publicKey)), toBase64(recovery.publicKey))
+  assert.equal(roomKeys.joinedBy(toBase64(self.publicKey)), undefined)
+})

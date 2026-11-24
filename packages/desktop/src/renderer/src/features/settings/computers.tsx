@@ -126,11 +126,17 @@ function DeviceRow({ device, twin, admin }: { device: Device; twin: boolean; adm
   const base = device.name ?? (server ? 'Computer that runs agents' : 'Computer')
   const name = twin ? `${base} (${tunnelKeyOf(device.key).slice(0, 4)})` : base
   const detail = device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))} · ${REMOVE_DETAIL}` : REMOVE_DETAIL
-  return <Row icon={<DeviceIcon kind={device.kind} />} title={name} note={[server && 'Server · Linux · runs agents', device.online ? 'Online' : 'Offline', admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')}>
+  return <Row icon={<DeviceIcon kind={device.kind} />} title={name} note={[server && 'Server · Linux · runs agents', device.online ? 'Online' : 'Offline', joinedNote(device.joined), admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')}>
     {server && !isPhone() && update.isPending && <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>}
     {server && !isPhone() && !update.isPending && admin?.server.updateAvailable && <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate({ id: tunnelKeyOf(device.key), name }, { onSuccess: () => toast(`${name} is updating`), onError: toastError })}>Update</Button>}
     {!isPhone() && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${name}?`} detail={detail} points={REMOVE_POINTS} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
   </Row>
+}
+
+export function joinedNote(joined: Device['joined']): string | null {
+  if (!joined) return null
+  if (joined.how === 'recovery') return 'Used your recovery kit or Touch ID'
+  return joined.by ? `Approved from ${joined.by}` : 'Approved from another computer'
 }
 
 function RequestRow({ workspace, asked }: { workspace: CloudWorkspaceView; asked: DeviceRequest }) {

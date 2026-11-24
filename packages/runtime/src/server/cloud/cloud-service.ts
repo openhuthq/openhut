@@ -18,7 +18,7 @@ import { settings } from '../platform/settings.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { callbackBase, connectionService } from '../connections/connection-service.ts'
 import { keyStore, type Account, type AskRoom } from './key-store.ts'
-import { deviceName, deviceOs, keysService, openLetter, sealTo } from './keys-service.ts'
+import { accountDevice, deviceName, deviceOs, keysService, openLetter, sealTo } from './keys-service.ts'
 import { roomKeys } from './room-keys.ts'
 import { guessSite, teamIcon } from './team-icon.ts'
 import { hinted, takeSignIn, withSignIn } from './sign-ins.ts'
@@ -67,7 +67,7 @@ export const cloudService = {
     const [inCloud, passkeyInCloud] = locked && session ? await Promise.all([kitInCloud(), boxInCloud('passkey')]) : [null, false]
     const devices = lists.flatMap((body) => {
       const mine = body?.members.find((member) => member.email === account?.email)
-      return body && mine ? mine.devices.filter((key) => key !== mine.kit && key !== accountKey).map((key) => ({ key, here: key === here, addedAt: addedOf(body, key) ? new Date(addedOf(body, key)).toISOString() : null, name: body.names?.[key] ?? null, kind: body.runtimes?.includes(key) ? 'server' as const : 'mac' as const, online: key === here || Date.now() - (cloudEvents.beats(body.workspace).get(key)?.at ?? 0) < 3 * BEAT_MS })) : []
+      return body && mine ? mine.devices.filter((key) => key !== mine.kit && key !== accountKey).map((key) => ({ key, here: key === here, addedAt: addedOf(body, key) ? new Date(addedOf(body, key)).toISOString() : null, name: body.names?.[key] ?? null, kind: body.runtimes?.includes(key) ? 'server' as const : 'mac' as const, joined: joinedOf({ key, accountKey, names: body.names }), online: key === here || Date.now() - (cloudEvents.beats(body.workspace).get(key)?.at ?? 0) < 3 * BEAT_MS })) : []
     }).filter(({ key }, index, all) => all.findIndex((each) => each.key === key) === index).sort((a, b) => (a.addedAt ?? '').localeCompare(b.addedAt ?? ''))
     return {
       object: 'cloud', status: locked ? 'locked' : on ? (cloudEvents.ready() ? 'on' : 'offline') : 'off', email: locked?.email ?? (on && account ? account.email : null),
@@ -138,6 +138,8 @@ export const cloudService = {
     if (asked.checked && (!asked.faces || [...faces ?? []].sort((a, b) => a - b).join() !== asked.faces.join())) throw new HttpError(400, 'Those faces don’t match the ones on the new computer.', { param: 'faces' })
     const mine = roomKeys.isOwn(workspace) && asked.email === keysService.account()?.email
     if (mine && !asked.server) {
+      const list = await keysService.addDevice({ device, name: asked.name, runtime: false })
+      if (list) await putList({ workspace, list })
       const sent = await keysService.call({ method: 'POST', path: '/v1/letters', body: { workspace, ...await keysService.accountLetter(device) } })
       if (sent.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t let that computer in. Try again.')
       return cloudService.status()
@@ -427,6 +429,13 @@ function signedIn(email: string): string {
   return page(`Signed in as ${email}. OpenHut has moved on, so you can close this tab.`, { title: 'Done', tab: 'Signed in', back: config.appScheme && `${config.appScheme}://open` })
 }
 
+function joinedOf({ key, accountKey, names }: { key: string; accountKey: string | null | undefined; names: Record<string, string> | undefined }): Cloud['devices'][number]['joined'] {
+  const by = roomKeys.joinedBy(key)
+  if (!by) return null
+  if (by === accountKey) return { how: 'recovery' }
+  return { how: 'approved', by: names?.[by] ?? null }
+}
+
 function kitOf(): { savedAt: string; differs: boolean } | null {
   const kit = keysService.kitState().saved
   return kit || boxesDiffer ? { savedAt: kit?.savedAt ?? new Date(0).toISOString(), differs: boxesDiffer } : null
@@ -550,7 +559,8 @@ async function chainOf(workspace: string): Promise<MemberList[]> {
 }
 
 async function joinWith({ account: restored, typed }: { account: Account; typed: boolean }): Promise<Cloud> {
-  const joined = await keysService.memberLists({ list: restored.list })
+  const signedHere = restored.list.by === toBase64((await accountDevice(fromBase64(restored.key))).publicKey)
+  const joined = signedHere ? await keysService.memberLists({ list: restored.list }) : { status: 200 }
   if (joined.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t add this computer. Try again.')
   const teams = []
   for (const team of restored.teams ?? []) if ((await keysService.memberLists({ list: team.list })).status === 200) teams.push(team)

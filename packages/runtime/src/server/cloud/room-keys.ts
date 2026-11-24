@@ -24,6 +24,7 @@ export const roomKeys = {
   members: (ws?: string): MemberListBody | undefined => bodyOf(roomKeys.room(ws)?.list),
   roleIn: (ws?: string): Role | undefined => roomKeys.members(ws)?.members.find((member) => member.email === keyStore.current()?.account?.email)?.role,
   link: ({ ws, email }: { ws: string; email: string }): string | undefined => keyStore.current()?.account?.links?.[`${ws}/${email}`],
+  joinedBy: (device: string): string | undefined => keyStore.current()?.account?.joinedBy?.[device],
   linkUntil: ({ ws, email }: { ws: string; email: string }): string | undefined => keyStore.current()?.account?.linksUntil?.[`${ws}/${email}`],
 
   ring(ws: string): Record<number, Bytes> {
@@ -46,7 +47,8 @@ export const roomKeys = {
     const now = keyStore.current()
     const fresh = roomKeys.room(room.workspace.id)
     if (!body || !last || !now || !fresh || fresh.list.bytes !== room.list.bytes) return null
-    await keyStore.write(withRoom(now, { workspace: fresh.workspace, list: last, first: fresh.first }))
+    const next = withRoom(now, { workspace: fresh.workspace, list: last, first: fresh.first })
+    await keyStore.write(next.account ? { ...next, account: { ...next.account, joinedBy: { ...next.account.joinedBy, ...joinersOf([room.list, ...lists]) } } } : next)
     return body
   },
 
@@ -295,6 +297,11 @@ function adminRoom({ ws, sentence }: { ws: string; sentence: string }): { room: 
   const mine = roomKeys.roleIn(ws)
   if (!room || !body || !mine || mine === 'member') throw new HttpError(403, sentence)
   return { room, body }
+}
+
+function joinersOf(chain: MemberList[]): Record<string, string> {
+  const devices = (list: MemberList) => bodyOf(list)?.members.flatMap((member) => member.devices) ?? []
+  return Object.fromEntries(chain.slice(1).flatMap((list, index) => devices(list).filter((key) => !devices(chain[index]).includes(key)).map((key) => [key, list.by])))
 }
 
 function withRoom(current: Stored, room: Room): Stored {
