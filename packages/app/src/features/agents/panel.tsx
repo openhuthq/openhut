@@ -207,7 +207,7 @@ function Access({ agent }: { agent: Agent }) {
       </MenuCard>
     </DropdownMenu>
     <ConfirmDialog open={sharing} onOpenChange={setSharing} question={`Share ${agent.name} with ${workspace.name}?`} action="Share" onConfirm={() => pick(true)}
-      detail={`Everyone in ${workspace.name} can chat with ${agent.name} and read its chat, including what you've said to it so far. They can ask it to use everything it has access to. Only you can change it.`} />
+      detail={`Everyone in ${workspace.name} can read its chats and use what it can use. Only you can change it.`} />
   </>
 }
 
