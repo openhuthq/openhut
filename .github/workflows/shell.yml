@@ -49,7 +49,7 @@ env:
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   TAGGED: ${{ startsWith(github.ref, 'refs/tags/') }}
   FULL: ${{ startsWith(github.ref, 'refs/tags/') || inputs.full }}
-  OPENHUT_INSTALL_URL: ${{ startsWith(github.ref, 'refs/tags/') && 'https://openhut.dev' || 'https://openhut.dev/edge' }}
+  OPENHUT_INSTALL_URL: ${{ startsWith(github.ref, 'refs/tags/') && 'https://openhut.dev/install.sh' || 'https://openhut.dev/edge' }}
 
 jobs:
   pack-update:
@@ -130,7 +130,7 @@ jobs:
         if: env.TAGGED == 'true'
         run: |
           echo "$GITHUB_REF_NAME" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?' || { echo "::error::$GITHUB_REF_NAME isn't a version tag like v0.6.3 or v0.6.3-beta.1."; exit 1; }
-          served=$(curl -fsSL https://openhut.dev/ | sed -n 's/^OPENHUT_BUILD="\(.*\)"$/\1/p')
+          served=$(curl -fsSL https://openhut.dev/install.sh | sed -n 's/^OPENHUT_BUILD="\(.*\)"$/\1/p')
           [ -z "$served" ] || [ "$(printf '%s\n%s\n' "$served" "${GITHUB_REF_NAME#v}" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" = "${GITHUB_REF_NAME#v}" ] && [ "$served" != "${GITHUB_REF_NAME#v}" ] ||
             { echo "::error::openhut.dev serves runtime build $served, and ${GITHUB_REF_NAME#v} isn't newer, so servers would never be offered this release. Use a higher version."; exit 1; }
       - name: Cloudflare takes uploads past wrangler's 300 MB limit

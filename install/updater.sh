@@ -5,7 +5,7 @@ set -u
 cd /tmp
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 REQUEST=/data/update.request LOG=/data/update.log EXIT=/data/update.log.exit
-RELEASE=${OPENHUT_RELEASE:-https://github.com/openhuthq/openhut/releases/latest/download}
+RELEASE=${OPENHUT_RELEASE:-https://dl.openhut.dev/channels/stable}
 signed() { for ext in '' .sig .rekor; do curl -fsSL --retry 3 "$RELEASE/release.json$ext" -o "$1/release.json$ext" || return 1; done; }
 apply() { # <sha256 the admin page checked> <app version>
   rm -f "$EXIT"; d=$(mktemp -d)
