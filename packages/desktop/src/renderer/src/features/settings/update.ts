@@ -1,7 +1,7 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query'
 
 export type Ready = { version: string }
-export type UpdateState = { current: string; checking: boolean; available: string | null; progress?: number; ready: Ready | null; error: 'signature' | 'failed' | null }
+export type UpdateState = { current: string; asksPassword?: boolean; checking: boolean; available: string | null; progress?: number; ready: Ready | null; error: 'signature' | 'failed' | null }
 export type UpdateBridge = { state: () => Promise<UpdateState>; check: () => Promise<UpdateState>; install: () => Promise<unknown>; onChange: (listener: (state: UpdateState) => void) => void }
 
 export const UPDATE_KEY = ['app-update']
@@ -19,7 +19,8 @@ export function downloadUrl(platform: string | undefined) {
 }
 
 export function readyNote(state: UpdateState | null | undefined) {
-  return state?.ready ? `OpenHut ${state.ready.version} is ready` : undefined
+  if (!state?.ready) return undefined
+  return state.asksPassword ? `OpenHut ${state.ready.version} is ready. Your computer will ask for your password to install it` : `OpenHut ${state.ready.version} is ready`
 }
 
 export function progressTitle(progress: number | undefined) {

@@ -32,6 +32,10 @@ test('the app follows the main process from download to ready', async () => {
   assert.equal(readyNote(client.getQueryData<UpdateState>(UPDATE_KEY)), 'OpenHut 0.1.2 is ready')
 })
 
+test('a .deb update says first that the computer will ask for a password, since only Restart to update installs it', () => {
+  assert.equal(readyNote({ ...idle, asksPassword: true, ready: { version: '0.6.4' } }), 'OpenHut 0.6.4 is ready. Your computer will ask for your password to install it')
+})
+
 test('a refused or failed update says so instead of up to date', () => {
   assert.match(updateNote({ ...idle, error: 'signature' }), /didn't come from OpenHut/)
   assert.match(updateNote({ ...idle, error: 'failed' }), /Couldn't update/)

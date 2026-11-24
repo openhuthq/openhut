@@ -23,6 +23,7 @@ const MAC = process.platform === 'darwin'
 const WIN = process.platform === 'win32'
 if (WIN) process.env.NODE_PENDING_PIPE_INSTANCES ??= '64'
 const APPIMAGE = process.env.APPIMAGE
+const ASKS_PASSWORD = process.platform === 'linux' && !APPIMAGE
 process.umask(0o022)
 const TEST_HOME = process.env.OPENHUT_TEST_HOME
 const RELEASE_FEED = app.getName() !== DEV_NAME
@@ -756,7 +757,7 @@ function menu() {
 }
 
 function updateState() {
-  return { current: app.getVersion(), ...updating }
+  return { current: app.getVersion(), asksPassword: ASKS_PASSWORD, ...updating }
 }
 
 function setUpdate(patch) {
@@ -788,6 +789,7 @@ function update() {
   auto.logger = logger
   if (process.env.OPENHUT_UPDATE_FEED) auto.setFeedURL({ provider: 'generic', url: process.env.OPENHUT_UPDATE_FEED })
   if (TEST_HOME) auto.autoRunAppAfterInstall = false
+  if (ASKS_PASSWORD) auto.autoInstallOnAppQuit = false
   auto.on('error', (error) => {
     logger.error(`openhut: update failed: ${error?.stack ?? error}`)
     if (updateCheck.quiet) return
