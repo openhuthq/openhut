@@ -192,10 +192,12 @@ function run(step: () => Promise<void>): Promise<void> {
 
 async function refreshKeys(ws: string): Promise<void> {
   if (!roomKeys.room(ws)) return
-  const { changed: moved } = await roomKeys.refresh({ ws, call: keysService.call })
+  const { changed: moved, gone: out } = await roomKeys.refresh({ ws, call: keysService.call })
   const list = roomKeys.members(ws)
   const me = await keysService.deviceKey()
-  if (ws === keysService.account()?.workspace.id && list && !list.members.some((member) => member.devices.includes(me))) return removedNow(ws)
+  const home = ws === keysService.account()?.workspace.id
+  if (out && !home) return cloudEvents.drop({ ws, why: 'removed' })
+  if (home && list && !list.members.some((member) => member.devices.includes(me))) return removedNow(ws)
   if (list) presence.members({ ws, emails: list.members.map((member) => member.email) })
   if (moved) emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
 }

@@ -14,7 +14,8 @@ import type { CheckResult, PhaseResults } from './e2e.ts'
 
 const RESULTS = process.env.RESULTS ?? 'packages/e2e/results'
 const CLOUD = process.env.CLOUD_URL ?? 'http://127.0.0.1:8790'
-const CLOUD_STATE = process.env.CLOUD_STATE ?? `${RESULTS}/cloud-state`
+const API = process.env.OPENHUT_API_URL ?? 'http://127.0.0.1:8792'
+const CLOUD_STATE = process.env.CLOUD_STATE ?? `${RESULTS}/api-state`
 const REMOTE = process.env.REMOTE_URL ?? 'http://127.0.0.1:8787'
 const REMOTE_KEY = process.env.OPENHUT_E2E_KEY ?? ''
 const REMOTE_CONTAINER = process.env.REMOTE_CONTAINER
@@ -34,7 +35,7 @@ const results: CheckResult[] = []
 
 type Call = (path: string, body?: unknown, method?: string) => Promise<Record<string, unknown>>
 type Runtime = { url: string; call: Call; restart: () => Promise<void>; stop: () => void }
-type Status = { status: string; email: string | null; device: string | null; workspace: { id: string; members: { email: string; devices: string[] }[] } | null; backup: { state: string; done: number; total: number; at: string | null }; kitInCloud: boolean; workspaces: { id: string; waiting: boolean; members: { email: string }[] }[]; gone: { name: string; why: string }[] }
+type Status = { status: string; email: string | null; device: string | null; workspace: { id: string; members: { email: string; devices: string[] }[] } | null; kitInCloud: boolean; workspaces: { id: string; waiting: boolean; members: { email: string }[] }[]; gone: { name: string; why: string }[] }
 
 const hermes = createServer((req, res) => {
   req.resume().on('end', () => {
@@ -74,7 +75,7 @@ function runtime({ name, port }: { name: string; port: number }): Runtime {
       spawn(process.execPath, ['packages/runtime/src/server/app.ts'], {
         stdio: ['ignore', 'ignore', 'inherit'],
         env: {
-          ...process.env, PORT: String(port), OPENHUT_DATA: data, OPENHUT_CLOUD_URL: CLOUD, OPENHUT_MODEL: 'test', AGENTD_SOCK: sock, OPENHUT_AGENT_API: HERMES,
+          ...process.env, PORT: String(port), OPENHUT_DATA: data, OPENHUT_CLOUD_URL: CLOUD, OPENHUT_API_URL: API, OPENHUT_MODEL: 'test', AGENTD_SOCK: sock, OPENHUT_AGENT_API: HERMES,
           OPENHUT_GATEWAY_PORT: String(port + 1), OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update('host').digest('hex'),
         },
       }),
@@ -175,35 +176,37 @@ function check(id: string, name: string, expected: string, fn: () => Promise<str
 
 const state = { workspace: '', device: '', agent: '', file: '', words: [] as string[] }
 
-check('Y1', 'The Mac signs in to the cloud room', 'host runtime: cloud on, owner mo@example.com', async () => {
+check('Y1', 'The server saves a recovery kit; a Mac signing in as the same person opens with it', 'server on as mo@example.com; 12 words; the Mac is locked after sign-in and on in the same workspace after the words', async () => {
+  const server = await remote('/api/cloud') as Status
+  assert.equal(server.status, 'on')
+  assert.equal(server.email, 'mo@example.com')
+  const kit = await remote('/api/cloud/kits', {}) as { words: string[] }
+  Object.assign(state, { workspace: server.workspace?.id, words: kit.words })
   await signIn(host, 'mo@example.com')
-  const cloud = await statusUntil(host, (s) => s.status === 'on' && !!s.workspace, 'the host cloud to be on')
-  assert.equal(cloud.email, 'mo@example.com')
-  Object.assign(state, { workspace: cloud.workspace?.id, device: cloud.device })
-  return `status ${cloud.status}, ${cloud.email}`
+  const locked = await statusUntil(host, (s) => s.status === 'locked', 'the Mac to ask for the kit')
+  await host.call('/api/cloud/unlock', { words: state.words })
+  const on = await statusUntil(host, (s) => s.status === 'on' && s.workspace?.id === state.workspace, 'the Mac to open in the server\'s workspace')
+  state.device = on.device ?? ''
+  return `server ${server.status} as ${server.email}; ${kit.words.length} words; Mac ${locked.status} -> ${on.status}`
 })
 
-check('Y2', 'The remote runtime joins as a device on the member list and signs in with its own key', 'remote cloud on; its device is on the list under mo@example.com', async () => {
-  const before = await remote('/api/cloud') as { status: string; device: string }
-  assert.equal(before.status, 'off')
-  const invite = await host.call('/api/cloud/runtimes', { device: before.device })
-  await remote('/api/cloud/join', invite)
-  const cloud = await until(async () => { const each = await remote('/api/cloud') as Status; return each.status === 'on' && each }, 'the remote to be on')
-  const owner = cloud.workspace?.members.find((member) => member.devices.includes(before.device))
+check('Y2', 'The server sees the Mac on its member list', 'the Mac\'s device is listed under mo@example.com on the server', async () => {
+  const cloud = await until(async () => { const each = await remote('/api/cloud') as Status; return each.workspace?.members.some((member) => member.devices.includes(state.device)) && each }, 'the Mac on the server\'s list')
+  const owner = cloud.workspace?.members.find((member) => member.devices.includes(state.device))
   assert.equal(owner?.email, 'mo@example.com')
-  return `remote ${cloud.status}, listed under ${owner?.email}`
+  return `the Mac is listed under ${owner?.email}`
 })
 
-check('Y3', 'A connection added on the Mac reaches the remote runtime with its key', 'remote lists the connection', async () => {
+check('Y3', 'A connection added on the Mac reaches the server with its key', 'the server lists the connection', async () => {
   await host.call('/api/connections', { kind: 'postgres', name: CANARIES.connection, dsn: `postgres://app:${SECRET}@db.invalid/orders` })
   const found = await until(async () => {
     const { data } = await remote('/api/connections') as { data: { name: string }[] }
     return data.find((each) => each.name === CANARIES.connection)
-  }, 'the connection on the remote')
+  }, 'the connection on the server')
   return found.name
 })
 
-check('Y4', 'Back up: an agent, its chat with an attached file and a recovery kit reach the room', 'agent running and answering; a file attached to the chat; kit saved in the cloud; backup idle with everything sent', async () => {
+check('Y4', 'An agent on the Mac runs and answers a chat with an attached file', 'agent running and answering; a file attached to the chat', async () => {
   const agent = await host.call('/api/agents', { name: CANARIES.agent, instructions: CANARIES.instructions }) as { id: string }
   state.agent = agent.id
   await host.call(`/api/agents/${agent.id}`, { wanted: 'running' }, 'PATCH')
@@ -213,10 +216,7 @@ check('Y4', 'Back up: an agent, its chat with an attached file and a recovery ki
   state.file = file.path
   await say(host, { agentId: agent.id, text: CANARIES.messages[1], files: [file] })
   assert.ok((await said(host, agent.id)).includes(CANARIES.reply), 'the agent answered')
-  const kit = await host.call('/api/cloud/kits', {}) as { words: string[] }
-  state.words = kit.words
-  const cloud = await statusUntil(host, (s) => s.backup.state === 'idle' && !!s.backup.at && s.kitInCloud, 'the backup to finish')
-  return `${file.path} attached; ${kit.words.length} words; backup ${cloud.backup.state} ${cloud.backup.done}/${cloud.backup.total} at ${cloud.backup.at}`
+  return `${agent.id} answered; ${file.path} attached`
 })
 
 check('Y5', 'Restore on a fresh runtime with the kit', 'fresh runtime: signed in as mo it is locked; the 12 words open it; the same agent id, name, instructions, chat and attached file come back', async () => {
