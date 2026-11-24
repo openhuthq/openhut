@@ -38,7 +38,7 @@ const app = spawn(process.execPath, ['--env-file-if-exists=.env', 'packages/runt
   env: { ...shared, OPENHUT_DATA: DATA, OPENHUT_AGENT_HOST_NET: '1', OPENHUT_CLIENT_KEY_SHA256: createHash('sha256').update('dev').digest('hex') },
   stdio: 'inherit',
 })
-const vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'packages/desktop/src/renderer'], { env: { ...shared, VITE_OPENHUT_DEV: LABEL }, stdio: 'inherit' })
+const vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'packages/app'], { env: { ...shared, OPENHUT_DEV_LABEL: LABEL }, stdio: 'inherit' })
 children.push(agentd, app, vite)
 console.log([
   '',

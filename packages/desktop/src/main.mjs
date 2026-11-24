@@ -885,6 +885,7 @@ async function releaseSigned(info) {
 
 function serve(req) {
   const { pathname } = new URL(req.url)
+  if (pathname === '/config.json') return Response.json({ cloud: CLOUD.OPENHUT_API_URL ?? 'https://cloud.openhut.dev/api', local: true })
   return /^\/(api|c\/[\w-]+\/api)\//.test(pathname) ? toLocal({ req, path: pathname }) : serveRenderer(req)
 }
 

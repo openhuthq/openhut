@@ -6,7 +6,7 @@ import { crc32, deflateSync } from 'node:zlib'
 const root = join(import.meta.dirname, '..')
 const ios = join(root, 'packages/phone/ios/App/App/Assets.xcassets')
 const res = join(root, 'packages/phone/android/app/src/main/res')
-const hut = readFileSync(join(root, 'packages/desktop/src/renderer/src/hut.svg'), 'utf8').replace(/^<svg[^>]*>|<\/svg>\s*$/g, '')
+const hut = readFileSync(join(root, 'packages/app/src/hut.svg'), 'utf8').replace(/^<svg[^>]*>|<\/svg>\s*$/g, '')
 const ground = '<ellipse cx="54" cy="102.5" rx="35.6" ry="3.3" fill="#c9952a" opacity=".28"/>'
 const mono = hut.replace(/<circle[^>]*fill="#fff"\/>/g, '').replace(/fill="#(fbe3c8|f5a48c)"/g, 'fill="none"').replace(/#[0-9a-f]{6}/g, '#000')
 

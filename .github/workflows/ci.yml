@@ -43,7 +43,7 @@ jobs:
           changed=$(git diff --name-only "$base" HEAD) || all
           echo "$changed"
           private=$(echo "$changed" | grep -E '^private$|^\.github/workflows/ci\.yml$' || true)
-          server=$(echo "$changed" | grep -E '^(install|packages/runtime|packages/common|packages/tunnel|vendor|private/api)/|^package-lock\.json$|^scripts/(release|image|image-smoke)\.sh$|^\.github/workflows/(runtime-image|ci)\.yml$' || true)
+          server=$(echo "$changed" | grep -E '^(install|packages/runtime|packages/common|vendor|private/api)/|^package-lock\.json$|^scripts/(release|image|image-smoke)\.sh$|^\.github/workflows/(runtime-image|ci)\.yml$' || true)
           if [ -n "$private" ] && echo "$changed" | grep -qx private; then
             old=$(git ls-tree "$base" private | awk '{print $3}') new=$(git ls-tree HEAD private | awk '{print $3}')
             mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
@@ -115,6 +115,31 @@ jobs:
           npm --prefix private/cloud run typecheck && npm --prefix private/cloud test
           npm --prefix private/site run typecheck
 
+  app:
+    # M3: the Cloud image and the shell carry the same App dist (scripts/app-sum.ts). The phone joins when it ships; the signed release joins with R4.
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check out private/
+        env:
+          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund --ignore-scripts
+      - name: The image, the shell and the App build carry the same dist sha256
+        run: |
+          npm -w @openhut/desktop run build
+          docker build -q -f private/api/deploy/Dockerfile -t openhut-cloud:ci .
+          docker cp "$(docker create openhut-cloud:ci)":/app/web image-web
+          node scripts/app-sum.ts packages/app/dist packages/desktop/dist/renderer image-web | tee -a "$GITHUB_STEP_SUMMARY"
+
   server:
     needs: changes
     if: needs.changes.outputs.server == 'true'
@@ -162,7 +187,7 @@ jobs:
           scripts/r2.sh pointer packs beta
 
   gate:
-    needs: [changes, checks, private, server]
+    needs: [changes, checks, private, server, app]
     if: always()
     runs-on: ubuntu-latest
     steps:

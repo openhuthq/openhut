@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { connect, newWebKeyPair, toHex, TunnelError, webKey, type TunnelSocket } from '../src/index.ts'
+import { connect, newWebKeyPair, toHex, TunnelError, webKey, type TunnelSocket } from '../../src/tunnel/index.ts'
 import { nativeKey, newDevice, startComputer, startRelay, TOKEN, waitFor } from './relay.ts'
 
 test('a request and its response cross the tunnel, with only the allowed headers and the body length', async () => {

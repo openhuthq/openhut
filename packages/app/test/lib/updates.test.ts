@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { accepted } from '../../src/lib/updates.ts'
 
-const SCRIPT = new URL('../../../../../../scripts/sign-phone-bundle.ts', import.meta.url).pathname
+const SCRIPT = new URL('../../../../scripts/sign-phone-bundle.ts', import.meta.url).pathname
 const pair = () => generateKeyPairSync('rsa', { modulusLength: 2048, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } })
 const release = pair()
 

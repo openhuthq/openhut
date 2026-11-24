@@ -1,13 +1,12 @@
-import { webKey, type Tunnel } from '@openhut/tunnel'
+import { webKey, type Tunnel } from '@openhut/common/tunnel/index.ts'
 import { ComputersOffline, openhutCloud } from '@openhut/common/cloud/openhut-cloud.ts'
 import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
 import { toBase64 } from '@openhut/common/vault/public.ts'
 import type { Channel } from '@/lib/live-socket'
 import { accountStepOf, lastSeenOf, Offline } from './web-first-run.ts'
+import { config } from './config.ts'
 
-const env: Partial<ImportMetaEnv> = import.meta.env ?? {}
-export const REMOTE = env.MODE === 'web'
-const API = env.VITE_OPENHUT_API_URL ?? 'https://cloud.openhut.dev/api'
+export const REMOTE = !config.local
 const RETURN = '/signed-in'
 
 type Pair = { publicKey: CryptoKey; privateKey: CryptoKey }
@@ -45,7 +44,7 @@ async function keys(): Promise<Keys> {
 }
 
 const cloud = openhutCloud.device({
-  url: API,
+  url: config.cloud,
   store,
   key: {
     async id() {

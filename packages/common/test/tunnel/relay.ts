@@ -2,7 +2,7 @@ import { createHash, createPublicKey, diffieHellman, generateKeyPairSync, random
 import { once } from 'node:events'
 import type { AddressInfo } from 'node:net'
 import { WebSocketServer, type RawData, type WebSocket } from 'ws'
-import { generateKeyPair, serve, toHex, type ServeInput } from '../src/index.ts'
+import { generateKeyPair, serve, toHex, type ServeInput } from '../../src/tunnel/index.ts'
 
 export const TOKEN = 'a-valid-access-token'
 

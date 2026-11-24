@@ -70,7 +70,7 @@ FROM base AS deps
 COPY --from=tree /opt/openhut/package.json /opt/openhut/package-lock.json /opt/openhut/
 COPY --from=tree /opt/openhut/packages/runtime/package.json /opt/openhut/packages/runtime/
 COPY --from=tree /opt/openhut/packages/common/package.json /opt/openhut/packages/common/
-COPY --from=tree /opt/openhut/packages/tunnel/package.json /opt/openhut/packages/tunnel/
+COPY --from=tree /opt/openhut/packages/app/package.json /opt/openhut/packages/app/
 COPY --from=tree /opt/openhut/packages/desktop/package.json /opt/openhut/packages/desktop/
 COPY --from=tree /opt/openhut/packages/e2e/package.json /opt/openhut/packages/e2e/
 COPY --from=tree /opt/openhut/packages/docs/package.json /opt/openhut/packages/docs/

@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { toast } from '@/lib/toast'
 import { latestBundle } from '@/lib/updates'
 import { desktop } from '@/lib/desktop'
+import { config } from '@/lib/config'
 
 type DeviceKeyPlugin = {
   publicKey(): Promise<{ publicKey: string }>
@@ -132,16 +133,14 @@ export function onLink(handler: (url: string) => void): () => void {
   return () => void listener.then((it) => it.remove())
 }
 
-const UPDATES_URL: string = import.meta.env.VITE_PHONE_UPDATES_URL ?? 'https://cloud.openhut.dev/v1/updates'
-const UPDATE_KEY: string | undefined = import.meta.env.VITE_PHONE_UPDATE_KEY
 let updating: Promise<void> | undefined
 
 export function update(): Promise<void> {
-  updating ??= isPhone() && UPDATE_KEY ? nextBundle(UPDATE_KEY).catch((error: unknown) => console.warn(`Live update: ${error}`)) : Promise.resolve()
+  updating ??= isPhone() && config.updates ? nextBundle(config.updates).catch((error: unknown) => console.warn(`Live update: ${error}`)) : Promise.resolve()
   return updating
 }
 
-async function nextBundle(key: string): Promise<void> {
+async function nextBundle({ url: updatesUrl, key }: { url: string; key: string }): Promise<void> {
   const { currentBundleId, previousBundleId, rollback } = await LiveUpdate.ready()
   const good = (await Preferences.get({ key: 'update.good' })).value
   if (rollback && previousBundleId) {
@@ -153,7 +152,7 @@ async function nextBundle(key: string): Promise<void> {
   if (currentBundleId) await Preferences.set({ key: 'update.good', value: currentBundleId })
   const { versionName } = await LiveUpdate.getVersionName()
   const highest = Number((await Preferences.get({ key: 'update.sequence' })).value ?? -1)
-  const verdict = await latestBundle({ updatesUrl: UPDATES_URL, key, appVersion: versionName, highest })
+  const verdict = await latestBundle({ updatesUrl, key, appVersion: versionName, highest })
   if ('refused' in verdict) return console.info(`Live update: refused, ${verdict.refused}`)
   const { bundleId, sequence, url, sha256, bundleSignature } = verdict.manifest
   if ((await LiveUpdate.getBlockedBundles()).bundleIds.includes(bundleId)) return console.info(`Live update: refused, ${bundleId} rolled back before`)

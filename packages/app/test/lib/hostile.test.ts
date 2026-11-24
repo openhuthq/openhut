@@ -43,7 +43,7 @@ test('raw HTML is set only from art built into the app, never from data', () => 
 })
 
 test('app://openhut serves the renderer under a strict CSP', () => {
-  const csp = /const CSP = "([^"]+)"/.exec(readFileSync(new URL('../../../main.mjs', import.meta.url), 'utf8'))?.[1] ?? ''
+  const csp = /const CSP = "([^"]+)"/.exec(readFileSync(new URL('../../../desktop/src/main.mjs', import.meta.url), 'utf8'))?.[1] ?? ''
   const script = /script-src ([^;]+)/.exec(csp)?.[1] ?? ''
   assert.equal(script.includes('unsafe-inline') || script.includes("'unsafe-eval'") || script.includes('*'), false)
   for (const rule of ["default-src 'self'", "object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'", "connect-src 'self'"]) assert.ok(csp.includes(rule), rule)

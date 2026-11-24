@@ -1,6 +1,7 @@
 @layer theme, base, components, utilities;
 @import 'tailwindcss/theme.css' layer(theme);
-@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+@source './';
 
 @custom-variant mobile (@media (max-width: 900px));
 @custom-variant narrow (@media (max-width: 720px));

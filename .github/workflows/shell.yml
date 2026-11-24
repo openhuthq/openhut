@@ -11,7 +11,7 @@ on:
     paths:
       - packages/desktop/src/*.mjs
       - packages/desktop/src/*.cjs
-      - packages/desktop/src/renderer/src/lib/desktop.ts
+      - packages/app/src/lib/desktop.ts
       - packages/desktop/package.json
       - packages/desktop/electron-builder*.yml
       - packages/desktop/build/**

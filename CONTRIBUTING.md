@@ -10,7 +10,7 @@ use one, point it at this file. If you are one, do what it says.
 Read these first. They are short, and a change that ignores them will be sent back.
 
 1. **[`CLAUDE.md`](CLAUDE.md)**: what each package is, the conventions, and how to run and test.
-2. **[`DESIGN.md`](DESIGN.md)**: every rule behind the dashboard's look. Read it before touching `packages/desktop/src/renderer`. Use
+2. **[`DESIGN.md`](DESIGN.md)**: every rule behind the dashboard's look. Read it before touching `packages/app`. Use
    the classes and tokens it names; don't add a colour, a button variant or a size it doesn't have.
 3. The reasons behind the code live in our private notes, so they aren't in this repo. If a change needs a reason that
    the code can't carry, put it in the pull request description.

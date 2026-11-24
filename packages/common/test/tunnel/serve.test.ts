@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MAX_REQUEST_BODY } from '../src/frames.ts'
-import { connect, type TunnelError } from '../src/index.ts'
+import { MAX_REQUEST_BODY } from '../../src/tunnel/frames.ts'
+import { connect, type TunnelError } from '../../src/tunnel/index.ts'
 import { newDevice, startComputer, TOKEN, waitFor } from './relay.ts'
 
 const closed = (error: TunnelError) => error.type === 'closed'
@@ -58,7 +58,7 @@ test('a replayed handshake message 1 does not start a request', async () => {
   const replay = new (WebSocket as unknown as new (url: string, init: { headers: Record<string, string> }) => WebSocket)(`${ctx.relay.url}/v1/tunnels/${ctx.computer.id}?role=device`, { headers: { 'x-openhut-token': TOKEN } })
   const answers: unknown[] = []
   replay.addEventListener('message', event => answers.push(event.data))
-  replay.addEventListener('open', () => recorded.forEach(frame => replay.send(frame)))
+  replay.addEventListener('open', () => recorded.forEach(frame => replay.send(new Uint8Array(frame))))
   const code = await new Promise<number>(resolve => replay.addEventListener('close', event => resolve(event.code)))
   assert.equal(code, 4003)
   assert.equal(answers.length, 1)
