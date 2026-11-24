@@ -27,8 +27,10 @@ function bytes(data: RawData): Buffer {
 export async function startRelay(): Promise<Relay> {
   const server = new WebSocketServer({
     host: '127.0.0.1', port: 0, maxPayload: 1024 * 1024,
+    handleProtocols: protocols => protocols.has('openhut') ? 'openhut' : false,
     verifyClient: ({ req }, done) => {
-      const valid = req.headers['x-openhut-token'] === TOKEN
+      const offered = String(req.headers['sec-websocket-protocol'] ?? '').split(',').map(each => each.trim())
+      const valid = (req.headers['x-openhut-token'] ?? (offered[0] === 'openhut' ? offered[1] : undefined)) === TOKEN
       if (!valid) relay.refused++
       done(valid, 401)
     }
