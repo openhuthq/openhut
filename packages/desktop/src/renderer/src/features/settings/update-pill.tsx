@@ -4,7 +4,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Meter } from '@/components/ui/meter'
 import { Spinner } from '@/components/ui/spinner'
 import { PILL } from '@/components/kit'
-import { UPDATE_KEY, downloadUrl, progressTitle, readyNote, updates, useAppUpdate } from '@/features/settings/update'
+import { UPDATE_KEY, downloadUrl, progressTitle, readyNote, updateCard, updates, useAppUpdate } from '@/features/settings/update'
 import { Hut } from '@/components/hut'
 import { toast, toastError } from '@/lib/toast'
 import { adminOf, startUpdate, useComputerAdmins, useComputers } from '@/features/computers/api'
@@ -70,10 +70,9 @@ export function UpdateEverything() {
   if (app?.installing) return <UpdateCard hut={<Hut className="size-11 [&>svg]:animate-[hop_1.2s_ease-in-out_infinite]" />} title="Installing…" note="Your computer is asking for your password" />
   if (run.isPending) return <UpdateCard hut={<Hut className="size-11 [&>svg]:animate-[hop_1.2s_ease-in-out_infinite]" />} title={doing || 'Updating…'} note="Your agents keep working" />
   if (downloading) return <UpdateCard title={progressTitle(app.progress)} note={`${app.available} · your agents keep working`}><Rider progress={app.progress ?? 0} /></UpdateCard>
-  const refused = app?.ready && app.error === 'not-installed'
-  const label = refused ? 'Try again' : app?.ready ? (servers.length ? 'Update and restart' : 'Restart to update') : 'Update'
-  return <UpdateCard hut={<Hut className="size-11 animate-[tilein_.4s_cubic-bezier(.3,1.4,.5,1)]" />} title={refused ? 'Update not installed' : app?.ready ? 'Update ready' : 'Update available'} note={app?.ready ? `Version ${app.ready.version} is ready${app.asksPassword ? '. Your computer will ask for your password to install it.' : ''}` : 'Your agents keep working'}>
-    <Button type="button" variant="primary" className="w-full justify-center" title={what} aria-label={`${label}: ${what}`} onClick={() => run.mutate()}>{label}</Button>
+  const card = updateCard({ app, servers: servers.length })
+  return <UpdateCard hut={<Hut className="size-11 animate-[tilein_.4s_cubic-bezier(.3,1.4,.5,1)]" />} title={card.title} note={card.note}>
+    <Button type="button" variant="primary" className="w-full justify-center" title={what} aria-label={`${card.label}: ${what}`} onClick={() => run.mutate()}>{card.label}</Button>
   </UpdateCard>
 }
 

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { QueryClient } from '@tanstack/react-query'
-import { UPDATE_KEY, downloadUrl, followUpdate, progressTitle, readUpdate, readyNote, updateNote, type UpdateBridge, type UpdateState } from '../../../src/features/settings/update.ts'
+import { UPDATE_KEY, downloadUrl, followUpdate, progressTitle, readUpdate, readyNote, updateCard, updateNote, type UpdateBridge, type UpdateState } from '../../../src/features/settings/update.ts'
 
 const idle: UpdateState = { current: '0.1.1', checking: false, available: null, ready: null, error: null }
 
@@ -84,4 +84,12 @@ test('a .deb install says the computer is asking for the password, and a cancell
   assert.equal(readyNote({ ...ready, installing: true }), 'Installing… your computer is asking for your password')
   assert.equal(updateNote({ ...ready, error: 'not-installed' }), 'Update not installed.')
   assert.match(readyNote({ ...ready, error: 'not-installed' }) ?? '', /^OpenHut 0.6.4 wasn't installed/)
+})
+
+test('the sidebar card offers Try again after a cancelled .deb install, and says nothing changed', () => {
+  const ready = { ...idle, asksPassword: true, ready: { version: '0.6.4' } }
+  assert.deepEqual(updateCard({ app: { ...ready, error: 'not-installed' }, servers: 0 }), { title: 'Update not installed', note: 'Nothing changed. Try again when you’re ready to enter your password.', label: 'Try again' })
+  assert.equal(updateCard({ app: ready, servers: 0 }).label, 'Restart to update')
+  assert.equal(updateCard({ app: ready, servers: 1 }).label, 'Update and restart')
+  assert.equal(updateCard({ app: idle, servers: 1 }).title, 'Update available')
 })

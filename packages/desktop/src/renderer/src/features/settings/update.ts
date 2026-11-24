@@ -25,6 +25,13 @@ export function readyNote(state: UpdateState | null | undefined) {
   return state.asksPassword ? `OpenHut ${state.ready.version} is ready. Your computer will ask for your password to install it` : `OpenHut ${state.ready.version} is ready`
 }
 
+export function updateCard({ app, servers }: { app: UpdateState | null | undefined; servers: number }) {
+  if (app?.ready && app.error === 'not-installed') return { title: 'Update not installed', note: 'Nothing changed. Try again when you’re ready to enter your password.', label: 'Try again' }
+  if (!app?.ready) return { title: 'Update available', note: 'Your agents keep working', label: 'Update' }
+  const note = `Version ${app.ready.version} is ready${app.asksPassword ? '. Your computer will ask for your password to install it.' : ''}`
+  return { title: 'Update ready', note, label: servers ? 'Update and restart' : 'Restart to update' }
+}
+
 export function progressTitle(progress: number | undefined) {
   return (progress ?? 0) < 80 ? 'Downloading the update' : 'Almost ready'
 }
