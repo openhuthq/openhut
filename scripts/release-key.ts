@@ -1,5 +1,5 @@
-import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, type KeyObject, sign, verify } from 'node:crypto'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 
@@ -8,7 +8,7 @@ const { values: flags, positionals } = parseArgs({
   options: { sequence: { type: 'string' }, channel: { type: 'string' }, 'shell-api': { type: 'string' }, halt: { type: 'boolean' }, rekor: { type: 'string' } },
 })
 const [command, path, dir, given] = positionals
-const usage = 'usage: release-key.ts key <new key file> | sign <key file> <release folder> [version] [--sequence N] [--channel stable|beta] [--shell-api MIN-MAX] [--halt] [--rekor https://rekor.sigstore.dev]'
+const usage = 'usage: release-key.ts key <new key file> | sign <key file> <release folder> [version] [--sequence N] [--channel stable|beta] [--shell-api MIN-MAX] [--halt] [--rekor https://rekor.sigstore.dev]\n       | point <key file> <signed release folder> <out folder> [--channel stable|beta] [--sequence N] [--halt] [--rekor https://rekor.sigstore.dev]'
 
 if (command === 'key' && path && !existsSync(path)) {
   const pair = generateKeyPairSync('ed25519')
@@ -42,12 +42,40 @@ if (command === 'key' && path && !existsSync(path)) {
     console.error(usage)
     process.exit(2)
   }
+  await signAndLog(key, dir, release)
+} else if (command === 'point' && path && dir && given) {
+  // R4: re-sign an already-built, already-signed release as a channel pointer (Promote, halt, or a pointer back to N−1). Builds nothing:
+  // the packs and files stay exactly those the release names; only channel, sequence and halt change, under a higher sequence.
+  const key = createPrivateKey(readFileSync(path))
+  const manifest = readFileSync(join(dir, 'release.json'))
+  if (!verify(null, manifest, createPublicKey(key), Buffer.from(readFileSync(join(dir, 'release.json.sig'), 'utf8').trim(), 'base64'))) {
+    console.error(`${dir}/release.json isn't signed by this release key, so it can't be pointed to`)
+    process.exit(1)
+  }
+  const from = JSON.parse(manifest.toString())
+  if (from.halt && !flags.halt) {
+    console.error(`${dir}/release.json is a halt; point to the release itself (its releases/<sha256>.json from before the halt)`)
+    process.exit(1)
+  }
+  const release = { ...from, channel: flags.channel ?? from.channel, sequence: Number(flags.sequence ?? Math.floor(Date.now() / 1000)), halt: flags.halt ?? false }
+  if (from.schema !== 2 || !Number.isSafeInteger(release.sequence) || release.sequence <= from.sequence || !['stable', 'beta'].includes(release.channel)) {
+    console.error(`${usage}\n(point needs a v2 release.json and a sequence above its ${from.sequence})`)
+    process.exit(2)
+  }
+  mkdirSync(given, { recursive: true })
+  await signAndLog(key, given, release)
+} else {
+  console.error(usage)
+  process.exit(2)
+}
+
+async function signAndLog(key: KeyObject, dir: string, release: Record<string, any>) {
   const manifest = Buffer.from(`${JSON.stringify(release, null, 2)}\n`)
   const signature = sign(null, manifest, key)
   writeFileSync(join(dir, 'release.json'), manifest)
   writeFileSync(join(dir, 'release.json.sig'), `${signature.toString('base64')}\n`)
   const publicKey = createPublicKey(key)
-  console.log(`${dir}/release.json: version ${version}, sequence ${release.sequence}, ${release.channel}, ${Object.keys(packs).length} packs, ${names.length} files, signed by ${publicKey.export({ type: 'spki', format: 'der' }).toString('base64')}`)
+  console.log(`${dir}/release.json: version ${release.version}, sequence ${release.sequence}, ${release.channel}${release.halt ? ', halt' : ''}, ${Object.keys(release.packs).length} packs, ${Object.keys(release.files).length} files, signed by ${publicKey.export({ type: 'spki', format: 'der' }).toString('base64')}`)
   if (flags.rekor) {
     // SEC6: log the signed manifest publicly. A rekord entry carries an Ed25519 signature over the whole artifact (hashedrekord can't).
     const res = await fetch(new URL('/api/v1/log/entries', flags.rekor), {
@@ -63,7 +91,4 @@ if (command === 'key' && path && !existsSync(path)) {
     writeFileSync(join(dir, 'release.json.rekor'), entry)
     console.log(`${dir}/release.json.rekor: Rekor entry ${Object.keys(JSON.parse(entry))[0]}`)
   }
-} else {
-  console.error(usage)
-  process.exit(2)
 }

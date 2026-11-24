@@ -16,9 +16,19 @@ rm -P "$TMPDIR/release.pem"
 
 `key` writes the private key (0600) and prints the public key (base64 SPKI); pin it as `export const RELEASE_KEY = '<printed key>'` and merge. Apps with the old key never accept an update signed by the new one, so their users download the app again.
 
-## Cut a release (owner)
+## Promote, halt, roll back (owner)
 
-**Actions › Cut a release › Run workflow**: pick the channel (`stable` or `beta`) and type the version (`0.5.0`, or `0.5.0-beta.2` for a beta). Nothing waits for a click after that. The workflow (`.github/workflows/release.yml`):
+Packs are the normal release (R4). With the repo variable `PUBLISH_PACKS` set to `true`, every green `main` push signs its packs as a beta, logs and announces it, puts the packs on dl.openhut.dev at `packs/<sha512 hex>` and the pointer at `channels/beta/release.json` (with `.sig` and `.rekor`). **Actions › Promote › Run workflow** (`.github/workflows/promote.yml`) then:
+
+- `promote`: re-signs the current beta as `channels/stable/` with a higher sequence. It builds nothing, and every stable device takes it at once, an hour after it's logged.
+- `halt`: re-signs the current stable with `halt: true`. A device holding it as pending drops it on its next poll, without waiting the hour.
+- `rollback` with `to` = an earlier release.json's sha256: re-signs those bytes (N−1's packs) as stable under a higher sequence. Devices go back to them an hour later, with no electron-updater.
+
+`release-key.ts point` does the re-signing and refuses a release.json the key didn't sign, a lower sequence, or pointing at a halt. `pointerAction()` in `packages/desktop/src/release-key.mjs` is what a device does with the pointer it polls (`refuse`, `halt`, `none`, `wait`, `install`); M5 wires it into the shell's pack apply.
+
+## Cut a shell release (owner)
+
+**Actions › Cut a shell release › Run workflow**: pick the channel (`stable` or `beta`) and type the version (`0.5.0`, or `0.5.0-beta.2` for a beta). Nothing waits for a click after that. The workflow (`.github/workflows/release.yml`):
 
 - checks the version: a beta has a `-beta.N` part and a stable has none; a stable is higher than every stable tag, a beta higher than every tag (a stable hotfix like 0.4.2 may still follow a 0.5.0 beta);
 - commits "Release X: the app and runtime version" (both `package.json` files and the lock), on `main` for a stable, on a new branch `release/vX` from `main` for a beta (a beta never lands on `main`, since every push there deploys openhut.dev, whose `install.sh` moves remote runtimes to its version);
@@ -42,7 +52,7 @@ It builds, is checked and is signed exactly like a stable. The differences: its 
 
 Set up on 2026-11-22:
 
-- **Environment `release`**: no required reviewers (removed 2026-11-23: the owner is the only one who releases), deployment only from tags `v*` (betas like `v0.5.0-beta.1` match) and from `main`. The desktop workflow's `publish` job and the Cut a release job run in it, so only those reach its secrets: `RELEASE_SIGNING_KEY` (above) and `RELEASE_TAG_KEY`, is the private half of the deploy key "Release tags from the Cut a release workflow" (write access); no copy exists anywhere else. To replace it, delete the deploy key, make a new ed25519 key, add it as a deploy key with write access and set it with `gh secret set RELEASE_TAG_KEY --env release`.
+- **Environment `release`**: no required reviewers (removed 2026-11-23: the owner is the only one who releases), deployment only from tags `v*` (betas like `v0.5.0-beta.1` match) and from `main`. The desktop workflow's `publish` job, the Cut a shell release job, Promote and the CI `beta` job run in it, so only those reach its secrets: `RELEASE_SIGNING_KEY` (above) and `RELEASE_TAG_KEY`, is the private half of the deploy key "Release tags from the Cut a release workflow" (now Cut a shell release) (write access); no copy exists anywhere else. To replace it, delete the deploy key, make a new ed25519 key, add it as a deploy key with write access and set it with `gh secret set RELEASE_TAG_KEY --env release`.
 - **Tag ruleset `release tags`** on `refs/tags/v*`: creation, update, deletion and force-push are restricted; the repository Admin role (`actor_id` 5) and deploy keys (`DeployKey`, added 2026-11-22 for Cut a release) bypass. The only deploy key is the one above.
 
 Still the owner's (needs the secret values): move `CSC_LINK`, `CSC_KEY_PASSWORD`, `NOTARY_KEY_P8_BASE64`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID` from repo secrets into the `release` environment (delete the repo copies), then run the `draft` and `build` jobs in it on tags (`environment: ${{ startsWith(github.ref, 'refs/tags/') && 'release' || '' }}`); a manual full build of a branch then can't sign. `CLOUDFLARE_API_TOKEN` stays a repo secret because the site deploy uses it too.

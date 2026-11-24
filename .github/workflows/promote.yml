@@ -1,0 +1,62 @@
+name: Promote
+
+# R4, the normal release. Re-signs the stable channel pointer to a release main already built and published as beta, for everyone at once,
+# and builds nothing. `halt` re-signs the current stable with halt: devices drop a pending install on their next poll, without the hour.
+# `rollback` points stable back at an earlier release's bytes (releases/<sha256>.json) under a higher sequence. Each pointer is logged in
+# Rekor and announced (scripts/r2.sh pointer), so the release monitor stays quiet; devices still wait the hour, halt excepted.
+# Installers are a shell release (shell.yml); deploying the Cloud with the promoted App is R5.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: promote the current beta to stable, halt stable, or roll stable back to an earlier release
+        type: choice
+        options: [promote, halt, rollback]
+        default: promote
+      to:
+        description: For rollback only, the sha256 of the earlier release.json (its releases/<sha256>.json on dl.openhut.dev, or its Rekor entry's data hash)
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: github.ref == 'refs/heads/main'
+    environment: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Re-sign, log and publish the stable pointer
+        env:
+          ACTION: ${{ inputs.action }}
+          TO: ${{ inputs.to }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          case "$ACTION" in
+            promote) from=channels/beta/release.json flags='--channel stable' ;;
+            halt) from=channels/stable/release.json flags='--halt' ;;
+            rollback)
+              echo "$TO" | grep -Eqx '[0-9a-f]{64}' || { echo "::error::A rollback needs the sha256 of an earlier release.json in 'to'."; exit 1; }
+              from=releases/$TO.json flags='--channel stable' ;;
+          esac
+          [ -n "$RELEASE_SIGNING_KEY" ] || { echo "::error::The release environment has no RELEASE_SIGNING_KEY."; exit 1; }
+          mkdir from
+          for ext in '' .sig .rekor; do curl -fsS -o "from/release.json$ext" "https://dl.openhut.dev/$from$ext"; done
+          (umask 077 && printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release.pem")
+          node scripts/release-key.ts point "$RUNNER_TEMP/release.pem" from stable $flags --rekor https://rekor.sigstore.dev
+          rm "$RUNNER_TEMP/release.pem"
+          scripts/r2.sh pointer stable stable
+          { echo "$ACTION: stable now points at $from, re-signed:"; echo '```'; cat stable/release.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
