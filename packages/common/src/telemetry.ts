@@ -30,7 +30,7 @@ export type InstallKind = typeof INSTALL_KINDS[number]
 // From an install: instance and version. openhut.dev (site: true, with the Cloud's stats token) may also send none, and adds the sender's country.
 export type TelemetryBatch = { instance?: string; version?: string; kind?: InstallKind; country?: string; events: TelemetryEvent[] }
 
-// GET /api/v1/stats on the Cloud (behind its stats token), which openhut.dev/stats shows.
+// What telemetryService.stats() returns on the Cloud; the owner-only admin page (cloud.openhut.dev/api/v1/admin) shows it.
 export type Stats = {
   installs: number
   activeToday: number
