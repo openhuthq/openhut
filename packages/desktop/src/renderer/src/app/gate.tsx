@@ -46,7 +46,7 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
     if (step === 'unlock') void notifyUnlock()
   }, [step])
   if (step === 'loading') return error ? <Down error={error} retrying={me.isFetching} onRetry={() => { void me.refetch(); void cloud.refetch() }} /> : <Waiting />
-  if ((isPhone() || REMOTE) && step !== 'ready') return <Stage><Step title="Finish on your computer." line="Set up OpenHut there, then come back." /></Stage>
+  if ((isPhone() || REMOTE) && step !== 'ready' && !(REMOTE && step === 'kit')) return <Stage><Step title="Finish on your computer." line="Set up OpenHut there, then come back." /></Stage>
   if (step === 'kit' && !saving && !invited) setSaving(true)
   if (saving) return <Stage><SaveKit onDone={() => {
     setSaving(false)

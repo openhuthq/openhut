@@ -5,6 +5,7 @@ import { Tick02Icon } from '@hugeicons/core-free-icons'
 import { Hut } from '@/components/hut'
 import { ICONS } from '@/components/icons'
 import { DRAG, I } from '@/components/kit'
+import type { Mood } from '@/lib/hut'
 import { OWN_TITLE_BAR } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 
@@ -20,9 +21,9 @@ export function Guide({ label, at, of, onClose, children }: { label: string; at:
   </Dialog>
 }
 
-export function Step({ title, line, happy = false, back, backLabel = 'Back', action, link, children }: { title: string; line?: ReactNode; happy?: boolean; back?: () => void; backLabel?: string; action?: ReactNode; link?: ReactNode; children?: ReactNode }) {
+export function Step({ title, line, happy = false, mood, back, backLabel = 'Back', action, link, children }: { title: string; line?: ReactNode; happy?: boolean; mood?: Mood; back?: () => void; backLabel?: string; action?: ReactNode; link?: ReactNode; children?: ReactNode }) {
   return <div className="@container flex w-full flex-col items-center gap-6 text-center">
-    <FrameHut happy={happy} />
+    <FrameHut happy={happy} mood={mood} />
     <div key={`t-${title}`} className="flex max-w-full animate-[fadein_.4s_ease-out] flex-col items-center gap-2 motion-reduce:animate-none">
       <h1 className="m-0 text-[42px]/[50px] font-bold tracking-[-.035em] text-balance @max-[600px]:text-[32px]/[40px]">{title}</h1>
       {line && <p className="m-0 flex max-w-[440px] items-center gap-1.5 text-[16px]/[24px] text-balance text-body">{line}</p>}
@@ -38,10 +39,10 @@ export function Step({ title, line, happy = false, back, backLabel = 'Back', act
   </div>
 }
 
-function FrameHut({ happy }: { happy: boolean }) {
+function FrameHut({ happy, mood }: { happy: boolean; mood?: Mood }) {
   return <span className="relative isolate size-[112px] shrink-0">
     <i className={cn('absolute -inset-[26%] -z-10 rounded-full bg-[radial-gradient(circle,#f7c94866,transparent_64%)] transition-[opacity,scale] duration-700 ease-out', happy ? 'scale-100 opacity-100' : 'scale-60 opacity-0')} />
-    <Hut mood={happy ? 'happy' : undefined} className="still size-full" />
+    <Hut mood={happy ? 'happy' : mood} className="still size-full" />
     <i className={cn('absolute right-1 bottom-2 grid size-[30px] place-items-center rounded-full border-[3px] border-canvas bg-pass text-white transition-[opacity,scale] duration-300 ease-[cubic-bezier(.34,1.56,.64,1)]', happy ? 'scale-100 opacity-100' : 'scale-40 opacity-0')}><I icon={Tick02Icon} size={15} className="[&_path]:stroke-[2.6]" /></i>
   </span>
 }

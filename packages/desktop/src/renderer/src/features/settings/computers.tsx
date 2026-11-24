@@ -228,7 +228,7 @@ function Empty({ title, line, children }: { title: string; line: string; childre
   </div>
 }
 
-function Scene({ mood, title, line, children }: { mood: Mood; title: string; line?: ReactNode; children?: ReactNode }) {
+export function Scene({ mood, title, line, children }: { mood: Mood; title: string; line?: ReactNode; children?: ReactNode }) {
   return <div className="flex flex-col items-center gap-4 px-6 pt-4 pb-2 text-center">
     {children ?? <Hut mood={mood} className="size-24" />}
     <div className="flex flex-col gap-1">
@@ -238,7 +238,7 @@ function Scene({ mood, title, line, children }: { mood: Mood; title: string; lin
   </div>
 }
 
-function Waiting({ children, note }: { children: ReactNode; note: string }) {
+export function Waiting({ children, note }: { children: ReactNode; note: string }) {
   return <div className="flex flex-col gap-1">
     <p className="m-0 flex items-center gap-2"><Spinner className="mt-0" />{children}</p>
     <p className="m-0 pl-[22px] text-[12px]/[16px] text-mute">{note}</p>
@@ -339,11 +339,11 @@ function AddByCommand() {
   </TailscaleDialog>
 }
 
-function joinCommand(code: string) {
+export function joinCommand(code: string) {
   return `curl -fsSL openhut.dev | OPENHUT_JOIN='${code.replaceAll("'", '')}' sh`
 }
 
-function useNow(ticking: boolean) {
+export function useNow(ticking: boolean) {
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
     if (!ticking) return

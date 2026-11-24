@@ -1,11 +1,12 @@
-import { connect, webKey, type Tunnel } from '@openhut/tunnel'
+import { connect, TunnelError, webKey, type Tunnel } from '@openhut/tunnel'
 import { bodyOf } from '@openhut/common/cloud/member-list.ts'
 import type { MemberList } from '@openhut/common/cloud/cloud.ts'
 import { commitOfWeb, facesOfWeb } from '@openhut/common/cloud/faces-web.ts'
 import type { JoinRequest } from '@openhut/common/cloud/v1/trust.ts'
-import { proofOf, requestParts, SIGNATURE_HEADER, type Me, type Session } from '@openhut/common/cloud/v1/identity.ts'
+import { proofOf, requestParts, SIGNATURE_HEADER, type JoinCode, type Me, type Session } from '@openhut/common/cloud/v1/identity.ts'
 import { fromBase64, toBase64 } from '@openhut/common/vault/vault.ts'
 import type { Channel } from '@/lib/live-socket'
+import { accountStepOf, lastSeenOf, Offline } from './web-first-run.ts'
 
 const env: Partial<ImportMetaEnv> = import.meta.env ?? {}
 export const REMOTE = env.MODE === 'web'
@@ -15,7 +16,7 @@ const RETURN = '/signed-in'
 
 type Pair = { publicKey: CryptoKey; privateKey: CryptoKey }
 type Keys = { signing: Pair; tunnel: Pair }
-export type RemoteState = { step: 'signed-out' } | { step: 'waiting'; email: string; faces: number[] } | { step: 'over'; email: string; missed: boolean } | { step: 'ready'; email: string; workspace: string }
+export type RemoteState = { step: 'signed-out' } | { step: 'first-run'; email: string } | { step: 'waiting'; email: string; faces: number[] } | { step: 'over'; email: string; missed: boolean } | { step: 'ready'; email: string; workspace: string }
 
 let tunnel: Tunnel | undefined
 
@@ -97,10 +98,11 @@ export const remote = {
     }
     const me = await cloud<Me>('GET', '/v1/me')
     if (me.status !== 200) return { step: 'signed-out' }
-    const home = me.json.workspaces.find((each) => each.id === me.json.home)
-    if (home?.access === 'listed') {
+    const step = accountStepOf(me.json)
+    if (step === 'first-run') return { step, email: me.json.email }
+    if (step === 'ready') {
       await write('nonce', null)
-      return { step: 'ready', email: me.json.email, workspace: home.id }
+      return { step: 'ready', email: me.json.email, workspace: me.json.home ?? '' }
     }
     const device = await deviceOf(await keys())
     const nonce = await read<string | null>('nonce')
@@ -120,20 +122,31 @@ export const remote = {
     await write('nonce', nonce)
   },
 
+  async joinCode(): Promise<JoinCode> {
+    const made = await cloud<JoinCode & { error?: { message: string } }>('POST', '/v1/join-codes')
+    if (made.status !== 200) throw new Error(made.json?.error?.message ?? 'OpenHut Cloud couldn’t make a command. Try again.')
+    return made.json
+  },
+
   async open(workspace: string): Promise<void> {
     const signed = await session()
     const lists = await cloud<{ data: MemberList[] }>('GET', `/v1/member-lists?workspace=${workspace}`)
     const body = bodyOf(lists.json?.data.at(-1))
     const mine = await deviceOf(await keys())
-    const computers = body?.members.find((each) => each.email === signed?.email)?.devices.filter((device) => device !== mine && !body.removed.includes(device)) ?? []
+    const own = body?.members.find((each) => each.email === signed?.email)
+    const computers = own?.devices.filter((device) => device !== mine && device !== own.kit && !body?.removed.includes(device)) ?? []
+    let seen: number | null = null
     for (const device of computers) {
       const box = fromBase64(device).subarray(32)
       const id = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', box)), (byte) => byte.toString(16).padStart(2, '0')).join('')
       const key = Array.from(box, (byte) => byte.toString(16).padStart(2, '0')).join('')
-      tunnel = await connect({ relayUrl: RELAY, computer: { id, key }, key: await webKey((await keys()).tunnel), token: signed?.token ?? '', timeout: 8000 }).catch(() => undefined)
+      tunnel = await connect({ relayUrl: RELAY, computer: { id, key }, key: await webKey((await keys()).tunnel), token: signed?.token ?? '', timeout: 8000 }).catch((err: unknown) => {
+        seen = Math.max(seen ?? 0, err instanceof TunnelError ? lastSeenOf(err.reason) ?? 0 : 0) || null
+        return undefined
+      })
       if (tunnel) return
     }
-    throw new Error('None of your computers is online. Open OpenHut on your Mac, then try again.')
+    throw new Offline({ computer: computers.length === 1 ? body?.names?.[computers[0] ?? ''] ?? null : null, seen })
   },
 
   fetch(path: string, init?: RequestInit): Promise<Response> {

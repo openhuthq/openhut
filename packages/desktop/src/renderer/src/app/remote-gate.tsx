@@ -3,22 +3,29 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
 import { Spinner } from '@/components/ui/spinner'
+import { FirstRun, forgetFirstRun, Offline, PhoneFirstRun } from '@/app/first-run'
 import { Knocking, YoureIn } from '@/features/cloud/knock'
 import { BIG, Stage, Step } from '@/features/cloud/step'
 import { followEvents } from '@/lib/live'
 import { remote } from '@/lib/remote'
+import { Offline as Away, phoneBrowser, screenOf } from '@/lib/web-first-run'
 
 const WAIT_MS = 3000
+const OFFLINE_MS = 5000
+const POLLED = ['waiting', 'first-run']
 
 export function RemoteGate({ children }: { children: ReactNode }) {
   const client = useQueryClient()
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState<string>()
   const [knocked, setKnocked] = useState(false)
-  const state = useQuery({ queryKey: ['remote'], queryFn: remote.state, refetchInterval: (query) => query.state.data?.step === 'waiting' ? WAIT_MS : false, retry: false })
+  const state = useQuery({ queryKey: ['remote'], queryFn: remote.state, refetchInterval: (query) => POLLED.includes(query.state.data?.step ?? '') ? WAIT_MS : false, retry: false })
   const workspace = state.data?.step === 'ready' ? state.data.workspace : undefined
-  const opened = useQuery({ queryKey: ['remote-tunnel', workspace], queryFn: async () => { await remote.open(workspace ?? ''); return true }, enabled: !!workspace, retry: false, staleTime: Infinity })
+  const opened = useQuery({ queryKey: ['remote-tunnel', workspace], queryFn: async () => { await remote.open(workspace ?? ''); return true }, enabled: !!workspace, retry: false, staleTime: Infinity, refetchInterval: (query) => query.state.error instanceof Away ? OFFLINE_MS : false })
   useEffect(() => { if (opened.data) followEvents(client) }, [opened.data, client])
+  const step = state.data?.step
+  useEffect(() => { if (step && step !== 'first-run') forgetFirstRun() }, [step])
+  const screen = screenOf({ step, opened: Boolean(opened.data), error: opened.error, phone: phoneBrowser({ userAgent: navigator.userAgent, width: innerWidth }) })
   if (opened.data && knocked) return <Stage><YoureIn line="Your computer let this browser in." onOpen={() => setKnocked(false)} /></Stage>
   if (opened.data) return children
   const failure = error ?? (state.error ?? opened.error)?.message
@@ -26,6 +33,9 @@ export function RemoteGate({ children }: { children: ReactNode }) {
     <Button className={BIG} disabled={signingIn} onClick={() => { setSigningIn(true); remote.signIn().catch((err: Error) => { setError(err.message); setSigningIn(false) }) }}>{signingIn ? <Spinner /> : null}Continue with Google</Button>
     {failure && <ErrorNote message={failure} />}
   </Step></Stage>
+  if (screen === 'first-run' && state.data?.step === 'first-run') return <FirstRun email={state.data.email} />
+  if (screen === 'phone' && state.data?.step === 'first-run') return <PhoneFirstRun email={state.data.email} />
+  if (screen === 'offline' && opened.error instanceof Away) return <Offline computer={opened.error.computer} seen={opened.error.seen} />
   if (state.data?.step === 'waiting' && !knocked) setKnocked(true)
   if (state.data?.step === 'waiting') return <Stage><Knocking faces={state.data.faces} /></Stage>
   if (state.data?.step === 'over') return <Stage><Step title={state.data.missed ? 'Those faces didn’t match.' : 'Nobody let you in.'} line={state.data.missed ? 'The request was turned down. If that was you, knock again.' : 'The knock was turned down, or 15 minutes passed.'}

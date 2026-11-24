@@ -16,7 +16,7 @@ export type Bundle = { list: MemberList; letters?: Letter[]; boxes?: Box[] }
 export type Call = { method: 'GET' | 'PUT' | 'POST' | 'DELETE'; path: string; token: string; signer: Identity; body?: unknown }
 export type Reply = { status: number; json: unknown }
 export type Device = { token?: string }
-export type CloudSession = { token: string; refresh: string; sub: string; email: string; expiresAt: string }
+export type CloudSession = { token: string; refresh: string; sub: string; email: string; expiresAt: string; maker?: string }
 
 export const cloud = {
   authorization: ({ token, ...body }: CreateOAuthAuthorization & Device): Promise<OAuthAuthorization> => post({ base: config.cloudUrl, path: '/v1/oauth-authorizations', body, token, reply: OAuthAuthorization }),
@@ -25,7 +25,7 @@ export const cloud = {
 
   async session(body: CreateSession): Promise<CloudSession> {
     const made = await post({ path: '/v1/sessions', body, reply: Session })
-    return { token: made.token, refresh: made.refreshToken, sub: made.sub, email: made.email, expiresAt: made.expiresAt }
+    return { token: made.token, refresh: made.refreshToken, sub: made.sub, email: made.email, expiresAt: made.expiresAt, maker: made.maker }
   },
 
   eventsUrl: (): string => `${config.apiUrl.replace(/^http/, 'ws')}/v1/events`,
