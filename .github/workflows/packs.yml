@@ -4,7 +4,7 @@ name: Packs
 # The release workflow calls this (workflow_call) and gets the packs as the `packs` artifact.
 on:
   push:
-    branches: [main, feat/r2-packs]
+    branches: [main]
   workflow_call:
 
 permissions:
