@@ -9,7 +9,14 @@ import { padded } from '@openhut/common/records/seal.ts'
 import { fromBase64, identity, lock, newKey, toBase64, unlock } from '@openhut/common/vault/vault.ts'
 
 const requests: unknown[] = []
+const refuse = new Map<string, number>()
 const http = createServer((req, res) => {
+  const team = new URL(req.url ?? '/', 'http://x').searchParams.get('workspace') ?? ''
+  const left = req.url?.startsWith('/v1/member-lists') ? refuse.get(team) ?? 0 : 0
+  if (left > 0) {
+    refuse.set(team, left - 1)
+    return res.writeHead(403, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { type: 'forbidden', message: 'Not in this team.' } }))
+  }
   const json = req.url?.startsWith('/v1/join-requests') ? { object: 'list', data: requests } : { object: 'list', data: [] }
   res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(json))
 })
@@ -142,4 +149,27 @@ test('a Here is locked to its sender, padded to one fixed size, and opens only w
   assert.equal(await openHere({ workspace: ws, keys: { 1: newKey() }, from, body }), null)
   assert.equal(Buffer.from(body, 'base64url').includes('ag_helpdesk'), false)
   assert.equal(await lockHere({ workspace: ws, key, version: 1, from, value: { ...value, agent: 'ag_x'.repeat(200) } }), null)
+})
+
+async function aTeam(id: string, key: string): Promise<void> {
+  const list = await signList({ signer: await keysService.device(), body: { workspace: id, version: 1, previous: null, members: [{ email: 'boss@example.com', role: 'owner', devices: [phoneKey] }, { email: 'mo@example.com', role: 'member', devices: [me] }], invites: [], removed: [] } })
+  await roomKeys.setRoom({ workspace: { id, key, version: 1 }, list, first: list })
+}
+
+test('a 403 for a team while joining it, or just once, doesn\'t drop the team; one that lasts does', async () => {
+  cloudEvents.start()
+  await until(() => !!peer, 'events running')
+  await aTeam('JoiningTeam01', '')
+  refuse.set('JoiningTeam01', Infinity)
+  await cloudEvents.refreshKeys('JoiningTeam01')
+  await aTeam('BlipTeam00001', toBase64(newKey()))
+  refuse.set('BlipTeam00001', 1)
+  await cloudEvents.refreshKeys('BlipTeam00001')
+  await aTeam('GoneTeam00001', toBase64(newKey()))
+  refuse.set('GoneTeam00001', Infinity)
+  await cloudEvents.refreshKeys('GoneTeam00001')
+  await sleep(2600)
+  assert.ok(roomKeys.room('JoiningTeam01'), 'a team still waiting for its key stays')
+  assert.ok(roomKeys.room('BlipTeam00001'), 'a team refused once stays')
+  await until(() => !roomKeys.room('GoneTeam00001'), 'the team that keeps refusing to drop')
 })

@@ -23,6 +23,7 @@ import { roomKeys } from './room-keys.ts'
 
 export const BEAT_MS = 10_000
 const GONE = [4001, 4003, 4010]
+const REFUSED_AGAIN_MS = 2000
 const LIVE: Record<Collection, string[]> = {
   workspace: [], agent: ['agent'], control: ['agent', 'grant'], message: ['thread'], memory: ['memory'], connection: ['connection'], skill: ['skill'], routine: ['routine'], channel: ['channel'], file: ['thread'],
 }
@@ -41,6 +42,7 @@ const names = new Map<string, { name: string | null; site: string | null }>()
 const requests = new Map<string, DeviceRequest[]>()
 const beats = new Map<string, Map<string, Beat>>()
 const gone: Gone[] = []
+const doubted = new Set<string>()
 
 presence.wire({
   rooms: () => ready ? roomKeys.rooms().map((room) => room.workspace.id) : [],
@@ -190,13 +192,23 @@ function run(step: () => Promise<void>): Promise<void> {
   return queue
 }
 
+function refusedOnce(ws: string): void {
+  if (!socket || !roomKeys.room(ws)?.workspace.key || doubted.has(ws)) return
+  doubted.add(ws)
+  setTimeout(() => void run(async () => {
+    doubted.delete(ws)
+    if (!socket || !roomKeys.room(ws)) return
+    if ((await roomKeys.refresh({ ws, call: keysService.call })).gone) await cloudEvents.drop({ ws, why: 'removed' })
+  }), REFUSED_AGAIN_MS).unref()
+}
+
 async function refreshKeys(ws: string): Promise<void> {
   if (!roomKeys.room(ws)) return
   const { changed: moved, gone: out } = await roomKeys.refresh({ ws, call: keysService.call })
   const list = roomKeys.members(ws)
   const me = await keysService.deviceKey()
   const home = ws === keysService.account()?.workspace.id
-  if (out && !home) return cloudEvents.drop({ ws, why: 'removed' })
+  if (out && !home) return refusedOnce(ws)
   if (home && list && !list.members.some((member) => member.devices.includes(me))) return removedNow(ws)
   if (list) presence.members({ ws, emails: list.members.map((member) => member.email) })
   if (moved) emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
