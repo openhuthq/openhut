@@ -116,7 +116,9 @@ jobs:
           npm --prefix private/site run typecheck
 
   app:
-    # M3: the shell carries main's App dist (scripts/app-sum.ts); the Cloud image carries the signed stable release's (R5: the web App follows stable only).
+    # M3: the image, the shell and the phone (webDir ../app/dist) carry the same App dist (scripts/app-sum.ts). A PR's App never matches
+    # stable, so here the image is built against a test-key release of this App (deploy/m2/test-release.ts, as in the rehearsal);
+    # R5's check against the real signed stable release runs in the Cloud deploy's build (cloud.yml, after fetch-release.sh).
     needs: changes
     runs-on: ubuntu-latest
     steps:
@@ -133,14 +135,13 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund --ignore-scripts
-      - name: The shell carries the App build's dist sha256; the image carries the stable release's App
+      - name: The image, the shell and the phone carry the same dist sha256
         run: |
           npm -w @openhut/desktop run build
-          node scripts/app-sum.ts packages/app/dist packages/desktop/dist/renderer | tee -a "$GITHUB_STEP_SUMMARY"
-          private/api/deploy/fetch-release.sh
-          docker build -q -f private/api/Dockerfile -t openhut-cloud:ci .
+          set -a; eval "$(node private/api/deploy/m2/test-release.ts packages/app/dist private/api/deploy/release)"; set +a
+          docker build -q -f private/api/Dockerfile --build-arg RELEASE_KEY_SPKI --build-arg REKOR_KEY_SPKI -t openhut-cloud:ci .
           docker cp "$(docker create openhut-cloud:ci)":/app/web image-web
-          node scripts/app-sum.ts private/api/deploy/release/renderer image-web | tee -a "$GITHUB_STEP_SUMMARY"
+          node scripts/app-sum.ts packages/app/dist packages/desktop/dist/renderer image-web | tee -a "$GITHUB_STEP_SUMMARY"
 
   server:
     needs: changes
