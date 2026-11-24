@@ -119,3 +119,8 @@ the Linux app runs agents natively like the Mac app, with no Docker (`private/br
 
 `npx turbo run build typecheck test` builds, typechecks and runs the unit tests. `npm run e2e` runs the whole thing on Docker Desktop (about 25 minutes):
 the install, every check, a tampered upgrade, the upgrade, a restart. Plan: `docs/verification-plan.md`.
+`npm run check:fast` typechecks and tests only what changed since main (`turbo --affected`; set `TURBO_SCM_BASE=origin/main`
+in a worktree). `npm run prove` builds the renderer and backend and runs the app e2e (`app-e2e.mjs --dev`) against
+the unpackaged app and a local dev cloud, on this Mac only. Its first run needs a click on the Keychain prompt
+(`private/brain/openhut-gotchas.md`). Packaged-app proof on every OS is the PR's Desktop app run: its `*-e2e`
+artifacts hold the screenshots and `evidence.json`.

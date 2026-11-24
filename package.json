@@ -14,6 +14,8 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck && tsc -p scripts",
     "test": "turbo run test",
+    "check:fast": "turbo run typecheck test --affected",
+    "prove": "npm -w @openhut/desktop run prove",
     "e2e": "npm -w @openhut/e2e run e2e",
     "release": "scripts/release.sh",
     "postinstall": "[ ! -f scripts/private.sh ] || sh scripts/private.sh"

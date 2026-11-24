@@ -1,21 +1,23 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
+import { createRequire } from 'node:module'
 import { createServer as tcpServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
 import { bootCloud, devCloudUrl, signIn } from './dev-cloud.mjs'
 
-const { values: args } = parseArgs({ options: { installer: { type: 'string' }, app: { type: 'string' }, out: { type: 'string', default: 'app-e2e' }, agents: { type: 'string', default: '5' }, cloud: { type: 'string' } } })
-if (!args.installer && !args.app) {
-  console.error('usage: node scripts/app-e2e.mjs (--installer <OpenHut-Setup-x64.exe> | --app <OpenHut.app or linux-unpacked>) [--out <evidence folder>] [--agents 5] [--cloud <private/api>]')
+const { values: args } = parseArgs({ options: { installer: { type: 'string' }, app: { type: 'string' }, dev: { type: 'boolean', default: false }, out: { type: 'string', default: 'app-e2e' }, agents: { type: 'string', default: '5' }, cloud: { type: 'string' } } })
+if (!args.installer && !args.app && !args.dev) {
+  console.error('usage: node scripts/app-e2e.mjs (--installer <OpenHut-Setup-x64.exe> | --app <OpenHut.app or linux-unpacked> | --dev) [--out <evidence folder>] [--agents 5] [--cloud <private/api>]')
   process.exit(2)
 }
 const WIN = process.platform === 'win32'
 const LINUX = process.platform === 'linux'
 const NAMES = ['Juniper', 'Atlas', 'Birch', 'Cedar', 'Dahlia', 'Elm', 'Fern', 'Grove']
-let exe = args.app ? resolve(args.app, LINUX ? 'openhut' : 'Contents/MacOS/OpenHut') : ''
+const DESKTOP = resolve(import.meta.dirname, '..')
+let exe = args.dev ? createRequire(import.meta.url)('electron') : args.app ? resolve(args.app, LINUX ? 'openhut' : 'Contents/MacOS/OpenHut') : ''
 const home = resolve(args.out, 'home')
 const cdpPort = 9300 + Math.floor(Math.random() * 500)
 const guestPort = cdpPort + 500
@@ -304,11 +306,12 @@ function osVersion() {
 }
 
 function resources() {
+  if (args.dev) return join(DESKTOP, 'dist')
   return join(dirname(exe), WIN || LINUX ? 'resources' : '../Resources')
 }
 
 function launch({ port = cdpPort, environment = env, link, who = 'app' } = {}) {
-  const proc = spawn(exe, [`--remote-debugging-port=${port}`, ...LINUX ? ['--no-sandbox', '--password-store=basic'] : [], ...link ? [link] : []], { env: environment, stdio: 'ignore' })
+  const proc = spawn(exe, [...args.dev ? [DESKTOP] : [], `--remote-debugging-port=${port}`, ...LINUX ? ['--no-sandbox', '--password-store=basic'] : [], ...link ? [link] : []], { env: environment, stdio: 'ignore' })
   proc.on('exit', (code) => say(`${who} process exited`, { code }))
   return proc
 }
