@@ -6,6 +6,7 @@ import { createServer as tcpServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
+import { attach, typeInto } from './cdp.mjs'
 import { bootCloud, bootWorker, devCloudUrl, signIn } from './dev-cloud.mjs'
 
 const { values: args } = parseArgs({ options: { installer: { type: 'string' }, app: { type: 'string' }, dev: { type: 'boolean', default: false }, out: { type: 'string', default: 'app-e2e' }, agents: { type: 'string', default: '5' }, cloud: { type: 'string' } } })
@@ -157,9 +158,7 @@ async function invite(mo, agent) {
   say(`the invitee's app lists Mo's shared ${agent.name}`, { owner: shared.ownerName, canEdit: shared.canEdit })
   await page.eval(`navigation.navigate('/agents/${agent.id}')`)
   const text = `hello from ${INVITEE}`
-  await until(async () => page.eval(`(() => { const box = document.querySelector('textarea[aria-label="Message"]'); if (!box || box.disabled) return false; box.focus(); return true })()`), 60, `the chat box for ${shared.name} in the invitee's window`)
-  await page.send('Input.insertText', { text })
-  for (const type of ['keyDown', 'keyUp']) await page.send('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, ...type === 'keyDown' && { text: '\r' } })
+  await until(async () => typeInto({ page, selector: 'textarea[aria-label="Message"]', text }), 60, `the chat box for ${shared.name} in the invitee's window`)
   say(`typed "${text}" in the invitee's chat box and pressed Enter`)
   const answer = await until(async () => {
     const body = String(await page.eval('document.body?.innerText') ?? '')
@@ -360,37 +359,7 @@ async function connect(port = cdpPort) {
     const list = await fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.json()).catch(() => [])
     return list.find((each) => each.type === 'page' && each.url.startsWith('app://openhut'))
   }, 60, 'the app window')
-  const socket = new WebSocket(target.webSocketDebuggerUrl)
-  await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject })
-  const waiting = new Map()
-  const urls = new Map()
-  let id = 0
-  const failures = []
-  socket.onmessage = (message) => {
-    const reply = JSON.parse(message.data)
-    if (reply.method === 'Network.requestWillBeSent') urls.set(reply.params.requestId, `${reply.params.request.method} ${reply.params.request.url}`)
-    if (reply.method === 'Network.loadingFailed' && !reply.params.canceled) failures.push({ request: urls.get(reply.params.requestId), error: reply.params.errorText, at: new Date().toISOString() })
-    if (reply.method === 'Runtime.exceptionThrown' || (reply.method === 'Runtime.consoleAPICalled' && reply.params.type === 'error')) failures.push({ console: JSON.stringify(reply.params).slice(0, 400) })
-    waiting.get(reply.id)?.(reply)
-    waiting.delete(reply.id)
-  }
-  const send = (method, params) => new Promise((resolve, reject) => {
-    const n = ++id
-    waiting.set(n, (reply) => reply.error ? reject(new Error(reply.error.message)) : resolve(reply.result))
-    socket.send(JSON.stringify({ id: n, method, params }))
-    setTimeout(() => waiting.has(n) && (waiting.delete(n), reject(new Error(`no answer to ${method}`))), 60_000)
-  })
-  await send('Network.enable', {})
-  await send('Runtime.enable', {})
-  return {
-    failures,
-    send,
-    eval: async (expression) => {
-      const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
-      if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? 'page error')
-      return result.result?.value
-    },
-  }
+  return attach(target.webSocketDebuggerUrl)
 }
 
 async function until(check, seconds, what) {

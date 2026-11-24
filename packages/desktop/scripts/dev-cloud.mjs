@@ -34,7 +34,7 @@ export async function bootWorker({ dir, url, state, log }) {
   return proc
 }
 
-export async function signIn({ page, api, email = 'mo@example.com' }) {
+export async function signIn({ page, api, email = 'mo@example.com', kit = true }) {
   const { authorizationUrl } = await page.eval("fetch('/api/cloud/sessions', { method: 'POST' }).then((r) => r.json())")
   const link = new RegExp(`href="([^"]+)">${email.replaceAll('.', '\\.')}<`).exec(await (await fetch(authorizationUrl)).text())?.[1]?.replaceAll('&amp;', '&')
   if (!link) throw new Error(`the dev sign-in page has no link for ${email}`)
@@ -43,8 +43,9 @@ export async function signIn({ page, api, email = 'mo@example.com' }) {
   let last
   await waitFor(async () => (last = await page.eval("fetch('/api/cloud').then((r) => r.json())")).status === 'on' || null, 120, 'the cloud to say signed in')
     .catch((error) => { throw new Error(`${error.message}; /api/cloud last said ${JSON.stringify(last).slice(0, 400)}`) })
-  const kit = await page.eval("fetch('/api/cloud/kits', { method: 'POST' }).then((r) => r.status)")
-  if (kit !== 200) throw new Error(`saving the recovery kit answered ${kit}`)
+  if (!kit) return
+  const saved = await page.eval("fetch('/api/cloud/kits', { method: 'POST' }).then((r) => r.status)")
+  if (saved !== 200) throw new Error(`saving the recovery kit answered ${saved}`)
 }
 
 async function waitFor(check, seconds, what) {
