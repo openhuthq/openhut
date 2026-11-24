@@ -4,6 +4,7 @@ import type { Routine } from '@openhut/common/routines/routine.ts'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
 import { useConfirming } from '@/components/confirm-button'
+import { EmptyState } from '@/components/empty-state'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { DialogCard, I, Loading, ROW, ROW_VALUE, SPLIT_DIALOG } from '@/components/kit'
@@ -124,11 +125,5 @@ function saidOf(last: NonNullable<Routine['last']>): string {
 }
 
 function Empty({ agent }: { agent: Agent }) {
-  return <div className="grid flex-1 place-items-center p-8">
-    <div className="grid max-w-[400px] justify-items-center gap-2 text-center">
-      <Face agent={agent} size={56} />
-      <h2 className="m-0 mt-2 text-[20px] font-semibold">No routines yet</h2>
-      <p className="m-0 text-[14px]/[1.55] text-body">{agent.name} adds routines here when something needs a follow-up.</p>
-    </div>
-  </div>
+  return <EmptyState className="flex-1 justify-center" line={`No routines yet. ${agent.name} adds one when something needs a follow-up.`} />
 }
