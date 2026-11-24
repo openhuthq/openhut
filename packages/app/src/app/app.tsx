@@ -4,7 +4,6 @@ import { Gate } from '@/app/gate'
 import { Shell, type ShellRoute } from '@/app/shell'
 import { useJoinRuntimes } from '@/features/cloud/live'
 import { CloudToasts } from '@/features/cloud/unlock'
-import { ConnectionsView } from '@/features/connections/connections-view'
 import { CloudJoin, JoinLinkDialog } from '@/features/join/cloud-join'
 import { useMe } from '@/features/people/api'
 import { SettingsView } from '@/features/settings/settings-view'
@@ -27,7 +26,7 @@ export function App() {
     {route.page === 'join' ? <CloudJoin /> : <>
       <Shell route={route.page === 'settings' || route.page === 'connections' ? background.current.route : route} overlay={route.page === 'settings' || route.page === 'connections' ? route.page : undefined} />
       {route.page === 'settings' && <SettingsView tab={route.tab} onClose={close} />}
-      {route.page === 'connections' && <ConnectionsView onClose={close} />}
+      {route.page === 'connections' && <SettingsView tab="apps" onClose={close} />}
       {opened === 'join-link' && <JoinLinkDialog />}
     </>}
     <JoinRuntimes />
