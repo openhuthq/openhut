@@ -45,3 +45,37 @@ export function nameOf(email: string): string {
   const first = (email.split('@')[0] ?? '').split(/[._+-]/)[0] ?? ''
   return first.charAt(0).toUpperCase() + first.slice(1)
 }
+
+const DISMISSED = 'openhut.gone.dismissed'
+
+export function goneKey({ name, owner }: Cloud['gone'][number]): string {
+  return `${name}\n${owner ?? ''}`
+}
+
+export function dismissedGone(): string {
+  try {
+    return localStorage.getItem(DISMISSED) ?? '[]'
+  } catch {
+    return '[]'
+  }
+}
+
+export function dismissGone(key: string): void {
+  try {
+    localStorage.setItem(DISMISSED, JSON.stringify([...new Set([...JSON.parse(dismissedGone()) as string[], key])]))
+  } catch {
+    return
+  }
+  window.dispatchEvent(new Event(DISMISSED))
+}
+
+export function onGoneDismissed(listener: () => void): () => void {
+  window.addEventListener(DISMISSED, listener)
+  return () => window.removeEventListener(DISMISSED, listener)
+}
+
+export function removedLine({ gone, dismissed }: { gone: Cloud['gone']; dismissed: string[] }): { key: string; text: string } | null {
+  const last = gone.filter((each) => each.why === 'removed' && !dismissed.includes(goneKey(each))).at(-1)
+  if (!last) return null
+  return { key: goneKey(last), text: last.owner ? `Removed from ${last.name} by ${nameOf(last.owner)}` : `Removed from ${last.name}` }
+}

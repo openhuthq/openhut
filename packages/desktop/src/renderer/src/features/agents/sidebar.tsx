@@ -1,5 +1,5 @@
-import { createContext, useState, type ReactElement } from 'react'
-import { Delete02Icon, LaptopIcon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, ServerStack01Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { createContext, useState, useSyncExternalStore, type ReactElement } from 'react'
+import { Cancel01Icon, Delete02Icon, LaptopIcon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, ServerStack01Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,8 @@ import { TeamMark } from '@/components/custom/team-mark'
 import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
 import { chooseWorkspace, peopleNote, useWorkspaces } from '@/features/cloud/workspaces'
 import { shownTeams } from '@/features/cloud/shown-teams'
+import { useCloud } from '@/features/cloud/api'
+import { dismissGone, dismissedGone, onGoneDismissed, removedLine } from '@/features/cloud/seen'
 import { Faces } from '@/features/cloud/presence'
 import { agentPath } from '@/app/routes'
 import { useAgents, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
@@ -72,6 +74,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
     </nav>
     <footer className="mt-auto flex flex-col items-start gap-2 px-3 pt-2 pb-3">
       <UpdateEverything />
+      <RemovedLine />
       <div className="flex w-full items-center gap-2">
         <TeamSwitcher />
         <a href="/connections" className={cn(SURFACE, 'flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg pr-3 pl-3.5 text-[13.5px] font-medium')}>
@@ -119,6 +122,16 @@ function ConnectedMarks() {
     <span className="truncate" title={connected.length ? 'Your connected apps' : 'Connect apps like Gmail, Drive and Postgres'}>Apps</span>
     <span className="ml-auto flex shrink-0 gap-1">{kinds.map((kind) => <Glyph key={kind} name={kind} size={14} />)}</span>
   </>
+}
+
+function RemovedLine() {
+  const dismissed = useSyncExternalStore(onGoneDismissed, dismissedGone)
+  const line = removedLine({ gone: useCloud().data?.gone ?? [], dismissed: JSON.parse(dismissed) as string[] })
+  if (!line) return null
+  return <p role="status" className="m-0 flex w-full items-center gap-2 rounded-lg bg-soft px-3 py-2 text-[12.5px]/[1.4] text-body">
+    <span className="min-w-0 flex-1">{line.text}</span>
+    <Button type="button" variant="ghost" size="icon-sm" aria-label="Dismiss" title="Dismiss" onClick={() => dismissGone(line.key)}><I icon={Cancel01Icon} size={14} /></Button>
+  </p>
 }
 
 function TeamSwitcher() {
