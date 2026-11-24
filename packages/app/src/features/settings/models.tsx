@@ -47,13 +47,15 @@ export function ModelsSettings() {
     if (returningTo) document.querySelector<HTMLElement>(`[data-provider=${returningTo}]`)?.focus()
     returningTo = undefined
   }, [providers])
+  const none = !providers?.some((each) => each.connected)
   const row = (id: ProviderId) => {
     const provider = providers?.find((each) => each.id === id)
-    return provider && <ProviderRow key={id} provider={provider} note={provider.connected ? notesOf({ provider, testModel }) : providerInfo(id).blurb} />
+    return provider && <ProviderRow key={id} provider={provider} lead={none && id === 'claude'} note={provider.connected ? notesOf({ provider, testModel }) : providerInfo(id).blurb} />
   }
   return <>
     <ErrorNote message={admin.error?.message} />
     {providers && <>
+      {none && <p className={HINT}>Connect one so your agents can think. Most people use Claude.</p>}
       <Section title="Subscriptions"><Rows>{SUBSCRIPTIONS.map((info) => row(info.id))}</Rows></Section>
       <Section title="API keys">
         <Rows>{KEYS.map((info) => row(info.id))}</Rows>
@@ -71,12 +73,12 @@ function notesOf({ provider, testModel }: { provider: Provider; testModel: boole
   return [plural({ count: provider.models.length, one: 'model', many: 'models' }), `${count(provider.models.filter((model) => model.on).length)} on`].join(' · ')
 }
 
-function ProviderRow({ provider, note }: { provider: Provider; note: string }) {
+function ProviderRow({ provider, note, lead }: { provider: Provider; note: string; lead: boolean }) {
   const subscription = provider.kind === 'subscription'
   return <Row icon={<Glyph name={provider.id} size={20} />} title={providerInfo(provider.id).short} note={note}>
     {provider.connected
       ? <><Status tone="on">{subscription ? 'Signed in' : 'Connected'}</Status><Button type="button" variant="ghost" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id) }}>Manage</Button></>
-      : <Button type="button" variant="secondary" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id === 'claude' ? 'seat' : provider.id) }}>{subscription ? 'Sign in' : 'Add key'}</Button>}
+      : <Button type="button" variant={lead ? 'primary' : 'secondary'} className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id === 'claude' ? 'seat' : provider.id) }}>{subscription ? 'Sign in' : 'Add key'}</Button>}
   </Row>
 }
 

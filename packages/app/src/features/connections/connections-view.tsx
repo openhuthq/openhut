@@ -4,9 +4,11 @@ import type { Me } from '@openhut/common/team/team.ts'
 import { useState } from 'react'
 import { ArrowLeft01Icon, ArrowRight01Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { EmptyState } from '@/components/empty-state'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { Loaded } from '@/components/loaded'
@@ -31,7 +33,9 @@ export function ConnectionsView({ onClose }: { onClose: () => void }) {
   const list = connections.data ?? []
   const returned = id ? undefined : search.get('error') ?? undefined
   const count = list.length
-  const shown = SHELVES.flatMap((each) => each.items)
+  const [query, setQuery] = useState('')
+  const words = query.trim().toLowerCase()
+  const shown = SHELVES.flatMap((each) => each.items).filter((item) => `${item.title} ${item.short}`.toLowerCase().includes(words))
   const sheet = me.data && id ? <Sheet me={me.data} id={decodeURIComponent(id)} kind={kind} connected={search.has('connected')} /> : null
   return <AppWindow label="Connections" onClose={onClose}>
     {sheet ?? <div className="no-scrollbar fade-b flex min-h-0 flex-1 flex-col overflow-y-auto px-8 pt-[22px] pb-7 phone:px-5">
@@ -49,7 +53,9 @@ export function ConnectionsView({ onClose }: { onClose: () => void }) {
             </ItemGroup>
             : <p className="m-0 text-[13px] text-balance text-body">Nothing connected yet. Pick an app under All apps.</p>}</Loaded>
         </div>
-        : <div className="mt-6 flex flex-col gap-3.5"><span className="text-[12px] text-mute">Apps</span>
+        : <div className="mt-6 flex flex-col gap-3.5"><div className="flex items-center gap-3"><span className="text-[12px] text-mute">Apps</span>
+            <Input type="search" aria-label="Find an app" placeholder="Find an app" autoComplete="off" data-1p-ignore className="ml-auto h-7 w-48 text-[12.5px] phone:w-36" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
+          {!shown.length && <EmptyState mood="worried" line={<>No app called “{query.trim()}”. Try <a href="/connections/new/mcp" className="text-ink underline underline-offset-2">Custom MCP</a> to add any server.</>} />}
           <div className="grid grid-cols-2 gap-x-8 phone:grid-cols-1">{shown.map((item) => {
             const href = `/connections/new/${item.name}`
             return <div key={item.name} className="flex min-h-16 min-w-0 items-center gap-3">

@@ -7,6 +7,7 @@ import { DialogTitle } from '@/components/ui/dialog'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmButton } from '@/components/confirm-button'
+import { EmptyState } from '@/components/empty-state'
 import { ErrorNote } from '@/components/error-note'
 import { DialogCard, I, Loading, SPLIT_DIALOG } from '@/components/kit'
 import { useMemory, useUpdateMemory } from '@/features/agents/api'
@@ -98,7 +99,7 @@ function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
           <span className="ml-auto flex gap-2"><Button type="reset" variant="secondary">Discard</Button><Button type="submit" variant="primary" disabled={update.isPending}>Save</Button></span>
         </Foot>}
       </form>}
-      {!adding && !selected && !phone && <p className="m-0 p-5 text-[13px] text-mute">{agent.name} hasn't saved anything yet.</p>}
+      {!adding && !selected && !phone && <EmptyState className="flex-1 justify-center" line={`${agent.name} hasn't saved anything yet.`} />}
     </section>
   </div>
 }

@@ -91,7 +91,7 @@ export function TeamDangerRows() {
     ...workspace.own ? [] : [{ title: 'Leave', note: 'You lose access. What you made stays with the team.', action: 'Leave', dialog: 'leave', danger: true }],
   ]
   return rows.map((row) => <Row key={row.dialog} icon={<I icon={row.dialog === 'keys' ? LockSync01Icon : Logout03Icon} size={20} className={row.danger ? 'text-fail' : 'text-hue-amber'} />} title={row.title} note={row.note}>
-    <Button type="button" variant={row.danger ? 'danger' : 'ghost'} className={PILL} onClick={() => open(row.dialog)}>{row.action}</Button>
+    <Button type="button" variant="secondary" className={cn(PILL, row.danger && 'text-fail')} onClick={() => open(row.dialog)}>{row.action}</Button>
   </Row>)
 }
 

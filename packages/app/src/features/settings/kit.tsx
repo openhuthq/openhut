@@ -26,7 +26,7 @@ const TOP = 'flex max-h-[34px] shrink-0 items-center self-stretch'
 export function Row({ icon, title, note, href, onClick, disabled, children }: { icon: ReactNode; title: ReactNode; note?: ReactNode; href?: string; onClick?: () => void; disabled?: boolean; children?: ReactNode }) {
   const body = <>
     <span className={cn(TOP, 'w-6 justify-center')}>{icon}</span>
-    <span className="flex min-w-0 flex-1 flex-col self-center"><span className="truncate text-[13px]/[18px]">{title}</span>{note && <span className="text-[12px]/[16px] text-mute">{note}</span>}</span>
+    <span className="flex min-w-0 flex-1 flex-col self-center"><span className="truncate text-[13px]/[18px]">{title}</span>{note && <span className="text-[12px]/[16px] text-pretty text-mute">{note}</span>}</span>
     {children && <span className={cn(TOP, 'gap-2 text-[13px]')}>{children}</span>}
   </>
   if (href) return <a href={href} className={cn(ROW, 'hover:bg-hover')}>{body}</a>

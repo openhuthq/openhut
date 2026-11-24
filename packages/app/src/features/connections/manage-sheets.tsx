@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Connection } from '@openhut/common/connections/connection.ts'
 import type { OpenHutAgent } from '@/lib/openhut'
 import { Badge } from '@/components/ui/badge'
+import { EmptyState } from '@/components/empty-state'
 import { Button } from '@/components/ui/button'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
 import { ConfirmButton } from '@/components/confirm-button'
@@ -26,7 +27,7 @@ export function AgentGrants({ connection, agents }: { connection: Connection; ag
   const createGrant = useCreateGrant()
   const deleteGrant = useDeleteGrant()
   const busy = createGrant.isPending || deleteGrant.isPending
-  if (!agents.length) return <p className="m-0 px-2 py-1.5 text-[12.5px] text-mute">No agents yet.</p>
+  if (!agents.length) return <EmptyState inline line="No agents yet." />
   return <>{agents.map((agent) => {
     const grant = grants.data?.find((each) => each.agentId === agent.id)
     return <AgentCheck key={agent.id} agent={agent} checked={!!grant} disabled={!grants.data || !agent.canEdit || busy}
@@ -67,7 +68,7 @@ function AccessSheet({ connection, agents }: { connection: Connection; agents: O
     <div className="flex animate-grow flex-col gap-3">
       <div className="flex flex-col gap-0.5 rounded-lg border border-hair bg-card p-1">
         {editable.length ? editable.map((agent) => <AgentCheck key={agent.id} agent={agent} checked={picked.includes(agent.id)} onChange={() => setPicked(picked.includes(agent.id) ? picked.filter((id) => id !== agent.id) : [...picked, agent.id])} />)
-          : <p className="m-0 px-2 py-1.5 text-[12.5px] text-mute">No agents yet. Come back here once you make one.</p>}
+          : <EmptyState inline line="No agents yet. Come back here once you make one." />}
       </div>
     </div>
   </SetupSheet>
