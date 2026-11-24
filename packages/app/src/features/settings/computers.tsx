@@ -102,7 +102,7 @@ function noteOf({ computer, admin, count, device }: { computer: Computer; admin:
   const failed = admin?.server.update?.status === 'failed' ? admin.server.update : null
   if (failed) return `Couldn't update to ${failed.to}. ${sentence(failed.reason ?? 'The update stopped before it finished.')}`
   const server = device?.kind === 'server'
-  return [isPhone() ? 'Your computer' : desktop ? 'This computer' : server ? 'Linux server · connected now' : 'Connected now', !server && 'Agents have your access', agentCount(count), admin && `OpenHut ${admin.server.version}`].filter(Boolean).join(' · ')
+  return [isPhone() ? 'Your computer' : desktop ? 'This computer' : server ? 'Linux server · connected now' : 'Connected now', agentCount(count), admin && `OpenHut ${admin.server.version}`].filter(Boolean).join(' · ')
 }
 
 function sentence(text: string) {
@@ -135,7 +135,7 @@ function DeviceRow({ device, twin, admin, current }: { device: Device; twin: boo
   const name = twin ? `${base} (${tunnelKeyOf(device.key).slice(0, 4)})` : base
   const detail = device.addedAt ? `Added ${shortDate.format(new Date(device.addedAt))} · ${REMOVE_DETAIL}` : REMOVE_DETAIL
   const browser = isBrowser(device)
-  return <Row icon={<DeviceIcon kind={browser ? 'browser' : device.kind} />} title={name} note={sentence([current ? 'This browser' : device.os === 'web' ? null : device.os ?? (server ? 'Linux' : null), server && 'Server · runs agents', joinedNote(device.joined, device.os), !browser && presenceOf(device), admin && `OpenHut ${admin.server.version}`].filter(Boolean).join(' · ')).replace(/\.$/, '')}>
+  return <Row icon={<DeviceIcon kind={browser ? 'browser' : device.kind} />} title={name} note={sentence([current ? 'This browser' : device.os === 'web' ? null : device.os ?? (server ? 'Linux' : null), server && 'Server · runs agents', !browser && presenceOf(device), admin && `OpenHut ${admin.server.version}`].filter(Boolean).join(' · ')).replace(/\.$/, '')}>
     {server && !isPhone() && update.isPending && <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>}
     {server && !isPhone() && !update.isPending && admin?.server.updateAvailable && <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate({ id: tunnelKeyOf(device.key), name }, { onSuccess: () => toast(`${name} is updating`), onError: toastError })}>Update</Button>}
     {!isPhone() && <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={remove.isPending} question={`Remove ${name}?`} detail={detail} points={REMOVE_POINTS} action="Remove" onConfirm={() => remove.mutate({ key: device.key })}>Remove</ConfirmButton>}
@@ -315,8 +315,8 @@ function TailscaleDialog({ title, back, foot, children }: { title: string; back?
 function AddComputer() {
   return <TailscaleDialog title="Add a computer">
     <Rows>
-      <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="The easiest way: paste one command on a Linux computer with sudo. No Tailscale needed. End-to-end encrypted."><Chevron /></Row>
-      <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Tailscale" note="Install it over Tailscale SSH in one click. It then talks through OpenHut Relay, end-to-end encrypted."><Chevron /></Row>
+      <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="Paste one command on your Linux server."><Chevron /></Row>
+      <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Tailscale" note="Install on a Tailscale computer in one click."><Chevron /></Row>
     </Rows>
     <p className="m-0 px-2.5 text-[12px]/[16px] text-mute">A Mac or PC joins by installing OpenHut and signing in with your account.</p>
   </TailscaleDialog>
