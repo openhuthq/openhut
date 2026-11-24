@@ -57,7 +57,7 @@ export function AppsSettings() {
     {view === 'connected'
       ? <Loaded query={connections}>{(loaded) => loaded.length
         ? <Rows>{loaded.map((connection) => <ConnectedRow key={connection.id} connection={connection} agents={agents.data ?? []} />)}</Rows>
-        : <EmptyState line="No apps connected yet. Connect one so your agents can read your mail, files or code." action={<Button type="button" variant="primary" className={PILL} onClick={() => setView('all')}>Browse apps</Button>} />}</Loaded>
+        : <EmptyState line="No apps connected yet. Pick one under All apps so your agents can read your mail, files or code." />}</Loaded>
       : <>{!shown.length && <EmptyState mood="worried" line={<>No app called “{query.trim()}”. Try <a href="/connections/new/mcp" className="text-ink underline underline-offset-2">Custom MCP</a> to add any server.</>} />}<Rows>{shown.map((item) => <Row key={item.name} icon={<Glyph name={item.name} size={20} />} title={item.title} note={item.short}>
         {kinds.includes(item.name)
           ? <Status tone="on">Connected</Status>

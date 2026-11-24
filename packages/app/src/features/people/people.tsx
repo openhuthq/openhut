@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Badge } from '@/components/ui/badge'
-import { EmptyState } from '@/components/empty-state'
 import { Row, Rows } from '@/features/settings/kit'
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Section } from '@/components/kit'
@@ -38,7 +37,6 @@ export function TeamPeople({ workspace }: { workspace: CloudWorkspaceView }) {
           {workspace.requests.filter((each) => each.email === member.email && !(workspace.own && each.email === email)).map((each) => <Request key={each.device} workspace={workspace} request={each} name={nameOf(member.email)} mine={member.email === email} admin={admin} />)}
         </div>)}
       </Rows>
-      {admin && workspace.members.length === 1 && !workspace.invites.length && <EmptyState inline mood="happy" className="mt-1 rounded-lg border border-dashed border-hair px-2.5 py-2.5" line={<><span className="block text-ink">Invite your first teammate</span>They make their own agents and chat with the ones you share.</>} action={<Button type="button" variant="secondary" className={PILL} onClick={() => open('invite')}>Invite</Button>} />}
     </Section>
     {workspace.invites.length > 0 && <Section title="Invited">
       <Rows>
