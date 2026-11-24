@@ -1,6 +1,6 @@
-import { spawn, spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { createWriteStream, mkdirSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 
 export function devCloudUrl() {
@@ -14,23 +14,6 @@ export async function bootCloud({ dir, api, log, data = '' }) {
     proc.stdout.pipe(createWriteStream(log, { flags: 'a' }))
   }
   await waitFor(async () => fetch(`${api}/health`).then(() => true, () => null), 120, 'the dev cloud API to listen')
-  return proc
-}
-
-export async function bootWorker({ dir, url, state, log }) {
-  const wrangler = join(resolve(dir), 'node_modules/wrangler/bin/wrangler.js')
-  const options = { cwd: resolve(dir), env: { ...process.env, CI: '1', WRANGLER_SEND_METRICS: 'false' } }
-  const migrated = spawnSync(process.execPath, [wrangler, 'd1', 'migrations', 'apply', 'openhut-stats', '--local', '--persist-to', state], { ...options, encoding: 'utf8' })
-  if (migrated.status !== 0) throw new Error(`the dev Worker's D1 migrations failed: ${migrated.stdout}${migrated.stderr}`)
-  const vars = ['DEV_SIGN_IN:1', 'GOOGLE_CLIENT_ID:dev', 'GOOGLE_CLIENT_SECRET:dev', 'STATE_KEY:dev-state-key', 'BETTER_AUTH_SECRET:dev-better-auth-secret-0123456789abcdef', `AUTH_URL:${url}`]
-  const proc = spawn(process.execPath, [wrangler, 'dev', '--infer-origin-from-routes=false', ...vars.flatMap((each) => ['--var', each]), '--port', new URL(url).port, '--inspector-port', '0', '--persist-to', state, '--show-interactive-dev-session=false', '--log-level', 'warn'], { ...options, stdio: ['ignore', log ? 'pipe' : 'ignore', log ? 'pipe' : 'inherit'] })
-  if (log) {
-    mkdirSync(dirname(log), { recursive: true })
-    const out = createWriteStream(log)
-    proc.stdout.pipe(out)
-    proc.stderr.pipe(out)
-  }
-  await waitFor(async () => fetch(url).then(() => true, () => null), 120, 'the dev cloud Worker (relay) to listen')
   return proc
 }
 

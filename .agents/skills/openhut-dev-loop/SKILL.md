@@ -11,7 +11,7 @@ OpenHut is developed as a web app. You see a change in a browser in seconds. Ele
 - Edit, and Vite hot-reloads. A runtime edit needs Ctrl-C and `npm run dev` again.
 
 **2. Pick the proof by what you changed** (`git diff --name-only origin/main`)
-- `packages/app/**`, `packages/runtime/**`, `packages/common/**`, `private/api/**`, `private/cloud/**`: the web app is the proof. Take a screenshot at the Vite URL and run `npm run check`. Done.
+- `packages/app/**`, `packages/runtime/**`, `packages/common/**`, `private/api/**`: the web app is the proof. Take a screenshot at the Vite URL and run `npm run check`. Done.
 - `packages/desktop/src/main.mjs`, `preload.cjs`, `lib/desktop.ts`, or anything that needs Keychain, Touch ID, passkey, updates, deep links or the tray: also run `npm run app` (the real app, unpackaged) and then `npm run e2e:app`.
 - `electron-builder*.yml`, `scripts/pack-*.mjs`, `install/**`, signing, installers: a Shell run proves it (`gh workflow run shell.yml --ref <branch>`; CI never packages). Don't build packages locally to check.
 

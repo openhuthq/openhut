@@ -30,7 +30,7 @@ async function signIn(): Promise<string[] | undefined> {
     let url = (await api<CloudAuthorization>('POST', '/api/cloud/sessions')).json.authorizationUrl
     for (let hop = 0; hop < 5 && !url.includes('/v1/dev/sign-in'); hop++) url = new URL((await fetch(url, { redirect: 'manual' })).headers.get('location') ?? '', url).href
     const link = new RegExp(`href="([^"]+)">${EMAIL}<`).exec(await (await fetch(url)).text())?.[1]?.replaceAll('&amp;', '&')
-    if (!link) throw new Error(`The dev sign-in page at ${url} doesn't offer ${EMAIL}. Run npm run dev with private/cloud checked out.`)
+    if (!link) throw new Error(`The dev sign-in page at ${url} doesn't offer ${EMAIL}. Run npm run dev with private/api checked out.`)
     const back = new URL((await fetch(link)).url).searchParams.get('to')
     if (back) await fetch(back)
   }

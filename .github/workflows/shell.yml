@@ -240,14 +240,6 @@ jobs:
           key: private-api-${{ runner.os }}-${{ hashFiles('private/api/package-lock.json') }}
       - if: steps.api-modules.outputs.cache-hit != 'true'
         run: npm --prefix private/api ci --no-audit --no-fund
-      - uses: actions/cache@v4
-        id: worker-modules
-        with:
-          path: private/cloud/node_modules
-          key: private-cloud-${{ runner.os }}-${{ hashFiles('private/cloud/package-lock.json') }}
-      - name: Install the cloud Worker the app e2e runs as its relay
-        if: steps.worker-modules.outputs.cache-hit != 'true'
-        run: npm --prefix private/cloud ci --no-audit --no-fund
       - uses: actions/cache/save@v4
         if: github.ref == 'refs/heads/main' && steps.native-cache.outputs.cache-hit != 'true'
         with:
