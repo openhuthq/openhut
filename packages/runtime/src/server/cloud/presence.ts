@@ -1,8 +1,7 @@
 import * as z from 'zod/mini'
 import { HereField, parseJson, type Member, type Presence, type SetHere } from '@openhut/common/cloud/cloud.ts'
-import { padded } from '@openhut/common/records/seal.ts'
-import { fromBase64, toBase64, type Bytes } from '@openhut/common/vault/public.ts'
-import { lock, unlock } from '@openhut/common/vault/secret.ts'
+import { padded } from '@openhut/common/records/row.ts'
+import { keyring } from '@openhut/common/keyring/keyring.ts'
 import { hold } from '../platform/cloud.ts'
 import { emit } from '../platform/events.ts'
 
@@ -23,7 +22,7 @@ export const HereValue = z.object({
 })
 export type HereValue = z.infer<typeof HereValue>
 
-export type HereContext = { workspace: string; key: Bytes; version: number; keys: Record<number, Bytes>; me: string; members: Member[]; email: string; list: number; listHash: string }
+export type HereContext = { workspace: string; me: string; members: Member[]; email: string; list: number; listHash: string }
 export type HereIo = { rooms: () => string[]; roomOf: (agent: string) => Promise<string | null>; context: (ws: string) => Promise<HereContext | null>; send: (input: { ws: string; body: string }) => boolean; catchUp: (ws: string) => void }
 type Seen = { email: string; agent: string | null; field: HereField | null; typing: boolean; since: number; heardAt: number; typingAt: number; sentAt: number }
 type State = Pick<SetHere, 'agent' | 'field' | 'typing'>
@@ -74,7 +73,7 @@ export const presence = {
 
   async heard({ ws, from, at, body }: { ws: string; from: string; at: number; body: string }): Promise<void> {
     const ctx = io && await io.context(ws)
-    const value = ctx && await openHere({ workspace: ws, keys: ctx.keys, from, body })
+    const value = ctx && await openHere({ workspace: ws, from, body })
     if (!ctx || !value) return
     if (from === ctx.me) {
       if (mine.since !== null || !value.field || value.agent !== mine.agent || value.field !== mine.field) return
@@ -162,7 +161,7 @@ async function sendTo({ ws, now }: { ws: string; now: number }): Promise<void> {
   const state: State = { agent: here ? mine.agent : null, field: here ? mine.field : null, typing: here && mine.typing }
   const ctx = due({ state, last: sent.get(ws), now }) && io ? await io.context(ws) : null
   if (!ctx || !io) return
-  const body = await lockHere({ workspace: ws, key: ctx.key, version: ctx.version, from: ctx.me, value: { ...state, at: now, list: ctx.list, listHash: ctx.listHash } })
+  const body = await lockHere({ workspace: ws, from: ctx.me, value: { ...state, at: now, list: ctx.list, listHash: ctx.listHash } })
   if (body && io.send({ ws, body })) sent.set(ws, { state, at: now })
 }
 
@@ -179,14 +178,13 @@ function stale(ws: string): void {
   if (last) sent.set(ws, { ...last, at: 0 })
 }
 
-export async function lockHere({ workspace, key, version, from, value }: { workspace: string; key: Bytes; version: number; from: string; value: HereValue }): Promise<string | null> {
+export async function lockHere({ workspace, from, value }: { workspace: string; from: string; value: HereValue }): Promise<string | null> {
   const plain = HereValue.safeParse(value).success ? padded({ json: JSON.stringify(value), size: HERE_BYTES }) : null
-  const locked = plain && await lock({ key, version, bind: hereBind({ workspace, from }), plain })
-  return locked ? toBase64(locked) : null
+  return plain && keyring.lock({ team: workspace, bind: hereBind({ workspace, from }), plain })
 }
 
-export async function openHere({ workspace, keys, from, body }: { workspace: string; keys: Record<number, Bytes>; from: string; body: string }): Promise<HereValue | null> {
-  const plain = await unlock({ keys, bind: hereBind({ workspace, from }), locked: fromBase64(body) })
+export async function openHere({ workspace, from, body }: { workspace: string; from: string; body: string }): Promise<HereValue | null> {
+  const plain = await keyring.unlock({ team: workspace, bind: hereBind({ workspace, from }), body })
   return plain?.length === HERE_BYTES ? HereValue.safeParse(parseJson(new TextDecoder().decode(plain))).data ?? null : null
 }
 

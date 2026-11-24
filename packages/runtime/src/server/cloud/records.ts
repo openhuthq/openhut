@@ -5,7 +5,8 @@ import { viewersOf } from '@openhut/common/cloud/member-list.ts'
 import type { Roster } from '@openhut/common/records/allowed.ts'
 import { RecordsError, type RecordsClient } from '@openhut/common/cloud/records.ts'
 import { refreshWithLease, type Secret } from '@openhut/common/records/lease.ts'
-import { signer, type Keyring, type Opened, type Value } from '@openhut/common/records/seal.ts'
+import type { Opened, Value } from '@openhut/common/records/row.ts'
+import { keyring } from '@openhut/common/keyring/keyring.ts'
 import { COLLECTIONS, type Collection } from '@openhut/common/records/wire.ts'
 import type { Bytes } from '@openhut/common/vault/public.ts'
 import { cloud } from '../platform/cloud.ts'
@@ -178,18 +179,9 @@ function valueOf({ value, secret, personal }: Patch & { personal?: boolean }): V
 }
 
 async function clientNow(): Promise<RecordsClient> {
-  const own = new Map(await Promise.all(roomKeys.rooms().map(async (room) => [room.workspace.id, await roomKeys.own(room.workspace.id)] as const)))
-  const vault = keysService.vault()
   const map = await seenMap()
-  const ring = (key: Bytes | null | undefined): Keyring | null => key ? { version: 1, keys: { 1: key } } : null
   return cloud.records({
-    device: signer(await keysService.device()),
-    keys: ({ use, workspace }) => {
-      if (use === 'own') return ring(own.get(workspace))
-      if (use === 'vault') return ring(vault)
-      const found = roomKeys.room(workspace)?.workspace
-      return found?.key ? { version: found.version, keys: roomKeys.ring(workspace) } : null
-    },
+    sealer: await keyring.sealer(),
     roster: (workspace) => rosterOf(roomKeys.members(workspace)),
     seen: (id, collection) => map.get(keyOf({ collection, id })),
   })
