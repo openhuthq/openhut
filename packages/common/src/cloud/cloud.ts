@@ -276,7 +276,7 @@ export const Cloud = z.object({
   asking: z._default(z.nullable(z.object({ rooms: z.array(z.object({ admins: z.array(Email), own: z._default(z.boolean(), false) })), denied: z.boolean(), error: z._default(z.nullable(z.string()), null), name: z._default(z.nullable(z.string()), null), reviewed: z._default(z.boolean(), false), faces: z._default(z.nullable(z.array(z.number())), null), missed: z._default(z.boolean(), false) })), null),
   canAsk: z._default(z.boolean(), false),
   rotate: z._default(z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() })), []),
-  gone: z._default(z.array(z.object({ name: z.string(), why: z.enum(['removed', 'deleted']) })), []),
+  gone: z._default(z.array(z.object({ name: z.string(), why: z.enum(['removed', 'deleted']), owner: z._default(z.nullable(z.string()), null) })), []),
 })
 export type Cloud = z.infer<typeof Cloud>
 

@@ -33,7 +33,7 @@ const Requests = z.object({ data: z.array(JoinRequest) })
 const Named = z.object({ name: z.optional(z.nullable(z.string())), site: z.optional(z.nullable(z.string())) })
 
 export type Beat = z.infer<typeof Beat>
-export type Gone = { name: string; why: 'removed' | 'deleted' }
+export type Gone = { name: string; why: 'removed' | 'deleted'; owner: string | null }
 
 let socket: ReconnectingWebSocket | undefined
 let ready = false
@@ -117,7 +117,7 @@ export const cloudEvents = {
 
   async drop({ ws, why }: { ws: string; why: Gone['why'] | null }): Promise<void> {
     const own = roomKeys.isOwn(ws)
-    if (why) gone.push({ name: cloudEvents.name(ws), why })
+    if (why) gone.push({ name: cloudEvents.name(ws), why, owner: roomKeys.members(ws)?.members.find((member) => member.role === 'owner')?.email ?? null })
     names.delete(ws)
     requests.delete(ws)
     presence.closed(ws)

@@ -22,6 +22,7 @@ import { FaceTile } from '@/features/cloud/review'
 import { RequestError } from '@/lib/api-client'
 import { Spinner } from '@/components/ui/spinner'
 import { navigate, usePath } from '@/lib/router'
+import { goneNotice } from '@/features/cloud/seen'
 import { longDate } from '@/lib/format'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
@@ -311,7 +312,8 @@ function GoneNotice({ cloud }: { cloud: Cloud }) {
     if (!last) return
     const home = cloud.workspaces.find((each) => each.home)
     if (home) chooseWorkspace(home.id)
-    notify({ lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: last.why === 'deleted' ? `${last.name} was deleted` : `You were removed from ${last.name}`, note: 'Its agents moved to the trash on this computer.' })
+    navigate('/', true)
+    notify({ lead: <Tinted icon={Alert02Icon} hue={AMBER} />, ...goneNotice(last) })
   }, [cloud.gone, cloud.workspaces])
   return null
 }

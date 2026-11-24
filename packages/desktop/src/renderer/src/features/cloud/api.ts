@@ -97,7 +97,7 @@ export function useRemovePasskey() {
 const NEW_KIT_HINT = 'If someone else has your kit, make a new one.'
 export const REMOVE_DETAIL = 'Only if it’s lost, sold or not yours.'
 export const REMOVE_POINTS = [
-  { icon: CloudOffIcon, text: 'It can’t get anything new from OpenHut Cloud' },
+  { icon: CloudOffIcon, text: 'It can’t get anything new from OpenHut Cloud, and OpenHut on it locks and clears this account’s chats' },
   { icon: FingerPrintIcon, text: 'Touch ID turns off until you add it again' },
   { icon: Key01Icon, text: 'Make a new kit if someone else has yours' },
 ]
@@ -161,7 +161,4 @@ export function useNewKit() {
   })
 }
 
-export function nameOf(email: string): string {
-  const first = (email.split('@')[0] ?? '').split(/[._+-]/)[0] ?? ''
-  return first.charAt(0).toUpperCase() + first.slice(1)
-}
+export { nameOf } from '@/features/cloud/seen'
