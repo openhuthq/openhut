@@ -88,7 +88,7 @@ try {
   await page.eval(`navigation.navigate('/agents/${agent.id}')`)
   await sleep(3000)
   await shot(page, '03-after-restart')
-  if (args.cloud) await invite(page)
+  if (args.cloud) await invite(page, agent)
   await quit(child)
   await sleep(3000)
   const gone = leftovers()
@@ -109,7 +109,10 @@ try {
   console.log(`app-e2e: ${evidence.pass ? 'PASS' : 'FAIL'}; evidence in ${args.out}`)
 }
 
-async function invite(mo) {
+async function invite(mo, agent) {
+  const sharing = await mo.eval(`fetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shared: true }) }).then(async (r) => ({ status: r.status, body: await r.json() }))`)
+  if (sharing.status !== 200 || !sharing.body.shared) throw new Error(`sharing ${agent.name} with the team answered ${sharing.status} ${JSON.stringify(sharing.body)}`)
+  say(`Mo shared ${agent.name} with the team`)
   const team = (await get(mo, '/api/cloud'))?.workspaces?.find((each) => each.home)
   if (!team) throw new Error(`Mo's app has no home team to invite to: ${JSON.stringify(await get(mo, '/api/cloud'))}`)
   const made = await post(mo, '/api/invitations/cloud', { workspace: team.id, email: INVITEE, role: 'member' })
@@ -142,6 +145,10 @@ async function invite(mo) {
   say('Mo\'s running app let the invitee in on its own: the invitee holds the team key', { team: joined.name, members: joined.members.map((each) => each.email) })
   const seen = await until(async () => (await get(mo, '/api/cloud'))?.workspaces?.find((each) => each.id === team.id && each.members.some((member) => member.email === INVITEE)), 60, `Mo's app to list ${INVITEE} as a member`)
   say(`Mo's app lists ${INVITEE} in the team`, { members: seen.members.map((each) => each.email), invites: seen.invites.map((each) => each.email) })
+  const shared = await until(async () => (await get(page, '/api/agents'))?.data?.find((each) => each.id === agent.id), 120, `the invitee's app to list Mo's shared ${agent.name}`)
+  say(`the invitee's app lists Mo's shared ${agent.name}`, { owner: shared.ownerName, canEdit: shared.canEdit })
+  await chat(page, shared, `hello from ${INVITEE}`)
+  await page.eval(`navigation.navigate('/agents/${agent.id}')`)
   await shot(page, '08-invitee-in')
   await quit(guest)
   say('quit the invitee\'s app')
