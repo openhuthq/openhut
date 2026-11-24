@@ -224,13 +224,14 @@ export const roomKeys = {
     return done
   },
 
-  async refresh({ ws, call }: { ws: string; call: Call }): Promise<{ changed: boolean; behind: boolean }> {
+  async refresh({ ws, call }: { ws: string; call: Call }): Promise<{ changed: boolean; behind: boolean; gone: boolean }> {
     const before = roomKeys.members(ws)
     const reply = await call({ method: 'GET', path: `/v1/member-lists?workspace=${ws}&startingAfter=${before?.version ?? 0}` })
+    if (reply.status === 403) return { changed: false, behind: false, gone: true }
     const after = await roomKeys.advance({ lists: Lists.safeParse(reply.json).data?.data ?? [], ws })
     if (before && after) await welcome({ ws, call, before, after })
     await listKit({ ws, call })
-    return { changed: Boolean(after), behind: await roomKeys.rekey({ ws, call }) }
+    return { changed: Boolean(after), behind: await roomKeys.rekey({ ws, call }), gone: false }
   },
 
   async rekey({ ws, call }: { ws: string; call: Call }): Promise<boolean> {

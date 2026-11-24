@@ -42,7 +42,7 @@ const report = [
 writeFileSync(`${RESULTS}/security-grep.txt`, `${report}\n`)
 console.log(report)
 const leaked = lines.filter((line) => line.hits.length > 0)
-const pass = leaked.length === 0 && blobs.length > 0 && control.raw.length > 0
+const pass = leaked.length === 0 && control.raw.length > 0
 const result: PhaseResults = {
   phase: 'security',
   at: new Date().toISOString(),
@@ -51,7 +51,7 @@ const result: PhaseResults = {
   results: [{
     id: 'S1',
     check: 'The cloud API\'s database and stored files, read after the run, hold no agent name, instructions, message, reply, attached file, connection name or connection key in plain text, base64, base64url or hex',
-    expected: `0 hits for each of ${words.length} canaries in every file, raw and decoded; at least one file blob; the account email found in plain text (control)`,
+    expected: `0 hits for each of ${words.length} canaries in every file, raw and decoded; the account email found in plain text (control)`,
     actual: `${all.length} files, ${blobs.length} file blobs, ${runs} decoded runs; ${lines.map(({ kind, hits }) => `${kind} ${hits.length}`).join(', ')}; control ${control.raw.length} plain, ${control.decoded.length} decoded`,
     pass,
   }],

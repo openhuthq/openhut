@@ -127,7 +127,7 @@ run_phase update; update=$?
 echo "--- security: dump the workspace room and grep it for every agent name, message and connection key the cloud run used"
 RESULTS="$R" node packages/e2e/src/security.ts; security=$?
 
-for f in boot agentd app; do in_host sh -c "grep -v -e ExperimentalWarning -e trace-warnings /var/log/openhut/$f.log" > "$R/$f.log" 2>&1; done
+for f in boot agentd app pull; do in_host sh -c "grep -v -e ExperimentalWarning -e trace-warnings /var/log/openhut/$f.log" > "$R/$f.log" 2>&1; done
 [ "$(tree_sha)" = "$(cat "$R/tree.sha256")" ] && tree=same || tree=changed
 node packages/e2e/src/report.ts "$tree" > "$R/e2e-report.md"; report=$?
 echo "main=$main cloud=$cloud after-upgrade=$upgrade after-restart=$after update-broken=$broken update=$update security=$security report=$report -> $R/e2e-report.md"
