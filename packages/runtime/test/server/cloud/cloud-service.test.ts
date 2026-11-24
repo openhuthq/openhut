@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { cloudService } from '../../../src/server/cloud/cloud-service.ts'
+import { cloudService, deviceKind } from '../../../src/server/cloud/cloud-service.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { migrate } from '../../../src/server/platform/db.ts'
 import { settings } from '../../../src/server/platform/settings.ts'
@@ -49,4 +49,13 @@ test('signing in for an invite with another Google account sets nothing up for t
   assert.equal(status.status, 'off')
   assert.equal(status.signInError, 'This invite is for sara@example.com. You signed in as mo@example.com, so nothing was set up.')
   cloud.close()
+})
+
+test('a Linux server install shows as a server even when its list has it as a computer; a laptop or a Linux desktop never does', () => {
+  assert.equal(deviceKind({ runtime: false, said: { kind: 'server', os: 'Linux' } }), 'server')
+  assert.equal(deviceKind({ runtime: true }), 'server')
+  assert.equal(deviceKind({ runtime: false, said: { kind: 'mac', os: 'macOS 15' } }), 'mac')
+  assert.equal(deviceKind({ runtime: false, said: { kind: 'linux', os: 'Linux' } }), 'mac')
+  assert.equal(deviceKind({ runtime: false, said: { kind: 'server' } }), 'mac')
+  assert.equal(deviceKind({ runtime: false }), 'mac')
 })

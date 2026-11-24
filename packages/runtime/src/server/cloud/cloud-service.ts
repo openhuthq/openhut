@@ -67,7 +67,7 @@ export const cloudService = {
     const [inCloud, passkeyInCloud] = locked && session ? await Promise.all([kitInCloud(), boxInCloud('passkey')]) : [null, false]
     const devices = lists.flatMap((body) => {
       const mine = body?.members.find((member) => member.email === account?.email)
-      return body && mine ? mine.devices.filter((key) => key !== mine.kit && key !== accountKey).map((key) => ({ key, here: key === here, addedAt: addedOf(body, key) ? new Date(addedOf(body, key)).toISOString() : null, name: body.names?.[key] ?? null, kind: body.runtimes?.includes(key) ? 'server' as const : 'mac' as const, joined: joinedOf({ key, accountKey, names: body.names }), os: key === here ? deviceOs() : cloudEvents.beats(body.workspace).get(key)?.os ?? requestedOs.get(key) ?? null, heard: key === here || cloudEvents.beats(body.workspace).has(key), online: key === here || Date.now() - (cloudEvents.beats(body.workspace).get(key)?.at ?? 0) < 3 * BEAT_MS })) : []
+      return body && mine ? mine.devices.filter((key) => key !== mine.kit && key !== accountKey).map((key) => ({ key, here: key === here, addedAt: addedOf(body, key) ? new Date(addedOf(body, key)).toISOString() : null, name: body.names?.[key] ?? null, kind: deviceKind({ runtime: Boolean(body.runtimes?.includes(key)), said: key === here ? { kind: config.installKind, os: deviceOs() } : cloudEvents.beats(body.workspace).get(key) }), joined: joinedOf({ key, accountKey, names: body.names }), os: key === here ? deviceOs() : cloudEvents.beats(body.workspace).get(key)?.os ?? requestedOs.get(key) ?? null, heard: key === here || cloudEvents.beats(body.workspace).has(key), online: key === here || Date.now() - (cloudEvents.beats(body.workspace).get(key)?.at ?? 0) < 3 * BEAT_MS })) : []
     }).filter(({ key }, index, all) => all.findIndex((each) => each.key === key) === index).sort((a, b) => (a.addedAt ?? '').localeCompare(b.addedAt ?? ''))
     return {
       object: 'cloud', status: locked ? 'locked' : on ? (cloudEvents.ready() ? 'on' : 'offline') : 'off', email: locked?.email ?? (on && account ? account.email : null),
@@ -514,6 +514,11 @@ async function letInMaker({ workspace, device }: { workspace: string; device: st
 
 function signedIn(email: string): string {
   return page(`Signed in as ${email}. OpenHut has moved on, so you can close this tab.`, { title: 'Done', tab: 'Signed in', back: config.appScheme && `${config.appScheme}://open` })
+}
+
+// A server shows as a server: listed as a runtime, or a Linux runtime that says it's a server install (itself, or in its signed beat). Display only, the list is unchanged.
+export function deviceKind({ runtime, said }: { runtime: boolean; said?: { kind: string; os?: string } }): 'server' | 'mac' {
+  return runtime || (said?.kind === 'server' && said.os === 'Linux') ? 'server' : 'mac'
 }
 
 function joinedOf({ key, accountKey, names }: { key: string; accountKey: string | null | undefined; names: Record<string, string> | undefined }): Cloud['devices'][number]['joined'] {
