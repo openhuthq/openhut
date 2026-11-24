@@ -32,12 +32,13 @@ class LockedWebViewPlugin : Plugin() {
 }
 
 // R6: the Android twin of ios/App/App/PackUpdater.swift. The pack updater lives in the native shell, never in the app pack it installs:
-// it polls the R4 feed, checks the release key's Ed25519 signature, the Rekor entry and the SEC6 hour (verifyRelease and pointerAction
+// it polls the R4 feed, checks the release key's Ed25519 signature, the Rekor entry and the SEC6 age rule, MIN_AGE (verifyRelease and pointerAction
 // in packages/desktop/src/release-key.mjs), then installs release.packs.app's renderer/ as the web root. No plugin exposes it to
 // JavaScript and its state is a file no plugin writes, so a pack can't switch the check off for the updates after it.
 object PackUpdater {
     const val SHELL_API = 1
-    const val MIN_AGE = 3600L
+    // Owner 2026-11-24: age rule off for fast iteration; set back to 3600 s (SEC6) later
+    const val MIN_AGE = 0L
     const val RELEASE_KEY = "MCowBQYDK2VwAyEAQbo1L199M6phAczpCAlP6iQc0+AMcbpjrnqH1XvCUyk="
     const val REKOR_KEY = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE2G2Y+2tabdTV5BcGiBIx0a9fAFwrkBbmLSGtks4L3qX6yYY0zufBnhC8Ur/iy55GhWP/9A/bY2LhC30M9+RYtw=="
     const val FEED = "https://dl.openhut.dev"
@@ -92,7 +93,7 @@ object PackUpdater {
         return Action.Install(sequence, release.optString("version"), sha512)
     }
 
-    // verifyRelease() from release-key.mjs: (null, null) when it holds, else (reason, retryAt when only the hour is missing).
+    // verifyRelease() from release-key.mjs: (null, null) when it holds, else (reason, retryAt when only the age is missing).
     fun verifyRelease(manifest: ByteArray, signature: String, rekor: ByteArray, key: ByteArray, rekorKey: ByteArray, now: Long): Pair<String?, Long?> {
         val sig = try { b64(signature.trim()) } catch (_: Exception) { return "not signed by the release key" to null }
         if (!ed25519(key, manifest, sig)) return "not signed by the release key" to null
@@ -110,7 +111,7 @@ object PackUpdater {
         } catch (_: Exception) { false }
         if (!logged) return "the Rekor entry is for another release" to null
         val retryAt = integratedTime + MIN_AGE
-        return if (now >= retryAt) null to null else "logged less than an hour ago" to retryAt
+        return if (now >= retryAt) null to null else "logged less than $MIN_AGE s ago" to retryAt
     }
 
     // rekorIncluded() from release-key.mjs: integratedTime when Rekor signed both the SET and a checkpoint whose tree holds the entry.
@@ -164,7 +165,7 @@ object PackUpdater {
             is Action.Refuse -> "refused: ${action.reason}"
             Action.None -> "up to date (sequence ${state(context)?.sequence ?: -1})"
             Action.Halt -> "halted"
-            is Action.Wait -> "refused for now: logged less than an hour ago, retry after ${java.time.Instant.ofEpochSecond(action.retryAt)}"
+            is Action.Wait -> "refused for now: logged too recently, retry after ${java.time.Instant.ofEpochSecond(action.retryAt)}"
             is Action.Install -> {
                 val want = b64(action.sha512)
                 val pack = fetch("${settings.feed}/packs/${hex(want)}")

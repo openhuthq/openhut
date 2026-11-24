@@ -49,7 +49,8 @@ test('Promote moves stable to everyone at once and builds nothing; halt stops a 
     const promoted = JSON.parse(read(stable).manifest)
     const built = JSON.parse(read(current).manifest)
     assert.deepEqual({ ...promoted, channel: 'beta', sequence: 200 }, built, 'only channel and sequence change')
-    assert.deepEqual(fleet(read(stable), [0, 100, 150]).map((each) => each.action), ['wait', 'wait', 'wait'], 'the hour applies to everyone')
+    assert.deepEqual(fleet(read(stable), [0, 100, 150]).map((each) => each.action), ['install', 'install', 'install'], 'age rule off (MIN_AGE_SECONDS 0): installs right away')
+    assert.equal(pointerAction({ pointer: read(stable), channel: 'stable', installed: 0, shellApi: 1, key, rekorKey, now: clock * 1000, minAge: 3600 }).action, 'wait', 'at 3600 s the hour applies')
     const rollout = fleet(read(stable), [0, 100, 150], hourLater())
     assert.deepEqual(rollout.map((each) => [each.action, each.sequence]), [['install', 300], ['install', 300], ['install', 300]], 'every device at once, no stages')
     assert.deepEqual(rollout[0].packs, built.packs)
@@ -65,7 +66,7 @@ test('Promote moves stable to everyone at once and builds nothing; halt stops a 
     // A pointer back to N−1's bytes, above every sequence so far: a fleet already on N goes back to N−1's packs (after the hour too).
     clock += 600
     const back = await point(old, 'stable-back', '--channel', 'stable', '--sequence', String(JSON.parse(read(halted).manifest).sequence + 1))
-    assert.deepEqual(fleet(read(back), [300, 300, 300]).map((each) => each.action), ['wait', 'wait', 'wait'], 'rollbacks wait the hour too')
+    assert.deepEqual(fleet(read(back), [300, 300, 300]).map((each) => each.action), ['install', 'install', 'install'], 'rollbacks too, with the age rule off')
     const rolled = fleet(read(back), [300, 300, 300], hourLater())
     assert.deepEqual(rolled.map((each) => [each.action, each.version]), [['install', '1.0.0-beta.1'], ['install', '1.0.0-beta.1'], ['install', '1.0.0-beta.1']])
     assert.deepEqual(rolled[0].packs, JSON.parse(read(old).manifest).packs, 'N−1\'s exact packs')

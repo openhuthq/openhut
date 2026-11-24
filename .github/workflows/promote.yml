@@ -1,9 +1,9 @@
 name: Promote
 
 # R4, the normal release. Re-signs the stable channel pointer to a release main already built and published as beta, for everyone at once,
-# and builds nothing. `halt` re-signs the current stable with halt: devices drop a pending install on their next poll, without the hour.
+# and builds nothing. `halt` re-signs the current stable with halt: devices drop a pending install on their next poll, without the age wait.
 # `rollback` points stable back at an earlier release's bytes (releases/<sha256>.json) under a higher sequence. Each pointer is logged in
-# Rekor and announced (scripts/r2.sh pointer), so the release monitor stays quiet; devices still wait the hour, halt excepted.
+# Rekor and announced (scripts/r2.sh pointer), so the release monitor stays quiet; devices still wait MIN_AGE_SECONDS (0 for now), halt excepted.
 # Installers are a shell release (shell.yml); deploying the Cloud with the promoted App is R5.
 
 on:

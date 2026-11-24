@@ -13,6 +13,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
 import { bootCloud, devCloudUrl, signIn } from './dev-cloud.mjs'
 import { fakeRekor } from '../test/fake-rekor.ts'
+import { MIN_AGE_SECONDS } from '../src/release-key.mjs'
 
 const { values: args } = parseArgs({ options: { app: { type: 'string' }, out: { type: 'string', default: 'pack-update' }, cloud: { type: 'string' } } })
 if (!args.app) {
@@ -86,8 +87,11 @@ try {
     const now = await page.eval('window.openhut.update.check()')
     return want(now) ? now : null
   }, 120, 'the update state')
-  await say('waiting', await state((now) => now.waiting))
-  await shot(page, 'm5-1-waiting')
+  // Owner 2026-11-24: with MIN_AGE_SECONDS 0 there is no waiting state; it comes back with the 3600 s rule.
+  if (MIN_AGE_SECONDS) {
+    await say('waiting', await state((now) => now.waiting))
+    await shot(page, 'm5-1-waiting')
+  }
 
   publish({ logged: false })
   say('refused', await state((now) => now.refused))

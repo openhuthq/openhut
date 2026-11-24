@@ -1,6 +1,6 @@
 #!/bin/sh
 # openhut-updater. R7: it lives in the base image (/usr/local/lib/openhut-updater), never in the per-release layer it replaces, and
-# runs an install.sh only when verify-installer.mjs finds its hash in a signed release.json whose Rekor entry is an hour old (SEC6).
+# runs an install.sh only when verify-installer.mjs finds its hash in a signed release.json whose Rekor entry is MIN_AGE_SECONDS old (SEC6; 0 for now).
 set -u
 cd /tmp
 HERE=$(cd "$(dirname "$0")/.." && pwd)
