@@ -139,3 +139,17 @@ test('a deleted agent leaves this computer and its records', async () => {
   assert.equal(await db.selectFrom('agent').select('id').where('id', '=', made.id).executeTakeFirst(), undefined)
   assert.equal((await recordsService.get({ collection: 'agent', workspace: HOME, id: made.id }))?.deleted, true)
 })
+
+test('an agent this computer couldn\'t set up says so as its health, with the reason, until a later try works', async () => {
+  const made = await agentService.create({ actor: owner, name: 'Netless' })
+  await agentService.update({ actor: owner, id: made.id, patch: { wanted: 'running' } })
+  agentd.failing.add(made.id)
+  await assert.rejects(agentService.reapply({ id: made.id }))
+  const failed = await agentService.get({ actor: owner, id: made.id })
+  assert.equal(failed.health, 'setup_failed')
+  assert.match(failed.healthDetail, /Pool overlaps/)
+  assert.equal((await agentService.statuses({ workspace: HOME }))[made.id]?.health, 'not_answering')
+  agentd.failing.delete(made.id)
+  await agentService.reapply({ id: made.id })
+  assert.notEqual((await agentService.get({ actor: owner, id: made.id })).health, 'setup_failed')
+})

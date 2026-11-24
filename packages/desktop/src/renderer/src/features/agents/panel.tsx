@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { SquareLock02Icon, UserGroupIcon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, LaptopIcon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { ServerStack01Icon, SquareLock02Icon, UserGroupIcon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, LaptopIcon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogClose, DialogTitle } from '@/components/ui/dialog'
@@ -162,7 +162,7 @@ function RunsOn({ agent }: { agent: Agent }) {
   const note = noteOf(agent)
   return <>
     <DropdownMenu>
-      <DropdownMenuTrigger className={ROW} disabled={!!move.going}><I icon={LaptopIcon} size={15} className="text-mute" />Runs on<span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="truncate">{agent.runsHere ? nameOf({ computers, id }) : elsewhereOf(agent)}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
+      <DropdownMenuTrigger className={ROW} disabled={!!move.going}><I icon={agent.runsOnServer ? ServerStack01Icon : LaptopIcon} size={15} className="text-mute" />Runs on<span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="truncate">{agent.runsHere ? nameOf({ computers, id }) : elsewhereOf(agent)}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
       <MenuCard title={`${agent.name} runs on`}>
         {!agent.runsHere && <Choice icon={<I icon={LaptopIcon} size={15} />} name={elsewhereOf(agent)} selected disabled />}
         {(computers ?? []).map((computer) => !agent.runsHere && computer.id === id

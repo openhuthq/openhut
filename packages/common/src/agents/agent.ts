@@ -5,7 +5,7 @@ import { ModelKey } from '../models/provider.ts'
 export const AgentStatus = z.enum(['running', 'stopped', 'missing'])
 export type AgentStatus = z.infer<typeof AgentStatus>
 
-export const AgentHealth = z.enum(['answering', 'starting', 'not_answering', 'no_seat'])
+export const AgentHealth = z.enum(['answering', 'starting', 'not_answering', 'no_seat', 'setup_failed'])
 export type AgentHealth = z.infer<typeof AgentHealth>
 
 export const Wanted = z.enum(['running', 'stopped'])
@@ -32,6 +32,7 @@ export const Agent = z.object({
   runsHere: z._default(z.boolean(), true),
   runsNowhere: z._default(z.boolean(), false),
   runsOnName: z._default(z.nullable(z.string()), null),
+  runsOnServer: z._default(z.boolean(), false),
   runsOn: z._default(z.nullable(z.string()), null),
   changedBy: z._default(z.nullable(z.string()), null),
   workspace: z._default(z.nullable(z.string()), null),
