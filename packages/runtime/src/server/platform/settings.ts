@@ -54,6 +54,8 @@ export const settings = {
   timeZone: (): string => rows.get('time_zone') || Intl.DateTimeFormat().resolvedOptions().timeZone,
   setTimeZone: (zone: string) => write('time_zone', zone),
   access: (): string | undefined => rows.get('access'),
+  ownWindow: (): string | undefined => rows.get('own_window'),
+  setOwnWindow: (key: string) => write('own_window', key),
   signIns: (): Record<string, number> => z.safeParse(z.record(z.string(), z.number()), JSON.parse(rows.get('sign_ins') ?? '{}')).data ?? {},
   setSignIns: (pending: Record<string, number>) => write('sign_ins', JSON.stringify(pending)),
 }

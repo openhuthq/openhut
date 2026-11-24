@@ -8,7 +8,7 @@ import { keysService } from '../cloud/keys-service.ts'
 import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
-import { fromTunnel, memberOf, tunnelKeyOf, who } from '../team/identity.ts'
+import { atHome, memberOf, tunnelKeyOf, who } from '../team/identity.ts'
 
 const MAX_REASON = 120
 const Id = z.object({ id: z.string() })
@@ -29,14 +29,14 @@ const RUNNER_OF: Partial<Record<string, (req: FastifyRequest) => Promise<string 
 export const forward = {
   async http(req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> {
     const find = RUNNER_OF[`${req.method} ${req.routeOptions.url ?? ''}`]
-    const key = find && !fromTunnel(req) ? await find(req) : undefined
+    const key = find && atHome(req) ? await find(req) : undefined
     if (!key) return undefined
     await who(req)
     return reply.send(await fetchOn({ key, path: req.url, init: { method: req.method, headers: headersOf(req), body: bodyOf(req) } }))
   },
 
   async socket({ socket, req, agentId }: { socket: WebSocket; req: FastifyRequest; agentId: string }): Promise<boolean> {
-    const key = fromTunnel(req) ? undefined : await runnerOf(agentId)
+    const key = atHome(req) ? await runnerOf(agentId) : undefined
     if (!key) return false
     try {
       await who(req)

@@ -17,6 +17,7 @@ import { db, isUniqueViolation } from '../platform/db.ts'
 import { emit } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { newId } from '../platform/secrets.ts'
+import { settings } from '../platform/settings.ts'
 
 const LOCAL = Symbol('local')
 const DEVICE = Symbol('device')
@@ -48,7 +49,7 @@ export async function who(req: FastifyRequest): Promise<Caller> {
   const member = memberOf(device)
   if (!member) throw new HttpError(401, 'This device isn’t on your list anymore, so it can’t reach this computer.')
   const route = routeOf(req)
-  const allowed = member.own ? !TRUST.test(route) || firstKitOnAServer(route) : TEAMMATE_LISTS.has(route) || (TEAMMATES.has(route) && await sharedWith({ req, workspaces: member.workspaces }))
+  const allowed = member.own ? isOwnWindow(device) || !TRUST.test(route) || firstKitOnAServer(route) : TEAMMATE_LISTS.has(route) || (TEAMMATES.has(route) && await sharedWith({ req, workspaces: member.workspaces }))
   if (!allowed) throw new HttpError(403, member.own ? 'Do this on your computer: devices, keys, the recovery kit and sign-in change only in the OpenHut app there.' : 'You can only chat with the agents your team shares.')
   return { id: (await owner()).id, email: member.email, local: false, ...!member.own && { teammate: member.workspaces } }
 }
@@ -56,12 +57,24 @@ export async function who(req: FastifyRequest): Promise<Caller> {
 export async function stepUp(req: FastifyRequest): Promise<void> {
   const { device } = arrival(req)
   const member = device === undefined ? undefined : memberOf(device)
-  if (!member?.own || !STEP_UP[routeOf(req)]?.(req.body)) return
+  if (!member?.own || isOwnWindow(device) || !STEP_UP[routeOf(req)]?.(req.body)) return
   if (!await userPresence.ask('let your browser or phone make this change')) throw new HttpError(403, 'Not confirmed on your computer, so nothing changed. Confirm it there to go ahead.', { param: 'presence' })
 }
 
 export async function requireSignIn(req: FastifyRequest): Promise<void> {
   await who(req)
+}
+
+export function withPresence(reason: string): (req: FastifyRequest) => Promise<void> {
+  return async (req) => {
+    await who(req)
+    if (!await userPresence.ask(reason)) throw new HttpError(403, 'Not confirmed. Nothing changed.', { param: 'presence' })
+  }
+}
+
+export function atHome(req: FastifyRequest): boolean {
+  const { device } = arrival(req)
+  return device === undefined || isOwnWindow(device)
 }
 
 export function enrolled(header: string | undefined): boolean {
@@ -74,8 +87,9 @@ export function tagDevice<T extends Duplex>({ conn, key }: { conn: T; key: strin
   return Object.assign(conn, { [DEVICE]: key })
 }
 
-export function fromTunnel(req: FastifyRequest): boolean {
-  return arrival(req).device !== undefined
+function isOwnWindow(device: string | undefined): boolean {
+  const own = settings.ownWindow()
+  return device !== undefined && own !== undefined && tunnelKeyOf(own) === device
 }
 
 export function tunnelKeyOf(device: string): string {
