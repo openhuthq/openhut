@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { guardedFetch } from '../../../src/server/platform/network.ts'
+import { config } from '../../../src/server/platform/config.ts'
+import { guardedFetch, portsFree } from '../../../src/server/platform/network.ts'
 
 test('guarded fetches refuse loopback, link-local and agent addresses, by name, by literal and after a redirect', async () => {
   for (const url of ['http://127.0.0.1:8999/', 'http://[::1]:8999/', 'http://localhost:8999/', 'http://169.254.169.254/latest', 'http://10.200.3.2/', 'http://[::ffff:127.0.0.1]:8999/']) {
@@ -16,4 +17,15 @@ test('guarded fetches refuse loopback, link-local and agent addresses, by name, 
   } finally {
     bounce.close()
   }
+})
+
+test('a new agent skips a slot whose port another program holds, when agents share this computer\'s network', async () => {
+  const taken = createServer().listen(18600 + 249, '127.0.0.1')
+  await new Promise((resolve) => taken.once('listening', resolve))
+  assert.equal(await portsFree(249), true)
+  config.agentHostNet = true
+  assert.equal(await portsFree(249), false)
+  assert.equal(await portsFree(248), true)
+  config.agentHostNet = false
+  taken.close()
 })

@@ -33,6 +33,7 @@ const HEALTH_MS = 5_000
 const PROBE_MS = 3_000
 const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
+const PORT_TAKEN = 'Another program answers on this agent’s port, likely another OpenHut on this computer. Quit it, then stop and start this agent.'
 const DEFAULT_MODEL = 'claude:sonnet'
 const CHILDREN = ['channel', 'routine', 'skill'] as const
 const held = new Map<string, boolean>()
@@ -407,14 +408,14 @@ async function healthOf({ row, state }: { row: AgentRow; state: string | undefin
   const provider = splitModelKey(row.model)?.provider ?? 'claude'
   if (!last.detail && config.modelMode === 'claude' && !providerService.connected(provider)) return { health: 'no_seat', detail: `${providerService.get({ id: provider }).name} isn't connected on this computer, so its model can't answer. Connect it under Settings › Models.` }
   if (!last.detail) return { health: 'answering', detail: '' }
-  return { health: Date.now() - last.failingSince > STARTING_MS ? 'not_answering' : 'starting', detail: last.detail }
+  return { health: last.detail === PORT_TAKEN || Date.now() - last.failingSince > STARTING_MS ? 'not_answering' : 'starting', detail: last.detail }
 }
 
 async function probe({ row, fresh }: { row: AgentRow; fresh: boolean }): Promise<Probe> {
   const last = probes.get(row.id)
   if (last && !fresh && Date.now() - last.at < PROBE_FRESH_MS) return last
   const detail = await fetch(`${agentApiUrl(row.net)}/v1/models`, { headers: { authorization: `Bearer ${unseal(row.channel_key)}` }, signal: AbortSignal.timeout(PROBE_MS) })
-    .then((res) => res.ok ? '' : 'The agent returned an error.')
+    .then((res) => res.ok ? '' : res.status === 401 || res.status === 403 ? PORT_TAKEN : 'The agent returned an error.')
     .catch((err: unknown) => unreachable(err))
   const next = { at: Date.now(), detail, failingSince: detail && last?.detail ? last.failingSince : Date.now() }
   probes.set(row.id, next)

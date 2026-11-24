@@ -9,6 +9,7 @@ import { agentd } from '../platform/agentd.ts'
 import { db } from '../platform/db.ts'
 import { emit, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
+import { portsFree } from '../platform/network.ts'
 import { newId, seal } from '../platform/secrets.ts'
 import { keysService } from './keys-service.ts'
 import { recordsService, type Change, type Held } from './records.ts'
@@ -138,7 +139,6 @@ async function ownerId(): Promise<string> {
 
 async function freeNet(): Promise<number> {
   const used = new Set((await db.selectFrom('agent').select('net').execute()).map((row) => row.net))
-  const net = Array.from({ length: MAX_AGENTS }, (_, i) => i + 1).find((n) => !used.has(n))
-  if (!net) throw new HttpError(409, `This computer already runs ${MAX_AGENTS} agents. Run some on another computer first.`)
-  return net
+  for (let net = 1; net <= MAX_AGENTS; net++) if (!used.has(net) && await portsFree(net)) return net
+  throw new HttpError(409, `This computer already runs ${MAX_AGENTS} agents. Run some on another computer first.`)
 }
