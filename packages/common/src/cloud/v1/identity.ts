@@ -45,7 +45,7 @@ export const CreateSession = z.discriminatedUnion('grant', [
 ])
 export type CreateSession = z.infer<typeof CreateSession>
 
-export const Session = z.object({ object: z.literal('session'), token: z.string(), refreshToken: z.string(), sub: z.string(), email: Email, device: DeviceKey, expiresAt: Timestamp })
+export const Session = z.object({ object: z.literal('session'), token: z.string(), refreshToken: z.string(), sub: z.string(), email: Email, device: DeviceKey, expiresAt: Timestamp, maker: z.optional(DeviceKey) })
 export type Session = z.infer<typeof Session>
 
 export const JoinCode = z.object({ object: z.literal('join_code'), code: z.string(), expiresAt: Timestamp })

@@ -458,8 +458,31 @@ async function serverApproval({ device, name }: { device: string; name: string |
 async function joinAsServer(code: string): Promise<void> {
   if (keysService.session() && keysService.locked()) return void resumeAsking()
   const session = await keysService.joinSession(code)
-  await keysService.setLocked({ sub: session.sub, email: session.email })
-  await cloudService.ask()
+  const who = { sub: session.sub, email: session.email }
+  if (await accountExists()) {
+    await keysService.setLocked(who)
+    await cloudService.ask()
+    return
+  }
+  const me = Me.safeParse((await keysService.call({ method: 'GET', path: '/v1/me' })).json).data
+  if (!me?.home) throw new HttpError(502, 'OpenHut Cloud didn’t send your home team. Try again.')
+  const home = me.home
+  if (!await serial(async () => openRoom({ account: await keysService.open({ ...who, home }) }))) throw new HttpError(409, 'Another computer set up this account a moment ago. Run the command again.')
+  log.info({ event: 'cloud.first_computer', workspace: home })
+  cloudEvents.start()
+  if (session.maker) void letInMaker({ workspace: home, device: session.maker }).catch((err: unknown) => log.warn({ event: 'cloud.let_in_failed', error: messageOf(err) }))
+}
+
+async function letInMaker({ workspace, device }: { workspace: string; device: string }): Promise<void> {
+  for (const end = Date.now() + KNOCK_MS; Date.now() < end; await new Promise((done) => setTimeout(done, ASK_POLL_MS))) {
+    await cloudEvents.refreshRequests(workspace)
+    const asked = cloudEvents.requests(workspace).find((each) => each.device === device)
+    if (asked && !asked.reviewed) await cloudService.review({ workspace, device })
+    if (!asked?.faces) continue
+    await cloudService.approve({ workspace, device, faces: asked.faces })
+    log.info({ event: 'cloud.maker_let_in', workspace })
+    return
+  }
 }
 
 function signedIn(email: string): string {

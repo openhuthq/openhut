@@ -22,10 +22,12 @@ type Pending = { resolve: (response: Response) => void; reject: (error: Error) =
 export class TunnelError extends Error {
   type: string
   code: number | undefined
-  constructor({ type, message, code }: { type: string; message: string; code?: number }) {
+  reason: string | undefined
+  constructor({ type, message, code, reason }: { type: string; message: string; code?: number; reason?: string }) {
     super(message)
     this.type = type
     this.code = code
+    this.reason = reason
   }
 }
 
@@ -105,9 +107,9 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
       opened = true
       socket.send(new Uint8Array(first))
     })
-    const closed = (code: number) => {
+    const closed = (code: number, reason?: string) => {
       const offline = code === 4004 || !opened
-      const error = new TunnelError({ type: offline ? 'offline' : 'closed', message: offline ? 'The computer is offline.' : 'The tunnel to the computer closed.', code })
+      const error = new TunnelError({ type: offline ? 'offline' : 'closed', message: offline ? 'The computer is offline.' : 'The tunnel to the computer closed.', code, reason })
       fail(error)
       reject(error)
     }
@@ -117,7 +119,7 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
       const data = event.data
       inbox = inbox.then(() => receive(data)).catch(() => socket.close())
     })
-    socket.addEventListener('close', event => closed(event.code))
+    socket.addEventListener('close', event => closed(event.code, event.reason))
     socket.addEventListener('error', () => { if (!opened) closed(1006) })
     late = setTimeout(() => {
       const error = new TunnelError({ type: 'closed', message: 'The computer didn\'t answer in time.' })
@@ -189,9 +191,9 @@ function closingOf(payload: Uint8Array): Closing {
   return { code: typeof code === 'number' ? code : 1005, reason: typeof reason === 'string' ? reason : '' }
 }
 
-function closing(text: string, closed: (code: number) => void): void {
+function closing(text: string, closed: (code: number, reason?: string) => void): void {
   const notice = parsed(text)
-  if (typeof notice === 'object' && notice !== null && 'type' in notice && notice.type === 'closing' && 'code' in notice && typeof notice.code === 'number') closed(notice.code)
+  if (typeof notice === 'object' && notice !== null && 'type' in notice && notice.type === 'closing' && 'code' in notice && typeof notice.code === 'number') closed(notice.code, 'reason' in notice && typeof notice.reason === 'string' ? notice.reason : undefined)
 }
 
 function parsed(text: string): unknown {
