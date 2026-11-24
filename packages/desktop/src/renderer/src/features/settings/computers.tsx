@@ -124,7 +124,7 @@ function DeviceRow({ device }: { device: Device }) {
   const server = device.kind === 'server'
   const name = device.name ?? (server ? 'Computer that runs agents' : 'Computer')
   const detail = device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))} · ${REMOVE_DETAIL}` : REMOVE_DETAIL
-  return <Row icon={<DeviceIcon kind={device.kind} />} title={name} note={[server ? 'Runs agents' : 'Mac', addedOf(device)].filter(Boolean).join(' · ')}>
+  return <Row icon={<DeviceIcon kind={device.kind} />} title={name} note={[server && 'Runs agents', addedOf(device)].filter(Boolean).join(' · ')}>
     {server && !isPhone() && update.isPending && <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>}
     {server && !isPhone() && !update.isPending && <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate({ id: tunnelKeyOf(device.key), name }, { onSuccess: () => toast(`${name} is updating`), onError: toastError })}>Update</Button>}
     {!isPhone() && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${name}?`} detail={detail} points={REMOVE_POINTS} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
@@ -136,7 +136,7 @@ function RequestRow({ workspace, asked }: { workspace: CloudWorkspaceView; asked
   const answer = useAnswer({ workspace: workspace.id, request: asked, label: title })
   const kind = asked.server ? 'server' : 'mac'
   return <Row icon={<DeviceIcon kind={kind} />} title={title} note={<>Wants to join · <DeviceMeta device={{ kind, name: title, os: asked.os ?? undefined, when: `${ago(asked.at)} ago` }} /></>}>
-    <Button type="button" variant="ghost" className={PILL} disabled={answer.busy} onClick={answer.notMe}>Not me</Button>
+    <Button type="button" variant="ghost" className={PILL} disabled={answer.busy} onClick={answer.notMe}>Not mine</Button>
     <Button type="button" variant="primary" className={PILL} disabled={answer.busy} onClick={answer.approve}>{asked.checked ? 'Review' : 'Approve'}</Button>
     {answer.dialog}
   </Row>
@@ -290,9 +290,10 @@ function TailscaleDialog({ title, back, foot, children }: { title: string; back?
 function AddComputer() {
   return <TailscaleDialog title="Add a computer">
     <Rows>
+      <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="The easiest way: paste one command on a Linux computer with sudo. No Tailscale needed. End-to-end encrypted."><Chevron /></Row>
       <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Tailscale" note="Install it over Tailscale SSH in one click. It then talks through OpenHut Relay, end-to-end encrypted."><Chevron /></Row>
-      <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="The easiest way. No Tailscale needed. End-to-end encrypted."><Chevron /></Row>
     </Rows>
+    <p className="m-0 px-2.5 text-[12px]/[16px] text-mute">A Mac or PC joins by installing OpenHut and signing in with your account.</p>
   </TailscaleDialog>
 }
 

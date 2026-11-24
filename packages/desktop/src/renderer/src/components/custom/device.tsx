@@ -14,7 +14,7 @@ export function DeviceMeta({ device, named }: { device: Device; named?: boolean 
   const parts = [
     named && <span key="name">{device.name}</span>,
     device.city && <span key="place" className="inline-flex items-center gap-1">{device.country && <Flag country={device.country} />}{device.city}</span>,
-    device.os && <span key="os" className="inline-flex items-center gap-1">{device.kind !== 'server' && <I icon={AppleIcon} size={12} />}{device.os}</span>,
+    device.os && <span key="os" className="inline-flex items-center gap-1">{device.os.startsWith('macOS') && <I icon={AppleIcon} size={12} />}{device.os}</span>,
     device.when && <span key="when">{device.when}</span>,
   ].filter(Boolean)
   return <span className="inline-flex items-center gap-1.5">{parts.flatMap((part, index) => index ? [<span key={index} aria-hidden>·</span>, part] : [part])}</span>

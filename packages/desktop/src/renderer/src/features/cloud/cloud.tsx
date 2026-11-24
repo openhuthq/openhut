@@ -112,8 +112,9 @@ export function CloudDevices({ merged }: { merged: string[] }) {
 export function JoinRequestRow({ workspace, request }: { workspace: CloudWorkspaceView; request: DeviceRequest }) {
   const title = request.name ?? 'New computer'
   const answer = useAnswer({ workspace: workspace.id, request, label: title })
-  return <Row icon={<DeviceIcon kind="mac" />} title={title} note={<>Wants to join · <DeviceMeta device={{ kind: 'mac', name: title, os: request.os ?? undefined, when: `${ago(request.at)} ago` }} /></>}>
-    <Button type="button" variant="ghost" className={PILL} disabled={answer.busy} onClick={answer.notMe}>Not me</Button>
+  const kind = request.server ? 'server' : 'mac'
+  return <Row icon={<DeviceIcon kind={kind} />} title={title} note={<>Wants to join · <DeviceMeta device={{ kind, name: title, os: request.os ?? undefined, when: `${ago(request.at)} ago` }} /></>}>
+    <Button type="button" variant="ghost" className={PILL} disabled={answer.busy} onClick={answer.notMe}>Not mine</Button>
     <Button type="button" variant="primary" className={PILL} disabled={answer.busy} onClick={answer.approve}>{request.checked ? 'Review' : 'Approve'}</Button>
     {answer.dialog}
   </Row>
