@@ -5,10 +5,10 @@ import { parseArgs } from 'node:util'
 
 const { values: flags, positionals } = parseArgs({
   allowPositionals: true,
-  options: { sequence: { type: 'string' }, channel: { type: 'string' }, 'shell-api': { type: 'string' }, halt: { type: 'boolean' }, rekor: { type: 'string' } },
+  options: { sequence: { type: 'string' }, channel: { type: 'string' }, 'shell-api': { type: 'string' }, halt: { type: 'boolean' }, rekor: { type: 'string' }, keys: { type: 'string' } },
 })
 const [command, path, dir, given] = positionals
-const usage = 'usage: release-key.ts key <new key file> | sign <key file> <release folder> [version] [--sequence N] [--channel stable|beta] [--shell-api MIN-MAX] [--halt] [--rekor https://rekor.sigstore.dev]\n       | point <key file> <signed release folder> <out folder> [--channel stable|beta] [--sequence N] [--halt] [--rekor https://rekor.sigstore.dev]'
+const usage = 'usage: release-key.ts key <new key file> | sign <key file> <release folder> [version] [--sequence N] [--channel stable|beta] [--shell-api MIN-MAX] [--halt] [--rekor https://rekor.sigstore.dev] [--keys <JSON: current, next, revoked>]\n       | point <key file> <signed release folder> <out folder> [--channel stable|beta] [--sequence N] [--halt] [--rekor https://rekor.sigstore.dev]'
 
 if (command === 'key' && path && !existsSync(path)) {
   const pair = generateKeyPairSync('ed25519')
@@ -37,6 +37,8 @@ if (command === 'key' && path && !existsSync(path)) {
     halt: flags.halt ?? false,
     packs,
     files,
+    // M5 key rotation: a release signed by "next" names the new pinned set, with the old "current" revoked.
+    ...(flags.keys ? { keys: JSON.parse(flags.keys) } : {}),
   }
   if (!Number.isSafeInteger(release.sequence) || !['stable', 'beta'].includes(release.channel) || !(min <= max)) {
     console.error(usage)

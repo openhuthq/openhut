@@ -21,6 +21,9 @@ on:
       - packages/desktop/scripts/notarize.sh
       - packages/desktop/scripts/app-e2e.mjs
       - packages/desktop/scripts/update-test.mjs
+      - packages/desktop/test/packs.test.ts
+      - packages/desktop/scripts/pack-update-test.mjs
+      - scripts/pack.ts
       - install/native-runtime.json
       - install/agent-image/**
       - install/agent-browser/**
@@ -49,6 +52,61 @@ env:
   OPENHUT_INSTALL_URL: ${{ startsWith(github.ref, 'refs/tags/') && format('https://github.com/{0}/releases/download/{1}/install.sh', github.repository, github.ref_name) || 'https://openhut.dev/edge' }}
 
 jobs:
+  pack-update:
+    # M5: the shell's pack updater (packages/desktop/src/packs.mjs) on each OS, with real packs from scripts/pack.ts signed by a test key
+    # and logged in a stand-in Rekor: N−1 → N, a broken pack rolls back by itself, a fleet follows a pointer back to N−1, "next" signs
+    # and a revoked key doesn't. No electron-updater and no real key.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, windows-2022, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: node --test packages/desktop/test/packs.test.ts
+
+  pack-swap:
+    # M5, packaged: one Linux shell goes N−1 → N by pack (no electron-updater), through Settings › Updates' states, with screenshots.
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/cache/restore@v4
+        with:
+          path: packages/desktop/dist/native-cache
+          key: native-runtime-${{ runner.os }}-${{ hashFiles('install/native-runtime.json', 'packages/desktop/scripts/pack-hermes.mjs') }}
+      - name: Check out private/ and install the cloud API the test signs in to
+        env:
+          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
+          npm --prefix private/api ci --no-audit --no-fund
+      - name: Build the Linux shell (unpacked)
+        working-directory: packages/desktop
+        run: umask 022 && npm run build && npm run pack-backend && npx electron-builder --linux dir --x64 -c.electronFuses.runAsNode=true --publish never
+      - name: N−1 → N by pack, with the update screens
+        working-directory: packages/desktop
+        run: |
+          sudo apt-get install -y -qq xvfb
+          xvfb-run -a -s "-screen 0 1280x800x24" node scripts/pack-update-test.mjs --app release/linux-unpacked/openhut --out pack-update --cloud ../../private/api
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pack-update
+          path: packages/desktop/pack-update/
+
   draft:
     environment: ${{ (startsWith(github.ref, 'refs/tags/') || inputs.full) && 'release' || '' }}
     runs-on: ubuntu-latest

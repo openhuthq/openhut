@@ -6,7 +6,7 @@ import { usePrefs } from '@/features/settings/desktop'
 import { desktop } from '@/lib/desktop'
 import { PrefSwitch } from '@/features/settings/general'
 import { Row, Rows } from '@/features/settings/kit'
-import { downloadUrl, updateNote, useAppUpdate, type UpdateState } from '@/features/settings/update'
+import { downloadUrl, updateDetails, updateNote, useAppUpdate, type UpdateState } from '@/features/settings/update'
 import { CheckButton, UpdatePill } from '@/features/settings/update-pill'
 import { cn } from '@/lib/utils'
 
@@ -18,8 +18,20 @@ export function UpdatesSettings() {
   const stays = state.current.includes('-') && prefs.data?.betaUpdates === false
   return <Rows>
     <Row icon={<I icon={CloudDownloadIcon} size={20} className="text-hue-sky" />} title={`OpenHut ${state.current}`} note={updateNote(state)}><Action state={state} /></Row>
+    <Details state={state} />
     <PrefSwitch icon={TestTube01Icon} hue="text-hue-violet" name="betaUpdates" title="Try new features early" note={stays ? 'You stay on this beta until the next regular version is out.' : 'Get beta versions before everyone else.'} />
   </Rows>
+}
+
+function Details({ state }: { state: UpdateState }) {
+  const details = updateDetails(state)
+  if (!details) return null
+  return <details className="px-3 text-[12px]/[16px] text-mute">
+    <summary className="cursor-default">Details</summary>
+    <div>Release key {details.key}</div>
+    <div>Log entry <a href={details.entry} target="_blank" rel="noreferrer" className="underline">{details.logIndex}</a></div>
+    <ul>{details.checks.map((check) => <li key={check}>✓ {check}</li>)}</ul>
+  </details>
 }
 
 function Action({ state }: { state: UpdateState }) {
