@@ -121,6 +121,16 @@ export const remote = {
   },
   reconnect: (): Promise<unknown> => live().catch(() => undefined),
 
+  async signOut(): Promise<void> {
+    const nonce = await store.get<string | null>('nonce')
+    const me = nonce ? await cloud.me().catch(() => null) : null
+    const account = me ? accountStepOf(me, (await store.get<Invited | null>('invite'))?.workspace) : undefined
+    if (nonce && account && account.step !== 'first-run') await cloud.knock({ team: account.workspace, nonce }).cancel().catch(() => undefined)
+    await store.set('session', undefined)
+    await store.set('nonce', null)
+    await store.set('invite', null)
+  },
+
   async signIn(): Promise<void> {
     const started = await cloud.signIn({ google: { returnTo: `${location.origin}${RETURN}` } }).catch(() => null)
     if (started?.object !== 'redirect') throw new Error('OpenHut Cloud didn’t start the sign-in. Try again.')

@@ -76,7 +76,7 @@ app.whenReady().then(async () => {
   try {
     const stranger = page()
     await stranger.go(WEB)
-    await stranger.until(/Use OpenHut in your browser/)
+    await stranger.until(/Your agents, everywhere/)
     await stranger.shot('f2-01-public')
     await stranger.signIn('ana@example.com')
     const choose = await stranger.until(/Where should your agents live\?/)
@@ -89,7 +89,7 @@ app.whenReady().then(async () => {
 
     const mo = page()
     await mo.go(WEB)
-    await mo.until(/Use OpenHut in your browser/)
+    await mo.until(/Your agents, everywhere/)
     await mo.signIn('mo@example.com')
     await mo.until(/Where should your agents live\?/)
     await mo.click('Run on my server')
@@ -156,7 +156,7 @@ app.whenReady().then(async () => {
     await web.shot('f2-08-continue')
     const twice = page()
     await twice.go(made.url)
-    const second = await twice.until(/Use OpenHut in your browser|Knock knock/, 30000)
+    const second = await twice.until(/Your agents, everywhere|Knock knock/, 30000)
     log(`13 the same link a second time: ${second.split('\n').filter(Boolean).slice(0, 2).join(' / ')}`)
     await twice.shot('f2-09-continue-twice')
 

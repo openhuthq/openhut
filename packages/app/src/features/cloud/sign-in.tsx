@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore, type FormEvent } from 'react'
+import { useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
 import { ComputerPhoneSyncIcon, File01Icon, FingerPrintIcon, SourceCodeIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import type { Cloud, RecoveryKit } from '@openhut/common/cloud/cloud.ts'
 import { kitText, readKit } from '@openhut/common/vault/kit-file.ts'
@@ -43,18 +43,27 @@ export function SignIn({ cloud }: { cloud: Cloud | undefined }) {
   const moving = migrating({ agents, invited })
   const busy = waiting || signIn.isPending
   const ready = Boolean(cloud)
-  const action = isPhone() ? undefined : <Button type="button" variant="primary" className={cn(BIG, 'grid', busy && 'bg-[#2a2b2e]')} disabled={!online || !ready || signIn.isPending} onClick={() => signIn.mutate(hint)}>
-    <span className={cn(SWAP, busy && '-translate-y-2.5 opacity-0')}>{ready ? <><Google size={17} />{hint ? `Sign in as ${hint}` : 'Continue with Google'}</> : <><Spinner className="mt-0 border-white/30 border-t-white" />Getting ready…</>}</span>
-    <span className={cn(SWAP, !busy && 'translate-y-2.5 opacity-0')} aria-hidden={!busy}><Spinner className="mt-0 border-white/30 border-t-white" />Finish in your browser</span>
-  </Button>
   const quiet = !invited && !isPhone() && <Button type="button" variant="text" onClick={() => open('join-link')}>I have an invite link</Button>
   const link = waiting ? <span className="text-mute">Google opened in your browser · <Button type="button" variant="text" className="font-normal text-mute" disabled={signIn.isPending} onClick={() => signIn.mutate(hint)}>Open it again</Button> · <Button type="button" variant="text" className="font-normal text-mute" onClick={cancel}>Cancel</Button></span> : quiet
-  const [title, line] = invited ? [invite?.team ? `You’re invited to ${invite.team}.` : 'You’re invited.', `${invite?.from ? `${firstName(invite.from)} (${invite.from}) invited you. ` : ''}${hint ? `Sign in with Google as ${hint} to join. Everything in the team stays end-to-end encrypted.` : INVITED}`] : [moving ? 'Sign in to keep going.' : 'Your agents, everywhere.', moving]
-  return <Step title={title} line={line} action={action} link={link}>
-    {!invited && <ul className="m-0 flex list-none flex-col gap-3 p-0 text-left">{POINTS.map(([icon, text]) => <li key={text} className="flex items-center gap-3 text-[15px]/[1.4] text-body"><I icon={icon} size={18} className="shrink-0 text-mute" />{text}</li>)}</ul>}
+  const [title, line] = invited ? [invite?.team ? `You’re invited to ${invite.team}.` : 'You’re invited.', `${invite?.from ? `${firstName(invite.from)} (${invite.from}) invited you. ` : ''}${hint ? `Sign in with Google as ${hint} to join. Everything in the team stays end-to-end encrypted.` : INVITED}`] : [moving ? 'Sign in to keep going.' : TITLE, moving]
+  return <SignInScreen title={title} line={line} invited={invited} hint={hint} ready={ready} busy={busy} disabled={!online || !ready || signIn.isPending} onSignIn={isPhone() ? undefined : () => signIn.mutate(hint)} link={link}>
     {isPhone() && <p className="m-0 text-[13px] text-mute">Sign in to OpenHut on your computer.</p>}
     {waiting && <PasteCode />}
     {online ? <ErrorNote className="max-w-[420px]" message={signIn.error?.message ?? cloud?.signInError ?? undefined} /> : <p className="m-0 text-[13px] text-mute">OpenHut needs the internet the first time.</p>}
+  </SignInScreen>
+}
+
+export const TITLE = 'Your agents, everywhere.'
+
+/** The one sign-in screen: the Mac app and app.openhut.dev both render this. */
+export function SignInScreen({ title, line, invited, hint, ready = true, busy, busyLabel = 'Finish in your browser', disabled, onSignIn, link, children }: { title: string; line?: ReactNode; invited: boolean; hint?: string; ready?: boolean; busy: boolean; busyLabel?: string; disabled: boolean; onSignIn?: () => void; link?: ReactNode; children?: ReactNode }) {
+  const action = onSignIn && <Button type="button" variant="primary" className={cn(BIG, 'grid', busy && 'bg-[#2a2b2e]')} disabled={disabled} onClick={onSignIn}>
+    <span className={cn(SWAP, busy && '-translate-y-2.5 opacity-0')}>{ready ? <><Google size={17} />{hint ? `Sign in as ${hint}` : 'Continue with Google'}</> : <><Spinner className="mt-0 border-white/30 border-t-white" />Getting ready…</>}</span>
+    <span className={cn(SWAP, !busy && 'translate-y-2.5 opacity-0')} aria-hidden={!busy}><Spinner className="mt-0 border-white/30 border-t-white" />{busyLabel}</span>
+  </Button>
+  return <Step title={title} line={line} action={action} link={link}>
+    {!invited && <ul className="m-0 flex list-none flex-col gap-3 p-0 text-left">{POINTS.map(([icon, text]) => <li key={text} className="flex items-center gap-3 text-[15px]/[1.4] text-body"><I icon={icon} size={18} className="shrink-0 text-mute" />{text}</li>)}</ul>}
+    {children}
   </Step>
 }
 
