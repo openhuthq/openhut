@@ -7,7 +7,10 @@ import { ConfirmButton, ConfirmDialog } from '@/components/confirm-button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Badge } from '@/components/ui/badge'
+import { EmptyState } from '@/components/empty-state'
+import { Row, Rows } from '@/features/settings/kit'
 import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Section } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
@@ -29,20 +32,21 @@ export function TeamPeople({ workspace }: { workspace: CloudWorkspaceView }) {
   const admin = workspace.role !== 'member'
   return <>
     <Section title={workspace.members.length === 1 ? '1 member' : `${workspace.members.length} members`} action={admin ? <InviteButton workspace={workspace} /> : undefined}>
-      <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
+      <Rows>
         {workspace.members.map((member) => <div key={member.email}>
           <PersonRow member={member} workspace={workspace} you={member.email === email} admin={admin} />
           {workspace.requests.filter((each) => each.email === member.email && !(workspace.own && each.email === email)).map((each) => <Request key={each.device} workspace={workspace} request={each} name={nameOf(member.email)} mine={member.email === email} admin={admin} />)}
         </div>)}
-      </div>
+      </Rows>
+      {admin && workspace.members.length === 1 && !workspace.invites.length && <EmptyState inline mood="happy" className="mt-1 rounded-lg border border-dashed border-hair px-2.5 py-2.5" line={<><span className="block text-ink">Invite your first teammate</span>They make their own agents and chat with the ones you share.</>} action={<Button type="button" variant="secondary" className={PILL} onClick={() => open('invite')}>Invite</Button>} />}
     </Section>
     {workspace.invites.length > 0 && <Section title="Invited">
-      <div className="flex flex-col divide-y divide-hair rounded-lg border border-hair bg-card">
+      <Rows>
         {workspace.invites.map((invite) => <div key={invite.email}>
           <InviteRow invite={invite} workspace={workspace} admin={admin} />
           {workspace.requests.filter((each) => each.email === invite.email).map((each) => <Request key={each.device} workspace={workspace} request={each} name={nameOf(invite.email)} mine={false} admin={admin} />)}
         </div>)}
-      </div>
+      </Rows>
     </Section>}
   </>
 }
@@ -50,12 +54,10 @@ export function TeamPeople({ workspace }: { workspace: CloudWorkspaceView }) {
 function InviteRow({ invite, workspace, admin }: { invite: CloudWorkspaceView['invites'][number]; workspace: CloudWorkspaceView; admin: boolean }) {
   const revoke = useRevokeInvite()
   const name = nameOf(invite.email)
-  return <div className="flex items-center gap-3 px-4 py-3">
-    <span className="opacity-40"><PersonFace name={name} email={invite.email} size={40} /></span>
-    <span className="grid min-w-0 flex-1 gap-px"><span className="text-[13.5px] font-medium">{name}</span><span className="truncate text-[12px] text-mute">{[invite.email, invite.until && (Date.parse(invite.until) > Date.now() ? `link works until ${shortDateTime.format(new Date(invite.until))}` : 'link ran out')].filter(Boolean).join(' · ')}</span></span>
+  return <Row icon={<span className="opacity-40"><PersonFace name={name} email={invite.email} size={24} /></span>} title={name} note={[invite.email, invite.until && (Date.parse(invite.until) > Date.now() ? `link works until ${shortDateTime.format(new Date(invite.until))}` : 'link ran out')].filter(Boolean).join(' · ')}>
     {invite.link && <Button type="button" variant="ghost" className={PILL} onClick={() => void copy({ link: invite.link ?? '', email: invite.email })}>Copy link</Button>}
     {admin && <ConfirmButton className={PILL} disabled={revoke.isPending} question={`Revoke ${name}’s invite?`} detail="The link stops working. You can invite them again later." action="Revoke" onConfirm={() => revoke.mutateAsync({ id: workspace.id, email: invite.email }).then(() => toast(`${name}’s invite revoked`))}>Revoke</ConfirmButton>}
-  </div>
+  </Row>
 }
 
 function PersonRow({ member, workspace, you, admin }: { member: Member; workspace: CloudWorkspaceView; you: boolean; admin: boolean }) {
@@ -69,10 +71,8 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
   const deviceName = (key: string) => workspace.names[key] ?? 'device'
   const device = asking && asking !== 'remove' ? asking : null
   const close = (on: boolean) => { if (!on) setAsking(null) }
-  return <div className="flex items-center gap-3 px-4 py-3">
-    <PersonFace name={name} email={member.email} size={40} />
-    <span className="grid min-w-0 flex-1 gap-px"><span className="flex items-center gap-2 text-[13.5px] font-medium">{name}{you && <span className="text-[12px] font-normal text-mute">You</span>}</span><span className="truncate text-[12px] text-mute">{member.email}</span></span>
-    <span className="text-[13px] text-body">{ROLE[member.role]}</span>
+  return <Row icon={<PersonFace name={name} email={member.email} size={24} />} title={<span className="flex items-center gap-2">{name}{you && <span className="text-[12px] text-mute">You</span>}</span>} note={member.email}>
+    <Badge variant="tag">{ROLE[member.role]}</Badge>
     {admin && member.role !== 'owner' && !you ? <DropdownMenu>
       <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label={`More options for ${name}`} title="More" disabled={setRole.isPending || remove.isPending || removeDevice.isPending} />}><I icon={MoreHorizontalIcon} size={16} /></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="flex w-[220px] flex-col gap-0.5 rounded-xl p-1.5 text-[13px] shadow-menu">
@@ -83,7 +83,7 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
     </DropdownMenu> : <span className="w-7" />}
     <ConfirmDialog open={asking === 'remove'} onOpenChange={close} question={`Remove ${name}?`} detail={`${name} can’t get anything new from OpenHut Cloud. What ${name} already saw stays on their computer.`} action="Remove" onConfirm={() => remove.mutate({ id: workspace.id, email: member.email }, { onSuccess: () => notify({ title: `${name} removed`, note: 'They can’t get anything new from OpenHut Cloud.' }), onError: toastError })} />
     <ConfirmDialog open={device !== null} onOpenChange={close} question={`Remove ${device ? deviceName(device) : 'device'}?`} detail={`It can’t get anything new from ${workspace.name}.`} action="Remove" onConfirm={() => device && removeDevice.mutate({ id: workspace.id, device }, { onSuccess: () => toast(`${deviceName(device)} removed`), onError: toastError })} />
-  </div>
+  </Row>
 }
 
 function Request({ workspace, request, name, mine, admin }: { workspace: CloudWorkspaceView; request: DeviceRequest; name: string; mine: boolean; admin: boolean }) {
@@ -91,7 +91,7 @@ function Request({ workspace, request, name, mine, admin }: { workspace: CloudWo
   const title = request.name ?? 'computer'
   const answer = useAnswer({ workspace: workspace.id, request, label: mine ? title : `${name}’s ${title}` })
   if (!admin && !mine) return null
-  return <div className="-mt-1 flex flex-wrap items-center gap-3 pr-4 pb-3 pl-[68px] phone:items-start phone:pl-4">
+  return <div className="flex flex-wrap items-center gap-3 pr-2.5 pb-3 pl-[50px] phone:items-start phone:pl-2.5">
     <DeviceIcon kind="mac" />
     <span className="grid min-w-0 flex-1 gap-1.5">
       <span className="text-[13px] font-medium">{mine ? `${title} asked to join as you` : `${name}’s ${title} wants to join`}</span>
@@ -110,6 +110,7 @@ function InviteButton({ workspace }: { workspace: CloudWorkspaceView }) {
   const opened = useOpen() === 'invite'
   const invite = useInvite()
   const [role, setRole] = useState<'member' | 'admin'>('member')
+  const [valid, setValid] = useState(false)
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const email = String(new FormData(event.currentTarget).get('email') ?? '').trim()
@@ -120,17 +121,15 @@ function InviteButton({ workspace }: { workspace: CloudWorkspaceView }) {
     <PopoverTrigger render={<Button type="button" variant="primary" className={cn(PILL, 'gap-1')} />}><I icon={PlusSignIcon} size={14} />Invite</PopoverTrigger>
     <PopoverContent className="flex w-[320px] flex-col gap-2.5 rounded-xl p-3 text-[13px]">
       <form onSubmit={submit} className="flex flex-col gap-2.5">
-        <div className="flex gap-2">
-          <Input name="email" type="email" required aria-label="Their email" placeholder="Their email" autoFocus className="h-8 flex-1 text-[13px] phone:h-11" />
-          <Select value={role} onValueChange={(value) => setRole(value === 'admin' ? 'admin' : 'member')}>
-            <SelectTrigger aria-label="Role" className="h-8 w-[104px] text-[13px] phone:h-11">{ROLE[role]}</SelectTrigger>
-            <SelectContent><SelectItem value="member">Member</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent>
-          </Select>
-        </div>
-        <span className="grid gap-0.5 text-[12px] text-body"><span><b className={cn('font-medium', role === 'member' && 'text-ink')}>Member:</b> chats with the agents the team shares, and makes their own.</span><span><b className={cn('font-medium', role === 'admin' && 'text-ink')}>Admin:</b> also invites people and adds computers.</span></span>
-        <Button type="submit" variant="secondary" className="h-8 w-full gap-1.5 phone:h-11 phone:justify-center" disabled={invite.isPending}><I icon={Link01Icon} size={14} />{invite.isPending ? 'Making the link…' : 'Copy invite link'}</Button>
+        <Input name="email" type="email" required aria-label="Their email" placeholder="Their email" autoFocus autoComplete="off" data-1p-ignore data-lpignore="true" className="h-8 w-full text-[13px] phone:h-11" onInput={(event) => setValid(event.currentTarget.validity.valid)} />
+        <ToggleGroup aria-label="Role" value={role} onPick={(next) => setRole(next === 'admin' ? 'admin' : 'member')} className="grid grid-cols-2">
+          <ToggleGroupItem value="member" className="justify-center">Member</ToggleGroupItem>
+          <ToggleGroupItem value="admin" className="justify-center">Admin</ToggleGroupItem>
+        </ToggleGroup>
+        <span className="text-[12px] text-body">{role === 'admin' ? 'Also invites people and adds computers.' : 'Chats with the agents the team shares, and makes their own.'}</span>
+        <Button type="submit" variant="primary" className="h-8 w-full gap-1.5 phone:h-11 phone:justify-center" disabled={!valid || invite.isPending}><I icon={Link01Icon} size={14} />{invite.isPending ? 'Making the link…' : 'Copy invite link for this email'}</Button>
         <ErrorNote message={invite.error?.message} />
-        <span className="text-[12px] text-mute">Send the link yourself, by chat or email. It works once, for 2 days. Your agents stay private until you share them.</span>
+        <span className="text-[12px] text-mute">Works once, for 2 days. Your agents stay private until you share them.</span>
       </form>
     </PopoverContent>
   </Popover>

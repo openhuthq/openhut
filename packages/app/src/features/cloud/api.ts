@@ -63,7 +63,7 @@ export class PasskeyQuiet extends Error {}
 export async function passkeyPrf({ create, quiet = false }: { create?: { email: string }; quiet?: boolean } = {}): Promise<string> {
   const reply = create ? await passkey?.create(create) : await passkey?.open({ quiet })
   if (reply?.prf) return reply.prf
-  if (reply?.error === 'no-prf') throw new Error('Your password manager’s passkey can’t unlock OpenHut. Use Touch ID or your recovery kit.')
+  if (reply?.error === 'no-prf') throw new Error('Your password manager can’t unlock OpenHut. Use Touch ID or your recovery kit.')
   if (reply?.error === 'canceled' || reply?.error === 'none-here') throw new PasskeyQuiet('Canceled.')
   if (reply?.message?.includes('not associated')) throw new Error('This copy of OpenHut can’t use Touch ID. Use the app from openhut.dev, or unlock another way.')
   throw new Error(reply?.message ? `Touch ID didn’t work: ${reply.message}` : 'Touch ID isn’t set up here. Unlock another way.')
@@ -114,9 +114,9 @@ export function useRemoveMac() {
       client.setQueryData(CLOUD_KEY, cloud)
       if (lost) {
         notify({ title: 'Removed and locked out', note: 'Your encryption is new, so it can’t read anything from now on. Save your new recovery kit.' })
-        return navigate('/settings/general?open=kit')
+        return navigate('/settings/security?open=kit')
       }
-      notify({ title: 'Device removed', note: NEW_KIT_HINT, action: { label: 'New kit', onClick: () => navigate('/settings/general?open=kit') } })
+      notify({ title: 'Device removed', note: NEW_KIT_HINT, action: { label: 'New kit', onClick: () => navigate('/settings/security?open=kit') } })
     },
     onError: toastError,
   })

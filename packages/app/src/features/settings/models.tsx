@@ -18,6 +18,7 @@ import { Busy, DialogCard, HINT, I, PILL, SetupSheet, Section, Status } from '@/
 import { Check, CardTitle, ListNote, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { useCodexSignIn, useConnectProvider, useDisconnectProvider, useFoundNotice, useProviders, useRefreshProvider, useSetModel } from '@/features/models/api'
 import { consequence, count, describe, matches, plural, updatedAgo } from '@/features/models/labels'
+import { inUse } from '@/features/agents/form'
 import { open, Redirect, useOpen } from '@/lib/router'
 import { formValues } from '@/lib/form'
 import { openPage } from '@/lib/native'
@@ -48,18 +49,19 @@ export function ModelsSettings() {
     returningTo = undefined
   }, [providers])
   const none = !providers?.some((each) => each.connected)
+  const used = inUse(providers)
   const row = (id: ProviderId) => {
     const provider = providers?.find((each) => each.id === id)
-    return provider && <ProviderRow key={id} provider={provider} lead={none && id === 'claude'} note={provider.connected ? notesOf({ provider, testModel }) : providerInfo(id).blurb} />
+    return provider && <ProviderRow key={id} provider={provider} lead={none && id === 'claude'} used={used === id} note={provider.connected ? notesOf({ provider, testModel }) : providerInfo(id).blurb} />
   }
   return <>
     <ErrorNote message={admin.error?.message} />
     {providers && <>
-      {none && <p className={HINT}>Connect one so your agents can think. Most people use Claude.</p>}
+      {none && <p className={cn(HINT, 'px-2.5')}>Connect one so your agents can think. Most people use Claude.</p>}
       <Section title="Subscriptions"><Rows>{SUBSCRIPTIONS.map((info) => row(info.id))}</Rows></Section>
       <Section title="API keys">
+        <ListNote>Your keys work on all your computers. Agents never see them.</ListNote>
         <Rows>{KEYS.map((info) => row(info.id))}</Rows>
-        <ListNote>Keys reach every computer and server you sign in on. Agents never see them.</ListNote>
       </Section>
     </>}
     {usage.data?.agents.some((agent) => agent.costUsd > 0) && <Spend usage={usage.data} />}
@@ -73,9 +75,9 @@ function notesOf({ provider, testModel }: { provider: Provider; testModel: boole
   return [plural({ count: provider.models.length, one: 'model', many: 'models' }), `${count(provider.models.filter((model) => model.on).length)} on`].join(' · ')
 }
 
-function ProviderRow({ provider, note, lead }: { provider: Provider; note: string; lead: boolean }) {
+function ProviderRow({ provider, note, lead, used }: { provider: Provider; note: string; lead: boolean; used: boolean }) {
   const subscription = provider.kind === 'subscription'
-  return <Row icon={<Glyph name={provider.id} size={20} />} title={providerInfo(provider.id).short} note={note}>
+  return <Row icon={<Glyph name={provider.id} size={20} />} title={providerInfo(provider.id).short} note={used ? `${note} · In use` : note}>
     {provider.connected
       ? <><Status tone="on">{subscription ? 'Signed in' : 'Connected'}</Status><Button type="button" variant="ghost" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id) }}>Manage</Button></>
       : <Button type="button" variant={lead ? 'primary' : 'secondary'} className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id === 'claude' ? 'seat' : provider.id) }}>{subscription ? 'Sign in' : 'Add key'}</Button>}

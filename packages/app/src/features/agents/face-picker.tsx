@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
-import { Upload04Icon } from '@hugeicons/core-free-icons'
+import { DiceFaces03Icon, Upload04Icon } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { I } from '@/components/kit'
 import { Face, photoOf } from '@/features/agents/face'
 import { bgColor, parseLook, randomLook } from '@/lib/face'
@@ -24,7 +25,7 @@ function stageOf(face: string) {
 
 const shown = (face: string) => ({ id: '', instructions: '', face })
 
-export function FacePicker({ initial }: { initial: string | null }) {
+export function FacePicker({ initial, compact = false }: { initial: string | null; compact?: boolean }) {
   const [round, setRound] = useState(() => Math.floor(Math.random() * 1e6))
   const [mine, setMine] = useState(initial)
   const [pick, setPick] = useState<number | null>(initial ? null : 0)
@@ -45,21 +46,36 @@ export function FacePicker({ initial }: { initial: string | null }) {
     squarePicture({ source: picked, size: 256, type: 'image/jpeg' })
       .then((photo) => show({ index: null, own: photo }), () => toastError(new Error('That file isn\'t a picture. Pick a PNG or JPEG.')))
   }
+  const tiles = <div className="flex flex-wrap justify-center gap-1.5" role="radiogroup" aria-label="Face">
+    {mine && <Button type="button" variant="bare" role="radio" aria-checked={pick === null} aria-label={photoOf(mine) ? 'Your picture' : 'Current face'} title={photoOf(mine) ? 'Your picture' : 'Current face'} className={tileClass(pick === null)} onClick={() => show({ index: null })}><Face agent={shown(mine)} size={30} /></Button>}
+    {LOOKS.map(([label], index) => <Button key={label} type="button" variant="bare" role="radio" aria-checked={index === pick} aria-label={label} title={label} onClick={() => show({ index })}
+      className={tileClass(index === pick)}><Face agent={shown(preset(index))} size={30} /></Button>)}
+    <Button type="button" variant="bare" aria-label="Upload a picture" title="Upload a picture" className="grid size-10 place-items-center rounded-lg border-[1.5px] border-dashed border-mute-2 text-body hover:bg-picked" onClick={() => file.current?.click()}><I icon={Upload04Icon} size={17} /></Button>
+    <Input ref={file} type="file" accept="image/*" hidden onChange={(event) => { upload(event.currentTarget.files?.[0]); event.currentTarget.value = '' }} />
+  </div>
+  const photo = pick === null && photoOf(mine)
+  const removePhoto = () => show({ index: kept ? null : 0, own: kept })
+  const stage = (size: number) => <span key={spin} className={cn('block', spin > 0 && 'animate-hop')}><Face agent={shown(face)} size={size} label="Agent face" /></span>
+  if (compact) return <span className="relative">
+    <Input type="hidden" name="face" value={face} />
+    <Popover>
+      <PopoverTrigger render={<Button type="button" variant="bare" aria-label="Change face" title="Change face" className="grid size-20 place-items-center rounded-xl shadow-[inset_0_0_0_1px_var(--hair)]" style={{ background: stageOf(face) }} />}>{stage(64)}</PopoverTrigger>
+      <PopoverContent align="center" className="w-auto items-center gap-3 p-3">
+        {tiles}
+        {photo && <Button type="button" variant="secondary" size="sm" className="rounded-full px-3" onClick={removePhoto}>Remove picture</Button>}
+      </PopoverContent>
+    </Popover>
+    <Button type="button" variant="secondary" size="icon-sm" aria-label="Shuffle" title="Shuffle" className="absolute -right-2 -bottom-2 rounded-full bg-card shadow-menu" onClick={shuffle}><I icon={DiceFaces03Icon} size={14} /></Button>
+  </span>
   return <>
     <Input type="hidden" name="face" value={face} />
     <Button type="button" variant="bare" aria-label="Shuffle" title="Shuffle" onClick={shuffle}
       className="grid size-[104px] place-items-center rounded-xl shadow-[inset_0_0_0_1px_var(--hair)]" style={{ background: stageOf(face) }}>
-      <span key={spin} className={cn('block', spin > 0 && 'animate-hop')}><Face agent={shown(face)} size={84} label="Agent face" /></span>
+      {stage(84)}
     </Button>
-    <div className="flex flex-wrap justify-center gap-1.5" role="radiogroup" aria-label="Face">
-      {mine && <Button type="button" variant="bare" role="radio" aria-checked={pick === null} aria-label={photoOf(mine) ? 'Your picture' : 'Current face'} title={photoOf(mine) ? 'Your picture' : 'Current face'} className={tileClass(pick === null)} onClick={() => show({ index: null })}><Face agent={shown(mine)} size={30} /></Button>}
-      {LOOKS.map(([label], index) => <Button key={label} type="button" variant="bare" role="radio" aria-checked={index === pick} aria-label={label} title={label} onClick={() => show({ index })}
-        className={tileClass(index === pick)}><Face agent={shown(preset(index))} size={30} /></Button>)}
-      <Button type="button" variant="bare" aria-label="Upload a picture" title="Upload a picture" className="grid size-10 place-items-center rounded-lg border-[1.5px] border-dashed border-mute-2 text-body hover:bg-picked" onClick={() => file.current?.click()}><I icon={Upload04Icon} size={17} /></Button>
-      <Input ref={file} type="file" accept="image/*" hidden onChange={(event) => { upload(event.currentTarget.files?.[0]); event.currentTarget.value = '' }} />
-    </div>
-    {pick === null && photoOf(mine)
-      ? <Button type="button" variant="secondary" size="sm" className="rounded-full px-3" onClick={() => show({ index: kept ? null : 0, own: kept })}>Remove picture</Button>
+    {tiles}
+    {photo
+      ? <Button type="button" variant="secondary" size="sm" className="rounded-full px-3" onClick={removePhoto}>Remove picture</Button>
       : <Button type="button" variant="secondary" size="sm" className="rounded-full px-3" onClick={shuffle}>Shuffle</Button>}
   </>
 }

@@ -15,7 +15,7 @@ const NO_BODY = [204, 205, 304]
 
 export class CloudOffline extends Error {
   constructor() {
-    super('Can’t reach OpenHut Cloud. Check this computer’s internet connection. OpenHut keeps trying.')
+    super('Can’t reach OpenHut Cloud. Check your internet. OpenHut keeps trying.')
   }
 }
 

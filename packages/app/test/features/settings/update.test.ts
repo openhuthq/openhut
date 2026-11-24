@@ -97,7 +97,7 @@ test('the sidebar card offers Try again after a cancelled .deb install, and says
 test('M5: the pack updater\'s screens: ready (signed and logged), waiting for the safety check, details, refused, halted', () => {
   const signed = { key: 'ab12cd34ef56ab78', logIndex: 4080265900, loggedAt: Date.now() - 18 * 60_000 }
   assert.equal(updateNote({ ...idle, ready: { version: '0.7.0', pack: true, signed } }), 'Version 0.7.0 is ready. Signed and publicly logged · verified.')
-  assert.equal(updateNote({ ...idle, waiting: { version: '0.7.0', retryAt: Date.now() + 42 * 60_000, signed } }), 'Version 0.7.0 is waiting before it installs: logged 18 min ago, installs in 42 min.')
+  assert.equal(updateNote({ ...idle, waiting: { version: '0.7.0', retryAt: Date.now() + 42 * 60_000, signed } }), 'Version 0.7.0 installs in 42 min.')
   assert.equal(updateDetails({ ...idle, ready: { version: '0.7.0', signed } })?.entry, 'https://search.sigstore.dev/?logIndex=4080265900')
   assert.equal(updateNote({ ...idle, refused: 'no Rekor entry' }), 'This update isn\'t in the public log, so OpenHut won\'t install it.')
   assert.equal(updateNote({ ...idle, refused: 'not signed by a trusted release key' }), 'This update didn\'t come from OpenHut, so it wasn\'t installed.')

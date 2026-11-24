@@ -88,6 +88,7 @@ export async function migrate(): Promise<void> {
   await sql`alter table agent add column if not exists workspace text`.execute(db)
   await sql`alter table agent add column if not exists shared boolean not null default false`.execute(db)
   await sql`alter table agent add column if not exists owner text`.execute(db)
+  await sql`alter table agent add column if not exists people text not null default '[]'`.execute(db)
   await sql`alter table agent add column if not exists owner_proof text`.execute(db)
   await sql`drop table if exists cloud_record`.execute(db)
   await sql`delete from install_setting where name like 'cloud_seq%' or name like 'cloud_name:%'`.execute(db)

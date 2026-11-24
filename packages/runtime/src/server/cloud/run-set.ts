@@ -107,7 +107,7 @@ async function keep({ agent, control }: { agent: Held; control: Held }): Promise
   const home = keysService.signedIn().workspace.id
   const fields = {
     name: value.name, instructions: value.instructions, face: value.face, wanted: value.wanted, model: placed.model, code_execution: placed.codeExecution, web_browser: placed.browser,
-    runs_on: placed.runsOn, workspace: agent.workspace === home ? null : agent.workspace, shared: !agent.personal, owner: agent.parent ?? null,
+    runs_on: placed.runsOn, workspace: agent.workspace === home ? null : agent.workspace, shared: !agent.personal, people: JSON.stringify(placed.people), owner: agent.parent ?? null,
   }
   const row = await db.selectFrom('agent').select('id').where('id', '=', agent.id).executeTakeFirst()
   if (row) await db.updateTable('agent').set(fields).where('id', '=', agent.id).execute()

@@ -1,5 +1,5 @@
 import { createContext, useState, useSyncExternalStore, type ReactElement } from 'react'
-import { BrowserIcon, Cancel01Icon, Delete02Icon, LaptopIcon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, ServerStack01Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { BrowserIcon, Cancel01Icon, Logout03Icon, Delete02Icon, LaptopIcon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, ServerStack01Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,9 @@ import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/component
 import { chooseWorkspace, continueInWeb, peopleNote, useWorkspaces } from '@/features/cloud/workspaces'
 import { REMOTE } from '@/lib/remote'
 import { shownTeams } from '@/features/cloud/shown-teams'
-import { useCloud } from '@/features/cloud/api'
+import { nameOf as personName, useCloud, useSignOut } from '@/features/cloud/api'
+import { SIGN_OUT_DETAIL } from '@/features/cloud/cloud'
+import { PersonFace } from '@/components/custom/person-face'
 import { dismissGone, dismissedGone, onGoneDismissed, removedLine } from '@/features/cloud/seen'
 import { Faces } from '@/features/cloud/presence'
 import { agentPath } from '@/app/routes'
@@ -21,6 +23,7 @@ import { Face } from '@/features/agents/face'
 import { toneOf, troubleOf, wordOf } from '@/features/agents/status'
 import { nameOf, useComputers } from '@/features/computers/api'
 import { useConnections } from '@/features/connections/api'
+import { chipMarks } from '@/features/connections/catalog'
 import { UpdateEverything } from '@/features/settings/update-pill'
 import { ago } from '@/lib/format'
 import { PHONE, useMedia } from '@/lib/media'
@@ -32,8 +35,6 @@ import { cn } from '@/lib/utils'
 const ROUND = 'float phone:size-10 phone:rounded-full phone:bg-card phone:text-ink'
 
 const LABEL = 'px-2.5 pt-3 pb-1 text-[11.5px] font-medium text-mute'
-
-const EMPTY = 'm-0 px-2.5 py-2 text-[13px] text-mute'
 
 const LIVE = { on: 'bg-pass', wait: 'animate-[blinkdot_1s_infinite] bg-amber', bad: 'bg-fail', off: 'bg-mute-2' }
 
@@ -65,7 +66,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
     </div>
     <h1 className="m-0 hidden px-5 pt-1 pb-3 text-[32px]/[1.1] font-bold tracking-[-.02em] phone:block">Agents</h1>
     <nav className="flex min-h-0 flex-col gap-1 overflow-auto px-3 pt-1 phone:gap-0 phone:px-2">
-      {(team ? [['Shared', contacts.filter(({ agent }) => agent.shared)], ['Private', contacts.filter(({ agent }) => !agent.shared)]] as const : [['', contacts]] as const).map(([label, group]) => group.length > 0 && <div key={label} className="flex flex-col gap-1 phone:gap-0">
+      {(team ? [['Shared', contacts.filter(({ agent }) => (agent.shared || agent.people.length > 0) && agent.inSidebar)], ['Private', contacts.filter(({ agent }) => !agent.shared && !agent.people.length)], ['More on your team', contacts.filter(({ agent }) => !agent.inSidebar)]] as const : [['', contacts]] as const).map(([label, group]) => group.length > 0 && <div key={label} className="flex flex-col gap-1 phone:gap-0">
       {label && <span className={LABEL}>{label}</span>}
       {group.map(({ agent, thread }) => <RowMenu key={agent.id} agent={agent}><a href={agentPath({ agentId: agent.id })} aria-current={agent.id === activeId ? 'page' : undefined}
         className={cn('row grid w-full shrink-0 data-popup-open:bg-picked grid-cols-[40px_1fr] items-center gap-3 rounded-lg px-2.5 py-2 text-left text-inherit no-underline phone:grid-cols-[52px_1fr_auto] phone:gap-3.5 phone:rounded-2xl phone:px-3 phone:py-3', HOVER, !phone && agent.id === activeId && PICKED)}
@@ -78,7 +79,10 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
         {thread && <span className="hidden self-start pt-1 text-[12px] text-mute tabular-nums phone:block">{ago(thread.updatedAt)}</span>}
       </a></RowMenu>)}
       </div>)}
-      {!contacts.length && <p className={EMPTY}>No agents yet</p>}
+      {!contacts.length && <Button type="button" variant="bare" onClick={onNew} className={cn('grid h-auto w-full grid-cols-[40px_1fr] items-center gap-3 rounded-lg px-2.5 py-2 text-left font-normal text-inherit', HOVER)}>
+        <span className="grid size-10 place-items-center rounded-full border-[1.5px] border-dashed border-mute-2 text-mute"><I icon={PlusSignIcon} size={16} /></span>
+        <span className="grid min-w-0 gap-0.5"><span className="truncate text-[14px] font-semibold">New agent</span><span className="truncate text-[13px] text-body">Chats with you and works on your computers</span></span>
+      </Button>}
     </nav>
     <footer className="mt-auto flex flex-col items-start gap-2 px-3 pt-2 pb-3">
       <UpdateEverything />
@@ -120,15 +124,12 @@ function Live({ agent, className }: { agent: OpenHutAgent; className: string }) 
   return <i title={wordOf(agent)} className={cn('absolute size-3 rounded-full border-2 border-sidebar', LIVE[tone], className)} />
 }
 
-const SUGGESTED = ['gmail', 'drive', 'postgres'] as const
-
 function ConnectedMarks() {
-  const connections = useConnections()
-  const connected = [...new Set(connections.data?.map((connection) => connection.kind))].slice(0, 3)
-  const kinds = connected.length ? connected : SUGGESTED
+  const { shown, more } = chipMarks(useConnections().data?.map((connection) => connection.kind) ?? [])
+  if (!shown.length) return <><I icon={PlusSignIcon} size={15} className="text-mute" /><span className="truncate">Connect apps</span></>
   return <>
-    <span className="truncate" title={connected.length ? 'Your connected apps' : 'Connect apps like Gmail, Drive and Postgres'}>Apps</span>
-    <span className="ml-auto flex shrink-0 gap-1">{kinds.map((kind) => <Glyph key={kind} name={kind} size={14} />)}</span>
+    <span className="truncate" title="Your connected apps">Apps</span>
+    <span className="ml-auto flex shrink-0 items-center gap-1">{shown.map((kind) => <Glyph key={kind} name={kind} size={14} />)}{more > 0 && <span className="text-[11.5px] font-normal text-mute">+{more}</span>}</span>
   </>
 }
 
@@ -143,25 +144,34 @@ function RemovedLine() {
 }
 
 function TeamSwitcher() {
-  const { all, active } = useWorkspaces()
+  const { all, active, email } = useWorkspaces()
+  const signOut = useSignOut()
+  const [leaving, setLeaving] = useState(false)
   const homeAgents = (useAgents().data ?? []).filter((agent) => !agent.workspace).length
   const teams = shownTeams({ all, active: active.id, homeAgents })
-  return <DropdownMenu>
-    <DropdownMenuTrigger render={<Button type="button" variant="bare" aria-label={`Team: ${active.name}`} title={active.name} className={cn(SURFACE, 'relative grid size-10 shrink-0 place-items-center rounded-lg')} />}>
-      <TeamMark workspace={active} />
-    </DropdownMenuTrigger>
-    <DropdownMenuContent side="top" align="start" className="flex w-[260px] flex-col gap-0.5 rounded-lg p-1.5 shadow-menu">
-      {teams.map((workspace) => <DropdownMenuItem key={workspace.id} className="h-auto gap-2.5 px-2 py-1.5" onClick={() => { if (workspace.id !== active.id) { chooseWorkspace(workspace.id); navigate('/') } }}>
-        <TeamMark workspace={workspace} className="size-7 rounded-md text-[12px]" />
-        <span className="grid min-w-0 flex-1 leading-tight"><span className="truncate text-[13px] font-medium">{workspace.name}</span><span className="text-[11.5px] text-mute">{peopleNote(workspace)}</span></span>
-        {workspace.id === active.id && <I icon={Tick02Icon} size={14} />}
-      </DropdownMenuItem>)}
-      <DropdownMenuSeparator />
-      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />Join a team</DropdownMenuItem>
-      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/general')}><I icon={Settings02Icon} size={15} className="text-mute" />Team settings</DropdownMenuItem>
-      {!REMOTE && <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => void continueInWeb().catch(toastError)}><I icon={BrowserIcon} size={15} className="text-mute" />Continue in web</DropdownMenuItem>}
-    </DropdownMenuContent>
-  </DropdownMenu>
+  const name = personName(email ?? '')
+  return <>
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button type="button" variant="bare" aria-label={`You: ${name}, team ${active.name}`} title={`${name} · ${active.name}`} className={cn(SURFACE, 'relative grid size-10 shrink-0 place-items-center rounded-lg')} />}>
+        <PersonFace name={name} email={email ?? ''} size={24} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="flex w-[260px] flex-col gap-0.5 rounded-lg p-1.5 shadow-menu">
+        <div className="flex items-center gap-2.5 px-2 py-1.5"><PersonFace name={name} email={email ?? ''} size={28} /><span className="grid min-w-0 leading-tight"><span className="truncate text-[13px] font-medium">{name}</span><span className="truncate text-[11.5px] text-mute">{email}</span></span></div>
+        <DropdownMenuSeparator />
+        {teams.map((workspace) => <DropdownMenuItem key={workspace.id} className="h-auto gap-2.5 px-2 py-1.5" onClick={() => { if (workspace.id !== active.id) { chooseWorkspace(workspace.id); navigate('/') } }}>
+          <TeamMark workspace={workspace} className="size-7 rounded-md text-[12px]" />
+          <span className="grid min-w-0 flex-1 leading-tight"><span className="truncate text-[13px] font-medium">{workspace.name}</span><span className="text-[11.5px] text-mute">{peopleNote(workspace)}</span></span>
+          {workspace.id === active.id && <I icon={Tick02Icon} size={14} />}
+        </DropdownMenuItem>)}
+        <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />Join a team</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/general')}><I icon={Settings02Icon} size={15} className="text-mute" />Settings{desktop && <span className="ml-auto text-[12px] text-mute">⌘,</span>}</DropdownMenuItem>
+        {!REMOTE && <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => void continueInWeb().catch(toastError)}><I icon={BrowserIcon} size={15} className="text-mute" />Continue in web</DropdownMenuItem>}
+        <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => setLeaving(true)}><I icon={Logout03Icon} size={15} className="text-mute" />Sign out</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+    <ConfirmDialog open={leaving} onOpenChange={setLeaving} question="Sign out?" detail={SIGN_OUT_DETAIL} action="Sign out" onConfirm={() => signOut.mutateAsync()} />
+  </>
 }
 
 function Where({ agent, computers }: { agent: OpenHutAgent; computers: Parameters<typeof nameOf>[0]['computers'] }) {

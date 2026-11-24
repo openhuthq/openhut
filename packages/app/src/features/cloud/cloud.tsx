@@ -21,31 +21,39 @@ import { cn } from '@/lib/utils'
 
 export function YouSettings() {
   const { cloud } = useGate()
+  const error = new URLSearchParams(useSearch()).get('error') ?? undefined
+  const email = cloud.email ?? ''
+  return <Section title="You">
+    <Rows>
+      <Row icon={<PersonFace name={nameOf(email)} email={email} size={20} />} title={nameOf(email)} note={email}>
+        {cloud.status === 'offline' && <Status tone="wait">Offline</Status>}
+        <SignOut />
+      </Row>
+    </Rows>
+    <ErrorNote message={error} />
+  </Section>
+}
+
+export function SignInRows() {
+  const { cloud } = useGate()
   const opened = useOpen()
   const helper = usePasskeys()
   const addPasskey = useAddPasskey()
   const removePasskey = useRemovePasskey()
-  const error = new URLSearchParams(useSearch()).get('error') ?? undefined
   const email = cloud.email ?? ''
   const young = Boolean(cloud.youngUntil)
-  return <Section title="You">
-    <Rows>
-      <Row icon={<PersonFace name={nameOf(email)} email={email} size={20} />} title={nameOf(email)} note={<span className="flex items-center gap-1.5"><Google />{email}</span>}>
-        {cloud.status === 'offline' && <Status tone="wait">Offline</Status>}
-        <SignOut />
-      </Row>
-      <Row icon={<I icon={LifebuoyIcon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>Your 12 words to get back in if you lose every computer. {kitNote(cloud.kit)}.</span>}>
-        {!young && <Button type="button" variant="secondary" className={PILL} onClick={() => open('kit')}>New kit</Button>}
-      </Row>
-      {helper?.passkeys && helper.prf && <Row icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title="Touch ID" note={cloud.passkey ? 'On · in iCloud Keychain. Your Macs on this Apple Account open OpenHut with one touch.' : 'Unlock OpenHut on your next Mac with your fingerprint'}>
-        {cloud.passkey
-          ? <ConfirmButton variant="ghost" className={PILL} disabled={removePasskey.isPending} question="Turn Touch ID off?" detail="Your Macs stop opening OpenHut with Touch ID. Your recovery kit still works, and you can turn it on again here." action="Turn off" onConfirm={() => removePasskey.mutateAsync()}>Remove</ConfirmButton>
-          : !young && <Button type="button" variant="ghost" className={PILL} disabled={addPasskey.isPending} onClick={() => addPasskey.mutate(email, { onError: toastError })}>Add</Button>}
-      </Row>}
-    </Rows>
-    <ErrorNote message={error} />
+  return <>
+    <Row icon={<Google />} title="Google" note={email} />
+    <Row icon={<I icon={LifebuoyIcon} size={20} className="text-hue-amber" />} title="Recovery kit" note={<span className={cloud.kit?.differs ? 'text-fail' : undefined}>Gets you back in if you lose every computer. {kitNote(cloud.kit)}.</span>}>
+      {!young && <Button type="button" variant="secondary" className={PILL} onClick={() => open('kit')}>New kit</Button>}
+    </Row>
+    {helper?.passkeys && helper.prf && <Row icon={<I icon={FingerPrintIcon} size={20} className="text-hue-green" />} title="Touch ID" note={cloud.passkey ? 'On · in iCloud Keychain. Your Macs on this Apple Account open OpenHut with one touch.' : 'Unlock OpenHut on your next Mac with your fingerprint'}>
+      {cloud.passkey
+        ? <ConfirmButton variant="ghost" className={PILL} disabled={removePasskey.isPending} question="Turn Touch ID off?" detail="Your Macs stop opening OpenHut with Touch ID. Your recovery kit still works, and you can turn it on again here." action="Turn off" onConfirm={() => removePasskey.mutateAsync()}>Remove</ConfirmButton>
+        : !young && <Button type="button" variant="ghost" className={PILL} disabled={addPasskey.isPending} onClick={() => addPasskey.mutate(email, { onError: toastError })}>Add</Button>}
+    </Row>}
     {opened === 'kit' && <KitDialog />}
-  </Section>
+  </>
 }
 
 export function DeleteAccountRow() {
@@ -58,9 +66,11 @@ function KitDialog() {
   </Guide>
 }
 
+export const SIGN_OUT_DETAIL = 'Your agents, chats and connections are deleted from this computer. They’re backed up, and come back when you sign in again.'
+
 function SignOut() {
   const signOut = useSignOut()
-  return <ConfirmButton variant="ghost" className={`${PILL} gap-1.5`} disabled={signOut.isPending} question="Sign out?" detail="Your agents, chats and connections are deleted from this computer. They’re backed up, and come back when you sign in again." action="Sign out" onConfirm={() => signOut.mutateAsync()}><I icon={Logout03Icon} size={13} />{signOut.isPending ? 'Signing out…' : 'Sign out'}</ConfirmButton>
+  return <ConfirmButton variant="ghost" className={`${PILL} gap-1.5`} disabled={signOut.isPending} question="Sign out?" detail={SIGN_OUT_DETAIL} action="Sign out" onConfirm={() => signOut.mutateAsync()}><I icon={Logout03Icon} size={13} />{signOut.isPending ? 'Signing out…' : 'Sign out'}</ConfirmButton>
 }
 
 function DeleteAccount({ cloud }: { cloud: Cloud }) {
@@ -127,6 +137,6 @@ function kitNote(kit: Cloud['kit']): string {
 }
 
 function Google() {
-  return <svg width={12} height={12} aria-hidden="true"><use href="#lg-google" width="100%" height="100%" /></svg>
+  return <svg width={18} height={18} aria-hidden="true"><use href="#lg-google" width="100%" height="100%" /></svg>
 }
 

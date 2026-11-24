@@ -65,7 +65,7 @@ export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
 
 function StartOver({ onBack }: { onBack: () => void }) {
   const remove = useDeleteData()
-  return <Step title="Start over?" line="This deletes your account and everything in it, then starts fresh. It can’t be undone: your data was encrypted on your devices, so nobody can recover it." back={onBack}
+  return <Step title="Start over?" line="This deletes your account and everything in it. Nobody can get it back." back={onBack}
     action={<Button type="button" variant="destructive" className={BIG} disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: () => navigate('/', true), onError: toastError })}>{remove.isPending ? 'Deleting…' : 'Delete and start over'}</Button>}>
     <ErrorNote message={remove.error?.message} />
   </Step>
@@ -162,7 +162,7 @@ function KitEntry({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
     if (!kit) return setProblem({ tone: 'fail', text: 'That doesn’t look like a recovery kit. Drop the file OpenHut saved, or type the words instead.' })
     if (kit.email && me && kit.email !== me) return setProblem({ tone: 'fail', text: `This kit is for ${kit.email}. You’re signed in as ${me}. Drop ${nameOf(me)}’s kit, or sign out and sign in as ${nameOf(kit.email)}.` })
     if (replaced !== undefined) return setProblem({ tone: 'warn', text: `This kit was replaced${replaced ? ` on ${longDate.format(new Date(replaced))}` : ''} and no longer works. Use the newest one, or another way in.` })
-    if (!kit.valid) return setProblem({ tone: 'fail', text: 'One of the words in this kit got changed, so it can’t open your cloud. Try another copy, or type the words instead.' })
+    if (!kit.valid) return setProblem({ tone: 'fail', text: 'This kit has a wrong word. Try another copy, or type the words.' })
     setProblem(undefined)
     unlock.mutate({ words: kit.words }, { onError: (err) => setProblem({ tone: 'fail', text: err.message }) })
   }
@@ -261,7 +261,7 @@ function TouchIdBack({ cloud }: { cloud: Cloud }) {
   useStickyToast({ id: 'touch-id-back', notice: shown ? {
     lead: <I icon={FingerPrintIcon} size={18} />,
     title: 'Turn Touch ID back on?',
-    note: 'The new encryption turned it off for all your Macs. Turn it on here and they can use it again.',
+    note: 'Reset encryption turned this off. Enable it again here.',
     action: { label: 'Turn on', onClick: () => add.mutate(null, { onSuccess: () => notify({ title: 'Touch ID is on again' }), onError: (error) => { if (!(error instanceof PasskeyQuiet)) toastError(error) } }) },
     cancel: { label: 'Not now', onClick: () => setLater(true) },
   } : null, onDismiss: () => setLater(true) })

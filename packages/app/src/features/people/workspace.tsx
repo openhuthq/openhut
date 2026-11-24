@@ -15,7 +15,7 @@ import { TeamPeople } from '@/features/people/people'
 import { Row, Rows } from '@/features/settings/kit'
 import { cn } from '@/lib/utils'
 
-const keysNote = (team: string) => `New encryption for ${team}. A lost computer or someone you removed can’t read anything new. Everyone else stays in.`
+const KEYS_NOTE = 'Locks out lost computers and people you removed. Everyone else stays in.'
 
 export function TeamSettings() {
   const { active } = useWorkspaces()
@@ -23,7 +23,6 @@ export function TeamSettings() {
   const admin = active.role !== 'member'
   return <>
     <TeamHeader workspace={active} editing={admin ? opened ?? undefined : undefined} />
-    {opened === 'keys' && admin && <KeysConfirm workspace={active} />}
     {opened === 'leave' && !active.own && <LeaveConfirm workspace={active} />}
   </>
 }
@@ -44,7 +43,7 @@ function TeamHeader({ workspace, editing }: { workspace: CloudWorkspaceView; edi
     setWebsite.mutate({ id: workspace.id, website: value || null }, { onSuccess: () => toast(value ? 'Website saved' : 'Website removed'), onError: toastError })
   }
   const pencil = (what: string, label: string) => admin && <Tooltip label={label}><Button type="button" variant="ghost" size="icon-xs" aria-label={label} className={cn(editing === what && 'invisible')} onClick={() => open(what)}><I icon={PencilEdit02Icon} size={13} className="text-mute" /></Button></Tooltip>
-  return <div className="flex items-center gap-3.5 px-1">
+  return <div className="flex items-center gap-3.5 px-2.5">
     <TeamMark workspace={workspace} className="size-12 rounded-xl text-[22px]" />
     <span className="grid min-w-0 flex-1 gap-0.5">
       <span className="flex min-w-0 items-center gap-1.5 text-[18px]/[1.3] font-semibold tracking-[-.01em]">
@@ -85,14 +84,20 @@ function InlineEdit({ value, label, placeholder, onSave }: { value: string; labe
 
 export function TeamDangerRows() {
   const workspace = useWorkspaces().active
-  const admin = workspace.role !== 'member'
-  const rows: { title: string; note: string; action: string; dialog: string; danger: boolean }[] = [
-    ...admin ? [{ title: 'Reset encryption', note: keysNote(workspace.name), action: 'Reset', dialog: 'keys', danger: false }] : [],
-    ...workspace.own ? [] : [{ title: 'Leave', note: 'You lose access. What you made stays with the team.', action: 'Leave', dialog: 'leave', danger: true }],
-  ]
-  return rows.map((row) => <Row key={row.dialog} icon={<I icon={row.dialog === 'keys' ? LockSync01Icon : Logout03Icon} size={20} className={row.danger ? 'text-fail' : 'text-hue-amber'} />} title={row.title} note={row.note}>
-    <Button type="button" variant="secondary" className={cn(PILL, row.danger && 'text-fail')} onClick={() => open(row.dialog)}>{row.action}</Button>
-  </Row>)
+  if (workspace.own) return null
+  return <Row icon={<I icon={Logout03Icon} size={20} className="text-fail" />} title="Leave" note="You lose access. What you made stays with the team.">
+    <Button type="button" variant="secondary" className={cn(PILL, 'text-fail')} onClick={() => open('leave')}>Leave</Button>
+  </Row>
+}
+
+export function ResetEncryptionRow() {
+  const workspace = useWorkspaces().active
+  const opened = useOpen()
+  if (workspace.role === 'member') return null
+  return <Row icon={<I icon={LockSync01Icon} size={20} className="text-hue-amber" />} title="Reset encryption" note={KEYS_NOTE}>
+    <Button type="button" variant="secondary" className={PILL} onClick={() => open('keys')}>Reset</Button>
+    {opened === 'keys' && <KeysConfirm workspace={workspace} />}
+  </Row>
 }
 
 function KeysConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
@@ -102,8 +107,8 @@ function KeysConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
     notify({ title: 'Encryption reset', note: 'Everyone else stays in.' })
     reset.current = true
   }
-  const close = () => (reset.current && workspace.own ? navigate('/settings/general?open=kit') : open())
-  return <ConfirmDialog open onOpenChange={(still) => still || close()} question={`Reset encryption for ${workspace.name}?`} detail={workspace.own ? `${keysNote(workspace.name)} You save a new recovery kit after.` : keysNote(workspace.name)} action="Reset encryption" onConfirm={() => changeKeys.mutateAsync(workspace.id).then(changed)} />
+  const close = () => (reset.current && workspace.own ? navigate('/settings/security?open=kit') : open())
+  return <ConfirmDialog open onOpenChange={(still) => still || close()} question={`Reset encryption for ${workspace.name}?`} detail={workspace.own ? `${KEYS_NOTE} You save a new recovery kit after.` : KEYS_NOTE} action="Reset encryption" onConfirm={() => changeKeys.mutateAsync(workspace.id).then(changed)} />
 }
 
 function LeaveConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
