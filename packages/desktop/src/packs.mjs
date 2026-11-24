@@ -68,15 +68,16 @@ export async function poll({ home, feed, channel, platform = `${process.platform
     writeState(home, { ...state, seen: decision.sequence, pending: null })
     return { ...decision, dropped: state.pending?.sequence ?? null, signed }
   }
-  if (decision.action === 'wait') return { ...decision, version: JSON.parse(manifest).version, signed }
-  if (decision.action !== 'install') return decision
+  if (!['wait', 'install'].includes(decision.action)) return decision
+  // Signed and logged: download and check the packs now, also while waiting out the hour (SEC6 step 3). Only install sets them pending.
   const roles = { app: 'app', [`runtime-${platform}`]: 'runtime', [`native-${platform}`]: 'native' }
   const packs = {}
-  for (const [name, pack] of Object.entries(decision.packs ?? {})) {
+  for (const [name, pack] of Object.entries(JSON.parse(manifest).packs ?? {})) {
     if (!roles[name]) continue
     packs[roles[name]] = hex(pack.sha512)
     await installPack({ home, pack, get })
   }
+  if (decision.action === 'wait') return { ...decision, version: JSON.parse(manifest).version, signed, downloaded: Object.keys(packs) }
   if (!packs.app) return { action: 'refuse', reason: 'the release has no app pack' }
   const release = JSON.parse(manifest)
   writeState(home, { ...state, seen: decision.sequence, keys: rotate(keys, release, key), pending: { sequence: decision.sequence, version: decision.version, packs, tried: false } })

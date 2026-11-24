@@ -84,7 +84,9 @@ test('packs move N−1 → N, a broken pack rolls back by itself, a fleet follow
 
     // N−1, then N: wait out the hour, install pending, restart, commit.
     publish(n1)
-    assert.equal((await check(fleet[0], clock * 1000)).action, 'wait', 'SEC6: logged under an hour ago')
+    const waiting = await check(fleet[0], clock * 1000)
+    assert.equal(waiting.action, 'wait', 'SEC6: logged under an hour ago')
+    assert.deepEqual([waiting.downloaded.sort(), readState(fleet[0].home).pending], [['app', 'native', 'runtime'], null], 'downloaded during the wait, not installed')
     for (const d of fleet) assert.equal((await check(d)).action, 'install')
     for (const d of fleet) restart(d)
     assert.match(runs(fleet[0]), /N−1/)

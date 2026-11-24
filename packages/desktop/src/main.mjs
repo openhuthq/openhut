@@ -186,11 +186,11 @@ handle('prefs', prefsNow)
 handle('set-prefs', setPrefs)
 handle('first-run', () => firstRun())
 handle('update.state', updateState)
-handle('update.check', () => DEV ? updateState() : checkForUpdate())
+handle('update.check', () => DEV ? updateState() : checkPacks().then(checkForUpdate))
 handle('update.install', () => {
   if (!updating.ready || updating.installing) return { installing: updating.installing }
   if (updating.ready.pack) {
-    app.relaunch()
+    if (!TEST_HOME) app.relaunch()
     app.quit()
     return { installing: true }
   }
@@ -908,7 +908,7 @@ async function checkPacks() {
     appendFileSync(join(LOGS, 'updates.log'), `openhut: packs: ${JSON.stringify({ ...result, packs: undefined })}\n`)
     if (result.action === 'install') setUpdate({ ready: { version: result.version, pack: true, signed: result.signed }, waiting: null, refused: null, halted: null })
     if (result.action === 'wait') setUpdate({ waiting: { version: result.version, retryAt: result.retryAt, signed: result.signed }, refused: null, halted: null })
-    if (result.action === 'refuse') setUpdate({ refused: result.reason })
+    if (result.action === 'refuse') setUpdate({ refused: result.reason, waiting: null })
     if (result.action === 'halt') setUpdate({ halted: { at: Date.now() }, waiting: null, ...updating.ready?.pack && { ready: null } })
   } catch (error) {
     appendFileSync(join(LOGS, 'updates.log'), `openhut: packs: ${error.message}\n`)
@@ -1039,7 +1039,7 @@ app.whenReady().then(async () => {
   if (PACK?.pending && started !== true) {
     rollbackPack({ home: HOME, data: DATA })
     appendFileSync(join(LOGS, 'updates.log'), `openhut: packs ${PACK.version} (sequence ${PACK.sequence}) didn't start, so OpenHut went back by itself\n`)
-    app.relaunch()
+    if (!TEST_HOME) app.relaunch()
     return app.quit()
   }
   if (PACK?.pending) commitPack({ home: HOME, data: DATA })
