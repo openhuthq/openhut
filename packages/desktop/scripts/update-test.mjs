@@ -86,6 +86,11 @@ try {
   await until(async () => onDisk() === want, 120, `the app on disk to become ${want}`)
   if (!LINUX) execFileSync('codesign', ['--verify', '--deep', '--strict', app])
   say('the app on disk is the new version and its signature verifies', { version: onDisk(), signature: signedBy() })
+  if (!LINUX && process.env.CI_KEYCHAIN_PASSWORD) {
+    const cdhash = /CDHash=(\w+)/.exec(spawnSync('codesign', ['-dvvv', app], { encoding: 'utf8' }).stderr)?.[1]
+    execFileSync('security', ['set-generic-password-partition-list', '-s', 'OpenHut Dev Safe Storage', '-S', `apple-tool:,apple:,cdhash:${cdhash}`, '-k', process.env.CI_KEYCHAIN_PASSWORD, process.env.CI_KEYCHAIN], { stdio: 'ignore' })
+    say('CI identity only: the safe-storage Keychain item now admits the new build, as a Developer ID team id does', { cdhash })
+  }
   if (args.broken) {
     const old = plistVersion.call(null, args.from)
     child = launch({ OPENHUT_TEST_DIALOG: 'Go back' })
@@ -124,12 +129,15 @@ try {
   evidence.error = error.message
   console.error(`update-test: FAIL ${error.message}`)
   process.exitCode = 1
+  if (!LINUX) spawnSync('screencapture', ['-x', resolve(`update-test-${args.via}-failure.png`)])
 } finally {
   if (child && child.exitCode === null) {
     child.kill('SIGTERM')
     await Promise.race([new Promise((resolve) => child.once('exit', resolve)), sleep(15_000)])
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
   }
   api?.kill()
+  feed.closeAllConnections()
   feed.close()
   if (!args.keep) rmSync(root, { recursive: true, force: true })
   else console.log(`update-test: kept ${root}`)

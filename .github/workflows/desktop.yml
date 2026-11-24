@@ -212,12 +212,13 @@ jobs:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: npm run build && npm run pack-backend && npm run sums && npx electron-builder --mac --arm64 --publish never
-      - name: Build the app unsigned
+      - name: A throwaway self-signed identity, so a branch build can run the update test
+        if: matrix.name == 'macos' && env.FULL != 'true'
+        run: scripts/ci-identity.sh "$RUNNER_TEMP/ci-identity" >> "$GITHUB_ENV"
+      - name: Build the app signed with it (zip only)
         if: matrix.name == 'macos' && env.FULL != 'true'
         working-directory: packages/desktop
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npm run build && npm run pack-backend && npm run sums && npx electron-builder --mac --arm64 --publish never && codesign --force --deep --sign - release/mac-arm64/OpenHut.app
+        run: npm run build && npm run pack-backend && npm run sums && npx electron-builder --mac zip --arm64 --publish never && codesign -dv release/mac-arm64/OpenHut.app
       - name: Notarize, staple and check Gatekeeper
         if: matrix.name == 'macos' && env.FULL == 'true'
         env:
@@ -270,14 +271,15 @@ jobs:
             ~/AppData/Local/electron-builder/Cache
           key: ${{ steps.electron-cache.outputs.cache-primary-key }}
       - name: The previous version updates to this one
-        if: matrix.name == 'macos' && env.FULL == 'true'
+        if: matrix.name == 'macos'
         working-directory: packages/desktop
         env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          CSC_LINK: ${{ env.FULL == 'true' && secrets.CSC_LINK || env.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ env.FULL == 'true' && secrets.CSC_KEY_PASSWORD || env.CSC_KEY_PASSWORD }}
         run: |
           npx electron-builder --mac zip --arm64 -c.extraMetadata.version=0.0.1 -c.directories.output=release-old --publish never
-          mkdir -p feed && cp release/latest-mac.yml release/OpenHut-*-arm64.zip release/OpenHut-*-arm64.zip.blockmap release/OpenHut-arm64.dmg feed/
+          mkdir -p feed && cp release/latest-mac.yml release/OpenHut-*-arm64.zip release/OpenHut-*-arm64.zip.blockmap feed/
+          [ ! -f release/OpenHut-arm64.dmg ] || cp release/OpenHut-arm64.dmg feed/
           node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via button --cloud ../../private/api
           node scripts/update-test.mjs --from release-old/mac-arm64/OpenHut.app --feed feed --via quit --cloud ../../private/api
       - name: Add the Mac app to the draft release
@@ -332,6 +334,7 @@ jobs:
           name: ${{ matrix.name }}-e2e
           path: |
             packages/desktop/app-e2e/*.png
+            packages/desktop/update-test-*.png
             packages/desktop/app-e2e/evidence.json
             packages/desktop/app-e2e/home/logs/
             packages/desktop/app-e2e/home2/logs/
