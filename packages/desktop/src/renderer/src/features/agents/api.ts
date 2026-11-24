@@ -188,7 +188,12 @@ export function useDeleteChannel() {
 }
 
 export function useSkills(agentId: string) {
-  return useQuery({ queryKey: ['skills', agentId], queryFn: () => request({ schema: SKILL_LIST, of: agentId, path: `/api/skills?${new URLSearchParams({ agentId })}` }).then((page) => page.data) })
+  const client = useQueryClient()
+  return useQuery({
+    queryKey: ['skills', agentId],
+    queryFn: () => request({ schema: SKILL_LIST, of: agentId, path: `/api/skills?${new URLSearchParams({ agentId })}` }).then((page) => page.data),
+    refetchInterval: (query) => !query.state.data?.length && client.getQueryData<Agent>([...AGENTS_KEY, agentId])?.status === 'running' ? 3_000 : false,
+  })
 }
 
 export function useSkill({ skillId, agentId }: { skillId: string; agentId: string }) {
