@@ -1,12 +1,10 @@
-import { BrowserIcon, CloudDownloadIcon, LaptopIcon, ServerStack01Icon, TestTube01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { ArrowUpRight01Icon, BrowserIcon, LaptopIcon, News01Icon, ServerStack01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { I, PILL } from '@/components/kit'
 import { adminOf, startUpdate, useComputerAdmins, type ComputerAdmin } from '@/features/computers/api'
-import { usePrefs } from '@/features/settings/desktop'
 import { desktop } from '@/lib/desktop'
-import { PrefSwitch } from '@/features/settings/general'
 import { Row, Rows } from '@/features/settings/kit'
 import { downloadUrl, updateDetails, updateNote, useAppUpdate, type UpdateState } from '@/features/settings/update'
 import { updateServers } from '@/features/settings/update-all'
@@ -16,35 +14,26 @@ import { WORDS } from '@/lib/platform'
 import { toastError, toastFailed } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
-const WHATS_NEW = 'https://github.com/openhuthq/openhut/releases'
+const WHATS_NEW = 'https://openhut.dev/changelog'
+// The release version (release.json, the changelog's labels) the web App was built as; packs.yml stamps it via set-version.ts.
+const WEB_VERSION: string | undefined = import.meta.env.OPENHUT_VERSION
 
 export function UpdatesSettings() {
   const admins = (useComputerAdmins().data ?? []).filter(({ computer, admin }) => admin && !(desktop && computer.id === 'local'))
-  const latest = useAppUpdate().data?.available
-  return <>
-    <p className="m-0 -mt-3 px-2.5 text-[12px]/[16px] text-mute">{latest ? `Latest: OpenHut ${latest} · ` : ''}<a href={WHATS_NEW} target="_blank" rel="noreferrer" className="text-hue-blue no-underline hover:underline">What’s new</a></p>
-    <Rows>
-      {desktop ? <ThisApp /> : <Row icon={<I icon={BrowserIcon} size={20} className="text-hue-sky" />} title="This app · Web" note="Always the latest" />}
-      {admins.map((each) => <ComputerRow key={each.computer.id} each={each} />)}
-    </Rows>
-    {desktop && <BetaSwitch />}
-  </>
+  return <Rows>
+    {desktop ? <ThisApp /> : <Row icon={<I icon={BrowserIcon} size={20} className="text-hue-sky" />} title="This app · Web" note={WEB_VERSION && `OpenHut ${WEB_VERSION}`} />}
+    {admins.map((each) => <ComputerRow key={each.computer.id} each={each} />)}
+    <Row icon={<I icon={News01Icon} size={20} className="text-mute" />} title="What’s new" href={WHATS_NEW}><I icon={ArrowUpRight01Icon} size={14} className="text-mute" /></Row>
+  </Rows>
 }
 
 function ThisApp() {
   const state = useAppUpdate().data
   if (!state) return null
   return <>
-    <Row icon={<I icon={CloudDownloadIcon} size={20} className="text-hue-sky" />} title={`${WORDS.thisComputer} · OpenHut ${state.current}`} note={updateNote(state)}><Action state={state} /></Row>
+    <Row icon={<I icon={LaptopIcon} size={20} className="text-hue-blue" />} title={WORDS.thisComputer} note={`OpenHut ${state.current} · ${updateNote(state)}`}><Action state={state} /></Row>
     <Details state={state} />
   </>
-}
-
-function BetaSwitch() {
-  const state = useAppUpdate().data
-  const prefs = usePrefs()
-  const stays = !!state?.current.includes('-') && prefs.data?.betaUpdates === false
-  return <Rows><PrefSwitch icon={TestTube01Icon} hue="text-hue-violet" name="betaUpdates" title="Try new features early" note={stays ? 'You stay on this beta until the next regular version is out.' : 'Get beta versions before everyone else.'} /></Rows>
 }
 
 function ComputerRow({ each: { computer, admin } }: { each: ComputerAdmin }) {
