@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
 import { Spinner } from '@/components/ui/spinner'
 import { FirstRun, forgetFirstRun, Offline, PhoneFirstRun } from '@/app/first-run'
@@ -8,6 +8,8 @@ import { Knocking, YoureIn } from '@/features/cloud/knock'
 import { nameOf } from '@/features/cloud/api'
 import { Teammate } from '@/app/teammate'
 import { BIG, Stage, Step } from '@/features/cloud/step'
+import { SignInScreen, TITLE } from '@/features/cloud/sign-in'
+import { cn } from '@/lib/utils'
 import { followEvents } from '@/lib/live'
 import { CloudOffline, remote } from '@/lib/remote'
 import { Offline as Away, phoneBrowser, screenOf } from '@/lib/web-first-run'
@@ -47,19 +49,21 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   if (state.error instanceof CloudOffline || opened.error instanceof CloudOffline) return <CloudDown />
   const invited = state.data?.step === 'signed-out' || state.data?.step === 'waiting' ? state.data.invited : null
   const host = nameOf(invited?.from ?? '') || 'Your teammate'
-  if (state.data?.step === 'signed-out') return <Stage><Step title={invited ? `You’re invited to ${invited.team ?? 'a team'}.` : 'Use OpenHut in your browser.'} line={invited ? `Sign in with Google${invited.email ? ` as ${invited.email}` : ''} to chat with the agents ${host} shares. Nothing to install.` : 'Sign in with the Google account you use on your Mac.'}>
-    <Button className={BIG} disabled={signingIn} onClick={() => { setSigningIn(true); remote.signIn().catch((err: Error) => { setError(err.message); setSigningIn(false) }) }}>{signingIn ? <Spinner /> : null}Continue with Google</Button>
+  if (state.data?.step === 'signed-out') return <Stage><SignInScreen title={invited ? `You’re invited to ${invited.team ?? 'a team'}.` : TITLE} line={invited ? `Sign in with Google${invited.email ? ` as ${invited.email}` : ''} to chat with the agents ${host} shares. Nothing to install.` : 'Use the Google account from your computer.'}
+    invited={Boolean(invited)} busy={signingIn} busyLabel="Opening Google…" disabled={signingIn} onSignIn={() => { setSigningIn(true); remote.signIn().catch((err: Error) => { setError(err.message); setSigningIn(false) }) }}>
     {failure && <ErrorNote message={failure} />}
-  </Step></Stage>
+  </SignInScreen></Stage>
   if (screen === 'first-run' && state.data?.step === 'first-run') return <FirstRun email={state.data.email} />
   if (screen === 'phone' && state.data?.step === 'first-run') return <PhoneFirstRun email={state.data.email} />
   if (screen === 'offline' && opened.error instanceof Away) return <Offline computer={opened.error.computer} seen={opened.error.seen} />
   if (state.data?.step === 'waiting' && !knocked) setKnocked(true)
   if (state.data?.step === 'continuing') return <Stage><Step title="Opening OpenHut…" line="Your computer is letting this browser in. This takes a few seconds."><Spinner /></Step></Stage>
-  if (state.data?.step === 'waiting' && invited) return <Stage><Knocking faces={state.data.faces} line={`${host}’s computer lets you in. Tell ${host} these two:`} note={`${host} picks the same two on their computer. We’ll keep knocking for 15 minutes.`} /></Stage>
-  if (state.data?.step === 'waiting') return <Stage><Knocking faces={state.data.faces} /></Stage>
+  const otherAccount = <Button type="button" variant="text" className="font-normal text-mute" onClick={() => void remote.signOut().then(() => state.refetch())}>Use another account</Button>
+  if (state.data?.step === 'waiting' && invited) return <Stage><Knocking faces={state.data.faces} line={`Tell ${host} these two. ${host} taps them on their computer.`} link={otherAccount} /></Stage>
+  if (state.data?.step === 'waiting') return <Stage><Knocking faces={state.data.faces}
+    action={<a href="openhut://open" className={cn(buttonVariants({ variant: 'primary' }), BIG)}>Open OpenHut</a>} link={otherAccount} /></Stage>
   const over = state.data?.step === 'over' ? state.data : undefined
-  if (over) return <Stage><Step title={over.missed ? 'Those faces didn’t match.' : 'Nobody let you in.'} line={over.missed ? 'The request was turned down. If that was you, knock again.' : 'The knock was turned down, or 15 minutes passed.'}
+  if (over) return <Stage><Step title={over.missed ? 'Those faces didn’t match.' : 'Nobody let you in.'} line={over.missed ? 'The request was turned down. If that was you, knock again.' : 'The knock was turned down, or 15 minutes passed.'} link={otherAccount}
     action={<Button className={BIG} onClick={() => remote.knock(over.workspace).then(() => state.refetch(), (err: Error) => setError(err.message))}>Knock again</Button>}>{failure && <ErrorNote message={failure} />}</Step></Stage>
   return <Stage><Step title={failure ? 'Can’t reach your computer.' : 'Connecting to your computer…'} line={failure ?? 'Your agents run on your Mac. This browser talks to it end to end encrypted.'}>
     {failure ? <Button className={BIG} onClick={() => { setError(undefined); void state.refetch(); void opened.refetch() }}>Try again</Button> : <Spinner />}

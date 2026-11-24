@@ -25,7 +25,7 @@ app.whenReady().then(async () => {
     let asked
     for (const end = Date.now() + 30000; !asked?.faces && Date.now() < end; await sleep(300)) asked = (await (await fetch(`${NEW_RUNTIME}/api/cloud`, { headers: { authorization: 'Bearer dev' } })).json()).asking
     const pair = asked.faces.map((index) => NAMES[index])
-    const knocking = await until(knocker, new RegExp(`Knock knock\\.[\\s\\S]*${pair[0]}[\\s\\S]*${pair[1]}[\\s\\S]*Focus mode`))
+    const knocking = await until(knocker, new RegExp(`Knock knock\\.[\\s\\S]*${pair[0]}[\\s\\S]*${pair[1]}`))
     log(`1 new device knocks and shows ${pair.join(' and ')}: ${knocking.split('\n').filter(Boolean).slice(1, 6).join(' / ')}`)
     await shot(knocker, 'c-01-knocking')
 

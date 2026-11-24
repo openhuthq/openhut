@@ -19,12 +19,10 @@ export function Named({ index, size }: { index: number; size: number }) {
   </span>
 }
 
-export function Knocking({ faces, onKit, line, note, children }: { faces: number[] | null; onKit?: () => void; line?: string; note?: string; children?: ReactNode }) {
-  return <Step title="Knock knock." line={line ?? 'Your data is locked to your computers, so one of them has to let you in. Look for these two:'}
-    link={onKit && <Button type="button" variant="text" className="font-normal text-mute" onClick={onKit}><I icon={Key01Icon} size={14} />Use my recovery kit instead</Button>}>
+export function Knocking({ faces, onKit, line, action, link, children }: { faces: number[] | null; onKit?: () => void; line?: string; action?: ReactNode; link?: ReactNode; children?: ReactNode }) {
+  return <Step title="Knock knock." line={line ?? 'Open OpenHut on one of your computers and tap these two:'} action={action}
+    link={onKit ? <Button type="button" variant="text" className="font-normal text-mute" onClick={onKit}><I icon={Key01Icon} size={14} />Use my recovery kit instead</Button> : link}>
     {faces ? <span className="flex gap-8">{faces.map((index) => <Named key={index} index={index} size={112} />)}</span> : <Spinner className="mt-1" />}
-    <p className="m-0 max-w-[440px] text-[14px]/[20px] text-body">{note ?? 'Open OpenHut on any of your computers. We’ll keep knocking for 15 minutes.'}</p>
-    <p className="m-0 text-[12.5px] text-mute">Focus mode can hide the notification.</p>
     {children}
   </Step>
 }

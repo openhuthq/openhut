@@ -33,7 +33,7 @@ function page({ width = 1180, height = 760, userAgent } = {}) {
   }
   const signIn = async (email) => {
     await win.loadURL(WEB)
-    await until(/Use OpenHut in your browser/)
+    await until(/Your agents, everywhere/)
     await click('Continue with Google')
     await until(new RegExp(email.replace('.', '\\.')))
     await click(email, 'a')
@@ -56,7 +56,7 @@ app.whenReady().then(async () => {
   try {
     const web = page()
     await web.win.loadURL(WEB)
-    log(`1 open ${WEB}: ${(await web.until(/Use OpenHut in your browser/)).split('\n').slice(0, 2).join(' / ')}`)
+    log(`1 open ${WEB}: ${(await web.until(/Your agents, everywhere/)).split('\n').slice(0, 2).join(' / ')}`)
     await web.shot('w-01-sign-in')
     await web.signIn('sara@example.com')
     const choose = await web.until(/Where should your agents live\?/)
@@ -96,7 +96,7 @@ app.whenReady().then(async () => {
 
     const box = server(code, data)
     log(`9 the server runs the command: a runtime in server mode with OPENHUT_JOIN, cloud ${CLOUD}`)
-    const knocking = await web.until(/Knock knock\.[\s\S]*Focus mode/, 90000)
+    const knocking = await web.until(/Knock knock\.[\s\S]*Use another account/, 90000)
     const pair = knocking.split('\n').map((line) => line.trim()).filter((line) => /^[A-Z][a-z]+$/.test(line)).slice(0, 2)
     log(`10 the waiting page moved on by itself when the server joined, and knocks with ${pair.join(' and ')}`)
     await web.shot('w-06-knock')
