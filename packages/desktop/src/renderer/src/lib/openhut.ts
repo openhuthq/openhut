@@ -5,6 +5,7 @@ import { Agent, Grant } from '@openhut/common/agents/agent.ts'
 import { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { Me } from '@openhut/common/team/team.ts'
 import { WORDS } from '@/lib/platform'
+import { desktop } from '@/lib/desktop'
 import { computersOf, type Computer, type Features } from '@/lib/computers'
 
 export type { Computer, Features }
@@ -14,22 +15,11 @@ export type OpenHutAgent = Agent & { computer: string; online: boolean }
 export type Enrollment = { peer: TailnetPeer; lines: string[]; url: string | null; startedAt: number; status: 'running' | 'failed'; error: string; retryAt: number | null; retried: boolean; waitingAt?: number | null; log?: string }
 
 type Schema<T> = { safeParse: (data: unknown) => { success: true; data: T } | { success: false } }
-type Bridge = {
-  version?: string
-  computers?: {
-    add: (input: { peer: TailnetPeer; join: string }) => Promise<unknown>
-    enrollments: () => Promise<Enrollment[]>
-    dismiss: (input: { dns: string }) => Promise<unknown>
-    onEnrollments: (listener: (list: Enrollment[]) => void) => void
-  }
-}
-
-const bridge: Bridge | undefined = Reflect.get(window, 'openhut')
 const LOCAL = 'local'
 const AGENT_LIST = List(Agent)
 const JoinCode = z.object({ code: z.string() })
 
-export const APP_VERSION = bridge?.version ?? ''
+export const APP_VERSION = desktop?.version ?? ''
 
 export class RequestError extends Error {
   readonly status: number
@@ -75,9 +65,9 @@ export const openhut = {
       return computersOf({ here: { id: LOCAL, name: WORDS.thisComputer, kind: 'here', url: '', online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false }, appTooOld, runtimeTooOld: false }, devices: cloud?.devices ?? [] })
     },
     async add(peer: TailnetPeer): Promise<unknown> {
-      if (!bridge?.computers) throw new Error('Open the OpenHut app on this computer to do this.')
+      if (!desktop?.computers) throw new Error('Open the OpenHut app on this computer to do this.')
       const { code } = await request({ schema: JoinCode, path: '/api/cloud/join-codes', method: 'POST' })
-      return bridge.computers.add({ peer, join: code })
+      return desktop.computers.add({ peer, join: code })
     },
   },
   account: {
@@ -86,9 +76,9 @@ export const openhut = {
 }
 
 export const enrollments = {
-  list: async (): Promise<Enrollment[]> => await bridge?.computers?.enrollments() ?? [],
-  dismiss: (dns: string) => bridge?.computers?.dismiss({ dns }),
-  follow: (listener: (list: Enrollment[]) => void) => bridge?.computers?.onEnrollments(listener),
+  list: async (): Promise<Enrollment[]> => await desktop?.computers?.enrollments() ?? [],
+  dismiss: (dns: string) => desktop?.computers?.dismiss({ dns }),
+  follow: (listener: (list: Enrollment[]) => void) => desktop?.computers?.onEnrollments(listener),
 }
 
 function here(agent: Agent): OpenHutAgent {

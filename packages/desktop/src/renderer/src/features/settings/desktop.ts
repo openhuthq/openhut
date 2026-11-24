@@ -1,4 +1,5 @@
 import { WORDS } from '@/lib/platform'
+import { desktop, type Failure } from '@/lib/desktop'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Peer } from '@/features/settings/peers'
 
@@ -6,21 +7,9 @@ export type Tailnet = { state: 'running'; tailnet: string; self: { name: string;
 export type Machine = { chip: string; memory: number; folder: string; size: number }
 export type Prefs = { openAtLogin: boolean; keepAwake: boolean; betaUpdates: boolean }
 export type FirstRun = { fresh: boolean; done: boolean; failed: boolean; steps: [string, string, 'done' | 'now' | 'next' | 'failed', number?][] }
-type Failure = { error: string }
-type Bridge = {
-  tailnet: () => Promise<Tailnet | Failure>
-  machine: () => Promise<Machine | Failure>
-  showFolder: () => Promise<string>
-  prefs: () => Promise<Prefs | Failure>
-  setPrefs: (patch: Partial<Prefs>) => Promise<Prefs | Failure>
-  firstRun: () => Promise<FirstRun | Failure>
-  onChanged: (listener: () => void) => void
-  focus?: () => Promise<unknown>
-}
 const PREFS_KEY = ['prefs']
 const FIRST_RUN_POLL_MS = 500
 
-export const desktop: Bridge | undefined = Reflect.get(window, 'openhut')
 export const HERE = WORDS.here
 
 export function useTailnet({ poll = false }: { poll?: boolean } = {}) {

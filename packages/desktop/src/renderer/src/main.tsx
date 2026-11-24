@@ -4,7 +4,7 @@ import { App } from '@/app/app'
 import { DEV_LABEL, DevPill } from '@/components/dev-pill'
 import { Toaster } from '@/components/ui/sonner'
 import hutDev from '@/hut-dev.svg'
-import { desktop } from '@/features/settings/desktop'
+import { desktop } from '@/lib/desktop'
 import { RequestError } from '@/lib/api-client'
 import { followEnrollments } from '@/features/computers/enroll'
 import { clearCarriedInvite } from '@/features/join/invite'
@@ -23,7 +23,7 @@ const client = new QueryClient({
   defaultOptions: { queries: { retry: (failures, error) => failures < 2 && !(error instanceof RequestError && error.status < 500) } },
 })
 
-if ('openhut' in window && navigator.userAgent.includes('Mac')) document.documentElement.dataset.desktop = ''
+if (desktop && navigator.userAgent.includes('Mac')) document.documentElement.dataset.desktop = ''
 desktop?.onChanged(() => void client.invalidateQueries())
 followEnrollments(client)
 followUpdate({ bridge: updates, client })

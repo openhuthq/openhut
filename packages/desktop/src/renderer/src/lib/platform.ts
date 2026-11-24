@@ -1,3 +1,5 @@
+import { desktop } from './desktop.ts'
+
 export type Words = { here: string; thisComputer: string; keychain: string; showFolder: string; badgeNote: string | undefined }
 
 export function wordsFor(platform: string): Words {
@@ -12,8 +14,7 @@ export function fromPhone(name: string): string {
   return FROM_PHONE[name] ?? name
 }
 
-const bridge: { platform?: string } | undefined = typeof window === 'undefined' ? undefined : Reflect.get(window, 'openhut')
 const guess = typeof navigator !== 'undefined' && /Mac|Android/.test(navigator.userAgent) ? 'darwin' : 'linux'
 
-export const WORDS = wordsFor(bridge?.platform ?? guess)
-export const OWN_TITLE_BAR = (bridge?.platform ?? guess) === 'darwin'
+export const WORDS = wordsFor(desktop?.platform ?? guess)
+export const OWN_TITLE_BAR = (desktop?.platform ?? guess) === 'darwin'

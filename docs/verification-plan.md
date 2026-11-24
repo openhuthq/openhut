@@ -36,7 +36,7 @@ The test story comes from scoping. A **Dev** agent may query the team's Orders d
 
 ## Install and the e2e run
 
-How the installer works, and how `npm run e2e` runs it on Docker Desktop (a bare server, the install, adding it again with a new key, a tampered upgrade, the real upgrade, a restart, the caches and what lands in `packages/e2e/results/`), is in `private/brain/openhut-gotchas.md`. The run has five phases, each a run of `e2e.ts` with its results in `e2e-<phase>.json`: `main` (after the install), `after-upgrade`, `after-restart`, `update-broken` (Update now with a release whose app can't start: the installer puts the previous build back) and `update` (Update now from Admin's API). The e2e runs the remote runtime only: gVisor, the firewall and the enrolled key; the desktop app is verified by hand (see "Not verified here").
+How the installer works, and how `npm run e2e:server` runs it on Docker Desktop (a bare server, the install, adding it again with a new key, a tampered upgrade, the real upgrade, a restart, the caches and what lands in `packages/e2e/results/`), is in `private/brain/openhut-gotchas.md`. The run has five phases, each a run of `e2e.ts` with its results in `e2e-<phase>.json`: `main` (after the install), `after-upgrade`, `after-restart`, `update-broken` (Update now with a release whose app can't start: the installer puts the previous build back) and `update` (Update now from Admin's API). The e2e runs the remote runtime only: gVisor, the firewall and the enrolled key; the desktop app is verified by hand (see "Not verified here").
 
 ## Checks
 
@@ -89,7 +89,7 @@ The approved mock is the **Mock** tab of the OpenHut blueprint artifact (https:/
 
 ## Pass criteria
 
-1. `npm run e2e` exits 0 on a fresh run: every check in all five phases passes, and the report says the tree matches what the run tested. `npx turbo run build typecheck test` passes.
+1. `npm run e2e:server` exits 0 on a fresh run: every check in all five phases passes, and the report says the tree matches what the run tested. `npx turbo run build typecheck test` passes.
 2. The result files exist and match the report.
 3. Three reviewer agents return **zero comments**. Each is briefed only with this plan, the code, the results and read-only access to the live server:
    - **Senior software engineer**: is the code correct and minimal, and does it do what this plan claims?

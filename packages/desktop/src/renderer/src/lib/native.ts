@@ -8,6 +8,7 @@ import { LiveUpdate } from '@capawesome/capacitor-live-update'
 import { useState } from 'react'
 import { toast } from '@/lib/toast'
 import { latestBundle } from '@/lib/updates'
+import { desktop } from '@/lib/desktop'
 
 type DeviceKeyPlugin = {
   publicKey(): Promise<{ publicKey: string }>
@@ -75,10 +76,8 @@ export async function deviceKey(): Promise<DeviceKey | undefined> {
   }
 }
 
-type TouchId = { prompt: (reason: string) => Promise<{ ok: boolean }> }
-
 export async function confirmed(reason: string): Promise<boolean> {
-  const touchId: TouchId | undefined = Reflect.get(window, 'openhut')?.touchId
+  const touchId = desktop?.touchId
   if (!isPhone() && !touchId) return true
   if (touchId) {
     const { ok } = await touchId.prompt(reason.charAt(0).toLowerCase() + reason.slice(1))

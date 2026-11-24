@@ -11,6 +11,7 @@ import { adminOf, startUpdate, useComputerAdmins, useComputers } from '@/feature
 import { behind, updateServers } from '@/features/settings/update-all'
 import { COMPUTERS_KEY } from '@/lib/query-keys'
 import { WORDS } from '@/lib/platform'
+import { desktop } from '@/lib/desktop'
 
 const HERE_NAME = WORDS.thisComputer
 import { cn } from '@/lib/utils'
@@ -29,7 +30,7 @@ export function UpdateStatus({ idle }: { idle: ReactNode }) {
   if (state?.ready) return <UpdatePill />
   if (!state?.error) return state?.checking || state?.available ? <Spinner className="mt-0" /> : idle
   return <span className="inline-flex gap-1.5">
-    <a href={downloadUrl(Reflect.get(window, 'openhut')?.platform)} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Download</a>
+    <a href={downloadUrl(desktop?.platform)} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Download</a>
     <CheckButton label="Try again" />
   </span>
 }

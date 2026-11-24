@@ -2,7 +2,8 @@ import { CloudDownloadIcon, TestTube01Icon } from '@hugeicons/core-free-icons'
 import { buttonVariants } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { I, PILL } from '@/components/kit'
-import { desktop, usePrefs } from '@/features/settings/desktop'
+import { usePrefs } from '@/features/settings/desktop'
+import { desktop } from '@/lib/desktop'
 import { PrefSwitch } from '@/features/settings/general'
 import { Row, Rows } from '@/features/settings/kit'
 import { downloadUrl, updateNote, useAppUpdate, type UpdateState } from '@/features/settings/update'
@@ -26,7 +27,7 @@ function Action({ state }: { state: UpdateState }) {
   if (state.checking || state.available) return <Spinner className="mt-0" />
   if (!state.error) return <CheckButton label="Check for updates" />
   return <>
-    <a href={downloadUrl(Reflect.get(window, 'openhut')?.platform)} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'ghost' }), PILL, 'text-mute')}>Download</a>
+    <a href={downloadUrl(desktop?.platform)} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'ghost' }), PILL, 'text-mute')}>Download</a>
     <CheckButton label="Try again" />
   </>
 }
