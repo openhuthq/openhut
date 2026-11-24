@@ -45,7 +45,7 @@ function page() {
 }
 
 function server(code, data) {
-  const env = { ...process.env, PORT: SERVER_PORT, OPENHUT_GATEWAY_PORT: String(Number(SERVER_PORT) + 100), OPENHUT_DATA: data, AGENTD_SOCK: join(data, 'agentd.sock'), OPENHUT_CLOUD_URL: CLOUD, OPENHUT_API_URL: CLOUD, OPENHUT_WEB_URL: WEB, OPENHUT_NAME: 'e2e-server', OPENHUT_MODEL: 'test', ...code && { OPENHUT_JOIN: code } }
+  const env = { ...process.env, PORT: SERVER_PORT, OPENHUT_GATEWAY_PORT: String(Number(SERVER_PORT) + 100), OPENHUT_DATA: data, AGENTD_SOCK: join(data, 'agentd.sock'), OPENHUT_CLOUD_URL: CLOUD, OPENHUT_API_URL: CLOUD, OPENHUT_WEB_URL: WEB, OPENHUT_NAME: 'e2e-server', OPENHUT_MODEL: 'test', OPENHUT_AGENT_HOST_NET: '1', ...code && { OPENHUT_JOIN: code } }
   for (const name of ['OPENHUT_SOCKET', 'OPENHUT_PERSONAL', 'ELECTRON_RUN_AS_NODE']) delete env[name]
   const agentd = spawn('node', ['packages/runtime/src/agentd/agentd.ts'], { cwd: ROOT, env: { ...env, OPENHUT_SANDBOX: 'native', AGENTD_DATA: join(data, 'agentd'), ...HERMES && { AGENTD_HERMES: HERMES } }, stdio: ['ignore', process.env.SHOW_AGENTD ? 'inherit' : 'ignore', 'inherit'] })
   const runtime = spawn('node', ['packages/runtime/src/server/app.ts'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'inherit'] })
@@ -142,6 +142,7 @@ app.whenReady().then(async () => {
     await sara.run(`(() => { const t = document.querySelector('textarea'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(t, 'Hello from Sara'); t.dispatchEvent(new Event('input', { bubbles: true })); t.form?.requestSubmit?.(); return true })()`)
     const answered = await sara.until(/ECHO: [^\n]*Hello from Sara/, 90000).catch(() => null)
     if (!answered) gaps.push('Helper never answered: its Hermes didn’t come up on this machine')
+    if (answered) await sara.shot('f2-10-answer')
     log(`10 sara chats with Helper over mo’s computer: ${answered ? answered.split('\n').filter(Boolean).slice(-3).join(' / ') : `NO ANSWER (${(await sara.text()).split('\n').filter(Boolean).slice(-2).join(' / ')})`}`)
     await sara.shot('f2-07-teammate-chat')
 
