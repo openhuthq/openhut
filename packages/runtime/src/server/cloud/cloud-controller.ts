@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import * as z from 'zod/mini'
 import { AddPasskey, ApproveRequest, ChangeRole, CreateWebLink, DenyRequestQuery, DeviceKey, PasteSignInCode, RemoveDeviceQuery, SetHere, StartCloudSignIn, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
-import { requireSignIn } from '../team/identity.ts'
+import { requireSignIn, withPresence } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
 import { presence } from './presence.ts'
 
@@ -16,7 +16,7 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.delete('/session', SignedIn, async () => cloudService.signOut())
 
-  app.post('/kits', SignedIn, async () => cloudService.newKit())
+  app.post('/kits', { onRequest: withPresence('save a new recovery kit') }, async () => cloudService.newKit())
 
   app.post('/join-codes', SignedIn, async () => cloudService.joinCode())
 
@@ -34,7 +34,7 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.get<{ Params: { id: string } }>('/workspaces/:id/icon', SignedIn, async (req, reply) => cloudService.icon({ workspace: req.params.id, reply }))
 
-  app.delete('/', SignedIn, async () => cloudService.deleteData())
+  app.delete('/', { onRequest: withPresence('delete your OpenHut data') }, async () => cloudService.deleteData())
 
   app.get('/presence', SignedIn, async () => presence.view())
 
@@ -46,13 +46,13 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.delete('/rotations', SignedIn, async () => cloudService.rotated())
 
-  app.delete<{ Params: { id: string; email: string } }>('/workspaces/:id/members/:email', SignedIn, async (req) => cloudService.remove({ workspace: req.params.id, email: req.params.email }))
+  app.delete<{ Params: { id: string; email: string } }>('/workspaces/:id/members/:email', { onRequest: withPresence('remove someone from your team') }, async (req) => cloudService.remove({ workspace: req.params.id, email: req.params.email }))
 
   app.delete<{ Params: { id: string; email: string } }>('/workspaces/:id/invites/:email', SignedIn, async (req) => cloudService.revokeInvite({ workspace: req.params.id, email: req.params.email }))
 
   app.delete<{ Params: { id: string; key: string } }>('/workspaces/:id/devices/:key', DeviceRequest, async (req) => cloudService.removeDevice({ workspace: req.params.id, device: req.params.key }))
 
-  app.post<{ Params: { id: string } }>('/workspaces/:id/keys', SignedIn, async (req) => cloudService.changeKeys({ workspace: req.params.id }))
+  app.post<{ Params: { id: string } }>('/workspaces/:id/keys', { onRequest: withPresence('reset your team’s encryption') }, async (req) => cloudService.changeKeys({ workspace: req.params.id }))
 
   app.post<{ Params: { id: string; device: string }; Body: ApproveRequest }>('/workspaces/:id/requests/:device/approvals', ApproveRequestRequest, async (req) => cloudService.approve({ workspace: req.params.id, device: req.params.device, faces: req.body?.faces }))
 
@@ -67,8 +67,8 @@ const SignedIn = { onRequest: requireSignIn }
 const PasteRequest = { onRequest: requireSignIn, schema: { body: PasteSignInCode } }
 const SignInRequest = { onRequest: requireSignIn, schema: { body: StartCloudSignIn } }
 const UnlockRequest = { onRequest: requireSignIn, schema: { body: UnlockCloud } }
-const NotMeRequest = { onRequest: requireSignIn, schema: { params: z.object({ key: DeviceKey }), querystring: RemoveDeviceQuery } }
-const DeviceRequest = { onRequest: requireSignIn, schema: { params: z.object({ id: z.string(), key: DeviceKey }) } }
+const NotMeRequest = { onRequest: withPresence('remove a device from OpenHut'), schema: { params: z.object({ key: DeviceKey }), querystring: RemoveDeviceQuery } }
+const DeviceRequest = { onRequest: withPresence('remove a device from OpenHut'), schema: { params: z.object({ id: z.string(), key: DeviceKey }) } }
 const PasskeyRequest = { onRequest: requireSignIn, schema: { body: AddPasskey } }
 const UpdateRequest = { onRequest: requireSignIn, schema: { body: UpdateWorkspace } }
 const RoleRequest = { onRequest: requireSignIn, schema: { body: ChangeRole } }

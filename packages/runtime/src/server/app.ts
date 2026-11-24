@@ -32,6 +32,7 @@ import { cloudService } from './cloud/cloud-service.ts'
 import { runSet } from './cloud/run-set.ts'
 import { settings } from './platform/settings.ts'
 import { listenLocally, stepUp } from './team/identity.ts'
+import { ownWindow } from './team/own-window.ts'
 import { keysService } from './cloud/keys-service.ts'
 
 await migrate()
@@ -90,6 +91,7 @@ process.once('SIGTERM', async () => {
   process.exit(0)
 })
 emit({ name: 'app.started', properties: { at: config.installKind === 'server' ? config.port : config.socket, build: config.build, version: config.version, kind: config.installKind } })
+ownWindow.listen()
 relayService.start({ server: app.server }).catch((err: unknown) => log.error({ event: 'relay.start_failed', error: messageOf(err) }))
 await gatewayServer.start().catch(async (err: unknown) => {
   log.error({ event: 'gateway.bind_failed', port: config.gatewayPort, error: messageOf(err) })
