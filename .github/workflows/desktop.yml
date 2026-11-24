@@ -149,7 +149,17 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npx turbo run typecheck test
+      - uses: actions/cache/restore@v4
+        with:
+          path: .turbo/cache
+          key: turbo-${{ github.sha }}
+          restore-keys: turbo-
+      - run: npx turbo run typecheck test --cache-dir=.turbo/cache
+      - uses: actions/cache/save@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: .turbo/cache
+          key: turbo-${{ github.sha }}
 
   build:
     needs: [draft, changes]
@@ -177,10 +187,23 @@ jobs:
         run: node scripts/set-version.ts "$GITHUB_REF_NAME"
       - run: npm ci --no-audit --no-fund
       - uses: astral-sh/setup-uv@v6
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: native-cache
         with:
           path: packages/desktop/dist/native-cache
           key: native-runtime-${{ runner.os }}-${{ hashFiles('install/native-runtime.json', 'packages/desktop/scripts/pack-hermes.mjs') }}
+      - uses: actions/cache/restore@v4
+        id: electron-cache
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
 
       - name: Build and sign the app
         if: matrix.name == 'macos' && env.FULL == 'true'
@@ -223,7 +246,29 @@ jobs:
           mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
           git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
-          npm --prefix private/api ci --no-audit --no-fund
+      - uses: actions/cache@v4
+        id: api-modules
+        with:
+          path: private/api/node_modules
+          key: private-api-${{ runner.os }}-${{ hashFiles('private/api/package-lock.json') }}
+      - if: steps.api-modules.outputs.cache-hit != 'true'
+        run: npm --prefix private/api ci --no-audit --no-fund
+      - uses: actions/cache/save@v4
+        if: github.ref == 'refs/heads/main' && steps.native-cache.outputs.cache-hit != 'true'
+        with:
+          path: packages/desktop/dist/native-cache
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
+      - uses: actions/cache/save@v4
+        if: github.ref == 'refs/heads/main' && steps.electron-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: ${{ steps.electron-cache.outputs.cache-primary-key }}
       - name: The previous version updates to this one
         if: matrix.name == 'macos' && env.FULL == 'true'
         working-directory: packages/desktop
