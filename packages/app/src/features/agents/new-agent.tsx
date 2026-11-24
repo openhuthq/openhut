@@ -12,8 +12,7 @@ import { useWorkspaces } from '@/features/cloud/workspaces'
 import { useComputers } from '@/features/computers/api'
 import { useStartSeatSignIn } from '@/features/settings/api'
 import { ModelsStep, SeatSignIn, stepOf } from '@/features/settings/models'
-import { WORDS } from '@/lib/platform'
-import { DEFAULT_MODEL, firstModel, noteOf } from '@/features/agents/form'
+import { DEFAULT_MODEL, defaultComputer, firstModel } from '@/features/agents/form'
 import { ComputerPicker } from '@/features/computers/computer-picker'
 import { useComputerProviders } from '@/features/models/api'
 import { ModelPicker, SOFT_TRIGGER } from '@/features/models/model-picker'
@@ -21,7 +20,7 @@ import { FacePicker } from '@/features/agents/face-picker'
 import { AccessPicker, PeopleField, type AccessValue } from '@/features/agents/access'
 import { formValues } from '@/lib/form'
 import { TOUCH, useMedia } from '@/lib/media'
-import { open, useOpen } from '@/lib/router'
+import { navigate, open, useOpen } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
 const NAMES = ['Juniper', 'Scout', 'Pepper', 'Atlas', 'Maple', 'Biscuit', 'Nova', 'Otto']
@@ -50,7 +49,8 @@ function AgentForm() {
   const [access, setAccess] = useState<AccessValue>({ shared: false, people: [], sidebars: [] })
   const touch = useMedia(TOUCH)
   const computers = useComputers().data ?? []
-  const [computer, setComputer] = useState('local')
+  const [chosen, setComputer] = useState<string>()
+  const computer = chosen ?? defaultComputer(computers)
   const providers = useComputerProviders(computer)
   const [picked, setPicked] = useState<string | null>(null)
   const [wanted, setWanted] = useState<ProviderId>()
@@ -89,8 +89,8 @@ function AgentForm() {
     <Input name="name" required maxLength={40} defaultValue={name} placeholder={name} aria-label="Name" autoFocus={!touch} autoComplete="off" spellCheck={false} enterKeyHint="go"
       className="h-auto w-full rounded-none border-0 bg-transparent p-0 text-center text-[22px]/[1.3] font-semibold shadow-none focus-visible:ring-0 text-ink outline-none placeholder:text-mute-2" />
     <div className="flex w-full flex-col divide-y divide-hair border-y border-hair text-left">
-      {(computers.length > 1 || computers[0]?.server) && where && <Row title="Runs on">
-        <ComputerPicker computers={computers} value={computer} onPick={(id) => { setComputer(id); setPicked(null) }} title="It runs on" className={PICKER} />
+      {where && <Row title="Runs on">
+        <ComputerPicker computers={computers} value={computer} onPick={(id) => { setComputer(id); setPicked(null) }} onAdd={() => navigate('/settings/computers?open=add')} title="It runs on" className={PICKER} />
       </Row>}
       <Row title="Model">
         <ModelPicker providers={providers} value={model} onPick={setPicked} onSetUp={setUp} label="Model" title="It thinks with" className={PICKER}>
@@ -100,7 +100,6 @@ function AgentForm() {
       {email && <Row title="Access"><AccessPicker team={active.name} value={access} onChange={setAccess} className={PICKER} /></Row>}
     </div>
     {email && <PeopleField workspace={active} owner={email} value={access} onChange={setAccess} />}
-    {where && <p className="m-0 w-full text-left text-[12px]/[16px] text-mute">{noteOf({ where, computers, here: WORDS.here })}</p>}
     <Button type="submit" variant="primary" className="h-10 w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !providers}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
     <ErrorNote message={createAgent.error?.message} />
   </form>

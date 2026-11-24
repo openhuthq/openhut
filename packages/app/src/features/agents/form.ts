@@ -15,20 +15,18 @@ export function inUse(providers: Provider[] | undefined): ProviderId | undefined
   return providers?.find((provider) => picked?.startsWith(`${provider.id}:`))?.id
 }
 
-export function noteOf({ where, computers, here }: { where: Pick<Computer, 'kind' | 'server'>; computers: Pick<Computer, 'kind'>[]; here: string }): string {
-  if (where.kind === 'server' || where.server) return 'Sealed in its own box. Can’t see your files.'
-  if (where.kind === 'desktop') return 'Runs as you on that computer, while it’s awake.'
-  const sealed = computers.some((each) => each.kind === 'server') ? 'Pick your Linux server to seal it in its own box.' : 'Add a Linux server in Settings › Computers to seal it in its own box.'
-  return `It runs like any app you install, with your access, while this ${here} is awake. ${sealed}`
+// Where a new agent runs unless the person picks another: the always-on Linux server when one is online, else this computer.
+export function defaultComputer(computers: Pick<Computer, 'id' | 'kind' | 'online'>[]): string {
+  return computers.find((each) => each.kind === 'server' && each.online)?.id ?? 'local'
 }
 
-export type PeopleSearch = { kind: 'alone' } | { kind: 'none'; query: string } | { kind: 'found'; emails: string[] }
+export type PeopleSearch = { kind: 'none'; query: string } | { kind: 'found'; emails: string[] }
 
 // The people a Share field offers: teammates other than the owner and those already added, matched on email or name.
 export function searchPeople({ members, owner, added, query }: { members: readonly string[]; owner: string; added: readonly string[]; query: string }): PeopleSearch {
-  const others = members.filter((email) => email !== owner)
-  if (!others.length) return { kind: 'alone' }
   const typed = query.trim().toLowerCase()
-  const emails = others.filter((email) => !added.includes(email) && email.toLowerCase().includes(typed))
+  const emails = members.filter((email) => email !== owner && !added.includes(email) && email.toLowerCase().includes(typed))
   return typed && !emails.length ? { kind: 'none', query: query.trim() } : { kind: 'found', emails }
 }
+
+export const looksLikeEmail = (text: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)

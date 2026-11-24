@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { firstModel, inUse, noteOf, searchPeople } from '../../../src/features/agents/form.ts'
+import { defaultComputer, firstModel, inUse, looksLikeEmail, searchPeople } from '../../../src/features/agents/form.ts'
 
 const provider = (id: string, connected: boolean, models: string[]) => ({ id, connected, models: models.map((model) => ({ id: model, on: true })) }) as never
 
@@ -14,10 +14,12 @@ test('a provider just set up from the Model row becomes the pick', () => {
   assert.equal(firstModel([provider('claude', true, ['sonnet']), provider('openrouter', true, ['kimi'])], 'openrouter'), 'openrouter:kimi')
 })
 
-test('the one-line note follows the pick, and offers a Linux server only when the team has none', () => {
-  assert.match(noteOf({ where: { kind: 'server', server: false }, computers: [], here: 'Mac' }), /own box/)
-  assert.match(noteOf({ where: { kind: 'here', server: false } as never, computers: [{ kind: 'server' }], here: 'Mac' }), /Pick your Linux server/)
-  assert.match(noteOf({ where: { kind: 'here', server: false } as never, computers: [{ kind: 'here' } as never], here: 'Mac' }), /Add a Linux server/)
+test('Runs on starts on the online Linux server, else this computer', () => {
+  const here = { id: 'local', kind: 'here', online: true } as const
+  assert.equal(defaultComputer([here]), 'local')
+  assert.equal(defaultComputer([here, { id: 'mac2', kind: 'desktop', online: true }]), 'local')
+  assert.equal(defaultComputer([here, { id: 'box', kind: 'server', online: false }]), 'local')
+  assert.equal(defaultComputer([here, { id: 'box', kind: 'server', online: true }]), 'box')
 })
 
 test('Models marks the one new agents use: Claude Sonnet first, else the first connected from top to bottom, none when nothing is set up', () => {
@@ -29,8 +31,15 @@ test('Models marks the one new agents use: Claude Sonnet first, else the first c
 
 test('the Share field: a team of one says so, a search with no match says so, and people already added are not offered again', () => {
   const owner = 'mo@example.com'
-  assert.deepEqual(searchPeople({ members: [owner], owner, added: [], query: '' }), { kind: 'alone' })
+  assert.deepEqual(searchPeople({ members: [owner], owner, added: [], query: '' }), { kind: 'found', emails: [] })
+  assert.deepEqual(searchPeople({ members: [owner], owner, added: [], query: 'sara@example.com' }), { kind: 'none', query: 'sara@example.com' })
   assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com'], owner, added: [], query: ' zzq ' }), { kind: 'none', query: 'zzq' })
   assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com', 'ana@example.com'], owner, added: ['ana@example.com'], query: '' }), { kind: 'found', emails: ['sara@example.com'] })
   assert.deepEqual(searchPeople({ members: [owner, 'sara@example.com', 'ana@example.com'], owner, added: [], query: 'SAR' }), { kind: 'found', emails: ['sara@example.com'] })
+})
+
+test('Share offers Invite only for a typed email', () => {
+  assert.equal(looksLikeEmail('sara@example.com'), true)
+  assert.equal(looksLikeEmail('sara'), false)
+  assert.equal(looksLikeEmail('sara@example'), false)
 })
