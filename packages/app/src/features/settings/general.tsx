@@ -5,9 +5,10 @@ import { I, Section } from '@/components/kit'
 import { usePrefs, useSetPrefs, type Prefs } from '@/features/settings/desktop'
 import { desktop } from '@/lib/desktop'
 import { Row, Rows } from '@/features/settings/kit'
-import { TeamDangerRows, TeamSettings } from '@/features/people/workspace'
-import { DeleteAccountRow, YouSettings } from '@/features/cloud/cloud'
+import { ResetEncryptionRow, TeamDangerRows, TeamSettings } from '@/features/people/workspace'
+import { DeleteAccountRow, SignInRows, YouSettings } from '@/features/cloud/cloud'
 import { toastError } from '@/lib/toast'
+import { useWorkspaces } from '@/features/cloud/workspaces'
 
 export function GeneralSettings() {
   return <>
@@ -20,6 +21,14 @@ export function GeneralSettings() {
     <Section title="Danger zone">
       <Rows><TeamDangerRows /><DeleteAccountRow /></Rows>
     </Section>
+  </>
+}
+
+export function SecuritySettings() {
+  const admin = useWorkspaces().active.role !== 'member'
+  return <>
+    <Section title="Sign-in and recovery"><Rows><SignInRows /></Rows></Section>
+    {admin && <Section title="Encryption"><Rows><ResetEncryptionRow /></Rows></Section>}
   </>
 }
 

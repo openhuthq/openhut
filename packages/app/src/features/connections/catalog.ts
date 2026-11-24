@@ -94,3 +94,12 @@ export function uniqueName({ title, taken }: { title: string; taken: string[] })
   while (taken.includes(`${title} ${n}`)) n += 1
   return `${title} ${n}`
 }
+
+export function connectedFirst({ items, kinds }: { items: Integration[]; kinds: string[] }): Integration[] {
+  return [...items.filter((item) => kinds.includes(item.name)), ...items.filter((item) => !kinds.includes(item.name))]
+}
+
+export function chipMarks<T extends string>(kinds: T[]): { shown: T[]; more: number } {
+  const unique = [...new Set(kinds)]
+  return { shown: unique.slice(0, 3), more: Math.max(0, unique.length - 3) }
+}
