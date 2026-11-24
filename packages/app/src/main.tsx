@@ -5,6 +5,7 @@ import { DEV_LABEL, DevPill } from '@/components/dev-pill'
 import { Toaster } from '@/components/ui/sonner'
 import hutDev from '@/hut-dev.svg'
 import { desktop } from '@/lib/desktop'
+import { openhut } from '@/lib/openhut'
 import { RequestError } from '@/lib/api-client'
 import { followEnrollments } from '@/features/computers/enroll'
 import { clearCarriedInvite } from '@/features/join/invite'
@@ -35,6 +36,7 @@ addEventListener('keydown', (event) => { if (event.key === 'Tab') delete documen
 if (!REMOTE) followEvents(client)
 document.body.insertAdjacentHTML('afterbegin', sprite)
 if (DEV_LABEL) {
+  Reflect.set(globalThis, 'openhutFetch', (path: string, init?: RequestInit) => openhut.fetch({ path, init }))
   document.title = 'OpenHut Dev'
   document.querySelector<HTMLLinkElement>('link[rel=icon]')?.setAttribute('href', hutDev)
 }

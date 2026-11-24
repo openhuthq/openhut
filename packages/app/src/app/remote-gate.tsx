@@ -9,11 +9,12 @@ import { nameOf } from '@/features/cloud/api'
 import { Teammate } from '@/app/teammate'
 import { BIG, Stage, Step } from '@/features/cloud/step'
 import { followEvents } from '@/lib/live'
-import { remote } from '@/lib/remote'
+import { CloudOffline, remote } from '@/lib/remote'
 import { Offline as Away, phoneBrowser, screenOf } from '@/lib/web-first-run'
 
 const WAIT_MS = 3000
 const OFFLINE_MS = 5000
+const SETUP_MS = 1500
 const POLLED = ['waiting', 'first-run', 'continuing']
 
 export function RemoteGate({ children }: { children: ReactNode }) {
@@ -21,17 +22,22 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState<string>()
   const [knocked, setKnocked] = useState(false)
-  const state = useQuery({ queryKey: ['remote'], queryFn: remote.state, refetchInterval: (query) => POLLED.includes(query.state.data?.step ?? '') ? WAIT_MS : false, retry: false })
+  const state = useQuery({ queryKey: ['remote'], queryFn: remote.state, refetchInterval: (query) => query.state.data?.step === 'setup' ? SETUP_MS : POLLED.includes(query.state.data?.step ?? '') || query.state.error instanceof CloudOffline ? WAIT_MS : false, retry: false })
   const workspace = state.data?.step === 'ready' ? state.data.workspace : undefined
-  const opened = useQuery({ queryKey: ['remote-tunnel', workspace], queryFn: async () => { await remote.open(workspace ?? ''); return true }, enabled: !!workspace, retry: false, staleTime: Infinity, refetchInterval: (query) => query.state.error instanceof Away ? OFFLINE_MS : false })
-  useEffect(() => { if (opened.data) followEvents(client) }, [opened.data, client])
+  const opened = useQuery({ queryKey: ['remote-tunnel', workspace], queryFn: async () => { await remote.open(workspace ?? ''); return true }, enabled: !!workspace, retry: false, staleTime: Infinity, refetchInterval: (query) => query.state.error instanceof Away || query.state.error instanceof CloudOffline ? OFFLINE_MS : false })
+  useEffect(() => {
+    if (!opened.data) return
+    followEvents(client)
+    void client.invalidateQueries({ predicate: (query) => !['remote', 'remote-tunnel'].includes(String(query.queryKey[0])) })
+  }, [opened.data, client])
   const step = state.data?.step
   useEffect(() => { if (step && step !== 'first-run') forgetFirstRun() }, [step])
   const screen = screenOf({ step, opened: Boolean(opened.data), error: opened.error, phone: phoneBrowser({ userAgent: navigator.userAgent, width: innerWidth }) })
   if (opened.data && knocked) return <Stage><YoureIn line="Your computer let this browser in." onOpen={() => setKnocked(false)} /></Stage>
   if (opened.data && state.data?.step === 'ready' && state.data.teammate) return <Teammate />
-  if (opened.data) return children
+  if (opened.data || state.data?.step === 'setup') return children
   const failure = error ?? (state.error ?? opened.error)?.message
+  if (state.error instanceof CloudOffline || opened.error instanceof CloudOffline) return <Stage><Step title="Can’t reach OpenHut Cloud." line="Check this computer’s internet connection. OpenHut tries again on its own."><Spinner /></Step></Stage>
   const invited = state.data?.step === 'signed-out' || state.data?.step === 'waiting' ? state.data.invited : null
   const host = nameOf(invited?.from ?? '') || 'Your teammate'
   if (state.data?.step === 'signed-out') return <Stage><Step title={invited ? `You’re invited to ${invited.team ?? 'a team'}.` : 'Use OpenHut in your browser.'} line={invited ? `Sign in with Google${invited.email ? ` as ${invited.email}` : ''} to chat with the agents ${host} shares. Nothing to install.` : 'Sign in with the Google account you use on your Mac.'}>

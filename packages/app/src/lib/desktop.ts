@@ -1,5 +1,4 @@
 import type { Enrollment, TailnetPeer } from '@/lib/openhut'
-import type { Channel } from '@/lib/live-socket'
 import type { FirstRun, Machine, Prefs, Tailnet } from '@/features/settings/desktop'
 import type { UpdateBridge } from '@/features/settings/update'
 
@@ -19,7 +18,10 @@ export type Desktop = {
   onChanged: (listener: () => void) => void
   focus?: () => Promise<unknown>
   update?: UpdateBridge
-  browserLive?: (path: string, onLine: (line: string) => void, onClose: (code: number, reason: string) => void) => Channel
+  window?: {
+    join: (key: string) => Promise<{ code: string; expiresAt: string; computer: string } | { error: string; status?: number }>
+    setup: (input: { method: string; path: string; body?: string }) => Promise<{ status: number; body: string }>
+  }
   cloud?: { notify: (input?: { title: string; body: string; path: string }) => Promise<{ shown?: boolean }>; knock?: (input: { title: string; body: string }) => Promise<{ action: 'open' | 'not-me' | null }> }
   passkey?: { status: () => Promise<PasskeyReply>; create: (input: { email: string }) => Promise<PasskeyReply>; open: (input?: { quiet: boolean }) => Promise<PasskeyReply>; cancel: () => Promise<void> }
   touchId?: { prompt: (reason: string) => Promise<{ ok: boolean }> }
