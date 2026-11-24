@@ -27,9 +27,8 @@ jobs:
         id: pick
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PASSED: ${{ github.event.workflow_run.head_sha }}
         run: |
-          sha=${PASSED:-$(gh run list --repo "$GITHUB_REPOSITORY" --workflow desktop.yml --branch main --event push --status success --limit 1 --json headSha -q '.[0].headSha')}
+          sha=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow desktop.yml --branch main --event push --status success --limit 1 --json headSha -q '.[0].headSha')
           [ -n "$sha" ] || { echo "::error::No main commit has passed Desktop app yet, so nothing is deployed."; exit 1; }
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "Deploying ${sha::8}" >> "$GITHUB_STEP_SUMMARY"
