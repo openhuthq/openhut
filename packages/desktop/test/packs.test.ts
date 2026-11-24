@@ -67,7 +67,7 @@ test('packs move N−1 → N, a broken pack rolls back by itself, a fleet follow
   }
   const device = (name: string) => ({ home: join(dir, name), data: join(dir, name, 'data') })
   const later = () => (clock + MIN_AGE_SECONDS) * 1000
-  const check = (d: ReturnType<typeof device>, at = later(), keys?: any) => poll({ home: d.home, feed, channel: 'stable', keys: keys ?? (readState(d.home).seen ? undefined : { current: current.pub, next: next.pub, revoked: [] }), rekorKey, now: at })
+  const check = (d: ReturnType<typeof device>, at = later(), keys?: any, minAge?: number) => poll({ home: d.home, feed, channel: 'stable', keys: keys ?? (readState(d.home).seen ? undefined : { current: current.pub, next: next.pub, revoked: [] }), rekorKey, now: at, minAge })
   // A restart: the shell picks the pack set, boots it, and commits or rolls back.
   const restart = (d: ReturnType<typeof device>, boots = true) => {
     const active = activePack(d)
@@ -82,10 +82,10 @@ test('packs move N−1 → N, a broken pack rolls back by itself, a fleet follow
     const fleet = ['a', 'b', 'c'].map(device)
     for (const d of fleet) mkdirSync(join(d.data, 'app'), { recursive: true })
 
-    // N−1, then N: wait out the hour, install pending, restart, commit.
+    // N−1, then N: (at 3600 s) wait out the hour, install pending, restart, commit.
     publish(n1)
-    const waiting = await check(fleet[0], clock * 1000)
-    assert.equal(waiting.action, 'wait', 'SEC6: logged under an hour ago')
+    const waiting = await check(fleet[0], clock * 1000, undefined, 3600)
+    assert.equal(waiting.action, 'wait', 'SEC6 at 3600 s: logged under an hour ago')
     assert.deepEqual([waiting.downloaded.sort(), readState(fleet[0].home).pending], [['app', 'native', 'runtime'], null], 'downloaded during the wait, not installed')
     for (const d of fleet) assert.equal((await check(d)).action, 'install')
     for (const d of fleet) restart(d)
@@ -111,12 +111,11 @@ test('packs move N−1 → N, a broken pack rolls back by itself, a fleet follow
     assert.equal(readFileSync(join(d.data, 'app/db'), 'utf8'), 'before')
     assert.equal((await check(d)).action, 'none', 'the broken sequence isn\'t installed again')
 
-    // A pointer back to N−1's bytes at a higher sequence rolls the whole fleet back (after the hour), with real packs.
+    // A pointer back to N−1's bytes at a higher sequence rolls the whole fleet back, with real packs.
     clock += 60
     await run('release-key.ts', ['point', current.file, n1, join(dir, 'back'), '--sequence', '300', '--rekor', rekor])
     publish(join(dir, 'back'))
-    for (const each of fleet) assert.equal((await check(each, clock * 1000)).action, 'wait')
-    for (const each of fleet) assert.equal((await check(each)).action, 'install')
+    for (const each of fleet) assert.equal((await check(each, clock * 1000)).action, 'install', 'age rule off (MIN_AGE_SECONDS 0): no wait')
     for (const each of fleet) assert.match(restart(each) && runs(each), /N−1/)
 
     // halt drops a pending install on the next poll.

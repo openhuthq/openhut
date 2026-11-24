@@ -48,7 +48,7 @@ const fingerprint = (key) => createHash('sha256').update(Buffer.from(key, 'base6
 
 // One poll. Returns { action, ... } as pointerAction does, after acting on it: install puts the packs in the store and sets them pending,
 // halt drops a pending set that hasn't booted yet.
-export async function poll({ home, feed, channel, platform = `${process.platform}-${process.arch}`, shellApi = SHELL_API, keys: pinned, rekorKey = REKOR_KEY, now = Date.now(), fetch = globalThis.fetch }) {
+export async function poll({ home, feed, channel, platform = `${process.platform}-${process.arch}`, shellApi = SHELL_API, keys: pinned, rekorKey = REKOR_KEY, now = Date.now(), minAge, fetch = globalThis.fetch }) {
   const state = readState(home)
   const keys = pinned ?? state.keys
   const get = async (path) => {
@@ -61,7 +61,7 @@ export async function poll({ home, feed, channel, platform = `${process.platform
   const pointer = { manifest, signature, rekor: rekor ? JSON.parse(rekor) : undefined }
   const key = signerOf(pointer, keys)
   if (!key) return { action: 'refuse', reason: 'not signed by a trusted release key' }
-  const decision = pointerAction({ pointer, channel, installed: state.seen, shellApi, key, rekorKey, now })
+  const decision = pointerAction({ pointer, channel, installed: state.seen, shellApi, key, rekorKey, now, minAge })
   const entry = pointer.rekor && Object.values(pointer.rekor)[0]
   const signed = entry && { key: fingerprint(key), logIndex: entry.logIndex, loggedAt: entry.integratedTime * 1000 }
   if (decision.action === 'halt') {
@@ -69,7 +69,7 @@ export async function poll({ home, feed, channel, platform = `${process.platform
     return { ...decision, dropped: state.pending?.sequence ?? null, signed }
   }
   if (!['wait', 'install'].includes(decision.action)) return decision
-  // Signed and logged: download and check the packs now, also while waiting out the hour (SEC6 step 3). Only install sets them pending.
+  // Signed and logged: download and check the packs now, also while waiting out the age rule (SEC6 step 3). Only install sets them pending.
   const roles = { app: 'app', [`runtime-${platform}`]: 'runtime', [`native-${platform}`]: 'native' }
   const packs = {}
   for (const [name, pack] of Object.entries(JSON.parse(manifest).packs ?? {})) {

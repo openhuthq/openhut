@@ -29,7 +29,7 @@ test('a real rekor.sigstore.dev entry (recorded) checks out against the pinned R
   assert.equal(rekorIncluded(real, generateKeyPairSync('ec', { namedCurve: 'P-256' }).publicKey.export({ type: 'spki', format: 'der' }).toString('base64')), null, 'another log key')
 })
 
-test('release.json v2 is signed, logged to Rekor and installed only once its entry is an hour old (SEC6)', async () => {
+test('release.json v2 is signed, logged to Rekor and installed once its entry is MIN_AGE_SECONDS old (SEC6; 0 for now)', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'oh-rekor-'))
   const keyFile = join(dir, 'test-release.pem')
   const key = await release(['key', keyFile])
@@ -55,7 +55,10 @@ test('release.json v2 is signed, logged to Rekor and installed only once its ent
 
     const check = (over: Record<string, unknown> = {}) => verifyRelease({ ...feed, key, rekorKey, now: (integratedTime + MIN_AGE_SECONDS) * 1000, ...over })
     assert.deepEqual(check(), { ok: true })
-    assert.deepEqual(check({ now: (integratedTime + MIN_AGE_SECONDS) * 1000 - 1 }), { ok: false, reason: 'logged less than an hour ago', retryAt: (integratedTime + MIN_AGE_SECONDS) * 1000 })
+    assert.equal(MIN_AGE_SECONDS, 0, 'Owner 2026-11-24: the age rule is off for now')
+    assert.deepEqual(check({ now: integratedTime * 1000 }), { ok: true }, 'age rule off: installs as soon as it is logged')
+    assert.deepEqual(check({ minAge: 3600, now: (integratedTime + 3600) * 1000 - 1 }), { ok: false, reason: 'logged less than 3600 s ago', retryAt: (integratedTime + 3600) * 1000 }, 'set back to 3600 s, it still refuses under an hour')
+    assert.deepEqual(check({ minAge: 3600, now: (integratedTime + 3600) * 1000 }), { ok: true })
     assert.equal(check({ rekor: undefined }).reason, 'no Rekor entry', 'Rekor unreachable or the entry missing: nothing installs')
     assert.equal(check({ rekorKey: REKOR_KEY }).ok, false, 'an entry not signed by the pinned log')
     assert.equal(check({ key: (await release(['key', join(dir, 'other.pem')])) }).reason, 'not signed by the release key')

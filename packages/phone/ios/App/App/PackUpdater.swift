@@ -19,12 +19,13 @@ public class LockedWebViewPlugin: CAPPlugin, CAPBridgedPlugin {
 
 // R6: the phone's pack updater lives here, in the native shell, never in the app pack it installs. It polls the R4 feed
 // (channels/<channel>/release.json + .sig + .rekor, packs/<sha512 hex>), checks the release key's Ed25519 signature, the Rekor entry
-// (SET, checkpoint, inclusion proof, that it logged exactly this release) and the SEC6 hour, as verifyRelease and pointerAction in
+// (SET, checkpoint, inclusion proof, that it logged exactly this release) and the SEC6 age rule (minAge), as verifyRelease and pointerAction in
 // packages/desktop/src/release-key.mjs do, then installs release.packs.app's renderer/ as the web root. No plugin exposes any of it to
 // JavaScript and its state is a file outside every plugin's reach, so a pack can't switch the check off for the updates after it.
 enum PackUpdater {
     static let shellApi = 1
-    static let minAge: TimeInterval = 3600
+    // Owner 2026-11-24: age rule off for fast iteration; set back to 3600 s (SEC6) later
+    static let minAge: TimeInterval = 0
     // The same keys as release-key.mjs: RELEASE_KEY and rekor.sigstore.dev's log key.
     static let releaseKey = "MCowBQYDK2VwAyEAQbo1L199M6phAczpCAlP6iQc0+AMcbpjrnqH1XvCUyk="
     static let rekorKey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE2G2Y+2tabdTV5BcGiBIx0a9fAFwrkBbmLSGtks4L3qX6yYY0zufBnhC8Ur/iy55GhWP/9A/bY2LhC30M9+RYtw=="
@@ -77,7 +78,7 @@ enum PackUpdater {
 
     enum Check { case ok, failure(String, Date?) }
 
-    // verifyRelease() from release-key.mjs: signed by the release key, logged in Rekor as exactly this release, and an hour old.
+    // verifyRelease() from release-key.mjs: signed by the release key, logged in Rekor as exactly this release, and minAge old.
     static func verifyRelease(manifest: Data, signature: String, rekor: Data, key: Data, rekorKey: Data, now: Date) -> Check {
         let ed25519Prefix = Data([0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00])
         guard key.count == 44, key.prefix(12) == ed25519Prefix, let releaseKey = try? Curve25519.Signing.PublicKey(rawRepresentation: key.suffix(32)),
@@ -96,7 +97,7 @@ enum PackUpdater {
               Data(base64Encoded: String(decoding: pem, as: UTF8.self).split(separator: "\n").filter { !$0.hasPrefix("-----") }.joined()) == key
         else { return .failure("the Rekor entry is for another release", nil) }
         let retryAt = Date(timeIntervalSince1970: TimeInterval(integratedTime) + minAge)
-        return now >= retryAt ? .ok : .failure("logged less than an hour ago", retryAt)
+        return now >= retryAt ? .ok : .failure("logged less than \(Int(minAge)) s ago", retryAt)
     }
 
     // rekorIncluded() from release-key.mjs: integratedTime when Rekor signed both the SET and a checkpoint whose tree holds the entry.
@@ -157,7 +158,7 @@ enum PackUpdater {
             case .refuse(let reason): return "refused: \(reason)"
             case .none: return "up to date (sequence \(state?.sequence ?? -1))"
             case .halt: return "halted"
-            case .wait(let at): return "refused for now: logged less than an hour ago, retry after \(ISO8601DateFormatter().string(from: at))"
+            case .wait(let at): return "refused for now: logged too recently, retry after \(ISO8601DateFormatter().string(from: at))"
             case .install(let sequence, let version, let sha512):
                 guard let digest = Data(base64Encoded: sha512) else { return "refused: bad pack hash" }
                 let pack = try await fetch(settings.feed.appendingPathComponent("packs/\(hex(digest))"))

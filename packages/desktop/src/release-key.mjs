@@ -5,7 +5,8 @@ export const RELEASE_KEY = 'MCowBQYDK2VwAyEAQbo1L199M6phAczpCAlP6iQc0+AMcbpjrnqH
 // rekor.sigstore.dev's log key (GET /api/v1/log/publicKey); its sha256 is the logID of every entry it signs.
 export const REKOR_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE2G2Y+2tabdTV5BcGiBIx0a9fAFwrkBbmLSGtks4L3qX6yYY0zufBnhC8Ur/iy55GhWP/9A/bY2LhC30M9+RYtw=='
 // SEC6: a release is installed only once its Rekor entry is this old, so a stolen key's release is public for an hour first.
-export const MIN_AGE_SECONDS = 3600
+// Owner 2026-11-24: age rule off for fast iteration; set back to 3600 s (SEC6) later
+export const MIN_AGE_SECONDS = 0
 
 const spki = (key) => createPublicKey({ key: Buffer.from(key, 'base64'), format: 'der', type: 'spki' })
 const sha256 = (...parts) => createHash('sha256').update(Buffer.concat(parts)).digest()
@@ -63,9 +64,9 @@ export function rekorIncluded(entry, rekorKey = REKOR_KEY) {
 }
 
 // SEC6 in one pure check, shared by the shell, the phone and servers: release.json carries the release key's signature, Rekor logged
-// exactly that manifest, signature and key, and the entry is at least an hour old. rekor is release.json.rekor ({ uuid: entry }).
+// exactly that manifest, signature and key, and the entry is at least minAge (MIN_AGE_SECONDS) old. rekor is release.json.rekor ({ uuid: entry }).
 // A missing or unreachable entry is a refusal, so updates fail closed. Returns { ok: true } or { ok: false, reason, retryAt? }.
-export function verifyRelease({ manifest, signature, key, rekor, rekorKey = REKOR_KEY, now = Date.now() }) {
+export function verifyRelease({ manifest, signature, key, rekor, rekorKey = REKOR_KEY, now = Date.now(), minAge = MIN_AGE_SECONDS }) {
   try {
     if (!signedBy(manifest, signature, key)) return { ok: false, reason: 'not signed by the release key' }
     const entry = rekor && Object.values(rekor)[0]
@@ -78,8 +79,8 @@ export function verifyRelease({ manifest, signature, key, rekor, rekorKey = REKO
       && Buffer.from(spec.signature.content, 'base64').equals(Buffer.from(signature.trim(), 'base64'))
       && createPublicKey(Buffer.from(spec.signature.publicKey.content, 'base64')).export({ type: 'spki', format: 'der' }).equals(Buffer.from(key, 'base64'))
     if (!logged) return { ok: false, reason: 'the Rekor entry is for another release' }
-    const retryAt = (integratedTime + MIN_AGE_SECONDS) * 1000
-    return now >= retryAt ? { ok: true } : { ok: false, reason: 'logged less than an hour ago', retryAt }
+    const retryAt = (integratedTime + minAge) * 1000
+    return now >= retryAt ? { ok: true } : { ok: false, reason: `logged less than ${minAge} s ago`, retryAt }
   } catch {
     return { ok: false, reason: 'malformed release or Rekor entry' }
   }
@@ -88,12 +89,12 @@ export function verifyRelease({ manifest, signature, key, rekor, rekorKey = REKO
 // R4: what a device does with the channel pointer it just polled (channels/<channel>/release.json, .sig and .rekor on the feed). One rule
 // for every device, so Promote reaches everyone at once. `installed` is the sequence of the release it runs.
 //   refuse  the pointer doesn't verify, is for another channel, or needs another shell: keep running, install nothing (fail closed)
-//   halt    a signed, logged pointer with halt: drop any pending install now. Halt skips the hour (it only stops installs)
+//   halt    a signed, logged pointer with halt: drop any pending install now. Halt skips the age rule (it only stops installs)
 //   none    nothing newer: an old or replayed pointer (a replayed halt too), or the release already running
-//   wait    newer, but logged under an hour ago: keep it pending until retryAt
-//   install newer and an hour old: apply exactly release.packs, even when its version is lower (a pointer back to N−1)
-export function pointerAction({ pointer, channel, installed, shellApi, key = RELEASE_KEY, rekorKey = REKOR_KEY, now = Date.now() }) {
-  const check = verifyRelease({ ...pointer, key, rekorKey, now })
+//   wait    newer, but logged under minAge ago: keep it pending until retryAt (never, while MIN_AGE_SECONDS is 0)
+//   install newer and minAge old: apply exactly release.packs, even when its version is lower (a pointer back to N−1)
+export function pointerAction({ pointer, channel, installed, shellApi, key = RELEASE_KEY, rekorKey = REKOR_KEY, now = Date.now(), minAge }) {
+  const check = verifyRelease({ ...pointer, key, rekorKey, now, minAge })
   if (!check.ok && !check.retryAt) return { action: 'refuse', reason: check.reason }
   const release = JSON.parse(pointer.manifest)
   if (release.channel !== channel) return { action: 'refuse', reason: `a ${release.channel} release on the ${channel} channel` }
