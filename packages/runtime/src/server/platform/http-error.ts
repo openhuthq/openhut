@@ -2,16 +2,8 @@ import type { FastifyError, FastifyInstance } from 'fastify'
 import type { ApiError } from '@openhut/common/api.ts'
 import { log } from './events.ts'
 
-export class HttpError extends Error {
-  readonly status: number
-  readonly param?: string
-
-  constructor(status: number, message: string, detail: { param?: string } = {}) {
-    super(message)
-    this.status = status
-    this.param = detail.param
-  }
-}
+export { HttpError } from '@openhut/common/http-error.ts'
+import { HttpError } from '@openhut/common/http-error.ts'
 
 export function errorBody({ status, message, param }: { status: number; message: string; param?: string }): ApiError {
   return { error: { type: status >= 500 ? 'api_error' : 'invalid_request_error', message, ...(param && { param }) } }
