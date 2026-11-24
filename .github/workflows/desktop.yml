@@ -339,6 +339,18 @@ jobs:
             packages/desktop/app-e2e/home/logs/
             packages/desktop/app-e2e/home2/logs/
             packages/desktop/app-e2e/home/data/native/*/agent.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.name }}-app
+          retention-days: 3
+          if-no-files-found: ignore
+          compression-level: 0
+          path: |
+            packages/desktop/release/OpenHut-x64.AppImage
+            packages/desktop/release/openhut-x64.deb
+            packages/desktop/release/OpenHut-*-arm64.zip
+            packages/desktop/release/OpenHut-Setup-x64.exe
       - name: Add the installer to the draft release
         if: matrix.name == 'windows' && env.TAGGED == 'true'
         working-directory: packages/desktop/release
