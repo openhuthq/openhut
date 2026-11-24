@@ -89,7 +89,6 @@ COPY --from=tree /opt/openhut/packages/runtime/package.json /opt/openhut/package
 COPY --from=tree /opt/openhut/packages/common/package.json /opt/openhut/packages/common/
 COPY --from=tree /opt/openhut/packages/app/package.json /opt/openhut/packages/app/
 COPY --from=tree /opt/openhut/packages/desktop/package.json /opt/openhut/packages/desktop/
-COPY --from=tree /opt/openhut/packages/e2e/package.json /opt/openhut/packages/e2e/
 COPY --from=tree /opt/openhut/packages/docs/package.json /opt/openhut/packages/docs/
 COPY --from=tree /opt/openhut/packages/phone/package.json /opt/openhut/packages/phone/
 RUN cd /opt/openhut && npm ci --omit=dev --no-audit --no-fund --loglevel=error >/dev/null && \

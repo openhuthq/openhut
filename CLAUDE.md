@@ -27,8 +27,6 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   serves the App's `dist` (copied to `dist/renderer` by `build`) and `/config.json` on `app://openhut`), and forwards `/api/*` there to the runtime's socket.
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types, the Cloud client (`cloud/`), and in `tunnel/` the encrypted tunnel (through the relay; `sessions()` runs it over any pipe): Noise IK on `noise-handshake`,
   the frame codec, `connect` (device) and `serve` (computer); a computer shows its access token as `x-openhut-token`, a device as the second WebSocket subprotocol after `openhut`, so `connect` runs in browsers too, with a non-exportable WebCrypto key (`newWebKeyPair`, `webKey`; `private/brain/decisions/browser-keys.md`).
-- **`packages/e2e`** — `@openhut/e2e`, the end-to-end run: the cloud server on PGlite, a bare Linux server in Docker, the
-  curl install of a remote runtime that joins with a one-use code (`OPENHUT_JOIN`), a tampered upgrade, the upgrade and a restart. Results go to `packages/e2e/results/` (gitignored).
 - **`packages/docs`** — `@openhut/docs`, the docs at openhut.dev/docs: Fumadocs on TanStack Start, prerendered. MDX in
   `content/docs`, real dashboard screenshots in `public/screenshots`. Notes: `private/brain/openhut-site.md`.
 - **`private/site`** — `@openhut/site`, openhut.dev, in the private submodule (see Private half below): `install.sh` for curl, the release tarball, the home page, the brand page
@@ -98,7 +96,6 @@ has (Keychain, Touch ID, passkey, updates, deep links, the tray). The procedure 
 | `npm run test` / `typecheck` / `build` | Everything |
 | `npm run app` | The real Electron app from this checkout |
 | `npm run e2e:app` | The app e2e on unpackaged Electron and a local dev cloud (this Mac) |
-| `npm run e2e:server` | The Docker server e2e, about 25 minutes |
 | `npm run release` | Build what openhut.dev serves |
 
 Which loop proves which change:
@@ -145,9 +142,8 @@ the Linux app runs agents natively like the Mac app, with no Docker (`private/br
 
 ## Test
 
-`npm run check` typechecks and tests what changed; `npx turbo run build typecheck test` does everything. `npm run e2e:server`
-runs the whole server path on Docker Desktop (about 25 minutes): the install, every check, a tampered upgrade, the upgrade,
-a restart. Plan: `docs/verification-plan.md`. `npm run e2e:app` builds the renderer and backend and runs the app e2e
+`npm run check` typechecks and tests what changed; `npx turbo run build typecheck test` does everything. The server path
+(install, a server joining, an agent in gVisor) is the runtime image smoke test (`scripts/image-smoke.sh`, in CI). `npm run e2e:app` builds the renderer and backend and runs the app e2e
 (`app-e2e.mjs --dev`) against the unpackaged app and a local dev cloud, on this Mac only. Its first run needs a click on
 the Keychain prompt (`private/brain/openhut-gotchas.md`). Packaged-app proof on every OS is a Shell run (`shell.yml`, dispatch only): its
 `*-e2e` artifacts hold the screenshots and `evidence.json`.

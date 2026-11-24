@@ -56,7 +56,7 @@ npx turbo run build typecheck test
 ```
 
 This must pass before you open a pull request. A change to the installer, agentd, the firewall or an upgrade also
-needs `npm run e2e:server` (Docker, about 25 minutes; plan in `docs/verification-plan.md`). A change to the dashboard needs a
+needs the runtime image smoke test green (`runtime-image.yml`, which CI runs on such changes). A change to the dashboard needs a
 look in the browser, not just a green build.
 
 ## Pull requests
