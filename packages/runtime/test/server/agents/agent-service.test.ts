@@ -41,6 +41,13 @@ test('renaming an agent cleans the name and refuses an empty one', async () => {
   await assert.rejects(agentService.update({ actor, id: 'ag_tokentst', patch: { name: '<>' } }), { status: 400 })
 })
 
+test('an agent carries its model’s display name from this computer’s catalogue, so teammates see Sonnet 5.5, not sonnet', async () => {
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
+  const agent = await agentService.get({ actor, id: 'ag_tokentst' })
+  assert.equal(agent.model, 'claude:sonnet')
+  assert.equal(agent.modelName, 'Sonnet 5.5')
+})
+
 test('an agent keeps the face it was given, so every device shows the same one', async () => {
   const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
   assert.equal((await agentService.get({ actor, id: 'ag_tokentst' })).face, null)
