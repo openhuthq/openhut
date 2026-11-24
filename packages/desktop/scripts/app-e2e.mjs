@@ -1,5 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
@@ -18,7 +19,7 @@ const home = resolve(args.out, 'home')
 const cdpPort = 9300 + Math.floor(Math.random() * 500)
 const API = devCloudUrl()
 const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test', ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: API } }
-const evidence = { platform: `${process.platform} ${osVersion()}`, steps: [] }
+const evidence = { platform: `${process.platform} ${osVersion()}`, steps: [], waits: [] }
 mkdirSync(args.out, { recursive: true })
 const say = (step, detail = {}) => {
   evidence.steps.push({ step, ...detail, at: new Date().toISOString() })
@@ -27,24 +28,25 @@ const say = (step, detail = {}) => {
 
 let child
 let api
+const site = createServer((req, res) => res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><title>OpenHut e2e page</title><h1>OpenHut e2e page</h1>')).listen(0, '127.0.0.1')
 try {
   if (args.cloud) {
-    api = await bootCloud({ dir: args.cloud, api: API })
+    api = await bootCloud({ dir: args.cloud, api: API, log: join(home, 'logs', 'cloud-api.log') })
     say('the dev cloud API is up', { url: API })
   }
   if (args.installer) {
     const programs = join(process.env.LOCALAPPDATA, 'Programs')
     execFileSync(args.installer, ['/S'])
-    exe = await until(async () => existsSync(programs) && readdirSync(programs).map((dir) => join(programs, dir, 'OpenHut.exe')).find((path) => existsSync(path)), 120, 'the installer to put OpenHut.exe in place')
+    exe = await until(async () => existsSync(programs) && readdirSync(programs).map((dir) => join(programs, dir, 'OpenHut.exe')).find((path) => existsSync(path)), 60, 'the installer to put OpenHut.exe in place')
   }
   say('installed', { exe })
   child = launch()
   let page = await connect()
   await shot(page, '01-welcome')
   const admin = await until(async () => {
-    const reply = await page.eval("fetch('/api/admin').then((r) => r.ok ? r.json() : null, () => null)")
+    const reply = await get(page, '/api/admin')
     return reply?.server?.healthy ? reply : null
-  }, 120, 'the runtime to be healthy')
+  }, 60, 'the runtime to be healthy')
   say('the runtime is up and healthy', { build: admin.server.build })
   if (args.cloud) {
     await signIn({ page, api: API })
@@ -53,10 +55,7 @@ try {
   }
   const agent = await firstAgent(page)
   await page.eval(`fetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wanted: 'running' }) }).then((r) => r.json())`)
-  const running = await until(async () => {
-    const now = await page.eval(`fetch('/api/agents/${agent.id}').then((r) => r.json())`)
-    return now.status === 'running' && now.health === 'answering' ? now : null
-  }, 300, 'the agent to be running and answering')
+  const [running] = await answering(page, [agent.id], 'the agent to be running and answering')
   say('made an agent and started it', { id: running.id, name: running.name, status: running.status, health: running.health })
   await chat(page, agent, `hello from ${agent.name}`)
   const cleared = await page.eval(`fetch('/api/threads/${agent.id}', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uploads: [] }) }).then(async (r) => ({ status: r.status, body: (await r.text()).slice(0, 300) }))`)
@@ -78,10 +77,7 @@ try {
   if (left.length) throw new Error(`after quitting, these are still running: ${left.join('; ')}`)
   child = launch()
   page = await connect()
-  const back = await until(async () => {
-    const again = await page.eval(`fetch('/api/agents/${agent.id}').then((r) => r.ok ? r.json() : null, () => null)`)
-    return again?.status === 'running' && again.health === 'answering' ? again : null
-  }, 300, 'the agent to run again after a restart')
+  const [back] = await answering(page, [agent.id], 'the agent to run again after a restart')
   say('relaunched: the agent survived the restart and runs again', { id: back.id, status: back.status, health: back.health })
   await page.eval(`navigation.navigate('/agents/${agent.id}')`)
   await sleep(3000)
@@ -96,6 +92,7 @@ try {
 } finally {
   if (child && child.exitCode === null) await quit().catch(() => child.kill())
   api?.kill()
+  site.close()
   writeFileSync(join(args.out, 'evidence.json'), JSON.stringify(evidence, null, 2))
   console.log(`app-e2e: ${evidence.pass ? 'PASS' : 'FAIL'}; evidence in ${args.out}`)
 }
@@ -118,7 +115,7 @@ async function firstAgent(page) {
       await shot(page, `00-first-run-${seen.size}`)
     }
     return run.done ? run : null
-  }, 900, 'the first run to finish').catch((error) => { throw new Error(`${error.message}; first run was at ${JSON.stringify(last?.steps)}`) })
+  }, 120, 'the first run to finish').catch((error) => { throw new Error(`${error.message}; first run was at ${JSON.stringify(last?.steps)}`) })
   say('first run finished: the runtime is ready', { steps: setup.steps })
   const made = await page.eval("fetch('/api/agents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Juniper' }) }).then(async (r) => ({ status: r.status, body: await r.json() }))")
   if (made.status !== 200) throw new Error(`making the first agent answered ${made.status} ${JSON.stringify(made.body)}`)
@@ -135,8 +132,16 @@ async function chat(page, agent, text) {
   if (crossed.length) throw new Error(`${agent.name}'s answer carried another agent's message: ${crossed.join(', ')}`)
 }
 
+async function get(page, path) {
+  const reply = await page.eval(`fetch('${path}').then(async (r) => ({ status: r.status, body: r.ok ? await r.json() : await r.text() }), () => null)`)
+  if (reply?.status === 401 || reply?.status === 403) throw new Error(`GET ${path} answered ${reply.status}, which waiting won't change: ${String(reply.body).slice(0, 300)}`)
+  return reply?.status === 200 ? reply.body : null
+}
+
 async function agentOf(page, id) {
-  return page.eval(`fetch('/api/agents/${id}').then((r) => r.ok ? r.json() : null, () => null)`)
+  const agent = await get(page, `/api/agents/${id}`)
+  if (agent?.health === 'not_answering' || agent?.health === 'no_seat') throw new Error(`${agent.name} is ${agent.health}, which waiting won't change: ${agent.healthDetail}`)
+  return agent
 }
 
 async function wanted(page, id, state) {
@@ -147,7 +152,7 @@ async function answering(page, ids, what) {
   return until(async () => {
     const now = await Promise.all(ids.map((id) => agentOf(page, id)))
     return now.every((each) => each?.status === 'running' && each.health === 'answering') ? now : null
-  }, 300, what)
+  }, 60, what)
 }
 
 async function browsers(page, pair) {
@@ -159,7 +164,7 @@ async function browsers(page, pair) {
   }
   for (const agent of pair) await page.eval(`fetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ browser: true, codeExecution: true }) }).then((r) => r.json())`)
   await answering(page, pair.map((each) => each.id), 'the two browser agents to answer')
-  await Promise.all(pair.map((agent) => tool(page, agent, `browser: open https://example.com/?agent=${agent.name}`, 'Example Domain')))
+  await Promise.all(pair.map((agent) => tool(page, agent, `browser: open http://127.0.0.1:${site.address().port}/?agent=${agent.name}`, 'OpenHut e2e page')))
   await Promise.all(pair.map((agent) => tool(page, agent, 'browser: get url', `agent=${agent.name}`)))
   say(`${pair.map((each) => each.name).join(' and ')} each opened a page in their own browser at the same time, and each still sees its own page`)
 }
@@ -169,7 +174,7 @@ async function tool(page, agent, text, expect) {
   await until(async () => {
         stream = await page.eval(`fetch('/api/threads/${agent.id}/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ trigger: 'submit-message', message: { id: 'm1', role: 'user', parts: [{ type: 'text', text: ${JSON.stringify(JSON.stringify(text))} }] } }) }).then((r) => r.text())`)
     return !stream.includes("isn't reachable")
-  }, 180, `${agent.name} to come back after turning Browser on`)
+  }, 60, `${agent.name} to come back after turning Browser on`)
   const ok = stream.includes(expect)
   say(`${agent.name} ran "${text}"`, { ok, tail: stream.slice(-300) })
   if (!ok) throw new Error(`${agent.name} ran "${text}" but the answer has no "${expect}": ${stream.slice(-600)}`)
@@ -189,7 +194,7 @@ async function many(page, first) {
   await shot(page, '02b-many-agents')
   const [, stopped, ...rest] = agents
   await wanted(page, stopped.id, 'stopped')
-  await until(async () => (await agentOf(page, stopped.id))?.status === 'stopped', 120, `${stopped.name} to stop`)
+  await until(async () => (await agentOf(page, stopped.id))?.status === 'stopped', 60, `${stopped.name} to stop`)
   const others = [agents[0], ...rest]
   await answering(page, others.map((each) => each.id), 'the others to keep answering')
   for (const agent of others) await chat(page, agent, `still here, ${agent.name}`)
@@ -245,7 +250,7 @@ async function connect() {
   const target = await until(async () => {
     const list = await fetch(`http://127.0.0.1:${cdpPort}/json/list`).then((r) => r.json()).catch(() => [])
     return list.find((each) => each.type === 'page' && each.url.startsWith('app://openhut'))
-  }, 120, 'the app window')
+  }, 60, 'the app window')
   const socket = new WebSocket(target.webSocketDebuggerUrl)
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject })
   const waiting = new Map()
@@ -280,9 +285,22 @@ async function connect() {
 }
 
 async function until(check, seconds, what) {
-  for (const end = Date.now() + seconds * 1000; Date.now() < end; await sleep(1000)) {
-    const value = await check()
-    if (value) return value
+  const started = Date.now()
+  const waited = (outcome) => evidence.waits.push({ what, seconds: Math.round((Date.now() - started) / 1000), limit: seconds, outcome })
+  for (const end = started + seconds * 1000; Date.now() < end; await sleep(1000)) {
+    if (child && (child.exitCode !== null || child.signalCode !== null)) {
+      waited('app exited')
+      throw new Error(`the app exited (${child.exitCode ?? child.signalCode}) while waiting for ${what}`)
+    }
+    const value = await check().catch((error) => {
+      waited('failed')
+      throw error
+    })
+    if (value) {
+      waited('done')
+      return value
+    }
   }
+  waited('timed out')
   throw new Error(`timed out after ${seconds}s waiting for ${what}`)
 }

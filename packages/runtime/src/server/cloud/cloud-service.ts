@@ -242,6 +242,7 @@ export const cloudService = {
       const who = { sub: session.sub, email: session.email }
       if (keysService.account()?.sub !== session.sub) {
         if (await accountExists()) {
+          log.info({ event: 'cloud.locked', why: 'this account already has a team or a kit' })
           await keysService.setLocked(who)
           return page(SIGNED_IN)
         }
@@ -669,7 +670,10 @@ async function rotate({ changed: { list, next, letters }, drop }: { changed: Awa
 
 async function openRoom({ account }: { account: Account }): Promise<boolean> {
   const made = await keysService.memberLists({ list: account.list, boxes: [await keysService.workspaceBox({ account })] })
-  if (made.status === 403) return false
+  if (made.status === 403) {
+    log.warn({ event: 'cloud.room_refused', workspace: account.workspace.id, reply: JSON.stringify(made.json).slice(0, 300) })
+    return false
+  }
   if (made.status !== 200 && made.status !== 409) throw new HttpError(502, 'OpenHut Cloud couldn’t open this team. Try again.')
   return true
 }
