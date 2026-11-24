@@ -51,7 +51,7 @@ export function useAuthorizeConnection() {
   }, [])
   return useMutation({
     mutationFn: async (body: CreateConnectionAuthorization) => {
-      if (isPhone()) throw new Error('Sign-ins finish on your Mac, so connect this app from OpenHut there. Agents on your phone can use it right after.')
+      if (isPhone()) throw new Error('Connect this app from OpenHut on your computer.')
       const started = await request({ schema: ConnectionAuthorization, path: '/api/connection-authorizations', method: 'POST', body })
       window.open(started.authorizationUrl, '_blank', 'noopener')
       for (let waited = 0; live.current && waited < SIGN_IN_WAIT_MS; waited += SIGN_IN_POLL_MS) {

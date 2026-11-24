@@ -55,7 +55,7 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   if (screen === 'first-run' && state.data?.step === 'first-run') return <FirstRun email={state.data.email} link={otherAccount} />
   if (screen === 'phone' && state.data?.step === 'first-run') return <PhoneFirstRun email={state.data.email} link={otherAccount} />
   if (screen === 'offline' && opened.error instanceof Away) return <Offline computer={opened.error.computer} seen={opened.error.seen} />
-  if (state.data?.step === 'continuing') return <Stage><Step title="Opening OpenHut…" line="Your computer is letting this browser in. This takes a few seconds."><Spinner /></Step></Stage>
+  if (state.data?.step === 'continuing') return <Stage><Step title="Opening OpenHut…" line="This takes a few seconds."><Spinner /></Step></Stage>
   if (state.data?.step === 'waiting' && invited) return <Stage><Knocking faces={state.data.faces} line={`Tell ${host} these two. ${host} taps them on their computer.`} link={otherAccount} /></Stage>
   if (state.data?.step === 'waiting') return <Stage><Knocking faces={state.data.faces}
     action={<a href="openhut://open" className={cn(buttonVariants({ variant: 'primary' }), BIG)}>Open OpenHut</a>} link={otherAccount} /></Stage>
@@ -68,5 +68,5 @@ export function RemoteGate({ children }: { children: ReactNode }) {
 }
 
 function CloudDown() {
-  return <Stage><Step title="Can’t reach OpenHut Cloud." line="Check this computer’s internet connection. OpenHut tries again on its own."><Spinner /></Step></Stage>
+  return <Stage><Step title="Can’t reach OpenHut Cloud." line="Check your internet. OpenHut keeps trying."><Spinner /></Step></Stage>
 }

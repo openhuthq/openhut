@@ -121,7 +121,7 @@ function refusal({ error, email }: { error: Error; email: string | null }): { ti
   if (status === 403) return { title: 'This invite is for another email', body: `It’s for ${error instanceof RequestError && error.param ? error.param : 'another email'}. You’re signed in as ${email ?? 'someone else'}. Sign in with the email it was sent to.` }
   if (status === 410) return { title: 'This invite link no longer works', body: 'Invites last 2 days, and this one ran out. Ask whoever sent it for a new one.' }
   if (status === 404) return { title: 'This invite link no longer works', body: 'It was used already, or it was taken back. Ask whoever sent it for a new one.' }
-  if (status === 0 || status >= 500) return { title: 'This invite didn’t open', body: 'Couldn’t join just now. Check your internet, then try again. Your invite is still here.' }
+  if (status === 0 || status >= 500) return { title: 'This invite didn’t open', body: 'Check your internet and try again. Your invite still works.' }
   return { title: 'This invite didn’t open', body: `${error.message} Your invite is still here.` }
 }
 
