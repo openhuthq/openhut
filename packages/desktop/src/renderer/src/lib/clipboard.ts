@@ -11,7 +11,6 @@ export function copyText(text: string): Promise<boolean> {
 
 export async function copySecret(text: string): Promise<boolean> {
   if (!await copyText(text)) return false
-  toast('Copied. Paste it into your password manager. OpenHut clears it from the clipboard in a minute.')
   setTimeout(() => void navigator.clipboard.readText().then((now) => now === text ? navigator.clipboard.writeText('') : undefined).catch(() => undefined), 60_000)
   return true
 }

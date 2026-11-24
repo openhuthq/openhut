@@ -167,7 +167,7 @@ function KitEntry({ cloud, onBack }: { cloud: Cloud; onBack: () => void }) {
     <div className="flex w-full max-w-[440px] flex-col gap-3">
       {problem && <p role="alert" className={cn('m-0 rounded-xl px-3.5 py-3 text-left text-[13.5px]/[1.45]', problem.tone === 'warn' ? 'bg-warning-subtle text-warning-strong' : 'bg-[color-mix(in_oklch,var(--fail)_10%,transparent)] text-ink')}>{problem.text}</p>}
       <DropZone className="py-5" onText={tryKit}>{() => <>
-        <span className="text-[15px] font-medium text-ink">{unlock.isPending ? 'Unlocking…' : 'Drop your kit here'}</span>
+        <span className="text-[15px] font-medium text-ink">{unlock.isPending ? 'Unlocking…' : 'Drop your kit file here, or choose it'}</span>
         {!unlock.isPending && <span className="text-[12.5px] text-mute">or paste it</span>}
       </>}</DropZone>
       <span className="text-[12.5px] text-mute">No file? <Button type="button" variant="text" className="h-auto p-0 text-[12.5px] font-normal text-ink underline underline-offset-2" onClick={() => setTyping(true)}>Type the words</Button></span>
