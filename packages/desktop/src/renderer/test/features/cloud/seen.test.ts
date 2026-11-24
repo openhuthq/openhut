@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
-import { goneNotice, newDevices } from '../../../src/features/cloud/seen.ts'
+import { goneKey, goneNotice, newDevices, removedLine } from '../../../src/features/cloud/seen.ts'
 
 const device = (key: string, addedAt: string | null, here = false) => ({ key, here, addedAt, name: key, kind: 'mac', online: true, os: null, heard: true, joined: null }) as Cloud['devices'][number]
 
@@ -29,4 +29,12 @@ test('a teammate whose computer the owner removed is told who did it and from wh
   assert.deepEqual(goneNotice({ name: 'Mo’s team', why: 'removed', owner: 'mo@example.com' }), { title: 'Mo removed this computer from Mo’s team', note: 'Ask Mo to invite you again if that’s a mistake.' })
   assert.equal(goneNotice({ name: 'Acme', why: 'deleted', owner: 'mo@example.com' }).title, 'Acme was deleted')
   assert.equal(goneNotice({ name: 'Acme', why: 'removed', owner: null }).title, 'You were removed from Acme')
+})
+
+test('the line under the team switcher names the last team you were removed from, until you dismiss it', () => {
+  const removed = { name: 'Mo’s team', why: 'removed' as const, owner: 'mo@example.com' }
+  const deleted = { name: 'Acme', why: 'deleted' as const, owner: null }
+  assert.deepEqual(removedLine({ gone: [removed, deleted], dismissed: [] }), { key: goneKey(removed), text: 'Removed from Mo’s team by Mo' })
+  assert.equal(removedLine({ gone: [removed, deleted], dismissed: [goneKey(removed)] }), null)
+  assert.equal(removedLine({ gone: [], dismissed: [] }), null)
 })

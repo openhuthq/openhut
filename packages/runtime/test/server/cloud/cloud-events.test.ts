@@ -173,3 +173,10 @@ test('a 403 for a team while joining it, or just once, doesn\'t drop the team; o
   assert.ok(roomKeys.room('BlipTeam00001'), 'a team refused once stays')
   await until(() => !roomKeys.room('GoneTeam00001'), 'the team that keeps refusing to drop')
 })
+
+test('a team that removed this computer is still named after a restart, with who owns it', async () => {
+  await aTeam('KeptGone00001', toBase64(newKey()))
+  await cloudEvents.drop({ ws: 'KeptGone00001', why: 'removed' })
+  const { cloudEvents: restarted } = await import(`../../../src/server/cloud/cloud-events.ts?restart=${Date.now()}`) as typeof import('../../../src/server/cloud/cloud-events.ts')
+  assert.deepEqual((await restarted.gone()).at(-1), { name: 'Boss’s team', why: 'removed', owner: 'boss@example.com' })
+})

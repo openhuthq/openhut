@@ -44,6 +44,9 @@ const names = new Map<string, { name: string | null; site: string | null }>()
 const requests = new Map<string, DeviceRequest[]>()
 const beats = new Map<string, Map<string, Beat>>()
 const gone: Gone[] = []
+const GONE_SETTING = 'cloud.gone'
+const GONE_KEPT = 20
+let goneLoaded = false
 const doubted = new Set<string>()
 
 presence.wire({
@@ -108,7 +111,10 @@ export const cloudEvents = {
   site: (ws: string): string | null => names.get(ws)?.site ?? null,
   requests: (ws: string): DeviceRequest[] => requests.get(ws) ?? [],
   beats: (ws: string): Map<string, Beat> => beats.get(ws) ?? new Map(),
-  gone: (): Gone[] => gone,
+  async gone(): Promise<Gone[]> {
+    await keptGone()
+    return gone
+  },
 
   refreshName: (ws: string): Promise<void> => run(() => refreshName(ws)),
   refreshRequests: (ws: string): Promise<void> => run(() => refreshRequests(ws)),
@@ -117,7 +123,7 @@ export const cloudEvents = {
 
   async drop({ ws, why }: { ws: string; why: Gone['why'] | null }): Promise<void> {
     const own = roomKeys.isOwn(ws)
-    if (why) gone.push({ name: cloudEvents.name(ws), why, owner: roomKeys.members(ws)?.members.find((member) => member.role === 'owner')?.email ?? null })
+    if (why) await keepGone({ name: cloudEvents.name(ws), why, owner: roomKeys.members(ws)?.members.find((member) => member.role === 'owner')?.email ?? null })
     names.delete(ws)
     requests.delete(ws)
     presence.closed(ws)
@@ -125,6 +131,22 @@ export const cloudEvents = {
     if (!own) await runSet.refresh().catch((err: unknown) => log.warn({ event: 'run_set.refresh_failed', error: messageOf(err) }))
     emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
   },
+}
+
+async function keptGone(): Promise<void> {
+  if (goneLoaded) return
+  goneLoaded = true
+  const row = await db.selectFrom('install_setting').select('value').where('name', '=', GONE_SETTING).executeTakeFirst()
+  const kept = z.safeParse(z.array(z.object({ name: z.string(), why: z.enum(['removed', 'deleted']), owner: z.nullable(z.string()) })), parseJson(row?.value ?? '[]')).data ?? []
+  gone.unshift(...kept)
+}
+
+async function keepGone(entry: Gone): Promise<void> {
+  await keptGone()
+  gone.push(entry)
+  gone.splice(0, Math.max(0, gone.length - GONE_KEPT))
+  const value = JSON.stringify(gone)
+  await db.insertInto('install_setting').values({ name: GONE_SETTING, value }).onConflict((oc) => oc.column('name').doUpdateSet({ value })).execute()
 }
 
 function heard(text: string): void {
