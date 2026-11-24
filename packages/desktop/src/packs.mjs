@@ -13,7 +13,7 @@ import { pointerAction, RELEASE_KEY, REKOR_KEY } from './release-key.mjs'
 // Bump when preload.cjs, the env main.mjs passes the server, PGlite (node_modules stays in the shell) or Electron's major change.
 export const SHELL_API = 1
 // The owner's offline "next" key (M5 key lifecycle). Empty until the owner generates it and pastes its public half here.
-export const NEXT_RELEASE_KEY = ''
+export const NEXT_RELEASE_KEY = 'MCowBQYDK2VwAyEACy4oolVkyw43n8Hz4Ui1fR0MkFKY1L5ULz+0OK1rhXo='
 export const PINNED_KEYS = { current: RELEASE_KEY, next: NEXT_RELEASE_KEY, revoked: [] }
 
 const hex = (b64) => Buffer.from(b64, 'base64').toString('hex')
