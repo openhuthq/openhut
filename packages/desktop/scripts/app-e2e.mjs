@@ -6,7 +6,7 @@ import { createServer as tcpServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
-import { bootCloud, devCloudUrl, signIn } from './dev-cloud.mjs'
+import { bootCloud, bootWorker, devCloudUrl, signIn } from './dev-cloud.mjs'
 
 const { values: args } = parseArgs({ options: { installer: { type: 'string' }, app: { type: 'string' }, dev: { type: 'boolean', default: false }, out: { type: 'string', default: 'app-e2e' }, agents: { type: 'string', default: '5' }, cloud: { type: 'string' } } })
 if (!args.installer && !args.app && !args.dev) {
@@ -23,7 +23,8 @@ const cdpPort = 9300 + Math.floor(Math.random() * 500)
 const guestPort = cdpPort + 500
 const INVITEE = 'sara@example.com'
 const API = devCloudUrl()
-const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test', OPENHUT_UPDATE_FEED: 'http://127.0.0.1:9/', ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: API } }
+const CLOUD = devCloudUrl().replace(/\d+$/, (port) => String(Number(port) + 500))
+const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test', OPENHUT_UPDATE_FEED: 'http://127.0.0.1:9/', ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: CLOUD } }
 const evidence = { platform: `${process.platform} ${osVersion()}`, steps: [], waits: [] }
 mkdirSync(args.out, { recursive: true })
 const say = (step, detail = {}) => {
@@ -34,11 +35,17 @@ const say = (step, detail = {}) => {
 let child
 let guest
 let api
+let worker
 const site = createServer((req, res) => res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><title>OpenHut e2e page</title><h1>OpenHut e2e page</h1>')).listen(0, '127.0.0.1')
 try {
   if (args.cloud) {
-    api = await bootCloud({ dir: args.cloud, api: API, log: join(home, 'logs', 'cloud-api.log') })
-    say('the dev cloud API is up', { url: API })
+    const booted = await Promise.all([
+      bootCloud({ dir: args.cloud, api: API, log: join(home, 'logs', 'cloud-api.log') }),
+      bootWorker({ dir: resolve(args.cloud, '../cloud'), url: CLOUD, state: resolve(args.out, 'worker-state'), log: join(home, 'logs', 'cloud-worker.log') }),
+    ])
+    api = booted[0]
+    worker = booted[1]
+    say('the dev cloud API and Worker (relay) are up', { api: API, cloud: CLOUD })
   }
   if (args.installer) {
     const programs = join(process.env.LOCALAPPDATA, 'Programs')
@@ -104,6 +111,7 @@ try {
 } finally {
   for (const each of [guest, child]) if (each && each.exitCode === null) await quit(each).catch(() => each.kill())
   api?.kill()
+  worker?.kill()
   site.close()
   writeFileSync(join(args.out, 'evidence.json'), JSON.stringify(evidence, null, 2))
   console.log(`app-e2e: ${evidence.pass ? 'PASS' : 'FAIL'}; evidence in ${args.out}`)
