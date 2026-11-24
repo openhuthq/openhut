@@ -13,7 +13,7 @@ OpenHut is developed as a web app. You see a change in a browser in seconds. Ele
 **2. Pick the proof by what you changed** (`git diff --name-only origin/main`)
 - `packages/desktop/src/renderer/**`, `packages/runtime/**`, `packages/common/**`, `private/api/**`, `private/cloud/**`: the web app is the proof. Take a screenshot at the Vite URL and run `npm run check`. Done.
 - `packages/desktop/src/main.mjs`, `preload.cjs`, `lib/desktop.ts`, or anything that needs Keychain, Touch ID, passkey, updates, deep links or the tray: also run `npm run app` (the real app, unpackaged) and then `npm run e2e:app`.
-- `electron-builder*.yml`, `scripts/pack-*.mjs`, `install/**`, signing, installers: the PR's Desktop app run proves it. Don't build packages locally to check.
+- `electron-builder*.yml`, `scripts/pack-*.mjs`, `install/**`, signing, installers: a Shell run proves it (`gh workflow run shell.yml --ref <branch>`; CI never packages). Don't build packages locally to check.
 
 **The web app (Continue in web)**
 - With `npm run dev` up and its runtime signed in, serve the web build: `VITE_OPENHUT_API_URL=http://127.0.0.1:<cloud port> VITE_OPENHUT_RELAY_URL=ws://127.0.0.1:<cloud port> node node_modules/vite/bin/vite.js packages/desktop/src/renderer --mode web --port 5190`.
