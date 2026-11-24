@@ -19,11 +19,11 @@ test('a server that joins with a spent code says so on /health, so the installer
   })
   await new Promise<void>((resolve) => cloud.listen(0, '127.0.0.1', resolve))
   config.apiUrl = `http://127.0.0.1:${(cloud.address() as AddressInfo).port}`
-  assert.equal(cloudService.joining(), undefined)
+  assert.equal(await cloudService.joining(), undefined)
   config.join = 'a-spent-join-code-0123'
-  assert.deepEqual(cloudService.joining(), { state: 'starting', error: null })
+  assert.deepEqual(await cloudService.joining(), { state: 'starting', error: null })
   cloudService.connect()
-  for (let i = 0; i < 50 && cloudService.joining()?.state === 'starting'; i++) await sleep(20)
-  assert.deepEqual(cloudService.joining(), { state: 'failed', error: EXPIRED })
+  for (let i = 0; i < 50 && (await cloudService.joining())?.state === 'starting'; i++) await sleep(20)
+  assert.deepEqual(await cloudService.joining(), { state: 'failed', error: EXPIRED })
   cloud.close()
 })

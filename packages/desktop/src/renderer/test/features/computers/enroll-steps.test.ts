@@ -30,6 +30,15 @@ test('each phase is a step further along, in plain words', () => {
   assert.deepEqual(stages.map((each) => each.at), [...stages.map((each) => each.at)].sort((a, b) => a - b))
 })
 
+test('once the server asks to join, the step says so and then shows the two faces it printed', () => {
+  const asking = ['==> Starting', 'Waiting for OpenHut', 'Asking to join', 'OpenHut is running and asking to join your computers.']
+  assert.equal(phaseOf(asking), 'Asking…')
+  assert.equal(stageOf(asking).line, 'Asking to join. Close this and press Review on it')
+  assert.equal(stageOf([...asking, 'In OpenHut, tap these two faces: Blue face with a top hat, and Cream face with a cap.']).line, 'In OpenHut, tap these two faces: Blue face with a top hat, and Cream face with a cap')
+  assert.equal(kind('The install stopped: openhut: couldn\'t join. This join code expired or was used already. Make a new one in the app.'), 'timeout')
+  assert.equal(kind('The install stopped: openhut: it was turned down in the OpenHut app, or no one approved it within an hour.'), 'other')
+})
+
 test('the percentage moves within a phase: one step per installer line, then with time while it waits to join', () => {
   const now = 1_000_000
   assert.equal(percentOf({ lines: [], now }), 12)

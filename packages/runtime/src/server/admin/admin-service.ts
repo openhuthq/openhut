@@ -149,7 +149,7 @@ async function probe(): Promise<{ health: Health; installing: boolean; last: Las
   const reply = await agentd.health().catch(() => undefined)
   const firewall = reply?.firewall ?? false
   return {
-    health: { ok: !!reply && firewall, version: config.version, build: config.build, agentd: !!reply, firewall, started: config.started, join: cloudService.joining() },
+    health: { ok: !!reply && firewall, version: config.version, build: config.build, agentd: !!reply, firewall, started: config.started, join: await cloudService.joining() },
     installing: reply ? reply.updating ?? false : true,
     last: reply?.lastUpdate ?? null,
   }

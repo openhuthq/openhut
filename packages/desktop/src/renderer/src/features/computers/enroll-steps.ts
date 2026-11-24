@@ -11,6 +11,7 @@ export function phaseOf(lines: string[]) {
     if (/^Starting/i.test(head)) phase = 'Starting…'
     else if (head) phase = 'Installing…'
     else if (/^Waiting for /.test(line)) phase = 'Almost ready…'
+    else if (/^Asking to join/.test(line)) phase = 'Asking…'
   }
   return phase
 }
@@ -20,10 +21,13 @@ const STAGES: Record<string, { at: number; line: string }> = {
   'Installing…': { at: 45, line: 'Installing OpenHut' },
   'Starting…': { at: 75, line: 'Starting' },
   'Almost ready…': { at: 92, line: 'Almost ready' },
+  'Asking…': { at: 96, line: 'Asking to join. Close this and press Review on it' },
 }
 
 export function stageOf(lines: string[]) {
-  return STAGES[phaseOf(lines)]
+  const faces = lines.map(clean).filter((line) => line.startsWith('In OpenHut, tap these two faces')).at(-1)
+  const stage = STAGES[phaseOf(lines)]
+  return faces ? { ...stage, line: faces.replace(/\.$/, '') } : stage
 }
 
 export function failureOf({ error, url, name }: { error: string; url: string | null; name: string }): Failure {
@@ -33,6 +37,8 @@ export function failureOf({ error, url, name }: { error: string; url: string | n
   if (/refused|unreachable|no route to host|could not resolve|timed out|exited with 255/i.test(text)) return { kind: 'unreachable', sentence: `Can't reach ${name} over Tailscale. Check it's on.` }
   if (/can't reach port|port \d+ is taken|too old to share|didn't open port|didn't say its key|can't find .* on your Tailscale/i.test(text)) return { kind: 'other', sentence: sentenceOf(text) }
   if (/didn't answer within/i.test(text)) return { kind: 'silent', sentence: `OpenHut is installed on ${name}, but it didn't connect. Try again, or copy the details and send them to us.` }
+  if (/join code expired|used already/i.test(text)) return { kind: 'timeout', sentence: `The join code ran out before ${name} used it. Try again.` }
+  if (/turned down/i.test(text)) return { kind: 'other', sentence: `${name} was turned down, so it didn't join. Try again to add it.` }
   if (/code expired/i.test(text)) return { kind: 'timeout', sentence: `OpenHut didn't start on ${name}. Try again.` }
   return { kind: 'other', sentence: "Couldn't install OpenHut. Check the computer is on and try again." }
 }

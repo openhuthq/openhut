@@ -6,6 +6,7 @@ import { MemberList, parseJson, type Letter, type Member } from '@openhut/common
 import { checkV1, signV1 } from '@openhut/common/cloud/v1/identity.ts'
 import { anchorOf, bodyOf, check, firstOf, keyVersionOf, nextOf, signList, withoutDevices } from '@openhut/common/cloud/member-list.ts'
 import { equal, fromBase64, fromWords, identity, letter, lock, newKey, newWords, read, slot, toBase64, unlock, type Bytes, type Identity, type LetterPurpose } from '@openhut/common/vault/vault.ts'
+import { config } from '../platform/config.ts'
 import { cloud, type Box, type Bundle, type Call, type CloudSession, type Letter as Sealed, type Reply } from '../platform/cloud.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { keyStore, Keys, type Account, type AskRoom, type Room, type Session, type Stored } from './key-store.ts'
@@ -238,7 +239,7 @@ export function deviceOs(): string {
 
 export function deviceName(): string {
   const name = process.platform === 'darwin' ? spawnSync('scutil', ['--get', 'ComputerName'], { encoding: 'utf8' }).stdout : ''
-  return (name || hostname()).trim().slice(0, 64)
+  return (config.name || name || hostname()).trim().slice(0, 64)
 }
 
 async function restoreFrom({ key, workspace, sub, email, device }: { key: Bytes; workspace: Boxed; sub: string; email: string; device: string }): Promise<Account | null> {

@@ -27,11 +27,13 @@ node_ok() { node -e 'const [a,b]=process.versions.node.split(".").map(Number);pr
 write_env() {
   mkdir -p /etc/openhut && touch /etc/openhut/env && chmod 0600 /etc/openhut/env
   IMAGE_OVERRIDE="${AGENT_IMAGE:-}"
+  NAME="${OPENHUT_NAME:-}"
   SOURCE_URL="$OPENHUT_URL"
   LISTEN="${OPENHUT_CONTAINER:+0.0.0.0}"
   . /etc/openhut/env
   LISTEN="${LISTEN:-${OPENHUT_HOST:-}}"
   IMAGE_OVERRIDE="${IMAGE_OVERRIDE:-${AGENT_IMAGE:-}}"
+  NAME="${NAME:-${OPENHUT_NAME:-}}"
   umask 077
   {
     echo "RESOLVER=${RESOLVER:-1.1.1.1}"
@@ -44,6 +46,7 @@ write_env() {
     [ -z "${OPENHUT_CLOUD_URL:-}" ] || echo "OPENHUT_CLOUD_URL=$OPENHUT_CLOUD_URL"
     [ -z "${OPENHUT_API_URL:-}" ] || echo "OPENHUT_API_URL=$OPENHUT_API_URL"
     [ "${OPENHUT_PERSONAL:-}" != 1 ] || echo "OPENHUT_PERSONAL=1"
+    [ -z "$NAME" ] || echo "OPENHUT_NAME=$NAME"
   } > /etc/openhut/env.new
   mv /etc/openhut/env.new /etc/openhut/env
   . /etc/openhut/env
@@ -76,7 +79,7 @@ fresh() { h=$($IN curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$
   [ "$(echo "$h" | sed -n 's/.*"started":\([0-9]*\).*/\1/p')" -ge "$STARTED_AFTER" ]; }
 up() { i=0; until fresh; do i=$((i+1)); [ $i -gt "$1" ] && return 1; printf .; sleep 3; done; }
 join_state() {
-  $IN curl -sS http://127.0.0.1:8787/health 2>/dev/null | node -e 'let s="";process.stdin.on("data",(c)=>{s+=c}).on("end",()=>{let j;try{j=JSON.parse(s).join}catch{}console.log(j?`${j.state} ${j.error??""}`:"starting ")})' 2>/dev/null || echo "starting "
+  $IN curl -sS http://127.0.0.1:8787/health 2>/dev/null | node -e 'let s="";process.stdin.on("data",(c)=>{s+=c}).on("end",()=>{let j;try{j=JSON.parse(s).join}catch{}console.log(j?`${j.state} ${j.faces?`In OpenHut, tap these two faces: ${j.faces.join(", and ")}.`:j.error??""}`:"starting ")})' 2>/dev/null || echo "starting "
 }
 asked() {
   printf 'Asking to join'
@@ -85,10 +88,18 @@ asked() {
     printf .; sleep 2
   done
   printf '\n'
+  [ "${STATE%% *}" != asking ] || echo "OpenHut is running and asking to join your computers. In the OpenHut app, open Settings > Computers and press Review on it."
+  SHOWN=; i=0
+  while [ "${STATE%% *}" = asking ]; do
+    [ "${STATE#* }" = "$SHOWN" ] || { SHOWN="${STATE#* }"; echo "$SHOWN"; }
+    i=$((i+1)); [ $i -gt 900 ] && { echo "Still not approved after 30 minutes, so this stops waiting. It's still asking: run this same command again to see the faces."; return; }
+    sleep 2; STATE=$(join_state)
+  done
   case "${STATE%% *}" in
-    joined) echo "OpenHut is running and is one of your computers already." ;;
+    joined) echo "Joined. This server is one of your computers now, and your agents can run here." ;;
     failed) die "couldn't join. ${STATE#* } (In the OpenHut app: Settings > Computers > Add a computer.)" ;;
-    *) echo "OpenHut is running and asking to join your computers. Approve it in the OpenHut app: Settings > Computers." ;;
+    denied) die "it was turned down in the OpenHut app, or no one approved it within an hour. To try again, make a new command in the OpenHut app (Settings > Computers > Add a computer)." ;;
+    *) echo "OpenHut is running. Check Settings > Computers in the OpenHut app." ;;
   esac
 }
 running() {
@@ -220,7 +231,7 @@ if [ "$MODE" != swap ] && { [ -n "${OPENHUT_UPDATER:-}" ] || { [ ! -f /.dockeren
   printf '%s\n' "$JOIN_CODE" | $D run --rm -i --name openhut-install --security-opt label=disable \
     -v /var/run/docker.sock:/var/run/docker.sock -v openhut-data:/data \
     -e "RUNTIME_IMAGE=$RUNTIME_IMAGE" -e "OPENHUT_URL=$OPENHUT_URL" -e OPENHUT_UPDATER -e OPENHUT_CLIENT_KEY_SHA256 -e OPENHUT_APP_VERSION \
-    -e OPENHUT_PERSONAL -e OPENHUT_MODEL -e OPENHUT_CLOUD_URL -e OPENHUT_API_URL -e RESOLVER -e AGENT_IMAGE \
+    -e "OPENHUT_NAME=$(uname -n | tr -cd 'A-Za-z0-9._-' | cut -c1-64)" -e OPENHUT_PERSONAL -e OPENHUT_MODEL -e OPENHUT_CLOUD_URL -e OPENHUT_API_URL -e RESOLVER -e AGENT_IMAGE \
     --entrypoint sh "$RUNTIME_IMAGE" -c 'read -r OPENHUT_JOIN || true; export OPENHUT_JOIN; exec sh /opt/openhut/install/install.sh swap 2>&1'
   exit
 fi
