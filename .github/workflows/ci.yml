@@ -107,12 +107,11 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: No high or critical advisory in what the cloud and the site ship, and their locks resolve only from the npm registry
         run: |
-          for dir in api cloud site; do (cd private/$dir && npm audit --omit=dev --audit-level=high) || exit 1; done
-          ! grep -h '"resolved":' private/api/package-lock.json private/cloud/package-lock.json private/site/package-lock.json | grep -v '"https://registry.npmjs.org/'
-      - name: The cloud API, the cloud Worker and the site typecheck and pass their tests
+          for dir in api site; do (cd private/$dir && npm audit --omit=dev --audit-level=high) || exit 1; done
+          ! grep -h '"resolved":' private/api/package-lock.json private/site/package-lock.json | grep -v '"https://registry.npmjs.org/'
+      - name: The cloud API and the site typecheck and pass their tests
         run: |
           npm --prefix private/api run typecheck && npm --prefix private/api test
-          npm --prefix private/cloud run typecheck && npm --prefix private/cloud test
           npm --prefix private/site run typecheck
 
   app:

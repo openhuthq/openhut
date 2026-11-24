@@ -5,5 +5,4 @@
 git config push.recurseSubmodules on-demand
 [ "$(git -C private rev-parse HEAD)" = "$(git -C private rev-parse -q --verify main)" ] && git -C private switch -q main
 npm --prefix private/site install --no-audit --no-fund --silent
-[ ! -f private/cloud/package.json ] || npm --prefix private/cloud install --no-audit --no-fund --silent
 [ ! -f private/api/package.json ] || npm --prefix private/api install --no-audit --no-fund --silent
