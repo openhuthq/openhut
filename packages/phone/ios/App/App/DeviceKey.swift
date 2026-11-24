@@ -5,9 +5,29 @@ import LocalAuthentication
 import Security
 
 class AppViewController: CAPBridgeViewController {
+    // R6: Capacitor's own persisted serverBasePath is ignored on purpose; only the native updater picks the web root.
+    override open func instanceDescriptor() -> InstanceDescriptor { InstanceDescriptor() }
+
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(DeviceKeyPlugin())
+        bridge?.registerPluginInstance(LockedWebViewPlugin())
         view.backgroundColor = .white
+        // Start from the last pack the native updater installed, else the built-in one.
+        if let pack = PackUpdater.installed { setServerBasePath(path: pack.path) }
+        Task { @MainActor in
+            let line = await PackUpdater.poll()
+            print("Pack update: \(line)")
+            if line.hasPrefix("installed"), let pack = PackUpdater.installed { setServerBasePath(path: pack.path) }
+            #if DEBUG
+            let label = UILabel(frame: CGRect(x: 8, y: view.bounds.height - 120, width: view.bounds.width - 16, height: 80))
+            label.numberOfLines = 0
+            label.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+            label.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+            label.textColor = .white
+            label.text = "Native shell updater (sequence \(PackUpdater.state?.sequence ?? -1)): \(line)"
+            view.addSubview(label)
+            #endif
+        }
     }
 }
 
