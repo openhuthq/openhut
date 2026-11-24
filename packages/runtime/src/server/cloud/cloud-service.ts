@@ -416,7 +416,7 @@ async function joinAsServer(code: string): Promise<void> {
 }
 
 function signedIn(email: string): string {
-  return page(`Signed in as ${email}. Go back to OpenHut to carry on. You can close this tab.`, { title: 'You’re signed in', back: config.appScheme && `${config.appScheme}://open` })
+  return page(`Signed in as ${email}. OpenHut has moved on, so you can close this tab.`, { title: 'Done', tab: 'Signed in', back: config.appScheme && `${config.appScheme}://open` })
 }
 
 function kitOf(): { savedAt: string; differs: boolean } | null {
