@@ -1,8 +1,14 @@
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { parseArgs } from 'node:util'
 
-const [command, path, dir, given] = process.argv.slice(2)
+const { values: flags, positionals } = parseArgs({
+  allowPositionals: true,
+  options: { sequence: { type: 'string' }, channel: { type: 'string' }, 'shell-api': { type: 'string' }, halt: { type: 'boolean' }, rekor: { type: 'string' } },
+})
+const [command, path, dir, given] = positionals
+const usage = 'usage: release-key.ts key <new key file> | sign <key file> <release folder> [version] [--sequence N] [--channel stable|beta] [--shell-api MIN-MAX] [--halt] [--rekor https://rekor.sigstore.dev]'
 
 if (command === 'key' && path && !existsSync(path)) {
   const pair = generateKeyPairSync('ed25519')
@@ -18,11 +24,46 @@ if (command === 'key' && path && !existsSync(path)) {
     process.exit(2)
   }
   const files = Object.fromEntries(names.map((name) => [name, createHash('sha512').update(readFileSync(join(dir, name))).digest('base64')]))
-  const manifest = Buffer.from(`${JSON.stringify({ version, files }, null, 2)}\n`)
+  // v2 keeps v1's version and files, so v1 checks (cosigned) still pass; packs are the openhut-<name>.tgz with an openhut-<name>.json manifest.
+  const packs = Object.fromEntries(names.filter((name) => /^openhut-.+\.tgz$/.test(name) && files[name.replace(/\.tgz$/, '.json')])
+    .map((name) => [name.slice(8, -4), { file: name, sha512: files[name], manifest: name.replace(/\.tgz$/, '.json'), manifestSha512: files[name.replace(/\.tgz$/, '.json')] }]))
+  const [min, max = min] = (flags['shell-api'] ?? '1').split('-').map(Number)
+  const release = {
+    schema: 2,
+    version,
+    sequence: Number(flags.sequence ?? Math.floor(Date.now() / 1000)),
+    channel: flags.channel ?? (version.includes('-') ? 'beta' : 'stable'),
+    shellApi: { min, max },
+    halt: flags.halt ?? false,
+    packs,
+    files,
+  }
+  if (!Number.isSafeInteger(release.sequence) || !['stable', 'beta'].includes(release.channel) || !(min <= max)) {
+    console.error(usage)
+    process.exit(2)
+  }
+  const manifest = Buffer.from(`${JSON.stringify(release, null, 2)}\n`)
+  const signature = sign(null, manifest, key)
   writeFileSync(join(dir, 'release.json'), manifest)
-  writeFileSync(join(dir, 'release.json.sig'), `${sign(null, manifest, key).toString('base64')}\n`)
-  console.log(`${dir}/release.json: version ${version}, ${names.length} files, signed by ${createPublicKey(key).export({ type: 'spki', format: 'der' }).toString('base64')}`)
+  writeFileSync(join(dir, 'release.json.sig'), `${signature.toString('base64')}\n`)
+  const publicKey = createPublicKey(key)
+  console.log(`${dir}/release.json: version ${version}, sequence ${release.sequence}, ${release.channel}, ${Object.keys(packs).length} packs, ${names.length} files, signed by ${publicKey.export({ type: 'spki', format: 'der' }).toString('base64')}`)
+  if (flags.rekor) {
+    // SEC6: log the signed manifest publicly. A rekord entry carries an Ed25519 signature over the whole artifact (hashedrekord can't).
+    const res = await fetch(new URL('/api/v1/log/entries', flags.rekor), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ apiVersion: '0.0.1', kind: 'rekord', spec: { data: { content: manifest.toString('base64') }, signature: { format: 'x509', content: signature.toString('base64'), publicKey: { content: Buffer.from(publicKey.export({ type: 'spki', format: 'pem' })).toString('base64') } } } }),
+    })
+    const entry = await res.text()
+    if (res.status !== 201) {
+      console.error(`${flags.rekor} refused the entry (${res.status}): ${entry}`)
+      process.exit(1)
+    }
+    writeFileSync(join(dir, 'release.json.rekor'), entry)
+    console.log(`${dir}/release.json.rekor: Rekor entry ${Object.keys(JSON.parse(entry))[0]}`)
+  }
 } else {
-  console.error('usage: release-key.ts key <new key file> | sign <key file> <release folder> [version]')
+  console.error(usage)
   process.exit(2)
 }

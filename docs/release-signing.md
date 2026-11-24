@@ -2,6 +2,8 @@
 
 The Mac app installs an update only when `release.json`, naming the release's version and listing the SHA-512 of every release file, carries an Ed25519 signature by the release key. The app also requires the signed version to equal the version the feed offers, so an older signed release can't be served again as a newer one (electron-updater never installs a version older than the running one). The public key is pinned in `packages/desktop/src/release-key.mjs`; the private key is the secret `RELEASE_SIGNING_KEY` in the `release` environment and exists nowhere else. The desktop workflow's `publish` job signs every release with it (owner, 2026-11-23). Tradeoff: a GitHub compromise could now ship an update; accepted pre-release.
 
+`release.json` is v2 (`schema: 2`): besides `version` and `files` (what the shipped app checks, unchanged) it carries `sequence`, `channel`, `shellApi` (`{ min, max }`), `halt` (Promote goes to everyone at once; `halt` and a signed pointer to N−1 are the brakes, and every release, rollbacks too, waits the hour) and `packs` (each `openhut-<name>.tgz` beside an `openhut-<name>.json` per-file manifest, with both sha512s), set by `release-key.ts sign` flags. The `publish` job logs the signed manifest in Sigstore's public Rekor log (`--rekor`, a `rekord` entry) and ships the entry as `release.json.rekor`. `verifyRelease()` in `packages/desktop/src/release-key.mjs` is the one check every client is to use (SEC6): the signature, Rekor's signed timestamp and inclusion proof under the pinned Rekor key, and an entry at least an hour old; no entry means no update. Packs build with `node scripts/pack.ts <folder>` after `pack-backend`, byte for byte the same for one commit.
+
 ## Replace the key (only if it leaks)
 
 ```sh

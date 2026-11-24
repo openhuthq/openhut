@@ -357,9 +357,9 @@ jobs:
           done
           gh release download "$GITHUB_REF_NAME" --dir r2
           (umask 077 && printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release.pem")
-          RELEASE_KEY="$RUNNER_TEMP/release.pem" scripts/release.sh sign r2
+          RELEASE_KEY="$RUNNER_TEMP/release.pem" scripts/release.sh sign r2 --rekor https://rekor.sigstore.dev
           rm "$RUNNER_TEMP/release.pem"
-          gh release upload "$GITHUB_REF_NAME" r2/release.json r2/release.json.sig --clobber
+          gh release upload "$GITHUB_REF_NAME" r2/release.json r2/release.json.sig r2/release.json.rekor --clobber
           scripts/r2.sh release "$v" r2
           gh release edit "$GITHUB_REF_NAME" --draft=false
           image=$(sed -n 's/^RUNTIME_IMAGE="${RUNTIME_IMAGE:-\(.*\)}"$/\1/p' r2/install.sh)

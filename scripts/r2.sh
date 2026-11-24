@@ -53,7 +53,7 @@ release() {
   for file in OpenHut-arm64.dmg "OpenHut-$v-arm64.zip" "OpenHut-$v-arm64.zip.blockmap" OpenHut-x64.AppImage openhut-x64.deb OpenHut-Setup-x64.exe OpenHut-Setup-x64.exe.blockmap; do
     put "v$v/$file" "$dir/$file" "$FOREVER"
   done
-  for file in SHA256SUMS release.json release.json.sig; do
+  for file in SHA256SUMS release.json release.json.sig release.json.rekor; do
     [ ! -f "$dir/$file" ] || put "v$v/$file" "$dir/$file" "$FOREVER" text/plain
   done
   case $v in

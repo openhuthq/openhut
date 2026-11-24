@@ -126,7 +126,10 @@ jobs:
     with:
       tags: ''
 
-  # Lane D: the pack build (scripts/pack.ts) joins here on main, and in `gate`'s needs once it should block.
+  packs:
+    # The pack build (scripts/pack.ts) and its time, on main only; it joins `gate`'s needs once it should block.
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/packs.yml
 
   gate:
     needs: [changes, checks, private, server]
