@@ -78,7 +78,7 @@ jobs:
           GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tag-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" git push "git@github.com:$GITHUB_REPOSITORY.git" "refs/tags/v$VERSION"
           rm "$RUNNER_TEMP/tag-key"
           echo "Pushed v$VERSION at ${SHA::8}" >> "$GITHUB_STEP_SUMMARY"
-      # Lane D: build, sign and publish the packs (scripts/pack.ts) for "v$VERSION" here. That is the normal release;
+      # Signing and publishing the packs built by the `packs` job below is R4. That is the normal release;
       # once it ships, `shell` defaults to false and the shell is packaged only when it changes.
       - name: Package the shell on the tag, which signs, uploads and publishes the release
         if: inputs.shell
@@ -87,3 +87,9 @@ jobs:
         run: |
           gh workflow run shell.yml --repo "$GITHUB_REPOSITORY" --ref "v$VERSION"
           echo "Packaging the shell for v$VERSION: https://github.com/$GITHUB_REPOSITORY/actions/workflows/shell.yml" >> "$GITHUB_STEP_SUMMARY"
+
+  packs:
+    needs: cut
+    uses: ./.github/workflows/packs.yml
+    with:
+      ref: v${{ inputs.version }}
