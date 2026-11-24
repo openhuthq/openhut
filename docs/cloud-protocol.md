@@ -1,6 +1,6 @@
 # OpenHut Cloud protocol (v1)
 
-One page on how OpenHut Cloud keeps your data locked. The room (`cloud.openhut.dev`) stores bytes and checks signatures it can verify without any key. Everything it could read is listed under "What the room sees". Code: `packages/common/src/vault/vault.ts` (primitives), `packages/common/src/cloud/` (records, member lists), test vectors in `packages/common/test/vault/vectors.json`.
+One page on how OpenHut Cloud keeps your data locked. The room (`cloud.openhut.dev`) stores bytes and checks signatures it can verify without any key. Everything it could read is listed under "What the room sees". Code: `packages/common/src/vault/public.ts` and `secret.ts` (primitives), `packages/common/src/keyring/` (the only user of the secret half), `packages/common/src/cloud/` (the client, member lists), test vectors in `packages/common/test/vault/vectors.json`.
 
 ## Keys
 
