@@ -68,6 +68,7 @@ async function refreshOnce(): Promise<void> {
     const workspace = room.workspace.id
     const [agents, controls] = await Promise.all([recordsService.list({ collection: 'agent', workspace }), recordsService.list({ collection: 'control', workspace })])
     const control = new Map(controls.map((each) => [each.id, each]))
+    await ownAgain({ workspace, agents })
     for (const agent of agents) {
       const placed = control.get(agent.id)
       if (ControlRecord.safeParse(placed?.value).data?.runsOn !== me || !placed) continue
@@ -78,6 +79,15 @@ async function refreshOnce(): Promise<void> {
   const home = keysService.signedIn().workspace.id
   for (const row of await db.selectFrom('agent').select(['id', 'workspace']).execute()) {
     if (!kept.has(row.id)) await applyOne({ workspace: row.workspace ?? home, id: row.id })
+  }
+}
+
+async function ownAgain({ workspace, agents }: { workspace: string; agents: Held[] }): Promise<void> {
+  const email = keysService.signedIn().email
+  const mine = roomKeys.members(workspace)?.members.find((member) => member.email === email)?.devices ?? []
+  for (const agent of agents.filter((each) => each.parent === email && !each.deleted && !mine.includes(each.by))) {
+    await recordsService.put({ collection: 'agent', id: agent.id, workspace, parent: email, personal: agent.personal, value: agent.value, reapply: (latest) => ({ value: latest.value }) })
+      .catch((err: unknown) => log.warn({ event: 'run_set.resign_failed', agent: agent.id, error: messageOf(err) }))
   }
 }
 
