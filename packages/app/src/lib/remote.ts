@@ -1,4 +1,4 @@
-import { webKey, type Tunnel } from '@openhut/common/tunnel/index.ts'
+import { webKey, type Tunnel, type TunnelSocket } from '@openhut/common/tunnel/index.ts'
 import { ComputersOffline, openhutCloud } from '@openhut/common/cloud/openhut-cloud.ts'
 import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
 import { toBase64 } from '@openhut/common/vault/public.ts'
@@ -6,17 +6,27 @@ import type { Channel } from '@/lib/live-socket'
 import { inviteOf } from '../features/join/invite.ts'
 import { accountStepOf, continueCodeOf, lastSeenOf, Offline } from './web-first-run.ts'
 import { config } from './config.ts'
+import { desktop } from './desktop.ts'
 
 export const REMOTE = !config.local
 const RETURN = '/signed-in'
 const CONTINUE_MS = 70_000
+const NO_BODY = [204, 205, 304]
+
+export class CloudOffline extends Error {
+  constructor() {
+    super('Can’t reach OpenHut Cloud. Check this computer’s internet connection. OpenHut keeps trying.')
+  }
+}
 
 type Pair = { publicKey: CryptoKey; privateKey: CryptoKey }
 type Keys = { signing: Pair; tunnel: Pair }
 export type Invited = { workspace: string; team: string | null; from: string | null; email: string | null }
-export type RemoteState = { step: 'signed-out'; invited: Invited | null } | { step: 'first-run'; email: string } | { step: 'continuing'; email: string } | { step: 'waiting'; email: string; faces: number[]; invited: Invited | null } | { step: 'over'; email: string; missed: boolean; workspace: string } | { step: 'ready'; email: string; workspace: string; teammate: boolean }
+export type RemoteState = { step: 'setup' } | { step: 'signed-out'; invited: Invited | null } | { step: 'first-run'; email: string } | { step: 'continuing'; email: string } | { step: 'waiting'; email: string; faces: number[]; invited: Invited | null } | { step: 'over'; email: string; missed: boolean; workspace: string } | { step: 'ready'; email: string; workspace: string; teammate: boolean }
 
 let tunnel: Tunnel | undefined
+let target: { team: string; computer?: string } | undefined
+let reopening: Promise<Tunnel> | undefined
 
 function kv<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -46,19 +56,49 @@ async function keys(): Promise<Keys> {
   return made
 }
 
-const cloud = openhutCloud.device({
-  url: config.cloud,
-  store,
-  key: {
-    async id() {
-      const { signing, tunnel: box } = await keys()
-      const raw = async (key: CryptoKey) => new Uint8Array(await crypto.subtle.exportKey('raw', key))
-      return toBase64(new Uint8Array([...await raw(signing.publicKey), ...await raw(box.publicKey)]))
-    },
-    sign: async (bytes) => new Uint8Array(await crypto.subtle.sign('Ed25519', (await keys()).signing.privateKey, Uint8Array.from(bytes))),
-    noise: async () => webKey((await keys()).tunnel),
+const key = {
+  async id() {
+    const { signing, tunnel: box } = await keys()
+    const raw = async (each: CryptoKey) => new Uint8Array(await crypto.subtle.exportKey('raw', each))
+    return toBase64(new Uint8Array([...await raw(signing.publicKey), ...await raw(box.publicKey)]))
   },
-})
+  sign: async (bytes: Uint8Array) => new Uint8Array(await crypto.subtle.sign('Ed25519', (await keys()).signing.privateKey, Uint8Array.from(bytes))),
+  noise: async () => webKey((await keys()).tunnel),
+}
+const cloud = openhutCloud.device({ url: config.cloud, store, key })
+
+function reachable(): Promise<boolean> {
+  return fetch(`${config.cloud.replace(/\/$/, '')}/health`, { mode: 'no-cors', cache: 'no-store' }).then(() => true, () => false)
+}
+
+async function joinAsWindow(): Promise<RemoteState> {
+  const joined = await desktop?.window?.join(await key.id())
+  if (!joined || 'error' in joined) {
+    if (joined?.status === 409) return { step: 'setup' }
+    throw new Error(joined?.error ?? 'OpenHut’s runtime didn’t answer. Restart OpenHut.')
+  }
+  await cloud.signIn({ joinCode: joined.code })
+  await store.set('computer', joined.computer)
+  const me = await cloud.me()
+  const account = me && accountStepOf(me)
+  if (!me || account?.step !== 'ready') throw new Error('This computer didn’t let its own window in. Restart OpenHut.')
+  return { step: 'ready', email: me.email, workspace: account.workspace, teammate: false }
+}
+
+function live(): Promise<Tunnel> {
+  if (tunnel && !tunnel.failure) return Promise.resolve(tunnel)
+  if (!target) return Promise.reject(new Error('Not connected to your computer yet.'))
+  reopening ??= cloud.open(target).then((opened) => (tunnel = opened), async (err: unknown) => {
+    throw await reachable() ? err : new CloudOffline()
+  }).finally(() => { reopening = undefined })
+  return reopening
+}
+
+async function viaShell(path: string, init?: RequestInit): Promise<Response> {
+  const answer = await desktop?.window?.setup({ method: init?.method ?? 'GET', path, body: typeof init?.body === 'string' ? init.body : undefined })
+  if (!answer) throw new Error('Not connected to your computer yet.')
+  return new Response(NO_BODY.includes(answer.status) ? null : answer.body, { status: answer.status, headers: { 'content-type': 'application/json' } })
+}
 
 export const remote = {
   async signIn(): Promise<void> {
@@ -83,6 +123,8 @@ export const remote = {
     }
     const invited = await store.get<Invited | null>('invite') ?? null
     const me = await cloud.me()
+    if (!me && !await reachable()) throw new CloudOffline()
+    if (desktop?.window && (!me || accountStepOf(me).step !== 'ready')) return joinAsWindow()
     if (!me) return { step: 'signed-out', invited }
     const account = accountStepOf(me, invited?.workspace)
     if (account.step === 'first-run') return { step: 'first-run', email: me.email }
@@ -109,27 +151,31 @@ export const remote = {
   joinCode: (): Promise<JoinCode> => cloud.firstComputerCode(),
 
   async open(workspace: string): Promise<void> {
-    tunnel = await cloud.open({ team: workspace }).catch((err: unknown) => {
+    const computer = desktop?.window ? await store.get<string>('computer') : undefined
+    target = { team: workspace, ...computer && { computer } }
+    tunnel = undefined
+    await live().catch((err: unknown) => {
       if (!(err instanceof ComputersOffline)) throw err
       const seen = Math.max(0, ...err.reasons.map((reason) => lastSeenOf(reason) ?? 0)) || null
       throw new Offline({ computer: err.names.length === 1 ? err.names[0] ?? null : null, seen })
     })
   },
 
-  fetch(path: string, init?: RequestInit): Promise<Response> {
-    if (!tunnel) return Promise.reject(new Error('Not connected to your computer yet.'))
-    return tunnel.fetch(path, init)
+  async fetch(path: string, init?: RequestInit): Promise<Response> {
+    if (!target && desktop?.window) return viaShell(path, init)
+    return (await live()).fetch(path, init)
   },
 
   channel({ path, onLine, onClose }: { path: string; onLine: (line: string) => void; onClose: (code: number, reason: string) => void }): Channel {
-    if (!tunnel) {
-      setTimeout(() => onClose(1006, 'not connected'))
-      return { send: () => undefined, close: () => undefined }
-    }
-    const socket = tunnel.socket(path)
-    socket.onmessage = ({ data }) => onLine(typeof data === 'string' ? data : new TextDecoder().decode(data))
-    socket.onclose = ({ code, reason }) => onClose(code, reason)
-    return { send: (line) => socket.readyState === 1 && socket.send(line), close: () => socket.close() }
+    let socket: TunnelSocket | undefined
+    let closed = false
+    live().then((open) => {
+      if (closed) return
+      socket = open.socket(path)
+      socket.onmessage = ({ data }) => onLine(typeof data === 'string' ? data : new TextDecoder().decode(data))
+      socket.onclose = ({ code, reason }) => onClose(code, reason)
+    }, () => onClose(1006, 'not connected'))
+    return { send: (line) => socket?.readyState === 1 && socket.send(line), close: () => { closed = true; socket?.close() } }
   },
 }
 

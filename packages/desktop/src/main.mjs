@@ -83,7 +83,10 @@ const WATCHED = new Set(['agent', 'thread'])
 const HEALTHY_MS = 120_000
 const RENDERER = join(HERE, '../dist/renderer')
 const APP_ORIGIN = 'app://openhut'
-const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+const CLOUD_API = CLOUD.OPENHUT_API_URL ?? 'https://cloud.openhut.dev/api'
+const CLOUD_ORIGIN = new URL(CLOUD_API).origin
+const CSP = `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self' ${CLOUD_ORIGIN} ${CLOUD_ORIGIN.replace(/^http/, 'ws')}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`
+const SETUP = /^(GET \/api\/(cloud|me|admin)|POST \/api\/cloud\/(sessions|sessions\/codes|unlock|requests)|DELETE \/api\/cloud(\/requests)?)$/
 const MAX_LOG = 10 << 20
 const PIPE_TRIES = 20
 const children = new Map()
@@ -107,6 +110,7 @@ const UPDATE_EVERY_MS = 30 * 60_000
 let updateCheck = { at: 0, quiet: false }
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 crashReporter.start({ uploadToServer: false })
+if (TEST_HOME && MAC) app.commandLine.appendSwitch('use-mock-keychain')
 
 function start(name, env) {
   const script = join(BACKEND, SCRIPTS[name])
@@ -114,6 +118,10 @@ function start(name, env) {
     ? spawn('node', [script], { cwd: ROOT, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
     : utilityProcess.fork(script, [], { env: { ...process.env, ...env }, stdio: 'pipe', serviceName: `OpenHut ${name}` })
   child.on('message', (message) => {
+    if (message?.type === 'own-window') {
+      windowJoins.get(message.id)?.(message.join ?? { error: String(message.error), status: message.status })
+      return windowJoins.delete(message.id)
+    }
     if (message?.type !== 'presence') return
     void touchId(message.reason).then(({ ok }) => {
       const answer = { type: 'presence', id: message.id, ok }
@@ -245,7 +253,24 @@ function passkey(args) {
   }) })
 }
 let passkeyRun
-ipcMain.on('browser-live', (event, path) => void relayLive({ port: event.ports[0], path: fromApp(event) ? path : '' }))
+const windowJoins = new Map()
+handle('window.join', async ({ key } = {}) => {
+  const server = await booted === true && children.get('server')
+  if (!server) return { error: 'OpenHut’s runtime isn’t running. Restart OpenHut.', status: 503 }
+  const id = randomBytes(8).toString('hex')
+  const message = { type: 'own-window', id, key: String(key) }
+  const answered = new Promise((resolve) => windowJoins.set(id, resolve))
+  if (server.postMessage) server.postMessage(message)
+  else server.send(message)
+  return answered
+})
+handle('window.setup', async ({ method = 'GET', path = '', body } = {}) => {
+  const route = String(path).split('?')[0]
+  if (!SETUP.test(`${method} ${route}`)) return { status: 403, body: JSON.stringify({ error: { type: 'invalid_request_error', message: 'Sign in to OpenHut first.' } }) }
+  const req = new Request(`${APP_ORIGIN}${path}`, { method, headers: body === undefined ? {} : { 'content-type': 'application/json' }, body })
+  const res = await toLocal({ req, path: route })
+  return { status: res.status, body: await res.text() }
+})
 
 function answer(fn) {
   return (arg) => Promise.resolve().then(() => fn(arg)).catch((error) => ({ error: error.message }))
@@ -711,7 +736,7 @@ function window(path = '/agents') {
   })
   win.on('close', saveBounds)
   win.on('focus', () => win.flashFrame(false))
-  win.once('ready-to-show', () => win.show())
+  win.once('ready-to-show', () => TEST_HOME && process.env.OPENHUT_TEST_HIDDEN ? undefined : win.show())
   win.loadURL(`${APP_ORIGIN}${path}`)
   main = win
   return win
@@ -897,8 +922,8 @@ async function releaseSigned(info) {
 
 function serve(req) {
   const { pathname } = new URL(req.url)
-  if (pathname === '/config.json') return Response.json({ cloud: CLOUD.OPENHUT_API_URL ?? 'https://cloud.openhut.dev/api', local: true })
-  return /^\/(api|c\/[\w-]+\/api)\//.test(pathname) ? toLocal({ req, path: pathname }) : serveRenderer(req)
+  if (pathname === '/config.json') return Response.json({ cloud: CLOUD_API })
+  return serveRenderer(req)
 }
 
 function refuse(status, message) {
@@ -906,28 +931,9 @@ function refuse(status, message) {
 }
 
 async function toLocal({ req, path }) {
-  const origin = req.headers.get('origin')
-  if (!['GET', 'HEAD'].includes(req.method) && origin !== null && origin !== APP_ORIGIN) return refuse(403, 'Only the OpenHut app can change things here.')
   const target = path + new URL(req.url).search
   if (await booted !== true) return refuse(502, `OpenHut's runtime didn't start. The logs are in ${LOGS}.`)
   return toSocket({ req, path: target }).catch((error) => refuse(502, `OpenHut's runtime didn't answer (${error.code ?? error.message}). Try again, or restart OpenHut.`))
-}
-
-async function relayLive({ port, path }) {
-  const ws = await liveSocket(String(path)).catch(() => null)
-  if (!ws) {
-    port.postMessage(ws === null ? { closed: 1006, reason: '' } : { closed: 4404, reason: 'There\'s no live view at that address.' })
-    return port.close()
-  }
-  port.on('message', ({ data }) => ws.readyState === WebSocket.OPEN && ws.send(String(data)))
-  port.on('close', () => ws.close())
-  port.start()
-  ws.onmessage = ({ data }) => port.postMessage(String(data))
-  ws.onclose = ({ code, reason }) => {
-    port.postMessage({ closed: code, reason: String(reason) })
-    port.close()
-  }
-  ws.onerror = () => undefined
 }
 
 async function liveSocket(path) {

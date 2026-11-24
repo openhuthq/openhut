@@ -1,10 +1,8 @@
-import { desktop } from './desktop.ts'
 import { remote, REMOTE } from './remote.ts'
 
 export type Channel = { send: (line: string) => void; close: () => void }
 
 export function openChannel({ path, onLine, onClose }: { path: string; onLine: (line: string) => void; onClose: (code: number, reason: string) => void }): Channel {
-  if (desktop?.browserLive) return desktop.browserLive(path, onLine, onClose)
   if (REMOTE) return remote.channel({ path, onLine, onClose })
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${path}`)
   ws.onmessage = ({ data }) => onLine(String(data))
