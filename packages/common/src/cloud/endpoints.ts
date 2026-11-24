@@ -11,7 +11,7 @@ export const ENDPOINTS = {
   createSession: { call: 'signIn', method: 'POST', path: '/v1/sessions', auth: 'device', does: 'Trade a grant for a token: google (the code, signed by the device), join_code (signed by the device), or refresh.' },
   me: { call: 'signIn', method: 'GET', path: '/v1/me', auth: 'token', does: 'The account, and each team with this device’s access (listed, waiting).' },
   deleteMe: { call: 'signIn', method: 'DELETE', path: '/v1/me', auth: 'computer', does: 'Delete the account. Signed, and allowed from a computer only.' },
-  createJoinCode: { call: 'signIn', method: 'POST', path: '/v1/join-codes', auth: 'computer', does: 'A one-use, 10-minute code for a team. Only the hash is stored.' },
+  createJoinCode: { call: 'signIn', method: 'POST', path: '/v1/join-codes', auth: 'signed', does: 'A one-use, 10-minute code for a team. Only the hash is stored. A computer makes one any time; any signed-in device makes one only while the account has no computer (device.firstComputerCode, the web first run).' },
   listRecords: { call: 'records', method: 'GET', path: '/v1/teams/:team/:kind', auth: 'token', does: 'List one kind, ordered, paged with ?after=.' },
   getRecord: { call: 'records', method: 'GET', path: '/v1/teams/:team/:kind/:id', auth: 'token', does: 'Read one record (sealed).' },
   putRecord: { call: 'records', method: 'PUT', path: '/v1/teams/:team/:kind/:id', auth: 'signed', does: 'Write one record. If-Match: <version>; a conflict returns 409 with the newer copy. Blobs stream through the same path as kind blob.' },

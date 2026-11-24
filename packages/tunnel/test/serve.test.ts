@@ -55,7 +55,7 @@ test('a replayed handshake message 1 does not start a request', async () => {
   const { ctx, tunnel } = await client()
   assert.equal((await tunnel.fetch('/once')).status, 200)
   const recorded = ctx.relay.frames.slice(0, 3)
-  const replay = new (WebSocket as unknown as new (url: string, init: { headers: Record<string, string> }) => WebSocket)(`${ctx.relay.url}/v1/relay/${ctx.computer.id}?role=device`, { headers: { 'x-openhut-token': TOKEN } })
+  const replay = new (WebSocket as unknown as new (url: string, init: { headers: Record<string, string> }) => WebSocket)(`${ctx.relay.url}/v1/tunnels/${ctx.computer.id}?role=device`, { headers: { 'x-openhut-token': TOKEN } })
   const answers: unknown[] = []
   replay.addEventListener('message', event => answers.push(event.data))
   replay.addEventListener('open', () => recorded.forEach(frame => replay.send(frame)))
