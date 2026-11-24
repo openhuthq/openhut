@@ -199,6 +199,7 @@ export function serve(input: ServeInput): { close: () => void } {
   let socket: WebSocket | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
   let attempts = 0
+  let movingUntil = 0
   let stopped = false
   let lose = () => {}
 
@@ -236,8 +237,10 @@ export function serve(input: ServeInput): { close: () => void } {
     if (message.type === 'close') end(id)
   }
 
+  // After a 1012 "moving" (a Cloud deploy hands over), the old server refuses reconnects until the proxy switches: keep trying
+  // every 0.25-1 s for a minute instead of doubling the wait to 16 s (a 31 s tunnel gap in the 2026-11-24 cutover).
   const retry = () => {
-    if (!stopped) timer = setTimeout(connect, Math.min(30_000, 250 * 2 ** attempts++))
+    if (!stopped) timer = setTimeout(connect, Date.now() < movingUntil ? 250 + Math.random() * 750 : Math.min(30_000, 250 * 2 ** attempts++))
   }
 
   const open = (token: string) => {
@@ -260,6 +263,7 @@ export function serve(input: ServeInput): { close: () => void } {
     lose = lost
     current.addEventListener('open', () => {
       attempts = 0
+      movingUntil = 0
       ping = setInterval(() => current.send('ping'), every)
     })
     current.addEventListener('message', event => {
@@ -268,7 +272,10 @@ export function serve(input: ServeInput): { close: () => void } {
       if (typeof event.data === 'string') onText(event.data)
       if (event.data instanceof ArrayBuffer) onBinary(new Uint8Array(event.data))
     })
-    current.addEventListener('close', lost)
+    current.addEventListener('close', (event) => {
+      if (event.code === 1012) movingUntil = Date.now() + 60_000
+      lost()
+    })
     current.addEventListener('error', lost)
   }
 
