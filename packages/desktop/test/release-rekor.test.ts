@@ -1,17 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { createHash, generateKeyPairSync, sign } from 'node:crypto'
-import { createServer } from 'node:http'
+import { createHash, generateKeyPairSync } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { cosigned, MIN_AGE_SECONDS, REKOR_KEY, rekorIncluded, verifyRelease } from '../src/release-key.mjs'
+import { fakeRekor } from './fake-rekor.ts'
 
 const root = join(import.meta.dirname, '../../..')
 const release = async (args: string[], env: Record<string, string> = {}) => (await promisify(execFile)(join(root, 'scripts/release.sh'), args, { env: { ...process.env, ...env }, encoding: 'utf8' })).stdout.trim()
-const sha256 = (...parts: Buffer[]) => createHash('sha256').update(Buffer.concat(parts)).digest()
 const recorded = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures/rekor-entry.json'), 'utf8'))
 const real = Object.values(recorded)[0] as any
 
@@ -29,31 +28,6 @@ test('a real rekor.sigstore.dev entry (recorded) checks out against the pinned R
   assert.equal(changed((e) => { e.verification.inclusionProof.checkpoint = e.verification.inclusionProof.checkpoint.replace(/\n\d+\n/, '\n1\n') }), null, 'a checkpoint for another tree')
   assert.equal(rekorIncluded(real, generateKeyPairSync('ec', { namedCurve: 'P-256' }).publicKey.export({ type: 'spki', format: 'der' }).toString('base64')), null, 'another log key')
 })
-
-// A stand-in for rekor.sigstore.dev: stores a rekord as Rekor does (the data's hash, not the data) in a one-leaf tree, signs the SET and checkpoint.
-function fakeRekor(time: () => number) {
-  const log = generateKeyPairSync('ec', { namedCurve: 'P-256' })
-  const rekorKey = log.publicKey.export({ type: 'spki', format: 'der' }).toString('base64')
-  const server = createServer((req, res) => {
-    let raw = ''
-    req.on('data', (chunk) => { raw += chunk })
-    req.on('end', () => {
-      const { apiVersion, kind, spec } = JSON.parse(raw)
-      const data = Buffer.from(spec.data.content, 'base64')
-      const body = Buffer.from(JSON.stringify({ apiVersion, kind, spec: { data: { hash: { algorithm: 'sha256', value: sha256(data).toString('hex') } }, signature: spec.signature } })).toString('base64')
-      const entry: any = { body, integratedTime: time(), logID: sha256(Buffer.from(rekorKey, 'base64')).toString('hex'), logIndex: 0 }
-      const leaf = sha256(Buffer.from([0]), Buffer.from(body, 'base64'))
-      const note = `fake - 1\n1\n${leaf.toString('base64')}\n`
-      const checkpoint = `${note}\n— fake ${Buffer.concat([Buffer.alloc(4), sign('sha256', Buffer.from(note), log.privateKey)]).toString('base64')}\n`
-      entry.verification = {
-        signedEntryTimestamp: sign('sha256', Buffer.from(JSON.stringify(entry)), log.privateKey).toString('base64'),
-        inclusionProof: { checkpoint, hashes: [], logIndex: 0, rootHash: leaf.toString('hex'), treeSize: 1 },
-      }
-      res.writeHead(201, { 'content-type': 'application/json' }).end(JSON.stringify({ [sha256(Buffer.from(body, 'base64')).toString('hex')]: entry }))
-    })
-  })
-  return { rekorKey, server }
-}
 
 test('release.json v2 is signed, logged to Rekor and installed only once its entry is an hour old (SEC6)', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'oh-rekor-'))
