@@ -27,7 +27,7 @@ export function CanUse({ agent }: { agent: Agent }) {
     <div className="flex flex-wrap gap-1.5">{granted.map(({ grant, connection }) => <span key={grant.id} className="group inline-flex h-6 items-center gap-1.5 rounded-md bg-picked pr-2 pl-1.5 text-[12px] text-ink">
       <Glyph name={connection.kind} size={13} />{connection.name}
       {agent.canEdit && <Button type="button" variant="bare" aria-label={`Remove ${connection.name}`} title="Remove" disabled={deleteGrant.isPending} onClick={() => deleteGrant.mutate(grant, { onError: toastError })}
-        className="-mr-1 grid size-4 place-items-center rounded-full text-mute opacity-0 group-hover:opacity-100 hover:bg-soft hover:text-ink focus-visible:opacity-100"><I icon={Cancel01Icon} size={11} /></Button>}
+        className="-mr-1 grid size-4 place-items-center rounded-full text-mute opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 hover:bg-soft hover:text-ink focus-visible:opacity-100"><I icon={Cancel01Icon} size={11} /></Button>}
     </span>)}</div>
   </Section>
 }

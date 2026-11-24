@@ -14,8 +14,7 @@ export function fromPhone(name: string): string {
   return FROM_PHONE[name] ?? name
 }
 
-const guess = typeof navigator !== 'undefined' && /Mac|Android/.test(navigator.userAgent) ? 'darwin' : 'linux'
-
 // Outside the desktop shell the browser's own OS says nothing about the computer it talks to.
 export const WORDS = wordsFor(desktop?.platform ?? '')
-export const OWN_TITLE_BAR = (desktop?.platform ?? guess) === 'darwin'
+// A browser tab has its own title bar and no traffic lights.
+export const OWN_TITLE_BAR = desktop?.platform === 'darwin'
