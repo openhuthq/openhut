@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { firstModel, noteOf } from '../../../src/features/agents/form.ts'
+import { firstModel, inUse, noteOf } from '../../../src/features/agents/form.ts'
 
 const provider = (id: string, connected: boolean, models: string[]) => ({ id, connected, models: models.map((model) => ({ id: model, on: true })) }) as never
 
@@ -18,4 +18,11 @@ test('the one-line note follows the pick, and offers a Linux server only when th
   assert.match(noteOf({ where: { kind: 'server', server: false }, computers: [], here: 'Mac' }), /own box/)
   assert.match(noteOf({ where: { kind: 'here', server: false } as never, computers: [{ kind: 'server' }], here: 'Mac' }), /Pick your Linux server/)
   assert.match(noteOf({ where: { kind: 'here', server: false } as never, computers: [{ kind: 'here' } as never], here: 'Mac' }), /Add a Linux server/)
+})
+
+test('Models marks the one new agents use: Claude Sonnet first, else the first connected from top to bottom, none when nothing is set up', () => {
+  assert.equal(inUse([provider('claude', true, ['sonnet']), provider('openrouter', true, ['x-ai/grok'])]), 'claude')
+  assert.equal(inUse([provider('claude', false, ['sonnet']), provider('openrouter', true, ['x-ai/grok'])]), 'openrouter')
+  assert.equal(inUse([provider('openai', false, ['gpt'])]), undefined)
+  assert.equal(inUse(undefined), undefined)
 })

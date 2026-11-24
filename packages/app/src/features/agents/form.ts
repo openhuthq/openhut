@@ -10,6 +10,11 @@ export function firstModel(providers: Provider[] | undefined, only?: ProviderId)
   return found[0] ?? null
 }
 
+export function inUse(providers: Provider[] | undefined): ProviderId | undefined {
+  const picked = firstModel(providers)
+  return providers?.find((provider) => picked?.startsWith(`${provider.id}:`))?.id
+}
+
 export function noteOf({ where, computers, here }: { where: Pick<Computer, 'kind' | 'server'>; computers: Pick<Computer, 'kind'>[]; here: string }): string {
   if (where.kind === 'server' || where.server) return 'Sealed in its own box. Can’t see your files.'
   if (where.kind === 'desktop') return 'Runs as you on that computer, while it’s awake.'
