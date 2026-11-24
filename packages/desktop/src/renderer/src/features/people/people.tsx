@@ -50,7 +50,7 @@ function InviteRow({ invite, workspace, admin }: { invite: CloudWorkspaceView['i
   return <div className="flex items-center gap-3 px-4 py-3">
     <span className="opacity-40"><PersonFace name={name} email={invite.email} size={40} /></span>
     <span className="grid min-w-0 flex-1 gap-px"><span className="text-[13.5px] font-medium">{name}</span><span className="truncate text-[12px] text-mute">{invite.email}</span></span>
-    {invite.link && <Button type="button" variant="ghost" className={PILL} onClick={() => void copy(invite.link ?? '')}>Copy link</Button>}
+    {invite.link && <Button type="button" variant="ghost" className={PILL} onClick={() => void copy({ link: invite.link ?? '', email: invite.email })}>Copy link</Button>}
     {admin && <ConfirmButton className={PILL} disabled={revoke.isPending} question={`Revoke ${name}’s invite?`} detail="The link stops working. You can invite them again later." action="Revoke" onConfirm={() => revoke.mutateAsync({ id: workspace.id, email: invite.email }).then(() => toast(`${name}’s invite revoked`))}>Revoke</ConfirmButton>}
   </div>
 }
@@ -109,8 +109,9 @@ function InviteButton({ workspace }: { workspace: CloudWorkspaceView }) {
   const [role, setRole] = useState<'member' | 'admin'>('member')
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const email = String(new FormData(event.currentTarget).get('email') ?? '')
-    invite.mutate({ workspace: workspace.id, email, role }, { onSuccess: ({ link }) => void copy(link), onError: () => undefined })
+    const email = String(new FormData(event.currentTarget).get('email') ?? '').trim()
+    const sent = workspace.invites.find((each) => each.email.toLowerCase() === email.toLowerCase())
+    invite.mutate({ workspace: workspace.id, email, role }, { onSuccess: ({ link }) => void copy({ link, email, replaced: Boolean(sent) }).then(() => open()), onError: () => undefined })
   }
   return <Popover open={opened} onOpenChange={(on) => open(on ? 'invite' : undefined)}>
     <PopoverTrigger render={<Button type="button" variant="primary" className={cn(PILL, 'gap-1')} />}><I icon={PlusSignIcon} size={14} />Invite</PopoverTrigger>
@@ -125,13 +126,14 @@ function InviteButton({ workspace }: { workspace: CloudWorkspaceView }) {
         </div>
         <Button type="submit" variant="secondary" className="h-8 w-full gap-1.5 phone:h-11 phone:justify-center" disabled={invite.isPending}><I icon={Link01Icon} size={14} />{invite.isPending ? 'Making the link…' : 'Copy invite link'}</Button>
         <ErrorNote message={invite.error?.message} />
-        <span className="text-[12px] text-mute">Your agents stay private until you share them.</span>
+        <span className="text-[12px] text-mute">Send the link yourself, by chat or email. It works once, for 2 days. Your agents stay private until you share them.</span>
       </form>
     </PopoverContent>
   </Popover>
 }
 
-async function copy(link: string) {
-  if (await copyText(link)) toast('Invite link copied')
-  else toast(link)
+async function copy({ link, email, replaced = false }: { link: string; email: string; replaced?: boolean }) {
+  const name = nameOf(email)
+  if (!await copyText(link)) return toast(link)
+  toast(replaced ? `New link for ${name} copied. The one you sent before stops working.` : `Link copied. Send it to ${name}. It works once, for 2 days.`)
 }
