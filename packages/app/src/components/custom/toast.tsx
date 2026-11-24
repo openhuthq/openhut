@@ -10,7 +10,7 @@ type Action = { label: string; onClick: () => void }
 type Notice = { lead?: ReactNode; title: string; note?: ReactNode; action?: Action; cancel?: Action }
 
 export function Tinted({ icon, hue }: { icon: Parameters<typeof I>[0]['icon']; hue: string }) {
-  return <span style={{ color: hue }}><I icon={icon} size={18} /></span>
+  return <span className="flex" style={{ color: hue }}><I icon={icon} size={20} /></span>
 }
 
 export function notify({ lead, title, note, action, onDismiss }: Notice & { onDismiss?: () => void }): void {
