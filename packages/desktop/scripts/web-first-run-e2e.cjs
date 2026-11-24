@@ -86,8 +86,8 @@ app.whenReady().then(async () => {
     if (resumed !== first) throw new Error('the server step didn’t resume with its code')
     await web.run(`localStorage.setItem('openhut-first-run', JSON.stringify({ step: 'server', code: ${JSON.stringify(first)}, expiresAt: new Date(Date.now() - 1000).toISOString() }))`)
     await web.win.reload()
-    await web.until(/Didn't hear from it/)
-    log('7 a command past its 10 minutes shows Didn’t hear from it with Make a new command')
+    await web.until(/This command expired/)
+    log('7 a command past its 10 minutes shows This command expired with Make a new command')
     await web.shot('w-12-server-expired')
     await web.click('Make a new command')
     const code = (await web.until(/OPENHUT_JOIN='[^']+'/)).match(/OPENHUT_JOIN='([^']+)'/)[1]
