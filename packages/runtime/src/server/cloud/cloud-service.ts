@@ -346,8 +346,8 @@ export const cloudService = {
     const mine = (ws: string) => Boolean(roomKeys.members(ws)?.members.some((member) => member.email === account.email && member.devices.includes(device)))
     const teams = roomKeys.rooms().map((room) => room.workspace.id).filter((ws) => ws !== account.workspace.id && mine(ws))
     if (!mine(account.workspace.id) && !teams.length) throw new HttpError(400, 'Pick one of your other devices to remove.', { param: 'device' })
-    if (mine(account.workspace.id)) await serial(async () => putList({ workspace: account.workspace.id, list: await keysService.dropDevices([device]) }))
-    for (const ws of teams) await change({ ws, devices: [device] })
+    await caughtUp({ ws: account.workspace.id, step: async () => { if (mine(account.workspace.id)) await serial(async () => putList({ workspace: account.workspace.id, list: await keysService.dropDevices([device]) })) } })
+    for (const ws of teams) await caughtUp({ ws, step: async () => { if (mine(ws)) await change({ ws, devices: [device] }) } })
     if (await serial(() => deleteBoxes({ account, kinds: ['passkey'] }))) passkeySaved = false
     await keepToRotate()
     return cloudService.status()
@@ -403,6 +403,17 @@ async function change({ ws, emails, devices, rotate = false }: { ws: string; ema
   await putList({ workspace: ws, list, letters })
   if (emails?.includes(keysService.account()?.email ?? '')) return cloudEvents.drop({ ws, why: null })
   if (rotate) await roomKeys.setRoom(room)
+}
+
+async function caughtUp({ ws, step }: { ws: string; step: () => Promise<void> }): Promise<void> {
+  for (let tries = 1; ; tries++) {
+    try {
+      return await step()
+    } catch (err) {
+      if (!(err instanceof HttpError) || err.status !== 409 || tries === 3) throw err
+      await roomKeys.refresh({ ws, call: keysService.call })
+    }
+  }
 }
 
 async function refusal({ ws, status }: { ws: string; status: number }): Promise<HttpError> {
