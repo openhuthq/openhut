@@ -754,6 +754,7 @@ function window(path = '/agents') {
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: DEV, preload: join(HERE, 'preload.cjs'), additionalArguments: [`--openhut-version=${VERSION}`, ...(LOOKS_DEV ? [`--openhut-dev=${devLabel(CLOUD.OPENHUT_CLOUD_URL)}`] : [])] },
   })
   win.on('close', saveBounds)
+  win.on('closed', () => { if (main === win) main = undefined })
   win.on('focus', () => win.flashFrame(false))
   win.once('ready-to-show', () => TEST_HOME && process.env.OPENHUT_TEST_HIDDEN ? undefined : win.show())
   win.loadURL(`${APP_ORIGIN}${path}`)
