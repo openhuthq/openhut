@@ -149,7 +149,8 @@ jobs:
     uses: ./.github/workflows/runtime-image.yml
     secrets: inherit
     with:
-      tags: ''
+      # R9: a main push that will be a beta also pushes the runtime image (tagged by commit) for the beta's install.sh to pin.
+      tags: ${{ github.ref == 'refs/heads/main' && vars.PUBLISH_PACKS == 'true' && github.sha || '' }}
 
   packs:
     # The pack build (scripts/pack.ts) and its time, on main only; it joins `gate`'s needs once it should block.
@@ -159,7 +160,7 @@ jobs:
   beta:
     # R4: every green main push becomes a beta: its packs, signed, logged in Rekor, announced and published as the beta pointer, which
     # Promote (promote.yml) re-signs as stable. Off until the repo variable PUBLISH_PACKS is 'true': it publishes on every main push.
-    needs: [gate, packs]
+    needs: [gate, packs, server]
     if: github.ref == 'refs/heads/main' && vars.PUBLISH_PACKS == 'true' && needs.gate.result == 'success'
     environment: release
     runs-on: ubuntu-latest
@@ -173,6 +174,15 @@ jobs:
         with:
           name: packs
           path: packs
+      - name: Add the server runtime, install.sh pinned to the image just pushed, and openhut.tgz
+        env:
+          IMAGE: ${{ needs.server.outputs.image }}
+          BUILD: ${{ needs.server.outputs.build }}
+        run: |
+          case "$IMAGE" in ghcr.io/openhuthq/runtime@sha256:*) ;; *) echo "::error::The runtime image job gave no image digest ($IMAGE)."; exit 1 ;; esac
+          BASE=https://openhut.dev/install.sh TGZ='https://dl.openhut.dev/packs/@SHA512@' scripts/release.sh
+          grep -qxF "RUNTIME_IMAGE=\"\${RUNTIME_IMAGE:-$IMAGE}\"" dist/install.sh && sh -n dist/install.sh
+          cp dist/install.sh dist/openhut.tgz packs/
       - name: Sign, log and publish the packs as the beta
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -88,10 +88,18 @@ announce() {
 pointer() {
   announce "$1"
   for ext in '' .sig .rekor; do put "channels/$2/release.json$ext" "$1/release.json$ext" 'public, max-age=60' application/json; done
+  # R9: the install.sh this pointer names (a signed file, at packs/<sha512 hex>) is served at channels/<channel>/install.sh;
+  # openhut.dev/install.sh redirects to stable's. Servers' updater checks it against channels/stable/release.json again.
+  hex=$(node -p "Buffer.from(JSON.parse(require('fs').readFileSync(process.argv[1])).files['install.sh'] ?? '', 'base64').toString('hex')" "$1/release.json")
+  [ -n "$hex" ] || return 0
+  curl -fsS -o "$1/install.sh.served" "$URL/packs/$hex"
+  [ "$(shasum -a 512 "$1/install.sh.served" | cut -d' ' -f1)" = "$hex" ] || { echo "r2: packs/$hex isn't the install.sh $1/release.json names" >&2; exit 1; }
+  put "channels/$2/install.sh" "$1/install.sh.served" 'public, max-age=60' 'text/plain; charset=utf-8'
 }
 
 packs() {
-  for file in "$1"/openhut-*.tgz "$1"/openhut-*.json; do
+  for file in "$1"/openhut-*.tgz "$1"/openhut-*.json "$1"/install.sh "$1"/openhut.tgz; do
+    [ -f "$file" ] || continue
     key=packs/$(shasum -a 512 "$file" | cut -d' ' -f1)
     if curl -fsI "$URL/$key" >/dev/null; then echo "r2: $key is there"; else put "$key" "$file" "$FOREVER"; fi
   done

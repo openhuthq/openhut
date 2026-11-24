@@ -1,7 +1,7 @@
 name: Packs
 
 # R2: the app, runtime and native packs (scripts/pack.ts), built and timed on Linux (target ≤5 min). Not signed or published yet (R4).
-# ci.yml calls it on main pushes, release.yml for each release (with the tag); the packs come back as the `packs` artifact.
+# ci.yml calls it on main pushes; the packs come back as the `packs` artifact.
 on:
   workflow_call:
     inputs:
@@ -47,10 +47,17 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: |
           key=$(node scripts/release-key.ts key "$RUNNER_TEMP/test.pem")
+          # ci.yml's beta pins the image its server job pushed; a dry run pins a stand-in digest.
+          IMAGE=ghcr.io/openhuthq/runtime@sha256:$(printf dry | sha256sum | cut -c1-64) BUILD=dry BASE=https://openhut.dev/install.sh TGZ='https://dl.openhut.dev/packs/@SHA512@' scripts/release.sh
+          cp dist/install.sh dist/openhut.tgz packs/
           node scripts/release-key.ts sign "$RUNNER_TEMP/test.pem" packs "$(node -p "require('./packages/desktop/package.json').version")" --channel beta
-          { echo "Dry release, signed by a test key ($key), PUBLISH_PACKS untouched. A normal release would upload only:"; echo '```'
-            for f in packs/openhut-*; do echo "packs/$(shasum -a 512 "$f" | cut -d' ' -f1)  ($(basename "$f"), $(wc -c < "$f") bytes)"; done
-            echo 'channels/beta/release.json, .sig, .rekor; releases/<sha256>.json, .sig, .rekor'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          node -e 'const f = require("./packs/release.json").files, h = (n) => require("crypto").createHash("sha512").update(require("fs").readFileSync("packs/" + n)).digest("base64")
+            for (const n of ["install.sh", "openhut.tgz"]) if (f[n] !== h(n)) throw new Error(`release.json does not sign ${n}`)'
+          grep -q "^OPENHUT_TGZ=\"https://dl.openhut.dev/packs/$(shasum -a 512 packs/openhut.tgz | cut -d' ' -f1)\"$" packs/install.sh
+          { echo "Dry release, signed by a test key ($key), PUBLISH_PACKS untouched. release.json signs install.sh and openhut.tgz. A normal release would upload only:"; echo '```'
+            for f in packs/openhut-* packs/install.sh packs/openhut.tgz; do echo "packs/$(shasum -a 512 "$f" | cut -d' ' -f1)  ($(basename "$f"), $(wc -c < "$f") bytes)"; done
+            echo 'channels/beta/release.json, .sig, .rekor, install.sh; releases/<sha256>.json, .sig, .rekor'; echo '```'
+            grep -E '^(OPENHUT_URL|OPENHUT_BUILD|OPENHUT_TGZ|RUNTIME_IMAGE)=' packs/install.sh; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: packs

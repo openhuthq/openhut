@@ -2,7 +2,7 @@ name: Shell
 
 # Packages the Electron shell: macOS, Windows and Linux installers, signing, notarization, packaged app e2e and the
 # update test. It runs only when a main push changes the shell, or by hand; never on a PR, and CI (ci.yml) never
-# packages. Run by hand on a v* tag ref (Cut a release does that), it signs, uploads to the tag's draft release and
+# packages. Run by hand on a v* tag ref, it signs, uploads to the tag's draft release and
 # publishes it, and installed apps take the new shell through their in-app update.
 
 on:
@@ -49,7 +49,7 @@ env:
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   TAGGED: ${{ startsWith(github.ref, 'refs/tags/') }}
   FULL: ${{ startsWith(github.ref, 'refs/tags/') || inputs.full }}
-  OPENHUT_INSTALL_URL: ${{ startsWith(github.ref, 'refs/tags/') && format('https://github.com/{0}/releases/download/{1}/install.sh', github.repository, github.ref_name) || 'https://openhut.dev/edge' }}
+  OPENHUT_INSTALL_URL: ${{ startsWith(github.ref, 'refs/tags/') && 'https://openhut.dev/install.sh' || 'https://openhut.dev/edge' }}
 
 jobs:
   pack-update:
@@ -130,7 +130,7 @@ jobs:
         if: env.TAGGED == 'true'
         run: |
           echo "$GITHUB_REF_NAME" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?' || { echo "::error::$GITHUB_REF_NAME isn't a version tag like v0.6.3 or v0.6.3-beta.1."; exit 1; }
-          served=$(curl -fsSL https://openhut.dev/ | sed -n 's/^OPENHUT_BUILD="\(.*\)"$/\1/p')
+          served=$(curl -fsSL https://openhut.dev/install.sh | sed -n 's/^OPENHUT_BUILD="\(.*\)"$/\1/p')
           [ -z "$served" ] || [ "$(printf '%s\n%s\n' "$served" "${GITHUB_REF_NAME#v}" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" = "${GITHUB_REF_NAME#v}" ] && [ "$served" != "${GITHUB_REF_NAME#v}" ] ||
             { echo "::error::openhut.dev serves runtime build $served, and ${GITHUB_REF_NAME#v} isn't newer, so servers would never be offered this release. Use a higher version."; exit 1; }
       - name: Cloudflare takes uploads past wrangler's 300 MB limit
@@ -351,56 +351,19 @@ jobs:
         shell: bash
         run: gh release upload "$GITHUB_REF_NAME" OpenHut-Setup-x64.exe OpenHut-Setup-x64.exe.blockmap latest.yml --clobber
 
-  runtime-image:
-    needs: draft
-    if: startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/runtime-image.yml
-    secrets: inherit
-    with:
-      build: ${{ github.ref_name }}
-      tags: ${{ github.ref_name }}
-
-  server-runtime:
-    needs: runtime-image
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-      - run: node scripts/set-version.ts "$GITHUB_REF_NAME"
-      - name: Add the server runtime of the same commit, pinned to its image, to the draft release
-        env:
-          IMAGE: ${{ needs.runtime-image.outputs.image }}
-        run: |
-          case "$IMAGE" in ghcr.io/openhuthq/runtime@sha256:*) ;; *) echo "::error::The runtime image workflow gave no image digest ($IMAGE)."; exit 1 ;; esac
-          BUILD="${GITHUB_REF_NAME#v}" TGZ="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/openhut.tgz" scripts/release.sh
-          sh -n dist/install.sh
-          grep -qxF "RUNTIME_IMAGE=\"\${RUNTIME_IMAGE:-$IMAGE}\"" dist/install.sh
-          gh release upload "$GITHUB_REF_NAME" dist/install.sh dist/openhut.tgz --clobber
-
   publish:
-    needs: [build, server-runtime]
+    needs: build
     if: startsWith(github.ref, 'refs/tags/')
     environment: release
     runs-on: ubuntu-latest
     permissions:
       contents: write
       actions: write
-      packages: write
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Every file is there, sign them, then put them on dl.openhut.dev and publish the release
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -410,7 +373,7 @@ jobs:
           have=$(gh release view "$GITHUB_REF_NAME" --json assets -q '.assets[].name')
           v="${GITHUB_REF_NAME#v}"
           [ -n "$RELEASE_SIGNING_KEY" ] || { echo "::error::The release environment has no RELEASE_SIGNING_KEY, and the app refuses an unsigned update."; exit 1; }
-          for want in OpenHut-arm64.dmg "OpenHut-$v-arm64.zip" "OpenHut-$v-arm64.zip.blockmap" latest-mac.yml OpenHut-x64.AppImage openhut-x64.deb latest-linux.yml OpenHut-Setup-x64.exe latest.yml install.sh openhut.tgz SHA256SUMS; do
+          for want in OpenHut-arm64.dmg "OpenHut-$v-arm64.zip" "OpenHut-$v-arm64.zip.blockmap" latest-mac.yml OpenHut-x64.AppImage openhut-x64.deb latest-linux.yml OpenHut-Setup-x64.exe latest.yml SHA256SUMS; do
             echo "$have" | grep -qx "$want" || { echo "::error::The draft release has no $want, so it stays a draft."; exit 1; }
           done
           gh release download "$GITHUB_REF_NAME" --dir r2
@@ -420,6 +383,4 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" r2/release.json r2/release.json.sig r2/release.json.rekor --clobber
           scripts/r2.sh release "$v" r2
           gh release edit "$GITHUB_REF_NAME" --draft=false
-          image=$(sed -n 's/^RUNTIME_IMAGE="${RUNTIME_IMAGE:-\(.*\)}"$/\1/p' r2/install.sh)
-          docker buildx imagetools create -t "ghcr.io/openhuthq/runtime:$(case "$v" in *-*) echo beta ;; *) echo latest ;; esac)" "$image"
           gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main
