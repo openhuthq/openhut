@@ -46,7 +46,7 @@ export function SignIn({ cloud }: { cloud: Cloud | undefined }) {
   </Button>
   const quiet = !invited && !isPhone() && <Button type="button" variant="text" onClick={() => open('join-link')}>I have an invite link</Button>
   const link = waiting ? <span className="text-mute">Google opened in your browser · <Button type="button" variant="text" className="font-normal text-mute" disabled={signIn.isPending} onClick={() => signIn.mutate(hint)}>Open it again</Button> · <Button type="button" variant="text" className="font-normal text-mute" onClick={cancel}>Cancel</Button></span> : quiet
-  const [title, line] = invited ? [invite?.from && invite.team ? `${firstName(invite.from)} invited you to ${invite.team}.` : 'You’re invited.', hint ? `Sign in with Google as ${hint} to join. Everything in the team stays end-to-end encrypted.` : INVITED] : [moving ? 'Sign in to keep going.' : 'Your agents, everywhere.', moving]
+  const [title, line] = invited ? [invite?.team ? `You’re invited to ${invite.team}.` : 'You’re invited.', `${invite?.from ? `${firstName(invite.from)} (${invite.from}) invited you. ` : ''}${hint ? `Sign in with Google as ${hint} to join. Everything in the team stays end-to-end encrypted.` : INVITED}`] : [moving ? 'Sign in to keep going.' : 'Your agents, everywhere.', moving]
   return <Step title={title} line={line} action={action} link={link}>
     {!invited && <ul className="m-0 flex list-none flex-col gap-3 p-0 text-left">{POINTS.map(([icon, text]) => <li key={text} className="flex items-center gap-3 text-[15px]/[1.4] text-body"><I icon={icon} size={18} className="shrink-0 text-mute" />{text}</li>)}</ul>}
     {isPhone() && <p className="m-0 text-[13px] text-mute">Sign in to OpenHut on your computer.</p>}
