@@ -50,7 +50,7 @@ test('against the real cloud API: dev sign-in, save the kit, make an agent, chat
     const polls = (async () => {
       while (polling) await Promise.all([status(), app.inject({ method: 'GET', url: '/api/agents', headers })])
     })()
-    assert.match((await app.inject({ method: 'GET', url: callback })).body, /You’re signed in/)
+    assert.match((await app.inject({ method: 'GET', url: callback })).body, /Signed in as .* OpenHut has moved on/)
     polling = false
     await polls
     for (let i = 0; i < 100 && (await status()).status !== 'on'; i++) await sleep(50)
