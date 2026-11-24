@@ -27,7 +27,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   Query), which calls `/api/*` on `app://openhut`; the main process forwards it to the runtime's socket. Tailwind v4 with shared components in `src/renderer/src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`private/brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.
 - **`packages/tunnel`** — `@openhut/tunnel`, the encrypted tunnel (through the relay; `sessions()` runs it over any pipe): Noise IK on `noise-handshake`,
-  the frame codec, `connect` (device) and `serve` (computer); both show the access token as `x-openhut-token`, so `connect` runs in Node only for now.
+  the frame codec, `connect` (device) and `serve` (computer); a computer shows its access token as `x-openhut-token`, a device as the second WebSocket subprotocol after `openhut`, so `connect` runs in browsers too, with a non-exportable WebCrypto key (`newWebKeyPair`, `webKey`; `private/brain/decisions/browser-keys.md`).
 - **`packages/e2e`** — `@openhut/e2e`, the end-to-end run: the cloud server on PGlite, a bare Linux server in Docker, the
   curl install of a remote runtime that joins with a one-use code (`OPENHUT_JOIN`), a tampered upgrade, the upgrade and a restart. Results go to `packages/e2e/results/` (gitignored).
 - **`packages/docs`** — `@openhut/docs`, the docs at openhut.dev/docs: Fumadocs on TanStack Start, prerendered. MDX in

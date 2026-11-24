@@ -18,6 +18,8 @@
   "devDependencies": {
     "@types/node": "26.6.2",
     "@types/ws": "8.18.1",
+    "electron": "45.2.1",
+    "esbuild": "0.28.2",
     "ws": "8.21.0"
   }
 }

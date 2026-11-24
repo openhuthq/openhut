@@ -32,12 +32,12 @@ export class TunnelError extends Error {
 const nullBody = new Set([204, 205, 304])
 const empty = new Uint8Array(0)
 
-const NodeSocket = WebSocket as unknown as new (url: string, init: { headers: Record<string, string> }) => WebSocket
+const PROTOCOL = 'openhut'
 
 export async function connect(input: { relayUrl: string; computer: { id: string; key: string }; key: DeviceKey; token: string; url?: string; timeout?: number }): Promise<Tunnel> {
   const handshake = initiator({ key: input.key, remote: fromHex(input.computer.key) })
   const first = await handshake.write()
-  const socket = new NodeSocket(input.url ?? `${input.relayUrl}/v1/relay/${input.computer.id}?role=device`, { headers: { 'x-openhut-token': input.token } })
+  const socket = new WebSocket(input.url ?? `${input.relayUrl}/v1/relay/${input.computer.id}?role=device`, [PROTOCOL, input.token])
   socket.binaryType = 'arraybuffer'
   const streams = new Map<number, Pending>()
   const sockets = new Map<number, OpenSocket>()

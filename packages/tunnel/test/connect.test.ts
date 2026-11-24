@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { connect, TunnelError, type TunnelSocket } from '../src/index.ts'
+import { connect, newWebKeyPair, toHex, TunnelError, webKey, type TunnelSocket } from '../src/index.ts'
 import { nativeKey, newDevice, startComputer, startRelay, TOKEN, waitFor } from './relay.ts'
 
 test('a request and its response cross the tunnel, with only the allowed headers and the body length', async () => {
@@ -196,6 +196,18 @@ test('a lost tunnel closes its sockets', async () => {
   await waitFor(() => closes.length === 1)
   assert.equal(closes[0].code, 1006)
   await waitFor(() => ctx.sockets.includes('closed /live'))
+  tunnel.close()
+  await ctx.close()
+})
+
+test('a browser-style device: a WebCrypto key that never leaves the key store, and its token sent as a subprotocol', async () => {
+  const ctx = await startComputer()
+  const pair = await newWebKeyPair()
+  assert.equal(pair.privateKey.extractable, false)
+  const key = await webKey(pair)
+  ctx.listed.add(toHex(key.publicKey))
+  const tunnel = await connect({ relayUrl: ctx.relay.url, computer: ctx.computer, key, token: TOKEN })
+  assert.deepEqual(await (await tunnel.fetch('/api/me')).json(), { path: '/api/me', body: '' })
   tunnel.close()
   await ctx.close()
 })
