@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { ArrowRight01Icon, Search01Icon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
-import { PROVIDERS, modelKey, type Provider, type ProviderModel } from '@openhut/common/models/provider.ts'
+import { PROVIDERS, modelKey, type Provider, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
 import { buttonVariants } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuEmpty, DropdownMenuFilter, DropdownMenuInput, DropdownMenuItem, DropdownMenuList, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Glyph } from '@/components/glyph'
@@ -15,10 +15,11 @@ export const SOFT_TRIGGER = cn(buttonVariants({ variant: 'secondary', size: 'sm'
 
 export type PickerNone = { name: string; note: string; icon: ReactNode }
 
-export function ModelPicker({ providers, value, onPick, title, label, none, disabled, className, children }: {
+export function ModelPicker({ providers, value, onPick, onSetUp, title, label, none, disabled, className, children }: {
   providers: Provider[] | undefined
   value: string | null
   onPick: (key: string | null) => void
+  onSetUp?: (id: ProviderId) => void
   title: string
   label: string
   none?: PickerNone
@@ -39,10 +40,15 @@ export function ModelPicker({ providers, value, onPick, title, label, none, disa
         <DropdownMenuSeparator />
       </>}
       {connected.map((provider) => <ProviderMenu key={provider.id} provider={provider} value={value} onPick={onPick} />)}
-      {missing.length > 0 && <>
+      {missing.length > 0 && (onSetUp ? <>
+        {connected.length > 0 && <DropdownMenuSeparator />}
+        {missing.filter((info) => info.kind === 'subscription').map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={`Sign in with ${info.short}`} note={info.blurb} onClick={() => onSetUp(info.id)} />)}
+        {missing.some((info) => info.kind === 'key') && <div className={LABEL}>Add an API key</div>}
+        {missing.filter((info) => info.kind === 'key').map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={`${info.short} key…`} note={info.blurb} onClick={() => onSetUp(info.id)} />)}
+      </> : <>
         <div className={LABEL}>Not set up</div>
         {missing.map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={info.short} note={info.kind === 'subscription' ? 'Sign in under Settings › Models' : 'Add a key under Settings › Models'} disabled />)}
-      </>}
+      </>)}
     </DropdownMenuContent>
   </DropdownMenu>
 }

@@ -33,8 +33,6 @@ const ROUND = 'float phone:size-10 phone:rounded-full phone:bg-card phone:text-i
 
 const LABEL = 'px-2.5 pt-3 pb-1 text-[11.5px] font-medium text-mute'
 
-const EMPTY = 'm-0 px-2.5 py-2 text-[13px] text-mute'
-
 const LIVE = { on: 'bg-pass', wait: 'animate-[blinkdot_1s_infinite] bg-amber', bad: 'bg-fail', off: 'bg-mute-2' }
 
 export type Contact = { agent: OpenHutAgent; thread: Thread | undefined }
@@ -78,7 +76,10 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
         {thread && <span className="hidden self-start pt-1 text-[12px] text-mute tabular-nums phone:block">{ago(thread.updatedAt)}</span>}
       </a></RowMenu>)}
       </div>)}
-      {!contacts.length && <p className={EMPTY}>No agents yet</p>}
+      {!contacts.length && <Button type="button" variant="bare" onClick={onNew} className={cn('grid h-auto w-full grid-cols-[40px_1fr] items-center gap-3 rounded-lg px-2.5 py-2 text-left font-normal text-inherit', HOVER)}>
+        <span className="grid size-10 place-items-center rounded-full border-[1.5px] border-dashed border-mute-2 text-mute"><I icon={PlusSignIcon} size={16} /></span>
+        <span className="grid min-w-0 gap-0.5"><span className="truncate text-[14px] font-semibold">New agent</span><span className="truncate text-[13px] text-body">Chats with you and works on your computers</span></span>
+      </Button>}
     </nav>
     <footer className="mt-auto flex flex-col items-start gap-2 px-3 pt-2 pb-3">
       <UpdateEverything />

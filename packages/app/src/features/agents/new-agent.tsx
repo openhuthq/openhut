@@ -1,128 +1,119 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Cancel01Icon, DiceFaces03Icon } from '@hugeicons/core-free-icons'
-import type { Provider } from '@openhut/common/models/provider.ts'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Cancel01Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { providerInfo, type ProviderId } from '@openhut/common/models/provider.ts'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
-import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { ErrorNote } from '@/components/error-note'
 import { DialogCard, I } from '@/components/kit'
+import { Glyph } from '@/components/glyph'
 import { useAgents, useCreateAgent } from '@/features/agents/api'
 import { useWorkspaces } from '@/features/cloud/workspaces'
-import { useComputers, whereNote } from '@/features/computers/api'
+import { useComputers } from '@/features/computers/api'
 import { useStartSeatSignIn } from '@/features/settings/api'
-import { SeatSignIn } from '@/features/settings/models'
+import { ModelsStep, SeatSignIn, stepOf } from '@/features/settings/models'
 import { WORDS } from '@/lib/platform'
+import { DEFAULT_MODEL, firstModel, noteOf } from '@/features/agents/form'
 import { ComputerPicker } from '@/features/computers/computer-picker'
 import { useComputerProviders } from '@/features/models/api'
-import { ModelPicker } from '@/features/models/model-picker'
+import { ModelPicker, SOFT_TRIGGER } from '@/features/models/model-picker'
 import { FacePicker } from '@/features/agents/face-picker'
 import { formValues } from '@/lib/form'
-import { SOFT_TRIGGER } from '@/features/models/model-picker'
 import { TOUCH, useMedia } from '@/lib/media'
-import { navigate } from '@/lib/router'
+import { open, useOpen } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
 const NAMES = ['Juniper', 'Scout', 'Pepper', 'Atlas', 'Maple', 'Biscuit', 'Nova', 'Otto']
 
-const DEFAULT_MODEL = 'claude:sonnet'
-
-function firstModel(providers: Provider[] | undefined): string | null {
-  const ready = providers?.filter((provider) => provider.connected) ?? []
-  if (ready.some((provider) => provider.id === 'claude' && provider.models.some((model) => model.id === 'sonnet' && model.on))) return DEFAULT_MODEL
-  const found = ready.flatMap((provider) => provider.models.filter((model) => model.on).map((model) => `${provider.id}:${model.id}`))
-  return found[0] ?? null
-}
+const PICKER = cn(SOFT_TRIGGER, 'w-auto min-w-[200px] max-w-full gap-2')
 
 export function NewAgentDialog({ onClose }: { onClose: () => void }) {
+  return <DialogCard onClose={onClose} className="max-h-[calc(100vh-32px)] w-[480px] p-6">
+    <Button type="button" size="icon-sm" aria-label="Close" title="Close" className="absolute top-3 right-3 rounded-full" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
+    <DialogTitle className="text-[15px]/[22px] font-medium">New agent</DialogTitle>
+    <AgentForm />
+  </DialogCard>
+}
+
+export function FirstAgent() {
+  return <div className="flex w-[400px] max-w-full flex-col items-center gap-2 text-center">
+    <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Make your first agent</h1>
+    <p className="m-0 mb-3 text-[14px]/[1.5] text-body">Give it a job in your first chat.</p>
+    <AgentForm />
+  </div>
+}
+
+function AgentForm() {
   const createAgent = useCreateAgent()
   const { active } = useWorkspaces()
   const touch = useMedia(TOUCH)
   const computers = useComputers().data ?? []
   const [computer, setComputer] = useState('local')
   const providers = useComputerProviders(computer)
-  const [picked, setPicked] = useState<string | null | undefined>(undefined)
-  const taken = new Set(useAgents().data?.map((agent) => agent.name))
-  const fresh = NAMES.filter((each) => !taken.has(each))
-  const names = fresh.length ? fresh : NAMES
-  const [typed, setTyped] = useState(names[0])
-  const [first] = useState(names[0])
-  const model = picked === undefined ? firstModel(providers) : picked
-  const name = useRef<HTMLInputElement>(null)
-  const [empty, setEmpty] = useState(false)
-  const reroll = () => {
-    if (!name.current) return
-    name.current.value = names[(names.indexOf(name.current.value) + 1) % names.length]
-    setTyped(name.current.value)
-    setEmpty(false)
-  }
-  return <DialogCard onClose={onClose} className="max-h-[calc(100vh-32px)] w-[480px] items-center p-6 text-center [&_form>*]:shrink-0">
-    <form className="contents" onSubmit={(event) => {
-      const field = formValues(event)
-      createAgent.mutate({ body: { name: field('name').trim(), face: field('face'), ...(model && { model }), ...(!active.home && { workspace: active.id }) }, computer })
-    }}>
-      <Button type="button" size="icon-sm" aria-label="Close" title="Close" className="absolute top-3 right-3 rounded-full" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
-      <DialogTitle className="text-[15px]/[22px] font-medium">New agent</DialogTitle>
-      <FacePicker initial={null} />
-      <div className="flex w-full items-center gap-2">
-        <Input ref={name} name="name" autoFocus={!touch} autoComplete="off" enterKeyHint="go" required maxLength={40} defaultValue={first} aria-label="Name" className="h-10 rounded-lg text-center text-base font-medium" onInput={(event) => { setTyped(event.currentTarget.value); setEmpty(!event.currentTarget.value.trim()) }} />
-        <Button type="button" variant="secondary" size="icon" aria-label="Random name" title="Random name" className="size-10 shrink-0 rounded-lg text-ink" onClick={reroll}><I icon={DiceFaces03Icon} /></Button>
-      </div>
-      <div className="flex w-full flex-col gap-2.5 text-left">
-        {(computers.length > 1 || computers[0]?.server) && <Setting title="Where should it run?" hint={whereNote(computers.find((each) => each.id === computer) ?? computers[0])}>
-          <ComputerPicker computers={computers} value={computer} onPick={(id) => { setComputer(id); setPicked(undefined) }} title={`${typed.trim() || 'The agent'} runs on`} className="w-[200px]" />
-        </Setting>}
-        <Setting title="Model" hint="What it thinks with.">
-          <ModelPicker providers={providers} value={model} onPick={setPicked} label="Model" title={`${typed.trim() || 'The agent'} thinks with`} className={cn(SOFT_TRIGGER, 'w-[200px]')} />
-        </Setting>
-      </div>
-      <Button type="submit" variant="primary" size="lg" className="h-10 w-full justify-center" disabled={empty || createAgent.isPending}>{createAgent.isPending ? 'Creating…' : 'Create'}</Button>
-      {createAgent.error ? <p role="alert" className="m-0 text-xs text-fail">{createAgent.error.message}</p> : <span className="text-[12px]/[16px] text-mute phone:hidden">You can set its job and where to talk to it next.</span>}
-    </form>
-  </DialogCard>
-}
-
-
-export function FirstAgent() {
-  const createAgent = useCreateAgent()
-  const { active } = useWorkspaces()
-  const providers = useComputerProviders('local')
-  const computers = useComputers().data ?? []
-  const [computer, setComputer] = useState('local')
-  const noModel = Boolean(providers && !firstModel(providers))
+  const [picked, setPicked] = useState<string | null>(null)
+  const [wanted, setWanted] = useState<ProviderId>()
   const seat = useStartSeatSignIn()
-  const [waiting, setWaiting] = useState<{ name: string; face: string }>()
-  const here = computer === 'local' && !computers[0]?.server
-  const sealed = computers.some((each) => each.kind === 'server') ? 'Pick your Linux server above to seal it in its own box instead.' : 'Want it sealed in its own box instead? Add a Linux server later in Settings › Computers.'
+  const [signing, setSigning] = useState<{ name: string; face: string } | 'only'>()
+  const setup = stepOf(useOpen())
+  const taken = new Set(useAgents().data?.map((agent) => agent.name))
+  const name = NAMES.find((each) => !taken.has(each)) ?? NAMES[0]
+  const model = picked ?? firstModel(providers) ?? DEFAULT_MODEL
+  const unready = Boolean(providers && !providers.some((provider) => provider.connected && model.startsWith(`${provider.id}:`)))
   const { mutate: prepare, isIdle } = seat
-  useEffect(() => { if (noModel && isIdle) prepare() }, [noModel, isIdle, prepare])
-  const create = ({ name, face, model }: { name: string; face: string; model: string | null }) => createAgent.mutate({ body: { name, face, ...(model && { model }), ...(!active.home && { workspace: active.id }) }, computer })
-  return <form className="flex flex-col items-center gap-4 text-center" onSubmit={(event) => {
+  useEffect(() => { if (unready && isIdle) prepare() }, [unready, isIdle, prepare])
+  const added = wanted && providers?.find((provider) => provider.id === wanted)?.connected
+  useEffect(() => {
+    if (!added || !wanted) return
+    setPicked(firstModel(providers, wanted))
+    setWanted(undefined)
+    if (setup) open()
+  }, [added, wanted, providers, setup])
+  const setUp = (id: ProviderId) => {
+    setWanted(id)
+    if (id === 'claude') setSigning('only')
+    else open(id)
+  }
+  const create = ({ name, face }: { name: string; face: string }) => createAgent.mutate({ body: { name, face, model, ...(!active.home && { workspace: active.id }) }, computer })
+  const where = computers.find((each) => each.id === computer) ?? computers[0]
+  return <form className="flex w-full flex-col items-center gap-4" onSubmit={(event) => {
     const field = formValues(event)
-    const picked = { name: field('name').trim(), face: field('face') }
-    if (noModel) return setWaiting(picked)
-    create({ ...picked, model: firstModel(providers) })
+    const typed = { name: field('name').trim() || name, face: field('face') }
+    if (unready && model.startsWith('claude:')) return setSigning(typed)
+    create(typed)
   }}>
-    {waiting && <SeatSignIn start={seat} onClose={() => setWaiting(undefined)} onDone={() => { create({ ...waiting, model: DEFAULT_MODEL }); setWaiting(undefined) }} />}
-    <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Make your first agent</h1>
-    <p className="m-0 -mt-2 text-[14px]/[1.5] text-body">Give it a name and a face. You can tell it its job in your first chat.</p>
-    <FacePicker initial={null} />
-    <Field label={<span className="text-[12px] font-medium text-mute">Name</span>} className="mt-1 w-[352px] max-w-full text-left">{(control) => <Input {...control} name="name" required maxLength={40} defaultValue={NAMES[0]} autoComplete="off" spellCheck={false} className="h-10 rounded-lg text-[15px] font-medium" />}</Field>
-    {(computers.length > 1 || computers[0]?.server) && <div className="flex w-[352px] max-w-full flex-col gap-1.5 text-left">
-      <span className="text-[12px] font-medium text-mute">Where should it run?</span>
-      <ComputerPicker computers={computers} value={computer} onPick={setComputer} title="It runs on" className="h-10 w-full rounded-lg" />
-      <span className="text-[12px]/[16px] text-mute">{whereNote(computers.find((each) => each.id === computer) ?? computers[0])}</span>
-    </div>}
-    {here && <p className="m-0 w-[352px] max-w-full text-left text-[12px]/[16px] text-mute">It runs on this {WORDS.here} as you, so it can open your files and run code. {sealed}</p>}
-    <Button type="submit" variant="primary" className="mt-2 h-10 w-[352px] max-w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !providers}>{createAgent.isPending ? 'Creating…' : noModel ? 'Connect Claude and create' : 'Create agent'}</Button>
-    {noModel && <Button type="button" variant="text" className="-mt-2 font-normal text-mute" onClick={() => navigate('/settings/models')}>Use ChatGPT or an API key instead</Button>}
+    {signing && <SeatSignIn start={seat} onClose={() => setSigning(undefined)} onDone={() => { if (signing !== 'only') create(signing); setSigning(undefined) }} />}
+    {setup && setup !== 'claude' && <ModelsStep id={setup} />}
+    <FacePicker initial={null} compact />
+    <Input name="name" required maxLength={40} defaultValue={name} placeholder={name} aria-label="Name" autoFocus={!touch} autoComplete="off" spellCheck={false} enterKeyHint="go"
+      className="h-auto w-full rounded-none border-0 bg-transparent p-0 text-center text-[22px]/[1.3] font-semibold shadow-none focus-visible:ring-0 text-ink outline-none placeholder:text-mute-2" />
+    <div className="flex w-full flex-col divide-y divide-hair border-y border-hair text-left">
+      {(computers.length > 1 || computers[0]?.server) && where && <Row title="Runs on">
+        <ComputerPicker computers={computers} value={computer} onPick={(id) => { setComputer(id); setPicked(null) }} title="It runs on" className={PICKER} />
+      </Row>}
+      <Row title="Model">
+        <ModelPicker providers={providers} value={model} onPick={setPicked} onSetUp={setUp} label="Model" title="It thinks with" className={PICKER}>
+          {unready ? <NeedsSignIn model={model} /> : undefined}
+        </ModelPicker>
+      </Row>
+    </div>
+    {where && <p className="m-0 w-full text-left text-[12px]/[16px] text-mute">{noteOf({ where, computers, here: WORDS.here })}</p>}
+    <Button type="submit" variant="primary" className="h-10 w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !providers}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
     <ErrorNote message={createAgent.error?.message} />
   </form>
 }
 
-function Setting({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
-  return <div className="flex flex-wrap items-center justify-between gap-3">
-    <span className="grid min-w-0 flex-1 basis-[180px]"><span className="text-[13px]/[18px] font-medium">{title}</span><span className="text-[12px]/[16px] text-mute">{hint}</span></span>
+function NeedsSignIn({ model }: { model: string }) {
+  const provider = model.split(':')[0] as ProviderId
+  return <>
+    <span className="grid w-3.5 shrink-0 place-items-center"><Glyph name={provider} size={14} /></span>
+    <span className="min-w-0 flex-1 truncate text-left">{providerInfo(provider).short} <span className="text-mute">· Sign in needed</span></span>
+    <I icon={UnfoldMoreIcon} size={12} className="text-mute" />
+  </>
+}
+
+function Row({ title, children }: { title: string; children: ReactNode }) {
+  return <div className="flex min-h-12 items-center justify-between gap-3 py-2">
+    <span className="text-[13px] font-medium">{title}</span>
     {children}
   </div>
 }
