@@ -1,5 +1,6 @@
 import { InviteLetter, type OpenedInvite, parseJson, type Cloud, type CloudInvite, type CloudInvitePreview, type CreateCloudInvite } from '@openhut/common/cloud/cloud.ts'
-import { fromBase64, identity, openInvite, read, type Identity } from '@openhut/common/vault/vault.ts'
+import { fromBase64, identity, type Identity } from '@openhut/common/vault/public.ts'
+import { openInvite, read } from '@openhut/common/vault/secret.ts'
 import { cloud } from '../platform/cloud.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { cloudService, mustBeOn, putList } from './cloud-service.ts'

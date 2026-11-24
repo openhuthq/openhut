@@ -6,7 +6,8 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { anchorOf, signList } from '@openhut/common/cloud/member-list.ts'
 import { padded } from '@openhut/common/records/seal.ts'
-import { fromBase64, identity, lock, newKey, toBase64, unlock } from '@openhut/common/vault/vault.ts'
+import { fromBase64, identity, newKey, toBase64 } from '@openhut/common/vault/public.ts'
+import { lock, unlock } from '@openhut/common/vault/secret.ts'
 
 const requests: unknown[] = []
 const refuse = new Map<string, number>()

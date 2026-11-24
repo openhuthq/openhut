@@ -2,7 +2,7 @@ import * as z from 'zod/mini'
 import { ListQuery, Timestamp } from '../../api.ts'
 import { AskAdmin, DeviceKey, Letter, Locked, MemberList, NewInvite } from '../cloud.ts'
 import { Email, NamedKeyBox, WorkspaceId } from './identity.ts'
-import { LETTER_PURPOSES } from '../../vault/vault.ts'
+import { LETTER_PURPOSES } from '../../vault/public.ts'
 
 export const WorkspaceQuery = z.object({ workspace: WorkspaceId })
 export type WorkspaceQuery = z.infer<typeof WorkspaceQuery>

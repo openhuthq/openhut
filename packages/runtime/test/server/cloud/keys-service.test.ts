@@ -9,7 +9,8 @@ import { seal, unseal } from '../../../src/server/platform/secrets.ts'
 import { accountDevice, keysService, openLetter } from '../../../src/server/cloud/keys-service.ts'
 import { keyStore } from '../../../src/server/cloud/key-store.ts'
 import { roomKeys } from '../../../src/server/cloud/room-keys.ts'
-import { fromBase64, identity, letter, lock, newKey, read, slot, toBase64, unlock } from '@openhut/common/vault/vault.ts'
+import { fromBase64, identity, newKey, toBase64 } from '@openhut/common/vault/public.ts'
+import { letter, lock, read, slot, unlock } from '@openhut/common/vault/secret.ts'
 import { anchorOf, bodyOf, check, signList } from '@openhut/common/cloud/member-list.ts'
 
 await migrate()
@@ -275,7 +276,7 @@ test('a copied Mac sees its keys belong to another machine before anything reads
   await keysService.setSession({ token: 'original-session', expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
   const before = stored()
   writeFileSync(FILE, seal(JSON.stringify({ ...before, machine: 'another-mac' })), { mode: 0o600 })
-  const probe = `const { keysService } = await import(${JSON.stringify(new URL('../../../src/server/cloud/keys-service.ts', import.meta.url).pathname)}); const { toBase64 } = await import('@openhut/common/vault/vault.ts'); const early = { account: keysService.account() ?? null, session: keysService.session() ?? null, kit: keysService.kitState().saved }; console.log(JSON.stringify({ ...early, device: toBase64((await keysService.device()).publicKey) })); process.exit(0)`
+  const probe = `const { keysService } = await import(${JSON.stringify(new URL('../../../src/server/cloud/keys-service.ts', import.meta.url).pathname)}); const { toBase64 } = await import('@openhut/common/vault/public.ts'); const early = { account: keysService.account() ?? null, session: keysService.session() ?? null, kit: keysService.kitState().saved }; console.log(JSON.stringify({ ...early, device: toBase64((await keysService.device()).publicKey) })); process.exit(0)`
   const out = execFileSync(process.execPath, ['--input-type=module', '-e', probe], { env: process.env, encoding: 'utf8', cwd: new URL('.', import.meta.url).pathname })
   const after = JSON.parse(out.trim().split('\n').at(-1) ?? '') as { device: string; account: unknown; session: unknown; kit: unknown }
   assert.deepEqual([after.account, after.session, after.kit], [null, null, null])

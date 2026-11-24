@@ -1,9 +1,9 @@
 import { openhutCloud } from '../../src/cloud/openhut-cloud.ts'
-import { sign } from '../../src/vault/vault.ts'
+import { sign } from '../../src/vault/public.ts'
 import { signer, type Keyring, type Keys, type Where } from '../../src/records/seal.ts'
 import type { Roster } from '../../src/records/allowed.ts'
 import { Collection, PutSealed, type SealedRow } from '../../src/records/wire.ts'
-import { identity, newKey, toBase64, type Bytes } from '../../src/vault/vault.ts'
+import { identity, newKey, toBase64, type Bytes } from '../../src/vault/public.ts'
 
 export const team = 'ws_team_0001'
 export const devices = {

@@ -1,5 +1,5 @@
 import { MemberList, MemberListBody, parseJson, type Member } from './cloud.ts'
-import { check as checkSignature, concat, fromBase64, sha256, sign, toBase64, type Bytes, type Identity } from '../vault/vault.ts'
+import { check as checkSignature, concat, fromBase64, sha256, sign, toBase64, type Bytes, type Identity } from '../vault/public.ts'
 
 type Link = { list: MemberList; body: MemberListBody }
 

@@ -2,7 +2,11 @@ import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createCipheriv, createDecipheriv, createPublicKey, hkdfSync, verify } from 'node:crypto'
-import * as vault from '../../src/vault/vault.ts'
+import * as publicHalf from '../../src/vault/public.ts'
+import * as secretHalf from '../../src/vault/secret.ts'
+
+const vault = { ...publicHalf, ...secretHalf }
+type Bytes = publicHalf.Bytes
 
 const vectors = JSON.parse(readFileSync(new URL('./vectors.json', import.meta.url), 'utf8'))
 const v1 = vectors['1']
@@ -22,7 +26,7 @@ function fixRandom(t: TestContext, value: Uint8Array) {
   })
 }
 
-async function lock({ key, version, bind, plain }: { key: vault.Bytes; version: number; bind: string; plain: vault.Bytes }) {
+async function lock({ key, version, bind, plain }: { key: Bytes; version: number; bind: string; plain: Bytes }) {
   return must(await vault.lock({ key, version, bind, plain }))
 }
 

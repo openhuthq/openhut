@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { MemberListBody } from '../../src/cloud/cloud.ts'
 import { anchorOf, bodyOf, check, nextOf, signList, withoutDevices } from '../../src/cloud/member-list.ts'
-import { fromBase64, identity, newKey, sign, toBase64 } from '../../src/vault/vault.ts'
+import { fromBase64, identity, newKey, sign, toBase64 } from '../../src/vault/public.ts'
 
 const [moMac, saraMac, saraPhone, anaMac, invite, eve] = await Promise.all(Array.from({ length: 6 }, () => identity()))
 const key = (who: { publicKey: Uint8Array }) => toBase64(who.publicKey)

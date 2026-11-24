@@ -1,4 +1,4 @@
-import { toBase64 } from '../vault/vault.ts'
+import { toBase64 } from '../vault/public.ts'
 import { FACES } from './cloud.ts'
 
 async function sha256(text: string): Promise<Uint8Array> {

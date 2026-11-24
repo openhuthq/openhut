@@ -7,7 +7,7 @@ import { RecordsError, type RecordsClient } from '@openhut/common/cloud/records.
 import { refreshWithLease, type Secret } from '@openhut/common/records/lease.ts'
 import { signer, type Keyring, type Opened, type Value } from '@openhut/common/records/seal.ts'
 import { COLLECTIONS, type Collection } from '@openhut/common/records/wire.ts'
-import type { Bytes } from '@openhut/common/vault/vault.ts'
+import type { Bytes } from '@openhut/common/vault/public.ts'
 import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
 import { log } from '../platform/events.ts'

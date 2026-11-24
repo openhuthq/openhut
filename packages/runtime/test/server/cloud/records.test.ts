@@ -38,7 +38,7 @@ const { db } = await import('../../../src/server/platform/db.ts')
 const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
 const { recordsService } = await import('../../../src/server/cloud/records.ts')
 const { seal, signer } = await import('@openhut/common/records/seal.ts')
-const { fromBase64 } = await import('@openhut/common/vault/vault.ts')
+const { fromBase64 } = await import('@openhut/common/vault/public.ts')
 after(() => server.close())
 
 const account = await keysService.open({ sub: 'dev-sara', email: 'sara@example.com' })

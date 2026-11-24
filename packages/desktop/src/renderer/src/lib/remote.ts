@@ -1,7 +1,7 @@
 import { webKey, type Tunnel } from '@openhut/tunnel'
 import { ComputersOffline, openhutCloud } from '@openhut/common/cloud/openhut-cloud.ts'
 import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
-import { toBase64 } from '@openhut/common/vault/vault.ts'
+import { toBase64 } from '@openhut/common/vault/public.ts'
 import type { Channel } from '@/lib/live-socket'
 import { accountStepOf, lastSeenOf, Offline } from './web-first-run.ts'
 

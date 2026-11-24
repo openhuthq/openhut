@@ -1,7 +1,8 @@
 import * as z from 'zod/mini'
 import { HereField, parseJson, type Member, type Presence, type SetHere } from '@openhut/common/cloud/cloud.ts'
 import { padded } from '@openhut/common/records/seal.ts'
-import { fromBase64, lock, toBase64, unlock, type Bytes } from '@openhut/common/vault/vault.ts'
+import { fromBase64, toBase64, type Bytes } from '@openhut/common/vault/public.ts'
+import { lock, unlock } from '@openhut/common/vault/secret.ts'
 import { hold } from '../platform/cloud.ts'
 import { emit } from '../platform/events.ts'
 

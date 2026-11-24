@@ -1,6 +1,6 @@
 import * as z from 'zod/mini'
 import { Timestamp } from '../api.ts'
-import { check, concat, field, fromBase64, isLocked, LETTER_PURPOSES, sign, toBase64, type Bytes, type Identity } from '../vault/vault.ts'
+import { check, concat, field, fromBase64, isLocked, LETTER_PURPOSES, sign, toBase64, type Bytes, type Identity } from '../vault/public.ts'
 
 const base64 = /^[A-Za-z0-9_-]*$/
 

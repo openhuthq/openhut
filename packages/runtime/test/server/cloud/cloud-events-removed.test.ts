@@ -4,7 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import Fastify from 'fastify'
 import type { MemberList, MemberListBody } from '@openhut/common/cloud/cloud.ts'
 import { bodyOf, withoutDevices } from '@openhut/common/cloud/member-list.ts'
-import type { Identity } from '@openhut/common/vault/vault.ts'
+import type { Identity } from '@openhut/common/vault/public.ts'
 import { bootCloud, devSignIn, hasCloud } from './real-cloud.ts'
 
 const skip = hasCloud ? false : 'private/api isn’t checked out here'

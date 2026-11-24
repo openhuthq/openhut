@@ -1,5 +1,6 @@
 import { parseJson } from '../cloud/cloud.ts'
-import { check, concat, field, fromBase64, lock, sha256, sign, toBase64, unlock, type Bytes, type Identity } from '../vault/vault.ts'
+import { check, concat, field, fromBase64, sha256, sign, toBase64, type Bytes, type Identity } from '../vault/public.ts'
+import { lock, unlock } from '../vault/secret.ts'
 import type { Collection, PutSealed, SealedRow } from './wire.ts'
 
 export const KEY_USES = ['workspace', 'own', 'vault'] as const

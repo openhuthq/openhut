@@ -2,7 +2,7 @@ import { connect, serve, TunnelError, type ComputerKey as NoiseComputerKey, type
 import * as z from 'zod/mini'
 import { ApiError } from '../api.ts'
 import { OAuthAuthorization, OAuthToken, type CreateOAuthAuthorization, type CreateOAuthToken } from './oauth.ts'
-import { fromBase64, toBase64 } from '../vault/vault.ts'
+import { fromBase64, toBase64 } from '../vault/public.ts'
 import { Letter, MemberList, OpenedInvite, type NewInvite } from './cloud.ts'
 import { ENDPOINTS, pathOf, SignInStarted, type EndpointName } from './endpoints.ts'
 import { commitOfWeb, facesOfWeb } from './faces-web.ts'
