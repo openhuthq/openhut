@@ -1,28 +1,56 @@
 name: Cloud
 
+run-name: Cloud ${{ github.event.workflow_run.head_sha || github.sha }}
+
 on:
-  push:
-    branches: [main, abuaboud/sign-in-first]
-    paths:
-      - private
-      - packages/common/**
-      - .github/workflows/cloud.yml
+  workflow_run:
+    workflows: [Desktop app]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
+  actions: read
 
 concurrency:
   group: cloud
   cancel-in-progress: false
 
 jobs:
+  changed:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.since.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Deploy only when private/ or packages/common changed since the last deploy (a passing Desktop app run already ran their tests)
+        id: since
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && { echo deploy=true >> "$GITHUB_OUTPUT"; exit 0; }
+          last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow cloud.yml --status success --limit 1 --json displayTitle -q '.[0].displayTitle' | sed -n 's/^Cloud \([0-9a-f]\{40\}\)$/\1/p')
+          if [ -z "$last" ] || ! git cat-file -e "$last^{commit}" 2>/dev/null; then echo deploy=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          changed=$(git diff --name-only "$last" HEAD -- private packages/common .github/workflows/cloud.yml)
+          echo "Since ${last::8}: ${changed:-nothing}"
+          echo "deploy=$([ -n "$changed" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
   deploy:
+    needs: changed
+    if: needs.changed.outputs.deploy == 'true'
+    environment: deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Check out private/
         env:
           KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
