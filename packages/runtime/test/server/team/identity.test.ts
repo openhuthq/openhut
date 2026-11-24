@@ -105,20 +105,23 @@ test('a device\'s connection is refused while no member list holds it, key or no
   assert.equal((await ask({ createConnection: device(VIEWER), path: '/api/me' })).status, 401)
 })
 
-test('over the tunnel your own viewer may chat, but gets 403 on agent writes and on every records and trust route', async () => {
+test('over the tunnel your own device (a phone, a browser) uses the whole app, but every trust route stays on the computer: devices, keys, the kit, sign-in, deleting data', async () => {
   await listDevices()
   const chat = await ask({ createConnection: device(VIEWER), method: 'POST', path: '/api/threads/ag_tprivate/chat', body: {} })
   assert.deepEqual([chat.status, chat.body.local, chat.body.email], [200, false, 'mo@example.com'])
   for (const [method, path, body] of [
-    ['POST', '/api/agents', { name: 'Sneaky' }],
-    ['PATCH', '/api/agents/ag_tprivate', { wanted: 'stopped' }],
-    ['DELETE', '/api/agents/ag_tprivate', undefined],
     ['GET', '/api/agents', undefined],
-    ['GET', '/caller', undefined],
-    ['POST', '/api/admin/codex-sign-ins', undefined],
+    ['POST', '/api/agents', { name: 'From the browser' }],
+    ['PATCH', '/api/agents/ag_tprivate', { wanted: 'stopped' }],
+    ['GET', '/api/cloud', undefined],
+  ] as const) assert.notEqual((await ask({ createConnection: device(VIEWER), method, path, body })).status, 403, `${method} ${path}`)
+  for (const [method, path, body] of [
     ['POST', `/api/cloud/workspaces/${TEAM}/requests/${toBase64(stranger.publicKey)}/approvals`, undefined],
     ['DELETE', `/api/cloud/devices/${toBase64(stranger.publicKey)}`, undefined],
     ['POST', '/api/cloud/kits', undefined],
+    ['POST', '/api/cloud/sessions', undefined],
+    ['DELETE', '/api/cloud/session', undefined],
+    ['DELETE', '/api/cloud', undefined],
   ] as const) assert.equal((await ask({ createConnection: device(VIEWER), method, path, body })).status, 403, `${method} ${path}`)
 })
 

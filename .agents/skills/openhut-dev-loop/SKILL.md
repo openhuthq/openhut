@@ -15,6 +15,10 @@ OpenHut is developed as a web app. You see a change in a browser in seconds. Ele
 - `packages/desktop/src/main.mjs`, `preload.cjs`, `lib/desktop.ts`, or anything that needs Keychain, Touch ID, passkey, updates, deep links or the tray: also run `npm run app` (the real app, unpackaged) and then `npm run e2e:app`.
 - `electron-builder*.yml`, `scripts/pack-*.mjs`, `install/**`, signing, installers: the PR's Desktop app run proves it. Don't build packages locally to check.
 
+**The web app (Continue in web)**
+- With `npm run dev` up and its runtime signed in, serve the web build: `VITE_OPENHUT_API_URL=http://127.0.0.1:<API port> VITE_OPENHUT_RELAY_URL=ws://127.0.0.1:<Worker port> node node_modules/vite/bin/vite.js packages/desktop/src/renderer --mode web --port 5190`.
+- `RUNTIME=http://127.0.0.1:<runtime port> OUT=/tmp/web-e2e node_modules/.bin/electron packages/desktop/scripts/web-e2e.cjs` signs a fresh browser in, has the Mac approve it, opens the dashboard over the tunnel and saves screenshots. The Mac needs its kit saved first.
+
 **3. Ship**
 - Open the PR with the first push, start one background `gh run watch <id> --exit-status`, and end the turn. CI is the merge gate, not the loop: never wait inside a turn to see a change working.
 

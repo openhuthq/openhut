@@ -6,6 +6,7 @@ import { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { Me } from '@openhut/common/team/team.ts'
 import { WORDS } from '@/lib/platform'
 import { desktop } from '@/lib/desktop'
+import { remote, REMOTE } from '@/lib/remote'
 import { computersOf, type Computer, type Features } from '@/lib/computers'
 
 export type { Computer, Features }
@@ -48,7 +49,7 @@ export async function requestBlob({ path }: Where & { path: string }): Promise<B
 }
 
 export const openhut = {
-  fetch: ({ path, init }: Where & { path: string; init?: RequestInit }): Promise<Response> => fetch(path, init),
+  fetch: ({ path, init }: Where & { path: string; init?: RequestInit }): Promise<Response> => REMOTE ? remote.fetch(path, init) : fetch(path, init),
   agents: {
     list: async (): Promise<OpenHutAgent[]> => (await request({ schema: AGENT_LIST, path: '/api/agents' })).data.map(here),
     move: async ({ id, to }: { id: string; to: string }): Promise<OpenHutAgent> =>
