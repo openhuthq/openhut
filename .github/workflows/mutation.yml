@@ -1,0 +1,23 @@
+name: Mutation
+
+on:
+  schedule:
+    - cron: '41 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vault-and-keyring:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Mutation testing on vault/ and keyring/ (a ratchet: K1 asks for 90%, measured 56.7% on 2026-11-24)
+        run: MUTATION_MIN=56 npm -w @openhut/common run mutate

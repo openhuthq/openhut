@@ -43,4 +43,6 @@ for (const file of files) {
     writeFileSync(file, source)
   }
 }
-console.log(`mutation score ${killed}/${total} = ${total ? ((100 * killed) / total).toFixed(1) : '100.0'}%`)
+const score = total ? (100 * killed) / total : 100
+console.log(`mutation score ${killed}/${total} = ${score.toFixed(1)}%`)
+if (score < Number(process.env.MUTATION_MIN ?? 0)) process.exitCode = 1
