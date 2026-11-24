@@ -61,7 +61,7 @@ presence.wire({
 })
 
 recordsService.onRefused((workspace) => {
-  if (workspace === keysService.account()?.workspace.id) void run(() => removedNow(workspace))
+  if (socket && workspace === keysService.account()?.workspace.id) void run(() => removedNow(workspace))
 })
 
 export const cloudEvents = {

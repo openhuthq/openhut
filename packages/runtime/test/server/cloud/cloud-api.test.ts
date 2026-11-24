@@ -48,7 +48,7 @@ test('against the real cloud API: dev sign-in, save the kit, make an agent, chat
     const callback = await devSignIn({ authorizationUrl: started.authorizationUrl, email: 'mo@example.com' })
     let polling = true
     const polls = (async () => {
-      while (polling) await status()
+      while (polling) await Promise.all([status(), app.inject({ method: 'GET', url: '/api/agents', headers })])
     })()
     assert.match((await app.inject({ method: 'GET', url: callback })).body, /You’re signed in/)
     polling = false
