@@ -136,7 +136,7 @@ jobs:
       - name: The image, the shell and the App build carry the same dist sha256
         run: |
           npm -w @openhut/desktop run build
-          docker build -q -f private/api/deploy/Dockerfile -t openhut-cloud:ci .
+          docker build -q -f private/api/Dockerfile -t openhut-cloud:ci .
           docker cp "$(docker create openhut-cloud:ci)":/app/web image-web
           node scripts/app-sum.ts packages/app/dist packages/desktop/dist/renderer image-web | tee -a "$GITHUB_STEP_SUMMARY"
 
