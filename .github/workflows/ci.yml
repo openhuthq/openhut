@@ -1,0 +1,141 @@
+name: CI
+
+# The merge gate: OpenHut checked as a web app and a server, Linux only. Packaging the Electron shell for
+# macOS, Windows and Linux lives in shell.yml and never runs here.
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  # Nothing here runs Electron or Playwright; the tunnel's Chromium test skips without a display.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.paths.outputs.server }}
+      private: ${{ steps.paths.outputs.private }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Pick the jobs a branch needs (main and a dispatch run everything)
+        id: paths
+        env:
+          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+        run: |
+          set -o pipefail
+          all() { printf 'server=true\nprivate=true\n' >> "$GITHUB_OUTPUT"; exit 0; }
+          [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_NAME" != main ] || all
+          base=$(git merge-base origin/main HEAD) || all
+          git cat-file -e "$base^{commit}" 2>/dev/null || all
+          changed=$(git diff --name-only "$base" HEAD) || all
+          echo "$changed"
+          private=$(echo "$changed" | grep -E '^private$|^\.github/workflows/ci\.yml$' || true)
+          server=$(echo "$changed" | grep -E '^(install|packages/runtime|packages/common|packages/tunnel|vendor|private/api)/|^package-lock\.json$|^scripts/(release|image|image-smoke)\.sh$|^\.github/workflows/(runtime-image|ci)\.yml$' || true)
+          if [ -n "$private" ] && echo "$changed" | grep -qx private; then
+            old=$(git ls-tree "$base" private | awk '{print $3}') new=$(git ls-tree HEAD private | awk '{print $3}')
+            mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+            ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+            git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private || all
+            inside=$(git -C private diff --name-only "$old" "$new" | sed 's|^|private/|') || all
+            echo "$inside"
+            [ -n "$server" ] || server=$(echo "$inside" | grep '^private/api/' || true)
+          fi
+          echo "Needs the private checks: ${private:-nothing}"
+          echo "Needs the server image: ${server:-nothing}"
+          echo "private=$([ -n "$private" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "server=$([ -n "$server" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: No high or critical advisory in what we ship, and the lock resolves only from the npm registry (npm ci already failed if it was out of date)
+        run: |
+          npm audit --omit=dev --audit-level=high
+          ! grep '"resolved":' package-lock.json | grep -v '"https://registry.npmjs.org/\|"packages/'
+      - uses: actions/cache/restore@v4
+        with:
+          path: .turbo/cache
+          key: turbo-${{ github.sha }}
+          restore-keys: turbo-
+      - name: Typecheck and test (a branch runs only the packages it affects; main runs everything)
+        run: |
+          if [ "$GITHUB_REF_NAME" = main ]; then npx turbo run typecheck test --cache-dir=.turbo/cache
+          else TURBO_SCM_BASE=$(git merge-base origin/main HEAD) npx turbo run typecheck test --affected --cache-dir=.turbo/cache; fi
+      - uses: actions/cache/save@v4
+        with:
+          path: .turbo/cache
+          key: turbo-${{ github.sha }}
+
+  private:
+    needs: changes
+    if: needs.changes.outputs.private == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check out private/
+        env:
+          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: No high or critical advisory in what the cloud and the site ship, and their locks resolve only from the npm registry
+        run: |
+          for dir in api cloud site; do (cd private/$dir && npm audit --omit=dev --audit-level=high) || exit 1; done
+          ! grep -h '"resolved":' private/api/package-lock.json private/cloud/package-lock.json private/site/package-lock.json | grep -v '"https://registry.npmjs.org/'
+      - name: The cloud API, the cloud Worker and the site typecheck and pass their tests
+        run: |
+          npm --prefix private/api run typecheck && npm --prefix private/api test
+          npm --prefix private/cloud run typecheck && npm --prefix private/cloud test
+          npm --prefix private/site run typecheck
+
+  server:
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/runtime-image.yml
+    secrets: inherit
+    with:
+      tags: ''
+
+  # Lane D: the pack build (scripts/pack.ts) joins here on main, and in `gate`'s needs once it should block.
+
+  gate:
+    needs: [changes, checks, private, server]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or was skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for result in $RESULTS; do case $result in success|skipped) ;; *) exit 1 ;; esac; done
