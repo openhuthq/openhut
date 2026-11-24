@@ -43,7 +43,7 @@ jobs:
           changed=$(git diff --name-only "$base" HEAD) || all
           echo "$changed"
           private=$(echo "$changed" | grep -E '^private$|^\.github/workflows/ci\.yml$' || true)
-          server=$(echo "$changed" | grep -E '^(install|packages/runtime|packages/common|packages/tunnel|vendor|private/api)/|^package-lock\.json$|^scripts/(release|image|image-smoke)\.sh$|^\.github/workflows/(runtime-image|ci)\.yml$' || true)
+          server=$(echo "$changed" | grep -E '^(install|packages/runtime|packages/common|vendor|private/api)/|^package-lock\.json$|^scripts/(release|image|image-smoke)\.sh$|^\.github/workflows/(runtime-image|ci)\.yml$' || true)
           if [ -n "$private" ] && echo "$changed" | grep -qx private; then
             old=$(git ls-tree "$base" private | awk '{print $3}') new=$(git ls-tree HEAD private | awk '{print $3}')
             mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519

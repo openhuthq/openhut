@@ -20,7 +20,7 @@ if tar --version 2>/dev/null | grep -q 'GNU tar'; then ROOT='--owner=0 --group=0
 COPYFILE_DISABLE=1 tar $ROOT --no-xattrs \
   --exclude node_modules --exclude .turbo --exclude agent-image.keep \
   -czf "$OUT/openhut.tgz" BUILD package.json package-lock.json install vendor \
-  packages/runtime/package.json packages/runtime/src packages/runtime/test/agentd packages/common packages/tunnel/package.json packages/tunnel/src \
+  packages/runtime/package.json packages/runtime/src packages/runtime/test/agentd packages/common \
   packages/app/package.json packages/desktop/package.json packages/e2e/package.json packages/docs/package.json packages/phone/package.json
 MIN_APP=$(sed -n "s/^export const MIN_APP_VERSION = '\(.*\)'$/\1/p" packages/common/src/admin/admin.ts)
 [ -n "$MIN_APP" ] || { echo "release.sh: no MIN_APP_VERSION in packages/common/src/admin/admin.ts" >&2; exit 1; }
