@@ -17,10 +17,10 @@ export async function bootCloud({ dir, api, log }) {
   return proc
 }
 
-export async function signIn({ page, api }) {
+export async function signIn({ page, api, email = 'mo@example.com' }) {
   const { authorizationUrl } = await page.eval("fetch('/api/cloud/sessions', { method: 'POST' }).then((r) => r.json())")
-  const link = new RegExp('href="([^"]+)">mo@example.com<').exec(await (await fetch(authorizationUrl)).text())?.[1]?.replaceAll('&amp;', '&')
-  if (!link) throw new Error('the dev sign-in page has no link for mo@example.com')
+  const link = new RegExp(`href="([^"]+)">${email.replaceAll('.', '\\.')}<`).exec(await (await fetch(authorizationUrl)).text())?.[1]?.replaceAll('&amp;', '&')
+  if (!link) throw new Error(`the dev sign-in page has no link for ${email}`)
   const back = new URL((await fetch(link, { redirect: 'manual' })).headers.get('location') ?? '', api)
   await page.eval(`fetch(${JSON.stringify(`/api/cloud/callback${back.search}`)}).then((r) => r.text())`)
   let last

@@ -325,6 +325,7 @@ jobs:
             packages/desktop/app-e2e/*.png
             packages/desktop/app-e2e/evidence.json
             packages/desktop/app-e2e/home/logs/
+            packages/desktop/app-e2e/home2/logs/
             packages/desktop/app-e2e/home/data/native/*/agent.log
       - name: Add the installer to the draft release
         if: matrix.name == 'windows' && env.TAGGED == 'true'
