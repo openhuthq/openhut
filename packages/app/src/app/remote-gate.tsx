@@ -53,12 +53,12 @@ export function RemoteGate({ children }: { children: ReactNode }) {
     invited={Boolean(invited)} busy={signingIn} busyLabel="Opening Google…" disabled={signingIn} onSignIn={() => { setSigningIn(true); remote.signIn().catch((err: Error) => { setError(err.message); setSigningIn(false) }) }}>
     {failure && <ErrorNote message={failure} />}
   </SignInScreen></Stage>
-  if (screen === 'first-run' && state.data?.step === 'first-run') return <FirstRun email={state.data.email} />
-  if (screen === 'phone' && state.data?.step === 'first-run') return <PhoneFirstRun email={state.data.email} />
+  const otherAccount = <Button type="button" variant="text" className="font-normal text-mute" onClick={() => void remote.signOut().then(() => state.refetch())}>Use another account</Button>
+  if (screen === 'first-run' && state.data?.step === 'first-run') return <FirstRun email={state.data.email} link={otherAccount} />
+  if (screen === 'phone' && state.data?.step === 'first-run') return <PhoneFirstRun email={state.data.email} link={otherAccount} />
   if (screen === 'offline' && opened.error instanceof Away) return <Offline computer={opened.error.computer} seen={opened.error.seen} />
   if (state.data?.step === 'waiting' && !knocked) setKnocked(true)
   if (state.data?.step === 'continuing') return <Stage><Step title="Opening OpenHut…" line="Your computer is letting this browser in. This takes a few seconds."><Spinner /></Step></Stage>
-  const otherAccount = <Button type="button" variant="text" className="font-normal text-mute" onClick={() => void remote.signOut().then(() => state.refetch())}>Use another account</Button>
   if (state.data?.step === 'waiting' && invited) return <Stage><Knocking faces={state.data.faces} line={`Tell ${host} these two. ${host} taps them on their computer.`} link={otherAccount} /></Stage>
   if (state.data?.step === 'waiting') return <Stage><Knocking faces={state.data.faces}
     action={<a href="openhut://open" className={cn(buttonVariants({ variant: 'primary' }), BIG)}>Open OpenHut</a>} link={otherAccount} /></Stage>
