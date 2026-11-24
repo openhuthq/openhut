@@ -1,8 +1,21 @@
 #!/bin/sh
+# openhut-updater. R7: it lives in the base image (/usr/local/lib/openhut-updater), never in the per-release layer it replaces, and
+# runs an install.sh only when verify-installer.mjs finds its hash in a signed release.json whose Rekor entry is an hour old (SEC6).
 set -u
 cd /tmp
-REQUEST=/data/update.request
-SCRIPT=$(node --input-type=module -e "import { UPDATE_SCRIPT } from '/opt/openhut/packages/runtime/src/agentd/update.ts'; process.stdout.write(UPDATE_SCRIPT)")
+HERE=$(cd "$(dirname "$0")/.." && pwd)
+REQUEST=/data/update.request LOG=/data/update.log EXIT=/data/update.log.exit
+RELEASE=${OPENHUT_RELEASE:-https://github.com/openhuthq/openhut/releases/latest/download}
+signed() { for ext in '' .sig .rekor; do curl -fsSL --retry 3 "$RELEASE/release.json$ext" -o "$1/release.json$ext" || return 1; done; }
+apply() { # <sha256 the admin page checked> <app version>
+  rm -f "$EXIT"; d=$(mktemp -d)
+  if ! curl -fsSL --retry 3 "$OPENHUT_URL" -o "$d/install.sh"; then echo "openhut: couldn't download the release from $OPENHUT_URL"; code=2
+  elif ! printf '%s  %s\n' "$1" "$d/install.sh" | sha256sum -c - >/dev/null 2>&1; then echo "openhut: a newer release came out after this update was checked. Check for updates again."; code=3
+  elif ! signed "$d"; then echo "openhut: couldn't download the signed release from $RELEASE, so nothing changed"; code=2
+  elif ! node "$HERE/install/verify-installer.mjs" "$d/install.sh" "$d"; then code=4
+  else OPENHUT_SHA256=$1 OPENHUT_APP_VERSION=$2 OPENHUT_UPDATER=1 sh "$d/install.sh"; code=$?; fi
+  rm -rf "$d"; echo "$code" > "$EXIT"
+}
 exec 9>/data/install.lock
 if flock -n 9 && docker container inspect openhut-previous >/dev/null 2>&1; then
   echo "openhut: an update didn't finish, so the previous release is back"
@@ -19,8 +32,7 @@ while :; do
     rm -f "$REQUEST"
     case "$sha:$version" in
       *[!0-9a-z.:-]*) echo "openhut: ignored an update request that isn't a sha256 and a version" ;;
-      ????????????????????????????????????????????????????????????????:*)
-        OPENHUT_SHA256=$sha OPENHUT_APP_VERSION=$version OPENHUT_UPDATER=1 LOG=/data/update.log EXIT=/data/update.log.exit sh -c "$SCRIPT" ;;
+      ????????????????????????????????????????????????????????????????:*) apply "$sha" "$version" > "$LOG" 2>&1 ;;
       *) echo "openhut: ignored an update request that isn't a sha256 and a version" ;;
     esac
     flock -u 9
