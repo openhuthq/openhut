@@ -29,5 +29,19 @@ export function rememberDevices(keys: string[]): void {
 }
 
 export function newDevices({ devices, known }: { devices: Cloud['devices']; known: Set<string> | null }): Cloud['devices'] {
-  return known ? devices.filter((device) => !device.here && device.kind === 'mac' && !known.has(device.key)) : []
+  const since = Date.parse(devices.find((device) => device.here)?.addedAt ?? '')
+  if (!known || Number.isNaN(since)) return []
+  return devices.filter((device) => !device.here && device.kind === 'mac' && !known.has(device.key) && Date.parse(device.addedAt ?? '') > since)
+}
+
+export function goneNotice({ name, why, owner }: Cloud['gone'][number]): { title: string; note: string } {
+  if (why === 'deleted') return { title: `${name} was deleted`, note: 'Its agents moved to the trash on this computer.' }
+  if (!owner) return { title: `You were removed from ${name}`, note: 'Its agents moved to the trash on this computer.' }
+  const who = nameOf(owner)
+  return { title: `${who} removed this computer from ${name}`, note: `Ask ${who} to invite you again if that’s a mistake.` }
+}
+
+export function nameOf(email: string): string {
+  const first = (email.split('@')[0] ?? '').split(/[._+-]/)[0] ?? ''
+  return first.charAt(0).toUpperCase() + first.slice(1)
 }

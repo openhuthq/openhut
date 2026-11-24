@@ -97,11 +97,13 @@ export function TeamDangerRows() {
 
 function KeysConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
   const changeKeys = useChangeKeys()
+  const reset = useRef(false)
   const changed = () => {
     notify({ title: 'Encryption reset', note: 'Everyone else stays in.' })
-    if (workspace.own) navigate('/settings/general?open=kit')
+    reset.current = true
   }
-  return <ConfirmDialog open onOpenChange={(still) => still || open()} question={`Reset encryption for ${workspace.name}?`} detail={workspace.own ? `${keysNote(workspace.name)} You save a new recovery kit after.` : keysNote(workspace.name)} action="Reset encryption" onConfirm={() => changeKeys.mutateAsync(workspace.id).then(changed)} />
+  const close = () => (reset.current && workspace.own ? navigate('/settings/general?open=kit') : open())
+  return <ConfirmDialog open onOpenChange={(still) => still || close()} question={`Reset encryption for ${workspace.name}?`} detail={workspace.own ? `${keysNote(workspace.name)} You save a new recovery kit after.` : keysNote(workspace.name)} action="Reset encryption" onConfirm={() => changeKeys.mutateAsync(workspace.id).then(changed)} />
 }
 
 function LeaveConfirm({ workspace }: { workspace: CloudWorkspaceView }) {

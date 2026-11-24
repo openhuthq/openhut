@@ -5,5 +5,14 @@ export function toast(message: string) {
 }
 
 export function toastError(error: Error) {
-  sonner.error(error.message)
+  sonner.error(plainError(error.message))
+}
+
+export function plainError(message: string): string {
+  try {
+    const said = (JSON.parse(message) as { error?: { message?: unknown } } | null)?.error?.message
+    return typeof said === 'string' ? said : message
+  } catch {
+    return message
+  }
 }

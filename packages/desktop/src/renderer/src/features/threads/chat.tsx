@@ -41,7 +41,7 @@ import { attachCalls, kindOf, stepsOf, type Step } from '@/features/threads/step
 import { CardReply, MessageCard } from '@/features/threads/card'
 import { ChangeCards, PendingElsewhere } from '@/features/agents/change-requests'
 import { copyText } from '@/lib/clipboard'
-import { toast, toastError } from '@/lib/toast'
+import { plainError, toast, toastError } from '@/lib/toast'
 import { usePhoneBack } from '@/app/phone-page'
 import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
@@ -102,7 +102,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
     {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     <PendingElsewhere agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
     {!agent.runsHere && chat.status !== 'submitted' && last?.role === 'user' && !troubleOf(agent) && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
-    {chat.error && <Alert variant="error-outline" role="alert"><span>{chat.error.message}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Try again</Button></Alert>}
+    {chat.error && <Alert variant="error-outline" role="alert"><span>{plainError(chat.error.message)}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Try again</Button></Alert>}
   </ChatFrame></CardReply></ChatFiles>
 }
 
