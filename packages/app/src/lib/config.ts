@@ -6,7 +6,6 @@ const AppConfig = z.object({
   cloud: z.string(),
   local: z.optional(z.boolean()),
   dev: z.optional(z.string()),
-  updates: z.optional(z.object({ url: z.string(), key: z.string() })),
 })
 export type AppConfig = z.infer<typeof AppConfig>
 
