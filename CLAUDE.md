@@ -77,7 +77,7 @@ Open the PR with the first push, and leave one background `gh run watch <id> --e
 when CI ends (no polling loops: the account's API limit is 5000/h, shared by every agent). After one review round
 with no open blocker, run `gh pr merge --auto --merge`; it merges when the required `gate` check passes. The owner's
 "merge without asking" (2026-11-13) still stands. The main ruleset has no bypass, so a red gate means fixing it,
-never forcing it. Every main commit gets its own full CI run (`ci.yml`, Linux only: typecheck, tests, private, server smoke); Deploy then ships main's newest green commit (openhut.dev, the edge image, the cloud).
+never forcing it. Every main commit gets its own full CI run (`ci.yml`, Linux only: typecheck, tests, private, server smoke). The image smoke (5-11 min) runs on a PR only when it changes the image's inputs (`install/`, `packages/runtime|common`, `vendor/`, `scripts/{release,image,image-smoke}.sh`, `runtime-image.yml`), so most PRs gate in ~2 min; on main it always runs, and `gate`, beta, the image publish and the Cloud deploy all wait on it; Deploy then ships main's newest green commit (openhut.dev, the edge image, the cloud).
 Reviewer loop and flaky tests: `private/brain/openhut-deploy.md` (CI).
 
 ## Web first, Electron last

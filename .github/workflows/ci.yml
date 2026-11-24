@@ -32,8 +32,6 @@ jobs:
           fetch-depth: 0
       - name: Pick the jobs a branch needs (main and a dispatch run everything)
         id: paths
-        env:
-          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
         run: |
           set -o pipefail
           all() { printf 'server=true\nprivate=true\n' >> "$GITHUB_OUTPUT"; exit 0; }
@@ -43,16 +41,9 @@ jobs:
           changed=$(git diff --name-only "$base" HEAD) || all
           echo "$changed"
           private=$(echo "$changed" | grep -E '^private$|^\.github/workflows/ci\.yml$' || true)
-          server=$(echo "$changed" | grep -E '^(install|packages/runtime|packages/common|vendor|private/api)/|^package-lock\.json$|^scripts/(release|image|image-smoke)\.sh$|^\.github/workflows/(runtime-image|ci)\.yml$' || true)
-          if [ -n "$private" ] && echo "$changed" | grep -qx private; then
-            old=$(git ls-tree "$base" private | awk '{print $3}') new=$(git ls-tree HEAD private | awk '{print $3}')
-            mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
-            ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-            git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private || all
-            inside=$(git -C private diff --name-only "$old" "$new" | sed 's|^|private/|') || all
-            echo "$inside"
-            [ -n "$server" ] || server=$(echo "$inside" | grep '^private/api/' || true)
-          fi
+          # The runtime image smoke (the slow job) runs on a branch only when the image's own inputs changed; every main push runs it,
+          # and `gate` (so beta, the image publish and the Cloud deploy) waits on it there.
+          server=$(echo "$changed" | grep -E '^(install|packages/runtime|packages/common|vendor)/|^scripts/(release|image|image-smoke)\.sh$|^\.github/workflows/runtime-image\.yml$' || true)
           echo "Needs the private checks: ${private:-nothing}"
           echo "Needs the server image: ${server:-nothing}"
           echo "private=$([ -n "$private" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
