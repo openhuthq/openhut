@@ -20,7 +20,7 @@ export type Desktop = {
   focus?: () => Promise<unknown>
   update?: UpdateBridge
   browserLive?: (path: string, onLine: (line: string) => void, onClose: (code: number, reason: string) => void) => Channel
-  cloud?: { notify: (input?: { title: string; body: string; path: string }) => Promise<{ shown?: boolean }> }
+  cloud?: { notify: (input?: { title: string; body: string; path: string }) => Promise<{ shown?: boolean }>; knock?: (input: { title: string; body: string }) => Promise<{ action: 'open' | 'not-me' | null }> }
   passkey?: { status: () => Promise<PasskeyReply>; create: (input: { email: string }) => Promise<PasskeyReply>; open: (input?: { quiet: boolean }) => Promise<PasskeyReply>; cancel: () => Promise<void> }
   touchId?: { prompt: (reason: string) => Promise<{ ok: boolean }> }
   kit?: { save: (input: { name: string; body: string }) => Promise<{ canceled?: boolean; text?: string }> }

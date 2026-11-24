@@ -226,14 +226,19 @@ export type AskAdmin = z.infer<typeof AskAdmin>
 export const FACES = 12
 const FACE_COLORS = ['Teal', 'Cream', 'Coral', 'Orange', 'Green', 'Mint', 'Blue', 'Rose', 'Yellow', 'Lilac', 'Periwinkle', 'Pink']
 const FACE_WEAR = ['a cap', 'a headset', 'a beanie', 'a crown', 'an antenna', 'a party hat', 'a top hat', 'a sprout', 'a halo', 'glasses', 'shades', 'a monocle']
+const CREATURES = ['Tilly', 'Moss', 'Bea', 'Duke', 'Sunny', 'Nibs', 'Wally', 'Sprig', 'Pip', 'Fig', 'Ziggy', 'Rosie']
 export function faceName(index: number): string {
   return `${FACE_COLORS[(index * 5) % FACE_COLORS.length]} face with ${FACE_WEAR[index % FACE_WEAR.length]}`
 }
+export function creatureName(index: number): string {
+  return CREATURES[index % CREATURES.length]
+}
+export const KNOCK_MS = 15 * 60_000
 export const ApproveRequest = z.object({ faces: z.optional(z.array(z.number().check(z.int(), z.minimum(0), z.maximum(FACES - 1))).check(z.length(2))) })
 export type ApproveRequest = z.infer<typeof ApproveRequest>
 export const DenyRequestQuery = z.object({ why: z.optional(z.enum(['mismatch', 'not-me'])) })
 export type DenyRequestQuery = z.infer<typeof DenyRequestQuery>
-export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null), server: z._default(z.boolean(), false), checked: z._default(z.boolean(), false), reviewed: z._default(z.boolean(), false), faces: z._default(z.nullable(z.array(z.number())), null) })
+export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null), server: z._default(z.boolean(), false), checked: z._default(z.boolean(), false), reviewed: z._default(z.boolean(), false), faces: z._default(z.nullable(z.array(z.number())), null), location: z._default(z.nullable(z.object({ city: z.nullable(z.string()), country: z.string(), countryCode: z.string() })), null), newCountry: z._default(z.boolean(), false) })
 export type DeviceRequest = z.infer<typeof DeviceRequest>
 
 export const DeleteNotice = z.object({ by: DeviceKey, signedAt: z.number(), signature: Signature })

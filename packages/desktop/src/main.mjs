@@ -111,8 +111,16 @@ crashReporter.start({ uploadToServer: false })
 function start(name, env) {
   const script = join(BACKEND, SCRIPTS[name])
   const child = DEV
-    ? spawn('node', [script], { cwd: ROOT, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
+    ? spawn('node', [script], { cwd: ROOT, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
     : utilityProcess.fork(script, [], { env: { ...process.env, ...env }, stdio: 'pipe', serviceName: `OpenHut ${name}` })
+  child.on('message', (message) => {
+    if (message?.type !== 'presence') return
+    void touchId(message.reason).then(({ ok }) => {
+      const answer = { type: 'presence', id: message.id, ok }
+      if (child.postMessage) child.postMessage(answer)
+      else child.send(answer)
+    })
+  })
   logs[name] ??= createWriteStream(join(LOGS, `${name}.log`), { flags: 'a' })
   for (const stream of [child.stdout, child.stderr]) stream?.pipe(logs[name], { end: false })
   children.set(name, child)
@@ -179,7 +187,8 @@ handle('passkey.status', () => passkey(['status']))
 handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
 handle('passkey.open', ({ quiet } = {}) => passkey(quiet ? ['open', '--quiet'] : ['open']))
 handle('passkey.cancel', () => { passkeyRun?.kill() })
-handle('touchid.prompt', ({ reason } = {}) => process.platform !== 'darwin' ? { ok: true } : systemPreferences.promptTouchID(String(reason)).then(() => ({ ok: true }), (error) => ({ ok: /not available|not enrolled|no identities/i.test(error.message), error: error.message })))
+const touchId = async (reason) => process.platform !== 'darwin' ? { ok: true } : systemPreferences.promptTouchID(String(reason)).then(() => ({ ok: true }), (error) => ({ ok: /not available|not enrolled|no identities/i.test(error.message), error: error.message }))
+handle('touchid.prompt', ({ reason } = {}) => touchId(reason))
 handle('cloud.notify', ({ title = 'Unlock OpenHut', body = 'Bring your agents and chats to this computer.', path = '/' } = {}) => new Promise((resolve) => {
   if (!Notification.isSupported()) return resolve({ shown: false })
   const note = new Notification({ title: String(title), body: String(body) })
@@ -187,6 +196,22 @@ handle('cloud.notify', ({ title = 'Unlock OpenHut', body = 'Bring your agents an
   note.on('show', () => resolve({ shown: true }))
   note.on('failed', () => resolve({ shown: false }))
   setTimeout(() => resolve({ shown: false }), 3000)
+  note.show()
+}))
+const knocks = new Set()
+handle('cloud.knock', ({ title, body } = {}) => new Promise((resolve) => {
+  if (!Notification.isSupported()) return resolve({ action: null })
+  const note = new Notification({ title: String(title), body: String(body), actions: [{ type: 'button', text: 'Let it in' }, { type: 'button', text: 'Not me' }] })
+  knocks.add(note)
+  const done = (action) => {
+    knocks.delete(note)
+    if (action === 'open') show()
+    resolve({ action })
+  }
+  note.on('click', () => done('open'))
+  note.on('action', (_event, index) => done(index === 0 ? 'open' : 'not-me'))
+  note.on('close', () => done(null))
+  note.on('failed', () => done(null))
   note.show()
 }))
 handle('kit.save', saveKit)

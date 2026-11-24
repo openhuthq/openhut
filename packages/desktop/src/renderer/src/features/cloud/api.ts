@@ -123,6 +123,10 @@ export function notifyDesktop(input: { title: string; body: string; path: string
   void bridge?.notify(input).catch(() => undefined)
 }
 
+export async function knockDesktop(input: { title: string; body: string }): Promise<'open' | 'not-me' | null> {
+  return (await bridge?.knock?.(input).catch(() => undefined))?.action ?? null
+}
+
 export function useSignIn() {
   const client = useQueryClient()
   return useMutation({

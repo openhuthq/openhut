@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import type { webcrypto } from 'node:crypto'
 import { setTimeout as sleep } from 'node:timers/promises'
 import Fastify from 'fastify'
+import { commitOf, facesOf } from '@openhut/common/cloud/faces.ts'
 import { proofOf, requestParts, SIGNATURE_HEADER, type Session } from '@openhut/common/cloud/v1/identity.ts'
 import { toBase64 } from '@openhut/common/vault/vault.ts'
 import { bootCloud, devSignIn, hasCloud } from './real-cloud.ts'
@@ -47,11 +48,16 @@ test('against the real cloud API: a browser signs in from the web app with WebCr
       const signedAt = Date.now()
       return api(path, { method, body: body || undefined, headers: { authorization: `Bearer ${session.token}`, [SIGNATURE_HEADER]: `${signedAt}.${await sign(proofOf({ proof: 'request', parts: await requestParts({ method, path, signedAt, body }) }))}` } })
     }
-    assert.equal((await signed('POST', '/v1/join-requests', JSON.stringify({ workspace: home, name: 'Chrome', os: 'web' }))).status, 200)
+    const nonce = 'n'.repeat(43)
+    const url = `/api/cloud/workspaces/${home}/requests/${encodeURIComponent(device)}`
+    assert.equal((await signed('POST', '/v1/join-requests', JSON.stringify({ workspace: home, name: 'Chrome', os: 'web', commit: commitOf({ device, nonce }) }))).status, 200)
     assert.equal(memberOf(tunnelKeyOf(device)), undefined)
 
     await cloudEvents.refreshRequests(home)
-    const approved = await app.inject({ method: 'POST', url: `/api/cloud/workspaces/${home}/requests/${encodeURIComponent(device)}/approvals`, headers, payload: {} })
+    assert.equal((await app.inject({ method: 'POST', url: `${url}/reviews`, headers })).statusCode, 200)
+    assert.equal((await signed('POST', '/v1/join-requests/nonces', JSON.stringify({ workspace: home, nonce }))).status, 200)
+    await cloudEvents.refreshRequests(home)
+    const approved = await app.inject({ method: 'POST', url: `${url}/approvals`, headers, payload: { faces: facesOf({ device, nonce }) } })
     assert.equal(approved.statusCode, 200, approved.body)
     assert.equal(memberOf(tunnelKeyOf(device))?.own, true)
     const letters = await signed('GET', `/v1/letters?workspace=${home}`)

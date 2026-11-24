@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { FastifyReply } from 'fastify'
 import * as z from 'zod/mini'
-import { type Backup, KeyBox, Letter, MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type UnlockCloud, faceName, siteHost } from '@openhut/common/cloud/cloud.ts'
+import { type Backup, KeyBox, Letter, MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type UnlockCloud, faceName, KNOCK_MS, siteHost } from '@openhut/common/cloud/cloud.ts'
 import type { Health } from '@openhut/common/admin/admin.ts'
 import { JoinCode, Me, signV1 } from '@openhut/common/cloud/v1/identity.ts'
 import { JoinRequest } from '@openhut/common/cloud/v1/trust.ts'
@@ -25,6 +25,7 @@ import { hinted, takeSignIn, withSignIn } from './sign-ins.ts'
 import { BEAT_MS, cloudEvents } from './cloud-events.ts'
 import { recordsService } from './records.ts'
 import { agentService } from '../agents/agent-service.ts'
+import { userPresence } from './user-presence.ts'
 
 const CHECK_MS = 60_000
 const Boxes = z.object({ data: z.array(z.object({ id: z.string(), body: z.string(), by: z.string(), signature: z.string() })) })
@@ -81,7 +82,7 @@ export const cloudService = {
         const invites = (body?.invites ?? []).map((each) => ({ email: each.email, role: each.role, link: roomKeys.link({ ws: id, email: each.email }) ?? null, until: roomKeys.linkUntil({ ws: id, email: each.email }) ?? null }))
         return { id, name: cloudEvents.name(id), website: cloudEvents.site(id), home: id === account.workspace.id, own: roomKeys.isOwn(id), role: roomKeys.roleIn(id) ?? 'member', waiting: !key, members: body?.members ?? [], invites, requests: cloudEvents.requests(id), names: body?.names ?? {} }
       }) : [],
-      asking: asked ? { rooms: askRooms.filter((room) => !asked.settled.includes(room.id)).map(({ admins, own }) => ({ admins, own: Boolean(own) })), denied: asked.settled.length === askRooms.length, error: asked.error, name: deviceName(), reviewed: asked.reviewed, missed: asked.missed, faces: asked.revealed && askRooms[0]?.nonce ? facesOf({ device: here, nonce: askRooms[0].nonce }) : null } : null,
+      asking: asked ? { rooms: askRooms.filter((room) => !asked.settled.includes(room.id)).map(({ admins, own }) => ({ admins, own: Boolean(own) })), denied: asked.settled.length === askRooms.length, error: asked.error, name: deviceName(), reviewed: asked.reviewed, missed: asked.missed, faces: askRooms[0]?.nonce ? facesOf({ device: here, nonce: askRooms[0].nonce }) : null } : null,
       canAsk: Boolean(locked && session),
       rotate: on ? await toRotate() : [],
       gone: await cloudEvents.gone(),
@@ -136,7 +137,13 @@ export const cloudService = {
   async approve({ workspace, device, faces }: { workspace: string; device: string; faces?: number[] }): Promise<Cloud> {
     const asked = cloudEvents.requests(mustBeOn(workspace)).find((each) => each.device === device)
     if (!asked) throw new HttpError(404, 'That device isn’t waiting anymore. It was let in, denied, or it expired.')
-    if (asked.checked && (!asked.faces || [...faces ?? []].sort((a, b) => a - b).join() !== asked.faces.join())) throw new HttpError(400, 'Those faces don’t match the ones on the new computer.', { param: 'faces' })
+    if (Date.now() - Date.parse(asked.at) > KNOCK_MS) throw new HttpError(410, 'That request expired after 15 minutes. Ask the new device to knock again.')
+    if (!asked.checked) throw new HttpError(400, 'That device didn’t show two faces, so it can’t be matched. Update OpenHut on it, then knock again.', { param: 'commit' })
+    if ((!asked.faces || [...faces ?? []].sort((a, b) => a - b).join() !== asked.faces.join())) {
+      await cloudService.deny({ workspace, device, why: 'mismatch' })
+      throw new HttpError(400, 'Those faces don’t match the ones on the new device, so the request was turned down.', { param: 'faces' })
+    }
+    if (!await userPresence.ask(`let ${asked.name ?? 'a new device'} into OpenHut`)) throw new HttpError(403, 'Not confirmed. Nothing was let in.', { param: 'presence' })
     const mine = roomKeys.isOwn(workspace) && asked.email === keysService.account()?.email
     if (asked.os) requestedOs.set(device, asked.os)
     if (mine && !asked.server) {

@@ -11,3 +11,12 @@ test('two different faces from the key and nonce, the same on both computers, an
   assert.deepEqual(facesOf({ device: 'd', nonce: 'n' }), facesOf({ device: 'd', nonce: 'n' }))
   assert.notEqual(commitOf({ device: 'd', nonce: 'a' }), commitOf({ device: 'd', nonce: 'b' }))
 })
+
+test('a browser works out the same commit and faces with WebCrypto', async () => {
+  const { commitOfWeb, facesOfWeb } = await import('../../src/cloud/faces-web.ts')
+  for (let i = 0; i < 20; i++) {
+    const each = { device: `dev${i}`, nonce: `n${i}` }
+    assert.equal(await commitOfWeb(each), commitOf(each))
+    assert.deepEqual(await facesOfWeb(each), facesOf(each))
+  }
+})
