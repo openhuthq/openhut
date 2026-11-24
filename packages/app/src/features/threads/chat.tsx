@@ -41,7 +41,7 @@ import { attachCalls, kindOf, stepsOf, type Step } from '@/features/threads/step
 import { CardReply, MessageCard } from '@/features/threads/card'
 import { ChangeCards, PendingElsewhere } from '@/features/agents/change-requests'
 import { copyText } from '@/lib/clipboard'
-import { plainError, toast, toastError } from '@/lib/toast'
+import { plainError, toast, toastError, toastFailed } from '@/lib/toast'
 import { usePhoneBack } from '@/app/phone-page'
 import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
@@ -121,9 +121,9 @@ function useAttachments({ agentId, threadId }: { agentId: string; threadId: stri
   }
   const add = (files: File[]) => {
     for (const file of files) {
-      if (taken.current.size >= MAX_FILES) return toast(`Attach at most ${MAX_FILES} files to one message.`)
+      if (taken.current.size >= MAX_FILES) return toastFailed('Too many files', `Attach up to ${MAX_FILES} per message.`)
       if (file.size > MAX_FILE_BYTES) {
-        toast(`${file.name} is over ${MAX_FILE_BYTES >> 20} MB, too big to attach.`)
+        toastFailed(`${file.name} is too big`, `Attach files up to ${MAX_FILE_BYTES >> 20} MB.`)
         continue
       }
       const key = crypto.randomUUID()

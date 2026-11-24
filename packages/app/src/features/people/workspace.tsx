@@ -104,7 +104,7 @@ function KeysConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
   const changeKeys = useChangeKeys()
   const reset = useRef(false)
   const changed = () => {
-    notify({ title: 'Encryption reset', note: 'Everyone else stays in.' })
+    toast('Encryption reset')
     reset.current = true
   }
   const close = () => (reset.current && workspace.own ? navigate('/settings/security?open=kit') : open())

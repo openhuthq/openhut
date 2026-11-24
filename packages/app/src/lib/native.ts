@@ -5,7 +5,7 @@ import { Keyboard } from '@capacitor/keyboard'
 import { CapacitorBarcodeScanner, CapacitorBarcodeScannerTypeHint } from '@capacitor/barcode-scanner'
 import { Preferences } from '@capacitor/preferences'
 import { useState } from 'react'
-import { toast } from '@/lib/toast'
+import { toastInfo } from '@/lib/toast'
 import { desktop } from '@/lib/desktop'
 
 type DeviceKeyPlugin = {
@@ -79,11 +79,11 @@ export async function confirmed(reason: string): Promise<boolean> {
   if (!isPhone() && !touchId) return true
   if (touchId) {
     const { ok } = await touchId.prompt(reason.charAt(0).toLowerCase() + reason.slice(1))
-    if (!ok) toast('Not confirmed. Nothing was sent.')
+    if (!ok) toastInfo('Nothing was sent', 'You didn’t confirm it.')
     return ok
   }
   return plugin.confirm({ reason }).then(() => true, () => {
-    toast('Not confirmed. Nothing was sent.')
+    toastInfo('Nothing was sent', 'You didn’t confirm it.')
     return false
   })
 }

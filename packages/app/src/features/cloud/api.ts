@@ -113,7 +113,7 @@ export function useRemoveMac() {
     onSuccess: (cloud, { lost }) => {
       client.setQueryData(CLOUD_KEY, cloud)
       if (lost) {
-        notify({ title: 'Removed and locked out', note: 'Your encryption is new, so it can’t read anything from now on. Save your new recovery kit.' })
+        notify({ title: 'Device removed and locked out', note: 'Save your new recovery kit.' })
         return navigate('/settings/security?open=kit')
       }
       notify({ title: 'Device removed', note: NEW_KIT_HINT, action: { label: 'New kit', onClick: () => navigate('/settings/security?open=kit') } })
