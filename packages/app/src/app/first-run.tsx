@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { AppleIcon, Mail01Icon, ServerStack01Icon } from '@hugeicons/core-free-icons'
 import { CopyButton } from '@/components/copy-button'
@@ -38,7 +38,7 @@ export function forgetFirstRun() {
   keep(null)
 }
 
-export function FirstRun({ email }: { email: string }) {
+export function FirstRun({ email, link }: { email: string; link?: ReactNode }) {
   const [step, setStep] = useState(load)
   const [resumed, setResumed] = useState(() => step?.step === 'mac')
   const go = (next: FirstRunStep | null) => {
@@ -53,7 +53,7 @@ export function FirstRun({ email }: { email: string }) {
     <Listening />
   </Step></Stage>
   return <>
-    <Stage><Step title="Where should your agents live?" line="On a computer you own. Pick one to set up; you can add more later."
+    <Stage><Step title="Where should your agents live?" line="On a computer you own. You can add more later." link={link}
       action={<div className="flex flex-col items-center gap-2.5">
         <a href={DOWNLOAD_MAC} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'primary' }), BIG)} onClick={() => go({ step: 'mac' })}><I icon={AppleIcon} size={16} />Download for Mac</a>
         <Button type="button" variant="secondary" className={BIG} onClick={() => go({ step: 'server' })}><I icon={ServerStack01Icon} size={16} />Run on my server</Button>
@@ -99,12 +99,12 @@ export function Offline({ computer, seen }: { computer: string | null; seen: num
   </>
 }
 
-export function PhoneFirstRun({ email }: { email: string }) {
-  const link = location.origin
-  return <Stage><Step title="Set up on a computer." line="Your agents run on a Mac or a Linux server. Send yourself the link and open it there. After that, this phone can chat with them."
+export function PhoneFirstRun({ email, link }: { email: string; link?: ReactNode }) {
+  const url = location.origin
+  return <Stage><Step title="Set up on a computer." line="Your agents run on a Mac or a Linux server. Send yourself the link and open it there. After that, this phone can chat with them." link={link}
     action={<div className="flex flex-col items-center gap-2.5">
-      <a href={`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Set up OpenHut')}&body=${encodeURIComponent(link)}`} className={cn(buttonVariants({ variant: 'primary' }), BIG)}><I icon={Mail01Icon} size={16} />Email me the link</a>
-      <CopyButton text={link} label="Copy link" className={BIG} />
+      <a href={`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Set up OpenHut')}&body=${encodeURIComponent(url)}`} className={cn(buttonVariants({ variant: 'primary' }), BIG)}><I icon={Mail01Icon} size={16} />Email me the link</a>
+      <CopyButton text={url} label="Copy link" className={BIG} />
     </div>} /></Stage>
 }
 
