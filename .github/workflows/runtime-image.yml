@@ -73,8 +73,16 @@ jobs:
         run: |
           start=$(date +%s)
           BUILD="ci-$(git rev-parse --short=8 HEAD)" BASE=http://127.0.0.1:8098 scripts/release.sh
-          scripts/image.sh dist localhost:5000/openhut/runtime:ci --platform linux/amd64 --push --cache-from type=gha,scope=runtime-amd64 --cache-to type=gha,scope=runtime-amd64,mode=min
-          echo "Built in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
+          # R7: the base (rebuilt a few times a year), then the thin per-release layer on it, timed on its own (target ≤180 s).
+          docker buildx build -f install/Dockerfile --target runtime-base --build-arg AGENT_IMAGE="$(cat install/agent-image)" --platform linux/amd64 \
+            -t localhost:5000/openhut/runtime-base:ci --push --cache-from type=gha,scope=runtime-amd64 --cache-to type=gha,scope=runtime-amd64,mode=min dist
+          echo "Base built in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
+          layer=$(date +%s)
+          scripts/image.sh dist localhost:5000/openhut/runtime:ci --platform linux/amd64 --push --build-arg BASE=localhost:5000/openhut/runtime-base:ci \
+            --cache-from type=gha,scope=runtime-layer --cache-to type=gha,scope=runtime-layer,mode=min
+          took=$(( $(date +%s) - layer ))
+          echo "R7: the layer published in ${took}s (target ≤180 s)" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$took" -le 180 ] || echo "::warning::The layer took ${took}s, over R7's 3 minutes."
       - name: Install it as a server would, from install.sh
         run: |
           KEY=$(openssl rand -hex 32) && echo "KEY=$KEY" >> "$GITHUB_ENV" && echo "::add-mask::$KEY"
@@ -87,6 +95,20 @@ jobs:
           docker ps --format '{{.Names}} {{.Image}} {{.Status}}'
       - name: One agent in gVisor answers a chat
         run: scripts/image-smoke.sh "$KEY"
+      - name: A release whose /health fails is rolled back (R7)
+        run: |
+          good=$(docker inspect -f '{{.Image}}' openhut)
+          printf 'FROM localhost:5000/openhut/runtime:ci\nRUN rm /opt/openhut/packages/runtime/src/server/app.ts\n' |
+            docker buildx build --platform linux/amd64 --push -t localhost:5000/openhut/runtime:broken --metadata-file broken.json -
+          ref="localhost:5000/openhut/runtime@$(sed -n 's/.*"containerimage.digest": *"\(sha256:[0-9a-f]*\)".*/\1/p' broken.json)"
+          sed "s|^RUNTIME_IMAGE=.*|RUNTIME_IMAGE=\"$ref\"|" dist/install.sh > broken-install.sh
+          gw=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}')
+          start=$(date +%s)
+          if OPENHUT_URL=http://127.0.0.1:8098 OPENHUT_MODEL=test OPENHUT_API_URL="http://$gw:8793" OPENHUT_CLOUD_URL="http://$gw:8793" \
+            OPENHUT_CLIENT_KEY_SHA256=$(printf %s "$KEY" | sha256sum | cut -c1-64) sh broken-install.sh; then echo "::error::the broken release installed"; exit 1; fi
+          [ "$(docker inspect -f '{{.Image}}' openhut)" = "$good" ] || { echo "::error::openhut isn't the previous image"; exit 1; }
+          docker exec openhut curl -fsS http://127.0.0.1:8787/health | grep -q '"ok":true'
+          echo "R7: a release with a failing /health was rolled back to the previous image in $(( $(date +%s) - start ))s" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Size
         run: |
           python3 - >> "$GITHUB_STEP_SUMMARY" <<'EOF'

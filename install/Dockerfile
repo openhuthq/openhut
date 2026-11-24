@@ -1,4 +1,8 @@
 # syntax=docker/dockerfile:1.7
+# R7: two images. `--target runtime-base` is the base (dind, gVisor, Claude Code, agent-browser, the bundled agent image and the
+# updater), rebuilt a few times a year. The default target is the thin per-release layer: the release tree and its node_modules on
+# top of BASE, a published base by digest (`--build-arg BASE=ghcr.io/openhuthq/runtime-base@sha256:…`), or the base built here.
+ARG BASE=runtime-base
 ARG AGENT_IMAGE
 ARG ALPINE=alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
 ARG DIND=docker:28-dind@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac
@@ -66,7 +70,20 @@ tar -xzf /tmp/agent-browser.tgz -C /tmp package/bin/agent-browser && mv /tmp/pac
 chown -R root:root /out && chmod 0755 /out/opt/openhut/bin/* /out/usr/local/bin/*
 EOF
 
-FROM base AS deps
+FROM base AS runtime-base
+COPY --from=downloads /out/ /
+COPY --from=agent /agent.tar.zst /image /opt/openhut-agent/
+COPY --from=bridge /bridge /var/lib/openhut/whatsapp-bridge
+# The updater and its release checks live here, never in the layer it replaces (R7, SEC6).
+COPY --from=tree /opt/openhut/install/updater.sh /opt/openhut/install/verify-installer.mjs /usr/local/lib/openhut-updater/install/
+COPY --from=tree /opt/openhut/packages/desktop/src/release-key.mjs /usr/local/lib/openhut-updater/packages/desktop/src/
+RUN mkdir -p /etc/docker && echo '{"runtimes":{"runsc":{"path":"/usr/local/bin/runsc"}}}' > /etc/docker/daemon.json && \
+    ln -s /data/etc /etc/openhut && ln -s /data/log /var/log/openhut && ln -s /run/agentd-etc /etc/agentd
+ENV OPENHUT_HOST=0.0.0.0 OPENHUT_RUNTIME=image DOCKER_TLS_CERTDIR=
+EXPOSE 8787
+ENTRYPOINT ["/opt/openhut/install/image-start.sh"]
+
+FROM ${BASE} AS deps
 COPY --from=tree /opt/openhut/package.json /opt/openhut/package-lock.json /opt/openhut/
 COPY --from=tree /opt/openhut/packages/runtime/package.json /opt/openhut/packages/runtime/
 COPY --from=tree /opt/openhut/packages/common/package.json /opt/openhut/packages/common/
@@ -78,14 +95,6 @@ COPY --from=tree /opt/openhut/packages/phone/package.json /opt/openhut/packages/
 RUN cd /opt/openhut && npm ci --omit=dev --no-audit --no-fund --loglevel=error >/dev/null && \
     chown -R root:root node_modules && chmod -R go-w node_modules
 
-FROM base
-COPY --from=downloads /out/ /
-COPY --from=agent /agent.tar.zst /image /opt/openhut-agent/
-COPY --from=bridge /bridge /var/lib/openhut/whatsapp-bridge
+FROM ${BASE}
 COPY --from=deps /opt/openhut/node_modules /opt/openhut/node_modules
 COPY --from=tree /opt/openhut /opt/openhut
-RUN mkdir -p /etc/docker && echo '{"runtimes":{"runsc":{"path":"/usr/local/bin/runsc"}}}' > /etc/docker/daemon.json && \
-    ln -s /data/etc /etc/openhut && ln -s /data/log /var/log/openhut && ln -s /run/agentd-etc /etc/agentd
-ENV OPENHUT_HOST=0.0.0.0 OPENHUT_RUNTIME=image DOCKER_TLS_CERTDIR=
-EXPOSE 8787
-ENTRYPOINT ["/opt/openhut/install/image-start.sh"]

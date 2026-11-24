@@ -120,7 +120,7 @@ updater() {
   docker run -d --name openhut-updater --restart unless-stopped --read-only --tmpfs /tmp:size=64m \
     --cap-drop ALL --security-opt no-new-privileges --security-opt label=disable \
     -v /var/run/docker.sock:/var/run/docker.sock -v openhut-data:/data -e "OPENHUT_URL=$OPENHUT_URL" \
-    --log-opt max-size=1m --log-opt max-file=2 --entrypoint /opt/openhut/install/updater.sh "$RUNTIME_IMAGE" >/dev/null
+    --log-opt max-size=1m --log-opt max-file=2 --entrypoint /usr/local/lib/openhut-updater/install/updater.sh "$RUNTIME_IMAGE" >/dev/null
 }
 lock() {
   exec 9>"$LOCK"
