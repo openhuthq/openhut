@@ -28,3 +28,11 @@ test('no confirm floats in a popover: a popover never holds a Cancel button', ()
   const files = dirs.flatMap((dir) => readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((file) => file.endsWith('.tsx')).map((file) => ({ file, source: readFileSync(new URL(file, dir), 'utf8') })))
   assert.deepEqual(files.filter(({ source }) => source.includes('PopoverContent') && />Cancel</.test(source)).map(({ file }) => file), [])
 })
+
+test('a dialog family is one Dialog: moving between its views never closes and reopens it', () => {
+  const read = (file: string) => readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8')
+  assert.equal(read('app/app.tsx').match(/<SettingsView\b/g)?.length, 1, 'Settings and /connections share one SettingsView')
+  const computers = read('features/settings/computers.tsx')
+  assert.equal(computers.match(/<Dialog\b/g)?.length, 1, 'Add a computer steps share one Dialog')
+  assert.ok(computers.indexOf('<Dialog') < computers.indexOf('function ComputerList'), 'ComputersSettings owns the Dialog, not each step')
+})

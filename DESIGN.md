@@ -133,6 +133,7 @@ A dropdown trigger (Model, Computer) follows the secondary button: soft fill, no
 - No shadows, no nested borders.
 - Popovers keep their side and size while open.
 - One button per action on a screen — no empty-state button that repeats a header button.
+- Moving between views inside a dialog swaps content; the dialog never closes and reopens. A dialog family (Settings and its Apps, Add a computer and its steps) renders one `Dialog` whose children change with the route; a dialog opened from inside another opens on top of it.
 
 ### Known trade-off
 

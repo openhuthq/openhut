@@ -22,11 +22,12 @@ export function App() {
   const opened = useOpen()
   useEffect(() => onBack(back), [])
   const close = () => navigate(background.current.path)
+  // One SettingsView for /settings/* and /connections, so moving to Apps swaps content instead of closing and reopening.
+  const settings = route.page === 'settings' ? route.tab : route.page === 'connections' ? 'apps' : undefined
   return <Gate me={me}>
     {route.page === 'join' ? <CloudJoin /> : <>
       <Shell route={route.page === 'settings' || route.page === 'connections' ? background.current.route : route} overlay={route.page === 'settings' || route.page === 'connections' ? route.page : undefined} />
-      {route.page === 'settings' && <SettingsView tab={route.tab} onClose={close} />}
-      {route.page === 'connections' && <SettingsView tab="apps" onClose={close} />}
+      {settings && <SettingsView tab={settings} onClose={close} />}
       {opened === 'join-link' && <JoinLinkDialog />}
     </>}
     <JoinRuntimes />

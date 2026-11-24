@@ -45,15 +45,20 @@ const JoinCode = z.object({ code: z.string(), expiresAt: z.string() })
 
 type Device = Cloud['devices'][number]
 
+// One Dialog for every step, so moving between steps swaps content instead of closing and reopening.
+const STEPS = ['add', 'command', 'tailscale', 'ssh', 'adding']
+
 export function ComputersSettings() {
   const [step, name = ''] = (useOpen() ?? '').split(':')
   return <>
     <ComputerList />
-    {step === 'add' && <AddComputer />}
-    {step === 'command' && <AddByCommand />}
-    {step === 'tailscale' && <TailscaleStep />}
-    {step === 'ssh' && <TurnOnSsh name={name} />}
-    {step === 'adding' && <Adding name={name} />}
+    {STEPS.includes(step) && <Dialog size="narrow" onClose={() => open()}>
+      {step === 'add' && <AddComputer />}
+      {step === 'command' && <AddByCommand />}
+      {step === 'tailscale' && <TailscaleStep />}
+      {step === 'ssh' && <TurnOnSsh name={name} />}
+      {step === 'adding' && <Adding name={name} />}
+    </Dialog>}
   </>
 }
 
@@ -191,7 +196,7 @@ function TailscaleStep() {
   const recheck = () => void tailnet.refetch()
   const data = tailnet.data
   const add = (peer: Peer) => { void start({ name: peer.name, dns: peer.dns } satisfies TailnetPeer); open(`adding:${peer.name}`) }
-  return <TailscaleDialog title="Add over Tailscale" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}>
+  return <Step title="Add over Tailscale" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}>
     {!data && <Scene mood="looking" title="Looking for your computers…" />}
     {data?.state === 'missing' && <Empty title="Install Tailscale" line="OpenHut uses it to find your other computers.">
       <a href={GET_TAILSCALE} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Get Tailscale</a>
@@ -201,7 +206,7 @@ function TailscaleStep() {
       <Button type="button" variant="secondary" className={PILL} disabled={tailnet.isFetching} onClick={recheck}>Check again</Button>
     </Empty>}
     {data?.state === 'running' && <Peers peers={data.peers} tailnet={data.tailnet} recheck={recheck} checking={tailnet.isFetching} onAdd={add} />}
-  </TailscaleDialog>
+  </Step>
 }
 
 function Peers({ peers, tailnet, recheck, checking, onAdd }: { peers: Peer[]; tailnet: string; recheck: () => void; checking: boolean; onAdd: (peer: Peer) => void }) {
@@ -258,14 +263,14 @@ function TurnOnSsh({ name }: { name: string }) {
   const tailnet = useTailnet({ poll: true })
   const peer = tailnet.data?.state === 'running' ? tailnet.data.peers.find((each) => each.name === name) : undefined
   useEffect(() => { if (peer?.ssh) open('tailscale') }, [peer?.ssh])
-  return <TailscaleDialog title="Turn on Tailscale SSH" back={<Button type="button" variant="secondary" onClick={() => open('tailscale')}>Back</Button>}>
+  return <Step title="Turn on Tailscale SSH" back={<Button type="button" variant="secondary" onClick={() => open('tailscale')}>Back</Button>}>
     <div className="flex items-center gap-4 px-2.5">
       <Hut mood="key" className="size-[72px]" />
       <p className="m-0 flex-1 text-body">Run this once on {name}. OpenHut installs itself over Tailscale SSH, so it needs to be on.</p>
     </div>
     <div className="px-2.5"><Command text="sudo tailscale set --ssh" /></div>
     <div className="px-2.5"><Waiting note="It moves on by itself once SSH is on.">Waiting for SSH on {name}…</Waiting></div>
-  </TailscaleDialog>
+  </Step>
 }
 
 function Adding({ name }: { name: string }) {
@@ -281,17 +286,17 @@ function Adding({ name }: { name: string }) {
     const retry = <Button type="button" variant="primary" onClick={() => void start(enrollment.peer)}>Try again</Button>
     const remove = <Button type="button" variant="secondary" onClick={() => { dismiss(enrollment.peer.dns); open() }}>Remove</Button>
     const details = detailsOf({ enrollment, version: APP_VERSION })
-    return <TailscaleDialog title="Add over Tailscale" back={remove} foot={<><CopyButton text={details} label="Copy details" />{retry}</>}>
+    return <Step title="Add over Tailscale" back={remove} foot={<><CopyButton text={details} label="Copy details" />{retry}</>}>
       <Scene mood="worried" title={`Couldn't add ${name}`} line={failureOf({ error: enrollment.error, url: enrollment.url, name }).sentence} />
       <details className="mx-2.5 rounded-lg border border-hair">
         <summary className="cursor-pointer px-3 py-2 text-mute select-none">Show details</summary>
         <pre className="m-0 max-h-40 overflow-auto border-t border-hair bg-tint px-3 py-2 font-mono text-[11px]/[1.6] whitespace-pre-wrap text-ink">{details}</pre>
       </details>
-    </TailscaleDialog>
+    </Step>
   }
   const stage = stageOf(enrollment?.lines ?? [])
   const percent = percentOf({ lines: enrollment?.lines ?? [], waitingAt: enrollment?.waitingAt, now })
-  return <TailscaleDialog title="Add over Tailscale" back={hide} foot={<span className="text-[12px] text-mute">It keeps going if you close this.</span>}>
+  return <Step title="Add over Tailscale" back={hide} foot={<span className="text-[12px] text-mute">It keeps going if you close this.</span>}>
     <Scene mood="building" title={`Adding ${name}`} line={enrollment?.url
       ? <>Tailscale wants you to approve this. <a href={enrollment.url} target="_blank" rel="noreferrer" className="text-ink underline underline-offset-2">Open the approval page</a></>
       : <>{stage.line} · <span className="font-medium text-ink tabular-nums">{percent}%</span></>}>
@@ -300,26 +305,25 @@ function Adding({ name }: { name: string }) {
         <Hut mood="building" className="absolute bottom-3 size-20 transition-[left] duration-700" style={{ left: `calc(${percent}% - 40px)` }} />
       </div>
     </Scene>
-  </TailscaleDialog>
+  </Step>
 }
 
-function TailscaleDialog({ title, back, foot, children }: { title: string; back?: ReactNode; foot?: ReactNode; children: ReactNode }) {
-  const close = () => open()
-  return <Dialog size="narrow" label={title} onClose={close}>
-    <DialogHead title={title} onClose={close} />
+function Step({ title, back, foot, children }: { title: string; back?: ReactNode; foot?: ReactNode; children: ReactNode }) {
+  return <>
+    <DialogHead title={title} onClose={() => open()} />
     <div className="flex max-h-[min(480px,calc(100vh-200px))] flex-col gap-4 overflow-y-auto px-3 py-5 text-[13px]/[18px]">{children}</div>
     {(back || foot) && <DialogFoot start={back}>{foot}</DialogFoot>}
-  </Dialog>
+  </>
 }
 
 function AddComputer() {
-  return <TailscaleDialog title="Add a computer">
+  return <Step title="Add a computer">
     <Rows>
       <Row onClick={() => open('command')} icon={<Hut mood="looking" className="size-6" />} title="OpenHut Relay" note="Paste one command on your Linux server."><Chevron /></Row>
       <Row onClick={() => open('tailscale')} icon={<Glyph name="tailscale" size={20} />} title="Tailscale" note="Install on a Tailscale computer in one click."><Chevron /></Row>
     </Rows>
     <p className="m-0 px-2.5 text-[12px]/[16px] text-mute">A Mac or PC joins by installing OpenHut and signing in with your account.</p>
-  </TailscaleDialog>
+  </Step>
 }
 
 function AddByCommand() {
@@ -330,7 +334,7 @@ function AddByCommand() {
   const { requests, home } = mineOf(useCloud().data)
   const asked = home && code.data ? requests.filter((each) => each.server).at(-1) : undefined
   const expired = !asked && code.data && now > Date.parse(code.data.expiresAt)
-  return <TailscaleDialog title="Add over OpenHut Relay" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}
+  return <Step title="Add over OpenHut Relay" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}
     foot={expired && <Button type="button" variant="primary" onClick={() => mutate()}>Make a new command</Button>}>
     <ErrorNote message={code.error?.message} />
     {code.isPending && <Waiting note="It works once, for 10 minutes.">Making a code…</Waiting>}
@@ -345,7 +349,7 @@ function AddByCommand() {
       <p className="m-0 text-[12px]/[16px] text-mute">Ubuntu, Debian or Alpine with sudo. It installs Docker if needed and takes about 2 GB. Every download is checked against its checksum. You can <a href="https://github.com/openhuthq/openhut/blob/main/install/install.sh" target="_blank" rel="noreferrer" className="text-ink underline underline-offset-2">read the script</a> first.</p>
       <Waiting note="It works once, for 10 minutes. Approve it here when it asks.">Waiting for it to ask to join…</Waiting>
     </>}
-  </TailscaleDialog>
+  </Step>
 }
 
 export function joinCommand(code: string) {
