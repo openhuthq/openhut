@@ -114,7 +114,7 @@ function NeedsSignIn({ model }: { model: string }) {
 
 function Row({ title, children }: { title: string; children: ReactNode }) {
   return <div className="flex min-h-12 items-center justify-between gap-3 py-2">
-    <span className="w-16 shrink-0 text-[13px] font-medium">{title}</span>
+    <span className="w-[72px] shrink-0 text-[13px] font-medium whitespace-nowrap">{title}</span>
     {children}
   </div>
 }
