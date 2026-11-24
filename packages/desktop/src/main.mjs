@@ -195,7 +195,8 @@ handle('passkey.status', () => passkey(['status']))
 handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
 handle('passkey.open', ({ quiet } = {}) => passkey(quiet ? ['open', '--quiet'] : ['open']))
 handle('passkey.cancel', () => { passkeyRun?.kill() })
-const touchId = async (reason) => process.platform !== 'darwin' ? { ok: true } : systemPreferences.promptTouchID(String(reason)).then(() => ({ ok: true }), (error) => ({ ok: /not available|not enrolled|no identities/i.test(error.message), error: error.message }))
+const testPresence = TEST_HOME && process.env.OPENHUT_TEST_PRESENCE
+const touchId = async (reason) => testPresence ? { ok: readFileSync(testPresence, 'utf8').trim() === 'yes' } : process.platform !== 'darwin' ? { ok: true } : systemPreferences.promptTouchID(String(reason)).then(() => ({ ok: true }), (error) => ({ ok: /not available|not enrolled|no identities/i.test(error.message), error: error.message }))
 handle('touchid.prompt', ({ reason } = {}) => touchId(reason))
 handle('cloud.notify', ({ title = 'Unlock OpenHut', body = 'Bring your agents and chats to this computer.', path = '/' } = {}) => new Promise((resolve) => {
   if (!Notification.isSupported()) return resolve({ shown: false })

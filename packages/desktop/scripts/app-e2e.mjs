@@ -6,7 +6,7 @@ import { createServer as tcpServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
-import { bootCloud, bootWorker, devCloudUrl, signIn } from './dev-cloud.mjs'
+import { bootCloud, devCloudUrl, signIn } from './dev-cloud.mjs'
 
 const { values: args } = parseArgs({ options: { installer: { type: 'string' }, app: { type: 'string' }, dev: { type: 'boolean', default: false }, out: { type: 'string', default: 'app-e2e' }, agents: { type: 'string', default: '5' }, cloud: { type: 'string' } } })
 if (!args.installer && !args.app && !args.dev) {
@@ -23,10 +23,14 @@ const cdpPort = 9300 + Math.floor(Math.random() * 500)
 const guestPort = cdpPort + 500
 const INVITEE = 'sara@example.com'
 const API = devCloudUrl()
-const CLOUD = devCloudUrl().replace(/\d+$/, (port) => String(Number(port) + 500))
-const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test', OPENHUT_UPDATE_FEED: 'http://127.0.0.1:9/', ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: CLOUD } }
+const CLOUD = API
+const presence = resolve(args.out, 'presence')
+const cloudData = resolve(args.out, 'cloud-data')
+const sent = []
+const env = { ...process.env, OPENHUT_TEST_HOME: home, OPENHUT_TEST_PRESENCE: presence, OPENHUT_TEST_HIDDEN: '1', OPENHUT_SECOND_APP: '1', OPENHUT_MODEL: 'test', OPENHUT_UPDATE_FEED: 'http://127.0.0.1:9/', ...args.cloud && { OPENHUT_API_URL: API, OPENHUT_CLOUD_URL: CLOUD } }
 const evidence = { platform: `${process.platform} ${osVersion()}`, steps: [], waits: [] }
 mkdirSync(args.out, { recursive: true })
+writeFileSync(presence, 'yes')
 const say = (step, detail = {}) => {
   evidence.steps.push({ step, ...detail, at: new Date().toISOString() })
   console.log(`app-e2e: ${step}${Object.keys(detail).length ? ` ${JSON.stringify(detail)}` : ''}`)
@@ -35,23 +39,18 @@ const say = (step, detail = {}) => {
 let child
 let guest
 let api
-let worker
 const site = createServer((req, res) => res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html><title>OpenHut e2e page</title><h1>OpenHut e2e page</h1>')).listen(0, '127.0.0.1')
 try {
   if (args.cloud) {
-    const booted = await Promise.all([
-      bootCloud({ dir: args.cloud, api: API, log: join(home, 'logs', 'cloud-api.log') }),
-      bootWorker({ dir: resolve(args.cloud, '../cloud'), url: CLOUD, state: resolve(args.out, 'worker-state'), log: join(home, 'logs', 'cloud-worker.log') }),
-    ])
-    api = booted[0]
-    worker = booted[1]
-    say('the dev cloud API and Worker (relay) are up', { api: API, cloud: CLOUD })
+    api = await bootCloud({ dir: args.cloud, api: API, data: cloudData, log: join(home, 'logs', 'cloud-api.log') })
+    say('the dev Cloud (API and relay, one Node process) is up', { api: API })
   }
   if (args.installer) {
     const programs = join(process.env.LOCALAPPDATA, 'Programs')
     execFileSync(args.installer, ['/S'])
     exe = await until(async () => existsSync(programs) && readdirSync(programs).map((dir) => join(programs, dir, 'OpenHut.exe')).find((path) => existsSync(path)), 60, 'the installer to put OpenHut.exe in place')
   }
+  env.OPENHUT_GATEWAY_PORT ??= String(await freePort())
   say('installed', { exe })
   child = launch()
   let page = await connect()
@@ -63,15 +62,17 @@ try {
   say('the runtime is up and healthy', { build: admin.server.build })
   if (args.cloud) {
     await signIn({ page, api: API })
-    say('signed in to the dev cloud as mo@example.com and saved the kit')
+    say('signed in once (the runtime, with Google), the window joined with the runtime’s one-use code over the relay, and saved the kit')
+    await presenceAtRuntime(page)
     await shot(page, '01-signed-in')
   }
   const agent = await firstAgent(page)
-  await page.eval(`fetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wanted: 'running' }) }).then((r) => r.json())`)
+  await page.eval(`openhutFetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wanted: 'running' }) }).then((r) => r.json())`)
   const [running] = await answering(page, [agent.id], 'the agent to be running and answering')
   say('made an agent and started it', { id: running.id, name: running.name, status: running.status, health: running.health })
   await chat(page, agent, `hello from ${agent.name}`)
-  const cleared = await page.eval(`fetch('/api/threads/${agent.id}', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uploads: [] }) }).then(async (r) => ({ status: r.status, body: (await r.text()).slice(0, 300) }))`)
+  if (args.cloud) await cloudRestart(page, agent)
+  const cleared = await page.eval(`openhutFetch('/api/threads/${agent.id}', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uploads: [] }) }).then(async (r) => ({ status: r.status, body: (await r.text()).slice(0, 300) }))`)
   say('cleared the chat, as Clear chat does (a DELETE with a body through the app)', cleared)
   if (cleared.status !== 200) throw new Error(`Clear chat answered ${cleared.status} ${cleared.body}`)
   await page.eval(`navigation.navigate('/agents/${agent.id}')`)
@@ -102,6 +103,10 @@ try {
   say('quit both apps; no agent or browser process is left', { left: gone })
   if (gone.length) throw new Error(`after quitting both apps, these are still running: ${gone.join('; ')}`)
   evidence.failedRequests = page.failures
+  const local = sent.filter((line) => /^\S+ app:\/\/openhut\/(api|c)\//.test(line))
+  evidence.requests = { total: sent.length, local, cloud: sent.filter((line) => line.includes(API)).length }
+  say('no request from a window went to a local /api', evidence.requests)
+  if (local.length) throw new Error(`the window still called a local /api: ${local.slice(0, 5).join('; ')}`)
   evidence.pass = true
 } catch (error) {
   evidence.pass = false
@@ -111,14 +116,13 @@ try {
 } finally {
   for (const each of [guest, child]) if (each && each.exitCode === null) await quit(each).catch(() => each.kill())
   api?.kill()
-  worker?.kill()
   site.close()
   writeFileSync(join(args.out, 'evidence.json'), JSON.stringify(evidence, null, 2))
   console.log(`app-e2e: ${evidence.pass ? 'PASS' : 'FAIL'}; evidence in ${args.out}`)
 }
 
 async function invite(mo, agent) {
-  const sharing = await mo.eval(`fetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shared: true }) }).then(async (r) => ({ status: r.status, body: await r.json() }))`)
+  const sharing = await mo.eval(`openhutFetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ shared: true }) }).then(async (r) => ({ status: r.status, body: await r.json() }))`)
   if (sharing.status !== 200 || !sharing.body.shared) throw new Error(`sharing ${agent.name} with the team answered ${sharing.status} ${JSON.stringify(sharing.body)}`)
   say(`Mo shared ${agent.name} with the team`)
   const team = (await get(mo, '/api/cloud'))?.workspaces?.find((each) => each.home)
@@ -171,6 +175,43 @@ async function invite(mo, agent) {
   say('quit the invitee\'s app')
 }
 
+async function presenceAtRuntime(page) {
+  const route = `/api/cloud/devices/${'A'.repeat(86)}`
+  const remove = () => page.eval(`openhutFetch('${route}', { method: 'DELETE' }).then(async (r) => ({ status: r.status, body: (await r.text()).slice(0, 200) }))`)
+  writeFileSync(presence, 'no')
+  const refused = await remove()
+  writeFileSync(presence, 'yes')
+  const passed = await remove()
+  say('the own window removing a device: without presence the runtime refuses it, with presence it goes through', { without: refused, with: passed })
+  if (refused.status !== 403 || !/Not confirmed/.test(refused.body)) throw new Error(`without presence the runtime answered ${refused.status} ${refused.body}`)
+  if ([401, 403].includes(passed.status)) throw new Error(`with presence the runtime still answered ${passed.status} ${passed.body}`)
+}
+
+async function cloudRestart(page, agent) {
+  const reads = () => page.eval(`openhutFetch('/api/agents/${agent.id}').then((r) => r.status, () => 0)`)
+  const stop = async () => {
+    api.kill()
+    await new Promise((done) => api.once('exit', done))
+  }
+  const start = async () => { api = await bootCloud({ dir: args.cloud, api: API, data: cloudData, log: join(home, 'logs', 'cloud-api.log') }) }
+  await stop()
+  say('restarted the Cloud in the middle of the session: stopped it')
+  await until(async () => await reads() !== 200, 30, 'the window to lose the tunnel')
+  await start()
+  await until(async () => await reads() === 200, 120, 'the window to reconnect on its own, with no reload and no click')
+  await chat(page, agent, `back after the Cloud restart, ${agent.name}`)
+  say('the Cloud came back with the same data; the window reopened its tunnel on its own and chats again')
+  await shot(page, '01b-reconnected-after-cloud-restart')
+  await stop()
+  await page.eval('location.reload()')
+  await until(async () => /Can.t reach OpenHut Cloud/.test(await textOf(page)), 60, 'the window to say it can’t reach OpenHut Cloud')
+  say('with the Cloud unreachable (as with the internet off), the opened window says so', { text: await textOf(page) })
+  await shot(page, '01c-cloud-unreachable', 500, false)
+  await start()
+  await until(async () => await reads() === 200 && !/Can.t reach/.test(await textOf(page)), 120, 'the window to come back once the Cloud answers')
+  say('the Cloud answered again and the window came back by itself')
+}
+
 async function joinScreen(page, how) {
   const text = await until(async () => {
     const now = await page.eval("location.pathname === '/join' && document.body?.innerText")
@@ -193,7 +234,7 @@ async function clickButton(page, label) {
 }
 
 async function post(page, path, body) {
-  return page.eval(`fetch('${path}', { method: 'POST', headers: { 'content-type': 'application/json' }, body: ${JSON.stringify(JSON.stringify(body))} }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }))`)
+  return page.eval(`openhutFetch('${path}', { method: 'POST', headers: { 'content-type': 'application/json' }, body: ${JSON.stringify(JSON.stringify(body))} }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }))`)
 }
 
 function freePort() {
@@ -225,14 +266,14 @@ async function firstAgent(page) {
     return run.done ? run : null
   }, 120, 'the first run to finish').catch((error) => { throw new Error(`${error.message}; first run was at ${JSON.stringify(last?.steps)}`) })
   say('first run finished: the runtime is ready', { steps: setup.steps })
-  const made = await page.eval("fetch('/api/agents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Juniper' }) }).then(async (r) => ({ status: r.status, body: await r.json() }))")
+  const made = await page.eval("openhutFetch('/api/agents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Juniper' }) }).then(async (r) => ({ status: r.status, body: await r.json() }))")
   if (made.status !== 200) throw new Error(`making the first agent answered ${made.status} ${JSON.stringify(made.body)}`)
   say('made the first agent, as Make your first agent does', { id: made.body.id })
   return made.body
 }
 
 async function chat(page, agent, text) {
-    const stream = await page.eval(`fetch('/api/threads/${agent.id}/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ trigger: 'submit-message', message: { id: 'm1', role: 'user', parts: [{ type: 'text', text: ${JSON.stringify(JSON.stringify(text))} }] } }) }).then((r) => r.text())`)
+    const stream = await page.eval(`openhutFetch('/api/threads/${agent.id}/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ trigger: 'submit-message', message: { id: 'm1', role: 'user', parts: [{ type: 'text', text: ${JSON.stringify(JSON.stringify(text))} }] } }) }).then((r) => r.text())`)
   const echoed = stream.includes('ECHO') && stream.includes(text)
   const crossed = NAMES.filter((name) => name !== agent.name && stream.includes(`hello from ${name}`))
   say(`chatted with ${agent.name} through the gateway`, { text, echoed, crossed, tail: stream.slice(-200) })
@@ -241,7 +282,7 @@ async function chat(page, agent, text) {
 }
 
 async function get(page, path) {
-  const reply = await page.eval(`fetch('${path}').then(async (r) => ({ status: r.status, body: r.ok ? await r.json() : await r.text() }), () => null)`)
+  const reply = await page.eval(`typeof openhutFetch !== 'function' ? null : openhutFetch('${path}').then(async (r) => ({ status: r.status, body: r.ok ? await r.json() : await r.text() }), () => null)`)
   if (reply?.status === 401 || reply?.status === 403) throw new Error(`GET ${path} answered ${reply.status}, which waiting won't change: ${String(reply.body).slice(0, 300)}`)
   return reply?.status === 200 ? reply.body : null
 }
@@ -253,7 +294,7 @@ async function agentOf(page, id) {
 }
 
 async function wanted(page, id, state) {
-  await page.eval(`fetch('/api/agents/${id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wanted: '${state}' }) }).then((r) => r.json())`)
+  await page.eval(`openhutFetch('/api/agents/${id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wanted: '${state}' }) }).then((r) => r.json())`)
 }
 
 async function answering(page, ids, what) {
@@ -264,13 +305,13 @@ async function answering(page, ids, what) {
 }
 
 async function browsers(page, pair) {
-  const features = (await page.eval("fetch('/api/admin').then((r) => r.json())")).features
+  const features = (await page.eval("openhutFetch('/api/admin').then((r) => r.json())")).features
   say('Browser and WhatsApp are available on this computer', { features })
   if (!features?.browser || !features?.whatsapp) {
     const bridge = join(resources(), 'backend/runtime/hermes/scripts/whatsapp-bridge')
     throw new Error(`expected Browser and WhatsApp, got ${JSON.stringify(features)}; ${bridge} holds ${existsSync(bridge) ? readdirSync(bridge).join(', ') : 'nothing'}`)
   }
-  for (const agent of pair) await page.eval(`fetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ browser: true, codeExecution: true }) }).then((r) => r.json())`)
+  for (const agent of pair) await page.eval(`openhutFetch('/api/agents/${agent.id}', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ browser: true, codeExecution: true }) }).then((r) => r.json())`)
   await answering(page, pair.map((each) => each.id), 'the two browser agents to answer')
   await Promise.all(pair.map((agent) => tool(page, agent, `browser: open http://127.0.0.1:${site.address().port}/?agent=${agent.name}`, 'OpenHut e2e page')))
   await Promise.all(pair.map((agent) => tool(page, agent, 'browser: get url', `agent=${agent.name}`)))
@@ -280,7 +321,7 @@ async function browsers(page, pair) {
 async function tool(page, agent, text, expect) {
   let stream = ''
   await until(async () => {
-        stream = await page.eval(`fetch('/api/threads/${agent.id}/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ trigger: 'submit-message', message: { id: 'm1', role: 'user', parts: [{ type: 'text', text: ${JSON.stringify(JSON.stringify(text))} }] } }) }).then((r) => r.text())`)
+        stream = await page.eval(`openhutFetch('/api/threads/${agent.id}/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ trigger: 'submit-message', message: { id: 'm1', role: 'user', parts: [{ type: 'text', text: ${JSON.stringify(JSON.stringify(text))} }] } }) }).then((r) => r.text())`)
     return !stream.includes("isn't reachable")
   }, 60, `${agent.name} to come back after turning Browser on`)
   const ok = stream.includes(expect)
@@ -291,7 +332,7 @@ async function tool(page, agent, text, expect) {
 async function many(page, first) {
   const count = Number(args.agents)
   const agents = [first]
-  for (const name of NAMES.slice(1, count)) agents.push(await page.eval(`fetch('/api/agents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: '${name}' }) }).then((r) => r.json())`))
+  for (const name of NAMES.slice(1, count)) agents.push(await page.eval(`openhutFetch('/api/agents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: '${name}' }) }).then((r) => r.json())`))
   const started = Date.now()
   for (const agent of agents) await wanted(page, agent.id, 'running')
   await answering(page, agents.map((each) => each.id), `all ${count} agents to answer`)
@@ -347,12 +388,12 @@ async function quit(proc) {
   await Promise.race([exited, sleep(60_000).then(() => { throw new Error('the app didn\'t quit within a minute') })])
 }
 
-async function shot(page, name, settle = 2000) {
+async function shot(page, name, settle = 2000, strict = true) {
   await sleep(settle)
   const broken = await page.eval("document.body.innerText.match(/Failed to fetch|Something went wrong|isn't answering|didn't answer/)?.[0] ?? ''")
   const { data } = await page.send('Page.captureScreenshot', { format: 'png' })
   writeFileSync(join(args.out, `${name}.png`), Buffer.from(data, 'base64'))
-  if (broken) throw new Error(`${name} shows "${broken}"; /api/me answers ${await page.eval("fetch('/api/me').then(async (r) => `${r.status} ${await r.text()}`, (e) => e.message)")}; failed requests: ${JSON.stringify(page.failures.slice(-10))}`)
+  if (broken && strict) throw new Error(`${name} shows "${broken}"; /api/me answers ${await page.eval("openhutFetch('/api/me').then(async (r) => `${r.status} ${await r.text()}`, (e) => e.message)")}; failed requests: ${JSON.stringify(page.failures.slice(-10))}`)
 }
 
 async function connect(port = cdpPort) {
@@ -368,7 +409,10 @@ async function connect(port = cdpPort) {
   const failures = []
   socket.onmessage = (message) => {
     const reply = JSON.parse(message.data)
-    if (reply.method === 'Network.requestWillBeSent') urls.set(reply.params.requestId, `${reply.params.request.method} ${reply.params.request.url}`)
+    if (reply.method === 'Network.requestWillBeSent') {
+      urls.set(reply.params.requestId, `${reply.params.request.method} ${reply.params.request.url}`)
+      sent.push(`${reply.params.request.method} ${reply.params.request.url}`)
+    }
     if (reply.method === 'Network.loadingFailed' && !reply.params.canceled) failures.push({ request: urls.get(reply.params.requestId), error: reply.params.errorText, at: new Date().toISOString() })
     if (reply.method === 'Runtime.exceptionThrown' || (reply.method === 'Runtime.consoleAPICalled' && reply.params.type === 'error')) failures.push({ console: JSON.stringify(reply.params).slice(0, 400) })
     waiting.get(reply.id)?.(reply)
