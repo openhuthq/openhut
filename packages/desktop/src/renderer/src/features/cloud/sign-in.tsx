@@ -11,8 +11,9 @@ import { I } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
 import { PasskeyQuiet, useAddPasskey, useCancelSignIn, useCloud, useNewKit, useSignIn, useSigningIn } from '@/features/cloud/api'
 import { notify } from '@/components/custom/toast'
-import { toastError } from '@/lib/toast'
+import { toast, toastError } from '@/lib/toast'
 import { BIG, Step } from '@/features/cloud/step'
+import { Check } from '@/features/settings/kit'
 import { shortDate } from '@/lib/format'
 import { isPhone } from '@/lib/native'
 import { open, usePath } from '@/lib/router'
@@ -65,7 +66,8 @@ function useOnline(): boolean {
 
 type KitBridge = { save: (input: { name: string; body: string }) => Promise<{ canceled?: boolean; text?: string }> }
 const kitBridge: KitBridge | undefined = Reflect.get(window, 'openhut')?.kit
-type KitStep = 'save' | 'words' | 'type'
+type KitStep = 'save' | 'words' | 'type' | 'copied'
+const SECRET = 'Your 12 words and your Google account together open everything. Never share them.'
 const LINK = 'font-normal text-mute'
 
 export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () => void }) {
@@ -99,14 +101,18 @@ export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () =>
   const save = async () => {
     const made = await ready()
     const text = textOf(made)
-    if (!kitBridge) return saved(download({ name, text }))
+    if (!kitBridge) {
+      toast(`Saved to Downloads as ${name}. Move it somewhere safe, like a password manager or a USB stick.`)
+      return saved(download({ name, text }))
+    }
     const kept = await kitBridge.save({ name, body: text })
     if (kept.canceled) return
     if (readKit(kept.text ?? '')?.words.join(' ') !== made.words.join(' ')) return setError('The saved file doesn’t match your kit. Save it again.')
+    toast('Kit saved. Keep the file somewhere safe.')
     saved('file')
   }
   const copy = async () => {
-    if (await copySecret(textOf(await ready()))) saved('copy')
+    if (await copySecret(textOf(await ready()))) go('copied')
   }
   const words = async () => {
     await ready()
@@ -114,11 +120,13 @@ export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () =>
   }
   if (step === 'words' && kit) return <KitWords kit={kit} replaced={replaced} onBack={isPhone() ? onBack : () => go('save')} onSaved={() => saved('words')} />
   if (step === 'type' && kit) return <ConfirmKit kit={kit} onBack={() => go('words')} onDone={onDone} />
+  if (step === 'copied' && kit) return <KitCopied onBack={() => go('save')} onDone={() => saved('copy')} />
   const ways = !young && !isPhone() && <span className="text-mute"><Button type="button" variant="text" className={LINK} disabled={make.isPending} onClick={() => run(copy)}>Copy</Button> · <Button type="button" variant="text" className={LINK} disabled={make.isPending} onClick={() => run(words)}>Write it down</Button></span>
   const label = isPhone() ? 'Show the words' : 'Save kit'
   return <Step title={old && !kit ? 'Save a new recovery kit' : 'Save your recovery kit'} line="Keep it somewhere safe. You’ll only need it if you ever lose all your computers." back={onBack} link={ways}
     action={!young && <Button type="button" variant="primary" className={BIG} disabled={make.isPending} onClick={() => run(isPhone() ? words : save)}>{label}</Button>}>
     {!young && <KitCard email={email} />}
+    {!young && <p className="m-0 max-w-[420px] text-[12.5px] text-mute">{SECRET}</p>}
     {old && !kit && <p className="m-0 text-mute">{cloud?.passkey ? 'Your old kit and Touch ID will stop working.' : 'Your old kit will stop working.'}</p>}
     {young && <p className="m-0 max-w-[420px] text-[12.5px] text-mute">This computer was added less than 3 days ago. Make a kit after {shortDate.format(new Date(young))}, or on an older one.</p>}
     <ErrorNote message={error} />
@@ -145,9 +153,19 @@ function download({ name, text }: { name: string; text: string }): KitWay {
 
 function KitWords({ kit, replaced, onBack, onSaved }: { kit: RecoveryKit; replaced: boolean; onBack?: () => void; onSaved: () => void }) {
   return <Step title="Your 12 words" line={replaced ? 'Write them down. Your old words stop working now.' : 'Write them down and keep them somewhere safe.'} back={onBack}
-    link={<Button type="button" variant="text" className="font-normal text-mute" onClick={() => void copySecret(numbered(kit))}>Copy</Button>}
+    link={<Button type="button" variant="text" className="font-normal text-mute" onClick={() => void copySecret(numbered(kit)).then((ok) => ok && toast('Copied. Paste them into your password manager. OpenHut clears the clipboard in a minute.'))}>Copy</Button>}
     action={<Button type="button" variant="primary" className={BIG} onClick={onSaved}>I wrote them down</Button>}>
     <div className="grid w-full max-w-[420px] grid-cols-3 gap-2 text-left phone:grid-cols-2">{kit.words.map((word, index) => <span key={index} className="flex items-center gap-2 rounded-lg border border-hair bg-card px-3 py-2 font-mono text-[13px]"><span className="w-4 text-right text-[11px] text-mute">{index + 1}</span>{word}</span>)}</div>
+    <p className="m-0 max-w-[420px] text-[12.5px] text-mute">{SECRET}</p>
+  </Step>
+}
+
+function KitCopied({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
+  const [stored, setStored] = useState(false)
+  return <Step title="Paste it somewhere safe" line="Your kit is on the clipboard. Paste it into your password manager now. OpenHut clears the clipboard in a minute." back={onBack}
+    action={<Button type="button" variant="primary" className={BIG} disabled={!stored} onClick={onDone}>Done</Button>}>
+    <span className="text-left text-[14px] text-body"><Check checked={stored} onChange={() => setStored(!stored)}>I’ve stored it somewhere safe</Check></span>
+    <p className="m-0 max-w-[420px] text-[12.5px] text-mute">{SECRET}</p>
   </Step>
 }
 
