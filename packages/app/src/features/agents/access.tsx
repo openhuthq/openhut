@@ -10,7 +10,7 @@ import { nameOf } from '@/features/cloud/seen'
 import { looksLikeEmail, previewOf, searchPeople } from '@/features/agents/form'
 import { useInvite } from '@/features/cloud/workspaces'
 import { copyText } from '@/lib/clipboard'
-import { toast } from '@/lib/toast'
+import { toast, toastError, toastFailed } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 export type AccessValue = { shared: boolean; people: string[]; sidebars: string[] }
@@ -25,8 +25,8 @@ export function AccessPicker({ workspace, owner, value, onChange, disabled, titl
   const set = (people: string[]) => onChange({ ...value, people })
   const toggle = (email: string) => set(value.people.includes(email) ? value.people.filter((each) => each !== email) : [...value.people, email])
   const inviteOf = (email: string) => invite.mutate({ workspace: workspace.id, email, role: 'member' }, {
-    onSuccess: async ({ link }) => { setQuery(''); if (!await copyText(link)) return toast(link); toast(`Invite link copied. Send it to ${email}. It works once, for 2 days.`) },
-    onError: (error) => toast(error.message),
+    onSuccess: async ({ link }) => { setQuery(''); if (!await copyText(link)) return toastFailed('Couldn’t copy the link', link); toast('Invite link copied', `Send it to ${email}. It works once, for 2 days.`) },
+    onError: toastError,
   })
 
   const shown = previewOf({ owner, people: value.people })

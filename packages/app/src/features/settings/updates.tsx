@@ -13,7 +13,7 @@ import { updateServers } from '@/features/settings/update-all'
 import { CheckButton, UpdatePill } from '@/features/settings/update-pill'
 import { COMPUTERS_KEY } from '@/lib/query-keys'
 import { WORDS } from '@/lib/platform'
-import { toast, toastError } from '@/lib/toast'
+import { toastError, toastFailed } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 const WHATS_NEW = 'https://github.com/openhuthq/openhut/releases'
@@ -51,7 +51,7 @@ function ComputerRow({ each: { computer, admin } }: { each: ComputerAdmin }) {
   const client = useQueryClient()
   const run = useMutation({
     mutationFn: () => updateServers({ servers: [computer], steps: { start: startUpdate, read: (server) => adminOf(server.id), say: () => undefined, wait: () => new Promise((resolve) => setTimeout(resolve, 3000)), limit: 900 } }),
-    onSuccess: ([outcome]) => outcome && !outcome.ok && toast(`${computer.name} didn't update: ${outcome.reason}`),
+    onSuccess: ([outcome]) => outcome && !outcome.ok && toastFailed(`${computer.name} didn’t update`, outcome.reason ?? undefined),
     onError: toastError,
     onSettled: () => void client.invalidateQueries({ queryKey: COMPUTERS_KEY }),
   })

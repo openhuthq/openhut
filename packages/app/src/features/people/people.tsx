@@ -21,7 +21,7 @@ import { copyText } from '@/lib/clipboard'
 import { useConfirmed } from '@/lib/native'
 import { notify } from '@/components/custom/toast'
 import { open, useOpen } from '@/lib/router'
-import { toast, toastError } from '@/lib/toast'
+import { toast, toastError, toastFailed } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { useAnswer } from '@/features/cloud/review'
 
@@ -81,7 +81,7 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
         <DropdownMenuItem className="h-8 px-2.5 text-fail" onClick={() => setAsking('remove')}>Remove from team</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu> : <span className="w-7" />}
-    <ConfirmDialog open={asking === 'remove'} onOpenChange={close} question={`Remove ${name}?`} detail={`${name} can’t get anything new from OpenHut Cloud. What ${name} already saw stays on their computer.`} action="Remove" onConfirm={() => remove.mutate({ id: workspace.id, email: member.email }, { onSuccess: () => notify({ title: `${name} removed`, note: 'They can’t get anything new from OpenHut Cloud.' }), onError: toastError })} />
+    <ConfirmDialog open={asking === 'remove'} onOpenChange={close} question={`Remove ${name}?`} detail={`${name} can’t get anything new from OpenHut Cloud. What ${name} already saw stays on their computer.`} action="Remove" onConfirm={() => remove.mutate({ id: workspace.id, email: member.email }, { onSuccess: () => toast(`${name} removed`), onError: toastError })} />
     <ConfirmDialog open={device !== null} onOpenChange={close} question={`Remove ${device ? deviceName(device) : 'device'}?`} detail={`It can’t get anything new from ${workspace.name}.`} action="Remove" onConfirm={() => device && removeDevice.mutate({ id: workspace.id, device }, { onSuccess: () => toast(`${deviceName(device)} removed`), onError: toastError })} />
   </Row>
 }
@@ -137,6 +137,6 @@ function InviteButton({ workspace }: { workspace: CloudWorkspaceView }) {
 
 async function copy({ link, email, replaced = false }: { link: string; email: string; replaced?: boolean }) {
   const name = nameOf(email)
-  if (!await copyText(link)) return toast(link)
-  toast(replaced ? `New link for ${name} copied. The one you sent before stops working.` : `Link copied. Send it to ${name}. It works once, for 2 days.`)
+  if (!await copyText(link)) return toastFailed('Couldn’t copy the link', link)
+  toast(replaced ? 'New invite link copied' : 'Invite link copied', replaced ? `Send it to ${name}. The old one stops working.` : `Send it to ${name}. It works once, for 2 days.`)
 }

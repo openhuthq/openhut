@@ -26,7 +26,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { navigate, usePath } from '@/lib/router'
 import { dismissGone, goneKey, goneNotice } from '@/features/cloud/seen'
 import { longDate } from '@/lib/format'
-import { toastError } from '@/lib/toast'
+import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 export function Unlock({ cloud, back }: { cloud: Cloud; back?: () => void }) {
@@ -144,7 +144,7 @@ function JoinRequests({ cloud }: { cloud: Cloud }) {
       told.current.add(request.device)
       void knockDesktop({ title: knockTitle(each), body: [placeOf(request), kindOf(request), mine ? request.email : workspace.name].filter(Boolean).join(' · ') }).then((action) => {
         if (action === 'open') letInRef.current(each)
-        if (action === 'not-me') deny.mutate({ id: workspace.id, device: request.device, why: 'not-me' }, { onSuccess: () => notify({ title: 'Turned down', note: 'That session was signed out.' }), onError: toastError })
+        if (action === 'not-me') deny.mutate({ id: workspace.id, device: request.device, why: 'not-me' }, { onSuccess: () => toast('Session signed out'), onError: toastError })
       })
     }
   }, [pending, deny])
@@ -241,7 +241,7 @@ export function CloudToasts() {
     if (!landing) return
     setLanding(false)
     void queries.invalidateQueries()
-    notify(problem ? { lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: 'Not everything came back', note: problem } : { title: 'Your agents are restored', note: 'Your agents and chats are on this computer now.' })
+    notify(problem ? { lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title: 'Not everything came back', note: problem } : { title: 'Agents and chats restored' })
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
   if (!cloud) return null
@@ -308,7 +308,7 @@ function TurnedDown({ cloud }: { cloud: Cloud }) {
       const title = `A sign-in from ${each.name ?? 'a new device'} was turned down`
       const body = [each.why === 'mismatch' ? 'The faces didn’t match' : 'Someone chose Not me', each.place, each.email].filter(Boolean).join(' · ')
       notifyDesktop({ title, body, path: '/settings/computers' })
-      notify({ lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title, note: `${body}. If that wasn’t you, nothing got in. If it keeps happening, change your Google password.` })
+      notify({ lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title, note: `${body}. Nothing got in. If this keeps happening, change your Google password.` })
     }
   }, [cloud.turnedDown])
   return null

@@ -7,7 +7,7 @@ import { I } from '@/components/kit'
 import { Face, photoOf } from '@/features/agents/face'
 import { bgColor, parseLook, randomLook } from '@/lib/face'
 import { squarePicture } from '@/lib/picture'
-import { toastError } from '@/lib/toast'
+import { toastError, toastFailed } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 const LOOKS = [['Support', 'support headset'], ['Ops', 'ops beanie'], ['Sales', 'sales shades'], ['Reports', 'report glasses'], ['Finance', 'finance tophat'], ['Triage', 'triage cap']]
@@ -44,7 +44,7 @@ export function FacePicker({ initial, compact = false }: { initial: string | nul
   const upload = (picked: File | undefined) => {
     if (!picked) return
     squarePicture({ source: picked, size: 256, type: 'image/jpeg' })
-      .then((photo) => show({ index: null, own: photo }), () => toastError(new Error('That file isn\'t a picture. Pick a PNG or JPEG.')))
+      .then((photo) => show({ index: null, own: photo }), () => toastFailed('That file isn’t a picture', 'Pick a PNG or JPEG.'))
   }
   const tiles = <div className="flex flex-wrap justify-center gap-1.5" role="radiogroup" aria-label="Face">
     {mine && <Button type="button" variant="bare" role="radio" aria-checked={pick === null} aria-label={photoOf(mine) ? 'Your picture' : 'Current face'} title={photoOf(mine) ? 'Your picture' : 'Current face'} className={tileClass(pick === null)} onClick={() => show({ index: null })}><Face agent={shown(mine)} size={30} /></Button>}

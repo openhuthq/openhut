@@ -11,7 +11,7 @@ import { QrCode } from '@/features/agents/qr-code'
 import { fieldError, formError } from '@/lib/api-client'
 import { copyText } from '@/lib/clipboard'
 import { formValues } from '@/lib/form'
-import { toast, toastError } from '@/lib/toast'
+import { toast, toastError, toastFailed } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 export function TelegramDialog({ agent, channel, onClose }: { agent: Agent; channel: Channel | undefined; onClose: () => void }) {
@@ -61,7 +61,7 @@ function People({ channel }: { channel: Channel }) {
   const invite = useTelegramInvite()
   const update = useUpdateChannel()
   const copy = () => invite.mutate(channel, {
-    onSuccess: ({ url }) => void copyText(url).then((copied) => toast(copied ? 'Invite link copied' : url)),
+    onSuccess: ({ url }) => void copyText(url).then((copied) => copied ? toast('Invite link copied') : toastFailed('Couldn’t copy the link', url)),
     onError: toastError,
   })
   const remove = (id: string) => update.mutate({ channel, change: { allowed: channel.allowed.filter((each) => each !== id) } }, { onError: toastError })

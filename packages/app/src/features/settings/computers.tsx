@@ -31,7 +31,7 @@ import { ago, shortDate } from '@/lib/format'
 import { isPhone, useConfirmed } from '@/lib/native'
 import { APP_VERSION, type Computer, type TailnetPeer } from '@/lib/openhut'
 import { open, useOpen } from '@/lib/router'
-import { toast, toastError } from '@/lib/toast'
+import { toast, toastError, toastInfo } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
 import { desktop } from '@/lib/desktop'
 import { isBrowser } from '@/lib/computers'
@@ -137,7 +137,7 @@ function DeviceRow({ device, twin, admin, current }: { device: Device; twin: boo
   const browser = isBrowser(device)
   return <Row icon={<DeviceIcon kind={browser ? 'browser' : device.kind} />} title={name} note={sentence([current ? 'This browser' : device.os === 'web' ? null : device.os ?? (server ? 'Linux' : null), server && 'Server · runs agents', !browser && presenceOf(device), admin && `OpenHut ${admin.server.version}`].filter(Boolean).join(' · ')).replace(/\.$/, '')}>
     {server && !isPhone() && update.isPending && <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>}
-    {server && !isPhone() && !update.isPending && admin?.server.updateAvailable && <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate({ id: tunnelKeyOf(device.key), name }, { onSuccess: () => toast(`${name} is updating`), onError: toastError })}>Update</Button>}
+    {server && !isPhone() && !update.isPending && admin?.server.updateAvailable && <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate({ id: tunnelKeyOf(device.key), name }, { onSuccess: () => toastInfo(`${name} is updating`), onError: toastError })}>Update</Button>}
     {!isPhone() && <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={remove.isPending} question={`Remove ${name}?`} detail={detail} points={REMOVE_POINTS} action="Remove" onConfirm={() => remove.mutate({ key: device.key })}>Remove</ConfirmButton>}
     {!isPhone() && <ConfirmButton variant="secondary" className={cn(PILL, 'text-fail')} disabled={remove.isPending} question={`${name} is lost or stolen?`} detail="Remove it and lock it out." points={LOST_POINTS} action="Remove and lock out" onConfirm={() => remove.mutate({ key: device.key, lost: true })}>Lost or stolen</ConfirmButton>}
   </Row>

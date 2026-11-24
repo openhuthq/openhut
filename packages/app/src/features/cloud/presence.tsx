@@ -116,6 +116,6 @@ export function EditLock({ agentId, field, draft, onClose }: { agentId: string; 
 export function Mismatch() {
   const mismatch = usePresence().data?.mismatch ?? []
   const names = [...new Set(mismatch.map((each) => nameOf(each.email)))]
-  useStickyToast({ id: 'mismatch', notice: names.length ? { lead: <Tinted icon={Alert02Icon} hue={RED} />, title: `Your computer and ${names.join(' and ')}’s don’t agree on who’s in the team`, note: 'Sharing is paused until they do. Check with them on a call.' } : null })
+  useStickyToast({ id: 'mismatch', notice: names.length ? { lead: <Tinted icon={Alert02Icon} hue={RED} />, title: 'Sharing paused', note: `Your team list doesn’t match ${names.join(' and ')}’s. Check it with them on a call.` } : null })
   return null
 }

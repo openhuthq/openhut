@@ -6,7 +6,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { PILL } from '@/components/kit'
 import { UPDATE_KEY, downloadUrl, progressTitle, readyNote, updateCard, updates, useAppUpdate } from '@/features/settings/update'
 import { Hut } from '@/components/hut'
-import { toast, toastError } from '@/lib/toast'
+import { toastError, toastFailed } from '@/lib/toast'
 import { adminOf, startUpdate, useComputerAdmins, useComputers } from '@/features/computers/api'
 import { behind, updateServers } from '@/features/settings/update-all'
 import { COMPUTERS_KEY } from '@/lib/query-keys'
@@ -56,7 +56,7 @@ export function UpdateEverything() {
       })
       void client.invalidateQueries({ queryKey: COMPUTERS_KEY })
       const failed = outcomes.filter((outcome) => !outcome.ok)
-      if (failed.length) toast(failed.map((outcome) => `${outcome.name} didn't update: ${outcome.reason}`).join(' '))
+      for (const outcome of failed) toastFailed(`${outcome.name} didn’t update`, outcome.reason ?? undefined)
       if (app?.ready) {
         setDoing('Restarting…')
         await updates?.install()

@@ -118,13 +118,13 @@ export function SaveKit({ onBack, onDone }: { onBack?: () => void; onDone: () =>
     const made = await ready()
     const text = textOf(made)
     if (!kitBridge) {
-      toast('Saved to your Downloads folder. Move it somewhere safe, like a password manager or a USB stick.')
+      toast('Recovery kit saved', 'In Downloads. Move it to a password manager or USB stick.')
       return saved(download({ name, text }))
     }
     const kept = await kitBridge.save({ name, body: text })
     if (kept.canceled) return
     if (readKit(kept.text ?? '')?.words.join(' ') !== made.words.join(' ')) return setError('The saved file doesn’t match your kit. Save it again.')
-    toast('Kit saved. Keep the file somewhere safe.')
+    toast('Recovery kit saved', 'Keep the file somewhere safe.')
     saved('file')
   }
   const copy = async () => {
@@ -172,7 +172,7 @@ function download({ name, text }: { name: string; text: string }): KitWay {
 
 function KitWords({ kit, replaced, onBack, onSaved }: { kit: RecoveryKit; replaced: boolean; onBack?: () => void; onSaved: () => void }) {
   return <EntryScreen mood="key" title="Write these down." line={replaced ? 'In order. Your old words stop working now. Never share them.' : 'In order. Never share them with anyone.'}
-    foot={<>{onBack && <Back onClick={onBack} />}<Button type="button" variant="text" className={QUIET} onClick={() => void copySecret(numbered(kit)).then((ok) => ok && toast('Copied. Paste them into your password manager. OpenHut clears the clipboard in a minute.'))}>Copy</Button></>}
+    foot={<>{onBack && <Back onClick={onBack} />}<Button type="button" variant="text" className={QUIET} onClick={() => void copySecret(numbered(kit)).then((ok) => ok && toast('Recovery kit copied', 'Paste it into your password manager. The clipboard clears in a minute.'))}>Copy</Button></>}
     action={<Button type="button" variant="primary" className={BIG} onClick={onSaved}>I wrote them down</Button>}>
     <div className="grid w-full grid-cols-3 gap-1.5 text-left phone:grid-cols-2">{kit.words.map((word, index) => <span key={index} className="flex items-center gap-2 rounded-lg bg-soft px-2.5 py-2 font-mono text-[13px] text-ink"><span className="w-3.5 text-right font-sans text-[11px] text-mute tabular-nums">{index + 1}</span>{word}</span>)}</div>
   </EntryScreen>
@@ -213,7 +213,7 @@ export function TouchIdOffer({ onDone }: { onDone: () => void }) {
   const add = useAddPasskey()
   const turnOn = () => add.mutate(cloud?.email ?? '', {
     onSuccess: () => {
-      notify({ lead: <I icon={FingerPrintIcon} size={18} className="text-hue-green" />, title: 'Touch ID is on', note: 'Your next Mac opens OpenHut with one touch.' })
+      notify({ lead: <I icon={FingerPrintIcon} size={18} className="text-hue-green" />, title: 'Touch ID is on' })
       onDone()
     },
     onError: (error) => { if (!(error instanceof PasskeyQuiet)) toastError(error) },

@@ -84,7 +84,7 @@ function DeleteAccount({ cloud }: { cloud: Cloud }) {
 const DELETE_NOTE = 'Deletes your account and your team. Agents already on your computers keep running until you remove them.'
 
 function accountDeleted() {
-  notify({ title: 'Account deleted', note: 'Your agents and chats stay on this computer.' })
+  toast('Account deleted')
 }
 
 function RotateConnections({ rotate }: { rotate: Cloud['rotate'] }) {

@@ -15,13 +15,13 @@ export function Tinted({ icon, hue }: { icon: Parameters<typeof I>[0]['icon']; h
 
 export function notify({ lead, title, note, action, onDismiss }: Notice & { onDismiss?: () => void }): void {
   const duration = action ? 20_000 : 6000
-  toast(title, { icon: lead, description: note, action, duration: onDismiss ? Infinity : duration, closeButton: Boolean(onDismiss), onDismiss })
+  toast.success(title, { icon: lead, description: note, action, duration: onDismiss ? Infinity : duration, closeButton: Boolean(onDismiss), onDismiss })
 }
 
 export function useStickyToast({ id, notice, onDismiss }: { id: string; notice: Notice | null; onDismiss?: () => void }): void {
   useEffect(() => {
     if (!notice) return
-    toast(notice.title, { id, icon: notice.lead, description: notice.note, action: notice.action, cancel: notice.cancel, duration: Infinity, onDismiss })
+    toast.info(notice.title, { id, icon: notice.lead, description: notice.note, action: notice.action, cancel: notice.cancel, duration: Infinity, onDismiss })
   })
   const shown = Boolean(notice)
   useEffect(() => {
