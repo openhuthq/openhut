@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils'
 
 const NAMES = ['Juniper', 'Scout', 'Pepper', 'Atlas', 'Maple', 'Biscuit', 'Nova', 'Otto']
 
-const PICKER = cn(SOFT_TRIGGER, 'w-auto min-w-[200px] max-w-full gap-2')
+const PICKER = cn(SOFT_TRIGGER, 'w-[270px] min-w-0 max-w-full gap-2 phone:w-auto phone:flex-1')
 
 export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   return <DialogCard onClose={onClose} className="max-h-[calc(100vh-32px)] w-[480px] p-6">
@@ -114,7 +114,7 @@ function NeedsSignIn({ model }: { model: string }) {
 
 function Row({ title, children }: { title: string; children: ReactNode }) {
   return <div className="flex min-h-12 items-center justify-between gap-3 py-2">
-    <span className="text-[13px] font-medium">{title}</span>
+    <span className="w-16 shrink-0 text-[13px] font-medium">{title}</span>
     {children}
   </div>
 }

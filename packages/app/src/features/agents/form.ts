@@ -1,5 +1,6 @@
 import type { Provider, ProviderId } from '@openhut/common/models/provider.ts'
 import type { Computer } from '@/lib/openhut'
+import { nameOf } from '../cloud/seen.ts'
 
 export const DEFAULT_MODEL = 'claude:sonnet'
 
@@ -28,3 +29,12 @@ export function searchPeople({ members, owner, query }: { members: readonly stri
 }
 
 export const looksLikeEmail = (text: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)
+
+export function previewOf({ owner, people }: { owner: string; people: readonly string[] }): { faces: string[]; text: string; label: string } {
+  const faces = [owner, ...people].slice(0, 3)
+  if (!people.length) return { faces, text: 'Only you', label: 'Only you' }
+  if (people.length > 3) return { faces, text: `+${people.length + 1 - faces.length}`, label: `You and ${people.length} more` }
+  const names = ['You', ...people.map(nameOf)]
+  const text = `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+  return { faces, text, label: text }
+}

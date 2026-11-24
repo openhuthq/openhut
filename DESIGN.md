@@ -124,6 +124,15 @@ Every variant and size is in `components/ui/button.tsx` (`buttonVariants` for li
 
 A dropdown trigger (Model, Computer) follows the secondary button: soft fill, no border, darker fill on hover and while open. Triggers stacked in one card share a minimum width (136px) so their edges line up, with the icon and label on the left and the chevron on the right. Every option has an icon in the same column, then its name and a one-line description, then the tick; the trigger shows the chosen option's icon. A menu of things to add (connections on an agent) follows the same shape: icon, name, and a greyed-out reason when an option can't be chosen.
 
+### Checks before merging UI
+
+- Pickers in one form share one fixed width; content left-aligned, text truncates, chevron pinned right.
+- No layout shift: choosing an option, toggling a mode or adding items never changes the size of the row, card or popover (reserve check/icon slots, keep one-line subtitles).
+- A preview shows the real state (the Access row shows exactly the picked people), never placeholders.
+- One line of help at most; prefer a sensible default over explanatory text.
+- No shadows, no nested borders.
+- Popovers keep their side and size while open.
+
 ### Known trade-off
 
 A ghost button at rest is bare text. In a row ("Set up", "Remove") that is the convention and the hover fill confirms it, but it is the weakest affordance in the system. If rows test badly, promote row actions to secondary `sm` rather than bringing the border back.

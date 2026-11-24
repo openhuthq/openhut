@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { defaultComputer, firstModel, inUse, looksLikeEmail, searchPeople } from '../../../src/features/agents/form.ts'
+import { defaultComputer, firstModel, inUse, looksLikeEmail, previewOf, searchPeople } from '../../../src/features/agents/form.ts'
 
 const provider = (id: string, connected: boolean, models: string[]) => ({ id, connected, models: models.map((model) => ({ id: model, on: true })) }) as never
 
@@ -42,4 +42,12 @@ test('Share offers Invite only for a typed email', () => {
   assert.equal(looksLikeEmail('sara@example.com'), true)
   assert.equal(looksLikeEmail('sara'), false)
   assert.equal(looksLikeEmail('sara@example'), false)
+})
+
+test('the Access row shows exactly who is picked: your face alone, names up to three, then faces and +N', () => {
+  const owner = 'mo@example.com'
+  assert.deepEqual(previewOf({ owner, people: [] }), { faces: [owner], text: 'Only you', label: 'Only you' })
+  assert.deepEqual(previewOf({ owner, people: ['sara@example.com'] }), { faces: [owner, 'sara@example.com'], text: 'You and Sara', label: 'You and Sara' })
+  assert.deepEqual(previewOf({ owner, people: ['sara@example.com', 'ana@example.com'] }), { faces: [owner, 'sara@example.com', 'ana@example.com'], text: 'You, Sara and Ana', label: 'You, Sara and Ana' })
+  assert.deepEqual(previewOf({ owner, people: ['sara@example.com', 'ana@example.com', 'li@example.com', 'jo@example.com'] }), { faces: [owner, 'sara@example.com', 'ana@example.com'], text: '+2', label: 'You and 4 more' })
 })
