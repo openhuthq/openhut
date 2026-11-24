@@ -1,4 +1,4 @@
-import { connect, newWebKeyPair, toHex, webKey } from '../../src/index.ts'
+import { connect, newWebKeyPair, toHex, webKey } from '../../../src/tunnel/index.ts'
 
 const report = (path: string, body: unknown) => fetch(path, { method: 'POST', body: JSON.stringify(body) })
 

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import curve from 'noise-handshake/dh.js'
-import { fromHex, generateKeyPair, initiator, responder, toHex } from '../src/noise.ts'
+import { fromHex, generateKeyPair, initiator, responder, toHex } from '../../src/tunnel/noise.ts'
 import { nativeKey } from './relay.ts'
 
 type Vector = {

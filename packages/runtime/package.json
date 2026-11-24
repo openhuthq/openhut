@@ -14,7 +14,6 @@
     "@json-render/core": "0.23.2",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@openhut/common": "*",
-    "@openhut/tunnel": "*",
     "ai": "7.0.172",
     "croner": "11.0.0",
     "evlog": "2.29.0",

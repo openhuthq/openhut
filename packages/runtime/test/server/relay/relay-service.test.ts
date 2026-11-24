@@ -4,8 +4,8 @@ import websocket from '@fastify/websocket'
 import Fastify from 'fastify'
 import { bodyOf, signList } from '@openhut/common/cloud/member-list.ts'
 import { boxKey, identity, toBase64 } from '@openhut/common/vault/public.ts'
-import { connect, toHex, type TunnelError } from '@openhut/tunnel'
-import { startRelay, TOKEN, waitFor } from '@openhut/tunnel/test/relay.ts'
+import { connect, toHex, type TunnelError } from '@openhut/common/tunnel/index.ts'
+import { startRelay, TOKEN, waitFor } from '@openhut/common/test/tunnel/relay.ts'
 
 const relay = await startRelay()
 const { config } = await import('../../../src/server/platform/config.ts')

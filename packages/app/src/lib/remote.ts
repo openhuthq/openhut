@@ -1,4 +1,4 @@
-import { webKey, type Tunnel } from '@openhut/tunnel'
+import { webKey, type Tunnel } from '@openhut/common/tunnel/index.ts'
 import { ComputersOffline, openhutCloud } from '@openhut/common/cloud/openhut-cloud.ts'
 import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
 import { toBase64 } from '@openhut/common/vault/public.ts'

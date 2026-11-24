@@ -17,7 +17,7 @@
   },
   "include": [
     "src/**/*.ts",
-    "../tunnel/src/noise-handshake.d.ts",
+    "../common/src/tunnel/noise-handshake.d.ts",
     "../common/src/sodium-javascript.d.ts"
   ]
 }

@@ -1,7 +1,7 @@
 import type { WebSocket } from '@fastify/websocket'
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import * as z from 'zod/mini'
-import type { Tunnel } from '@openhut/tunnel'
+import type { Tunnel } from '@openhut/common/tunnel/index.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { channelService } from '../channels/channel-service.ts'
 import { keysService } from '../cloud/keys-service.ts'

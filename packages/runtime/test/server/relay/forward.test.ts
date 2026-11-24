@@ -2,8 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import Fastify from 'fastify'
 import { boxKey, identity, toBase64 } from '@openhut/common/vault/public.ts'
-import { serve, toHex } from '@openhut/tunnel'
-import { startRelay, TOKEN, waitFor } from '@openhut/tunnel/test/relay.ts'
+import { serve, toHex } from '@openhut/common/tunnel/index.ts'
+import { startRelay, TOKEN, waitFor } from '@openhut/common/test/tunnel/relay.ts'
 import { useFakeRecords } from '../cloud/records-fake.ts'
 
 const relay = await startRelay()

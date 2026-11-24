@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { FrameType, MAX_PAYLOAD, MAX_PLAINTEXT, chunks, decodeFrame, encodeFrame } from '../src/frames.ts'
+import { FrameType, MAX_PAYLOAD, MAX_PLAINTEXT, chunks, decodeFrame, encodeFrame } from '../../src/tunnel/frames.ts'
 
 test('a frame is one type byte, a big-endian stream id and the payload', () => {
   const plaintext = encodeFrame({ type: FrameType.responseBody, stream: 258, payload: new Uint8Array([9, 8]) })

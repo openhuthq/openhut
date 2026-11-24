@@ -1,4 +1,4 @@
-import { connect, serve, TunnelError, type ComputerKey as NoiseComputerKey, type DeviceKey as NoiseDeviceKey, type Handlers, type Tunnel } from '@openhut/tunnel'
+import { connect, serve, TunnelError, type ComputerKey as NoiseComputerKey, type DeviceKey as NoiseDeviceKey, type Handlers, type Tunnel } from '../tunnel/index.ts'
 import * as z from 'zod/mini'
 import { ApiError } from '../api.ts'
 import { OAuthAuthorization, OAuthToken, type CreateOAuthAuthorization, type CreateOAuthToken } from './oauth.ts'
