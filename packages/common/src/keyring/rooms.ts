@@ -113,7 +113,7 @@ export const roomKeys = {
     return { list, room: next, letters }
   },
 
-  async approve({ ws, email, device, name }: { ws: string; email: string; device: string; name?: string | null }): Promise<{ list: MemberList; letter: Sent }> {
+  async approve({ ws, email, device, name, server = false }: { ws: string; email: string; device: string; name?: string | null; server?: boolean }): Promise<{ list: MemberList; letter: Sent }> {
     const { room, body } = adminRoom({ ws, sentence: 'Only an owner or admin can let a new device in.' })
     const target = body.members.find((member) => member.email === email)
     const invited = target ? [] : body.invites.filter((each) => each.email === email)
@@ -121,7 +121,7 @@ export const roomKeys = {
     if ((!target && !invited[0]) || body.members.some((member) => member.devices.includes(device))) throw new HttpError(409, `${email} isn’t waiting with that device anymore.`)
     const base = await nextOf({ list: room.list, body, me: await keysService.deviceKey() })
     const members = target ? body.members.map((member) => member === target ? { ...member, devices: [...member.devices, device] } : member) : [...body.members, { email, role: invited[0]?.role ?? 'member', devices: [device], viewers: [] }]
-    const list = await signList({ signer: await keysService.device(), body: { ...base, members, invites: body.invites.filter((each) => !invited.includes(each)), removed: [...base.removed, ...invited.map((each) => each.key)], added: { ...body.added, [device]: base.at || 0 }, ...name && { names: { ...body.names, [device]: name.slice(0, 64) } } } })
+    const list = await signList({ signer: await keysService.device(), body: { ...base, members, invites: body.invites.filter((each) => !invited.includes(each)), removed: [...base.removed, ...invited.map((each) => each.key)], added: { ...body.added, [device]: base.at || 0 }, ...server && { runtimes: [...body.runtimes || [], device] }, ...name && { names: { ...body.names, [device]: name.slice(0, 64) } } } })
     return { list, letter: await sealTo({ to: device, purpose: 'workspace-key', workspace: ws, plain: await secretOf({ room, own: false }) }) }
   },
 

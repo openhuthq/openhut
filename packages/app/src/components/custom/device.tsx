@@ -1,13 +1,14 @@
-import { AppleIcon, BrowserIcon, LaptopIcon, ServerStack01Icon, SmartPhone01Icon } from '@hugeicons/core-free-icons'
+import { AppleIcon } from '@hugeicons/core-free-icons'
+import { DEVICE_HUE, DEVICE_ICONS } from '@/lib/computers'
+
+export { DEVICE_HUE, DEVICE_ICONS, deviceIcon } from '@/lib/computers'
 import { I } from '@/components/kit'
 import { Flag } from '@/components/custom/flag'
 
 export type Device = { kind: 'mac' | 'iphone' | 'server' | 'browser'; name: string; country?: string; city?: string; os?: string; when?: string }
 
-const ICONS = { mac: LaptopIcon, iphone: SmartPhone01Icon, server: ServerStack01Icon, browser: BrowserIcon }
-
 export function DeviceIcon({ kind, size = 20 }: { kind: Device['kind']; size?: number }) {
-  return <I icon={ICONS[kind]} size={size} className="shrink-0 text-mute" />
+  return <I icon={DEVICE_ICONS[kind]} size={size} className={`shrink-0 ${DEVICE_HUE}`} />
 }
 
 export function DeviceMeta({ device, named }: { device: Device; named?: boolean }) {

@@ -67,9 +67,9 @@ export const keyring = {
 
   tunnelKey: async (): Promise<{ publicKey: Bytes; secretKey: Bytes }> => boxKey((await keys.device()).secret),
 
-  async approve({ team, email, device, name }: { team: string; email: string; device: string; name?: string | null }): Promise<{ list: MemberList; letter: Sent }> {
+  async approve({ team, email, device, name, server = false }: { team: string; email: string; device: string; name?: string | null; server?: boolean }): Promise<{ list: MemberList; letter: Sent }> {
     const account = keys.account()
-    if (!rooms.isOwn(team) || email !== account?.email) return rooms.approve({ ws: team, email, device, name })
+    if (!rooms.isOwn(team) || email !== account?.email) return rooms.approve({ ws: team, email, device, name, server })
     const on = keys.mustBeOn()
     const list = await keys.addDevice({ device, name: name ?? null })
     if (!list) throw new HttpError(409, 'That computer is already on your account.')
