@@ -5,6 +5,7 @@ import { Tick02Icon } from '@hugeicons/core-free-icons'
 import { Hut } from '@/components/hut'
 import { ICONS } from '@/components/icons'
 import { DRAG, I } from '@/components/kit'
+import { OWN_TITLE_BAR } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 
 export function Guide({ label, at, of, onClose, children }: { label: string; at: number; of: number; onClose: () => void; children: ReactNode }) {
@@ -53,7 +54,7 @@ export function Stage({ children }: { children: ReactNode }) {
 
 export function Window({ children }: { children: ReactNode }) {
   return <div className="flex h-dvh flex-col bg-canvas pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-ink">
-    <div className={cn('flex h-[52px] shrink-0 items-center justify-center text-[13px] font-semibold text-mute', DRAG)}>{document.title}</div>
+    <div className={cn('flex h-[52px] shrink-0 items-center justify-center text-[13px] font-semibold text-mute', DRAG)}>{OWN_TITLE_BAR && document.title}</div>
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center-safe gap-4 overflow-y-auto px-8 pb-12 text-center">{children}</div>
   </div>
 }

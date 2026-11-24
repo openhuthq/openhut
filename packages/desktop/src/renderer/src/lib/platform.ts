@@ -16,3 +16,4 @@ const bridge: { platform?: string } | undefined = typeof window === 'undefined' 
 const guess = typeof navigator !== 'undefined' && /Mac|Android/.test(navigator.userAgent) ? 'darwin' : 'linux'
 
 export const WORDS = wordsFor(bridge?.platform ?? guess)
+export const OWN_TITLE_BAR = (bridge?.platform ?? guess) === 'darwin'

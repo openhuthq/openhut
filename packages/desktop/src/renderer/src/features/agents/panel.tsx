@@ -37,7 +37,7 @@ const VALUE = ROW_VALUE
 
 export function Panel({ agent, naming, watching }: { agent: Agent; naming: boolean; watching: boolean }) {
   const memory = useMemoryCount(agent)
-  const skills = useSkills(agent.id).data?.length
+  const skills = skillsNote(useSkills(agent.id).data)
   return <aside className={cn('still flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] phone:w-full phone:flex-1 phone:border-l-0 border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
     <div className={cn('flex items-center gap-3', DRAG)}>
       <FieldBox agentId={agent.id} field="face" className="shrink-0">{agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="relative block shrink-0">
@@ -147,6 +147,13 @@ function useMemoryCount(agent: Agent) {
   if (!memory) return undefined
   const count = memory.notes.entries.length + memory.people.entries.length
   return count === 1 ? '1 memory' : `${count} memories`
+}
+
+function skillsNote(skills: { builtIn: boolean }[] | undefined): string | undefined {
+  if (!skills) return undefined
+  const learned = skills.filter((skill) => !skill.builtIn).length
+  const builtIn = skills.length - learned
+  return [learned && `${learned} learned`, builtIn && `${builtIn} built in`].filter(Boolean).join(' · ') || '0'
 }
 
 function Counted({ agent, dialog, icon, title, value }: { agent: Agent; dialog: AgentDialog; icon: IconSvgElement; title: string; value: string | number | undefined }) {
