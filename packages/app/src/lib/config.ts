@@ -1,5 +1,7 @@
 import * as z from 'zod/mini'
 
+z.config({ jitless: true })
+
 const AppConfig = z.object({
   cloud: z.string(),
   local: z.optional(z.boolean()),
