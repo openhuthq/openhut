@@ -10,6 +10,7 @@ class AppViewController: CAPBridgeViewController {
 
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(DeviceKeyPlugin())
+        bridge?.registerPluginInstance(LockedWebViewPlugin())
         view.backgroundColor = .white
         // Start from the last pack the native updater installed, else the built-in one.
         if let pack = PackUpdater.installed { setServerBasePath(path: pack.path) }

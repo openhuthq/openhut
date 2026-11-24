@@ -11,6 +11,7 @@ import com.getcapacitor.BridgeActivity
 class MainActivity : BridgeActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         registerPlugin(DeviceKeyPlugin::class.java)
+        registerPlugin(LockedWebViewPlugin::class.java)
         super.onCreate(savedInstanceState)
         // R6: start from the last pack the native updater installed, else the built-in one, then poll for the next.
         PackUpdater.installed(this)?.let { bridge.setServerBasePath(it.path) }

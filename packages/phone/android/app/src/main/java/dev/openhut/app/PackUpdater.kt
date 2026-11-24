@@ -2,6 +2,10 @@ package dev.openhut.app
 
 import android.content.Context
 import android.content.Intent
+import com.getcapacitor.Plugin
+import com.getcapacitor.PluginCall
+import com.getcapacitor.PluginMethod
+import com.getcapacitor.annotation.CapacitorPlugin
 import android.util.Base64
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
@@ -15,6 +19,17 @@ import java.security.MessageDigest
 import java.security.Signature
 import java.security.spec.X509EncodedKeySpec
 import java.util.zip.GZIPInputStream
+
+// Replaces Capacitor's WebView plugin, whose setServerBasePath and persistServerBasePath let JavaScript pick the served folder. Only
+// PackUpdater picks it, so every call is refused. Registered after the built-in one, so it takes the "WebView" name.
+@CapacitorPlugin(name = "WebView")
+class LockedWebViewPlugin : Plugin() {
+    @PluginMethod fun setServerAssetPath(call: PluginCall) = refuse(call)
+    @PluginMethod fun setServerBasePath(call: PluginCall) = refuse(call)
+    @PluginMethod fun getServerBasePath(call: PluginCall) = refuse(call)
+    @PluginMethod fun persistServerBasePath(call: PluginCall) = refuse(call)
+    private fun refuse(call: PluginCall) = call.reject("only the native pack updater picks the web root")
+}
 
 // R6: the Android twin of ios/App/App/PackUpdater.swift. The pack updater lives in the native shell, never in the app pack it installs:
 // it polls the R4 feed, checks the release key's Ed25519 signature, the Rekor entry and the SEC6 hour (verifyRelease and pointerAction

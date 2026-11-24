@@ -28,9 +28,11 @@ addEventListener('load', async () => {
   await tryIt('Preferences group NativeStorage', () => P.Preferences.configure({ group: 'NativeStorage' }))
   for (const k of ['serverBasePath', 'openhut.updater.disabled', 'update.sequence']) await tryIt('set ' + k, () => P.Preferences.set({ key: k, value: '999999' }))
   await tryIt('LiveUpdate.setNextBundle', () => P.LiveUpdate.setNextBundle({ bundleId: 'x' }))
+  await tryIt('WebView.persistServerBasePath', () => P.WebView.persistServerBasePath())
+  await tryIt('WebView.setServerBasePath', () => P.WebView.setServerBasePath({ path: '/tmp' }))
   document.getElementById('log').textContent = out.join('\\n')
 })
-</script><pre id="log">trying to disable the check…</pre>`
+</script><pre id="log" style="white-space:pre-wrap;font-size:13px">trying to disable the check…</pre>`
 
 async function publish(name: string, age: number, sequence: number, bad: boolean) {
   const folder = join(dir, `release-${sequence}`)

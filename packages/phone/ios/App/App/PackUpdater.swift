@@ -2,6 +2,21 @@ import Capacitor
 import CryptoKit
 import Foundation
 
+// Replaces Capacitor's WebView plugin, whose setServerBasePath and persistServerBasePath let JavaScript pick the served folder. Only
+// PackUpdater picks it, so every call is refused.
+@objc(LockedWebViewPlugin)
+public class LockedWebViewPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "LockedWebViewPlugin"
+    public let jsName = "WebView"
+    public let pluginMethods: [CAPPluginMethod] = ["setServerAssetPath", "setServerBasePath", "getServerBasePath", "persistServerBasePath"]
+        .map { CAPPluginMethod(name: $0, returnType: CAPPluginReturnPromise) }
+    @objc func setServerAssetPath(_ call: CAPPluginCall) { refuse(call) }
+    @objc func setServerBasePath(_ call: CAPPluginCall) { refuse(call) }
+    @objc func getServerBasePath(_ call: CAPPluginCall) { refuse(call) }
+    @objc func persistServerBasePath(_ call: CAPPluginCall) { refuse(call) }
+    private func refuse(_ call: CAPPluginCall) { call.reject("only the native pack updater picks the web root") }
+}
+
 // R6: the phone's pack updater lives here, in the native shell, never in the app pack it installs. It polls the R4 feed
 // (channels/<channel>/release.json + .sig + .rekor, packs/<sha512 hex>), checks the release key's Ed25519 signature, the Rekor entry
 // (SET, checkpoint, inclusion proof, that it logged exactly this release) and the SEC6 hour, as verifyRelease and pointerAction in
