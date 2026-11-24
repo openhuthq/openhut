@@ -124,7 +124,7 @@ function InviteButton({ workspace }: { workspace: CloudWorkspaceView }) {
             <SelectContent><SelectItem value="member">Member</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent>
           </Select>
         </div>
-        <span className="text-[12px] text-body">{role === 'admin' ? 'An admin chats with shared agents and can also invite people and add computers.' : 'A member chats with the agents the team shares, and makes their own.'}</span>
+        <span className="grid gap-0.5 text-[12px] text-body"><span><b className={cn('font-medium', role === 'member' && 'text-ink')}>Member:</b> chats with the agents the team shares, and makes their own.</span><span><b className={cn('font-medium', role === 'admin' && 'text-ink')}>Admin:</b> also invites people and adds computers.</span></span>
         <Button type="submit" variant="secondary" className="h-8 w-full gap-1.5 phone:h-11 phone:justify-center" disabled={invite.isPending}><I icon={Link01Icon} size={14} />{invite.isPending ? 'Making the link…' : 'Copy invite link'}</Button>
         <ErrorNote message={invite.error?.message} />
         <span className="text-[12px] text-mute">Send the link yourself, by chat or email. It works once, for 2 days. Your agents stay private until you share them.</span>

@@ -223,6 +223,7 @@ export const agentService = {
 
   async boot(): Promise<void> {
     await applyRelease().catch((err: unknown) => log.error({ event: 'build.apply_failed', error: messageOf(err) }))
+    await removeStrays().catch((err: unknown) => log.warn({ event: 'agent.strays_failed', error: messageOf(err) }))
     await reconcileSafely()
     setInterval(() => void reconcileSafely(), RECONCILE_MS)
     setInterval(() => void watchHealth().catch((err: unknown) => log.warn({ event: 'health.watch_failed', error: messageOf(err) })), HEALTH_MS)
@@ -325,6 +326,15 @@ async function watchHealth(): Promise<void> {
     const seen = `${statusOf(states[row.id])}:${(await healthOf({ row, state: states[row.id] })).health}`
     if (healths.has(row.id) && healths.get(row.id) !== seen) emit({ name: 'agent.health_changed', target: { type: 'agent', id: row.id, health: seen } })
     healths.set(row.id, seen)
+  }
+}
+
+async function removeStrays(): Promise<void> {
+  const states = await containerStates()
+  const known = new Set((await db.selectFrom('agent').select('id').execute()).map((row) => row.id))
+  for (const id of Object.keys(states ?? {}).filter((each) => !known.has(each))) {
+    await agentd.remove({ id, trash: true })
+    log.info({ event: 'agent.stray_removed', agent: id })
   }
 }
 
