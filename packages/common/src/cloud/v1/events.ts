@@ -11,7 +11,7 @@ export const ClientEvent = z.discriminatedUnion('type', [
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>
 
-export const Notice = z.object({ object: z.string(), id: z.string(), ver: z.number(), workspace: WorkspaceId, deleted: z.optional(z.boolean()) })
+export const Notice = z.object({ object: z.string(), id: z.string(), ver: z.number(), workspace: WorkspaceId, deleted: z.optional(z.boolean()), why: z.optional(z.enum(['mismatch', 'not-me'])) })
 export type Notice = z.infer<typeof Notice>
 
 export const Forwarded = z.object({ object: z.enum(FORWARDED), workspace: WorkspaceId, from: DeviceKey, body: Base64 })

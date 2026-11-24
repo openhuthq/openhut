@@ -238,6 +238,8 @@ export const ApproveRequest = z.object({ faces: z.optional(z.array(z.number().ch
 export type ApproveRequest = z.infer<typeof ApproveRequest>
 export const DenyRequestQuery = z.object({ why: z.optional(z.enum(['mismatch', 'not-me'])) })
 export type DenyRequestQuery = z.infer<typeof DenyRequestQuery>
+export const RemoveDeviceQuery = z.object({ lost: z.optional(z.enum(['true'])) })
+export type RemoveDeviceQuery = z.infer<typeof RemoveDeviceQuery>
 export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null), server: z._default(z.boolean(), false), checked: z._default(z.boolean(), false), reviewed: z._default(z.boolean(), false), faces: z._default(z.nullable(z.array(z.number())), null), location: z._default(z.nullable(z.object({ city: z.nullable(z.string()), country: z.string(), countryCode: z.string() })), null), newCountry: z._default(z.boolean(), false) })
 export type DeviceRequest = z.infer<typeof DeviceRequest>
 
@@ -282,12 +284,15 @@ export const Cloud = z.object({
   canAsk: z._default(z.boolean(), false),
   rotate: z._default(z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() })), []),
   gone: z._default(z.array(z.object({ name: z.string(), why: z.enum(['removed', 'deleted']), owner: z._default(z.nullable(z.string()), null) })), []),
+  turnedDown: z._default(z.array(z.object({ device: z.string(), workspace: z.string(), name: z.nullable(z.string()), email: z.nullable(Email), place: z.nullable(z.string()), why: z.enum(['mismatch', 'not-me']), at: Timestamp })), []),
 })
 export type Cloud = z.infer<typeof Cloud>
 
 export const CloudAuthorization = z.object({ object: z.literal('cloud_authorization'), authorizationUrl: z.string() })
 export const StartCloudSignIn = z.nullish(z.object({ loginHint: z.optional(Email) }))
 export type StartCloudSignIn = z.infer<typeof StartCloudSignIn>
+export const PasteSignInCode = z.object({ code: z.string().check(z.maxLength(200)) })
+export type PasteSignInCode = z.infer<typeof PasteSignInCode>
 export type CloudAuthorization = z.infer<typeof CloudAuthorization>
 
 export const RecoveryKit = z.object({ object: z.literal('recovery_kit'), words: z.array(z.string()), ask: z.array(z.number().check(z.int())), kitId: z.string(), madeAt: Timestamp, device: z.string() })

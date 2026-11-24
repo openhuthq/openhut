@@ -22,7 +22,7 @@ type Kit = {
 }
 type Tokens = { tokens: { mint: (input: { sub: string; email: string; device: string }) => Promise<{ token: string }> } }
 
-test('against the real cloud API: Not me takes the device off your home list and off a teammate’s team you’re in, and it then reads and writes nothing in either', { skip }, async () => {
+test('against the real cloud API: Not me takes the device off your home list and off a teammate’s team you’re in, and it then reads and writes nothing in either; Lost or stolen also resets the encryption for a new kit, a plain Remove doesn’t', { skip }, async () => {
   const cloud = await bootCloud()
   const { fakeAgentd } = await import('../agents/signed-in.ts')
   fakeAgentd()
@@ -80,6 +80,36 @@ test('against the real cloud API: Not me takes the device off your home list and
       assert.equal((await kit.call(laptop, 'GET', `/v1/teams/${ws}/agent`)).status, 403)
       assert.equal((await kit.put(laptop, { collection: 'agent', workspace: ws, id: kit.newId() })).status, 403)
     }
+
+    const kitOf = async () => (await app.inject({ method: 'GET', url: '/api/cloud', headers })).json<{ kit: { savedAt: string } | null }>().kit
+    const madeKit = await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })
+    assert.equal(madeKit.statusCode, 200, madeKit.body)
+    const firstKit = madeKit.json<{ kitId: string }>().kitId
+    const keyVersion = () => roomKeys.room(home)?.workspace.version
+    const addLaptop = async () => {
+      const device = await kit.another({ email: account.email, sub: account.sub, home })
+      const list = await keysService.addDevice({ device: device.key, name: 'Laptop', runtime: false })
+      assert.ok(list)
+      await putList({ workspace: home, list })
+      return device
+    }
+
+    const sold = await addLaptop()
+    const before = { version: keyVersion(), kit: await kitOf() }
+    assert.ok(before.kit)
+    assert.equal((await app.inject({ method: 'DELETE', url: `/api/cloud/devices/${encodeURIComponent(sold.key)}`, headers })).statusCode, 200)
+    assert.deepEqual({ version: keyVersion(), kit: await kitOf() }, before, 'a plain Remove keeps the keys and the kit')
+
+    const stolen = await addLaptop()
+    const lost = await app.inject({ method: 'DELETE', url: `/api/cloud/devices/${encodeURIComponent(stolen.key)}?lost=true`, headers })
+    assert.equal(lost.statusCode, 200, lost.body)
+    assert.ok((keyVersion() ?? 0) > (before.version ?? 0), 'lost or stolen resets the encryption')
+    assert.equal(await kitOf(), null, 'and the old kit stops working, so a new one is due')
+    assert.equal((await kit.call(stolen, 'GET', `/v1/member-lists?workspace=${home}`)).status, 403)
+    const newKit = await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })
+    assert.equal(newKit.statusCode, 200, newKit.body)
+    assert.notEqual(newKit.json<{ kitId: string }>().kitId, firstKit)
+    assert.ok(await kitOf())
   } finally {
     cloudEvents.stop()
     await app.close()

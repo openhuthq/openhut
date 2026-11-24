@@ -81,6 +81,7 @@ export const cloudService = {
       canAsk: Boolean(locked && session),
       rotate: on ? await toRotate() : [],
       gone: await cloudEvents.gone(),
+      turnedDown: on ? cloudEvents.turnedDown() : [],
     }
   },
 
@@ -155,6 +156,7 @@ export const cloudService = {
   },
 
   async deny({ workspace, device, why }: { workspace: string; device: string; why?: 'mismatch' | 'not-me' }): Promise<Cloud> {
+    if (why) cloudEvents.deniedHere(device)
     const denied = await cloud.team(mustBeOn(workspace)).deny({ device, why })
     if (denied.status !== 200 && denied.status !== 404) throw new HttpError(502, 'OpenHut Cloud couldn’t deny it. Try again.')
     await cloudEvents.refreshRequests(workspace)
@@ -225,7 +227,7 @@ export const cloudService = {
 
   async start({ loginHint }: { loginHint?: string } = {}): Promise<CloudAuthorization> {
     const state = randomBytes(24).toString('base64url')
-    const started = await cloud.signIn({ google: { returnTo: `${callbackBase()}/api/cloud/callback`, state } }).catch(fromCloud)
+    const started = await cloud.signIn({ google: { returnTo: `${callbackBase()}/api/cloud/callback${config.appScheme ? `?app=${config.appScheme}` : ''}`, state } }).catch(fromCloud)
     const url = started.object === 'redirect' ? started.url : ''
     await settings.setSignIns(withSignIn({ pending: settings.signIns(), state, now: Date.now() }))
     if (loginHint) invited.set(state, loginHint.toLowerCase())
@@ -281,6 +283,15 @@ export const cloudService = {
       signInError = messageOf(err)
       return page(`${signInError} Go back to OpenHut.`)
     }
+  },
+
+  async pasted({ code }: { code: string }): Promise<Cloud> {
+    const [state = '', grant = ''] = code.trim().split('.')
+    if (!grant || !(state in settings.signIns())) throw new HttpError(400, 'That code expired or isn’t from this sign-in. Sign in again.', { param: 'code' })
+    signInError = null
+    await cloudService.finish({ state, code: grant })
+    if (signInError) throw new HttpError(400, signInError, { param: 'code' })
+    return cloudService.status()
   },
 
   async signOut(): Promise<Cloud> {
@@ -350,7 +361,7 @@ export const cloudService = {
     return cloudService.status()
   },
 
-  async notMe({ device }: { device: string }): Promise<Cloud> {
+  async notMe({ device, lost = false }: { device: string; lost?: boolean }): Promise<Cloud> {
     const account = keysService.mustBeOn()
     const mine = (ws: string) => Boolean(roomKeys.members(ws)?.members.some((member) => member.email === account.email && member.devices.includes(device)))
     const teams = roomKeys.rooms().map((room) => room.workspace.id).filter((ws) => ws !== account.workspace.id && mine(ws))
@@ -359,6 +370,7 @@ export const cloudService = {
     for (const ws of teams) await caughtUp({ ws, step: async () => { if (mine(ws)) await change({ ws, devices: [device] }) } })
     if (await serial(() => deleteBoxes({ account, kinds: ['passkey'] }))) passkeySaved = false
     await keepToRotate()
+    if (lost) return cloudService.changeKeys({ workspace: account.workspace.id })
     return cloudService.status()
   },
 

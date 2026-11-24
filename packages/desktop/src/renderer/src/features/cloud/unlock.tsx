@@ -235,7 +235,7 @@ export function CloudToasts() {
     navigate(agent ? agentPath({ agentId: agent }) : '/', true)
   }, [restoring, landing, agent, problem, queries])
   if (!cloud) return null
-  return <><JoinRequests cloud={cloud} /><Mismatch /><GoneNotice cloud={cloud} /><Joins cloud={cloud} /><SelfJoins cloud={cloud} /><TouchIdBack cloud={cloud} /></>
+  return <><JoinRequests cloud={cloud} /><Mismatch /><GoneNotice cloud={cloud} /><TurnedDown cloud={cloud} /><Joins cloud={cloud} /><SelfJoins cloud={cloud} /><TouchIdBack cloud={cloud} /></>
 }
 
 function Joins({ cloud }: { cloud: Cloud }) {
@@ -271,7 +271,7 @@ function TouchIdBack({ cloud }: { cloud: Cloud }) {
 const OS_WAIT_MS = 20_000
 
 function SelfJoins({ cloud }: { cloud: Cloud }) {
-  const remove = useRemoveMac({ then: '/settings/general?open=keys' })
+  const remove = useRemoveMac()
   useEffect(() => {
     if (cloud.status !== 'on') return
     const fresh = newDevices({ devices: cloud.devices, known: knownDevices() })
@@ -284,9 +284,23 @@ function SelfJoins({ cloud }: { cloud: Cloud }) {
       const title = recovered ? `A computer used your ${device.os?.startsWith('macOS') ? 'recovery kit or Touch ID' : 'recovery kit'} to join` : `${name} joined`
       const how = recovered ? name : joinedNote(device.joined)
       notifyDesktop({ title, body: 'If that wasn’t you, open OpenHut and choose Remove.', path: '/settings/computers' })
-      notify({ lead: <DeviceIcon kind={device.kind} />, title, note: `${[kind, how, device.addedAt && askedAgo(device.addedAt)].filter(Boolean).join(' · ')}. Not you? Remove it, then reset encryption in Settings › General.`, action: { label: 'Remove', onClick: () => remove.mutate(device.key) } })
+      notify({ lead: <DeviceIcon kind={device.kind} />, title, note: `${[kind, how, device.addedAt && askedAgo(device.addedAt)].filter(Boolean).join(' · ')}. Not you? Remove and lock it out.`, action: { label: 'Remove', onClick: () => remove.mutate({ key: device.key, lost: true }) } })
     }
   }, [cloud.devices, cloud.status, cloud.email, remove])
+  return null
+}
+
+function TurnedDown({ cloud }: { cloud: Cloud }) {
+  const seen = useRef(new Set(cloud.turnedDown.map((each) => each.at)))
+  useEffect(() => {
+    for (const each of cloud.turnedDown.filter((one) => !seen.current.has(one.at))) {
+      seen.current.add(each.at)
+      const title = `A sign-in from ${each.name ?? 'a new device'} was turned down`
+      const body = [each.why === 'mismatch' ? 'The faces didn’t match' : 'Someone chose Not me', each.place, each.email].filter(Boolean).join(' · ')
+      notifyDesktop({ title, body, path: '/settings/computers' })
+      notify({ lead: <Tinted icon={Alert02Icon} hue={AMBER} />, title, note: `${body}. If that wasn’t you, nothing got in. If it keeps happening, change your Google password.` })
+    }
+  }, [cloud.turnedDown])
   return null
 }
 
