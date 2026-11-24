@@ -127,7 +127,7 @@ function DeviceRow({ device, twin, admin }: { device: Device; twin: boolean; adm
   const base = device.name ?? (server ? 'Computer that runs agents' : 'Computer')
   const name = twin ? `${base} (${tunnelKeyOf(device.key).slice(0, 4)})` : base
   const detail = device.addedAt ? `Added ${shortDateTime.format(new Date(device.addedAt))} · ${REMOVE_DETAIL}` : REMOVE_DETAIL
-  return <Row icon={<DeviceIcon kind={device.kind} />} title={name} note={sentence([device.os ?? (server ? 'Linux' : null), server && 'Server · runs agents', joinedNote(device.joined), presenceOf(device), admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')).replace(/\.$/, '')}>
+  return <Row icon={<DeviceIcon kind={device.kind} />} title={name} note={sentence([device.os ?? (server ? 'Linux' : null), server && 'Server · runs agents', joinedNote(device.joined, device.os), presenceOf(device), admin && `OpenHut ${admin.server.version}`, addedOf(device)].filter(Boolean).join(' · ')).replace(/\.$/, '')}>
     {server && !isPhone() && update.isPending && <span className="inline-flex items-center gap-1.5"><Spinner className="mt-0" />Updating…</span>}
     {server && !isPhone() && !update.isPending && admin?.server.updateAvailable && <Button type="button" variant="secondary" className={PILL} onClick={() => update.mutate({ id: tunnelKeyOf(device.key), name }, { onSuccess: () => toast(`${name} is updating`), onError: toastError })}>Update</Button>}
     {!isPhone() && <ConfirmButton className={PILL} disabled={remove.isPending} question={`Remove ${name}?`} detail={detail} points={REMOVE_POINTS} action="Remove" onConfirm={() => remove.mutate(device.key)}>Remove</ConfirmButton>}
@@ -141,9 +141,9 @@ function presenceOf(device: Device): string {
   return !device.heard && device.addedAt && Date.now() - Date.parse(device.addedAt) < JOINING_MS ? 'Connecting…' : 'Offline'
 }
 
-export function joinedNote(joined: Device['joined']): string | null {
+export function joinedNote(joined: Device['joined'], os?: string | null): string | null {
   if (!joined) return null
-  if (joined.how === 'recovery') return 'used your recovery kit or Touch ID'
+  if (joined.how === 'recovery') return os?.startsWith('macOS') ? 'used your recovery kit or Touch ID' : 'used your recovery kit'
   return joined.by ? `approved from ${joined.by}` : 'approved from another computer'
 }
 
