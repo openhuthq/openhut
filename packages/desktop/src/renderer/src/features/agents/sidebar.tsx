@@ -115,7 +115,7 @@ function ConnectedMarks() {
   const connected = [...new Set(connections.data?.map((connection) => connection.kind))].slice(0, 3)
   const kinds = connected.length ? connected : SUGGESTED
   return <>
-    <span className="truncate">{connections.data && !connected.length ? 'Connect apps' : 'Connections'}</span>
+    <span className="truncate" title={connected.length ? 'Your connected apps' : 'Connect apps like Gmail, Drive and Postgres'}>Apps</span>
     <span className="ml-auto flex shrink-0 gap-1">{kinds.map((kind) => <Glyph key={kind} name={kind} size={14} />)}</span>
   </>
 }
