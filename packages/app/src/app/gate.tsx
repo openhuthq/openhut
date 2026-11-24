@@ -9,7 +9,7 @@ import { Meter } from '@/components/ui/meter'
 import { Spinner } from '@/components/ui/spinner'
 import { notifyUnlock, useCloud, usePasskeys } from '@/features/cloud/api'
 import { SaveKit, SignIn, TouchIdOffer } from '@/features/cloud/sign-in'
-import { BIG, Stage, Step } from '@/features/cloud/step'
+import { BIG, EntryScreen, Stage } from '@/features/cloud/step'
 import { Unlock } from '@/features/cloud/unlock'
 import { activeOf, GateContext, useChosen } from '@/features/cloud/workspaces'
 import { JoinLinkDialog } from '@/features/join/cloud-join'
@@ -45,7 +45,7 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
     if (step === 'unlock') void notifyUnlock()
   }, [step])
   if (step === 'loading') return error ? <Down error={error} retrying={me.isFetching} onRetry={() => { void me.refetch(); void cloud.refetch() }} /> : <Waiting />
-  if ((isPhone() || (REMOTE && !desktop?.window)) && step !== 'ready' && !(REMOTE && step === 'kit')) return <Stage><Step title="Finish on your computer." line="Set up OpenHut there, then come back." /></Stage>
+  if ((isPhone() || (REMOTE && !desktop?.window)) && step !== 'ready' && !(REMOTE && step === 'kit')) return <Stage><EntryScreen mood="looking" title="Finish on your computer." line="Set up OpenHut there, then come back." /></Stage>
   if (step === 'kit' && !saving && !invited) setSaving(true)
   if (saving) return <Stage><SaveKit onDone={() => {
     setSaving(false)
@@ -76,18 +76,20 @@ function Down({ error, retrying, onRetry }: { error: Error | null; retrying: boo
 }
 
 function GettingReady({ run, failure, ready, invited, onRetry, onOpen }: { run: FirstRun | undefined; failure?: string; ready: boolean; invited: boolean; onRetry: () => void; onOpen: () => void }) {
-  if (failure) return <Step title="OpenHut couldn’t start." line={failure} action={<Button variant="primary" className={BIG} onClick={onRetry}><I icon={Refresh01Icon} size={16} />Try again</Button>} />
+  if (failure) return <EntryScreen mood="worried" title="OpenHut couldn’t start." line={failure} action={<Button variant="primary" className={BIG} onClick={onRetry}><I icon={Refresh01Icon} size={16} />Try again</Button>} />
   const steps = run?.steps ?? []
   const now = steps.find(([, , state]) => state === 'now' || state === 'failed')
   const doneCount = steps.filter(([, , state]) => state === 'done').length
   const value = ready ? 100 : Math.round(((doneCount + (now?.[3] ?? 0)) / Math.max(steps.length, 1)) * 100)
-  const [title, line] = invited ? ['You’re invited.', ready ? 'OpenHut is ready.' : 'Setting up OpenHut. This happens once, then your invite.'] : [ready ? 'Ready.' : 'Getting ready.', ready ? 'Your agents live here now.' : 'Only the first time.']
+  const [title, line] = invited ? ['You’re invited.', ready ? 'OpenHut is ready.' : 'Setting up OpenHut. This happens once, then your invite.'] : [ready ? 'Ready.' : 'Getting ready.', ready ? 'Your agents live here now.' : 'Only the first time. About a minute.']
   const label = invited ? 'See your invite' : 'Open OpenHut'
   const action = run?.failed
     ? <Button variant="primary" className={BIG} onClick={onRetry}><I icon={Refresh01Icon} size={16} />Try again</Button>
-    : <Button variant="primary" className={cn(BIG, !ready && 'bg-[#2a2b2e] disabled:opacity-100')} disabled={!ready} autoFocus={ready} onClick={onOpen}>{!ready && <Spinner className="mt-0 border-white/30 border-t-white" />}{ready ? label : 'Setting up'}</Button>
-  return <Step happy={ready} title={title} line={line} action={action}>
-    <Meter className="w-[320px] max-w-full" size="xs" value={value} aria-label="Getting ready" />
-    <span key={now?.[0]} className={cn('animate-[fadein_.35s_ease-out] text-[14px] font-medium', now?.[2] === 'failed' ? 'text-fail' : 'text-ink')}>{ready ? 'All done' : now?.[0] ?? 'Starting'}</span>
-  </Step>
+    : ready && <Button variant="primary" className={BIG} autoFocus onClick={onOpen}>{label}</Button>
+  return <EntryScreen happy={ready} mood="building" title={title} line={line} action={action}>
+    {!ready && <>
+      <Meter className="w-full" size="xs" value={value} aria-label="Getting ready" />
+      <span key={now?.[0]} className={cn('animate-[fadein_.35s_ease-out] text-[13px]', now?.[2] === 'failed' ? 'text-fail' : 'text-body')}>{now?.[0] ?? 'Starting'}</span>
+    </>}
+  </EntryScreen>
 }

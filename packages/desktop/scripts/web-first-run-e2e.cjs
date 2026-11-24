@@ -76,7 +76,7 @@ app.whenReady().then(async () => {
     await web.click('Pick another way')
     await web.until(/Where should your agents live\?/)
 
-    await web.click('Run on my server')
+    await web.click('Run on my Linux server instead')
     const first = (await web.until(/OPENHUT_JOIN='[^']+'/)).match(/OPENHUT_JOIN='([^']+)'/)[1]
     log(`5 Run on my server shows the command with a one-use code ${first.slice(0, 6)}…`)
     await web.shot('w-05-server')

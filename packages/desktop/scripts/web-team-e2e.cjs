@@ -83,7 +83,7 @@ app.whenReady().then(async () => {
     const nothing = !/Agents\n|Chats|Settings|Team|Shared with you/.test(choose)
     const first = choose.split('\n').map((line) => line.trim()).filter(Boolean)
     log(`1 a stranger with no computer sees the download page first and no data (${nothing ? 'no agents, chats, team or settings' : 'FOUND DATA'}): ${first.join(' / ')}`)
-    if (!nothing || first.indexOf('Download for Mac') > first.indexOf('Run on my server')) throw new Error('the stranger saw data, or the download wasn’t the first call to action')
+    if (!nothing || first.indexOf('Download for Mac') > first.indexOf('Run on my Linux server instead')) throw new Error('the stranger saw data, or the download wasn’t the first call to action')
     await stranger.shot('f2-02-stranger')
     stranger.win.destroy()
 
@@ -92,7 +92,7 @@ app.whenReady().then(async () => {
     await mo.until(/Your agents, everywhere/)
     await mo.signIn('mo@example.com')
     await mo.until(/Where should your agents live\?/)
-    await mo.click('Run on my server')
+    await mo.click('Run on my Linux server instead')
     const code = (await mo.until(/OPENHUT_JOIN='[^']+'/)).match(/OPENHUT_JOIN='([^']+)'/)[1]
     const box = server(code, data)
     log(`2 mo runs the server command (cloud ${CLOUD}, web ${WEB}); the server is the account’s only computer`)

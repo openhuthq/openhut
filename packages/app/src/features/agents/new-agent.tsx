@@ -8,6 +8,7 @@ import { ErrorNote } from '@/components/error-note'
 import { DialogCard, I } from '@/components/kit'
 import { Glyph } from '@/components/glyph'
 import { useAgents, useCreateAgent } from '@/features/agents/api'
+import { EntryScreen } from '@/features/cloud/step'
 import { useWorkspaces } from '@/features/cloud/workspaces'
 import { useComputers } from '@/features/computers/api'
 import { useStartSeatSignIn } from '@/features/settings/api'
@@ -36,11 +37,9 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
 }
 
 export function FirstAgent() {
-  return <div className="flex w-[400px] max-w-full flex-col items-center gap-2 text-center">
-    <h1 className="m-0 text-[22px]/[1.25] font-semibold tracking-[-.01em]">Make your first agent</h1>
-    <p className="m-0 mb-3 text-[14px]/[1.5] text-body">Give it a job in your first chat.</p>
+  return <EntryScreen art={null} title="Make your first agent." line="Give it a job in your first chat.">
     <AgentForm />
-  </div>
+  </EntryScreen>
 }
 
 function AgentForm() {

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { FingerPrintIcon, Key01Icon } from '@hugeicons/core-free-icons'
+import { FingerPrintIcon } from '@hugeicons/core-free-icons'
 import { creatureName, faceName, FACES, type DeviceRequest } from '@openhut/common/cloud/cloud.ts'
 import { Creature } from '@/components/creature'
 import { DeviceIcon } from '@/components/custom/device'
@@ -7,7 +7,7 @@ import { I } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogHead } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
-import { Step } from '@/features/cloud/step'
+import { EntryScreen, WaitPill } from '@/features/cloud/step'
 import { faceLook } from '@/lib/face'
 import { WORDS } from '@/lib/platform'
 import { cn } from '@/lib/utils'
@@ -19,12 +19,14 @@ export function Named({ index, size }: { index: number; size: number }) {
   </span>
 }
 
-export function Knocking({ faces, onKit, line, action, link, children }: { faces: number[] | null; onKit?: () => void; line?: string; action?: ReactNode; link?: ReactNode; children?: ReactNode }) {
-  return <Step title="Knock knock." line={line ?? 'Open OpenHut on one of your computers and tap these two:'} action={action}
-    link={onKit ? <Button type="button" variant="text" className="font-normal text-mute" onClick={onKit}><I icon={Key01Icon} size={14} />Use my recovery kit instead</Button> : link}>
-    {faces ? <span className="flex gap-8">{faces.map((index) => <Named key={index} index={index} size={112} />)}</span> : <Spinner className="mt-1" />}
+export function Knocking({ faces, line, action, foot, children }: { faces: number[] | null; line?: string; action?: ReactNode; foot?: ReactNode; children?: ReactNode }) {
+  const names = faces?.map(creatureName).join(' and ')
+  return <EntryScreen title="Knock knock." line={line ?? (names ? `On a computer you already use, tap ${names}.` : 'On a computer you already use, open OpenHut.')} foot={foot}
+    art={faces ? <span className="mb-6 flex gap-7">{faces.map((index) => <Named key={index} index={index} size={104} />)}</span> : undefined}>
+    <WaitPill>Waiting for your other computer</WaitPill>
+    {action}
     {children}
-  </Step>
+  </EntryScreen>
 }
 
 export function pairsOf({ faces, random = Math.random }: { faces: number[]; random?: () => number }): number[][] {

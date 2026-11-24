@@ -72,7 +72,7 @@ function Home({ first, adding, overlaid, waiting, loading }: { first: string | u
     <p className="m-0 text-[14px]/[1.5] text-body">{nameOf(owner ?? '')}’s {HERE} lets you in as soon as it’s on.</p>
   </section>
   if (loading) return <section className="relative flex flex-1 items-center justify-center bg-card"><PhoneTop /><Spinner className="size-5" /></section>
-  return <section className="relative flex flex-1 flex-col items-center justify-center bg-card px-8 pb-12">
+  return <section className="relative flex flex-1 flex-col bg-card">
     <PhoneTop />
     <FirstAgent />
     {adding && <NewAgentDialog onClose={() => navigate('/')} />}
