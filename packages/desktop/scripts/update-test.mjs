@@ -86,6 +86,11 @@ try {
   await until(async () => onDisk() === want, 120, `the app on disk to become ${want}`)
   if (!LINUX) execFileSync('codesign', ['--verify', '--deep', '--strict', app])
   say('the app on disk is the new version and its signature verifies', { version: onDisk(), signature: signedBy() })
+  if (!LINUX && process.env.CI_KEYCHAIN_PASSWORD) {
+    const cdhash = /CDHash=(\w+)/.exec(spawnSync('codesign', ['-dvvv', app], { encoding: 'utf8' }).stderr)?.[1]
+    execFileSync('security', ['set-generic-password-partition-list', '-s', 'OpenHut Dev Safe Storage', '-S', `apple-tool:,apple:,cdhash:${cdhash}`, '-k', process.env.CI_KEYCHAIN_PASSWORD, process.env.CI_KEYCHAIN], { stdio: 'ignore' })
+    say('CI identity only: the safe-storage Keychain item now admits the new build, as a Developer ID team id does', { cdhash })
+  }
   if (args.broken) {
     const old = plistVersion.call(null, args.from)
     child = launch({ OPENHUT_TEST_DIALOG: 'Go back' })
