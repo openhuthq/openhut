@@ -9,6 +9,7 @@ const STATES: Record<ReturnType<typeof agentState>, [Tone, string]> = {
   stopped: ['off', 'Stopped'],
   not_answering: ['bad', 'Not answering'],
   no_seat: ['bad', 'Model not connected'],
+  setup_failed: ['bad', 'Couldn’t start'],
   missing: ['bad', 'Stopped unexpectedly'],
 }
 

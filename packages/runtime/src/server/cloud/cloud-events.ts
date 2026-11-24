@@ -26,7 +26,7 @@ const GONE = [4001, 4003, 4010]
 const LIVE: Record<Collection, string[]> = {
   workspace: [], agent: ['agent'], control: ['agent', 'grant'], message: ['thread'], memory: ['memory'], connection: ['connection'], skill: ['skill'], routine: ['routine'], channel: ['channel'], file: ['thread'],
 }
-const Beat = z.object({ at: z.number(), build: z.string(), version: z.string(), kind: z.string(), agents: z.optional(z.record(z.string(), z.object({ status: AgentStatus, health: z.nullable(AgentHealth) }))) })
+const Beat = z.object({ at: z.number(), build: z.string(), version: z.string(), kind: z.string(), agents: z.optional(z.record(z.string(), z.object({ status: AgentStatus, health: z.nullable(AgentHealth), detail: z.optional(z.string()) }))) })
 const Requests = z.object({ data: z.array(JoinRequest) })
 const Named = z.object({ name: z.optional(z.nullable(z.string())), site: z.optional(z.nullable(z.string())) })
 

@@ -21,6 +21,7 @@ export function signIn({ email = 'mo@example.com', me = 'dev_mac', others = ['de
 export function fakeAgentd() {
   const files = new Map<string, string>()
   const applied = new Map<string, boolean>()
+  const failing = new Set<string>()
   const server = createServer({ allowHalfOpen: true }, (sock) => {
     let raw = ''
     sock.setEncoding('utf8').on('data', (chunk) => {
@@ -31,16 +32,17 @@ export function fakeAgentd() {
       if (lines.length < 2) return
       const key = `${req.id}/${req.path}`
       if (req.cmd === 'write') files.set(key, Buffer.from(lines[1] ?? '', 'base64').toString('utf8'))
-      if (req.cmd === 'apply') applied.set(req.id, req.running)
+      if (req.cmd === 'apply' && !failing.has(req.id)) applied.set(req.id, req.running)
       if (req.cmd === 'rm') applied.delete(req.id)
       const states = Object.fromEntries([...applied].map(([id, running]) => [id, running ? 'running' : 'exited']))
       const replies: Record<string, unknown> = {
         ps: { states }, health: { firewall: true, imageReady: true }, apply: { applied: req.id, change: 'none' }, rm: { removed: req.id }, write: { path: req.path },
         read: { body: files.has(key) ? Buffer.from(files.get(key) ?? '').toString('base64') : null }, skills: { skills: [], bundled: '' }, delete: { removed: req.paths ?? [] },
       }
+      if (req.cmd === 'apply' && failing.has(req.id)) return sock.end(JSON.stringify({ ok: false, error: 'Pool overlaps with other one on this address space' }))
       sock.end(JSON.stringify({ ok: true, ...(replies[req.cmd] as object) }))
     })
   }).listen(process.env.AGENTD_SOCK)
   server.unref()
-  return { files, applied }
+  return { files, applied, failing }
 }

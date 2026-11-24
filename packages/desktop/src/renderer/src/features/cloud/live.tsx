@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Cloud, RuntimeInvite } from '@openhut/common/cloud/cloud.ts'
 import { PILL } from '@/components/kit'
@@ -13,7 +13,6 @@ import { request } from '@/lib/api-client'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
-const KEPT = 'openhut.kept-there.'
 const joining = new Set<string>()
 
 export function OfflineChip({ className }: { className?: string }) {
@@ -25,19 +24,13 @@ export function OfflineChip({ className }: { className?: string }) {
 }
 
 export function MoveHere({ agent }: { agent: Agent }) {
-  const [kept, setKept] = useState(() => stored(agent.id))
   const update = useUpdateAgent(agent.id)
-  const hidden = agent.runsHere || agent.wanted !== 'running' || (kept && !agent.runsNowhere) || !agent.canEdit || !agent.canManage
-  const keep = () => {
-    keepThere(agent.id)
-    setKept(true)
-  }
+  const hidden = !agent.runsNowhere || agent.wanted !== 'running' || !agent.canEdit || !agent.canManage
   useStickyToast({ id: `move-${agent.id}`, notice: hidden ? null : {
     lead: <DeviceIcon kind="mac" />,
-    title: agent.runsNowhere ? `No computer runs ${agent.name} now` : `${agent.name} still runs on ${agent.runsOnName ?? 'your other computer'}`,
-    note: agent.runsNowhere ? 'The computer it ran on left this team.' : 'Only one computer can run an agent.',
+    title: `No computer runs ${agent.name} now`,
+    note: 'The computer it ran on left this team.',
     action: { label: 'Run here', onClick: () => update.mutate({ runsHere: true }, { onError: toastError }) },
-    cancel: agent.runsNowhere ? undefined : { label: 'Keep it there', onClick: keep },
   } })
   return null
 }
@@ -76,18 +69,3 @@ async function join(computer: string): Promise<void> {
   await request({ schema: Cloud, computer, path: '/api/cloud/join', method: 'POST', body: invite })
 }
 
-function stored(id: string): boolean {
-  try {
-    return localStorage.getItem(KEPT + id) === '1'
-  } catch {
-    return false
-  }
-}
-
-export function keepThere(id: string): void {
-  try {
-    localStorage.setItem(KEPT + id, '1')
-  } catch {
-    return
-  }
-}

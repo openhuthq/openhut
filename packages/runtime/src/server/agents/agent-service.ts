@@ -150,7 +150,7 @@ export const agentService = {
       return
     }
     const row = await rowOf(id)
-    await agentd.apply({ id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' })
+    await applied(row, agentd.apply({ id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' }))
     probes.delete(id)
   },
 
@@ -160,12 +160,15 @@ export const agentService = {
     }
   },
 
-  async statuses({ workspace }: { workspace: string }): Promise<Record<string, { status: AgentStatus; health: AgentHealth | null }>> {
+  async statuses({ workspace }: { workspace: string }): Promise<Record<string, { status: AgentStatus; health: AgentHealth | null; detail?: string }>> {
     const home = keysService.account()?.workspace.id
     const rows = await db.selectFrom('agent').selectAll().execute()
     const states = await containerStates()
     const mine = rows.filter((row) => (row.workspace ?? home) === workspace)
-    return Object.fromEntries(await Promise.all(mine.map(async (row) => [row.id, { status: statusOf(states?.[row.id]), health: (await healthOf({ row, state: states?.[row.id] })).health }] as const)))
+    return Object.fromEntries(await Promise.all(mine.map(async (row) => {
+      const { health, detail } = await healthOf({ row, state: states?.[row.id] })
+      return [row.id, { status: statusOf(states?.[row.id]), health: health === 'setup_failed' ? 'not_answering' : health, ...detail && { detail } }] as const
+    })))
   },
 
   async byToken({ token }: { token: string }): Promise<GatewayAgent | undefined> {
@@ -212,7 +215,7 @@ export const agentService = {
   async reapplyAll({ force }: { force: boolean }): Promise<string[]> {
     const failed: string[] = []
     for (const row of await db.selectFrom('agent').selectAll().execute()) {
-      await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running', force })
+      await applied(row, agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running', force }))
         .catch((err: unknown) => failed.push(`${row.name}: ${messageOf(err)}`))
     }
     return failed
@@ -301,14 +304,14 @@ async function agentOf({ facts, actor, states }: { facts: AgentFacts; actor: Cal
   const list = roomKeys.members(facts.workspace)
   const runner = list?.members.find((member) => control && member.devices.includes(control.runsOn))
   const beat = control && !here ? cloudEvents.beats(facts.workspace).get(control.runsOn)?.agents?.[facts.id] : undefined
-  const health = here ? await healthOf({ row, state: states?.[facts.id] }) : { health: beat?.health ?? null, detail: '' }
+  const health = here ? await healthOf({ row, state: states?.[facts.id] }) : { health: beat?.health ?? null, detail: beat?.detail ?? '' }
   const author = facts.by ? list?.members.find((member) => member.devices.includes(facts.by ?? ''))?.email : undefined
   const mine = facts.owner === actor.email
   return {
     id: facts.id, object: 'agent', name: value.name, ownerId: facts.owner, ownerName: facts.owner, model: control?.model ?? DEFAULT_MODEL, wanted: value.wanted,
     status: here ? statusOf(states?.[facts.id]) : beat?.status ?? 'missing', health: health.health, healthDetail: health.detail, summary: summaryOf(value.instructions), net: here ? row.net : 0,
     instructions: value.instructions, codeExecution: control?.codeExecution ?? true, browser: control?.browser ?? false, face: value.face, canEdit: mayEdit({ facts, actor }),
-    runsHere: here, runsNowhere: !here && (!control || !runner || !!list?.removed.includes(control.runsOn)), runsOn: control?.runsOn ?? null, runsOnName: here || !control ? null : list?.names?.[control.runsOn] ?? (runner ? `${runner.email}’s computer` : null),
+    runsHere: here, runsNowhere: !here && (!control || !runner || !!list?.removed.includes(control.runsOn)), runsOn: control?.runsOn ?? null, runsOnName: here || !control ? null : list?.names?.[control.runsOn] ?? (runner ? `${runner.email}’s computer` : null), runsOnServer: !!control && !!list?.runtimes?.includes(control.runsOn),
     changedBy: author && author !== actor.email ? author : null, workspace: facts.workspace === keysService.account()?.workspace.id ? null : facts.workspace, shared: !facts.personal, owner: facts.owner,
     canManage: mine, createdAt: value.createdAt,
   }
@@ -367,7 +370,7 @@ function renderedChannel(channel: Selectable<Database['channel']>): RenderedChan
 }
 
 async function keepRunning({ row }: { row: AgentRow }): Promise<void> {
-  const { change } = await agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: true })
+  const { change } = await applied(row, agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: true }))
   if (change !== 'none') log.info({ event: `reconcile.${change}`, agent: row.id })
 }
 
@@ -398,15 +401,29 @@ function statusOf(state: string | undefined): AgentStatus {
 
 const probes = new Map<string, Probe>()
 const healths = new Map<string, string>()
+const setupFailures = new Map<string, string>()
+
+async function applied<T>(row: Pick<AgentRow, 'id'>, apply: Promise<T>): Promise<T> {
+  try {
+    const done = await apply
+    setupFailures.delete(row.id)
+    return done
+  } catch (err) {
+    setupFailures.set(row.id, messageOf(err))
+    throw err
+  }
+}
 
 async function healthOf({ row, state }: { row: AgentRow; state: string | undefined }): Promise<Health> {
+  const failed = setupFailures.get(row.id)
+  if (failed && row.wanted === 'running') return { health: 'setup_failed', detail: failed }
+  const provider = splitModelKey(row.model)?.provider ?? 'claude'
+  if (row.wanted === 'running' && config.modelMode === 'claude' && !providerService.connected(provider)) return { health: 'no_seat', detail: `${providerService.get({ id: provider }).name} isn't connected on this computer, so its model can't answer. Connect it under Settings › Models.` }
   if (state !== 'running') {
     probes.delete(row.id)
     return { health: null, detail: '' }
   }
   const last = await probe({ row, fresh: false })
-  const provider = splitModelKey(row.model)?.provider ?? 'claude'
-  if (!last.detail && config.modelMode === 'claude' && !providerService.connected(provider)) return { health: 'no_seat', detail: `${providerService.get({ id: provider }).name} isn't connected on this computer, so its model can't answer. Connect it under Settings › Models.` }
   if (!last.detail) return { health: 'answering', detail: '' }
   return { health: last.detail === PORT_TAKEN || Date.now() - last.failingSince > STARTING_MS ? 'not_answering' : 'starting', detail: last.detail }
 }

@@ -31,6 +31,7 @@ import { PersonFace } from '@/components/custom/person-face'
 import { nameOf as personName, useCloud } from '@/features/cloud/api'
 import { SidebarContext } from '@/features/agents/sidebar'
 import { agentState } from '@/components/status-badge'
+import { troubleOf } from '@/features/agents/status'
 import { useAgents, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { deleteUpload, saveFile, threadPath, uploadFile, useAgentThread, useClearChat, useHomeFiles, useThumb, useTouchThread } from '@/features/threads/api'
@@ -100,7 +101,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
     </> : <ChatEmpty agent={agent} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     <PendingElsewhere agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
-    {!agent.runsHere && chat.status !== 'submitted' && last?.role === 'user' && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
+    {!agent.runsHere && chat.status !== 'submitted' && last?.role === 'user' && !troubleOf(agent) && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
     {chat.error && <Alert variant="error-outline" role="alert"><span>{chat.error.message}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Try again</Button></Alert>}
   </ChatFrame></CardReply></ChatFiles>
 }
@@ -268,6 +269,7 @@ function NotReady({ agent }: { agent: Agent }) {
   const reason = {
     starting: 'It\'s still starting. You can type as soon as it answers.',
     no_seat: 'Its model isn\'t connected.',
+    setup_failed: agent.healthDetail,
     not_answering: 'It restarts on its own. You can also stop it and start it again.',
     stopped: '',
     missing: 'It comes back by itself within 30 seconds.',
@@ -470,14 +472,15 @@ function ChatEmpty({ agent }: { agent: Agent }) {
     : {
       running: [`Say hello to ${agent.name}`, 'Ask it anything, or tell it what its job is.'],
       starting: [`Starting ${agent.name}`, 'It takes about a minute the first time. You can type as soon as it answers.'],
-      no_seat: [`${agent.name} isn't ready`, 'Connect its model under Settings › Models, then it starts answering.'],
+      no_seat: [`${agent.name} is asleep until it has a model`, 'Connect Claude, ChatGPT or an API key, and it starts answering.'],
+      setup_failed: [`${agent.name} couldn't start${agent.runsHere ? '' : ` on ${agent.runsOnName ?? 'its computer'}`}`, 'OpenHut keeps trying. If it stays like this, stop it and start it again.'],
       not_answering: [`${agent.name} isn't answering`, 'It restarts on its own. You can also stop it and start it again.'],
       stopped: ['', ''],
       missing: [`${agent.name} stopped unexpectedly`, 'It comes back by itself within 30 seconds.'],
     }[state]
-  const detail = state === 'no_seat' || state === 'not_answering' ? agent.healthDetail : ''
+  const detail = state === 'not_answering' || state === 'setup_failed' ? agent.healthDetail : ''
   return <Centered agent={agent} title={copy[0]} line={copy[1]} pulse={state === 'starting'}>
-    {state === 'no_seat' && <a href="/settings/models" className="text-ink underline underline-offset-2">Open Settings › Models</a>}
+    {state === 'no_seat' && <a href="/settings/models" className="text-ink underline underline-offset-2">Connect a model</a>}
     {detail && <Details text={detail} />}
   </Centered>
 }

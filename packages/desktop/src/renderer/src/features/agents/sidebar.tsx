@@ -141,5 +141,5 @@ function TeamSwitcher() {
 
 function Where({ agent, computers }: { agent: OpenHutAgent; computers: Parameters<typeof nameOf>[0]['computers'] }) {
   const label = agent.runsHere ? 'Runs on this computer' : `Runs on ${agent.runsOnName ?? nameOf({ computers, id: agent.computer })}`
-  return <Tooltip label={label}><span aria-label={label} className="grid text-mute-2"><I icon={agent.runsHere ? LaptopIcon : ServerStack01Icon} size={13} /></span></Tooltip>
+  return <Tooltip label={label}><span aria-label={label} className="grid text-mute-2"><I icon={agent.runsOnServer ? ServerStack01Icon : LaptopIcon} size={13} /></span></Tooltip>
 }

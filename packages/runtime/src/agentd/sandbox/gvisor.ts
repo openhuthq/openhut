@@ -140,7 +140,19 @@ function stateOf(row: unknown): SandboxState[] {
 
 async function freshNetwork({ id, net }: { id: string; net: number }) {
   await docker('network', 'rm', `ag-${id}`).catch(() => undefined)
-  await docker('network', 'create', '--subnet', `10.200.${net}.0/24`, '--gateway', `10.200.${net}.1`, '--label', `openhut.agent=${id}`, `ag-${id}`)
+  const create = () => docker('network', 'create', '--subnet', `10.200.${net}.0/24`, '--gateway', `10.200.${net}.1`, '--label', `openhut.agent=${id}`, `ag-${id}`)
+  await create().catch(async (err: unknown) => {
+    if (!/overlap/i.test(errorText(err))) throw err
+    await dropUnused(`10.200.${net}.0/24`)
+    return create()
+  })
+}
+
+async function dropUnused(subnet: string) {
+  for (const name of (await docker('network', 'ls', '--filter', 'name=ag-', '--format', '{{.Name}}')).split('\n').filter(Boolean)) {
+    const used = await docker('network', 'inspect', '--format', '{{range .IPAM.Config}}{{.Subnet}}{{end}}', name).catch(() => '')
+    if (used === subnet) await docker('network', 'rm', name).catch(() => undefined)
+  }
 }
 
 async function digestOf(image: string) {
