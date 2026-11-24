@@ -10,9 +10,10 @@ import { Glyph } from '@/components/glyph'
 import { TeamMark } from '@/components/custom/team-mark'
 import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
 import { chooseWorkspace, peopleNote, useWorkspaces } from '@/features/cloud/workspaces'
+import { shownTeams } from '@/features/cloud/shown-teams'
 import { Faces } from '@/features/cloud/presence'
 import { agentPath } from '@/app/routes'
-import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
+import { useAgents, useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { toneOf, troubleOf, wordOf } from '@/features/agents/status'
 import { nameOf, useComputers } from '@/features/computers/api'
@@ -122,12 +123,14 @@ function ConnectedMarks() {
 
 function TeamSwitcher() {
   const { all, active } = useWorkspaces()
+  const homeAgents = (useAgents().data ?? []).filter((agent) => !agent.workspace).length
+  const teams = shownTeams({ all, active: active.id, homeAgents })
   return <DropdownMenu>
     <DropdownMenuTrigger render={<Button type="button" variant="bare" aria-label={`Team: ${active.name}`} title={active.name} className={cn(SURFACE, 'relative grid size-10 shrink-0 place-items-center rounded-lg')} />}>
       <TeamMark workspace={active} />
     </DropdownMenuTrigger>
     <DropdownMenuContent side="top" align="start" className="flex w-[260px] flex-col gap-0.5 rounded-lg p-1.5 shadow-menu">
-      {all.map((workspace) => <DropdownMenuItem key={workspace.id} className="h-auto gap-2.5 px-2 py-1.5" onClick={() => { if (workspace.id !== active.id) { chooseWorkspace(workspace.id); navigate('/') } }}>
+      {teams.map((workspace) => <DropdownMenuItem key={workspace.id} className="h-auto gap-2.5 px-2 py-1.5" onClick={() => { if (workspace.id !== active.id) { chooseWorkspace(workspace.id); navigate('/') } }}>
         <TeamMark workspace={workspace} className="size-7 rounded-md text-[12px]" />
         <span className="grid min-w-0 flex-1 leading-tight"><span className="truncate text-[13px] font-medium">{workspace.name}</span><span className="text-[11.5px] text-mute">{peopleNote(workspace)}</span></span>
         {workspace.id === active.id && <I icon={Tick02Icon} size={14} />}

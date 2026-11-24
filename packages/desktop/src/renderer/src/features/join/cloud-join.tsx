@@ -30,7 +30,7 @@ export function CloudJoin() {
   const parsed = inviteOf(hash)
   const link = parsed?.link ?? `${INVITE_PAGE}${hash}`
   const { cloud } = useGate()
-  const [entered, setEntered] = useState<{ id: string; name: string }>()
+  const [entered, setEntered] = useState<{ id: string; name: string; from: string }>()
   const joined = !entered ? cloud.workspaces.find((each) => each.id === parsed?.workspace) : undefined
   const preview = useInvitePreview({ link, enabled: !joined && !entered })
   const join = useJoin()
@@ -71,15 +71,15 @@ export function CloudJoin() {
     onSuccess: () => {
       forgetInvite()
       chooseWorkspace(invite.workspace)
-      setEntered({ id: invite.workspace, name: invite.name })
+      setEntered({ id: invite.workspace, name: invite.name, from: invite.from })
     },
   })
-  return <Card mood="party" title={`Join ${invite.name}`} body={`${nameOf(invite.from)} invited you as ${invite.role === 'admin' ? 'an admin' : 'a member'}.`}
+  return <Card mood="party" title={`Join ${invite.name}`} body={<><b className="font-medium text-ink">{nameOf(invite.from)} ({invite.from})</b> invited you to <b className="font-medium text-ink">{invite.name}</b> as {invite.role === 'admin' ? 'an admin, who can also invite people and add computers' : 'a member'}. You’ll chat with the agents {invite.name} shares. Agents you make stay private until you share them.</>}
     action={<Button type="button" variant="primary" className={BIG} disabled={join.isPending} onClick={accept}>{join.isPending ? 'Joining…' : 'Join team'}</Button>}
     link={<span className="inline-flex flex-col items-center gap-2"><span className="inline-flex items-center gap-1.5 text-[12px] text-mute"><Google />Signed in as {cloud.email}</span>{!join.isPending && <Button type="button" variant="text" className={QUIET} onClick={leave}>Not now</Button>}</span>} />
 }
 
-function Entered({ team }: { team: { id: string; name: string } }) {
+function Entered({ team }: { team: { id: string; name: string; from: string } }) {
   const agents = useAgents()
   const { cloud } = useGate()
   const [settled, setSettled] = useState(false)
@@ -103,7 +103,7 @@ function Entered({ team }: { team: { id: string; name: string } }) {
   useEffect(() => {
     if (settled && (arrived || gaveUp)) navigate('/', true)
   }, [settled, arrived, gaveUp])
-  return <Card mood="party" title={`You’re in ${team.name}.`} body={<span className="inline-flex items-center gap-2"><Spinner className="mt-0" />{waiting ? 'Almost in…' : 'Getting the team’s agents…'}</span>} />
+  return <Card mood="party" title={`You’re in ${team.name}.`} body={<span className="inline-flex items-center gap-2"><Spinner className="mt-0" />{waiting ? `Getting the team’s key from ${nameOf(team.from)}’s computer…` : 'Getting the team’s agents…'}</span>} />
 }
 
 function Card({ mood, title, body, action, link }: { mood: 'party' | 'worried'; title: string; body: ReactNode; action?: ReactNode; link?: ReactNode }) {

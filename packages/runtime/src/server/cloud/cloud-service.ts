@@ -47,6 +47,7 @@ let passkeyDropped = false
 let asking: { settled: string[]; approved: boolean; error: string | null; timer: NodeJS.Timeout; reviewed: boolean; revealed: boolean; missed: boolean } | undefined
 let polling = false
 let joinError: string | null = null
+const invited = new Map<string, string>()
 const Rotate = z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() }))
 
 export const cloudService = {
@@ -76,7 +77,7 @@ export const cloudService = {
       signInError, keptAccount: on ? null : (keysService.kitState().saved ? keysService.account()?.email ?? null : null), devices, passkey: on ? passkeySaved : passkeyInCloud, touchIdOff: on && passkeyDropped && !passkeySaved, youngUntil: null, needsSignIn: Boolean(locked && !session),
       workspaces: on && account ? roomKeys.rooms().map(({ workspace: { id, key } }) => {
         const body = roomKeys.members(id)
-        const invites = (body?.invites ?? []).map((each) => ({ email: each.email, role: each.role, link: roomKeys.link({ ws: id, email: each.email }) ?? null }))
+        const invites = (body?.invites ?? []).map((each) => ({ email: each.email, role: each.role, link: roomKeys.link({ ws: id, email: each.email }) ?? null, until: roomKeys.linkUntil({ ws: id, email: each.email }) ?? null }))
         return { id, name: cloudEvents.name(id), website: cloudEvents.site(id), home: id === account.workspace.id, own: roomKeys.isOwn(id), role: roomKeys.roleIn(id) ?? 'member', waiting: !key, members: body?.members ?? [], invites, requests: cloudEvents.requests(id), names: body?.names ?? {} }
       }) : [],
       asking: asked ? { rooms: askRooms.filter((room) => !asked.settled.includes(room.id)).map(({ admins, own }) => ({ admins, own: Boolean(own) })), denied: asked.settled.length === askRooms.length, error: asked.error, name: deviceName(), reviewed: asked.reviewed, missed: asked.missed, faces: asked.revealed && askRooms[0]?.nonce ? facesOf({ device: here, nonce: askRooms[0].nonce }) : null } : null,
@@ -221,12 +222,15 @@ export const cloudService = {
     const state = randomBytes(24).toString('base64url')
     const { url } = await cloud.signIn({ provider: 'google', device: toBase64(device.publicKey), redirectUrl: `${callbackBase()}/api/cloud/callback`, state })
     await settings.setSignIns(withSignIn({ pending: settings.signIns(), state, now: Date.now() }))
+    if (loginHint) invited.set(state, loginHint.toLowerCase())
     signInError = null
     return { object: 'cloud_authorization', authorizationUrl: hinted({ url, loginHint }) }
   },
 
   async finish({ state, code, error }: { state?: string; code?: string; error?: string }): Promise<string> {
     const { started, rest } = takeSignIn({ pending: settings.signIns(), state: state ?? '', now: Date.now() })
+    const expected = invited.get(state ?? '')
+    invited.delete(state ?? '')
     await settings.setSignIns(rest)
     if (!started) return page('This sign-in expired. Go back to OpenHut and try again.')
     if (!code) {
@@ -236,6 +240,10 @@ export const cloudService = {
     try {
       const device = await keysService.device()
       const session = await cloud.session({ grant: 'google', code, signature: await signV1({ signer: device, proof: 'session', parts: [code] }) })
+      if (expected && session.email.toLowerCase() !== expected) {
+        signInError = `This invite is for ${expected}. You signed in as ${session.email}, so nothing was set up.`
+        return page(`This invite is for ${expected}, and you signed in as ${session.email}. Nothing was set up for ${session.email}. Go back to OpenHut and sign in as ${expected}.`, { title: 'Wrong Google account' })
+      }
       keysService.ownedBy(session)
       await keysService.setSession({ token: session.token, refresh: session.refresh, expiresAt: session.expiresAt })
       const who = { sub: session.sub, email: session.email }

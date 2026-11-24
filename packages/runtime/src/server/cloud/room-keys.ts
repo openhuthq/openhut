@@ -6,6 +6,7 @@ import { HttpError } from '../platform/http-error.ts'
 import { keyStore, type Account, type Room, type Stored } from './key-store.ts'
 import { accountDevice, deviceName, keysService, openLetter, ownOf, readSecret, rotateKeys, sealTo, secretOf, type Sent } from './keys-service.ts'
 
+const HINT_MAX = 430
 const INVITE_MS = 48 * 60 * 60_000
 const INVITE_URL = 'https://openhut.dev/join'
 const Lists = z.object({ data: z.array(MemberList) })
@@ -23,6 +24,7 @@ export const roomKeys = {
   members: (ws?: string): MemberListBody | undefined => bodyOf(roomKeys.room(ws)?.list),
   roleIn: (ws?: string): Role | undefined => roomKeys.members(ws)?.members.find((member) => member.email === keyStore.current()?.account?.email)?.role,
   link: ({ ws, email }: { ws: string; email: string }): string | undefined => keyStore.current()?.account?.links?.[`${ws}/${email}`],
+  linkUntil: ({ ws, email }: { ws: string; email: string }): string | undefined => keyStore.current()?.account?.linksUntil?.[`${ws}/${email}`],
 
   ring(ws: string): Record<number, Bytes> {
     const workspace = roomKeys.room(ws)?.workspace
@@ -60,7 +62,7 @@ export const roomKeys = {
     const plain = await lockInvite({ secret: card.secret, workspace: ws, plain: new TextEncoder().encode(JSON.stringify({ workspace: ws, name, from: account.email, email, role, anchor: await anchorOf(firstOf(room)), expiresAt })) })
     const sealed = plain && await letter({ sender: await keysService.device(), to: card.publicKey, workspace: ws, purpose: 'invite', version: 1, plain })
     if (!sealed) throw new HttpError(500, 'Couldn’t make the invite. Try again.')
-    return { list, id: await inviteId(card.publicKey), key, body: toBase64(sealed), link: `${INVITE_URL}#${toBase64(new TextEncoder().encode(email))}#${ws}.${toBase64(card.secret)}`, expiresAt }
+    return { list, id: await inviteId(card.publicKey), key, body: toBase64(sealed), link: `${INVITE_URL}#${hintOf({ email, from: account.email, team: name })}#${ws}.${toBase64(card.secret)}`, expiresAt }
   },
 
   async revoke({ ws, email }: { ws: string; email: string }): Promise<MemberList> {
@@ -168,9 +170,10 @@ export const roomKeys = {
 
   setRoom: async (room: Room): Promise<void> => keyStore.write(withRoom(await keyStore.read(), room)),
 
-  async keepLink({ ws, email, link }: { ws: string; email: string; link: string }): Promise<void> {
+  async keepLink({ ws, email, link, until }: { ws: string; email: string; link: string; until: string }): Promise<void> {
     const current = await keyStore.read()
-    if (current.account) await keyStore.write({ ...current, account: { ...current.account, links: { ...current.account.links, [`${ws}/${email}`]: link } } })
+    const key = `${ws}/${email}`
+    if (current.account) await keyStore.write({ ...current, account: { ...current.account, links: { ...current.account.links, [key]: link }, linksUntil: { ...current.account.linksUntil, [key]: until } } })
   },
 
   async joinList({ card, chain, anchor, ws }: { card: Identity; chain: MemberList[]; anchor: string; ws: string }): Promise<MemberList> {
@@ -303,4 +306,9 @@ function withRoom(current: Stored, room: Room): Stored {
 
 export async function inviteId(key: Bytes): Promise<string> {
   return `inv_${toBase64(await sha256(key)).slice(0, 22)}`
+}
+
+function hintOf({ email, from, team }: { email: string; from: string; team: string }): string {
+  const full = toBase64(new TextEncoder().encode(`${email}\n${from}\n${team.replace(/\s+/g, ' ').slice(0, 60)}`))
+  return full.length <= HINT_MAX ? full : toBase64(new TextEncoder().encode(email))
 }

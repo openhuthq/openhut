@@ -17,7 +17,7 @@ const Room = z.object({ workspace: z.object({ id: z.string(), ...Keys.shape }), 
 const Stored = z.object({
   device: z.string(),
   machine: z.string(),
-  account: z.optional(z.object({ sub: z.string(), email: z.string(), key: z.string(), vault: z.optional(z.string()), ...Room.shape, teams: z.optional(z.array(Room)), links: z.optional(z.record(z.string(), z.string())) })),
+  account: z.optional(z.object({ sub: z.string(), email: z.string(), key: z.string(), vault: z.optional(z.string()), ...Room.shape, teams: z.optional(z.array(Room)), links: z.optional(z.record(z.string(), z.string())), linksUntil: z.optional(z.record(z.string(), z.string())) })),
   kit: z.optional(KIT),
   locked: z.optional(z.object({ sub: z.string(), email: z.string() })),
   session: z.optional(z.object({ token: z.string(), refresh: z.optional(z.string()), expiresAt: z.string() })),
