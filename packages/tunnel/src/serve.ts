@@ -243,7 +243,7 @@ export function serve(input: ServeInput): { close: () => void } {
   const open = (token: string) => {
     if (stopped) return
     const { every, within } = input.keepalive ?? { every: 30_000, within: 75_000 }
-    const current = new NodeSocket(`${input.relayUrl}/v1/relay/${input.computerId}?role=computer`, { headers: { 'x-openhut-token': token } })
+    const current = new NodeSocket(`${input.relayUrl}/v1/tunnels/${input.computerId}?role=computer`, { headers: { 'x-openhut-token': token } })
     current.binaryType = 'arraybuffer'
     socket = current
     let ping: ReturnType<typeof setInterval> | undefined

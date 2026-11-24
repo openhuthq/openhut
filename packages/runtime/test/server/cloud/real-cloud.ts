@@ -1,3 +1,4 @@
+import type { webcrypto } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 
@@ -35,3 +36,23 @@ export async function devSignIn({ authorizationUrl, email }: { authorizationUrl:
   const location = new URL(back.headers.get('location') ?? 'http://none/')
   return `${location.pathname}${location.search}`
 }
+
+export async function webBrowser({ url, email }: { url: string; email: string }) {
+  const { openhutCloud } = await import('@openhut/common/cloud/openhut-cloud.ts')
+  const { toBase64 } = await import('@openhut/common/vault/vault.ts')
+  const signing = await crypto.subtle.generateKey('Ed25519', false, ['sign', 'verify']) as webcrypto.CryptoKeyPair
+  const tunnel = await crypto.subtle.generateKey('X25519', false, ['deriveBits']) as webcrypto.CryptoKeyPair
+  const raw = async (key: webcrypto.CryptoKey) => new Uint8Array(await crypto.subtle.exportKey('raw', key))
+  const device = toBase64(new Uint8Array([...await raw(signing.publicKey), ...await raw(tunnel.publicKey)]))
+  const kept = new Map<string, unknown>()
+  const store = { get: async <T>(key: string) => kept.get(key) as T | undefined, set: async (key: string, value: unknown) => { kept.set(key, value) } }
+  const key = { id: async () => device, sign: async (bytes: Uint8Array) => new Uint8Array(await crypto.subtle.sign('Ed25519', signing.privateKey, Uint8Array.from(bytes))), noise: async () => ({ publicKey: await raw(tunnel.publicKey), secretKey: new Uint8Array(32) }) }
+  const fetch: typeof globalThis.fetch = (input, init) => globalThis.fetch(input, { ...init, headers: { ...init?.headers as Record<string, string>, origin: WEB } })
+  const client = openhutCloud.device({ url, key, store, fetch })
+  const started = await client.signIn({ google: { returnTo: `${WEB}/signed-in` } })
+  const back = new URL(await devSignIn({ authorizationUrl: started.object === 'redirect' ? started.url : '', email }), WEB)
+  await client.signIn({ googleCode: back.searchParams.get('code') ?? '', state: back.searchParams.get('state') ?? '' })
+  return { device, client, asComputer: openhutCloud.computer({ url, key, store, fetch }) }
+}
+
+const WEB = 'https://app.openhut.dev'

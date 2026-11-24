@@ -97,8 +97,8 @@ test('against the real cloud API: dev sign-in, save the kit, make an agent, chat
     assert.match(over.json<{ error: { message: string } }>().error.message, /already has a recovery kit/)
     await keysService.setKit(saved ?? undefined)
 
-    const token = await keysService.token()
-    const lists = () => fetch(`${cloud.url}/v1/member-lists?workspace=${workspace}`, { headers: { authorization: `Bearer ${token}` } })
+    const token = keysService.session()?.token ?? ''
+    const lists = () => fetch(`${cloud.url}/v1/teams/${workspace}/member-list`, { headers: { authorization: `Bearer ${token}` } })
     assert.equal((await lists()).status, 200)
     const out = await app.inject({ method: 'DELETE', url: '/api/cloud/session', headers })
     assert.equal(out.json<{ status: string }>().status, 'off', out.body)

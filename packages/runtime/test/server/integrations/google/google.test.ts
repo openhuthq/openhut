@@ -14,7 +14,7 @@ const cloud = createServer((req, res) => {
 cloud.listen(0, '127.0.0.1')
 await once(cloud, 'listening')
 const address = cloud.address()
-process.env.OPENHUT_CLOUD_URL = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`
+process.env.OPENHUT_API_URL = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`
 
 const { migrate } = await import('../../../../src/server/platform/db.ts')
 await migrate()

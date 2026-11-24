@@ -2,6 +2,8 @@ import * as z from 'zod/mini'
 import { Letter, MemberList, type MemberListBody, type Role } from '@openhut/common/cloud/cloud.ts'
 import { anchorOf, bodyOf, check, firstOf, keyVersionOf, nextOf, signList, withoutDevices } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64, identity, letter, lock, lockInvite, newKey, sha256, toBase64, unlock, type Bytes, type Identity } from '@openhut/common/vault/vault.ts'
+import { CloudError, type Team } from '@openhut/common/cloud/openhut-cloud.ts'
+import { cloud, sending } from '../platform/cloud.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { keyStore, type Account, type Room, type Stored } from './key-store.ts'
 import { accountDevice, deviceName, keysService, openLetter, ownOf, readSecret, rotateKeys, sealTo, secretOf, type Sent } from './keys-service.ts'
@@ -12,7 +14,7 @@ const INVITE_URL = 'https://openhut.dev/join'
 const Lists = z.object({ data: z.array(MemberList) })
 const Letters = z.object({ data: z.array(Letter) })
 
-export type Call = (input: { method: 'GET' | 'PUT' | 'POST' | 'DELETE'; path: string; body?: unknown }) => Promise<{ status: number; json: unknown }>
+export type Cloudside = Pick<Team, 'lists' | 'letters' | 'take' | 'publish' | 'send'>
 
 export const roomKeys = {
   rooms: (): Room[] => {
@@ -229,20 +231,20 @@ export const roomKeys = {
     return done
   },
 
-  async refresh({ ws, call }: { ws: string; call: Call }): Promise<{ changed: boolean; behind: boolean; gone: boolean }> {
+  async refresh({ ws, team = cloud.team(ws) }: { ws: string; team?: Cloudside }): Promise<{ changed: boolean; behind: boolean; gone: boolean }> {
     const before = roomKeys.members(ws)
-    const reply = await call({ method: 'GET', path: `/v1/member-lists?workspace=${ws}&startingAfter=${before?.version ?? 0}` })
-    if (reply.status === 403) return { changed: false, behind: false, gone: true }
-    const after = await roomKeys.advance({ lists: Lists.safeParse(reply.json).data?.data ?? [], ws })
-    if (before && after) await welcome({ ws, call, before, after })
-    await listKit({ ws, call })
-    return { changed: Boolean(after), behind: await roomKeys.rekey({ ws, call }), gone: false }
+    const lists = await team.lists({ after: before?.version ?? 0 }).catch((error: unknown) => error instanceof CloudError && error.status === 403 ? null : [])
+    if (!lists) return { changed: false, behind: false, gone: true }
+    const after = await roomKeys.advance({ lists, ws })
+    if (before && after) await welcome({ ws, team, before, after })
+    await listKit({ ws, team })
+    return { changed: Boolean(after), behind: await roomKeys.rekey({ ws, team }), gone: false }
   },
 
-  async rekey({ ws, call }: { ws: string; call: Call }): Promise<boolean> {
+  async rekey({ ws, team = cloud.team(ws) }: { ws: string; team?: Cloudside }): Promise<boolean> {
     if (!await behind(ws)) return false
-    const found = Letters.safeParse((await call({ method: 'GET', path: `/v1/letters?workspace=${ws}` })).json).data?.data ?? []
-    for (const id of await roomKeys.takeLetters({ found, ws })) await call({ method: 'DELETE', path: `/v1/letters/${id}` })
+    const found = await team.letters().catch(() => [])
+    for (const id of await roomKeys.takeLetters({ found, ws })) await team.take(id)
     return behind(ws)
   },
 }
@@ -263,7 +265,7 @@ async function behind(ws: string): Promise<boolean> {
   return Boolean(account && found && body && (keyVersionOf(body) > found.workspace.version || (kit && account.key && kit !== await keysService.accountDeviceKey())))
 }
 
-async function listKit({ ws, call }: { ws: string; call: Call }): Promise<void> {
+async function listKit({ ws, team }: { ws: string; team: Cloudside }): Promise<void> {
   const account = keyStore.current()?.account
   const room = roomKeys.room(ws)
   const body = bodyOf(room?.list)
@@ -279,15 +281,18 @@ async function listKit({ ws, call }: { ws: string; call: Call }): Promise<void> 
   const next = withoutDevices({ body: await nextOf({ list: room.list, body, me }), gone })
   const members = next.members.map((member) => member.email === mine.email ? { ...member, devices: adds ? [...member.devices, kit] : member.devices, kit } : member)
   const list = await signList({ signer: await keysService.device(), body: { ...next, members, added: { ...next.added, ...adds && { [kit]: next.at ?? 0 } } } })
-  if ((await call({ method: 'POST', path: '/v1/member-lists', body: { list } })).status === 200) await roomKeys.advance({ lists: [list], ws })
+  if ((await team.publish({ list, letters: [], boxes: [] })).status === 200) await roomKeys.advance({ lists: [list], ws })
 }
 
-async function welcome({ ws, call, before, after }: { ws: string; call: Call; before: MemberListBody; after: MemberListBody }): Promise<void> {
+async function welcome({ ws, team, before, after }: { ws: string; team: Cloudside; before: MemberListBody; after: MemberListBody }): Promise<void> {
   const account = keyStore.current()?.account
   const mine = after.members.find((member) => member.email === account?.email)
   if (!mine || mine.role === 'member' || !account?.key) return
   const fresh = after.members.filter((member) => member.email !== account.email && !before.members.some((each) => each.email === member.email)).flatMap((member) => member.devices)
-  for (const sent of await roomKeys.welcomeLetters({ ws, devices: fresh })) await call({ method: 'POST', path: '/v1/letters', body: { workspace: ws, ...sent } })
+  for (const sent of await roomKeys.welcomeLetters({ ws, devices: fresh })) {
+    sending(ws)
+    await team.send(sent)
+  }
 }
 
 

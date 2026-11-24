@@ -1,8 +1,8 @@
 import * as z from 'zod/mini'
 import { ApiError, List } from '../api.ts'
-import { agentFacts, allowed, runsOnAllowed, type AgentFacts, type Roster } from './allowed.ts'
-import { open, seal, verify, type Keys, type Opened, type Signer, type Value, type Where } from './seal.ts'
-import { PER_AGENT, SealedConflict, SealedRow, type Collection } from './wire.ts'
+import { agentFacts, allowed, runsOnAllowed, type AgentFacts, type Roster } from '../records/allowed.ts'
+import { open, seal, verify, type Keys, type Opened, type Signer, type Value, type Where } from '../records/seal.ts'
+import { PER_AGENT, SealedConflict, SealedRow, type Collection } from '../records/wire.ts'
 
 export type Seen = { ver: number; parent: string | null }
 export type RecordsClient = ReturnType<typeof recordsClient>
@@ -26,20 +26,15 @@ export class RecordsError extends Error {
   }
 }
 
-export function recordsClient({ baseUrl, token, device, keys, roster, seen = () => undefined, fetch: send = globalThis.fetch }: {
-  baseUrl: string
-  token: () => string | Promise<string>
+export type Send = (input: { method: 'GET' | 'PUT'; workspace: string; kind: Collection; id?: string; query?: Record<string, string | number | undefined>; body?: unknown }) => Promise<Reply>
+export type RecordsOptions = {
   device: Signer
   keys: Keys
   roster: (workspace: string) => Roster | null | undefined
   seen?: (id: string, collection: Collection) => Seen | undefined
-  fetch?: typeof globalThis.fetch
-}) {
-  async function call({ method, path, body }: { method: 'GET' | 'PUT'; path: string; body?: unknown }): Promise<Reply> {
-    const headers = { authorization: `Bearer ${await token()}`, ...(body === undefined ? {} : { 'content-type': 'application/json' }) }
-    const response = await send(`${baseUrl}/v1/${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
-    return { status: response.status, json: await response.json().catch(() => null) }
-  }
+}
+
+export function recordsClient({ send: call, device, keys, roster, seen = () => undefined }: RecordsOptions & { send: Send }) {
 
   async function checked({ json, expect, agents }: { json: unknown; expect: Expect; agents: Agents }): Promise<Checked | null> {
     const row = SealedRow.safeParse(json).data
@@ -59,7 +54,8 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
   }
 
   async function fetchAgent({ workspace, id, agents }: { workspace: string; id: string; agents: Agents }): Promise<AgentFacts | null> {
-    const reply = await call({ method: 'GET', path: `agent/${encodeURIComponent(id)}` })
+    const reply = await call({ method: 'GET', workspace, kind: 'agent', id })
+    if (reply.status === 0) throw failure(reply)
     const ok = reply.status === 200 ? await checked({ json: reply.json, expect: { collection: 'agent', workspace, id }, agents }) : null
     return ok && await verify(ok.row) ? agentFacts({ ...ok.row, id }) : null
   }
@@ -83,7 +79,7 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
   }
 
   async function get({ collection, workspace, id }: { collection: Collection; workspace: string; id: string }): Promise<Opened | null> {
-    const reply = await call({ method: 'GET', path: `${collection}/${encodeURIComponent(id)}` })
+    const reply = await call({ method: 'GET', workspace, kind: collection, id })
     if (reply.status === 404) return null
     if (reply.status !== 200) throw failure(reply)
     return accept({ json: reply.json, expect: { collection, workspace, id } })
@@ -97,7 +93,7 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
     if (!list || !allowed({ row: { id: where.id, object: where.collection, ...sealed }, roster: list, mode: 'write', agent })) {
       throw new RecordsError({ status: 403, type: 'invalid_request_error', message: 'The team’s rules don’t let this device write that record.' })
     }
-    const reply = await call({ method: 'PUT', path: `${where.collection}/${encodeURIComponent(where.id)}`, body: sealed })
+    const reply = await call({ method: 'PUT', workspace: where.workspace, kind: where.collection, id: where.id, body: sealed })
     if (reply.status === 409) {
       const current = SealedConflict.safeParse(reply.json).data?.current
       const expect = { collection: where.collection, workspace: where.workspace, parent: where.parent, id: where.id }
@@ -124,8 +120,7 @@ export function recordsClient({ baseUrl, token, device, keys, roster, seen = () 
     get,
 
     async list({ collection, workspace, parent, startingAfter, limit }: { collection: Collection; workspace: string; parent?: string; startingAfter?: string; limit?: number }): Promise<{ data: Opened[]; next: string | null }> {
-      const query = new URLSearchParams({ workspace, ...(parent ? { parent } : {}), ...(startingAfter ? { startingAfter } : {}), ...(limit ? { limit: String(limit) } : {}) })
-      return many({ reply: await call({ method: 'GET', path: `${collection}?${query}` }), expect: { collection, workspace, parent } })
+      return many({ reply: await call({ method: 'GET', workspace, kind: collection, query: { parent, after: startingAfter, limit } }), expect: { collection, workspace, parent } })
     },
 
     put({ collection, workspace, parent = null, id, current = 0, value, reapply }: Omit<Where, 'parent'> & { parent?: string | null; current?: number; value: Value; reapply?: (latest: Opened) => Value | null | Promise<Value | null> }): Promise<Opened> {
@@ -146,5 +141,5 @@ function placedOn(value: Value): unknown {
 
 function failure(reply: Reply): RecordsError {
   const error = ApiError.safeParse(reply.json).data?.error
-  return new RecordsError({ status: reply.status, type: error?.type, message: error?.message ?? `The cloud answered with status ${reply.status}.` })
+  return new RecordsError({ status: reply.status, type: error?.type, message: error?.message ?? (reply.status ? `The cloud answered with status ${reply.status}.` : 'OpenHut Cloud didn’t answer. Check this computer’s internet connection.') })
 }

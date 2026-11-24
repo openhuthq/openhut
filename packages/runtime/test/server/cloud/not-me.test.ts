@@ -63,21 +63,21 @@ test('against the real cloud API: Not me takes the device off your home list and
     await roomKeys.setRoom({ workspace: { id: sara.home, key: toBase64(kit.workspaceKey), version: 1 }, list: saras.list })
 
     const rooms = [{ ws: home, reader: thisMac }, { ws: sara.home, reader: sara }]
-    for (const { ws } of rooms) assert.equal((await kit.call(laptop, 'GET', `/v1/member-lists?workspace=${ws}`)).status, 200)
+    for (const { ws } of rooms) assert.equal((await kit.call(laptop, 'GET', `/v1/teams/${ws}/member-list`)).status, 200)
 
     const removed = await app.inject({ method: 'DELETE', url: `/api/cloud/devices/${encodeURIComponent(laptop.key)}`, headers })
     assert.equal(removed.statusCode, 200, removed.body)
 
     for (const { ws, reader } of rooms) {
-      const lists = await kit.call<{ data: MemberList[]; hasMore: boolean }>(reader, 'GET', `/v1/member-lists?workspace=${ws}`)
+      const lists = await kit.call<{ data: MemberList[]; hasMore: boolean }>(reader, 'GET', `/v1/teams/${ws}/member-list`)
       assert.equal(lists.status, 200)
       assert.equal(lists.json.hasMore, false)
       const latest = bodyOf(lists.json.data.at(-1))
       assert.ok(latest)
       assert.equal(latest.members.some((member) => member.devices.includes(laptop.key)), false, `the laptop is still listed in ${ws}`)
       assert.ok(latest.removed.includes(laptop.key))
-      assert.equal((await kit.call(laptop, 'GET', `/v1/member-lists?workspace=${ws}`)).status, 403)
-      assert.equal((await kit.call(laptop, 'GET', `/v1/agent?workspace=${ws}`)).status, 403)
+      assert.equal((await kit.call(laptop, 'GET', `/v1/teams/${ws}/member-list`)).status, 403)
+      assert.equal((await kit.call(laptop, 'GET', `/v1/teams/${ws}/agent`)).status, 403)
       assert.equal((await kit.put(laptop, { collection: 'agent', workspace: ws, id: kit.newId() })).status, 403)
     }
   } finally {

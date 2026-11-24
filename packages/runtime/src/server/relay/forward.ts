@@ -1,15 +1,14 @@
 import type { WebSocket } from '@fastify/websocket'
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import * as z from 'zod/mini'
-import { connect, type Tunnel } from '@openhut/tunnel'
+import type { Tunnel } from '@openhut/tunnel'
 import { agentService } from '../agents/agent-service.ts'
 import { channelService } from '../channels/channel-service.ts'
 import { keysService } from '../cloud/keys-service.ts'
-import { config } from '../platform/config.ts'
+import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { fromTunnel, memberOf, tunnelKeyOf, who } from '../team/identity.ts'
-import { relayIdOf, tunnelKey } from './relay-service.ts'
 
 const MAX_REASON = 120
 const Id = z.object({ id: z.string() })
@@ -84,9 +83,7 @@ function open(key: string): Promise<Tunnel> {
 }
 
 function reopen(key: string): Promise<Tunnel> {
-  if (!config.relayUrl) return Promise.reject(new HttpError(502, 'This copy of OpenHut has no relay to reach its other computers.'))
-  const relayUrl = config.relayUrl
-  const opening = Promise.all([tunnelKey(), keysService.token()]).then(([mine, token]) => connect({ relayUrl, computer: { id: relayIdOf(Buffer.from(key, 'hex')), key }, key: mine, token }))
+  const opening = cloud.open({ box: key })
   tunnels.set(key, opening)
   opening.catch(() => { if (tunnels.get(key) === opening) tunnels.delete(key) })
   return opening

@@ -5,7 +5,7 @@ import { anchorOf, check, signList } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64, identity, letter, newKey, toBase64, type Identity } from '@openhut/common/vault/vault.ts'
 import { migrate } from '../../../src/server/platform/db.ts'
 import { accountDevice, keysService } from '../../../src/server/cloud/keys-service.ts'
-import { roomKeys, type Call } from '../../../src/server/cloud/room-keys.ts'
+import { roomKeys, type Cloudside } from '../../../src/server/cloud/room-keys.ts'
 
 await migrate()
 const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com' })
@@ -101,10 +101,7 @@ test('in a team room this Mac lists the account key as its kit, moves the mark w
   const v2 = await signList({ signer: boss, body: { workspace: ws, version: 2, previous: await anchorOf(v1), members: [{ email: 'boss@example.com', role: 'owner', devices: [bossKey] }, { email: 'mo@example.com', role: 'member', devices: [mine] }], invites: [], removed: [], at: at + 1, added: { [bossKey]: at, [mine]: at + 1 } } })
   await roomKeys.addTeam({ ws, list: v2, first: v1 })
   const puts: MemberList[] = []
-  await roomKeys.refresh({ ws, call: async ({ method, path, body }) => {
-    if (method === 'POST' && path === '/v1/member-lists') puts.push((body as { list: MemberList }).list)
-    return { status: 200, json: { object: 'list', data: [] } }
-  } })
+  await roomKeys.refresh({ ws, team: fakeTeam({ publish: async ({ list }) => (puts.push(list), { status: 200, json: null }) }) })
   const v3 = puts[0]
   assert.ok(v3)
   const oldKit = await keysService.accountDeviceKey()
@@ -116,10 +113,7 @@ test('in a team room this Mac lists the account key as its kit, moves the mark w
   const kit = await keysService.accountDeviceKey()
   assert.ok(kit && kit !== oldKit)
   assert.equal(changed.letters.some((each) => each.to === kit || each.to === oldKit), false)
-  await roomKeys.refresh({ ws, call: async ({ method, path, body }) => {
-    if (method === 'POST' && path === '/v1/member-lists') puts.push((body as { list: MemberList }).list)
-    return { status: 200, json: { object: 'list', data: [] } }
-  } })
+  await roomKeys.refresh({ ws, team: fakeTeam({ publish: async ({ list }) => (puts.push(list), { status: 200, json: null }) }) })
   const v4 = puts[1]
   assert.ok(v4)
   const moved = await check({ anchor: await anchorOf(v1), chain: [v1, v2, v3, v4] })
@@ -167,10 +161,10 @@ test('a rotation whose answer was lost still lands: its bundle carries a letter 
   assert.equal(roomKeys.room(ws)?.workspace.version, 1)
   const found = letters.filter((each) => each.to === mine).map((each) => ({ ...each, id: 'let_mine', object: 'letter' as const, from: mine, workspace: ws }))
   const deleted: string[] = []
-  const call: Call = async ({ method, path }) => method === 'GET' ? { status: 200, json: { object: 'list', data: found } } : { status: 200, json: deleted.push(path) }
-  assert.equal(await roomKeys.rekey({ ws, call }), false)
+  const cloudside = fakeTeam({ letters: async () => found, take: async (id) => ({ status: 200, json: deleted.push(id) }) })
+  assert.equal(await roomKeys.rekey({ ws, team: cloudside }), false)
   assert.deepEqual([roomKeys.room(ws)?.workspace.version, roomKeys.room(ws)?.workspace.key], [2, room.workspace.key])
-  assert.deepEqual(deleted, ['/v1/letters/let_mine'])
+  assert.deepEqual(deleted, ['let_mine'])
 })
 
 test('an admin revokes an invite: the next list drops it and moves its key to removed, so its link can no longer sign a join', async () => {
@@ -228,3 +222,8 @@ test('a new device remembers who signed the version that added it: another of yo
   assert.equal(roomKeys.joinedBy(toBase64(restored.publicKey)), toBase64(recovery.publicKey))
   assert.equal(roomKeys.joinedBy(toBase64(self.publicKey)), undefined)
 })
+
+function fakeTeam(over: Partial<Cloudside>): Cloudside {
+  const ok = async () => ({ status: 200, json: null })
+  return { lists: async () => [], letters: async () => [], take: ok, publish: ok, send: ok, ...over }
+}

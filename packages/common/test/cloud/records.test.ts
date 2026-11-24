@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { RecordsError } from '../../src/records/client.ts'
+import { RecordsError } from '../../src/cloud/records.ts'
 import { seal } from '../../src/records/seal.ts'
-import { agentWhere, clientOf, fakeCloud, keyOf, keysOf, signerOf, team } from './world.ts'
+import { agentWhere, clientOf, fakeCloud, keyOf, keysOf, signerOf, team } from '../records/world.ts'
 
 async function world() {
   const cloud = fakeCloud()

@@ -3,12 +3,12 @@ import * as z from 'zod/mini'
 import type { MemberListBody } from '@openhut/common/cloud/cloud.ts'
 import { viewersOf } from '@openhut/common/cloud/member-list.ts'
 import type { Roster } from '@openhut/common/records/allowed.ts'
-import { RecordsError, recordsClient, type RecordsClient } from '@openhut/common/records/client.ts'
+import { RecordsError, type RecordsClient } from '@openhut/common/cloud/records.ts'
 import { refreshWithLease, type Secret } from '@openhut/common/records/lease.ts'
 import { signer, type Keyring, type Opened, type Value } from '@openhut/common/records/seal.ts'
 import { COLLECTIONS, type Collection } from '@openhut/common/records/wire.ts'
 import type { Bytes } from '@openhut/common/vault/vault.ts'
-import { config } from '../platform/config.ts'
+import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
 import { log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
@@ -182,9 +182,7 @@ async function clientNow(): Promise<RecordsClient> {
   const vault = keysService.vault()
   const map = await seenMap()
   const ring = (key: Bytes | null | undefined): Keyring | null => key ? { version: 1, keys: { 1: key } } : null
-  return recordsClient({
-    baseUrl: config.apiUrl,
-    token: () => keysService.token(),
+  return cloud.records({
     device: signer(await keysService.device()),
     keys: ({ use, workspace }) => {
       if (use === 'own') return ring(own.get(workspace))
@@ -216,13 +214,13 @@ async function reach<T>(step: () => Promise<T>, workspace?: string): Promise<T> 
 }
 
 function unreachable(error: unknown): boolean {
-  if (error instanceof RecordsError) return error.status >= 500 || error.status === 429
+  if (error instanceof RecordsError) return error.status >= 500 || error.status === 429 || error.status === 0
   if (error instanceof HttpError) return error.status === 502
   return error instanceof TypeError
 }
 
 function httpOf(error: unknown): unknown {
-  if (error instanceof RecordsError) return new HttpError(error.status >= 500 ? 502 : error.status, error.message)
+  if (error instanceof RecordsError) return new HttpError(error.status >= 500 || error.status === 0 ? 502 : error.status, error.message)
   if (error instanceof TypeError) return new HttpError(502, `OpenHut Cloud didn’t answer (${error.message}). Check this computer’s internet connection.`)
   return error
 }

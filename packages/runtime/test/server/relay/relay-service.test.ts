@@ -9,7 +9,7 @@ import { startRelay, TOKEN, waitFor } from '@openhut/tunnel/test/relay.ts'
 
 const relay = await startRelay()
 const { config } = await import('../../../src/server/platform/config.ts')
-config.relayUrl = relay.url
+config.apiUrl = relay.url.replace(/^ws/, 'http')
 const { keyStore } = await import('../../../src/server/cloud/key-store.ts')
 const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
 const { migrate } = await import('../../../src/server/platform/db.ts')

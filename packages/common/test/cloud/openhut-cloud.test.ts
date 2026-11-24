@@ -5,14 +5,16 @@ import { TRUST_CALLS } from '../../src/cloud/openhut-cloud.ts'
 import { ENDPOINTS, pathOf } from '../../src/cloud/endpoints.ts'
 import { KINDS, RULES, SEALED_KINDS, TRUST_KINDS } from '../../src/cloud/rules.ts'
 
-type Trust = (typeof TRUST_CALLS)[number] | keyof Team | 'approve' | 'remove' | 'rotateKeys' | 'records' | 'keyring'
+type Trust = (typeof TRUST_CALLS)[number] | Exclude<keyof Team, 'id'> | 'approve' | 'remove' | 'rotateKeys' | 'keyring'
 type Leaked = Extract<keyof Device, Trust>
 const deviceHasNoTrustCalls: [Leaked] extends [never] ? true : false = true
 const computerIsADevice: Computer extends Device ? true : false = true
+const deviceMakesTheFirstComputerCode: 'firstComputerCode' extends keyof Device ? true : false = true
 
 test('a device client has no trust calls; only a computer can change trust', () => {
   assert.equal(deviceHasNoTrustCalls, true)
   assert.equal(computerIsADevice, true)
+  assert.equal(deviceMakesTheFirstComputerCode, true)
   const device = {} as Device
   // @ts-expect-error a device has no team, so no approve, remove, rotateKeys or records
   void device.team

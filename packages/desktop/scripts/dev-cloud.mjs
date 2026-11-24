@@ -13,7 +13,7 @@ export async function bootCloud({ dir, api, log }) {
     mkdirSync(dirname(log), { recursive: true })
     proc.stdout.pipe(createWriteStream(log))
   }
-  await waitFor(async () => fetch(`${api}/v1/events`).then(() => true, () => null), 120, 'the dev cloud API to listen')
+  await waitFor(async () => fetch(`${api}/health`).then(() => true, () => null), 120, 'the dev cloud API to listen')
   return proc
 }
 
