@@ -283,7 +283,7 @@ function askedAgo(at: string): string {
 }
 
 function SelfJoins({ cloud }: { cloud: Cloud }) {
-  const remove = useRemoveMac()
+  const remove = useRemoveMac({ then: '/settings/general?open=keys' })
   useEffect(() => {
     if (cloud.status !== 'on') return
     const fresh = newDevices({ devices: cloud.devices, known: knownDevices() })
@@ -296,7 +296,7 @@ function SelfJoins({ cloud }: { cloud: Cloud }) {
       const title = recovered ? `A computer used your ${device.os?.startsWith('macOS') ? 'recovery kit or Touch ID' : 'recovery kit'} to join` : `${name} joined your account`
       const how = recovered ? name : joinedNote(device.joined)
       notifyDesktop({ title, body: 'If that wasn’t you, open OpenHut and choose Not mine.', path: '/settings/computers' })
-      notify({ lead: <DeviceIcon kind={device.kind} />, title, note: `${[kind, how].filter(Boolean).join(' · ')}. Not you? Remove it, then reset encryption in Settings › General.`, action: { label: 'Not mine · Remove', onClick: () => remove.mutate(device.key, { onSuccess: () => navigate('/settings/general?open=keys'), onError: toastError }) } })
+      notify({ lead: <DeviceIcon kind={device.kind} />, title, note: `${[kind, how].filter(Boolean).join(' · ')}. Not you? Remove it, then reset encryption in Settings › General.`, action: { label: 'Not mine · Remove', onClick: () => remove.mutate(device.key) } })
     }
   }, [cloud.devices, cloud.status, cloud.email, remove])
   return null
