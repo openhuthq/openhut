@@ -116,10 +116,12 @@ export const roomKeys = {
   async approve({ ws, email, device, name }: { ws: string; email: string; device: string; name?: string | null }): Promise<{ list: MemberList; letter: Sent }> {
     const { room, body } = adminRoom({ ws, sentence: 'Only an owner or admin can let a new device in.' })
     const target = body.members.find((member) => member.email === email)
+    const invited = target ? [] : body.invites.filter((each) => each.email === email)
     if (!room.workspace.key) throw new HttpError(409, 'This computer is still joining the team. Try again in a moment.')
-    if (!target || body.members.some((member) => member.devices.includes(device))) throw new HttpError(409, `${email} isn’t waiting with that device anymore.`)
+    if ((!target && !invited[0]) || body.members.some((member) => member.devices.includes(device))) throw new HttpError(409, `${email} isn’t waiting with that device anymore.`)
     const base = await nextOf({ list: room.list, body, me: await keysService.deviceKey() })
-    const list = await signList({ signer: await keysService.device(), body: { ...base, members: body.members.map((member) => member === target ? { ...member, devices: [...member.devices, device] } : member), added: { ...body.added, [device]: base.at || 0 }, ...name && { names: { ...body.names, [device]: name.slice(0, 64) } } } })
+    const members = target ? body.members.map((member) => member === target ? { ...member, devices: [...member.devices, device] } : member) : [...body.members, { email, role: invited[0]?.role ?? 'member', devices: [device], viewers: [] }]
+    const list = await signList({ signer: await keysService.device(), body: { ...base, members, invites: body.invites.filter((each) => !invited.includes(each)), removed: [...base.removed, ...invited.map((each) => each.key)], added: { ...body.added, [device]: base.at || 0 }, ...name && { names: { ...body.names, [device]: name.slice(0, 64) } } } })
     return { list, letter: await sealTo({ to: device, purpose: 'workspace-key', workspace: ws, plain: await secretOf({ room, own: false }) }) }
   },
 

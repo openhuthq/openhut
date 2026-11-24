@@ -297,6 +297,10 @@ export type CloudAuthorization = z.infer<typeof CloudAuthorization>
 
 export const RecoveryKit = z.object({ object: z.literal('recovery_kit'), words: z.array(z.string()), ask: z.array(z.number().check(z.int())), kitId: z.string(), madeAt: Timestamp, device: z.string() })
 export type RecoveryKit = z.infer<typeof RecoveryKit>
+export const CreateWebLink = z.object({ path: z.string().check(z.regex(/^\/(?!\/)[^#\s\\]{0,500}$/, 'Send the page as a path on this site, like /agents/ag_1.')) })
+export type CreateWebLink = z.infer<typeof CreateWebLink>
+export const WebLink = z.object({ object: z.literal('web_link'), url: z.string(), expiresAt: Timestamp })
+export type WebLink = z.infer<typeof WebLink>
 
 const Prf = canonical({ length: 43, message: 'Send the passkey’s PRF output as 32 bytes of base64url.' })
 export const UnlockCloud = z.union([z.object({ words: z.array(z.string().check(z.maxLength(40))).check(z.length(12)) }), z.object({ prf: Prf })])

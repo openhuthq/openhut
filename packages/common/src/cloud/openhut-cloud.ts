@@ -3,13 +3,13 @@ import * as z from 'zod/mini'
 import { ApiError } from '../api.ts'
 import { OAuthAuthorization, OAuthToken, type CreateOAuthAuthorization, type CreateOAuthToken } from './oauth.ts'
 import { fromBase64, toBase64 } from '../vault/public.ts'
-import { Letter, MemberList, OpenedInvite, type NewInvite } from './cloud.ts'
+import { Letter, MemberList, OpenedInvite, type Member, type NewInvite } from './cloud.ts'
 import { ENDPOINTS, pathOf, SignInStarted, type EndpointName } from './endpoints.ts'
 import { commitOfWeb, facesOfWeb } from './faces-web.ts'
 import { bodyOf } from './member-list.ts'
 import { recordsClient, type RecordsOptions } from './records.ts'
 import type { Kind } from './rules.ts'
-import { JoinCode, KeyBox, Me, proofOf, requestParts, Session, SIGNATURE_HEADER, type NamedKeyBox, type V1Proof } from './v1/identity.ts'
+import { JoinCode, JoinedCode, KeyBox, Me, proofOf, requestParts, Session, SIGNATURE_HEADER, type NamedKeyBox, type V1Proof } from './v1/identity.ts'
 import { JoinRequest, type NewLetter, type PostMemberList } from './v1/trust.ts'
 
 export type Store = {
@@ -57,6 +57,8 @@ export type Computer = Device & {
   serve: (handlers: Handlers) => () => void
   team: (id: string) => Team
   joinCode: () => Promise<JoinCode>
+  webCode: () => Promise<JoinCode>
+  joinedBy: (code: string) => Promise<string | null>
   deleteAccount: () => Promise<Reply>
   keyBoxes: {
     list: () => Promise<KeyBox[] | null>
@@ -69,7 +71,7 @@ export type Computer = Device & {
   oauth: { authorize: (body: CreateOAuthAuthorization) => Promise<OAuthAuthorization>; token: (body: CreateOAuthToken) => Promise<OAuthToken> }
 }
 
-export const TRUST_CALLS = ['serve', 'team', 'joinCode', 'deleteAccount', 'watch', 'oauth'] as const satisfies readonly Exclude<keyof Computer, keyof Device>[]
+export const TRUST_CALLS = ['serve', 'team', 'joinCode', 'webCode', 'joinedBy', 'deleteAccount', 'watch', 'oauth'] as const satisfies readonly Exclude<keyof Computer, keyof Device>[]
 
 export class CloudError extends Error {
   readonly status: number
@@ -169,8 +171,9 @@ function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net:
     const me = await key.id()
     const lists = await listsOf({ net, team })
     const body = bodyOf(lists.at(-1))
-    const mine = body?.members.find((each) => each.email === signedIn?.email)
-    const devices = mine?.devices.filter((device) => device !== me && device !== mine.kit && !body?.removed.includes(device) && !(mine.viewers ?? []).includes(device)) ?? []
+    const reachable = (member: Member | undefined) => member?.devices.filter((device) => device !== me && device !== member.kit && !body?.removed.includes(device) && !(member.viewers ?? []).includes(device)) ?? []
+    const mine = reachable(body?.members.find((each) => each.email === signedIn?.email))
+    const devices = mine.length ? mine : reachable(body?.members.find((each) => each.role === 'owner'))
     return devices.map((device) => ({ device, name: body?.names?.[device] ?? null }))
   }
 
@@ -321,6 +324,8 @@ function computerOf({ url, key, store, fetch }: { url: Url; key: ComputerIdentit
 
     team: (id) => teamOf({ net, id }),
     joinCode: () => net.ok({ name: 'createJoinCode', reply: JoinCode }),
+    webCode: () => net.ok({ name: 'createJoinCode', body: { web: true }, reply: JoinCode }),
+    joinedBy: async (code) => (await net.ok({ name: 'getJoinCode', params: { code }, reply: JoinedCode })).device,
     deleteAccount: () => net.call({ name: 'deleteMe' }),
 
     keyBoxes: {

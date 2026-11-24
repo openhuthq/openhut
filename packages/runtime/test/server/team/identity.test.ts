@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { statSync } from 'node:fs'
 import { request, type RequestOptions } from 'node:http'
@@ -9,6 +9,7 @@ import Fastify from 'fastify'
 import { bodyOf, signList } from '@openhut/common/cloud/member-list.ts'
 import { identity, newKey, toBase64 } from '@openhut/common/vault/public.ts'
 import { agentController } from '../../../src/server/agents/agent-controller.ts'
+import { visibleTo } from '../../../src/server/agents/agent-service.ts'
 import { cloudController } from '../../../src/server/cloud/cloud-controller.ts'
 import { keyStore } from '../../../src/server/cloud/key-store.ts'
 import { keysService } from '../../../src/server/cloud/keys-service.ts'
@@ -18,13 +19,15 @@ import { config } from '../../../src/server/platform/config.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
 import { validateWithZod } from '../../../src/server/platform/validation.ts'
-import { listenLocally, tagDevice, tunnelKeyOf, who } from '../../../src/server/team/identity.ts'
+import { listenLocally, stepUp, tagDevice, tunnelKeyOf, who } from '../../../src/server/team/identity.ts'
+import { userPresence } from '../../../src/server/cloud/user-presence.ts'
 import { meController } from '../../../src/server/team/team-controller.ts'
 
 await migrate()
 const app = Fastify()
 answerErrors(app)
 app.setValidatorCompiler(validateWithZod)
+app.addHook('preHandler', stepUp)
 app.get('/caller', async (req) => who(req))
 for (const url of ['/api/threads/:id', '/api/threads/:id/chat']) app.route({ method: url.endsWith('chat') ? 'POST' : 'GET', url, handler: async (req) => who(req) })
 await app.register(meController, { prefix: '/api/me' })
@@ -119,11 +122,56 @@ test('over the tunnel your own device (a phone, a browser) uses the whole app, b
   for (const [method, path, body] of [
     ['POST', `/api/cloud/workspaces/${TEAM}/requests/${toBase64(stranger.publicKey)}/approvals`, undefined],
     ['DELETE', `/api/cloud/devices/${toBase64(stranger.publicKey)}`, undefined],
-    ['POST', '/api/cloud/kits', undefined],
     ['POST', '/api/cloud/sessions', undefined],
     ['DELETE', '/api/cloud/session', undefined],
     ['DELETE', '/api/cloud', undefined],
   ] as const) assert.equal((await ask({ createConnection: device(VIEWER), method, path, body })).status, 403, `${method} ${path}`)
+})
+
+test('W5: on a server that is the account’s only computer, your browser saves the first recovery kit over the tunnel; once a kit exists, the kit stays on a computer', async () => {
+  const kits = async () => (await ask({ createConnection: device(VIEWER), method: 'POST', path: '/api/cloud/kits' })).status
+  const kit = mock.method(keysService, 'kitState', () => ({ saved: null, pending: null }))
+  try {
+    assert.notEqual(await kits(), 403)
+    kit.mock.mockImplementation(() => ({ saved: { box: 'b', savedAt: '2026-11-24T10:00:00Z' }, pending: null }))
+    assert.equal(await kits(), 403)
+  } finally {
+    kit.mock.restore()
+  }
+})
+
+test('SEC2: a powerful change from your browser waits for this computer’s approval (Touch ID here), and goes through only once it is given; chat never asks', async () => {
+  const reasons: string[] = []
+  let answer = false
+  const presence = mock.method(userPresence, 'ask', async (reason: string) => { reasons.push(reason); return answer })
+  try {
+    const change = () => ask({ createConnection: device(VIEWER), method: 'PATCH', path: '/api/agents/ag_tprivate', body: { instructions: '# New' } })
+    const refused = await change()
+    assert.equal(refused.status, 403)
+    assert.match(JSON.stringify(refused.body), /Not confirmed on your computer/)
+    answer = true
+    assert.notEqual((await change()).status, 403, 'after the computer confirms, the same request goes through')
+    assert.notEqual((await ask({ createConnection: device(VIEWER), method: 'DELETE', path: '/api/agents/ag_tnothere' })).status, 403)
+    assert.equal(reasons.length, 3)
+    answer = false
+    assert.notEqual((await ask({ createConnection: device(VIEWER), method: 'PATCH', path: '/api/agents/ag_tprivate', body: { wanted: 'stopped' } })).status, 403, 'starting or stopping isn’t powerful')
+    assert.equal((await ask({ createConnection: device(VIEWER), method: 'POST', path: '/api/threads/ag_tprivate/chat', body: {} })).status, 200)
+    assert.notEqual((await ask({ socketPath: config.socket, method: 'PATCH', path: '/api/agents/ag_tprivate', body: { instructions: '# Here' } })).status, 403, 'the computer’s own window never steps up')
+    assert.equal(reasons.length, 3)
+  } finally {
+    presence.mock.restore()
+  }
+})
+
+test('SEC10: over the tunnel a teammate lists only the agents shared in their teams, and reaches nothing else of the owner’s', async () => {
+  const all = [{ id: 'shared', workspace: TEAM, personal: false }, { id: 'private', workspace: TEAM, personal: true }, { id: 'home', workspace: 'home', personal: false }]
+  assert.deepEqual(visibleTo({ actor: { teammate: [TEAM] }, all }).map((each) => each.id), ['shared'])
+  assert.deepEqual(visibleTo({ actor: {}, all }).map((each) => each.id), ['shared', 'private', 'home'])
+  const caller = await ask({ createConnection: device(TEAMMATE), path: '/api/agents' })
+  assert.notEqual(caller.status, 403, 'a teammate may list, and the list holds only what is shared with them')
+  for (const [method, path] of [['GET', '/api/agents/ag_tshared'], ['GET', '/api/me'], ['GET', '/api/cloud'], ['GET', '/api/admin'], ['POST', '/api/cloud/web-links']] as const) {
+    assert.equal((await ask({ createConnection: device(TEAMMATE), method, path, body: method === 'POST' ? { path: '/' } : undefined })).status, 403, `${method} ${path}`)
+  }
 })
 
 test('over the tunnel a teammate chats only with agents shared in their workspace, and a stranger gets nothing', async () => {

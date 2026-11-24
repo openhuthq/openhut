@@ -31,7 +31,7 @@ import { cloudController } from './cloud/cloud-controller.ts'
 import { cloudService } from './cloud/cloud-service.ts'
 import { runSet } from './cloud/run-set.ts'
 import { settings } from './platform/settings.ts'
-import { listenLocally } from './team/identity.ts'
+import { listenLocally, stepUp } from './team/identity.ts'
 import { keysService } from './cloud/keys-service.ts'
 
 await migrate()
@@ -53,6 +53,7 @@ app.addHook('onSend', async (_req, reply) => {
 
 await app.register(websocket)
 app.addHook('preHandler', forward.http)
+app.addHook('preHandler', stepUp)
 await app.register(healthController, { prefix: '/health' })
 await app.register(meController, { prefix: '/api/me' })
 await app.register(invitationController, { prefix: '/api/invitations' })

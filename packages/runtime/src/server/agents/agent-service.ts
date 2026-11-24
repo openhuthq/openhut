@@ -41,7 +41,7 @@ const held = new Map<string, boolean>()
 export const agentService = {
   async list({ actor }: { actor: Caller }): Promise<Agent[]> {
     const [all, states] = await Promise.all([everything(), containerStates()])
-    return Promise.all(all.map((facts) => agentOf({ facts, actor, states })))
+    return Promise.all(visibleTo({ actor, all }).map((facts) => agentOf({ facts, actor, states })))
   },
 
   async get({ actor, id }: { actor: Caller; id: string }): Promise<Agent> {
@@ -265,6 +265,11 @@ function requireRunner({ facts, runsOn, me }: { facts: AgentFacts; runsOn: strin
   const list = roomKeys.members(facts.workspace)
   const ok = runsOn === me || (!!list && !viewersOf(list).includes(runsOn) && !list.removed.includes(runsOn) && list.members.some((member) => member.email === facts.owner && member.kit !== runsOn && member.devices.includes(runsOn)))
   if (!ok) throw new HttpError(400, `${facts.value.name} can only run on one of ${facts.owner}'s own computers.`, { param: 'runsOn' })
+}
+
+export function visibleTo<T extends Pick<AgentFacts, 'personal' | 'workspace'>>({ actor, all }: { actor: Pick<Caller, 'teammate'>; all: T[] }): T[] {
+  const { teammate } = actor
+  return teammate ? all.filter((facts) => !facts.personal && teammate.includes(facts.workspace)) : all
 }
 
 function workspaces(): string[] {

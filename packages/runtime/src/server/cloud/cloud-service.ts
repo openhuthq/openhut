@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { FastifyReply } from 'fastify'
 import * as z from 'zod/mini'
-import { type Backup, KeyBox, type Letter, type MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type UnlockCloud, faceName, KNOCK_MS, siteHost } from '@openhut/common/cloud/cloud.ts'
+import { type Backup, KeyBox, type Letter, type MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type UnlockCloud, type CreateWebLink, type WebLink, faceName, KNOCK_MS, siteHost } from '@openhut/common/cloud/cloud.ts'
 import type { Health } from '@openhut/common/admin/admin.ts'
 import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
 import { facesOf } from '@openhut/common/cloud/faces.ts'
@@ -34,6 +34,8 @@ const IDLE: Backup = { state: 'idle', done: 0, total: 0, current: null, at: null
 const CHANGED = 'Someone changed this team a moment ago. Try again.'
 const ROTATE = 'cloud_rotate'
 const ASK_POLL_MS = 2000
+const WEB_POLL_MS = 1000
+const WEB_GRACE_MS = 5000
 let signInError: string | null = null
 let boxesDiffer = false
 let checkedAt = 0
@@ -151,7 +153,7 @@ export const cloudService = {
       return cloudService.status()
     }
     const approved = await keyring.approve({ team: workspace, email: asked.email, device, name: asked.name })
-    await putList({ workspace, list: approved.list, letters: [approved.letter] })
+    await putList({ workspace, list: approved.list, letters: asked.os === 'web' ? [] : [approved.letter] })
     await cloudEvents.refreshRequests(workspace)
     return cloudService.status()
   },
@@ -380,6 +382,14 @@ export const cloudService = {
     return cloud.joinCode().catch((): never => { throw new HttpError(502, 'OpenHut Cloud couldn’t make a join code. Try again.') })
   },
 
+  async continueInWeb({ path }: CreateWebLink): Promise<WebLink> {
+    const { workspace } = keysService.mustBeOn()
+    if (!await userPresence.ask('open this page in your browser, signed in')) throw new HttpError(403, 'Not confirmed. Nothing was opened.', { param: 'presence' })
+    const made = await cloud.webCode().catch((): never => { throw new HttpError(502, 'OpenHut Cloud couldn’t make a link for your browser. Try again.') })
+    void letInBrowser({ workspace: workspace.id, code: made.code, until: Date.parse(made.expiresAt) + WEB_GRACE_MS }).catch((err: unknown) => log.warn({ event: 'cloud.web_let_in_failed', error: messageOf(err) }))
+    return { object: 'web_link', url: `${config.webUrl}${path}#continue=${made.code}`, expiresAt: made.expiresAt }
+  },
+
   async joining(): Promise<Health['join']> {
     if (!config.join) return undefined
     if (keysService.account()) return { state: 'joined', error: null }
@@ -475,6 +485,19 @@ async function joinAsServer(code: string): Promise<void> {
   log.info({ event: 'cloud.first_computer', workspace: home })
   cloudEvents.start()
   if (me.maker) void letInMaker({ workspace: home, device: me.maker }).catch((err: unknown) => log.warn({ event: 'cloud.let_in_failed', error: messageOf(err) }))
+}
+
+async function letInBrowser({ workspace, code, until }: { workspace: string; code: string; until: number }): Promise<void> {
+  for (; Date.now() < until; await new Promise((done) => setTimeout(done, WEB_POLL_MS))) {
+    const device = await cloud.joinedBy(code).catch(() => null)
+    if (!device) continue
+    await serial(async () => {
+      const list = await keysService.addDevice({ device, name: 'Browser (web)', runtime: false })
+      if (list) await putList({ workspace, list })
+    })
+    log.info({ event: 'cloud.web_let_in', workspace })
+    return
+  }
 }
 
 async function letInMaker({ workspace, device }: { workspace: string; device: string }): Promise<void> {

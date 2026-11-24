@@ -22,6 +22,7 @@ export const config = {
   gatewayPort: GATEWAY_PORT,
   releaseUrl: process.env.OPENHUT_URL ?? 'https://openhut.dev',
   apiUrl: API_URL,
+  webUrl: (process.env.OPENHUT_WEB_URL || 'https://app.openhut.dev').replace(/\/$/, ''),
   socket: process.env.OPENHUT_SOCKET ?? join(DATA, 'openhut.sock'),
   installKind: installKindOf(process.env.OPENHUT_SOCKET ? 'desktop' : 'server'),
   personal: Boolean(process.env.OPENHUT_SOCKET) || process.env.OPENHUT_PERSONAL === '1',

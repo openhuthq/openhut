@@ -10,6 +10,8 @@ import * as z from 'zod/mini'
 import { bodyOf } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64 } from '@openhut/common/vault/public.ts'
 import { keyStore } from '../cloud/key-store.ts'
+import { keysService } from '../cloud/keys-service.ts'
+import { userPresence } from '../cloud/user-presence.ts'
 import { config } from '../platform/config.ts'
 import { db, isUniqueViolation } from '../platform/db.ts'
 import { emit } from '../platform/events.ts'
@@ -20,6 +22,23 @@ const LOCAL = Symbol('local')
 const DEVICE = Symbol('device')
 const TRUST = /^(POST|PUT|PATCH|DELETE) \/api\/cloud(\/|$)/
 const TEAMMATES = new Set(['GET /api/threads/:id', 'POST /api/threads/:id/chat'])
+const TEAMMATE_LISTS = new Set(['GET /api/agents'])
+const SERVER_KIT = 'POST /api/cloud/kits'
+const CHANGES = ['instructions', 'codeExecution', 'browser', 'runsHere', 'runsOn', 'shared', 'model']
+const STEP_UP: Record<string, (body: unknown) => boolean> = {
+  'POST /api/agents': () => config.installKind !== 'server',
+  'PATCH /api/agents/:id': (body) => typeof body === 'object' && body !== null && CHANGES.some((field) => field in body),
+  'DELETE /api/agents/:id': () => true,
+  'POST /api/grants': () => true,
+  'DELETE /api/grants/:id': () => true,
+  'POST /api/change-requests/:id/approve': () => true,
+  'POST /api/connections': () => true,
+  'DELETE /api/connections/:id': () => true,
+  'POST /api/connection-authorizations': () => true,
+  'PATCH /api/providers/:id': () => true,
+  'POST /api/providers/:id/refresh': () => true,
+  'DELETE /api/providers/:id': () => true,
+}
 const IdParams = z.object({ id: z.string() })
 
 export async function who(req: FastifyRequest): Promise<Caller> {
@@ -28,10 +47,17 @@ export async function who(req: FastifyRequest): Promise<Caller> {
   if (device === undefined) throw new HttpError(401, 'Send the key the OpenHut app enrolled with this computer, as Authorization: Bearer <key>.')
   const member = memberOf(device)
   if (!member) throw new HttpError(401, 'This device isn’t on your list anymore, so it can’t reach this computer.')
-  const route = `${req.method} ${req.routeOptions.url ?? ''}`
-  const allowed = member.own ? !TRUST.test(route) : TEAMMATES.has(route) && await sharedWith({ req, workspaces: member.workspaces })
+  const route = routeOf(req)
+  const allowed = member.own ? !TRUST.test(route) || firstKitOnAServer(route) : TEAMMATE_LISTS.has(route) || (TEAMMATES.has(route) && await sharedWith({ req, workspaces: member.workspaces }))
   if (!allowed) throw new HttpError(403, member.own ? 'Do this on your computer: devices, keys, the recovery kit and sign-in change only in the OpenHut app there.' : 'You can only chat with the agents your team shares.')
-  return { id: (await owner()).id, email: member.email, local: false }
+  return { id: (await owner()).id, email: member.email, local: false, ...!member.own && { teammate: member.workspaces } }
+}
+
+export async function stepUp(req: FastifyRequest): Promise<void> {
+  const { device } = arrival(req)
+  const member = device === undefined ? undefined : memberOf(device)
+  if (!member?.own || !STEP_UP[routeOf(req)]?.(req.body)) return
+  if (!await userPresence.ask('let your browser or phone make this change')) throw new HttpError(403, 'Not confirmed on your computer, so nothing changed. Confirm it there to go ahead.', { param: 'presence' })
 }
 
 export async function requireSignIn(req: FastifyRequest): Promise<void> {
@@ -89,6 +115,14 @@ function arrival(req: FastifyRequest): { local: boolean; device?: string } {
   return { local: enrolled(req.headers.authorization) }
 }
 
+function routeOf(req: FastifyRequest): string {
+  return `${req.method} ${req.routeOptions.url ?? ''}`
+}
+
+function firstKitOnAServer(route: string): boolean {
+  return route === SERVER_KIT && config.installKind === 'server' && !keysService.kitState().saved
+}
+
 async function sharedWith({ req, workspaces }: { req: FastifyRequest; workspaces: string[] }): Promise<boolean> {
   const agentId = z.safeParse(IdParams, req.params).data?.id
   const agent = agentId ? await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', agentId).executeTakeFirst() : undefined
@@ -115,4 +149,4 @@ async function claimOwner(): Promise<Owner> {
 }
 
 type Owner = { id: string; email: string }
-export type Caller = Owner & { local: boolean }
+export type Caller = Owner & { local: boolean; teammate?: string[] }
