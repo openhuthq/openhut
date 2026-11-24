@@ -1,16 +1,17 @@
 import { useState } from 'react'
-import { Cancel01Icon, Globe02Icon, SquareLock02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, Globe02Icon, Mail01Icon, SquareLock02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { EmptyState } from '@/components/empty-state'
 import { PersonFace } from '@/components/custom/person-face'
-import { Choice, I, MenuCard, PILL } from '@/components/kit'
+import { Choice, I, MenuCard } from '@/components/kit'
 import { nameOf } from '@/features/cloud/seen'
-import { searchPeople } from '@/features/agents/form'
+import { looksLikeEmail, searchPeople } from '@/features/agents/form'
+import { useInvite } from '@/features/cloud/workspaces'
+import { copyText } from '@/lib/clipboard'
+import { toast } from '@/lib/toast'
 import { SOFT_TRIGGER } from '@/features/models/model-picker'
-import { navigate } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
 export type AccessValue = { shared: boolean; people: string[]; sidebars: string[] }
@@ -36,18 +37,25 @@ export function PeopleField({ workspace, owner, value, onChange, disabled }: { w
   const field = value.shared ? 'sidebars' : 'people'
   const added = value[field]
   const found = searchPeople({ members: workspace.members.map((member) => member.email), owner, added, query })
-  const invite = <Button type="button" variant="secondary" className={PILL} onClick={() => navigate('/settings/people?open=invite')}>Invite</Button>
+  const invite = useInvite()
   const add = (email: string) => { onChange({ ...value, [field]: [...added, email] }); setQuery('') }
+  const inviteOf = (email: string) => invite.mutate({ workspace: workspace.id, email, role: 'member' }, {
+    onSuccess: async ({ link }) => { setQuery(''); if (!await copyText(link)) return toast(link); toast(`Invite link copied. Send it to ${email}. It works once, for 2 days.`) },
+    onError: (error) => toast(error.message),
+  })
+  const row = 'h-8 justify-start gap-2 rounded-md px-2 text-[13px] font-normal hover:bg-hover'
   return <div className="flex w-full flex-col gap-1.5 text-left">
-    {found.kind !== 'alone' && <Input value={query} disabled={disabled} onChange={(event) => setQuery(event.currentTarget.value)} aria-label={value.shared ? 'Add to sidebars of' : 'Share with'} placeholder={value.shared ? 'Add to sidebars of…' : 'Share with…'} autoComplete="off" spellCheck={false}
-        onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); if (found.kind === 'found' && found.emails[0] && query.trim()) add(found.emails[0]) } }} className="h-9 rounded-lg text-[13px]" />}
-    {found.kind === 'none' && <EmptyState inline line={`No one on your team matches “${found.query}”. Invite them by email?`} action={invite} className="px-0" />}
-    {found.kind === 'found' && query.trim() && <div role="listbox" aria-label="Teammates" className="flex flex-col rounded-lg border border-hair p-1">
-      {found.emails.map((email) => <Button key={email} type="button" variant="bare" role="option" aria-selected={false} onClick={() => add(email)} className="h-8 justify-start gap-2 rounded-md px-2 text-[13px] font-normal hover:bg-hover">
+    <Input value={query} disabled={disabled} onChange={(event) => setQuery(event.currentTarget.value)} aria-label={value.shared ? 'Add to sidebars of' : 'Share with people'} placeholder={value.shared ? 'Add to sidebars of…' : 'Share with people…'} autoComplete="off" spellCheck={false}
+      onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); if (found.kind === 'found' && found.emails[0] && query.trim()) add(found.emails[0]) } }} className="h-9 rounded-lg text-[13px]" />
+    {query.trim() && <div role="listbox" aria-label="Teammates" className="flex flex-col rounded-lg border border-hair p-1">
+      {found.kind === 'found' && found.emails.map((email) => <Button key={email} type="button" variant="bare" role="option" aria-selected={false} onClick={() => add(email)} className={row}>
         <PersonFace name={nameOf(email)} email={email} size={20} /><span className="truncate">{nameOf(email)}</span><span className="truncate text-mute">{email}</span>
       </Button>)}
+      {found.kind === 'none' && (looksLikeEmail(found.query)
+        ? <Button type="button" variant="bare" role="option" aria-selected={false} disabled={invite.isPending} onClick={() => inviteOf(found.query)} className={row}><I icon={Mail01Icon} size={15} className="text-mute" /><span className="truncate">{invite.isPending ? 'Making the link…' : `Invite ${found.query}`}</span></Button>
+        : <p className="m-0 px-2 py-1.5 text-[12.5px] text-mute">No one on your team matches. Type their email to invite them.</p>)}
     </div>}
-    {found.kind !== 'alone' && <p className="m-0 text-[12px]/[16px] text-mute">{value.shared ? 'They see it in their sidebar. Add no one and it shows for everyone.' : 'People you add can chat with this agent and see its chats.'}</p>}
+    <p className="m-0 text-[12px]/[16px] text-mute">{value.shared ? 'They see it in their sidebar. Add no one and it shows for everyone.' : 'People you add can chat with this agent and see its chats.'}</p>
     <ul className="m-0 flex list-none flex-col p-0">
       <Person email={owner} role="Owner" />
       {added.map((email) => <Person key={email} email={email} role={value.shared ? 'In sidebar' : 'Can chat'} onRemove={disabled ? undefined : () => onChange({ ...value, [field]: added.filter((each) => each !== email) })} />)}
