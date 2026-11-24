@@ -22,9 +22,9 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   key broker on :8081), `admin/`, and
   `integrations/<service>/`. `src/agentd/` is the root helper: the only process that starts agents (gVisor on servers, native in the app on
   Mac, Windows and Linux: a plain Hermes process per agent, or memory, `private/brain/decisions/sandbox-module.md`), on a Unix socket on a server; in the app the server runs its command table in its own process (`src/agentd/serve.ts`). Tests mirror them in `test/server/` and `test/agentd/`.
-- **`packages/desktop`** — `@openhut/desktop`, the Mac, Windows and Linux app (`private/brain/decisions/desktop-app.md`): Electron main (`src/main.mjs`, starts the server, which runs agentd inside it,
-  serves the renderer on `app://openhut`) and the React dashboard in `src/renderer` (Vite to `dist/renderer`, TanStack
-  Query), which calls `/api/*` on `app://openhut`; the main process forwards it to the runtime's socket. Tailwind v4 with shared components in `src/renderer/src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`private/brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
+- **`packages/app`** — `@openhut/app`, the App: the React dashboard (Vite to `dist`, TanStack Query), one build that the desktop shell, the phone and the Cloud (app.openhut.dev) serve as the same bytes. It reads `/config.json` (`{ cloud, local? }`) at start: `local` means the page's own origin answers `/api` (the desktop shell, and `npm run dev`); without it the App reaches computers through the Cloud's tunnel (`lib/remote.ts`). Tailwind v4 with shared components in `src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`private/brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
+- **`packages/desktop`** — `@openhut/desktop`, the Mac, Windows and Linux shell (`private/brain/decisions/desktop-app.md`): Electron main (`src/main.mjs`, starts the server, which runs agentd inside it,
+  serves the App's `dist` (copied to `dist/renderer` by `build`) and `/config.json` on `app://openhut`), and forwards `/api/*` there to the runtime's socket.
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.
 - **`packages/tunnel`** — `@openhut/tunnel`, the encrypted tunnel (through the relay; `sessions()` runs it over any pipe): Noise IK on `noise-handshake`,
   the frame codec, `connect` (device) and `serve` (computer); a computer shows its access token as `x-openhut-token`, a device as the second WebSocket subprotocol after `openhut`, so `connect` runs in browsers too, with a non-exportable WebCrypto key (`newWebKeyPair`, `webKey`; `private/brain/decisions/browser-keys.md`).
@@ -109,7 +109,7 @@ Which loop proves which change:
 - Packaging, signing, installers, OS-specific behavior: a manual Shell run on the branch (`gh workflow run shell.yml --ref <branch>`).
   It also runs by itself when a main push changes the shell. CI never packages, and it is the merge gate, never the loop: don't wait on it to see a change working.
 
-The dashboard reaches the desktop app only through `packages/desktop/src/renderer/src/lib/desktop.ts` (`desktop` is
+The dashboard reaches the desktop app only through `packages/app/src/lib/desktop.ts` (`desktop` is
 `undefined` in a browser, and every caller handles that); a test keeps it the only place. Prefer moving work out of
 the main process into the runtime's `/api` over adding a `desktop` call, so it runs in the browser too.
 

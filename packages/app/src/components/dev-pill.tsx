@@ -1,7 +1,7 @@
 import { desktop } from '@/lib/desktop'
+import { config } from '@/lib/config'
 
-
-export const DEV_LABEL: string | undefined = desktop?.dev ?? import.meta.env.VITE_OPENHUT_DEV ?? (import.meta.env.DEV ? 'Dev' : undefined)
+export const DEV_LABEL: string | undefined = desktop?.dev ?? config.dev ?? (import.meta.env.DEV ? 'Dev' : undefined)
 
 export function DevPill() {
   if (!DEV_LABEL) return null

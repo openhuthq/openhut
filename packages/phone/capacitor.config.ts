@@ -4,7 +4,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 const config: CapacitorConfig = {
   appId: 'dev.openhut.app',
   appName: 'OpenHut',
-  webDir: '../desktop/dist/renderer',
+  webDir: '../app/dist',
   backgroundColor: '#f7f7f7',
   ios: { scrollEnabled: false },
   loggingBehavior: 'none',

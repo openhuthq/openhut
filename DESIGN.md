@@ -1,6 +1,6 @@
 # Design
 
-How the dashboard (`packages/desktop/src/renderer`) looks and why. The look lives in the shared components in `packages/desktop/src/renderer/src/components/ui/` (Tailwind and cva variants over Base UI) and the tokens in `packages/desktop/src/renderer/src/index.css`; this file is the rules behind them.
+How the dashboard (`packages/app`) looks and why. The look lives in the shared components in `packages/app/src/components/ui/` (Tailwind and cva variants over Base UI) and the tokens in `packages/app/src/index.css`; this file is the rules behind them.
 
 ## Buttons
 

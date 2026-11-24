@@ -3,22 +3,20 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-const RELAYS: Record<string, string[]> = { phone: ['wss://cloud.openhut.dev'], 'phone-debug': ['wss://cloud.openhut.dev', process.env.OPENHUT_CLOUD_URL?.replace(/^http/, 'ws') ?? 'ws://127.0.0.1:8790'], web: [process.env.VITE_OPENHUT_RELAY_URL ?? 'wss://cloud.openhut.dev', new URL(process.env.VITE_OPENHUT_API_URL ?? 'https://cloud.openhut.dev/api').origin] }
+const DEV_CONFIG = JSON.stringify({
+  cloud: process.env.OPENHUT_API_URL ?? 'https://cloud.openhut.dev/api',
+  ...process.env.OPENHUT_WEB === '1' ? {} : { local: true },
+  ...process.env.OPENHUT_DEV_LABEL ? { dev: process.env.OPENHUT_DEV_LABEL } : {},
+})
 
-function policy(relays: string[]): Plugin {
-  const csp = [
-    "default-src 'self'", "script-src 'self' 'wasm-unsafe-eval'", "style-src 'self' 'unsafe-inline'", "img-src 'self' data: blob:", "font-src 'self' data:",
-    `connect-src 'self' capacitor://localhost ${relays.join(' ')}`, "object-src 'none'", "base-uri 'none'", "form-action 'none'", "frame-src 'none'",
-  ].join('; ')
-  return { name: 'phone-csp', apply: 'build', transformIndexHtml: () => [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: csp }, injectTo: 'head-prepend' }] }
+function devConfig(): Plugin {
+  return { name: 'config-json', apply: 'serve', configureServer: (server) => { server.middlewares.use('/config.json', (_req, res) => { res.setHeader('content-type', 'application/json'); res.end(DEV_CONFIG) }) } }
 }
 
-export default defineConfig(({ mode }) => {
-  const relays = RELAYS[mode]
-  return {
-    plugins: [react(), tailwindcss(), ...relays ? [policy(relays)] : []],
-    resolve: { alias: { '@': path.resolve(import.meta.dirname, './src'), 'sodium-native': 'sodium-javascript' } },
-    build: { outDir: '../../dist/renderer', emptyOutDir: true },
-    server: { proxy: Object.fromEntries(['/api', '^/c/'].map((path) => [path, { target: `http://127.0.0.1:${process.env.PORT ?? 8787}`, ws: true, headers: { authorization: 'Bearer dev' } }])) },
-  }
+export default defineConfig({
+  root: import.meta.dirname,
+  plugins: [react(), tailwindcss(), devConfig()],
+  resolve: { alias: { '@': path.resolve(import.meta.dirname, './src'), 'sodium-native': 'sodium-javascript' } },
+  build: { outDir: 'dist', emptyOutDir: true, target: 'es2022' },
+  server: { proxy: Object.fromEntries(['/api', '^/c/'].map((path) => [path, { target: `http://127.0.0.1:${process.env.PORT ?? 8787}`, ws: true, headers: { authorization: 'Bearer dev' } }])) },
 })
