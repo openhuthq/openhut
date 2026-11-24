@@ -208,7 +208,7 @@ async function refreshKeys(ws: string): Promise<void> {
   const list = roomKeys.members(ws)
   const me = await keysService.deviceKey()
   const home = ws === keysService.account()?.workspace.id
-  if (out && !home) return refusedOnce(ws)
+  if (out) return home ? checkRemoved() : refusedOnce(ws)
   if (home && list && !list.members.some((member) => member.devices.includes(me))) return removedNow(ws)
   if (list) presence.members({ ws, emails: list.members.map((member) => member.email) })
   if (moved) emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
