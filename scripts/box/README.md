@@ -31,6 +31,7 @@ Everything lands in `$BOX_E2E_OUT/<run-id>/` (default `plan/deploy-evidence/<run
 - **Address.** `install` makes two previews (Box previews only ports bound on `0.0.0.0`, so each is a `socat` systemd unit):
   `:8788` to Caddy on :80, where the first visitor creates the owner, and `:8789` to the app on 127.0.0.1:8787, to give as the
   address (Caddy then tries Let's Encrypt for it and fails, which is expected; the real certificate is tested at deploy).
-  `RUNTIME_IMAGE=<ref>` in the environment installs that image instead of the pinned one.
-- **Join (M2).** The runtime can't hand out a join code headlessly yet, so `join` takes the code or command from outside.
+  `OPENHUT_IMAGE=<ref>` and `RUNTIME_IMAGE=<ref>` in the environment install those images instead of the pinned ones.
+- **Join.** `join` takes the whole command from Settings › Computers › Add a computer. Box previews don't pass WebSockets, so
+  a runtime on another machine needs another way to reach the main (the M2 run used an SSH reverse tunnel).
 - **App.** 8787 serves the web App, the API and `/health` on one origin.

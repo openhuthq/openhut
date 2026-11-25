@@ -10,7 +10,7 @@ export OPENHUT_HERE_TOKEN_SHA256="$(printf '%s' "$TOKEN" | sha256sum | cut -c1-6
 runtime() {
   i=0; until curl -fsS http://127.0.0.1:8787/health >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 300 ] && return 1; sleep 1; done
   docker container inspect openhut-runtime >/dev/null 2>&1 && return 0
-  RUNTIME_IMAGE=$(cat $J/RUNTIME_IMAGE) OPENHUT_NETWORK=openhut OPENHUT_NAME="${OPENHUT_NAME:-openhut}" sh $J/install/install.sh join http://openhut:8787 "$TOKEN"
+  RUNTIME_IMAGE=$(cat $J/RUNTIME_IMAGE) OPENHUT_NETWORK=openhut OPENHUT_NAME=openhut-runtime sh $J/install/install.sh join http://openhut:8787 "$TOKEN"
 }
 runtime >> /data/log/runtime-install.log 2>&1 &
 cd $J

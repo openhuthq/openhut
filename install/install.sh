@@ -7,7 +7,7 @@ say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die() { printf 'openhut: %s\n' "$*" >&2; exit 1; }
 
 [ "$(uname -s)" = Linux ] || die "OpenHut runs on a Linux server with Docker, not $(uname -s)"
-[ "${IMAGE#@}${RUNTIME#@}" = "$IMAGE$RUNTIME" ] || die "this installer has no OpenHut image pinned. Download it again from openhut.dev."
+[ "${RUNTIME#@}" = "$RUNTIME" ] || die "this installer has no OpenHut image pinned. Download it again from openhut.dev."
 SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
 if ! command -v docker >/dev/null 2>&1; then
   say "Docker"
@@ -59,6 +59,7 @@ if [ "${1:-}" = join ]; then
   echo "This computer runs agents for $(rdata 'cut -d" " -f1 /data/link'). Manage it in Settings › Computers there."
   exit 0
 fi
+[ "${IMAGE#@}" = "$IMAGE" ] || die "this installer has no OpenHut image pinned. Download it again from openhut.dev."
 envof() { $D container inspect -f '{{range .Config.Env}}{{println .}}{{end}}' openhut 2>/dev/null | sed -n "s/^$1=//p"; }
 updater() {
   [ "$($D container inspect -f '{{.Config.Image}}' openhut-updater 2>/dev/null || true)" != "$IMAGE" ] || return 0

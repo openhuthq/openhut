@@ -88,7 +88,7 @@ async function install() {
   const [plain, url] = [preview(PREVIEW_PORT), preview(PREVIEW_PORT + 1)]
   if (!plain || !url) throw new Error('preview gave no URL')
   writeFileSync(`${OUT}/preview-url.txt`, `:80 (Caddy, before an address is set) ${plain}\n:8787 (the app, to use as the address) ${url}\n`)
-  const envs = process.env.RUNTIME_IMAGE ? `RUNTIME_IMAGE=${process.env.RUNTIME_IMAGE}` : ''
+  const envs = ['OPENHUT_IMAGE', 'RUNTIME_IMAGE', 'OPENHUT_MODEL'].flatMap((name) => process.env[name] ? [`${name}=${process.env[name]}`] : []).join(' ')
   const script = values.script!
   const local = existsSync(script)
   const cmd = local ? `sudo env ${envs} sh -s` : `curl -fsSL ${script} | sudo env ${envs} sh`
@@ -111,9 +111,9 @@ async function install() {
 }
 
 async function join() {
-  const cmd = values.cmd ?? (values.code ? `curl -fsSL ${values.script} | sudo sh -s -- join ${values.code}` : undefined)
+  const cmd = values.cmd
   if (!cmd) {
-    console.error('join needs --code <code> or --cmd \'<command>\' from main (Settings > Computers > Add a computer); main cannot produce one headlessly yet (M2).')
+    console.error('join needs --cmd \'<command>\' from main (Settings > Computers > Add a computer).')
     process.exit(2)
   }
   const rts = machines().filter((m) => m !== main)
