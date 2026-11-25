@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { cloud } from '../../../../src/server/platform/cloud.ts'
-import { MAX_CONTEXT, MAX_OUTPUT, openhut } from '../../../../src/server/models/providers/openhut.ts'
+import { credits, MAX_CONTEXT, MAX_OUTPUT, openhut } from '../../../../src/server/models/providers/openhut.ts'
 
 const KEY = 'sk-or-v1-from-the-cloud'
-cloud.credits = async () => ({ object: 'credits', balance: 5_000_000, given: 5_000_000, ai: 0, computer: 0, models: [], key: KEY })
+cloud.credits = async () => ({ object: 'credits', balance: 5_000_000, given: 5_000_000, ai: 0, computer: 0, models: [], cloudComputer: true, key: KEY })
 
 test('openhut: output is capped at 8,192 tokens and context at 200k', () => {
   const cap = openhut.upstream.body!
@@ -24,4 +24,5 @@ test('openhut: the key is not in the agent’s environment, only the gateway add
   const out = { path: '/v1/chat/completions', headers: new Headers() }
   openhut.upstream.apply({ out, secret: await openhut.upstream.credential({} as never, {}) })
   assert.equal(out.headers.get('authorization'), `Bearer ${KEY}`)
+  assert.ok(!JSON.stringify(await credits()).includes(KEY), 'GET /api/credits never shows the key')
 })

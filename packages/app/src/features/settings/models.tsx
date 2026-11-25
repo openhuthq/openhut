@@ -24,6 +24,7 @@ import { formValues } from '@/lib/form'
 import { openPage } from '@/lib/native'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
+import { CreditsSection } from '@/features/credits/credits'
 
 let returningTo: ProviderId | undefined
 const resetTime = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' })
@@ -58,6 +59,7 @@ export function ModelsSettings() {
     <ErrorNote message={admin.error?.message} />
     {providers && <>
       {none && <p className={cn(HINT, 'px-2.5')}>Connect one so your agents can think. Most people use Claude.</p>}
+      <CreditsSection />
       {providers.find((each) => each.id === 'openhut')?.connected && <Section title="OpenHut">
         <ListNote>Paid from your OpenHut credits. Your Cloud computer uses these.</ListNote>
         <Rows>{row('openhut')}</Rows>

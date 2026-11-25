@@ -5,10 +5,9 @@ import { keyed, listed, refuse, type ListedModel, type Provider } from './shared
 
 export const MAX_OUTPUT = 8_192
 export const MAX_CONTEXT = 200_000
-const FRESH_MS = 5 * 60_000 // how often the Cloud computer re-reads its key and the model list
+const FRESH_MS = 5 * 60_000
 const OUT = 'Your OpenHut credits are used up. Ask your admin for more, or add your own key under Settings, Models.'
 
-// The Cloud's default list, until the first read (its admin setting inference.models can change it). $ per million tokens.
 const MODELS: CreditModel[] = [
   { id: 'deepseek/deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', inputPrice: 0.14, outputPrice: 0.42 },
   { id: 'openai/gpt-6-luna', name: 'GPT-6 Luna', inputPrice: 0.1, outputPrice: 0.5 },
@@ -18,28 +17,32 @@ const MODELS: CreditModel[] = [
   { id: 'z-ai/glm-5.3-flash', name: 'GLM 5.3 Flash', inputPrice: 0.12, outputPrice: 0.38 },
 ]
 
-const credits: { at: number; value?: Credits } = { at: 0 }
+const cached: { at: number; value?: Credits } = { at: 0 }
 
 async function current(): Promise<Credits | undefined> {
-  if (Date.now() - credits.at > FRESH_MS) {
-    credits.at = Date.now()
-    credits.value = await cloud.credits().catch(() => credits.value)
+  if (Date.now() - cached.at > FRESH_MS) {
+    cached.at = Date.now()
+    cached.value = await cloud.credits().catch(() => cached.value)
   }
-  return credits.value
+  return cached.value
+}
+
+export async function credits(): Promise<Omit<Credits, 'key'> | undefined> {
+  const value = await current()
+  if (!value?.cloudComputer) return undefined
+  const { key: _, ...shown } = value
+  return shown
 }
 
 const listedOf = ({ id, name, inputPrice, outputPrice }: CreditModel): ListedModel => listed(id, { name, contextLength: MAX_CONTEXT, inputPrice, outputPrice })
 
-// The usual keyed() provider over OpenRouter, but the key comes from OpenHut Cloud (only the Cloud computer gets it) and
-// stays in the gateway: agents get their gateway token. Every request is capped at 200k context and 8,192 output tokens.
 const base = keyed({ id: 'openhut', origin: config.openrouterApi, listModels: async () => ((await current())?.models ?? MODELS).map(listedOf) })
 export const openhut: Provider = {
   ...base,
   seed: MODELS.map(listedOf),
-  // The first ask starts the read, so a Cloud computer shows OpenHut as connected a moment later.
   connected: () => {
     void current()
-    return !!credits.value?.key
+    return !!cached.value?.key
   },
   upstream: {
     ...base.upstream,
