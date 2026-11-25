@@ -46,3 +46,13 @@ test('a move to a computer that isn\'t connected is refused before anything stop
   await assert.rejects(agentService.update({ actor, id: agent.id, patch: { runsOn: 'cm_offlinex' } }), { status: 409 })
   assert.equal(await runsOn(agent.id), 'cm_sourcebx')
 })
+
+test('a move to a computer still loading the agent image is refused with a plain message before anything stops', async () => {
+  const agent = await agentService.create({ actor, name: 'Patient', runsOn: 'cm_sourcebx' })
+  await agentService.update({ actor, id: agent.id, patch: { wanted: 'running' } })
+  target.agentd.image.ready = false
+  await assert.rejects(agentService.update({ actor, id: agent.id, patch: { runsOn: 'cm_targetbx' } }), { status: 409, message: /cm_targetbx is still getting ready/ })
+  assert.equal(await runsOn(agent.id), 'cm_sourcebx')
+  assert.equal(source.agentd.applied.get(agent.id), true)
+  target.agentd.image.ready = true
+})
