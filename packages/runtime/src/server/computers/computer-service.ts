@@ -58,7 +58,7 @@ export const computerService = {
     const computer = await computerService.get({ id })
     if (computer.agents) throw new HttpError(409, `${computer.name} still runs ${computer.agents === 1 ? 'an agent' : `${computer.agents} agents`}. Move ${computer.agents === 1 ? 'it' : 'them'} to another computer first.`)
     await db.deleteFrom('computer').where('id', '=', id).execute()
-    forward.unlink({ computer: id })
+    forward.unlink({ computer: id, revoked: true })
     emit({ name: 'computer.removed', actor, target: { type: 'computer', id, name: computer.name } })
     return { id, object: 'computer', deleted: true, uninstall: UNINSTALL }
   },
@@ -82,7 +82,7 @@ export const computerService = {
     const link: Link = {
       features: { whatsapp: false, browser: false },
       gvisor: null,
-      end: () => socket.close(4000, 'Another connection with this computer’s token replaced this one.'),
+      end: (revoked) => revoked ? socket.close(4401, 'This computer was removed from the install.') : socket.close(4000, 'Another connection with this computer’s token replaced this one.'),
       mux: mux({
         odd: false,
         send: (bytes, done) => socket.send(bytes, (err) => done(err ?? undefined)),

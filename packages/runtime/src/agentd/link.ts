@@ -102,7 +102,7 @@ function dial(): void {
       if (message.type !== 'welcome') return
       if (typeof message.token === 'string' && /^ohj_[\w-]{20,100}$/.test(message.token)) writeFileSync(LINK, `${address} ${message.token}\n`, { mode: 0o600 })
       const image = typeof message.runtimeImage === 'string' ? message.runtimeImage : ''
-      writeFileSync(LINKED, `${new Date().toISOString()}\n`)
+      try { writeFileSync(LINKED, `${new Date().toISOString()}\n`) } catch { console.log('link: no /run to mark the link in') }
       wait = 1_000
       void follow(image).catch((err: unknown) => console.error(`link: couldn't start the update: ${String(err)}`))
       void hello(image).then((said) => link.say(said))

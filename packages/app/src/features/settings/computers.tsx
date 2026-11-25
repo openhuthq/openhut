@@ -94,7 +94,7 @@ function AddComputer() {
       {join.data && <>
         <p className="m-0 text-body">Run this on the other machine. It needs Linux with Docker.</p>
         <Command text={join.data.command} />
-        <p className="m-0 text-[12px]/[16px] text-mute">{left ? `Expires in ${Math.ceil(left / 60_000)} minutes, works once.` : 'This command expired.'} The machine connects out to this server, so it can sit behind a firewall.</p>
+        <p className="m-0 text-[12px]/[16px] text-mute">{left ? `Expires in ${Math.min(10, Math.ceil(left / 60_000))} minutes, works once.` : 'This command expired.'} The machine connects out to this server, so it can sit behind a firewall.</p>
         {left > 0 && <p className="m-0 flex items-center gap-2 text-mute"><Spinner className="mt-0" />Waiting for it to connect…</p>}
         {!left && <div><Button type="button" variant="secondary" className={PILL} onClick={() => mutate()}>Make a new command</Button></div>}
       </>}

@@ -8,7 +8,7 @@ import { agentApiUrl } from '../platform/network.ts'
 import { config } from '../platform/config.ts'
 import { HERE } from '../team/home.ts'
 
-export type Link = { mux: Mux; features: { whatsapp: boolean; browser: boolean }; gvisor: boolean | null; end: () => void }
+export type Link = { mux: Mux; features: { whatsapp: boolean; browser: boolean }; gvisor: boolean | null; end: (revoked?: boolean) => void }
 
 const SERVE = new URL(`../../agentd/serve.${import.meta.url.endsWith('.ts') ? 'ts' : 'mjs'}`, import.meta.url).href
 const local = config.agentdInProcess ? await import(SERVE) as typeof import('../../agentd/serve.ts') : undefined
@@ -22,11 +22,11 @@ export const forward = {
     links.set(computer, link)
   },
 
-  unlink({ computer, link }: { computer: string; link?: Link }): void {
+  unlink({ computer, link, revoked = false }: { computer: string; link?: Link; revoked?: boolean }): void {
     const held = links.get(computer)
     if (!held || (link && held !== link)) return
     links.delete(computer)
-    held.end()
+    held.end(revoked)
   },
 
   linked: (computer: string): Link | undefined => links.get(computer),
