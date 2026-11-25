@@ -154,7 +154,7 @@ export const roomKeys = {
     const me = toBase64(device.publicKey)
     const id = toBase64(newKey(12))
     const at = Date.now()
-    const list = await signList({ signer: device, body: { workspace: id, version: 1, previous: null, members: [{ email: account.email, role: 'owner', devices: [me], viewers: [] }], invites: [], removed: [], at, added: { [me]: at }, names: { [me]: deviceName() } } })
+    const list = await signList({ signer: device, body: { workspace: id, version: 1, previous: null, members: [{ email: account.email, role: 'owner', devices: [me], viewers: [] }], invites: [], removed: [], at, added: { [me]: at }, names: { [me]: deviceName() }, managed: bodyOf(account.list)?.managed } })
     const room = { workspace: { id, key: toBase64(newKey()), version: 1 }, list, first: list }
     await keyStore.write(withRoom(await keyStore.read(), room))
     return room

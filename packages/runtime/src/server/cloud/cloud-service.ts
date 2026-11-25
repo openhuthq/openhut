@@ -275,7 +275,7 @@ export const cloudService = {
       const me = session
       if (!me.home) throw new HttpError(502, 'OpenHut Cloud didn’t send your home team. Try again.')
       const home = me.home
-      const opened = await serial(async () => openRoom({ account: await keysService.open({ ...who, home }) }))
+      const opened = await serial(async () => openRoom({ account: await keysService.open({ ...who, home, managed: me.managed }) }))
       if (!opened) {
         await keysService.relock(who)
         return signedIn(session.email)
@@ -481,7 +481,7 @@ async function joinAsServer(code: string): Promise<void> {
   }
   if (!me.home) throw new HttpError(502, 'OpenHut Cloud didn’t send your home team. Try again.')
   const home = me.home
-  if (!await serial(async () => openRoom({ account: await keysService.open({ ...who, home }) }))) throw new HttpError(409, 'Another computer set up this account a moment ago. Run the command again.')
+  if (!await serial(async () => openRoom({ account: await keysService.open({ ...who, home, managed: me.managed }) }))) throw new HttpError(409, 'Another computer set up this account a moment ago. Run the command again.')
   log.info({ event: 'cloud.first_computer', workspace: home })
   cloudEvents.start()
   if (me.maker) void letInMaker({ workspace: home, device: me.maker }).catch((err: unknown) => log.warn({ event: 'cloud.let_in_failed', error: messageOf(err) }))
@@ -777,7 +777,9 @@ async function rotate({ changed: { list, next, letters }, drop }: { changed: Awa
 
 
 async function openRoom({ account }: { account: Account }): Promise<boolean> {
-  const made = await cloud.team(account.workspace.id).publish({ list: account.list, letters: [], boxes: [await keysService.workspaceBox({ account })] })
+  const managed = bodyOf(account.list)?.managed
+  const boxes = [await keysService.workspaceBox({ account }), ...managed ? [await keysService.escrowBox({ account, to: managed })] : []]
+  const made = await cloud.team(account.workspace.id).publish({ list: account.list, letters: [], boxes })
   if (made.status === 403) {
     log.warn({ event: 'cloud.room_refused', workspace: account.workspace.id, reply: JSON.stringify(made.json).slice(0, 300) })
     return false
