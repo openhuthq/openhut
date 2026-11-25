@@ -35,6 +35,22 @@ const nullBody = new Set([204, 205, 304])
 const empty = new Uint8Array(0)
 
 const PROTOCOL = 'openhut'
+const WAKE_MS = 60_000 // a paused Cloud computer takes longer than a handshake to wake
+
+// True while the relay wakes a paused Cloud computer for this App; chat shows "Waking Cloud…".
+const wakeListeners = new Set<() => void>()
+export const waking = {
+  now: false,
+  subscribe(listener: () => void): () => void {
+    wakeListeners.add(listener)
+    return () => wakeListeners.delete(listener)
+  },
+}
+function setWaking(now: boolean): void {
+  if (waking.now === now) return
+  waking.now = now
+  for (const listener of wakeListeners) listener()
+}
 
 export async function connect(input: { relayUrl: string; computer: { id: string; key: string }; key: DeviceKey; token: string; url?: string; timeout?: number }): Promise<Tunnel> {
   const handshake = initiator({ key: input.key, remote: fromHex(input.computer.key) })
@@ -113,7 +129,19 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
       fail(error)
       reject(error)
     }
+    const timeout = () => {
+      const error = new TunnelError({ type: 'closed', message: 'The computer didn\'t answer in time.' })
+      fail(error)
+      reject(error)
+      socket.close()
+    }
     socket.addEventListener('message', event => {
+      if (typeof event.data === 'string' && isWaking(event.data)) {
+        setWaking(true)
+        clearTimeout(late)
+        late = setTimeout(timeout, Math.max(input.timeout ?? 15_000, WAKE_MS))
+        return
+      }
       if (typeof event.data === 'string') return closing(event.data, closed)
       if (!(event.data instanceof ArrayBuffer)) return
       const data = event.data
@@ -121,15 +149,13 @@ export async function connect(input: { relayUrl: string; computer: { id: string;
     })
     socket.addEventListener('close', event => closed(event.code, event.reason))
     socket.addEventListener('error', () => { if (!opened) closed(1006) })
-    late = setTimeout(() => {
-      const error = new TunnelError({ type: 'closed', message: 'The computer didn\'t answer in time.' })
-      fail(error)
-      reject(error)
-      socket.close()
-    }, input.timeout ?? 15_000)
+    late = setTimeout(timeout, input.timeout ?? 15_000)
   })
 
-  await ready.finally(() => clearTimeout(late))
+  await ready.finally(() => {
+    clearTimeout(late)
+    setWaking(false)
+  })
 
   const fetch = async (path: string, init?: RequestInit) => {
     if (failure) throw failure
@@ -194,6 +220,11 @@ function closingOf(payload: Uint8Array): Closing {
 function closing(text: string, closed: (code: number, reason?: string) => void): void {
   const notice = parsed(text)
   if (typeof notice === 'object' && notice !== null && 'type' in notice && notice.type === 'closing' && 'code' in notice && typeof notice.code === 'number') closed(notice.code, 'reason' in notice && typeof notice.reason === 'string' ? notice.reason : undefined)
+}
+
+function isWaking(text: string): boolean {
+  const notice = parsed(text)
+  return typeof notice === 'object' && notice !== null && 'type' in notice && notice.type === 'waking'
 }
 
 function parsed(text: string): unknown {
