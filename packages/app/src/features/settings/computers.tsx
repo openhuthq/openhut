@@ -70,9 +70,9 @@ function ComputerList() {
   </>
 }
 
-// C3: the Cloud computer pauses when idle and wakes on a message.
+// A paused Cloud computer shows as Running: it wakes on its own when someone uses it.
 function CloudRow({ state }: { state: string }) {
-  const shown = state === 'running' ? <Status tone="on">Running</Status> : <span className="text-[13px] text-mute">{state === 'waking' ? 'Waking…' : state === 'creating' ? 'Starting…' : state === 'out' ? 'Out of credits' : 'Paused'}</span>
+  const shown = state === 'creating' || state === 'out' ? <span className="text-[13px] text-mute">{state === 'out' ? 'Out of credits' : 'Starting…'}</span> : <Status tone="on">Running</Status>
   return <Row icon={<I icon={CloudIcon} size={20} className="text-hue-sky" />} title="Cloud" note={CLOUD_NOTE}>{shown}</Row>
 }
 

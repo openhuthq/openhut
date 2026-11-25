@@ -86,6 +86,11 @@ export function useUpdateAgent(agentId: string) {
   return useMutation({
     mutationKey: ['agent-update', agentId],
     mutationFn: (body: UpdateAgent) => request({ schema: Agent, of: agentId, path: agentPath(agentId), method: 'PATCH', body }),
+    onMutate: (body) => {
+      client.setQueryData<Agent>([...AGENTS_KEY, agentId], (agent) => agent && { ...agent, ...body })
+      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agentId ? { ...each, ...body } : each))
+    },
+    onError: () => client.invalidateQueries({ queryKey: AGENTS_KEY }),
     onSuccess: (agent) => {
       client.setQueryData([...AGENTS_KEY, agent.id], agent)
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agent.id ? { ...each, ...agent } : each))
