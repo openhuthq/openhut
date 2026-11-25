@@ -1,11 +1,13 @@
 name: Promote
 
-# R4, the normal release. `promote` takes main's newest green CI run, signs its packs (the `packs` artifact) with install.sh pinned to the
-# runtime image that run pushed, and publishes them as the stable pointer, for everyone at once. `halt` re-signs the current stable with
-# halt: devices drop a pending install on their next poll, without the age wait. `rollback` points stable back at an earlier release's
-# bytes (releases/<sha256>.json) under a higher sequence. Each pointer is logged in Rekor and announced (scripts/r2.sh pointer), so the
-# release monitor stays quiet; devices still wait MIN_AGE_SECONDS (0 for now), halt excepted. A finished Promote deploys the Cloud
-# (cloud.yml).
+# R4, the normal release. `promote` takes main's newest green CI run and runs the runtime image smoke on that exact commit (install.sh,
+# an agent in gVisor answers a chat, a release with a failing /health rolls back); a red smoke stops the release before anything is
+# signed. Then it signs that run's packs (the `packs` artifact) with install.sh pinned to the runtime image that run pushed, and
+# publishes them as the stable pointer, for everyone at once. `halt` re-signs the current stable with halt: devices drop a pending
+# install on their next poll, without the age wait. `rollback` points stable back at an earlier release's bytes
+# (releases/<sha256>.json) under a higher sequence. halt and rollback don't wait for a smoke. Each pointer is logged in Rekor and
+# announced (scripts/r2.sh pointer), so the release monitor stays quiet; devices still wait MIN_AGE_SECONDS (0 for now), halt
+# excepted. A finished Promote deploys the Cloud (cloud.yml).
 
 on:
   workflow_dispatch:
@@ -29,15 +31,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  promote:
-    if: github.ref == 'refs/heads/main'
-    environment: release
+  green:
+    if: github.ref == 'refs/heads/main' && inputs.action == 'promote'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    outputs:
+      run: ${{ steps.green.outputs.run }}
+      sha: ${{ steps.green.outputs.sha }}
     steps:
       - name: Main's newest green CI run
         id: green
-        if: inputs.action == 'promote'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -47,9 +49,30 @@ jobs:
           [ -n "$sha" ] || { echo "::error::No main commit has passed CI yet."; exit 1; }
           echo "Promoting ${sha::8} (CI run $run)"
           printf 'run=%s\nsha=%s\n' "$run" "$sha" >> "$GITHUB_OUTPUT"
+
+  smoke:
+    # CI no longer smoke-tests the runtime image; a release does, on the commit it promotes, before anything is signed.
+    needs: green
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/runtime-image.yml
+    secrets: inherit
+    with:
+      ref: ${{ needs.green.outputs.sha }}
+      tags: ''
+
+  promote:
+    needs: [green, smoke]
+    # halt and rollback skip green and smoke; promote needs a passing smoke.
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (inputs.action != 'promote' || needs.smoke.result == 'success') }}
+    environment: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ steps.green.outputs.sha || github.sha }}
+          ref: ${{ needs.green.outputs.sha || github.sha }}
           # release.sh numbers the build by counting commits, as the runtime image job did.
           fetch-depth: 0
       - uses: actions/setup-node@v5
@@ -59,7 +82,7 @@ jobs:
         if: inputs.action == 'promote'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN: ${{ steps.green.outputs.run }}
+          RUN: ${{ needs.green.outputs.run }}
         run: |
           gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n packs -D packs || { echo "::error::CI run $RUN has no packs artifact (kept 7 days); push to main or rerun CI."; exit 1; }
           gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n runtime-image -D image
@@ -72,7 +95,7 @@ jobs:
         env:
           ACTION: ${{ inputs.action }}
           TO: ${{ inputs.to }}
-          SHA: ${{ steps.green.outputs.sha }}
+          SHA: ${{ needs.green.outputs.sha }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
