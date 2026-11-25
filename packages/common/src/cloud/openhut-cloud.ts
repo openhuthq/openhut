@@ -71,6 +71,13 @@ export type Computer = Device & {
   watch: (input: { socket: (url: string) => WatchSocket; onMessage: (text: string) => void; onHello?: (error?: unknown) => void }) => Watch
   records: (options: RecordsOptions) => ReturnType<typeof recordsClient>
   oauth: { authorize: (body: CreateOAuthAuthorization) => Promise<OAuthAuthorization>; token: (body: CreateOAuthToken) => Promise<OAuthToken> }
+  channels: {
+    create: (input: { agent: string; kind: 'telegram'; token: string }) => Promise<Reply>
+    list: () => Promise<Reply>
+    delete: (id: string) => Promise<Reply>
+    events: (input: { id: string; after?: number }) => Promise<Reply>
+  }
+  routines: { put: (input: { id: string; nextRun: string | null }) => Promise<Reply> }
 }
 
 export const TRUST_CALLS = ['serve', 'team', 'joinCode', 'webCode', 'joinedBy', 'deleteAccount', 'watch', 'oauth'] as const satisfies readonly Exclude<keyof Computer, keyof Device>[]
@@ -334,6 +341,14 @@ function computerOf({ url, key, store, fetch }: { url: Url; key: ComputerIdentit
     webCode: () => net.ok({ name: 'createJoinCode', body: { web: true }, reply: JoinCode }),
     joinedBy: async (code) => (await net.ok({ name: 'getJoinCode', params: { code }, reply: JoinedCode })).device,
     deleteAccount: () => net.call({ name: 'deleteMe' }),
+
+    channels: {
+      create: (body) => net.call({ name: 'createChannel', body }),
+      list: () => net.call({ name: 'listChannels' }),
+      delete: (id) => net.call({ name: 'deleteChannel', params: { id } }),
+      events: ({ id, after }) => net.call({ name: 'listChannelEvents', params: { id }, query: { after } }),
+    },
+    routines: { put: ({ id, nextRun }) => net.call({ name: 'putRoutine', params: { id }, body: { nextRun } }) },
 
     keyBoxes: {
       async list() {

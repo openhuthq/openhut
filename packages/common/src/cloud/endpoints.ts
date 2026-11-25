@@ -23,6 +23,11 @@ export const ENDPOINTS = {
   createOAuthAuthorization: { call: 'connections', method: 'POST', path: '/v1/oauth-authorizations', auth: 'token', does: 'Start an OAuth connection for a computer.' },
   oauthCallback: { call: 'connections', method: 'GET', path: '/v1/oauth-authorizations/callback', auth: 'none', does: 'The provider comes back here.' },
   createOAuthToken: { call: 'connections', method: 'POST', path: '/v1/oauth-tokens', auth: 'token', does: 'Exchange or refresh a connection’s token.' },
+  createChannel: { call: 'connections', method: 'POST', path: '/v1/channels', auth: 'signed', does: 'A Cloud computer hands a channel (agent, kind, token) to the Cloud, which becomes its webhook and holds its events.' },
+  listChannels: { call: 'connections', method: 'GET', path: '/v1/channels', auth: 'token', does: 'This computer’s channels on the Cloud.' },
+  deleteChannel: { call: 'connections', method: 'DELETE', path: '/v1/channels/:id', auth: 'signed', does: 'Remove the webhook and the pending events (the agent left or the channel was turned off).' },
+  listChannelEvents: { call: 'connections', method: 'GET', path: '/v1/channels/:id/events', auth: 'token', does: 'Events held for this computer, in order; ?after acknowledges every event up to it.' },
+  putRoutine: { call: 'connections', method: 'PUT', path: '/v1/routines/:id', auth: 'signed', does: 'A routine’s next run (never its prompt), so the Cloud wakes the computer for it.' },
   health: { call: 'ops', method: 'GET', path: '/health', auth: 'none', does: 'Ready once migrations ran and the database answers.' },
 } as const satisfies Record<string, Endpoint>
 
