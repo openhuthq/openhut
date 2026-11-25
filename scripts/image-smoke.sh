@@ -36,5 +36,5 @@ reply=$(rt curl -fsS -m 180 -H "authorization: Bearer $token" -H 'content-type: 
   -d '{"model":"hermes-agent","messages":[{"role":"user","content":"smoke test ping"}]}') || fail "chat"
 printf '%s' "$reply" | grep -q 'smoke test ping' || fail "the reply doesn't echo: $reply"
 echo "smoke: the agent answered: $(printf '%s' "$reply" | head -c 300)"
-[ -n "${KEEP:-}" ] || api -o /dev/null -X DELETE "http://127.0.0.1:8787/api/agents/$id" || fail "delete the agent"
+[ -n "${KEEP:-}" ] || rt curl -fsS -o /dev/null -b /tmp/smoke-cookies -X DELETE "http://127.0.0.1:8787/api/agents/$id" || fail "delete the agent"
 echo "smoke: ok"
