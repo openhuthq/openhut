@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link01Icon, MoreHorizontalIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
-import type { MemberRole, Person } from '@openhut/common/team/team.ts'
+import type { Invite, MemberRole, Person } from '@openhut/common/team/team.ts'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -11,7 +11,8 @@ import { ErrorNote } from '@/components/error-note'
 import { I, Loading, PILL, Section } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { Row, Rows } from '@/features/settings/kit'
-import { useCreateInvite, useIsAdmin, useMe, usePeople, useRemovePerson, useSetRole } from '@/features/people/api'
+import { useCreateInvite, useInvites, useIsAdmin, useMe, usePeople, useRemovePerson, useRevokeInvite, useSetRole } from '@/features/people/api'
+import { shortDate } from '@/lib/format'
 import { copyText } from '@/lib/clipboard'
 import { open, useOpen } from '@/lib/router'
 import { toast, toastError, toastFailed } from '@/lib/toast'
@@ -23,12 +24,27 @@ export function PeopleSettings() {
   const people = usePeople()
   const admin = useIsAdmin()
   const me = useMe().data?.user.id
+  const invites = useInvites({ enabled: admin })
   if (!people.data) return people.error ? <ErrorNote message={people.error.message} /> : <Loading />
-  return <Section title={people.data.length === 1 ? '1 member' : `${people.data.length} members`} action={admin ? <InviteButton /> : undefined}>
-    <Rows>
-      {people.data.map((person) => <div key={person.id}><PersonRow person={person} you={person.id === me} admin={admin} /></div>)}
-    </Rows>
-  </Section>
+  return <div className="flex flex-col gap-6">
+    <Section title={people.data.length === 1 ? '1 member' : `${people.data.length} members`} action={admin ? <InviteButton /> : undefined}>
+      <Rows>
+        {people.data.map((person) => <div key={person.id}><PersonRow person={person} you={person.id === me} admin={admin} /></div>)}
+      </Rows>
+    </Section>
+    {!!invites.data?.length && <Section title={invites.data.length === 1 ? '1 pending invite' : `${invites.data.length} pending invites`}>
+      <Rows>{invites.data.map((invite) => <div key={invite.id}><InviteRow invite={invite} /></div>)}</Rows>
+    </Section>}
+  </div>
+}
+
+function InviteRow({ invite }: { invite: Invite }) {
+  const revoke = useRevokeInvite()
+  return <Row icon={<I icon={Link01Icon} size={16} className="text-mute" />} title={`${ROLE[invite.role]} invite link`}
+    note={`Made ${shortDate.format(new Date(invite.createdAt))} · expires ${shortDate.format(new Date(invite.expiresAt))}`}>
+    <Button type="button" variant="ghost" className="h-7 px-2.5 text-[13px] text-fail" disabled={revoke.isPending}
+      onClick={() => revoke.mutate({ id: invite.id }, { onSuccess: () => toast('Invite link revoked', 'It no longer works.'), onError: toastError })}>Revoke</Button>
+  </Row>
 }
 
 function PersonRow({ person, you, admin }: { person: Person; you: boolean; admin: boolean }) {

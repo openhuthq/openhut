@@ -77,3 +77,18 @@ test('roles are enforced on the server: a member can\'t invite, change roles or 
   assert.equal((await call({ method: 'DELETE', url: `/api/people/${mia}`, cookie: owner })).status, 200)
   assert.equal((await call({ url: '/api/me', cookie: member })).status, 401)
 })
+
+test('admins see pending invite links and revoke them; a member can\'t; a removed person\'s email can be invited back', async () => {
+  const member = (await call({ method: 'POST', url: '/api/people', body: { inviteToken: (await call({ method: 'POST', url: '/api/invites', body: { role: 'member' }, cookie: owner })).body.link.split('/invite/')[1], name: 'Sam', email: 'sam@example.com', password: PASSWORD } })).cookie
+  const { body: invite } = await call({ method: 'POST', url: '/api/invites', body: { role: 'member' }, cookie: owner })
+  const token = invite.link.split('/invite/')[1]
+  const pending = (await call({ url: '/api/invites', cookie: owner })).body.data
+  assert.ok(pending.some((each: { id: string; link?: string }) => each.id === invite.id && !each.link))
+  assert.equal((await call({ url: '/api/invites', cookie: member })).status, 403)
+  assert.equal((await call({ method: 'DELETE', url: `/api/invites/${invite.id}`, cookie: member })).status, 403)
+  assert.equal((await call({ method: 'DELETE', url: `/api/invites/${invite.id}`, cookie: owner })).status, 200)
+  assert.equal((await call({ url: `/api/invites/${token}` })).status, 410)
+  const again = (await call({ method: 'POST', url: '/api/invites', body: { role: 'member' }, cookie: owner })).body.link.split('/invite/')[1]
+  const back = await call({ method: 'POST', url: '/api/people', body: { inviteToken: again, name: 'Mia', email: 'mia@example.com', password: PASSWORD } })
+  assert.deepEqual([back.status, back.body.email], [200, 'mia@example.com'])
+})

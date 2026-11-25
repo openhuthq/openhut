@@ -40,7 +40,7 @@ export type Setup = z.infer<typeof Setup>
 export const Session = z.object({ id: z.string(), object: z.literal('session'), person: Person, expiresAt: Timestamp })
 export type Session = z.infer<typeof Session>
 
-export const Invite = z.object({ object: z.literal('invite'), role: MemberRole, expiresAt: Timestamp, link: z.optional(z.string()) })
+export const Invite = z.object({ id: z.string(), object: z.literal('invite'), role: MemberRole, createdAt: Timestamp, expiresAt: Timestamp, link: z.optional(z.string()) })
 export type Invite = z.infer<typeof Invite>
 
 export const CreatePerson = z.union([

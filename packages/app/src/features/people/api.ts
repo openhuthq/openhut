@@ -43,6 +43,25 @@ export function useRemovePerson() {
   })
 }
 
+const INVITES_KEY = ['invites']
+const Invites = List(Invite)
+
+export function useInvites({ enabled }: { enabled: boolean }) {
+  return useQuery({ queryKey: INVITES_KEY, enabled, queryFn: async () => (await request({ schema: Invites, path: '/api/invites' })).data })
+}
+
 export function useCreateInvite() {
-  return useMutation({ mutationFn: ({ role }: { role: MemberRole }) => request({ schema: Invite, path: '/api/invites', method: 'POST', body: { role } }) })
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ role }: { role: MemberRole }) => request({ schema: Invite, path: '/api/invites', method: 'POST', body: { role } }),
+    onSuccess: () => client.invalidateQueries({ queryKey: INVITES_KEY }),
+  })
+}
+
+export function useRevokeInvite() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id }: { id: string }) => request({ schema: Deleted, path: `/api/invites/${id}`, method: 'DELETE' }),
+    onSuccess: () => client.invalidateQueries({ queryKey: INVITES_KEY }),
+  })
 }
