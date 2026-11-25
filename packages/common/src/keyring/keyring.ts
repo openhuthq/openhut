@@ -88,7 +88,6 @@ export const keyring = {
 
   signedHere: async (account: Account): Promise<boolean> => account.list.by === toBase64((await accountDevice(fromBase64(account.key))).publicKey),
 
-  // Our servers, for a managed account: open its escrow box with our key and seal the account key to its new computer, from its kit.
   async escrowLetter({ ours, box, workspace, to }: { ours: Identity; box: { body: string; by: string }; workspace: string; to: string }): Promise<Sent | null> {
     const kit = fromBase64(box.by)
     const key = await read({ recipient: ours, from: kit, workspace, purpose: 'account-key', body: fromBase64(box.body), allowed: [kit] })

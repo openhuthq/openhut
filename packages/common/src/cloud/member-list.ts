@@ -75,13 +75,13 @@ async function follows({ previous, next }: { previous: Link; next: Link }): Prom
   const invite = a.invites.find((each) => each.key === by)
   const signer = invite ? undefined : a.members.find((member) => member.devices.includes(by))
   const back = invite ? b.members.find((member) => member.email === invite.email)?.devices.find((key) => a.removed.includes(key)) : undefined
-  if (managedOf(b) !== managedOf(a) && signer?.role !== 'owner') return false
+  if (b.managed !== a.managed && signer?.role !== 'owner') return false
   if (!tracksRemoved({ previous: a, next: b, owner: signer?.role === 'owner', back })) return false
   const manager = signer?.role === 'owner' || signer?.role === 'admin'
   if (!manager && (keyVersionOf(b) !== keyVersionOf(a) || runtimesOf(b).some((key) => !runtimesOf(a).includes(key)))) return false
   if (signersOf(b).length === 0) return false
   if (invite) return joins({ previous: a, next: b, invite })
-  if (managedOf(a) === by) return managedAdds({ previous: a, next: b })
+  if (a.managed === by) return managedAdds({ previous: a, next: b })
   if (!signer) return false
   if (signer.kit === by) return kitAdds({ previous: a, next: b, signer })
   if (signer.role === 'owner') return true
@@ -105,10 +105,6 @@ function managedAdds({ previous: a, next: b }: { previous: MemberListBody; next:
   const joined = b.members.filter((member) => !a.members.some((was) => was.email === member.email))
   const used = a.invites.filter((each) => joined.some((member) => member.email === each.email && member.role === each.role))
   return kept && used.length === joined.length && same(b.invites, a.invites.filter((each) => !used.includes(each))) && same(b.runtimes, a.runtimes)
-}
-
-export function managedOf(body: MemberListBody): string | undefined {
-  return body.managed
 }
 
 function dated({ previous: a, next: b }: { previous: MemberListBody; next: MemberListBody }): boolean {
