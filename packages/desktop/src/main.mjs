@@ -11,7 +11,8 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import updater from 'electron-updater'
 import WebSocket from 'ws'
-import { DEV_NAME, devBuild, devCloud, devLabel } from './dev-build.mjs'
+import { config } from './config.mjs'
+import { DEV_NAME, devBuild, devLabel } from './dev-build.mjs'
 import { linkHandler } from './desktop-entry.mjs'
 import { invitePath } from './invite-link.mjs'
 import { linkPath, signInCallback } from './open-link.mjs'
@@ -21,19 +22,18 @@ import { activePack, commit as commitPack, poll as pollPacks, rollback as rollba
 const DEV = !app.isPackaged
 const MAC = process.platform === 'darwin'
 const WIN = process.platform === 'win32'
-if (WIN) process.env.NODE_PENDING_PIPE_INSTANCES ??= '64'
-const APPIMAGE = process.env.APPIMAGE
+const APPIMAGE = config.appImage
 const ASKS_PASSWORD = process.platform === 'linux' && !APPIMAGE
 process.umask(0o022)
-const TEST_HOME = process.env.OPENHUT_TEST_HOME
+const TEST_HOME = config.testHome
 const RELEASE_FEED = app.getName() !== DEV_NAME
 const LOOKS_DEV = devBuild({ packaged: app.isPackaged, name: app.getName(), testHome: TEST_HOME })
 const NAME = LOOKS_DEV ? DEV_NAME : 'OpenHut'
 const SCHEME = LOOKS_DEV ? 'openhut-dev' : 'openhut'
-const CLOUD = LOOKS_DEV ? devCloud(process.env) : {}
+const CLOUD = LOOKS_DEV ? { OPENHUT_CLOUD_URL: config.devCloudUrl, OPENHUT_API_URL: config.devApiUrl } : {}
 const USER_DATA = TEST_HOME || join(app.getPath('appData'), LOOKS_DEV ? 'OpenHut Dev' : 'OpenHut')
 app.setName('OpenHut')
-app.setPath('userData', process.env.OPENHUT_SECOND_APP ? USER_DATA : join(app.getPath('appData'), 'OpenHut'))
+app.setPath('userData', config.secondApp ? USER_DATA : join(app.getPath('appData'), 'OpenHut'))
 const LOCKED = app.requestSingleInstanceLock()
 if (!LOCKED) app.exit(0)
 app.setName(NAME)
@@ -61,9 +61,9 @@ const PACK = DEV || !LOCKED ? null : (() => {
 const PACKED = PACK?.app ?? BACKEND
 const VERSION = PACK?.version ?? app.getVersion()
 const SCRIPTS = { server: DEV ? 'packages/runtime/src/server/app.ts' : 'packages/runtime/src/server/platform/app.mjs' }
-const RUNTIME = process.env.AGENTD_HERMES ?? PACK?.runtime ?? join(BACKEND, DEV ? 'packages/desktop/dist/backend/runtime' : 'runtime')
+const RUNTIME = config.hermesRuntime ?? PACK?.runtime ?? join(BACKEND, DEV ? 'packages/desktop/dist/backend/runtime' : 'runtime')
 const NATIVE_BIN = PACK?.native ?? join(BACKEND, DEV ? 'packages/desktop/dist/backend/bin/native' : 'bin/native')
-const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? (LOOKS_DEV ? 8091 : 8081))
+const GATEWAY_PORT = config.gatewayPort ?? (LOOKS_DEV ? 8091 : 8081)
 const HOME = app.getPath('userData')
 const ASSETS = DEV ? ROOT : join(HOME, 'assets', PACK ? `${app.getVersion()}+${PACK.sequence}` : app.getVersion())
 const LOGS = app.getPath('logs')
@@ -82,7 +82,7 @@ const SECRET = join(HOME, 'secret.bin')
 const PENDING_INVITE = join(HOME, 'invite')
 const LOCAL = { name: MAC ? 'This Mac' : 'This computer' }
 const EDGE_INSTALL_URL = 'https://openhut.dev/edge'
-const INSTALL_URL = process.env.OPENHUT_INSTALL_URL || bakedInstallUrl()
+const INSTALL_URL = config.installUrl || bakedInstallUrl()
 const JOIN_CODE = /^[\w.~:/?#=&%-]{1,500}$/
 const AUTOSTART = join(app.getPath('appData'), 'autostart/openhut.desktop')
 const DEFAULT_PREFS = { keepAwake: true }
@@ -211,7 +211,7 @@ handle('passkey.status', () => passkey(['status']))
 handle('passkey.create', ({ email } = {}) => passkey(['create', String(email)]))
 handle('passkey.open', ({ quiet } = {}) => passkey(quiet ? ['open', '--quiet'] : ['open']))
 handle('passkey.cancel', () => { passkeyRun?.kill() })
-const testPresence = TEST_HOME && process.env.OPENHUT_TEST_PRESENCE
+const testPresence = TEST_HOME && config.testPresence
 const touchId = async (reason) => testPresence ? { ok: readFileSync(testPresence, 'utf8').trim() === 'yes' } : process.platform !== 'darwin' ? { ok: true } : systemPreferences.promptTouchID(String(reason)).then(() => ({ ok: true }), (error) => ({ ok: /not available|not enrolled|no identities/i.test(error.message), error: error.message }))
 handle('touchid.prompt', ({ reason } = {}) => touchId(reason))
 handle('cloud.notify', ({ title = 'Unlock OpenHut', body = 'Bring your agents and chats to this computer.', path = '/' } = {}) => new Promise((resolve) => {
@@ -653,11 +653,11 @@ async function boot() {
   }
   keepData()
   await assets()
-  const shared = { ...CLOUD, OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? (DEV ? 'test' : 'claude'), OPENHUT_BIN: NATIVE_BIN, OPENHUT_CLAUDE: join(DATA, 'claude', WIN ? 'claude.exe' : 'claude') }
+  const shared = { ...CLOUD, OPENHUT_MODEL: config.model ?? (DEV ? 'test' : 'claude'), OPENHUT_BIN: NATIVE_BIN, OPENHUT_CLAUDE: join(DATA, 'claude', WIN ? 'claude.exe' : 'claude') }
   if (!PIPES) rmSync(SERVER_SOCK, { force: true })
   await rootSecret()
   serverEnv.PORT = String(await signInCallbacks())
-  start('server', Object.assign(serverEnv, { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_APP_SCHEME: SCHEME, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_AGENT_HOST_NET: '1' }))
+  start('server', Object.assign(serverEnv, { ...shared, OPENHUT_SANDBOX: config.sandbox, AGENTD_DATA: DATA, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_APP_SCHEME: SCHEME, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_AGENT_HOST_NET: '1' }))
   if (!await waitFor(() => listening(SERVER_SOCK), 60)) return false
   return true
 }
@@ -750,7 +750,7 @@ function window(path = '/agents') {
   win.on('close', saveBounds)
   win.on('closed', () => { if (main === win) main = undefined })
   win.on('focus', () => win.flashFrame(false))
-  win.once('ready-to-show', () => TEST_HOME && process.env.OPENHUT_TEST_HIDDEN ? undefined : win.show())
+  win.once('ready-to-show', () => TEST_HOME && config.testHidden ? undefined : win.show())
   win.loadURL(`${APP_ORIGIN}${path}`)
   main = win
   return win
@@ -868,7 +868,7 @@ function update() {
   auto.logger = logger
   auto.channel = 'latest'
   auto.allowDowngrade = false
-  if (process.env.OPENHUT_UPDATE_FEED) auto.setFeedURL({ provider: 'generic', url: process.env.OPENHUT_UPDATE_FEED })
+  if (config.updateFeed) auto.setFeedURL({ provider: 'generic', url: config.updateFeed })
   if (TEST_HOME) auto.autoRunAppAfterInstall = false
   if (ASKS_PASSWORD) auto.autoInstallOnAppQuit = false
   auto.on('error', (error) => {
@@ -928,12 +928,12 @@ function installDeb() {
 // M5: packs come from the channel pointer, not electron-updater (which now only brings a new shell).
 const PACK_EVERY_MS = 15 * 60_000
 async function checkPacks() {
-  const testKey = TEST_HOME && process.env.OPENHUT_RELEASE_KEY
+  const testKey = TEST_HOME && config.releaseKey
   try {
     const result = await pollPacks({
-      home: HOME, feed: process.env.OPENHUT_UPDATE_FEED || 'https://dl.openhut.dev/', channel: 'stable',
-      ...testKey && { keys: { current: testKey, next: process.env.OPENHUT_NEXT_KEY ?? '', revoked: [] } },
-      ...TEST_HOME && process.env.OPENHUT_REKOR_KEY && { rekorKey: process.env.OPENHUT_REKOR_KEY },
+      home: HOME, feed: config.updateFeed || 'https://dl.openhut.dev/', channel: 'stable',
+      ...testKey && { keys: { current: testKey, next: config.nextKey, revoked: [] } },
+      ...TEST_HOME && config.rekorKey && { rekorKey: config.rekorKey },
     })
     appendFileSync(join(LOGS, 'updates.log'), `openhut: packs: ${JSON.stringify({ ...result, packs: undefined })}\n`)
     if (result.action === 'install') setUpdate({ ready: { version: result.version, pack: true, signed: result.signed }, waiting: null, refused: null, halted: null })
@@ -946,9 +946,9 @@ async function checkPacks() {
 }
 
 async function releaseSigned(info) {
-  const key = (TEST_HOME && process.env.OPENHUT_RELEASE_KEY) || RELEASE_KEY
+  const key = (TEST_HOME && config.releaseKey) || RELEASE_KEY
   if (!key) return true
-  const feed = process.env.OPENHUT_UPDATE_FEED || 'https://dl.openhut.dev/'
+  const feed = config.updateFeed || 'https://dl.openhut.dev/'
   const [manifest, signature] = await Promise.all(['release.json', 'release.json.sig'].map((name) => net.fetch(new URL(`v${info.version}/${name}`, feed).href).then((res) => res.ok ? res.text() : '', () => '')))
   return cosigned({ manifest, signature, key, version: String(info.version), files: info.files ?? [] })
 }
@@ -1057,7 +1057,7 @@ app.whenReady().then(async () => {
   if (started !== true) {
     const back = previousVersion()
     const buttons = [...(back ? [`Go back to ${back}`] : []), 'Open Logs', 'Quit']
-    const picked = TEST_HOME && process.env.OPENHUT_TEST_DIALOG ? buttons.findIndex((label) => label.startsWith(process.env.OPENHUT_TEST_DIALOG)) : -1
+    const picked = TEST_HOME && config.testDialog ? buttons.findIndex((label) => label.startsWith(config.testDialog)) : -1
     const { response } = picked >= 0 ? { response: picked } : await dialog.showMessageBox({ type: 'error', message: 'OpenHut couldn\'t start', detail: `${started || 'Its server didn\'t come up within a minute.'} The logs are in ${LOGS}.`, buttons, defaultId: 0 })
     if (back && response === 0) return goBack(back)
     if (buttons[response] === 'Open Logs') await shell.openPath(LOGS)
