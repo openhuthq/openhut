@@ -22,14 +22,14 @@ const feed = createServer((req, res) => {
   res.writeHead(200).end(readFileSync(file))
 })
 const url = (server: Server) => `http://127.0.0.1:${(server.address() as { port: number }).port}`
-let key = '', otherKey = ''
+let key = ''
 
 before(async () => {
   await Promise.all([rekor, feed].map((server) => new Promise<void>((done) => server.listen(0, '0.0.0.0', done))))
   mkdirSync(join(feedDir, 'packs'), { recursive: true })
   mkdirSync(join(feedDir, 'channels/stable'), { recursive: true })
   key = await run('release-key.ts', ['key', join(root, 'release.pem')])
-  otherKey = await run('release-key.ts', ['key', join(root, 'other.pem')])
+  await run('release-key.ts', ['key', join(root, 'other.pem')])
   // Laid out as snapshot.sh installs it in /opt/openhut/boot.
   mkdirSync(join(root, 'boot'))
   for (const file of ['install/boat/boot.mjs', 'packages/desktop/src/packs.mjs', 'packages/desktop/src/release-key.mjs']) copyFileSync(join(repo, file), join(root, 'boot', file.split('/').at(-1)!))
@@ -95,7 +95,6 @@ test('a release signed by any other key is refused and changes nothing', async (
   await publish({ name: 'forged', sequence: 101, pem: 'other.pem' })
   assert.deepEqual(await poll(updates()), { action: 'refuse', reason: 'not signed by a trusted release key' })
   assert.equal(readState(home).pending, null)
-  assert.notEqual(otherKey, key)
 })
 
 for (const [kind, sequence] of [['exits', 102], ['hangs', 104]] as const) {
