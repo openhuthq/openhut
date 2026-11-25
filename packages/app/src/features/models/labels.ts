@@ -3,10 +3,12 @@ import type { BrandName } from '@/components/brand-icons'
 
 const LABS: Record<string, BrandName> = { anthropic: 'anthropic', openai: 'openai', google: 'gemini', 'x-ai': 'xai', deepseek: 'deepseek', qwen: 'qwen', moonshotai: 'kimi', 'z-ai': 'zai', mistralai: 'mistral', meta: 'meta' }
 
+const MAKERS: Partial<Record<ProviderId, BrandName>> = { claude: 'anthropic', codex: 'openai' }
+
 export const labOf = (model: ProviderModel) => model.id.includes('/') ? model.id.slice(0, model.id.indexOf('/')) : ''
 
-export function glyphOf({ provider, model }: { provider: Provider; model: ProviderModel }): BrandName {
-  return provider.id === 'openrouter' || provider.id === 'openhut' ? LABS[labOf(model)] ?? provider.id : provider.id
+export function glyphOf({ provider, model }: { provider: ProviderId; model: string }): BrandName {
+  return LABS[model.split('/')[0]] ?? MAKERS[provider] ?? provider
 }
 
 export function money(value: number) {
