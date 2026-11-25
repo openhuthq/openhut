@@ -48,6 +48,12 @@ export type CreateSession = z.infer<typeof CreateSession>
 export const Session = z.object({ object: z.literal('session'), token: z.string(), refreshToken: z.string(), sub: z.string(), email: Email, device: DeviceKey, expiresAt: Timestamp, maker: z.optional(DeviceKey) })
 export type Session = z.infer<typeof Session>
 
+export const CreditModel = z.object({ id: z.string(), name: z.string(), inputPrice: z.number(), outputPrice: z.number() })
+export type CreditModel = z.infer<typeof CreditModel>
+// GET /v1/credits. Micros. `cloudComputer`: the caller is the person's Cloud computer. `key` is the person's OpenRouter key, sent only to their Cloud computer.
+export const Credits = z.object({ object: z.literal('credits'), balance: z.number(), given: z.number(), ai: z.number(), computer: z.number(), models: z.array(CreditModel), cloudComputer: z.boolean(), key: z.optional(z.string()) })
+export type Credits = z.infer<typeof Credits>
+
 export const JoinCode = z.object({ object: z.literal('join_code'), code: z.string(), expiresAt: Timestamp })
 export type JoinCode = z.infer<typeof JoinCode>
 export const CreateJoinCode = z.object({ web: z.optional(z.boolean()) })

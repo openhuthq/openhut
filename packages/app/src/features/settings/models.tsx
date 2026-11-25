@@ -24,6 +24,7 @@ import { formValues } from '@/lib/form'
 import { openPage } from '@/lib/native'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
+import { CreditsSection } from '@/features/credits/credits'
 
 let returningTo: ProviderId | undefined
 const resetTime = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' })
@@ -31,7 +32,7 @@ const FIRST_SHOWN = 10
 const MIN_KEY = 8
 const MAX_KEY = 400
 const SUBSCRIPTIONS = PROVIDERS.filter((info) => info.kind === 'subscription')
-const KEYS = PROVIDERS.filter((info) => info.kind === 'key')
+const KEYS = PROVIDERS.filter((info) => info.kind === 'key' && info.id !== 'openhut')
 
 export function stepOf(name: string | null): ProviderId | undefined {
   const parsed = ProviderId.safeParse(name)
@@ -58,6 +59,11 @@ export function ModelsSettings() {
     <ErrorNote message={admin.error?.message} />
     {providers && <>
       {none && <p className={cn(HINT, 'px-2.5')}>Connect one so your agents can think. Most people use Claude.</p>}
+      <CreditsSection />
+      {providers.find((each) => each.id === 'openhut')?.connected && <Section title="OpenHut">
+        <ListNote>Paid from your OpenHut credits. Your Cloud computer uses these.</ListNote>
+        <Rows>{row('openhut')}</Rows>
+      </Section>}
       <Section title="Subscriptions"><Rows>{SUBSCRIPTIONS.map((info) => row(info.id))}</Rows></Section>
       <Section title="API keys">
         <ListNote>Your keys work on all your computers. Agents never see them.</ListNote>
