@@ -7,10 +7,13 @@ import { config } from '../../../src/server/platform/config.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { runSet } from '../../../src/server/cloud/run-set.ts'
 import { channelService } from '../../../src/server/channels/channel-service.ts'
+import { cloud } from '../../../src/server/platform/cloud.ts'
+import { telegramCodes } from '../../../src/server/channels/telegram-codes.ts'
 import { fakeAgentd, signIn } from '../agents/signed-in.ts'
 
 const queue: unknown[] = []
 const sent: { chat_id: number; text: string }[] = []
+const calls: string[] = []
 const telegram = createServer((req, res) => {
   let raw = ''
   req.on('data', (chunk) => { raw += chunk })
@@ -18,6 +21,7 @@ const telegram = createServer((req, res) => {
     const reply = (result: unknown) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, result }))
     if (req.url?.includes('/getMe')) return reply({ username: 'juniper_test_bot' })
     if (req.url?.includes('/sendMessage')) { sent.push(JSON.parse(raw)); return reply({}) }
+    if (req.url?.includes('/getUpdates')) calls.push('getUpdates')
     if (req.url?.includes('/getUpdates')) return setTimeout(() => reply(queue.splice(0)), 30)
     res.writeHead(404).end()
   })
@@ -31,6 +35,7 @@ await db.insertInto('person').values({ id: 'usr_tgowner1', email: 'tg@example.co
 await db.insertInto('agent').values([
   { id: 'ag_tgclaim1', name: 'Juniper', owner_id: 'usr_tgowner1', instructions: '#', model: 'claude:sonnet', net: 74, channel_key: seal('k'.repeat(48)), wanted: 'stopped' },
   { id: 'ag_tgclaim2', name: 'Rover', owner_id: 'usr_tgowner1', instructions: '#', model: 'claude:sonnet', net: 75, channel_key: seal('k'.repeat(48)), wanted: 'stopped' },
+  { id: 'ag_tgclaim3', name: 'Moss', owner_id: 'usr_tgowner1', instructions: '#', model: 'claude:sonnet', net: 76, channel_key: seal('k'.repeat(48)), wanted: 'stopped' },
 ]).execute()
 signIn({ email: 'tg@example.com' })
 runSet.watch()
@@ -102,3 +107,25 @@ test('codes live in the database, so a restarted runtime shows the same Start li
 })
 
 test.after(() => { telegram.close() })
+
+test('on a Cloud computer the Cloud takes the webhook only after the claim, so the claim\'s own getUpdates is never refused', async () => {
+  for (const row of await db.selectFrom('channel').select('id').execute()) await telegramCodes.stop({ channelId: row.id })
+  await new Promise((resolve) => setTimeout(resolve, 100))
+  const created: { agent: string; kind: string; token: string }[] = []
+  const was = cloud.channels.create
+  cloud.channels.create = async (input) => { calls.push('webhook'); created.push(input); return { status: 200, json: {} } }
+  config.cloudComputer = true
+  try {
+    const made = await channelService.create({ actor, kind: 'telegram', agentId: 'ag_tgclaim3', botToken: token, open: false, allowed: [] })
+    const code = /\?start=([\w-]{22})$/.exec(made.qr ?? '')?.[1] ?? ''
+    assert.deepEqual(created, [], 'no webhook while the claim still polls')
+    queue.push(message(3, `/start ${code}`, 222333444, 'Kim'))
+    await until(async () => created.length, (n) => n > 0)
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    assert.deepEqual(created, [{ agent: 'ag_tgclaim3', kind: 'telegram', token }])
+    assert.ok(!calls.slice(calls.indexOf('webhook')).includes('getUpdates'), 'nothing polls Telegram once the webhook is set')
+  } finally {
+    config.cloudComputer = false
+    cloud.channels.create = was
+  }
+})

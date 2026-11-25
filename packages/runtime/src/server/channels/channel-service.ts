@@ -177,9 +177,7 @@ export const channelService = {
       const fields = { kind: value.kind, status: before?.status === 'connected' ? 'connected' as const : value.status, account: before?.account ?? value.account, owner_address: value.ownerAddress, open: value.open, allowed: value.allowed.join(','), secrets: secret?.botToken ? seal(JSON.stringify(secret)) : '' }
       await db.insertInto('channel').values({ id: held.id, agent_id: agentId, ...fields, created_at: value.createdAt }).onConflict((oc) => oc.column('id').doUpdateSet(fields)).execute()
       const oldToken = before?.secrets ? TelegramSecrets.safeParse(JSON.parse(unseal(before.secrets))).data?.botToken : undefined
-      if (config.cloudComputer && value.kind === 'telegram' && secret?.botToken && secret.botToken !== oldToken) {
-        ok(await cloud.channels.create({ agent: agentId, kind: 'telegram', token: secret.botToken }), 'OpenHut Cloud didn’t take over Telegram for this computer. Try turning Telegram off and on.')
-      }
+      if (value.kind === 'telegram' && fields.status === 'connected' && secret?.botToken && secret.botToken !== oldToken) await joinInbox({ agentId, botToken: secret.botToken })
       const added = value.allowed.filter((address) => !before || !audienceOf(before).allowed.includes(address))
       if (value.kind === 'slack' && secret?.botToken && before && added.length) greetings.push({ botToken: secret.botToken, ids: added })
     }
@@ -237,6 +235,12 @@ async function setupOf({ body, facts }: { body: CreateChannel; facts: AgentFacts
   }
 }
 
+// Only once the claim is done: the claim reads getUpdates itself, which Telegram refuses while a webhook is set.
+async function joinInbox({ agentId, botToken }: { agentId: string; botToken: string }): Promise<void> {
+  if (!config.cloudComputer) return
+  ok(await cloud.channels.create({ agent: agentId, kind: 'telegram', token: botToken }), 'OpenHut Cloud didn’t take over Telegram for this computer. Try turning Telegram off and on.')
+}
+
 // The agent left this Cloud computer or Telegram was turned off: the Cloud deletes the webhook, so the next computer can poll.
 export async function leaveInbox(row: Pick<Row, 'agent_id' | 'kind'>): Promise<void> {
   if (!config.cloudComputer || row.kind !== 'telegram') return
@@ -286,6 +290,7 @@ async function claimed({ row, botToken, person }: { row: Row; botToken: string; 
   await recordsService.put({ collection: 'channel', id: row.id, parent: row.agent_id, workspace: facts.workspace, personal: facts.personal, value: own(ChannelRecord.parse(held.value)), secret: held.secret, reapply: (latest) => ({ value: own(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
   await db.updateTable('channel').set({ status: 'connected', owner_address: person.userId }).where('id', '=', row.id).execute()
   await telegramCodes.stop({ channelId: row.id, kind: 'claim' })
+  await joinInbox({ agentId: row.agent_id, botToken })
   await telegram.send({ botToken, chatId: person.chatId, text: welcome(person.name) }).catch(() => undefined)
   emit({ name: 'channel.linked', target: { type: 'channel', id: row.id, kind: 'telegram', agentId: row.agent_id } })
   await runSet.apply({ workspace: facts.workspace, id: row.agent_id }).catch((err: unknown) => log.warn({ event: 'telegram.claim_apply_failed', agent: row.agent_id, error: messageOf(err) }))
