@@ -19,6 +19,7 @@ import { emit } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { newId } from '../platform/secrets.ts'
 import { settings } from '../platform/settings.ts'
+import { IdParams } from '../platform/responses.ts'
 
 const LOCAL = Symbol('local')
 const DEVICE = Symbol('device')
@@ -41,7 +42,6 @@ const STEP_UP: Record<string, (body: unknown) => boolean> = {
   'POST /api/providers/:id/refresh': () => true,
   'DELETE /api/providers/:id': () => true,
 }
-const IdParams = z.object({ id: z.string() })
 
 export async function who(req: FastifyRequest): Promise<Caller> {
   const { local, device } = arrival(req)

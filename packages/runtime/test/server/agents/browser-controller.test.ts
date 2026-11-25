@@ -8,7 +8,7 @@ import type { WebSocket } from 'ws'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { browserController } from '../../../src/server/agents/browser-controller.ts'
-import { validateWithZod } from '../../../src/server/platform/validation.ts'
+import { validatorCompiler } from 'fastify-type-provider-zod'
 
 const KEY = { authorization: 'Bearer test-key' }
 const heard: string[] = []
@@ -28,7 +28,7 @@ await db.insertInto('agent').values({ id: 'ag_browseon', name: 'Scout', owner_id
 await db.insertInto('agent').values({ id: 'ag_browseof', name: 'Ops', owner_id: 'usr_browsown', instructions: '# Ops', model: 'sonnet', net: 22, channel_key: seal('k'.repeat(32)) }).execute()
 
 const app = Fastify()
-app.setValidatorCompiler(validateWithZod)
+app.setValidatorCompiler(validatorCompiler)
 await app.register(websocket)
 await app.register(browserController, { prefix: '/api/browsers' })
 await app.ready()

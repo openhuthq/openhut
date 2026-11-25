@@ -28,7 +28,7 @@ test('against the real cloud API: when a teammate takes one of their devices off
   fakeAgentd()
   const { migrate } = await import('../../../src/server/platform/db.ts')
   const { answerErrors } = await import('../../../src/server/platform/http-error.ts')
-  const { validateWithZod } = await import('../../../src/server/platform/validation.ts')
+  const { validatorCompiler } = await import('fastify-type-provider-zod')
   const { cloudController } = await import('../../../src/server/cloud/cloud-controller.ts')
   const { cloudEvents } = await import('../../../src/server/cloud/cloud-events.ts')
   const { putList } = await import('../../../src/server/cloud/cloud-service.ts')
@@ -40,7 +40,7 @@ test('against the real cloud API: when a teammate takes one of their devices off
   await migrate()
   const app = Fastify()
   answerErrors(app)
-  app.setValidatorCompiler(validateWithZod)
+  app.setValidatorCompiler(validatorCompiler)
   await app.register(cloudController, { prefix: '/api/cloud' })
   const headers = { authorization: 'Bearer test-key' }
   const status = async () => (await app.inject({ method: 'GET', url: '/api/cloud', headers })).json<{ status: string }>()

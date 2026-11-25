@@ -2,14 +2,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import Fastify from 'fastify'
 import { migrate } from '../../../src/server/platform/db.ts'
-import { validateWithZod } from '../../../src/server/platform/validation.ts'
+import { validatorCompiler } from 'fastify-type-provider-zod'
 import { connectionAuthorizationController } from '../../../src/server/connections/connection-controller.ts'
 
 await migrate()
 
 test('a sign-in finishes in the browser: an expired one says so there, a GitHub launch page posts the manifest, and the app can only see its own sign-in', async () => {
   const app = Fastify()
-  app.setValidatorCompiler(validateWithZod)
+  app.setValidatorCompiler(validatorCompiler)
   await app.register(connectionAuthorizationController, { prefix: '/api/connection-authorizations' })
   const back = () => app.inject({ method: 'GET', url: '/api/connection-authorizations/callback?state=gone&code=x' })
 

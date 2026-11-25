@@ -1,5 +1,6 @@
 import type { WebSocket } from '@fastify/websocket'
-import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import * as z from 'zod/mini'
 import type { Tunnel } from '@openhut/common/tunnel/index.ts'
 import { agentService } from '../agents/agent-service.ts'
@@ -52,8 +53,8 @@ export const forward = {
   },
 }
 
-export const forwardController: FastifyPluginAsync = async (app) => {
-  app.post<{ Params: { key: string } }>('/:key/api/updates', async (req, reply) => {
+export const forwardController: FastifyPluginAsyncZod = async (app) => {
+  app.post('/:key/api/updates', { schema: { params: z.object({ key: z.string() }) } }, async (req, reply) => {
     await who(req)
     if (!memberOf(req.params.key)?.own) throw new HttpError(404, 'That computer isn’t one of yours.', { param: 'key' })
     return reply.send(await fetchOn({ key: req.params.key, path: '/api/updates', init: { method: 'POST' } }))

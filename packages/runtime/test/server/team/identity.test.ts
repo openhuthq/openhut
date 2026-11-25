@@ -18,7 +18,7 @@ import { adminController } from '../../../src/server/admin/admin-controller.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
-import { validateWithZod } from '../../../src/server/platform/validation.ts'
+import { validatorCompiler } from 'fastify-type-provider-zod'
 import { listenLocally, stepUp, tagDevice, tunnelKeyOf, who } from '../../../src/server/team/identity.ts'
 import { userPresence } from '../../../src/server/cloud/user-presence.ts'
 import { meController } from '../../../src/server/team/team-controller.ts'
@@ -26,7 +26,7 @@ import { meController } from '../../../src/server/team/team-controller.ts'
 await migrate()
 const app = Fastify()
 answerErrors(app)
-app.setValidatorCompiler(validateWithZod)
+app.setValidatorCompiler(validatorCompiler)
 app.addHook('preHandler', stepUp)
 app.get('/caller', async (req) => who(req))
 for (const url of ['/api/threads/:id', '/api/threads/:id/chat']) app.route({ method: url.endsWith('chat') ? 'POST' : 'GET', url, handler: async (req) => who(req) })

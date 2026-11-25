@@ -4,7 +4,7 @@ import { config } from './platform/config.ts'
 import { db, migrate } from './platform/db.ts'
 import { emit, log } from './platform/events.ts'
 import { answerErrors, errorBody, messageOf } from './platform/http-error.ts'
-import { validateWithZod } from './platform/validation.ts'
+import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod'
 import { adminController, healthController, updateController } from './admin/admin-controller.ts'
 import { agentController, grantController } from './agents/agent-controller.ts'
 import { memoryController } from './agents/memory-controller.ts'
@@ -41,9 +41,10 @@ if (config.installKind === 'server' && !/^[0-9a-f]{64}$/i.test(config.clientKeyS
   process.exit(1)
 }
 
-const app = Fastify({ logger: false, bodyLimit: 1 << 20, trustProxy: ['127.0.0.1', '::1'], forceCloseConnections: true })
+const app = Fastify({ logger: false, bodyLimit: 1 << 20, trustProxy: ['127.0.0.1', '::1'], forceCloseConnections: true }).withTypeProvider<ZodTypeProvider>()
 answerErrors(app)
-app.setValidatorCompiler(validateWithZod)
+app.setValidatorCompiler(validatorCompiler)
+app.setSerializerCompiler(serializerCompiler)
 app.addHook('onRequest', async (req) => {
   const zone = req.headers['openhut-time-zone']
   if (typeof zone === 'string' && zone) await routineService.setTimeZone(zone)
