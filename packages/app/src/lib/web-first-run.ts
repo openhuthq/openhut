@@ -1,10 +1,8 @@
 import type { Me } from '@openhut/common/cloud/v1/identity.ts'
 
-export const FIRST_RUN_KEY = 'openhut-first-run'
 export const HELP = 'https://openhut.dev/docs'
 
-export type FirstRunStep = { step: 'cloud' } | { step: 'server'; code?: string; expiresAt?: string }
-export type WebScreen = 'loading' | 'sign-in' | 'first-run' | 'knock' | 'over' | 'offline' | 'connecting' | 'open'
+export type WebScreen = 'loading' | 'sign-in' | 'start-cloud' | 'knock' | 'over' | 'offline' | 'connecting' | 'open'
 
 export class Offline extends Error {
   computer: string | null
@@ -30,25 +28,11 @@ export function accountStepOf(me: Pick<Me, 'home' | 'workspaces'>, invited?: str
 export function screenOf({ step, opened, error }: { step: string | undefined; opened: boolean; error: unknown }): WebScreen {
   if (opened) return 'open'
   if (step === 'signed-out') return 'sign-in'
-  if (step === 'first-run') return 'first-run'
+  if (step === 'first-run') return 'start-cloud'
   if (step === 'waiting') return 'knock'
   if (step === 'over') return 'over'
   if (step === 'ready' && error instanceof Offline) return 'offline'
   return step || error ? 'connecting' : 'loading'
-}
-
-export function savedOf(raw: string | null): FirstRunStep | null {
-  try {
-    const saved: unknown = JSON.parse(raw ?? 'null')
-    if (typeof saved !== 'object' || !saved || !('step' in saved)) return null
-    if (saved.step === 'cloud') return { step: 'cloud' }
-    if (saved.step !== 'server') return null
-    const code = 'code' in saved && typeof saved.code === 'string' ? saved.code : undefined
-    const expiresAt = 'expiresAt' in saved && typeof saved.expiresAt === 'string' ? saved.expiresAt : undefined
-    return { step: 'server', ...code && expiresAt && { code, expiresAt } }
-  } catch {
-    return null
-  }
 }
 
 export function lastSeenOf(reason: string | undefined): number | null {
