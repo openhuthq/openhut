@@ -20,8 +20,7 @@ export type PostMemberList = z.infer<typeof PostMemberList>
 export const CreateInvite = z.object({ workspace: WorkspaceId, ...NewInvite.shape })
 export type CreateInvite = z.infer<typeof CreateInvite>
 
-const Nonce = z.string().check(z.regex(/^[\w-]{43}$/))
-export const CreateJoinRequest = z.object({ workspace: WorkspaceId, ...AskAdmin.shape, server: z._default(z.boolean(), false), commit: z.optional(Nonce) })
+export const CreateJoinRequest = z.object({ workspace: WorkspaceId, ...AskAdmin.shape, server: z._default(z.boolean(), false) })
 export type CreateJoinRequest = z.infer<typeof CreateJoinRequest>
 export const JoinRequest = z.object({
   id: DeviceKey,
@@ -33,15 +32,7 @@ export const JoinRequest = z.object({
   os: z.nullable(z.string()),
   server: z.boolean(),
   at: Timestamp,
-  commit: z._default(z.nullable(z.string()), null),
-  nonce: z._default(z.nullable(z.string()), null),
-  reviewed: z._default(z.boolean(), false),
-  missed: z._default(z.boolean(), false),
   location: z._default(z.nullable(z.object({ city: z.nullable(z.string()), country: z.string(), countryCode: z.string() })), null),
   newCountry: z._default(z.boolean(), false),
 })
 export type JoinRequest = z.infer<typeof JoinRequest>
-export const RevealJoinRequest = z.object({ workspace: WorkspaceId, nonce: Nonce })
-export type RevealJoinRequest = z.infer<typeof RevealJoinRequest>
-export const DenyJoinRequest = z.object({ workspace: WorkspaceId, why: z.optional(z.enum(['mismatch', 'not-me'])) })
-export type DenyJoinRequest = z.infer<typeof DenyJoinRequest>

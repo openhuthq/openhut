@@ -9,7 +9,7 @@ import { ENDPOINTS, pathOf, SignInStarted, type EndpointName } from './endpoints
 import { bodyOf } from './member-list.ts'
 import { recordsClient, type RecordsOptions } from './records.ts'
 import type { Kind } from './rules.ts'
-import { Credits, JoinCode, JoinedCode, KeyBox, Me, proofOf, requestParts, Session, SIGNATURE_HEADER, type NamedKeyBox, type V1Proof } from './v1/identity.ts'
+import { Credits, JoinCode, KeyBox, Me, proofOf, requestParts, Session, SIGNATURE_HEADER, type NamedKeyBox, type V1Proof } from './v1/identity.ts'
 import { JoinRequest, type NewLetter, type PostMemberList } from './v1/trust.ts'
 
 export type Store = {

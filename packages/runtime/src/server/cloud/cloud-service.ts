@@ -556,7 +556,9 @@ async function stopAsking(): Promise<void> {
 }
 
 async function rotate({ list, next, letters }: Awaited<ReturnType<typeof keysService.change>>): Promise<void> {
+  const managed = bodyOf(list)?.managed
   const boxes: Box[] = await Promise.all([next, ...(next.teams ?? []).filter((each) => each.workspace.key)].map((room) => keysService.workspaceBox({ account: next, room })))
+  if (managed) boxes.push(await keysService.escrowBox({ account: next, to: managed }))
   const put = await cloud.team(next.workspace.id).publish({ list, letters, boxes })
   if (put.status === 409) throw new HttpError(409, 'Your devices changed on another computer just now. Try again.')
   if (put.status !== 200) throw new HttpError(put.status === 403 ? 403 : 502, 'OpenHut Cloud couldn’t save the change. Try again.')

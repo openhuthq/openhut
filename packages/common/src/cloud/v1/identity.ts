@@ -56,10 +56,6 @@ export type Credits = z.infer<typeof Credits>
 
 export const JoinCode = z.object({ object: z.literal('join_code'), code: z.string(), expiresAt: Timestamp })
 export type JoinCode = z.infer<typeof JoinCode>
-export const CreateJoinCode = z.object({ web: z.optional(z.boolean()) })
-export type CreateJoinCode = z.infer<typeof CreateJoinCode>
-export const JoinedCode = z.object({ object: z.literal('join_code'), code: z.string(), device: z.nullable(DeviceKey) })
-export type JoinedCode = z.infer<typeof JoinedCode>
 
 export const DEVICE_KINDS = ['computer', 'runtime', 'viewer', 'kit'] as const
 export const DeviceKind = z.enum(DEVICE_KINDS)

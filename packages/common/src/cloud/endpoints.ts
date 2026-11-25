@@ -12,10 +12,9 @@ export const ENDPOINTS = {
   getCredits: { call: 'signIn', method: 'GET', path: '/v1/credits', auth: 'token', does: 'The credit balance and the OpenHut models. The OpenRouter key only to the account’s Cloud computer, while the balance is above $0.' },
   me: { call: 'signIn', method: 'GET', path: '/v1/me', auth: 'token', does: 'The account, and each team with this device’s access (listed, waiting).' },
   deleteMe: { call: 'signIn', method: 'DELETE', path: '/v1/me', auth: 'computer', does: 'Delete the account. Signed, and allowed from a computer only.' },
-  createJoinCode: { call: 'signIn', method: 'POST', path: '/v1/join-codes', auth: 'signed', does: 'A one-use, 10-minute code for a team. Only the hash is stored. A computer makes one any time; any signed-in device makes one only while the account has no computer (device.firstComputerCode, the web first run). With { web: true } it lasts 60 seconds, for Continue in web: the maker then reads which device used it.' },
+  createJoinCode: { call: 'signIn', method: 'POST', path: '/v1/join-codes', auth: 'signed', does: 'A one-use, 10-minute code for a team. Only the hash is stored. A computer makes one any time; any signed-in device makes one only while the account has no computer (device.firstComputerCode, the web first run).' },
   startCloudComputer: { call: 'signIn', method: 'POST', path: '/v1/cloud-computer', auth: 'signed', does: 'Start the person\u2019s Cloud computer (one Boat VM), or adopt the one starting. 409 when this server has no Boat key, 402 at $0. It joins with a server code and lets in the device that asked.' },
   getCloudComputer: { call: 'signIn', method: 'GET', path: '/v1/cloud-computer', auth: 'signed', does: 'The person\u2019s Cloud computer and its state (creating, running, stopping, asleep, waking, out). 404 when they have none.' },
-  getJoinCode: { call: 'signIn', method: 'GET', path: '/v1/join-codes/:code', auth: 'token', does: 'Which device used a Continue in web code (null until one did). Only the device that made the code may ask.' },
   listRecords: { call: 'records', method: 'GET', path: '/v1/teams/:team/:kind', auth: 'token', does: 'List one kind, ordered, paged with ?after=.' },
   getRecord: { call: 'records', method: 'GET', path: '/v1/teams/:team/:kind/:id', auth: 'token', does: 'Read one record (sealed).' },
   putRecord: { call: 'records', method: 'PUT', path: '/v1/teams/:team/:kind/:id', auth: 'signed', does: 'Write one record. If-Match: <version>; a conflict returns 409 with the newer copy. Blobs stream through the same path as kind blob.' },
@@ -48,9 +47,5 @@ export type CreateSignIn = z.infer<typeof CreateSignIn>
 export const SignInStarted = z.object({ object: z.literal('sign_in'), url: z.string() })
 export type SignInStarted = z.infer<typeof SignInStarted>
 
-export const PutJoinRequest = z.union([
-  z.object({ ...AskAdmin.shape, server: CreateJoinRequest.shape.server, commit: CreateJoinRequest.shape.commit }),
-  z.object({ nonce: CreateJoinRequest.shape.commit.def.innerType }),
-  z.object({ reviewed: z.literal(true) }),
-])
+export const PutJoinRequest = z.object({ ...AskAdmin.shape, server: CreateJoinRequest.shape.server })
 export type PutJoinRequest = z.infer<typeof PutJoinRequest>

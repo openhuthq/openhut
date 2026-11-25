@@ -175,7 +175,7 @@ function heard(text: string): void {
   if (notice) noticed(notice)
 }
 
-function noticed({ object, id, ver, workspace, why }: Notice): void {
+function noticed({ object, id, ver, workspace }: Notice): void {
   const collection = Collection.safeParse(object).data
   if (collection) {
     changed({ collection, id, ver, workspace })
