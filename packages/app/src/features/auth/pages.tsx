@@ -16,7 +16,8 @@ const QUIET = 'h-auto text-[13px] font-normal text-mute'
 export function SetupPage() {
   const setup = useSetup()
   const createPerson = useCreatePerson()
-  if (setup.data?.open === false) return <Redirect to="/login" />
+  // The app sends a signed-out visitor on to /login ("Welcome back"); a signed-in one stays.
+  if (setup.data?.open === false) return <Redirect to="/" />
   return <AuthForm title="Create your account" line="You’re first here, so this is the owner account." error={createPerson.error}
     fields={['address', 'email', 'password']} busy={createPerson.isPending} button="Create account" foot="After this, people join by invite link."
     onSubmit={(event) => {
