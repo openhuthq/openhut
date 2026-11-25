@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { FastifyReply } from 'fastify'
 import * as z from 'zod/mini'
-import { type Backup, KeyBox, type Letter, type MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type UnlockCloud, type CreateWebLink, type WebLink, faceName, KNOCK_MS, siteHost } from '@openhut/common/cloud/cloud.ts'
+import { type Backup, KeyBox, type Letter, type MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type SetEncryption, type UnlockCloud, type CreateWebLink, type WebLink, faceName, KNOCK_MS, siteHost } from '@openhut/common/cloud/cloud.ts'
 import type { Health } from '@openhut/common/admin/admin.ts'
 import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
 import { facesOf } from '@openhut/common/cloud/faces.ts'
@@ -74,7 +74,7 @@ export const cloudService = {
       device: here,
       workspace: on && account && members ? { id: account.workspace.id, version: members.version, members: members.members } : null,
       keyStore: keyStore.kind(), kit: on ? kitOf() : null, kitInCloud: inCloud ? inCloud.found : Boolean(keysService.kitState().saved) || cloudHasKit === true, cloudKit: inCloud?.kit ?? null, backup: IDLE,
-      signInError, keptAccount: on ? null : (keysService.kitState().saved ? keysService.account()?.email ?? null : null), devices, passkey: on ? passkeySaved : passkeyInCloud, touchIdOff: on && passkeyDropped && !passkeySaved, youngUntil: null, needsSignIn: Boolean(locked && !session),
+      signInError, keptAccount: on ? null : (keysService.kitState().saved ? keysService.account()?.email ?? null : null), devices, passkey: on ? passkeySaved : passkeyInCloud, encryption: encryptionOn(), touchIdOff: on && passkeyDropped && !passkeySaved, youngUntil: null, needsSignIn: Boolean(locked && !session),
       workspaces: on && account ? roomKeys.rooms().map(({ workspace: { id, key } }) => {
         const body = roomKeys.members(id)
         const invites = (body?.invites ?? []).map((each) => ({ email: each.email, role: each.role, link: roomKeys.link({ ws: id, email: each.email }) ?? null, until: roomKeys.linkUntil({ ws: id, email: each.email }) ?? null }))
@@ -357,6 +357,18 @@ export const cloudService = {
     return cloudService.status()
   },
 
+  async encryption({ on }: SetEncryption): Promise<Cloud> {
+    const account = keysService.mustBeOn()
+    if (on === encryptionOn()) return cloudService.status()
+    await serial(async () => {
+      if (on) return rotate({ changed: await keysService.change({ dropManaged: true }), drop: ['kit', 'kit-confirmed', 'passkey', 'escrow'] })
+      const ours = (await cloud.me())?.managed
+      if (!ours) throw new HttpError(409, 'OpenHut Cloud can’t keep a backup key right now. Try again later.')
+      await putList({ workspace: account.workspace.id, list: await keysService.withManaged(ours), boxes: [await keysService.escrowBox({ account, to: ours })] })
+    })
+    return cloudService.status()
+  },
+
   async removePasskey(): Promise<Cloud> {
     const account = keysService.mustBeOn()
     if (!await serial(() => deleteBoxes({ account, kinds: ['passkey'] }))) throw new HttpError(502, 'OpenHut Cloud couldn’t turn Touch ID off. Try again.')
@@ -526,6 +538,11 @@ function joinedOf({ key, accountKey, names }: { key: string; accountKey: string 
   if (!by) return null
   if (by === accountKey) return { how: 'recovery' }
   return { how: 'approved', by: names?.[by] ?? null }
+}
+
+function encryptionOn(): boolean {
+  const account = keysService.account()
+  return Boolean(account && !bodyOf(account.list)?.managed)
 }
 
 function kitOf(): { savedAt: string; differs: boolean } | null {
@@ -763,7 +780,7 @@ async function stopAsking(): Promise<void> {
   if (keysService.asked().length) await keysService.setAsked([])
 }
 
-async function rotate({ changed: { list, next, letters }, drop }: { changed: Awaited<ReturnType<typeof keysService.change>>; drop: ('kit' | 'kit-confirmed' | 'passkey')[] }): Promise<void> {
+async function rotate({ changed: { list, next, letters }, drop }: { changed: Awaited<ReturnType<typeof keysService.change>>; drop: ('kit' | 'kit-confirmed' | 'passkey' | 'escrow')[] }): Promise<void> {
   const boxes: Box[] = await Promise.all([next, ...(next.teams ?? []).filter((each) => each.workspace.key)].map((room) => keysService.workspaceBox({ account: next, room })))
   const put = await cloud.team(next.workspace.id).publish({ list, letters, boxes })
   if (put.status === 409) throw new HttpError(409, 'Your devices changed on another computer just now. Try again.')

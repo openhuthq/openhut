@@ -170,7 +170,7 @@ export const keysService = {
     return signList({ signer: await keysService.device(), body: withoutDevices({ body: await nextOf({ list: account.list, body, me }), gone }) })
   },
 
-  async change(): Promise<{ list: MemberList; next: Account; letters: Sent[] }> {
+  async change({ dropManaged = false }: { dropManaged?: boolean } = {}): Promise<{ list: MemberList; next: Account; letters: Sent[] }> {
     const account = keysService.mustBeOn()
     const body = bodyOf(account.list)
     const me = toBase64((await keysService.device()).publicKey)
@@ -183,12 +183,19 @@ export const keysService = {
     const base = withoutDevices({ body: await nextOf({ list: account.list, body, me }), gone })
     const members = base.members.map((member) => member.email === account.email ? { ...member, devices: [...member.devices, kit], kit } : member)
     const keyVersion = keyVersionOf(body) + 1
-    const list = await signList({ signer: await keysService.device(), body: { ...base, members, keyVersion, added: { ...base.added, [kit]: base.at || 0 } } })
+    const list = await signList({ signer: await keysService.device(), body: { ...base, members, keyVersion, added: { ...base.added, [kit]: base.at || 0 }, managed: dropManaged ? undefined : base.managed } })
     if (!await check({ anchor: await anchorOf(account.list), chain: [account.list, list] })) throw new HttpError(409, 'Your devices changed on another computer just now. Try again.')
     const { next, letters } = await rotateKeys({ room: { ...account, key: toBase64(key) }, list, keyVersion, members, me })
     const own = members.find((member) => member.email === account.email)?.devices.filter((device) => device !== kit && !body.runtimes?.includes(device)) || []
     for (const to of own) letters.push(await sealTo({ to, purpose: 'account-key', workspace: account.workspace.id, plain: key }))
     return { list, next, letters }
+  },
+
+  async withManaged(managed: string): Promise<MemberList> {
+    const account = keysService.mustBeOn()
+    const body = bodyOf(account.list)
+    if (!body) throw new HttpError(409, 'Enable OpenHut Cloud on this computer first.')
+    return signList({ signer: await keysService.device(), body: { ...await nextOf({ list: account.list, body, me: await keysService.deviceKey() }), managed } })
   },
 
   signedIn(): Account {

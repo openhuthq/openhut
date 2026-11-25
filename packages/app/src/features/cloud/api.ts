@@ -93,6 +93,14 @@ export function useRemovePasskey() {
   })
 }
 
+export function useSetEncryption() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (on: boolean) => request({ schema: Cloud, computer: 'local', path: '/api/cloud/encryption', method: 'POST', body: { on } }),
+    onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
+  })
+}
+
 const NEW_KIT_HINT = 'If someone else has your kit, make a new one.'
 export const REMOVE_DETAIL = 'Only if it’s lost, sold or not yours.'
 export const REMOVE_POINTS = [
