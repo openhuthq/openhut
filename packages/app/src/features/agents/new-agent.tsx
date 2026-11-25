@@ -8,6 +8,7 @@ import { ErrorNote } from '@/components/error-note'
 import { DialogCard, I } from '@/components/kit'
 import { Glyph } from '@/components/glyph'
 import { useAgents, useCreateAgent } from '@/features/agents/api'
+import { useCloudComputer, useStartCloud } from '@/features/cloud/api'
 import { EntryScreen } from '@/features/cloud/step'
 import { useWorkspaces } from '@/features/cloud/workspaces'
 import { useComputers } from '@/features/computers/api'
@@ -22,6 +23,8 @@ import { AccessPicker, type AccessValue } from '@/features/agents/access'
 import { formValues } from '@/lib/form'
 import { TOUCH, useMedia } from '@/lib/media'
 import { navigate, open, useOpen } from '@/lib/router'
+import { tunnelKeyOf, type Computer } from '@/lib/computers'
+import { REMOTE } from '@/lib/remote'
 import { cn } from '@/lib/utils'
 
 const NAMES = ['Juniper', 'Scout', 'Pepper', 'Atlas', 'Maple', 'Biscuit', 'Nova', 'Otto']
@@ -47,10 +50,12 @@ function AgentForm() {
   const { active, email } = useWorkspaces()
   const [access, setAccess] = useState<AccessValue>({ shared: false, people: [], sidebars: [] })
   const touch = useMedia(TOUCH)
-  const computers = useComputers().data ?? []
+  const { computers, cloud } = useRunsOn()
+  const startCloud = useStartCloud()
   const [chosen, setComputer] = useState<string>()
-  const computer = chosen ?? defaultComputer(computers)
-  const providers = useComputerProviders(computer)
+  const computer = (chosen === CLOUD_PICK ? cloud : chosen) ?? (computers.some((each) => each.id !== cloud) ? defaultComputer(computers) : cloud ?? 'local')
+  const starting = computer === CLOUD_PICK
+  const providers = useComputerProviders(starting ? 'local' : computer)
   const [picked, setPicked] = useState<string | null>(null)
   const [wanted, setWanted] = useState<ProviderId>()
   const seat = useStartSeatSignIn()
@@ -89,7 +94,7 @@ function AgentForm() {
       className="h-auto w-full rounded-none border-0 bg-transparent p-0 text-center text-[22px]/[1.3] font-semibold shadow-none focus-visible:ring-0 text-ink outline-none placeholder:text-mute-2" />
     <div className="flex w-full flex-col divide-y divide-hair border-y border-hair text-left">
       {where && <Row title="Runs on">
-        <ComputerPicker computers={computers} value={computer} onPick={(id) => { setComputer(id); setPicked(null) }} onAdd={() => navigate('/settings/computers?open=add')} title="It runs on" className={PICKER} />
+        <ComputerPicker computers={computers} value={computer} cloud={cloud} onPick={(id) => { setComputer(id); setPicked(null); if (id === CLOUD_PICK) startCloud.mutate() }} onAdd={() => navigate('/settings/computers?open=add')} title="It runs on" className={PICKER} />
       </Row>}
       <Row title="Model">
         <ModelPicker providers={providers} value={model} onPick={setPicked} onSetUp={setUp} label="Model" title="It thinks with" className={PICKER}>
@@ -98,9 +103,22 @@ function AgentForm() {
       </Row>
       {email && <Row title="Access"><AccessPicker workspace={active} owner={email} value={access} onChange={setAccess} className={PICKER} /></Row>}
     </div>
-    <Button type="submit" variant="primary" className="h-10 w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !providers}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
+    <Button type="submit" variant="primary" className="h-10 w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !providers || starting}>{starting ? 'Starting Cloud…' : createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
     <ErrorNote message={createAgent.error?.message} />
   </form>
+}
+
+// "Runs on" choices: the person's computers, with their Cloud computer named Cloud, or a Cloud choice that starts one (web App only).
+const CLOUD_PICK = 'cloud'
+function useRunsOn(): { computers: Computer[]; cloud?: string } {
+  const computers = useComputers().data ?? []
+  const mine = useCloudComputer().data
+  if (!REMOTE) return { computers }
+  const cloud = mine?.device ? tunnelKeyOf(mine.device) : CLOUD_PICK
+  const joined = computers.some((each) => each.id === cloud)
+  const listed = joined ? computers.map((each) => each.id === cloud ? { ...each, name: 'Cloud' } : each)
+    : [...computers, { id: cloud, name: 'Cloud', kind: 'server' as const, url: '', online: true, features: { whatsapp: false, browser: false }, appTooOld: false, runtimeTooOld: false }]
+  return { computers: listed, cloud: joined ? cloud : CLOUD_PICK }
 }
 
 function NeedsSignIn({ model }: { model: string }) {
