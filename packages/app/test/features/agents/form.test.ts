@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { firstModel, inUse } from '../../../src/features/agents/form.ts'
+import { firstModel, inUse, runsOnChoices } from '../../../src/features/agents/form.ts'
 
 const provider = (id: string, connected: boolean, models: string[]) => ({ id, connected, models: models.map((model) => ({ id: model, on: true })) }) as never
 
@@ -19,4 +19,11 @@ test('Models marks the one new agents use: Claude Sonnet first, else the first c
   assert.equal(inUse([provider('claude', false, ['sonnet']), provider('openrouter', true, ['x-ai/grok'])]), 'openrouter')
   assert.equal(inUse([provider('openai', false, ['gpt'])]), undefined)
   assert.equal(inUse(undefined), undefined)
+})
+
+test('Runs on lists the online computers, and none when there is only one to pick', () => {
+  const on = (id: string, online = true) => ({ id, online })
+  assert.deepEqual(runsOnChoices([on('here'), on('mac'), on('box', false)]).map((each) => each.id), ['here', 'mac'])
+  assert.deepEqual(runsOnChoices([on('here'), on('box', false)]), [])
+  assert.deepEqual(runsOnChoices(undefined), [])
 })

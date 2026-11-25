@@ -7,12 +7,17 @@ import { useIsAdmin } from '@/features/people/api'
 import { DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ErrorNote } from '@/components/error-note'
-import { DialogCard, I, PILL } from '@/components/kit'
+import { Choice, DialogCard, I, MenuCard, PILL } from '@/components/kit'
 import { Glyph } from '@/components/glyph'
 import { useAgents, useCreateAgent } from '@/features/agents/api'
 import { useStartSeatSignIn } from '@/features/settings/api'
 import { ModelsStep, SeatSignIn, stepOf } from '@/features/settings/models'
-import { DEFAULT_MODEL, firstModel } from '@/features/agents/form'
+import { DEFAULT_MODEL, firstModel, runsOnChoices } from '@/features/agents/form'
+import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DEVICE_HUE, DEVICE_ICONS } from '@/components/custom/device'
+import { nameOf, useComputers } from '@/features/computers/api'
+import { noteOf } from '@/features/settings/computers'
+import { HERE, type Computer } from '@/lib/openhut'
 import { useComputerProviders } from '@/features/models/api'
 import { ModelPicker, SOFT_TRIGGER } from '@/features/models/model-picker'
 import { FacePicker } from '@/features/agents/face-picker'
@@ -50,6 +55,8 @@ function AgentForm() {
   const touch = useMedia(TOUCH)
   const providers = useComputerProviders('local')
   const [picked, setPicked] = useState<string | null>(null)
+  const [runsOn, setRunsOn] = useState(HERE)
+  const computers = runsOnChoices(useComputers().data)
   const [wanted, setWanted] = useState<ProviderId>()
   const seat = useStartSeatSignIn()
   const [signing, setSigning] = useState<{ name: string; face: string } | 'only'>()
@@ -73,7 +80,7 @@ function AgentForm() {
     if (id === 'claude') setSigning('only')
     else open(id)
   }
-  const create = ({ name, face }: { name: string; face: string }) => createAgent.mutate({ name, face, model })
+  const create = ({ name, face }: { name: string; face: string }) => createAgent.mutate({ name, face, model, runsOn })
   return <form className="flex w-full flex-col items-center gap-4" onSubmit={(event) => {
     if (event.target !== event.currentTarget) return
     const field = formValues(event)
@@ -87,6 +94,7 @@ function AgentForm() {
     <Input name="name" required maxLength={40} defaultValue={name} placeholder={name} aria-label="Name" autoFocus={!touch} autoComplete="off" spellCheck={false} enterKeyHint="go"
       className="h-auto w-full rounded-none border-0 bg-transparent p-0 text-center text-[22px]/[1.3] font-semibold shadow-none focus-visible:ring-0 text-ink outline-none placeholder:text-mute-2" />
     <div className="flex w-full flex-col divide-y divide-hair border-y border-hair text-left">
+      {computers.length > 0 && <Row title="Runs on"><ComputerPicker computers={computers} value={runsOn} onPick={setRunsOn} /></Row>}
       {none && <ConnectModel onSetUp={setUp} />}
       {!none && <Row title="Model">
         <ModelPicker providers={providers} value={model} onPick={setPicked} onSetUp={setUp} label="Model" title="It thinks with" className={PICKER}>
@@ -97,6 +105,20 @@ function AgentForm() {
     <Button type="submit" variant="primary" className="h-10 w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !providers || none}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
     <ErrorNote message={createAgent.error?.message} />
   </form>
+}
+
+function ComputerPicker({ computers, value, onPick }: { computers: Computer[]; value: string; onPick: (id: string) => void }) {
+  const name = nameOf({ computers, id: value })
+  return <DropdownMenu>
+    <DropdownMenuTrigger className={PICKER} aria-label={`Runs on: ${name}`}>
+      <I icon={DEVICE_ICONS.server} size={14} className="shrink-0 text-mute" />
+      <span className="min-w-0 flex-1 truncate text-left">{name}</span>
+      <I icon={UnfoldMoreIcon} size={12} className="text-mute" />
+    </DropdownMenuTrigger>
+    <MenuCard title="It runs on">
+      {computers.map((computer) => <Choice key={computer.id} icon={<I icon={DEVICE_ICONS.server} size={15} className={DEVICE_HUE} />} name={computer.name} note={noteOf(computer)} selected={computer.id === value} onClick={() => onPick(computer.id)} />)}
+    </MenuCard>
+  </DropdownMenu>
 }
 
 const KEY_PROVIDERS = PROVIDERS.filter((info) => info.kind === 'key')

@@ -13,3 +13,8 @@ export function inUse(providers: Provider[] | undefined): ProviderId | undefined
   const picked = firstModel(providers)
   return providers?.find((provider) => picked?.startsWith(`${provider.id}:`))?.id
 }
+
+export function runsOnChoices<T extends { online: boolean }>(computers: T[] | undefined): T[] {
+  const online = computers?.filter((computer) => computer.online) ?? []
+  return online.length > 1 ? online : []
+}
