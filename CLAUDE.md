@@ -20,7 +20,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   (`platform/records.ts`, secrets sealed with the install secret); `agents/run-set.ts` applies them to the agents this computer
   runs. People sign in with a session cookie (`team/identity.ts`, `team/team-service.ts`): while there is no owner, the first
   visitor creates the owner account (and sets the HTTPS address); everyone else joins by invite link; roles owner, admin, member.
-  `docker exec openhut openhut reset-owner | address` talk to the local socket. The address (`platform/address.ts`, Settings ›
+  `docker exec -it openhut openhut reset-owner` (new owner password) and `openhut address [url|clear]` use the local socket. The address (`platform/address.ts`, Settings ›
   Admin) sets the cookie's Secure flag, every redirect URL and the Caddyfile: Caddy in the image serves :80, and once the address
   is set gets its Let's Encrypt certificate and serves HTTPS on :443. `npm run dev` and the tests use `OPENHUT_DEV_KEY_SHA256`
   instead, a key that acts as the owner. The server also serves the built App (`platform/web-app.ts`).

@@ -73,7 +73,7 @@ export const settings = {
     return sealed ? z.parse(Smtp, JSON.parse(unseal(sealed))) : undefined
   },
   setSmtp: (smtp: Smtp) => write('smtp', seal(JSON.stringify(smtp))),
-  address: (): string | undefined => rows.get('address'),
+  address: (): string | undefined => rows.get('address') || undefined,
   setAddress: (origin: string) => write('address', origin),
   usageData: (): boolean => rows.get('usage_data') === 'on',
   setUsageData: (on: boolean) => write('usage_data', on ? 'on' : 'off'),

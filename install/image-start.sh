@@ -26,8 +26,9 @@ supervise "$LOG/agentd.log" node "$J/packages/runtime/src/agentd/agentd.ts" &
 i=0; until [ -S /run/agentd/agentd.sock ]; do i=$((i+1)); [ $i -gt 300 ] && { mark "agentd failed"; exit 1; }; sleep 0.2; done
 ( umask 077; cd "$J" && supervise "$LOG/app.log" su-exec openhut node "$J/packages/runtime/src/server/app.ts" ) &
 i=0; until [ -s /data/app/Caddyfile ]; do i=$((i+1)); [ $i -gt 600 ] && { mark "no Caddyfile"; exit 1; }; sleep 0.2; done
-mkdir -p /data/caddy
-( export XDG_DATA_HOME=/data/caddy XDG_CONFIG_HOME=/data/caddy; supervise "$LOG/caddy.log" caddy run --config /data/app/Caddyfile --adapter caddyfile --watch ) &
+mkdir -p /data/caddy && chown openhut:openhut /data/caddy && chmod 0700 /data/caddy
+sysctl -qw net.ipv4.ip_unprivileged_port_start=80
+( export XDG_DATA_HOME=/data/caddy XDG_CONFIG_HOME=/data/caddy; supervise "$LOG/caddy.log" su-exec openhut caddy run --config /data/app/Caddyfile --adapter caddyfile --watch ) &
 mark "agentd, app and caddy started"
 echo "openhut: up"
 while :; do sleep 3600; done

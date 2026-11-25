@@ -29,10 +29,11 @@ export const teamService = {
     return { object: 'setup', open: !(await claimedOwner()), googleSignIn: settings.googleSignIn(), passwordReset: !!settings.smtp() }
   },
 
-  async resetOwner(): Promise<{ object: 'owner_reset'; url: string }> {
-    const owner = await db.updateTable('person').set({ pass: null }).where('role', '=', 'owner').returning('id').executeTakeFirst()
-    if (owner) await db.deleteFrom('session').where('person_id', '=', owner.id).execute()
-    if (owner) await db.deleteFrom('password_reset').where('person_id', '=', owner.id).execute()
+  async resetOwner({ password }: { password: string }): Promise<{ object: 'owner_reset'; url: string }> {
+    const owner = await db.updateTable('person').set({ pass: await hashPassword(password) }).where('role', '=', 'owner').returning('id').executeTakeFirst()
+    if (!owner) throw new HttpError(404, 'This install has no owner yet. Open it and create the owner account.')
+    await db.deleteFrom('session').where('person_id', '=', owner.id).execute()
+    await db.deleteFrom('password_reset').where('person_id', '=', owner.id).execute()
     emit({ name: 'owner.reset' })
     return { object: 'owner_reset', url: publicAddress() }
   },

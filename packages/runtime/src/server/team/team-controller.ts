@@ -1,8 +1,8 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import * as z from 'zod/mini'
-import { CreateInvite, CreatePasswordReset, CreatePerson, CreateSession, FinishPasswordReset, UpdatePerson, UpdateInstallSettings } from '@openhut/common/team/team.ts'
+import { PASSWORD_MIN, CreateInvite, CreatePasswordReset, CreatePerson, CreateSession, FinishPasswordReset, UpdatePerson, UpdateInstallSettings } from '@openhut/common/team/team.ts'
 import { clientOf, rateLimit, requireUnder } from '../platform/rate-limit.ts'
-import { checkAddress, publicAddress, saveAddress } from '../platform/address.ts'
+import { checkAddress, clearAddress, publicAddress, saveAddress } from '../platform/address.ts'
 import { deleted, IdParams, listOf } from '../platform/responses.ts'
 import { clearSessionCookie, cookieOf, googleStateCookie, GOOGLE_STATE, requireLocal, requireSignIn, sessionToken, setSessionCookie, who } from './identity.ts'
 import { routineService } from '../routines/routine-service.ts'
@@ -26,14 +26,14 @@ export const addressController: FastifyPluginAsyncZod = async (app) => {
   app.get('/', Local, async () => ({ object: 'address', url: publicAddress() }))
 
   app.post('/', { onRequest: requireLocal, schema: { body: SetAddress } }, async (req) => {
-    const origin = checkAddress(req.body.address)
-    await saveAddress(origin)
-    return { object: 'address', url: origin }
+    if (req.body.address === 'clear') await clearAddress()
+    else await saveAddress(checkAddress(req.body.address))
+    return { object: 'address', url: publicAddress() }
   })
 }
 
 export const ownerResetController: FastifyPluginAsyncZod = async (app) => {
-  app.post('/', Local, async () => teamService.resetOwner())
+  app.post('/', { onRequest: requireLocal, schema: { body: OwnerReset } }, async (req) => teamService.resetOwner(req.body))
 }
 
 export const peopleController: FastifyPluginAsyncZod = async (app) => {
@@ -120,6 +120,7 @@ export const installSettingsController: FastifyPluginAsyncZod = async (app) => {
 }
 
 const Local = { onRequest: requireLocal }
+const OwnerReset = z.object({ password: z.string().check(z.minLength(PASSWORD_MIN, `Pick a password of at least ${PASSWORD_MIN} characters.`), z.maxLength(200)) })
 const SetAddress = z.object({ address: z.string().check(z.maxLength(300)) })
 const SignedIn = { onRequest: requireSignIn }
 const TokenParams = z.object({ token: z.string().check(z.maxLength(200)) })

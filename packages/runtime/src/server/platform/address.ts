@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { config } from './config.ts'
 import { HttpError } from './http-error.ts'
@@ -10,10 +10,15 @@ export const publicAddress = (): string => settings.address() || `http://127.0.0
 
 export function checkAddress(url: string): string {
   const parsed = URL.canParse(url) ? new URL(url) : undefined
-  if (parsed?.protocol !== 'https:' || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(parsed.hostname) || /^[\d.]+$/.test(parsed.hostname)) {
+  if (parsed?.protocol !== 'https:' || parsed.port || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(parsed.hostname) || /^[\d.]+$/.test(parsed.hostname)) {
     throw new HttpError(400, 'Enter the HTTPS address people will open, like https://agents.example.com. Its DNS must point at this server.', { param: 'address' })
   }
   return parsed.origin
+}
+
+export async function clearAddress(): Promise<void> {
+  await settings.setAddress('')
+  writeCaddyfile()
 }
 
 export async function saveAddress(origin: string): Promise<void> {
@@ -22,7 +27,9 @@ export async function saveAddress(origin: string): Promise<void> {
 }
 
 export function writeCaddyfile(): void {
-  writeFileSync(join(config.dataDir, 'Caddyfile'), caddyfile(settings.address()))
+  const path = join(config.dataDir, 'Caddyfile')
+  writeFileSync(`${path}.next`, caddyfile(settings.address()))
+  renameSync(`${path}.next`, path)
 }
 
 export function caddyfile(address: string | undefined): string {
