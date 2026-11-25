@@ -107,7 +107,7 @@ jobs:
 
   app:
     # M3: the image, the shell and the phone (webDir ../app/dist) carry the same App dist (scripts/app-sum.ts). A PR's App never matches
-    # stable, so here the image is built against a test-key release of this App (deploy/m2/test-release.ts, as in the rehearsal);
+    # stable, so here the image is built against a test-key release of this App (deploy/test-release.ts);
     # R5's check against the real signed stable release runs in the Cloud deploy's build (cloud.yml, after fetch-release.sh).
     needs: changes
     runs-on: ubuntu-latest
@@ -128,7 +128,7 @@ jobs:
       - name: The image, the shell and the phone carry the same dist sha256
         run: |
           npm -w @openhut/desktop run build
-          set -a; eval "$(node private/api/deploy/m2/test-release.ts packages/app/dist private/api/deploy/release)"; set +a
+          set -a; eval "$(node private/api/deploy/test-release.ts packages/app/dist private/api/deploy/release)"; set +a
           docker build -q -f private/api/Dockerfile --build-arg RELEASE_KEY_SPKI --build-arg REKOR_KEY_SPKI -t openhut-cloud:ci .
           docker cp "$(docker create openhut-cloud:ci)":/app/web image-web
           node scripts/app-sum.ts packages/app/dist packages/desktop/dist/renderer image-web | tee -a "$GITHUB_STEP_SUMMARY"

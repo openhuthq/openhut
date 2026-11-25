@@ -13,6 +13,7 @@ export const ENDPOINTS = {
   me: { call: 'signIn', method: 'GET', path: '/v1/me', auth: 'token', does: 'The account, and each team with this device’s access (listed, waiting).' },
   deleteMe: { call: 'signIn', method: 'DELETE', path: '/v1/me', auth: 'computer', does: 'Delete the account. Signed, and allowed from a computer only.' },
   createJoinCode: { call: 'signIn', method: 'POST', path: '/v1/join-codes', auth: 'signed', does: 'A one-use, 10-minute code for a team. Only the hash is stored. A computer makes one any time; any signed-in device makes one only while the account has no computer (device.firstComputerCode, the web first run). With { web: true } it lasts 60 seconds, for Continue in web: the maker then reads which device used it.' },
+  startCloudComputer: { call: 'signIn', method: 'POST', path: '/v1/cloud-computer', auth: 'signed', does: 'Start the person\u2019s Cloud computer (one Boat VM), or adopt the one starting. 409 when this server has no Boat key, 402 at $0. It joins with a server code and lets in the device that asked.' },
   getJoinCode: { call: 'signIn', method: 'GET', path: '/v1/join-codes/:code', auth: 'token', does: 'Which device used a Continue in web code (null until one did). Only the device that made the code may ask.' },
   listRecords: { call: 'records', method: 'GET', path: '/v1/teams/:team/:kind', auth: 'token', does: 'List one kind, ordered, paged with ?after=.' },
   getRecord: { call: 'records', method: 'GET', path: '/v1/teams/:team/:kind/:id', auth: 'token', does: 'Read one record (sealed).' },
@@ -23,6 +24,11 @@ export const ENDPOINTS = {
   createOAuthAuthorization: { call: 'connections', method: 'POST', path: '/v1/oauth-authorizations', auth: 'token', does: 'Start an OAuth connection for a computer.' },
   oauthCallback: { call: 'connections', method: 'GET', path: '/v1/oauth-authorizations/callback', auth: 'none', does: 'The provider comes back here.' },
   createOAuthToken: { call: 'connections', method: 'POST', path: '/v1/oauth-tokens', auth: 'token', does: 'Exchange or refresh a connection’s token.' },
+  createChannel: { call: 'connections', method: 'POST', path: '/v1/channels', auth: 'signed', does: 'A Cloud computer hands a channel (agent, kind, token) to the Cloud, which becomes its webhook and holds its events.' },
+  listChannels: { call: 'connections', method: 'GET', path: '/v1/channels', auth: 'token', does: 'This computer’s channels on the Cloud.' },
+  deleteChannel: { call: 'connections', method: 'DELETE', path: '/v1/channels/:id', auth: 'signed', does: 'Remove the webhook and the pending events (the agent left or the channel was turned off).' },
+  listChannelEvents: { call: 'connections', method: 'GET', path: '/v1/channels/:id/events', auth: 'token', does: 'Events held for this computer, in order; ?after acknowledges every event up to it.' },
+  putRoutine: { call: 'connections', method: 'PUT', path: '/v1/routines/:id', auth: 'signed', does: 'A routine’s next run (never its prompt), so the Cloud wakes the computer for it.' },
   health: { call: 'ops', method: 'GET', path: '/health', auth: 'none', does: 'Ready once migrations ran and the database answers.' },
 } as const satisfies Record<string, Endpoint>
 

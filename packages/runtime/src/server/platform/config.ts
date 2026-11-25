@@ -45,7 +45,6 @@ export const config = {
   agentdSocket: process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock',
   agentdInProcess: !!process.env.OPENHUT_SANDBOX && !process.env.AGENTD_SOCK,
   secret: process.env.OPENHUT_SECRET,
-  secretHandoff: process.env.OPENHUT_SECRET ? join(DATA, 'secret.handoff') : undefined,
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))).version,
   build: BUILD,
   join: JOIN,

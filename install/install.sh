@@ -131,16 +131,6 @@ lock() {
 }
 exists() { docker container inspect "$1" >/dev/null 2>&1; }
 label() { docker container inspect -f "{{index .Config.Labels \"$2\"}}" "$1" 2>/dev/null || true; }
-migrate() {
-  say "Moving OpenHut into its image (its data comes along)"
-  docker stop -t 10 openhut >/dev/null
-  find /data -mindepth 1 -maxdepth 1 ! -name install.lock ! -name etc -exec rm -rf {} +
-  docker cp openhut:/data - | tar -x -C / || die "couldn't copy the data out of the old container, so nothing changed; it's stopped: docker start openhut"
-  docker cp openhut:/etc/openhut/env - | tar -x -C /etc/openhut/ || true
-  chown -R openhut:openhut /data/app
-  docker rename openhut openhut-legacy
-  PREVIOUS=openhut-legacy
-}
 undo() {
   docker rm -f openhut >/dev/null 2>&1 || true
   if [ "$PREVIOUS" = openhut-previous ]; then
@@ -194,7 +184,6 @@ finish() {
     OLD=$(docker container inspect -f '{{.Image}}' openhut-previous)
     docker rm -f openhut-previous >/dev/null
   fi
-  [ "$PREVIOUS" != openhut-legacy ] || echo "  The old container is kept, stopped, as openhut-legacy. Once you're happy with this one: docker rm openhut-legacy"
   [ -z "${OPENHUT_UPDATER:-}" ] || echo 0 > /data/update.log.exit
   updater
   [ -z "$OLD" ] || docker image rm "$OLD" >/dev/null 2>&1 || true
@@ -239,8 +228,6 @@ if [ "$MODE" = swap ]; then
   mkdir -p /data/etc && chmod 0700 /data/etc
   LOCK=/data/install.lock IN="docker exec openhut" PREVIOUS=
   [ -n "${OPENHUT_UPDATER:-}" ] || lock
-  exists openhut || ! exists openhut-legacy || docker rename openhut-legacy openhut
-  if exists openhut && [ -z "$(label openhut dev.openhut.build)" ]; then migrate; fi
 fi
 [ "$MODE" = swap ] || [ -z "${OPENHUT_RUNTIME:-}" ] || die "run this on the server itself, not inside the OpenHut container"
 

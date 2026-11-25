@@ -77,7 +77,7 @@ export const Me = z.object({
 export type Me = z.infer<typeof Me>
 
 export const KEY_BOX_NAME = /^(passkey|kit|kit-confirmed|workspace-[A-Za-z0-9_-]{8,64})$/
-export const KeyBoxName = z.string().check(z.regex(KEY_BOX_NAME, 'Name a key box passkey, kit, kit-confirmed or workspace-<id>.'))
+const KeyBoxName = z.string().check(z.regex(KEY_BOX_NAME, 'Name a key box passkey, kit, kit-confirmed or workspace-<id>.'))
 export const PutKeyBox = z.object({ body: Locked.check(z.maxLength(16_384)), by: DeviceKey, signature: Signature, savedAt: z.number().check(z.int(), z.positive()) })
 export type PutKeyBox = z.infer<typeof PutKeyBox>
 export const NamedKeyBox = z.object({ name: KeyBoxName, ...PutKeyBox.shape })
