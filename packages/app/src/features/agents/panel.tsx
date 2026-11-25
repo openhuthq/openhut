@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { BrowserIcon, SidebarRight01Icon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, SparklesIcon } from '@hugeicons/core-free-icons'
+import { BrowserIcon, SidebarRight01Icon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, SparklesIcon, UserMultipleIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogClose, DialogTitle } from '@/components/ui/dialog'
@@ -47,6 +47,7 @@ export function Panel({ agent, naming, watching, onHide }: { agent: Agent; namin
     <div className="-mx-2.5 flex flex-col gap-px">
       <ModelRows agent={agent} />
       <RunsOnRow agent={agent} />
+      <SharedRow agent={agent} />
       {agent.runsHere && <>
         <Counted agent={agent} dialog="memory" icon={AiBrain01Icon} title="Memory" value={memory} />
         <Counted agent={agent} dialog="skills" icon={BookOpen01Icon} title="Skills" value={skills} />
@@ -60,6 +61,14 @@ export function Panel({ agent, naming, watching, onHide }: { agent: Agent; namin
 }
 
 const LABEL = 'pb-1.5 text-[12px]/[16px] text-mute'
+
+// Only the owner shares: everyone on the team can then open and chat with it.
+function SharedRow({ agent }: { agent: Agent }) {
+  const updateAgent = useUpdateAgent(agent.id)
+  if (!agent.canManage) return null
+  return <label className={ROW}><I icon={UserMultipleIcon} size={15} className="text-mute" />Shared with team<Switch className="ml-auto" checked={agent.shared} aria-label="Shared with team" disabled={updateAgent.isPending}
+    onCheckedChange={(on) => updateAgent.mutate({ shared: on }, { onError: toastError })} /></label>
+}
 
 function AgentActions({ agent, watching }: { agent: Agent; watching: boolean }) {
   const features = useFeatures(agent.runsOn ?? undefined)
