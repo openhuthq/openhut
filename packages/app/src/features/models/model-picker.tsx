@@ -28,7 +28,7 @@ export function ModelPicker({ providers, value, onPick, onSetUp, title, label, n
   children?: ReactNode
 }) {
   const connected = PROVIDERS.flatMap((info) => providers?.find((each) => each.id === info.id && each.connected) ?? [])
-  const missing = PROVIDERS.filter((info) => info.kind !== 'managed' && !connected.some((provider) => provider.id === info.id))
+  const missing = PROVIDERS.filter((info) => !connected.some((provider) => provider.id === info.id))
   return <DropdownMenu>
     <DropdownMenuTrigger className={className ?? SOFT_TRIGGER} disabled={disabled} aria-label={`${label}: ${find({ providers, key: value }).model?.name ?? value ?? none?.name ?? 'None'}`}>
       {children ?? <ModelValue providers={providers} value={value} none={none} />}

@@ -17,7 +17,7 @@ export function UpdateEverything() {
     mutationFn: async () => {
       const outcomes = await updateServers({
         servers,
-        steps: { start: startUpdate, read: (server) => adminOf(server.id), say: setDoing, wait: () => new Promise((resolve) => setTimeout(resolve, 3000)), limit: 900 },
+        steps: { start: startUpdate, read: adminOf, say: setDoing, wait: () => new Promise((resolve) => setTimeout(resolve, 3000)), limit: 900 },
       })
       void client.invalidateQueries({ queryKey: COMPUTERS_KEY })
       const failed = outcomes.filter((outcome) => !outcome.ok)

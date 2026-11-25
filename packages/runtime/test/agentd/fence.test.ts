@@ -53,7 +53,7 @@ test('the script probes every target in parallel and numbers each answer', () =>
 
 test('the host probe targets a listener agentd really holds open, so only the fence can make it fail', async () => {
   let target = ''
-  const box: Sandboxes = { ...memory, name: 'gvisor', exec: async ({ command }) => {
+  const box: Sandboxes = { ...memory, name: 'docker', exec: async ({ command }) => {
     target = /'(http:\/\/10\.200\.0\.1:\d+\/)'/.exec(command.at(-1) ?? '')?.[1] ?? ''
     const answer = await fetch(target.replace('10.200.0.1', '127.0.0.1')).then((r) => `HTTP ${r.status}`, (e: Error) => e.message)
     return { stdin: null, stdout: Readable.from([`3 ${answer} =>${answer.slice(5)}\n`]), exit: Promise.resolve(0), kill: () => undefined }
@@ -63,24 +63,23 @@ test('the host probe targets a listener agentd really holds open, so only the fe
   assert.deepEqual(report.checks[3], { name: 'host listener', target, expect: 'refused', got: 'HTTP 200', pass: false })
 })
 
-test('memory and native agents are skipped, not proven: only gVisor has a network fence', async () => {
+test('the in-memory test sandbox is skipped, not proven: only Docker agents have a network fence', async () => {
   const report = await proveFence({ box: memory, spec })
-  assert.deepEqual(report, { ok: true, sandbox: 'memory', skipped: 'memory agents run as the user, with no network fence', checks: [] })
-  assert.deepEqual(fenceLines(report), ['fence: skipped (memory agents run as the user, with no network fence)'])
-  assert.equal((await proveFence({ box: { ...memory, name: 'native' }, spec })).skipped, 'native agents run as the user, with no network fence')
+  assert.deepEqual(report, { ok: true, sandbox: 'memory', skipped: 'memory agents have no network fence', checks: [] })
+  assert.deepEqual(fenceLines(report), ['fence: skipped (memory agents have no network fence)'])
 })
 
 test('a sandbox that never answers is reported as a timeout, not waited on, and removed', async () => {
-  const box: Sandboxes = { ...memory, name: 'gvisor', exec: () => new Promise(() => {}) }
+  const box: Sandboxes = { ...memory, name: 'docker', exec: () => new Promise(() => {}) }
   const report = await proveFence({ box, spec, timeoutMs: 50 })
   assert.equal(report.ok, false)
   assert.equal(report.checks[0].got, 'timed out after 0.05 s')
-  assert.match(fenceLines(report).at(-1) ?? '', /^fence: NOT OK on gvisor \(0\/6 checks passed\)$/)
+  assert.match(fenceLines(report).at(-1) ?? '', /^fence: NOT OK on docker \(0\/6 checks passed\)$/)
   assert.equal(boxes.has('fence'), false)
 })
 
 test('a sandbox that fails to start fails every check with its error', async () => {
-  const box: Sandboxes = { ...memory, name: 'gvisor', create: () => Promise.reject(new Error('runsc is missing')) }
+  const box: Sandboxes = { ...memory, name: 'docker', create: () => Promise.reject(new Error('runsc is missing')) }
   const report = await proveFence({ box, spec })
   assert.equal(report.ok, false)
   assert.ok(report.checks.every((c) => c.got === 'sandbox failed: runsc is missing'))

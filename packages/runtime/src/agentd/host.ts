@@ -8,11 +8,8 @@ export const IMAGE = config.image
 export const APP_GID = gidOf('openhut')
 export const ASSETS = config.assets
 export const DATA = config.data
-export const PIPE = process.platform === 'win32'
 export const BIN = config.bin
-export const EXE = PIPE ? '.exe' : ''
-// The server image sets OPENHUT_CLAUDE to the musl build for its own Alpine sign-in; agents are glibc, so they get bin/claude (exec of the musl build there is ENOENT).
-export const CLAUDE = config.inImage ? join(BIN, 'claude') : config.claude || join(BIN, `claude${EXE}`)
+export const CLAUDE = join(BIN, 'claude')
 export const RESOLV = '/etc/agentd/resolv.conf'
 export const AGENT_UID = 10000
 export const AGENT_USER = `${AGENT_UID}:${AGENT_UID}`
@@ -20,7 +17,7 @@ export const AS_ROOT = process.getuid?.() === 0
 export const AGENT_OWNER = AS_ROOT ? { uid: AGENT_UID, gid: AGENT_UID } : undefined
 export const TMP_MIB = 256
 export const ID = /^ag_[a-z0-9]{8}$/
-export const box = await sandboxes()
+export const box = sandboxes
 
 export function home(id: string): string {
   return `${DATA}/agents/${id}`

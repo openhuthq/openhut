@@ -5,8 +5,6 @@ import env from 'env-var'
 import * as z from 'zod/mini'
 
 const PackageJson = z.object({ version: z.string() })
-const NativeRuntime = z.object({ claude: z.object({ version: z.string(), sha256: z.record(z.string(), z.string()) }) })
-const PLATFORM = `${process.platform}-${process.arch === 'arm64' ? 'arm64' : 'x64'}`
 const BUILD = fileOr(new URL('../../../../../BUILD', import.meta.url), 'dev')
 
 // Every environment variable the server reads lives here (the agent host has its own, agentd/config.ts).
@@ -15,8 +13,7 @@ const SOCKET = env.get('OPENHUT_SOCKET').asString() // the desktop app's socket;
 const TEST_MODEL = env.get('OPENHUT_MODEL').asString() === 'test' // 'test' answers with the built-in fake model
 const HOST_NET = env.get('OPENHUT_AGENT_HOST_NET').default('false').asBool() // agents share the host's network (desktop)
 const GATEWAY_PORT = env.get('OPENHUT_GATEWAY_PORT').default('8081').asPortNumber() // the agents' gateway
-const BIN = env.get('OPENHUT_BIN').asString() // the desktop pack's native binaries
-const SANDBOX = env.get('OPENHUT_SANDBOX').asString() // set means agentd runs in this process unless AGENTD_SOCK is set
+const FAKE_SANDBOX = env.get('OPENHUT_FAKE_SANDBOX').default('false').asBool() // tests: agentd's in-memory sandbox runs in this process unless AGENTD_SOCK is set
 const AGENTD_SOCK = env.get('AGENTD_SOCK').asString() // the agent host's socket, when it runs as its own process
 
 export const config = {
@@ -47,31 +44,18 @@ export const config = {
   codexApi: 'https://chatgpt.com/backend-api/codex',
   codexAuthApi: 'https://auth.openai.com',
   agentdSocket: AGENTD_SOCK ?? '/run/agentd/agentd.sock',
-  agentdInProcess: !!SANDBOX && !AGENTD_SOCK,
+  agentdInProcess: FAKE_SANDBOX && !AGENTD_SOCK,
   secret: env.get('OPENHUT_SECRET').asString(), // the install's auth secret from the OS keychain (desktop); removed from the env below
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))).version,
   build: BUILD,
   join: env.get('OPENHUT_JOIN').asString(), // a join code: a new server joins this team on first start
   name: env.get('OPENHUT_NAME').asString(), // this computer's name, instead of the hostname
   claudeBin: fileURLToPath(new URL('../../../../../bin/claude', import.meta.url)),
-  claudeHostBin: env.get('OPENHUT_CLAUDE').asString() ?? (BIN ? join(BIN, process.platform === 'win32' ? 'claude.exe' : 'claude') : fileURLToPath(new URL(`../../../../../bin/${process.platform === 'darwin' ? 'claude-darwin' : 'claude'}`, import.meta.url))), // the Claude CLI the server runs itself
-  claudePlatform: PLATFORM,
-  ...claudeOf(new URL('../../../../../install/native-runtime.json', import.meta.url)),
-  hermesRuntime: env.get('AGENTD_HERMES').asString(), // the bundled Python and Node runtime (desktop)
+  claudeHostBin: env.get('OPENHUT_CLAUDE').default('claude').asString(), // the Claude CLI the server runs itself for the seat sign-in
   path: env.get('PATH').default('/usr/bin:/bin').asString(), // the PATH Claude sign-in runs with
-  systemRoot: env.get('SystemRoot').default('C:\\Windows').asString(), // Windows only, for Claude sign-in
   started: Math.floor(Date.now() / 1000),
 }
 delete process.env.OPENHUT_SECRET
-
-function claudeOf(url: URL): { claudeVersion?: string; claudeSha256?: string } {
-  try {
-    const { claude } = z.parse(NativeRuntime, JSON.parse(readFileSync(url, 'utf8')))
-    return { claudeVersion: claude.version, claudeSha256: claude.sha256[PLATFORM] }
-  } catch {
-    return {}
-  }
-}
 
 function installKindOf(kind: 'desktop' | 'server'): 'mac' | 'linux' | 'server' {
   if (kind === 'server') return 'server'

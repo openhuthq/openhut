@@ -6,15 +6,11 @@ import { behind, updateServers, type Behind } from '../../../src/features/settin
 const admin = (server: Partial<Admin['server']>) => ({ server: { build: '0.2.0', updateAvailable: false, update: null, ...server } }) as unknown as Admin
 const started = (to: string): Update => ({ object: 'update', status: 'running', from: '0.2.0', to, startedAt: '2026-11-18T00:00:00.000Z' })
 
-test('only online servers with an update are behind; this computer updates with the app', () => {
-  const computers = [{ id: 'local', name: 'This Mac', url: '', online: true }, { id: 'a', name: 'beelink', url: 'https://beelink.ts.net', online: true }, { id: 'b', name: 'nuc', url: 'https://nuc.ts.net', online: false }, { id: 'c', name: 'pi', url: 'https://pi.ts.net', online: true }]
-  const admins = [
-    { computer: { id: 'local' }, admin: admin({ updateAvailable: true }) },
-    { computer: { id: 'a' }, admin: admin({ updateAvailable: true }) },
-    { computer: { id: 'b' }, admin: admin({ updateAvailable: true }) },
-    { computer: { id: 'c' }, admin: admin({}) },
-  ]
-  assert.deepEqual(behind({ computers, admins }), [{ id: 'a', name: 'beelink' }])
+test('this computer is behind when it is online and has an update', () => {
+  const admins = [{ computer: { id: 'local' }, admin: admin({ updateAvailable: true }) }]
+  assert.deepEqual(behind({ computers: [{ id: 'local', name: 'This computer', online: true }], admins }), [{ id: 'local', name: 'This computer' }])
+  assert.deepEqual(behind({ computers: [{ id: 'local', name: 'This computer', online: false }], admins }), [])
+  assert.deepEqual(behind({ computers: [{ id: 'local', name: 'This computer', online: true }], admins: [{ computer: { id: 'local' }, admin: admin({}) }] }), [])
 })
 
 test('servers update one at a time; one that fails says why and the next still updates', async () => {

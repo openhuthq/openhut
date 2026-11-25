@@ -1,7 +1,7 @@
 const HUES = ['#ff7a59', '#b79cf2', '#19B3B1', '#f7c948', '#3d8fdc']
 const INK = '#0b0b0b'
 
-export function hueOf(email: string): string {
+function hueOf(email: string): string {
   return HUES[[...email].reduce((sum, char) => sum + char.charCodeAt(0), 0) % HUES.length] ?? '#ff7a59'
 }
 
@@ -14,8 +14,4 @@ export function PersonFace({ name, email, size = 36 }: { name: string; email: st
     <circle cx={64} cy={50} r={6} fill={INK} />
     <path d="M41 62q9 9 18 0" stroke={INK} strokeWidth={5.5} fill="none" strokeLinecap="round" />
   </svg>
-}
-
-export function PersonFaces({ people, size = 24 }: { people: { name: string; email: string }[]; size?: number }) {
-  return <span className="flex items-center">{people.map(({ name, email }, index) => <span key={email} className="relative block shrink-0 rounded-full leading-none shadow-[0_0_0_2px_#fff]" style={{ width: size, height: size, marginLeft: index ? -size * 0.28 : 0, zIndex: people.length - index }}><PersonFace name={name} email={email} size={size} /></span>)}</span>
 }

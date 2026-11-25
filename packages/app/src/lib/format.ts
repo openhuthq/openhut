@@ -1,5 +1,4 @@
 export const shortDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
-export const shortDateTime = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
 export function ago(iso: string) {
   const seconds = Math.max(1, Math.round((Date.now() - Date.parse(iso)) / 1000))
@@ -9,3 +8,8 @@ export function ago(iso: string) {
   return `${Math.floor(seconds / 86400)}d`
 }
 export const longDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+
+export function personName(email: string): string {
+  const first = (email.split('@')[0] ?? '').split(/[._+-]/)[0] ?? ''
+  return first.charAt(0).toUpperCase() + first.slice(1)
+}

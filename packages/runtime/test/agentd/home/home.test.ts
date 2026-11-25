@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 const skip = process.platform !== 'linux' && 'needs /proc (Linux)'
 const data = realpathSync(mkdtempSync(`${tmpdir()}/home-`))
 process.env.AGENTD_DATA = data
-process.env.OPENHUT_SANDBOX = 'memory'
+process.env.OPENHUT_FAKE_SANDBOX = '1'
 const { agentHome } = await import('../../../src/agentd/home/home.ts')
 const id = 'ag_hometest'
 const root = `${data}/agents/${id}`

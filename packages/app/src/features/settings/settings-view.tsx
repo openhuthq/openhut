@@ -1,15 +1,13 @@
 import { ComputersSettings } from '@/features/settings/computers'
 import { GeneralSettings } from '@/features/settings/general'
-import { PeopleSettings } from '@/features/people/workspace'
 import { ModelsSettings, ModelsStep, stepOf } from '@/features/settings/models'
-import { UsageSettings } from '@/features/credits/credits'
 import { AppsSettings, AppsSheet } from '@/features/connections/connections-view'
 import { tabsFor } from '@/features/settings/tabs'
 import { AppWindow, HOVER, I, PICKED } from '@/components/kit'
 import { navigate, useOpen, usePath } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
-const MOVED: Record<string, string> = { devices: 'computers', cloud: 'general', backup: 'general', account: 'general', team: 'general', mcp: 'general', phones: 'computers', security: 'general', updates: 'general' }
+const MOVED: Record<string, string> = { devices: 'computers', people: 'general', usage: 'general', cloud: 'general', backup: 'general', account: 'general', team: 'general', mcp: 'general', phones: 'computers', security: 'general', updates: 'general' }
 
 export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: () => void }) {
   const tab = MOVED[asked] ?? asked
@@ -40,10 +38,8 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
 
 function Tab({ tab }: { tab: string }) {
   switch (tab) {
-    case 'people': return <PeopleSettings />
     case 'computers': return <ComputersSettings />
     case 'models': return <ModelsSettings />
-    case 'usage': return <UsageSettings />
     case 'apps': return <AppsSettings />
     default: return <GeneralSettings />
   }

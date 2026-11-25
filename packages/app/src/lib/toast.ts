@@ -5,10 +5,6 @@ export function toast(title: string, note?: string) {
   sonner.success(title, { description: note })
 }
 
-export function toastInfo(title: string, note?: string) {
-  sonner.info(title, { description: note })
-}
-
 /** Takes one argument on purpose: it is passed straight as `onError`, whose second argument is the mutation's variables. */
 export function toastError(error: Error) {
   sonner.error(plainError(error.message))

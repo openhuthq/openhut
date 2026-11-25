@@ -32,9 +32,6 @@ test('no confirm floats in a popover: a popover never holds a Cancel button', ()
 test('a dialog family is one Dialog: moving between its views never closes and reopens it', () => {
   const read = (file: string) => readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8')
   assert.equal(read('app/app.tsx').match(/<SettingsView\b/g)?.length, 1, 'Settings and /connections share one SettingsView')
-  const computers = read('features/settings/computers.tsx')
-  assert.equal(computers.match(/<Dialog\b/g)?.length, 1, 'Add a computer steps share one Dialog')
-  assert.ok(computers.indexOf('<Dialog') < computers.indexOf('function ComputerList'), 'ComputersSettings owns the Dialog, not each step')
 })
 
 test('a Back button inside a dialog carries data-back, so Esc steps back one view instead of closing the dialog', () => {

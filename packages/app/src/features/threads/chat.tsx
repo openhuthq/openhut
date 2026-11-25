@@ -1,5 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
-import { waking } from '@openhut/common/tunnel/connect.ts'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
 import * as z from 'zod/mini'
 import { useChat } from '@ai-sdk/react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -23,13 +22,12 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
-import { ErrorNote, shownError } from '@/components/error-note'
+import { ErrorNote } from '@/components/error-note'
 import { STEP_ICONS } from '@/components/icons'
 import { Dots, I, ICON_BUTTON } from '@/components/kit'
-import { OfflineChip } from '@/features/cloud/live'
-import { Faces, typed, Typing } from '@/features/cloud/presence'
 import { PersonFace } from '@/components/custom/person-face'
-import { nameOf as personName, useCloud } from '@/features/cloud/api'
+import { useOwner } from '@/features/people/api'
+import { personName } from '@/lib/format'
 import { SidebarContext } from '@/features/agents/sidebar'
 import { agentState } from '@/components/status-badge'
 import { troubleOf } from '@/features/agents/status'
@@ -57,7 +55,7 @@ const IMAGE = /\.(png|jpe?g|gif|webp)$/i
 export function Chat({ agent, tools, onTitle }: { agent: Agent; tools?: ReactNode; onTitle?: () => void }) {
   const thread = useAgentThread(agent.id)
   if (agentState(agent) === 'stopped') return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><Asleep agent={agent} /></ChatFrame>
-  if (!thread.data) return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><div className="m-auto"><ErrorNote message={shownError(thread.error)} /></div></ChatFrame>
+  if (!thread.data) return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><div className="m-auto"><ErrorNote message={thread.error?.message} /></div></ChatFrame>
   return <ThreadView key={thread.data.id} thread={thread.data} agent={agent} tools={tools} onTitle={onTitle} />
 }
 
@@ -65,7 +63,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   const touch = useTouchThread()
   const transport = useMemo(() => new DefaultChatTransport<AgentMessage>({
     api: `${threadPath(thread.id)}/chat`,
-    fetch: (url, init) => openhut.fetch({ of: agent.id, path: String(url), init, wake: true }),
+    fetch: (url, init) => openhut.fetch({ path: String(url), init }),
     prepareSendMessagesRequest: ({ messages, trigger }) => ({ body: { trigger, message: trigger === 'submit-message' ? messages.at(-1) : undefined } }),
   }), [thread.id, agent.id])
   const chat = useChat<AgentMessage>({ id: thread.id, messages: thread.messages.map(uiMessageOf), transport, onFinish: () => touch(thread) })
@@ -193,9 +191,8 @@ function ChatFrame({ agent, composer, tools, onTitle, onFiles, children }: { age
       {onTitle
         ? <Button type="button" variant="bare" className="float flex h-10 min-w-0 items-center gap-2 rounded-full bg-card pr-4 pl-1.5 text-ink" onClick={onTitle}><Face agent={agent} size={28} /><span className="truncate text-[16px] font-semibold">{agent.name}</span></Button>
         : <><Face agent={agent} size={26} /><span className="min-w-0 truncate text-[14px] font-semibold">{agent.name}</span></>}
-      <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{agent.shared && <span className="mr-2"><Faces agentId={agent.id} size={26} /></span>}<OfflineChip className="mr-1.5 phone:hidden" />{tools}</span>
+      <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{tools}</span>
     </div>
-    <OfflineChip className="mx-auto hidden phone:flex" />
     <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 phone:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>
       <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col justify-end gap-4">{children}</div>
     </div>
@@ -222,7 +219,6 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
     if (busy) return onStop()
     if (!(box instanceof HTMLTextAreaElement) || attachments.uploading || (!box.value.trim() && !attachments.items.length)) return
     onSend(box.value.trim())
-    typed('')
     box.value = ''
     box.style.height = ''
     setEmpty(true)
@@ -239,7 +235,6 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
   }
   return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3">
     {!ready && !busy && !quiet && <NotReady agent={agent} />}
-    {agent.shared && <Typing agentId={agent.id} />}
     <form className="mx-auto flex max-w-[640px] flex-col gap-2 rounded-xl border border-[oklch(0%_0_0/.12)] bg-card p-2 focus-within:border-mid" onSubmit={submit}>
       {attachments.items.length > 0 && <div className="flex flex-wrap gap-1.5">{attachments.items.map((each) => <FileChip key={each.key} name={each.name} image={each.image} thumb={each.thumb} busy={!each.file} onRemove={() => attachments.remove(each.key)} />)}</div>}
       <div className="flex items-end gap-1">
@@ -247,7 +242,7 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Attach files" title="Attach files" disabled={!ready} onClick={() => picker.current?.click()}><I icon={Attachment01Icon} size={16} /></Button>
         <Textarea variant="composer" name="text" rows={1} aria-label="Message" placeholder={placeholderOf(agent)} disabled={!ready} autoFocus={!touch}
           className="min-h-0 flex-1 py-1.5 text-[14px]" onKeyDown={enter} onPaste={paste}
-          onInput={(event) => { const box = event.currentTarget; setEmpty(!box.value.trim()); if (agent.shared) typed(box.value); box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 240)}px` }} />
+          onInput={(event) => { const box = event.currentTarget; setEmpty(!box.value.trim()); box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 240)}px` }} />
         <Button type="submit" variant="send" onMouseDown={(event) => event.preventDefault()} className={cn(!busy && nothing && 'bg-transparent text-mute disabled:opacity-100')} aria-label={busy ? 'Stop' : 'Send'} title={busy ? 'Stop' : 'Send (Enter). Shift+Enter for a new line'} disabled={!busy && (!ready || nothing || attachments.uploading)}>{busy ? <span className="size-2.5 rounded-[2px] bg-white" /> : <I icon={ArrowUp02Icon} />}</Button>
       </div>
     </form>
@@ -294,7 +289,6 @@ function Message({ agent, message, live }: { agent: Agent; message: AgentMessage
 function AgentReply({ agent, message, live }: { agent: Agent; message: AgentMessage; live: boolean }) {
   const { agentId, threadId } = useContext(ChatFiles)
   const blocks = blocksOf(message)
-  const wakingCloud = useSyncExternalStore(waking.subscribe, () => waking.now)
   const { spec, hasSpec } = useJsonRenderMessage(message.parts)
   const paths = live ? [] : homePathsIn(blocks.flatMap((block) => block.type === 'text' ? [block.text] : []).join('\n'))
   const found = useHomeFiles({ agentId, threadId, paths })
@@ -308,7 +302,7 @@ function AgentReply({ agent, message, live }: { agent: Agent; message: AgentMess
         return <Steps key={index} steps={block.steps} live={live && index === blocks.length - 1} />
       })}
       {changesOf(message).length > 0 && <ChangeCards agent={agent} ids={changesOf(message)} />}
-      {live && !blocks.length && (wakingCloud ? <span className="text-[13.5px] text-mute">Waking Cloud…</span> : <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>)}
+      {live && !blocks.length && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
       {!live && !blocks.length && <span className="text-[13.5px] text-mute-2 italic">No reply.</span>}
     </div></CopyMenu>
   </div>
@@ -320,7 +314,7 @@ function UserMessage({ message }: { message: AgentMessage }) {
   const text = textOf(message)
   const files = message.parts.flatMap((part) => part.type === 'file' ? [part] : [])
   const author = z.safeParse(Authored, message.metadata).data?.author
-  const me = useCloud().data?.email
+  const me = useOwner()
   if (author && me && author !== me) return <div className="flex animate-grow gap-3">
     <PersonFace name={personName(author)} email={author} size={28} />
     <span className="grid min-w-0 gap-1"><span className="text-[12px] text-mute">{personName(author)}</span>
@@ -465,10 +459,7 @@ function shortUrl(href: string) {
 function ChatEmpty({ agent }: { agent: Agent }) {
   const state = agentState(agent)
   const offline = useOffline(agent)
-  const wakingCloud = useSyncExternalStore(waking.subscribe, () => waking.now)
-  const copy = wakingCloud
-    ? ['Waking Cloud…', 'Your message goes through as soon as it’s up.']
-    : offline
+  const copy = offline
     ? [`${agent.name}'s computer is offline`, 'It answers again as soon as its computer is back online.']
     : {
       running: [`Say hello to ${agent.name}`, 'Ask it anything, or tell it what its job is.'],
@@ -480,7 +471,7 @@ function ChatEmpty({ agent }: { agent: Agent }) {
       missing: [`${agent.name} stopped unexpectedly`, 'It comes back by itself within 30 seconds.'],
     }[state]
   const detail = state === 'not_answering' || state === 'setup_failed' ? agent.healthDetail : ''
-  return <Centered agent={agent} title={copy[0]} line={copy[1]} pulse={state === 'starting' || wakingCloud}>
+  return <Centered agent={agent} title={copy[0]} line={copy[1]} pulse={state === 'starting'}>
     {state === 'no_seat' && <a href="/settings/models" className="text-ink underline underline-offset-2">Connect a model</a>}
     {detail && <Details text={detail} />}
   </Centered>

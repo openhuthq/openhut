@@ -17,7 +17,7 @@ const local = config.agentdInProcess ? await import(SERVE) as typeof import('../
 await local?.boot()
 
 export const agentd = {
-  health: () => ask({ request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), imageReady: z.optional(z.boolean()), updating: z.optional(z.boolean()), lastUpdate: z.optional(z.nullable(LastUpdate)), features: z.optional(Features) }) }),
+  health: () => ask({ request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), imageReady: z.optional(z.boolean()), gvisor: z.optional(z.boolean()), updating: z.optional(z.boolean()), lastUpdate: z.optional(z.nullable(LastUpdate)), features: z.optional(Features) }) }),
   ps: () => ask({ request: { cmd: 'ps' }, doing: 'list the agents', schema: z.object({ states: z.record(z.string(), z.string()) }) }),
   apply: ({ id, net, files, browser, running, force = false }: { id: string; net: number; files: AgentFiles; browser: boolean; running: boolean; force?: boolean }) =>
     ask({ request: { cmd: 'apply', id, net, files, browser, running, force }, doing: 'set up the agent', schema: z.object({ applied: z.string(), change: Change }) }),

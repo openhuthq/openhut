@@ -1,13 +1,11 @@
 import { existsSync } from 'node:fs'
 import type { Duplex } from 'node:stream'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
-import { BIN, box, conf, EXE, writeIfChanged } from './host.ts'
-import { BROWSER_STREAM_PORT_BASE, type Exec, type Mount } from './sandbox/sandbox.ts'
+import { BIN, box, conf, writeIfChanged } from './host.ts'
+import type { Exec, Mount } from './sandbox/sandbox.ts'
 import { isRecord, jsonOrUndefined } from './util.ts'
-import { config } from './config.ts'
 
 export const POLICY_FILE = 'browser-policy.json'
 export const FREE_POLICY = `${JSON.stringify({ default: 'allow' })}\n`
@@ -15,56 +13,28 @@ export const HELD_POLICY = `${JSON.stringify({ default: 'deny', allow: ['snapsho
 export const HOLD_IDLE_MS = 120_000
 export const MAX_FPS = 30
 
-const AGENT_BROWSER = join(BIN, `agent-browser${EXE}`)
+const AGENT_BROWSER = join(BIN, 'agent-browser')
 const DIR = fileURLToPath(new URL('../../../../install/agent-browser', import.meta.url))
-const INSTALLED_CHROME = [
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
-  '/opt/google/chrome/chrome', '/usr/lib/chromium/chromium', '/usr/bin/chromium', '/opt/microsoft/msedge/msedge', '/opt/brave.com/brave/brave',
-  ...config.windowsAppDirs.flatMap((root) => [`${root}\\Google\\Chrome\\Application\\chrome.exe`, `${root}\\Microsoft\\Edge\\Application\\msedge.exe`, `${root}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`]),
-]
-const NO_CHROME = 'Install Google Chrome on this computer, then turn Browser on.'
-let chrome: string | undefined
 
 export const browser = {
   memoryMib: 4096,
   tmpMib: 1024,
 
   installed(): boolean {
-    return box.name === 'memory' || (existsSync(AGENT_BROWSER) && (box.name !== 'native' || !!installedChrome()))
+    return box.name === 'memory' || existsSync(AGENT_BROWSER)
   },
 
   async prepare(): Promise<void> {
-    if (box.name === 'native') chrome = installedChrome()
-    if (box.name === 'native' && !chrome) throw new Error(NO_CHROME)
     if (!browser.installed()) throw new Error("agent-browser isn't installed on this server; run the installer again")
   },
 
   mounts(id: string): Mount[] {
-    if (box.name === 'native') return [{ host: AGENT_BROWSER, guest: '/usr/local/bin/agent-browser', readOnly: true }]
     return [
       { host: AGENT_BROWSER, guest: '/usr/local/lib/agent-browser', readOnly: true },
       { host: DIR, guest: '/opt/agent-browser', readOnly: true },
       { host: `${DIR}/agent-browser.sh`, guest: '/usr/local/bin/agent-browser', readOnly: true },
       { host: `${conf(id)}/${POLICY_FILE}`, guest: `/opt/data/${POLICY_FILE}`, readOnly: true },
     ]
-  },
-
-  env({ id, net }: { id: string; net: number }): Record<string, string> {
-    if (box.name !== 'native') return {}
-    return {
-      AGENT_BROWSER_EXECUTABLE_PATH: chrome ?? '',
-      AGENT_BROWSER_ARGS: '--window-size=1280,887',
-      AGENT_BROWSER_CONFIG: `${DIR}/config.json`,
-      AGENT_BROWSER_PROFILE: '/opt/data/home/browser-profile',
-      AGENT_BROWSER_ACTION_POLICY: `${conf(id)}/${POLICY_FILE}`,
-      AGENT_BROWSER_STREAM_PORT: String(BROWSER_STREAM_PORT_BASE + net),
-      AGENT_BROWSER_STREAM_QUALITY: '50',
-      AGENT_BROWSER_STREAM_MAX_WIDTH: '1280',
-      AGENT_BROWSER_STREAM_MAX_HEIGHT: '800',
-      AGENT_BROWSER_NO_VERSION_CHECK: '1',
-      AGENT_BROWSER_SESSION: id,
-      AGENT_BROWSER_SOCKET_DIR: join(tmpdir(), `oh-${id}`),
-    }
   },
 
   freeAll(ids: string[]): void {
@@ -76,17 +46,13 @@ export const browser = {
       sock.end(`${JSON.stringify({ type: 'closed' })}\n`)
       return undefined
     }
-    const bridge = await box.exec({ id, command: ['node', box.name === 'native' ? `${DIR}/bridge.mjs` : '/opt/agent-browser/bridge.mjs', 'live', String(fps)], stdin: true })
+    const bridge = await box.exec({ id, command: ['node', '/opt/agent-browser/bridge.mjs', 'live', String(fps)], stdin: true })
     const setHeld = (held: boolean) => {
       if (existsSync(conf(id))) writeIfChanged(`${conf(id)}/${POLICY_FILE}`, held ? HELD_POLICY : FREE_POLICY)
     }
     live({ id, sock, bridge, rest, setHeld })
     return undefined
   },
-}
-
-function installedChrome(): string | undefined {
-  return INSTALLED_CHROME.find((path) => existsSync(path))
 }
 
 const PING_MS = 10_000

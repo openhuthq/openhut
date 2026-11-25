@@ -1,13 +1,17 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
-DIR="${1:?image.sh <release folder> <image name> [docker buildx build flags]}"
-NAME="${2:?image.sh <release folder> <image name> [docker buildx build flags]}"
-shift 2
-AGENT="$(tar -xzOf "$DIR/openhut.tgz" install/agent-image)"
-docker buildx build -f install/Dockerfile --build-arg AGENT_IMAGE="$AGENT" --metadata-file "$DIR/image.json" -t "$NAME" "$@" "$DIR"
-DIGEST="$(sed -n 's/.*"containerimage.digest": *"\(sha256:[0-9a-f]*\)".*/\1/p' "$DIR/image.json")"
+NAME="${1:?image.sh <image name> [docker buildx build flags]; BUILD names the build, OUT (dist) gets install.sh}"
+shift
+OUT="${OUT:-dist}"
+if [ -z "${BUILD:-}" ]; then
+  [ "$(git rev-parse --is-shallow-repository)" = false ] || { echo "image.sh needs the full git history to number the build (fetch-depth: 0), or BUILD" >&2; exit 1; }
+  BUILD="$(sed -n 's/^  "version": "\([0-9]*\.[0-9]*\)\..*/\1/p' packages/runtime/package.json).$((100 + $(git rev-list --count HEAD -- install packages/runtime packages/common vendor)))"
+fi
+mkdir -p "$OUT"
+docker buildx build -f install/Dockerfile --build-arg AGENT_IMAGE="$(cat install/agent-image)" --build-arg BUILD="$BUILD" --metadata-file "$OUT/image.json" -t "$NAME" "$@" .
+DIGEST="$(sed -n 's/.*"containerimage.digest": *"\(sha256:[0-9a-f]*\)".*/\1/p' "$OUT/image.json")"
 [ -n "$DIGEST" ] || { echo "image.sh: the build didn't report a digest" >&2; exit 1; }
 REF="${NAME%:*}@$DIGEST"
-sed -i.bak "s|@OPENHUT_IMAGE@|$REF|" "$DIR/install.sh" && rm -f "$DIR/install.sh.bak"
-echo "$DIR/install.sh pins $REF"
+sed "s|@OPENHUT_IMAGE@|$REF|" install/install.sh > "$OUT/install.sh"
+echo "$OUT/install.sh pins $REF (build $BUILD)"

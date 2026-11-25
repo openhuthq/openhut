@@ -20,7 +20,9 @@ const CONNECT_TIMEOUT = /^curl: \(28\) (Connection timed out|Failed to connect)/
 const UNRESOLVED = /^curl: \(6\)|Resolving timed out/
 
 export async function proveFence({ box, spec, timeoutMs = TIMEOUT_MS }: { box: Sandboxes; spec: Omit<SandboxSpec, 'entrypoint' | 'command' | 'net'>; timeoutMs?: number }): Promise<FenceReport> {
-  if (box.name !== 'gvisor') return { ok: true, sandbox: box.name, skipped: `${box.name} agents run as the user, with no network fence`, checks: [] }
+  if (box.name === 'memory') return { ok: true, sandbox: box.name, skipped: 'memory agents have no network fence', checks: [] }
+  const ready = await box.ready()
+  if (!ready.ok) return { ok: false, sandbox: box.name, skipped: ready.reason ?? 'the sandbox is not ready', checks: [] }
   const listener = createServer((sock) => sock.end('HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n')).listen(0, '0.0.0.0')
   await once(listener, 'listening')
   const probes = probesFor({ host: `10.200.${FENCE_NET}.1`, hostPort: (listener.address() as AddressInfo).port, lan: hostAddress(isPrivate, '10.0.0.1'), tailnet: hostAddress(isCgnat, '100.64.0.1') })

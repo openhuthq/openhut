@@ -20,7 +20,6 @@ import { audienceOf } from '../channels/audience.ts'
 import { DiscordSecrets } from '../integrations/discord/discord.ts'
 import { resolveSlots } from '../models/model-slots.ts'
 import { providerService } from '../models/provider-service.ts'
-import { claudeCli } from '../admin/seat-sign-in.ts'
 import { renderFiles, type RenderedChannel } from './hermes-files.ts'
 import { keysService } from '../cloud/keys-service.ts'
 import { roomKeys } from '../cloud/room-keys.ts'
@@ -390,7 +389,6 @@ async function tellAgent(id: string): Promise<void> {
 }
 
 async function filesOf(row: AgentRow): Promise<AgentFiles> {
-  if (config.modelMode === 'claude' && splitModelKey(row.model)?.provider === 'claude' && providerService.connected('claude')) await claudeCli.ensure().catch((err: unknown) => log.warn({ event: 'agent.claude_missing', agent: row.id, error: messageOf(err) }))
   const channels = await db.selectFrom('channel').selectAll().where('agent_id', '=', row.id).orderBy('kind').execute()
   const slots = resolveSlots({ model: row.model, catalog: providerService.catalog })
   return renderFiles({

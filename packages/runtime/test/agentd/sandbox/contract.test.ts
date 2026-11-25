@@ -4,9 +4,8 @@ import { randomBytes } from 'node:crypto'
 import { text } from 'node:stream/consumers'
 import type { SandboxSpec } from '../../../src/agentd/sandbox/sandbox.ts'
 
-process.env.OPENHUT_SANDBOX ||= 'memory'
-const { sandboxes } = await import('../../../src/agentd/sandbox/index.ts')
-const box = await sandboxes()
+process.env.OPENHUT_FAKE_SANDBOX ??= '1'
+const { sandboxes: box } = await import('../../../src/agentd/sandbox/index.ts')
 const { ok, reason } = await box.ready()
 const skip = ok ? false : `${box.name} is not ready: ${reason}`
 const real = box.name !== 'memory'

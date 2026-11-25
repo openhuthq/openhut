@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { box, ID } from './host.ts'
-import { FIREWALL } from './sandbox/gvisor.ts'
+import { AS_ROOT, box, ID } from './host.ts'
+import { FIREWALL } from './sandbox/docker.ts'
 import { errorText, EXEC } from './util.ts'
 
 const run = promisify(execFile)
@@ -13,7 +13,7 @@ let pending: Promise<Readiness> | undefined
 
 export const firewall = {
   watch(): void {
-    if (box.name === 'gvisor') setInterval(() => watch().catch((e) => console.error(`watchdog: ${errorText(e)}`)), WATCHDOG_MS)
+    if (box.name === 'docker' && AS_ROOT) setInterval(() => watch().catch((e) => console.error(`watchdog: ${errorText(e)}`)), WATCHDOG_MS)
   },
 
   async recent(): Promise<boolean> {

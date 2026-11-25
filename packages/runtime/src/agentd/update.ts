@@ -1,4 +1,4 @@
-import { execFile, spawn } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -10,11 +10,6 @@ const INSTALL_LOCK = '/run/openhut-install.lock'
 const LOG = join(config.data, 'update.log')
 const EXIT = `${LOG}.exit`
 const REQUEST = join(config.data, 'update.request')
-export const UPDATE_SCRIPT = `exec >"$LOG" 2>&1; rm -f "$EXIT"; f=$(mktemp)
-if ! curl -fsSL --retry 3 "$OPENHUT_URL" -o "$f"; then echo "openhut: couldn't download the release from $OPENHUT_URL"; code=2
-elif ! printf '%s  %s\\n' "$OPENHUT_SHA256" "$f" | sha256sum -c - >/dev/null 2>&1; then echo "openhut: a newer release came out after this update was checked. Check for updates again."; code=3
-else sh "$f"; code=$?; fi
-rm -f "$f"; echo "$code" > "$EXIT"`
 
 export type LastUpdate = { exit: number; at: string; reason: string | null }
 
@@ -32,15 +27,6 @@ export function lastUpdate(): LastUpdate | null {
 
 export async function update({ appVersion = '', sha256 }: { appVersion?: string; sha256: string }): Promise<{ updating: boolean }> {
   if (await installing()) throw new Error('an install or update is already running')
-  if (config.inImage) {
-    writeFileSync(REQUEST, `${sha256} ${appVersion}\n`)
-    return { updating: true }
-  }
-  const env = { OPENHUT_URL: config.releaseUrl, OPENHUT_APP_VERSION: appVersion, OPENHUT_SHA256: sha256, LOG, EXIT }
-  if (existsSync('/run/systemd/system')) {
-    await run('systemd-run', ['--unit=openhut-update', '--collect', '--quiet', ...Object.entries(env).map(([name, value]) => `--setenv=${name}=${value}`), '/bin/sh', '-c', UPDATE_SCRIPT])
-  } else {
-    spawn('/bin/sh', ['-c', UPDATE_SCRIPT], { detached: true, stdio: 'ignore', env: { ...process.env, ...env } }).unref()
-  }
+  writeFileSync(REQUEST, `${sha256} ${appVersion}\n`)
   return { updating: true }
 }
