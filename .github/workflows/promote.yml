@@ -1,7 +1,10 @@
 name: Promote
 
 # Takes main's newest green CI run, runs the runtime image smoke on that exact commit (install.sh, an agent in gVisor answers a
-# chat, a release with a failing /health rolls back), then tags the image CI pushed for that commit as `stable`.
+# chat, a release with a failing /health rolls back), then tags the image CI pushed for that commit as `stable` and publishes
+# that run's install.sh (pinned to the image by digest, with its OPENHUT_BUILD) as dl.openhut.dev/channels/stable/install.sh,
+# which openhut.dev/ redirects to. Servers' Settings › Updates compare that OPENHUT_BUILD with their own; the updater runs
+# that install.sh only if its sha256 is the one the server checked.
 
 on:
   workflow_dispatch:
@@ -23,16 +26,19 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.green.outputs.sha }}
+      run: ${{ steps.green.outputs.run }}
     steps:
       - name: Main's newest green CI run
         id: green
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sha=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --event push --status success --limit 1 --json headSha -q '.[0].headSha')
+          read -r run sha <<EOF
+          $(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --event push --status success --limit 1 --json databaseId,headSha -q '.[0] | "\(.databaseId) \(.headSha)"')
+          EOF
           [ -n "$sha" ] || { echo "::error::No main commit has passed CI yet."; exit 1; }
-          echo "Promoting ${sha::8}" | tee -a "$GITHUB_STEP_SUMMARY"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Promoting ${sha::8} (CI run $run)" | tee -a "$GITHUB_STEP_SUMMARY"
+          printf 'run=%s\nsha=%s\n' "$run" "$sha" >> "$GITHUB_OUTPUT"
 
   smoke:
     needs: green
@@ -57,9 +63,30 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: That run's install.sh pins the image CI pushed for that commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN: ${{ needs.green.outputs.run }}
+          SHA: ${{ needs.green.outputs.sha }}
+        run: |
+          gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n runtime-image -D dist || { echo "::error::CI run $RUN has no runtime-image artifact; rerun CI on main."; exit 1; }
+          digest=$(docker buildx imagetools inspect "$REPO:$SHA" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          grep -qxF "IMAGE=\"\${RUNTIME_IMAGE:-$REPO@$digest}\"" dist/install.sh || { echo "::error::install.sh from run $RUN doesn't pin $REPO@$digest"; exit 1; }
+          grep -Eqx 'OPENHUT_BUILD="[0-9A-Za-z_.-]+"' dist/install.sh || { echo "::error::install.sh from run $RUN has no OPENHUT_BUILD"; exit 1; }
+          sh -n dist/install.sh
       - name: Tag the image CI pushed for that commit as stable
         env:
           SHA: ${{ needs.green.outputs.sha }}
         run: |
           docker buildx imagetools create -t "$REPO:stable" "$REPO:$SHA"
           echo "$REPO:stable is $(docker buildx imagetools inspect "$REPO:stable" --format '{{json .Manifest.Digest}}') (${SHA::8})" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Publish its install.sh as the stable installer
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx -y wrangler@4.164.0 r2 object put openhut-releases/channels/stable/install.sh --file dist/install.sh --remote \
+            --content-type 'text/plain; charset=utf-8' --cache-control 'public, max-age=60'
+          for i in 1 2 3 4 5 6; do cmp -s dist/install.sh <(curl -fsSL https://openhut.dev/) && break; sleep 20; done
+          cmp dist/install.sh <(curl -fsSL https://openhut.dev/) || { echo "::error::openhut.dev doesn't serve the new install.sh"; exit 1; }
+          echo "openhut.dev/ serves $(grep '^OPENHUT_BUILD=' dist/install.sh)" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -11,7 +11,7 @@ const HEADERS = {
   'cache-control': 'no-cache',
   vary: 'Accept, User-Agent',
 }
-// R9: `/` is the stable release's install.sh on dl.openhut.dev (signed in its release.json, published there by Promote).
+// `/` is the stable install.sh on dl.openhut.dev (pinned to the stable image by digest, published there by Promote).
 const STABLE_INSTALLER = 'https://dl.openhut.dev/channels/stable/install.sh'
 const PREVIEW_BOT = /bot|facebookexternalhit|slack|whatsapp|telegram|discord|linkedin|skype|embedly|iframely|preview|crawler|spider/i
 const PAGE_CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"

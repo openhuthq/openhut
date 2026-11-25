@@ -1,6 +1,6 @@
 import type { IconSvgElement } from '@hugeicons/react'
 import { DEVICE_HUE, DEVICE_ICONS } from '../../lib/computers.ts'
-import { AiMagicIcon, PlugSocketIcon, SecurityCheckIcon, Settings02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
+import { AiMagicIcon, CloudDownloadIcon, PlugSocketIcon, SecurityCheckIcon, Settings02Icon, UserGroupIcon } from '@hugeicons/core-free-icons'
 
 export type Tab = { slug: string; name: string; icon: IconSvgElement; hue: string; subtitle: string; href?: string }
 
@@ -11,6 +11,7 @@ const TABS: Tab[] = [
   { slug: 'computers', name: 'Computers', icon: DEVICE_ICONS.mac, hue: DEVICE_HUE, subtitle: 'Where your agents run' },
   { slug: 'models', name: 'Models', icon: AiMagicIcon, hue: 'text-hue-violet', subtitle: 'Connected once for the whole install. Each agent picks its own model' },
   { slug: 'apps', name: 'Apps', icon: PlugSocketIcon, hue: 'text-hue-red', subtitle: 'What your agents can read and use', href: '/connections' },
+  { slug: 'updates', name: 'Updates', icon: CloudDownloadIcon, hue: 'text-hue-sky', subtitle: 'One update for the whole install' },
 ]
 
 export function tabsFor(): Tab[] {

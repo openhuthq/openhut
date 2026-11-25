@@ -37,8 +37,11 @@ Node, the tree, Claude Code pinned by `ARG CLAUDE`, agent-browser, the WhatsApp 
 nothing downloads on the server); `install/image-start.sh` is its entrypoint. `install.sh` pulls that image by the digest
 `scripts/image.sh` pins into it and runs it as the container `openhut` (`--privileged` for the agents' Docker and gVisor,
 read-only root, data in the volumes `openhut-data` and `openhut`, 127.0.0.1:8787 only, `OPENHUT_ADDRESS` from its first argument or a prompt), prints the setup link, and goes back to the previous container
-if the new one fails its health check. `.github/workflows/runtime-image.yml` builds, smoke-tests (`scripts/image-smoke.sh`) and
-pushes it; `promote.yml` smoke-tests main's newest green commit and tags its image `stable`. `vendor/` is the pinned Hermes plugin.
+if the new one fails its health check. It also runs `openhut-updater` (`install/updater.sh`, in the base image): Settings ›
+Updates has agentd write `/data/update.request` with the sha256 of the install.sh the runtime checked at `OPENHUT_URL`, and the
+updater runs that install.sh if it still matches. `.github/workflows/runtime-image.yml` builds, smoke-tests
+(`scripts/image-smoke.sh`) and pushes it; `promote.yml` smoke-tests main's newest green commit, tags its image `stable` and
+publishes its install.sh (pinned by digest, with `OPENHUT_BUILD`) where openhut.dev/ redirects. `vendor/` is the pinned Hermes plugin.
 
 ## Conventions (Skyfleet's)
 

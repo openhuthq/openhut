@@ -5,11 +5,12 @@ import { SECURITY_STEPS, SecuritySettingsTab, SecurityStep } from '@/features/se
 import { PeopleSettings } from '@/features/people/people'
 import { AppsSettings, AppsSheet } from '@/features/connections/connections-view'
 import { tabsFor } from '@/features/settings/tabs'
+import { UpdatesSettings } from '@/features/settings/updates'
 import { AppWindow, HOVER, I, PICKED } from '@/components/kit'
 import { navigate, useOpen, usePath } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
-const MOVED: Record<string, string> = { devices: 'computers', usage: 'general', cloud: 'general', backup: 'general', account: 'general', team: 'general', mcp: 'general', phones: 'computers', updates: 'general' }
+const MOVED: Record<string, string> = { devices: 'computers', usage: 'general', cloud: 'general', backup: 'general', account: 'general', team: 'general', mcp: 'general', phones: 'computers' }
 
 export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: () => void }) {
   const tab = MOVED[asked] ?? asked
@@ -47,6 +48,7 @@ function Tab({ tab }: { tab: string }) {
     case 'computers': return <ComputersSettings />
     case 'models': return <ModelsSettings />
     case 'apps': return <AppsSettings />
+    case 'updates': return <UpdatesSettings />
     default: return <GeneralSettings />
   }
 }

@@ -13,5 +13,5 @@ docker buildx build -f install/Dockerfile --build-arg AGENT_IMAGE="$(cat install
 DIGEST="$(sed -n 's/.*"containerimage.digest": *"\(sha256:[0-9a-f]*\)".*/\1/p' "$OUT/image.json")"
 [ -n "$DIGEST" ] || { echo "image.sh: the build didn't report a digest" >&2; exit 1; }
 REF="${NAME%:*}@$DIGEST"
-sed "s|@OPENHUT_IMAGE@|$REF|" install/install.sh > "$OUT/install.sh"
+sed -e "s|@OPENHUT_IMAGE@|$REF|" -e "s|@OPENHUT_BUILD@|$BUILD|" install/install.sh > "$OUT/install.sh"
 echo "$OUT/install.sh pins $REF (build $BUILD)"
