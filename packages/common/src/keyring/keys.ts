@@ -50,6 +50,12 @@ export const keysService = {
     return keysService.signBox({ account, name: `workspace-${room.workspace.id}`, body: box, savedAt: Date.now() })
   },
 
+  async escrowBox({ account, to }: { account: Account; to: string }): Promise<Box> {
+    const key = fromBase64(account.key)
+    const { body } = await sealTo({ to, purpose: 'account-key', workspace: account.workspace.id, plain: key, sender: await accountDevice(key) })
+    return keysService.signBox({ account, name: 'escrow', body, savedAt: Date.now() })
+  },
+
   async signBox({ account, name, body, savedAt }: { account: Account; name: string; body: string; savedAt: number }): Promise<Box> {
     const signer = await accountDevice(fromBase64(account.key))
     return { name, body, by: toBase64(signer.publicKey), signature: await signV1({ signer, proof: 'key-box', parts: [account.sub, name, body, String(savedAt)] }), savedAt }
@@ -108,7 +114,7 @@ export const keysService = {
     if (other && other.sub !== sub) throw new HttpError(409, `This computer is set up for ${other.email}. Sign in with that account.`)
   },
 
-  async open({ sub, email, home = toBase64(newKey(12)) }: { sub: string; email: string; home?: string }): Promise<Account> {
+  async open({ sub, email, home = toBase64(newKey(12)), managed }: { sub: string; email: string; home?: string; managed?: string }): Promise<Account> {
     const current = await keyStore.read()
     if (current.account?.sub === sub) return current.account
     keysService.ownedBy({ sub })
@@ -118,7 +124,7 @@ export const keysService = {
     const kit = toBase64((await accountDevice(key)).publicKey)
     const devices = [toBase64(device.publicKey), kit]
     const at = Date.now()
-    const list = await signList({ signer: device, body: { workspace: id, version: 1, previous: null, members: [{ email, role: 'owner', devices, kit, viewers: [] }], invites: [], removed: [], at, added: Object.fromEntries(devices.map((each) => [each, at])), names: { [devices[0]]: deviceName() } } })
+    const list = await signList({ signer: device, body: { workspace: id, version: 1, previous: null, members: [{ email, role: 'owner', devices, kit, viewers: [] }], invites: [], removed: [], at, added: Object.fromEntries(devices.map((each) => [each, at])), names: { [devices[0]]: deviceName() }, ...managed && { managed } } })
     const account = { sub, email, key: toBase64(key), vault: toBase64(newKey()), workspace: { id, key: toBase64(newKey()), version: 1 }, list, first: list }
     await keyStore.write({ device: current.device, machine: keyStore.machine, account, session: current.session })
     return account
@@ -279,8 +285,8 @@ async function boxedSecret({ account, room }: { account: Account; room: Room }):
   return secretOf({ room, own: true, team: room.workspace.id !== account.workspace.id })
 }
 
-export async function sealTo({ to, purpose, workspace, plain }: { to: string; purpose: LetterPurpose; workspace: string; plain: Bytes }): Promise<Sent> {
-  const body = await letter({ sender: await keysService.device(), to: fromBase64(to), workspace, purpose, version: 1, plain })
+export async function sealTo({ to, purpose, workspace, plain, sender }: { to: string; purpose: LetterPurpose; workspace: string; plain: Bytes; sender?: Identity }): Promise<Sent> {
+  const body = await letter({ sender: sender ?? await keysService.device(), to: fromBase64(to), workspace, purpose, version: 1, plain })
   return { to, purpose, body: toBase64(body || new Uint8Array()) }
 }
 

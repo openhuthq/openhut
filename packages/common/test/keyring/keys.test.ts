@@ -250,3 +250,13 @@ test('the owner prunes old tombstones when it signs, so an honest list never rea
   assert.deepEqual(next?.removed, removed.slice(-500))
 })
 
+
+test('a managed account lists our signer from the start, and its escrow box is signed by the kit', async () => {
+  stored = undefined
+  const ours = await identity()
+  const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com', managed: toBase64(ours.publicKey) })
+  assert.equal(bodyOf(account.list)?.managed, toBase64(ours.publicKey))
+  const box = await keysService.escrowBox({ account, to: toBase64(ours.publicKey) })
+  assert.equal(box.name, 'escrow')
+  assert.equal(box.by, toBase64((await accountDevice(fromBase64(account.key))).publicKey))
+})

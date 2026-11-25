@@ -7,7 +7,7 @@ type Listening = { listen: (input: { port: number; host: string }) => Promise<st
 
 export const hasCloud = existsSync(new URL('app.ts', API))
 
-export async function bootCloud(): Promise<{ url: string; close: () => Promise<void> }> {
+export async function bootCloud({ managed = false }: { managed?: boolean } = {}): Promise<{ url: string; close: () => Promise<void> }> {
   const port = await new Promise<number>((done) => {
     const probe = createServer().listen(0, '127.0.0.1', () => {
       const { port: free } = probe.address() as AddressInfo
@@ -17,7 +17,7 @@ export async function bootCloud(): Promise<{ url: string; close: () => Promise<v
   const url = `http://127.0.0.1:${port}`
   const runtimePort = process.env.PORT
   for (const name of ['DATABASE_URL', 'OPENHUT_API_DATA', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']) delete process.env[name]
-  Object.assign(process.env, { PORT: String(port), API_URL: url, DEV_SIGN_IN: '1', BETTER_AUTH_SECRET: 'test-better-auth-secret-0123456789abcdef' })
+  Object.assign(process.env, { PORT: String(port), API_URL: url, DEV_SIGN_IN: '1', BETTER_AUTH_SECRET: 'test-better-auth-secret-0123456789abcdef', ...!managed && { MANAGED_KEY: '' } })
   const { migrate } = await import(new URL('platform/db.ts', API).href) as { migrate: () => Promise<void> }
   await migrate()
   const { app } = await import(new URL('app.ts', API).href) as { app: Listening }
