@@ -3,16 +3,16 @@ import { copyFileSync, cpSync, existsSync, linkSync, lstatSync, mkdirSync, readF
 import { dirname, extname, join, resolve } from 'node:path'
 import { PassThrough } from 'node:stream'
 import type { Exec, Mount, Sandboxes, SandboxSpec, SandboxState } from './sandbox.ts'
+import { config } from '../config.ts'
 
 const WIN = process.platform === 'win32'
-const DATA = resolve(process.env.AGENTD_DATA || '/data')
-const STATE = join(DATA, 'native')
-export const RUNTIME = process.env.AGENTD_HERMES || join(DATA, 'runtime')
+const STATE = join(config.data, 'native')
+export const RUNTIME = config.hermesRuntime
 const BACKEND = dirname(RUNTIME)
 const NODE = join(RUNTIME, 'node')
 const PYTHON = WIN ? join(RUNTIME, 'python', 'python.exe') : join(RUNTIME, 'python', 'bin', 'python3')
 const KILL_MS = 10_000
-const BASE_PATH = WIN ? `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32;${process.env.SystemRoot ?? 'C:\\Windows'}` : '/usr/bin:/bin:/usr/sbin:/sbin'
+const BASE_PATH = WIN ? `${config.systemRoot}\\System32;${config.systemRoot}` : '/usr/bin:/bin:/usr/sbin:/sbin'
 
 type Saved = { spec: SandboxSpec; pid?: number; startedAt?: string }
 
@@ -80,7 +80,7 @@ function clear(path: string) {
 }
 
 function envOf(spec: SandboxSpec): Record<string, string> {
-  const mapped = Object.fromEntries(Object.entries(spec.env).map(([name, value]) => [name, value.startsWith('/') && !value.startsWith(DATA) && name !== 'AGENT_BROWSER_SOCKET_DIR' ? hostOf({ spec, guest: value }) : value]))
+  const mapped = Object.fromEntries(Object.entries(spec.env).map(([name, value]) => [name, value.startsWith('/') && !value.startsWith(config.data) && name !== 'AGENT_BROWSER_SOCKET_DIR' ? hostOf({ spec, guest: value }) : value]))
   return { ...mapped, PATH: [binDir(spec), NODE, dirname(PYTHON), BASE_PATH].join(WIN ? ';' : ':'), TMPDIR: join(dirOf(spec.id), 'tmp'), TEMP: join(dirOf(spec.id), 'tmp'), TMP: join(dirOf(spec.id), 'tmp'), PYTHONNOUSERSITE: '1', PYTHONPYCACHEPREFIX: join(STATE, 'pycache'), LANG: 'en_US.UTF-8' }
 }
 

@@ -4,13 +4,13 @@ import { networkInterfaces } from 'node:os'
 import { text } from 'node:stream/consumers'
 import { errorText } from './util.ts'
 import type { Sandboxes, SandboxSpec } from './sandbox/sandbox.ts'
+import { config } from './config.ts'
 
 type FenceCheck = { name: string; target: string; expect: 'refused' | 'allowed'; got: string; pass: boolean }
 export type FenceReport = { ok: boolean; sandbox: string; skipped?: string; checks: FenceCheck[] }
 type Probe = Omit<FenceCheck, 'got' | 'pass'> & { waits?: true }
 
 const FENCE_NET = 0
-const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
 const PROBE_SECONDS = 6
 const TIMEOUT_MS = 30_000
 const STATUS = / =>(\d{3})\s*$/
@@ -47,7 +47,7 @@ export function probesFor({ host, hostPort, lan, tailnet }: { host: string; host
     { name: 'tailnet address', target: `https://${tailnet}/`, expect: 'refused' },
     { name: 'host listener', target: `http://${host}:${hostPort}/`, expect: 'refused' },
     { name: 'public https', target: 'https://example.com/', expect: 'allowed' },
-    { name: 'gateway', target: `http://${host}:${GATEWAY_PORT}/`, expect: 'allowed', waits: true },
+    { name: 'gateway', target: `http://${host}:${config.gatewayPort}/`, expect: 'allowed', waits: true },
   ]
 }
 
