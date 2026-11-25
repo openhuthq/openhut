@@ -44,7 +44,7 @@ export const Invite = z.object({ object: z.literal('invite'), role: MemberRole, 
 export type Invite = z.infer<typeof Invite>
 
 export const CreatePerson = z.union([
-  z.object({ setupCode: z.string().check(z.maxLength(200)), email: Email, password: Password }),
+  z.object({ address: z.string().check(z.maxLength(300)), email: Email, password: Password }),
   z.object({ inviteToken: z.string().check(z.maxLength(200)), name: Name, email: Email, password: Password }),
 ])
 export type CreatePerson = z.infer<typeof CreatePerson>
@@ -64,15 +64,17 @@ export type CreatePasswordReset = z.infer<typeof CreatePasswordReset>
 export const FinishPasswordReset = z.object({ token: z.string().check(z.maxLength(200)), password: Password })
 export type FinishPasswordReset = z.infer<typeof FinishPasswordReset>
 
-export const SecuritySettings = z.object({
-  object: z.literal('security_settings'),
+export const InstallSettings = z.object({
+  object: z.literal('install_settings'),
+  address: z.object({ url: z.nullable(z.string()), certificateUntil: z.nullable(Timestamp) }),
   google: z.object({ set: z.boolean(), signIn: z.boolean(), clientId: z.nullable(z.string()), signInRedirectUri: z.string(), connectionsRedirectUri: z.string() }),
   smtp: z.object({ set: z.boolean(), host: z.nullable(z.string()), port: z.nullable(z.number()), user: z.nullable(z.string()), from: z.nullable(z.string()) }),
   usageData: z.boolean(),
 })
-export type SecuritySettings = z.infer<typeof SecuritySettings>
+export type InstallSettings = z.infer<typeof InstallSettings>
 
-export const UpdateSecurity = z.object({
+export const UpdateInstallSettings = z.object({
+  address: z.optional(z.string().check(z.maxLength(300))),
   googleClientId: z.optional(z.string().check(z.trim(), z.regex(/^\S{10,200}\.apps\.googleusercontent\.com$/, 'Paste the client ID Google shows, ending in .apps.googleusercontent.com.'))),
   googleClientSecret: z.optional(z.string().check(z.trim(), z.regex(/^\S{10,200}$/, 'Paste the client secret Google shows.'))),
   googleSignIn: z.optional(z.boolean()),
@@ -83,4 +85,4 @@ export const UpdateSecurity = z.object({
   smtpFrom: z.optional(Email),
   usageData: z.optional(z.boolean()),
 })
-export type UpdateSecurity = z.infer<typeof UpdateSecurity>
+export type UpdateInstallSettings = z.infer<typeof UpdateInstallSettings>

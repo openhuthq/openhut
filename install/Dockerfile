@@ -75,10 +75,13 @@ ARG CLAUDE_MUSL_SHA256_arm64=172150e3f9ea07e8e2e2e29862d7d9a25f5c234d8e909e4063d
 ARG AGENT_BROWSER=0.43.0
 ARG AGENT_BROWSER_SHA512_amd64=598f2fcb649a6b7a11b7a5c49b3e1269ed56e6a4bd4e361c6d7e8813e7716fcb3600f7cbf57c908cc1c2ea3059ae1c2a0c122f51e4cc093fcfd9cab75cb3d207
 ARG AGENT_BROWSER_SHA512_arm64=f030b6df82c69570a7f00d985c693ac28cb5b938f27b1bed1ddfd33901cbad5dac7d43190fae3b1d31c427217edb3d49d68477e0b681e63a8727d7744440be0b
+ARG CADDY=2.11.9
+ARG CADDY_SHA512_amd64=0e85544340290a16ce4bfb76fe7d65e9de1bf3a6e67f5ccfff30b30d27ea4c73e078077b7bf3e58ae60b6b12e44327705287059c775bca5782e8ee85ea7edd75
+ARG CADDY_SHA512_arm64=9e5e76d7888542924de2c25353ae87c5f77e2a22c5b1198633cae13688922282e05383d142599205c88d8d80eee5e967d291214d7abce4835329a191b20dd6e0
 RUN <<EOF
 set -eu
 case "$TARGETARCH" in amd64) A=x86_64 N=x64 ;; arm64) A=aarch64 N=arm64 ;; *) exit 1 ;; esac
-eval "G=\$GVISOR_SHA512_$TARGETARCH C=\$CLAUDE_SHA256_$TARGETARCH M=\$CLAUDE_MUSL_SHA256_$TARGETARCH B=\$AGENT_BROWSER_SHA512_$TARGETARCH"
+eval "G=\$GVISOR_SHA512_$TARGETARCH C=\$CLAUDE_SHA256_$TARGETARCH M=\$CLAUDE_MUSL_SHA256_$TARGETARCH B=\$AGENT_BROWSER_SHA512_$TARGETARCH Y=\$CADDY_SHA512_$TARGETARCH"
 fetch() { curl -fsSL --retry 4 --retry-all-errors "$1" -o "$2"; }
 fetch "https://storage.googleapis.com/gvisor/releases/release/$GVISOR/$A/gvisor.tar.zstd" /tmp/gvisor.tar.zstd
 printf '%s  %s\n' "$G" /tmp/gvisor.tar.zstd | sha512sum -c - >/dev/null
@@ -90,6 +93,9 @@ printf '%s  %s\n' "$M" /out/opt/openhut/bin/claude-musl | sha256sum -c - >/dev/n
 fetch "https://registry.npmjs.org/@agent-browser/cli-linux-$N-gnu/-/cli-linux-$N-gnu-$AGENT_BROWSER.tgz" /tmp/agent-browser.tgz
 printf '%s  %s\n' "$B" /tmp/agent-browser.tgz | sha512sum -c - >/dev/null
 tar -xzf /tmp/agent-browser.tgz -C /tmp package/bin/agent-browser && mv /tmp/package/bin/agent-browser /out/opt/openhut/bin/agent-browser
+fetch "https://github.com/caddyserver/caddy/releases/download/v$CADDY/caddy_${CADDY}_linux_$TARGETARCH.tar.gz" /tmp/caddy.tgz
+printf '%s  %s\n' "$Y" /tmp/caddy.tgz | sha512sum -c - >/dev/null
+tar -xzf /tmp/caddy.tgz -C /out/usr/local/bin caddy
 chown -R root:root /out && chmod 0755 /out/opt/openhut/bin/* /out/usr/local/bin/*
 EOF
 
@@ -101,7 +107,7 @@ RUN mkdir -p /etc/docker && echo '{"runtimes":{"runsc":{"path":"/usr/local/bin/r
     ln -s /data/log /var/log/openhut && ln -s /run/agentd-etc /etc/agentd
 # Agents get the glibc claude; the seat sign-in runs claude here, on Alpine, so it takes the musl build.
 ENV OPENHUT_HOST=0.0.0.0 DOCKER_TLS_CERTDIR= OPENHUT_CLAUDE=/opt/openhut/bin/claude-musl
-EXPOSE 8787
+EXPOSE 80 443 8787
 ENTRYPOINT ["/opt/openhut/install/image-start.sh"]
 COPY install/updater.sh /usr/local/lib/openhut-updater.sh
 

@@ -1,20 +1,19 @@
 import { ComputersSettings } from '@/features/settings/computers'
 import { GeneralSettings } from '@/features/settings/general'
 import { ModelsSettings, ModelsStep, stepOf } from '@/features/settings/models'
-import { SECURITY_STEPS, SecuritySettingsTab, SecurityStep } from '@/features/settings/security'
+import { ADMIN_STEPS, AdminSettings, AdminStep } from '@/features/settings/admin'
 import { PeopleSettings } from '@/features/people/people'
 import { AppsSettings, AppsSheet } from '@/features/connections/connections-view'
 import { tabsFor } from '@/features/settings/tabs'
+import { useIsAdmin } from '@/features/people/api'
 import { UpdatesSettings } from '@/features/settings/updates'
 import { AppWindow, HOVER, I, PICKED } from '@/components/kit'
 import { navigate, useOpen, usePath } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
-const MOVED: Record<string, string> = { devices: 'computers', usage: 'general', cloud: 'general', backup: 'general', account: 'general', team: 'general', mcp: 'general', phones: 'computers' }
-
 export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: () => void }) {
-  const tab = MOVED[asked] ?? asked
-  const tabs = tabsFor()
+  const tab = asked
+  const tabs = tabsFor({ admin: useIsAdmin() })
   const current = tabs.find(({ slug }) => slug === tab) ?? tabs[0]
   const nav = <nav aria-label="Settings" className="no-scrollbar flex w-[198px] shrink-0 flex-col gap-0.5 overflow-y-auto px-3 py-4">
     {tabs.map(({ slug, name, icon, hue, href = `/settings/${slug}` }) => <a key={slug} href={href} aria-current={slug === tab ? 'page' : undefined} onClick={(event) => { event.preventDefault(); navigate(href, true) }}
@@ -22,14 +21,14 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
   </nav>
   const opened = useOpen()
   const step = tab === 'models' ? stepOf(opened) : undefined
-  const securityStep = tab === 'security' && opened && SECURITY_STEPS.includes(opened) ? opened : undefined
+  const adminStep = tab === 'admin' && opened && ADMIN_STEPS.includes(opened) ? opened : undefined
   const [section, sheet] = usePath().split('/').slice(1)
   const apps = section === 'connections' && Boolean(sheet)
   return <AppWindow label="Settings" nav={nav} onClose={onClose}>
     {step && <ModelsStep id={step} />}
-    {securityStep && <SecurityStep id={securityStep} />}
+    {adminStep && <AdminStep id={adminStep} />}
     {!step && apps && <AppsSheet />}
-    {!step && !securityStep && !apps && <>
+    {!step && !adminStep && !apps && <>
       <div className="shrink-0 pt-[26px] pr-[52px] pb-1.5 pl-[34px] phone:hidden">
         <h2 className="m-0 text-[15px]/[22px] font-medium">{current?.name}</h2>
         <p className="m-0 text-[12.5px]/[18px] text-mute">{current?.subtitle}</p>
@@ -44,7 +43,7 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
 function Tab({ tab }: { tab: string }) {
   switch (tab) {
     case 'people': return <PeopleSettings />
-    case 'security': return <SecuritySettingsTab />
+    case 'admin': return <AdminSettings />
     case 'computers': return <ComputersSettings />
     case 'models': return <ModelsSettings />
     case 'apps': return <AppsSettings />

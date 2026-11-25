@@ -16,17 +16,18 @@ const QUIET = 'h-auto text-[13px] font-normal text-mute'
 export function SetupPage() {
   const setup = useSetup()
   const createPerson = useCreatePerson()
-  const code = query('code')
   if (setup.data?.open === false) return <Redirect to="/login" />
   return <AuthForm title="Create your account" line="You’re first here, so this is the owner account." error={createPerson.error}
-    fields={['setupCode', 'email', 'password']} busy={createPerson.isPending} button="Create account" foot="After this, people join by invite."
+    fields={['address', 'email', 'password']} busy={createPerson.isPending} button="Create account" foot="After this, people join by invite link."
     onSubmit={(event) => {
       const field = formValues(event)
-      createPerson.mutate({ setupCode: field('setupCode'), email: field('email'), password: field('password') })
+      const address = field('address').trim().replace(/\/+$/, '')
+      createPerson.mutate({ address, email: field('email'), password: field('password') }, {
+        onSuccess: () => { if (URL.canParse(address) && new URL(address).origin !== location.origin) location.assign(`${new URL(address).origin}/login`) },
+      })
     }}>
-    {code
-      ? <><Input type="hidden" name="setupCode" value={code} /><p className="m-0 -mb-1 text-[12px] text-mute">Setup code from your install link.</p></>
-      : <Field strong label="Setup code" hint="Printed at the end of the install." error={fieldError(createPerson.error, 'setupCode')}>{(control) => <Input variant="lg" mono {...control} name="setupCode" required autoComplete="one-time-code" placeholder="XXXX-XXXX-…" />}</Field>}
+    <Field strong label="Address" hint="The HTTPS address your team will open. Point its DNS at this server first; OpenHut gets the certificate itself." error={fieldError(createPerson.error, 'address')}>{(control) =>
+      <Input variant="lg" {...control} name="address" type="url" required defaultValue={location.protocol === 'https:' ? location.origin : ''} placeholder="https://agents.example.com" autoComplete="url" />}</Field>
     <CredentialFields error={createPerson.error} />
   </AuthForm>
 }

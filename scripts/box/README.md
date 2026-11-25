@@ -28,11 +28,9 @@ Everything lands in `$BOX_E2E_OUT/<run-id>/` (default `plan/deploy-evidence/<run
   with the Box MCP tool `create_agent {"environment":"box","name":"oh-<run>-main","size":"medium"}` (and
   `oh-<run>-rt1`, small), then run `up` again: it skips machines that exist and does the rest (ssh wait, `box awake`).
 - **Awake.** Machines sleep after 5 idle minutes, which kills containers; `--awake 1` and `box awake` keep them up a day.
-- **Address.** `install` gets the preview URL first and passes it as `OPENHUT_ADDRESS`, so the printed setup link and the
-  session cookie use it. `RUNTIME_IMAGE=<ref>` in the environment installs that image instead of the pinned one.
-- **Preview.** The installer publishes `127.0.0.1:8787` only and Box previews only ports bound on `0.0.0.0`, so `install`
-  runs `socat` on `0.0.0.0:8788` (systemd unit `oh-preview`) and `preview 8788`, giving
-  `https://box-node-<id>-8788.on.boat.dev`. The runtime has no Host allow-list today (only WebSockets check that
-  `Origin` matches `Host`), so the on.boat.dev host just works. If M1 adds one, pass the preview host to the installer.
+- **Address.** `install` makes two previews (Box previews only ports bound on `0.0.0.0`, so each is a `socat` systemd unit):
+  `:8788` to Caddy on :80, where the first visitor creates the owner, and `:8789` to the app on 127.0.0.1:8787, to give as the
+  address (Caddy then tries Let's Encrypt for it and fails, which is expected; the real certificate is tested at deploy).
+  `RUNTIME_IMAGE=<ref>` in the environment installs that image instead of the pinned one.
 - **Join (M2).** The runtime can't hand out a join code headlessly yet, so `join` takes the code or command from outside.
 - **App.** 8787 serves the web App, the API and `/health` on one origin.

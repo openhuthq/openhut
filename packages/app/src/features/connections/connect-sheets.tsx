@@ -8,7 +8,8 @@ import { useAuthorizeConnection, useBackToAsker, useConnections, useCreateConnec
 import { uniqueName, type Integration } from '@/features/connections/catalog'
 import { Field } from '@/features/connections/sheet'
 import { GoogleClientGuide } from '@/features/connections/google-client'
-import { useSecurity, useUpdateSecurity } from '@/features/settings/security'
+import { useInstallSettings, useUpdateInstallSettings } from '@/features/settings/admin'
+import { useIsAdmin } from '@/features/people/api'
 import { CopyButton } from '@/components/copy-button'
 import { useAgents, useCreateGrant } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
@@ -150,11 +151,13 @@ function McpSheet({ item, close, returned, ask }: FlowProps) {
 
 function GoogleSheet(props: FlowProps) {
   const { item, close, returned, ask } = props
-  const google = useSecurity().data?.google
-  const save = useUpdateSecurity()
+  const admin = useIsAdmin()
+  const settings = useInstallSettings(admin)
+  const google = settings.data?.google
+  const save = useUpdateInstallSettings()
   const quick = useQuickConnect()
+  if (!admin || google?.set) return <QuickSheet {...props} />
   if (!google) return null
-  if (google.set) return <QuickSheet {...props} />
   return <SetupSheet {...sheetOf(item)} blurb="Google needs your own OAuth client first. An admin sets it up once and the whole team uses it." eta="5 minutes" onClose={close}
     error={formError(save.error, ['googleClientId', 'googleClientSecret']) ?? returned} safe="The secret stays on this server."
     onSubmit={(event) => {

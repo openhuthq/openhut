@@ -19,7 +19,7 @@ function useSignedIn<T>(mutationFn: (body: T) => Promise<unknown>) {
   return useMutation({ mutationFn, onSuccess: () => { client.clear(); navigate('/', true) } })
 }
 
-export const useCreatePerson = () => useSignedIn((body: { setupCode: string; email: string; password: string } | { inviteToken: string; name: string; email: string; password: string }) => request({ schema: Person, path: '/api/people', method: 'POST', body }))
+export const useCreatePerson = () => useSignedIn((body: { address: string; email: string; password: string } | { inviteToken: string; name: string; email: string; password: string }) => request({ schema: Person, path: '/api/people', method: 'POST', body }))
 
 export const useCreateSession = () => useSignedIn((body: { email: string; password: string }) => request({ schema: Session, path: '/api/sessions', method: 'POST', body }))
 

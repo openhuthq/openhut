@@ -1,13 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { request } from 'node:http'
 import Fastify from 'fastify'
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod'
-import { config } from '../../../src/server/platform/config.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
-import { listenLocally } from '../../../src/server/team/identity.ts'
-import { inviteController, meController, peopleController, securityController, sessionController, setupCodeController } from '../../../src/server/team/team-controller.ts'
+import { inviteController, meController, peopleController, installSettingsController, sessionController } from '../../../src/server/team/team-controller.ts'
 
 await migrate()
 const app = Fastify()
@@ -15,15 +12,12 @@ answerErrors(app)
 app.setValidatorCompiler(validatorCompiler)
 app.setSerializerCompiler(serializerCompiler)
 await app.register(meController, { prefix: '/api/me' })
-await app.register(setupCodeController, { prefix: '/api/setup-codes' })
 await app.register(peopleController, { prefix: '/api/people' })
 await app.register(sessionController, { prefix: '/api/sessions' })
 await app.register(inviteController, { prefix: '/api/invites' })
-await app.register(securityController, { prefix: '/api/settings/security' })
-await app.listen({ port: 0, host: '127.0.0.1' })
-const socket = `${config.dataDir}/team.sock`
-const local = await listenLocally({ server: app.server, path: socket })
-test.after(async () => { local.close(); await app.close() })
+await app.register(installSettingsController, { prefix: '/api/install-settings' })
+await app.ready()
+test.after(() => app.close())
 
 const PASSWORD = 'correct horse battery'
 let ip = 0
@@ -31,27 +25,18 @@ const call = async ({ method = 'GET', url, body, cookie, from = `10.0.0.${++ip}`
   const res = await app.inject({ method: method as 'GET', url, payload: body, headers: cookie ? { cookie } : {}, remoteAddress: from })
   return { status: res.statusCode, body: res.json(), cookie: String(res.headers['set-cookie'] ?? '').split(';')[0] }
 }
-const mintCode = () => new Promise<string>((resolve, reject) => {
-  request({ socketPath: socket, path: '/api/setup-codes', method: 'POST' }, (res) => {
-    let raw = ''
-    res.on('data', (chunk) => { raw += chunk }).on('end', () => resolve(JSON.parse(raw).code))
-  }).on('error', reject).end()
-})
 let owner = ''
 
-test('the setup code comes only from the server\'s own socket, and two visitors racing with it make one owner', async () => {
-  assert.equal((await call({ method: 'POST', url: '/api/setup-codes' })).status, 403)
-  const code = await mintCode()
-  assert.match(code, /^([A-Z2-9]{4}-){6}[A-Z2-9]{4}$/)
-  assert.equal((await call({ method: 'POST', url: '/api/people', body: { setupCode: 'WRONG-CODE', email: 'x@example.com', password: PASSWORD } })).status, 403)
-  const race = await Promise.all(['a@example.com', 'b@example.com'].map((email) => call({ method: 'POST', url: '/api/people', body: { setupCode: code.toLowerCase(), email, password: PASSWORD } })))
-  assert.deepEqual(race.map((each) => each.status).sort(), [200, 403])
+test('while there is no owner, the first visitor becomes it; two racing visitors make one owner, and owner sign-up then closes', async () => {
+  const body = (email: string) => ({ address: 'https://agents.example.com', email, password: PASSWORD })
+  const race = await Promise.all(['a@example.com', 'b@example.com'].map((email) => call({ method: 'POST', url: '/api/people', body: body(email) })))
+  assert.deepEqual(race.map((each) => each.status).sort(), [200, 409])
   const winner = race.find((each) => each.status === 200)
   assert.equal(winner?.body.role, 'owner')
   assert.match(winner?.cookie ?? '', /^openhut_session=ohs_/)
   owner = winner?.cookie ?? ''
   assert.equal((await db.selectFrom('person').select('id').where('role', '=', 'owner').execute()).length, 1)
-  assert.equal((await call({ method: 'POST', url: '/api/people', body: { setupCode: code, email: 'c@example.com', password: PASSWORD } })).status, 403)
+  assert.equal((await call({ method: 'POST', url: '/api/people', body: body('c@example.com') })).status, 409)
   assert.equal((await call({ url: '/api/me', cookie: owner })).status, 200)
   assert.equal((await call({ url: '/api/me' })).status, 401)
 })
@@ -84,7 +69,7 @@ test('roles are enforced on the server: a member can\'t invite, change roles or 
   const mia = (await call({ url: '/api/me', cookie: member })).body.user.id
   assert.equal((await call({ method: 'POST', url: '/api/invites', body: { role: 'admin' }, cookie: member })).status, 403)
   assert.equal((await call({ method: 'PATCH', url: `/api/people/${mia}`, body: { role: 'admin' }, cookie: member })).status, 403)
-  assert.equal((await call({ method: 'PATCH', url: '/api/settings/security', body: { usageData: true }, cookie: member })).status, 403)
+  assert.equal((await call({ method: 'PATCH', url: '/api/install-settings', body: { usageData: true }, cookie: member })).status, 403)
   assert.equal((await call({ method: 'PATCH', url: `/api/people/${mia}`, body: { role: 'admin' }, cookie: owner })).body.role, 'admin')
   assert.equal((await call({ method: 'POST', url: '/api/invites', body: { role: 'member' }, cookie: member })).status, 200)
   const ownerId = (await call({ url: '/api/me', cookie: owner })).body.user.id

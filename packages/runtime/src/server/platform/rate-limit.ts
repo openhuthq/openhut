@@ -21,4 +21,4 @@ export function rateLimit({ keys, max }: { keys: string[]; max: number }): void 
   if (hits.size > 50_000) for (const [key, hit] of hits) if (hit.until <= now) hits.delete(key)
 }
 
-export const clientOf = (req: FastifyRequest): string => req.raw.socket.remoteAddress ?? 'unknown'
+export const clientOf = (req: FastifyRequest): string => req.ip

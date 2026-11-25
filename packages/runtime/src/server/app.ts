@@ -5,6 +5,7 @@ import { db, migrate } from './platform/db.ts'
 import { emit, log } from './platform/events.ts'
 import { answerErrors, messageOf } from './platform/http-error.ts'
 import { webApp } from './platform/web-app.ts'
+import { writeCaddyfile } from './platform/address.ts'
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod'
 import { adminController, healthController, updateController } from './admin/admin-controller.ts'
 import { agentController, grantController } from './agents/agent-controller.ts'
@@ -24,15 +25,16 @@ import { routineController } from './routines/routine-controller.ts'
 import { changeRequestController } from './agents/change-request-controller.ts'
 import { changeRequestService } from './agents/change-request-service.ts'
 import { routineService } from './routines/routine-service.ts'
-import { googleSignInController, inviteController, meController, ownerResetController, passwordResetController, peopleController, securityController, sessionController, setupCodeController, setupController } from './team/team-controller.ts'
-import { securityService } from './team/security-service.ts'
+import { addressController, googleSignInController, inviteController, meController, ownerResetController, passwordResetController, peopleController, installSettingsController, sessionController, setupController } from './team/team-controller.ts'
+import { installSettingsService } from './team/install-settings-service.ts'
 import { forward } from './relay/forward.ts'
 import { runSet } from './agents/run-set.ts'
 import { listenLocally } from './team/identity.ts'
 
 await migrate()
+writeCaddyfile()
 
-const app = Fastify({ logger: false, bodyLimit: 1 << 20, forceCloseConnections: true }).withTypeProvider<ZodTypeProvider>()
+const app = Fastify({ logger: false, bodyLimit: 1 << 20, trustProxy: '127.0.0.1', forceCloseConnections: true }).withTypeProvider<ZodTypeProvider>()
 answerErrors(app)
 app.setValidatorCompiler(validatorCompiler)
 app.setSerializerCompiler(serializerCompiler)
@@ -45,14 +47,14 @@ app.addHook('preHandler', forward.http)
 await app.register(healthController, { prefix: '/health' })
 await app.register(meController, { prefix: '/api/me' })
 await app.register(setupController, { prefix: '/api/setup' })
-await app.register(setupCodeController, { prefix: '/api/setup-codes' })
 await app.register(ownerResetController, { prefix: '/api/owner-resets' })
+await app.register(addressController, { prefix: '/api/addresses' })
 await app.register(peopleController, { prefix: '/api/people' })
 await app.register(sessionController, { prefix: '/api/sessions' })
 await app.register(inviteController, { prefix: '/api/invites' })
 await app.register(passwordResetController, { prefix: '/api/password-resets' })
 await app.register(googleSignInController, { prefix: '/api/google-sign-in' })
-await app.register(securityController, { prefix: '/api/settings/security' })
+await app.register(installSettingsController, { prefix: '/api/install-settings' })
 await app.register(agentController, { prefix: '/api/agents' })
 await app.register(grantController, { prefix: '/api/grants' })
 await app.register(skillController, { prefix: '/api/skills' })
@@ -95,5 +97,5 @@ routineService.runDashboardWith((input) => threadService.runRoutine(input))
 changeRequestService.runDashboardWith((input) => threadService.runRoutine(input))
 void changeRequestService.resume().catch((err: unknown) => log.warn({ event: 'change_request.resume_failed', error: messageOf(err) }))
 routineService.start()
-securityService.startUsageData()
+installSettingsService.startUsageData()
 void channelService.resumeTelegramClaims().catch((err: unknown) => log.warn({ event: 'telegram.claim_resume_failed', error: messageOf(err) }))

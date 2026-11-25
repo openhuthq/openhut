@@ -76,7 +76,7 @@ jobs:
       - name: Install it as a server would, from install.sh
         run: |
           start=$(date +%s)
-          OPENHUT_MODEL=test OPENHUT_ADDRESS=http://127.0.0.1:8787 sh dist/install.sh
+          OPENHUT_MODEL=test sh dist/install.sh
           echo "Installed in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
           docker ps --format '{{.Names}} {{.Image}} {{.Status}}'
           [ "$(docker inspect -f '{{.State.Running}}' openhut-updater)" = true ] || { echo "::error::the updater isn't running"; docker logs openhut-updater; exit 1; }

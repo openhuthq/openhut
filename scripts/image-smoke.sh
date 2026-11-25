@@ -2,15 +2,17 @@
 set -eu
 D="${DOCKER:-docker}"
 rt() { $D exec openhut "$@"; }
-api() { rt curl -fsS -b /tmp/smoke-cookies -c /tmp/smoke-cookies -H 'content-type: application/json' "$@"; }
+api() { rt curl -fsS -H "cookie: ${COOKIE:-}" -H 'content-type: application/json' "$@"; }
 fail() { echo "smoke: $*" >&2; $D exec openhut sh -c 'tail -n 40 /var/log/openhut/agentd.log /var/log/openhut/app.log' >&2 || true; exit 1; }
 wait_for() { i=0; until eval "$2" >/dev/null 2>&1; do i=$((i+1)); [ "$i" -gt "$1" ] && return 1; sleep 3; done; }
 
 wait_for 100 'rt curl -fsS http://127.0.0.1:8787/health' || fail "no /health"
-code=$(rt openhut setup-code | sed -n 's/.*code=//p') || fail "no setup code"
-api -X POST http://127.0.0.1:8787/api/people -d "{\"setupCode\":\"$code\",\"email\":\"smoke@example.com\",\"password\":\"smoke-test-password\"}" >/dev/null || fail "create the owner from the setup code"
+wait_for 20 "curl -fsS -o /dev/null http://127.0.0.1/setup" || fail "Caddy doesn't serve the app on :80 before an address is set"
+COOKIE=$(api -i -X POST http://127.0.0.1:8787/api/people -d "{\"address\":\"https://smoke.example.com\",\"email\":\"smoke@example.com\",\"password\":\"smoke-test-password\"}" | sed -n 's/^set-cookie: \(openhut_session=[^;]*\).*/\1/ip') || fail "create the owner"
+[ -n "$COOKIE" ] || fail "no session cookie after creating the owner"
+rt cat /data/app/Caddyfile | grep -q '^smoke.example.com {' || fail "the Caddyfile doesn't serve the address"
 rt curl -fsS http://127.0.0.1:8787/setup | grep -q '<div id="root">' || fail "the web app isn't served"
-echo "smoke: the owner signed in with the setup code, and the web app is served"
+echo "smoke: the first visitor became the owner, and the web app is served"
 rt sh -c 'command -v script' >/dev/null || fail "no script(1) in the image, so the Claude sign-in can't start"
 link=$(rt sh -c 'd=$(mktemp -d); cd "$d"; HOME=$d CLAUDE_CONFIG_DIR=$d BROWSER=/bin/true TERM=xterm-256color timeout 30 script -qfec "stty cols 4000 rows 60; exec $OPENHUT_CLAUDE setup-token" /dev/null </dev/null | tr "\033\007" "\n\n" | grep -o "https://claude\.[a-z]*/[^ ]*oauth/authorize?[^ ]*" | head -n 1; rm -rf "$d"')
 case "$link" in https://claude.ai/*|https://claude.com/*) echo "smoke: the Claude sign-in starts at ${link%%\?*}" ;; *) fail "the Claude sign-in gave no claude.ai link: $link" ;; esac

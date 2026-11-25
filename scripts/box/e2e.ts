@@ -81,11 +81,14 @@ async function up(runtimes: number) {
 }
 
 async function install() {
-  capture(main, `command -v socat >/dev/null || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq socat >/dev/null; sudo systemctl stop oh-preview 2>/dev/null; sudo systemd-run --unit oh-preview socat TCP-LISTEN:${PREVIEW_PORT},fork,reuseaddr TCP:127.0.0.1:8787`)
-  const url = capture(main, `preview ${PREVIEW_PORT}`).match(/https:\/\/\S+/)?.[0]
-  if (!url) throw new Error('preview gave no URL')
-  writeFileSync(`${OUT}/preview-url.txt`, `${url}\n`)
-  const envs = `OPENHUT_ADDRESS=${url}${process.env.RUNTIME_IMAGE ? ` RUNTIME_IMAGE=${process.env.RUNTIME_IMAGE}` : ''}`
+  const forward = (port: number, to: number) => capture(main, `command -v socat >/dev/null || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq socat >/dev/null; sudo systemctl stop oh-preview-${port} 2>/dev/null; sudo systemd-run --unit oh-preview-${port} socat TCP-LISTEN:${port},fork,reuseaddr TCP:127.0.0.1:${to}`)
+  forward(PREVIEW_PORT, 80)
+  forward(PREVIEW_PORT + 1, 8787)
+  const preview = (port: number) => capture(main, `preview ${port}`).match(/https:\/\/\S+/)?.[0] ?? ''
+  const [plain, url] = [preview(PREVIEW_PORT), preview(PREVIEW_PORT + 1)]
+  if (!plain || !url) throw new Error('preview gave no URL')
+  writeFileSync(`${OUT}/preview-url.txt`, `:80 (Caddy, before an address is set) ${plain}\n:8787 (the app, to use as the address) ${url}\n`)
+  const envs = process.env.RUNTIME_IMAGE ? `RUNTIME_IMAGE=${process.env.RUNTIME_IMAGE}` : ''
   const script = values.script!
   const local = existsSync(script)
   const cmd = local ? `sudo env ${envs} sh -s` : `curl -fsSL ${script} | sudo env ${envs} sh`
@@ -97,8 +100,8 @@ async function install() {
   if (r.status !== 0) process.exit(1)
   const image = capture(main, `docker image inspect -f '{{.Size}}' $(docker inspect -f '{{.Image}}' openhut)`).trim()
   log(`install: image ${(Number(image) / 1e9).toFixed(2)} GB unpacked; local health ${capture(main, 'curl -fsS http://127.0.0.1:8787/health').trim()}`)
-  const setup = (r.stdout + r.stderr).match(/https:\/\/\S+\/setup\?code=\S+/)?.[0]
-  if (setup) log(`install: setup link ${setup} (in install.log)`)
+  const code = (r.stdout + r.stderr).match(/\/setup\?code=(\S+)/)?.[1]
+  if (code) log(`install: setup link through Caddy on :80 ${plain}/setup?code=${code}; use ${url} as the address`)
   for (let i = 0; i < 20; i++) {
     const res = await fetch(`${url}/health`).catch((e: Error) => e)
     if (!(res instanceof Error) && res.ok) return log(`install: ${url}/health -> ${res.status} ${await res.text()}`)
