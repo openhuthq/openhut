@@ -75,6 +75,7 @@ function AgentForm() {
   }
   const create = ({ name, face }: { name: string; face: string }) => createAgent.mutate({ name, face, model })
   return <form className="flex w-full flex-col items-center gap-4" onSubmit={(event) => {
+    if (event.target !== event.currentTarget) return
     const field = formValues(event)
     const typed = { name: field('name').trim() || name, face: field('face') }
     if (unready && model.startsWith('claude:')) return setSigning(typed)
