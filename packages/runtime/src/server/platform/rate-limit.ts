@@ -4,6 +4,12 @@ import { HttpError } from './http-error.ts'
 const WINDOW_MS = 15 * 60_000
 const hits = new Map<string, { n: number; until: number }>()
 
+export function requireUnder({ keys, max }: { keys: string[]; max: number }): void {
+  const now = Date.now()
+  const over = keys.map((key) => hits.get(key)).find((hit) => hit && hit.until > now && hit.n >= max)
+  if (over) throw new HttpError(429, `Too many tries. Wait ${Math.ceil((over.until - now) / 60_000)} minutes and try again.`)
+}
+
 export function rateLimit({ keys, max }: { keys: string[]; max: number }): void {
   const now = Date.now()
   for (const key of keys) {

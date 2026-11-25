@@ -34,6 +34,7 @@ export const providerService = {
 
   async update({ actor, id, patch }: { actor: Caller; id: ProviderId; patch: UpdateProvider }): Promise<Provider> {
     if (patch.baseUrl !== undefined) {
+      if (patch.apiKey === undefined) throw new HttpError(400, 'Paste the API key again with a new base URL.', { param: 'apiKey' })
       if (id !== 'compatible') throw new HttpError(400, `${providerInfo(id).short} has a fixed address.`, { param: 'baseUrl' })
       await settings.setProviderBaseUrl(id, patch.baseUrl)
     }

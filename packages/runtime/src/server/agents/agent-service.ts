@@ -14,7 +14,7 @@ import { log, emit } from '../platform/events.ts'
 import { liveService } from '../platform/live-service.ts'
 import { deleted } from '../platform/responses.ts'
 import { connectionService } from '../connections/connection-service.ts'
-import type { Caller } from '../team/identity.ts'
+import { peopleOf, type Caller } from '../team/identity.ts'
 import { audienceOf } from '../channels/audience.ts'
 import { DiscordSecrets } from '../integrations/discord/discord.ts'
 import { resolveSlots } from '../models/model-slots.ts'
@@ -45,6 +45,15 @@ export const agentService = {
     const [facts, states] = await Promise.all([agentService.find({ id }), containerStates()])
     if (!canUse(accessOf(facts), actor.email)) throw new HttpError(404, 'That agent doesn\'t exist. It may have been deleted.')
     return agentOf({ facts, actor, states })
+  },
+
+  async visibleIds({ actor }: { actor: Caller }): Promise<Set<string>> {
+    const rows = await db.selectFrom('agent').select(['id', 'owner', 'shared', 'people']).execute()
+    return new Set(rows.filter((row) => canUse({ owner: row.owner ?? actor.email, shared: row.shared, people: peopleOf(row.people), sidebars: [] }, actor.email)).map((row) => row.id))
+  },
+
+  async requireVisible({ actor, id }: { actor: Caller; id: string }): Promise<void> {
+    if (!(await agentService.visibleIds({ actor })).has(id)) throw new HttpError(404, 'That agent doesn\'t exist. It may have been deleted.')
   },
 
   async find({ id }: { id: string }): Promise<AgentFacts> {

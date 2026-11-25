@@ -46,8 +46,16 @@ export async function requireLocal(req: FastifyRequest): Promise<void> {
   if (!isLocal(req)) throw new HttpError(403, 'Run this on the server: docker exec openhut openhut <command>.')
 }
 
-export const sessionToken = (req: FastifyRequest): string | undefined =>
-  (req.headers.cookie ?? '').split(/;\s*/).find((part) => part.startsWith(`${COOKIE}=`))?.slice(COOKIE.length + 1)
+export const GOOGLE_STATE = 'openhut_google_state'
+
+export const cookieOf = ({ req, name }: { req: FastifyRequest; name: string }): string | undefined =>
+  (req.headers.cookie ?? '').split(/;\s*/).find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1)
+
+export const sessionToken = (req: FastifyRequest): string | undefined => cookieOf({ req, name: COOKIE })
+
+export function googleStateCookie({ value, maxAge }: { value: string; maxAge: number }): string {
+  return `${GOOGLE_STATE}=${value}; HttpOnly; SameSite=Lax; Path=/api/google-sign-in; Max-Age=${maxAge}${secure()}`
+}
 
 export function setSessionCookie({ reply, token }: { reply: FastifyReply; token: string }): void {
   reply.header('set-cookie', cookie(token, SESSION_DAYS * 86400))
@@ -72,8 +80,10 @@ export async function listenLocally({ server, path }: { server: Server; path: st
 }
 
 function cookie(value: string, maxAge: number): string {
-  return `${COOKIE}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${config.address.startsWith('https:') ? '; Secure' : ''}`
+  return `${COOKIE}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${secure()}`
 }
+
+const secure = (): string => config.address.startsWith('https:') ? '; Secure' : ''
 
 async function sessionCaller(req: FastifyRequest): Promise<Caller | undefined> {
   const token = sessionToken(req)

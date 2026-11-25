@@ -1,14 +1,20 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import * as z from 'zod/mini'
 import { CreateInvite, CreatePasswordReset, CreatePerson, CreateSession, FinishPasswordReset, UpdatePerson, UpdateSecurity } from '@openhut/common/team/team.ts'
-import { clientOf, rateLimit } from '../platform/rate-limit.ts'
+import { clientOf, rateLimit, requireUnder } from '../platform/rate-limit.ts'
 import { deleted, IdParams, listOf } from '../platform/responses.ts'
-import { clearSessionCookie, requireLocal, requireSignIn, sessionToken, setSessionCookie, who } from './identity.ts'
+import { clearSessionCookie, cookieOf, googleStateCookie, GOOGLE_STATE, requireLocal, requireSignIn, sessionToken, setSessionCookie, who } from './identity.ts'
+import { routineService } from '../routines/routine-service.ts'
 import { securityService } from './security-service.ts'
 import { teamService } from './team-service.ts'
 
 export const meController: FastifyPluginAsyncZod = async (app) => {
-  app.get('/', async (req) => teamService.me({ caller: await who(req) }))
+  app.get('/', async (req) => {
+    const caller = await who(req)
+    const zone = req.headers['openhut-time-zone']
+    if (typeof zone === 'string' && zone) await routineService.setTimeZone(zone)
+    return teamService.me({ caller })
+  })
 }
 
 export const setupController: FastifyPluginAsyncZod = async (app) => {
@@ -40,8 +46,9 @@ export const peopleController: FastifyPluginAsyncZod = async (app) => {
 
 export const sessionController: FastifyPluginAsyncZod = async (app) => {
   app.post('/', CreateSessionRequest, async (req, reply) => {
-    rateLimit({ keys: [`login:${clientOf(req)}`, `login:${req.body.email}`], max: 10 })
-    const { session, token } = await teamService.createSession(req.body)
+    const keys = [`login:${clientOf(req)}`, `login:${req.body.email}`]
+    requireUnder({ keys, max: 10 })
+    const { session, token } = await teamService.createSession(req.body).catch((err: unknown) => { rateLimit({ keys, max: Infinity }); throw err })
     setSessionCookie({ reply, token })
     return session
   })
@@ -77,12 +84,19 @@ export const passwordResetController: FastifyPluginAsyncZod = async (app) => {
 }
 
 export const googleSignInController: FastifyPluginAsyncZod = async (app) => {
-  app.get('/', async (_req, reply) => reply.redirect(teamService.beginGoogleSignIn()))
+  app.get('/', async (req, reply) => {
+    rateLimit({ keys: [`google:${clientOf(req)}`], max: 30 })
+    const { url, state } = teamService.beginGoogleSignIn()
+    reply.header('set-cookie', googleStateCookie({ value: state, maxAge: 600 }))
+    return reply.redirect(url)
+  })
 
   app.get('/callback', { schema: { querystring: GoogleCallback } }, async (req, reply) => {
-    rateLimit({ keys: [`login:${clientOf(req)}`], max: 10 })
+    rateLimit({ keys: [`google:${clientOf(req)}`], max: 30 })
+    reply.header('set-cookie', googleStateCookie({ value: '', maxAge: 0 }))
     if (!req.query.code || !req.query.state) return reply.redirect('/login?error=google')
-    const token = await teamService.finishGoogleSignIn({ state: req.query.state, code: req.query.code })
+    const browserState = cookieOf({ req, name: GOOGLE_STATE })
+    const token = await teamService.finishGoogleSignIn({ state: req.query.state, code: req.query.code, browserState })
       .catch((err: unknown) => { req.log.warn(err); return undefined })
     if (!token) return reply.redirect('/login?error=google')
     setSessionCookie({ reply, token })

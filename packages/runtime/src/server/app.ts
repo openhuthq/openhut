@@ -36,10 +36,6 @@ const app = Fastify({ logger: false, bodyLimit: 1 << 20, forceCloseConnections: 
 answerErrors(app)
 app.setValidatorCompiler(validatorCompiler)
 app.setSerializerCompiler(serializerCompiler)
-app.addHook('onRequest', async (req) => {
-  const zone = req.headers['openhut-time-zone']
-  if (typeof zone === 'string' && zone) await routineService.setTimeZone(zone)
-})
 app.addHook('onSend', async (_req, reply) => {
   reply.header('referrer-policy', 'no-referrer').header('x-frame-options', 'DENY')
 })

@@ -1,5 +1,5 @@
 import { createReadStream, existsSync, statSync } from 'node:fs'
-import { extname, join, normalize } from 'node:path'
+import { extname, join, normalize, sep } from 'node:path'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { config } from './config.ts'
 import { errorBody } from './http-error.ts'
@@ -16,7 +16,7 @@ export function webApp(req: FastifyRequest, reply: FastifyReply): FastifyReply {
     return reply.status(404).send(errorBody({ status: 404, message: `There's no ${req.method} ${path}.` }))
   }
   const asked = join(config.appDir, normalize(path))
-  const file = asked.startsWith(config.appDir) && existsSync(asked) && statSync(asked).isFile() ? asked : join(config.appDir, 'index.html')
+  const file = asked.startsWith(config.appDir + sep) && existsSync(asked) && statSync(asked).isFile() ? asked : join(config.appDir, 'index.html')
   const immutable = file.startsWith(join(config.appDir, 'assets'))
   return reply.type(TYPES[extname(file)] ?? 'application/octet-stream')
     .header('cache-control', immutable ? 'public, max-age=31536000, immutable' : 'no-cache')

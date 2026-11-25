@@ -18,6 +18,7 @@ const DAY_MS = 86_400_000
 const INVITE_DAYS = 7
 const RESET_MS = 60 * 60_000
 const SIGN_IN_MS = 10 * 60_000
+const MAX_PENDING = 1000
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const CODE_LENGTH = 28
 const WRONG_CODE = 'That setup code is wrong or was already used. Get a fresh one on the server: docker exec openhut openhut setup-code'
@@ -41,6 +42,7 @@ export const teamService = {
   async resetOwner(): Promise<{ object: 'setup_code'; code: string; url: string }> {
     const owner = await db.updateTable('person').set({ pass: null }).where('role', '=', 'owner').returning('id').executeTakeFirst()
     if (owner) await db.deleteFrom('session').where('person_id', '=', owner.id).execute()
+    if (owner) await db.deleteFrom('password_reset').where('person_id', '=', owner.id).execute()
     emit({ name: 'owner.reset' })
     return teamService.mintSetupCode()
   },
@@ -84,6 +86,7 @@ export const teamService = {
     const row = await db.transaction().execute(async (trx) => {
       const removed = await trx.updateTable('person').set({ removed_at: new Date(), pass: null }).where('id', '=', id).where('role', '!=', 'owner').where('removed_at', 'is', null).returning('id').executeTakeFirst()
       if (removed) await trx.deleteFrom('session').where('person_id', '=', id).execute()
+      if (removed) await trx.deleteFrom('password_reset').where('person_id', '=', id).execute()
       return removed
     })
     if (!row) throw new HttpError(404, 'That person isn\'t on the team, or is the owner, who always stays.')
@@ -125,24 +128,26 @@ export const teamService = {
       const reset = await trx.deleteFrom('password_reset').where('hash', '=', sha(token)).where('expires_at', '>', new Date()).returning('person_id').executeTakeFirst()
       if (!reset) throw new HttpError(410, 'This reset link was already used or has expired. Ask for a new one.')
       await trx.deleteFrom('session').where('person_id', '=', reset.person_id).execute()
-      return trx.updateTable('person').set({ pass }).where('id', '=', reset.person_id).where('removed_at', 'is', null).returningAll().executeTakeFirstOrThrow()
+      const person = await trx.updateTable('person').set({ pass }).where('id', '=', reset.person_id).where('removed_at', 'is', null).returningAll().executeTakeFirst()
+      if (!person) throw new HttpError(410, 'This reset link was already used or has expired. Ask for a new one.')
+      return person
     })
     return sessionOf({ person: personOf(person), token: await openSession(person.id) })
   },
 
-  beginGoogleSignIn(): string {
+  beginGoogleSignIn(): { url: string; state: string } {
     if (!settings.googleSignIn()) throw new HttpError(409, 'Sign in with Google is off on this install.')
     const state = randomBytes(18).toString('base64url')
     const verifier = randomBytes(32).toString('base64url')
-    for (const [key, each] of googleSignIns) if (each.expires < Date.now()) googleSignIns.delete(key)
+    for (const [key, each] of googleSignIns) if (each.expires < Date.now() || googleSignIns.size > MAX_PENDING) googleSignIns.delete(key)
     googleSignIns.set(state, { verifier, expires: Date.now() + SIGN_IN_MS })
-    return google.signInUrl({ redirectUri: googleRedirectUri(), state, verifier })
+    return { url: google.signInUrl({ redirectUri: googleRedirectUri(), state, verifier }), state }
   },
 
-  async finishGoogleSignIn({ state, code }: { state: string; code: string }): Promise<string> {
+  async finishGoogleSignIn({ state, code, browserState }: { state: string; code: string; browserState: string | undefined }): Promise<string> {
     const pending = googleSignIns.get(state)
     googleSignIns.delete(state)
-    if (!pending || pending.expires < Date.now() || !settings.googleSignIn()) throw new HttpError(400, 'That Google sign-in expired. Try again.')
+    if (!pending || pending.expires < Date.now() || state !== browserState || !settings.googleSignIn()) throw new HttpError(400, 'That Google sign-in expired. Try again.')
     const email = await google.verifiedEmail({ code, verifier: pending.verifier, redirectUri: googleRedirectUri() })
     const person = email && await db.selectFrom('person').select('id').where('email', '=', email).where('removed_at', 'is', null).executeTakeFirst()
     if (!person) throw new HttpError(403, `${email ?? 'That Google account'} isn't on this team. Ask for an invite with that email.`)
@@ -175,12 +180,9 @@ async function acceptInvite({ inviteToken, name, email, password }: { inviteToke
   return db.transaction().execute(async (trx) => {
     const invite = await trx.deleteFrom('invite').where('hash', '=', sha(inviteToken)).where('expires_at', '>', new Date()).returning('role').executeTakeFirst()
     if (!invite) throw new HttpError(410, USED_INVITE)
-    const fields = { name, pass, role: invite.role, removed_at: null, created_at: new Date() }
-    const person = await trx.insertInto('person').values({ id: newId('usr'), email, ...fields })
-      .onConflict((oc) => oc.column('email').doUpdateSet(fields).where('person.removed_at', 'is not', null)).returningAll().executeTakeFirst()
-    if (!person) throw new HttpError(409, 'Someone on the team already uses that email. Use another one, or sign in.', { param: 'email' })
+    const person = await trx.insertInto('person').values({ id: newId('usr'), email, name, pass, role: invite.role }).returningAll().executeTakeFirstOrThrow()
     return personOf(person)
-  })
+  }).catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'That email already has an account here, or had one. Use another one, or sign in.', { param: 'email' }) : err })
 }
 
 async function openSession(personId: string): Promise<string> {
