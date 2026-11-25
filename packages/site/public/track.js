@@ -1,4 +1,4 @@
-// Web app and GitHub links on openhut.dev: one anonymous event each to /api/events, which hands it to the Cloud. No cookies, no ids.
+// Web app and GitHub links on openhut.dev: one anonymous event each to /api/events (stored in Analytics Engine). No cookies, no ids.
 document.addEventListener('click', (e) => {
   const send = (name, properties) => navigator.sendBeacon('/api/events', JSON.stringify({ events: [{ name, properties, at: Date.now() }] }))
   const web = e.target.closest('a[href^="https://app.openhut.dev"]')

@@ -22,3 +22,19 @@ test('openhut.dev/install.sh redirects to the stable install.sh', async () => {
   assert.ok(lines.includes('/install.sh https://dl.openhut.dev/channels/stable/install.sh 302'))
   assert.ok(lines.includes('/docs /install 302'))
 })
+
+test('POST /api/events stores allow-listed events in Analytics Engine and drops everything else', async () => {
+  const points: unknown[] = []
+  const env = { EVENTS: { writeDataPoint: (point: unknown) => points.push(point) } } as never
+  const post = (body: unknown) => worker.fetch(new Request('https://openhut.dev/api/events', { method: 'POST', body: JSON.stringify(body) }), env, {})
+  const instance = '0b6f3c1e-2a4d-4e5f-8a9b-1c2d3e4f5a6b'
+  const events = [
+    { name: 'instance_active', properties: { agents: 3, email: 'a@b.c' }, at: Date.now() },
+    { name: 'made_up', properties: {}, at: Date.now() },
+  ]
+  assert.equal((await post({ instance, version: '1.2.3', kind: 'server', extra: 'x', events })).status, 202)
+  assert.deepEqual(points, [{ indexes: [instance], blobs: ['instance_active', '1.2.3', 'server'], doubles: [3] }])
+  assert.equal((await post({ instance: 'not-a-uuid', version: '1.2.3', events })).status, 400)
+  assert.equal((await post({ events: [{ name: 'instance_active', properties: { agents: 1 }, at: Date.now() }] })).status, 202)
+  assert.equal(points.length, 1)
+})
