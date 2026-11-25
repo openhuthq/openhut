@@ -10,7 +10,6 @@ import { HttpError, messageOf } from '../platform/http-error.ts'
 import { newId, unseal } from '../platform/secrets.ts'
 import type { Connector, ConnectorContext, ToolSpec } from '../integrations/connector.ts'
 import { convex } from '../integrations/convex/convex.ts'
-import { excalidraw } from '../integrations/excalidraw/excalidraw.ts'
 import { github } from '../integrations/github/github.ts'
 import { google } from '../integrations/google/google.ts'
 import { MCP_SERVERS, mcp } from '../integrations/mcp/mcp.ts'
@@ -36,7 +35,7 @@ const CONNECTORS: Record<ConnectionKind, Connector> = {
   posthog: mcp.connector({ url: MCP_SERVERS.posthog, redirectUrl }),
   linear: mcp.connector({ url: MCP_SERVERS.linear, redirectUrl }),
   github: github.connector,
-  excalidraw: excalidraw.connector,
+  excalidraw: mcp.connector({ url: MCP_SERVERS.excalidraw, redirectUrl }),
   mcp: mcp.connector({ redirectUrl }),
   gmail: google.connector('gmail'),
   drive: google.connector('drive'),
@@ -173,7 +172,7 @@ async function keyedConfig({ kind, dsn, deployKey, url, header }: Omit<CreateCon
     if (!deployKey) throw new HttpError(400, 'Paste the deploy key.', { param: 'deployKey' })
     return { config: { deployKey: deployKey.trim() }, account: await convex.probe(deployKey.trim()) }
   }
-  if (kind === 'excalidraw') return { config: {}, account: excalidraw.account }
+  if (kind === 'excalidraw') return { config: {}, account: new URL(MCP_SERVERS.excalidraw).host }
   if (kind === 'mcp') {
     if (!url) throw new HttpError(400, 'Paste the MCP server URL.', { param: 'url' })
     const headers = mcp.parseHeader(header)

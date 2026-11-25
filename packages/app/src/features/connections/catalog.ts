@@ -17,9 +17,9 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
       safe: ['Every query runs in a read-only transaction.', 'Superusers and roles that can run programs are refused.', 'Agents never see the connection string.'],
     },
     {
-      name: 'convex', short: 'Tables, functions and logs', safeLine: 'The deploy key is stored safely on this computer.', warn: 'Running functions can change data. Let only agents you trust with writes use it.', eta: '1 minute', title: 'Convex', blurb: 'Tables, data, functions and logs from one deployment, through its deploy key.',
-      gets: ['tables: the schema and the shapes Convex inferred', 'data: pages of documents from a table', 'functions: every query, mutation and action', 'run: call one function with JSON arguments', 'logs: recent runs, console lines and errors'],
-      safe: ['run can change data: let only agents you trust with writes use it.', 'The deploy key is stored safely on this computer and never shown again.'],
+      name: 'convex', short: 'Tables, functions and logs', safeLine: 'The deploy key is stored safely on this computer.', warn: 'Running functions can change data. Let only agents you trust with writes use it.', eta: '1 minute', title: 'Convex', blurb: 'Convex’s official MCP server for one deployment, through its deploy key.',
+      gets: ['tables and data: the schema and pages of documents', 'functionSpec and run: every function, and calling one', 'runOneoffQuery: a read-only query you write', 'logs: recent runs, console lines and errors', 'Whatever else Convex adds to its MCP server'],
+      safe: ['run can change data: let only agents you trust with writes use it.', 'Environment-variable tools are off, so agents never see the deployment’s secrets.', 'The server runs on this computer; the deploy key is stored safely here and never shown again.'],
     },
     {
       name: 'posthog', short: 'Insights, events and flags', safeLine: 'Agents act as you.', eta: 'One approval', title: 'PostHog', blurb: 'Events, insights and feature flags, with your sign-in.',
@@ -39,9 +39,9 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
       safe: ['The bot is a GitHub App you own: it reaches only the repositories you install it on.', 'Agents never see its private key.', 'Commits show as the bot, not as a person.'],
     },
     {
-      name: 'excalidraw', short: 'Diagrams shared as a link', safeLine: 'Drawings live on excalidraw.com. Anyone with the link can open them.', eta: 'One click', title: 'Excalidraw', blurb: 'Agents draw a diagram and send a link that opens it in Excalidraw. No account or key.',
-      gets: ['draw: boxes, arrows and notes become a diagram', 'A link that opens the drawing in Excalidraw, where people can edit it'],
-      safe: ['Drawings are encrypted on this computer, and the key is only in the link.', 'Anyone with the link can open the drawing, so agents are told to leave secrets out.', 'There is no account or key to leak.'],
+      name: 'excalidraw', short: 'Diagrams shared as a link', safeLine: 'Drawings live on excalidraw.com. Anyone with the link can open them.', eta: 'One click', title: 'Excalidraw', blurb: 'Excalidraw’s official MCP server: agents draw a diagram and send a link that opens it. No account or key.',
+      gets: ['read_me and create_view: draw a hand-drawn diagram', 'export_to_excalidraw: a link that opens it on excalidraw.com, where people can edit it'],
+      safe: ['Anyone with the link can open the drawing, so leave secrets out.', 'There is no account or key to leak.'],
     },
     {
       name: 'gmail', short: 'Mail, labels and drafts', safeLine: 'No tool sends mail. Agents leave drafts for you.', eta: 'One approval', title: 'Gmail', blurb: 'Search, read, label and draft mail.',

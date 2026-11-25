@@ -1,5 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { auth, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
+import { StdioClientTransport, type StdioServerParameters } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { OAuthClientInformationFullSchema, OAuthTokensSchema, type OAuthClientInformationFull, type OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js'
 import * as z from 'zod/mini'
@@ -8,7 +9,9 @@ import { HttpError, messageOf } from '../../platform/http-error.ts'
 import { guardedFetch } from '../../platform/network.ts'
 import type { Connector, ConnectorContext, ToolResult, ToolSpec } from '../connector.ts'
 
-export const MCP_SERVERS = { posthog: 'https://mcp.posthog.com/mcp', linear: 'https://mcp.linear.app/mcp', github: 'https://api.githubcopilot.com/mcp/' }
+export const MCP_SERVERS = {
+  posthog: 'https://mcp.posthog.com/mcp', linear: 'https://mcp.linear.app/mcp', github: 'https://api.githubcopilot.com/mcp/', excalidraw: 'https://mcp.excalidraw.com/mcp',
+}
 const MAX_PAGES = 10
 const HEADER = /^([A-Za-z0-9][A-Za-z0-9-]{0,63}):\s*(\S.{0,3900})$/
 const FORBIDDEN_HEADERS = /^(host|content-length|content-type|transfer-encoding|connection|accept|mcp-session-id|mcp-protocol-version)$/i
@@ -19,8 +22,9 @@ const Stored = z.object({
 })
 
 export const mcp = {
-  connector({ url: fixedUrl, redirectUrl }: { url?: string; redirectUrl: () => string }): Connector {
+  connector({ url: fixedUrl, stdio, redirectUrl }: { url?: string; stdio?: (config: unknown) => StdioServerParameters; redirectUrl: () => string }): Connector {
     const open = ({ config, refresh }: ConnectorContext): Target => {
+      if (stdio) return { url: '', stdio: stdio(config), redirectUrl: '' }
       const stored = z.parse(Stored, config)
       const url = fixedUrl ?? stored.url
       if (!url) throw new Error('This connection has no server URL. Delete it and connect again.')
@@ -75,12 +79,13 @@ async function withRenewal<T>(target: Target, fn: (client: Client) => Promise<T>
   }
 }
 
-async function withClient<T>({ url, headers, oauth, redirectUrl }: Target, fn: (client: Client) => Promise<T>): Promise<T> {
+async function withClient<T>({ url, headers, oauth, redirectUrl, stdio }: Target, fn: (client: Client) => Promise<T>): Promise<T> {
   const flow: SignIn = { clientInformation: oauth?.clientInformation, tokens: oauth?.tokens && withoutRefresh(oauth.tokens) }
   const provider = oauth ? providerFor({ flow, redirectUrl, state: '' }) : undefined
   const client = new Client({ name: 'openhut', version: '1.0.0' })
   try {
-    await client.connect(new StreamableHTTPClientTransport(new URL(url), { authProvider: provider, fetch: guardedFetch, requestInit: { headers: headers ?? {} } }))
+    // ponytail: one process per call, keep it alive per connection if spawn time starts to hurt.
+    await client.connect(stdio ? new StdioClientTransport({ ...stdio, stderr: 'ignore' }) : new StreamableHTTPClientTransport(new URL(url), { authProvider: provider, fetch: guardedFetch, requestInit: { headers: headers ?? {} } }))
     return await fn(client)
   } catch (err) {
     if (provider?.authorizationUrl) throw new Expired(url)
@@ -157,4 +162,4 @@ function providerFor({ flow, redirectUrl, state }: { flow: SignIn; redirectUrl: 
 }
 
 export type SignIn = { clientInformation?: OAuthClientInformationFull; tokens?: OAuthTokens; codeVerifier?: string }
-type Target = { url: string; headers?: Record<string, string>; oauth?: SignIn; redirectUrl: string; renew?: () => Promise<z.infer<typeof Stored>['oauth']> }
+type Target = { url: string; stdio?: StdioServerParameters; headers?: Record<string, string>; oauth?: SignIn; redirectUrl: string; renew?: () => Promise<z.infer<typeof Stored>['oauth']> }
