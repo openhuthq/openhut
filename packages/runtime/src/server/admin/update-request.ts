@@ -2,19 +2,19 @@ import { execFile } from 'node:child_process'
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { isRecord } from './util.ts'
-import { config } from './config.ts'
+import { HttpError } from '../platform/http-error.ts'
+import { config } from '../platform/config.ts'
 
 const run = promisify(execFile)
-const INSTALL_LOCK = '/run/openhut-install.lock'
-const LOG = join(config.data, 'update.log')
+const INSTALL_LOCK = join(config.installDir, 'install.lock')
+const LOG = join(config.installDir, 'update.log')
 const EXIT = `${LOG}.exit`
-const REQUEST = join(config.data, 'update.request')
+const REQUEST = join(config.installDir, 'update.request')
 
 export type LastUpdate = { exit: number; at: string; reason: string | null }
 
 export async function installing(): Promise<boolean> {
-  return run('flock', ['-n', INSTALL_LOCK, 'true']).then(() => false, (e: unknown) => isRecord(e) && e.code === 1)
+  return run('flock', ['-n', INSTALL_LOCK, 'true']).then(() => false, (e: unknown) => typeof e === 'object' && e !== null && 'code' in e && e.code === 1)
 }
 
 export function lastUpdate(): LastUpdate | null {
@@ -25,8 +25,8 @@ export function lastUpdate(): LastUpdate | null {
   return { exit: Number.isFinite(exit) ? exit : -1, at: statSync(EXIT).mtime.toISOString(), reason: exit === 0 ? null : said ?? lines.at(-1) ?? null }
 }
 
-export async function update({ appVersion = '', sha256 }: { appVersion?: string; sha256: string }): Promise<{ updating: boolean }> {
-  if (await installing()) throw new Error('an install or update is already running')
+export async function request({ appVersion = '', sha256 }: { appVersion?: string; sha256: string }): Promise<{ updating: boolean }> {
+  if (await installing()) throw new HttpError(409, 'An install or update is already running. Try again when it finishes.')
   writeFileSync(REQUEST, `${sha256} ${appVersion}\n`)
   return { updating: true }
 }

@@ -12,7 +12,7 @@ import { HttpError, messageOf } from '../platform/http-error.ts'
 import { portsFree } from '../platform/network.ts'
 import { newId, seal } from '../platform/secrets.ts'
 import { recordsService, type Change, type Held } from '../platform/records.ts'
-import { HERE, HOME } from '../team/home.ts'
+import { HOME } from '../team/home.ts'
 
 const MAX_AGENTS = 250
 const START_MS = 5_000
@@ -62,7 +62,7 @@ async function refreshOnce(): Promise<void> {
   const control = new Map(controls.map((each) => [each.id, each]))
   for (const agent of agents) {
     const placed = control.get(agent.id)
-    if (ControlRecord.safeParse(placed?.value).data?.runsOn !== HERE || !placed) continue
+    if (!placed || !placeable({ agent, control: placed })) continue
     kept.add(agent.id)
     await keep({ agent, control: placed }).catch((err: unknown) => log.warn({ event: 'run_set.apply_failed', agent: agent.id, error: messageOf(err) }))
   }
@@ -75,9 +75,12 @@ async function applyOne({ workspace, id }: { workspace: string; id: string }): P
   const row = await db.selectFrom('agent').selectAll().where('id', '=', id).executeTakeFirst()
   if (workspace !== HOME) return row ? leave(row) : undefined
   const [agent, control] = await Promise.all([recordsService.get({ collection: 'agent', workspace, id }), recordsService.get({ collection: 'control', workspace, id })])
-  const runsOn = ControlRecord.safeParse(control?.value).data?.runsOn
-  if (agent && !agent.deleted && control && runsOn === HERE) return keep({ agent, control })
-  if (row && (agent?.deleted || control?.deleted || (runsOn !== undefined && runsOn !== HERE))) await leave(row)
+  if (agent && control && placeable({ agent, control })) return keep({ agent, control })
+  if (row && (agent?.deleted || control?.deleted)) await leave(row)
+}
+
+function placeable({ agent, control }: { agent: Held; control: Held }): boolean {
+  return !agent.deleted && !control.deleted && AgentRecord.safeParse(agent.value).success && ControlRecord.safeParse(control.value).success
 }
 
 async function keep({ agent, control }: { agent: Held; control: Held }): Promise<void> {

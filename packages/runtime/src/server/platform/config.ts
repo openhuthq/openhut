@@ -6,6 +6,7 @@ import * as z from 'zod/mini'
 
 const PackageJson = z.object({ version: z.string() })
 const BUILD = fileOr(new URL('../../../../../BUILD', import.meta.url), 'dev')
+const RUNTIME_IMAGE = fileOr(new URL('../../../../../RUNTIME_IMAGE', import.meta.url), '')
 
 // Every environment variable the server reads lives here (the agent host has its own, agentd/config.ts).
 const DATA = env.get('OPENHUT_DATA').default('/data/app').asString() // where the database and files live
@@ -44,6 +45,9 @@ export const config = {
   secret: env.get('OPENHUT_SECRET').asString(), // the install's auth secret from the OS keychain (desktop); removed from the env below
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))).version,
   build: BUILD,
+  runtimeImage: env.get('OPENHUT_RUNTIME_IMAGE').default(RUNTIME_IMAGE).asString(), // the openhut-runtime image this build pairs with; every computer follows it
+  hereTokenSha256: env.get('OPENHUT_HERE_TOKEN_SHA256').asString(), // sha256 of the token this install's own runtime links with (main-start.sh)
+  installDir: env.get('OPENHUT_INSTALL_DIR').default('/data').asString(), // the update request, log and lock the updater shares
   claudeBin: fileURLToPath(new URL('../../../../../bin/claude', import.meta.url)),
   claudeHostBin: env.get('OPENHUT_CLAUDE').default('claude').asString(), // the Claude CLI the server runs itself for the seat sign-in
   path: env.get('PATH').default('/usr/bin:/bin').asString(), // the PATH Claude sign-in runs with

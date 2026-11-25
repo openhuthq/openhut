@@ -10,6 +10,7 @@ Object.assign(process.env, { OPENHUT_FAKE_SANDBOX: '1', AGENTD_DATA: data })
 delete process.env.AGENTD_SOCK
 const { agentd, liveBrowser } = await import('../../../src/server/platform/agentd.ts')
 const { config } = await import('../../../src/server/platform/config.ts')
+await (await import('../../../src/server/platform/db.ts')).migrate()
 after(() => rmSync(data, { recursive: true, force: true }))
 
 const FILES = { 'config.yaml': 'a', '.env': 'b', 'SOUL.md': 'c', 'auth.json': 'd' }

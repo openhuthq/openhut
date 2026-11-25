@@ -52,8 +52,6 @@ export const settings = {
     const secret: Record<string, string[]> = { claude: ['seat_token', 'seat_at'], codex: ['codex_tokens', 'codex_at'] }
     for (const name of [...secret[provider] ?? [`provider_key_${provider}`], `provider_models_${provider}`]) await forget(name)
   },
-  appliedBuild: (): string | undefined => rows.get('build'),
-  setAppliedBuild: (build: string) => write('build', build),
   update: (): string | undefined => rows.get('update') || undefined,
   setUpdate: (record: string) => write('update', record),
   timeZone: (): string => rows.get('time_zone') || Intl.DateTimeFormat().resolvedOptions().timeZone,

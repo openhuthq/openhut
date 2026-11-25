@@ -7,9 +7,8 @@ import type { Database } from '../platform/db-schema.ts'
 import { config } from '../platform/config.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { agentToken, newId, sameSecret, unseal } from '../platform/secrets.ts'
-import { settings } from '../platform/settings.ts'
 import { agentd, containerStates, features, type AgentFiles } from '../platform/agentd.ts'
-import { agentApiUrl } from '../platform/network.ts'
+import { forward } from '../relay/forward.ts'
 import { log, emit } from '../platform/events.ts'
 import { liveService } from '../platform/live-service.ts'
 import { deleted } from '../platform/responses.ts'
@@ -34,6 +33,7 @@ const PORT_TAKEN = 'Another program answers on this agent’s port, likely anoth
 const DEFAULT_MODEL = 'claude:sonnet'
 const CHILDREN = ['channel', 'routine', 'skill'] as const
 const held = new Map<string, boolean>()
+const moving = new Set<string>()
 
 export const agentService = {
   async list({ actor }: { actor: Caller }): Promise<Agent[]> {
@@ -72,18 +72,19 @@ export const agentService = {
     return row
   },
 
-  async create({ actor, name, instructions, model, face, workspace, shared = false, people = [], sidebars = [] }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'face' | 'workspace' | 'shared' | 'people' | 'sidebars'>): Promise<Agent> {
+  async create({ actor, name, instructions, model, face, workspace, shared = false, people = [], sidebars = [], runsOn = HERE }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'face' | 'workspace' | 'shared' | 'people' | 'sidebars' | 'runsOn'>): Promise<Agent> {
     const clean = cleanName(name)
     requireModel(model)
     if (workspace && workspace !== HOME) throw new HttpError(400, 'This install has one team.', { param: 'workspace' })
     const ws = HOME
-    const health = await agentd.health()
+    await requireComputer(runsOn)
+    const health = await agentd.health({ on: runsOn })
     if (health.imageReady === false) throw new HttpError(409, 'OpenHut is still downloading what agents need to run. This happens once and takes a few minutes. Try again shortly.')
     const access = await teamOnly({ owner: actor.email, people, sidebars })
     const id = newId('ag')
     const value: AgentRecord = { name: clean, instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000), face: face ?? null, wanted: 'stopped', createdAt: new Date().toISOString() }
     await recordsService.put({ collection: 'agent', id, workspace: ws, parent: actor.email, personal: !shared, value })
-    const control: ControlRecord = { runsOn: HERE, model: model ?? DEFAULT_MODEL, codeExecution: true, browser: !!health.features?.browser, grants: [], ...access }
+    const control: ControlRecord = { runsOn, model: model ?? DEFAULT_MODEL, codeExecution: true, browser: !!health.features?.browser, grants: [], ...access }
     await recordsService.put({ collection: 'control', parent: id, workspace: ws, personal: !shared, value: control })
     await runSet.apply({ workspace: ws, id })
     emit({ name: 'agent.created', actor, target: { type: 'agent', id, name: clean, model: control.model } })
@@ -91,16 +92,17 @@ export const agentService = {
   },
 
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateAgent }): Promise<Agent> {
-    const facts = await agentService.find({ id })
+    const found = await agentService.find({ id })
     const { codeExecution, browser, model, runsHere, runsOn, shared, people, sidebars, ...fields } = patch
     const controls = codeExecution !== undefined || browser !== undefined || model !== undefined || runsHere !== undefined || runsOn !== undefined || shared !== undefined || people !== undefined || sidebars !== undefined
-    if (controls && facts.owner !== actor.email) throw new HttpError(403, `Only ${facts.owner} can change where ${facts.value.name} runs, its model, what it can run, or who can use it.`, { param: Object.keys(patch)[0] })
-    if (!controls && !mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} can change ${facts.value.name}. You can chat with it.`)
-    requireModel(model === facts.control?.model ? undefined : model)
-    const me = HERE
-    const target = runsHere ? me : runsOn ?? facts.control?.runsOn ?? me
-    if (target !== facts.control?.runsOn) requireRunner({ facts, runsOn: target, me })
-    if (browser && target === me && !(await features()).browser) throw new HttpError(409, config.installKind === 'server' ? 'This computer can\'t give agents a browser. Run the agent on a Linux computer you added to use one.' : 'Install Google Chrome on this computer, then turn Browser on.', { param: 'browser' })
+    if (controls && found.owner !== actor.email) throw new HttpError(403, `Only ${found.owner} can change where ${found.value.name} runs, its model, what it can run, or who can use it.`, { param: Object.keys(patch)[0] })
+    if (!controls && !mayEdit({ facts: found, actor })) throw new HttpError(403, `Only ${found.owner} can change ${found.value.name}. You can chat with it.`)
+    requireModel(model === found.control?.model ? undefined : model)
+    const from = found.control?.runsOn ?? HERE
+    const target = runsHere ? HERE : runsOn ?? from
+    if (browser && !(await features({ on: target })).browser) throw new HttpError(409, 'That computer can\'t give agents a browser.', { param: 'browser' })
+    if (target !== from) await move({ facts: found, from, to: target })
+    const facts = target === from ? found : await agentService.find({ id })
     const personal = shared === undefined ? facts.personal : !shared
     const access = people || sidebars ? await teamOnly({ owner: facts.owner, people: people ?? facts.control?.people ?? [], sidebars: sidebars ?? facts.control?.sidebars ?? [] }) : {}
     const resealed = personal !== facts.personal
@@ -110,7 +112,7 @@ export const agentService = {
       await recordsService.put({ collection: 'agent', id, workspace: facts.workspace, parent: facts.owner, personal, value: change(facts.value), reapply: (latest) => ({ value: change(AgentRecord.parse(latest.value)) }) })
     }
     if (controls) {
-      const change = (value: ControlRecord): ControlRecord => ({ ...value, ...model && { model }, ...codeExecution !== undefined && { codeExecution }, ...browser !== undefined && { browser }, runsOn: target, ...access })
+      const change = (value: ControlRecord): ControlRecord => ({ ...value, ...model && { model }, ...codeExecution !== undefined && { codeExecution }, ...browser !== undefined && { browser }, ...access })
       await editControl({ facts, personal, change })
     }
     if (resealed) await reseal({ facts, personal })
@@ -214,13 +216,18 @@ export const agentService = {
     return deleted({ id, object: 'grant' })
   },
 
-  async reapplyAll({ force }: { force: boolean }): Promise<string[]> {
-    const failed: string[] = []
-    for (const row of await db.selectFrom('agent').selectAll().execute()) {
-      await applied(row, agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running', force }))
-        .catch((err: unknown) => failed.push(`${row.name}: ${messageOf(err)}`))
+  async sync({ computer }: { computer: string }): Promise<void> {
+    const { states } = await agentd.ps({ on: computer })
+    const mine = (await db.selectFrom('agent').selectAll().execute()).filter((row) => (row.runs_on ?? HERE) === computer && !moving.has(row.id))
+    const kept = new Set(mine.map((row) => row.id))
+    for (const id of Object.keys(states).filter((each) => !kept.has(each) && !moving.has(each))) {
+      await agentd.remove({ id, on: computer, trash: true })
+      log.info({ event: 'agent.stray_removed', agent: id, computer })
     }
-    return failed
+    for (const row of mine) {
+      await applied(row, agentd.apply({ id: row.id, on: computer, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' }))
+        .catch((err: unknown) => log.warn({ event: 'agent.sync_failed', agent: row.id, computer, error: messageOf(err) }))
+    }
   },
 
   // Just booted: its agents are still coming up, so a message waits for them instead of failing.
@@ -228,8 +235,7 @@ export const agentService = {
 
   async boot(): Promise<void> {
     bootedAt = Date.now()
-    await applyRelease().catch((err: unknown) => log.error({ event: 'build.apply_failed', error: messageOf(err) }))
-    await removeStrays().catch((err: unknown) => log.warn({ event: 'agent.strays_failed', error: messageOf(err) }))
+    if (!forward.linked(HERE)) await agentService.sync({ computer: HERE }).catch((err: unknown) => log.info({ event: 'agent.sync_waits', computer: HERE, error: messageOf(err) }))
     await reconcileSafely()
     setInterval(() => void reconcileSafely(), RECONCILE_MS)
     setInterval(() => void watchHealth().catch((err: unknown) => log.warn({ event: 'health.watch_failed', error: messageOf(err) })), HEALTH_MS)
@@ -267,8 +273,51 @@ async function reseal({ facts, personal }: { facts: AgentFacts; personal: boolea
   for (const child of children) await recordsService.put({ collection: child.collection, id: child.id, parent: facts.id, workspace: facts.workspace, personal, value: child.value, secret: child.secret })
 }
 
-function requireRunner({ facts, runsOn, me }: { facts: AgentFacts; runsOn: string; me: string }): void {
-  if (runsOn !== me) throw new HttpError(400, `${facts.value.name} can only run on this computer.`, { param: 'runsOn' })
+async function requireComputer(id: string): Promise<void> {
+  if (!await db.selectFrom('computer').select('id').where('id', '=', id).where('expires_at', 'is', null).executeTakeFirst() && id !== HERE) throw new HttpError(400, 'That computer isn’t part of this install.', { param: 'runsOn' })
+  if (!forward.online(id)) throw new HttpError(409, 'That computer is offline. Start it, or pick another one.', { param: 'runsOn' })
+}
+
+async function move({ facts, from, to }: { facts: AgentFacts; from: string; to: string }): Promise<void> {
+  await requireComputer(to)
+  if (!forward.online(from)) throw new HttpError(409, `The computer ${facts.value.name} runs on is offline, so its memory and files can’t be copied. Start it, then move ${facts.value.name}.`, { param: 'runsOn' })
+  const place = (runsOn: string) => editControl({ facts, change: (value) => ({ ...value, runsOn }) })
+  moving.add(facts.id)
+  try {
+    await agentd.stop({ id: facts.id, on: from })
+    try {
+      await copyHome({ id: facts.id, from, to })
+      await place(to)
+      await runSet.apply({ workspace: facts.workspace, id: facts.id })
+    } catch (err) {
+      await place(from).catch(() => undefined)
+      await agentd.remove({ id: facts.id, on: to }).catch(() => undefined)
+      await runSet.apply({ workspace: facts.workspace, id: facts.id }).catch((again: unknown) => log.error({ event: 'agent.move_undo_failed', agent: facts.id, error: messageOf(again) }))
+      throw new HttpError(502, `Couldn’t move ${facts.value.name}, so it stays where it was. ${messageOf(err)}`, { param: 'runsOn' })
+    }
+    await agentd.remove({ id: facts.id, on: from, trash: true }).catch((err: unknown) => log.warn({ event: 'agent.move_cleanup_failed', agent: facts.id, error: messageOf(err) }))
+    emit({ name: 'agent.moved', target: { type: 'agent', id: facts.id, from, to } })
+  } finally {
+    moving.delete(facts.id)
+  }
+}
+
+export async function copyHome({ id, from, to }: { id: string; from: string; to: string }): Promise<void> {
+  const source = forward.open({ on: from, request: { to: 'pack', id } })
+  const target = forward.open({ on: to, request: { to: 'unpack', id } })
+  const said = new Promise<string>((resolve, reject) => {
+    let text = ''
+    target.setEncoding('utf8')
+    target.on('data', (chunk: string) => { text += chunk })
+    target.on('end', () => resolve(text))
+    target.on('close', () => reject(new Error('The other computer went offline while copying.')))
+    target.on('error', reject)
+  })
+  source.on('close', () => { if (!source.readableEnded) target.destroy() })
+  target.on('close', () => source.destroy())
+  source.pipe(target)
+  const reply = await said.catch((err: unknown) => { throw new Error(`Its memory and files couldn’t be copied: ${messageOf(err)}`) })
+  if (reply !== 'ok') throw new Error(`Its memory and files couldn’t be saved there: ${reply.slice(0, 300) || 'no answer'}.`)
 }
 
 function accessOf(facts: Pick<AgentFacts, 'personal' | 'owner' | 'control'>): Access {
@@ -299,7 +348,7 @@ function factsOf({ agent, control, row }: { agent: Held; control: Held | null; r
 
 async function agentOf({ facts, actor, states }: { facts: AgentFacts; actor: Caller; states: Record<string, string> | undefined }): Promise<Agent> {
   const { value, control, row } = facts
-  const here = !!row && control?.runsOn === HERE
+  const here = !!row
   const health = here ? await healthOf({ row, state: states?.[facts.id] }) : { health: null, detail: '' }
   const mine = facts.owner === actor.email
   return {
@@ -323,21 +372,13 @@ async function watchHealth(): Promise<void> {
   }
 }
 
-async function removeStrays(): Promise<void> {
-  const states = await containerStates()
-  const known = new Set((await db.selectFrom('agent').select('id').execute()).map((row) => row.id))
-  for (const id of Object.keys(states ?? {}).filter((each) => !known.has(each))) {
-    await agentd.remove({ id, trash: true })
-    log.info({ event: 'agent.stray_removed', agent: id })
-  }
-}
-
 const reconcileSafely = () => reconcile().catch((err: unknown) => log.error({ event: 'reconcile.failed', error: messageOf(err) }))
 
 async function reconcile(): Promise<void> {
   const states = await containerStates()
   if (!states) return
   for (const row of await db.selectFrom('agent').selectAll().where('wanted', '=', 'running').execute()) {
+    if (moving.has(row.id) || !forward.online(row.runs_on ?? HERE)) continue
     if (states[row.id] === 'running') await probe({ row, fresh: true })
     await keepRunning({ row }).catch((err: unknown) => log.error({ event: 'reconcile.failed', agent: row.id, error: messageOf(err) }))
   }
@@ -375,18 +416,6 @@ function renderedChannel(channel: Selectable<Database['channel']>): RenderedChan
 async function keepRunning({ row }: { row: AgentRow }): Promise<void> {
   const { change } = await applied(row, agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: true }))
   if (change !== 'none') log.info({ event: `reconcile.${change}`, agent: row.id })
-}
-
-async function applyRelease(): Promise<void> {
-  const previous = settings.appliedBuild()
-  const force = previous !== undefined && previous !== config.build
-  const failed = await agentService.reapplyAll({ force })
-  if (failed.length) {
-    log.error({ event: 'build.apply_failed', error: failed.join('; ') })
-    return
-  }
-  await settings.setAppliedBuild(config.build)
-  if (force) log.info({ event: 'build.applied', from: previous, to: config.build })
 }
 
 export function runsHere({ row, me }: { row: Pick<AgentRow, 'runs_on'>; me: string | null }): boolean {
@@ -434,7 +463,7 @@ async function healthOf({ row, state }: { row: AgentRow; state: string | undefin
 async function probe({ row, fresh }: { row: AgentRow; fresh: boolean }): Promise<Probe> {
   const last = probes.get(row.id)
   if (last && !fresh && Date.now() - last.at < PROBE_FRESH_MS) return last
-  const detail = await fetch(`${agentApiUrl(row.net)}/v1/models`, { headers: { authorization: `Bearer ${unseal(row.channel_key)}` }, signal: AbortSignal.timeout(PROBE_MS) })
+  const detail = await forward.fetch({ agent: row, path: '/v1/models', init: { headers: { authorization: `Bearer ${unseal(row.channel_key)}` }, signal: AbortSignal.timeout(PROBE_MS) } })
     .then((res) => res.ok ? '' : res.status === 401 || res.status === 403 ? PORT_TAKEN : 'The agent returned an error.')
     .catch((err: unknown) => unreachable(err))
   const next = { at: Date.now(), detail, failingSince: detail && last?.detail ? last.failingSince : Date.now() }

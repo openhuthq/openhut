@@ -5,17 +5,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const dir = mkdtempSync(join(tmpdir(), 'openhut-update-'))
-process.env.AGENTD_DATA = dir
-const { lastUpdate } = await import('../../src/agentd/update.ts')
+process.env.OPENHUT_INSTALL_DIR = dir
+const { lastUpdate } = await import('../../../src/server/admin/update-request.ts')
 
 test('no finished update until the installer writes its exit code', () => {
   assert.equal(lastUpdate(), null)
 })
 
 test('an update is a request file for whatever swaps the container, not an installer run here', async () => {
-  const { update } = await import('../../src/agentd/update.ts')
+  const { request } = await import('../../../src/server/admin/update-request.ts')
   const { readFileSync } = await import('node:fs')
-  assert.deepEqual(await update({ appVersion: '0.6.0', sha256: 'a'.repeat(64) }), { updating: true })
+  assert.deepEqual(await request({ appVersion: '0.6.0', sha256: 'a'.repeat(64) }), { updating: true })
   assert.equal(readFileSync(join(dir, 'update.request'), 'utf8'), `${'a'.repeat(64)} 0.6.0\n`)
 })
 

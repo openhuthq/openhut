@@ -4,7 +4,8 @@ import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { createHash } from 'node:crypto'
-import { agentd, containerStates, features, type LastUpdate } from '../platform/agentd.ts'
+import { agentd, containerStates, features } from '../platform/agentd.ts'
+import { installing as installRunning, lastUpdate, request, type LastUpdate } from './update-request.ts'
 import { settings } from '../platform/settings.ts'
 import { emit } from '../platform/events.ts'
 import { newId, transferPublicKey } from '../platform/secrets.ts'
@@ -71,7 +72,7 @@ export const adminService = {
     if (running?.status === 'running') throw new HttpError(409, 'An update is already running. This page shows when it finishes.')
     const stored = { from: config.build, to, startedAt: new Date().toISOString() }
     await settings.setUpdate(JSON.stringify(stored))
-    await agentd.update({ appVersion: appVersion && SEMVER.test(appVersion) ? appVersion : undefined, sha256 }).catch(async (err: unknown) => {
+    await request({ appVersion: appVersion && SEMVER.test(appVersion) ? appVersion : undefined, sha256 }).catch(async (err: unknown) => {
       await settings.setUpdate('')
       throw err
     })
@@ -148,9 +149,9 @@ async function probe(): Promise<{ health: Health; installing: boolean; last: Las
   const reply = await agentd.health().catch(() => undefined)
   const firewall = reply?.firewall ?? false
   return {
-    health: { ok: !!reply && firewall, version: config.version, build: config.build, agentd: !!reply, firewall, started: config.started },
-    installing: reply ? reply.updating ?? false : true,
-    last: reply?.lastUpdate ?? null,
+    health: { ok: true, version: config.version, build: config.build, agentd: !!reply, firewall, started: config.started },
+    installing: await installRunning(),
+    last: lastUpdate(),
   }
 }
 
