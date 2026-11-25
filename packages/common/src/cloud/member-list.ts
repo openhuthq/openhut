@@ -76,7 +76,9 @@ async function follows({ previous, next }: { previous: Link; next: Link }): Prom
   const signer = invite ? undefined : a.members.find((member) => member.devices.includes(by))
   const back = invite ? b.members.find((member) => member.email === invite.email)?.devices.find((key) => a.removed.includes(key)) : undefined
   if (!tracksRemoved({ previous: a, next: b, owner: signer?.role === 'owner', back })) return false
-  if (signer?.role !== 'owner' && signer?.role !== 'admin' && keyVersionOf(b) !== keyVersionOf(a)) return false
+  const manager = signer?.role === 'owner' || signer?.role === 'admin'
+  if (!manager && (keyVersionOf(b) !== keyVersionOf(a) || runtimesOf(b).some((key) => !runtimesOf(a).includes(key)))) return false
+  if (signersOf(b).length === 0) return false
   if (invite) return joins({ previous: a, next: b, invite })
   if (!signer) return false
   if (signer.kit === by) return kitAdds({ previous: a, next: b, signer })
@@ -142,6 +144,10 @@ function wellFormed(body: MemberListBody): boolean {
   const kits = body.members.every((member) => !member.kit || member.devices.includes(member.kit))
   const added = [...Object.keys(body.added ?? {}), ...Object.keys(body.names ?? {})].every((key) => listedOf(body).includes(key))
   return owners.length === 1 && kits && added && unique(body.members.map((member) => member.email)) && unique(keys) && runtimesOf(body).every((key) => devicesOf(body).includes(key))
+}
+
+function signersOf(body: MemberListBody): string[] {
+  return body.members.filter((member) => member.role === 'owner' || member.role === 'admin').flatMap((member) => member.devices).filter((key) => !runtimesOf(body).includes(key))
 }
 
 function runtimesOf(body: MemberListBody): string[] {

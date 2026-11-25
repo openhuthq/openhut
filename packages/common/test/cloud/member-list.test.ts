@@ -221,6 +221,20 @@ test('a runtime device is listed for records only: it can never sign a member li
   assert.equal(await check({ anchor, chain: [v1, await next({ ...first, runtimes: [key(server)] })] }), null)
 })
 
+test('only an owner or admin moves a device into runtimes, and never the last device that can sign', async () => {
+  const [laptop, server] = await Promise.all([identity(), identity()])
+  const team = { ...first, members: [first.members[0], { email: 'ada@example.com', role: 'admin' as const, devices: [key(laptop)] }, { ...first.members[1], devices: [key(saraMac), key(server)] }] }
+  const v2 = await next(team)
+  const v2Anchor = await anchorOf(v2)
+  const third = (body: MemberListBody, signer = moMac) => signList({ signer, body: { ...body, version: 3, previous: v2Anchor } })
+  assert.equal(await check({ anchor, chain: [v1, v2, await third({ ...team, runtimes: [key(laptop)] }, saraMac)] }), null)
+  assert.equal(await check({ anchor, chain: [v1, v2, await third({ ...team, runtimes: [key(server)] }, saraMac)] }), null)
+  assert.ok(await check({ anchor, chain: [v1, v2, await third({ ...team, runtimes: [key(server)] })] }))
+  assert.ok(await check({ anchor, chain: [v1, v2, await third({ ...team, runtimes: [key(server)] }, laptop)] }))
+  assert.equal(await check({ anchor, chain: [v1, v2, await third({ ...team, runtimes: [key(moMac), key(laptop)] })] }), null)
+  assert.ok(await check({ anchor, chain: [v1, v2, await third({ ...team, runtimes: [key(laptop)] })] }))
+})
+
 test('a viewer (a phone or browser) is listed per person, never signs a member list, never becomes a device, and leaves on removed', async () => {
   const phone = await identity()
   const withPhone = { ...first, members: [{ ...first.members[0], viewers: [key(phone)] }, first.members[1]] }
