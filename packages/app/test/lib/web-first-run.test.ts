@@ -38,7 +38,8 @@ test('closing the tab and coming back resumes at the same step, and junk in stor
   assert.deepEqual(savedOf(JSON.stringify({ step: 'server', code: 'abc', expiresAt: '2026-11-24T10:10:00Z' })), { step: 'server', code: 'abc', expiresAt: '2026-11-24T10:10:00Z' })
   assert.deepEqual(savedOf(JSON.stringify({ step: 'server' })), { step: 'server' })
   assert.equal(savedOf('{nope'), null)
-  assert.equal(savedOf(JSON.stringify({ step: 'cloud' })), null)
+  assert.deepEqual(savedOf(JSON.stringify({ step: 'cloud' })), { step: 'cloud' })
+  assert.equal(savedOf(JSON.stringify({ step: 'moon' })), null)
   assert.equal(savedOf(null), null)
 })
 

@@ -20,6 +20,8 @@ import { audienceOf } from './audience.ts'
 import { whatsappPairing } from './whatsapp-pairing.ts'
 import { telegramCodes, welcome, type Person } from './telegram-codes.ts'
 import { activity } from '../gateway/activity.ts'
+import { config } from '../platform/config.ts'
+import { cloud, ok } from '../platform/cloud.ts'
 
 const CHANNEL_KINDS = new Set<ChannelKind>(['slack', 'discord'])
 const QUIET_MS = 10_000
@@ -174,11 +176,14 @@ export const channelService = {
       const secret = ChannelSecrets.safeParse(held.secret).data
       const fields = { kind: value.kind, status: before?.status === 'connected' ? 'connected' as const : value.status, account: before?.account ?? value.account, owner_address: value.ownerAddress, open: value.open, allowed: value.allowed.join(','), secrets: secret?.botToken ? seal(JSON.stringify(secret)) : '' }
       await db.insertInto('channel').values({ id: held.id, agent_id: agentId, ...fields, created_at: value.createdAt }).onConflict((oc) => oc.column('id').doUpdateSet(fields)).execute()
+      const oldToken = before?.secrets ? TelegramSecrets.safeParse(JSON.parse(unseal(before.secrets))).data?.botToken : undefined
+      if (value.kind === 'telegram' && fields.status === 'connected' && secret?.botToken && secret.botToken !== oldToken) await joinInbox({ agentId, botToken: secret.botToken })
       const added = value.allowed.filter((address) => !before || !audienceOf(before).allowed.includes(address))
       if (value.kind === 'slack' && secret?.botToken && before && added.length) greetings.push({ botToken: secret.botToken, ids: added })
     }
     for (const row of await db.selectFrom('channel').selectAll().where('agent_id', '=', agentId).execute()) {
       if (wanted.has(row.id) || await recordsService.held(row.id) === 0) continue
+      await leaveInbox(row)
       await disconnect(row)
       await db.deleteFrom('channel').where('id', '=', row.id).execute()
     }
@@ -230,6 +235,26 @@ async function setupOf({ body, facts }: { body: CreateChannel; facts: AgentFacts
   }
 }
 
+// Only once the claim is done: the claim reads getUpdates itself, which Telegram refuses while a webhook is set.
+async function joinInbox({ agentId, botToken }: { agentId: string; botToken: string }): Promise<void> {
+  if (!config.cloudComputer) return
+  ok(await cloud.channels.create({ agent: agentId, kind: 'telegram', token: botToken }), 'OpenHut Cloud didn’t take over Telegram for this computer. Try turning Telegram off and on.')
+}
+
+// The agent left this Cloud computer or Telegram was turned off: the Cloud deletes the webhook, so the next computer can poll.
+export async function leaveInbox(row: Pick<Row, 'agent_id' | 'kind'>): Promise<void> {
+  if (!config.cloudComputer || row.kind !== 'telegram') return
+  const id = await cloudChannelOf({ agentId: row.agent_id })
+  const reply = id ? await cloud.channels.delete(id) : { status: 204 }
+  if (reply.status !== 204) log.warn({ event: 'channel.inbox_leave_failed', agent: row.agent_id, status: reply.status })
+}
+
+export async function cloudChannelOf({ agentId }: { agentId: string }): Promise<string | undefined> {
+  const reply = await cloud.channels.list()
+  if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud didn't list this computer's channels (HTTP ${reply.status}).`)
+  return (reply.json as { data: { id: string; agent: string; kind: string }[] }).data.find((each) => each.agent === agentId && each.kind === 'telegram')?.id
+}
+
 async function disconnect(row: Row): Promise<void> {
   switch (row.kind) {
     case 'whatsapp':
@@ -265,6 +290,7 @@ async function claimed({ row, botToken, person }: { row: Row; botToken: string; 
   await recordsService.put({ collection: 'channel', id: row.id, parent: row.agent_id, workspace: facts.workspace, personal: facts.personal, value: own(ChannelRecord.parse(held.value)), secret: held.secret, reapply: (latest) => ({ value: own(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
   await db.updateTable('channel').set({ status: 'connected', owner_address: person.userId }).where('id', '=', row.id).execute()
   await telegramCodes.stop({ channelId: row.id, kind: 'claim' })
+  await joinInbox({ agentId: row.agent_id, botToken })
   await telegram.send({ botToken, chatId: person.chatId, text: welcome(person.name) }).catch(() => undefined)
   emit({ name: 'channel.linked', target: { type: 'channel', id: row.id, kind: 'telegram', agentId: row.agent_id } })
   await runSet.apply({ workspace: facts.workspace, id: row.agent_id }).catch((err: unknown) => log.warn({ event: 'telegram.claim_apply_failed', agent: row.agent_id, error: messageOf(err) }))

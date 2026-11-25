@@ -29,6 +29,7 @@ test('the Cloud’s world: no plaintext, key or token appears in any byte a keyr
   cloud(kit.box)
   cloud(await keysService.passkeyBox(newKey()))
   cloud(await keysService.accountLetter(laptop))
+  cloud(await keysService.escrowBox({ account, to: toBase64((await identity()).publicKey) }))
   cloud(await keysService.addDevice({ device: laptop, name: 'Laptop' }))
 
   const sealer = await keyring.sealer()
@@ -66,5 +67,5 @@ test('the Cloud’s world: no plaintext, key or token appears in any byte a keyr
     assert.equal(wire.includes(Buffer.from(plain).toString('base64url')), false)
   }
   assert.equal(sent.filter((each) => each !== null && each !== undefined).length, sent.length, 'every operation produced something to send')
-  assert.equal(sent.length, 14)
+  assert.equal(sent.length, 15)
 })

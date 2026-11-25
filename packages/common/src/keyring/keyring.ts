@@ -23,7 +23,7 @@ const pick = <T extends object, K extends keyof T>(from: T, names: K[]): Pick<T,
 // The account's state and flows the runtime needs; the key material stays in here.
 export const keysService = pick(keys, ['account', 'session', 'locked', 'asked', 'kitState', 'vault', 'deviceKey', 'accountDeviceKey', 'signedIn', 'mustBeOn', 'ownedBy',
   'open', 'adopt', 'relock', 'forgetHere', 'removedHere', 'setSession', 'setLocked', 'setAsked', 'setKit',
-  'addDevice', 'dropDevices', 'change', 'accountLetter', 'passkeyBox', 'workspaceBox', 'signBox', 'deleteBox', 'boxIsMine'])
+  'addDevice', 'dropDevices', 'change', 'accountLetter', 'passkeyBox', 'workspaceBox', 'escrowBox', 'signBox', 'deleteBox', 'boxIsMine'])
 
 // Each team's state and flows the runtime needs.
 export const roomKeys = pick(rooms, ['rooms', 'room', 'members', 'roleIn', 'isOwn', 'link', 'linkUntil', 'joinedBy',
@@ -87,6 +87,14 @@ export const keyring = {
   },
 
   signedHere: async (account: Account): Promise<boolean> => account.list.by === toBase64((await accountDevice(fromBase64(account.key))).publicKey),
+
+  async escrowLetter({ ours, box, workspace, to }: { ours: Identity; box: { body: string; by: string }; workspace: string; to: string }): Promise<Sent | null> {
+    const kit = fromBase64(box.by)
+    const key = await read({ recipient: ours, from: kit, workspace, purpose: 'account-key', body: fromBase64(box.body), allowed: [kit] })
+    const sender = key && await accountDevice(key)
+    if (!key || !sender || toBase64(sender.publicKey) !== box.by) return null
+    return sealTo({ to, purpose: 'account-key', workspace, plain: key, sender })
+  },
 
   verifyList: ({ anchor, chain }: { anchor: string; chain: MemberList[] }): Promise<MemberListBody | null> => check({ anchor, chain }),
 }

@@ -25,6 +25,7 @@ export const config = {
   webUrl: (process.env.OPENHUT_WEB_URL || 'https://app.openhut.dev').replace(/\/$/, ''),
   socket: process.env.OPENHUT_SOCKET ?? join(DATA, 'openhut.sock'),
   installKind: installKindOf(process.env.OPENHUT_SOCKET ? 'desktop' : 'server'),
+  cloudComputer: process.env.OPENHUT_CLOUD === '1', // a Cloud computer (Boat VM): sends busy/idle so the Cloud can pause it
   personal: Boolean(process.env.OPENHUT_SOCKET) || process.env.OPENHUT_PERSONAL === '1',
   clientKeySha256: process.env.OPENHUT_CLIENT_KEY_SHA256,
   modelMode: TEST_MODEL ? 'test' as const : 'claude' as const,
@@ -44,7 +45,6 @@ export const config = {
   agentdSocket: process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock',
   agentdInProcess: !!process.env.OPENHUT_SANDBOX && !process.env.AGENTD_SOCK,
   secret: process.env.OPENHUT_SECRET,
-  secretHandoff: process.env.OPENHUT_SECRET ? join(DATA, 'secret.handoff') : undefined,
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))).version,
   build: BUILD,
   join: JOIN,

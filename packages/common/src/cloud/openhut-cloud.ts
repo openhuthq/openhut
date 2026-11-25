@@ -1,4 +1,5 @@
 import { connect, serve, TunnelError, type ComputerKey as NoiseComputerKey, type DeviceKey as NoiseDeviceKey, type Handlers, type Tunnel } from '../tunnel/index.ts'
+import { CloudComputer } from './v1/credits.ts'
 import * as z from 'zod/mini'
 import { ApiError } from '../api.ts'
 import { OAuthAuthorization, OAuthToken, type CreateOAuthAuthorization, type CreateOAuthToken } from './oauth.ts'
@@ -35,6 +36,7 @@ export type Device = {
   signIn: (input: SignIn) => Promise<Redirect | SignedIn>
   me: () => Promise<Me | null>
   firstComputerCode: () => Promise<JoinCode>
+  startCloud: () => Promise<CloudComputer>
   knock: (input: { team: string; nonce: string }) => Knock
   open: (input: { team: string; computer?: string; timeout?: number } | { box: string; timeout?: number }) => Promise<Tunnel>
 }
@@ -69,6 +71,13 @@ export type Computer = Device & {
   watch: (input: { socket: (url: string) => WatchSocket; onMessage: (text: string) => void; onHello?: (error?: unknown) => void }) => Watch
   records: (options: RecordsOptions) => ReturnType<typeof recordsClient>
   oauth: { authorize: (body: CreateOAuthAuthorization) => Promise<OAuthAuthorization>; token: (body: CreateOAuthToken) => Promise<OAuthToken> }
+  channels: {
+    create: (input: { agent: string; kind: 'telegram'; token: string }) => Promise<Reply>
+    list: () => Promise<Reply>
+    delete: (id: string) => Promise<Reply>
+    events: (input: { id: string; after?: number }) => Promise<Reply>
+  }
+  routines: { put: (input: { id: string; nextRun: string | null }) => Promise<Reply> }
 }
 
 export const TRUST_CALLS = ['serve', 'team', 'joinCode', 'webCode', 'joinedBy', 'deleteAccount', 'watch', 'oauth'] as const satisfies readonly Exclude<keyof Computer, keyof Device>[]
@@ -201,6 +210,7 @@ function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net:
     },
 
     firstComputerCode: () => net.ok({ name: 'createJoinCode', reply: JoinCode }),
+    startCloud: () => net.ok({ name: 'startCloudComputer', reply: CloudComputer }),
 
     knock({ team, nonce }) {
       const mine = async () => {
@@ -331,6 +341,14 @@ function computerOf({ url, key, store, fetch }: { url: Url; key: ComputerIdentit
     webCode: () => net.ok({ name: 'createJoinCode', body: { web: true }, reply: JoinCode }),
     joinedBy: async (code) => (await net.ok({ name: 'getJoinCode', params: { code }, reply: JoinedCode })).device,
     deleteAccount: () => net.call({ name: 'deleteMe' }),
+
+    channels: {
+      create: (body) => net.call({ name: 'createChannel', body }),
+      list: () => net.call({ name: 'listChannels' }),
+      delete: (id) => net.call({ name: 'deleteChannel', params: { id } }),
+      events: ({ id, after }) => net.call({ name: 'listChannelEvents', params: { id }, query: { after } }),
+    },
+    routines: { put: ({ id, nextRun }) => net.call({ name: 'putRoutine', params: { id }, body: { nextRun } }) },
 
     keyBoxes: {
       async list() {

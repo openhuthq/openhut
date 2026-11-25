@@ -3,7 +3,7 @@ import { AgentRecord, ControlRecord } from '@openhut/common/agents/agent.ts'
 import { agentService, type AgentRow } from '../agents/agent-service.ts'
 import { memoryService } from '../agents/memory-service.ts'
 import { skillService } from '../agents/skill-service.ts'
-import { channelService } from '../channels/channel-service.ts'
+import { channelService, leaveInbox } from '../channels/channel-service.ts'
 import { routineService } from '../routines/routine-service.ts'
 import { agentd } from '../platform/agentd.ts'
 import { db } from '../platform/db.ts'
@@ -125,6 +125,7 @@ async function keep({ agent, control }: { agent: Held; control: Held }): Promise
 }
 
 async function leave(row: Pick<AgentRow, 'id'>): Promise<void> {
+  for (const channel of await db.selectFrom('channel').select(['agent_id', 'kind']).where('agent_id', '=', row.id).execute()) await leaveInbox(channel)
   await agentd.remove({ id: row.id, trash: true }).catch((err: unknown) => log.warn({ event: 'agent.remove_failed', agent: row.id, error: messageOf(err) }))
   await db.deleteFrom('agent').where('id', '=', row.id).execute()
   emit({ name: 'agent.synced', target: { type: 'agent', id: row.id } })
