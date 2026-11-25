@@ -1,9 +1,9 @@
-import type { FastifyPluginAsync } from 'fastify'
+import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { HttpError } from '../platform/http-error.ts'
 import { who } from '../team/identity.ts'
 import { credits } from './providers/openhut.ts'
 
-export const creditsController: FastifyPluginAsync = async (app) => {
+export const creditsController: FastifyPluginAsyncZod = async (app) => {
   app.get('/', async (req) => {
     await who(req)
     const shown = await credits()

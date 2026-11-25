@@ -29,11 +29,11 @@ export const cloudController: FastifyPluginAsyncZod = async (app) => {
 
   app.post('/passkeys', PasskeyRequest, async (req) => cloudService.addPasskey(req.body))
 
-  app.post<{ Body: SetEncryption }>('/encryption', EncryptionRequest, async (req) => cloudService.encryption(req.body))
+  app.post('/encryption', EncryptionRequest, async (req) => cloudService.encryption(req.body))
 
   app.post('/encryption/keys', SignedIn, async () => cloudService.prepareEncryption())
 
-  app.post<{ Body: EncryptionPasskey }>('/encryption/passkeys', EncryptionPasskeyRequest, async (req) => cloudService.encryptionPasskey(req.body))
+  app.post('/encryption/passkeys', EncryptionPasskeyRequest, async (req) => cloudService.encryptionPasskey(req.body))
 
   app.delete('/passkeys', async () => cloudService.removePasskey())
 

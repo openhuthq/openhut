@@ -39,7 +39,8 @@ export type Device = {
   startCloud: () => Promise<CloudComputer>
   cloudComputer: () => Promise<CloudComputer | null>
   knock: (input: { team: string; nonce: string }) => Knock
-  open: (input: { team: string; computer?: string; timeout?: number } | { box: string; timeout?: number }) => Promise<Tunnel>
+  // wake: a person acted (opened the App, sent a message), so a paused Cloud computer is woken; background dials aren't.
+  open: (input: ({ team: string; computer?: string; timeout?: number } | { box: string; timeout?: number }) & { wake?: boolean }) => Promise<Tunnel>
 }
 
 export type Team = {
@@ -255,7 +256,7 @@ function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net:
       const reasons: string[] = []
       for (const box of boxes) {
         const id = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', box)))
-        const opened = await connect({ relayUrl: sockets(), url: `${sockets()}${pathOf({ name: 'tunnel', params: { computer: id } })}?role=device`, computer: { id, key: hex(box) }, key: noise, token, timeout }).catch((error: unknown) => {
+        const opened = await connect({ relayUrl: sockets(), url: `${sockets()}${pathOf({ name: 'tunnel', params: { computer: id } })}?role=device${input.wake ? '&wake=1' : ''}`, computer: { id, key: hex(box) }, key: noise, token, timeout }).catch((error: unknown) => {
           if (error instanceof TunnelError && error.reason) reasons.push(error.reason)
           return undefined
         })

@@ -1,5 +1,5 @@
 import { createContext, useState, useSyncExternalStore, type ReactElement } from 'react'
-import { BrowserIcon, Cancel01Icon, Logout03Icon, Delete02Icon, LaptopIcon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, ServerStack01Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { BrowserIcon, Cancel01Icon, CloudIcon, Logout03Icon, Delete02Icon, LaptopIcon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, ServerStack01Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
 import { CreditsLine } from '@/features/credits/credits'
 import type { Thread } from '@openhut/common/threads/thread.ts'
@@ -14,7 +14,7 @@ import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/component
 import { chooseWorkspace, continueInWeb, peopleNote, useWorkspaces } from '@/features/cloud/workspaces'
 import { REMOTE } from '@/lib/remote'
 import { shownTeams } from '@/features/cloud/shown-teams'
-import { nameOf as personName, useCloud, useSignOut } from '@/features/cloud/api'
+import { nameOf as personName, useCloud, useCloudId, useSignOut } from '@/features/cloud/api'
 import { SIGN_OUT_DETAIL } from '@/features/cloud/cloud'
 import { PersonFace } from '@/components/custom/person-face'
 import { dismissGone, dismissedGone, onGoneDismissed, removedLine } from '@/features/cloud/seen'
@@ -179,6 +179,7 @@ function TeamSwitcher() {
 }
 
 function Where({ agent, computers }: { agent: OpenHutAgent; computers: Parameters<typeof nameOf>[0]['computers'] }) {
-  const label = agent.runsHere ? 'Runs on this computer' : `Runs on ${agent.runsOnName ?? nameOf({ computers, id: agent.computer })}`
-  return <Tooltip label={label}><span aria-label={label} className="grid text-mute-2"><I icon={agent.runsOnServer ? ServerStack01Icon : LaptopIcon} size={13} /></span></Tooltip>
+  const onCloud = (agent.runsHere ? 'local' : agent.computer) === useCloudId(computers ?? [])
+  const label = onCloud ? 'Runs on Cloud' : agent.runsHere ? 'Runs on this computer' : `Runs on ${agent.runsOnName ?? nameOf({ computers, id: agent.computer })}`
+  return <Tooltip label={label}><span aria-label={label} className="grid text-mute-2"><I icon={onCloud ? CloudIcon : agent.runsOnServer ? ServerStack01Icon : LaptopIcon} size={13} /></span></Tooltip>
 }

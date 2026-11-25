@@ -93,10 +93,11 @@ async function joinAsWindow(): Promise<RemoteState> {
   return { step: 'ready', email: me.email, workspace: account.workspace, teammate: false }
 }
 
-function live(): Promise<Tunnel> {
+// Only a person's action wakes a paused Cloud computer (wake); live events, refetches and the reconnect timer don't.
+function live(wake = false): Promise<Tunnel> {
   if (tunnel && !tunnel.failure) return Promise.resolve(tunnel)
   if (!target) return Promise.reject(new Error('Not connected to your computer yet.'))
-  reopening ??= cloud.open(target).then((opened) => {
+  reopening ??= cloud.open({ ...target, wake }).then((opened) => {
     setCut(false)
     return (tunnel = opened)
   }, async (err: unknown) => {
@@ -189,16 +190,16 @@ export const remote = {
     const computer = desktop?.window ? await store.get<string>('computer') : undefined
     target = { team: workspace, ...computer && { computer } }
     tunnel = undefined
-    await live().catch((err: unknown) => {
+    await live(true).catch((err: unknown) => {
       if (!(err instanceof ComputersOffline)) throw err
       const seen = Math.max(0, ...err.reasons.map((reason) => lastSeenOf(reason) ?? 0)) || null
       throw new Offline({ computer: err.names.length === 1 ? err.names[0] ?? null : null, seen })
     })
   },
 
-  async fetch(path: string, init?: RequestInit): Promise<Response> {
+  async fetch(path: string, init?: RequestInit, wake = false): Promise<Response> {
     if (!target && desktop?.window) return viaShell(path, init)
-    return (await live()).fetch(path, init)
+    return (await (wake ? live().catch(() => live(true)) : live())).fetch(path, init)
   },
 
   channel({ path, onLine, onClose }: { path: string; onLine: (line: string) => void; onClose: (code: number, reason: string) => void }): Channel {

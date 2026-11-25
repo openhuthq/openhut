@@ -7,6 +7,7 @@ import { gatewayServer } from '../../../src/server/gateway/gateway-server.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
 import { routineService } from '../../../src/server/routines/routine-service.ts'
+import { activity } from '../../../src/server/gateway/activity.ts'
 
 await migrate()
 await db.insertInto('person').values({ id: 'usr_rtgowner', email: 'rtg@example.com', role: 'owner', removed_at: null }).execute()
@@ -27,6 +28,12 @@ async function mcp() {
 }
 
 const textOf = (result: Awaited<ReturnType<Client['callTool']>>) => (result.content as { text: string }[])[0].text
+
+test('the routines poll and MCP keepalives are not activity, so an idle Cloud computer can pause', async () => {
+  assert.equal((await fetch(`${base}/routines/due`, { headers })).status, 200)
+  await fetch(`${base}/api/v1/mcp`, { method: 'POST', headers: { ...headers, accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }) })
+  assert.equal(activity.recent(60_000), false)
+})
 
 test('the agent sees three routine tools, and origin is not in the schema it gets', async () => {
   const client = await mcp()

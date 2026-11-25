@@ -11,7 +11,8 @@ import { computersOf, type Computer, type Features } from '@/lib/computers'
 
 export type { Computer, Features }
 export type TailnetPeer = { name: string; dns: string }
-export type Where = { computer?: string; of?: string }
+// wake: a person acted (sent a message, started an agent), so a paused Cloud computer is woken for it.
+export type Where = { computer?: string; of?: string; wake?: boolean }
 export type OpenHutAgent = Agent & { computer: string; online: boolean }
 export type Enrollment = { peer: TailnetPeer; lines: string[]; url: string | null; startedAt: number; status: 'running' | 'failed'; error: string; retryAt: number | null; retried: boolean; waitingAt?: number | null; log?: string }
 
@@ -33,8 +34,8 @@ export class RequestError extends Error {
   }
 }
 
-export async function request<T>({ schema, path, method = 'GET', body }: Where & { schema: Schema<T>; path: string; method?: string; body?: unknown }): Promise<T> {
-  const response = await openhut.fetch({ path, init: { method, ...payloadOf(body) } })
+export async function request<T>({ schema, path, method = 'GET', body, wake }: Where & { schema: Schema<T>; path: string; method?: string; body?: unknown }): Promise<T> {
+  const response = await openhut.fetch({ path, init: { method, ...payloadOf(body) }, wake })
   const payload: unknown = await response.json().catch(() => null)
   if (!response.ok) throw failure({ status: response.status, payload })
   const parsed = schema.safeParse(payload)
@@ -49,7 +50,7 @@ export async function requestBlob({ path }: Where & { path: string }): Promise<B
 }
 
 export const openhut = {
-  fetch: ({ path, init }: Where & { path: string; init?: RequestInit }): Promise<Response> => REMOTE ? remote.fetch(path, init) : fetch(path, init),
+  fetch: ({ path, init, wake }: Where & { path: string; init?: RequestInit }): Promise<Response> => REMOTE ? remote.fetch(path, init, wake) : fetch(path, init),
   agents: {
     list: async (): Promise<OpenHutAgent[]> => (await request({ schema: AGENT_LIST, path: '/api/agents' })).data.map(here),
     move: async ({ id, to }: { id: string; to: string }): Promise<OpenHutAgent> =>

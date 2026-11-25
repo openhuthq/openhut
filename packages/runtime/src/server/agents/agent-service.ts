@@ -33,6 +33,7 @@ const HEALTH_MS = 5_000
 const PROBE_MS = 3_000
 const PROBE_FRESH_MS = 5_000
 const STARTING_MS = 180_000
+let bootedAt = 0
 const PORT_TAKEN = 'Another program answers on this agent’s port, likely another OpenHut on this computer. Quit it, then stop and start this agent.'
 const DEFAULT_MODEL = 'claude:sonnet'
 const CHILDREN = ['channel', 'routine', 'skill'] as const
@@ -223,7 +224,11 @@ export const agentService = {
     return failed
   },
 
+  // Just booted (a woken Cloud computer): its agents are still coming up, so a message waits for them instead of failing.
+  booting: (): boolean => Date.now() - bootedAt < STARTING_MS,
+
   async boot(): Promise<void> {
+    bootedAt = Date.now()
     await applyRelease().catch((err: unknown) => log.error({ event: 'build.apply_failed', error: messageOf(err) }))
     await removeStrays().catch((err: unknown) => log.warn({ event: 'agent.strays_failed', error: messageOf(err) }))
     await reconcileSafely()

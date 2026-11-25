@@ -26,6 +26,14 @@ export function useCloudComputer() {
   return useQuery({ queryKey: CLOUD_COMPUTER_KEY, queryFn: remote.cloudComputer, enabled: REMOTE, refetchInterval: (query) => MOVING.includes(query.state.data?.state ?? '') ? PAIRING_POLL_MS : ON_POLL_MS })
 }
 
+// The joined Cloud computer's id in a computers list: its device key, or 'local' when it's the computer this browser talks to
+// (the list holds every device but that one).
+export function useCloudId(computers: { id: string }[]): string | undefined {
+  const device = useCloudComputer().data?.device
+  if (!device) return undefined
+  return computers.some((each) => each.id === device) ? device : 'local'
+}
+
 export function useStartCloud() {
   const client = useQueryClient()
   return useMutation({ mutationFn: remote.startCloud, onSuccess: (started) => client.setQueryData(CLOUD_COMPUTER_KEY, started), onError: toastError })

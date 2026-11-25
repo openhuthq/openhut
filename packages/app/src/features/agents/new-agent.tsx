@@ -8,7 +8,7 @@ import { ErrorNote } from '@/components/error-note'
 import { DialogCard, I } from '@/components/kit'
 import { Glyph } from '@/components/glyph'
 import { useAgents, useCreateAgent } from '@/features/agents/api'
-import { useCloudComputer, useStartCloud } from '@/features/cloud/api'
+import { useCloudId, useStartCloud } from '@/features/cloud/api'
 import { EntryScreen } from '@/features/cloud/step'
 import { useWorkspaces } from '@/features/cloud/workspaces'
 import { useComputers } from '@/features/computers/api'
@@ -23,7 +23,7 @@ import { AccessPicker, type AccessValue } from '@/features/agents/access'
 import { formValues } from '@/lib/form'
 import { TOUCH, useMedia } from '@/lib/media'
 import { navigate, open, useOpen } from '@/lib/router'
-import { tunnelKeyOf, type Computer } from '@/lib/computers'
+import type { Computer } from '@/lib/computers'
 import { REMOTE } from '@/lib/remote'
 import { cn } from '@/lib/utils'
 
@@ -112,10 +112,10 @@ function AgentForm() {
 const CLOUD_PICK = 'cloud'
 function useRunsOn(): { computers: Computer[]; cloud?: string } {
   const computers = useComputers().data ?? []
-  const mine = useCloudComputer().data
+  const joinedId = useCloudId(computers)
   if (!REMOTE) return { computers }
-  const cloud = mine?.device ? tunnelKeyOf(mine.device) : CLOUD_PICK
-  const joined = computers.some((each) => each.id === cloud)
+  const cloud = joinedId ?? CLOUD_PICK
+  const joined = !!joinedId
   const listed = joined ? computers.map((each) => each.id === cloud ? { ...each, name: 'Cloud' } : each)
     : [...computers, { id: cloud, name: 'Cloud', kind: 'server' as const, url: '', online: true, features: { whatsapp: false, browser: false }, appTooOld: false, runtimeTooOld: false }]
   return { computers: listed, cloud: joined ? cloud : CLOUD_PICK }

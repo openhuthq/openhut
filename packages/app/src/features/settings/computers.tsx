@@ -74,14 +74,15 @@ function ComputerList() {
   const current = useQuery({ queryKey: ['browser-key'], queryFn: remote.deviceKey, staleTime: Infinity }).data
   const others = devices.filter((device) => !device.here)
   const cloudComputer = useCloudComputer().data
+  const localIsCloud = !!cloudComputer?.device && here?.key === cloudComputer.device
   const browsers = others.filter(isBrowser)
   return <>
     <KeysToReplace />
     <Intro>Your computers</Intro>
     <ErrorNote message={computers.error?.message} />
     <Rows>
-      {local && admin?.server.update?.status === 'running' && <Row icon={<ComputerMark computer={local} />} title={here?.name ?? local.name} note="Updating…"><Spinner className="mt-0" /></Row>}
-      {local && admin?.server.update?.status !== 'running' && <Row icon={<ComputerMark computer={local} />} title={here?.name ?? local.name} note={noteOf({ computer: local, admin, count: agents.filter((agent) => agent.runsHere).length, device: here })}>
+      {local && !localIsCloud && admin?.server.update?.status === 'running' && <Row icon={<ComputerMark computer={local} />} title={here?.name ?? local.name} note="Updating…"><Spinner className="mt-0" /></Row>}
+      {local && !localIsCloud && admin?.server.update?.status !== 'running' && <Row icon={<ComputerMark computer={local} />} title={here?.name ?? local.name} note={noteOf({ computer: local, admin, count: agents.filter((agent) => agent.runsHere).length, device: here })}>
         {!isPhone() && <UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Up to date</span>} />}
       </Row>}
       {home && requests.map((each) => <RequestRow key={each.device} workspace={home} asked={each} />)}

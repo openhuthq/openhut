@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 type Tone = 'ok' | 'low' | 'out'
 
 export function useCredits() {
-  return useQuery({ queryKey: CREDITS_KEY, queryFn: () => request({ schema: Credits, path: '/api/credits' }), retry: false, staleTime: 60_000 }).data
+  return useQuery({ queryKey: CREDITS_KEY, queryFn: () => request({ schema: Credits, path: '/api/credits' }), retry: false, staleTime: 60_000, refetchInterval: 60_000 }).data
 }
 
 const TEXT: Record<Tone, string> = { ok: 'text-body', low: 'text-warning-strong', out: 'text-fail' }

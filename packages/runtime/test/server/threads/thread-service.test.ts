@@ -13,6 +13,7 @@ import { validatorCompiler } from 'fastify-type-provider-zod'
 import { threadController } from '../../../src/server/threads/thread-controller.ts'
 import { imageTypeOf, safeFileName, shownCall, threadService } from '../../../src/server/threads/thread-service.ts'
 import { keysService } from '../../../src/server/cloud/keys-service.ts'
+import { agentService } from '../../../src/server/agents/agent-service.ts'
 import { useFakeRecords } from '../cloud/records-fake.ts'
 import type { SendChat } from '@openhut/common/threads/thread.ts'
 
@@ -328,6 +329,15 @@ test('a runner new to a conversation, after a move or the upgrade, seeds its new
   assert.match(String(seen.body?.messages.at(-1)?.content), /^Earlier in this chat, before this computer ran you:\n\nYou: Said on the other computer\.\n\nNow:/)
 })
 
+test('on a just-booted computer (a woken Cloud computer) a message waits for its agent to come up, then gets the reply', async (t) => {
+  const port = (hermes.address() as AddressInfo).port
+  await new Promise((resolve) => hermes.close(resolve))
+  t.mock.method(agentService, 'booting', () => true)
+  setTimeout(() => hermes.listen(port, '127.0.0.1'), 1500)
+  const res = await say('ag_chatrunn', 'hi')
+  assert.match(res.body, /214 orders\./)
+})
+
 test('an agent that isn\'t answering ends the turn with a sentence, not a hang', async () => {
   await new Promise((resolve) => hermes.close(resolve))
   const thread = { id: 'ag_chatrunn' }
@@ -421,6 +431,8 @@ test('clearing a chat leaves one tombstone per message, written by the runner, a
 test('the agent\'s own model and channel calls through the broker are not shown as tools', () => {
   assert.equal(shownCall('anthropic POST /v1/messages'), false)
   assert.equal(shownCall('codex POST /responses'), false)
+  assert.equal(shownCall('openhut POST /v1/chat/completions'), false)
+  assert.equal(shownCall('openhut GET /v1/models'), false)
   assert.equal(shownCall('telegram POST /bot…/sendMessage'), false)
   assert.equal(shownCall('postgres_query'), true)
   assert.equal(shownCall('github_create_pull_request'), true)

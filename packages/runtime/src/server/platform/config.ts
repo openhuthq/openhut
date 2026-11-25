@@ -41,7 +41,7 @@ export const config = {
   telegramApi: 'https://api.telegram.org',
   discordApi: 'https://discord.com/api/v10',
   anthropicApi: TEST_MODEL ? `http://127.0.0.1:${GATEWAY_PORT}/test-anthropic` : 'https://api.anthropic.com',
-  openrouterApi: 'https://openrouter.ai/api',
+  openrouterApi: process.env.OPENHUT_OPENROUTER_API || 'https://openrouter.ai/api', // a local fake in the Cloud e2e
   openaiApi: 'https://api.openai.com',
   xaiApi: 'https://api.x.ai',
   codexApi: 'https://chatgpt.com/backend-api/codex',
