@@ -13,7 +13,7 @@ test('against the real cloud API: a new account starts managed, so a second brow
   fakeAgentd()
   const { migrate } = await import('../../../src/server/platform/db.ts')
   const { answerErrors } = await import('../../../src/server/platform/http-error.ts')
-  const { validateWithZod } = await import('../../../src/server/platform/validation.ts')
+  const { validatorCompiler } = await import('fastify-type-provider-zod')
   const { cloudController } = await import('../../../src/server/cloud/cloud-controller.ts')
   const { cloud: ours } = await import('../../../src/server/platform/cloud.ts')
   const { inviteService } = await import('../../../src/server/cloud/invite-service.ts')
@@ -23,7 +23,7 @@ test('against the real cloud API: a new account starts managed, so a second brow
   await migrate()
   const app = Fastify()
   answerErrors(app)
-  app.setValidatorCompiler(validateWithZod)
+  app.setValidatorCompiler(validatorCompiler)
   await app.register(cloudController, { prefix: '/api/cloud' })
   const headers = { authorization: 'Bearer test-key' }
   try {

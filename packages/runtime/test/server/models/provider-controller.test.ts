@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import Fastify from 'fastify'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
 import { migrate } from '../../../src/server/platform/db.ts'
-import { validateWithZod } from '../../../src/server/platform/validation.ts'
+import { validatorCompiler } from 'fastify-type-provider-zod'
 import { providerController } from '../../../src/server/models/provider-controller.ts'
 import { config } from '../../../src/server/platform/config.ts'
 
@@ -12,7 +12,7 @@ await migrate()
 async function app() {
   const server = Fastify()
   answerErrors(server)
-  server.setValidatorCompiler(validateWithZod)
+  server.setValidatorCompiler(validatorCompiler)
   await server.register(providerController, { prefix: '/api/providers' })
   return server
 }

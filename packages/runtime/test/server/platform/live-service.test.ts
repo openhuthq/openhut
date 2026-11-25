@@ -7,7 +7,7 @@ import type { WebSocket } from 'ws'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { emit, listen } from '../../../src/server/platform/events.ts'
 import { eventsController } from '../../../src/server/platform/events-controller.ts'
-import { validateWithZod } from '../../../src/server/platform/validation.ts'
+import { validatorCompiler } from 'fastify-type-provider-zod'
 
 const KEY = { authorization: 'Bearer test-key' }
 
@@ -15,7 +15,7 @@ await migrate()
 await db.insertInto('person').values({ id: 'usr_liveown', email: 'owner@example.com', role: 'owner', removed_at: null }).execute()
 
 const app = Fastify()
-app.setValidatorCompiler(validateWithZod)
+app.setValidatorCompiler(validatorCompiler)
 await app.register(websocket)
 await app.register(eventsController, { prefix: '/api/events' })
 await app.ready()

@@ -13,7 +13,7 @@ test('against the real cloud API: Continue in web asks for Touch ID once, opens 
   fakeAgentd()
   const { migrate } = await import('../../../src/server/platform/db.ts')
   const { answerErrors } = await import('../../../src/server/platform/http-error.ts')
-  const { validateWithZod } = await import('../../../src/server/platform/validation.ts')
+  const { validatorCompiler } = await import('fastify-type-provider-zod')
   const { config } = await import('../../../src/server/platform/config.ts')
   const { cloudController } = await import('../../../src/server/cloud/cloud-controller.ts')
   const { invitationController } = await import('../../../src/server/cloud/invite-controller.ts')
@@ -24,7 +24,7 @@ test('against the real cloud API: Continue in web asks for Touch ID once, opens 
   await migrate()
   const app = Fastify()
   answerErrors(app)
-  app.setValidatorCompiler(validateWithZod)
+  app.setValidatorCompiler(validatorCompiler)
   await app.register(cloudController, { prefix: '/api/cloud' })
   await app.register(invitationController, { prefix: '/api/invitations' })
   const headers = { authorization: 'Bearer test-key' }

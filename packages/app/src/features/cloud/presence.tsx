@@ -49,7 +49,7 @@ export function Here({ agentId, field }: { agentId: string; field: HereField | n
   const isTyping = useSyncExternalStore((listener) => { typingListeners.add(listener); return () => { typingListeners.delete(listener) } }, () => typing)
   useEffect(() => {
     if (!on) return
-    const post = (agent: string | null) => request({ schema: Presence, computer: 'local', path: '/api/cloud/here', method: 'POST', body: { agent, field: agent && field, typing: Boolean(agent) && isTyping } })
+    const post = (agent: string | null) => request({ schema: Presence, computer: 'local', path: '/api/cloud/presence', method: 'PUT', body: { agent, field: agent && field, typing: Boolean(agent) && isTyping } })
       .then((presence) => client.setQueryData(PRESENCE_KEY, presence), () => undefined)
     const shown = () => document.visibilityState === 'visible'
     const beat = () => void post(shown() ? agentId : null)
