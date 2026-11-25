@@ -2,7 +2,7 @@
 set -eu
 J=/opt/openhut
 mkdir -p /data/app /data/log /data/caddy
-chown openhut:openhut /data/app /data/caddy; chmod 0700 /data/app /data/caddy
+chown -R openhut:openhut /data/app /data/caddy; chmod 0700 /data/app /data/caddy
 touch /data/install.lock /data/update.request; chmod 0666 /data/update.request
 [ -s /data/here.token ] || (umask 077; printf 'ohj_%s\n' "$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n')" > /data/here.token)
 TOKEN=$(cat /data/here.token)
