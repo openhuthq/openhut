@@ -27,7 +27,7 @@ function useDecide(agentId: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: ({ id, verb, body }: { id: string; verb: 'approve' | 'deny'; body: object }) =>
-      request({ schema: ChangeRequest, of: agentId, path: `/api/change-requests/${encodeURIComponent(id)}/${verb}`, method: 'POST', body }),
+      request({ schema: ChangeRequest, of: agentId, path: `/api/change-requests/${encodeURIComponent(id)}/${verb === 'approve' ? 'approvals' : 'denials'}`, method: 'POST', body }),
     onSuccess: (decided) => client.setQueryData<ChangeRequest[]>(changesKey(agentId), (all) => all?.map((each) => each.id === decided.id ? decided : each)),
   })
 }

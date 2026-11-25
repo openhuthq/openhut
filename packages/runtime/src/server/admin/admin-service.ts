@@ -64,7 +64,7 @@ export const adminService = {
     return (await latestRelease({ fresh: false })).build
   },
 
-  async startUpdate({ actor, appVersion }: { actor: Caller; appVersion?: string | string[] }): Promise<Update> {
+  async startUpdate({ actor, appVersion }: { actor: Caller; appVersion?: string }): Promise<Update> {
     const { build: to, sha256 } = await latestRelease({ fresh: true })
     if (!to) throw new HttpError(502, 'Couldn\'t check for a new version. Try again in a minute.')
     if (!isNewer({ latest: to, current: config.build })) throw new HttpError(409, 'This computer is already up to date.')
@@ -72,7 +72,7 @@ export const adminService = {
     if (running?.status === 'running') throw new HttpError(409, 'An update is already running. This page shows when it finishes.')
     const stored = { from: config.build, to, startedAt: new Date().toISOString() }
     await settings.setUpdate(JSON.stringify(stored))
-    await agentd.update({ appVersion: typeof appVersion === 'string' && SEMVER.test(appVersion) ? appVersion : undefined, sha256 }).catch(async (err: unknown) => {
+    await agentd.update({ appVersion: appVersion && SEMVER.test(appVersion) ? appVersion : undefined, sha256 }).catch(async (err: unknown) => {
       await settings.setUpdate('')
       throw err
     })
