@@ -421,6 +421,8 @@ test('clearing a chat leaves one tombstone per message, written by the runner, a
 test('the agent\'s own model and channel calls through the broker are not shown as tools', () => {
   assert.equal(shownCall('anthropic POST /v1/messages'), false)
   assert.equal(shownCall('codex POST /responses'), false)
+  assert.equal(shownCall('openhut POST /v1/chat/completions'), false)
+  assert.equal(shownCall('openhut GET /v1/models'), false)
   assert.equal(shownCall('telegram POST /bot…/sendMessage'), false)
   assert.equal(shownCall('postgres_query'), true)
   assert.equal(shownCall('github_create_pull_request'), true)

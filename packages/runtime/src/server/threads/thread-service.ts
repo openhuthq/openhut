@@ -19,6 +19,7 @@ import { keysService } from '../cloud/keys-service.ts'
 import { recordsService } from '../cloud/records.ts'
 import { peopleOf, type Caller } from '../team/identity.ts'
 import { changeRequestService } from '../agents/change-request-service.ts'
+import { providers } from '../models/providers/index.ts'
 
 const TURN_MS = 15 * 60_000
 const SEED = 20
@@ -449,7 +450,8 @@ export function safeFileName(name: string): string {
   return [...stem, ...ext].join('')
 }
 
-const PLUMBING = ['anthropic', 'codex', 'telegram']
+// The agent's own model calls (every model provider's upstream) and Telegram polling aren't tool use.
+const PLUMBING = [...Object.values(providers).map((provider) => provider.upstream.name), 'telegram']
 
 export function shownCall(tool: string) {
   return !PLUMBING.some((upstream) => tool.startsWith(`${upstream} `))
