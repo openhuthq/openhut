@@ -180,8 +180,6 @@ export const remote = {
     await store.set('asked', workspace)
   },
 
-  me: () => cloud.me(),
-
   joinCode: (): Promise<JoinCode> => cloud.firstComputerCode(),
 
   startCloud: (team = target?.team ?? fresh ?? '') => cloud.startCloud(team),
