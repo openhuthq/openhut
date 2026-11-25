@@ -15,6 +15,7 @@
     "@modelcontextprotocol/sdk": "1.32.2",
     "@openhut/common": "*",
     "ai": "7.0.172",
+    "convex": "1.51.0",
     "croner": "11.0.0",
     "env-var": "7.5.0",
     "evlog": "2.29.0",

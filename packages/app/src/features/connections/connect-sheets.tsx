@@ -115,7 +115,7 @@ function ConvexSheet({ item, close, returned, ask }: FlowProps) {
     {ask.line}
     {name(fieldError(create.error, 'name'))}
     <Field label="Deploy key" error={fieldError(create.error, 'deployKey')}><Input mono name="deployKey" type="password" required placeholder="prod:happy-otter-123|eyJ…" autoComplete="off" /></Field>
-    <span className="flex items-center gap-2 text-[12px] text-mute">From Settings › Deploy keys.<a className={cn(buttonVariants({ variant: 'secondary' }), PILL)} href="https://dashboard.convex.dev" target="_blank" rel="noreferrer">Open Convex</a></span>
+    <span className="flex items-center gap-2 text-[12px] text-mute">From Settings › Deploy keys. Convex’s official MCP server runs on this computer with it.<a className={cn(buttonVariants({ variant: 'secondary' }), PILL)} href="https://dashboard.convex.dev" target="_blank" rel="noreferrer">Open Convex</a></span>
   </SetupSheet>
 }
 
