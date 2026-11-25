@@ -22,6 +22,7 @@ export function fakeAgentd() {
   const files = new Map<string, string>()
   const applied = new Map<string, boolean>()
   const failing = new Set<string>()
+  const features = { whatsapp: false, browser: false }
   const server = createServer({ allowHalfOpen: true }, (sock) => {
     let raw = ''
     sock.setEncoding('utf8').on('data', (chunk) => {
@@ -36,7 +37,7 @@ export function fakeAgentd() {
       if (req.cmd === 'rm') applied.delete(req.id)
       const states = Object.fromEntries([...applied].map(([id, running]) => [id, running ? 'running' : 'exited']))
       const replies: Record<string, unknown> = {
-        ps: { states }, health: { firewall: true, imageReady: true }, apply: { applied: req.id, change: 'none' }, rm: { removed: req.id }, write: { path: req.path },
+        ps: { states }, health: { firewall: true, imageReady: true, features }, apply: { applied: req.id, change: 'none' }, rm: { removed: req.id }, write: { path: req.path },
         read: { body: files.has(key) ? Buffer.from(files.get(key) ?? '').toString('base64') : null }, skills: { skills: [], bundled: '' }, delete: { removed: req.paths ?? [] },
       }
       if (req.cmd === 'apply' && failing.has(req.id)) return sock.end(JSON.stringify({ ok: false, error: 'Pool overlaps with other one on this address space' }))
@@ -44,5 +45,5 @@ export function fakeAgentd() {
     })
   }).listen(process.env.AGENTD_SOCK)
   server.unref()
-  return { files, applied, failing }
+  return { files, applied, failing, features }
 }
