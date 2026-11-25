@@ -1,0 +1,67 @@
+---
+title: Install
+description: One command on your own Linux server with Docker. Then open it and create the owner account.
+icon: sales
+---
+
+## What you need
+
+- A Linux server or VM. Any distribution, x86_64 or arm64. The installer adds Docker if it's missing (on Debian, Ubuntu and Alpine).
+- A dedicated machine, not your laptop. OpenHut has root on it: it runs a Docker container for each agent.
+- Ports **80** and **443** open to the internet. OpenHut gets its HTTPS certificate itself.
+- A domain name, like `openhut.example.com`. Point its DNS (an `A` record) at the server **before** you install.
+
+<Steps>
+<Step>
+
+### Run the installer
+
+On the server:
+
+```sh
+curl -fsSL https://openhut.dev | sh
+```
+
+It downloads OpenHut, starts it and prints the address to open, like `http://203.0.113.7`.
+
+</Step>
+<Step>
+
+### Open it right away
+
+Open that address in your browser. The first person to open it becomes the owner, so do it as soon as the installer finishes. Enter your name, email and a password.
+
+</Step>
+<Step>
+
+### Set the HTTPS address
+
+Enter your domain, like `https://openhut.example.com`. OpenHut gets the certificate on ports 80 and 443 and moves you there. You can change it later in **Settings › Admin › Address**.
+
+</Step>
+<Step>
+
+### Connect a model and make an agent
+
+**Settings › Models**: sign in with your [Claude](/claude) or [ChatGPT](/codex) plan, or add an [API key](/api-keys). Then make your first [agent](/agents).
+
+</Step>
+</Steps>
+
+Everyone else joins with an invite link from [People](/people).
+
+## Hardware
+
+Plan memory for the busiest moment: every running agent can use its full memory at once.
+
+| Server | CPU | Memory | Disk |
+| --- | --- | --- | --- |
+| Try it: 2 agents, no browser | 2 vCPU | 4 GB | 20 GB |
+| A team: 5 agents, 2 of them browse | 4 vCPU | 8 GB | 30 GB |
+| A bigger team: 10 agents, 4 of them browse | 8 vCPU | 16 GB | 40 GB |
+
+- **Memory:** 1 GB for OpenHut and the system, plus 1 GB for each running agent and 2 GB for each agent that browses the web.
+- **CPU:** one core for OpenHut, plus one for each agent working at the same moment.
+- **Disk:** 10 GB for the images and Docker, plus about 1 GB per agent.
+
+Out of room? [Add another computer](/computers) and move agents to it.

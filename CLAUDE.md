@@ -33,6 +33,10 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
 - **`packages/site`** — openhut.dev: the home page, the brand page and `/` for curl, served by a Cloudflare Worker with static assets
   (`wrangler.jsonc`, `src/worker.ts`) that `.github/workflows/deploy.yml` deploys after CI passes on `main`. Its own npm package
   with its own lock, not a workspace (wrangler stays out of the root lock): `npm --prefix site ci`, then `run typecheck` and `test`.
+- **`packages/docs`** — openhut.dev/docs: Fumadocs on TanStack Start, prerendered to static files (`content/docs/*.mdx`, order in
+  `meta.json`) plus `/docs/llms.txt`; the site's `deploy` builds it and `src/build.ts` copies it into the Worker's assets.
+  `/install` redirects to `/docs/install/`. **Docs live in `packages/docs`; any PR that changes what a user sees or does updates
+  the matching page in the same PR.**
 
 `install/` is the server, two images from one `install/Dockerfile` (`scripts/image.sh` builds both and pins them into
 `install.sh`): `ghcr.io/openhuthq/openhut` (`--target main`: Node, the Docker CLI, the tree and the built App; entrypoint

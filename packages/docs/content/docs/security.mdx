@@ -1,0 +1,12 @@
+---
+title: Security
+description: Each agent in its own container. Keys stay on your main install.
+icon: hut
+---
+
+- **One container per agent.** Each agent runs in its own Docker container, read-only, with no capabilities. When the machine supports it, the container runs under [gVisor](https://gvisor.dev), a sandbox with its own kernel. **Settings › Computers** shows whether gVisor is on.
+- **Limited network.** Agents reach the public internet over HTTPS only. Private addresses on your network are blocked.
+- **Keys stay on the main install.** Model keys and app credentials are sealed on your main install. Agents call models and apps through OpenHut and never see a key. Other computers don't hold them either.
+- **The owner is whoever signs up first.** Open your install right after installing, before anyone else can. See [Install](/install).
+- **The machine is OpenHut's.** OpenHut runs Docker with root on its server. Use a dedicated server or VM.
+- **Browser:** a web page can carry text written to mislead an agent. Turn on Browser only for agents that need it.

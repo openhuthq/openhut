@@ -20,7 +20,7 @@ test('openhut.dev/install.sh redirects to the stable install.sh', async () => {
   const { readFile } = await import('node:fs/promises')
   const lines = (await readFile(new URL('../public/_redirects', import.meta.url), 'utf8')).split('\n').map((line) => line.trim())
   assert.ok(lines.includes('/install.sh https://dl.openhut.dev/channels/stable/install.sh 302'))
-  assert.ok(lines.includes('/docs /install 302'))
+  assert.ok(lines.includes('/install /docs/install/ 302'))
 })
 
 test('POST /api/events stores allow-listed events in Analytics Engine and drops everything else', async () => {

@@ -6,9 +6,10 @@
     "build": "node src/build.ts",
     "typecheck": "tsc -p .",
     "test": "node --test test/*.test.ts",
-    "deploy": "node src/build.ts && wrangler deploy"
+    "deploy": "npm -w @openhut/docs run build && node src/build.ts && wrangler deploy"
   },
   "devDependencies": {
+    "@openhut/docs": "*",
     "@types/node": "26.6.2",
     "wrangler": "^4.156.2"
   }

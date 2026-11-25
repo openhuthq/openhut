@@ -1,0 +1,15 @@
+---
+title: Uninstall
+description: Remove OpenHut and all its data from a machine.
+icon: hut
+---
+
+Run this on each machine. It deletes every agent and all OpenHut data there, and can't be undone. Docker stays installed.
+
+```sh
+sudo docker rm -f openhut openhut-previous openhut-updater openhut-updater-old openhut-runtime openhut-runtime-previous openhut-runtime-update
+sudo docker volume rm openhut openhut-data openhut-runtime openhut-runtime-data
+sudo docker network rm openhut
+```
+
+To take one [computer](/computers) out of your install but keep the rest, **Remove** it in **Settings › Computers** first.

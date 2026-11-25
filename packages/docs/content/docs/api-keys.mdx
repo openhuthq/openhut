@@ -1,0 +1,33 @@
+---
+title: API keys
+description: Run agents on OpenRouter, OpenAI or any OpenAI-compatible provider with your own key.
+icon: support
+---
+
+<Steps>
+<Step>
+
+### Get a key
+
+- **OpenRouter:** [openrouter.ai/keys](https://openrouter.ai/keys). One key for hundreds of models.
+- **OpenAI:** [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+- **OpenAI-compatible:** any provider with a `/chat/completions` API, like xAI, Groq or Mistral, or your own model server.
+
+</Step>
+<Step>
+
+### Add it
+
+**Settings › Models**, then **Add key** next to the provider under **API keys**. For OpenAI-compatible, also enter the **Base URL**: the address before `/chat/completions`, like `https://api.x.ai/v1`. **Connect** checks the key and finds its models.
+
+</Step>
+<Step>
+
+### Pick a model per agent
+
+Each agent picks its own model from **Model** on its panel. In **Settings › Models › Manage** you can switch models off; switched-off models stay out of the picker.
+
+</Step>
+</Steps>
+
+The key stays on your main install and works for agents on every computer. Agents never see it.

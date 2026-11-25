@@ -1,5 +1,7 @@
 /join https://app.openhut.dev/join 302
 /security / 301
 /install.sh https://dl.openhut.dev/channels/stable/install.sh 302
-/docs /install 302
-/docs/* /install 302
+/install /docs/install/ 302
+/docs/upgrade /docs/updates/ 301
+/docs/data /docs/apps/ 301
+/docs/cloud /docs/ 301
