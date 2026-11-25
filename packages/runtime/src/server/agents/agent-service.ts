@@ -77,12 +77,13 @@ export const agentService = {
     requireModel(model)
     const ws = workspace ?? keysService.signedIn().workspace.id
     if (!roomKeys.room(ws)) throw new HttpError(400, 'This computer isn’t in that team.', { param: 'workspace' })
-    if ((await agentd.health()).imageReady === false) throw new HttpError(409, 'OpenHut is still downloading what agents need to run. This happens once and takes a few minutes. Try again shortly.')
+    const health = await agentd.health()
+    if (health.imageReady === false) throw new HttpError(409, 'OpenHut is still downloading what agents need to run. This happens once and takes a few minutes. Try again shortly.')
     const access = teamOnly({ workspace: ws, owner: actor.email, people, sidebars })
     const id = newId('ag')
     const value: AgentRecord = { name: clean, instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000), face: face ?? null, wanted: 'stopped', createdAt: new Date().toISOString() }
     await recordsService.put({ collection: 'agent', id, workspace: ws, parent: actor.email, personal: !shared, value })
-    const control: ControlRecord = { runsOn: await keysService.deviceKey(), model: model ?? DEFAULT_MODEL, codeExecution: true, browser: false, grants: [], ...access }
+    const control: ControlRecord = { runsOn: await keysService.deviceKey(), model: model ?? DEFAULT_MODEL, codeExecution: true, browser: !!health.features?.browser, grants: [], ...access }
     await recordsService.put({ collection: 'control', parent: id, workspace: ws, personal: !shared, value: control })
     await runSet.apply({ workspace: ws, id })
     emit({ name: 'agent.created', actor, target: { type: 'agent', id, name: clean, model: control.model } })

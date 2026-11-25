@@ -98,6 +98,12 @@ test('a new agent is two records, runs here, and only its owner changes it, even
   await assert.rejects(agentService.createGrant({ actor: mate, agentId: made.id, connectionId: 'cn_none' }), { status: 403 })
 })
 
+test('a new agent has Browser on when this computer can run one', async () => {
+  agentd.features.browser = true
+  assert.equal((await agentService.create({ actor: owner, name: 'Scout' })).browser, true)
+  agentd.features.browser = false
+})
+
 test('changing runsOn stops the agent here; changing it back starts it again', async () => {
   const made = await agentService.create({ actor: owner, name: 'Rover' })
   const moved = await agentService.update({ actor: owner, id: made.id, patch: { runsOn: 'dev_srv' } })

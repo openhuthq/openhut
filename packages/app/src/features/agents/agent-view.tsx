@@ -37,14 +37,14 @@ export function AgentView({ agentId, dialog, detail }: { agentId: string; dialog
   useEffect(() => { if (moved) void refetch() }, [moved, agents.dataUpdatedAt, refetch])
   const narrow = useMedia(NARROW)
   const phone = useMedia(PHONE)
-  const [shown, setShown] = useState<boolean | null>(null)
-  useEffect(() => setShown(null), [narrow])
+  const [shown, setShown] = useState(() => phone ? null : savedShown())
+  useEffect(() => { if (!phone) saveShown(shown) }, [phone, shown])
   const open = shown ?? !narrow
   if (away) return <Redirect to={away} />
   if (!agent.data) return <section className="grid flex-1 place-items-center bg-card">{!gone && <ErrorNote message={shownError(agent.error)} />}</section>
-  const toggle = narrow && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label={open ? 'Hide details' : 'Show details'} aria-pressed={open} title={open ? 'Hide details' : 'Show details'} onClick={() => setShown(!open)}><I icon={phone ? InformationCircleIcon : SidebarRight01Icon} size={phone ? 20 : 16} /></Button>
+  const toggle = !open && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Show details" title="Show details" onClick={() => setShown(true)}><I icon={phone ? InformationCircleIcon : SidebarRight01Icon} size={phone ? 20 : 16} /></Button>
   const dialogs = <Dialogs agent={agent.data} dialog={dialog} detail={detail} />
-  const panel = open && <Panel agent={agent.data} naming={dialog === 'name'} watching={dialog === 'browser'} />
+  const panel = open && <Panel agent={agent.data} naming={dialog === 'name'} watching={dialog === 'browser'} onHide={() => setShown(false)} />
   return <>
     <div className="relative flex min-w-0 flex-1">
       <Chat agent={agent.data} tools={toggle} onTitle={phone ? () => setShown(true) : undefined} />
@@ -74,4 +74,13 @@ function Dialogs({ agent, dialog, detail }: { agent: Agent; dialog: AgentDialog 
 }
 
 const NARROW = '(max-width: 1100px)'
+const SHOWN_KEY = 'openhut.details.shown'
+
+function savedShown(): boolean | null {
+  try { const saved = localStorage.getItem(SHOWN_KEY); return saved === null ? null : saved === '1' } catch { return null }
+}
+
+function saveShown(shown: boolean | null) {
+  try { if (shown !== null) localStorage.setItem(SHOWN_KEY, shown ? '1' : '0') } catch { return }
+}
 const FIELDS: Record<string, HereField> = { does: 'instructions', name: 'name', customize: 'face' }

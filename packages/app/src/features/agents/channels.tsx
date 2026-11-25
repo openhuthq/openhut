@@ -1,14 +1,17 @@
 import { useState } from 'react'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Channel, ChannelKind } from '@openhut/common/channels/channel.ts'
-import { Button } from '@/components/ui/button'
+import { PlusSignIcon } from '@hugeicons/core-free-icons'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { ErrorNote, shownError } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
-import { ROW, Section } from '@/components/kit'
+import { I, ROW, Section } from '@/components/kit'
 import { agentPath } from '@/app/routes'
 import { useChannels, useDeleteChannel } from '@/features/agents/api'
+import { ORDER, listedChannels } from '@/features/agents/channel-kinds'
 import { useFeatures } from '@/features/computers/api'
 import { SlackDialog } from '@/features/agents/slack-dialog'
 import { TelegramDialog } from '@/features/agents/telegram-dialog'
@@ -24,39 +27,45 @@ const KINDS: Record<ChannelKind, { label: string; remove: string; gone: string }
   telegram: { label: 'Telegram', remove: 'Disconnect', gone: 'stops answering on Telegram. Connecting again takes the bot token.' },
   discord: { label: 'Discord', remove: 'Disconnect', gone: 'stops answering in Discord. Connecting again takes the bot token.' },
 }
-const ORDER: ChannelKind[] = ['slack', 'discord', 'whatsapp', 'telegram']
 const WAKES: ChannelKind[] = ['telegram']
 
 export function ChannelRows({ agent }: { agent: Agent }) {
   const channels = useChannels(agent.id)
   const features = useFeatures(agent.id)
-  const offered = ORDER.filter((kind) => kind !== 'whatsapp' || features.whatsapp || channels.data?.some((channel) => channel.kind === 'whatsapp'))
-  return <Section title="Talk to it on">
+  const shown = listedChannels(channels.data ?? [])
+  const others = ORDER.filter((kind) => (kind !== 'whatsapp' || features.whatsapp) && !shown.some((channel) => channel.kind === kind))
+  return <Section title="Channels" action={<AddChannel agent={agent} kinds={others} awake={!!features.cloud} />}>
     <ErrorNote message={shownError(channels.error)} />
-    <div className="-mx-2.5 flex flex-col gap-px">{offered.map((kind) => <ChannelRow key={kind} agent={agent} kind={kind} channel={channels.data?.find((channel) => channel.kind === kind)} awake={!!features.cloud && !WAKES.includes(kind)} />)}</div>
+    {channels.data && !shown.length && <p className="m-0 text-[12px]/[16px] text-balance text-mute">{agent.name} isn't on any channel yet.</p>}
+    <div className="-mx-2.5 flex flex-col gap-px">{shown.map((channel) => <ChannelRow key={channel.id} agent={agent} channel={channel} />)}</div>
   </Section>
 }
 
-function ChannelRow({ agent, kind, channel, awake }: { agent: Agent; kind: ChannelKind; channel: Channel | undefined; awake: boolean }) {
-  const deleteChannel = useDeleteChannel()
-  const [confirming, setConfirming] = useState(false)
-  const open = () => navigate(agentPath({ agentId: agent.id, dialog: kind }))
-  const { label, remove, gone } = KINDS[kind]
-  return <div className={cn(ROW, 'cursor-default')} onClick={agent.canEdit && channel?.status !== 'connected' ? open : undefined}>
-    <Glyph name={kind} size={16} />
-    {label}<span className="min-w-0 flex-1 truncate text-xs text-mute">{[line(channel), awake && 'Keeps Cloud awake'].filter(Boolean).join(' · ')}</span>
-    {channel?.status === 'connected'
-      ? <Switch checked aria-label={`${remove} ${label}`} disabled={!agent.canEdit || deleteChannel.isPending} onCheckedChange={() => setConfirming(true)} />
-      : <Button type="button" variant="secondary" size="xs" className="rounded-full px-2.5 text-[12px] font-normal" disabled={!agent.canEdit} onClick={(event) => { event.stopPropagation(); open() }}>{channel ? 'Scan code' : 'Set up'}</Button>}
-    <ConfirmDialog open={confirming} onOpenChange={setConfirming} question={`${remove} ${label}?`} detail={`${agent.name} ${gone}`} action={remove}
-      onConfirm={() => channel && deleteChannel.mutate(channel, { onError: toastError })} />
-  </div>
+function AddChannel({ agent, kinds, awake }: { agent: Agent; kinds: ChannelKind[]; awake: boolean }) {
+  return <DropdownMenu>
+    <DropdownMenuTrigger className={cn(buttonVariants({ variant: 'text' }), 'text-xs')} disabled={!agent.canEdit || !kinds.length}><I icon={PlusSignIcon} size={12} />Add</DropdownMenuTrigger>
+    <DropdownMenuContent align="end">
+      {kinds.map((kind) => <DropdownMenuItem size="tall" key={kind} onClick={() => navigate(agentPath({ agentId: agent.id, dialog: kind }))}>
+        <Glyph name={kind} size={16} />{KINDS[kind].label}{awake && !WAKES.includes(kind) && <span className="ml-auto pl-3 text-xs text-mute">Keeps Cloud awake</span>}
+      </DropdownMenuItem>)}
+    </DropdownMenuContent>
+  </DropdownMenu>
 }
 
-function line(channel: Channel | undefined) {
-  if (!channel) return ''
-  if (channel.status === 'linking') return 'Waiting for scan…'
-  return 'Connected'
+function ChannelRow({ agent, channel }: { agent: Agent; channel: Channel }) {
+  const deleteChannel = useDeleteChannel()
+  const [confirming, setConfirming] = useState(false)
+  const open = () => navigate(agentPath({ agentId: agent.id, dialog: channel.kind }))
+  const { label, remove, gone } = KINDS[channel.kind]
+  return <div className={cn(ROW, 'cursor-default')} onClick={agent.canEdit && channel.status !== 'connected' ? open : undefined}>
+    <Glyph name={channel.kind} size={16} />
+    {label}<span className="min-w-0 flex-1 truncate text-xs text-mute">{channel.status === 'linking' ? 'Waiting for scan…' : 'Connected'}</span>
+    {channel.status === 'connected'
+      ? <Switch checked aria-label={`${remove} ${label}`} disabled={!agent.canEdit || deleteChannel.isPending} onCheckedChange={() => setConfirming(true)} />
+      : <Button type="button" variant="secondary" size="xs" className="rounded-full px-2.5 text-[12px] font-normal" disabled={!agent.canEdit} onClick={(event) => { event.stopPropagation(); open() }}>Scan code</Button>}
+    <ConfirmDialog open={confirming} onOpenChange={setConfirming} question={`${remove} ${label}?`} detail={`${agent.name} ${gone}`} action={remove}
+      onConfirm={() => deleteChannel.mutate(channel, { onError: toastError })} />
+  </div>
 }
 
 export function ChannelDialog({ agent, kind, onClose }: { agent: Agent; kind: ChannelKind; onClose: () => void }) {

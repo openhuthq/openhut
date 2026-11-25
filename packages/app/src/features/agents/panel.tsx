@@ -1,7 +1,7 @@
 import { useCloudId } from '@/features/cloud/api'
 import { useEffect, useRef, useState } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { Globe02Icon, SquareLock02Icon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { BrowserIcon, Globe02Icon, SidebarRight01Icon, SquareLock02Icon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import { deviceIcon } from '@/components/custom/device'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog, useConfirming } from '@/components/confirm-button'
-import { Choice, DialogCard, GLASS, HOVER, I, MenuCard, PILL, ROW, ROW_VALUE, Section, TINY_ICON } from '@/components/kit'
+import { Choice, DialogCard, GLASS, HOVER, I, ICON_BUTTON, MenuCard, PILL, ROW, ROW_VALUE, TINY_ICON } from '@/components/kit'
 import { agentPath, type AgentDialog } from '@/app/routes'
 import { useAgents, useChannels, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
 import { nameOf, runsOnNote, useComputers, useFeatures } from '@/features/computers/api'
@@ -38,7 +38,7 @@ import { cn } from '@/lib/utils'
 
 const VALUE = ROW_VALUE
 
-export function Panel({ agent, naming, watching }: { agent: Agent; naming: boolean; watching: boolean }) {
+export function Panel({ agent, naming, watching, onHide }: { agent: Agent; naming: boolean; watching: boolean; onHide: () => void }) {
   const memory = useMemoryCount(agent)
   const skills = skillsNote(useSkills(agent.id).data)
   return <aside className={cn('still flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] phone:w-full phone:flex-1 phone:border-l-0 border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
@@ -47,6 +47,7 @@ export function Panel({ agent, naming, watching }: { agent: Agent; naming: boole
         <Face agent={agent} size={48} tile />
       </a> : <Face agent={agent} size={48} tile />}</FieldBox>
       <FieldBox agentId={agent.id} field="name" className="grid min-w-0 flex-1"><PanelTitle agent={agent} naming={naming} /></FieldBox>
+      <Button type="button" variant="bare" className={cn(ICON_BUTTON, 'self-start phone:hidden')} aria-label="Hide details" title="Hide details" onClick={onHide}><I icon={SidebarRight01Icon} size={16} /></Button>
     </div>
     <FieldBox agentId={agent.id} field="instructions" className="-mx-2.5"><Button type="button" variant="bare" onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'does' }))} className={cn('group flex w-full flex-col gap-1 rounded-lg px-2.5 py-2', HOVER)}>
       <span className="flex items-center text-[12px]/[16px] text-mute">What it does<span className="ml-auto text-mute opacity-0 group-hover:opacity-100"><I icon={PencilEdit02Icon} size={13} /></span></span>
@@ -63,40 +64,32 @@ export function Panel({ agent, naming, watching }: { agent: Agent; naming: boole
       </>}
       <RoutinesRow agent={agent} />
     </div>
-    <BrowserRows agent={agent} watching={watching} />
     <ChannelRows agent={agent} />
     <CanUse agent={agent} />
-    {agent.canManage && <AgentActions agent={agent} />}
+    <AgentActions agent={agent} watching={watching} />
   </aside>
 }
 
 const LABEL = 'pb-1.5 text-[12px]/[16px] text-mute'
 
-function BrowserRows({ agent, watching }: { agent: Agent; watching: boolean }) {
+function AgentActions({ agent, watching }: { agent: Agent; watching: boolean }) {
   const features = useFeatures(agent.id)
-  const updateAgent = useUpdateAgent(agent.id)
-  if (!features.browser && !agent.browser) return agent.runsHere ? <Section title="Browser"><p className="m-0 text-[12px]/[16px] text-mute">Install Google Chrome on this computer, then turn Browser on.</p></Section> : null
-  const toggle = <span className="flex items-center gap-2">
-    {agent.browser && agent.canEdit && <a className="text-[12px] text-body underline-offset-2 hover:underline" href={agentPath({ agentId: agent.id, dialog: 'browser' })}>Open</a>}
-    <Switch checked={agent.browser} aria-label="Browser" disabled={!agent.canEdit || updateAgent.isPending} onCheckedChange={() => updateAgent.mutate({ browser: !agent.browser }, { onError: toastError })} />
-  </span>
-  return <Section title="Browser" action={toggle}>
-    {agent.browser && agent.canEdit && !watching && <BrowserPreview agent={agent} />}
-  </Section>
-}
-
-function AgentActions({ agent }: { agent: Agent }) {
   const updateAgent = useUpdateAgent(agent.id)
   const change = (patch: Parameters<typeof updateAgent.mutate>[0]) => updateAgent.mutate(patch, { onError: toastError })
   const locked = !agent.canEdit || !agent.canManage || updateAgent.isPending
-  const home = useAgents().data?.find((each) => each.id === agent.id)
-  const asYou = agent.runsHere && (home?.computer ?? 'local') === 'local'
+  const browser = features.browser || !!features.cloud || agent.browser
+  if (!agent.canManage && !browser && !agent.runsHere) return null
   return <div className="mt-auto flex flex-col pt-2">
     <span className={LABEL}>Allowed to</span>
     <div className="-mx-2.5 flex flex-col gap-px">
-      <label className={ROW}><I icon={SourceCodeIcon} size={15} className="text-mute" />Run code<Switch className="ml-auto" checked={agent.codeExecution} aria-label="Run code" disabled={locked} onCheckedChange={() => change({ codeExecution: !agent.codeExecution })} /></label>
-      {asYou && <span className="px-2.5 pb-1 text-[12px]/[16px] text-mute">Runs as you on this computer, with your files.</span>}
+      {agent.canManage && <label className={ROW}><I icon={SourceCodeIcon} size={15} className="text-mute" />Run code<Switch className="ml-auto" checked={agent.codeExecution} aria-label="Run code" disabled={locked} onCheckedChange={() => change({ codeExecution: !agent.codeExecution })} /></label>}
+      {(browser || agent.runsHere) && <label className={ROW}><I icon={BrowserIcon} size={15} className="text-mute" />Browser<span className="ml-auto flex items-center gap-2">
+        {agent.browser && agent.canEdit && <a className="text-[12px] text-body underline-offset-2 hover:underline" href={agentPath({ agentId: agent.id, dialog: 'browser' })}>Open</a>}
+        <Switch checked={agent.browser} aria-label="Browser" disabled={!browser || !agent.canEdit || updateAgent.isPending} onCheckedChange={() => change({ browser: !agent.browser })} />
+      </span></label>}
+      {!browser && agent.runsHere && <span className="px-2.5 pb-1 text-[12px]/[16px] text-mute">Install Google Chrome on this computer, then turn Browser on.</span>}
     </div>
+    {agent.browser && agent.canEdit && !watching && <BrowserPreview agent={agent} />}
   </div>
 }
 
