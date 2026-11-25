@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { ArrowRight01Icon, Search01Icon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
-import { PROVIDERS, modelKey, type Provider, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
+import { PROVIDERS, modelKey, providerInfo, type Provider, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
 import { buttonVariants } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuEmpty, DropdownMenuFilter, DropdownMenuInput, DropdownMenuItem, DropdownMenuList, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Glyph } from '@/components/glyph'
@@ -87,7 +87,7 @@ function ProviderMenu({ provider, value, onPick }: { provider: Provider; value: 
 function ModelRow({ provider, model, selected, onClick }: { provider: Provider; model: ProviderModel; selected: boolean; onClick: () => void }) {
   const side = provider.kind === 'key' ? prices(model) : model.note
   return <DropdownMenuItem label={`${model.name} ${model.id}`} title={model.id} onClick={onClick}>
-    <Glyph name={glyphOf({ provider, model })} size={16} />
+    <Glyph name={glyphOf({ provider: provider.id, model: model.id })} size={16} />
     <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{model.name}</span>
     {side && <span className="shrink-0 text-[12px] text-mute tabular-nums">{side}</span>}
     <span className="grid w-3.5 shrink-0 place-items-center">{selected && <I icon={Tick02Icon} size={14} className="text-ink" />}</span>
@@ -102,8 +102,8 @@ export function ModelValue({ providers, value, none, known }: { providers: Provi
     <I icon={UnfoldMoreIcon} size={12} className="text-mute" />
   </>
   return <>
-    <span className="grid w-3.5 shrink-0 place-items-center"><Glyph name={split.provider} size={14} /></span>
-    <span className="min-w-0 flex-1 truncate text-left">{model?.name ?? known ?? split.model}</span>
+    <span className="grid w-3.5 shrink-0 place-items-center"><Glyph name={glyphOf(split)} size={14} /></span>
+    <span className="min-w-0 flex-1 truncate text-left">{model?.name ?? known ?? split.model} <span className="text-mute">· {providerInfo(split.provider).short}</span></span>
     <I icon={UnfoldMoreIcon} size={12} className="text-mute" />
   </>
 }

@@ -57,10 +57,11 @@ test('prices keep two significant digits under a dollar and drop trailing zeros'
   assert.equal(prices(model('x')), '')
 })
 
-test('an OpenRouter model shows its lab\'s logo; other providers show their own', () => {
-  const router = provider('openrouter', [])
-  assert.equal(glyphOf({ provider: router, model: model('anthropic/claude-opus-5.5') }), 'anthropic')
-  assert.equal(glyphOf({ provider: router, model: model('x-ai/grok-4.7') }), 'xai')
-  assert.equal(glyphOf({ provider: router, model: model('someone/new-model') }), 'openrouter')
-  assert.equal(glyphOf({ provider: provider('claude', [], 'subscription'), model: model('opus') }), 'claude')
+test('a model shows its maker\'s logo, whichever provider runs it', () => {
+  const ids = ['deepseek/deepseek-v4.1-flash', 'openai/gpt-6-luna', 'google/gemini-4-neon', 'x-ai/grok-4.7', 'anthropic/claude-opus-5.5', 'z-ai/glm-5.3-flash']
+  assert.deepEqual(ids.map((model) => glyphOf({ provider: 'openrouter', model })), ['deepseek', 'openai', 'gemini', 'xai', 'anthropic', 'zai'])
+  assert.equal(glyphOf({ provider: 'claude', model: 'opus' }), 'anthropic')
+  assert.equal(glyphOf({ provider: 'codex', model: 'gpt-5.5' }), 'openai')
+  assert.equal(glyphOf({ provider: 'xai', model: 'grok-4.7' }), 'xai')
+  assert.equal(glyphOf({ provider: 'openrouter', model: 'someone/new-model' }), 'openrouter')
 })
