@@ -1,4 +1,5 @@
 import { Delete02Icon, FingerPrintIcon, Key01Icon, LifebuoyIcon, Logout03Icon } from '@hugeicons/core-free-icons'
+import { REMOTE } from '@/lib/remote'
 import type { Cloud, CloudWorkspaceView, DeviceRequest } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
@@ -66,7 +67,7 @@ function KitDialog() {
   </Guide>
 }
 
-export const SIGN_OUT_DETAIL = 'Your agents, chats and connections are deleted from this computer. They’re backed up, and come back when you sign in again.'
+export const SIGN_OUT_DETAIL = REMOTE ? 'This browser forgets your account. Your agents and chats stay on your computer.' : 'Your agents, chats and connections are deleted from this computer. They’re backed up, and come back when you sign in again.'
 
 function SignOut() {
   const signOut = useSignOut()

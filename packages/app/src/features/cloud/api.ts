@@ -6,6 +6,7 @@ import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
 import { desktop } from '@/lib/desktop'
+import { REMOTE, remote } from '@/lib/remote'
 
 const CLOUD_KEY = ['cloud']
 const SIGN_IN_KEY = ['cloud-sign-in']
@@ -166,7 +167,13 @@ export function useCancelSignIn() {
 export function useSignOut({ stay = false }: { stay?: boolean } = {}) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: () => request({ schema: Cloud, computer: 'local', path: '/api/cloud/session', method: 'DELETE' }),
+    // A browser or phone signs only itself out; the computer's own session stays (its runtime refuses a remote sign-out).
+    mutationFn: async () => {
+      if (!REMOTE) return request({ schema: Cloud, computer: 'local', path: '/api/cloud/session', method: 'DELETE' })
+      await remote.signOut()
+      location.assign('/')
+      return new Promise<never>(() => undefined)
+    },
     onSuccess: (cloud) => {
       client.setQueryData(CLOUD_KEY, cloud)
       if (!stay) navigate('/', true)
