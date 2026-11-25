@@ -80,6 +80,7 @@ jobs:
           OPENHUT_MODEL=test OPENHUT_CLIENT_KEY_SHA256=$(printf %s "$KEY" | sha256sum | cut -c1-64) sh dist/install.sh
           echo "Installed in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
           docker ps --format '{{.Names}} {{.Image}} {{.Status}}'
+          [ "$(docker inspect -f '{{.State.Running}}' openhut-updater)" = true ] || { echo "::error::the updater isn't running"; docker logs openhut-updater; exit 1; }
       - name: One agent in gVisor answers a chat
         run: scripts/image-smoke.sh "$KEY"
       - name: A release whose /health fails is rolled back
@@ -175,3 +176,4 @@ jobs:
           path: |
             dist/runtime-image.txt
             dist/image.json
+            dist/install.sh
