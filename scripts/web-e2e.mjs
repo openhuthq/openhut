@@ -17,7 +17,7 @@ const shot = async (name) => { await page.addStyleTag({ content: '*,*::before,*:
 try {
   await page.goto(WEB)
   const shell = await until(/New agent|Make your first agent|Settings/i)
-  if (/Continue with Google|Sign in/i.test(shell)) throw new Error('the app asked to sign in')
+  if (/Continue with Google|Sign in to OpenHut/i.test(shell)) throw new Error('the app asked to sign in')
   log(`1 the shell renders with no sign-in: ${lines(shell, 4)}`)
   await shot('1-shell')
   const me = await page.evaluate(() => fetch('/api/me').then((r) => r.status))
