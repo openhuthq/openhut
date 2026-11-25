@@ -24,6 +24,7 @@ export type Upstream = {
   credential: (agent: GatewayAgent, incoming: IncomingHttpHeaders) => Promise<string>
   apply: (req: { out: Outgoing; secret: string }) => void
   observe?: (headers: Headers) => void
+  body?: (json: Record<string, unknown>) => Record<string, unknown>
 }
 
 export type Outgoing = { path: string; headers: Headers }
@@ -68,7 +69,8 @@ export const brokerService = {
     }
     const out = { path, headers: forwardable(req.headers) }
     upstream.apply({ out, secret: await upstream.credential(agent, req.headers) })
-    const status = await relay({ url: new URL(upstream.origin + out.path), method, headers: out.headers, req, res, idleMs, observe: upstream.observe })
+    const body = upstream.body && method === 'POST' ? await rewritten({ req, headers: out.headers, change: upstream.body }) : req
+    const status = await relay({ url: new URL(upstream.origin + out.path), method, headers: out.headers, body, res, idleMs, observe: upstream.observe })
       .catch(async (err: unknown) => {
         await audit({ agent, tool, reason: messageOf(err).slice(0, 200), outcome: 'failed', started })
         throw err
@@ -77,7 +79,18 @@ export const brokerService = {
   },
 }
 
-function relay({ url, method, headers, req, res, idleMs, observe }: { url: URL; method: string; headers: Headers; req: IncomingMessage; res: ServerResponse; idleMs: number; observe?: (headers: Headers) => void }): Promise<number> {
+async function rewritten({ req, headers, change }: { req: IncomingMessage; headers: Headers; change: (json: Record<string, unknown>) => Record<string, unknown> }): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) chunks.push(chunk as Buffer)
+  let json: unknown
+  try { json = JSON.parse(Buffer.concat(chunks).toString('utf8')) } catch { throw new HttpError(400, 'The gateway needs a JSON body here.') }
+  if (!json || typeof json !== 'object' || Array.isArray(json)) throw new HttpError(400, 'The gateway needs a JSON body here.')
+  const out = Buffer.from(JSON.stringify(change(json as Record<string, unknown>)))
+  headers.set('content-length', String(out.length))
+  return out
+}
+
+function relay({ url, method, headers, body, res, idleMs, observe }: { url: URL; method: string; headers: Headers; body: IncomingMessage | Buffer; res: ServerResponse; idleMs: number; observe?: (headers: Headers) => void }): Promise<number> {
   return new Promise((resolve, reject) => {
     const outgoing = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, { method, headers: Object.fromEntries(headers) }, (answer) => {
       const status = answer.statusCode ?? 502
@@ -88,7 +101,8 @@ function relay({ url, method, headers, req, res, idleMs, observe }: { url: URL; 
     outgoing.setTimeout(idleMs, () => outgoing.destroy(new HttpError(504, `The upstream sent nothing for ${idleMs / 1000} seconds.`)))
     outgoing.on('error', (err) => reject(res.headersSent ? err : new HttpError(err instanceof HttpError ? err.status : 502, err instanceof HttpError ? err.message : `The upstream didn't answer (${err.message}).`)))
     res.on('close', () => { if (!res.writableFinished) outgoing.destroy() })
-    pipeline(req, outgoing).catch(() => outgoing.destroy())
+    if (Buffer.isBuffer(body)) outgoing.end(body)
+    else pipeline(body, outgoing).catch(() => outgoing.destroy())
   })
 }
 
