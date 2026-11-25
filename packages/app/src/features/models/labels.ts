@@ -6,7 +6,7 @@ const LABS: Record<string, BrandName> = { anthropic: 'anthropic', openai: 'opena
 export const labOf = (model: ProviderModel) => model.id.includes('/') ? model.id.slice(0, model.id.indexOf('/')) : ''
 
 export function glyphOf({ provider, model }: { provider: Provider; model: ProviderModel }): BrandName {
-  return provider.id === 'openrouter' ? LABS[labOf(model)] ?? 'openrouter' : provider.id
+  return provider.id === 'openrouter' || provider.id === 'openhut' ? LABS[labOf(model)] ?? provider.id : provider.id
 }
 
 export function money(value: number) {
