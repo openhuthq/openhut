@@ -28,6 +28,7 @@ await db.insertInto('agent').values([
   { id: 'ag_chatstop', name: 'Sleeper', owner_id: 'usr_chatownr', instructions: '# Sleeper', model: 'sonnet', net: 22, channel_key: seal('k'.repeat(48)), workspace: WS },
 ]).execute()
 
+const lost = new Set<string>()
 const seen: { auth?: string; session?: string; body?: { stream: boolean; messages: { role: string; content: unknown }[] } } = {}
 const hermes = createServer((req, res) => {
   let raw = ''
@@ -43,6 +44,7 @@ const hermes = createServer((req, res) => {
     ]).execute()
     if (seen.body?.messages.at(-1)?.content === 'cloud dies') await fake.offline(true)
     res.writeHead(200, { 'content-type': 'text/event-stream' })
+    if (lost.has(seen.session)) return res.end(`data: ${JSON.stringify({ error: { message: 'unknown_execution', code: 'unknown_execution' } })}\n\n`)
     if (seen.body?.messages.at(-1)?.content === 'model down') return res.end(`data: ${JSON.stringify({ error: { message: 'HTTP 401: Claude Code is installed but has no usable login' } })}\n\n`)
     const chunk = (content: string) => `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content } }] })}\n\n`
     if (seen.body?.messages.at(-1)?.content === 'card') return res.end(`${['Deploy is ready.\n\n```spec\n{"op":"add","path":"/root","value":"c"}\n', '{"op":"add","path":"/elements/c","value":{"type":"Card","props":{"title":"Deploy"}}}\n', '```\n\nApprove?'].map(chunk).join('')}data: [DONE]\n\n`)
@@ -112,6 +114,22 @@ test('an agent has one conversation, and Hermes keeps its history: a turn sends 
   assert.deepEqual(seen.body?.messages.slice(1), [{ role: 'user', content: 'Second' }])
   const saved = (await app.inject({ method: 'GET', url: `/api/threads/${thread.id}`, headers: as() })).json()
   assert.deepEqual(saved.messages.map((message: { role: string }) => message.role), ['user', 'assistant', 'user', 'assistant'])
+})
+
+test('a Hermes session that lost a turn (its gateway was killed mid-turn) moves the chat to a fresh, seeded session', async () => {
+  const thread = { id: 'ag_chatrunn' }
+  const old = `openhut-${(await messagesOf(thread.id))[0].id}`
+  lost.add(old)
+  const res = await say(thread.id, 'Still there?')
+  assert.match(res.body, /214 orders\./)
+  assert.doesNotMatch(res.body, /unknown_execution/)
+  const fresh = seen.session
+  assert.match(String(fresh), new RegExp(`^${old}\\.`))
+  assert.match(JSON.stringify(seen.body?.messages.at(-1)), /Earlier in this chat/)
+  await say(thread.id, 'And now?')
+  assert.equal(seen.session, fresh)
+  assert.deepEqual(seen.body?.messages.slice(1), [{ role: 'user', content: 'And now?' }])
+  lost.clear()
 })
 
 test('threads need the enrolled key, and a stopped agent says so before anything is sent', async () => {
