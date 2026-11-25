@@ -1,7 +1,9 @@
 import { webKey, type Tunnel, type TunnelSocket } from '@openhut/common/tunnel/index.ts'
 import { ComputersOffline, openhutCloud } from '@openhut/common/cloud/openhut-cloud.ts'
 import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
-import { toBase64 } from '@openhut/common/vault/public.ts'
+import { commitOfWeb } from '@openhut/common/cloud/faces-web.ts'
+import type { PasskeyAssertion } from '@openhut/common/cloud/v1/trust.ts'
+import { fromBase64, toBase64 } from '@openhut/common/vault/public.ts'
 import type { Channel } from '@/lib/live-socket'
 import { inviteOf } from '../features/join/invite.ts'
 import { accountStepOf, continueCodeOf, lastSeenOf, Offline } from './web-first-run.ts'
@@ -22,7 +24,7 @@ export class CloudOffline extends Error {
 type Pair = { publicKey: CryptoKey; privateKey: CryptoKey }
 type Keys = { signing: Pair; tunnel: Pair }
 export type Invited = { workspace: string; team: string | null; from: string | null; email: string | null }
-export type RemoteState = { step: 'setup' } | { step: 'signed-out'; invited: Invited | null } | { step: 'first-run'; email: string } | { step: 'continuing'; email: string } | { step: 'waiting'; email: string; faces: number[]; invited: Invited | null } | { step: 'over'; email: string; missed: boolean; workspace: string } | { step: 'ready'; email: string; workspace: string; teammate: boolean }
+export type RemoteState = { step: 'setup' } | { step: 'signed-out'; invited: Invited | null } | { step: 'first-run'; email: string } | { step: 'continuing'; email: string } | { step: 'waiting'; email: string; faces: number[]; invited: Invited | null; workspace: string } | { step: 'over'; email: string; missed: boolean; workspace: string } | { step: 'ready'; email: string; workspace: string; teammate: boolean }
 
 let tunnel: Tunnel | undefined
 let target: { team: string; computer?: string } | undefined
@@ -170,12 +172,13 @@ export const remote = {
     if (!await store.get<string | null>('nonce')) await remote.knock(workspace)
     const state = await cloud.knock({ team: workspace, nonce: await store.get<string>('nonce') ?? '' }).state()
     if (state.step === 'approved') return ready()
-    return state.step === 'waiting' ? { step: 'waiting', email: me.email, faces: state.faces, invited } : { step: 'over', email: me.email, missed: state.missed, workspace }
+    return state.step === 'waiting' ? { step: 'waiting', email: me.email, faces: state.faces, invited, workspace } : { step: 'over', email: me.email, missed: state.missed, workspace }
   },
 
-  async knock(workspace: string): Promise<void> {
+  async knock(workspace: string, touchId = false): Promise<void> {
     const nonce = toBase64(crypto.getRandomValues(new Uint8Array(32)))
-    await cloud.knock({ team: workspace, nonce }).ask({ name: browserName(), os: 'web' })
+    const passkey = touchId ? await assertion(await commitOfWeb({ device: await key.id(), nonce })) : undefined
+    await cloud.knock({ team: workspace, nonce }).ask({ name: browserName(), os: 'web', passkey })
     await store.set('nonce', nonce)
   },
 
@@ -216,4 +219,12 @@ function browserName(): string {
   const ua = navigator.userAgent
   const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser'
   return `${browser} (web)`
+}
+
+// Touch ID signs this knock's commit, so the computer can let this browser in without faces.
+async function assertion(challenge: string): Promise<PasskeyAssertion> {
+  const got = await navigator.credentials.get({ publicKey: { challenge: fromBase64(challenge), rpId: location.hostname, userVerification: 'required' } })
+  if (!(got instanceof PublicKeyCredential) || !(got.response instanceof AuthenticatorAssertionResponse)) throw new Error('Touch ID didn’t answer. Try again, or tap the faces on your computer.')
+  const bytes = (buffer: ArrayBuffer) => toBase64(new Uint8Array(buffer))
+  return { clientData: bytes(got.response.clientDataJSON), authenticatorData: bytes(got.response.authenticatorData), signature: bytes(got.response.signature) }
 }

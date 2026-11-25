@@ -2,6 +2,7 @@ import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
 import { type Cloud, type DeviceRequest, parseJson, siteHost } from '@openhut/common/cloud/cloud.ts'
 import { Forwarded, Notice, Ready } from '@openhut/common/cloud/v1/events.ts'
+import type { JoinRequest } from '@openhut/common/cloud/v1/trust.ts'
 import { commitOf, facesOf } from '@openhut/common/cloud/faces.ts'
 import { anchorOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
 import type { MemberListBody } from '@openhut/common/cloud/cloud.ts'
@@ -42,6 +43,7 @@ let ready = false
 let timer: NodeJS.Timeout | undefined
 let queue: Promise<void> = Promise.resolve()
 let rotate: ((ws: string) => Promise<void>) | undefined
+let touched: ((ws: string, asked: JoinRequest) => Promise<void>) | undefined
 const names = new Map<string, { name: string | null; site: string | null }>()
 const requests = new Map<string, DeviceRequest[]>()
 const beats = new Map<string, Map<string, Beat>>()
@@ -110,6 +112,10 @@ export const cloudEvents = {
 
   onDropped(listener: (ws: string) => Promise<void>): void {
     rotate = listener
+  },
+
+  onTouchId(listener: (ws: string, asked: JoinRequest) => Promise<void>): void {
+    touched = listener
   },
 
   name: (ws: string): string => names.get(ws)?.name ?? defaultName(ws),
@@ -280,6 +286,7 @@ async function refreshRequests(ws: string): Promise<void> {
   const asked = await cloud.team(ws).requests()
   requests.set(ws, asked.filter((each) => each.asked).map((each) => ({ device: each.id, email: each.email, at: each.at, name: each.name, os: each.os, server: each.server, checked: Boolean(each.commit), reviewed: each.reviewed, faces: each.commit && each.nonce && commitOf({ device: each.id, nonce: each.nonce }) === each.commit ? facesOf({ device: each.id, nonce: each.nonce }) : null, location: each.location, newCountry: each.newCountry })))
   if (JSON.stringify(requests.get(ws)) !== before) emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
+  for (const each of asked) if (each.asked && each.passkey) void touched?.(ws, each)
 }
 
 async function checkRemoved(): Promise<void> {

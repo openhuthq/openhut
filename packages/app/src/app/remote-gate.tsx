@@ -23,6 +23,7 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   const client = useQueryClient()
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState<string>()
+  const [touching, setTouching] = useState(false)
   const state = useQuery({ queryKey: ['remote'], queryFn: remote.state, refetchInterval: (query) => query.state.data?.step === 'setup' ? SETUP_MS : POLLED.includes(query.state.data?.step ?? '') || query.state.error instanceof CloudOffline ? WAIT_MS : false, retry: false })
   const workspace = state.data?.step === 'ready' ? state.data.workspace : undefined
   const opened = useQuery({ queryKey: ['remote-tunnel', workspace], queryFn: async () => { await remote.open(workspace ?? ''); return true }, enabled: !!workspace, retry: false, staleTime: Infinity, refetchInterval: (query) => query.state.error instanceof Away || query.state.error instanceof CloudOffline ? OFFLINE_MS : false })
@@ -59,8 +60,15 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   if (screen === 'offline' && opened.error instanceof Away) return <Offline computer={opened.error.computer} seen={opened.error.seen} />
   if (state.data?.step === 'continuing') return <Stage><EntryScreen mood="happy" title="Opening OpenHut…" line="This takes a few seconds." waiting="Opening" /></Stage>
   if (state.data?.step === 'waiting' && invited) return <Stage><Knocking faces={state.data.faces} line={`Tell ${host} these two. ${host} taps them on their computer.`} foot={otherAccount} /></Stage>
-  if (state.data?.step === 'waiting') return <Stage><Knocking faces={state.data.faces}
-    action={<a href="openhut://open" className={cn(buttonVariants({ variant: 'text' }), INK)}>Open OpenHut</a>} foot={otherAccount} /></Stage>
+  const waiting = state.data?.step === 'waiting' ? state.data : undefined
+  if (waiting) return <Stage><Knocking faces={waiting.faces}
+    action={<a href="openhut://open" className={cn(buttonVariants({ variant: 'text' }), INK)}>Open OpenHut</a>} foot={otherAccount}>
+    {'PublicKeyCredential' in window && <Button type="button" variant="secondary" disabled={touching} onClick={() => {
+      setTouching(true)
+      remote.knock(waiting.workspace, true).then(() => state.refetch(), (err: Error) => err.name === 'NotAllowedError' || setError(err.message)).finally(() => setTouching(false))
+    }}>Unlock with Touch ID</Button>}
+    {failure && <ErrorNote message={failure} />}
+  </Knocking></Stage>
   const over = state.data?.step === 'over' ? state.data : undefined
   if (over) return <Stage><EntryScreen mood="worried" title={over.missed ? 'Those faces didn’t match.' : 'Nobody let you in.'} line={over.missed ? 'The request was turned down. If that was you, knock again.' : 'The knock was turned down, or 15 minutes passed.'} foot={otherAccount}
     action={<Button variant="primary" className={BIG} onClick={() => remote.knock(over.workspace).then(() => state.refetch(), (err: Error) => setError(err.message))}>Knock again</Button>}>{failure && <ErrorNote message={failure} />}</EntryScreen></Stage>

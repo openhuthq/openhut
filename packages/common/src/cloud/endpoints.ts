@@ -48,7 +48,7 @@ export const SignInStarted = z.object({ object: z.literal('sign_in'), url: z.str
 export type SignInStarted = z.infer<typeof SignInStarted>
 
 export const PutJoinRequest = z.union([
-  z.object({ ...AskAdmin.shape, server: CreateJoinRequest.shape.server, commit: CreateJoinRequest.shape.commit }),
+  z.object({ ...AskAdmin.shape, server: CreateJoinRequest.shape.server, commit: CreateJoinRequest.shape.commit, passkey: CreateJoinRequest.shape.passkey }),
   z.object({ nonce: CreateJoinRequest.shape.commit.def.innerType }),
   z.object({ reviewed: z.literal(true) }),
 ])

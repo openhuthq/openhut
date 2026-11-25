@@ -1,5 +1,6 @@
 const { app, BrowserWindow } = require('electron')
 const { writeFileSync } = require('node:fs')
+const { generateKeyPairSync } = require('node:crypto')
 const OUT = process.env.OUT ?? require('node:os').tmpdir()
 const WEB = process.env.WEB ?? 'http://localhost:5190/'
 const RUNTIME = process.env.RUNTIME ?? 'http://127.0.0.1:8798'
@@ -45,6 +46,7 @@ app.whenReady().then(async () => {
     log(`8 the invited teammate is in, no owner step: ${inTeam.split('\n').filter(Boolean).slice(0, 3).join(' / ')}`)
     await sleep(800)
     writeFileSync(`${OUT}/w1-teammate-in.png`, (await ana.webContents.capturePage()).toPNG())
+    await touchIdBrowser()
     log('PASS')
   } catch (error) {
     log(`FAIL ${error.message}`)
@@ -54,6 +56,39 @@ app.whenReady().then(async () => {
   }
   app.exit(process.exitCode ?? 0)
 })
+
+// W3: End-to-end encryption on, browser B unlocks with Touch ID (a virtual authenticator holds the passkey, as iCloud Keychain would), no other device.
+async function touchIdBrowser() {
+  const b = new BrowserWindow({ width: 1280, height: 820, show: false, webPreferences: { partition: `touch-${Date.now()}`, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } })
+  const run = (code) => b.webContents.executeJavaScript(code)
+  const bUntil = async (pattern, ms = 45000) => { for (const end = Date.now() + ms; Date.now() < end; await sleep(300)) { const t = await run('document.body.innerText').catch(() => ''); if (pattern.test(t)) return t } throw new Error(`browser B never saw ${pattern}; the page says: ${(await run('document.body.innerText').catch(() => '')).slice(0, 300)}`) }
+  const passkey = generateKeyPairSync('ec', { namedCurve: 'P-256' })
+  const json = { method: 'POST', headers: { 'content-type': 'application/json' } }
+  await api('/api/cloud/encryption/keys', { method: 'POST' })
+  await api('/api/cloud/encryption/passkeys', { ...json, body: JSON.stringify({ id: 'touch-id', publicKey: passkey.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url') }) })
+  const on = await (await api('/api/cloud/encryption', { ...json, body: JSON.stringify({ on: true }) })).json()
+  if (on.encryption !== true) throw new Error(`turning End-to-end encryption on answered ${JSON.stringify(on).slice(0, 300)}`)
+  log('9 the Mac turns End-to-end encryption on, with Touch ID')
+  await b.loadURL(WEB)
+  await bUntil(/Continue with Google/)
+  await run(`[...document.querySelectorAll('button')].find((b) => b.innerText.includes('Continue with Google')).click()`)
+  await bUntil(/Sign in \(dev only\)/)
+  await run(`[...document.querySelectorAll('a')].find((a) => a.innerText.trim() === 'mo@example.com').click()`)
+  log(`10 browser B signs in and knocks: ${(await bUntil(/Unlock with Touch ID/)).split('\n').filter(Boolean).slice(0, 3).join(' / ')}`)
+  writeFileSync(`${OUT}/w3-knock.png`, (await b.webContents.capturePage()).toPNG())
+  const cdp = b.webContents.debugger
+  cdp.attach('1.3')
+  await cdp.sendCommand('WebAuthn.enable', { enableUI: false })
+  const { authenticatorId } = await cdp.sendCommand('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } })
+  await cdp.sendCommand('WebAuthn.addCredential', { authenticatorId, credential: { credentialId: Buffer.from('touch-id').toString('base64'), isResidentCredential: true, rpId: new URL(WEB).hostname, userHandle: Buffer.from('mo').toString('base64'), privateKey: passkey.privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64'), signCount: 0 } })
+  // Electron has no passkey picker, so stand in for it: pick the one passkey (a browser's picker does this when the App asks with no list).
+  await run(`const get = navigator.credentials.get.bind(navigator.credentials); navigator.credentials.get = (asked) => get({ publicKey: { ...asked.publicKey, allowCredentials: [{ type: 'public-key', id: new TextEncoder().encode('touch-id') }] } }); true`)
+  await run(`[...document.querySelectorAll('button')].find((b) => b.innerText.includes('Unlock with Touch ID')).click()`)
+  const inside = await bUntil(/Make your first agent|New agent|\nApps\n/)
+  log(`11 browser B is in with Touch ID, no faces and no other device: ${inside.split('\n').filter(Boolean).slice(0, 4).join(' / ')}`)
+  await sleep(800)
+  writeFileSync(`${OUT}/w3-touch-id-in.png`, (await b.webContents.capturePage()).toPNG())
+}
 
 // A fresh runtime (CI) signs the Mac in to the dev cloud as mo@example.com and saves its kit, as dev-cloud.mjs signIn does through a page.
 function api(path, init) {

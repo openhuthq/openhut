@@ -11,7 +11,7 @@ import { bodyOf } from './member-list.ts'
 import { recordsClient, type RecordsOptions } from './records.ts'
 import type { Kind } from './rules.ts'
 import { Credits, JoinCode, JoinedCode, KeyBox, Me, proofOf, requestParts, Session, SIGNATURE_HEADER, type NamedKeyBox, type V1Proof } from './v1/identity.ts'
-import { JoinRequest, type NewLetter, type PostMemberList } from './v1/trust.ts'
+import { JoinRequest, type NewLetter, type PasskeyAssertion, type PostMemberList } from './v1/trust.ts'
 
 export type Store = {
   get: <T>(key: string) => Promise<T | undefined>
@@ -28,7 +28,7 @@ export type SignIn = { google: { returnTo: string; state?: string } } | { google
 export type Redirect = { object: 'redirect'; url: string }
 export type SignedIn = Me & { maker?: string }
 export type KnockState = { step: 'approved' } | { step: 'waiting'; faces: number[] } | { step: 'over'; missed: boolean }
-export type Knock = { team: string; reveal: () => Promise<boolean>; ask: (input: { name: string; os: string; server?: boolean }) => Promise<JoinRequest>; mine: () => Promise<JoinRequest | undefined>; state: () => Promise<KnockState>; cancel: () => Promise<void> }
+export type Knock = { team: string; reveal: () => Promise<boolean>; ask: (input: { name: string; os: string; server?: boolean; passkey?: PasskeyAssertion }) => Promise<JoinRequest>; mine: () => Promise<JoinRequest | undefined>; state: () => Promise<KnockState>; cancel: () => Promise<void> }
 export type Watch = { send: (input: { type: 'presence' | 'beat'; workspace: string; body: string }) => void; close: () => void }
 export type WatchSocket = { send: (text: string) => void; close: () => void; addEventListener: (type: 'open' | 'message', listener: (event: { data?: unknown }) => void) => void }
 
@@ -223,9 +223,9 @@ function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net:
         team,
         mine,
         reveal,
-        async ask({ name, os, server = false }) {
+        async ask({ name, os, server = false, passkey }) {
           const me = await key.id()
-          return net.ok({ name: 'putRecord', params: { team, kind: 'join-request', id: me }, body: { name, os, server, commit: await commitOfWeb({ device: me, nonce }) }, reply: JoinRequest })
+          return net.ok({ name: 'putRecord', params: { team, kind: 'join-request', id: me }, body: { name, os, server, commit: await commitOfWeb({ device: me, nonce }), passkey }, reply: JoinRequest })
         },
         async state() {
           const me = await net.ok({ name: 'me', reply: Me })

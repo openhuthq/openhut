@@ -1,10 +1,9 @@
 import { concat, equal, fromBase64, sha256, subtle } from '../vault/public.ts'
-
-export type Assertion = { clientData: string; authenticatorData: string; signature: string }
+import type { PasskeyAssertion } from './v1/trust.ts'
 
 const USER_VERIFIED = 0x04
 
-export async function checkPasskey({ publicKey, assertion, challenge, origin }: { publicKey: string; assertion: Assertion; challenge: string; origin: string }): Promise<boolean> {
+export async function checkPasskey({ publicKey, assertion, challenge, origin }: { publicKey: string; assertion: PasskeyAssertion; challenge: string; origin: string }): Promise<boolean> {
   const clientBytes = fromBase64(assertion.clientData)
   const auth = fromBase64(assertion.authenticatorData)
   const client = parsed(new TextDecoder().decode(clientBytes))

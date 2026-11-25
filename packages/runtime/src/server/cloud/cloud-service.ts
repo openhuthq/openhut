@@ -1,9 +1,11 @@
 import { randomBytes } from 'node:crypto'
 import type { FastifyReply } from 'fastify'
 import * as z from 'zod/mini'
-import { type Backup, KeyBox, type Letter, type MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type SetEncryption, type EncryptionPasskey, type UnlockCloud, type CreateWebLink, type WebLink, faceName, KNOCK_MS, siteHost } from '@openhut/common/cloud/cloud.ts'
+import { type Backup, KeyBox, type Letter, type MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type SetEncryption, EncryptionPasskey, type UnlockCloud, type CreateWebLink, type WebLink, faceName, KNOCK_MS, parseJson, siteHost } from '@openhut/common/cloud/cloud.ts'
 import type { Health } from '@openhut/common/admin/admin.ts'
 import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
+import type { JoinRequest } from '@openhut/common/cloud/v1/trust.ts'
+import { checkPasskey } from '@openhut/common/cloud/passkey.ts'
 import { facesOf } from '@openhut/common/cloud/faces.ts'
 import { addedOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64, newKey, toBase64 } from '@openhut/common/vault/public.ts'
@@ -48,6 +50,7 @@ let asking: { settled: string[]; approved: boolean; error: string | null; timer:
 let polling = false
 let joinError: string | null = null
 let prepared: { key: string; kit: string; passkey?: EncryptionPasskey } | undefined
+const touching = new Set<string>()
 const requestedOs = new Map<string, string>()
 const invited = new Map<string, string>()
 const Rotate = z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() }))
@@ -460,6 +463,7 @@ async function change({ ws, emails, devices, rotate = false }: { ws: string; ema
 }
 
 cloudEvents.onDropped((ws) => serial(() => rotateTeam(ws)).catch((err: unknown) => log.warn({ event: 'cloud.rotate_failed', workspace: ws, error: messageOf(err) })))
+cloudEvents.onTouchId((ws, asked) => touchedIn({ ws, asked }).catch((err: unknown) => log.warn({ event: 'cloud.touch_id_failed', workspace: ws, error: messageOf(err) })))
 
 async function rotateTeam(ws: string): Promise<void> {
   await caughtUp({
@@ -566,6 +570,23 @@ async function saveKit(box: string, savedAt = Date.now()): Promise<void> {
   await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString() })
   cloudHasKit = true
   await confirmKit({ account: signer, body: box, savedAt }).catch(warnCheck)
+}
+
+// End-to-end encryption on: your own new browser that signs its knock with the setup's Touch ID passkey is let in without faces; anything else waits for faces.
+async function touchedIn({ ws, asked }: { ws: string; asked: JoinRequest }): Promise<void> {
+  if (!asked.passkey || !asked.commit || asked.os !== 'web' || asked.server || touching.has(asked.id)) return
+  if (!encryptionOn() || !roomKeys.isOwn(ws) || asked.email !== keysService.account()?.email) return
+  const row = await db.selectFrom('install_setting').select('value').where('name', '=', PASSKEY).executeTakeFirst()
+  const passkey = EncryptionPasskey.safeParse(parseJson(row?.value ?? 'null')).data
+  if (!passkey || !await checkPasskey({ publicKey: passkey.publicKey, assertion: asked.passkey, challenge: asked.commit, origin: config.webUrl })) return
+  touching.add(asked.id)
+  try {
+    const list = await keysService.addDevice({ device: asked.id, name: asked.name, runtime: false })
+    if (list) await putList({ workspace: ws, list })
+    log.info({ event: 'cloud.touch_id_let_in', workspace: ws })
+  } finally {
+    touching.delete(asked.id)
+  }
 }
 
 function encryptionOn(): boolean {

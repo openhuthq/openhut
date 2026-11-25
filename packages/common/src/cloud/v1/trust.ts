@@ -1,6 +1,6 @@
 import * as z from 'zod/mini'
 import { Timestamp } from '../../api.ts'
-import { AskAdmin, DeviceKey, Letter, Locked, MemberList, NewInvite } from '../cloud.ts'
+import { AskAdmin, Base64, DeviceKey, Letter, Locked, MemberList, NewInvite } from '../cloud.ts'
 import { Email, NamedKeyBox, WorkspaceId } from './identity.ts'
 import { LETTER_PURPOSES } from '../../vault/public.ts'
 
@@ -21,7 +21,10 @@ export const CreateInvite = z.object({ workspace: WorkspaceId, ...NewInvite.shap
 export type CreateInvite = z.infer<typeof CreateInvite>
 
 const Nonce = z.string().check(z.regex(/^[\w-]{43}$/))
-export const CreateJoinRequest = z.object({ workspace: WorkspaceId, ...AskAdmin.shape, server: z._default(z.boolean(), false), commit: z.optional(Nonce) })
+const Part = Base64.check(z.maxLength(4096))
+export const PasskeyAssertion = z.object({ clientData: Part, authenticatorData: Part, signature: Part })
+export type PasskeyAssertion = z.infer<typeof PasskeyAssertion>
+export const CreateJoinRequest = z.object({ workspace: WorkspaceId, ...AskAdmin.shape, server: z._default(z.boolean(), false), commit: z.optional(Nonce), passkey: z.optional(PasskeyAssertion) })
 export type CreateJoinRequest = z.infer<typeof CreateJoinRequest>
 export const JoinRequest = z.object({
   id: DeviceKey,
@@ -35,6 +38,7 @@ export const JoinRequest = z.object({
   at: Timestamp,
   commit: z._default(z.nullable(z.string()), null),
   nonce: z._default(z.nullable(z.string()), null),
+  passkey: z._default(z.nullable(PasskeyAssertion), null),
   reviewed: z._default(z.boolean(), false),
   missed: z._default(z.boolean(), false),
   location: z._default(z.nullable(z.object({ city: z.nullable(z.string()), country: z.string(), countryCode: z.string() })), null),
