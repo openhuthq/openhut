@@ -14,12 +14,12 @@ import { useWorkspaces } from '@/features/cloud/workspaces'
 import { useComputers } from '@/features/computers/api'
 import { useStartSeatSignIn } from '@/features/settings/api'
 import { ModelsStep, SeatSignIn, stepOf } from '@/features/settings/models'
-import { DEFAULT_MODEL, defaultComputer, firstModel } from '@/features/agents/form'
+import { DEFAULT_MODEL, defaultComputer, firstModel, ONLY_YOU } from '@/features/agents/form'
 import { ComputerPicker } from '@/features/computers/computer-picker'
 import { useComputerProviders } from '@/features/models/api'
 import { ModelPicker, SOFT_TRIGGER } from '@/features/models/model-picker'
 import { FacePicker } from '@/features/agents/face-picker'
-import { AccessPicker, type AccessValue } from '@/features/agents/access'
+import { AccessPicker } from '@/features/agents/access'
 import { formValues } from '@/lib/form'
 import { TOUCH, useMedia } from '@/lib/media'
 import { navigate, open, useOpen } from '@/lib/router'
@@ -48,7 +48,7 @@ export function FirstAgent() {
 function AgentForm() {
   const createAgent = useCreateAgent()
   const { active, email } = useWorkspaces()
-  const [access, setAccess] = useState<AccessValue>({ shared: false, people: [], sidebars: [] })
+  const [access, setAccess] = useState(ONLY_YOU)
   const touch = useMedia(TOUCH)
   const { computers, cloud } = useRunsOn()
   const startCloud = useStartCloud()

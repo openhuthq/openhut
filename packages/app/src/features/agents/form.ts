@@ -38,3 +38,11 @@ export function previewOf({ owner, people }: { owner: string; people: readonly s
   const text = `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
   return { faces, text, label: text }
 }
+
+export type AccessValue = { shared: boolean; people: string[]; sidebars: string[] }
+
+export const ONLY_YOU: AccessValue = { shared: false, people: [], sidebars: [] }
+
+export const withWholeTeam = (value: AccessValue, on: boolean): AccessValue => ({ ...value, shared: on, sidebars: [] })
+
+export const accessLabel = ({ value, owner, team }: { value: AccessValue; owner: string; team: string }) => value.shared ? `Everyone on ${team}` : previewOf({ owner, people: value.people }).label
