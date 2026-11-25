@@ -80,7 +80,6 @@ const WINDOW_STATE = join(HOME, 'window.json')
 const PREFS = join(HOME, 'prefs.json')
 const SECRET = join(HOME, 'secret.bin')
 const PENDING_INVITE = join(HOME, 'invite')
-const HANDOFF = join(DATA, 'app', 'secret.handoff')
 const LOCAL = { name: MAC ? 'This Mac' : 'This computer' }
 const EDGE_INSTALL_URL = 'https://openhut.dev/edge'
 const INSTALL_URL = process.env.OPENHUT_INSTALL_URL || bakedInstallUrl()
@@ -637,7 +636,6 @@ async function rootSecret() {
     appendFileSync(join(LOGS, 'server.log'), 'openhut: no system keychain (Keychain, libsecret or KWallet) is available, so the root secret stays in the database\n')
     return
   }
-  if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   if (!existsSync(SECRET)) await keepSecret(randomBytes(32).toString('hex'))
   serverEnv.OPENHUT_SECRET = (await safeStorage.decryptStringAsync(readFileSync(SECRET))).result
 }
@@ -645,7 +643,6 @@ async function rootSecret() {
 async function keepSecret(hex) {
   writeFileSync(SECRET, await safeStorage.encryptStringAsync(hex), { mode: 0o600 })
   serverEnv.OPENHUT_SECRET = hex
-  rmSync(HANDOFF, { force: true })
 }
 
 async function boot() {
@@ -662,7 +659,6 @@ async function boot() {
   serverEnv.PORT = String(await signInCallbacks())
   start('server', Object.assign(serverEnv, { ...shared, OPENHUT_SANDBOX: process.env.OPENHUT_SANDBOX ?? 'native', AGENTD_DATA: DATA, AGENTD_ASSETS: ASSETS, AGENTD_HERMES: RUNTIME, OPENHUT_DATA: join(DATA, 'app'), OPENHUT_SOCKET: SERVER_SOCK, OPENHUT_APP_SCHEME: SCHEME, OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_AGENT_HOST_NET: '1' }))
   if (!await waitFor(() => listening(SERVER_SOCK), 60)) return false
-  if (existsSync(HANDOFF)) await keepSecret(readFileSync(HANDOFF, 'utf8').trim())
   return true
 }
 

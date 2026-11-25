@@ -32,7 +32,7 @@ export const Admin = z.object({
   }),
   publicKey: z.string(),
   relay: z.optional(z.object({ key: z.string(), computerId: z.string(), url: z.nullable(z.string()) })),
-  features: z.optional(z.object({ whatsapp: z.boolean(), browser: z.boolean() })),
+  features: z.optional(z.object({ whatsapp: z.boolean(), browser: z.boolean(), cloud: z.optional(z.boolean()) })),
   minAppVersion: z.optional(z.string()),
 })
 export type Admin = z.infer<typeof Admin>

@@ -17,7 +17,7 @@ import { Face } from '@/features/agents/face'
 import { Busy, DialogCard, HINT, I, PILL, SetupSheet, Section, Status } from '@/components/kit'
 import { Check, CardTitle, ListNote, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { useCodexSignIn, useConnectProvider, useDisconnectProvider, useFoundNotice, useProviders, useRefreshProvider, useSetModel } from '@/features/models/api'
-import { consequence, count, describe, matches, plural, updatedAgo } from '@/features/models/labels'
+import { consequence, count, describe, glyphOf, matches, plural, updatedAgo } from '@/features/models/labels'
 import { inUse } from '@/features/agents/form'
 import { open, Redirect, useOpen } from '@/lib/router'
 import { formValues } from '@/lib/form'
@@ -206,7 +206,7 @@ function Manage({ provider, notice, clearNotice }: { provider: Provider; notice:
 const ModelRow = memo(function ModelRow({ provider, model, onSwitch }: { provider: Provider; model: ProviderModel; onSwitch: (model: string, on: boolean) => void }) {
   const note = describe({ provider, model })
   const id = provider.id === 'openrouter' ? <><span className="font-mono">{model.id}</span>{note && ' · '}</> : null
-  return <Row icon={<Glyph name={provider.id} size={16} />} title={model.name} note={<>{id}{note}</>}>
+  return <Row icon={<Glyph name={glyphOf({ provider: provider.id, model: model.id })} size={16} />} title={model.name} note={<>{id}{note}</>}>
     <Switch checked={model.on} aria-label={model.name} onCheckedChange={(on) => onSwitch(model.id, on)} />
   </Row>
 }, (a, b) => a.model === b.model && a.provider.id === b.provider.id && a.onSwitch === b.onSwitch)

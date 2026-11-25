@@ -181,6 +181,8 @@ export const remote = {
 
   joinCode: (): Promise<JoinCode> => cloud.firstComputerCode(),
 
+  startCloud: () => cloud.startCloud(),
+
   async open(workspace: string): Promise<void> {
     const computer = desktop?.window ? await store.get<string>('computer') : undefined
     target = { team: workspace, ...computer && { computer } }
