@@ -35,7 +35,7 @@ import { toast, toastError, toastInfo } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
 import { desktop } from '@/lib/desktop'
 import { isBrowser } from '@/lib/computers'
-import { remote } from '@/lib/remote'
+import { remote, REMOTE } from '@/lib/remote'
 import { iconOf } from '@/features/computers/computer-picker'
 import { cn } from '@/lib/utils'
 import { useAnswer } from '@/features/cloud/review'
@@ -196,7 +196,7 @@ function TailscaleStep() {
   const recheck = () => void tailnet.refetch()
   const data = tailnet.data
   const add = (peer: Peer) => { void start({ name: peer.name, dns: peer.dns } satisfies TailnetPeer); open(`adding:${peer.name}`) }
-  return <Step title="Add over Tailscale" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}>
+  return <Step title="Add over Tailscale" back={<Button type="button" variant="secondary" data-back onClick={() => open('add')}>Back</Button>}>
     {!data && <Scene mood="looking" title="Looking for your computers…" />}
     {data?.state === 'missing' && <Empty title="Install Tailscale" line="OpenHut uses it to find your other computers.">
       <a href={GET_TAILSCALE} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Get Tailscale</a>
@@ -263,7 +263,7 @@ function TurnOnSsh({ name }: { name: string }) {
   const tailnet = useTailnet({ poll: true })
   const peer = tailnet.data?.state === 'running' ? tailnet.data.peers.find((each) => each.name === name) : undefined
   useEffect(() => { if (peer?.ssh) open('tailscale') }, [peer?.ssh])
-  return <Step title="Turn on Tailscale SSH" back={<Button type="button" variant="secondary" onClick={() => open('tailscale')}>Back</Button>}>
+  return <Step title="Turn on Tailscale SSH" back={<Button type="button" variant="secondary" data-back onClick={() => open('tailscale')}>Back</Button>}>
     <div className="flex items-center gap-4 px-2.5">
       <Hut mood="key" className="size-[72px]" />
       <p className="m-0 flex-1 text-body">Run this once on {name}. OpenHut installs itself over Tailscale SSH, so it needs to be on.</p>
@@ -334,9 +334,9 @@ function AddByCommand() {
   const { requests, home } = mineOf(useCloud().data)
   const asked = home && code.data ? requests.filter((each) => each.server).at(-1) : undefined
   const expired = !asked && code.data && now > Date.parse(code.data.expiresAt)
-  return <Step title="Add over OpenHut Relay" back={<Button type="button" variant="secondary" onClick={() => open('add')}>Back</Button>}
+  return <Step title="Add over OpenHut Relay" back={<Button type="button" variant="secondary" data-back onClick={() => open('add')}>Back</Button>}
     foot={expired && <Button type="button" variant="primary" onClick={() => mutate()}>Make a new command</Button>}>
-    <ErrorNote message={code.error?.message} />
+    {code.error && REMOTE ? <Scene mood="looking" title="Add it from the OpenHut app" line={code.error.message} /> : <ErrorNote message={code.error?.message} />}
     {code.isPending && <Waiting note="It works once, for 10 minutes.">Making a code…</Waiting>}
     {expired && <Scene mood="worried" title="This command expired" line="Make a new one and run it on your server." />}
     {asked && home && <>

@@ -36,3 +36,8 @@ test('a dialog family is one Dialog: moving between its views never closes and r
   assert.equal(computers.match(/<Dialog\b/g)?.length, 1, 'Add a computer steps share one Dialog')
   assert.ok(computers.indexOf('<Dialog') < computers.indexOf('function ComputerList'), 'ComputersSettings owns the Dialog, not each step')
 })
+
+test('a Back button inside a dialog carries data-back, so Esc steps back one view instead of closing the dialog', () => {
+  const unmarked = screens().flatMap(({ file, source }) => [...source.matchAll(/<Button\b(?:(?!<Button\b)[^\n])*?>Back<\/Button>/g)].filter((match) => !match[0].includes('data-back')).map(() => file))
+  assert.deepEqual(unmarked, [])
+})
