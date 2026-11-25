@@ -25,6 +25,7 @@ export const config = {
   webUrl: (process.env.OPENHUT_WEB_URL || 'https://app.openhut.dev').replace(/\/$/, ''),
   socket: process.env.OPENHUT_SOCKET ?? join(DATA, 'openhut.sock'),
   installKind: installKindOf(process.env.OPENHUT_SOCKET ? 'desktop' : 'server'),
+  cloudComputer: process.env.OPENHUT_CLOUD === '1', // a Cloud computer (Boat VM): sends busy/idle so the Cloud can pause it
   personal: Boolean(process.env.OPENHUT_SOCKET) || process.env.OPENHUT_PERSONAL === '1',
   clientKeySha256: process.env.OPENHUT_CLIENT_KEY_SHA256,
   modelMode: TEST_MODEL ? 'test' as const : 'claude' as const,

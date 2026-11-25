@@ -180,8 +180,29 @@ jobs:
           name: web-e2e
           path: ${{ runner.temp }}/web-e2e
 
+  boat-boot:
+    # C1: openhut-boot against a local signed feed (bad signature refused, unhealthy pack falls back), then snapshot.sh and
+    # openhut.service in a systemd container, the fresh Boat VM stand-in (c1-boot.txt). The real Boat VM check runs at Rollout.
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: install/boat/boot.test.ts
+        run: OPENHUT_BOOT_CONTAINER=1 OPENHUT_BOOT_OUT=$RUNNER_TEMP node --test --test-concurrency=1 install/boat/boot.test.ts && cat $RUNNER_TEMP/c1-boot.txt | tee -a "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c1-boot
+          path: ${{ runner.temp }}/c1-boot.txt
+          if-no-files-found: ignore
+
   gate:
-    needs: [changes, checks, private, server, app, browser]
+    needs: [changes, checks, private, server, app, browser, boat-boot]
     if: always()
     runs-on: ubuntu-latest
     steps:
