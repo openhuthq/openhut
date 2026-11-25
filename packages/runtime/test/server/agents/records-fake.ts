@@ -1,7 +1,6 @@
 import * as z from 'zod/mini'
-import type { Secret } from '@openhut/common/records/lease.ts'
 import { HttpError } from '../../../src/server/platform/http-error.ts'
-import { changed, idOf, keyOf, recordsService, type Held, type PutRecord } from '../../../src/server/cloud/records.ts'
+import { changed, idOf, keyOf, recordsService, type Held, type PutRecord, type Secret } from '../../../src/server/platform/records.ts'
 
 export type FakeRecords = ReturnType<typeof useFakeRecords>
 type Write = Omit<PutRecord, 'collection' | 'id' | 'parent'> & { collection: Held['collection']; id: string; parent?: string; deleted?: boolean }

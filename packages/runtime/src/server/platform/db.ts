@@ -15,7 +15,7 @@ export const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite: aw
 
 await sql`create table if not exists install_setting (name text primary key, value text not null)`.execute(db)
 
-export async function findRow<T extends 'agent' | 'channel' | 'connection_grant' | 'thread'>({ table, id, missing }: { table: T; id: string; missing: string }): Promise<Selectable<Database[T]>> {
+export async function findRow<T extends 'agent' | 'channel' | 'connection_grant'>({ table, id, missing }: { table: T; id: string; missing: string }): Promise<Selectable<Database[T]>> {
   const [row] = ID.test(id) ? (await sql<Selectable<Database[T]>>`select * from ${sql.table(table)} where id = ${id}`.execute(db)).rows : []
   if (!row) throw new HttpError(404, missing)
   return row
@@ -36,7 +36,7 @@ export async function migrate(): Promise<void> {
     code_execution boolean not null default true, web_browser boolean not null default false, face text,
     size text not null default 'standard' check (size in ('standard', 'large', 'xlarge')), token_epoch integer not null default 0,
     fallback_model text, helper_models text not null default '{}', runs_on text, changed_by text, workspace text,
-    shared boolean not null default false, owner text, people text not null default '[]', owner_proof text)`.execute(db)
+    shared boolean not null default false, owner text, people text not null default '[]')`.execute(db)
   await sql`create table if not exists channel (
     id text primary key, agent_id text not null references agent(id) on delete cascade,
     kind text not null check (kind in (${sql.join(ChannelKind.options.map((kind) => sql.lit(kind)))})),
@@ -54,19 +54,16 @@ export async function migrate(): Promise<void> {
     reason text not null, outcome text not null check (outcome in ('allowed', 'denied', 'failed')), ms integer not null)`.execute(db)
   await sql`create index if not exists connection_event_by_connection on connection_event (connection_id, id desc)`.execute(db)
   await sql`create index if not exists connection_event_by_agent on connection_event (agent_id, id desc)`.execute(db)
-  await sql`create table if not exists thread (
-    id text primary key, agent_id text not null references agent(id) on delete cascade, person_id text not null references person(id) on delete cascade,
-    title text not null, messages text not null default '[]', created_at timestamptz not null default now(), updated_at timestamptz not null default now())`.execute(db)
-  await sql`create index if not exists thread_by_person on thread (person_id, updated_at desc)`.execute(db)
   await sql`create table if not exists routine (
     id text primary key, agent_id text not null references agent(id) on delete cascade, name text not null, plan text not null,
     at timestamptz, cron text, until timestamptz, origin text not null, next_run_at timestamptz, created_at timestamptz not null default now(),
     run_id text, run_status text check (run_status in ('open', 'told', 'quiet', 'failed')), run_picked_at timestamptz, run_at timestamptz, run_text text,
     failures integer not null default 0)`.execute(db)
   await sql`create index if not exists routine_due on routine (next_run_at) where next_run_at is not null`.execute(db)
-  await sql`create table if not exists record_held (id text primary key, ver integer not null, parent text)`.execute(db)
-  await sql`create table if not exists record_outbox (
-    seq bigserial primary key, id text unique not null, collection text not null, workspace text not null, parent text, body text not null, deleted boolean not null default false)`.execute(db)
+  await sql`create table if not exists record (
+    key text primary key, collection text not null, id text not null, workspace text not null, parent text, ver integer not null,
+    value text not null, secret text, personal boolean not null default false, deleted boolean not null default false)`.execute(db)
+  await sql`create index if not exists record_by_parent on record (collection, workspace, parent)`.execute(db)
   await sql`create table if not exists change_request (
     id text primary key, agent_id text not null references agent(id) on delete cascade, action text not null, input text not null, summary text not null,
     why text not null, origin text not null, status text not null default 'pending' check (status in ('pending', 'approved', 'denied')), note text,

@@ -1,6 +1,5 @@
 import type { Selectable } from 'kysely'
-import { AgentRecord, ControlRecord, canUse, inSidebar, type Access, type Agent, type CreateAgent, type AgentHealth, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
-import { viewersOf } from '@openhut/common/cloud/member-list.ts'
+import { AgentRecord, ControlRecord, inSidebar, type Access, type Agent, type CreateAgent, type AgentHealth, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import type { Deleted } from '@openhut/common/api.ts'
 import { splitModelKey } from '@openhut/common/models/provider.ts'
 import { db, findRow } from '../platform/db.ts'
@@ -15,17 +14,15 @@ import { log, emit } from '../platform/events.ts'
 import { liveService } from '../platform/live-service.ts'
 import { deleted } from '../platform/responses.ts'
 import { connectionService } from '../connections/connection-service.ts'
-import { peopleOf, type Caller } from '../team/identity.ts'
+import type { Caller } from '../team/identity.ts'
 import { audienceOf } from '../channels/audience.ts'
 import { DiscordSecrets } from '../integrations/discord/discord.ts'
 import { resolveSlots } from '../models/model-slots.ts'
 import { providerService } from '../models/provider-service.ts'
 import { renderFiles, type RenderedChannel } from './hermes-files.ts'
-import { keysService } from '../cloud/keys-service.ts'
-import { roomKeys } from '../cloud/room-keys.ts'
-import { recordsService, type Held } from '../cloud/records.ts'
-import { cloudEvents } from '../cloud/cloud-events.ts'
-import { runSet } from '../cloud/run-set.ts'
+import { recordsService, type Held } from '../platform/records.ts'
+import { HERE, HOME } from '../team/home.ts'
+import { runSet } from './run-set.ts'
 
 const RECONCILE_MS = 30_000
 const HEALTH_MS = 5_000
@@ -41,7 +38,7 @@ const held = new Map<string, boolean>()
 export const agentService = {
   async list({ actor }: { actor: Caller }): Promise<Agent[]> {
     const [all, states] = await Promise.all([everything(), containerStates()])
-    return Promise.all(visibleTo({ actor, all }).map((facts) => agentOf({ facts, actor, states })))
+    return Promise.all(all.map((facts) => agentOf({ facts, actor, states })))
   },
 
   async get({ actor, id }: { actor: Caller; id: string }): Promise<Agent> {
@@ -51,16 +48,10 @@ export const agentService = {
 
   async find({ id }: { id: string }): Promise<AgentFacts> {
     const row = await db.selectFrom('agent').selectAll().where('id', '=', id).executeTakeFirst()
-    const home = keysService.account()?.workspace.id
-    const first = row ? row.workspace ?? home : undefined
-    const spaces = [...new Set([first, ...workspaces()].filter((ws): ws is string => !!ws))]
-    for (const workspace of spaces) {
-      const agent = await recordsService.get({ collection: 'agent', workspace, id })
-      if (!agent || agent.deleted) continue
-      const control = await recordsService.get({ collection: 'control', workspace, id })
-      const facts = factsOf({ agent, control, row })
-      if (facts) return facts
-    }
+    const agent = await recordsService.get({ collection: 'agent', workspace: HOME, id })
+    const control = agent && await recordsService.get({ collection: 'control', workspace: HOME, id })
+    const facts = agent && factsOf({ agent, control, row })
+    if (facts) return facts
     throw new HttpError(404, 'That agent doesn\'t exist. It may have been deleted.')
   },
 
@@ -74,15 +65,15 @@ export const agentService = {
   async create({ actor, name, instructions, model, face, workspace, shared = false, people = [], sidebars = [] }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'face' | 'workspace' | 'shared' | 'people' | 'sidebars'>): Promise<Agent> {
     const clean = cleanName(name)
     requireModel(model)
-    const ws = workspace ?? keysService.signedIn().workspace.id
-    if (!roomKeys.room(ws)) throw new HttpError(400, 'This computer isn’t in that team.', { param: 'workspace' })
+    if (workspace && workspace !== HOME) throw new HttpError(400, 'This install has one team.', { param: 'workspace' })
+    const ws = HOME
     const health = await agentd.health()
     if (health.imageReady === false) throw new HttpError(409, 'OpenHut is still downloading what agents need to run. This happens once and takes a few minutes. Try again shortly.')
-    const access = teamOnly({ workspace: ws, owner: actor.email, people, sidebars })
+    const access = teamOnly({ owner: actor.email, people, sidebars })
     const id = newId('ag')
     const value: AgentRecord = { name: clean, instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000), face: face ?? null, wanted: 'stopped', createdAt: new Date().toISOString() }
     await recordsService.put({ collection: 'agent', id, workspace: ws, parent: actor.email, personal: !shared, value })
-    const control: ControlRecord = { runsOn: await keysService.deviceKey(), model: model ?? DEFAULT_MODEL, codeExecution: true, browser: !!health.features?.browser, grants: [], ...access }
+    const control: ControlRecord = { runsOn: HERE, model: model ?? DEFAULT_MODEL, codeExecution: true, browser: !!health.features?.browser, grants: [], ...access }
     await recordsService.put({ collection: 'control', parent: id, workspace: ws, personal: !shared, value: control })
     await runSet.apply({ workspace: ws, id })
     emit({ name: 'agent.created', actor, target: { type: 'agent', id, name: clean, model: control.model } })
@@ -96,12 +87,12 @@ export const agentService = {
     if (controls && facts.owner !== actor.email) throw new HttpError(403, `Only ${facts.owner} can change where ${facts.value.name} runs, its model, what it can run, or who can use it.`, { param: Object.keys(patch)[0] })
     if (!controls && !mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} can change ${facts.value.name}. You can chat with it.`)
     requireModel(model === facts.control?.model ? undefined : model)
-    const me = await keysService.deviceKey()
+    const me = HERE
     const target = runsHere ? me : runsOn ?? facts.control?.runsOn ?? me
     if (target !== facts.control?.runsOn) requireRunner({ facts, runsOn: target, me })
     if (browser && target === me && !(await features()).browser) throw new HttpError(409, config.installKind === 'server' ? 'This computer can\'t give agents a browser. Run the agent on a Linux computer you added to use one.' : 'Install Google Chrome on this computer, then turn Browser on.', { param: 'browser' })
     const personal = shared === undefined ? facts.personal : !shared
-    const access = people || sidebars ? teamOnly({ workspace: facts.workspace, owner: facts.owner, people: people ?? facts.control?.people ?? [], sidebars: sidebars ?? facts.control?.sidebars ?? [] }) : {}
+    const access = people || sidebars ? teamOnly({ owner: facts.owner, people: people ?? facts.control?.people ?? [], sidebars: sidebars ?? facts.control?.sidebars ?? [] }) : {}
     const resealed = personal !== facts.personal
     const name = fields.name === undefined ? undefined : cleanName(fields.name)
     if (Object.keys(fields).length || resealed) {
@@ -120,8 +111,7 @@ export const agentService = {
 
   async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'agent'>> {
     const facts = await agentService.find({ id })
-    const role = roomKeys.roleIn(facts.workspace)
-    if (facts.owner !== actor.email && (role === 'member' || role === undefined)) throw new HttpError(403, `Only ${facts.value.name}'s owner or an admin of this team can delete it.`)
+    if (facts.owner !== actor.email) throw new HttpError(403, `Only ${facts.value.name}'s owner or an admin of this team can delete it.`)
     const children = (await Promise.all(CHILDREN.map((collection) => recordsService.list({ collection, workspace: facts.workspace, parent: id })))).flat()
     for (const child of [...children, { collection: 'memory' as const, id }, { collection: 'control' as const, id }]) {
       await recordsService.remove({ collection: child.collection, workspace: facts.workspace, id: child.id }).catch((err: unknown) => log.warn({ event: 'agent.child_not_removed', agent: id, error: messageOf(err) }))
@@ -164,10 +154,9 @@ export const agentService = {
   },
 
   async statuses({ workspace }: { workspace: string }): Promise<Record<string, { status: AgentStatus; health: AgentHealth | null; detail?: string }>> {
-    const home = keysService.account()?.workspace.id
     const rows = await db.selectFrom('agent').selectAll().execute()
     const states = await containerStates()
-    const mine = rows.filter((row) => (row.workspace ?? home) === workspace)
+    const mine = rows.filter((row) => (row.workspace ?? HOME) === workspace)
     return Object.fromEntries(await Promise.all(mine.map(async (row) => {
       const { health, detail } = await healthOf({ row, state: states?.[row.id] })
       return [row.id, { status: statusOf(states?.[row.id]), health: health === 'setup_failed' ? 'not_answering' : health, ...detail && { detail } }] as const
@@ -224,7 +213,7 @@ export const agentService = {
     return failed
   },
 
-  // Just booted (a woken Cloud computer): its agents are still coming up, so a message waits for them instead of failing.
+  // Just booted: its agents are still coming up, so a message waits for them instead of failing.
   booting: (): boolean => Date.now() - bootedAt < STARTING_MS,
 
   async boot(): Promise<void> {
@@ -238,7 +227,7 @@ export const agentService = {
 }
 
 export function mayEdit({ facts, actor }: { facts: AgentFacts; actor: Caller }): boolean {
-  return facts.owner === actor.email || roomKeys.members(facts.workspace)?.members.find((member) => member.email === actor.email)?.role === 'owner'
+  return facts.owner === actor.email
 }
 
 function modelNameOf(key: string): string | null {
@@ -247,7 +236,7 @@ function modelNameOf(key: string): string | null {
 }
 
 export function placeOf(row: Pick<AgentRow, 'workspace' | 'shared'>): { workspace: string; personal: boolean } {
-  return { workspace: row.workspace ?? keysService.signedIn().workspace.id, personal: !row.shared }
+  return { workspace: row.workspace ?? HOME, personal: !row.shared }
 }
 
 async function requireOwner({ actor, id }: { actor: Caller; id: string }): Promise<AgentFacts> {
@@ -257,7 +246,7 @@ async function requireOwner({ actor, id }: { actor: Caller; id: string }): Promi
 }
 
 async function editControl({ facts, personal = facts.personal, change }: { facts: AgentFacts; personal?: boolean; change: (value: ControlRecord) => ControlRecord }): Promise<void> {
-  if (!facts.control) throw new HttpError(409, `${facts.value.name}'s settings haven't arrived from OpenHut Cloud yet. Try again in a moment.`)
+  if (!facts.control) throw new HttpError(409, `${facts.value.name}'s settings aren't saved yet. Try again in a moment.`)
   await recordsService.put({ collection: 'control', parent: facts.id, workspace: facts.workspace, personal, value: change(facts.control), reapply: (latest) => ({ value: change(ControlRecord.parse(latest.value)) }) })
 }
 
@@ -269,47 +258,27 @@ async function reseal({ facts, personal }: { facts: AgentFacts; personal: boolea
 }
 
 function requireRunner({ facts, runsOn, me }: { facts: AgentFacts; runsOn: string; me: string }): void {
-  const list = roomKeys.members(facts.workspace)
-  const ok = runsOn === me || (!!list && !viewersOf(list).includes(runsOn) && !list.removed.includes(runsOn) && list.members.some((member) => member.email === facts.owner && member.kit !== runsOn && member.devices.includes(runsOn)))
-  if (!ok) throw new HttpError(400, `${facts.value.name} can only run on one of ${facts.owner}'s own computers.`, { param: 'runsOn' })
-}
-
-export function visibleTo<T extends Pick<AgentFacts, 'personal' | 'workspace' | 'owner' | 'control'>>({ actor, all }: { actor: Pick<Caller, 'teammate' | 'email'>; all: T[] }): T[] {
-  const { teammate } = actor
-  return teammate ? all.filter((facts) => teammate.includes(facts.workspace) && canUse(accessOf(facts), actor.email)) : all
+  if (runsOn !== me) throw new HttpError(400, `${facts.value.name} can only run on this computer.`, { param: 'runsOn' })
 }
 
 function accessOf(facts: Pick<AgentFacts, 'personal' | 'owner' | 'control'>): Access {
   return { owner: facts.owner, shared: !facts.personal, people: facts.control?.people ?? [], sidebars: facts.control?.sidebars ?? [] }
 }
 
-function teamOnly({ workspace, owner, people, sidebars }: { workspace: string; owner: string; people: string[]; sidebars: string[] }): { people: string[]; sidebars: string[] } {
-  const members = new Set(roomKeys.members(workspace)?.members.map((member) => member.email))
+function teamOnly({ owner, people, sidebars }: { owner: string; people: string[]; sidebars: string[] }): { people: string[]; sidebars: string[] } {
+  const members = new Set([owner])
   const clean = (emails: string[]) => [...new Set(emails.map((email) => email.toLowerCase()))].filter((email) => email !== owner)
   const outside = [...clean(people), ...clean(sidebars)].find((email) => !members.has(email))
   if (outside) throw new HttpError(400, `${outside} isn’t on this team yet. Invite them first.`, { param: 'people' })
   return { people: clean(people), sidebars: clean(sidebars) }
 }
 
-function workspaces(): string[] {
-  return keysService.account() ? roomKeys.rooms().map((room) => room.workspace.id) : []
-}
-
 async function everything(): Promise<AgentFacts[]> {
-  const rows = await db.selectFrom('agent').selectAll().orderBy('created_at').execute()
+  const rows = await db.selectFrom('agent').selectAll().execute()
   const byId = new Map(rows.map((row) => [row.id, row]))
-  try {
-    const found = await Promise.all(workspaces().map(async (workspace) => {
-      const [agents, controls] = await Promise.all([recordsService.list({ collection: 'agent', workspace }), recordsService.list({ collection: 'control', workspace })])
-      const control = new Map(controls.map((each) => [each.id, each]))
-      return agents.flatMap((agent) => factsOf({ agent, control: control.get(agent.id) ?? null, row: byId.get(agent.id) }) ?? [])
-    }))
-    return found.flat().sort((a, b) => a.value.createdAt.localeCompare(b.value.createdAt))
-  } catch (error) {
-    if (!(error instanceof HttpError) || error.status !== 502) throw error
-    const me = await keysService.deviceKey()
-    return rows.map((row) => heldFacts({ row, me }))
-  }
+  const [agents, controls] = await Promise.all([recordsService.list({ collection: 'agent', workspace: HOME }), recordsService.list({ collection: 'control', workspace: HOME })])
+  const control = new Map(controls.map((each) => [each.id, each]))
+  return agents.flatMap((agent) => factsOf({ agent, control: control.get(agent.id) ?? null, row: byId.get(agent.id) }) ?? []).sort((a, b) => a.value.createdAt.localeCompare(b.value.createdAt))
 }
 
 function factsOf({ agent, control, row }: { agent: Held; control: Held | null; row: AgentRow | undefined }): AgentFacts | null {
@@ -318,31 +287,17 @@ function factsOf({ agent, control, row }: { agent: Held; control: Held | null; r
   return { id: agent.id, workspace: agent.workspace, owner: agent.parent, personal: !!agent.personal, by: agent.by, value, control: ControlRecord.safeParse(control?.value).data ?? null, row }
 }
 
-function heldFacts({ row, me }: { row: AgentRow; me: string }): AgentFacts {
-  const { workspace, personal } = placeOf(row)
-  return {
-    id: row.id, workspace, owner: row.owner ?? keysService.account()?.email ?? '', personal, by: null, row,
-    value: { name: row.name, instructions: row.instructions, face: row.face, wanted: row.wanted, createdAt: new Date(row.created_at).toISOString() },
-    control: { runsOn: row.runs_on ?? me, model: row.model, codeExecution: row.code_execution, browser: row.web_browser, grants: [], people: peopleOf(row.people), sidebars: [] },
-  }
-}
-
 async function agentOf({ facts, actor, states }: { facts: AgentFacts; actor: Caller; states: Record<string, string> | undefined }): Promise<Agent> {
-  const me = await keysService.deviceKey()
   const { value, control, row } = facts
-  const here = !!row && control?.runsOn === me
-  const list = roomKeys.members(facts.workspace)
-  const runner = list?.members.find((member) => control && member.devices.includes(control.runsOn))
-  const beat = control && !here ? cloudEvents.beats(facts.workspace).get(control.runsOn)?.agents?.[facts.id] : undefined
-  const health = here ? await healthOf({ row, state: states?.[facts.id] }) : { health: beat?.health ?? null, detail: beat?.detail ?? '' }
-  const author = facts.by ? list?.members.find((member) => member.devices.includes(facts.by ?? ''))?.email : undefined
+  const here = !!row && control?.runsOn === HERE
+  const health = here ? await healthOf({ row, state: states?.[facts.id] }) : { health: null, detail: '' }
   const mine = facts.owner === actor.email
   return {
     id: facts.id, object: 'agent', name: value.name, ownerId: facts.owner, ownerName: facts.owner, model: control?.model ?? DEFAULT_MODEL, modelName: modelNameOf(control?.model ?? DEFAULT_MODEL), wanted: value.wanted,
-    status: here ? statusOf(states?.[facts.id]) : beat?.status ?? 'missing', health: health.health, healthDetail: health.detail, summary: summaryOf(value.instructions), net: here ? row.net : 0,
+    status: here ? statusOf(states?.[facts.id]) : 'missing', health: health.health, healthDetail: health.detail, summary: summaryOf(value.instructions), net: here ? row.net : 0,
     instructions: value.instructions, codeExecution: control?.codeExecution ?? true, browser: control?.browser ?? false, face: value.face, canEdit: mayEdit({ facts, actor }),
-    runsHere: here, runsNowhere: !here && (!control || !runner || !!list?.removed.includes(control.runsOn)), runsOn: control?.runsOn ?? null, runsOnName: here || !control ? null : list?.names?.[control.runsOn] ?? (runner ? `${runner.email}’s computer` : null), runsOnServer: !!control && !!list?.runtimes?.includes(control.runsOn),
-    changedBy: author && author !== actor.email ? author : null, workspace: facts.workspace === keysService.account()?.workspace.id ? null : facts.workspace, shared: !facts.personal, people: facts.control?.people ?? [], sidebars: facts.control?.sidebars ?? [], inSidebar: inSidebar(accessOf(facts), actor.email), owner: facts.owner,
+    runsHere: here, runsNowhere: !here, runsOn: control?.runsOn ?? null, runsOnName: null, runsOnServer: false,
+    changedBy: null, workspace: null, shared: !facts.personal, people: facts.control?.people ?? [], sidebars: facts.control?.sidebars ?? [], inSidebar: inSidebar(accessOf(facts), actor.email), owner: facts.owner,
     canManage: mine, createdAt: value.createdAt,
   }
 }
@@ -392,7 +347,7 @@ async function filesOf(row: AgentRow): Promise<AgentFiles> {
   const channels = await db.selectFrom('channel').selectAll().where('agent_id', '=', row.id).orderBy('kind').execute()
   const slots = resolveSlots({ model: row.model, catalog: providerService.catalog })
   return renderFiles({
-    agent: { ...row, slots }, ownerName: row.owner ?? keysService.account()?.email ?? 'its owner', token: agentToken({ id: row.id, epoch: row.token_epoch }), channelKey: unseal(row.channel_key),
+    agent: { ...row, slots }, ownerName: row.owner ?? 'its owner', token: agentToken({ id: row.id, epoch: row.token_epoch }), channelKey: unseal(row.channel_key),
     channels: channels.filter((channel) => channel.kind !== 'telegram' || channel.status === 'connected').map(renderedChannel), connections: await connectionService.reachable({ agent: row }),
   })
 }

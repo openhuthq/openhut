@@ -1,16 +1,15 @@
 import * as z from 'zod/mini'
 import { Timestamp, atLeastOneField } from '../api.ts'
 
-export const ProviderId = z.enum(['openhut', 'claude', 'codex', 'openrouter', 'openai', 'xai'])
+export const ProviderId = z.enum(['claude', 'codex', 'openrouter', 'openai', 'xai'])
 export type ProviderId = z.infer<typeof ProviderId>
 
-export const ProviderKind = z.enum(['managed', 'subscription', 'key'])
+export const ProviderKind = z.enum(['subscription', 'key'])
 export type ProviderKind = z.infer<typeof ProviderKind>
 
 export const KEY_MESSAGE = 'That does not look like a key. Paste the whole thing.'
 
 export const PROVIDERS = [
-  { id: 'openhut', kind: 'managed', name: 'OpenHut', short: 'OpenHut', blurb: 'Popular models, paid from your credits', keysAt: null, keyHint: null },
   { id: 'claude', kind: 'subscription', name: 'Claude subscription', short: 'Claude', blurb: 'Pro or Max', keysAt: null, keyHint: null },
   { id: 'codex', kind: 'subscription', name: 'ChatGPT subscription', short: 'ChatGPT', blurb: 'Plus or Pro', keysAt: null, keyHint: null },
   { id: 'openrouter', kind: 'key', name: 'OpenRouter', short: 'OpenRouter', blurb: 'One key for hundreds of models', keysAt: 'openrouter.ai/keys', keyHint: 'sk-or-v1-…' },
@@ -22,7 +21,7 @@ export type ProviderInfo = (typeof PROVIDERS)[number]
 
 export const providerInfo = (id: ProviderId): ProviderInfo => PROVIDERS.find((each) => each.id === id) ?? PROVIDERS[0]
 
-export const ModelKey = z.string().check(z.regex(/^(openhut|claude|codex|openrouter|openai|xai):\S{1,200}$/, 'Use provider:model, like claude:sonnet.'))
+export const ModelKey = z.string().check(z.regex(/^(claude|codex|openrouter|openai|xai):\S{1,200}$/, 'Use provider:model, like claude:sonnet.'))
 export type ModelKey = z.infer<typeof ModelKey>
 
 export function splitModelKey(key: string): { provider: ProviderId; model: string } | undefined {

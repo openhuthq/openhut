@@ -20,7 +20,7 @@ import { askCard, MCP_AUTH } from '@openhut/common/asks/ask.ts'
 import { ConnectionKind } from '@openhut/common/connections/connection.ts'
 
 const PER_AGENT = 8
-// Background polls (Telegram's long poll, the plugin's routines poll every 15 s) aren't the agent at work, so they don't keep a Cloud computer awake.
+// Background polls (Telegram's long poll, the plugin's routines poll every 15 s) aren't the agent at work, so they don't count toward its request limit.
 const LONG_POLL = /^(\/u\/telegram\/bot[^/]+\/getUpdates|\/routines\/due)$/
 const MAX_BODY = 1 << 20
 const LIMITS = { requestTimeout: 60_000, headersTimeout: 10_000, connectionsCheckingInterval: 2_000 }

@@ -3,12 +3,11 @@ import assert from 'node:assert/strict'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
 import { agentService } from '../../../src/server/agents/agent-service.ts'
-import { recordsService } from '../../../src/server/cloud/records.ts'
-import { runSet } from '../../../src/server/cloud/run-set.ts'
-import { upgrade } from '../../../src/server/cloud/upgrade.ts'
+import { recordsService } from '../../../src/server/platform/records.ts'
+import { runSet } from '../../../src/server/agents/run-set.ts'
 import { HttpError } from '../../../src/server/platform/http-error.ts'
 import { settings } from '../../../src/server/platform/settings.ts'
-import { fakeAgentd, HOME, signIn } from './signed-in.ts'
+import { fakeAgentd, HOME, refresh, signIn } from './signed-in.ts'
 
 const agentd = fakeAgentd()
 await migrate()
@@ -17,7 +16,7 @@ await db.insertInto('agent').values({ id: 'ag_tokentst', name: 'Dev', owner_id: 
 await db.insertInto('channel').values({ id: 'ch_tokentst', agent_id: 'ag_tokentst', kind: 'telegram', status: 'connected', account: '@dev_bot', owner_address: '15550001111', open: false, allowed: '', secrets: seal(JSON.stringify({ botToken: '123:abc' })) }).execute()
 const { fake, device } = signIn({ email: 'tokenowner@example.com' })
 runSet.watch()
-await runSet.refresh()
+await refresh()
 const token = agentToken({ id: 'ag_tokentst', epoch: 0 })
 
 test('an agent\'s own token is the whole check, from any address; a forged one is refused', async () => {
@@ -76,16 +75,6 @@ test('a computer without agent-browser refuses the browser switch before changin
 const owner = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: true }
 const mate = { id: 'usr_teammate', email: 'teammate@example.com', local: false }
 
-test('the upgrade uploads what this computer runs once: the agent, its owner-signed control and its channels', async () => {
-  const agent = fake.rows.get('ag_tokentst')
-  assert.deepEqual([agent?.parent, agent?.personal, agent?.workspace], ['tokenowner@example.com', true, HOME])
-  const control = await recordsService.get({ collection: 'control', workspace: HOME, id: 'ag_tokentst' })
-  assert.deepEqual([control?.parent, (control?.value as { runsOn?: string })?.runsOn], ['ag_tokentst', device.me])
-  const channel = fake.rows.get('ch_tokentst')
-  assert.deepEqual([channel?.collection, channel?.parent, (channel?.secret as { botToken?: string })?.botToken], ['channel', 'ag_tokentst', '123:abc'])
-  assert.equal(await upgrade.done(), true)
-})
-
 test('a new agent is two records, runs here, and only its owner changes it, even shared: a teammate chats', async () => {
   const made = await agentService.create({ actor: owner, name: 'Juniper' })
   assert.deepEqual([made.runsHere, made.owner, made.shared], [true, 'tokenowner@example.com', false])
@@ -102,32 +91,6 @@ test('a new agent has Browser on when this computer can run one', async () => {
   agentd.features.browser = true
   assert.equal((await agentService.create({ actor: owner, name: 'Scout' })).browser, true)
   agentd.features.browser = false
-})
-
-test('changing runsOn stops the agent here; changing it back starts it again', async () => {
-  const made = await agentService.create({ actor: owner, name: 'Rover' })
-  const moved = await agentService.update({ actor: owner, id: made.id, patch: { runsOn: 'dev_srv' } })
-  assert.deepEqual([moved.runsHere, moved.status], [false, 'missing'])
-  assert.equal(await db.selectFrom('agent').select('id').where('id', '=', made.id).executeTakeFirst(), undefined)
-  assert.equal(agentd.applied.has(made.id), false)
-  const back = await recordsService.get({ collection: 'control', workspace: HOME, id: made.id })
-  fake.write({ collection: 'control', id: made.id, workspace: HOME, parent: made.id, personal: true, value: { ...back?.value as object, runsOn: device.me } })
-  for (let i = 0; i < 100 && !(await db.selectFrom('agent').select('id').where('id', '=', made.id).executeTakeFirst() && agentd.applied.has(made.id)); i++) await new Promise((resolve) => setTimeout(resolve, 10))
-  assert.ok(await db.selectFrom('agent').select('id').where('id', '=', made.id).executeTakeFirst(), 'the change notice brought it back')
-  assert.equal(agentd.applied.has(made.id), true)
-})
-
-test('offline, the agents still list and run from what this computer holds', async () => {
-  const list = recordsService.list
-  Object.assign(recordsService, { list: async () => { throw new HttpError(502, 'OpenHut Cloud didn’t answer.') } })
-  try {
-    await runSet.refresh().catch(() => undefined)
-    const names = (await agentService.list({ actor: owner })).map((agent) => agent.id)
-    assert.ok(names.includes('ag_tokentst'))
-    assert.ok(await db.selectFrom('agent').select('id').where('id', '=', 'ag_tokentst').executeTakeFirst())
-  } finally {
-    Object.assign(recordsService, { list })
-  }
 })
 
 test('a deleted agent leaves this computer and its records', async () => {

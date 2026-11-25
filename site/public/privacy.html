@@ -33,18 +33,12 @@ a{color:var(--ink)}
 <body><main>
 <p><a href="/">← OpenHut</a></p>
 <h1>Privacy</h1>
-<p class="date">Updated 23 November 2026</p>
-<p>OpenHut runs your agents on your own computers, and you sign in to OpenHut Cloud to use it. This page covers what reaches us.</p>
-<h2>OpenHut Cloud</h2>
-<p>We store your agents, chats, memory, connections and settings, encrypted on your device before they reach us. No one can read them, including us. An agent’s own files on the computer that runs it, like its browser logins, stay there.</p>
-<p>We can see your email, who is in each team, device names, how many records you store and how big they are, which agent each message belongs to, which device wrote it and when, and which computer runs each agent. We can’t see names, contents, which apps you connect or what each agent may use.</p>
-<p><b>Settings › Account › Delete account</b> in the app deletes what we store for you.</p>
-<h2>Google sign-in through OpenHut Cloud</h2>
-<p>You sign in to OpenHut with Google. We ask only for your email; we never see your Google password, and signing in doesn’t give us your mail or files.</p>
-<p>When you connect Gmail, Drive, Calendar or another Google app, your browser goes to Google and back through <code>cloud.openhut.dev/api</code>, which holds OpenHut’s Google app. It exchanges the one-time code and refreshes tokens on your computer’s behalf, then hands the tokens straight back. Your computer encrypts them before they’re stored in OpenHut Cloud, so we can’t read them, and calls Google directly; your Google data never passes through us.</p>
-<p>OpenHut’s use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements. We don’t use Google user data for advertising, sell it, or use it to train models.</p>
+<p class="date">Updated 25 November 2026</p>
+<p>OpenHut is self-hosted. It runs on your own server, and your agents, chats, memory, connections, keys and accounts stay there. None of it reaches us. This page covers what does.</p>
+<h2>Your own services</h2>
+<p>Models, Google, Telegram, Slack and WhatsApp use your own keys, OAuth client, bots and apps. Your server talks to them directly; nothing passes through us. Their own privacy terms apply.</p>
 <h2>Usage data</h2>
-<p>The app sends no usage events. We count sign-ups and active devices from sign-ins. The website counts page views and downloads without cookies.</p>
+<p>The app sends no usage events. This website counts page views and install script downloads without cookies.</p>
 <h2>Removing access</h2>
 <p>Delete a connection in OpenHut, or remove OpenHut from your Google account’s third-party access at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</p>
 <h2>Contact</h2>

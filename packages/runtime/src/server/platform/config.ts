@@ -22,23 +22,21 @@ export const config = {
   host: env.get('OPENHUT_HOST').default('127.0.0.1').asString(), // the address it listens on
   gatewayPort: GATEWAY_PORT,
   releaseUrl: env.get('OPENHUT_URL').default('https://openhut.dev').asString(), // where releases are downloaded from
-  apiUrl: env.get('OPENHUT_API_URL').default('https://cloud.openhut.dev/api').asString(), // the Cloud API
-  webUrl: env.get('OPENHUT_WEB_URL').default('https://app.openhut.dev').asString().replace(/\/$/, ''), // the web App
   socket: SOCKET ?? join(DATA, 'openhut.sock'),
   installKind: installKindOf(SOCKET ? 'desktop' : 'server'),
-  cloudComputer: env.get('OPENHUT_CLOUD').default('false').asBool(), // a Cloud computer (Boat VM): sends busy/idle so the Cloud can pause it
-  personal: Boolean(SOCKET) || env.get('OPENHUT_PERSONAL').default('false').asBool(), // one person's computer, not a team server
   clientKeySha256: env.get('OPENHUT_CLIENT_KEY_SHA256').asString(), // sha256 of the key a server's clients present
   modelMode: TEST_MODEL ? 'test' as const : 'claude' as const,
   agentApi: env.get('OPENHUT_AGENT_API').asString(), // overrides the agents' API address (tests)
   agentGateway: HOST_NET ? `http://127.0.0.1:${GATEWAY_PORT}` : undefined,
   agentHostNet: HOST_NET,
+  googleClientId: env.get('OPENHUT_GOOGLE_CLIENT_ID').asString(), // the team's own Google OAuth client (M1 moves it to Settings)
+  googleClientSecret: env.get('OPENHUT_GOOGLE_CLIENT_SECRET').asString(),
   slackApi: 'https://slack.com/api',
   slackFiles: 'https://files.slack.com',
   telegramApi: 'https://api.telegram.org',
   discordApi: 'https://discord.com/api/v10',
   anthropicApi: TEST_MODEL ? `http://127.0.0.1:${GATEWAY_PORT}/test-anthropic` : 'https://api.anthropic.com',
-  openrouterApi: process.env.OPENHUT_OPENROUTER_API || 'https://openrouter.ai/api', // a local fake in the Cloud e2e
+  openrouterApi: process.env.OPENHUT_OPENROUTER_API || 'https://openrouter.ai/api', // a local fake in tests
   openaiApi: 'https://api.openai.com',
   xaiApi: 'https://api.x.ai',
   codexApi: 'https://chatgpt.com/backend-api/codex',
@@ -48,8 +46,6 @@ export const config = {
   secret: env.get('OPENHUT_SECRET').asString(), // the install's auth secret from the OS keychain (desktop); removed from the env below
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))).version,
   build: BUILD,
-  join: env.get('OPENHUT_JOIN').asString(), // a join code: a new server joins this team on first start
-  name: env.get('OPENHUT_NAME').asString(), // this computer's name, instead of the hostname
   claudeBin: fileURLToPath(new URL('../../../../../bin/claude', import.meta.url)),
   claudeHostBin: env.get('OPENHUT_CLAUDE').default('claude').asString(), // the Claude CLI the server runs itself for the seat sign-in
   path: env.get('PATH').default('/usr/bin:/bin').asString(), // the PATH Claude sign-in runs with

@@ -8,15 +8,11 @@ import { db, migrate } from '../../../src/server/platform/db.ts'
 import { connectionAuthorizationService } from '../../../src/server/connections/connection-authorization-service.ts'
 import { connectionService } from '../../../src/server/connections/connection-service.ts'
 import { mcp } from '../../../src/server/integrations/mcp/mcp.ts'
-import { keysService } from '../../../src/server/cloud/keys-service.ts'
-import { useFakeRecords } from '../cloud/records-fake.ts'
 
 const lan = Object.values(networkInterfaces()).flat().find((each) => each?.family === 'IPv4' && !each.internal)?.address
 const actor = { id: 'usr_aaaaaaaa', email: 'owner@example.com', local: false, role: 'owner' as const }
 await migrate()
 await db.insertInto('person').values({ id: actor.id, email: actor.email, role: 'owner' }).execute()
-const fake = useFakeRecords()
-await keysService.open({ sub: 'dev-auth', email: actor.email })
 
 test('a sign-in registers OpenHut, finishes once, and its token reaches the tools', { skip: !lan && 'needs a non-loopback address' }, async () => {
   const server = await oauthMcpServer(lan ?? '')
@@ -36,17 +32,6 @@ test('a sign-in registers OpenHut, finishes once, and its token reaches the tool
     assert.deepEqual((await connectionService.listTools({ actor, connectionId: connection.id })).map((tool) => tool.name), ['mcp_ping'])
     const row = await db.selectFrom('connection').select('config').where('id', '=', connection.id).executeTakeFirstOrThrow()
     assert.ok(!row.config.includes('at-'), 'tokens are sealed')
-    const held = fake.rows.get(connection.id)
-    if (!held) return assert.fail('no connection record')
-    assert.equal(held.personal, true)
-
-    fake.write({ ...held, value: { ...held.value as object, name: 'Renamed' } })
-    for (let tries = 0; tries < 50 && (await connectionService.get({ actor, id: connection.id })).name !== 'Renamed'; tries++) await new Promise((resolve) => setTimeout(resolve, 10))
-    server.expire()
-    assert.deepEqual((await connectionService.listTools({ actor, connectionId: connection.id })).map((tool) => tool.name), ['mcp_ping'])
-    assert.deepEqual([server.refreshes(), fake.leases], [1, [connection.id]])
-    assert.match(JSON.stringify(fake.rows.get(connection.id)?.secret), /"refresh_token":"rt-2"/)
-    assert.match(JSON.stringify(fake.rows.get(connection.id)?.value), /"name":"Renamed"/)
   } finally {
     server.close()
   }

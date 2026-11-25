@@ -5,11 +5,10 @@ import type { AddressInfo } from 'node:net'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
-import { runSet } from '../../../src/server/cloud/run-set.ts'
+import { runSet } from '../../../src/server/agents/run-set.ts'
 import { channelService } from '../../../src/server/channels/channel-service.ts'
-import { cloud } from '../../../src/server/platform/cloud.ts'
 import { telegramCodes } from '../../../src/server/channels/telegram-codes.ts'
-import { fakeAgentd, signIn } from '../agents/signed-in.ts'
+import { fakeAgentd, refresh, signIn } from '../agents/signed-in.ts'
 
 const queue: unknown[] = []
 const sent: { chat_id: number; text: string }[] = []
@@ -39,7 +38,7 @@ await db.insertInto('agent').values([
 ]).execute()
 signIn({ email: 'tg@example.com' })
 runSet.watch()
-await runSet.refresh()
+await refresh()
 const actor = { id: 'usr_tgowner1', email: 'tg@example.com', local: true, role: 'owner' as const }
 const token = '7381920465:AAHk2QxxxxxxxxxxxxxxxxxxxxxxxxxxXx9Lw'
 const message = (id: number, text: string, from: number, name: string) => ({ update_id: id, message: { text, chat: { id: from }, from: { id: from, first_name: name } } })
@@ -107,25 +106,3 @@ test('codes live in the database, so a restarted runtime shows the same Start li
 })
 
 test.after(() => { telegram.close() })
-
-test('on a Cloud computer the Cloud takes the webhook only after the claim, so the claim\'s own getUpdates is never refused', async () => {
-  for (const row of await db.selectFrom('channel').select('id').execute()) await telegramCodes.stop({ channelId: row.id })
-  await new Promise((resolve) => setTimeout(resolve, 100))
-  const created: { agent: string; kind: string; token: string }[] = []
-  const was = cloud.channels.create
-  cloud.channels.create = async (input) => { calls.push('webhook'); created.push(input); return { status: 200, json: {} } }
-  config.cloudComputer = true
-  try {
-    const made = await channelService.create({ actor, kind: 'telegram', agentId: 'ag_tgclaim3', botToken: token, open: false, allowed: [] })
-    const code = /\?start=([\w-]{22})$/.exec(made.qr ?? '')?.[1] ?? ''
-    assert.deepEqual(created, [], 'no webhook while the claim still polls')
-    queue.push(message(3, `/start ${code}`, 222333444, 'Kim'))
-    await until(async () => created.length, (n) => n > 0)
-    await new Promise((resolve) => setTimeout(resolve, 200))
-    assert.deepEqual(created, [{ agent: 'ag_tgclaim3', kind: 'telegram', token }])
-    assert.ok(!calls.slice(calls.indexOf('webhook')).includes('getUpdates'), 'nothing polls Telegram once the webhook is set')
-  } finally {
-    config.cloudComputer = false
-    cloud.channels.create = was
-  }
-})
