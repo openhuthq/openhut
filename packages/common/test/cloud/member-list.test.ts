@@ -397,5 +397,6 @@ test('the managed signer adds devices and invited people only while listed; it c
   const off = await step({ ...first }, moMac)
   const later = await signList({ signer: ours, body: { ...first, members: [{ ...mo, devices: [key(moMac), key(eve)] }, sara], version: 3, previous: await anchorOf(off) } })
   assert.equal(await check({ anchor: root, chain: [m1, off, later] }), null, 'it signs only while listed')
-  assert.equal(await check({ anchor: await anchorOf(await signList({ signer: moMac, body: { ...first, managed: key(moMac) } })), chain: [await signList({ signer: moMac, body: { ...first, managed: key(moMac) } })] }), null, 'it is never a device too')
+  const self = await signList({ signer: moMac, body: { ...first, managed: key(moMac) } })
+  assert.equal(await check({ anchor: await anchorOf(self), chain: [self] }), null, 'it is never a device too')
 })

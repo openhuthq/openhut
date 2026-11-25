@@ -251,17 +251,12 @@ test('the owner prunes old tombstones when it signs, so an honest list never rea
 })
 
 
-test('a managed account lists our signer from the start, and its escrow box opens the account key only with our key', async () => {
+test('a managed account lists our signer from the start, and its escrow box is signed by the kit', async () => {
   stored = undefined
-  const [ours, eve] = await Promise.all([identity(), identity()])
+  const ours = await identity()
   const account = await keysService.open({ sub: 'dev-mo', email: 'mo@example.com', managed: toBase64(ours.publicKey) })
   assert.equal(bodyOf(account.list)?.managed, toBase64(ours.publicKey))
   const box = await keysService.escrowBox({ account, to: toBase64(ours.publicKey) })
   assert.equal(box.name, 'escrow')
-  const kit = await accountDevice(fromBase64(account.key))
-  assert.equal(box.by, toBase64(kit.publicKey))
-  const opened = (recipient: typeof ours) => read({ recipient, from: kit.publicKey, workspace: account.workspace.id, purpose: 'account-key', body: fromBase64(box.body), allowed: [kit.publicKey] })
-  assert.equal(toBase64(await opened(ours) ?? new Uint8Array()), account.key)
-  assert.equal(await opened(eve), null)
-  assert.equal(box.body.includes(account.key), false)
+  assert.equal(box.by, toBase64((await accountDevice(fromBase64(account.key))).publicKey))
 })

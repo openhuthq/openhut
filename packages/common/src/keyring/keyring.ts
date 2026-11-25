@@ -6,7 +6,7 @@ import { signer, type Keyring as Ring, type Opened, type Value, type Where } fro
 import { open, seal } from '../records/seal.ts'
 import type { SealedRow } from '../records/wire.ts'
 import { boxKey, fromBase64, identity, toBase64, type Bytes, type Identity } from '../vault/public.ts'
-import { letter, lock, openInvite, read, unlock } from '../vault/secret.ts'
+import { lock, openInvite, read, unlock } from '../vault/secret.ts'
 import { accountDevice, keysService as keys, openLetter, sealTo, type Boxed, type Sent } from './keys.ts'
 import { inviteId, roomKeys as rooms } from './rooms.ts'
 import type { Account } from './store.ts'
@@ -93,8 +93,7 @@ export const keyring = {
     const key = await read({ recipient: ours, from: kit, workspace, purpose: 'account-key', body: fromBase64(box.body), allowed: [kit] })
     const sender = key && await accountDevice(key)
     if (!key || !sender || toBase64(sender.publicKey) !== box.by) return null
-    const body = await letter({ sender, to: fromBase64(to), workspace, purpose: 'account-key', version: 1, plain: key })
-    return body && { to, purpose: 'account-key', body: toBase64(body) }
+    return sealTo({ to, purpose: 'account-key', workspace, plain: key, sender })
   },
 
   verifyList: ({ anchor, chain }: { anchor: string; chain: MemberList[] }): Promise<MemberListBody | null> => check({ anchor, chain }),
