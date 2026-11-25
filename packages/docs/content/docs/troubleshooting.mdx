@@ -1,0 +1,37 @@
+---
+title: Troubleshooting
+description: Lost the owner password, a new address, and where to look.
+icon: support
+---
+
+## Lost the owner password
+
+On the server:
+
+```sh
+sudo docker exec -it openhut openhut reset-owner
+```
+
+It asks for a new password (12 characters or more) and signs the owner out everywhere. Others can reset theirs by email once [Email](/admin) is set.
+
+## Change the address
+
+```sh
+sudo docker exec openhut openhut address
+sudo docker exec openhut openhut address https://new.example.com
+sudo docker exec openhut openhut address clear
+```
+
+The first prints the address. The second changes it: point the new name's DNS at the server first, and OpenHut gets a new certificate. `clear` goes back to plain `http://<server>` until you set one again.
+
+## The certificate doesn't come
+
+Check that the domain's DNS points at this server and that ports 80 and 443 are open to the internet.
+
+## A computer shows Offline
+
+Check that it's on and can reach your main install's address. Its logs: `sudo docker logs openhut-runtime`.
+
+## Something else
+
+Logs: `sudo docker logs openhut`. Still stuck? [Open an issue](https://github.com/openhuthq/openhut/issues).

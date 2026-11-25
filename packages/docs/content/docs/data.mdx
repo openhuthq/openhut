@@ -1,0 +1,20 @@
+---
+title: Data
+description: What OpenHut keeps, where, and what it sends.
+icon: finance
+---
+
+Everything stays on your servers, in Docker volumes:
+
+- `openhut-data`: the main install's data: accounts, agents, chats, settings, keys.
+- `openhut-runtime-data` and `openhut-runtime`: the runtime and the agents' containers, on the main install and on each computer you [added](/computers).
+
+An agent's memory, skills and routines are saved on the main install when it stops or moves.
+
+To back up, back up the `openhut-data` volume.
+
+## What's sent to openhut.dev
+
+With **Share usage data** on in **Settings › Admin**, OpenHut sends once a day: a random install ID, the version and the number of agents. Nothing else. Updates download from openhut.dev and GitHub.
+
+Models and apps get what your agents send them.

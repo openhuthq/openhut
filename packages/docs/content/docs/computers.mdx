@@ -1,0 +1,27 @@
+---
+title: Computers
+description: Add more Linux machines to run agents, and move agents between them.
+icon: recruiter
+---
+
+Your main install runs agents itself. When it runs out of room, add another machine. That machine runs only the runtime: it runs agents and connects out to your main install, which keeps the app, the accounts and the keys. It needs no domain, HTTPS or open port.
+
+## Add a computer
+
+**Settings › Computers › Add a computer**. OpenHut shows one command with a code in it. The code works once, for 10 minutes. Run it on the new machine, which needs Linux with Docker:
+
+```sh
+curl -fsSL https://openhut.dev | sh -s -- join https://openhut.example.com <code>
+```
+
+It shows up in **Settings › Computers** when it connects, with whether it's online, gVisor, its version and its agents. If the code expired, **Make a new command**.
+
+## Move an agent
+
+On the agent, **Runs on**, then **Move to** the computer. Its memory, skills and routines come along.
+
+## Remove a computer
+
+**Settings › Computers**, then **Remove** on the computer. Its agents stop and it's cut off. OpenHut then shows a command to run on that machine to delete what's left there.
+
+Only owners and admins can add or remove computers.
