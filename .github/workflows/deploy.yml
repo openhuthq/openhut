@@ -33,27 +33,13 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "Deploying ${sha::8}" >> "$GITHUB_STEP_SUMMARY"
 
-  image:
-    needs: target
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/runtime-image.yml
-    secrets: inherit
-    with:
-      # The runtime image smoke runs only at release (promote.yml).
-      smoke: false
-      tags: edge
-      ref: ${{ needs.target.outputs.sha }}
-
   deploy:
-    needs: [target, image]
+    needs: target
     environment: deploy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0
           ref: ${{ needs.target.outputs.sha }}
       - name: Check out private/
         env:
@@ -68,39 +54,11 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm --prefix private/site run typecheck
-      - name: Release files
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IMAGE: ${{ needs.image.outputs.image }}
-          BUILD: ${{ needs.image.outputs.build }}
-        run: |
-          set -o pipefail
-          if names=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q '.assets[].name' 2>err.txt); then :
-          elif grep -q 'HTTP 404' err.txt; then names=''
-          else cat err.txt >&2; echo "Couldn't read the latest GitHub release, so openhut.dev isn't changed." >&2; exit 1; fi
-          if echo "$names" | grep -qx install.sh; then
-            echo "openhut.dev/ sends curl to the latest GitHub release's installer"
-          else
-            OUT=dist/site scripts/release.sh
-          fi
-          OUT=dist/site/edge BASE=https://openhut.dev/edge scripts/release.sh
       - name: Deploy openhut.dev
         run: npm --prefix private/site run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      - name: Check that openhut.dev serves this release
+      - name: Check that openhut.dev serves the site and the stable installer
         run: |
-          check() {
-            want=$(sed -n 's/^OPENHUT_SHA256="\([0-9a-f]*\)"$/\1/p' "dist/site/$1install.sh")
-            for i in 1 2 3 4 5 6; do
-              got=$(curl -fsS "https://openhut.dev/$1openhut.tgz" | sha256sum | cut -d' ' -f1)
-              served=$(curl -fsSL "https://openhut.dev/$2" | sed -n 's/^OPENHUT_SHA256="\([0-9a-f]*\)"$/\1/p')
-              [ "$got" = "$want" ] && [ "$served" = "$want" ] && return 0
-              sleep 10
-            done
-            echo "openhut.dev/$2 doesn't serve this release yet." >&2; return 1
-          }
-          check edge/ edge
-          if [ -f dist/site/install.sh ]; then check '' ''
-          else curl -fsSL https://openhut.dev/ | grep -q '^OPENHUT_BUILD='; fi
+          curl -fsSL https://openhut.dev/ | grep -q '^OPENHUT_BUILD='
           curl -fsS -H 'accept: text/html' https://openhut.dev/ | grep -q '<html'
