@@ -90,6 +90,7 @@ RUN mkdir -p /etc/docker && echo '{"runtimes":{"runsc":{"path":"/usr/local/bin/r
 ENV OPENHUT_HOST=0.0.0.0 DOCKER_TLS_CERTDIR= OPENHUT_CLAUDE=/opt/openhut/bin/claude-musl
 EXPOSE 8787
 ENTRYPOINT ["/opt/openhut/install/image-start.sh"]
+COPY install/updater.sh /usr/local/lib/openhut-updater.sh
 
 FROM ${BASE} AS deps
 COPY --from=tree /opt/openhut/package.json /opt/openhut/package-lock.json /opt/openhut/
