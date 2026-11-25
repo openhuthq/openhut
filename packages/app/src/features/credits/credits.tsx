@@ -50,7 +50,7 @@ export function CreditsLine({ className }: { className?: string }) {
   const credits = useCredits()
   if (!credits) return null
   const tone = toneOf(credits)
-  return <a href="/settings/usage" className={cn('flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-[12.5px] no-underline hover:bg-hover', TEXT[tone], className)}>
-    <CreditsRing credits={credits} className="size-4" /><span className="truncate">{tone === 'out' ? 'Out of credits' : `${dollars(credits.balance)} left`}</span>
+  return <a href="/settings/usage" className={cn('flex h-6 items-center gap-1.5 rounded-md px-1.5 text-[11.5px] tabular-nums no-underline hover:bg-hover', tone === 'ok' ? 'text-mute' : TEXT[tone], className)}>
+    <CreditsRing credits={credits} className="size-3" /><span className="truncate">{tone === 'out' ? 'Out of credits' : `${dollars(credits.balance)} left`}</span>
   </a>
 }

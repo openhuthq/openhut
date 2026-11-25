@@ -31,7 +31,7 @@ const FIRST_SHOWN = 10
 const MIN_KEY = 8
 const MAX_KEY = 400
 const SUBSCRIPTIONS = PROVIDERS.filter((info) => info.kind === 'subscription')
-const KEYS = PROVIDERS.filter((info) => info.kind === 'key' && info.id !== 'openhut')
+const KEYS = PROVIDERS.filter((info) => info.kind === 'key')
 
 export function stepOf(name: string | null): ProviderId | undefined {
   const parsed = ProviderId.safeParse(name)
@@ -80,7 +80,7 @@ function ProviderRow({ provider, note, lead, used }: { provider: Provider; note:
   const subscription = provider.kind === 'subscription'
   return <Row icon={<Glyph name={provider.id} size={20} />} title={providerInfo(provider.id).short} note={used ? `${note} · In use` : note}>
     {provider.connected
-      ? <>{provider.id === 'openhut' ? <CreditsLine className="h-7 w-auto" /> : <Status tone="on">{subscription ? 'Signed in' : 'Connected'}</Status>}<Button type="button" variant="ghost" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id) }}>Manage</Button></>
+      ? <>{provider.id === 'openhut' ? <CreditsLine className="h-7" /> : <Status tone="on">{subscription ? 'Signed in' : 'Connected'}</Status>}<Button type="button" variant="ghost" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id) }}>Manage</Button></>
       : <Button type="button" variant={lead ? 'primary' : 'secondary'} className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id === 'claude' ? 'seat' : provider.id) }}>{subscription ? 'Sign in' : 'Add key'}</Button>}
   </Row>
 }
@@ -92,7 +92,7 @@ export function ModelsStep({ id }: { id: ProviderId }) {
   const clearNotice = useCallback(() => setNotice(''), [])
   if (!provider) return <div className="flex-1" />
   if (provider.connected) return <Manage provider={provider} notice={notice} clearNotice={clearNotice} />
-  if (id === 'claude') return <Redirect to="/settings/models" />
+  if (id === 'claude' || id === 'openhut') return <Redirect to="/settings/models" />
   if (id === 'codex') return <CodexSignInStep onSignedIn={() => setNotice(found(id))} />
   return <ConnectKey provider={provider} onConnected={() => setNotice(found(id))} />
 }

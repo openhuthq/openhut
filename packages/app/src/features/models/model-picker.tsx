@@ -28,7 +28,7 @@ export function ModelPicker({ providers, value, onPick, onSetUp, title, label, n
   children?: ReactNode
 }) {
   const connected = PROVIDERS.flatMap((info) => providers?.find((each) => each.id === info.id && each.connected) ?? [])
-  const missing = PROVIDERS.filter((info) => !connected.some((provider) => provider.id === info.id))
+  const missing = PROVIDERS.filter((info) => info.kind !== 'managed' && !connected.some((provider) => provider.id === info.id))
   return <DropdownMenu>
     <DropdownMenuTrigger className={className ?? SOFT_TRIGGER} disabled={disabled} aria-label={`${label}: ${find({ providers, key: value }).model?.name ?? value ?? none?.name ?? 'None'}`}>
       {children ?? <ModelValue providers={providers} value={value} none={none} />}
@@ -42,9 +42,9 @@ export function ModelPicker({ providers, value, onPick, onSetUp, title, label, n
       {connected.map((provider) => <ProviderMenu key={provider.id} provider={provider} value={value} onPick={onPick} />)}
       {missing.length > 0 && (onSetUp ? <>
         {connected.length > 0 && <DropdownMenuSeparator />}
-        {missing.filter((info) => info.kind === 'subscription').map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={`Sign in with ${info.short}`} note={info.blurb} onClick={() => onSetUp(info.id)} />)}
+        {missing.filter((info) => info.kind === 'subscription').map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={`Sign in with ${info.short}`} onClick={() => onSetUp(info.id)} />)}
         {missing.some((info) => info.kind === 'key') && <div className={LABEL}>Add an API key</div>}
-        {missing.filter((info) => info.kind === 'key').map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={`${info.short} key…`} note={info.blurb} onClick={() => onSetUp(info.id)} />)}
+        {missing.filter((info) => info.kind === 'key').map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={`${info.short} key…`} onClick={() => onSetUp(info.id)} />)}
       </> : <>
         <div className={LABEL}>Not set up</div>
         {missing.map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={info.short} note={info.kind === 'subscription' ? 'Sign in under Settings › Models' : 'Add a key under Settings › Models'} disabled />)}
@@ -85,7 +85,7 @@ function ProviderMenu({ provider, value, onPick }: { provider: Provider; value: 
 }
 
 function ModelRow({ provider, model, selected, onClick }: { provider: Provider; model: ProviderModel; selected: boolean; onClick: () => void }) {
-  const side = provider.kind === 'key' ? prices(model) : model.note
+  const side = provider.kind === 'subscription' ? model.note : prices(model)
   return <DropdownMenuItem label={`${model.name} ${model.id}`} title={model.id} onClick={onClick}>
     <Glyph name={glyphOf({ provider: provider.id, model: model.id })} size={16} />
     <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{model.name}</span>
@@ -108,7 +108,7 @@ export function ModelValue({ providers, value, none, known }: { providers: Provi
   </>
 }
 
-function Choice({ icon, name, note, selected = false, disabled = false, onClick }: { icon?: ReactNode; name: string; note: string; selected?: boolean; disabled?: boolean; onClick?: () => void }) {
+function Choice({ icon, name, note = '', selected = false, disabled = false, onClick }: { icon?: ReactNode; name: string; note?: string; selected?: boolean; disabled?: boolean; onClick?: () => void }) {
   return <DropdownMenuItem size="tall" disabled={disabled} onClick={onClick}>
     {icon && <Tile>{icon}</Tile>}
     <Text name={name} note={note} />
