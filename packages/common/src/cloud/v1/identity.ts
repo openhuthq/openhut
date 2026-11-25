@@ -40,6 +40,7 @@ export async function signRequest({ signer, method, path, body = '', signedAt = 
 
 export const CreateSession = z.discriminatedUnion('grant', [
   z.object({ grant: z.literal('google'), code: z.string().check(z.maxLength(100)), signature: Signature }),
+  z.object({ grant: z.literal('email_code'), email: Email, code: z.string().check(z.regex(/^\d{6}$/, 'Send the 6-digit code from the email.')), device: DeviceKey, signature: Signature }),
   z.object({ grant: z.literal('join_code'), code: z.string().check(z.maxLength(100)), device: DeviceKey, signature: Signature }),
   z.object({ grant: z.literal('refresh_token'), refreshToken: z.string().check(z.maxLength(200)), signedAt: SignedAt, signature: Signature }),
 ])

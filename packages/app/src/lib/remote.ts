@@ -131,6 +131,16 @@ export const remote = {
     location.assign(started.url)
   },
 
+  async sendCode(email: string): Promise<string> {
+    const sent = await cloud.signIn({ email })
+    if (sent.object !== 'email_code') throw new Error('OpenHut Cloud didn’t send the code. Try again.')
+    return sent.email
+  },
+
+  async signInWithCode({ email, code }: { email: string; code: string }): Promise<void> {
+    await cloud.signIn({ email, code })
+  },
+
   async state(): Promise<RemoteState> {
     const back = new URL(location.href)
     const link = back.pathname === '/join' ? inviteOf(back.hash) : undefined

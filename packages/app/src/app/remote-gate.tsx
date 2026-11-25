@@ -6,7 +6,8 @@ import { Offline } from '@/app/first-run'
 import { nameOf } from '@/features/cloud/api'
 import { Teammate } from '@/app/teammate'
 import { BIG, EntryScreen, QUIET, Stage } from '@/features/cloud/step'
-import { LINE, SignInScreen, TITLE } from '@/features/cloud/sign-in'
+import { EmailCodeEntry, EmailCodeStart, LINE, SignInScreen, TITLE } from '@/features/cloud/sign-in'
+import { config } from '@/lib/config'
 import { followEvents } from '@/lib/live'
 import { CloudOffline, remote } from '@/lib/remote'
 import { Offline as Away, screenOf } from '@/lib/web-first-run'
@@ -19,6 +20,7 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   const client = useQueryClient()
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState<string>()
+  const [codeTo, setCodeTo] = useState<string>()
   const state = useQuery({ queryKey: ['remote'], queryFn: remote.state, refetchInterval: (query) => POLLED.includes(query.state.data?.step ?? '') || query.state.error instanceof CloudOffline ? WAIT_MS : false, retry: false })
   const workspace = state.data?.step === 'ready' ? state.data.workspace : undefined
   const opened = useQuery({ queryKey: ['remote-tunnel', workspace], queryFn: async () => { await remote.open(workspace ?? ''); return true }, enabled: !!workspace, retry: false, staleTime: Infinity, refetchInterval: (query) => query.state.error instanceof Away || query.state.error instanceof CloudOffline ? OFFLINE_MS : false })
@@ -42,8 +44,9 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   if (state.error instanceof CloudOffline || opened.error instanceof CloudOffline) return <CloudDown />
   const invited = state.data?.step === 'signed-out' || state.data?.step === 'waiting' ? state.data.invited : null
   const host = nameOf(invited?.from ?? '') || 'Your teammate'
+  if (state.data?.step === 'signed-out' && codeTo) return <Stage><EmailCodeEntry email={codeTo} onBack={() => setCodeTo(undefined)} onSignedIn={() => { setCodeTo(undefined); void state.refetch() }} /></Stage>
   if (state.data?.step === 'signed-out') return <Stage><SignInScreen title={invited ? `You’re invited to ${invited.team ?? 'a team'}.` : TITLE} line={invited ? `Sign in with Google${invited.email ? ` as ${invited.email}` : ''} to chat with the agents ${host} shares. Nothing to install.` : LINE}
-    busy={signingIn} busyLabel="Opening Google…" disabled={signingIn} onSignIn={() => { setSigningIn(true); remote.signIn().catch((err: Error) => { setError(err.message); setSigningIn(false) }) }}>
+    busy={signingIn} busyLabel="Opening Google…" disabled={signingIn} more={config.emailCode && <EmailCodeStart onSent={setCodeTo} />} onSignIn={() => { setSigningIn(true); remote.signIn().catch((err: Error) => { setError(err.message); setSigningIn(false) }) }}>
     {failure && <ErrorNote message={failure} />}
   </SignInScreen></Stage>
   const otherAccount = <Button type="button" variant="text" className={QUIET} onClick={() => void remote.signOut().then(() => state.refetch())}>Use another account</Button>

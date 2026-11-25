@@ -6,6 +6,7 @@ const AppConfig = z.object({
   cloud: z.string(),
   local: z.optional(z.boolean()),
   dev: z.optional(z.string()),
+  emailCode: z.optional(z.boolean()),
 })
 export type AppConfig = z.infer<typeof AppConfig>
 

@@ -5,7 +5,7 @@ import { ApiError } from '../api.ts'
 import { OAuthAuthorization, OAuthToken, type CreateOAuthAuthorization, type CreateOAuthToken } from './oauth.ts'
 import { fromBase64, toBase64 } from '../vault/public.ts'
 import { Letter, MemberList, OpenedInvite, type Member, type NewInvite } from './cloud.ts'
-import { ENDPOINTS, pathOf, SignInStarted, type EndpointName } from './endpoints.ts'
+import { CodeSent, ENDPOINTS, pathOf, SignInStarted, type EndpointName } from './endpoints.ts'
 import { bodyOf } from './member-list.ts'
 import { recordsClient, type RecordsOptions } from './records.ts'
 import type { Kind } from './rules.ts'
@@ -23,7 +23,7 @@ export type Fetch = typeof globalThis.fetch
 export type Url = string | (() => string)
 export type Reply = { status: number; json: unknown }
 
-export type SignIn = { google: { returnTo: string; state?: string } } | { googleCode: string; state?: string } | { joinCode: string }
+export type SignIn = { google: { returnTo: string; state?: string } } | { googleCode: string; state?: string } | { joinCode: string } | { email: string; code?: string }
 export type Redirect = { object: 'redirect'; url: string }
 export type SignedIn = Me & { maker?: string }
 export type KnockState = { step: 'approved' } | { step: 'waiting' } | { step: 'over' }
@@ -32,7 +32,7 @@ export type Watch = { send: (input: { type: 'presence' | 'beat'; workspace: stri
 export type WatchSocket = { send: (text: string) => void; close: () => void; addEventListener: (type: 'open' | 'message', listener: (event: { data?: unknown }) => void) => void }
 
 export type Device = {
-  signIn: (input: SignIn) => Promise<Redirect | SignedIn>
+  signIn: (input: SignIn) => Promise<Redirect | CodeSent | SignedIn>
   me: () => Promise<Me | null>
   firstComputerCode: () => Promise<JoinCode>
   startCloud: () => Promise<CloudComputer>
@@ -160,8 +160,9 @@ function wire({ url, key, store, fetch: send = globalThis.fetch }: { url: Url; k
     throw new CloudError(answer)
   }
 
-  async function start({ grant, code }: { grant: 'google' | 'join_code'; code: string }): Promise<SignedIn> {
-    const body = grant === 'google' ? { grant, code, signature: await sign('session', [code]) } : { grant, code, device: await key.id(), signature: await sign('session', [code]) }
+  async function start({ grant, code, email }: { grant: 'google' | 'join_code' | 'email_code'; code: string; email?: string }): Promise<SignedIn> {
+    const signature = await sign('session', email ? [email, code] : [code])
+    const body = grant === 'google' ? { grant, code, signature } : { grant, code, device: await key.id(), signature, ...email && { email } }
     const made = await ok({ name: 'createSession', body, auth: false, reply: Session })
     await store.set('session', made)
     return { ...await ok({ name: 'me', reply: Me }), ...made.maker && { maker: made.maker } }
@@ -189,6 +190,10 @@ function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net:
   return {
     async signIn(input) {
       if ('joinCode' in input) return net.start({ grant: 'join_code', code: input.joinCode })
+      if ('email' in input) {
+        const email = input.email.trim().toLowerCase()
+        return input.code ? net.start({ grant: 'email_code', code: input.code, email }) : net.ok({ name: 'startSignIn', auth: false, body: { email }, reply: CodeSent })
+      }
       if ('googleCode' in input) {
         if (input.state !== undefined && input.state !== await store.get<string>('sign-in-state')) throw new CloudError({ status: 400, json: null, message: 'This sign-in didn’t start here. Start it again.' })
         await store.set('sign-in-state', undefined)

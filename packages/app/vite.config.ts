@@ -7,6 +7,7 @@ const DEV_CONFIG = JSON.stringify({
   cloud: process.env.OPENHUT_API_URL ?? 'https://cloud.openhut.dev/api',
   ...process.env.OPENHUT_WEB === '1' ? {} : { local: true },
   ...process.env.OPENHUT_DEV_LABEL ? { dev: process.env.OPENHUT_DEV_LABEL } : {},
+  ...process.env.MAIL_FROM ? { emailCode: true } : {},
 })
 
 function devConfig(): Plugin {

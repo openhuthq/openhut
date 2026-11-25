@@ -1,4 +1,4 @@
-import { Delete02Icon, Key01Icon, Logout03Icon } from '@hugeicons/core-free-icons'
+import { Delete02Icon, Key01Icon, Logout03Icon, Mail01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { REMOTE } from '@/lib/remote'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,8 @@ import { I, PILL, Section, Status } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { ConfirmButton } from '@/components/confirm-button'
 import { nameOf, useSignOut } from '@/features/cloud/api'
+import { Google } from '@/features/cloud/sign-in'
+import { config } from '@/lib/config'
 import { Chevron, Row, Rows } from '@/features/settings/kit'
 import { navigate, useSearch } from '@/lib/router'
 import { useDeleteData, useGate, useRotated } from '@/features/cloud/workspaces'
@@ -25,6 +27,18 @@ export function YouSettings() {
       </Row>
     </Rows>
     <ErrorNote message={error} />
+  </Section>
+}
+
+export function SignInWays() {
+  const email = useGate().cloud.email ?? ''
+  return <Section title="Ways you can sign in">
+    <Rows>
+      {config.emailCode && <Row icon={<I icon={Mail01Icon} size={20} className="text-mute" />} title="Email code" note={`Sign in with a code sent to ${email}`}>
+        <span className="inline-flex items-center gap-1 text-[12px] text-mute"><I icon={Tick02Icon} size={12} />On</span>
+      </Row>}
+      <Row icon={<Google size={20} />} title="Google" note={`Connected as ${email}`} />
+    </Rows>
   </Section>
 }
 

@@ -1,14 +1,14 @@
 import * as z from 'zod/mini'
-import { AskAdmin, DeviceKey } from './cloud.ts'
+import { AskAdmin, DeviceKey, Member } from './cloud.ts'
 import { CreateJoinRequest } from './v1/trust.ts'
 
 export type Auth = 'none' | 'device' | 'token' | 'signed' | 'computer'
 export type Endpoint = { call: 'signIn' | 'records' | 'tunnel' | 'connections' | 'ops'; method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'WSS'; path: string; auth: Auth; does: string }
 
 export const ENDPOINTS = {
-  startSignIn: { call: 'signIn', method: 'POST', path: '/v1/sign-ins', auth: 'none', does: 'Start Google sign-in for a device key. Returns the Google URL. The return address must be app.openhut.dev or a loopback address.' },
+  startSignIn: { call: 'signIn', method: 'POST', path: '/v1/sign-ins', auth: 'none', does: 'Start Google sign-in for a device key and return the Google URL (the return address must be app.openhut.dev or a loopback address), or email a 6-digit sign-in code that works for 5 minutes.' },
   signInCallback: { call: 'signIn', method: 'GET', path: '/v1/sign-ins/callback', auth: 'none', does: 'Google comes back here. Redirects to the return address with a one-use code.' },
-  createSession: { call: 'signIn', method: 'POST', path: '/v1/sessions', auth: 'device', does: 'Trade a grant for a token: google (the code, signed by the device), join_code (signed by the device), or refresh.' },
+  createSession: { call: 'signIn', method: 'POST', path: '/v1/sessions', auth: 'device', does: 'Trade a grant for a token: google (the code, signed by the device), email_code (the emailed code, signed by the device), join_code (signed by the device), or refresh.' },
   getCredits: { call: 'signIn', method: 'GET', path: '/v1/credits', auth: 'token', does: 'The credit balance and the OpenHut models. The OpenRouter key only to the account’s Cloud computer, while the balance is above $0.' },
   me: { call: 'signIn', method: 'GET', path: '/v1/me', auth: 'token', does: 'The account, and each team with this device’s access (listed, waiting).' },
   deleteMe: { call: 'signIn', method: 'DELETE', path: '/v1/me', auth: 'computer', does: 'Delete the account. Signed, and allowed from a computer only.' },
@@ -42,10 +42,15 @@ export function pathOf({ name, params = {} }: { name: EndpointName; params?: Rec
   })
 }
 
-export const CreateSignIn = z.object({ device: DeviceKey, returnTo: z.string().check(z.maxLength(500)), state: z.string().check(z.minLength(8), z.maxLength(200)) })
+export const CreateSignIn = z.union([
+  z.object({ device: DeviceKey, returnTo: z.string().check(z.maxLength(500)), state: z.string().check(z.minLength(8), z.maxLength(200)) }),
+  z.object({ email: Member.shape.email }),
+])
 export type CreateSignIn = z.infer<typeof CreateSignIn>
 export const SignInStarted = z.object({ object: z.literal('sign_in'), url: z.string() })
 export type SignInStarted = z.infer<typeof SignInStarted>
+export const CodeSent = z.object({ object: z.literal('email_code'), email: Member.shape.email })
+export type CodeSent = z.infer<typeof CodeSent>
 
 export const PutJoinRequest = z.object({ ...AskAdmin.shape, server: CreateJoinRequest.shape.server })
 export type PutJoinRequest = z.infer<typeof PutJoinRequest>
