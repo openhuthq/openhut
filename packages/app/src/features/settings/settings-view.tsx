@@ -1,7 +1,7 @@
 import { ComputersSettings } from '@/features/settings/computers'
 import { GeneralSettings } from '@/features/settings/general'
 import { ModelsSettings, ModelsStep, stepOf } from '@/features/settings/models'
-import { ADMIN_STEPS, AdminSettings, AdminStep } from '@/features/settings/admin'
+import { AdminSettings } from '@/features/settings/admin'
 import { PeopleSettings } from '@/features/people/people'
 import { AppsSettings, AppsSheet } from '@/features/connections/connections-view'
 import { tabsFor } from '@/features/settings/tabs'
@@ -21,14 +21,12 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
   </nav>
   const opened = useOpen()
   const step = tab === 'models' ? stepOf(opened) : undefined
-  const adminStep = tab === 'admin' && opened && ADMIN_STEPS.includes(opened) ? opened : undefined
   const [section, sheet] = usePath().split('/').slice(1)
   const apps = section === 'connections' && Boolean(sheet)
   return <AppWindow label="Settings" nav={nav} onClose={onClose}>
     {step && <ModelsStep id={step} />}
-    {adminStep && <AdminStep id={adminStep} />}
     {!step && apps && <AppsSheet />}
-    {!step && !adminStep && !apps && <>
+    {!step && !apps && <>
       <div className="shrink-0 pt-[26px] pr-[52px] pb-1.5 pl-[34px] phone:hidden">
         <h2 className="m-0 text-[15px]/[22px] font-medium">{current?.name}</h2>
         <p className="m-0 text-[12.5px]/[18px] text-mute">{current?.subtitle}</p>

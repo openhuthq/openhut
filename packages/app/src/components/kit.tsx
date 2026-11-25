@@ -91,11 +91,11 @@ export function Frame({ face, title, subtitle, action, foot, onClose, children }
   </DialogCard>
 }
 
-export function SetupSheet({ brand, title, blurb, eta, safe, error, foot, onSubmit, onClose, children }: {
+export function SetupSheet({ brand, title, blurb, eta, safe, error, foot, onSubmit, onClose, modal, children }: {
   brand: BrandName; title: string; blurb: string; eta?: string; safe?: string; error?: string; foot: ReactNode
-  onSubmit?: (event: FormEvent<HTMLFormElement>) => void; onClose: () => void; children?: ReactNode
+  onSubmit?: (event: FormEvent<HTMLFormElement>) => void; onClose: () => void; modal?: boolean; children?: ReactNode
 }) {
-  const inWindow = useContext(InWindow)
+  const inWindow = useContext(InWindow) && !modal
   const body = <>
     <div className={cn('flex items-start gap-3.5 px-5 pt-5 pb-4', inWindow && 'items-center px-8 pt-[26px] pr-14')}>
       {inWindow && <Button type="button" data-back size="icon-sm" aria-label="Back" title="All connections" className="-ml-2" onClick={onClose}><I icon={ArrowLeft01Icon} size={16} /></Button>}
