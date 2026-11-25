@@ -30,7 +30,7 @@ export function useComputerAdmins() {
 }
 
 export function runsOnNote(computer: Computer) {
-  if (!computer.online) return computer.kind === 'server' ? 'Offline · it isn’t answering' : 'Offline · open OpenHut on it to use it'
+  if (!computer.online) return 'Offline · it isn’t answering'
   if (computer.kind === 'server') return 'Sealed in its own box · always on'
   if (computer.server) return 'Linux server · always on'
   return 'With your access · while this computer is awake'
