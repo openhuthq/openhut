@@ -25,10 +25,10 @@ test('providers are a Stripe-shaped list, Claude counts as connected in test mod
   assert.equal(res.statusCode, 200)
   const list = res.json()
   assert.deepEqual([list.object, list.url, list.hasMore], ['list', '/api/providers', false])
-  assert.deepEqual(list.data.map((each: { id: string }) => each.id), ['claude', 'codex', 'openrouter', 'openai', 'xai'])
-  const [claude, codex, openrouter] = list.data
+  assert.deepEqual(list.data.map((each: { id: string }) => each.id), ['openhut', 'claude', 'codex', 'openrouter', 'openai', 'xai'])
+  const [openhut, claude, codex, openrouter] = list.data
   assert.deepEqual([claude.object, claude.connected, claude.models.map((model: { id: string }) => model.id), config.modelMode], ['provider', true, ['opus', 'sonnet', 'haiku'], 'test'])
-  assert.deepEqual([codex.connected, codex.models, openrouter.connected, openrouter.keyHint], [false, [], false, null])
+  assert.deepEqual([openhut.connected, codex.connected, codex.models, openrouter.connected, openrouter.keyHint], [false, false, [], false, null])
 })
 
 test('a bad id, a short key and an empty body are 400s that name the field; no key means 401', async () => {

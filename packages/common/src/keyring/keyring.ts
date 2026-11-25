@@ -23,7 +23,7 @@ const pick = <T extends object, K extends keyof T>(from: T, names: K[]): Pick<T,
 // The account's state and flows the runtime needs; the key material stays in here.
 export const keysService = pick(keys, ['account', 'session', 'locked', 'asked', 'kitState', 'vault', 'deviceKey', 'accountDeviceKey', 'signedIn', 'mustBeOn', 'ownedBy',
   'open', 'adopt', 'relock', 'forgetHere', 'removedHere', 'setSession', 'setLocked', 'setAsked', 'setKit',
-  'addDevice', 'dropDevices', 'change', 'accountLetter', 'passkeyBox', 'workspaceBox', 'escrowBox', 'signBox', 'deleteBox', 'boxIsMine'])
+  'addDevice', 'dropDevices', 'change', 'accountLetter', 'passkeyBox', 'workspaceBox', 'escrowBox', 'withManaged', 'signBox', 'deleteBox', 'boxIsMine'])
 
 // Each team's state and flows the runtime needs.
 export const roomKeys = pick(rooms, ['rooms', 'room', 'members', 'roleIn', 'isOwn', 'link', 'linkUntil', 'joinedBy',

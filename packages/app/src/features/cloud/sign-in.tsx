@@ -163,7 +163,7 @@ function numbered(kit: RecoveryKit): string {
   return kit.words.map((word, index) => `${index + 1}. ${word}`).join('\n')
 }
 
-function download({ name, text }: { name: string; text: string }): KitWay {
+export function download({ name, text }: { name: string; text: string }): KitWay {
   const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })), download: name })
   link.click()
   setTimeout(() => URL.revokeObjectURL(link.href), 60_000)

@@ -277,6 +277,7 @@ export const Cloud = z.object({
   keptAccount: z.nullable(Email),
   devices: z.array(z.object({ key: DeviceKey, here: z.boolean(), addedAt: z.nullable(Timestamp), name: z.nullable(z.string()), kind: z.enum(['mac', 'server']), online: z._default(z.boolean(), false), os: z._default(z.nullable(z.string()), null), heard: z._default(z.boolean(), true), joined: z._default(z.nullable(z.union([z.object({ how: z.literal('recovery') }), z.object({ how: z.literal('approved'), by: z.nullable(z.string()) })])), null) })),
   passkey: z.boolean(),
+  encryption: z.boolean(),
   touchIdOff: z._default(z.boolean(), false),
   youngUntil: z._default(z.nullable(Timestamp), null),
   needsSignIn: z.boolean(),
@@ -309,6 +310,11 @@ export type UnlockCloud = z.infer<typeof UnlockCloud>
 
 export const AddPasskey = z.object({ prf: Prf })
 export type AddPasskey = z.infer<typeof AddPasskey>
+
+export const SetEncryption = z.object({ on: z.boolean() })
+export type SetEncryption = z.infer<typeof SetEncryption>
+export const EncryptionPasskey = z.object({ id: Base64, publicKey: Base64 })
+export type EncryptionPasskey = z.infer<typeof EncryptionPasskey>
 
 export const CreateCloudInvite = z.object({ workspace: Id, email: z.pipe(z.string().check(z.trim(), z.toLowerCase()), Email), role: InviteRole })
 export type CreateCloudInvite = z.infer<typeof CreateCloudInvite>
