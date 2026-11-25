@@ -5,6 +5,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { parseEnv } from 'node:util'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { activePack, commit, poll, rollback } from './packs.mjs'
 
@@ -15,14 +16,14 @@ const ENV_FILE = process.env.OPENHUT_ENV_FILE ?? '/etc/openhut/env'
 const PORT = Number(process.env.PORT ?? 8787)
 const HEALTHY_MS = Number(process.env.OPENHUT_HEALTHY_MS ?? 60_000)
 const POLL_MS = 15 * 60_000
-const testKey = process.env.OPENHUT_RELEASE_KEY // CI's test-boot.sh only, as the desktop's OPENHUT_TEST_HOME
+const testKey = process.env.OPENHUT_RELEASE_KEY // boot.test.ts only, as the desktop's OPENHUT_TEST_HOME
 const updates = {
   home: HOME, feed: process.env.OPENHUT_UPDATE_FEED || 'https://dl.openhut.dev/', channel: 'stable',
   fetch: (url, options) => fetch(url, { ...options, signal: AbortSignal.timeout(120_000) }),
   ...testKey && { keys: { current: testKey, next: '', revoked: [] }, rekorKey: process.env.OPENHUT_REKOR_KEY },
 }
 const say = (event, more = {}) => console.log(JSON.stringify({ event, ...more }))
-const envFile = () => existsSync(ENV_FILE) ? Object.fromEntries(readFileSync(ENV_FILE, 'utf8').split('\n').filter(Boolean).map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)])) : {}
+const envFile = () => existsSync(ENV_FILE) ? parseEnv(readFileSync(ENV_FILE, 'utf8')) : {}
 
 async function check() {
   try { say('boot.update', await poll(updates)) } catch (error) { say('boot.update_failed', { error: error.message }) }

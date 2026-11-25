@@ -192,8 +192,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: install/boat/test-boot.sh
-        run: OPENHUT_BOOT_CONTAINER=1 OPENHUT_BOOT_OUT=$RUNNER_TEMP sh install/boat/test-boot.sh && cat $RUNNER_TEMP/c1-boot.txt | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: install/boat/boot.test.ts
+        run: OPENHUT_BOOT_CONTAINER=1 OPENHUT_BOOT_OUT=$RUNNER_TEMP node --test --test-concurrency=1 install/boat/boot.test.ts && cat $RUNNER_TEMP/c1-boot.txt | tee -a "$GITHUB_STEP_SUMMARY"
       - if: always()
         uses: actions/upload-artifact@v4
         with:
