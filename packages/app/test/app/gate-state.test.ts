@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { checksKit, gateOf, migrating } from '../../src/app/gate-state.ts'
 
 const kit = { savedAt: '2026-11-23T10:00:00Z', differs: false }
-const on = { status: 'on' as const, kit, kitInCloud: true, youngUntil: null }
+const on = { status: 'on' as const, kit, kitInCloud: true, youngUntil: null, encryption: true }
 const fresh = { fresh: true, done: false, failed: false }
 const ready = { fresh: true, done: true, failed: false }
 
@@ -14,6 +14,10 @@ test('signed out is the sign-in screen, locked is Unlock, no kit is the kit, and
   assert.equal(gateOf({ cloud: { ...on, kit: null }, setup: undefined, down: false }), 'ready', 'a kit already in the cloud is never overwritten from here')
   assert.equal(gateOf({ cloud: on, setup: undefined, down: false }), 'ready')
   assert.equal(gateOf({ cloud: { ...on, status: 'offline' }, setup: undefined, down: false }), 'ready')
+})
+
+test('with managed keys (End-to-end encryption off) first run asks for no kit', () => {
+  assert.equal(gateOf({ cloud: { ...on, kit: null, kitInCloud: false, encryption: false }, setup: undefined, down: false }), 'ready')
 })
 
 test('a computer added less than 3 days ago, which can’t make a kit yet, is let in without one', () => {
