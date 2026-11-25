@@ -42,9 +42,9 @@ export function ModelPicker({ providers, value, onPick, onSetUp, title, label, n
       {connected.map((provider) => <ProviderMenu key={provider.id} provider={provider} value={value} onPick={onPick} />)}
       {missing.length > 0 && (onSetUp ? <>
         {connected.length > 0 && <DropdownMenuSeparator />}
-        {missing.filter((info) => info.kind === 'subscription').map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={`Sign in with ${info.short}`} onClick={() => onSetUp(info.id)} />)}
+        {missing.filter((info) => info.kind === 'subscription').map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={`Connect ${info.name}…`} onClick={() => onSetUp(info.id)} />)}
         {missing.some((info) => info.kind === 'key') && <div className={LABEL}>Add an API key</div>}
-        {missing.filter((info) => info.kind === 'key').map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={`${info.short} key…`} onClick={() => onSetUp(info.id)} />)}
+        {missing.filter((info) => info.kind === 'key').map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={info.id === 'compatible' ? `${info.name}…` : `${info.short} key…`} onClick={() => onSetUp(info.id)} />)}
       </> : <>
         <div className={LABEL}>Not set up</div>
         {missing.map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={info.short} note={info.kind === 'subscription' ? 'Sign in under Settings › Models' : 'Add a key under Settings › Models'} disabled />)}

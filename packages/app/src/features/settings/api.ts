@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Admin, SeatSignIn, SeatUsage } from '@openhut/common/admin/admin.ts'
 import { request } from '@/lib/api-client'
-import { AGENTS_KEY } from '@/lib/query-keys'
+import { AGENTS_KEY, PROVIDERS_KEY } from '@/lib/query-keys'
 
 const ADMIN_KEY = ['admin']
 
@@ -24,6 +24,7 @@ export function useCompleteSeatSignIn() {
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ADMIN_KEY })
       void client.invalidateQueries({ queryKey: AGENTS_KEY })
+      void client.invalidateQueries({ queryKey: PROVIDERS_KEY })
     },
   })
 }
