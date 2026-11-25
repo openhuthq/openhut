@@ -1,0 +1,20 @@
+# C1: a Cloud computer (a Boat VM) runs one process: openhut-boot, which runs the server with agentd in-process.
+[Unit]
+Description=OpenHut on a Cloud computer
+After=network-online.target
+Wants=network-online.target
+# Keep retrying: before the Cloud writes the join env the server exits at once (no join code), and that must not trip the start limit.
+StartLimitIntervalSec=0
+
+[Service]
+User=openhut
+WorkingDirectory=/var/lib/openhut
+# As root: take the join code the Cloud wrote through Boat's files API (only /home/user is writable there).
+ExecStartPre=+/opt/openhut/boot/openhut-boot.sh join
+ExecStart=/opt/openhut/boot/openhut-boot.sh
+UMask=0077
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

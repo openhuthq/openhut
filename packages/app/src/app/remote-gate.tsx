@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { followEvents } from '@/lib/live'
 import { CloudOffline, remote } from '@/lib/remote'
 import { Offline as Away, phoneBrowser, screenOf } from '@/lib/web-first-run'
+import { waking } from '@openhut/common/tunnel/connect.ts'
 
 const WAIT_MS = 3000
 const OFFLINE_MS = 5000
@@ -33,6 +34,7 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   const step = state.data?.step
   useEffect(() => { if (step && step !== 'first-run') forgetFirstRun() }, [step])
   const cut = useSyncExternalStore(remote.watchCut, remote.cut)
+  const wakingCloud = useSyncExternalStore(waking.subscribe, () => waking.now)
   useEffect(() => {
     if (!cut) return
     const retry = setInterval(() => void remote.reconnect(), OFFLINE_MS)
@@ -53,6 +55,7 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   const otherAccount = <Button type="button" variant="text" className={QUIET} onClick={() => void remote.signOut().then(() => state.refetch())}>Use another account</Button>
   if (screen === 'first-run' && state.data?.step === 'first-run') return <FirstRun email={state.data.email} link={otherAccount} />
   if (screen === 'phone' && state.data?.step === 'first-run') return <PhoneFirstRun email={state.data.email} link={otherAccount} />
+  if (wakingCloud) return <Stage><EntryScreen mood="looking" title="Waking Cloud…" line="Your Cloud computer was paused. It’s back in a few seconds." waiting="Waking" /></Stage>
   if (screen === 'offline' && opened.error instanceof Away) return <Offline computer={opened.error.computer} seen={opened.error.seen} />
   if (state.data?.step === 'continuing') return <Stage><EntryScreen mood="happy" title="Opening OpenHut…" line="This takes a few seconds." waiting="Opening" /></Stage>
   if (state.data?.step === 'waiting' && invited) return <Stage><Knocking faces={state.data.faces} line={`Tell ${host} these two. ${host} taps them on their computer.`} foot={otherAccount} /></Stage>

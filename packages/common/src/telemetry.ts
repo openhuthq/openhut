@@ -17,11 +17,12 @@ export const TELEMETRY_EVENTS = {
   message_sent: ['channel', 'agent_name'],
   download_clicked: ['platform', 'location'],
   github_clicked: ['location'],
+  web_app_clicked: ['location'],
 } as const satisfies Record<string, readonly string[]>
 
 export const TELEMETRY_MAX_BATCH = 100
 // What a browser on openhut.dev may send without an instance (private/site/public/track.js).
-export const BROWSER_EVENTS: readonly TelemetryName[] = ['download_clicked', 'github_clicked']
+export const BROWSER_EVENTS: readonly TelemetryName[] = ['download_clicked', 'github_clicked', 'web_app_clicked']
 export const INSTALL_KINDS = ['mac', 'linux', 'server'] as const
 
 export type TelemetryName = keyof typeof TELEMETRY_EVENTS
