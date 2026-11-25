@@ -294,6 +294,7 @@ function Message({ agent, message, live }: { agent: Agent; message: AgentMessage
 function AgentReply({ agent, message, live }: { agent: Agent; message: AgentMessage; live: boolean }) {
   const { agentId, threadId } = useContext(ChatFiles)
   const blocks = blocksOf(message)
+  const wakingCloud = useSyncExternalStore(waking.subscribe, () => waking.now)
   const { spec, hasSpec } = useJsonRenderMessage(message.parts)
   const paths = live ? [] : homePathsIn(blocks.flatMap((block) => block.type === 'text' ? [block.text] : []).join('\n'))
   const found = useHomeFiles({ agentId, threadId, paths })
@@ -307,7 +308,7 @@ function AgentReply({ agent, message, live }: { agent: Agent; message: AgentMess
         return <Steps key={index} steps={block.steps} live={live && index === blocks.length - 1} />
       })}
       {changesOf(message).length > 0 && <ChangeCards agent={agent} ids={changesOf(message)} />}
-      {live && !blocks.length && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
+      {live && !blocks.length && (wakingCloud ? <span className="text-[13.5px] text-mute">Waking Cloud…</span> : <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>)}
       {!live && !blocks.length && <span className="text-[13.5px] text-mute-2 italic">No reply.</span>}
     </div></CopyMenu>
   </div>
