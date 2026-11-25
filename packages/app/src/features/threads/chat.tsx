@@ -65,7 +65,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   const touch = useTouchThread()
   const transport = useMemo(() => new DefaultChatTransport<AgentMessage>({
     api: `${threadPath(thread.id)}/chat`,
-    fetch: (url, init) => openhut.fetch({ of: agent.id, path: String(url), init }),
+    fetch: (url, init) => openhut.fetch({ of: agent.id, path: String(url), init, wake: true }),
     prepareSendMessagesRequest: ({ messages, trigger }) => ({ body: { trigger, message: trigger === 'submit-message' ? messages.at(-1) : undefined } }),
   }), [thread.id, agent.id])
   const chat = useChat<AgentMessage>({ id: thread.id, messages: thread.messages.map(uiMessageOf), transport, onFinish: () => touch(thread) })

@@ -13,6 +13,7 @@ import { validatorCompiler } from 'fastify-type-provider-zod'
 import { threadController } from '../../../src/server/threads/thread-controller.ts'
 import { imageTypeOf, safeFileName, shownCall, threadService } from '../../../src/server/threads/thread-service.ts'
 import { keysService } from '../../../src/server/cloud/keys-service.ts'
+import { agentService } from '../../../src/server/agents/agent-service.ts'
 import { useFakeRecords } from '../cloud/records-fake.ts'
 import type { SendChat } from '@openhut/common/threads/thread.ts'
 
@@ -326,6 +327,15 @@ test('a runner new to a conversation, after a move or the upgrade, seeds its new
   fake.write({ collection: 'message', id, parent: 'ag_chatmove', workspace: WS, value: { message: { id, role: 'assistant', parts: [{ type: 'text', text: 'Said on the other computer.' }] }, session: seen.session } })
   await say('ag_chatmove', 'Back here')
   assert.match(String(seen.body?.messages.at(-1)?.content), /^Earlier in this chat, before this computer ran you:\n\nYou: Said on the other computer\.\n\nNow:/)
+})
+
+test('on a just-booted computer (a woken Cloud computer) a message waits for its agent to come up, then gets the reply', async (t) => {
+  const port = (hermes.address() as AddressInfo).port
+  await new Promise((resolve) => hermes.close(resolve))
+  t.mock.method(agentService, 'booting', () => true)
+  setTimeout(() => hermes.listen(port, '127.0.0.1'), 1500)
+  const res = await say('ag_chatrunn', 'hi')
+  assert.match(res.body, /214 orders\./)
 })
 
 test('an agent that isn\'t answering ends the turn with a sentence, not a hang', async () => {

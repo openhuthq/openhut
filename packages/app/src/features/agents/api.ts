@@ -56,7 +56,7 @@ export function useCreateAgent() {
   return useMutation({
     mutationFn: async ({ body, computer }: { body: CreateAgent; computer: string }) => {
       const agent = await request({ schema: Agent, path: '/api/agents', method: 'POST', body })
-      return request({ schema: Agent, path: agentPath(agent.id), method: 'PATCH', body: { wanted: 'running', ...(computer !== 'local' && { runsOn: computer }) } })
+      return request({ schema: Agent, path: agentPath(agent.id), method: 'PATCH', body: { wanted: 'running', ...(computer !== 'local' && { runsOn: computer }) }, wake: true })
     },
     onSuccess: (agent, { computer }) => {
       client.setQueryData([...AGENTS_KEY, agent.id], agent)

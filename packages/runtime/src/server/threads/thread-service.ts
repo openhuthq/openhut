@@ -304,12 +304,16 @@ async function idle(id: string): Promise<void> {
 }
 
 async function callAgent({ agent, session, message, signal }: { agent: AgentRow; session: string; message: OpenAiMessage; signal: AbortSignal }): Promise<ReadableStream<Uint8Array>> {
-  const res = await fetch(`${agentApiUrl(agent.net)}/v1/chat/completions`, {
+  const ask = () => fetch(`${agentApiUrl(agent.net)}/v1/chat/completions`, {
     method: 'POST',
     headers: { authorization: `Bearer ${unseal(agent.channel_key)}`, 'content-type': 'application/json', 'x-hermes-session-id': session },
     body: JSON.stringify({ model: 'hermes-agent', stream: true, messages: [{ role: 'system', content: CHAT_NOTE }, message] }),
     signal: AbortSignal.any([signal, AbortSignal.timeout(TURN_MS)]),
-  }).catch(() => { throw new HttpError(502, signal.aborted ? 'Stopped.' : `${agent.name} isn't answering. Try again, or stop it and start it again.`) })
+  }).catch(async (err: unknown) => {
+    if (!signal.aborted && agentService.booting()) return new Promise<Response>((resolve) => setTimeout(() => resolve(ask()), IDLE_POLL_MS))
+    throw err
+  })
+  const res = await ask().catch(() => { throw new HttpError(502, signal.aborted ? 'Stopped.' : `${agent.name} isn't answering. Try again, or stop it and start it again.`) })
   if (!res.ok || !res.body) throw new HttpError(502, `${agent.name} couldn't answer. Try again, or stop it and start it again.`)
   return res.body
 }

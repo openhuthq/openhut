@@ -197,10 +197,9 @@ export const remote = {
     })
   },
 
-  async fetch(path: string, init?: RequestInit): Promise<Response> {
+  async fetch(path: string, init?: RequestInit, wake = false): Promise<Response> {
     if (!target && desktop?.window) return viaShell(path, init)
-    const acted = (init?.method ?? 'GET') !== 'GET' // a message sent, an agent started
-    return (await (acted ? live().catch(() => live(true)) : live())).fetch(path, init)
+    return (await (wake ? live().catch(() => live(true)) : live())).fetch(path, init)
   },
 
   channel({ path, onLine, onClose }: { path: string; onLine: (line: string) => void; onClose: (code: number, reason: string) => void }): Channel {
