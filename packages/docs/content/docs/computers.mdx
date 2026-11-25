@@ -64,5 +64,3 @@ Plan memory for the busiest moment: every running agent can use up to 1 GB, or 4
 - **The Tailscale list is empty or says Tailscale is off.** Install Tailscale on your Mac, open it and sign in, then **Check again**.
 - **"Tailscale SSH is off".** Run `sudo tailscale set --ssh` on that computer, then **Check again**.
 - **A computer shows Offline.** Check that it's on and connected to the internet. Its agents keep running there; the app catches up when it's back.
-- **A computer added before the OpenHut image.** It updates as before, but to move it to the image, run the install command on that computer once: `curl -fsSL openhut.dev | sh`. Its agents, settings and data come along, and the old container is kept, stopped, as `openhut-legacy` until you remove it (`docker rm openhut-legacy`).
-- **A computer added over Tailscale before 0.6.2.** It talked to your Mac over your tailnet, which OpenHut no longer does. Remove it and add it again; its agents' settings and chats come back from your account.

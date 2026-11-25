@@ -1,6 +1,5 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { sql } from 'kysely'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
 import { agentService } from '../../../src/server/agents/agent-service.ts'
@@ -56,13 +55,6 @@ test('an agent keeps the face it was given, so every device shows the same one',
   assert.equal((await agentService.get({ actor, id: 'ag_tokentst' })).face, face)
 })
 
-test('the browser is off for every agent, even on a database that kept the old browser column that defaulted to on', async () => {
-  await sql`alter table agent add column if not exists browser boolean not null default true`.execute(db)
-  await migrate()
-  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
-  assert.equal((await agentService.get({ actor, id: 'ag_tokentst' })).browser, false)
-})
-
 test('model choices: only a connected, switched-on model is accepted', async () => {
   const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
   const model = (id: string, on: boolean) => ({ id, name: id, on, tier: 'big' as const, note: null, contextLength: null, inputPrice: null, outputPrice: null })
@@ -73,15 +65,6 @@ test('model choices: only a connected, switched-on model is accepted', async () 
   await assert.rejects(agentService.update({ actor, id, patch: { model: 'openai:o5' } }), { status: 409, message: /switched off/ })
   const picked = await agentService.update({ actor, id, patch: { model: 'openai:gpt-5.5' } })
   assert.equal(picked.model, 'openai:gpt-5.5')
-})
-
-test('an older database is migrated: bare model ids get their provider, the model check is gone', async () => {
-  await db.insertInto('agent').values({ id: 'ag_legacymod', name: 'Old', owner_id: 'usr_tokenown', instructions: '# Old', model: 'opus', net: 20, channel_key: seal('k'.repeat(32)) }).execute()
-  await db.insertInto('agent').values({ id: 'ag_legacycdx', name: 'Older', owner_id: 'usr_tokenown', instructions: '# Older', model: 'codex', net: 21, channel_key: seal('k'.repeat(32)) }).execute()
-  await migrate()
-  const rows = await db.selectFrom('agent').select(['id', 'model']).where('id', 'in', ['ag_legacymod', 'ag_legacycdx']).orderBy('id').execute()
-  assert.deepEqual(rows.map((row) => row.model), ['codex:gpt-5.5', 'claude:opus'])
-  await db.deleteFrom('agent').where('id', 'in', ['ag_legacymod', 'ag_legacycdx']).execute()
 })
 
 test('a computer without agent-browser refuses the browser switch before changing anything', async () => {
