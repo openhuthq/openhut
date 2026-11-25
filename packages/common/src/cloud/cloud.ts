@@ -98,6 +98,7 @@ export const MemberListBody = z.object({
   at: z.optional(z.number().check(z.int(), z.minimum(0))),
   added: z.optional(z.record(DeviceKey, z.number().check(z.int(), z.minimum(0)))),
   names: z.optional(z.record(DeviceKey, z.string().check(z.maxLength(64)))),
+  managed: z.optional(DeviceKey),
 })
 export type MemberListBody = z.infer<typeof MemberListBody>
 
