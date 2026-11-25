@@ -1,9 +1,9 @@
 #!/bin/sh
 set -eu
 J=/opt/openhut
-mkdir -p /data/app /data/log /data/caddy
-chown -R openhut:openhut /data/app /data/caddy; chmod 0700 /data/app /data/caddy
-touch /data/install.lock /data/update.request; chmod 0666 /data/update.request
+mkdir -p /data/app /data/log /data/caddy /data/update
+chown -R openhut:openhut /data/app /data/caddy /data/update; chmod 0700 /data/app /data/caddy; chmod 0755 /data/update
+touch /data/install.lock
 [ -s /data/here.token ] || (umask 077; printf 'ohj_%s\n' "$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n')" > /data/here.token)
 TOKEN=$(cat /data/here.token)
 export OPENHUT_HERE_TOKEN_SHA256="$(printf '%s' "$TOKEN" | sha256sum | cut -c1-64)"

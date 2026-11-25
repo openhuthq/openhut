@@ -16,7 +16,7 @@ test('an update is a request file for whatever swaps the container, not an insta
   const { request } = await import('../../../src/server/admin/update-request.ts')
   const { readFileSync } = await import('node:fs')
   assert.deepEqual(await request({ appVersion: '0.6.0', sha256: 'a'.repeat(64) }), { updating: true })
-  assert.equal(readFileSync(join(dir, 'update.request'), 'utf8'), `${'a'.repeat(64)} 0.6.0\n`)
+  assert.equal(readFileSync(join(dir, 'update', 'request'), 'utf8'), `${'a'.repeat(64)} 0.6.0\n`)
 })
 
 test('a failed install reports the installer\'s last "openhut:" line as the reason', () => {

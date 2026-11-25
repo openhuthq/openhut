@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { HttpError } from '../platform/http-error.ts'
@@ -9,7 +9,7 @@ const run = promisify(execFile)
 const INSTALL_LOCK = join(config.installDir, 'install.lock')
 const LOG = join(config.installDir, 'update.log')
 const EXIT = `${LOG}.exit`
-const REQUEST = join(config.installDir, 'update.request')
+const REQUEST = join(config.installDir, 'update', 'request')
 
 export type LastUpdate = { exit: number; at: string; reason: string | null }
 
@@ -27,6 +27,8 @@ export function lastUpdate(): LastUpdate | null {
 
 export async function request({ appVersion = '', sha256 }: { appVersion?: string; sha256: string }): Promise<{ updating: boolean }> {
   if (await installing()) throw new HttpError(409, 'An install or update is already running. Try again when it finishes.')
+  mkdirSync(join(config.installDir, 'update'), { recursive: true })
   writeFileSync(REQUEST, `${sha256} ${appVersion}\n`)
+  chmodSync(REQUEST, 0o666)
   return { updating: true }
 }

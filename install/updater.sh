@@ -1,7 +1,7 @@
 #!/bin/sh
 set -u
 cd /tmp || exit 1
-REQUEST=/data/update.request LOG=/data/update.log EXIT=/data/update.log.exit
+REQUEST=/data/update/request LOG=/data/update.log EXIT=/data/update.log.exit
 apply() { # <sha256 the runtime checked> <app version>
   rm -f "$EXIT"; d=$(mktemp -d)
   if ! curl -fsSL --retry 3 "$OPENHUT_URL" -o "$d/install.sh"; then echo "openhut: couldn't download the new version from $OPENHUT_URL"; code=2

@@ -47,7 +47,7 @@ streams (frames.ts): the main opens agentd, agent-API and home-copy streams, the
 stay on the main. `relay/forward.ts` routes each agent's calls to the computer that runs it (`agent.runs_on`; `here` is the
 main's own runtime). Runtimes follow the main: its welcome names its paired runtime image, and a runtime on another one runs
 `install.sh join` in a one-shot `openhut-runtime-update` container, which goes back on failure and labels the image failed.
-The main also runs `openhut-updater` (`install/updater.sh`): Settings › Updates has the server write `/data/update.request`
+The main also runs `openhut-updater` (`install/updater.sh`): Settings › Updates has the server write `/data/update/request`
 with the sha256 of the install.sh it checked at `OPENHUT_URL`, and the updater runs that install.sh if it still matches.
 `.github/workflows/runtime-image.yml` builds, smoke-tests (`scripts/image-smoke.sh`) and pushes both; `promote.yml`
 smoke-tests main's newest green commit, tags both images `stable` and publishes its install.sh (pinned by digest, with
