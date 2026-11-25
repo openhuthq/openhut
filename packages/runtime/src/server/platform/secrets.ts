@@ -1,13 +1,11 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, createPrivateKey, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes, timingSafeEqual, type KeyObject } from 'node:crypto'
-import { writeFileSync } from 'node:fs'
 import { config } from './config.ts'
 import { db } from './db.ts'
 
-const stored = (await db.selectFrom('install_setting').select('value').where('name', '=', 'auth_secret').executeTakeFirst())?.value
-const secretHex = stored ?? config.secret ?? randomBytes(32).toString('hex')
-if (config.secretHandoff && secretHex !== config.secret) writeFileSync(config.secretHandoff, secretHex, { mode: 0o600 })
-if (config.secretHandoff && stored) await db.deleteFrom('install_setting').where('name', '=', 'auth_secret').execute()
-if (!config.secretHandoff && !stored) await db.insertInto('install_setting').values({ name: 'auth_secret', value: secretHex }).execute()
+// The app passes the root secret from the system keychain; without a keychain it lives in the database.
+const stored = config.secret ? undefined : (await db.selectFrom('install_setting').select('value').where('name', '=', 'auth_secret').executeTakeFirst())?.value
+const secretHex = config.secret ?? stored ?? randomBytes(32).toString('hex')
+if (!config.secret && !stored) await db.insertInto('install_setting').values({ name: 'auth_secret', value: secretHex }).execute()
 const secret = Buffer.from(secretHex, 'hex')
 const sealKey = createHash('sha256').update(secret).update('seal').digest()
 const X25519_PKCS8 = Buffer.from('302e020100300506032b656e04220420', 'hex')
