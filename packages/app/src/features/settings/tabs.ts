@@ -12,7 +12,7 @@ const TABS: Tab[] = [
   { slug: 'apps', name: 'Apps', icon: PlugSocketIcon, hue: 'text-hue-red', subtitle: 'What your agents can read and use', href: '/connections' },
   { slug: 'updates', name: 'Updates', icon: CloudDownloadIcon, hue: 'text-hue-sky', subtitle: 'One update for the whole install' },
 ]
-const ADMIN: Tab = { slug: 'admin', name: 'Admin', icon: ShieldUserIcon, hue: 'text-hue-green', subtitle: 'The install’s address, sign-in, email and usage data' }
+const ADMIN: Tab = { slug: 'admin', name: 'Admin', icon: ShieldUserIcon, hue: 'text-hue-green', subtitle: 'For the whole install' }
 
 export function tabsFor({ admin = false }: { admin?: boolean } = {}): Tab[] {
   return admin ? [...TABS, ADMIN] : TABS
