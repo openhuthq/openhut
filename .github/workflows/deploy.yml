@@ -45,12 +45,10 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: |
-          npm ci --no-audit --no-fund --ignore-scripts
-          npm --prefix site ci --no-audit --no-fund
-      - run: npm --prefix site run typecheck
+      - run: npm ci --no-audit --no-fund --ignore-scripts
+      - run: npm -w @openhut/site run typecheck
       - name: Deploy openhut.dev
-        run: npm --prefix site run deploy
+        run: npm -w @openhut/site run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Check that openhut.dev serves the site and the stable installer

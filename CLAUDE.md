@@ -28,7 +28,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
 - **`packages/app`** — `@openhut/app`, the App: the React dashboard (Vite to `dist`, built into the image and served by the runtime on the same origin, TanStack Query). Tailwind v4 with shared
   components in `src/components/ui` (shadcn on Base UI); screens use those, not their own styles.
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.
-- **`site/`** — openhut.dev: the home page, the brand page and `/` for curl, served by a Cloudflare Worker with static assets
+- **`packages/site`** — openhut.dev: the home page, the brand page and `/` for curl, served by a Cloudflare Worker with static assets
   (`wrangler.jsonc`, `src/worker.ts`) that `.github/workflows/deploy.yml` deploys after CI passes on `main`. Its own npm package
   with its own lock, not a workspace (wrangler stays out of the root lock): `npm --prefix site ci`, then `run typecheck` and `test`.
 

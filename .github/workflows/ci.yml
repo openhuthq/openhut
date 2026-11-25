@@ -43,13 +43,6 @@ jobs:
         with:
           path: .turbo/cache
           key: turbo-${{ github.sha }}
-      - name: The site (site/, its own package) has no high advisory, typechecks and passes its tests
-        run: |
-          npm --prefix site ci --no-audit --no-fund
-          (cd site && npm audit --omit=dev --audit-level=high)
-          if grep '"resolved":' site/package-lock.json | grep -v '"https://registry.npmjs.org/'; then exit 1; fi
-          npm --prefix site run typecheck
-          npm --prefix site test
 
   server:
     if: github.ref == 'refs/heads/main'
