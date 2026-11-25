@@ -55,4 +55,4 @@ jobs:
         run: |
           curl -fsSL https://openhut.dev/ | grep -q '^OPENHUT_BUILD='
           curl -fsS -H 'accept: text/html' https://openhut.dev/ | grep -q '<html'
-          curl -fsS https://openhut.dev/docs/install/ | grep -q 'curl -fsSL https://openhut.dev'
+          curl -fsS https://openhut.dev/docs/install/ | grep -q 'Install · OpenHut docs'
