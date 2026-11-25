@@ -2,7 +2,6 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import Fastify from 'fastify'
-import { validatorCompiler } from 'fastify-type-provider-zod'
 import { bodyOf } from '@openhut/common/cloud/member-list.ts'
 import { bootCloud, devSignIn, hasCloud, webBrowser } from './real-cloud.ts'
 
@@ -14,6 +13,7 @@ test('against the real cloud API: a new account starts managed, so a second brow
   fakeAgentd()
   const { migrate } = await import('../../../src/server/platform/db.ts')
   const { answerErrors } = await import('../../../src/server/platform/http-error.ts')
+  const { validatorCompiler } = await import('fastify-type-provider-zod')
   const { cloudController } = await import('../../../src/server/cloud/cloud-controller.ts')
   const { cloud: ours } = await import('../../../src/server/platform/cloud.ts')
   const { inviteService } = await import('../../../src/server/cloud/invite-service.ts')

@@ -2,7 +2,6 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import Fastify from 'fastify'
-import { validatorCompiler } from 'fastify-type-provider-zod'
 import { bodyOf } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64 } from '@openhut/common/vault/public.ts'
 import { unlock } from '@openhut/common/vault/secret.ts'
@@ -15,6 +14,7 @@ test('against the real cloud API: End-to-end encryption on, after the setup, dro
   const { fakeAgentd } = await import('../agents/signed-in.ts')
   fakeAgentd()
   const { migrate } = await import('../../../src/server/platform/db.ts')
+  const { validatorCompiler } = await import('fastify-type-provider-zod')
   const { cloudController } = await import('../../../src/server/cloud/cloud-controller.ts')
   const { cloudService } = await import('../../../src/server/cloud/cloud-service.ts')
   const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
