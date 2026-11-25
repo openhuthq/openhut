@@ -22,9 +22,9 @@ export function SetupPage() {
     onSubmit={(event) => {
       const field = formValues(event)
       const address = field('address').trim().replace(/\/+$/, '')
-      createPerson.mutate({ address, email: field('email'), password: field('password') }, {
-        onSuccess: () => { if (URL.canParse(address) && new URL(address).origin !== location.origin) location.assign(`${new URL(address).origin}/login`) },
-      })
+      void createPerson.mutateAsync({ address, email: field('email'), password: field('password') }).then(() => {
+        if (URL.canParse(address) && new URL(address).origin !== location.origin) location.assign(`${new URL(address).origin}/login`)
+      }, () => undefined)
     }}>
     <Field strong label="Address" hint="The HTTPS address your team will open. Point its DNS at this server first; OpenHut gets the certificate itself." error={fieldError(createPerson.error, 'address')}>{(control) =>
       <Input variant="lg" {...control} name="address" type="url" required defaultValue={location.protocol === 'https:' ? location.origin : ''} placeholder="https://agents.example.com" autoComplete="url" />}</Field>
