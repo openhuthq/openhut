@@ -183,6 +183,8 @@ export const remote = {
 
   startCloud: () => cloud.startCloud(),
 
+  cloudComputer: () => cloud.cloudComputer(),
+
   async open(workspace: string): Promise<void> {
     const computer = desktop?.window ? await store.get<string>('computer') : undefined
     target = { team: workspace, ...computer && { computer } }
