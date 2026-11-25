@@ -11,7 +11,8 @@ export const DATA = resolve(process.env.AGENTD_DATA || '/data')
 export const PIPE = process.platform === 'win32'
 export const BIN = process.env.OPENHUT_BIN || join(ASSETS, 'bin')
 export const EXE = PIPE ? '.exe' : ''
-export const CLAUDE = process.env.OPENHUT_CLAUDE || join(BIN, `claude${EXE}`)
+// The server image sets OPENHUT_CLAUDE to the musl build for its own Alpine sign-in; agents are glibc, so they get bin/claude (exec of the musl build there is ENOENT).
+export const CLAUDE = process.env.OPENHUT_RUNTIME === 'image' ? join(BIN, 'claude') : process.env.OPENHUT_CLAUDE || join(BIN, `claude${EXE}`)
 export const RESOLV = '/etc/agentd/resolv.conf'
 export const AGENT_UID = 10000
 export const AGENT_USER = `${AGENT_UID}:${AGENT_UID}`
