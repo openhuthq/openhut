@@ -77,9 +77,7 @@ export const agentService = {
     requireModel(model)
     if (workspace && workspace !== HOME) throw new HttpError(400, 'This install has one team.', { param: 'workspace' })
     const ws = HOME
-    await requireComputer(runsOn)
-    const health = await agentd.health({ on: runsOn })
-    if (health.imageReady === false) throw new HttpError(409, 'OpenHut is still downloading what agents need to run. This happens once and takes a few minutes. Try again shortly.')
+    const health = await requireComputer(runsOn)
     const access = await teamOnly({ owner: actor.email, people, sidebars })
     const id = newId('ag')
     const value: AgentRecord = { name: clean, instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000), face: face ?? null, wanted: 'stopped', createdAt: new Date().toISOString() }
@@ -278,9 +276,13 @@ async function reseal({ facts, personal }: { facts: AgentFacts; personal: boolea
   for (const child of children) await recordsService.put({ collection: child.collection, id: child.id, parent: facts.id, workspace: facts.workspace, personal, value: child.value, secret: child.secret })
 }
 
-async function requireComputer(id: string): Promise<void> {
-  if (!await db.selectFrom('computer').select('id').where('id', '=', id).where('expires_at', 'is', null).executeTakeFirst() && id !== HERE) throw new HttpError(400, 'That computer isn’t part of this install.', { param: 'runsOn' })
+async function requireComputer(id: string) {
+  const row = await db.selectFrom('computer').select('name').where('id', '=', id).where('expires_at', 'is', null).executeTakeFirst()
+  if (!row && id !== HERE) throw new HttpError(400, 'That computer isn’t part of this install.', { param: 'runsOn' })
   if (!forward.online(id)) throw new HttpError(409, 'That computer is offline. Start it, or pick another one.', { param: 'runsOn' })
+  const health = await agentd.health({ on: id })
+  if (health.imageReady === false) throw new HttpError(409, `${row?.name || 'That computer'} is still getting ready (loading what agents need to run). This happens once. Try again in a few minutes.`, { param: 'runsOn' })
+  return health
 }
 
 async function move({ facts, from, to }: { facts: AgentFacts; from: string; to: string }): Promise<void> {

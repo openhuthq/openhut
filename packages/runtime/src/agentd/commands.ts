@@ -22,11 +22,14 @@ let fence = checkFence()
 export const commands = {
   health: {
     parse: () => ({}),
-    run: async () => ({
-      firewall: await firewall.recent(), image: IMAGE, imageReady: box.name === 'docker' ? await imageReady(IMAGE) : true,
-      gvisor: box.name === 'docker' && await gvisorOn(IMAGE),
-      features: { whatsapp: whatsapp.installed(), browser: browser.installed() },
-    }),
+    run: async () => {
+      const ready = box.name === 'docker' ? await imageReady(IMAGE) : true
+      return {
+        firewall: await firewall.recent(), image: IMAGE, imageReady: ready,
+        gvisor: box.name === 'docker' ? ready ? await gvisorOn(IMAGE) : undefined : false, // unknown until the image is loaded, so the main doesn't show "off"
+        features: { whatsapp: whatsapp.installed(), browser: browser.installed() },
+      }
+    },
   },
   ps: {
     parse: () => ({}),
