@@ -8,7 +8,7 @@ import { bootCloud, devSignIn, hasCloud } from './real-cloud.ts'
 
 const skip = hasCloud ? false : 'private/api isn’t checked out here'
 
-test('against the real cloud API: dev sign-in, save the kit, make an agent, chat with it, add a connection, all kept as sealed records', { skip }, async () => {
+test('against the real cloud API: dev sign-in, make an agent, chat with it, add a connection, all kept as sealed records', { skip }, async () => {
   const cloud = await bootCloud()
   const { fakeAgentd } = await import('../agents/signed-in.ts')
   fakeAgentd()
@@ -41,7 +41,7 @@ test('against the real cloud API: dev sign-in, save the kit, make an agent, chat
   await app.register(threadController, { prefix: '/api/threads' })
   await app.register(connectionController, { prefix: '/api/connections' })
   const headers = { authorization: 'Bearer test-key' }
-  const status = async () => (await app.inject({ method: 'GET', url: '/api/cloud', headers })).json<{ status: string; email: string | null; kit: unknown; workspace: { id: string } | null }>()
+  const status = async () => (await app.inject({ method: 'GET', url: '/api/cloud', headers })).json<{ status: string; email: string | null; workspace: { id: string } | null }>()
   try {
     assert.equal((await status()).status, 'off')
     const started = (await app.inject({ method: 'POST', url: '/api/cloud/sessions', headers })).json<{ authorizationUrl: string }>()
@@ -57,12 +57,6 @@ test('against the real cloud API: dev sign-in, save the kit, make an agent, chat
     const on = await status()
     assert.equal(on.status, 'on')
     assert.equal(on.email, 'mo@example.com')
-    assert.equal(on.kit, null)
-
-    const kit = await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })
-    assert.equal(kit.statusCode, 200, kit.body)
-    assert.equal(kit.json<{ words: string[] }>().words.length, 12)
-    assert.ok((await status()).kit)
 
     const made = await app.inject({ method: 'POST', url: '/api/agents', headers, payload: { name: 'Juniper', instructions: 'Answer briefly.' } })
     assert.equal(made.statusCode, 200, made.body)
@@ -89,13 +83,6 @@ test('against the real cloud API: dev sign-in, save the kit, make an agent, chat
     const record = await recordsService.get({ collection: 'connection', workspace, id: connection.id })
     assert.equal(record?.personal, true)
     assert.ok(keysService.vault(), 'a Mac holds the account’s vault key for connection secrets')
-
-    const saved = keysService.kitState().saved
-    await keysService.setKit(undefined)
-    const over = await app.inject({ method: 'POST', url: '/api/cloud/kits', headers })
-    assert.equal(over.statusCode, 409, 'a computer that hasn’t picked up the cloud kit can’t write a new one over it')
-    assert.match(over.json<{ error: { message: string } }>().error.message, /already has a recovery kit/)
-    await keysService.setKit(saved ?? undefined)
 
     const token = keysService.session()?.token ?? ''
     const lists = () => fetch(`${cloud.url}/v1/teams/${workspace}/member-list`, { headers: { authorization: `Bearer ${token}` } })

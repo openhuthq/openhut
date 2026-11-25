@@ -1,7 +1,6 @@
 name: CI
 
-# The merge gate: OpenHut checked as a web app and a server, Linux only. Packaging the Electron shell for
-# macOS, Windows and Linux lives in shell.yml and never runs here.
+# The merge gate: OpenHut checked as a web app and a server, Linux only.
 
 on:
   push:
@@ -14,11 +13,6 @@ permissions:
 concurrency:
   group: ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
-
-env:
-  # Nothing here runs Electron or Playwright; the tunnel's Chromium test skips without a display.
-  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
 jobs:
   changes:
@@ -64,6 +58,8 @@ jobs:
         run: |
           npm audit --omit=dev --audit-level=high
           ! grep '"resolved":' package-lock.json | grep -v '"https://registry.npmjs.org/\|"packages/'
+      - name: Web only (scripts/web-only-check.sh)
+        run: scripts/web-only-check.sh
       - uses: actions/cache/restore@v4
         with:
           path: .turbo/cache
@@ -106,7 +102,7 @@ jobs:
           npm --prefix private/site run typecheck
 
   app:
-    # M3: the image, the shell and the phone (webDir ../app/dist) carry the same App dist (scripts/app-sum.ts). A PR's App never matches
+    # M3: the image carries the same App dist the build makes (scripts/app-sum.ts). A PR's App never matches
     # stable, so here the image is built against a test-key release of this App (deploy/test-release.ts);
     # R5's check against the real signed stable release runs in the Cloud deploy's build (cloud.yml, after fetch-release.sh).
     needs: changes
@@ -125,13 +121,13 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund --ignore-scripts
-      - name: The image, the shell and the phone carry the same dist sha256
+      - name: The image carries the same dist sha256
         run: |
-          npm -w @openhut/desktop run build
+          npm -w @openhut/app run build
           set -a; eval "$(node private/api/deploy/test-release.ts packages/app/dist private/api/deploy/release)"; set +a
           docker build -q -f private/api/Dockerfile --build-arg RELEASE_KEY_SPKI --build-arg REKOR_KEY_SPKI -t openhut-cloud:ci .
           docker cp "$(docker create openhut-cloud:ci)":/app/web image-web
-          node scripts/app-sum.ts packages/app/dist packages/desktop/dist/renderer image-web | tee -a "$GITHUB_STEP_SUMMARY"
+          node scripts/app-sum.ts packages/app/dist image-web | tee -a "$GITHUB_STEP_SUMMARY"
 
   server:
     needs: changes
@@ -151,11 +147,9 @@ jobs:
     uses: ./.github/workflows/packs.yml
 
   browser:
-    # R1: the browser run is part of the gate: a fresh dev stack, the web App, and a browser signed in through the Mac (scripts/web-e2e.sh).
+    # R1: the browser run is part of the gate: a fresh dev stack, the web App, and Chrome signing in (scripts/web-e2e.sh).
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: ''
     steps:
       - uses: actions/checkout@v5
       - name: Check out private/

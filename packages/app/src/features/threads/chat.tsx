@@ -25,7 +25,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { ErrorNote } from '@/components/error-note'
 import { STEP_ICONS } from '@/components/icons'
-import { DRAG, Dots, I, ICON_BUTTON } from '@/components/kit'
+import { Dots, I, ICON_BUTTON } from '@/components/kit'
 import { OfflineChip } from '@/features/cloud/live'
 import { Faces, typed, Typing } from '@/features/cloud/presence'
 import { PersonFace } from '@/components/custom/person-face'
@@ -188,7 +188,7 @@ function ChatFrame({ agent, composer, tools, onTitle, onFiles, children }: { age
   }
   return <section className="flex min-w-0 flex-1 flex-col bg-card" onDragOver={dragOver} onDrop={drop}>
     <title>{`${agent.name} · OpenHut`}</title>
-    <div className={cn('still flex h-[52px] shrink-0 items-center gap-2 px-4 phone:grid phone:h-16 phone:grid-cols-[1fr_auto_1fr] phone:px-3', sidebar?.collapsed && 'pl-[94px] mac:pl-[166px] phone:pl-3', DRAG)}>
+    <div className={cn('still flex h-[52px] shrink-0 items-center gap-2 px-4 phone:grid phone:h-16 phone:grid-cols-[1fr_auto_1fr] phone:px-3', sidebar?.collapsed && 'pl-[94px] phone:pl-3')}>
       <Button type="button" variant="bare" aria-label="All agents" className={cn(ICON_BUTTON, 'float hidden size-10 justify-self-start rounded-full bg-card text-ink phone:grid')} onClick={back}><I icon={ArrowLeft01Icon} size={20} /></Button>
       {onTitle
         ? <Button type="button" variant="bare" className="float flex h-10 min-w-0 items-center gap-2 rounded-full bg-card pr-4 pl-1.5 text-ink" onClick={onTitle}><Face agent={agent} size={28} /><span className="truncate text-[16px] font-semibold">{agent.name}</span></Button>

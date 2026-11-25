@@ -15,13 +15,12 @@ import { useAdmin, useCompleteSeatSignIn, useSeatUsage, useStartSeatSignIn } fro
 import { useAgents } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { Busy, DialogCard, HINT, I, PILL, SetupSheet, Section, Status } from '@/components/kit'
-import { Check, CardTitle, ListNote, Row, Rows, useConfirming } from '@/features/settings/kit'
+import { CardTitle, ListNote, Row, Rows, useConfirming } from '@/features/settings/kit'
 import { useCodexSignIn, useConnectProvider, useDisconnectProvider, useFoundNotice, useProviders, useRefreshProvider, useSetModel } from '@/features/models/api'
 import { consequence, count, describe, glyphOf, matches, plural, updatedAgo } from '@/features/models/labels'
 import { inUse } from '@/features/agents/form'
 import { open, Redirect, useOpen } from '@/lib/router'
 import { formValues } from '@/lib/form'
-import { openPage } from '@/lib/native'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { CreditsSection } from '@/features/credits/credits'
@@ -260,7 +259,7 @@ export function SeatSignIn({ start: prepared, onClose = () => open(), onDone = (
   useEffect(() => {
     if (!signIn?.url || shown.current) return
     shown.current = true
-    openPage(signIn.url)
+    window.open(signIn.url, '_blank')
   }, [signIn?.url])
   useEffect(() => {
     const pick = () => void navigator.clipboard.readText().then((text) => {

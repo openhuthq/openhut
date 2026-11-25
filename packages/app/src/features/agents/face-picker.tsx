@@ -7,7 +7,7 @@ import { I } from '@/components/kit'
 import { Face, photoOf } from '@/features/agents/face'
 import { bgColor, parseLook, randomLook } from '@/lib/face'
 import { squarePicture } from '@/lib/picture'
-import { toastError, toastFailed } from '@/lib/toast'
+import { toastFailed } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 const LOOKS = [['Support', 'support headset'], ['Ops', 'ops beanie'], ['Sales', 'sales shades'], ['Reports', 'report glasses'], ['Finance', 'finance tophat'], ['Triage', 'triage cap']]

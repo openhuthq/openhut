@@ -1,14 +1,13 @@
 # OpenHut
 
-Self-hosted agents with an end-to-end encrypted cloud: the OpenHut app (Mac and Linux) runs agents on several runtimes, one on
-this computer and one on each computer you add. A runtime runs many Hermes agents, each in its
-own process (a plain process that runs as you in the app on a Mac, Windows or Linux PC, a gVisor sandbox in Docker on a server you add), with their own Slack app and WhatsApp number. Agents reach team
+Agents for a team, web only (owner, 2026-11-25: `private/brain/decisions/web-only.md`): the web App (app.openhut.dev) runs agents on
+runtimes: Cloud (a computer we host) and any Linux server you add with install.sh. A runtime runs many Hermes agents, each in its
+own process (a plain process on Cloud, a gVisor sandbox in Docker on a server you add), with their own Slack app and WhatsApp number. Agents reach team
 data only through the runtime's gateway, which holds every key and checks each agent's grants on every call. You manage
-it from the app, or by asking an agent to change its own name, instructions, channels or connections, which you approve in the app (`private/brain/decisions/agents-change-themselves.md`). Everyone signs in to OpenHut Cloud on first launch: always
-synced, always a team, end-to-end encrypted (`private/brain/decisions/sign-in-first.md`). Apps read sealed records from the cloud
-(`cloud.openhut.dev/api`) and decrypt them locally; a runtime keeps only the run set for the agents it runs. The app reaches the local
-runtime on a 0600 Unix socket, and a remote one end-to-end encrypted through the relay (Tailscale only carries the first install, over Tailscale SSH), after it
-asked to join with a one-use code and you approved it.
+it from the app, or by asking an agent to change its own name, instructions, channels or connections, which you approve in the app (`private/brain/decisions/agents-change-themselves.md`). Everyone signs in to OpenHut Cloud with Google: always
+synced, always a team (`private/brain/decisions/sign-in-first.md`). The App reads sealed records from the cloud
+(`cloud.openhut.dev/api`); every account is managed (our signer adds your browsers and invited teammates, W1). The App reaches a
+runtime through the relay's encrypted tunnel, after the runtime joined with a one-use code.
 Scope and decisions: `private/brain/decisions/openhut-v1-scope.md`.
 
 ## Packages
@@ -20,11 +19,12 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   errors, evlog logging, the typed agentd client), `team/` (identity: the socket or the enrolled key, and the one owner),
   `agents/` (agents, grants, their Hermes files), `channels/`, `connections/`, `gateway/` (the agents' MCP gateway and
   key broker on :8081), `admin/`, and
-  `integrations/<service>/`. `src/agentd/` is the root helper: the only process that starts agents (gVisor on servers, native in the app on
-  Mac, Windows and Linux: a plain Hermes process per agent, or memory, `private/brain/decisions/sandbox-module.md`), on a Unix socket on a server; in the app the server runs its command table in its own process (`src/agentd/serve.ts`). Tests mirror them in `test/server/` and `test/agentd/`.
-- **`packages/app`** — `@openhut/app`, the App: the React dashboard (Vite to `dist`, TanStack Query), one build that the desktop shell, the phone and the Cloud (app.openhut.dev) serve as the same bytes. It reads `/config.json` (`{ cloud, local? }`) at start: `local` means the page's own origin answers `/api` (the desktop shell, and `npm run dev`); without it the App reaches computers through the Cloud's tunnel (`lib/remote.ts`). Tailwind v4 with shared components in `src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`private/brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
-- **`packages/desktop`** — `@openhut/desktop`, the Mac, Windows and Linux shell (`private/brain/decisions/desktop-app.md`): Electron main (`src/main.mjs`, starts the server, which runs agentd inside it,
-  serves the App's `dist` (copied to `dist/renderer` by `build`) and `/config.json` on `app://openhut`), and forwards `/api/*` there to the runtime's socket.
+  `integrations/<service>/`. `src/agentd/` is the root helper: the only process that starts agents (gVisor on servers, native on Cloud: a plain
+  Hermes process per agent, `private/brain/decisions/sandbox-module.md`), on a Unix socket on a server; on Cloud the server runs its command table in its own process (`src/agentd/serve.ts`). Tests mirror them in `test/server/` and `test/agentd/`.
+- **`packages/app`** — `@openhut/app`, the App: the React dashboard (Vite to `dist`, TanStack Query), one build that the Cloud (app.openhut.dev) serves. It reads `/config.json` (`{ cloud, local? }`) at start: `local` means the page's own origin answers `/api` (`npm run dev`); without it the App reaches computers through the Cloud's tunnel (`lib/remote.ts`). Tailwind v4 with shared components in `src/components/ui` (shadcn on Base UI); screens use those, not their own styles (`private/brain/decisions/dashboard-uses-tailwind-and-shadcn.md`).
+- **`packages/release`** — `@openhut/release`, the signed packs: `scripts/pack-backend.mjs` bundles the server and agentd with esbuild
+  into `dist/backend` with the Hermes runtime and agent-browser (`scripts/pack-hermes.mjs`, pinned in `install/native-runtime.json`),
+  `scripts/pack.ts` (repo root) packs them, and `src/packs.mjs` + `src/release-key.mjs` are the updater openhut-boot runs on a Cloud computer.
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types, the Cloud client (`cloud/`), and in `tunnel/` the encrypted tunnel (through the relay; `sessions()` runs it over any pipe): Noise IK on `noise-handshake`,
   the frame codec, `connect` (device) and `serve` (computer); a computer shows its access token as `x-openhut-token`, a device as the second WebSocket subprotocol after `openhut`, so `connect` runs in browsers too, with a non-exportable WebCrypto key (`newWebKeyPair`, `webKey`; `private/brain/decisions/browser-keys.md`).
 - **`packages/docs`** — `@openhut/docs`, the docs at openhut.dev/docs: Fumadocs on TanStack Start, prerendered. MDX in
@@ -81,12 +81,10 @@ with no open blocker, run `gh pr merge --auto --merge`; it merges when the requi
 never forcing it. Every main commit gets its own full CI run (`ci.yml`, Linux only: typecheck, tests, private, server smoke). The image smoke (5-11 min) runs on a PR only when it changes the image's inputs (`install/`, `packages/runtime|common`, `vendor/`, `scripts/{release,image,image-smoke}.sh`, `runtime-image.yml`), so most PRs gate in ~2 min; on main it always runs, and `gate`, the image publish and the Cloud deploy all wait on it; Deploy then ships main's newest green commit (openhut.dev, the edge image, the cloud).
 Reviewer loop and flaky tests: `private/brain/openhut-deploy.md` (CI).
 
-## Web first, Electron last
+## Dev loop
 
-OpenHut is developed as a web app. The dashboard runs on localhost in a browser with hot reload, against the real
-runtime and a local cloud. Electron is the endgame: run it last, to check the final thing and what only the desktop
-has (Keychain, Touch ID, passkey, updates, deep links, the tray). The procedure is the `openhut-dev-loop` skill
-(`.agents/skills/`, linked from `.claude/skills`).
+OpenHut is a web app. The dashboard runs on localhost in a browser with hot reload, against the real runtime and a local
+cloud. The procedure is the `openhut-dev-loop` skill (`.agents/skills/`, linked from `.claude/skills`).
 
 | Command | What it does |
 |---|---|
@@ -95,20 +93,10 @@ has (Keychain, Touch ID, passkey, updates, deep links, the tray). The procedure 
 | `npm run reset` | Wipe `.data` (runtime and local cloud DB) |
 | `npm run check` | Typecheck and test only what changed since `origin/main` |
 | `npm run test` / `typecheck` / `build` | Everything |
-| `npm run app` | The real Electron app from this checkout |
-| `npm run e2e:app` | The app e2e on unpackaged Electron and a local dev cloud (this Mac) |
 | `npm run release` | Build what openhut.dev serves |
 
-Which loop proves which change:
-- Screens, copy, forms, API, agents, cloud: `npm run dev` and a look in Chrome at the Vite URL, plus `npm run check`.
-  This is the default, and it's proof enough for review.
-- `main.mjs`, `preload.cjs`, anything behind `window.openhut`: `npm run app`, then `npm run e2e:app`.
-- Packaging, signing, installers, OS-specific behavior: a manual Shell run on the branch (`gh workflow run shell.yml --ref <branch>`).
-  It also runs by itself when a main push changes the shell. CI never packages, and it is the merge gate, never the loop: don't wait on it to see a change working.
-
-The dashboard reaches the desktop app only through `packages/app/src/lib/desktop.ts` (`desktop` is
-`undefined` in a browser, and every caller handles that); a test keeps it the only place. Prefer moving work out of
-the main process into the runtime's `/api` over adding a `desktop` call, so it runs in the browser too.
+`scripts/web-e2e.sh` is the browser run (Chrome through playwright-core), and `scripts/web-only-check.sh` keeps the desktop app,
+the phone app and end-to-end encryption out (restore them from the tag `archive/desktop-and-e2e-2026-11-25`).
 
 ## Local dev
 
@@ -117,34 +105,16 @@ npm install
 npm run dev
 ```
 
-`npm run dev` starts agentd with native agents (real Hermes processes, as on the Mac app; they need the bundled runtime:
-`npm -w @openhut/desktop run pack-backend`, which needs `uv`), the server API on 127.0.0.1:8787 with `.data`, the real model
+`npm run dev` starts agentd with native agents (real Hermes processes, as on Cloud; they need the bundled runtime:
+`npm -w @openhut/release run pack-backend`, which needs `uv`), the server API on 127.0.0.1:8787 with `.data`, the real model
 and real outside services (connect Claude in Settings), the dev key `dev` enrolled, and Vite for the renderer with `/api` proxied to it with
 `Authorization: Bearer dev`. It also runs the cloud locally, never production: one Node process from `private/api` (PGlite, dev sign-in, the
 relay and the OAuth broker; no wrangler), so it needs `private/` and fails without it unless
 `OPENHUT_CLOUD_URL`/`OPENHUT_API_URL` name a cloud. Dev ports (API 8797, gateway 8091, cloud 8792) step
-to the next free one, so it runs beside the installed app and other checkouts; it prints the URLs and the sign-in account
+to the next free one, so it runs beside other checkouts; it prints the URLs and the sign-in account
 (mo@example.com). Ctrl-C stops everything.
-Every dev run of the app (`npm run app`, `OPENHUT_TEST_HOME`, or `npm -w @openhut/desktop run dist:dev`, app id `dev.openhut.app.dev`) is
-"OpenHut Dev": DEV icon and pill, `~/Library/Application Support/OpenHut Dev`, `openhut-dev://`, gateway 8091, the local cloud
-(`packages/desktop/src/dev-build.mjs`), and no updates from the release feed (an `OPENHUT_TEST_HOME` run still updates, for the update tests).
-
-## Build the desktop app
-
-`npm -w @openhut/desktop run dist` builds the renderer, bundles the runtime's server and agentd with esbuild into
-`packages/desktop/dist/backend` with the Hermes runtime (no `.pyc`), Node (Mac and Windows; Linux runs Node with Electron) and agent-browser for the build's platform; Claude Code downloads on the first Claude sign-in (`scripts/pack-hermes.mjs`, pinned in `install/native-runtime.json`; nothing downloads on first run) (`scripts/pack-backend.mjs`), and runs electron-builder (`electron-builder.yml`): an arm64,
-macOS 14+ `release/mac-arm64/OpenHut.app`, `release/OpenHut-arm64.dmg` and the versioned zip. It signs with the Developer ID
-in the login keychain (hardened runtime, `build/entitlements.mac.plist`) and never notarizes (`notarize: false`): only the
-release workflow (`.github/workflows/shell.yml`, `scripts/notarize.sh`) notarizes, staples and checks a build. The packaged app runs the real model unless `OPENHUT_MODEL` is set.
-Icon sources: `build/icon.svg`, `build/background.svg`. Gotchas: `private/brain/openhut-gotchas.md` (Mac app, Linux app).
-
-On x86_64 Linux, `npm -w @openhut/desktop run dist:linux` builds `release/OpenHut-x64.AppImage` and `release/openhut-x64.deb`;
-the Linux app runs agents natively like the Mac app, with no Docker (`private/brain/decisions/linux-app-runs-agents-natively.md`). It needs a Linux machine, not a cross-build from the Mac.
 
 ## Test
 
 `npm run check` typechecks and tests what changed; `npx turbo run build typecheck test` does everything. The server path
-(install, a server joining, an agent in gVisor) is the runtime image smoke test (`scripts/image-smoke.sh`, in CI). `npm run e2e:app` builds the renderer and backend and runs the app e2e
-(`app-e2e.mjs --dev`) against the unpackaged app and a local dev cloud, on this Mac only. Its first run needs a click on
-the Keychain prompt (`private/brain/openhut-gotchas.md`). Packaged-app proof on every OS is a Shell run (`shell.yml`, dispatch only): its
-`*-e2e` artifacts hold the screenshots and `evidence.json`.
+(install, a server joining, an agent in gVisor) is the runtime image smoke test (`scripts/image-smoke.sh`, in CI). The browser path (sign in, a second browser, an invited teammate) is `scripts/web-e2e.sh`, in CI.

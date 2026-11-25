@@ -15,15 +15,13 @@ export { Stored, useStore, type Account, type AskRoom, type KeyStore, type Room,
 export type { Box, Boxed, Sent } from './keys.ts'
 export type { Cloudside } from './rooms.ts'
 
-type From = { words: string[]; kit: string } | { prf: Bytes; box: string } | { letter: Letter; workspace: string }
-
 const ring = (key: Bytes | null | undefined): Ring | null => (key ? { version: 1, keys: { 1: key } } : null)
 const pick = <T extends object, K extends keyof T>(from: T, names: K[]): Pick<T, K> => Object.fromEntries(names.map((name) => [name, from[name]])) as Pick<T, K>
 
 // The account's state and flows the runtime needs; the key material stays in here.
-export const keysService = pick(keys, ['account', 'session', 'locked', 'asked', 'kitState', 'vault', 'deviceKey', 'accountDeviceKey', 'signedIn', 'mustBeOn', 'ownedBy',
-  'open', 'adopt', 'relock', 'forgetHere', 'removedHere', 'setSession', 'setLocked', 'setAsked', 'setKit',
-  'addDevice', 'dropDevices', 'change', 'accountLetter', 'passkeyBox', 'workspaceBox', 'escrowBox', 'withManaged', 'signBox', 'deleteBox', 'boxIsMine'])
+export const keysService = pick(keys, ['account', 'session', 'locked', 'asked', 'vault', 'deviceKey', 'accountDeviceKey', 'signedIn', 'mustBeOn', 'ownedBy',
+  'open', 'adopt', 'relock', 'forgetHere', 'removedHere', 'setSession', 'setLocked', 'setAsked',
+  'addDevice', 'dropDevices', 'change', 'accountLetter', 'workspaceBox', 'escrowBox', 'signBox'])
 
 // Each team's state and flows the runtime needs.
 export const roomKeys = pick(rooms, ['rooms', 'room', 'members', 'roleIn', 'isOwn', 'link', 'linkUntil', 'joinedBy',
@@ -78,11 +76,9 @@ export const keyring = {
 
   remove: ({ team, devices, emails }: { team: string; devices?: string[]; emails?: string[] }) => rooms.teamChange({ ws: team, devices, emails }),
   rotate: (team: string) => rooms.teamChange({ ws: team, rotate: true }),
-  kit: keys.newKit,
 
-  async restore({ from, workspaces }: { from: From; workspaces: () => Promise<Boxed[]> }): Promise<Account | null> {
-    if ('words' in from) return keys.restore({ ...from, workspaces: await workspaces() })
-    const key = 'prf' in from ? await keys.fromPasskey(from) : await openLetter({ found: from.letter, workspace: from.workspace })
+  async restore({ from, workspaces }: { from: { letter: Letter; workspace: string }; workspaces: () => Promise<Boxed[]> }): Promise<Account | null> {
+    const key = await openLetter({ found: from.letter, workspace: from.workspace })
     return key ? keys.restoreWith({ key, workspaces: await workspaces() }) : null
   },
 

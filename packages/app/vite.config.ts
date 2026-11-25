@@ -18,7 +18,7 @@ export default defineConfig({
   root: import.meta.dirname,
   plugins: [react(), tailwindcss(), devConfig()],
   resolve: { alias: { '@': path.resolve(import.meta.dirname, './src'), 'sodium-native': 'sodium-javascript' } },
-  define: { 'import.meta.env.OPENHUT_VERSION': JSON.stringify(JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../desktop/package.json'), 'utf8')).version) },
+  define: { 'import.meta.env.OPENHUT_VERSION': JSON.stringify(JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../runtime/package.json'), 'utf8')).version) },
   build: { outDir: 'dist', emptyOutDir: true, target: 'es2022' },
   server: { proxy: Object.fromEntries(['/api', '^/c/'].map((path) => [path, { target: `http://127.0.0.1:${process.env.PORT ?? 8787}`, ws: true, headers: { authorization: 'Bearer dev' } }])) },
 })

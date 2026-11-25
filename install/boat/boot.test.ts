@@ -7,8 +7,8 @@ import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { fakeRekor } from '../../packages/desktop/test/fake-rekor.ts'
-import { poll, readState } from '../../packages/desktop/src/packs.mjs'
+import { fakeRekor } from '../../packages/release/test/fake-rekor.ts'
+import { poll, readState } from '../../packages/release/src/packs.mjs'
 
 const repo = join(import.meta.dirname, '../..')
 const root = mkdtempSync(join(tmpdir(), 'openhut-boot-'))
@@ -32,7 +32,7 @@ before(async () => {
   await run('release-key.ts', ['key', join(root, 'other.pem')])
   // Laid out as snapshot.sh installs it in /opt/openhut/boot.
   mkdirSync(join(root, 'boot'))
-  for (const file of ['install/boat/boot.mjs', 'packages/desktop/src/packs.mjs', 'packages/desktop/src/release-key.mjs']) copyFileSync(join(repo, file), join(root, 'boot', file.split('/').at(-1)!))
+  for (const file of ['install/boat/boot.mjs', 'packages/release/src/packs.mjs', 'packages/release/src/release-key.mjs']) copyFileSync(join(repo, file), join(root, 'boot', file.split('/').at(-1)!))
 })
 after(() => { rekor.close(); feed.close() })
 

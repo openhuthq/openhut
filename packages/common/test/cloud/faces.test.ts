@@ -1,22 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { FACES } from '../../src/cloud/cloud.ts'
-import { commitOf, facesOf } from '../../src/cloud/faces.ts'
+import { commitOf } from '../../src/cloud/faces.ts'
 
-test('two different faces from the key and nonce, the same on both computers, and a commit that changes with the nonce', () => {
-  for (let i = 0; i < 200; i++) {
-    const [a, b] = facesOf({ device: `dev${i}`, nonce: `n${i}` })
-    assert.ok(a < b && b < FACES)
-  }
-  assert.deepEqual(facesOf({ device: 'd', nonce: 'n' }), facesOf({ device: 'd', nonce: 'n' }))
+test('a commit changes with the nonce and is the same for the same device and nonce', () => {
+  assert.equal(commitOf({ device: 'd', nonce: 'n' }), commitOf({ device: 'd', nonce: 'n' }))
   assert.notEqual(commitOf({ device: 'd', nonce: 'a' }), commitOf({ device: 'd', nonce: 'b' }))
-})
-
-test('a browser works out the same commit and faces with WebCrypto', async () => {
-  const { commitOfWeb, facesOfWeb } = await import('../../src/cloud/faces-web.ts')
-  for (let i = 0; i < 20; i++) {
-    const each = { device: `dev${i}`, nonce: `n${i}` }
-    assert.equal(await commitOfWeb(each), commitOf(each))
-    assert.deepEqual(await facesOfWeb(each), facesOf(each))
-  }
 })

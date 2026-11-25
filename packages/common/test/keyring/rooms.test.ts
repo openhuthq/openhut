@@ -128,13 +128,11 @@ test('in a team room this Mac lists the account key as its kit, moves the mark w
   assert.equal(team?.workspace.key, teamKey)
   const current = keysService.account()
   assert.ok(current && team)
-  const words = await keysService.newKit()
-  await keysService.setKit({ box: words.box, savedAt: new Date().toISOString() })
   const workspaces = [{ id: current.workspace.id, key: (await keysService.workspaceBox({ account: current })).body, chain: homeChain }, { id: team.workspace.id, key: (await keysService.workspaceBox({ account: current, room: team })).body, chain: [v1, v2, v3, v4] }]
   await keysService.setSession(undefined)
   await keysService.forgetHere()
   await keysService.setLocked({ sub: 'dev-mo', email: 'mo@example.com' })
-  const restored = await keysService.restore({ words: words.words, kit: words.box, workspaces })
+  const restored = await keysService.restoreWith({ key: fromBase64(current.key), workspaces })
   const back = restored?.teams?.[0]
   assert.equal(restored?.workspace.id, account.workspace.id)
   assert.equal(back?.workspace.key, teamKey)

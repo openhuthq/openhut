@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Base64, checkRecord, DeviceKey, Here, KeyBox, Letter, Record, recordBind, RecordKind, Signed, signRecord, siteHost } from '../../src/cloud/cloud.ts'
+import { Base64, checkRecord, DeviceKey, Here, Letter, Record, recordBind, RecordKind, Signed, signRecord, siteHost } from '../../src/cloud/cloud.ts'
 import { identity, newKey, toBase64 } from '../../src/vault/public.ts'
 import { lock } from '../../src/vault/secret.ts'
 
@@ -67,7 +67,6 @@ test('letters, key boxes and here messages carry locked bodies only, and letters
   assert.equal(Letter.safeParse(letter).success, true)
   assert.equal(Letter.safeParse({ ...letter, body: toBase64(newKey()) }).success, false)
   assert.equal(Letter.safeParse({ ...letter, purpose: 'anything' }).success, false)
-  assert.equal(KeyBox.safeParse({ object: 'key_box', kind: 'kit', body: locked }).success, true)
   assert.equal(Here.safeParse({ object: 'here', from, body: 'aGk' }).success, false)
 })
 

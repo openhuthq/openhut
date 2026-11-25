@@ -1,9 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { wordlist } from '@scure/bip39/wordlists/english.js'
 import { check, concat, header, HEADER, identity, isLocked, newKey, readHeader, sign, suites } from '../../src/vault/public.ts'
 import { letter, lock, read, unlock } from '../../src/vault/secret.ts'
-import { nearestWord, readKit } from '../../src/vault/kit-file.ts'
 
 test('a header holds versions 0 to 2^32-1 of a known suite and nothing else', () => {
   assert.ok(header({ version: 0 }))
@@ -60,21 +58,6 @@ test('read refuses an unknown purpose, a sender key of the wrong size, a truncat
   assert.equal(await read({ ...base, allowed: [] }), null)
 })
 
-test('a kit file reads its mark case-insensitively, keeps the first valid window and suggests the closest word', () => {
-  const words = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'.split(' ')
-  const kit = readKit(`OpenHut-Kit/1 MO@Example.com k-abcd-12ef\n${words.join(' ')}`)
-  assert.ok(kit)
-  assert.deepEqual([kit.email, kit.kitId], ['mo@example.com', 'K-ABCD-12EF'])
-  assert.deepEqual([readKit(words.join(' '))?.email, readKit(words.join(' '))?.kitId], [null, null])
-  assert.equal(kit.valid, true)
-  assert.deepEqual(kit.words, words)
-  const loose = readKit(`zoo ${words.join(' ')} zoo`)
-  assert.deepEqual(loose?.words, words)
-  assert.equal(readKit(words.slice(0, 11).join(' ')), null)
-  assert.equal(nearestWord('abandom'), 'abandon')
-  assert.equal(nearestWord(wordlist[5]), wordlist[5])
-})
-
 test('check refuses a small-order public key with a signature made for it, sign bit set or not (some Ed25519 builds would accept it)', async () => {
   const bytes = Uint8Array.of(1, 2, 3)
   const base = Uint8Array.from({ length: 32 }, (_, index) => (index ? 0x66 : 0x58))
@@ -96,10 +79,4 @@ test('read opens an empty letter, and refuses a purpose outside the list even wh
   const odd = await letter({ sender, to: recipient.publicKey, workspace: 'w', purpose: 'nope' as 'pairing', version: 1, plain: Uint8Array.of(9) })
   assert.ok(odd)
   assert.equal(await read({ recipient, from: sender.publicKey, workspace: 'w', purpose: 'nope' as 'pairing', body: odd, allowed: [sender.publicKey] }), null)
-})
-
-test('a kit needs all twelve numbered words or twelve kit words in a row, and a tie picks the first word in the list', () => {
-  assert.equal(readKit('1. abandon 2. ability'), null)
-  assert.equal(readKit('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon zebrax'), null)
-  assert.equal(nearestWord('cxt'), 'cat')
 })

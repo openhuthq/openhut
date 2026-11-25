@@ -1,7 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { FACES, faceName } from '@openhut/common/cloud/cloud.ts'
-import { faceArt, faceLook, parseLook, randomLook, SWATCHES } from '../../src/lib/face.ts'
+import { faceArt, parseLook, randomLook, SWATCHES } from '../../src/lib/face.ts'
 
 test('a saved look in the old shape reads as the seeded look it always was', () => {
   assert.deepEqual(parseLook({ id: 'face_7_1', about: 'ops beanie' }), randomLook({ seed: 'face_7_1', about: 'ops beanie' }))
@@ -24,13 +23,3 @@ test('the background shows only when asked for', () => {
   assert.ok(faceArt({ look, tile: true }).startsWith('<rect x="4"'))
 })
 
-test('each approval face has a name that says its colour and what it wears, so a server can print it', () => {
-  const words = { tophat: 'top hat', party: 'party hat' } as Record<string, string>
-  for (let index = 0; index < FACES; index++) {
-    const look = faceLook(index)
-    const worn = look.hat ?? look.eyewear ?? ''
-    assert.ok(faceName(index).startsWith(`${SWATCHES[look.body].name} face with `), faceName(index))
-    assert.ok(faceName(index).endsWith(words[worn] ?? worn), faceName(index))
-  }
-  assert.equal(new Set(Array.from({ length: FACES }, (_, index) => faceName(index))).size, FACES)
-})

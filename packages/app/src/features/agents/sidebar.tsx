@@ -10,9 +10,8 @@ import { ConfirmDialog } from '@/components/confirm-button'
 import { Glyph } from '@/components/glyph'
 import { Hut } from '@/components/hut'
 import { TeamMark } from '@/components/custom/team-mark'
-import { DRAG, GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
-import { chooseWorkspace, continueInWeb, peopleNote, useWorkspaces } from '@/features/cloud/workspaces'
-import { REMOTE } from '@/lib/remote'
+import { GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
+import { chooseWorkspace, peopleNote, useWorkspaces } from '@/features/cloud/workspaces'
 import { shownTeams } from '@/features/cloud/shown-teams'
 import { nameOf as personName, useCloud, useCloudId, useSignOut } from '@/features/cloud/api'
 import { SIGN_OUT_DETAIL } from '@/features/cloud/cloud'
@@ -31,7 +30,6 @@ import { ago } from '@/lib/format'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate, open } from '@/lib/router'
 import { toastError } from '@/lib/toast'
-import { desktop } from '@/lib/desktop'
 import { cn } from '@/lib/utils'
 
 const ROUND = 'float phone:size-10 phone:rounded-full phone:bg-card phone:text-ink'
@@ -45,7 +43,7 @@ export type Contact = { agent: OpenHutAgent; thread: Thread | undefined }
 export const SidebarContext = createContext<{ collapsed: boolean } | null>(null)
 
 export function ShowSidebar({ onExpand, onNew }: { onExpand: () => void; onNew: () => void }) {
-  return <span className={cn('absolute top-[env(safe-area-inset-top)] left-0 z-10 flex h-[52px] items-center gap-0.5 pl-3 mac:pl-[84px] phone:hidden animate-[fadein_120ms_80ms_ease-out_backwards]', DRAG)}>
+  return <span className={cn('absolute top-[env(safe-area-inset-top)] left-0 z-10 flex h-[52px] items-center gap-0.5 pl-3 phone:hidden animate-[fadein_120ms_80ms_ease-out_backwards]')}>
     <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Show sidebar" title="Show sidebar ⌘\" onClick={onExpand}><I icon={SidebarLeftIcon} size={16} /></Button>
     <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="New agent" title="New agent" onClick={onNew}><I icon={PlusSignIcon} size={16} /></Button>
   </span>
@@ -59,7 +57,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
   const many = new Set(contacts.map(({ agent }) => agent.computer)).size > 1
   return <aside inert={collapsed} className={cn('pushable still shrink-0 overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring)', collapsed ? 'w-0' : 'w-[280px] border-r-[0.5px]', contacts.length ? 'phone:w-full phone:border-r-0' : 'phone:hidden', GLASS)}>
     <div className={cn('flex h-full w-[280px] flex-col phone:w-full transition-[opacity,translate] duration-[160ms] ease-out', collapsed && '-translate-x-2 opacity-0')}>
-    <div className={cn('flex h-[44px] shrink-0 items-center gap-1.5 pr-3 pl-3 mac:pl-[84px] phone:h-16 phone:px-4', DRAG)}>
+    <div className={cn('flex h-[44px] shrink-0 items-center gap-1.5 pr-3 pl-3 phone:h-16 phone:px-4')}>
       <a href="/" aria-label="OpenHut" title="OpenHut" className="flex items-center gap-1.5 text-[14px] font-semibold text-ink no-underline phone:hidden"><Hut className="size-6" />OpenHut</a>
       <a href="/settings/general" aria-label="Settings" className={cn(ICON_BUTTON, ROUND, 'hidden phone:grid')}><I icon={Settings02Icon} size={20} /></a>
       <span className="ml-auto flex gap-1.5">
@@ -120,7 +118,7 @@ function RowMenu({ agent, children }: { agent: OpenHutAgent; children: ReactElem
 }
 
 function Gear() {
-  return <a href="/settings/general" aria-label="Settings" title={desktop ? 'Settings ⌘,' : 'Settings'} className={cn(SURFACE, 'grid phone:hidden size-10 shrink-0 place-items-center rounded-lg')}><I icon={Settings02Icon} size={17} /></a>
+  return <a href="/settings/general" aria-label="Settings" title="Settings" className={cn(SURFACE, 'grid phone:hidden size-10 shrink-0 place-items-center rounded-lg')}><I icon={Settings02Icon} size={17} /></a>
 }
 
 function Live({ agent, className }: { agent: OpenHutAgent; className: string }) {
@@ -169,8 +167,7 @@ function TeamSwitcher() {
         </DropdownMenuItem>)}
         <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />Join a team</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/general')}><I icon={Settings02Icon} size={15} className="text-mute" />Settings{desktop && <span className="ml-auto text-[12px] text-mute">⌘,</span>}</DropdownMenuItem>
-        {!REMOTE && <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => void continueInWeb().catch(toastError)}><I icon={BrowserIcon} size={15} className="text-mute" />Continue in web</DropdownMenuItem>}
+        <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/general')}><I icon={Settings02Icon} size={15} className="text-mute" />Settings</DropdownMenuItem>
         <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => setLeaving(true)}><I icon={Logout03Icon} size={15} className="text-mute" />Sign out</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

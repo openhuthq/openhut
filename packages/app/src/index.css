@@ -7,8 +7,6 @@
 @custom-variant narrow (@media (max-width: 720px));
 @custom-variant phone (@media (max-width: 640px));
 @custom-variant tiny (@media (max-width: 560px));
-/* The macOS desktop window: traffic lights sit over the top-left corner. */
-@custom-variant mac (&:where(html[data-desktop] *));
 
 @theme {
   --font-weight-book: 450;

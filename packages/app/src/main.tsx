@@ -4,12 +4,8 @@ import { App } from '@/app/app'
 import { DEV_LABEL, DevPill } from '@/components/dev-pill'
 import { Toaster } from '@/components/ui/sonner'
 import hutDev from '@/hut-dev.svg'
-import { desktop } from '@/lib/desktop'
 import { openhut } from '@/lib/openhut'
 import { RequestError } from '@/lib/api-client'
-import { followEnrollments } from '@/features/computers/enroll'
-import { clearCarriedInvite } from '@/features/join/invite'
-import { followUpdate, updates } from '@/features/settings/update'
 import { followEvents } from '@/lib/live'
 import sprite from '@/logos.svg?raw'
 import '@fontsource-variable/inter/wght.css'
@@ -26,12 +22,7 @@ const client = new QueryClient({
   defaultOptions: { queries: { retry: (failures, error) => failures < 2 && !(error instanceof RequestError && error.status < 500) } },
 })
 
-if (desktop && navigator.userAgent.includes('Mac')) document.documentElement.dataset.desktop = ''
-desktop?.onChanged(() => void client.invalidateQueries())
-followEnrollments(client)
-followUpdate({ bridge: updates, client })
 addEventListener('pointerdown', () => { document.documentElement.dataset.pointer = '' }, true)
-addEventListener('pointerdown', clearCarriedInvite, { once: true, capture: true })
 addEventListener('keydown', (event) => { if (event.key === 'Tab') delete document.documentElement.dataset.pointer }, true)
 if (!REMOTE) followEvents(client)
 document.body.insertAdjacentHTML('afterbegin', sprite)
@@ -42,4 +33,3 @@ if (DEV_LABEL) {
 }
 const root = document.getElementById('root')
 if (root) createRoot(root).render(<QueryClientProvider client={client}>{REMOTE ? <RemoteGate><App /></RemoteGate> : <App />}<DevPill /><Toaster /></QueryClientProvider>)
-// ci touch

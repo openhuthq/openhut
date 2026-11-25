@@ -40,7 +40,7 @@ function binDir(spec: SandboxSpec) {
 export function layout(spec: SandboxSpec) {
   mkdirSync(join(dirOf(spec.id), 'tmp'), { recursive: true })
   mkdirSync(binDir(spec), { recursive: true })
-  if (!WIN && !existsSync(NODE)) writeFileSync(join(binDir(spec), 'node'), `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec '${process.execPath}' "$@"\n`, { mode: 0o755 })
+  if (!WIN && !existsSync(NODE)) writeFileSync(join(binDir(spec), 'node'), `#!/bin/sh\nexec '${process.execPath}' "$@"\n`, { mode: 0o755 })
   for (const m of spec.mounts) placeMount({ spec, mount: m })
   for (const t of spec.tmpfs.filter((each) => each.guest !== '/tmp')) mkdirSync(hostOf({ spec, guest: t.guest }), { recursive: true })
 }

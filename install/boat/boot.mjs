@@ -1,5 +1,5 @@
-// C1: openhut-boot on a Cloud computer. Runs the server (agentd in-process) from the pack set packs.mjs picked, the same updater
-// the desktop shell uses: on the first boot it downloads and verifies one first; a pending set that isn't listening within 60 s
+// C1: openhut-boot on a Cloud computer. Runs the server (agentd in-process) from the pack set packs.mjs picked, packages/release/src/packs.mjs:
+// on the first boot it downloads and verifies one first; a pending set that isn't listening within 60 s
 // rolls back to the previous one (so does one whose last boot died). In the background it fetches the next release for the next boot.
 // Once the server is up, the join code is deleted from the env file (a session exists from then on, so later boots skip joining).
 import { spawn } from 'node:child_process'
@@ -16,7 +16,7 @@ const ENV_FILE = process.env.OPENHUT_ENV_FILE ?? '/etc/openhut/env'
 const PORT = Number(process.env.PORT ?? 8787)
 const HEALTHY_MS = Number(process.env.OPENHUT_HEALTHY_MS ?? 60_000)
 const POLL_MS = 15 * 60_000
-const testKey = process.env.OPENHUT_RELEASE_KEY // boot.test.ts only, as the desktop's OPENHUT_TEST_HOME
+const testKey = process.env.OPENHUT_RELEASE_KEY // boot.test.ts only
 const updates = {
   home: HOME, feed: process.env.OPENHUT_UPDATE_FEED || 'https://dl.openhut.dev/', channel: 'stable',
   fetch: (url, options) => fetch(url, { ...options, signal: AbortSignal.timeout(120_000) }),

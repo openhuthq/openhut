@@ -35,41 +35,9 @@ claude() {
     zstd -q -f -19 --long=27 -T0 "$tmp/claude" -o "$tmp/claude.zst"
     put "$key" "$tmp/claude.zst" "$FOREVER"
   done
-  for platform in darwin-arm64 win32-x64; do
-    key=claude/$version/$platform/claude.zst
-    if curl -fsI "$URL/$key" >/dev/null; then echo "r2: $key is there"; continue; fi
-    name=claude; [ "$platform" = win32-x64 ] && name=claude.exe
-    want=$(node -p "require('./install/native-runtime.json').claude.sha256['$platform']")
-    curl -fsSL -o "$tmp/claude" "https://downloads.claude.ai/claude-code-releases/$version/$platform/$name"
-    [ "$(shasum -a 256 "$tmp/claude" | cut -d' ' -f1)" = "$want" ] || { echo "r2: claude $version $platform doesn't match native-runtime.json" >&2; exit 1; }
-    zstd -q -f -19 --long=27 -T0 "$tmp/claude" -o "$tmp/claude.zst"
-    put "$key" "$tmp/claude.zst" "$FOREVER"
-  done
   rm -rf "$tmp"
 }
 
-release() {
-  v=$1 dir=$2
-  for file in OpenHut-arm64.dmg "OpenHut-$v-arm64.zip" "OpenHut-$v-arm64.zip.blockmap" OpenHut-x64.AppImage openhut-x64.deb OpenHut-Setup-x64.exe OpenHut-Setup-x64.exe.blockmap; do
-    put "v$v/$file" "$dir/$file" "$FOREVER"
-  done
-  for file in SHA256SUMS release.json release.json.sig release.json.rekor; do
-    [ ! -f "$dir/$file" ] || put "v$v/$file" "$dir/$file" "$FOREVER" text/plain
-  done
-  [ ! -f "$dir/release.json.rekor" ] || announce "$dir"
-  for file in OpenHut-arm64.dmg OpenHut-x64.AppImage openhut-x64.deb OpenHut-Setup-x64.exe; do
-    put "latest/$file" "$dir/$file" 'public, max-age=300'
-  done
-  feeds "$v" "$dir"
-}
-
-feeds() {
-  v=$1 dir=$2
-  for feed in latest.yml latest-mac.yml latest-linux.yml; do
-    sed -e "s#^\(  *- url: \)#\1v$v/#" -e "s#^path: #path: v$v/#" "$dir/$feed" > "$dir/$feed.r2"
-    put "$feed" "$dir/$feed.r2" 'public, max-age=60' text/yaml
-  done
-}
 
 # R3: every release.json CI logs in Rekor is announced at releases/<sha256>.json (with .sig and .rekor). The release monitor
 # (private/api/src/releases/release-monitor.ts) alerts on any Rekor entry signed by the release key that isn't announced here.
@@ -103,8 +71,7 @@ packs() {
 case "${1:-}" in
   claude) claude ;;
   check) tmp=$(mktemp) && date > "$tmp" && big check/large-uploads "$tmp" 'no-store' text/plain && echo 'r2: large uploads work' ;;
-  release) [ $# -eq 3 ] || { echo 'usage: scripts/r2.sh release <version> <folder with the release files>' >&2; exit 2; }; release "$2" "$3" ;;
   pointer) [ $# -eq 2 ] || { echo 'usage: scripts/r2.sh pointer <folder with release.json, .sig and .rekor>' >&2; exit 2; }; pointer "$2" ;;
   packs) [ $# -eq 2 ] || { echo 'usage: scripts/r2.sh packs <folder with openhut-*.tgz and .json>' >&2; exit 2; }; packs "$2" ;;
-  *) echo 'usage: scripts/r2.sh claude | check | release <version> <folder> | pointer <folder> | packs <folder>' >&2; exit 2 ;;
+  *) echo 'usage: scripts/r2.sh claude | check | pointer <folder> | packs <folder>' >&2; exit 2 ;;
 esac

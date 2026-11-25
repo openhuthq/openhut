@@ -2,7 +2,6 @@ import ReconnectingWebSocket from 'partysocket/ws'
 import * as z from 'zod/mini'
 import { type Cloud, type DeviceRequest, parseJson, siteHost } from '@openhut/common/cloud/cloud.ts'
 import { Forwarded, Notice, Ready } from '@openhut/common/cloud/v1/events.ts'
-import { commitOf, facesOf } from '@openhut/common/cloud/faces.ts'
 import { anchorOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
 import type { MemberListBody } from '@openhut/common/cloud/cloud.ts'
 import { padded } from '@openhut/common/records/row.ts'
@@ -35,7 +34,6 @@ const Named = z.object({ name: z.optional(z.nullable(z.string())), site: z.optio
 
 export type Beat = z.infer<typeof Beat>
 export type Gone = { name: string; why: 'removed' | 'deleted'; owner: string | null }
-export type TurnedDown = Cloud['turnedDown'][number]
 
 let socket: ReconnectingWebSocket | undefined
 let ready = false
@@ -46,8 +44,6 @@ const names = new Map<string, { name: string | null; site: string | null }>()
 const requests = new Map<string, DeviceRequest[]>()
 const beats = new Map<string, Map<string, Beat>>()
 const gone: Gone[] = []
-const turnedDown: TurnedDown[] = []
-const deniedHere = new Set<string>()
 const GONE_SETTING = 'cloud.gone'
 const GONE_KEPT = 20
 let goneLoaded = false
@@ -117,8 +113,6 @@ export const cloudEvents = {
   site: (ws: string): string | null => names.get(ws)?.site ?? null,
   requests: (ws: string): DeviceRequest[] => requests.get(ws) ?? [],
   beats: (ws: string): Map<string, Beat> => beats.get(ws) ?? new Map(),
-  turnedDown: (): TurnedDown[] => turnedDown,
-  deniedHere: (device: string): void => void deniedHere.add(device),
   async gone(): Promise<Gone[]> {
     await keptGone()
     return gone
@@ -188,18 +182,8 @@ function noticed({ object, id, ver, workspace, why }: Notice): void {
     for (const type of LIVE[collection]) emit({ name: `${type}.changed`, target: { type, id } })
   }
   if (object === 'member_list' || object === 'letter') void run(() => refreshKeys(workspace))
-  if (object === 'join_request' && why) alert({ ws: workspace, device: id, why })
   if (object === 'join_request') void run(() => refreshRequests(workspace))
   if (object === 'workspace' && id === workspace) void run(() => refreshName(workspace))
-}
-
-function alert({ ws, device, why }: { ws: string; device: string; why: TurnedDown['why'] }): void {
-  if (deniedHere.delete(device)) return
-  const asked = requests.get(ws)?.find((each) => each.device === device)
-  const place = asked?.location && [asked.location.city, asked.location.country].filter(Boolean).join(', ')
-  turnedDown.push({ device, workspace: ws, name: asked?.name ?? null, email: asked?.email ?? null, place: place || null, why, at: new Date().toISOString() })
-  turnedDown.splice(0, Math.max(0, turnedDown.length - GONE_KEPT))
-  emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
 }
 
 async function beatAll(): Promise<void> {
@@ -278,7 +262,7 @@ async function refreshName(ws: string): Promise<void> {
 async function refreshRequests(ws: string): Promise<void> {
   const before = JSON.stringify(requests.get(ws) ?? [])
   const asked = await cloud.team(ws).requests()
-  requests.set(ws, asked.filter((each) => each.asked).map((each) => ({ device: each.id, email: each.email, at: each.at, name: each.name, os: each.os, server: each.server, checked: Boolean(each.commit), reviewed: each.reviewed, faces: each.commit && each.nonce && commitOf({ device: each.id, nonce: each.nonce }) === each.commit ? facesOf({ device: each.id, nonce: each.nonce }) : null, location: each.location, newCountry: each.newCountry })))
+  requests.set(ws, asked.filter((each) => each.asked).map((each) => ({ device: each.id, email: each.email, at: each.at, name: each.name, os: each.os, server: each.server, location: each.location, newCountry: each.newCountry })))
   if (JSON.stringify(requests.get(ws)) !== before) emit({ name: 'cloud.changed', target: { type: 'cloud', id: ws } })
 }
 

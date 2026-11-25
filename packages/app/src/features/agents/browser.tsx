@@ -10,7 +10,6 @@ import { I } from '@/components/kit'
 import { agentPath } from '@/app/routes'
 import { useLive } from '@/features/agents/browser-live'
 import { Face } from '@/features/agents/face'
-import { navigate } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
 const PREVIEW_FPS = 2

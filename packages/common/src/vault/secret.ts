@@ -1,5 +1,3 @@
-import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39'
-import { wordlist } from '@scure/bip39/wordlists/english.js'
 import { HEADER, KEY, LETTER_PURPOSES, NEWEST, SIGNATURE, check, concat, deviceKem, equal, field, fromBase64, header, newKey, readHeader, sign, subtle, suites, text, toBase64, type Bytes, type Identity, type LetterPurpose, type Suite } from './public.ts'
 
 export async function lock({ key, version, bind, plain }: { key: Bytes; version: number; bind: string; plain: Bytes }): Promise<Bytes | null> {
@@ -54,17 +52,6 @@ export async function read({ recipient, from, workspace, purpose, body, allowed 
 
 function letterContext({ head, from, to, purpose, workspace }: { head: Bytes; from: Bytes; to: Bytes; purpose: LetterPurpose; workspace: string }): Bytes {
   return concat([text.encode('openhut/letter\0'), head, from, to, field(purpose), field(workspace)])
-}
-
-export async function newWords(): Promise<{ words: string[]; key: Bytes }> {
-  const entropy = newKey(16)
-  return { words: entropyToMnemonic(entropy, wordlist).split(' '), key: await derive({ key: entropy, info: 'openhut/kit' }) }
-}
-
-export async function fromWords(words: string[]): Promise<Bytes | null> {
-  const phrase = words.map((word) => word.trim().toLowerCase()).join(' ')
-  if (words.length !== 12 || !validateMnemonic(phrase, wordlist)) return null
-  return derive({ key: new Uint8Array(mnemonicToEntropy(phrase, wordlist)), info: 'openhut/kit' })
 }
 
 export async function slot({ key, path }: { key: Bytes; path: string }): Promise<string> {

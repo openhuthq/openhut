@@ -1,17 +1,15 @@
 import * as z from 'zod/mini'
 import { MemberList } from '../cloud/cloud.ts'
 
-export const KIT = z.object({ box: z.string(), savedAt: z.string(), confirmed: z.optional(z.boolean()) })
 export const Keys = z.object({ key: z.string(), version: z.number(), old: z.optional(z.record(z.string(), z.string())), slot: z.optional(z.string()), own: z.optional(z.string()) })
 export const Room = z.object({ workspace: z.object({ id: z.string(), ...Keys.shape }), list: MemberList, first: z.optional(MemberList) })
 export const Stored = z.object({
   device: z.string(),
   machine: z.string(),
   account: z.optional(z.object({ sub: z.string(), email: z.string(), key: z.string(), vault: z.optional(z.string()), ...Room.shape, teams: z.optional(z.array(Room)), links: z.optional(z.record(z.string(), z.string())), linksUntil: z.optional(z.record(z.string(), z.string())), joinedBy: z.optional(z.record(z.string(), z.string())) })),
-  kit: z.optional(KIT),
   locked: z.optional(z.object({ sub: z.string(), email: z.string() })),
   session: z.optional(z.object({ token: z.string(), refresh: z.optional(z.string()), expiresAt: z.string() })),
-  asking: z.optional(z.array(z.object({ id: z.string(), admins: z.array(z.string()), own: z.optional(z.boolean()), nonce: z.optional(z.string()) }))),
+  asking: z.optional(z.array(z.object({ id: z.string(), admins: z.array(z.string()), own: z.optional(z.boolean()) }))),
 })
 export type Stored = z.infer<typeof Stored>
 export type Account = NonNullable<Stored['account']>

@@ -1,29 +1,26 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
-import { FirstRun, forgetFirstRun, Offline, PhoneFirstRun } from '@/app/first-run'
-import { Knocking } from '@/features/cloud/knock'
+import { FirstRun, forgetFirstRun, Offline } from '@/app/first-run'
 import { nameOf } from '@/features/cloud/api'
 import { Teammate } from '@/app/teammate'
-import { BIG, EntryScreen, INK, QUIET, Stage } from '@/features/cloud/step'
+import { BIG, EntryScreen, QUIET, Stage } from '@/features/cloud/step'
 import { LINE, SignInScreen, TITLE } from '@/features/cloud/sign-in'
-import { cn } from '@/lib/utils'
 import { followEvents } from '@/lib/live'
 import { CloudOffline, remote } from '@/lib/remote'
-import { Offline as Away, phoneBrowser, screenOf } from '@/lib/web-first-run'
+import { Offline as Away, screenOf } from '@/lib/web-first-run'
 import { waking } from '@openhut/common/tunnel/connect.ts'
 
 const WAIT_MS = 3000
 const OFFLINE_MS = 5000
-const SETUP_MS = 1500
-const POLLED = ['waiting', 'first-run', 'continuing']
+const POLLED = ['waiting', 'first-run']
 
 export function RemoteGate({ children }: { children: ReactNode }) {
   const client = useQueryClient()
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState<string>()
-  const state = useQuery({ queryKey: ['remote'], queryFn: remote.state, refetchInterval: (query) => query.state.data?.step === 'setup' ? SETUP_MS : POLLED.includes(query.state.data?.step ?? '') || query.state.error instanceof CloudOffline ? WAIT_MS : false, retry: false })
+  const state = useQuery({ queryKey: ['remote'], queryFn: remote.state, refetchInterval: (query) => POLLED.includes(query.state.data?.step ?? '') || query.state.error instanceof CloudOffline ? WAIT_MS : false, retry: false })
   const workspace = state.data?.step === 'ready' ? state.data.workspace : undefined
   const opened = useQuery({ queryKey: ['remote-tunnel', workspace], queryFn: async () => { await remote.open(workspace ?? ''); return true }, enabled: !!workspace, retry: false, staleTime: Infinity, refetchInterval: (query) => query.state.error instanceof Away || query.state.error instanceof CloudOffline ? OFFLINE_MS : false })
   useEffect(() => {
@@ -40,10 +37,10 @@ export function RemoteGate({ children }: { children: ReactNode }) {
     const retry = setInterval(() => void remote.reconnect(), OFFLINE_MS)
     return () => clearInterval(retry)
   }, [cut])
-  const screen = screenOf({ step, opened: Boolean(opened.data), error: opened.error, phone: phoneBrowser({ userAgent: navigator.userAgent, width: innerWidth }) })
+  const screen = screenOf({ step, opened: Boolean(opened.data), error: opened.error })
   if (opened.data && cut) return <CloudDown />
   if (opened.data && state.data?.step === 'ready' && state.data.teammate) return <Teammate />
-  if (opened.data || state.data?.step === 'setup') return children
+  if (opened.data) return children
   const failure = error ?? (state.error ?? opened.error)?.message
   if (state.error instanceof CloudOffline || opened.error instanceof CloudOffline) return <CloudDown />
   const invited = state.data?.step === 'signed-out' || state.data?.step === 'waiting' ? state.data.invited : null
@@ -53,18 +50,14 @@ export function RemoteGate({ children }: { children: ReactNode }) {
     {failure && <ErrorNote message={failure} />}
   </SignInScreen></Stage>
   const otherAccount = <Button type="button" variant="text" className={QUIET} onClick={() => void remote.signOut().then(() => state.refetch())}>Use another account</Button>
-  if (screen === 'first-run' && state.data?.step === 'first-run') return <FirstRun email={state.data.email} link={otherAccount} />
-  if (screen === 'phone' && state.data?.step === 'first-run') return <PhoneFirstRun email={state.data.email} link={otherAccount} />
+  if (screen === 'first-run') return <FirstRun link={otherAccount} />
   if (wakingCloud) return <Stage><EntryScreen mood="looking" title="Waking Cloud…" line="Your Cloud computer was paused. It’s back in a few seconds." waiting="Waking" /></Stage>
   if (screen === 'offline' && opened.error instanceof Away) return <Offline computer={opened.error.computer} seen={opened.error.seen} />
-  if (state.data?.step === 'continuing') return <Stage><EntryScreen mood="happy" title="Opening OpenHut…" line="This takes a few seconds." waiting="Opening" /></Stage>
-  if (state.data?.step === 'waiting' && invited) return <Stage><Knocking faces={state.data.faces} line={`Tell ${host} these two. ${host} taps them on their computer.`} foot={otherAccount} /></Stage>
-  if (state.data?.step === 'waiting') return <Stage><Knocking faces={state.data.faces}
-    action={<a href="openhut://open" className={cn(buttonVariants({ variant: 'text' }), INK)}>Open OpenHut</a>} foot={otherAccount} /></Stage>
+  if (state.data?.step === 'waiting') return <Stage><EntryScreen mood="looking" title="Letting you in…" line={invited ? `Joining ${invited.team ?? `${host}’s team`}.` : 'This takes a few seconds.'} waiting="Letting you in" foot={otherAccount} /></Stage>
   const over = state.data?.step === 'over' ? state.data : undefined
-  if (over) return <Stage><EntryScreen mood="worried" title={over.missed ? 'Those faces didn’t match.' : 'Nobody let you in.'} line={over.missed ? 'The request was turned down. If that was you, knock again.' : 'The knock was turned down, or 15 minutes passed.'} foot={otherAccount}
-    action={<Button variant="primary" className={BIG} onClick={() => remote.knock(over.workspace).then(() => state.refetch(), (err: Error) => setError(err.message))}>Knock again</Button>}>{failure && <ErrorNote message={failure} />}</EntryScreen></Stage>
-  return <Stage><EntryScreen mood={failure ? 'worried' : 'looking'} title={failure ? 'Can’t reach your computer.' : 'Connecting to your computer…'} line={failure ?? 'Your agents run on your Mac. This browser talks to it end to end encrypted.'}
+  if (over) return <Stage><EntryScreen mood="worried" title="You’re not in yet." line="This account isn’t on that team. Ask for a new invite, or try another account." foot={otherAccount}
+    action={<Button variant="primary" className={BIG} onClick={() => remote.knock(over.workspace).then(() => state.refetch(), (err: Error) => setError(err.message))}>Try again</Button>}>{failure && <ErrorNote message={failure} />}</EntryScreen></Stage>
+  return <Stage><EntryScreen mood={failure ? 'worried' : 'looking'} title={failure ? 'Can’t reach your computer.' : 'Connecting to your computer…'} line={failure ?? 'This takes a few seconds.'}
     waiting={!failure && 'Connecting'} action={<Button variant="primary" className={BIG} onClick={() => { setError(undefined); void state.refetch(); void opened.refetch() }}>Try again</Button>} />
   </Stage>
 }

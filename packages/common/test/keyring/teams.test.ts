@@ -268,12 +268,11 @@ test('taking letters: one at the key I already hold is dropped unused, an accoun
   assert.deepEqual(await roomKeys.takeLetters({ found: [future] }), [])
   assert.equal(keysService.account()?.key, account.key)
   const ownKit = await keyLetter({ id: 'own', sender: laptop, ws, plain: fromBase64(account.key), purpose: 'account-key' })
-  await keysService.setKit({ box: 'b', savedAt: 's' })
   assert.deepEqual(await roomKeys.takeLetters({ found: [ownKit] }), ['own'])
-  assert.deepEqual(keysService.kitState().saved, { box: 'b', savedAt: 's' }, 'the same account key keeps the kit')
+  assert.equal(keysService.account()?.key, account.key)
 })
 
-test('an account key letter for my new kit replaces the key and forgets the old kit; one for a removed kit is dropped', async () => {
+test('an account key letter for my new account device replaces the key; one for a removed one is dropped', async () => {
   const account = await signedIn()
   const ws = account.workspace.id
   const laptop = await identity()
@@ -281,11 +280,10 @@ test('an account key letter for my new kit replaces the key and forgets the old 
   const kit = toBase64((await accountDevice(newAccountKey)).publicKey)
   const oldKit = toBase64((await accountDevice(fromBase64(account.key))).publicKey)
   await grow({ change: (body, at) => ({ members: body.members.map((member) => ({ ...member, devices: [...member.devices.filter((each) => each !== oldKit), key(laptop), kit], kit })), removed: [oldKit], added: { ...Object.fromEntries(Object.entries(body.added ?? {}).filter(([each]) => each !== oldKit)), [key(laptop)]: at, [kit]: at } }) })
-  await keysService.setKit({ box: 'b', savedAt: 's' })
   const stale = await keyLetter({ id: 'stale', sender: laptop, ws, plain: fromBase64(account.key), purpose: 'account-key' })
   const fresh = await keyLetter({ id: 'fresh', sender: laptop, ws, plain: newAccountKey, purpose: 'account-key' })
   assert.deepEqual(await roomKeys.takeLetters({ found: [stale, fresh] }), ['stale', 'fresh'])
-  assert.deepEqual([keysService.account()?.key, keysService.kitState().saved], [toBase64(newAccountKey), null])
+  assert.equal(keysService.account()?.key, toBase64(newAccountKey))
 })
 
 test('refresh: a 403 means I’m out; other errors read as nothing new; it asks only for lists after mine and rekeys only when behind', async () => {

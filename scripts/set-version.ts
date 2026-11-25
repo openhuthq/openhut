@@ -14,10 +14,8 @@ function edit(file: string, change: (json: Manifest) => void) {
   writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`)
 }
 
-edit('packages/desktop/package.json', (p) => { p.version = version })
 edit('packages/runtime/package.json', (p) => { p.version = version })
 edit('package-lock.json', (l) => {
-  l.packages['packages/desktop'].version = version
   l.packages['packages/runtime'].version = version
 })
-console.log(`The app and runtime are ${version} in this checkout.`)
+console.log(`The runtime is ${version} in this checkout.`)

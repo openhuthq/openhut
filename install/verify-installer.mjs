@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { REKOR_KEY, RELEASE_KEY, verifyRelease } from '../packages/desktop/src/release-key.mjs'
+import { REKOR_KEY, RELEASE_KEY, verifyRelease } from '../packages/release/src/release-key.mjs'
 
 export function verifyInstaller({ installer, manifest, signature, rekor, key = RELEASE_KEY, rekorKey = REKOR_KEY, now = Date.now(), minAge }) {
   const check = verifyRelease({ manifest, signature, rekor, key, rekorKey, now, minAge })

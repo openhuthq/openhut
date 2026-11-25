@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { AppleIcon, CloudIcon, Mail01Icon } from '@hugeicons/core-free-icons'
-import { CopyButton } from '@/components/copy-button'
+import { CloudIcon } from '@hugeicons/core-free-icons'
 import { ErrorNote } from '@/components/error-note'
 import { I } from '@/components/kit'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -10,7 +9,7 @@ import { Command } from '@/features/settings/kit'
 import { joinCommand, useNow } from '@/features/settings/computers'
 import { ago } from '@/lib/format'
 import { remote } from '@/lib/remote'
-import { DOWNLOAD_MAC, FIRST_RUN_KEY, HELP, savedOf, type FirstRunStep } from '@/lib/web-first-run'
+import { FIRST_RUN_KEY, HELP, savedOf, type FirstRunStep } from '@/lib/web-first-run'
 import { cn } from '@/lib/utils'
 
 function load(): FirstRunStep | null {
@@ -34,25 +33,17 @@ export function forgetFirstRun() {
   keep(null)
 }
 
-export function FirstRun({ email, link }: { email: string; link?: ReactNode }) {
+export function FirstRun({ link }: { link?: ReactNode }) {
   const [step, setStep] = useState(load)
-  const [resumed, setResumed] = useState(() => step?.step === 'mac')
   const go = (next: FirstRunStep | null) => {
     keep(next)
     setStep(next)
-    setResumed(false)
   }
-  if (step?.step === 'mac' && resumed) return <Stage><EntryScreen mood="looking" title="Welcome back." line={`Open OpenHut on your computer and sign in as ${email}.`}
-    waiting="Listening for a computer on your account" foot={<><Button type="button" variant="text" className={QUIET} onClick={() => go(null)}>Pick another way</Button>{link}</>} /></Stage>
-  if (step?.step === 'mac') return <Stage><EntryScreen mood="looking" title="Waiting for your computer…" line={`Open OpenHut on your Mac and sign in as ${email}. This page moves on by itself.`}
-    waiting="Listening for a computer on your account"
-    foot={<><a href="openhut://open" className={cn(buttonVariants({ variant: 'text' }), QUIET)}>I already have OpenHut</a><Button type="button" variant="text" className={QUIET} onClick={() => go({ step: 'server' })}>Run on my server instead</Button><a href={HELP} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'text' }), QUIET)}>Help</a></>} /></Stage>
   if (step?.step === 'server') return <Stage><ServerCommand step={step} onCode={go} onBack={() => go(null)} /></Stage>
   if (step?.step === 'cloud') return <Stage><StartCloud onBack={() => go(null)} /></Stage>
   return <Stage><EntryScreen mood="looking" title="Where should your agents live?" line="On Cloud, paid from your free credits, or on a computer you own. Add more later." foot={link}
     action={<>
       <Button type="button" variant="primary" className={BIG} onClick={() => go({ step: 'cloud' })}><I icon={CloudIcon} size={16} />Use Cloud</Button>
-      <a href={DOWNLOAD_MAC} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'text' }), INK)} onClick={() => go({ step: 'mac' })}><I icon={AppleIcon} size={16} />Download for Mac</a>
       <Button type="button" variant="text" className={INK} onClick={() => go({ step: 'server' })}>Run on my Linux server instead</Button>
     </>} /></Stage>
 }
@@ -101,13 +92,7 @@ export function Offline({ computer, seen }: { computer: string | null; seen: num
   const [adding, setAdding] = useState<{ code?: string; expiresAt?: string } | null>(null)
   const who = computer ?? 'Your computer'
   if (adding) return <Stage><ServerCommand step={adding} onCode={(step) => setAdding(step.step === 'server' ? step : null)} onBack={() => setAdding(null)} /></Stage>
-  return <Stage><EntryScreen mood="asleep" title="Your computer is offline." line={`${who} ${seen ? `was last seen ${ago(new Date(seen).toISOString())} ago` : 'isn’t online'}. Wake it, or open OpenHut on it.`}
+  return <Stage><EntryScreen mood="asleep" title="Your computer is offline." line={`${who} ${seen ? `was last seen ${ago(new Date(seen).toISOString())} ago` : 'isn’t online'}. Wake it, then come back.`}
     waiting="Listening for your computers"
     foot={<><Button type="button" variant="text" className={QUIET} onClick={() => setAdding({})}>Add a server that stays on</Button><a href={HELP} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'text' }), QUIET)}>Help</a></>} /></Stage>
-}
-
-export function PhoneFirstRun({ email, link }: { email: string; link?: ReactNode }) {
-  const url = location.origin
-  return <Stage><EntryScreen mood="looking" title="Set up on a computer." line="Send yourself the link and open it on your computer." foot={<><CopyButton text={url} label="Copy link" variant="text" className={QUIET} />{link}</>}
-    action={<a href={`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('Set up OpenHut')}&body=${encodeURIComponent(url)}`} className={cn(buttonVariants({ variant: 'primary' }), BIG)}><I icon={Mail01Icon} size={16} />Email me the link</a>} /></Stage>
 }

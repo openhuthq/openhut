@@ -1,10 +1,10 @@
 ---
 title: OpenHut Cloud
-description: Your account. Everything syncs, encrypted on your device. No one can read it, including us.
+description: Your account and your team, the same on every device.
 icon: hut
 ---
 
-You sign in to OpenHut Cloud the first time you open the app, with **Continue with Google**. It keeps your agents, chats and connections the same on every device you sign in on, and shares agents with your team. Everything is encrypted on your device before it leaves. No one can read it, including us.
+You sign in to OpenHut Cloud with **Continue with Google**. It keeps your agents, chats and connections the same on every device you sign in on, and shares agents with your team. Records are sealed before they're stored; we keep a copy of your account's key, so any browser you sign in on gets in with no recovery file to keep.
 
 ## What's in your account
 
@@ -15,7 +15,7 @@ You sign in to OpenHut Cloud the first time you open the app, with **Continue wi
 - Files you add to a chat.
 - Your settings, like the models you switched on and your time zone.
 
-Your devices fetch what they need and decrypt it themselves. A phone keeps nothing. A computer keeps only what its own agents need to run, so they keep answering in Slack and Telegram, and routines keep running, even when the cloud is down. The app then shows **Offline** and doesn't take changes until it's back.
+Your devices fetch what they need and open it themselves. A browser keeps nothing. A computer keeps only what its own agents need to run, so they keep answering in Slack and Telegram, and routines keep running, even when the cloud is down. The app then shows **Offline** and doesn't take changes until it's back.
 
 ## What stays on the agent's computer
 
@@ -23,8 +23,8 @@ An agent's own files on the computer that runs it aren't in your account: its ho
 
 ## Who can open what
 
-- **Your private agents**, with their chats and memory, and the names of your connections: all your devices, phones included.
-- **Connection keys, API keys and channel tokens**: only your Macs, PCs and servers. Phones never get them, and teammates never do.
+- **Your private agents**, with their chats and memory, and the names of your connections: all your devices, browsers included.
+- **Connection keys, API keys and channel tokens**: only your computers. Browsers never get them, and teammates never do.
 - **Shared agents**, with their chats and memory: your teammates' devices too.
 
 Only an agent's owner can change what it can use, and only with their own connections. An agent runs only on its owner's computers.
@@ -32,60 +32,34 @@ Only an agent's owner can change what it can use, and only with their own connec
 ## What we can see
 
 - Your email, from Google, so we know who signed in.
-- Who is in each team: emails, roles, and devices with their names. Your devices sign this list, so we can't change it.
-- The shape of your data: how many agents, messages and other records you have and how big they are, which agent each message belongs to, and which device wrote it and when.
-- Which computer runs an agent, since that computer signs what the agent writes.
-- Which agents are private, since each sealed part carries the name of the key it was sealed with.
+- Who is in each team: emails, roles, and devices with their names.
+- The shape of your data: how many agents, messages and other records you have and how big they are.
 - When your devices are online, and when someone in a team is typing.
 
-We can't see names, contents, which apps you connect or what each agent may use. We can delay or hold back an update, but we can't change one, make one up, or add a device to your account: your devices check every signature.
-
-We ask Google only for your email. We never see your Google password, and signing in doesn't give us your mail or files. When you connect a Google app, the sign-in and its token refreshes pass through OpenHut Cloud, because Google requires it.
-
-## Save a way back in
-
-We can't reset your key. Right after you sign up, OpenHut asks you to save a recovery kit: one small file with 12 words. With your Google account, it lets a new device in when you have no other device to approve it. Keep it offline, like a password.
-
-To make a new kit, **Settings › Account › New kit**. This also changes your keys, so the old kit stops working right away.
+We keep a copy of your account's key so a new browser gets in with just your Google sign-in. We ask Google only for your email; we never see your Google password, and signing in doesn't give us your mail or files. When you connect a Google app, the sign-in and its token refreshes pass through OpenHut Cloud, because Google requires it.
 
 ## A new device
 
-Sign in with the same Google account. Pick one way in:
-
-- **Request access.** The new device asks, and shows **Requires approval**. On one of your Macs, a notice says it wants to join, and the request shows up in **Settings › Computers**; click **Approve**. Check the device's name and when it asked before you approve. A request expires after an hour.
-- **Your recovery kit.** Drop the file, or type the 12 words.
-- **Touch ID.** If you set up Touch ID in **Settings › Account** on another Mac, unlock with your fingerprint. Needs macOS 15 or later. Resetting your own team's encryption or making a new kit removes it, so add it again after.
-
-The keys travel as a letter locked to the new device's own key, so only that device can open it, and we can't.
-
-A phone asks the same way: see [Phones](/phones). A server asks with the one-use code from **Add a computer** instead of a Google sign-in: see [Computers](/computers).
+Sign in with the same Google account, and you're in. A server joins with the one-use code from **Add a computer** instead of a Google sign-in: see [Computers](/computers).
 
 ## Not me
 
-When a device joins your account, your other devices say so. If it isn't yours, click **Not me**. That device is cut off right away. You can also remove a device in **Settings › Computers**.
+If a device on your account isn't yours, remove it in **Settings › Computers**. It's cut off right away.
 
 ## Teams
 
 Everyone has a team of their own. To share it, **Settings › Team › Invite**: pick an email and a role, then send the link. A link works once, for 48 hours, and only for that email.
 
-Each agent is **Private** or **Shared**. Your teammates see and chat with Shared agents. Private ones stay yours, locked so even teammates can't open them.
+Each agent is **Private** or **Shared**. Your teammates see and chat with Shared agents. Private ones stay yours; teammates can't open them.
 
 ## Removing someone
 
-When you remove someone, or a device, the cloud refuses them from then on and they get nothing new. The keys stay the same, so this is quick, but anything they already read, they could have kept.
-
-If you don't trust them, an admin can also **Reset encryption** in **Settings › Team**. Everyone else's devices pick it up by themselves.
+When you remove someone, or a device, the cloud refuses them from then on and they get nothing new. Anything they already read, they could have kept.
 
 ## Sign out
 
-**Settings › Account › Sign out** removes this device from your account and wipes it. Agents that run on it stop, so move them to another computer first if they should keep answering. To use it again, sign in and let it in like a new device.
+**Settings › Account › Sign out** signs this browser out. To use it again, sign in.
 
 ## Delete your account
 
-**Settings › Account › Delete account**, at the bottom. It deletes everything OpenHut Cloud keeps for you: your agents, chats, connections and settings, your devices list, your recovery kit and Touch ID, and your sign-in. The cloud is the only copy, so this can't be undone. Your agents stop on every computer, and the device you delete from is wiped. Teams you own alone are deleted, and you leave the teams you joined. If you own a team with other people in it, make someone else its owner or delete it first.
-
-Only one of your devices can delete your account. A Google sign-in alone can't.
-
-## Check the app
-
-Each release lists the SHA-256 of every file of the app's code in `SHA256SUMS`, so you can check that the app you run is built from [the source](https://github.com/openhuthq/openhut) at that version. The code that locks and unlocks everything is `packages/common/src/vault/secret.ts`, used only by the keyring in `packages/common/src/keyring/`. The wire format is in [the protocol](https://github.com/openhuthq/openhut/blob/main/docs/cloud-protocol.md).
+**Settings › Account › Delete account**, at the bottom. It deletes everything OpenHut Cloud keeps for you: your agents, chats, connections and settings, your devices list and your sign-in. The cloud is the only copy, so this can't be undone. Your agents stop on every computer. Teams you own alone are deleted, and you leave the teams you joined. If you own a team with other people in it, make someone else its owner or delete it first.

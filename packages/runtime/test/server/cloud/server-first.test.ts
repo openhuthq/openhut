@@ -5,7 +5,7 @@ import { bootCloud, hasCloud, webBrowser } from './real-cloud.ts'
 
 const skip = hasCloud ? false : 'private/api isn’t checked out here'
 
-test('against the real cloud API: a browser on an account with no computer makes a join code, the server that runs it becomes the first computer, and it lets that browser in when it knocks', { skip }, async () => {
+test('against the real cloud API: a browser on an account with no computer makes a join code, the server that runs it becomes the first computer, and it lets that browser in when it asks', { skip }, async () => {
   const cloud = await bootCloud()
   const { client } = await webBrowser({ url: cloud.url, email: 'sara@example.com' })
   const me = async () => {
@@ -31,10 +31,8 @@ test('against the real cloud API: a browser on an account with no computer makes
     const home = (await me()).home ?? ''
     assert.deepEqual((await me()).workspaces.map((each) => [each.id, each.access]), [[home, 'waiting']])
 
-    const knock = client.knock({ team: home, nonce: 'n'.repeat(43) })
+    const knock = client.knock({ team: home })
     await knock.ask({ name: 'Chrome (web)', os: 'web' })
-    for (let i = 0; i < 100 && !(await knock.mine())?.reviewed; i++) await sleep(100)
-    assert.equal(await knock.reveal(), true)
     for (let i = 0; i < 100 && (await knock.state()).step !== 'approved'; i++) await sleep(100)
     assert.equal((await me()).workspaces[0]?.access, 'listed')
   } finally {

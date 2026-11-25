@@ -22,7 +22,6 @@ export const SURFACE = 'border border-solid border-hair bg-card text-ink no-unde
 export const PILL = 'h-[26px] rounded-full px-2.5 text-[12px] font-normal'
 export const TINY_ICON = 'grid size-7 shrink-0 place-items-center rounded-md border-0 bg-transparent p-0 text-ink hover:bg-hover disabled:opacity-50'
 export const ICON_BUTTON = 'grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent p-0 text-body no-underline shadow-none outline-offset-0 hover:bg-hover hover:text-ink'
-export const DRAG = '[-webkit-app-region:drag] select-none [&_a,&_button,&_input]:[-webkit-app-region:no-drag]'
 export const HINT = 'm-0 text-[12px]/[16px] text-mute [&_b]:font-medium [&_b]:text-body [&_code]:font-mono [&_code]:text-[11.5px] [&_code]:text-ink'
 
 export function I({ icon, size = 16, className }: { icon: IconSvgElement; size?: number; className?: string }) {

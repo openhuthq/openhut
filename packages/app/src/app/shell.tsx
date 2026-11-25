@@ -12,7 +12,6 @@ import { Spinner } from '@/components/ui/spinner'
 import { nameOf } from '@/features/cloud/api'
 import { inWorkspace } from '@/features/cloud/teams'
 import { useWorkspaces } from '@/features/cloud/workspaces'
-import { HERE } from '@/features/settings/desktop'
 import { ShowSidebar, Sidebar, SidebarContext, type Contact } from '@/features/agents/sidebar'
 import { useThreads } from '@/features/threads/api'
 import { PHONE, useMedia } from '@/lib/media'
@@ -69,7 +68,7 @@ function Home({ first, adding, overlaid, waiting, loading }: { first: string | u
     <PhoneTop />
     <Hut mood="looking" className="size-[84px]" />
     <h1 className="mt-2 mb-0 text-[20px]/[1.3] font-semibold text-ink">Almost in</h1>
-    <p className="m-0 text-[14px]/[1.5] text-body">{nameOf(owner ?? '')}’s {HERE} lets you in as soon as it’s on.</p>
+    <p className="m-0 text-[14px]/[1.5] text-body">{nameOf(owner ?? '')}’s computer lets you in as soon as it’s on.</p>
   </section>
   if (loading) return <section className="relative flex flex-1 items-center justify-center bg-card"><PhoneTop /><Spinner className="size-5" /></section>
   return <section className="relative flex min-w-0 flex-1 flex-col bg-card">

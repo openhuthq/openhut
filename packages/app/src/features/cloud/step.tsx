@@ -5,9 +5,8 @@ import { Dialog } from '@/components/ui/dialog'
 import { Tick02Icon } from '@hugeicons/core-free-icons'
 import { Hut } from '@/components/hut'
 import { ICONS } from '@/components/icons'
-import { DRAG, I } from '@/components/kit'
+import { I } from '@/components/kit'
 import type { Mood } from '@/lib/hut'
-import { OWN_TITLE_BAR } from '@/lib/platform'
 import { cn } from '@/lib/utils'
 
 export function Guide({ label, at, of, onClose, children }: { label: string; at: number; of: number; onClose: () => void; children: ReactNode }) {
@@ -70,7 +69,7 @@ export function Stage({ children }: { children: ReactNode }) {
 }
 
 function TitleBar() {
-  return <div className={cn('flex h-[52px] shrink-0 items-center justify-center text-[13px] font-semibold text-mute', DRAG)}>{OWN_TITLE_BAR && document.title}</div>
+  return <div className="h-[52px] shrink-0" />
 }
 
 export function Window({ children }: { children: ReactNode }) {

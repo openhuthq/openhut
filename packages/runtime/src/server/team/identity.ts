@@ -12,7 +12,6 @@ import { bodyOf } from '@openhut/common/cloud/member-list.ts'
 import { fromBase64 } from '@openhut/common/vault/public.ts'
 import { keyStore } from '../cloud/key-store.ts'
 import { keysService } from '../cloud/keys-service.ts'
-import { userPresence } from '../cloud/user-presence.ts'
 import { config } from '../platform/config.ts'
 import { db, isUniqueViolation } from '../platform/db.ts'
 import { emit } from '../platform/events.ts'
@@ -26,22 +25,6 @@ const DEVICE = Symbol('device')
 const TRUST = /^(POST|PUT|PATCH|DELETE) \/api\/cloud(\/|$)/
 const TEAMMATES = new Set(['GET /api/threads/:id', 'POST /api/threads/:id/chat'])
 const TEAMMATE_LISTS = new Set(['GET /api/agents'])
-const SERVER_KIT = 'POST /api/cloud/kits'
-const CHANGES = ['instructions', 'codeExecution', 'browser', 'runsHere', 'runsOn', 'shared', 'people', 'sidebars', 'model']
-const STEP_UP: Record<string, (body: unknown) => boolean> = {
-  'POST /api/agents': () => config.installKind !== 'server',
-  'PATCH /api/agents/:id': (body) => typeof body === 'object' && body !== null && CHANGES.some((field) => field in body),
-  'DELETE /api/agents/:id': () => true,
-  'POST /api/grants': () => true,
-  'DELETE /api/grants/:id': () => true,
-  'POST /api/change-requests/:id/approvals': () => true,
-  'POST /api/connections': () => true,
-  'DELETE /api/connections/:id': () => true,
-  'POST /api/connection-authorizations': () => true,
-  'PATCH /api/providers/:id': () => true,
-  'POST /api/providers/:id/refresh': () => true,
-  'DELETE /api/providers/:id': () => true,
-}
 
 export async function who(req: FastifyRequest): Promise<Caller> {
   const { local, device } = arrival(req)
@@ -50,32 +33,18 @@ export async function who(req: FastifyRequest): Promise<Caller> {
   const member = memberOf(device)
   if (!member) throw new HttpError(401, 'This device isn’t on your list anymore, so it can’t reach this computer.')
   const route = routeOf(req)
-  const allowed = member.own ? isOwnWindow(device) || !TRUST.test(route) || firstKitOnAServer(route) : TEAMMATE_LISTS.has(route) || (TEAMMATES.has(route) && await sharedWith({ req, email: member.email, workspaces: member.workspaces }))
-  if (!allowed) throw new HttpError(403, member.own ? 'Do this on your computer: devices, keys, the recovery kit and sign-in change only in the OpenHut app there.' : 'You can only chat with the agents your team shares.')
+  const allowed = member.own ? !TRUST.test(route) : TEAMMATE_LISTS.has(route) || (TEAMMATES.has(route) && await sharedWith({ req, email: member.email, workspaces: member.workspaces }))
+  if (!allowed) throw new HttpError(403, member.own ? 'Do this on your computer: devices, keys and sign-in change only there.' : 'You can only chat with the agents your team shares.')
   return { id: (await owner()).id, email: member.email, local: false, ...!member.own && { teammate: member.workspaces } }
-}
-
-export async function stepUp(req: FastifyRequest): Promise<void> {
-  const { device } = arrival(req)
-  const member = device === undefined ? undefined : memberOf(device)
-  if (!member?.own || isOwnWindow(device) || !STEP_UP[routeOf(req)]?.(req.body)) return
-  if (!await userPresence.ask('let your browser or phone make this change')) throw new HttpError(403, 'Not confirmed on your computer, so nothing changed. Confirm it there to go ahead.', { param: 'presence' })
 }
 
 export async function requireSignIn(req: FastifyRequest): Promise<void> {
   await who(req)
 }
 
-export function withPresence(reason: string): (req: FastifyRequest) => Promise<void> {
-  return async (req) => {
-    await who(req)
-    if (!await userPresence.ask(reason)) throw new HttpError(403, 'Not confirmed. Nothing changed.', { param: 'presence' })
-  }
-}
-
 export function atHome(req: FastifyRequest): boolean {
   const { device } = arrival(req)
-  return device === undefined || isOwnWindow(device)
+  return device === undefined
 }
 
 export function enrolled(header: string | undefined): boolean {
@@ -86,11 +55,6 @@ export function enrolled(header: string | undefined): boolean {
 
 export function tagDevice<T extends Duplex>({ conn, key }: { conn: T; key: string }): T {
   return Object.assign(conn, { [DEVICE]: key })
-}
-
-function isOwnWindow(device: string | undefined): boolean {
-  const own = settings.ownWindow()
-  return device !== undefined && own !== undefined && tunnelKeyOf(own) === device
 }
 
 export function tunnelKeyOf(device: string): string {
@@ -132,10 +96,6 @@ function arrival(req: FastifyRequest): { local: boolean; device?: string } {
 
 function routeOf(req: FastifyRequest): string {
   return `${req.method} ${req.routeOptions.url ?? ''}`
-}
-
-function firstKitOnAServer(route: string): boolean {
-  return route === SERVER_KIT && config.installKind === 'server' && !keysService.kitState().saved
 }
 
 async function sharedWith({ req, email, workspaces }: { req: FastifyRequest; email: string; workspaces: string[] }): Promise<boolean> {
