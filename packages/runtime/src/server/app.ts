@@ -15,6 +15,7 @@ import { agentService } from './agents/agent-service.ts'
 import { channelController } from './channels/channel-controller.ts'
 import { channelService } from './channels/channel-service.ts'
 import { connectionAuthorizationController, connectionController, connectionEventController, connectionToolController } from './connections/connection-controller.ts'
+import { creditsController } from './models/credits-controller.ts'
 import { providerController } from './models/provider-controller.ts'
 import { gatewayServer } from './gateway/gateway-server.ts'
 import { threadController } from './threads/thread-controller.ts'
@@ -72,6 +73,7 @@ await app.register(connectionEventController, { prefix: '/api/connection-events'
 await app.register(connectionToolController, { prefix: '/api/connection-tools' })
 await app.register(connectionAuthorizationController, { prefix: '/api/connection-authorizations' })
 await app.register(providerController, { prefix: '/api/providers' })
+await app.register(creditsController, { prefix: '/api/credits' })
 await app.register(adminController, { prefix: '/api/admin' })
 await app.register(eventsController, { prefix: '/api/events' })
 await app.register(updateController, { prefix: '/api/updates' })

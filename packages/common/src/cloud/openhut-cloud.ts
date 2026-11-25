@@ -10,7 +10,7 @@ import { commitOfWeb, facesOfWeb } from './faces-web.ts'
 import { bodyOf } from './member-list.ts'
 import { recordsClient, type RecordsOptions } from './records.ts'
 import type { Kind } from './rules.ts'
-import { JoinCode, JoinedCode, KeyBox, Me, proofOf, requestParts, Session, SIGNATURE_HEADER, type NamedKeyBox, type V1Proof } from './v1/identity.ts'
+import { Credits, JoinCode, JoinedCode, KeyBox, Me, proofOf, requestParts, Session, SIGNATURE_HEADER, type NamedKeyBox, type V1Proof } from './v1/identity.ts'
 import { JoinRequest, type NewLetter, type PostMemberList } from './v1/trust.ts'
 
 export type Store = {
@@ -63,6 +63,7 @@ export type Computer = Device & {
   webCode: () => Promise<JoinCode>
   joinedBy: (code: string) => Promise<string | null>
   deleteAccount: () => Promise<Reply>
+  credits: () => Promise<Credits>
   keyBoxes: {
     list: () => Promise<KeyBox[] | null>
     get: (name: string) => Promise<Reply>
@@ -346,6 +347,7 @@ function computerOf({ url, key, store, fetch }: { url: Url; key: ComputerIdentit
     webCode: () => net.ok({ name: 'createJoinCode', body: { web: true }, reply: JoinCode }),
     joinedBy: async (code) => (await net.ok({ name: 'getJoinCode', params: { code }, reply: JoinedCode })).device,
     deleteAccount: () => net.call({ name: 'deleteMe' }),
+    credits: () => net.ok({ name: 'getCredits', reply: Credits }),
 
     channels: {
       create: (body) => net.call({ name: 'createChannel', body }),

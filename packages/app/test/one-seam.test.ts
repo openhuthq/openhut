@@ -10,3 +10,8 @@ test('every request goes to this computer\'s runtime through one seam: only lib/
   const found = files.filter((file) => /(?<![.\w])fetch\(|fetch\(\s*['"`]\/api/.test(readFileSync(new URL(file, SRC), 'utf8')))
   assert.deepEqual(found, [])
 })
+
+test('the App reads End-to-end encryption in one place: only useEncryption() looks at cloud.encryption', () => {
+  const files = readdirSync(SRC, { recursive: true, encoding: 'utf8' }).filter((file) => /\.tsx?$/.test(file) && file !== 'features/settings/encryption.tsx')
+  assert.deepEqual(files.filter((file) => /\.encryption\b|\bmanaged\b/.test(readFileSync(new URL(file, SRC), 'utf8'))), [])
+})

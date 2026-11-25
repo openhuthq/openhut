@@ -9,3 +9,4 @@ export function grantsKey(filter: { agentId: string } | { connectionId: string }
 }
 export const COMPUTERS_KEY = ['computers']
 export const PROVIDERS_KEY = ['providers']
+export const CREDITS_KEY = ['credits']
