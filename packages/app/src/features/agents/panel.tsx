@@ -19,6 +19,7 @@ import { ChannelRows } from '@/features/agents/channels'
 import { Face } from '@/features/agents/face'
 import { RoutinesRow } from '@/features/routines/routines-dialog'
 import { ModelRows } from '@/features/agents/model-rows'
+import { RunsOnRow } from '@/features/agents/move'
 import { AgentStatus } from '@/features/agents/status'
 import { formValues } from '@/lib/form'
 import { PHONE, useMedia } from '@/lib/media'
@@ -45,6 +46,7 @@ export function Panel({ agent, naming, watching, onHide }: { agent: Agent; namin
     </Button></div>
     <div className="-mx-2.5 flex flex-col gap-px">
       <ModelRows agent={agent} />
+      <RunsOnRow agent={agent} />
       {agent.runsHere && <>
         <Counted agent={agent} dialog="memory" icon={AiBrain01Icon} title="Memory" value={memory} />
         <Counted agent={agent} dialog="skills" icon={BookOpen01Icon} title="Skills" value={skills} />
@@ -60,7 +62,7 @@ export function Panel({ agent, naming, watching, onHide }: { agent: Agent; namin
 const LABEL = 'pb-1.5 text-[12px]/[16px] text-mute'
 
 function AgentActions({ agent, watching }: { agent: Agent; watching: boolean }) {
-  const features = useFeatures()
+  const features = useFeatures(agent.runsOn ?? undefined)
   const updateAgent = useUpdateAgent(agent.id)
   const change = (patch: Parameters<typeof updateAgent.mutate>[0]) => updateAgent.mutate(patch, { onError: toastError })
   const locked = !agent.canEdit || !agent.canManage || updateAgent.isPending
@@ -74,7 +76,7 @@ function AgentActions({ agent, watching }: { agent: Agent; watching: boolean }) 
         {agent.browser && agent.canEdit && <a className="text-[12px] text-body underline-offset-2 hover:underline" href={agentPath({ agentId: agent.id, dialog: 'browser' })}>Open</a>}
         <Switch checked={agent.browser} aria-label="Browser" disabled={!browser || !agent.canEdit || updateAgent.isPending} onCheckedChange={() => change({ browser: !agent.browser })} />
       </span></label>}
-      {!browser && agent.runsHere && <span className="px-2.5 pb-1 text-[12px]/[16px] text-mute">Install Google Chrome on this computer, then turn Browser on.</span>}
+      {!browser && agent.runsHere && <span className="px-2.5 pb-1 text-[12px]/[16px] text-mute">This computer can’t give agents a browser.</span>}
     </div>
     {agent.browser && agent.canEdit && !watching && <BrowserPreview agent={agent} />}
   </div>

@@ -27,12 +27,14 @@ import { changeRequestService } from './agents/change-request-service.ts'
 import { routineService } from './routines/routine-service.ts'
 import { addressController, googleSignInController, inviteController, meController, ownerResetController, passwordResetController, peopleController, installSettingsController, sessionController, setupController } from './team/team-controller.ts'
 import { installSettingsService } from './team/install-settings-service.ts'
-import { forward } from './relay/forward.ts'
 import { runSet } from './agents/run-set.ts'
+import { computerController } from './computers/computer-controller.ts'
+import { computerService } from './computers/computer-service.ts'
 import { listenLocally } from './team/identity.ts'
 
 await migrate()
 writeCaddyfile()
+await computerService.boot()
 
 const app = Fastify({ logger: false, bodyLimit: 1 << 20, trustProxy: '127.0.0.1', forceCloseConnections: true }).withTypeProvider<ZodTypeProvider>()
 answerErrors(app)
@@ -42,8 +44,7 @@ app.addHook('onSend', async (_req, reply) => {
   reply.header('referrer-policy', 'no-referrer').header('x-frame-options', 'DENY')
 })
 
-await app.register(websocket)
-app.addHook('preHandler', forward.http)
+await app.register(websocket, { options: { maxPayload: 1 << 20 } })
 await app.register(healthController, { prefix: '/health' })
 await app.register(meController, { prefix: '/api/me' })
 await app.register(setupController, { prefix: '/api/setup' })
@@ -55,6 +56,7 @@ await app.register(inviteController, { prefix: '/api/invites' })
 await app.register(passwordResetController, { prefix: '/api/password-resets' })
 await app.register(googleSignInController, { prefix: '/api/google-sign-in' })
 await app.register(installSettingsController, { prefix: '/api/install-settings' })
+await app.register(computerController, { prefix: '/api/computers' })
 await app.register(agentController, { prefix: '/api/agents' })
 await app.register(grantController, { prefix: '/api/grants' })
 await app.register(skillController, { prefix: '/api/skills' })

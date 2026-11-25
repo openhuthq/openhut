@@ -1,7 +1,7 @@
 #!/bin/sh
 set -u
 cd /tmp || exit 1
-REQUEST=/data/update.request LOG=/data/update.log EXIT=/data/update.log.exit
+REQUEST=/data/update/request LOG=/data/update.log EXIT=/data/update.log.exit
 apply() { # <sha256 the runtime checked> <app version>
   rm -f "$EXIT"; d=$(mktemp -d)
   if ! curl -fsSL --retry 3 "$OPENHUT_URL" -o "$d/install.sh"; then echo "openhut: couldn't download the new version from $OPENHUT_URL"; code=2
@@ -21,10 +21,10 @@ if flock -n 9 && docker container inspect openhut-previous >/dev/null 2>&1; then
 fi
 flock -u 9
 while :; do
-  if [ -f "$REQUEST" ] && flock -n 9; then
+  if [ -s "$REQUEST" ] && flock -n 9; then
     sha='' version=''
     read -r sha version < "$REQUEST" || true
-    rm -f "$REQUEST"
+    : > "$REQUEST"
     if printf '%s' "$sha" | grep -Eqx '[0-9a-f]{64}' && case $version in *[!0-9.]*) false ;; esac; then apply "$sha" "$version" > "$LOG" 2>&1
     else echo "openhut: ignored an update request that isn't a sha256 and a version"; fi
     flock -u 9

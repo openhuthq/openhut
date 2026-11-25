@@ -1,95 +1,92 @@
-import type { WebSocket } from '@fastify/websocket'
-import type { FastifyReply, FastifyRequest } from 'fastify'
-import * as z from 'zod/mini'
-import { agentService } from '../agents/agent-service.ts'
-import { channelService } from '../channels/channel-service.ts'
+import { request as httpRequest } from 'node:http'
+import { connect } from 'node:net'
+import { duplexPair, Readable, type Duplex } from 'node:stream'
+import type { Mux } from '@openhut/common/tunnel/mux.ts'
 import { db } from '../platform/db.ts'
-import { HttpError, messageOf } from '../platform/http-error.ts'
+import { HttpError } from '../platform/http-error.ts'
+import { agentApiUrl } from '../platform/network.ts'
+import { config } from '../platform/config.ts'
 import { HERE } from '../team/home.ts'
-import { who } from '../team/identity.ts'
 
-const MAX_REASON = 120
-const Id = z.object({ id: z.string() })
-const ByAgent = z.object({ agentId: z.string() })
-type Tunnel = { failure?: unknown; fetch: (path: string, init: RequestInit) => Promise<Response>; socket: (url: string) => WebSocket }
+export type Link = { mux: Mux; features: { whatsapp: boolean; browser: boolean }; gvisor: boolean | null; end: (revoked?: boolean) => void }
 
-const tunnels = new Map<string, Promise<Tunnel>>()
-const RUNNER_OF: Partial<Record<string, (req: FastifyRequest) => Promise<string | undefined>>> = {
-  'GET /api/threads/:id': (req) => runnerOf(idOf(req)),
-  'DELETE /api/threads/:id': (req) => runnerOf(idOf(req)),
-  'POST /api/threads/:id/chat': (req) => runnerOf(idOf(req)),
-  'GET /api/threads/:id/files': (req) => runnerOf(idOf(req)),
-  'POST /api/threads/:id/files': (req) => runnerOf(idOf(req)),
-  'DELETE /api/threads/:id/files': (req) => runnerOf(idOf(req)),
-  'POST /api/threads/:id/files/lookups': (req) => runnerOf(idOf(req)),
-  'GET /api/channels/:id': async (req) => runnerOf(await channelService.agentOf({ id: idOf(req) })),
-  'GET /api/connection-events': (req) => runnerOf(z.safeParse(ByAgent, req.query).data?.agentId),
-}
+const SERVE = new URL(`../../agentd/serve.${import.meta.url.endsWith('.ts') ? 'ts' : 'mjs'}`, import.meta.url).href
+const local = config.agentdInProcess ? await import(SERVE) as typeof import('../../agentd/serve.ts') : undefined
+await local?.boot()
+const links = new Map<string, Link>()
+const relayed = new Map<number, string>()
+const OFFLINE = 'The computer that runs this agent is offline. Start it, or move the agent to another computer.'
 
 export const forward = {
-  async http(req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> {
-    const find = RUNNER_OF[`${req.method} ${req.routeOptions.url ?? ''}`]
-    const key = find ? await find(req) : undefined
-    if (!key) return undefined
-    await who(req)
-    return reply.send(await fetchOn({ key, path: req.url, init: { method: req.method, headers: headersOf(req), body: bodyOf(req) } }))
+  link({ computer, link }: { computer: string; link: Link }): void {
+    links.get(computer)?.end()
+    links.set(computer, link)
   },
 
-  async socket({ socket, req, agentId }: { socket: WebSocket; req: FastifyRequest; agentId: string }): Promise<boolean> {
-    const key = await runnerOf(agentId)
-    if (!key) return false
-    try {
-      await who(req)
-      const remote = (await open(key)).socket(req.url)
-      remote.onmessage = ({ data }) => socket.send(data)
-      remote.onclose = ({ code, reason }) => socket.close(code === 1000 || code >= 3000 ? code : 1011, reason.slice(0, MAX_REASON))
-      socket.on('message', (data, binary) => remote.send(binary ? new Uint8Array(data as Buffer) : String(data)))
-      socket.on('close', () => remote.close())
-    } catch (error) {
-      socket.close(4000 + (error instanceof HttpError ? error.status : 502), messageOf(error).slice(0, MAX_REASON))
-    }
-    return true
+  unlink({ computer, link, revoked = false }: { computer: string; link?: Link; revoked?: boolean }): void {
+    const held = links.get(computer)
+    if (!held || (link && held !== link)) return
+    links.delete(computer)
+    held.end(revoked)
+  },
+
+  linked: (computer: string): Link | undefined => links.get(computer),
+
+  gateway({ computer, stream }: { computer: string; stream: Duplex }): void {
+    const gateway = connect(config.gatewayPort, '127.0.0.1')
+    gateway.once('connect', () => {
+      const port = gateway.localPort
+      if (!port) return gateway.destroy()
+      relayed.set(port, computer)
+      gateway.once('close', () => relayed.delete(port))
+      stream.pipe(gateway).pipe(stream)
+    })
+    gateway.on('error', () => stream.destroy())
+    stream.on('error', () => gateway.destroy())
+    stream.on('close', () => gateway.destroy())
+  },
+
+  relayedFrom: (port: number | undefined): string | undefined => port === undefined ? undefined : relayed.get(port),
+
+  online: (computer: string): boolean => links.has(computer) || (computer === HERE && !links.size),
+
+  computers: (): string[] => links.size ? [...links.keys()] : [HERE],
+
+  async computerOf(agentId: string | undefined): Promise<string> {
+    if (!agentId) return HERE
+    const row = await db.selectFrom('agent').select('runs_on').where('id', '=', agentId).executeTakeFirst()
+    return row?.runs_on ?? HERE
+  },
+
+  open({ on, request }: { on: string; request: Record<string, unknown> }): Duplex {
+    const link = links.get(on)
+    if (link) return link.mux.open(request)
+    if (on !== HERE) throw new HttpError(503, OFFLINE)
+    if (request.to === 'agentd') return localAgentd()
+    throw new HttpError(503, OFFLINE)
+  },
+
+  async fetch({ agent, path, init }: { agent: { id: string; net: number }; path: string; init: RequestInit }): Promise<Response> {
+    const on = await forward.computerOf(agent.id)
+    if (!links.has(on) && on === HERE) return fetch(`${agentApiUrl(agent.net)}${path}`, init)
+    const socket = forward.open({ on, request: { to: 'agent', net: agent.net } })
+    return new Promise((resolve, reject) => {
+      const req = httpRequest(`http://agent${path}`, { method: init.method, headers: init.headers as Record<string, string>, createConnection: () => socket, signal: init.signal ?? undefined }, (res) => {
+        const headers = new Headers()
+        for (const [name, value] of Object.entries(res.headers)) if (typeof value === 'string') headers.set(name, value)
+        resolve(new Response(res.statusCode === 204 ? null : Readable.toWeb(res) as ReadableStream<Uint8Array>, { status: res.statusCode, headers }))
+      })
+      req.on('error', reject)
+      req.end(typeof init.body === 'string' ? init.body : undefined)
+    })
   },
 }
 
-async function runnerOf(agentId: string | undefined): Promise<string | undefined> {
-  if (!agentId || await db.selectFrom('agent').select('id').where('id', '=', agentId).executeTakeFirst()) return undefined
-  const runsOn = (await agentService.find({ id: agentId }).catch(() => null))?.control?.runsOn
-  return !runsOn || runsOn === HERE ? undefined : runsOn
-}
-
-async function fetchOn({ key, path, init }: { key: string; path: string; init: RequestInit }): Promise<Response> {
-  try {
-    return await (await open(key)).fetch(path, init)
-  } catch {
-    tunnels.delete(key)
-    throw new HttpError(502, 'The computer that runs this isn’t answering. It may be off or offline.')
-  }
-}
-
-function open(key: string): Promise<Tunnel> {
-  const held = tunnels.get(key)
-  if (held) return held.then((tunnel) => tunnel.failure ? reopen(key) : tunnel)
-  return reopen(key)
-}
-
-function reopen(key: string): Promise<Tunnel> {
-  const opening = Promise.reject(new HttpError(502, `The computer ${key} isn’t connected to this install.`))
-  tunnels.set(key, opening)
-  opening.catch(() => { if (tunnels.get(key) === opening) tunnels.delete(key) })
-  return opening
-}
-
-function idOf(req: FastifyRequest): string {
-  return z.safeParse(Id, req.params).data?.id ?? ''
-}
-
-function headersOf(req: FastifyRequest): Record<string, string> {
-  const { 'content-type': type, accept } = req.headers
-  return { ...type && { 'content-type': type }, ...accept && { accept } }
-}
-
-function bodyOf(req: FastifyRequest): string | Uint8Array | undefined {
-  if (req.body === undefined || req.body === null) return undefined
-  return Buffer.isBuffer(req.body) ? new Uint8Array(req.body) : JSON.stringify(req.body)
+function localAgentd(): Duplex {
+  if (!local) return connect(config.agentdSocket)
+  const [socket, agentdSide] = duplexPair()
+  socket.once('close', () => agentdSide.destroy())
+  agentdSide.once('close', () => socket.destroy())
+  local.serve(agentdSide)
+  return socket
 }

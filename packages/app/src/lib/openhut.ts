@@ -1,5 +1,5 @@
 import { ApiError, List } from '@openhut/common/api.ts'
-import { Admin } from '@openhut/common/admin/admin.ts'
+import { Computer as ComputerSchema } from '@openhut/common/computers/computer.ts'
 import { Agent, Grant } from '@openhut/common/agents/agent.ts'
 import { Me } from '@openhut/common/team/team.ts'
 import type { Computer, Features } from '@/lib/computers'
@@ -9,8 +9,9 @@ export type Where = { computer?: string; of?: string }
 export type OpenHutAgent = Agent & { computer: string; online: boolean }
 
 type Schema<T> = { safeParse: (data: unknown) => { success: true; data: T } | { success: false } }
-const LOCAL = 'local'
+export const HERE = 'here'
 const AGENT_LIST = List(Agent)
+const COMPUTER_LIST = List(ComputerSchema)
 
 export class RequestError extends Error {
   readonly status: number
@@ -47,10 +48,7 @@ export const openhut = {
     grant: ({ connection, agent }: { connection: string; agent: string }): Promise<Grant> => request({ schema: Grant, path: '/api/grants', method: 'POST', body: { agentId: agent, connectionId: connection } }),
   },
   computers: {
-    async list(): Promise<Computer[]> {
-      const admin = await request({ schema: Admin, path: '/api/admin' }).catch(() => undefined)
-      return [{ id: LOCAL, name: 'This server', version: admin?.server.version ?? null, online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false } }]
-    },
+    list: async (): Promise<Computer[]> => (await request({ schema: COMPUTER_LIST, path: '/api/computers' })).data,
   },
   account: {
     me: (): Promise<Me> => request({ schema: Me, path: '/api/me' }),
@@ -58,7 +56,7 @@ export const openhut = {
 }
 
 function here(agent: Agent): OpenHutAgent {
-  return { ...agent, computer: agent.runsHere || !agent.runsOn ? LOCAL : agent.runsOn, online: true }
+  return { ...agent, computer: agent.runsOn ?? HERE, online: true }
 }
 
 function payloadOf(body: unknown): RequestInit {

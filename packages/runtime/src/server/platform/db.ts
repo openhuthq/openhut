@@ -32,6 +32,9 @@ export async function migrate(): Promise<void> {
   await sql`create table if not exists invite (
     hash text primary key, role text not null check (role in ('admin', 'member')), created_by text not null references person(id), expires_at timestamptz not null)`.execute(db)
   await sql`create table if not exists password_reset (hash text primary key, person_id text not null references person(id), expires_at timestamptz not null)`.execute(db)
+  await sql`create table if not exists computer (
+    id text primary key, name text not null, token_hash text unique not null, expires_at timestamptz, version text, gvisor boolean,
+    update_error text, seen_at timestamptz, created_at timestamptz not null default now())`.execute(db)
   await sql`create table if not exists agent (
     id text primary key, name text not null, owner_id text not null references person(id), instructions text not null,
     model text not null default 'claude:sonnet', net integer unique not null check (net between 1 and 250),

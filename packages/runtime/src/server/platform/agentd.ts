@@ -1,29 +1,25 @@
-import { connect } from 'node:net'
-import { duplexPair, type Duplex } from 'node:stream'
+import type { Duplex } from 'node:stream'
 import * as z from 'zod/mini'
-import { config } from './config.ts'
 import { log } from './events.ts'
 import { HttpError } from './http-error.ts'
+import { db } from './db.ts'
+import { forward } from '../relay/forward.ts'
+import { HERE } from '../team/home.ts'
 
 const TIMEOUT_MS = 180_000
 const MAX_LIVE_LINE = 8 << 20
 const Features = z.object({ whatsapp: z.boolean(), browser: z.boolean() })
-export const LastUpdate = z.object({ exit: z.number(), at: z.string(), reason: z.nullable(z.string()) })
-export type LastUpdate = z.infer<typeof LastUpdate>
 const Failure = z.object({ ok: z.literal(false), error: z.string() })
 const Change = z.enum(['created', 'started', 'restarted', 'stopped', 'none'])
-const SERVE = new URL(`../../agentd/serve.${import.meta.url.endsWith('.ts') ? 'ts' : 'mjs'}`, import.meta.url).href
-const local = config.agentdInProcess ? await import(SERVE) as typeof import('../../agentd/serve.ts') : undefined
-await local?.boot()
+type On = { on?: string }
 
 export const agentd = {
-  health: () => ask({ request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), imageReady: z.optional(z.boolean()), gvisor: z.optional(z.boolean()), updating: z.optional(z.boolean()), lastUpdate: z.optional(z.nullable(LastUpdate)), features: z.optional(Features) }) }),
-  ps: () => ask({ request: { cmd: 'ps' }, doing: 'list the agents', schema: z.object({ states: z.record(z.string(), z.string()) }) }),
-  apply: ({ id, net, files, browser, running, force = false }: { id: string; net: number; files: AgentFiles; browser: boolean; running: boolean; force?: boolean }) =>
-    ask({ request: { cmd: 'apply', id, net, files, browser, running, force }, doing: 'set up the agent', schema: z.object({ applied: z.string(), change: Change }) }),
-  stop: ({ id }: { id: string }) => ask({ request: { cmd: 'stop', id }, doing: 'stop the agent', schema: z.object({ stopped: z.string() }) }),
-  remove: ({ id, trash = false }: { id: string; trash?: boolean }) => ask({ request: { cmd: 'rm', id, trash }, doing: 'delete the agent', schema: z.object({ removed: z.string() }) }),
-  update: ({ appVersion, sha256 }: { appVersion?: string; sha256: string }) => ask({ request: { cmd: 'update', appVersion, sha256 }, doing: 'start the update', schema: z.object({ updating: z.boolean() }) }),
+  health: ({ on = HERE }: On = {}) => ask({ on, request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), imageReady: z.optional(z.boolean()), gvisor: z.optional(z.boolean()), features: z.optional(Features) }) }),
+  ps: ({ on = HERE }: On = {}) => ask({ on, request: { cmd: 'ps' }, doing: 'list the agents', schema: z.object({ states: z.record(z.string(), z.string()) }) }),
+  apply: ({ id, net, files, browser, running, force = false, on }: { id: string; net: number; files: AgentFiles; browser: boolean; running: boolean; force?: boolean } & On) =>
+    ask({ on, request: { cmd: 'apply', id, net, files, browser, running, force }, doing: 'set up the agent', schema: z.object({ applied: z.string(), change: Change }) }),
+  stop: ({ id, on }: { id: string } & On) => ask({ on, request: { cmd: 'stop', id }, doing: 'stop the agent', schema: z.object({ stopped: z.string() }) }),
+  remove: ({ id, trash = false, on }: { id: string; trash?: boolean } & On) => ask({ on, request: { cmd: 'rm', id, trash }, doing: 'delete the agent', schema: z.object({ removed: z.string() }) }),
   skills: ({ id }: { id: string }) => ask({ request: { cmd: 'skills', id }, doing: 'list the skills', schema: z.object({ skills: z.array(z.object({ path: z.string(), head: z.string() })), bundled: z.string() }) }),
   read: async ({ id, path }: { id: string; path: string }): Promise<Buffer | null> => {
     const { body } = await ask({ request: { cmd: 'read', id, path }, doing: 'read the file', schema: z.object({ body: z.nullable(z.string()) }) })
@@ -33,61 +29,65 @@ export const agentd = {
     ask({ request: { cmd: 'write', id, path, create, replace }, body: Buffer.from(body).toString('base64'), doing: 'save the file in the agent\'s home', schema: z.object({ path: z.string() }) }),
   delete: ({ id, paths }: { id: string; paths: string[] }) => ask({ request: { cmd: 'delete', id, paths }, doing: 'delete the files', schema: z.object({ removed: z.array(z.string()) }) }),
   stat: ({ id, paths }: { id: string; paths: string[] }) => ask({ request: { cmd: 'stat', id, paths }, doing: 'look for the files', schema: z.object({ files: z.array(z.object({ path: z.string(), size: z.number() })) }) }),
-  newMessages: ({ since }: { since: number }) => ask({ request: { cmd: 'messages', since }, doing: 'look for new messages', schema: z.object({ messages: z.array(z.object({ agentId: z.string(), source: z.string(), at: z.number() })) }) }),
-  usage: ({ since }: { since: number }) => ask({ request: { cmd: 'usage', since }, doing: 'read the agents\' usage', schema: z.object({ usage: z.record(z.string(), z.number()) }) }),
+  usage: async ({ since }: { since: number }) => ({
+    usage: (await everywhere((on) => ask({ on, request: { cmd: 'usage', since }, doing: 'read the agents\' usage', schema: z.object({ usage: z.record(z.string(), z.number()) }) }).then((reply) => reply.usage))) ?? {},
+  }),
 }
 
 export function liveBrowser({ id, fps, onLine, onEnd }: { id: string; fps: number; onLine: (line: string) => void; onEnd: () => void }): Stream {
-  return stream({ request: { cmd: 'browser-live', id, fps }, onLine, onEnd })
+  return stream({ id, request: { cmd: 'browser-live', id, fps }, onLine, onEnd })
 }
 
 export function pairWhatsapp({ id, onLine, onEnd }: { id: string; onLine: (line: string) => void; onEnd: () => void }): Stream {
-  return stream({ request: { cmd: 'wa-pair', id }, onLine, onEnd })
+  return stream({ id, request: { cmd: 'wa-pair', id }, onLine, onEnd })
 }
 
-function open(): Duplex {
-  if (!local) return connect(config.agentdSocket)
-  const [socket, agentdSide] = duplexPair()
-  socket.once('close', () => agentdSide.destroy())
-  agentdSide.once('close', () => socket.destroy())
-  local.serve(agentdSide)
-  return socket
-}
-
-function stream({ request, onLine, onEnd }: { request: Record<string, unknown>; onLine: (line: string) => void; onEnd: () => void }): Stream {
-  const socket = open()
+function stream({ id, request, onLine, onEnd }: { id: string; request: Record<string, unknown>; onLine: (line: string) => void; onEnd: () => void }): Stream {
+  let socket: Duplex | undefined
+  let closed = false
   let pending = ''
-  socket.setEncoding('utf8')
-  socket.on('data', (chunk: string) => {
-    pending += chunk
-    for (let end = pending.indexOf('\n'); end >= 0; end = pending.indexOf('\n')) {
-      onLine(pending.slice(0, end))
-      pending = pending.slice(end + 1)
-    }
-    if (pending.length > MAX_LIVE_LINE) socket.destroy()
-  })
-  socket.on('end', () => {
-    if (pending) onLine(pending)
-    pending = ''
-    socket.destroy()
-  })
-  socket.on('error', () => socket.destroy())
-  socket.on('close', onEnd)
-  socket.write(`${JSON.stringify(request)}\n`)
-  return { send: (line) => socket.write(`${line}\n`), close: () => socket.destroy() }
+  forward.computerOf(id).then((on) => {
+    socket = forward.open({ on, request: { to: 'agentd' } })
+    if (closed) return socket.destroy()
+    socket.setEncoding('utf8')
+    socket.on('data', (chunk: string) => {
+      pending += chunk
+      for (let end = pending.indexOf('\n'); end >= 0; end = pending.indexOf('\n')) {
+        onLine(pending.slice(0, end))
+        pending = pending.slice(end + 1)
+      }
+      if (pending.length > MAX_LIVE_LINE) socket?.destroy()
+    })
+    socket.on('end', () => {
+      if (pending) onLine(pending)
+      pending = ''
+      socket?.destroy()
+    })
+    socket.on('error', () => socket?.destroy())
+    socket.on('close', onEnd)
+    socket.write(`${JSON.stringify(request)}\n`)
+  }).catch(() => onEnd())
+  return { send: (line) => socket?.write(`${line}\n`), close: () => { closed = true; socket?.destroy() } }
 }
 
-export async function features(): Promise<z.output<typeof Features>> {
-  return (await agentd.health().catch(() => undefined))?.features ?? { whatsapp: false, browser: false }
+export async function features({ on = HERE }: On = {}): Promise<z.output<typeof Features>> {
+  return (await agentd.health({ on }).catch(() => undefined))?.features ?? { whatsapp: false, browser: false }
 }
 
 export async function containerStates(): Promise<Record<string, string> | undefined> {
-  const reply = await agentd.ps().catch(() => undefined)
-  return reply?.states
+  return everywhere((on) => agentd.ps({ on }).then((reply) => reply.states))
 }
 
-async function ask<S extends z.ZodMiniType>({ request, body, doing, schema }: { request: Record<string, unknown>; body?: string; doing: string; schema: S }): Promise<z.output<S>> {
-  const reply = await send({ request, body, doing })
+async function everywhere<T>(each: (on: string) => Promise<Record<string, T>>): Promise<Record<string, T> | undefined> {
+  const runsOn = new Map((await db.selectFrom('agent').select(['id', 'runs_on']).execute()).map((row) => [row.id, row.runs_on ?? HERE]))
+  const settled = await Promise.all(forward.computers().map(async (on) => ({ on, said: await each(on).catch(() => undefined) })))
+  if (settled.every(({ said }) => !said)) return undefined
+  return Object.fromEntries(settled.flatMap(({ on, said }) => Object.entries(said ?? {}).filter(([id]) => runsOn.get(id) === on)))
+}
+
+async function ask<S extends z.ZodMiniType>({ on, request, body, doing, schema }: { on?: string; request: Record<string, unknown>; body?: string; doing: string; schema: S }): Promise<z.output<S>> {
+  const computer = on ?? await forward.computerOf(typeof request.id === 'string' ? request.id : undefined)
+  const reply = await send({ on: computer, request, body, doing })
   const failure = z.safeParse(Failure, reply)
   if (failure.success) throw new HttpError(502, `OpenHut couldn't ${doing}: ${failure.data.error}. Restart OpenHut and try again.`)
   const parsed = z.safeParse(schema, reply)
@@ -95,9 +95,9 @@ async function ask<S extends z.ZodMiniType>({ request, body, doing, schema }: { 
   return parsed.data
 }
 
-function send({ request, body = '', doing }: { request: Record<string, unknown>; body?: string; doing: string }): Promise<unknown> {
+function send({ on, request, body = '', doing }: { on: string; request: Record<string, unknown>; body?: string; doing: string }): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const socket = open()
+    const socket = forward.open({ on, request: { to: 'agentd' } })
     let buffer = ''
     const timer = setTimeout(() => {
       socket.destroy()
@@ -114,6 +114,10 @@ function send({ request, body = '', doing }: { request: Record<string, unknown>;
       clearTimeout(timer)
       log.error({ event: 'agentd.unreachable', error: err.message })
       reject(new HttpError(503, 'Agents can\'t run on this computer right now. Restart OpenHut on it.'))
+    })
+    socket.on('close', () => {
+      clearTimeout(timer)
+      reject(new HttpError(503, 'The computer that runs this agent went offline. Try again when it\'s back.'))
     })
     socket.write(`${JSON.stringify(request)}\n${body && `${body}\n`}`)
   })

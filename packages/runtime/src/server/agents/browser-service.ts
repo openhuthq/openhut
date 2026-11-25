@@ -4,7 +4,6 @@ import { liveBrowser } from '../platform/agentd.ts'
 import { emit } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { sameOrigin } from '../platform/live-service.ts'
-import { forward } from '../relay/forward.ts'
 import { who } from '../team/identity.ts'
 import { agentService } from './agent-service.ts'
 
@@ -15,7 +14,6 @@ export const browserService = {
   async live({ socket, req, agentId, fps }: { socket: WebSocket; req: FastifyRequest; agentId: string; fps: number }): Promise<void> {
     try {
       if (!sameOrigin(req)) throw new HttpError(403, 'Only the OpenHut app can open an agent\'s browser.')
-      if (await forward.socket({ socket, req, agentId })) return
       const actor = await who(req)
       const row = await agentService.requireEditable({ actor, id: agentId })
       if (!row.web_browser) throw new HttpError(409, `Turn on Browser for ${row.name} first.`)

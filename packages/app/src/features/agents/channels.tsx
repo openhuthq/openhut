@@ -30,7 +30,7 @@ const KINDS: Record<ChannelKind, { label: string; remove: string; gone: string }
 
 export function ChannelRows({ agent }: { agent: Agent }) {
   const channels = useChannels(agent.id)
-  const features = useFeatures()
+  const features = useFeatures(agent.runsOn ?? undefined)
   const shown = listedChannels(channels.data ?? [])
   const others = ORDER.filter((kind) => (kind !== 'whatsapp' || features.whatsapp) && !shown.some((channel) => channel.kind === kind))
   return <Section title="Channels" action={<AddChannel agent={agent} kinds={others} />}>

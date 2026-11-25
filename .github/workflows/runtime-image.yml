@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tags:
-        description: Space-separated tags to push to ghcr.io/openhuthq/runtime (empty builds and smoke-tests only)
+        description: Space-separated tags to push to ghcr.io/openhuthq/openhut and openhut-runtime (empty builds and smoke-tests only)
         type: string
         default: ''
       smoke:
@@ -22,7 +22,7 @@ on:
         type: string
         default: ''
       tags:
-        description: Space-separated tags to push to ghcr.io/openhuthq/runtime, like "0.6.0" (a leading v is dropped)
+        description: Space-separated tags to push to ghcr.io/openhuthq/openhut and openhut-runtime, like "0.6.0" (a leading v is dropped)
         type: string
         required: true
       ref:
@@ -31,7 +31,7 @@ on:
         default: ''
     outputs:
       image:
-        description: The pushed image by digest, ghcr.io/openhuthq/runtime@sha256:…, for install.sh to pin
+        description: The pushed main image by digest, ghcr.io/openhuthq/openhut@sha256:…, which install.sh pins with its runtime
         value: ${{ jobs.publish.outputs.image }}
       build:
         description: The build number inside the image
@@ -45,7 +45,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  REPO: ghcr.io/openhuthq/runtime
+  REPO: ghcr.io/openhuthq
 
 jobs:
   smoke:
@@ -70,9 +70,9 @@ jobs:
             -t localhost:5000/openhut/runtime-base:ci --push --cache-from type=gha,scope=runtime-amd64 --cache-to type=gha,scope=runtime-amd64,mode=min .
           echo "Base built in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
           layer=$(date +%s)
-          BUILD="ci-$(git rev-parse --short=8 HEAD)" scripts/image.sh localhost:5000/openhut/runtime:ci --platform linux/amd64 --push --build-arg BASE=localhost:5000/openhut/runtime-base:ci \
+          BUILD="ci-$(git rev-parse --short=8 HEAD)" scripts/image.sh localhost:5000/openhut ci --platform linux/amd64 --push --build-arg BASE=localhost:5000/openhut/runtime-base:ci \
             --cache-from type=gha,scope=runtime-layer --cache-to type=gha,scope=runtime-layer,mode=min
-          echo "The layer built and pushed in $(( $(date +%s) - layer ))s" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Both images built and pushed in $(( $(date +%s) - layer ))s" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Install it as a server would, from install.sh
         run: |
           start=$(date +%s)
@@ -80,16 +80,17 @@ jobs:
           echo "Installed in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
           docker ps --format '{{.Names}} {{.Image}} {{.Status}}'
           [ "$(docker inspect -f '{{.State.Running}}' openhut-updater)" = true ] || { echo "::error::the updater isn't running"; docker logs openhut-updater; exit 1; }
-      - name: One agent in gVisor answers a chat
+          [ "$(docker inspect -f '{{.HostConfig.Privileged}}' openhut)" = false ] || { echo "::error::the main container is privileged"; exit 1; }
+      - name: The main install starts its own runtime, and one agent in gVisor on it answers a chat
         run: scripts/image-smoke.sh
       - name: A release whose /health fails is rolled back
         run: |
           good=$(docker inspect -f '{{.Image}}' openhut)
-          printf 'FROM localhost:5000/openhut/runtime:ci\nRUN rm /opt/openhut/packages/runtime/src/server/app.ts\n' |
-            docker buildx build --platform linux/amd64 --push -t localhost:5000/openhut/runtime:broken --metadata-file broken.json -
-          ref="localhost:5000/openhut/runtime@$(sed -n 's/.*"containerimage.digest": *"\(sha256:[0-9a-f]*\)".*/\1/p' broken.json)"
+          printf 'FROM localhost:5000/openhut/openhut:ci\nRUN rm /opt/openhut/packages/runtime/src/server/app.ts\n' |
+            docker buildx build --platform linux/amd64 --push -t localhost:5000/openhut/openhut:broken --metadata-file broken.json -
+          ref="localhost:5000/openhut/openhut@$(sed -n 's/.*"containerimage.digest": *"\(sha256:[0-9a-f]*\)".*/\1/p' broken.json)"
           start=$(date +%s)
-          if RUNTIME_IMAGE="$ref" OPENHUT_MODEL=test sh dist/install.sh; then echo "::error::the broken release installed"; exit 1; fi
+          if OPENHUT_IMAGE="$ref" OPENHUT_MODEL=test sh dist/install.sh; then echo "::error::the broken release installed"; exit 1; fi
           [ "$(docker inspect -f '{{.Image}}' openhut)" = "$good" ] || { echo "::error::openhut isn't the previous image"; exit 1; }
           docker exec openhut curl -fsS http://127.0.0.1:8787/health | grep -q '"ok":true'
           echo "A release with a failing /health was rolled back to the previous image in $(( $(date +%s) - start ))s" | tee -a "$GITHUB_STEP_SUMMARY"
@@ -97,18 +98,20 @@ jobs:
         run: |
           python3 - >> "$GITHUB_STEP_SUMMARY" <<'EOF'
           import json, urllib.request
-          get = lambda ref, kind: json.load(urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:5000/v2/openhut/runtime/manifests/{ref}", headers={"Accept": kind})))
-          index = get("ci", "application/vnd.oci.image.index.v1+json")
-          digest = next(m["digest"] for m in index["manifests"] if m["platform"]["architecture"] == "amd64")
-          layers = get(digest, "application/vnd.oci.image.manifest.v1+json")["layers"]
-          print(f"Image (linux/amd64): {sum(l['size'] for l in layers) / 1e6:.0f} MB compressed, {len(layers)} layers")
+          for name in ("openhut", "openhut-runtime"):
+              get = lambda ref, kind: json.load(urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:5000/v2/openhut/{name}/manifests/{ref}", headers={"Accept": kind})))
+              index = get("ci", "application/vnd.oci.image.index.v1+json")
+              digest = next(m["digest"] for m in index["manifests"] if m["platform"]["architecture"] == "amd64")
+              layers = get(digest, "application/vnd.oci.image.manifest.v1+json")["layers"]
+              print(f"{name} (linux/amd64): {sum(l['size'] for l in layers) / 1e6:.0f} MB compressed, {len(layers)} layers")
           EOF
-          docker image ls --format '{{.Repository}} {{.Size}} (on disk)' | grep runtime >> "$GITHUB_STEP_SUMMARY"
+          docker image ls --format '{{.Repository}} {{.Size}} (on disk)' | grep openhut >> "$GITHUB_STEP_SUMMARY"
       - name: Logs
         if: failure()
         run: |
           docker logs openhut 2>&1 | tail -50 || true
-          docker exec openhut sh -c 'tail -n 80 /var/log/openhut/*.log' || true
+          docker exec openhut sh -c 'tail -n 40 /data/log/*.log' || true
+          docker exec openhut-runtime sh -c 'tail -n 80 /var/log/openhut/*.log' || true
 
   publish:
     needs: smoke
@@ -153,26 +156,27 @@ jobs:
         run: |
           start=$(date +%s)
           [ -z "$BUILD_INPUT" ] || export BUILD="${BUILD_INPUT#v}"
-          first=${TAGS%% *}
-          extra=; for tag in $TAGS; do extra="$extra -t $REPO:${tag#v}"; done
-          scripts/image.sh "$REPO:${first#v}" --platform linux/amd64,linux/arm64 --push $extra \
+          scripts/image.sh "$REPO" "$TAGS" --platform linux/amd64,linux/arm64 --push \
             --label org.opencontainers.image.source="https://github.com/$GITHUB_REPOSITORY" --label org.opencontainers.image.revision="$(git rev-parse HEAD)" \
             --cache-from type=gha,scope=runtime-multi --cache-to type=gha,scope=runtime-multi,mode=min | tee dist-build.txt
-          image=$(sed -n 's/^IMAGE="${RUNTIME_IMAGE:-\(.*\)}"$/\1/p' dist/install.sh)
+          image=$(sed -n 's/^IMAGE="${OPENHUT_IMAGE:-\(.*\)}"$/\1/p' dist/install.sh)
+          runtime=$(sed -n 's/^RUNTIME="${RUNTIME_IMAGE:-\(.*\)}"$/\1/p' dist/install.sh)
           build=$(sed -n 's/.*(build \(.*\))$/\1/p' dist-build.txt)
           echo "image=$image" >> "$GITHUB_OUTPUT"
           echo "build=$build" >> "$GITHUB_OUTPUT"
-          printf '%s\n' "$image" > dist/runtime-image.txt
-          echo "Pushed $image (build $build, tags $TAGS) in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n%s\n' "$image" "$runtime" > dist/runtime-image.txt
+          echo "Pushed $image and $runtime (build $build, tags $TAGS) in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
       - name: Anyone can pull it, as servers do
         run: |
-          image=$(cat dist/runtime-image.txt)
-          DOCKER_CONFIG=$(mktemp -d) docker buildx imagetools inspect "$image" ||
-            { echo "::error::$image isn't public. Make the ghcr.io/openhuthq/runtime package public once (package settings), then rerun."; exit 1; }
+          for image in $(cat dist/runtime-image.txt); do
+            DOCKER_CONFIG=$(mktemp -d) docker buildx imagetools inspect "$image" >/dev/null ||
+              { echo "::error::$image isn't public. Make the ${image%@*} package public once (package settings), then rerun."; exit 1; }
+          done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: runtime-image
           path: |
             dist/runtime-image.txt
-            dist/image.json
+            dist/openhut.json
+            dist/openhut-runtime.json
             dist/install.sh

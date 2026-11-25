@@ -60,6 +60,7 @@ export const CreateAgent = z.object({
   shared: z.optional(z.boolean()),
   people: z.optional(Emails),
   sidebars: z.optional(Emails),
+  runsOn: z.optional(z.string().check(z.minLength(1), z.maxLength(64))),
 })
 export type CreateAgent = z.infer<typeof CreateAgent>
 

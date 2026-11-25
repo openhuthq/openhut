@@ -9,6 +9,7 @@ export interface Database {
   session: { hash: string; person_id: string; expires_at: Timestamp }
   invite: { hash: string; role: 'admin' | 'member'; created_by: string; expires_at: Timestamp }
   password_reset: { hash: string; person_id: string; expires_at: Timestamp }
+  computer: { id: string; name: string; token_hash: string; expires_at: Timestamp | null; version: string | null; gvisor: boolean | null; update_error: string | null; seen_at: Timestamp | null; created_at: Generated<Date> }
   agent: {
     id: string; name: string; owner_id: string; instructions: string; model: string; fallback_model: string | null; helper_models: Generated<string>; net: number
     wanted: Generated<'running' | 'stopped'>; code_execution: Generated<boolean>; web_browser: Generated<boolean>; face: Generated<string | null>; token_epoch: Generated<number>; channel_key: string; created_at: Timestamp
