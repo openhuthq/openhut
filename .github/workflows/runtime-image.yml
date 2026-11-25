@@ -22,7 +22,7 @@ on:
         type: string
         default: ''
       tags:
-        description: Space-separated tags to push to ghcr.io/openhuthq/runtime, like "0.6.0" or "edge" (a leading v is dropped)
+        description: Space-separated tags to push to ghcr.io/openhuthq/runtime, like "0.6.0" (a leading v is dropped)
         type: string
         required: true
       ref:
