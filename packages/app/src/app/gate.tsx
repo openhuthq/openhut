@@ -9,6 +9,7 @@ import { Meter } from '@/components/ui/meter'
 import { Spinner } from '@/components/ui/spinner'
 import { notifyUnlock, useCloud, usePasskeys } from '@/features/cloud/api'
 import { SaveKit, SignIn, TouchIdOffer } from '@/features/cloud/sign-in'
+import { useEncryption } from '@/features/settings/encryption'
 import { BIG, EntryScreen, Stage } from '@/features/cloud/step'
 import { Unlock } from '@/features/cloud/unlock'
 import { activeOf, GateContext, useChosen } from '@/features/cloud/workspaces'
@@ -36,7 +37,7 @@ export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   const [readying, setReadying] = useState(false)
   const error = me.error ?? cloud.error
   const failure = error instanceof RequestError && error.status === 502 ? error.message : undefined
-  const step = gateOf({ cloud: cloud.data, setup: run.data, down: Boolean(error) })
+  const step = gateOf({ cloud: cloud.data, encryption: useEncryption(), setup: run.data, down: Boolean(error) })
   const done = run.data?.done
   useEffect(() => {
     if (done) void queries.invalidateQueries()
