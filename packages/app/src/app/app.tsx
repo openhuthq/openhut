@@ -27,6 +27,7 @@ function SignedIn({ path }: { path: string }) {
   const close = () => navigate(background.current.path)
   // One SettingsView for /settings/* and /connections, so moving to Apps swaps content instead of closing and reopening.
   const settings = route.page === 'settings' ? route.tab : route.page === 'connections' ? 'apps' : undefined
+  if (route.page === 'settings' && route.tab === 'general') return <Redirect to="/settings/people" />
   if (me.error instanceof RequestError && me.error.status === 401) return <Redirect to="/login" />
   return <Gate me={me}>
     <Shell route={route.page === 'settings' || route.page === 'connections' ? background.current.route : route} overlay={route.page === 'settings' || route.page === 'connections' ? route.page : undefined} />

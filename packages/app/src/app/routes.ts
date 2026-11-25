@@ -13,7 +13,7 @@ const MISSING: Route = { page: 'missing' }
 export function routeOf(path: string): Route {
   const [section = '', id = '', dialog = '', detail = '', ...rest] = path.split('/').slice(1).map(decodeURIComponent)
   if (section === 'connections') return { page: 'connections' }
-  if (section === 'settings') return { page: 'settings', tab: id || 'general' }
+  if (section === 'settings') return { page: 'settings', tab: id || 'people' }
   if (rest.length) return MISSING
   if (section === '' || (section === 'agents' && !id)) return { page: 'home', adding: false }
   if (section === 'new' && !id) return { page: 'home', adding: true }

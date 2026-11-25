@@ -64,7 +64,7 @@ function Home({ first, adding, overlaid }: { first: string | undefined; adding: 
 
 function PhoneTop() {
   return <span className="absolute top-3 left-4 hidden items-center gap-1.5 phone:flex">
-    <a href="/settings/general" aria-label="Settings" className={cn(ICON_BUTTON, 'float grid size-10 rounded-full bg-card text-ink')}><I icon={Settings02Icon} size={20} /></a>
+    <a href="/settings/people" aria-label="Settings" className={cn(ICON_BUTTON, 'float grid size-10 rounded-full bg-card text-ink')}><I icon={Settings02Icon} size={20} /></a>
   </span>
 }
 
