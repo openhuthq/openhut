@@ -3,9 +3,9 @@ import assert from 'node:assert/strict'
 import { accountStepOf, lastSeenOf, Offline, screenOf } from '../../src/lib/web-first-run.ts'
 
 const listed = { home: 'w1', workspaces: [{ id: 'w1', object: 'workspace' as const, role: 'owner' as const, access: 'listed' as const, kind: 'viewer' as const, version: 2 }] }
-test('a new account goes straight to starting Cloud, with no chooser and nothing of anyone’s', () => {
+test('a new account opens the App straight away, with no computer yet and nothing of anyone’s', () => {
   assert.deepEqual(accountStepOf({ home: 'w1', workspaces: [] }), { step: 'first-run' })
-  assert.equal(screenOf({ step: 'first-run', opened: false, error: null }), 'start-cloud')
+  assert.equal(screenOf({ step: 'first-run', opened: false, error: null }), 'open')
 })
 
 test('an account whose only computer is offline sees Your computer is offline, not the first-run screen', () => {

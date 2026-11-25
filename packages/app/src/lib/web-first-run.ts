@@ -2,7 +2,7 @@ import type { Me } from '@openhut/common/cloud/v1/identity.ts'
 
 export const HELP = 'https://openhut.dev/docs'
 
-export type WebScreen = 'loading' | 'sign-in' | 'start-cloud' | 'knock' | 'over' | 'offline' | 'connecting' | 'open'
+export type WebScreen = 'loading' | 'sign-in' | 'knock' | 'over' | 'offline' | 'connecting' | 'open'
 
 export class Offline extends Error {
   computer: string | null
@@ -26,9 +26,8 @@ export function accountStepOf(me: Pick<Me, 'home' | 'workspaces'>, invited?: str
 }
 
 export function screenOf({ step, opened, error }: { step: string | undefined; opened: boolean; error: unknown }): WebScreen {
-  if (opened) return 'open'
+  if (opened || step === 'first-run') return 'open'
   if (step === 'signed-out') return 'sign-in'
-  if (step === 'first-run') return 'start-cloud'
   if (step === 'waiting') return 'knock'
   if (step === 'over') return 'over'
   if (step === 'ready' && error instanceof Offline) return 'offline'

@@ -18,6 +18,13 @@ export class CloudPaused extends Error {
 }
 const PAUSED = ['asleep', 'stopping', 'waking']
 
+// A new account has no computer until its first agent starts Cloud. Reads fail with this, and the App shows an empty start.
+export class NoComputer extends Error {
+  constructor() {
+    super('No computer yet. Creating your first agent starts Cloud.')
+  }
+}
+
 export class CloudOffline extends Error {
   constructor() {
     super('Can’t reach OpenHut Cloud. Check your internet. OpenHut keeps trying.')
@@ -33,6 +40,7 @@ let tunnel: Tunnel | undefined
 let target: { team: string; computer?: string } | undefined
 let reopening: Promise<Tunnel> | undefined
 let cut = false
+let fresh = false
 const watchers = new Set<() => void>()
 
 function setCut(now: boolean): void {
@@ -87,7 +95,7 @@ function reachable(): Promise<boolean> {
 // Only a person's action wakes a paused Cloud computer (wake); live events, refetches and the reconnect timer don't.
 function live(wake = false): Promise<Tunnel> {
   if (tunnel && !tunnel.failure) return Promise.resolve(tunnel)
-  if (!target) return Promise.reject(new Error('Not connected to your computer yet.'))
+  if (!target) return Promise.reject(fresh ? new NoComputer() : new Error('Not connected to your computer yet.'))
   reopening ??= cloud.open({ ...target, wake }).then((opened) => {
     setCut(false)
     return (tunnel = opened)
@@ -138,6 +146,7 @@ export const remote = {
     if (!me && !await reachable()) throw new CloudOffline()
     if (!me) return { step: 'signed-out', invited }
     const account = accountStepOf(me, invited?.workspace)
+    fresh = account.step === 'first-run'
     if (account.step === 'first-run') return { step: 'first-run', email: me.email }
     const { workspace } = account
     const ready = async (): Promise<RemoteState> => {
@@ -156,6 +165,8 @@ export const remote = {
     await cloud.knock({ team: workspace }).ask({ name: browserName(), os: 'web' })
     await store.set('asked', workspace)
   },
+
+  me: () => cloud.me(),
 
   joinCode: (): Promise<JoinCode> => cloud.firstComputerCode(),
 
