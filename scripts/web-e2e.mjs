@@ -24,7 +24,7 @@ try {
   if (me !== 200) throw new Error(`/api/me through Vite's proxy answered ${me}`)
   log('2 /api/me answers 200 through the dev proxy')
   await page.goto(new URL('settings/computers', WEB).href)
-  log(`3 Settings > Computers: ${lines(await until(/This computer/), 4)}`)
+  log(`3 Settings > Computers: ${lines(await until(/This server/), 4)}`)
   await shot('2-computers')
   log('PASS')
 } catch (error) {

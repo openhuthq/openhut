@@ -105,7 +105,7 @@ async function renew(latest: Record<string, unknown>): Promise<GoogleConfig> {
 
 function client(): { id: string; secret: string } {
   const saved = settings.googleClient()
-  if (!saved) throw new HttpError(409, 'Google needs your own OAuth client first. An admin adds it under Settings › Security or when connecting a Google app.')
+  if (!saved) throw new HttpError(409, 'Google needs your own OAuth client first. An admin adds it under Settings › Admin.')
   return saved
 }
 

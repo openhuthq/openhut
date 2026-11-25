@@ -1,5 +1,8 @@
-import type { SecuritySettings, UpdateSecurity } from '@openhut/common/team/team.ts'
+import { connect } from 'node:tls'
+import { checkAddress, saveAddress } from '../platform/address.ts'
+import type { InstallSettings, UpdateInstallSettings } from '@openhut/common/team/team.ts'
 import { config } from '../platform/config.ts'
+import { publicAddress } from '../platform/address.ts'
 import { db } from '../platform/db.ts'
 import { emit, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
@@ -11,20 +14,23 @@ import { googleRedirectUri } from './team-service.ts'
 
 const USAGE_MS = 86_400_000
 
-export const securityService = {
-  get(): SecuritySettings {
+export const installSettingsService = {
+  async get({ actor }: { actor: Caller }): Promise<InstallSettings> {
+    requireAdmin(actor)
     const google = settings.googleClient()
     const mail = settings.smtp()
     return {
-      object: 'security_settings',
+      object: 'install_settings',
+      address: { url: settings.address() ?? null, certificateUntil: await certificateUntil() },
       google: { set: !!google, signIn: settings.googleSignIn(), clientId: google?.id ?? null, signInRedirectUri: googleRedirectUri(), connectionsRedirectUri: connectionService.redirectUrl() },
       smtp: { set: !!mail, host: mail?.host ?? null, port: mail?.port ?? null, user: mail?.user || null, from: mail?.from ?? null },
       usageData: settings.usageData(),
     }
   },
 
-  async update({ actor, patch }: { actor: Caller; patch: UpdateSecurity }): Promise<SecuritySettings> {
+  async update({ actor, patch }: { actor: Caller; patch: UpdateInstallSettings }): Promise<InstallSettings> {
     requireAdmin(actor)
+    if (patch.address !== undefined) await saveAddress(checkAddress(patch.address))
     if (patch.googleClientId !== undefined || patch.googleClientSecret !== undefined) {
       const current = settings.googleClient()
       const id = patch.googleClientId ?? current?.id
@@ -45,20 +51,33 @@ export const securityService = {
     }
     if (patch.usageData !== undefined) await settings.setUsageData(patch.usageData)
     emit({ name: 'security.updated', actor, target: { type: 'settings', id: 'security', fields: Object.keys(patch) } })
-    return securityService.get()
+    return installSettingsService.get({ actor })
   },
 
   async sendTestEmail({ actor }: { actor: Caller }): Promise<{ object: 'test_email'; to: string }> {
     requireAdmin(actor)
     const server = settings.smtp()
     if (!server) throw new HttpError(409, 'Set up email first.')
-    await smtp.send({ server, to: actor.email, subject: 'OpenHut test email', text: `Email from ${config.address} works. Invites and password resets can go out now.` })
+    await smtp.send({ server, to: actor.email, subject: 'OpenHut test email', text: `Email from ${publicAddress()} works. Invites and password resets can go out now.` })
     return { object: 'test_email', to: actor.email }
   },
 
   startUsageData(): void {
     setInterval(() => void sendUsage().catch((err: unknown) => log.warn({ event: 'usage.failed', error: messageOf(err) })), USAGE_MS).unref()
   },
+}
+
+function certificateUntil(): Promise<string | null> {
+  const address = settings.address()
+  if (!address) return Promise.resolve(null)
+  return new Promise((resolve) => {
+    const socket = connect({ host: '127.0.0.1', port: 443, servername: new URL(address).hostname, timeout: 3000 }, () => {
+      const until = socket.getPeerCertificate().valid_to
+      socket.destroy()
+      resolve(until && socket.authorized ? new Date(until).toISOString() : null)
+    })
+    socket.on('error', () => resolve(null)).on('timeout', () => { socket.destroy(); resolve(null) })
+  })
 }
 
 async function sendUsage(): Promise<void> {

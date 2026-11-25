@@ -49,7 +49,7 @@ export const openhut = {
   computers: {
     async list(): Promise<Computer[]> {
       const admin = await request({ schema: Admin, path: '/api/admin' }).catch(() => undefined)
-      return [{ id: LOCAL, name: 'This computer', version: admin?.server.version ?? null, online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false } }]
+      return [{ id: LOCAL, name: 'This server', version: admin?.server.version ?? null, online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false } }]
     },
   },
   account: {

@@ -24,7 +24,6 @@ export const config = {
   releaseUrl: env.get('OPENHUT_URL').default('https://openhut.dev').asString(), // where releases are downloaded from
   socket: SOCKET ?? join(DATA, 'openhut.sock'),
   installKind: installKindOf(SOCKET ? 'desktop' : 'server'),
-  address: addressOf(env.get('OPENHUT_ADDRESS').asUrlString()), // the HTTPS address people open; cookies and redirect URLs come from it
   devKeySha256: env.get('OPENHUT_DEV_KEY_SHA256').asString(), // npm run dev and the tests only: sha256 of a key that acts as the owner
   appDir: fileURLToPath(new URL('../../../../app/dist', import.meta.url)), // the built web app, served on the same origin
   modelMode: TEST_MODEL ? 'test' as const : 'claude' as const,
@@ -55,10 +54,6 @@ delete process.env.OPENHUT_SECRET
 function installKindOf(kind: 'desktop' | 'server'): 'mac' | 'linux' | 'server' {
   if (kind === 'server') return 'server'
   return process.platform === 'darwin' ? 'mac' : 'linux'
-}
-
-function addressOf(url: string | undefined): string {
-  return url ? new URL(url).origin : `http://127.0.0.1:${env.get('PORT').default('8787').asPortNumber()}`
 }
 
 function fileOr(url: URL, fallback: string): string {

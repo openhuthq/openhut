@@ -7,6 +7,7 @@ import type { Duplex } from 'node:stream'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import type { TeamRole } from '@openhut/common/team/team.ts'
 import { config } from '../platform/config.ts'
+import { publicAddress } from '../platform/address.ts'
 import { db } from '../platform/db.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { newId, sha } from '../platform/secrets.ts'
@@ -83,7 +84,7 @@ function cookie(value: string, maxAge: number): string {
   return `${COOKIE}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${secure()}`
 }
 
-const secure = (): string => config.address.startsWith('https:') ? '; Secure' : ''
+const secure = (): string => publicAddress().startsWith('https:') ? '; Secure' : ''
 
 async function sessionCaller(req: FastifyRequest): Promise<Caller | undefined> {
   const token = sessionToken(req)

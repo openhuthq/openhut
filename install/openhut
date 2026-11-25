@@ -1,12 +1,15 @@
 #!/bin/sh
 set -eu
-api() { curl -fsS --unix-socket /data/app/openhut.sock -X POST "http://openhut$1" || { echo "openhut: the server didn't answer. Is OpenHut up? docker logs openhut" >&2; exit 1; }; }
-link() { sed -n 's/.*"url":"\([^"]*\)".*/\1/p'; }
+call() { out=$(curl -sS --unix-socket /data/app/openhut.sock -H 'content-type: application/json' "$@") || { echo "openhut: the server didn't answer. Is OpenHut up? docker logs openhut" >&2; exit 1; }
+  case "$out" in *'"url"'*) printf '%s\n' "$out" | sed -n 's/.*"url":"\([^"]*\)".*/\1/p' ;; *) printf '%s\n' "$out" | sed -n 's/.*"message":"\([^"]*\)".*/\1/p' >&2; exit 1 ;; esac; }
 case "${1:-}" in
-  setup-code) out=$(curl -sS --unix-socket /data/app/openhut.sock -X POST http://openhut/api/setup-codes) || exit 1
-    case "$out" in *'"url"'*) printf '%s\n' "$out" | link ;; *) printf '%s\n' "$out" | sed -n 's/.*"message":"\([^"]*\)".*/\1/p' >&2; exit 1 ;; esac ;;
-  reset-owner) api /api/owner-resets | link ;;
-  *) echo "usage: openhut setup-code | reset-owner
-  setup-code   prints a one-use link to create the owner account (each new one replaces the last)
-  reset-owner  signs the owner out everywhere and prints a link to set a new email and password" >&2; exit 2 ;;
+  reset-owner) [ -t 0 ] || { echo "openhut: run it with a terminal: docker exec -it openhut openhut reset-owner" >&2; exit 2; }
+    printf 'New owner password (12 or more characters): ' >&2; stty -echo; read -r pass; stty echo; printf '\n' >&2
+    body=$(printf '%s' "$pass" | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>process.stdout.write(JSON.stringify({password:s})))')
+    call -X POST http://openhut/api/owner-resets -d "$body" >/dev/null; echo "The owner's password is changed, and the owner is signed out everywhere." ;;
+  address) if [ -n "${2:-}" ]; then call -X POST http://openhut/api/addresses -d "{\"address\":\"$2\"}"; else call http://openhut/api/addresses; fi ;;
+  *) echo "usage: openhut reset-owner | address [https://new.address | clear]
+  reset-owner  sets a new owner password and signs the owner out everywhere (docker exec -it)
+  address      prints the HTTPS address, changes it (OpenHut gets a certificate for the new one),
+               or with 'clear' goes back to plain http://<server> until an address is set again" >&2; exit 2 ;;
 esac

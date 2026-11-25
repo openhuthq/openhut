@@ -3,6 +3,7 @@ import type { Selectable } from 'kysely'
 import type { Deleted } from '@openhut/common/api.ts'
 import type { CreatePerson, Invite, Me, MemberRole, Person, Session, Setup } from '@openhut/common/team/team.ts'
 import { config } from '../platform/config.ts'
+import { checkAddress, publicAddress, saveAddress } from '../platform/address.ts'
 import { db, isUniqueViolation } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { emit } from '../platform/events.ts'
@@ -19,10 +20,7 @@ const INVITE_DAYS = 7
 const RESET_MS = 60 * 60_000
 const SIGN_IN_MS = 10 * 60_000
 const MAX_PENDING = 1000
-const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-const CODE_LENGTH = 28
-const WRONG_CODE = 'That setup code is wrong or was already used. Get a fresh one on the server: docker exec openhut openhut setup-code'
-const HAS_OWNER = 'This install already has an owner. Sign in, or ask the owner for an invite.'
+const HAS_OWNER = 'This install already has an owner. Sign in, or ask them for an invite link.'
 const USED_INVITE = 'This invite link was already used or has expired. Ask for a new one.'
 const googleSignIns = new Map<string, { verifier: string; expires: number }>()
 
@@ -31,24 +29,17 @@ export const teamService = {
     return { object: 'setup', open: !(await claimedOwner()), googleSignIn: settings.googleSignIn(), passwordReset: !!settings.smtp() }
   },
 
-  async mintSetupCode(): Promise<{ object: 'setup_code'; code: string; url: string }> {
-    if (await claimedOwner()) throw new HttpError(409, HAS_OWNER)
-    const bytes = randomBytes(CODE_LENGTH)
-    const code = Array.from(bytes, (byte) => CODE_LETTERS[byte % CODE_LETTERS.length]).join('').match(/.{4}/g)?.join('-') ?? ''
-    await db.insertInto('install_setting').values({ name: 'setup_code', value: sha(plain(code)) }).onConflict((oc) => oc.column('name').doUpdateSet({ value: sha(plain(code)) })).execute()
-    return { object: 'setup_code', code, url: `${config.address}/setup?code=${code}` }
-  },
-
-  async resetOwner(): Promise<{ object: 'setup_code'; code: string; url: string }> {
-    const owner = await db.updateTable('person').set({ pass: null }).where('role', '=', 'owner').returning('id').executeTakeFirst()
-    if (owner) await db.deleteFrom('session').where('person_id', '=', owner.id).execute()
-    if (owner) await db.deleteFrom('password_reset').where('person_id', '=', owner.id).execute()
+  async resetOwner({ password }: { password: string }): Promise<{ object: 'owner_reset'; url: string }> {
+    const owner = await db.updateTable('person').set({ pass: await hashPassword(password) }).where('role', '=', 'owner').returning('id').executeTakeFirst()
+    if (!owner) throw new HttpError(404, 'This install has no owner yet. Open it and create the owner account.')
+    await db.deleteFrom('session').where('person_id', '=', owner.id).execute()
+    await db.deleteFrom('password_reset').where('person_id', '=', owner.id).execute()
     emit({ name: 'owner.reset' })
-    return teamService.mintSetupCode()
+    return { object: 'owner_reset', url: publicAddress() }
   },
 
   async createPerson(input: CreatePerson): Promise<{ person: Person; token: string }> {
-    const person = 'setupCode' in input ? await claimOwner(input) : await acceptInvite(input)
+    const person = 'inviteToken' in input ? await acceptInvite(input) : await claimOwner(input)
     emit({ name: 'person.joined', actor: person, target: { type: 'person', id: person.id, role: person.role } })
     return { person, token: await openSession(person.id) }
   },
@@ -101,7 +92,7 @@ export const teamService = {
     await db.insertInto('invite').values({ hash: sha(token), role, created_by: actor.id, expires_at: expiresAt }).execute()
     await db.deleteFrom('invite').where('expires_at', '<', new Date()).execute()
     emit({ name: 'invite.created', actor, target: { type: 'invite', id: sha(token).slice(0, 12), role } })
-    return { object: 'invite', role, expiresAt: expiresAt.toISOString(), link: `${config.address}/invite/${token}` }
+    return { object: 'invite', role, expiresAt: expiresAt.toISOString(), link: `${publicAddress()}/invite/${token}` }
   },
 
   async getInvite({ token }: { token: string }): Promise<Invite> {
@@ -117,7 +108,7 @@ export const teamService = {
     if (person) {
       const token = newToken('ohr')
       await db.insertInto('password_reset').values({ hash: sha(token), person_id: person.id, expires_at: new Date(Date.now() + RESET_MS) }).execute()
-      await smtp.send({ server, to: email, subject: 'Reset your OpenHut password', text: `Open this link to pick a new password. It works once, for an hour.\n\n${config.address}/reset?token=${token}\n\nIf you didn't ask for this, ignore this email.` })
+      await smtp.send({ server, to: email, subject: 'Reset your OpenHut password', text: `Open this link to pick a new password. It works once, for an hour.\n\n${publicAddress()}/reset?token=${token}\n\nIf you didn't ask for this, ignore this email.` })
     }
     return { object: 'password_reset' }
   },
@@ -155,22 +146,25 @@ export const teamService = {
   },
 }
 
-export const googleRedirectUri = (): string => `${config.address}/api/google-sign-in/callback`
+export const googleRedirectUri = (): string => `${publicAddress()}/api/google-sign-in/callback`
 
 async function claimedOwner(): Promise<boolean> {
   return !!(await db.selectFrom('person').select('id').where('role', '=', 'owner').where('pass', 'is not', null).executeTakeFirst())
 }
 
-async function claimOwner({ setupCode, email, password }: { setupCode: string; email: string; password: string }): Promise<Person> {
+async function claimOwner({ address, email, password }: { address: string; email: string; password: string }): Promise<Person> {
+  const origin = checkAddress(address)
   const pass = await hashPassword(password)
   const owner = await db.transaction().execute(async (trx) => {
-    const code = await trx.deleteFrom('install_setting').where('name', '=', 'setup_code').where('value', '=', sha(plain(setupCode))).returning('name').executeTakeFirst()
-    if (!code) throw new HttpError(403, WRONG_CODE, { param: 'setupCode' })
     const current = await trx.selectFrom('person').select(['id', 'pass']).where('role', '=', 'owner').executeTakeFirst()
     if (current?.pass) throw new HttpError(409, HAS_OWNER)
     if (current) return trx.updateTable('person').set({ email, pass }).where('id', '=', current.id).returningAll().executeTakeFirstOrThrow()
     return trx.insertInto('person').values({ id: newId('usr'), email, pass, role: 'owner' }).returningAll().executeTakeFirstOrThrow()
-  }).catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'Someone on the team already uses that email. Use another one.', { param: 'email' }) : err })
+  }).catch(async (err: unknown) => {
+    if (!isUniqueViolation(err)) throw err
+    throw await claimedOwner() ? new HttpError(409, HAS_OWNER) : new HttpError(409, 'Someone on the team already uses that email. Use another one.', { param: 'email' })
+  })
+  await saveAddress(origin)
   emit({ name: 'setup.completed', actor: owner, target: { type: 'person', id: owner.id } })
   return personOf(owner)
 }
@@ -195,8 +189,6 @@ async function openSession(personId: string): Promise<string> {
 function sessionOf({ person, token }: { person: Person; token: string }): { session: Session; token: string } {
   return { session: { id: sha(token).slice(0, 16), object: 'session', person, expiresAt: new Date(Date.now() + SESSION_DAYS * DAY_MS).toISOString() }, token }
 }
-
-const plain = (code: string): string => code.toUpperCase().replace(/[^A-Z0-9]/g, '')
 
 function personOf(row: Selectable<Database['person']>): Person {
   return { id: row.id, object: 'person', email: row.email, name: row.name || row.email.split('@')[0] || row.email, role: row.role, joinedAt: new Date(row.created_at).toISOString() }

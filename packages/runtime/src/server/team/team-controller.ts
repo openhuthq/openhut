@@ -1,11 +1,12 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import * as z from 'zod/mini'
-import { CreateInvite, CreatePasswordReset, CreatePerson, CreateSession, FinishPasswordReset, UpdatePerson, UpdateSecurity } from '@openhut/common/team/team.ts'
+import { PASSWORD_MIN, CreateInvite, CreatePasswordReset, CreatePerson, CreateSession, FinishPasswordReset, UpdatePerson, UpdateInstallSettings } from '@openhut/common/team/team.ts'
 import { clientOf, rateLimit, requireUnder } from '../platform/rate-limit.ts'
+import { checkAddress, clearAddress, publicAddress, saveAddress } from '../platform/address.ts'
 import { deleted, IdParams, listOf } from '../platform/responses.ts'
 import { clearSessionCookie, cookieOf, googleStateCookie, GOOGLE_STATE, requireLocal, requireSignIn, sessionToken, setSessionCookie, who } from './identity.ts'
 import { routineService } from '../routines/routine-service.ts'
-import { securityService } from './security-service.ts'
+import { installSettingsService } from './install-settings-service.ts'
 import { teamService } from './team-service.ts'
 
 export const meController: FastifyPluginAsyncZod = async (app) => {
@@ -21,19 +22,25 @@ export const setupController: FastifyPluginAsyncZod = async (app) => {
   app.get('/', async () => teamService.setup())
 }
 
-export const setupCodeController: FastifyPluginAsyncZod = async (app) => {
-  app.post('/', Local, async () => teamService.mintSetupCode())
+export const addressController: FastifyPluginAsyncZod = async (app) => {
+  app.get('/', Local, async () => ({ object: 'address', url: publicAddress() }))
+
+  app.post('/', { onRequest: requireLocal, schema: { body: SetAddress } }, async (req) => {
+    if (req.body.address === 'clear') await clearAddress()
+    else await saveAddress(checkAddress(req.body.address))
+    return { object: 'address', url: publicAddress() }
+  })
 }
 
 export const ownerResetController: FastifyPluginAsyncZod = async (app) => {
-  app.post('/', Local, async () => teamService.resetOwner())
+  app.post('/', { onRequest: requireLocal, schema: { body: OwnerReset } }, async (req) => teamService.resetOwner(req.body))
 }
 
 export const peopleController: FastifyPluginAsyncZod = async (app) => {
   app.get('/', SignedIn, async (req) => listOf({ req, data: await teamService.listPeople() }))
 
   app.post('/', CreatePersonRequest, async (req, reply) => {
-    rateLimit({ keys: [`setup:${clientOf(req)}`, `setup:${req.body.email}`], max: 20 })
+    rateLimit({ keys: [`join:${clientOf(req)}`, `join:${req.body.email}`], max: 20 })
     const { person, token } = await teamService.createPerson(req.body)
     setSessionCookie({ reply, token })
     return person
@@ -104,15 +111,17 @@ export const googleSignInController: FastifyPluginAsyncZod = async (app) => {
   })
 }
 
-export const securityController: FastifyPluginAsyncZod = async (app) => {
-  app.get('/', SignedIn, async () => securityService.get())
+export const installSettingsController: FastifyPluginAsyncZod = async (app) => {
+  app.get('/', async (req) => installSettingsService.get({ actor: await who(req) }))
 
-  app.patch('/', UpdateSecurityRequest, async (req) => securityService.update({ actor: await who(req), patch: req.body }))
+  app.patch('/', UpdateInstallSettingsRequest, async (req) => installSettingsService.update({ actor: await who(req), patch: req.body }))
 
-  app.post('/test-emails', async (req) => securityService.sendTestEmail({ actor: await who(req) }))
+  app.post('/test-emails', async (req) => installSettingsService.sendTestEmail({ actor: await who(req) }))
 }
 
 const Local = { onRequest: requireLocal }
+const OwnerReset = z.object({ password: z.string().check(z.minLength(PASSWORD_MIN, `Pick a password of at least ${PASSWORD_MIN} characters.`), z.maxLength(200)) })
+const SetAddress = z.object({ address: z.string().check(z.maxLength(300)) })
 const SignedIn = { onRequest: requireSignIn }
 const TokenParams = z.object({ token: z.string().check(z.maxLength(200)) })
 const GoogleCallback = z.object({ code: z.optional(z.string()), state: z.optional(z.string()) })
@@ -122,4 +131,4 @@ const CreateSessionRequest = { schema: { body: CreateSession } }
 const CreateInviteRequest = { schema: { body: CreateInvite } }
 const CreateResetRequest = { schema: { body: CreatePasswordReset } }
 const FinishResetRequest = { schema: { body: FinishPasswordReset } }
-const UpdateSecurityRequest = { schema: { body: UpdateSecurity } }
+const UpdateInstallSettingsRequest = { schema: { body: UpdateInstallSettings } }

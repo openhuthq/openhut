@@ -15,7 +15,7 @@ export function ComputersSettings() {
   const count = useAgents().data?.length ?? 0
   const local = computers.data?.[0]
   return <>
-    <Intro>Your computer</Intro>
+    <Intro>This server runs your agents. Adding more machines comes next.</Intro>
     <ErrorNote message={computers.error?.message} />
     <Rows>
       {local && <Row icon={<ComputerMark computer={local} />} title={local.name} note={admin?.server.update?.status === 'running' ? 'Updating…' : noteOf({ computer: local, admin, count })}>
