@@ -25,7 +25,7 @@ while :; do
     sha='' version=''
     read -r sha version < "$REQUEST" || true
     rm -f "$REQUEST"
-    if printf '%s' "$sha" | grep -Eqx '[0-9a-f]{64}' && printf '%s' "$version" | grep -Eqx '[0-9.]*'; then apply "$sha" "$version" > "$LOG" 2>&1
+    if printf '%s' "$sha" | grep -Eqx '[0-9a-f]{64}' && case $version in *[!0-9.]*) false ;; esac; then apply "$sha" "$version" > "$LOG" 2>&1
     else echo "openhut: ignored an update request that isn't a sha256 and a version"; fi
     flock -u 9
   fi
