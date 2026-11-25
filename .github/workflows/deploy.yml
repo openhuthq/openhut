@@ -41,6 +41,8 @@ jobs:
     uses: ./.github/workflows/runtime-image.yml
     secrets: inherit
     with:
+      # The runtime image smoke runs only at release (promote.yml).
+      smoke: false
       tags: edge
       ref: ${{ needs.target.outputs.sha }}
 

@@ -7,8 +7,16 @@ on:
         description: Space-separated tags to push to ghcr.io/openhuthq/runtime (empty builds and smoke-tests only)
         type: string
         default: ''
+      smoke:
+        description: Install the image from install.sh and run the gVisor chat and the rollback test first
+        type: boolean
+        default: true
   workflow_call:
     inputs:
+      smoke:
+        description: Install the image from install.sh and run the gVisor chat and the rollback test first (CI skips it; Promote runs it)
+        type: boolean
+        default: true
       build:
         description: The build number servers see (the version, a leading v is dropped); empty numbers it like release.sh does
         type: string
@@ -41,6 +49,7 @@ env:
 
 jobs:
   smoke:
+    if: inputs.smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -129,7 +138,8 @@ jobs:
 
   publish:
     needs: smoke
-    if: inputs.tags != ''
+    # Runs when the smoke passed or was skipped, never after a failed one.
+    if: ${{ !cancelled() && inputs.tags != '' && needs.smoke.result != 'failure' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
