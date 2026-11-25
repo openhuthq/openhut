@@ -21,7 +21,7 @@ if ! api http://127.0.0.1:8787/api/cloud | grep -q '"status":"on"'; then
   wait_for 40 "api http://127.0.0.1:8787/api/cloud | grep -q '\"status\":\"on\"'" || fail "the runtime didn't sign in"
   echo "smoke: signed in as mo@example.com"
 fi
-# A device joins the server: a join code from it, signIn through openhutCloud, a knock it approves, then /api through the relay's tunnel.
+# A browser joins the server: a join code from it, signIn through openhutCloud, a join request the managed signer approves, then /api through the relay's tunnel.
 KEY="$KEY" CLOUD="${CLOUD:-http://127.0.0.1:8793}" node --input-type=module <<'EOF' || fail "a device joining the server"
 const root = `file://${process.cwd()}/packages/common/src/`
 const { openhutCloud } = await import(`${root}cloud/openhut-cloud.ts`)
@@ -41,13 +41,8 @@ const cloud = openhutCloud.device({ url: process.env.CLOUD, store: { get: async 
 const { code } = api('POST', '/api/cloud/join-codes')
 const me = await cloud.signIn({ joinCode: code })
 const team = me.home
-const knock = cloud.knock({ team, nonce: toBase64(crypto.getRandomValues(new Uint8Array(32))) })
-await knock.ask({ name: 'Smoke device', os: 'linux' })
-const at = `/api/cloud/workspaces/${team}/requests/${encodeURIComponent(id)}`
-await until('the server to see the knock', async () => api('POST', `${at}/reviews`))
-await knock.reveal()
-const faces = await until('the faces on the server', async () => api('GET', '/api/cloud').workspaces.find((w) => w.id === team)?.requests.find((r) => r.device === id)?.faces)
-api('POST', `${at}/approvals`, { faces })
+const knock = cloud.knock({ team })
+await knock.ask({ name: 'Smoke browser', os: 'web' })
 await until('the approval', async () => (await knock.state()).step === 'approved')
 const tunnel = await cloud.open({ team, timeout: 30_000 })
 const res = await tunnel.fetch('/api/agents')

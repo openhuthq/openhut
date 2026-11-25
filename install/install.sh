@@ -79,7 +79,7 @@ fresh() { h=$($IN curl -fsS http://127.0.0.1:8787/health 2>/dev/null) && echo "$
   [ "$(echo "$h" | sed -n 's/.*"started":\([0-9]*\).*/\1/p')" -ge "$STARTED_AFTER" ]; }
 up() { i=0; until fresh; do i=$((i+1)); [ $i -gt "$1" ] && return 1; printf .; sleep 3; done; }
 join_state() {
-  $IN curl -sS http://127.0.0.1:8787/health 2>/dev/null | node -e 'let s="";process.stdin.on("data",(c)=>{s+=c}).on("end",()=>{let j;try{j=JSON.parse(s).join}catch{}console.log(j?`${j.state} ${j.faces?`In OpenHut, tap these two faces: ${j.faces.join(", and ")}.`:j.error??""}`:"starting ")})' 2>/dev/null || echo "starting "
+  $IN curl -sS http://127.0.0.1:8787/health 2>/dev/null | node -e 'let s="";process.stdin.on("data",(c)=>{s+=c}).on("end",()=>{let j;try{j=JSON.parse(s).join}catch{}console.log(j?`${j.state} ${j.error??""}`:"starting ")})' 2>/dev/null || echo "starting "
 }
 asked() {
   printf 'Asking to join'
@@ -88,17 +88,15 @@ asked() {
     printf .; sleep 2
   done
   printf '\n'
-  [ "${STATE%% *}" != asking ] || echo "OpenHut is running and asking to join your computers. In the OpenHut app, open Settings > Computers and press Review on it. Two faces will show here for you to check."
-  SHOWN=; i=0
+  i=0
   while [ "${STATE%% *}" = asking ]; do
-    [ "${STATE#* }" = "$SHOWN" ] || { SHOWN="${STATE#* }"; echo "$SHOWN"; }
-    i=$((i+1)); [ $i -gt 900 ] && { echo "Still not approved after 30 minutes, so this stops waiting. It's still asking: run this same command again to see the faces."; return; }
+    i=$((i+1)); [ $i -gt 900 ] && { echo "Still not approved after 30 minutes, so this stops waiting. It's still asking: run this same command again to check."; return; }
     sleep 2; STATE=$(join_state)
   done
   case "${STATE%% *}" in
     joined) echo "Joined. This server is one of your computers now, and your agents can run here." ;;
     failed) die "couldn't join. ${STATE#* } (In the OpenHut app: Settings > Computers > Add a computer.)" ;;
-    denied) die "it was turned down in the OpenHut app, or no one approved it within an hour. To try again, make a new command in the OpenHut app (Settings > Computers > Add a computer)." ;;
+    denied) die "it wasn't let in within an hour. To try again, make a new command in the OpenHut app (Settings > Computers > Add a computer)." ;;
     *) echo "OpenHut is running. Check Settings > Computers in the OpenHut app." ;;
   esac
 }
