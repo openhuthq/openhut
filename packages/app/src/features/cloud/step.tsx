@@ -58,8 +58,6 @@ function FrameHut({ happy, mood }: { happy: boolean; mood?: Mood }) {
 export const BIG = 'h-11 w-full justify-center gap-2 rounded-[10px] text-[15px]'
 /** A quiet footer link. */
 export const QUIET = 'h-auto font-normal text-[13px] text-mute'
-/** A link beside the button that is a real second way. */
-export const INK = 'h-auto text-[14px] font-medium text-ink'
 
 export function Stage({ children }: { children: ReactNode }) {
   return <div className="flex h-dvh flex-col bg-canvas pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-ink">
