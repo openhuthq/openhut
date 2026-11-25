@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
+import * as z from 'zod/mini'
 import { CONNECTION_TITLES, CreateConnection, CreateConnectionAuthorization, ListConnectionEvents, ListConnectionTools } from '@openhut/common/connections/connection.ts'
 import { page, posting } from '../platform/page.ts'
 import { listOf } from '../platform/responses.ts'
@@ -24,12 +25,12 @@ export const connectionToolController: FastifyPluginAsync = async (app) => {
 export const connectionAuthorizationController: FastifyPluginAsync = async (app) => {
   app.post<{ Body: CreateConnectionAuthorization }>('/', AuthorizeRequest, async (req) => connectionAuthorizationService.create({ actor: await who(req), ...req.body }))
 
-  app.get<{ Querystring: { state?: string } }>('/launch', async (req, reply) => {
+  app.get<{ Querystring: LaunchQuery }>('/launch', { schema: { querystring: LaunchQuery } }, async (req, reply) => {
     const launch = connectionAuthorizationService.launch(req.query.state ?? '')
     return reply.type('text/html; charset=utf-8').send(launch ? posting({ url: launch.url, field: 'manifest', value: launch.manifest }) : page('This sign-in expired. Go back to OpenHut and start it again.'))
   })
 
-  app.get<{ Querystring: { state?: string; code?: string; error?: string; installation_id?: string } }>('/callback', async (req, reply) => {
+  app.get<{ Querystring: CallbackQuery }>('/callback', { schema: { querystring: CallbackQuery } }, async (req, reply) => {
     const { kind, error, redirect } = await connectionAuthorizationService.finish(req.query)
     if (redirect) return reply.redirect(redirect)
     const title = kind ? CONNECTION_TITLES[kind] : 'The app'
@@ -43,9 +44,11 @@ export const connectionEventController: FastifyPluginAsync = async (app) => {
   app.get<{ Querystring: ListConnectionEvents }>('/', ListEventsRequest, async (req) => listOf({ req, ...await connectionEventService.list({ actor: await who(req), query: req.query }) }))
 }
 
-
-
 const CreateRequest = { schema: { body: CreateConnection } }
 const AuthorizeRequest = { onRequest: requireSignIn, schema: { body: CreateConnectionAuthorization } }
 const ListToolsRequest = { schema: { querystring: ListConnectionTools } }
 const ListEventsRequest = { schema: { querystring: ListConnectionEvents } }
+const LaunchQuery = z.object({ state: z.optional(z.string()) })
+type LaunchQuery = z.infer<typeof LaunchQuery>
+const CallbackQuery = z.object({ state: z.optional(z.string()), code: z.optional(z.string()), error: z.optional(z.string()), installation_id: z.optional(z.string()) })
+type CallbackQuery = z.infer<typeof CallbackQuery>

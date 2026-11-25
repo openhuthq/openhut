@@ -15,7 +15,7 @@ export const agentController: FastifyPluginAsync = async (app) => {
 
   app.delete<{ Params: { id: string } }>('/:id', async (req) => agentService.delete({ actor: await who(req), id: req.params.id }))
 
-  app.post<{ Params: { id: string } }>('/:id/revoke-token', async (req) => agentService.revokeToken({ actor: await who(req), id: req.params.id }))
+  app.delete<{ Params: { id: string } }>('/:id/token', async (req) => agentService.revokeToken({ actor: await who(req), id: req.params.id }))
 }
 
 export const grantController: FastifyPluginAsync = async (app) => {

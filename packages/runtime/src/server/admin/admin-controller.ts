@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
+import * as z from 'zod/mini'
 import { CompleteSeatSignIn, UpdateAdmin } from '@openhut/common/admin/admin.ts'
 import { requireSignIn, who } from '../team/identity.ts'
 import { adminService } from './admin-service.ts'
@@ -20,7 +21,7 @@ export const adminController: FastifyPluginAsync = async (app) => {
 }
 
 export const updateController: FastifyPluginAsync = async (app) => {
-  app.post('/', SignedIn, async (req) => adminService.startUpdate({ actor: await who(req), appVersion: req.headers['openhut-app-version'] }))
+  app.post<{ Headers: UpdateHeaders }>('/', StartUpdateRequest, async (req) => adminService.startUpdate({ actor: await who(req), appVersion: req.headers['openhut-app-version'] }))
 }
 
 export const healthController: FastifyPluginAsync = async (app) => {
@@ -33,3 +34,7 @@ export const healthController: FastifyPluginAsync = async (app) => {
 const SignedIn = { onRequest: requireSignIn }
 const UpdateRequest = { schema: { body: UpdateAdmin } }
 const CompleteSeatRequest = { schema: { body: CompleteSeatSignIn } }
+// Loose: the rest of the headers (authorization) pass through untouched.
+const UpdateHeaders = z.looseObject({ 'openhut-app-version': z.optional(z.string()) })
+type UpdateHeaders = z.infer<typeof UpdateHeaders>
+const StartUpdateRequest = { onRequest: requireSignIn, schema: { headers: UpdateHeaders } }

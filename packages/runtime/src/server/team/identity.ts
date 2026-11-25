@@ -33,7 +33,7 @@ const STEP_UP: Record<string, (body: unknown) => boolean> = {
   'DELETE /api/agents/:id': () => true,
   'POST /api/grants': () => true,
   'DELETE /api/grants/:id': () => true,
-  'POST /api/change-requests/:id/approve': () => true,
+  'POST /api/change-requests/:id/approvals': () => true,
   'POST /api/connections': () => true,
   'DELETE /api/connections/:id': () => true,
   'POST /api/connection-authorizations': () => true,

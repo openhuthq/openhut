@@ -10,7 +10,7 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.post<{ Body: StartCloudSignIn }>('/sessions', SignInRequest, async (req) => cloudService.start(req.body ?? {}))
 
-  app.get<{ Querystring: { state?: string; code?: string; error?: string } }>('/callback', async (req, reply) => reply.type('text/html; charset=utf-8').send(await cloudService.finish(req.query)))
+  app.get<{ Querystring: CallbackQuery }>('/callback', { schema: { querystring: CallbackQuery } }, async (req, reply) => reply.type('text/html; charset=utf-8').send(await cloudService.finish(req.query)))
 
   app.post<{ Body: PasteSignInCode }>('/sessions/codes', PasteRequest, async (req) => cloudService.pasted(req.body))
 
@@ -24,7 +24,7 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.post<{ Body: UnlockCloud }>('/unlock', UnlockRequest, async (req) => cloudService.unlock(req.body))
 
-  app.delete<{ Params: { key: string }; Querystring: RemoveDeviceQuery }>('/devices/:key', NotMeRequest, async (req) => cloudService.notMe({ device: req.params.key, lost: req.query.lost === 'true' }))
+  app.delete<{ Params: { key: string }; Querystring: RemoveDeviceQuery }>('/devices/:key', NotMeRequest, async (req) => cloudService.notMe({ device: req.params.key, lost: !!req.query.lost }))
 
   app.post<{ Body: AddPasskey }>('/passkeys', PasskeyRequest, async (req) => cloudService.addPasskey(req.body))
 
@@ -44,7 +44,7 @@ export const cloudController: FastifyPluginAsync = async (app) => {
 
   app.get('/presence', SignedIn, async () => presence.view())
 
-  app.post<{ Body: SetHere }>('/here', HereRequest, async (req) => presence.set(req.body).then(() => presence.view()))
+  app.put<{ Body: SetHere }>('/presence', HereRequest, async (req) => presence.set(req.body).then(() => presence.view()))
 
   app.post('/requests', SignedIn, async () => cloudService.ask())
 
@@ -84,3 +84,5 @@ const WebLinkRequest = { onRequest: requireSignIn, schema: { body: CreateWebLink
 const HereRequest = { onRequest: requireSignIn, schema: { body: SetHere } }
 const ApproveRequestRequest = { onRequest: requireSignIn, schema: { body: z.optional(ApproveRequest) } }
 const DenyRequestRequest = { onRequest: requireSignIn, schema: { querystring: DenyRequestQuery } }
+const CallbackQuery = z.object({ state: z.optional(z.string()), code: z.optional(z.string()), error: z.optional(z.string()) })
+type CallbackQuery = z.infer<typeof CallbackQuery>
