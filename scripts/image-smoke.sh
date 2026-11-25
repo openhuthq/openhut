@@ -2,8 +2,9 @@
 set -eu
 D="${DOCKER:-docker}"
 rt() { $D exec openhut "$@"; }
+rr() { $D exec openhut-runtime "$@"; }
 api() { rt curl -fsS -H "cookie: ${COOKIE:-}" -H 'content-type: application/json' "$@"; }
-fail() { echo "smoke: $*" >&2; $D exec openhut sh -c 'tail -n 40 /var/log/openhut/agentd.log /var/log/openhut/app.log' >&2 || true; exit 1; }
+fail() { echo "smoke: $*" >&2; $D logs openhut 2>&1 | tail -n 40 >&2; $D exec openhut sh -c 'tail -n 20 /data/log/*.log' >&2; rr sh -c 'tail -n 40 /var/log/openhut/agentd.log /var/log/openhut/link.log' >&2 || true; exit 1; }
 wait_for() { i=0; until eval "$2" >/dev/null 2>&1; do i=$((i+1)); [ "$i" -gt "$1" ] && return 1; sleep 3; done; }
 
 wait_for 100 'rt curl -fsS http://127.0.0.1:8787/health' || fail "no /health"
@@ -16,6 +17,8 @@ echo "smoke: the first visitor became the owner, and the web app is served"
 rt sh -c 'command -v script' >/dev/null || fail "no script(1) in the image, so the Claude sign-in can't start"
 link=$(rt sh -c 'd=$(mktemp -d); cd "$d"; HOME=$d CLAUDE_CONFIG_DIR=$d BROWSER=/bin/true TERM=xterm-256color timeout 30 script -qfec "stty cols 4000 rows 60; exec $OPENHUT_CLAUDE setup-token" /dev/null </dev/null | tr "\033\007" "\n\n" | grep -o "https://claude\.[a-z]*/[^ ]*oauth/authorize?[^ ]*" | head -n 1; rm -rf "$d"')
 case "$link" in https://claude.ai/*|https://claude.com/*) echo "smoke: the Claude sign-in starts at ${link%%\?*}" ;; *) fail "the Claude sign-in gave no claude.ai link: $link" ;; esac
+wait_for 100 "api http://127.0.0.1:8787/api/computers/here | grep -q '\"online\":true'" || fail "the main install's own runtime never connected"
+echo "smoke: the main install started openhut-runtime and it connected: $(api http://127.0.0.1:8787/api/computers/here)"
 i=0; until agent=$(api -X POST http://127.0.0.1:8787/api/agents -d '{"name":"Smoke","instructions":"# Smoke\nYou echo."}' 2>/dev/null); do
   i=$((i+1)); [ "$i" -gt 20 ] && fail "create an agent"; sleep 3
 done
@@ -23,18 +26,20 @@ id=$(printf '%s' "$agent" | sed -n 's/.*"id":"\(ag_[a-z0-9]*\)".*/\1/p')
 [ -n "$id" ] || fail "no agent id in $agent"
 echo "smoke: agent $id"
 api -X PATCH "http://127.0.0.1:8787/api/agents/$id" -d '{"wanted":"running"}' >/dev/null || fail "start the agent"
-wait_for 300 "[ \"\$(rt docker inspect -f '{{.State.Running}}' ag-$id)\" = true ]" || fail "ag-$id never ran"
-runtime=$(rt docker inspect -f '{{.HostConfig.Runtime}} {{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}} {{.Config.User}}' "ag-$id")
+wait_for 300 "[ \"\$(rr docker inspect -f '{{.State.Running}}' ag-$id)\" = true ]" || fail "ag-$id never ran"
+runtime=$(rr docker inspect -f '{{.HostConfig.Runtime}} {{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}} {{.Config.User}}' "ag-$id")
 echo "smoke: ag-$id runs with runtime, read-only, cap-drop, user: $runtime"
 case "$runtime" in "runsc true [ALL] 10000:10000") ;; *) fail "ag-$id isn't isolated as expected: $runtime" ;; esac
-rt docker exec "ag-$id" dmesg 2>/dev/null | grep -qi gvisor || fail "ag-$id's kernel isn't gVisor"
-rt docker exec "ag-$id" sh -c '[ ! -e /var/run/docker.sock ] && [ ! -e /run/agentd ]' || fail "ag-$id can see a Docker or agentd socket"
-ip=$(rt docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "ag-$id")
-token=$(rt sed -n 's/^API_SERVER_KEY=//p' "/data/agent-conf/$id/.env")
-wait_for 100 "rt curl -fsS -H 'authorization: Bearer $token' http://$ip:8642/v1/models" || fail "ag-$id's API never answered"
-reply=$(rt curl -fsS -m 180 -H "authorization: Bearer $token" -H 'content-type: application/json' "http://$ip:8642/v1/chat/completions" \
+rr docker exec "ag-$id" dmesg 2>/dev/null | grep -qi gvisor || fail "ag-$id's kernel isn't gVisor"
+rr docker exec "ag-$id" sh -c '[ ! -e /var/run/docker.sock ] && [ ! -e /run/agentd ]' || fail "ag-$id can see a Docker or agentd socket"
+ip=$(rr docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "ag-$id")
+token=$(rr sed -n 's/^API_SERVER_KEY=//p' "/data/agent-conf/$id/.env")
+wait_for 100 "rr curl -fsS -H 'authorization: Bearer $token' http://$ip:8642/v1/models" || fail "ag-$id's API never answered"
+reply=$(rr curl -fsS -m 180 -H "authorization: Bearer $token" -H 'content-type: application/json' "http://$ip:8642/v1/chat/completions" \
   -d '{"model":"hermes-agent","messages":[{"role":"user","content":"smoke test ping"}]}') || fail "chat"
 printf '%s' "$reply" | grep -q 'smoke test ping' || fail "the reply doesn't echo: $reply"
 echo "smoke: the agent answered: $(printf '%s' "$reply" | head -c 300)"
+wait_for 40 "api http://127.0.0.1:8787/api/agents/$id | grep -q '\"health\":\"answering\"'" || fail "the main install can't reach the agent through the relay"
+echo "smoke: the main install reaches the agent through the relay"
 [ -n "${KEEP:-}" ] || rt curl -fsS -o /dev/null -H "cookie: $COOKIE" -X DELETE "http://127.0.0.1:8787/api/agents/$id" || fail "delete the agent"
 echo "smoke: ok"

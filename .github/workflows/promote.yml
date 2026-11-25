@@ -1,8 +1,8 @@
 name: Promote
 
 # Takes main's newest green CI run, runs the runtime image smoke on that exact commit (install.sh, an agent in gVisor answers a
-# chat, a release with a failing /health rolls back), then tags the image CI pushed for that commit as `stable` and publishes
-# that run's install.sh (pinned to the image by digest, with its OPENHUT_BUILD) as dl.openhut.dev/channels/stable/install.sh,
+# chat, a release with a failing /health rolls back), then tags the two images CI pushed for that commit (openhut and openhut-runtime) as `stable` and publishes
+# that run's install.sh (pinned to both by digest, with its OPENHUT_BUILD) as dl.openhut.dev/channels/stable/install.sh,
 # which openhut.dev/ redirects to. Servers' Settings › Updates compare that OPENHUT_BUILD with their own; the updater runs
 # that install.sh only if its sha256 is the one the server checked.
 
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  REPO: ghcr.io/openhuthq/runtime
+  REPO: ghcr.io/openhuthq
 
 jobs:
   green:
@@ -70,16 +70,20 @@ jobs:
           SHA: ${{ needs.green.outputs.sha }}
         run: |
           gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n runtime-image -D dist || { echo "::error::CI run $RUN has no runtime-image artifact; rerun CI on main."; exit 1; }
-          digest=$(docker buildx imagetools inspect "$REPO:$SHA" --format '{{json .Manifest.Digest}}' | tr -d '"')
-          grep -qxF "IMAGE=\"\${RUNTIME_IMAGE:-$REPO@$digest}\"" dist/install.sh || { echo "::error::install.sh from run $RUN doesn't pin $REPO@$digest"; exit 1; }
+          for name in openhut openhut-runtime; do
+            digest=$(docker buildx imagetools inspect "$REPO/$name:$SHA" --format '{{json .Manifest.Digest}}' | tr -d '"')
+            grep -qF ":-$REPO/$name@$digest}\"" dist/install.sh || { echo "::error::install.sh from run $RUN doesn't pin $REPO/$name@$digest"; exit 1; }
+          done
           grep -Eqx 'OPENHUT_BUILD="[0-9A-Za-z_.-]+"' dist/install.sh || { echo "::error::install.sh from run $RUN has no OPENHUT_BUILD"; exit 1; }
           sh -n dist/install.sh
-      - name: Tag the image CI pushed for that commit as stable
+      - name: Tag both images CI pushed for that commit as stable
         env:
           SHA: ${{ needs.green.outputs.sha }}
         run: |
-          docker buildx imagetools create -t "$REPO:stable" "$REPO:$SHA"
-          echo "$REPO:stable is $(docker buildx imagetools inspect "$REPO:stable" --format '{{json .Manifest.Digest}}') (${SHA::8})" | tee -a "$GITHUB_STEP_SUMMARY"
+          for name in openhut openhut-runtime; do
+            docker buildx imagetools create -t "$REPO/$name:stable" "$REPO/$name:$SHA"
+            echo "$REPO/$name:stable is $(docker buildx imagetools inspect "$REPO/$name:stable" --format '{{json .Manifest.Digest}}') (${SHA::8})" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
       - name: Publish its install.sh as the stable installer
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

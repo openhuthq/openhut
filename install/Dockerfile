@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1.7
-# Built from the repo root. `--target runtime-base` is the base (dind, gVisor, Claude Code, agent-browser, the bundled agent image),
-# rebuilt a few times a year. The default target is the thin per-commit layer: the tree and its node_modules on top of BASE,
-# a published base by digest (`--build-arg BASE=ghcr.io/openhuthq/runtime-base@sha256:…`), or the base built here.
+# Built from the repo root, two images (scripts/image.sh builds both). `--target runtime` is openhut-runtime: the thin
+# per-commit layer (the tree and its node_modules) on top of BASE, a published base by digest or `--target runtime-base`
+# built here (dind, gVisor, Claude Code, agent-browser, the bundled agent image), rebuilt a few times a year. It runs agentd
+# and the link to the main install. `--target main` is openhut: Node, the Docker CLI and the tree, no Docker daemon; it runs
+# the web app and the server, and starts its own openhut-runtime (RUNTIME_IMAGE, by digest) next to it.
 ARG BASE=runtime-base
 ARG AGENT_IMAGE
 ARG ALPINE=alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
@@ -105,11 +107,8 @@ COPY --from=agent /agent.tar.zst /image /opt/openhut-agent/
 COPY --from=bridge /bridge /var/lib/openhut/whatsapp-bridge
 RUN mkdir -p /etc/docker && echo '{"runtimes":{"runsc":{"path":"/usr/local/bin/runsc"}}}' > /etc/docker/daemon.json && \
     ln -s /data/log /var/log/openhut && ln -s /run/agentd-etc /etc/agentd
-# Agents get the glibc claude; the seat sign-in runs claude here, on Alpine, so it takes the musl build.
-ENV OPENHUT_HOST=0.0.0.0 DOCKER_TLS_CERTDIR= OPENHUT_CLAUDE=/opt/openhut/bin/claude-musl
-EXPOSE 80 443 8787
-ENTRYPOINT ["/opt/openhut/install/image-start.sh"]
-COPY install/updater.sh /usr/local/lib/openhut-updater.sh
+ENV DOCKER_TLS_CERTDIR=
+ENTRYPOINT ["/opt/openhut/install/runtime-start.sh"]
 
 FROM ${BASE} AS deps
 COPY --from=tree /opt/openhut/package.json /opt/openhut/package-lock.json /opt/openhut/
@@ -119,7 +118,21 @@ COPY --from=tree /opt/openhut/packages/app/package.json /opt/openhut/packages/ap
 RUN cd /opt/openhut && npm ci --omit=dev --no-audit --no-fund --loglevel=error >/dev/null && \
     chown -R root:root node_modules && chmod -R go-w node_modules
 
-FROM ${BASE}
+FROM ${BASE} AS runtime
 COPY --from=deps /opt/openhut/node_modules /opt/openhut/node_modules
 COPY --from=tree /opt/openhut /opt/openhut
-RUN ln -sf /opt/openhut/install/openhut /usr/local/bin/openhut
+
+FROM $ALPINE AS main
+ARG RUNTIME_IMAGE
+RUN apk add --no-cache nodejs docker-cli curl su-exec flock util-linux-misc >/dev/null && \
+    addgroup -S openhut && adduser -S -D -G openhut openhut
+# The seat sign-in runs claude here, on Alpine, so it takes the musl build.
+COPY --from=downloads /out/opt/openhut/bin/claude-musl /opt/openhut/bin/claude-musl
+COPY --from=downloads /out/usr/local/bin/caddy /usr/local/bin/caddy
+COPY --from=deps /opt/openhut/node_modules /opt/openhut/node_modules
+COPY --from=tree /opt/openhut /opt/openhut
+COPY install/updater.sh /usr/local/lib/openhut-updater.sh
+RUN test -n "$RUNTIME_IMAGE" && printf '%s\n' "$RUNTIME_IMAGE" > /opt/openhut/RUNTIME_IMAGE && ln -sf /opt/openhut/install/openhut /usr/local/bin/openhut
+ENV OPENHUT_HOST=0.0.0.0 OPENHUT_CLAUDE=/opt/openhut/bin/claude-musl
+EXPOSE 80 443 8787
+ENTRYPOINT ["/opt/openhut/install/main-start.sh"]

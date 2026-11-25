@@ -21,10 +21,10 @@ if flock -n 9 && docker container inspect openhut-previous >/dev/null 2>&1; then
 fi
 flock -u 9
 while :; do
-  if [ -f "$REQUEST" ] && flock -n 9; then
+  if [ -s "$REQUEST" ] && flock -n 9; then
     sha='' version=''
     read -r sha version < "$REQUEST" || true
-    rm -f "$REQUEST"
+    : > "$REQUEST"
     if printf '%s' "$sha" | grep -Eqx '[0-9a-f]{64}' && case $version in *[!0-9.]*) false ;; esac; then apply "$sha" "$version" > "$LOG" 2>&1
     else echo "openhut: ignored an update request that isn't a sha256 and a version"; fi
     flock -u 9

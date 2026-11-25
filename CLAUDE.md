@@ -24,7 +24,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   Admin) sets the cookie's Secure flag, every redirect URL and the Caddyfile: Caddy in the image serves :80, and once the address
   is set gets its Let's Encrypt certificate and serves HTTPS on :443. `npm run dev` and the tests use `OPENHUT_DEV_KEY_SHA256`
   instead, a key that acts as the owner. The server also serves the built App (`platform/web-app.ts`).
-  `src/agentd/` is the root helper on a Unix socket, the only process that starts agents: `sandbox/docker.ts` runs each one
+  `src/agentd/` is the root helper on a Unix socket in openhut-runtime, the only process that starts agents: `sandbox/docker.ts` runs each one
   as a container (`--runtime runsc` when a probe at boot finds gVisor works; health says `gvisor`), `sandbox/memory.ts`
   is the tests' fake (`OPENHUT_FAKE_SANDBOX=1`). Tests mirror them in `test/server/` and `test/agentd/`.
 - **`packages/app`** — `@openhut/app`, the App: the React dashboard (Vite to `dist`, built into the image and served by the runtime on the same origin, TanStack Query). Tailwind v4 with shared
@@ -34,16 +34,24 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   (`wrangler.jsonc`, `src/worker.ts`) that `.github/workflows/deploy.yml` deploys after CI passes on `main`. Its own npm package
   with its own lock, not a workspace (wrangler stays out of the root lock): `npm --prefix site ci`, then `run typecheck` and `test`.
 
-`install/` is the server: `install/Dockerfile` builds the image `ghcr.io/openhuthq/runtime` from the repo root (dockerd, gVisor,
-Node, the tree, Claude Code pinned by `ARG CLAUDE`, agent-browser, the WhatsApp bridge and the pinned Hermes agent image, so
-nothing downloads on the server); `install/image-start.sh` is its entrypoint. `install.sh` pulls that image by the digest
-`scripts/image.sh` pins into it and runs it as the container `openhut` (`--privileged` for the agents' Docker and gVisor,
-read-only root, data in the volumes `openhut-data` and `openhut`, 127.0.0.1:8787 only, ports 80 and 443 for Caddy), prints the address to open, and goes back to the previous container
-if the new one fails its health check. It also runs `openhut-updater` (`install/updater.sh`, in the base image): Settings ›
-Updates has agentd write `/data/update.request` with the sha256 of the install.sh the runtime checked at `OPENHUT_URL`, and the
-updater runs that install.sh if it still matches. `.github/workflows/runtime-image.yml` builds, smoke-tests
-(`scripts/image-smoke.sh`) and pushes it; `promote.yml` smoke-tests main's newest green commit, tags its image `stable` and
-publishes its install.sh (pinned by digest, with `OPENHUT_BUILD`) where openhut.dev/ redirects. `vendor/` is the pinned Hermes plugin.
+`install/` is the server, two images from one `install/Dockerfile` (`scripts/image.sh` builds both and pins them into
+`install.sh`): `ghcr.io/openhuthq/openhut` (`--target main`: Node, the Docker CLI, the tree and the built App; entrypoint
+`install/main-start.sh`) runs the web app and the server as the container `openhut` (not privileged, read-only root, the host's
+Docker socket, data in `openhut-data`, network `openhut`, 127.0.0.1:8787, ports 80 and 443 for Caddy), prints the address to open, and goes back to the previous container if the new one fails its health check. On first boot it starts
+its own runtime with `install.sh join http://openhut:8787 <token>`. `ghcr.io/openhuthq/openhut-runtime` (`--target runtime`:
+dockerd, gVisor, Claude Code pinned by `ARG CLAUDE`, agent-browser, the WhatsApp bridge and the pinned Hermes agent image, so
+nothing downloads on the server; entrypoint `install/runtime-start.sh`) runs agentd and `agentd/link.ts`, privileged, no open
+port, data in `openhut-runtime-data`. Other machines run only that: `curl … | sh -s -- join <address> <token>` from
+Settings › Computers. The link is one outbound WebSocket to `/api/computers/link` carrying the `common/src/tunnel/mux.ts`
+streams (frames.ts): the main opens agentd, agent-API and home-copy streams, the runtime opens gateway streams, so model keys
+stay on the main. `relay/forward.ts` routes each agent's calls to the computer that runs it (`agent.runs_on`; `here` is the
+main's own runtime). Runtimes follow the main: its welcome names its paired runtime image, and a runtime on another one runs
+`install.sh join` in a one-shot `openhut-runtime-update` container, which goes back on failure and labels the image failed.
+The main also runs `openhut-updater` (`install/updater.sh`): Settings › Updates has the server write `/data/update.request`
+with the sha256 of the install.sh it checked at `OPENHUT_URL`, and the updater runs that install.sh if it still matches.
+`.github/workflows/runtime-image.yml` builds, smoke-tests (`scripts/image-smoke.sh`) and pushes both; `promote.yml`
+smoke-tests main's newest green commit, tags both images `stable` and publishes its install.sh (pinned by digest, with
+`OPENHUT_BUILD`) where openhut.dev/ redirects. `vendor/` is the pinned Hermes plugin.
 
 ## Conventions (Skyfleet's)
 
