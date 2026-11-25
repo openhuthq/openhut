@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { defaultComputer, firstModel, inUse, looksLikeEmail, previewOf, searchPeople } from '../../../src/features/agents/form.ts'
+import { accessLabel, defaultComputer, firstModel, inUse, looksLikeEmail, ONLY_YOU, previewOf, searchPeople, withWholeTeam } from '../../../src/features/agents/form.ts'
 
 const provider = (id: string, connected: boolean, models: string[]) => ({ id, connected, models: models.map((model) => ({ id: model, on: true })) }) as never
 
@@ -50,4 +50,15 @@ test('the Access row shows exactly who is picked: your face alone, names up to t
   assert.deepEqual(previewOf({ owner, people: ['sara@example.com'] }), { faces: [owner, 'sara@example.com'], text: 'You and Sara', label: 'You and Sara' })
   assert.deepEqual(previewOf({ owner, people: ['sara@example.com', 'ana@example.com'] }), { faces: [owner, 'sara@example.com', 'ana@example.com'], text: 'You, Sara and Ana', label: 'You, Sara and Ana' })
   assert.deepEqual(previewOf({ owner, people: ['sara@example.com', 'ana@example.com', 'li@example.com', 'jo@example.com'] }), { faces: [owner, 'sara@example.com', 'ana@example.com'], text: '+2', label: 'You and 4 more' })
+})
+
+test('a new agent opens to only you until you add someone', () => {
+  assert.equal(ONLY_YOU.shared, false)
+  assert.equal(accessLabel({ value: ONLY_YOU, owner: 'owner@example.com', team: 'Acme' }), 'Only you')
+})
+
+test('Whole team gives everyone on the team access and keeps the people picked', () => {
+  const on = withWholeTeam({ shared: false, people: ['pat@example.com'], sidebars: ['pat@example.com'] }, true)
+  assert.deepEqual(on, { shared: true, people: ['pat@example.com'], sidebars: [] })
+  assert.equal(accessLabel({ value: on, owner: 'owner@example.com', team: 'Acme' }), 'Everyone on Acme')
 })

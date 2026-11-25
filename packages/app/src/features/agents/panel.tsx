@@ -26,7 +26,8 @@ import { Face } from '@/features/agents/face'
 import { useMove } from '@/features/agents/move'
 import { RoutinesRow } from '@/features/routines/routines-dialog'
 import { useWorkspaces } from '@/features/cloud/workspaces'
-import { AccessPicker, type AccessValue } from '@/features/agents/access'
+import { AccessPicker } from '@/features/agents/access'
+import type { AccessValue } from '@/features/agents/form'
 import { ModelRows } from '@/features/agents/model-rows'
 import { AgentStatus } from '@/features/agents/status'
 import { formValues } from '@/lib/form'
@@ -202,7 +203,7 @@ function Access({ agent }: { agent: Agent }) {
   if (!workspace || !email || (home?.computer ?? 'local') !== 'local') return null
   const save = (next: AccessValue) => update.mutate(next, { onError: toastError })
   return <>
-    <AccessPicker workspace={workspace} owner={agent.owner ?? email} value={{ shared: agent.shared, people: agent.people, sidebars: agent.sidebars }} title={`Who can open ${agent.name}`} disabled={!agent.canManage || update.isPending}
+    <AccessPicker workspace={workspace} owner={agent.owner ?? email} value={{ shared: agent.shared, people: agent.people, sidebars: agent.sidebars }} disabled={!agent.canManage || update.isPending}
       onChange={(next) => next.shared && !agent.shared ? setSharing(next) : save(next)} className={ROW}
       trigger={(preview) => <><I icon={agent.shared ? Globe02Icon : SquareLock02Icon} size={15} className="text-mute" />Access<span className={VALUE}>{preview}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></>} />
     <ConfirmDialog open={!!sharing} onOpenChange={(on) => { if (!on) setSharing(undefined) }} question={`Share ${agent.name} with ${workspace.name}?`} action="Share" onConfirm={() => sharing && save(sharing)}
