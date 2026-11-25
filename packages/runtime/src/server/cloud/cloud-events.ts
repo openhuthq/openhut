@@ -18,6 +18,7 @@ import { db } from '../platform/db.ts'
 import { emit, log } from '../platform/events.ts'
 import { messageOf } from '../platform/http-error.ts'
 import { deviceOs, keysService } from './keys-service.ts'
+import { busy } from './idle.ts'
 import { presence } from './presence.ts'
 import { changed, recordsService } from './records.ts'
 import { runSet } from './run-set.ts'
@@ -212,6 +213,7 @@ async function beatAll(): Promise<void> {
     const body = listed && plain && await keyring.lock({ team: ws, bind: beatBind({ ws, from: me }), plain })
     if (body) sent({ type: 'beat', workspace: ws, body })
   }
+  if (config.cloudComputer && socket) socket.send(JSON.stringify({ type: 'busy', busy: await busy() }))
 }
 
 async function beatHeard({ workspace, from, body }: { workspace: string; from: string; body: string }): Promise<void> {
