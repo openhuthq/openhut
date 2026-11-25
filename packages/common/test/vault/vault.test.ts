@@ -164,22 +164,6 @@ test('the letter vector still opens', async () => {
   assert.equal(hex(opened ?? new Uint8Array()), plain)
 })
 
-test('12 words give back the same key and a typo in one word is caught', async (t) => {
-  const { words, key } = await vault.newWords()
-  assert.equal(words.length, 12)
-  assert.deepEqual(await vault.fromWords(words), key)
-  assert.deepEqual(await vault.fromWords(words.map((word) => ` ${word.toUpperCase()} `)), key)
-  const typo = [...v1.words.words]
-  typo[4] = 'abandon'
-  assert.equal(await vault.fromWords(typo), null)
-  assert.equal(await vault.fromWords([...words.slice(0, 11), 'zooo']), null)
-  assert.equal(await vault.fromWords(words.slice(0, 11)), null)
-  fixRandom(t, bytes(v1.words.entropy))
-  const fixed = await vault.newWords()
-  assert.deepEqual(fixed.words, v1.words.words)
-  assert.equal(hex(fixed.key), v1.words.key)
-})
-
 test('slots are a keyed hash of the path', async () => {
   const { key, path, slot } = v1.slot
   assert.equal(await vault.slot({ key: bytes(key), path }), slot)

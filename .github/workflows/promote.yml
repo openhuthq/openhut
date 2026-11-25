@@ -5,7 +5,7 @@ name: Promote
 # halt: devices drop a pending install on their next poll, without the age wait. `rollback` points stable back at an earlier release's
 # bytes (releases/<sha256>.json) under a higher sequence. Each pointer is logged in Rekor and announced (scripts/r2.sh pointer), so the
 # release monitor stays quiet; devices still wait MIN_AGE_SECONDS (0 for now), halt excepted. A finished Promote deploys the Cloud
-# (cloud.yml). Installers are a shell release (shell.yml).
+# (cloud.yml).
 
 on:
   workflow_dispatch:
@@ -81,7 +81,7 @@ jobs:
           (umask 077 && printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release.pem")
           case "$ACTION" in
             promote)
-              node scripts/release-key.ts sign "$RUNNER_TEMP/release.pem" packs "$(node -p "require('./packages/desktop/package.json').version")" --rekor https://rekor.sigstore.dev
+              node scripts/release-key.ts sign "$RUNNER_TEMP/release.pem" packs "$(node -p "require('./packages/runtime/package.json').version")" --rekor https://rekor.sigstore.dev
               rm "$RUNNER_TEMP/release.pem"
               scripts/r2.sh packs packs
               out=packs from="main ${SHA::8}" ;;

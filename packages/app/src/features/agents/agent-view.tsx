@@ -5,7 +5,7 @@ import type { HereField } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { I, ICON_BUTTON } from '@/components/kit'
-import { ErrorNote } from '@/components/error-note'
+import { ErrorNote, shownError } from '@/components/error-note'
 import { useQueryClient } from '@tanstack/react-query'
 import { agentPath, goneAgentPath, type AgentDialog } from '@/app/routes'
 import { useAgent, useAgents } from '@/features/agents/api'
@@ -41,7 +41,7 @@ export function AgentView({ agentId, dialog, detail }: { agentId: string; dialog
   useEffect(() => setShown(null), [narrow])
   const open = shown ?? !narrow
   if (away) return <Redirect to={away} />
-  if (!agent.data) return <section className="grid flex-1 place-items-center bg-card">{!gone && <ErrorNote message={agent.error?.message} />}</section>
+  if (!agent.data) return <section className="grid flex-1 place-items-center bg-card">{!gone && <ErrorNote message={shownError(agent.error)} />}</section>
   const toggle = narrow && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label={open ? 'Hide details' : 'Show details'} aria-pressed={open} title={open ? 'Hide details' : 'Show details'} onClick={() => setShown(!open)}><I icon={phone ? InformationCircleIcon : SidebarRight01Icon} size={phone ? 20 : 16} /></Button>
   const dialogs = <Dialogs agent={agent.data} dialog={dialog} detail={detail} />
   const panel = open && <Panel agent={agent.data} naming={dialog === 'name'} watching={dialog === 'browser'} />

@@ -3,7 +3,6 @@ import { useAgents } from '@/features/agents/api'
 import { Admin, Update } from '@openhut/common/admin/admin.ts'
 import { request } from '@/lib/api-client'
 import { openhut, type Computer, type Features } from '@/lib/openhut'
-import { WORDS } from '@/lib/platform'
 import { COMPUTERS_KEY } from '@/lib/query-keys'
 
 export type ComputerAdmin = { computer: Computer; admin: Admin | undefined }
@@ -31,18 +30,16 @@ export function useComputerAdmins() {
 }
 
 export function runsOnNote(computer: Computer) {
-  if (!computer.online) return computer.kind === 'server' ? 'Offline · it isn’t answering' : 'Offline · open OpenHut on it to use it'
+  if (!computer.online) return 'Offline · it isn’t answering'
   if (computer.kind === 'server') return 'Sealed in its own box · always on'
-  if (computer.kind === 'desktop') return 'Another of your computers · while it’s awake'
   if (computer.server) return 'Linux server · always on'
-  return `With your access · while this ${WORDS.here} is awake`
+  return 'With your access · while this computer is awake'
 }
 
 export function whereNote(computer: Computer) {
-  if (computer.kind === 'server') return `Always on, so it keeps answering while this ${WORDS.here} sleeps.`
-  if (computer.kind === 'desktop') return `Answers while that computer is awake, even when this ${WORDS.here} sleeps.`
+  if (computer.kind === 'server') return 'Always on, so it keeps answering while this computer sleeps.'
   if (computer.server) return 'Always on, so it keeps answering while you’re away.'
-  return `Answers while this ${WORDS.here} is awake.`
+  return 'Answers while this computer is awake.'
 }
 
 export function nameOf({ computers, id }: { computers: Computer[] | undefined; id: string }) {

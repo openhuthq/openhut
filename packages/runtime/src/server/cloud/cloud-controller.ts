@@ -1,7 +1,7 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import * as z from 'zod/mini'
-import { AddPasskey, ApproveRequest, ChangeRole, CreateWebLink, DenyRequestQuery, DeviceKey, PasteSignInCode, EncryptionPasskey, RemoveDeviceQuery, SetEncryption, SetHere, StartCloudSignIn, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
-import { requireSignIn, withPresence } from '../team/identity.ts'
+import { ChangeRole, DeviceKey, PasteSignInCode, RemoveDeviceQuery, SetHere, StartCloudSignIn, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
+import { requireSignIn } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
 import { presence } from './presence.ts'
 import { IdParams } from '../platform/responses.ts'
@@ -17,31 +17,15 @@ export const cloudController: FastifyPluginAsyncZod = async (app) => {
 
   app.delete('/session', SignedIn, async () => cloudService.signOut())
 
-  app.post('/kits', { onRequest: withPresence('save a new recovery kit') }, async () => cloudService.newKit())
-
   app.post('/join-codes', SignedIn, async () => cloudService.joinCode())
 
-  app.post('/web-links', WebLinkRequest, async (req) => cloudService.continueInWeb(req.body))
-
-  app.post('/unlock', UnlockRequest, async (req) => cloudService.unlock(req.body))
-
   app.delete('/devices/:key', NotMeRequest, async (req) => cloudService.notMe({ device: req.params.key, lost: !!req.query.lost }))
-
-  app.post('/passkeys', PasskeyRequest, async (req) => cloudService.addPasskey(req.body))
-
-  app.post('/encryption', EncryptionRequest, async (req) => cloudService.encryption(req.body))
-
-  app.post('/encryption/keys', SignedIn, async () => cloudService.prepareEncryption())
-
-  app.post('/encryption/passkeys', EncryptionPasskeyRequest, async (req) => cloudService.encryptionPasskey(req.body))
-
-  app.delete('/passkeys', async () => cloudService.removePasskey())
 
   app.patch('/workspaces/:id', UpdateRequest, async (req) => cloudService.update({ workspace: req.params.id, ...req.body }))
 
   app.get('/workspaces/:id/icon', { ...SignedIn, schema: { params: IdParams } }, async (req, reply) => cloudService.icon({ workspace: req.params.id, reply }))
 
-  app.delete('/', { onRequest: withPresence('delete your OpenHut data') }, async () => cloudService.deleteData())
+  app.delete('/', SignedIn, async () => cloudService.deleteData())
 
   app.get('/presence', SignedIn, async () => presence.view())
 
@@ -53,19 +37,13 @@ export const cloudController: FastifyPluginAsyncZod = async (app) => {
 
   app.delete('/rotations', SignedIn, async () => cloudService.rotated())
 
-  app.delete('/workspaces/:id/members/:email', { schema: { params: z.object({ id: z.string(), email: z.string() }) }, onRequest: withPresence('remove someone from your team') }, async (req) => cloudService.remove({ workspace: req.params.id, email: req.params.email }))
+  app.delete('/workspaces/:id/members/:email', { onRequest: requireSignIn, schema: { params: z.object({ id: z.string(), email: z.string() }) } }, async (req) => cloudService.remove({ workspace: req.params.id, email: req.params.email }))
 
   app.delete('/workspaces/:id/invites/:email', { ...SignedIn, schema: { params: z.object({ id: z.string(), email: z.string() }) } }, async (req) => cloudService.revokeInvite({ workspace: req.params.id, email: req.params.email }))
 
   app.delete('/workspaces/:id/devices/:key', DeviceRequest, async (req) => cloudService.removeDevice({ workspace: req.params.id, device: req.params.key }))
 
-  app.post('/workspaces/:id/keys', { schema: { params: IdParams }, onRequest: withPresence('reset your team’s encryption') }, async (req) => cloudService.changeKeys({ workspace: req.params.id }))
-
-  app.post('/workspaces/:id/requests/:device/approvals', ApproveRequestRequest, async (req) => cloudService.approve({ workspace: req.params.id, device: req.params.device, faces: req.body?.faces }))
-
-  app.post('/workspaces/:id/requests/:device/reviews', { ...SignedIn, schema: { params: z.object({ id: z.string(), device: z.string() }) } }, async (req) => cloudService.review({ workspace: req.params.id, device: req.params.device }))
-
-  app.delete('/workspaces/:id/requests/:device', DenyRequestRequest, async (req) => cloudService.deny({ workspace: req.params.id, device: req.params.device, why: req.query.why }))
+  app.post('/workspaces/:id/keys', { onRequest: requireSignIn, schema: { params: IdParams } }, async (req) => cloudService.changeKeys({ workspace: req.params.id }))
 
   app.patch('/workspaces/:id/members/:email', RoleRequest, async (req) => cloudService.setRole({ workspace: req.params.id, email: req.params.email, role: req.body.role }))
 }
@@ -73,16 +51,9 @@ export const cloudController: FastifyPluginAsyncZod = async (app) => {
 const SignedIn = { onRequest: requireSignIn }
 const PasteRequest = { onRequest: requireSignIn, schema: { body: PasteSignInCode } }
 const SignInRequest = { onRequest: requireSignIn, schema: { body: StartCloudSignIn } }
-const UnlockRequest = { onRequest: requireSignIn, schema: { body: UnlockCloud } }
-const NotMeRequest = { onRequest: withPresence('remove a device from OpenHut'), schema: { params: z.object({ key: DeviceKey }), querystring: RemoveDeviceQuery } }
-const DeviceRequest = { onRequest: withPresence('remove a device from OpenHut'), schema: { params: z.object({ id: z.string(), key: DeviceKey }) } }
-const EncryptionRequest = { onRequest: withPresence('turn end-to-end encryption on or off'), schema: { body: SetEncryption } }
-const EncryptionPasskeyRequest = { onRequest: requireSignIn, schema: { body: EncryptionPasskey } }
-const PasskeyRequest = { onRequest: requireSignIn, schema: { body: AddPasskey } }
+const NotMeRequest = { onRequest: requireSignIn, schema: { params: z.object({ key: DeviceKey }), querystring: RemoveDeviceQuery } }
+const DeviceRequest = { onRequest: requireSignIn, schema: { params: z.object({ id: z.string(), key: DeviceKey }) } }
 const UpdateRequest = { onRequest: requireSignIn, schema: { params: IdParams, body: UpdateWorkspace } }
 const RoleRequest = { onRequest: requireSignIn, schema: { params: z.object({ id: z.string(), email: z.string() }), body: ChangeRole } }
-const WebLinkRequest = { onRequest: requireSignIn, schema: { body: CreateWebLink } }
 const HereRequest = { onRequest: requireSignIn, schema: { body: SetHere } }
-const ApproveRequestRequest = { onRequest: requireSignIn, schema: { params: z.object({ id: z.string(), device: z.string() }), body: z.optional(ApproveRequest) } }
-const DenyRequestRequest = { onRequest: requireSignIn, schema: { params: z.object({ id: z.string(), device: z.string() }), querystring: DenyRequestQuery } }
 const CallbackQuery = z.object({ state: z.optional(z.string()), code: z.optional(z.string()), error: z.optional(z.string()) })

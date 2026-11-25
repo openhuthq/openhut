@@ -41,10 +41,3 @@ test('raw HTML is set only from art built into the app, never from data', () => 
     .filter((file) => /\.tsx?$/.test(file) && !file.startsWith('proto') && readFileSync(new URL(file, root), 'utf8').includes('dangerouslySetInnerHTML'))
   assert.deepEqual(users.sort(), ['components/creature.tsx', 'components/glyph.tsx', 'components/hut.tsx'])
 })
-
-test('app://openhut serves the renderer under a strict CSP that connects only to itself and the Cloud', () => {
-  const csp = /const CSP = `([^`]+)`/.exec(readFileSync(new URL('../../../desktop/src/main.mjs', import.meta.url), 'utf8'))?.[1] ?? ''
-  const script = /script-src ([^;]+)/.exec(csp)?.[1] ?? ''
-  assert.equal(script.includes('unsafe-inline') || script.includes("'unsafe-eval'") || script.includes('*'), false)
-  for (const rule of ["default-src 'self'", "object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'", "connect-src 'self' ${CLOUD_ORIGIN} ${CLOUD_ORIGIN.replace(/^http/, 'ws')};"]) assert.ok(csp.includes(rule), rule)
-})

@@ -225,7 +225,7 @@ export const roomKeys = {
     if (!done.length || !now?.account || !fresh || now.account.sub !== account.sub) return done
     const key = account.key === current.account?.key ? now.account.key : account.key
     const workspace = fresh.workspace.version > room.workspace.version ? fresh.workspace : room.workspace
-    await keyStore.write({ ...withRoom({ ...now, account: { ...now.account, key } }, { workspace, list: fresh.list, first: fresh.first }), kit: key === now.account.key ? now.kit : undefined })
+    await keyStore.write({ ...withRoom({ ...now, account: { ...now.account, key } }, { workspace, list: fresh.list, first: fresh.first }) })
     return done
   },
 

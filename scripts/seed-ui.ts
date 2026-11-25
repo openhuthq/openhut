@@ -1,6 +1,6 @@
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { ApiError } from '@openhut/common/api.ts'
-import type { Cloud, CloudAuthorization, RecoveryKit } from '@openhut/common/cloud/cloud.ts'
+import type { Cloud, CloudAuthorization } from '@openhut/common/cloud/cloud.ts'
 import type { Connection } from '@openhut/common/connections/connection.ts'
 import { setTimeout as sleep } from 'node:timers/promises'
 
@@ -11,7 +11,7 @@ const AGENTS = [
   ['Sales', 'Posts the weekly pipeline report and answers questions about deals.', 'claude:sonnet', 'stopped'],
   ['Support', 'Answers customers in #support. Looks the customer up before replying.', 'claude:haiku', 'running'],
 ]
-const words = await signIn()
+await signIn()
 const orders = (
   await api<Connection>('POST', '/api/connections', { name: 'Orders DB', dsn: 'postgres://reader:sample@db.internal.example:5432/orders' })
 ).json
@@ -23,9 +23,9 @@ for (const [name, about, model, wanted] of AGENTS) {
   await api('PATCH', `/api/agents/${agent.id}`, { model, wanted })
 }
 for (const agentId of [ids.Dev, ids.Support]) await api('POST', '/api/grants', { agentId, connectionId: orders.id })
-console.log(JSON.stringify({ email: EMAIL, kit: words, agents: ids, connection: orders.id }))
+console.log(JSON.stringify({ email: EMAIL, agents: ids, connection: orders.id }))
 
-async function signIn(): Promise<string[] | undefined> {
+async function signIn(): Promise<void> {
   if ((await api<Cloud>('GET', '/api/cloud')).json.status === 'off') {
     let url = (await api<CloudAuthorization>('POST', '/api/cloud/sessions')).json.authorizationUrl
     for (let hop = 0; hop < 5 && !url.includes('/v1/dev/sign-in'); hop++) url = new URL((await fetch(url, { redirect: 'manual' })).headers.get('location') ?? '', url).href
@@ -36,9 +36,7 @@ async function signIn(): Promise<string[] | undefined> {
   }
   for (let tries = 0; tries < 50; tries++) {
     const cloud = (await api<Cloud>('GET', '/api/cloud')).json
-    if (cloud.status === 'locked') throw new Error(`${EMAIL} already has an account in the dev cloud. Unlock it in the app, or start from a fresh .data.`)
-    if (cloud.status === 'on' && cloud.kit) return undefined
-    if (cloud.status === 'on') return (await api<RecoveryKit>('POST', '/api/cloud/kits')).json.words
+    if (cloud.status === 'on') return
     await sleep(200)
   }
   throw new Error('Sign-in didn’t finish. Check the dev cloud’s log.')

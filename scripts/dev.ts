@@ -7,7 +7,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 
 const DATA = resolve(process.env.OPENHUT_DATA ?? '.data')
 const SOCK = `${DATA}/agentd.sock`
-const BACKEND = resolve('packages/desktop/dist/backend')
+const BACKEND = resolve('packages/release/dist/backend')
 const RUNTIME = `${BACKEND}/runtime`
 const BIN = `${BACKEND}/bin/native`
 const taken = new Set<number>()
@@ -26,7 +26,7 @@ const API_URL = process.env.OPENHUT_API_URL ?? (LOCAL_CLOUD ? CLOUD_URL : 'https
 const LABEL = LOCAL_CLOUD ? 'Dev · local cloud' : `Dev · ${new URL(CLOUD_URL).hostname}`
 const shared = { ...process.env, PORT: String(PORT), OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), OPENHUT_BIN: BIN, AGENTD_HERMES: RUNTIME, AGENTD_SOCK: SOCK, OPENHUT_CLOUD_URL: CLOUD_URL, OPENHUT_API_URL: API_URL, OPENHUT_PERSONAL: '1' }
 
-if (!existsSync(RUNTIME)) console.warn(`No agent runtime at ${RUNTIME}, so agents won't start. Run npm -w @openhut/desktop run pack-backend (needs uv).`)
+if (!existsSync(RUNTIME)) console.warn(`No agent runtime at ${RUNTIME}, so agents won't start. Run npm -w @openhut/release run pack-backend (needs uv).`)
 const children: ChildProcess[] = []
 if (LOCAL_CLOUD) {
   children.push(spawn(process.execPath, ['src/server.ts'], { cwd: 'private/api', env: { ...process.env, PORT: String(API_PORT), OPENHUT_API_DATA: `${DATA}/api`, DEV_SIGN_IN: '1' }, stdio: 'inherit' }))

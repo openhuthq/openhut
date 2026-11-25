@@ -44,10 +44,7 @@ npm run dev
 
 Open `http://localhost:5173`. `npm run seed` on a fresh `.data` fills in sample agents and
 connections. Agents run as real Hermes processes, which need the bundled runtime first:
-`npm -w @openhut/desktop run pack-backend` (needs `uv`). Connect Claude in Settings to talk to them.
-
-Work on the web app in your browser. `npm run app` starts the real desktop app from your checkout; use it last, for
-what only the desktop has (Keychain, Touch ID, updates, deep links, the tray).
+`npm -w @openhut/release run pack-backend` (needs `uv`). Connect Claude in Settings to talk to them.
 
 ## Check it
 

@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { FingerPrintIcon, Link01Icon, MoreHorizontalIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
-import type { CloudWorkspaceView, DeviceRequest, Member } from '@openhut/common/cloud/cloud.ts'
-import { DeviceIcon, DeviceMeta } from '@/components/custom/device'
+import { Link01Icon, MoreHorizontalIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import type { CloudWorkspaceView, Member } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { ConfirmButton, ConfirmDialog } from '@/components/confirm-button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -14,15 +13,12 @@ import { ErrorNote } from '@/components/error-note'
 import { I, PILL, Section } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { nameOf } from '@/features/cloud/api'
-import { useApprove, useDeny, useInvite, useRemoveDevice, useRemoveMember, useRevokeInvite, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
-import { ago, shortDateTime } from '@/lib/format'
+import { useInvite, useRemoveDevice, useRemoveMember, useRevokeInvite, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
+import { shortDateTime } from '@/lib/format'
 import { copyText } from '@/lib/clipboard'
-import { useConfirmed } from '@/lib/native'
-import { notify } from '@/components/custom/toast'
 import { open, useOpen } from '@/lib/router'
 import { toast, toastError, toastFailed } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import { useAnswer } from '@/features/cloud/review'
 
 const ROLE = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 
@@ -34,7 +30,6 @@ export function TeamPeople({ workspace }: { workspace: CloudWorkspaceView }) {
       <Rows>
         {workspace.members.map((member) => <div key={member.email}>
           <PersonRow member={member} workspace={workspace} you={member.email === email} admin={admin} />
-          {workspace.requests.filter((each) => each.email === member.email && !(workspace.own && each.email === email)).map((each) => <Request key={each.device} workspace={workspace} request={each} name={nameOf(member.email)} mine={member.email === email} admin={admin} />)}
         </div>)}
       </Rows>
     </Section>
@@ -42,7 +37,6 @@ export function TeamPeople({ workspace }: { workspace: CloudWorkspaceView }) {
       <Rows>
         {workspace.invites.map((invite) => <div key={invite.email}>
           <InviteRow invite={invite} workspace={workspace} admin={admin} />
-          {workspace.requests.filter((each) => each.email === invite.email).map((each) => <Request key={each.device} workspace={workspace} request={each} name={nameOf(invite.email)} mine={false} admin={admin} />)}
         </div>)}
       </Rows>
     </Section>}
@@ -82,26 +76,6 @@ function PersonRow({ member, workspace, you, admin }: { member: Member; workspac
     <ConfirmDialog open={asking === 'remove'} onOpenChange={close} question={`Remove ${name}?`} detail={`${name} can’t get anything new from OpenHut Cloud. What ${name} already saw stays on their computer.`} action="Remove" onConfirm={() => remove.mutate({ id: workspace.id, email: member.email }, { onSuccess: () => toast(`${name} removed`), onError: toastError })} />
     <ConfirmDialog open={device !== null} onOpenChange={close} question={`Remove ${device ? deviceName(device) : 'device'}?`} detail={`It can’t get anything new from ${workspace.name}.`} action="Remove" onConfirm={() => device && removeDevice.mutate({ id: workspace.id, device }, { onSuccess: () => toast(`${deviceName(device)} removed`), onError: toastError })} />
   </Row>
-}
-
-function Request({ workspace, request, name, mine, admin }: { workspace: CloudWorkspaceView; request: DeviceRequest; name: string; mine: boolean; admin: boolean }) {
-  const { device, at } = request
-  const title = request.name ?? 'computer'
-  const answer = useAnswer({ workspace: workspace.id, request, label: mine ? title : `${name}’s ${title}` })
-  if (!admin && !mine) return null
-  return <div className="flex flex-wrap items-center gap-3 pr-2.5 pb-3 pl-[50px] phone:items-start phone:pl-2.5">
-    <DeviceIcon kind="mac" />
-    <span className="grid min-w-0 flex-1 gap-1.5">
-      <span className="text-[13px] font-medium">{mine ? `${title} asked to join as you` : `${name}’s ${title} wants to join`}</span>
-      <span className="text-[12px] text-mute"><DeviceMeta device={{ kind: 'mac', name: title, os: request.os ?? undefined, when: `${ago(at)} ago` }} /></span>
-      {mine && <span className="text-[12px] text-body">If it isn’t yours, deny it.</span>}
-    </span>
-    <span className="flex gap-2 phone:w-full phone:justify-end phone:*:h-11 phone:*:flex-1 phone:*:justify-center phone:*:rounded-xl">
-      <Button type="button" variant="ghost" className={PILL} disabled={answer.busy} onClick={mine ? answer.notMe : answer.deny}>{mine ? 'Not me' : 'Deny'}</Button>
-      {admin && !mine && <Button type="button" variant="primary" disabled={answer.busy} className={cn(PILL, 'gap-1.5 bg-[#12a150] text-white hover:bg-[#0f8a44]')} onClick={answer.approve}><I icon={FingerPrintIcon} size={14} />{request.checked ? 'Review' : 'Approve'}</Button>}
-    </span>
-    {answer.dialog}
-  </div>
 }
 
 function InviteButton({ workspace }: { workspace: CloudWorkspaceView }) {

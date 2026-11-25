@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 
 const PACKAGES = new URL('../../../', import.meta.url)
-const ROOTS = ['runtime/src', 'app/src', 'desktop/src', 'desktop/scripts', 'common/src']
+const ROOTS = ['runtime/src', 'app/src', 'common/src']
 const CLIENT = ['common/src/cloud/', 'common/src/tunnel/']
 const RULES: [string, RegExp][] = [
   ['a Cloud URL', /(?<!common\/cloud)\/v1\/(teams|sessions|sign-ins|me|join-codes|watch|tunnels|relay|events|oauth-[a-z-]+|member-lists|letters|invites|join-requests|key-boxes|files|account|auth)\b/],

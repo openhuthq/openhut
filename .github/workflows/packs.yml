@@ -34,12 +34,12 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - uses: actions/cache@v4
         with:
-          path: packages/desktop/dist/native-cache
-          key: native-runtime-${{ runner.os }}-${{ hashFiles('install/native-runtime.json', 'packages/desktop/scripts/pack-hermes.mjs') }}
+          path: packages/release/dist/native-cache
+          key: native-runtime-${{ runner.os }}-${{ hashFiles('install/native-runtime.json', 'packages/release/scripts/pack-hermes.mjs') }}
       - name: Build the packs
         run: |
           umask 022
-          npm -w @openhut/desktop run build && npm -w @openhut/desktop run pack-backend && node scripts/pack.ts packs
+          npm -w @openhut/release run build && npm -w @openhut/release run pack-backend && node scripts/pack.ts packs
           ls -l packs
           { echo "Packs built in $(( $(date +%s) - START ))s from checkout (target 300s)"; echo '```'; shasum -a 512 packs/*.tgz; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           cat "$GITHUB_STEP_SUMMARY"
@@ -50,7 +50,7 @@ jobs:
           # Promote pins the image CI's server job pushed; a dry run pins a stand-in digest.
           IMAGE=ghcr.io/openhuthq/runtime@sha256:$(printf dry | sha256sum | cut -c1-64) BUILD=dry BASE=https://openhut.dev/install.sh TGZ='https://dl.openhut.dev/packs/@SHA512@' scripts/release.sh
           cp dist/install.sh dist/openhut.tgz packs/
-          node scripts/release-key.ts sign "$RUNNER_TEMP/test.pem" packs "$(node -p "require('./packages/desktop/package.json').version")"
+          node scripts/release-key.ts sign "$RUNNER_TEMP/test.pem" packs "$(node -p "require('./packages/runtime/package.json').version")"
           node -e 'const f = require("./packs/release.json").files, h = (n) => require("crypto").createHash("sha512").update(require("fs").readFileSync("packs/" + n)).digest("base64")
             for (const n of ["install.sh", "openhut.tgz"]) if (f[n] !== h(n)) throw new Error(`release.json does not sign ${n}`)'
           grep -q "^OPENHUT_TGZ=\"https://dl.openhut.dev/packs/$(shasum -a 512 packs/openhut.tgz | cut -d' ' -f1)\"$" packs/install.sh

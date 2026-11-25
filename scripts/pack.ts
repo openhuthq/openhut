@@ -1,4 +1,4 @@
-// Builds the three packs from packages/desktop/dist (run `npm -w @openhut/desktop run build && npm -w @openhut/desktop run pack-backend` first):
+// Builds the three packs from packages/release/dist (run `npm -w @openhut/release run build && npm -w @openhut/release run pack-backend` first):
 // openhut-app.tgz (renderer, server and agentd JS, hermes-plugins: the same on every OS), openhut-runtime-<platform>.tgz (Hermes,
 // Python, Node) and openhut-native-<platform>.tgz (agent-browser). Each has a manifest .json with every file's sha512. Paths are
 // relative to the backend folder, so the three packs extract into one tree laid out like dist/backend.
@@ -10,11 +10,11 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGzip } from 'node:zlib'
 
-const DIST = process.env.OPENHUT_PACK_DIST ?? join(import.meta.dirname, '../packages/desktop/dist')
+const DIST = process.env.OPENHUT_PACK_DIST ?? join(import.meta.dirname, '../packages/release/dist')
 const BACKEND = join(DIST, 'backend')
 const MTIME = 946684800 // 2000-01-01, any fixed time works
 const PLATFORM = `${process.platform}-${process.arch}`
-const version: string = JSON.parse(readFileSync(join(import.meta.dirname, '../packages/desktop/package.json'), 'utf8')).version
+const version: string = JSON.parse(readFileSync(join(import.meta.dirname, '../packages/runtime/package.json'), 'utf8')).version
 
 type Entry = { path: string; abs: string; kind: 'file' | 'dir' | 'link'; mode: number }
 

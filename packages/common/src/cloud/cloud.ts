@@ -147,10 +147,6 @@ export const LockedWorkspace = z.object({ name: z.optional(Locked.check(z.maxLen
 export const CloudWorkspace = z.object({ id: Id, object: z.literal('workspace'), name: z.nullable(z.string()), site: z.optional(z.nullable(z.string())) })
 export type CloudWorkspace = z.infer<typeof CloudWorkspace>
 
-export const KEY_BOX_KINDS = ['passkey', 'kit', 'kit-confirmed'] as const
-export const KeyBox = z.object({ object: z.literal('key_box'), kind: z.enum(KEY_BOX_KINDS), body: Locked, by: z.optional(DeviceKey), signature: z.optional(Signature), savedAt: z.optional(Timestamp) })
-export type KeyBox = z.infer<typeof KeyBox>
-
 export const Here = z.object({ object: z.literal('here'), from: DeviceKey, body: Locked })
 export type Here = z.infer<typeof Here>
 
@@ -224,24 +220,14 @@ export type Backup = z.infer<typeof Backup>
 export const AskAdmin = z.object({ name: z.string().check(z.maxLength(64)), os: z.string().check(z.maxLength(32)) })
 export type AskAdmin = z.infer<typeof AskAdmin>
 
-export const FACES = 12
-const FACE_COLORS = ['Teal', 'Cream', 'Coral', 'Orange', 'Green', 'Mint', 'Blue', 'Rose', 'Yellow', 'Lilac', 'Periwinkle', 'Pink']
-const FACE_WEAR = ['a cap', 'a headset', 'a beanie', 'a crown', 'an antenna', 'a party hat', 'a top hat', 'a sprout', 'a halo', 'glasses', 'shades', 'a monocle']
 const CREATURES = ['Tilly', 'Moss', 'Bea', 'Duke', 'Sunny', 'Nibs', 'Wally', 'Sprig', 'Pip', 'Fig', 'Ziggy', 'Rosie']
-export function faceName(index: number): string {
-  return `${FACE_COLORS[(index * 5) % FACE_COLORS.length]} face with ${FACE_WEAR[index % FACE_WEAR.length]}`
-}
 export function creatureName(index: number): string {
   return CREATURES[index % CREATURES.length]
 }
 export const KNOCK_MS = 15 * 60_000
-export const ApproveRequest = z.object({ faces: z.optional(z.array(z.number().check(z.int(), z.minimum(0), z.maximum(FACES - 1))).check(z.length(2))) })
-export type ApproveRequest = z.infer<typeof ApproveRequest>
-export const DenyRequestQuery = z.object({ why: z.optional(z.enum(['mismatch', 'not-me'])) })
-export type DenyRequestQuery = z.infer<typeof DenyRequestQuery>
 export const RemoveDeviceQuery = z.object({ lost: z.optional(z.enum(['true'])) })
 export type RemoveDeviceQuery = z.infer<typeof RemoveDeviceQuery>
-export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null), server: z._default(z.boolean(), false), checked: z._default(z.boolean(), false), reviewed: z._default(z.boolean(), false), faces: z._default(z.nullable(z.array(z.number())), null), location: z._default(z.nullable(z.object({ city: z.nullable(z.string()), country: z.string(), countryCode: z.string() })), null), newCountry: z._default(z.boolean(), false) })
+export const DeviceRequest = z.object({ device: DeviceKey, email: Email, at: Timestamp, name: z._default(z.nullable(z.string()), null), os: z._default(z.nullable(z.string()), null), server: z._default(z.boolean(), false), location: z._default(z.nullable(z.object({ city: z.nullable(z.string()), country: z.string(), countryCode: z.string() })), null), newCountry: z._default(z.boolean(), false) })
 export type DeviceRequest = z.infer<typeof DeviceRequest>
 
 export const DeleteNotice = z.object({ by: DeviceKey, signedAt: z.number(), signature: Signature })
@@ -269,24 +255,15 @@ export const Cloud = z.object({
   device: z.nullable(DeviceKey),
   workspace: z.nullable(z.object({ id: Id, version: Version, members: z.array(Member) })),
   keyStore: z.enum(['keychain', 'file']),
-  kit: z.nullable(z.object({ savedAt: Timestamp, differs: z.boolean() })),
-  kitInCloud: z.boolean(),
-  cloudKit: z._default(z.nullable(z.object({ id: z.string(), savedAt: z.nullable(Timestamp) })), null),
   backup: Backup,
   signInError: z.nullable(z.string()),
-  keptAccount: z.nullable(Email),
   devices: z.array(z.object({ key: DeviceKey, here: z.boolean(), addedAt: z.nullable(Timestamp), name: z.nullable(z.string()), kind: z.enum(['mac', 'server']), online: z._default(z.boolean(), false), os: z._default(z.nullable(z.string()), null), heard: z._default(z.boolean(), true), joined: z._default(z.nullable(z.union([z.object({ how: z.literal('recovery') }), z.object({ how: z.literal('approved'), by: z.nullable(z.string()) })])), null) })),
-  passkey: z.boolean(),
-  encryption: z.boolean(),
-  touchIdOff: z._default(z.boolean(), false),
-  youngUntil: z._default(z.nullable(Timestamp), null),
   needsSignIn: z.boolean(),
   workspaces: z._default(z.array(CloudWorkspaceView), []),
-  asking: z._default(z.nullable(z.object({ rooms: z.array(z.object({ admins: z.array(Email), own: z._default(z.boolean(), false) })), denied: z.boolean(), error: z._default(z.nullable(z.string()), null), name: z._default(z.nullable(z.string()), null), reviewed: z._default(z.boolean(), false), faces: z._default(z.nullable(z.array(z.number())), null), missed: z._default(z.boolean(), false) })), null),
+  asking: z._default(z.nullable(z.object({ rooms: z.array(z.object({ admins: z.array(Email), own: z._default(z.boolean(), false) })), denied: z.boolean(), error: z._default(z.nullable(z.string()), null), name: z._default(z.nullable(z.string()), null) })), null),
   canAsk: z._default(z.boolean(), false),
   rotate: z._default(z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() })), []),
   gone: z._default(z.array(z.object({ name: z.string(), why: z.enum(['removed', 'deleted']), owner: z._default(z.nullable(z.string()), null) })), []),
-  turnedDown: z._default(z.array(z.object({ device: z.string(), workspace: z.string(), name: z.nullable(z.string()), email: z.nullable(Email), place: z.nullable(z.string()), why: z.enum(['mismatch', 'not-me']), at: Timestamp })), []),
 })
 export type Cloud = z.infer<typeof Cloud>
 
@@ -296,25 +273,6 @@ export type StartCloudSignIn = z.infer<typeof StartCloudSignIn>
 export const PasteSignInCode = z.object({ code: z.string().check(z.maxLength(200)) })
 export type PasteSignInCode = z.infer<typeof PasteSignInCode>
 export type CloudAuthorization = z.infer<typeof CloudAuthorization>
-
-export const RecoveryKit = z.object({ object: z.literal('recovery_kit'), words: z.array(z.string()), ask: z.array(z.number().check(z.int())), kitId: z.string(), madeAt: Timestamp, device: z.string() })
-export type RecoveryKit = z.infer<typeof RecoveryKit>
-export const CreateWebLink = z.object({ path: z.string().check(z.regex(/^\/(?!\/)[^#\s\\]{0,500}$/, 'Send the page as a path on this site, like /agents/ag_1.')) })
-export type CreateWebLink = z.infer<typeof CreateWebLink>
-export const WebLink = z.object({ object: z.literal('web_link'), url: z.string(), expiresAt: Timestamp })
-export type WebLink = z.infer<typeof WebLink>
-
-const Prf = canonical({ length: 43, message: 'Send the passkey’s PRF output as 32 bytes of base64url.' })
-export const UnlockCloud = z.union([z.object({ words: z.array(z.string().check(z.maxLength(40))).check(z.length(12)) }), z.object({ prf: Prf })])
-export type UnlockCloud = z.infer<typeof UnlockCloud>
-
-export const AddPasskey = z.object({ prf: Prf })
-export type AddPasskey = z.infer<typeof AddPasskey>
-
-export const SetEncryption = z.object({ on: z.boolean() })
-export type SetEncryption = z.infer<typeof SetEncryption>
-export const EncryptionPasskey = z.object({ id: Base64, publicKey: Base64 })
-export type EncryptionPasskey = z.infer<typeof EncryptionPasskey>
 
 export const CreateCloudInvite = z.object({ workspace: Id, email: z.pipe(z.string().check(z.trim(), z.toLowerCase()), Email), role: InviteRole })
 export type CreateCloudInvite = z.infer<typeof CreateCloudInvite>

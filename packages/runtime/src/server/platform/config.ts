@@ -52,7 +52,6 @@ export const config = {
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))).version,
   build: BUILD,
   join: env.get('OPENHUT_JOIN').asString(), // a join code: a new server joins this team on first start
-  appScheme: env.get('OPENHUT_APP_SCHEME').asString(), // the desktop app's URL scheme, to return to after sign-in
   name: env.get('OPENHUT_NAME').asString(), // this computer's name, instead of the hostname
   claudeBin: fileURLToPath(new URL('../../../../../bin/claude', import.meta.url)),
   claudeHostBin: env.get('OPENHUT_CLAUDE').asString() ?? (BIN ? join(BIN, process.platform === 'win32' ? 'claude.exe' : 'claude') : fileURLToPath(new URL(`../../../../../bin/${process.platform === 'darwin' ? 'claude-darwin' : 'claude'}`, import.meta.url))), // the Claude CLI the server runs itself

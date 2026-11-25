@@ -9,7 +9,7 @@ import { useAgents } from '@/features/agents/api'
 import { nameOf, useSignOut } from '@/features/cloud/api'
 import { Window } from '@/features/cloud/step'
 import { chooseWorkspace, useGate, useInvitePreview, useJoin } from '@/features/cloud/workspaces'
-import { forgetInvite, INVITE_PAGE, inviteOf, keepInvite } from '@/features/join/invite'
+import { INVITE_PAGE, inviteOf } from '@/features/join/invite'
 import { navigate, open } from '@/lib/router'
 
 const BIG = 'mt-2 h-10 w-[300px] justify-center phone:h-12 phone:w-full'
@@ -37,16 +37,12 @@ export function CloudJoin() {
   const signOut = useSignOut({ stay: true })
   useEffect(() => {
     if (!joined) return
-    forgetInvite()
     chooseWorkspace(joined.id)
     navigate('/', true)
   }, [joined])
   if (entered) return <Entered team={entered} />
   if (joined) return null
-  const leave = () => {
-    forgetInvite()
-    navigate('/', true)
-  }
+  const leave = () => navigate('/', true)
   const error = preview.error ?? join.error
   if (error) {
     const status = error instanceof RequestError ? error.status : 0
@@ -69,7 +65,6 @@ export function CloudJoin() {
   if (!invite) return <Window><Hut mood="looking" className="size-[84px]" /><p className="m-0 text-[14px] text-body">Opening your invite…</p></Window>
   const accept = () => join.mutate(link, {
     onSuccess: () => {
-      forgetInvite()
       chooseWorkspace(invite.workspace)
       setEntered({ id: invite.workspace, name: invite.name, from: invite.from })
     },
@@ -136,7 +131,6 @@ export function JoinLinkDialog() {
     event.preventDefault()
     const path = joinPathOf(String(new FormData(event.currentTarget).get('link') ?? ''))
     if (!path) return
-    keepInvite(path)
     navigate(path)
   }
   return <Dialog size="narrow" label="Join with a link" onClose={close}>

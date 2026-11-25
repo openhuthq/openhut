@@ -9,8 +9,6 @@
 <p>Self-improving agents in Slack and WhatsApp, on your own server.</p>
 
 <p>
-<a href="https://openhut.dev/download/mac?from=github"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/mac-dark.png"><img src="docs/readme/buttons/mac-light.png" alt="Download for Mac" height="48"></picture></a>
-<a href="https://openhut.dev/download/linux?from=github"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/linux-dark.png"><img src="docs/readme/buttons/linux-light.png" alt="Download for Linux" height="48"></picture></a>
 <a href="https://openhut.dev/docs"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/buttons/start-dark.png"><img src="docs/readme/buttons/start-light.png" alt="Get started" height="48"></picture></a>
 </p>
 
@@ -36,7 +34,7 @@ On an always-on computer you add, watch them work live. Take over any time.
 
 <p align="center"><img src="docs/readme/where.gif" alt="Ops moves from This Mac to ops-server and back; Support, Growth and Scout stay on the always-on server" width="100%"></p>
 
-On your Mac or PC, or on your own server. On Linux, each agent is sealed in its own box.
+On Cloud, a computer we run for you, or on your own Linux server, where each agent is sealed in its own box.
 
 <table>
 <tr>

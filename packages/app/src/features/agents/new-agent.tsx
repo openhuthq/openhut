@@ -117,7 +117,7 @@ function useRunsOn(): { computers: Computer[]; cloud?: string } {
   const cloud = joinedId ?? CLOUD_PICK
   const joined = !!joinedId
   const listed = joined ? computers.map((each) => each.id === cloud ? { ...each, name: 'Cloud' } : each)
-    : [...computers, { id: cloud, name: 'Cloud', kind: 'server' as const, url: '', online: true, features: { whatsapp: false, browser: false }, appTooOld: false, runtimeTooOld: false }]
+    : [...computers, { id: cloud, name: 'Cloud', kind: 'server' as const, url: '', online: true, features: { whatsapp: false, browser: false }, runtimeTooOld: false }]
   return { computers: listed, cloud: joined ? cloud : CLOUD_PICK }
 }
 

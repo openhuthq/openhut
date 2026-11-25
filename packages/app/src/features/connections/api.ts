@@ -5,7 +5,6 @@ import { Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, t
 import { request } from '@/lib/api-client'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
 import { asked } from '@/features/connections/asked'
-import { isPhone } from '@/lib/native'
 import { navigate } from '@/lib/router'
 
 const CONNECTION_LIST = List(Connection)
@@ -51,7 +50,6 @@ export function useAuthorizeConnection() {
   }, [])
   return useMutation({
     mutationFn: async (body: CreateConnectionAuthorization) => {
-      if (isPhone()) throw new Error('Connect this app from OpenHut on your computer.')
       const started = await request({ schema: ConnectionAuthorization, path: '/api/connection-authorizations', method: 'POST', body })
       window.open(started.authorizationUrl, '_blank', 'noopener')
       for (let waited = 0; live.current && waited < SIGN_IN_WAIT_MS; waited += SIGN_IN_POLL_MS) {

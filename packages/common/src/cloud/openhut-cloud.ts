@@ -6,11 +6,10 @@ import { OAuthAuthorization, OAuthToken, type CreateOAuthAuthorization, type Cre
 import { fromBase64, toBase64 } from '../vault/public.ts'
 import { Letter, MemberList, OpenedInvite, type Member, type NewInvite } from './cloud.ts'
 import { ENDPOINTS, pathOf, SignInStarted, type EndpointName } from './endpoints.ts'
-import { commitOfWeb, facesOfWeb } from './faces-web.ts'
 import { bodyOf } from './member-list.ts'
 import { recordsClient, type RecordsOptions } from './records.ts'
 import type { Kind } from './rules.ts'
-import { Credits, JoinCode, JoinedCode, KeyBox, Me, proofOf, requestParts, Session, SIGNATURE_HEADER, type NamedKeyBox, type V1Proof } from './v1/identity.ts'
+import { Credits, JoinCode, KeyBox, Me, proofOf, requestParts, Session, SIGNATURE_HEADER, type NamedKeyBox, type V1Proof } from './v1/identity.ts'
 import { JoinRequest, type NewLetter, type PostMemberList } from './v1/trust.ts'
 
 export type Store = {
@@ -27,8 +26,8 @@ export type Reply = { status: number; json: unknown }
 export type SignIn = { google: { returnTo: string; state?: string } } | { googleCode: string; state?: string } | { joinCode: string }
 export type Redirect = { object: 'redirect'; url: string }
 export type SignedIn = Me & { maker?: string }
-export type KnockState = { step: 'approved' } | { step: 'waiting'; faces: number[] } | { step: 'over'; missed: boolean }
-export type Knock = { team: string; reveal: () => Promise<boolean>; ask: (input: { name: string; os: string; server?: boolean }) => Promise<JoinRequest>; mine: () => Promise<JoinRequest | undefined>; state: () => Promise<KnockState>; cancel: () => Promise<void> }
+export type KnockState = { step: 'approved' } | { step: 'waiting' } | { step: 'over' }
+export type Knock = { team: string; ask: (input: { name: string; os: string; server?: boolean }) => Promise<JoinRequest>; mine: () => Promise<JoinRequest | undefined>; state: () => Promise<KnockState>; cancel: () => Promise<void> }
 export type Watch = { send: (input: { type: 'presence' | 'beat'; workspace: string; body: string }) => void; close: () => void }
 export type WatchSocket = { send: (text: string) => void; close: () => void; addEventListener: (type: 'open' | 'message', listener: (event: { data?: unknown }) => void) => void }
 
@@ -38,7 +37,7 @@ export type Device = {
   firstComputerCode: () => Promise<JoinCode>
   startCloud: () => Promise<CloudComputer>
   cloudComputer: () => Promise<CloudComputer | null>
-  knock: (input: { team: string; nonce: string }) => Knock
+  knock: (input: { team: string }) => Knock
   // wake: a person acted (opened the App, sent a message), so a paused Cloud computer is woken; background dials aren't.
   open: (input: ({ team: string; computer?: string; timeout?: number } | { box: string; timeout?: number }) & { wake?: boolean }) => Promise<Tunnel>
 }
@@ -48,8 +47,6 @@ export type Team = {
   lists: (input?: { after?: number }) => Promise<MemberList[]>
   publish: (change: PostMemberList) => Promise<Reply>
   requests: () => Promise<JoinRequest[]>
-  review: (device: string) => Promise<Reply>
-  deny: (input: { device: string; why?: 'mismatch' | 'not-me' }) => Promise<Reply>
   letters: () => Promise<Letter[]>
   send: (letter: NewLetter & { id?: string }) => Promise<Reply>
   take: (id: string) => Promise<Reply>
@@ -61,15 +58,11 @@ export type Computer = Device & {
   serve: (handlers: Handlers) => () => void
   team: (id: string) => Team
   joinCode: () => Promise<JoinCode>
-  webCode: () => Promise<JoinCode>
-  joinedBy: (code: string) => Promise<string | null>
   deleteAccount: () => Promise<Reply>
   credits: () => Promise<Credits>
   keyBoxes: {
     list: () => Promise<KeyBox[] | null>
-    get: (name: string) => Promise<Reply>
     put: (box: NamedKeyBox) => Promise<Reply>
-    drop: (input: { name: string; by: string; signature: string }) => Promise<Reply>
   }
   watch: (input: { socket: (url: string) => WatchSocket; onMessage: (text: string) => void; onHello?: (error?: unknown) => void }) => Watch
   records: (options: RecordsOptions) => ReturnType<typeof recordsClient>
@@ -83,7 +76,7 @@ export type Computer = Device & {
   routines: { put: (input: { id: string; nextRun: string | null }) => Promise<Reply> }
 }
 
-export const TRUST_CALLS = ['serve', 'team', 'joinCode', 'webCode', 'joinedBy', 'deleteAccount', 'watch', 'oauth'] as const satisfies readonly Exclude<keyof Computer, keyof Device>[]
+export const TRUST_CALLS = ['serve', 'team', 'joinCode', 'deleteAccount', 'watch', 'oauth'] as const satisfies readonly Exclude<keyof Computer, keyof Device>[]
 
 export class CloudError extends Error {
   readonly status: number
@@ -99,7 +92,7 @@ export class ComputersOffline extends Error {
   readonly names: (string | null)[]
   readonly reasons: string[]
   constructor({ names, reasons }: { names: (string | null)[]; reasons: string[] }) {
-    super('None of your computers is online. Open OpenHut on your Mac, then try again.')
+    super('None of your computers is online. Wake one, then try again.')
     this.names = names
     this.reasons = reasons
   }
@@ -219,27 +212,22 @@ function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net:
       throw error
     }),
 
-    knock({ team, nonce }) {
+    knock({ team }) {
       const mine = async () => {
         const me = await key.id()
         return (await requestsOf({ net, team })).find((each) => each.id === me)
       }
-      const reveal = async () => (await net.call({ name: 'putRecord', params: { team, kind: 'join-request', id: await key.id() }, body: { nonce } })).status === 200
       return {
         team,
         mine,
-        reveal,
         async ask({ name, os, server = false }) {
-          const me = await key.id()
-          return net.ok({ name: 'putRecord', params: { team, kind: 'join-request', id: me }, body: { name, os, server, commit: await commitOfWeb({ device: me, nonce }) }, reply: JoinRequest })
+          return net.ok({ name: 'putRecord', params: { team, kind: 'join-request', id: await key.id() }, body: { name, os, server }, reply: JoinRequest })
         },
         async state() {
           const me = await net.ok({ name: 'me', reply: Me })
           if (me.workspaces.some((each) => each.id === team && each.access === 'listed')) return { step: 'approved' }
           const asked = await mine()
-          if (!asked?.asked) return { step: 'over', missed: Boolean(asked?.missed) }
-          if (asked.reviewed && !asked.nonce) await reveal()
-          return { step: 'waiting', faces: await facesOfWeb({ device: asked.id, nonce }) }
+          return asked?.asked ? { step: 'waiting' } : { step: 'over' }
         },
         async cancel() {
           await net.call({ name: 'deleteRecord', params: { team, kind: 'join-request', id: await key.id() } })
@@ -301,8 +289,6 @@ function teamOf({ net, id }: { net: Wire; id: string }): Team {
     lists: ({ after } = {}) => listsOf({ net, team: id, after }),
     publish: (change) => net.call({ name: 'putRecord', params: record('member-list', String(bodyOf(change.list)?.version ?? 0)), body: change }),
     requests: () => requestsOf({ net, team: id }),
-    review: (device) => net.call({ name: 'putRecord', params: record('join-request', device), body: { reviewed: true } }),
-    deny: ({ device, why }) => net.call({ name: 'deleteRecord', params: record('join-request', device), query: { why } }),
     async letters() {
       const reply = await net.call({ name: 'listRecords', params: { team: id, kind: 'letter' } })
       const page = reply.status === 200 ? Page.safeParse(reply.json).data : undefined
@@ -345,8 +331,6 @@ function computerOf({ url, key, store, fetch }: { url: Url; key: ComputerIdentit
 
     team: (id) => teamOf({ net, id }),
     joinCode: () => net.ok({ name: 'createJoinCode', reply: JoinCode }),
-    webCode: () => net.ok({ name: 'createJoinCode', body: { web: true }, reply: JoinCode }),
-    joinedBy: async (code) => (await net.ok({ name: 'getJoinCode', params: { code }, reply: JoinedCode })).device,
     deleteAccount: () => net.call({ name: 'deleteMe' }),
     credits: () => net.ok({ name: 'getCredits', reply: Credits }),
 
@@ -364,9 +348,7 @@ function computerOf({ url, key, store, fetch }: { url: Url; key: ComputerIdentit
         const page = reply.status === 200 ? Page.safeParse(reply.json).data : undefined
         return page ? page.data.flatMap((each) => KeyBox.safeParse(each).data ?? []) : null
       },
-      get: (box) => onHome((team) => net.call({ name: 'getRecord', params: { team, kind: 'key-box', id: box } })),
       put: ({ name: box, ...body }) => onHome((team) => net.call({ name: 'putRecord', params: { team, kind: 'key-box', id: box }, body })),
-      drop: ({ name: box, ...body }) => onHome((team) => net.call({ name: 'deleteRecord', params: { team, kind: 'key-box', id: box }, body })),
     },
 
     watch({ socket, onMessage, onHello }) {

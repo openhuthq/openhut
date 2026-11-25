@@ -1,21 +1,18 @@
 import { useEffect, useRef } from 'react'
-import { LockSync01Icon, Logout03Icon, PencilEdit02Icon } from '@hugeicons/core-free-icons'
+import { Logout03Icon, PencilEdit02Icon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
-import { ConfirmDialog } from '@/components/confirm-button'
 import { Dialog, DialogFoot, DialogHead } from '@/components/ui/dialog'
 import { Tooltip } from '@/components/ui/tooltip'
 import { TeamMark } from '@/components/custom/team-mark'
-import { useChangeKeys, useRemoveMember, useRename, useSetWebsite, useWorkspaces } from '@/features/cloud/workspaces'
+import { useRemoveMember, useRename, useSetWebsite, useWorkspaces } from '@/features/cloud/workspaces'
 import { navigate, open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
-import { notify } from '@/components/custom/toast'
 import { I, PILL } from '@/components/kit'
 import { TeamPeople } from '@/features/people/people'
-import { Row, Rows } from '@/features/settings/kit'
+import { Row } from '@/features/settings/kit'
 import { cn } from '@/lib/utils'
 
-const KEYS_NOTE = 'Locks out lost computers and people you removed. Everyone else stays in.'
 
 export function TeamSettings() {
   const { active } = useWorkspaces()
@@ -88,27 +85,6 @@ export function TeamDangerRows() {
   return <Row icon={<I icon={Logout03Icon} size={20} className="text-fail" />} title="Leave" note="You lose access. What you made stays with the team.">
     <Button type="button" variant="secondary" className={cn(PILL, 'text-fail')} onClick={() => open('leave')}>Leave</Button>
   </Row>
-}
-
-export function ResetEncryptionRow() {
-  const workspace = useWorkspaces().active
-  const opened = useOpen()
-  if (workspace.role === 'member') return null
-  return <Row icon={<I icon={LockSync01Icon} size={20} className="text-hue-amber" />} title="Reset encryption" note={KEYS_NOTE}>
-    <Button type="button" variant="secondary" className={PILL} onClick={() => open('keys')}>Reset</Button>
-    {opened === 'keys' && <KeysConfirm workspace={workspace} />}
-  </Row>
-}
-
-function KeysConfirm({ workspace }: { workspace: CloudWorkspaceView }) {
-  const changeKeys = useChangeKeys()
-  const reset = useRef(false)
-  const changed = () => {
-    toast('Encryption reset')
-    reset.current = true
-  }
-  const close = () => (reset.current && workspace.own ? navigate('/settings/security?open=kit') : open())
-  return <ConfirmDialog open onOpenChange={(still) => still || close()} question={`Reset encryption for ${workspace.name}?`} detail={workspace.own ? `${KEYS_NOTE} You save a new recovery kit after.` : KEYS_NOTE} action="Reset encryption" onConfirm={() => changeKeys.mutateAsync(workspace.id).then(changed)} />
 }
 
 function LeaveConfirm({ workspace }: { workspace: CloudWorkspaceView }) {

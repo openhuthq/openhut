@@ -80,7 +80,7 @@ COPY --from=agent /agent.tar.zst /image /opt/openhut-agent/
 COPY --from=bridge /bridge /var/lib/openhut/whatsapp-bridge
 # The updater and its release checks live here, never in the layer it replaces (R7, SEC6).
 COPY --from=tree /opt/openhut/install/updater.sh /opt/openhut/install/verify-installer.mjs /usr/local/lib/openhut-updater/install/
-COPY --from=tree /opt/openhut/packages/desktop/src/release-key.mjs /usr/local/lib/openhut-updater/packages/desktop/src/
+COPY --from=tree /opt/openhut/packages/release/src/release-key.mjs /usr/local/lib/openhut-updater/packages/release/src/
 RUN mkdir -p /etc/docker && echo '{"runtimes":{"runsc":{"path":"/usr/local/bin/runsc"}}}' > /etc/docker/daemon.json && \
     ln -s /data/etc /etc/openhut && ln -s /data/log /var/log/openhut && ln -s /run/agentd-etc /etc/agentd
 # Agents get the glibc claude; the seat sign-in runs claude here, on Alpine, so it takes the musl build.
@@ -93,9 +93,8 @@ COPY --from=tree /opt/openhut/package.json /opt/openhut/package-lock.json /opt/o
 COPY --from=tree /opt/openhut/packages/runtime/package.json /opt/openhut/packages/runtime/
 COPY --from=tree /opt/openhut/packages/common/package.json /opt/openhut/packages/common/
 COPY --from=tree /opt/openhut/packages/app/package.json /opt/openhut/packages/app/
-COPY --from=tree /opt/openhut/packages/desktop/package.json /opt/openhut/packages/desktop/
+COPY --from=tree /opt/openhut/packages/release/package.json /opt/openhut/packages/release/
 COPY --from=tree /opt/openhut/packages/docs/package.json /opt/openhut/packages/docs/
-COPY --from=tree /opt/openhut/packages/phone/package.json /opt/openhut/packages/phone/
 RUN cd /opt/openhut && npm ci --omit=dev --no-audit --no-fund --loglevel=error >/dev/null && \
     chown -R root:root node_modules && chmod -R go-w node_modules
 

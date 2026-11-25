@@ -226,11 +226,3 @@ export function faceUri({ look, view = 'full', size, tile = false }: { look: Loo
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${VIEWS[view]}" width="${size}" height="${size}">${faceArt({ look, tile: tile && view === 'full' })}</svg>`
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
-
-const WEAR = [...HATS, 'glasses', 'shades', 'monocle'] as const
-
-export function faceLook(index: number): Look {
-  const wear = WEAR[index % WEAR.length]
-  const hat = HATS.find((each) => each === wear) ?? null
-  return { ...randomLook({ seed: 'openhut-face' }), body: (index * 5) % SWATCHES.length, eyes: index % 5, mouth: index % 3, hat, eyewear: hat ? null : EYEWEAR.find((each) => each === wear) ?? null, extra: null }
-}

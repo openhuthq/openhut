@@ -56,10 +56,6 @@ export type Credits = z.infer<typeof Credits>
 
 export const JoinCode = z.object({ object: z.literal('join_code'), code: z.string(), expiresAt: Timestamp })
 export type JoinCode = z.infer<typeof JoinCode>
-export const CreateJoinCode = z.object({ web: z.optional(z.boolean()) })
-export type CreateJoinCode = z.infer<typeof CreateJoinCode>
-export const JoinedCode = z.object({ object: z.literal('join_code'), code: z.string(), device: z.nullable(DeviceKey) })
-export type JoinedCode = z.infer<typeof JoinedCode>
 
 export const DEVICE_KINDS = ['computer', 'runtime', 'viewer', 'kit'] as const
 export const DeviceKind = z.enum(DEVICE_KINDS)
@@ -77,8 +73,8 @@ export const Me = z.object({
 })
 export type Me = z.infer<typeof Me>
 
-export const KEY_BOX_NAME = /^(passkey|kit|kit-confirmed|escrow|workspace-[A-Za-z0-9_-]{8,64})$/
-export const KeyBoxName = z.string().check(z.regex(KEY_BOX_NAME, 'Name a key box passkey, kit, kit-confirmed, escrow or workspace-<id>.'))
+export const KEY_BOX_NAME = /^(escrow|workspace-[A-Za-z0-9_-]{8,64})$/
+export const KeyBoxName = z.string().check(z.regex(KEY_BOX_NAME, 'Name a key box escrow or workspace-<id>.'))
 export const PutKeyBox = z.object({ body: Locked.check(z.maxLength(16_384)), by: DeviceKey, signature: Signature, savedAt: z.number().check(z.int(), z.positive()) })
 export type PutKeyBox = z.infer<typeof PutKeyBox>
 export const NamedKeyBox = z.object({ name: KeyBoxName, ...PutKeyBox.shape })

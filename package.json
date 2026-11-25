@@ -16,12 +16,11 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck && tsc -p scripts",
     "build": "turbo run build",
-    "app": "npm -w @openhut/desktop run build && npm -w @openhut/desktop start",
-    "e2e:app": "npm -w @openhut/desktop run prove",
     "release": "scripts/release.sh",
     "postinstall": "[ ! -f scripts/private.sh ] || sh scripts/private.sh"
   },
   "devDependencies": {
+    "playwright-core": "1.65.0",
     "turbo": "2.5.4",
     "typescript": "7.0.2"
   }

@@ -1,14 +1,5 @@
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 
-type Workspace = Cloud['workspaces'][number]
-export type JoinRequest = { workspace: Workspace; request: Workspace['requests'][number]; mine: boolean; path: string }
-
-export function joinRequests({ cloud }: { cloud: Cloud }): JoinRequest[] {
-  return cloud.workspaces.flatMap((workspace) => workspace.requests
-    .filter((request) => request.email === cloud.email ? workspace.own && workspace.home : workspace.role !== 'member')
-    .map((request) => ({ workspace, request, mine: request.email === cloud.email, path: request.email === cloud.email ? '/settings/computers' : '/settings/people' })))
-}
-
 const KNOWN = 'openhut.devices.known'
 
 export function knownDevices(): Set<string> | null {

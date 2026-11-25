@@ -1,42 +1,32 @@
 ---
-title: Install
-description: Download the app for Mac, Windows or Linux, sign in, make an agent.
+title: Get started
+description: Sign in, pick where your agents run, make an agent.
 icon: sales
 ---
 
 <Steps>
 <Step>
 
-### Download it
-
-- **Mac:** [Download for Mac](https://openhut.dev/download/mac?from=docs). Apple silicon, macOS 14 or later. Open the dmg and drag OpenHut to Applications.
-- **Windows:** [Download for Windows](https://openhut.dev/download/windows?from=docs). x64. Run the installer.
-- **Linux:** [Download the AppImage](https://openhut.dev/download/linux?from=docs), or the [.deb](https://dl.openhut.dev/latest/openhut-x64.deb) for Debian and Ubuntu (`sudo apt install ./openhut-x64.deb`). x64.
-
-</Step>
-<Step>
-
 ### Sign in
 
-Open OpenHut and press **Continue with Google**. Your browser opens; finish there and the app moves on by itself. Everything you make in OpenHut is encrypted on your device. No one can read it, including us. See [OpenHut Cloud](/cloud).
-
-OpenHut needs the internet the first time. While you sign in it gets ready, which takes a minute or two; after that it opens in about ten seconds.
-
-Already use OpenHut on another computer? Sign in with the same Google account and let this one in: see [A new device](/cloud#a-new-device).
+Open [app.openhut.dev](https://app.openhut.dev) and press **Continue with Google**. OpenHut runs in your browser, on any computer or phone. See [OpenHut Cloud](/cloud).
 
 </Step>
 <Step>
 
-### Save your recovery kit
+### Pick where your agents live
 
-A new account asks for it before anything else: one small file with 12 words. We can't reset your key, so with your Google account this file is the way back in if you lose every device. Keep it offline, like a password.
+- **Cloud**: a computer we run for you, paid from your credits. It's ready in a minute or two.
+- **Your own server**: any Linux server with Docker. OpenHut shows one command to run there. See [Computers](/computers).
+
+Add more later in **Settings › Computers**.
 
 </Step>
 <Step>
 
 ### Make your first agent
 
-The app opens on **Make your first agent**. Pick a face and a name, then **Create**. Tell it its job under **What it does**. See [Multiple agents](/agents).
+OpenHut opens on **Make your first agent**. Pick a face and a name, then **Create**. Tell it its job under **What it does**. See [Multiple agents](/agents).
 
 </Step>
 <Step>
@@ -46,29 +36,6 @@ The app opens on **Make your first agent**. Pick a face and a name, then **Creat
 **Settings › Models**, then **Sign in** next to Claude subscription. See [Claude plan](/claude).
 
 </Step>
-<Step>
-
-### Add a computer (optional)
-
-Agents on this computer answer only while it's awake. For agents that stay on, add an always-on Linux computer from **Settings › Computers**. See [Computers](/computers).
-
-</Step>
 </Steps>
 
-Agents on this computer run like any app you install, with your access. On a [computer you add](/computers), each agent is sealed in its own box.
-
-## Keep your Mac awake
-
-**Settings › General**:
-
-- **Keep this Mac awake while agents run.** The screen can still turn off. A closed lid or a sleeping Mac still stops them.
-- **Open at login.** Agents start in the background, without the window.
-
-OpenHut notifies you when an agent replies while the window is closed or in the background, and when an agent stops answering.
-
-Closing the window on a Mac keeps agents running. On Windows and Linux it quits the app, and this computer's agents stop until you open it again.
-
-## Troubleshooting
-
-- **Intel Mac.** Not supported: the Mac app needs Apple silicon. Use the Linux app on an x64 Linux machine instead.
-- **Agents stop answering at night.** Your Mac went to sleep. Turn on **Keep this Mac awake**, or move the agent to an always-on [computer](/computers).
+On Cloud and on a [computer you add](/computers), each agent runs in its own process, apart from the others.

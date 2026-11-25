@@ -24,10 +24,6 @@ test('the Cloud’s world: no plaintext, key or token appears in any byte a keyr
   const teammate = toBase64((await identity()).publicKey)
   const laptop = toBase64((await identity()).publicKey)
   cloud({ list: account.list, box: await keysService.workspaceBox({ account }) })
-  cloud(await keysService.signBox({ account, name: 'kit-confirmed', body: 'x', savedAt: 1 }))
-  const kit = await keysService.newKit()
-  cloud(kit.box)
-  cloud(await keysService.passkeyBox(newKey()))
   cloud(await keysService.accountLetter(laptop))
   cloud(await keysService.escrowBox({ account, to: toBase64((await identity()).publicKey) }))
   cloud(await keysService.addDevice({ device: laptop, name: 'Laptop' }))
@@ -60,12 +56,10 @@ test('the Cloud’s world: no plaintext, key or token appears in any byte a keyr
   const wire = JSON.stringify(sent)
   const bytes = Buffer.from(wire).toString('latin1')
   for (const secret of secrets) for (const form of forms(secret)) assert.equal(wire.includes(form), false, 'a raw key reached the Cloud')
-  // single words collide with JSON keys and values ("list", "name", "false"), so look for two kit words side by side
-  for (let i = 1; i < kit.words.length; i++) assert.equal(new RegExp(`\\b${kit.words[i - 1]}\\W{1,3}${kit.words[i]}\\b`).test(wire), false, 'kit words reached the Cloud')
   for (const plain of [SECRET, TOKEN, 'refresh-token-that-never-leaves']) {
     assert.equal(bytes.includes(plain), false, `${plain} reached the Cloud`)
     assert.equal(wire.includes(Buffer.from(plain).toString('base64url')), false)
   }
   assert.equal(sent.filter((each) => each !== null && each !== undefined).length, sent.length, 'every operation produced something to send')
-  assert.equal(sent.length, 15)
+  assert.equal(sent.length, 12)
 })

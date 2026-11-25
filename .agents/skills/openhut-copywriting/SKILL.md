@@ -8,8 +8,8 @@ Use this before writing or changing any text a person reads in the app or on ope
 
 **In the app**
 - Titles, labels and benefits are short words or phrases ("Backups", "Teams"), not sentences. But a line someone reads to understand a consequence is a full, plain sentence a person would say out loud: "Your agents and chats stay on this computer. You can't undo this.", not "This Mac keeps its agents and chats. Can't be undone."
-- One call to action per screen, a plain verb ("Enable cloud", "Save kit", "Restart now"). The button says exactly what happens.
-- Name things the way people know them: OpenHut Cloud, recovery kit, Touch ID, agent, Mac, phone. Not internal words (record, relay, vault, key, hash, token, workspace key, PRF).
+- One call to action per screen, a plain verb ("Enable cloud", "Add a computer", "Restart now"). The button says exactly what happens.
+- Name things the way people know them: OpenHut Cloud, Cloud, agent, computer, team. Not internal words (record, relay, vault, key, hash, token, workspace key, PRF).
 - Errors say what went wrong and what to do next, no apology, no codes.
 - Keep the same word for the same thing everywhere (one name per feature, matching Settings and the docs).
 - No faces in option rows; plain icons. Characters are for big pictures and for agents and people.
@@ -17,22 +17,17 @@ Use this before writing or changing any text a person reads in the app or on ope
 **One word for each thing** (use these, everywhere, errors included)
 - Turning the cloud on: **Enable** ("Enable cloud", "Enable OpenHut Cloud…"). Not turn on, set up.
 - What the cloud keeps: **agents, chats and settings**.
-- Getting them back on a new Mac: **restore** ("Restoring your agents…"). Not bring back.
-- Privacy: **End-to-end encrypted / We can't read your data.**
-- Unlocking with a fingerprint: **Touch ID** (never "passkey" in user text).
-- New encryption for a team: **Reset encryption** (not change keys).
 - Passing a team on: **Make someone else the owner** (not hand over).
 - Call it a **team**, never a workspace, in anything people read ("Join Mo’s team", "Mo’s team"). Slack and Google Workspace keep their own word.
-- The 12 words and their file: **recovery kit** (not recovery words).
-- Where an agent runs: **sealed in its own box** only on Linux (gVisor); on Mac and Windows it runs **like any app you install, with your access**. Never claim a sandbox or box on Mac or Windows.
+- Where an agent runs: **Cloud** (a computer we host) or **your own computer** (a Linux server, where it is **sealed in its own box**, gVisor).
 - Agent states: **Running**, **Stopped**, **Stopped unexpectedly**, **Model not connected**. Tools an agent may not use: **Blocked**.
 - What an agent may use: **can use** (not grant, call). The machine: **computer** (not server, runner, agentd).
-- Say **computer**, not Mac: OpenHut runs on Mac, Windows and Linux. Say Mac only for something that is truly Mac-only (Touch ID, the Mac app download).
+- Say **computer**, not server or Mac: agents run on Cloud or on a Linux server you add; OpenHut itself is a web app.
 - Errors carry no codes ("HTTP 500") and always end with what to do next ("Try again.", "OpenHut tries again.").
 
 **On the site and in announcements**
 - Say outcomes, not how it works: "Your agents on every computer", not "encrypted records sync through the cloud". The mechanism lives behind a "How it works" or "Security" link.
-- Never overclaim. Check claims against the docs and code first. The known traps are in `private/brain/openhut-site.md` ("Showing OpenHut Cloud on the site"): the phone never reads cloud data, no live cursors, removal doesn't change keys, restored agents don't start by themselves, the cloud does see emails, members, device names and timing.
+- Never overclaim. Check claims against the docs and code first. The known traps are in `private/brain/openhut-site.md` ("Showing OpenHut Cloud on the site"): no live cursors, removal doesn't change keys, restored agents don't start by themselves, the cloud does see emails, members, device names and timing.
 
 **Write like Notion and Linear** (the owner's references; their home pages, 2026-11-22)
 - Titles are 2 to 5 words: a noun phrase ("Planning and monitoring", "Changelog") or a verb and its object ("Capture knowledge", "Find answers").

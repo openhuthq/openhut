@@ -6,10 +6,10 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const ROOT = resolve(import.meta.dirname, '../../../../..')
-const RUNTIME = join(ROOT, 'packages/desktop/dist/backend/runtime')
+const RUNTIME = process.env.AGENTD_HERMES ?? ''
 const PYTHON = join(RUNTIME, 'python/bin/python3')
 
-test('the openhut-ui plugin points Slack\'s client and file downloads at the gateway', { skip: !existsSync(PYTHON) && 'no bundled Hermes runtime (npm -w @openhut/desktop run pack-backend)' }, () => {
+test('the openhut-ui plugin points Slack\'s client and file downloads at the gateway', { skip: !existsSync(PYTHON) && 'no Hermes runtime (set AGENTD_HERMES)' }, () => {
   const stub = mkdtempSync(join(tmpdir(), 'slack-plugin-'))
   mkdirSync(join(stub, 'gateway'))
   writeFileSync(join(stub, 'gateway/__init__.py'), '')

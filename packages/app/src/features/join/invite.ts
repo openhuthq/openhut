@@ -1,5 +1,3 @@
-import { desktop } from '../../lib/desktop.ts'
-
 const HASH = /^#(?:([A-Za-z0-9_-]{1,430})#)?(([A-Za-z0-9_-]{8,64})\.[A-Za-z0-9_-]{43})$/
 const EMAIL = /^[^\s@]+@[^\s@]+$/
 
@@ -11,18 +9,6 @@ export function inviteOf(hash: string): Invite | undefined {
   const parsed = HASH.exec(hash)
   if (!parsed?.[2] || !parsed[3]) return undefined
   return { link: `${INVITE_PAGE}#${parsed[2]}`, workspace: parsed[3], ...hintOf(parsed[1]) }
-}
-
-export function forgetInvite() {
-  void desktop?.invite?.forget().catch(() => undefined)
-}
-
-export function keepInvite(path: string) {
-  void desktop?.invite?.keep?.(path).catch(() => undefined)
-}
-
-export function clearCarriedInvite() {
-  void desktop?.invite?.clearClipboard().catch(() => undefined)
 }
 
 function hintOf(part: string | undefined): { email: string | undefined; from: string | undefined; team: string | undefined } {

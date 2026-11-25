@@ -36,17 +36,6 @@ async function grow({ ws, signer, change }: { ws?: string; signer?: Identity; ch
 
 const joined = (email: string, role: 'owner' | 'admin' | 'member', devices: string[]) => (body: MemberListBody, at: number): Partial<MemberListBody> => ({ members: [...body.members, { email, role, devices }], added: { ...body.added, ...Object.fromEntries(devices.map((each) => [each, at])) } })
 
-test('the kit state tells a saved kit from one still waiting for its words to be checked', async () => {
-  await signedIn()
-  assert.deepEqual(keysService.kitState(), { saved: null, pending: null })
-  await keysService.setKit({ box: 'b1', savedAt: 's1', confirmed: false })
-  assert.deepEqual(keysService.kitState(), { saved: null, pending: 'b1' })
-  await keysService.setKit({ box: 'b2', savedAt: 's2' })
-  assert.deepEqual(keysService.kitState(), { saved: { box: 'b2', savedAt: 's2' }, pending: null })
-  await keysService.setKit({ box: 'b3', savedAt: 's3', confirmed: true })
-  assert.deepEqual(keysService.kitState(), { saved: { box: 'b3', savedAt: 's3', confirmed: true }, pending: null })
-})
-
 test('asked rooms round-trip, and an empty list clears them', async () => {
   await signedIn()
   assert.deepEqual(keysService.asked(), [])
@@ -120,21 +109,6 @@ test('adding a device lists it under me only, as a runtime unless told otherwise
   assert.equal(await keysService.addDevice({ device: key(mac), name: null }), null)
 })
 
-test('only boxes I signed are mine; the kit and passkey boxes need only the signature, a workspace box must hold this room’s secret', async () => {
-  const account = await signedIn()
-  const iso = <T extends { savedAt: number }>(made: T) => ({ ...made, savedAt: new Date(made.savedAt).toISOString() })
-  const random = toBase64(newKey())
-  for (const name of ['kit', 'kit-confirmed', 'passkey']) assert.equal(await keysService.boxIsMine({ account, name, box: iso(await keysService.signBox({ account, name, body: random, savedAt: 1 })) }), true, name)
-  const name = `workspace-${account.workspace.id}`
-  assert.equal(await keysService.boxIsMine({ account, name, box: iso(await keysService.signBox({ account, name, body: random, savedAt: 1 })) }), false)
-  const stale = await keysService.workspaceBox({ account: { ...account, workspace: { ...account.workspace, key: toBase64(newKey()) } } })
-  assert.equal(await keysService.boxIsMine({ account, name, box: iso(stale) }), false)
-  const real = iso(await keysService.workspaceBox({ account }))
-  assert.equal(await keysService.boxIsMine({ account, name, box: real }), true)
-  assert.equal(await keysService.boxIsMine({ account, name, box: { ...real, signature: undefined } }), false)
-  assert.equal(await keysService.boxIsMine({ account, name, box: { ...real, savedAt: undefined } }), false)
-})
-
 test('Not me refuses a list that also names this Mac, and drops a runtime added at the same moment as the stolen device', async () => {
   await signedIn()
   const [stolen, planted] = await Promise.all([identity(), identity()])
@@ -147,7 +121,7 @@ test('Not me refuses a list that also names this Mac, and drops a runtime added 
   assert.deepEqual([body?.removed.includes(key(stolen)), body?.removed.includes(key(planted)), body?.removed.includes(me)], [true, true, false])
 })
 
-test('the 12 words bring back the vault key and own key; a Mac still on the list restores without a new list', async () => {
+test('the account key brings back the vault key and own key; a Mac still on the list restores without a new list', async () => {
   const account = await signedIn()
   const sara = await identity()
   const pinned = toBase64(newKey())
@@ -156,11 +130,9 @@ test('the 12 words bring back the vault key and own key; a Mac still on the list
   const now = keysService.account()
   assert.ok(now)
   const chain = [account.list, now.list]
-  const kit = await keyring.kit()
-  const workspaces = async () => [{ id: now.workspace.id, key: (await keysService.workspaceBox({ account: now })).body, chain }]
-  const boxes = await workspaces()
+  const boxes = [{ id: now.workspace.id, key: (await keysService.workspaceBox({ account: now })).body, chain }]
   await keysService.relock({ sub: now.sub, email: now.email })
-  const back = await keyring.restore({ from: { words: kit.words, kit: kit.box }, workspaces: async () => boxes })
+  const back = await keysService.restoreWith({ key: fromBase64(now.key), workspaces: boxes })
   assert.ok(back)
   assert.deepEqual([back.vault, back.workspace.own, back.list.bytes], [account.vault, pinned, now.list.bytes])
   assert.deepEqual(bodyOf(back.list)?.members.find((member) => member.email === 'sara@example.com')?.devices, [key(sara)])
@@ -174,13 +146,12 @@ test('a fresh Mac joins only my member entry, and a team box can’t stand in fo
   assert.ok(now)
   const chain = [account.list, now.list]
   const team = await roomKeys.createTeam()
-  const kit = await keyring.kit()
   const home = { id: now.workspace.id, key: (await keysService.workspaceBox({ account: now })).body, chain }
   const teamBox = { id: team.workspace.id, key: (await keysService.workspaceBox({ account: now, room: team })).body, chain: [team.list] }
   await keysService.forgetHere()
   await keysService.setLocked({ sub: now.sub, email: now.email })
-  assert.equal(await keyring.restore({ from: { words: kit.words, kit: kit.box }, workspaces: async () => [teamBox] }), null)
-  const back = await keyring.restore({ from: { words: kit.words, kit: kit.box }, workspaces: async () => [home, teamBox] })
+  assert.equal(await keysService.restoreWith({ key: fromBase64(now.key), workspaces: [teamBox] }), null)
+  const back = await keysService.restoreWith({ key: fromBase64(now.key), workspaces: [home, teamBox] })
   const body = bodyOf(back?.list)
   const me = await keysService.deviceKey()
   assert.deepEqual(body?.members.map((member) => member.devices.includes(me)), [true, false])
@@ -188,26 +159,22 @@ test('a fresh Mac joins only my member entry, and a team box can’t stand in fo
   assert.equal(back?.teams, undefined, 'my kit isn’t listed in the team, so the team box doesn’t open it')
 })
 
-test('restore by passkey and by an approval letter, and signedHere tells who signed the restored list', async () => {
+test('restore by an approval letter, and signedHere tells who signed the restored list', async () => {
   const account = await signedIn()
-  const prf = newKey()
-  const passkey = await keysService.passkeyBox(prf)
   const boxes = [{ id: account.workspace.id, key: (await keysService.workspaceBox({ account })).body, chain: [account.list] }]
   const oldMac = await keysService.device()
   await keysService.forgetHere()
   await keysService.setLocked({ sub: account.sub, email: account.email })
   let fetched = 0
   const workspaces = async () => (fetched++, boxes)
-  assert.equal(await keyring.restore({ from: { prf: newKey(), box: passkey.body }, workspaces }), null)
+  const body = await lockLetter({ sender: oldMac, plain: fromBase64(account.key), workspace: account.workspace.id })
+  const letter = { id: 'l1', object: 'letter' as const, to: await keysService.deviceKey(), from: key(oldMac), workspace: account.workspace.id, purpose: 'account-key' as const, body }
+  assert.equal(await keyring.restore({ from: { letter: { ...letter, body: toBase64(newKey(90)) }, workspace: account.workspace.id }, workspaces }), null)
   assert.equal(fetched, 0, 'boxes are fetched only once the key opens')
-  const back = await keyring.restore({ from: { prf, box: passkey.body }, workspaces })
+  const back = await keyring.restore({ from: { letter, workspace: account.workspace.id }, workspaces })
   assert.equal(back?.key, account.key)
   assert.equal(await keyring.signedHere(back ?? account), true)
   assert.equal(await keyring.signedHere(account), false)
-  const body = await lockLetter({ sender: oldMac, plain: fromBase64(account.key), workspace: account.workspace.id })
-  const letter = { id: 'l1', object: 'letter' as const, to: await keysService.deviceKey(), from: key(oldMac), workspace: account.workspace.id, purpose: 'account-key' as const, body }
-  assert.equal((await keyring.restore({ from: { letter, workspace: account.workspace.id }, workspaces }))?.key, account.key)
-  assert.equal(await keyring.restore({ from: { letter: { ...letter, body: toBase64(newKey(90)) }, workspace: account.workspace.id }, workspaces }), null)
 })
 
 test('approving my own server lists it as a runtime and hands it the own and vault keys; approving a teammate hands only the team key', async () => {

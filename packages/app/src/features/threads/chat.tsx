@@ -23,9 +23,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
-import { ErrorNote } from '@/components/error-note'
+import { ErrorNote, shownError } from '@/components/error-note'
 import { STEP_ICONS } from '@/components/icons'
-import { DRAG, Dots, I, ICON_BUTTON } from '@/components/kit'
+import { Dots, I, ICON_BUTTON } from '@/components/kit'
 import { OfflineChip } from '@/features/cloud/live'
 import { Faces, typed, Typing } from '@/features/cloud/presence'
 import { PersonFace } from '@/components/custom/person-face'
@@ -57,7 +57,7 @@ const IMAGE = /\.(png|jpe?g|gif|webp)$/i
 export function Chat({ agent, tools, onTitle }: { agent: Agent; tools?: ReactNode; onTitle?: () => void }) {
   const thread = useAgentThread(agent.id)
   if (agentState(agent) === 'stopped') return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><Asleep agent={agent} /></ChatFrame>
-  if (!thread.data) return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><div className="m-auto"><ErrorNote message={thread.error?.message} /></div></ChatFrame>
+  if (!thread.data) return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><div className="m-auto"><ErrorNote message={shownError(thread.error)} /></div></ChatFrame>
   return <ThreadView key={thread.data.id} thread={thread.data} agent={agent} tools={tools} onTitle={onTitle} />
 }
 
@@ -188,7 +188,7 @@ function ChatFrame({ agent, composer, tools, onTitle, onFiles, children }: { age
   }
   return <section className="flex min-w-0 flex-1 flex-col bg-card" onDragOver={dragOver} onDrop={drop}>
     <title>{`${agent.name} · OpenHut`}</title>
-    <div className={cn('still flex h-[52px] shrink-0 items-center gap-2 px-4 phone:grid phone:h-16 phone:grid-cols-[1fr_auto_1fr] phone:px-3', sidebar?.collapsed && 'pl-[94px] mac:pl-[166px] phone:pl-3', DRAG)}>
+    <div className={cn('still flex h-[52px] shrink-0 items-center gap-2 px-4 phone:grid phone:h-16 phone:grid-cols-[1fr_auto_1fr] phone:px-3', sidebar?.collapsed && 'pl-[94px] phone:pl-3')}>
       <Button type="button" variant="bare" aria-label="All agents" className={cn(ICON_BUTTON, 'float hidden size-10 justify-self-start rounded-full bg-card text-ink phone:grid')} onClick={back}><I icon={ArrowLeft01Icon} size={20} /></Button>
       {onTitle
         ? <Button type="button" variant="bare" className="float flex h-10 min-w-0 items-center gap-2 rounded-full bg-card pr-4 pl-1.5 text-ink" onClick={onTitle}><Face agent={agent} size={28} /><span className="truncate text-[16px] font-semibold">{agent.name}</span></Button>

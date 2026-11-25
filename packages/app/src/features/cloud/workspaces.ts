@@ -1,6 +1,6 @@
 import { createContext, use, useSyncExternalStore } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Cloud, CloudInvite, CloudInvitePreview, WebLink, type CloudWorkspaceView, type CreateCloudInvite, type Role } from '@openhut/common/cloud/cloud.ts'
+import { Cloud, CloudInvite, CloudInvitePreview, type CloudWorkspaceView, type CreateCloudInvite, type Role } from '@openhut/common/cloud/cloud.ts'
 import { request, requestBlob } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
 
@@ -129,25 +129,8 @@ export const useRevokeInvite = () => useCloudCall(({ id, email }: { id: string; 
 
 export const useRemoveDevice = () => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/devices/${encodeURIComponent(device)}`, method: 'DELETE' }))
 
-export const useChangeKeys = () => useCloudCall((id: string) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/keys`, method: 'POST' }))
-
 export const useDeleteWorkspace = () => useCloudCall(({ id, name }: { id: string; name: string }) => request({ schema: Cloud, computer: 'local', path: room(id), method: 'DELETE', body: { name } }))
-
-export const useApprove = () => useCloudCall(({ id, device, faces }: { id: string; device: string; faces?: number[] }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}/approvals`, method: 'POST', body: { faces } }))
-
-export const useReview = () => useCloudCall(({ id, device }: { id: string; device: string }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}/reviews`, method: 'POST' }))
-
-export const useDeny = () => useCloudCall(({ id, device, why }: { id: string; device: string; why?: 'mismatch' | 'not-me' }) => request({ schema: Cloud, computer: 'local', path: `${room(id)}/requests/${encodeURIComponent(device)}${why ? `?why=${why}` : ''}`, method: 'DELETE' }))
-
-export const useAsk = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud/requests', method: 'POST' }))
-
-export const useCancelAsk = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud/requests', method: 'DELETE' }))
 
 export const useDeleteData = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud', method: 'DELETE' }))
 
 export const useRotated = () => useCloudCall(() => request({ schema: Cloud, computer: 'local', path: '/api/cloud/rotations', method: 'DELETE' }))
-
-export async function continueInWeb(): Promise<void> {
-  const { url } = await request({ schema: WebLink, computer: 'local', path: '/api/cloud/web-links', method: 'POST', body: { path: `${location.pathname}${location.search}` } })
-  window.open(url, '_blank', 'noopener')
-}

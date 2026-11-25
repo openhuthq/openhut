@@ -1,6 +1,7 @@
+import { useCloudId } from '@/features/cloud/api'
 import { useEffect, useRef, useState } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { Globe02Icon, SquareLock02Icon, UserGroupIcon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { Globe02Icon, SquareLock02Icon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import { deviceIcon } from '@/components/custom/device'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
@@ -11,7 +12,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog, useConfirming } from '@/components/confirm-button'
-import { Choice, DialogCard, DRAG, GLASS, HOVER, I, MenuCard, PILL, ROW, ROW_VALUE, Section, TINY_ICON } from '@/components/kit'
+import { Choice, DialogCard, GLASS, HOVER, I, MenuCard, PILL, ROW, ROW_VALUE, Section, TINY_ICON } from '@/components/kit'
 import { agentPath, type AgentDialog } from '@/app/routes'
 import { useAgents, useChannels, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
 import { nameOf, runsOnNote, useComputers, useFeatures } from '@/features/computers/api'
@@ -29,7 +30,6 @@ import { AccessPicker, type AccessValue } from '@/features/agents/access'
 import { ModelRows } from '@/features/agents/model-rows'
 import { AgentStatus } from '@/features/agents/status'
 import { formValues } from '@/lib/form'
-import { WORDS } from '@/lib/platform'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
@@ -41,7 +41,7 @@ export function Panel({ agent, naming, watching }: { agent: Agent; naming: boole
   const memory = useMemoryCount(agent)
   const skills = skillsNote(useSkills(agent.id).data)
   return <aside className={cn('still flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] phone:w-full phone:flex-1 phone:border-l-0 border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
-    <div className={cn('flex items-center gap-3', DRAG)}>
+    <div className={'flex items-center gap-3'}>
       <FieldBox agentId={agent.id} field="face" className="shrink-0">{agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="relative block shrink-0">
         <Face agent={agent} size={48} tile />
       </a> : <Face agent={agent} size={48} tile />}</FieldBox>
@@ -94,7 +94,7 @@ function AgentActions({ agent }: { agent: Agent }) {
     <span className={LABEL}>Allowed to</span>
     <div className="-mx-2.5 flex flex-col gap-px">
       <label className={ROW}><I icon={SourceCodeIcon} size={15} className="text-mute" />Run code<Switch className="ml-auto" checked={agent.codeExecution} aria-label="Run code" disabled={locked} onCheckedChange={() => change({ codeExecution: !agent.codeExecution })} /></label>
-      {asYou && <span className="px-2.5 pb-1 text-[12px]/[16px] text-mute">Runs as you on this {WORDS.here}, with your files.</span>}
+      {asYou && <span className="px-2.5 pb-1 text-[12px]/[16px] text-mute">Runs as you on this computer, with your files.</span>}
     </div>
   </div>
 }
@@ -166,13 +166,15 @@ function RunsOn({ agent }: { agent: Agent }) {
   const computers = useComputers().data
   const home = useAgents().data?.find((each) => each.id === agent.id)
   const id = home?.computer ?? 'local'
-  const live = home?.online ?? true
+  // A paused Cloud isn't offline: sending a message wakes it.
+  const onCloud = id === useCloudId(computers ?? [])
+  const live = onCloud || (home?.online ?? true)
   const move = useMove(home)
   const update = useUpdateAgent(agent.id)
   const note = noteOf(agent)
   return <>
     <DropdownMenu>
-      <DropdownMenuTrigger className={cn(ROW, 'h-auto min-h-8 py-1.5 whitespace-normal')} disabled={!!move.going}><I icon={deviceIcon({ kind: agent.runsOnServer || (agent.runsHere && computers?.[0]?.server) ? 'server' : 'mac' })} size={15} className="shrink-0 text-mute" /><span className="shrink-0">Runs on</span><span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="text-right [overflow-wrap:anywhere]">{agent.runsHere ? nameOf({ computers, id }) : elsewhereOf(agent)}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
+      <DropdownMenuTrigger className={cn(ROW, 'h-auto min-h-8 py-1.5 whitespace-normal')} disabled={!!move.going}><I icon={deviceIcon({ kind: agent.runsOnServer || (agent.runsHere && computers?.[0]?.server) ? 'server' : 'mac' })} size={15} className="shrink-0 text-mute" /><span className="shrink-0">Runs on</span><span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="text-right [overflow-wrap:anywhere]">{onCloud ? 'Cloud' : agent.runsHere ? nameOf({ computers, id }) : elsewhereOf(agent)}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
       <MenuCard title={`${agent.name} runs on`}>
         {!agent.runsHere && <Choice icon={<I icon={deviceIcon({ kind: agent.runsOnServer ? 'server' : 'mac' })} size={15} />} name={elsewhereOf(agent)} selected disabled />}
         {(computers ?? []).map((computer) => !agent.runsHere && computer.id === id
