@@ -73,23 +73,30 @@ updater() {
 NAME="${OPENHUT_NAME:-$(envof OPENHUT_NAME)}"; NAME="${NAME:-$(uname -n | tr -cd 'A-Za-z0-9._-' | cut -c1-64)}"
 URL="${OPENHUT_URL:-$(envof OPENHUT_URL)}"; URL="${URL:-https://openhut.dev}"
 MODEL="${OPENHUT_MODEL:-$(envof OPENHUT_MODEL)}" RESOLVER="${RESOLVER:-$(envof RESOLVER)}"
+if [ "${1:-}" = proxy ]; then
+  printf '%s' "${2:-}" | grep -Eqx '[1-9][0-9]{1,4}' || die "give the local port your proxy reaches OpenHut on, and optionally its Docker network: sh -s -- proxy 8787 [network]"
+  PROXY=$2 PROXY_NET=${3:-}
+  [ -z "$PROXY_NET" ] || $D network inspect "$PROXY_NET" >/dev/null 2>&1 || die "there's no Docker network named $PROXY_NET"
+else PROXY=$(envof OPENHUT_PROXY) PROXY_NET=$(envof OPENHUT_PROXY_NETWORK); fi
 
 say "OpenHut $OPENHUT_BUILD ($IMAGE)"
 pull "$IMAGE"
-if exists openhut && [ "$($D container inspect -f '{{.Image}}' openhut)" = "$($D image inspect -f '{{.Id}}' "$IMAGE")" ]; then
+if [ $# = 0 ] && exists openhut && [ "$($D container inspect -f '{{.Image}}' openhut)" = "$($D image inspect -f '{{.Id}}' "$IMAGE")" ]; then
   updater
   echo "OpenHut is already running this release."
   exit 0
 fi
 
 data() { $D run --rm -v openhut-data:/data --entrypoint sh "$IMAGE" -c "$1"; }
+PORTS="-p 80:80 -p 443:443 -p 127.0.0.1:8787:8787"; [ -z "$PROXY" ] || PORTS="-p 127.0.0.1:$PROXY:8787"
 start() {
   $D network inspect openhut >/dev/null 2>&1 || $D network create openhut >/dev/null
   $D run -d --name openhut --hostname openhut --network openhut --restart unless-stopped --read-only --tmpfs /run:size=64m --tmpfs /tmp:size=1g \
     --sysctl net.ipv4.ip_unprivileged_port_start=80 -v /var/run/docker.sock:/var/run/docker.sock -v openhut-data:/data \
-    -p 80:80 -p 443:443 -p 127.0.0.1:8787:8787 --log-opt max-size=10m --log-opt max-file=3 \
+    $PORTS --log-opt max-size=10m --log-opt max-file=3 \
     -e "OPENHUT_NAME=$NAME" -e "OPENHUT_URL=$URL" ${MODEL:+-e "OPENHUT_MODEL=$MODEL"} ${RESOLVER:+-e "RESOLVER=$RESOLVER"} \
-    "$IMAGE" >/dev/null
+    ${PROXY:+-e "OPENHUT_PROXY=$PROXY"} ${PROXY_NET:+-e "OPENHUT_PROXY_NETWORK=$PROXY_NET"} "$IMAGE" >/dev/null &&
+    { [ -z "$PROXY_NET" ] || $D network connect "$PROXY_NET" openhut; }
 }
 up() { i=0; until $D exec openhut curl -fsS http://127.0.0.1:8787/health 2>/dev/null | grep -q '"ok":true'; do i=$((i+1)); [ $i -gt 200 ] && return 1; printf .; sleep 3; done; }
 
@@ -132,6 +139,7 @@ echo "OpenHut is running."
 ADDRESS=$($D exec openhut openhut address 2>/dev/null || true)
 case "$ADDRESS" in
   https://*) printf '\n  Open %s\n\n' "$ADDRESS" ;;
-  *) printf '\n  Open http://%s and create your account. The first person to open it becomes the owner.\n' "$(hostname -I 2>/dev/null | awk '{print $1}')"
+  *) if [ -n "$PROXY" ]; then printf '\n  Point your proxy at %s, then open its HTTPS address and create your account.\n\n' "${PROXY_NET:+openhut:8787 on the $PROXY_NET network, or }127.0.0.1:$PROXY"; exit 0; fi
+     printf '\n  Open http://%s and create your account. The first person to open it becomes the owner.\n' "$(hostname -I 2>/dev/null | awk '{print $1}')"
      printf '  You set the HTTPS address there; point its DNS at this server first. OpenHut gets the certificate itself (ports 80 and 443).\n\n' ;;
 esac

@@ -22,6 +22,7 @@ export const config = {
   port: env.get('PORT').default('8787').asPortNumber(), // the server's HTTP port
   host: env.get('OPENHUT_HOST').default('127.0.0.1').asString(), // the address it listens on
   gatewayPort: GATEWAY_PORT,
+  behindProxy: !!env.get('OPENHUT_PROXY').asString(), // install.sh proxy <port>: an upstream proxy serves HTTPS, Caddy doesn't run
   releaseUrl: env.get('OPENHUT_URL').default('https://openhut.dev').asString(), // where releases are downloaded from
   socket: SOCKET ?? join(DATA, 'openhut.sock'),
   installKind: installKindOf(SOCKET ? 'desktop' : 'server'),

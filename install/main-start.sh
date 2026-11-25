@@ -25,7 +25,7 @@ caddy() {
   i=0; until [ -s /data/app/Caddyfile ]; do i=$((i+1)); [ $i -gt 600 ] && return 1; sleep 0.2; done
   XDG_DATA_HOME=/data/caddy XDG_CONFIG_HOME=/data/caddy supervise /data/log/caddy.log su-exec openhut /usr/local/bin/caddy run --config /data/app/Caddyfile --adapter caddyfile --watch
 }
-caddy &
+[ -n "${OPENHUT_PROXY:-}" ] || caddy &
 cd $J
 umask 077
 exec su-exec openhut node $J/packages/runtime/src/server/app.ts

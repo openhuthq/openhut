@@ -21,7 +21,7 @@ export const installSettingsService = {
     const mail = settings.smtp()
     return {
       object: 'install_settings',
-      address: { url: settings.address() ?? null, certificateUntil: await certificateUntil() },
+      address: { url: settings.address() ?? null, certificateUntil: config.behindProxy ? null : await certificateUntil(), proxy: config.behindProxy },
       google: { set: !!google, signIn: settings.googleSignIn(), clientId: google?.id ?? null, signInRedirectUri: googleRedirectUri(), connectionsRedirectUri: connectionService.redirectUrl() },
       smtp: { set: !!mail, host: mail?.host ?? null, port: mail?.port ?? null, user: mail?.user || null, from: mail?.from ?? null },
       usageData: settings.usageData(),

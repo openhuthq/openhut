@@ -36,7 +36,7 @@ await migrate()
 writeCaddyfile()
 await computerService.boot()
 
-const app = Fastify({ logger: false, bodyLimit: 1 << 20, trustProxy: '127.0.0.1', forceCloseConnections: true }).withTypeProvider<ZodTypeProvider>()
+const app = Fastify({ logger: false, bodyLimit: 1 << 20, trustProxy: (address: string, hop: number) => hop === 0 && (config.behindProxy || address === '127.0.0.1'), forceCloseConnections: true }).withTypeProvider<ZodTypeProvider>()
 answerErrors(app)
 app.setValidatorCompiler(validatorCompiler)
 app.setSerializerCompiler(serializerCompiler)

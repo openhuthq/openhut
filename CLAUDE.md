@@ -41,7 +41,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
 `install/` is the server, two images from one `install/Dockerfile` (`scripts/image.sh` builds both and pins them into
 `install.sh`): `ghcr.io/openhuthq/openhut` (`--target main`: Node, the Docker CLI, the tree and the built App; entrypoint
 `install/main-start.sh`) runs the web app and the server as the container `openhut` (not privileged, read-only root, the host's
-Docker socket, data in `openhut-data`, network `openhut`, 127.0.0.1:8787, ports 80 and 443 for Caddy), prints the address to open, and goes back to the previous container if the new one fails its health check. On first boot it starts
+Docker socket, data in `openhut-data`, network `openhut`, 127.0.0.1:8787, ports 80 and 443 for Caddy; `install.sh proxy <port> [network]` publishes only 127.0.0.1:<port>, joins that Docker network, skips Caddy and keeps it as `OPENHUT_PROXY` env for updates), prints the address to open, and goes back to the previous container if the new one fails its health check. On first boot it starts
 its own runtime with `install.sh join http://openhut:8787 <token>`. `ghcr.io/openhuthq/openhut-runtime` (`--target runtime`:
 dockerd, gVisor, Claude Code pinned by `ARG CLAUDE`, agent-browser, the WhatsApp bridge and the pinned Hermes agent image, so
 nothing downloads on the server; entrypoint `install/runtime-start.sh`) runs agentd and `agentd/link.ts`, privileged, no open
