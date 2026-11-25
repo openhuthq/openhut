@@ -15,7 +15,6 @@ iptables-restore --noflush <<RULES
 *filter
 :AGENT - [0:0]
 :AGENT-IN - [0:0]
--A AGENT -o tailscale0 -j DROP
 -A AGENT -d $RESOLVER/32 -p udp --dport 53 -j RETURN
 -A AGENT -d $RESOLVER/32 -p tcp --dport 53 -j RETURN
 -A AGENT -d 169.254.0.0/16,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10 -j DROP

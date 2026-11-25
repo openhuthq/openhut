@@ -6,7 +6,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
 import { ConfirmDialog } from '@/components/confirm-button'
-import { ErrorNote, shownError } from '@/components/error-note'
+import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { I, ROW, Section } from '@/components/kit'
 import { agentPath } from '@/app/routes'
@@ -27,26 +27,25 @@ const KINDS: Record<ChannelKind, { label: string; remove: string; gone: string }
   telegram: { label: 'Telegram', remove: 'Disconnect', gone: 'stops answering on Telegram. Connecting again takes the bot token.' },
   discord: { label: 'Discord', remove: 'Disconnect', gone: 'stops answering in Discord. Connecting again takes the bot token.' },
 }
-const WAKES: ChannelKind[] = ['telegram']
 
 export function ChannelRows({ agent }: { agent: Agent }) {
   const channels = useChannels(agent.id)
-  const features = useFeatures(agent.id)
+  const features = useFeatures()
   const shown = listedChannels(channels.data ?? [])
   const others = ORDER.filter((kind) => (kind !== 'whatsapp' || features.whatsapp) && !shown.some((channel) => channel.kind === kind))
-  return <Section title="Channels" action={<AddChannel agent={agent} kinds={others} awake={!!features.cloud} />}>
-    <ErrorNote message={shownError(channels.error)} />
+  return <Section title="Channels" action={<AddChannel agent={agent} kinds={others} />}>
+    <ErrorNote message={channels.error?.message} />
     {channels.data && !shown.length && <p className="m-0 text-[12px]/[16px] text-balance text-mute">{agent.name} isn't on any channel yet.</p>}
     <div className="-mx-2.5 flex flex-col gap-px">{shown.map((channel) => <ChannelRow key={channel.id} agent={agent} channel={channel} />)}</div>
   </Section>
 }
 
-function AddChannel({ agent, kinds, awake }: { agent: Agent; kinds: ChannelKind[]; awake: boolean }) {
+function AddChannel({ agent, kinds }: { agent: Agent; kinds: ChannelKind[] }) {
   return <DropdownMenu>
     <DropdownMenuTrigger className={cn(buttonVariants({ variant: 'text' }), 'text-xs')} disabled={!agent.canEdit || !kinds.length}><I icon={PlusSignIcon} size={12} />Add</DropdownMenuTrigger>
     <DropdownMenuContent align="end">
       {kinds.map((kind) => <DropdownMenuItem size="tall" key={kind} onClick={() => navigate(agentPath({ agentId: agent.id, dialog: kind }))}>
-        <Glyph name={kind} size={16} />{KINDS[kind].label}{awake && !WAKES.includes(kind) && <span className="ml-auto pl-3 text-xs text-mute">Keeps Cloud awake</span>}
+        <Glyph name={kind} size={16} />{KINDS[kind].label}
       </DropdownMenuItem>)}
     </DropdownMenuContent>
   </DropdownMenu>

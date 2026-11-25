@@ -3,7 +3,7 @@ import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Connection } from '@openhut/common/connections/connection.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { ErrorNote, shownError } from '@/components/error-note'
+import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { I, Section } from '@/components/kit'
 import { useCreateGrant, useDeleteGrant, useGrants } from '@/features/agents/api'
@@ -22,7 +22,7 @@ export function CanUse({ agent }: { agent: Agent }) {
   })
   const others = (connections.data ?? []).filter((connection) => !grants.data?.some((grant) => grant.connectionId === connection.id))
   return <Section title="Can use" action={<AddConnection agent={agent} connections={others} />}>
-    <ErrorNote message={shownError(connections.error ?? grants.error)} />
+    <ErrorNote message={(connections.error ?? grants.error)?.message} />
     {grants.data && !granted.length && <p className="m-0 text-[12px]/[16px] text-balance text-mute">{agent.name} can't use any connection yet.</p>}
     <div className="flex flex-wrap gap-1.5">{granted.map(({ grant, connection }) => <span key={grant.id} className="group inline-flex h-6 items-center gap-1.5 rounded-md bg-picked pr-2 pl-1.5 text-[12px] text-ink">
       <Glyph name={connection.kind} size={13} />{connection.name}

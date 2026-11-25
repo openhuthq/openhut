@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { InformationCircleIcon, SidebarRight01Icon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
-import type { HereField } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { I, ICON_BUTTON } from '@/components/kit'
-import { ErrorNote, shownError } from '@/components/error-note'
+import { ErrorNote } from '@/components/error-note'
 import { useQueryClient } from '@tanstack/react-query'
 import { agentPath, goneAgentPath, type AgentDialog } from '@/app/routes'
 import { useAgent, useAgents } from '@/features/agents/api'
@@ -18,8 +17,6 @@ import { DoesDialog, Panel } from '@/features/agents/panel'
 import { SkillsDialog } from '@/features/agents/skills-dialog'
 import { RoutinesDialog } from '@/features/routines/routines-dialog'
 import { Chat } from '@/features/threads/chat'
-import { MoveHere } from '@/features/cloud/live'
-import { Here } from '@/features/cloud/presence'
 import { RequestError } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
 import { PHONE, useMedia } from '@/lib/media'
@@ -41,15 +38,13 @@ export function AgentView({ agentId, dialog, detail }: { agentId: string; dialog
   useEffect(() => { if (!phone) saveShown(shown) }, [phone, shown])
   const open = shown ?? !narrow
   if (away) return <Redirect to={away} />
-  if (!agent.data) return <section className="grid flex-1 place-items-center bg-card">{!gone && <ErrorNote message={shownError(agent.error)} />}</section>
+  if (!agent.data) return <section className="grid flex-1 place-items-center bg-card">{!gone && <ErrorNote message={agent.error?.message} />}</section>
   const toggle = !open && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Show details" title="Show details" onClick={() => setShown(true)}><I icon={phone ? InformationCircleIcon : SidebarRight01Icon} size={phone ? 20 : 16} /></Button>
   const dialogs = <Dialogs agent={agent.data} dialog={dialog} detail={detail} />
   const panel = open && <Panel agent={agent.data} naming={dialog === 'name'} watching={dialog === 'browser'} onHide={() => setShown(false)} />
   return <>
     <div className="relative flex min-w-0 flex-1">
       <Chat agent={agent.data} tools={toggle} onTitle={phone ? () => setShown(true) : undefined} />
-      <MoveHere agent={agent.data} />
-      <Here agentId={agent.data.id} field={FIELDS[dialog ?? ''] ?? null} />
     </div>
     {phone && panel ? <Dialog size="window" label={`${agent.data.name}'s details`} className="phone:bg-sidebar" onClose={() => setShown(false)}>{panel}{dialogs}</Dialog> : <>{panel}{dialogs}</>}
   </>
@@ -83,4 +78,3 @@ function savedShown(): boolean | null {
 function saveShown(shown: boolean | null) {
   try { if (shown !== null) localStorage.setItem(SHOWN_KEY, shown ? '1' : '0') } catch { return }
 }
-const FIELDS: Record<string, HereField> = { does: 'instructions', name: 'name', customize: 'face' }

@@ -43,8 +43,8 @@ npm run dev
 ```
 
 Open `http://localhost:5173`. `npm run seed` on a fresh `.data` fills in sample agents and
-connections. Agents run as real Hermes processes, which need the bundled runtime first:
-`npm -w @openhut/release run pack-backend` (needs `uv`). Connect Claude in Settings to talk to them.
+connections. Agents run as Docker containers, under gVisor where `runsc` works; they start only where the agents firewall
+applies (Linux, as root). Connect Claude in Settings to talk to them.
 
 ## Check it
 
@@ -53,7 +53,7 @@ npx turbo run build typecheck test
 ```
 
 This must pass before you open a pull request. A change to the installer, agentd, the firewall or an upgrade also
-needs the runtime image smoke test green (`runtime-image.yml`, which CI runs on such changes). A change to the dashboard needs a
+needs the runtime image smoke test green (`runtime-image.yml`; Promote runs it). A change to the dashboard needs a
 look in the browser, not just a green build.
 
 ## Pull requests

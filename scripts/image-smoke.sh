@@ -8,48 +8,9 @@ fail() { echo "smoke: $*" >&2; $D exec openhut sh -c 'tail -n 40 /var/log/openhu
 wait_for() { i=0; until eval "$2" >/dev/null 2>&1; do i=$((i+1)); [ "$i" -gt "$1" ] && return 1; sleep 3; done; }
 
 wait_for 100 'rt curl -fsS http://127.0.0.1:8787/health' || fail "no /health"
-# The Claude sign-in runs `claude setup-token` under script(1) for a terminal (seat-sign-in.ts); run that same command, without the app's database, and it must hand back a claude.ai link.
 rt sh -c 'command -v script' >/dev/null || fail "no script(1) in the image, so the Claude sign-in can't start"
 link=$(rt sh -c 'd=$(mktemp -d); cd "$d"; HOME=$d CLAUDE_CONFIG_DIR=$d BROWSER=/bin/true TERM=xterm-256color timeout 30 script -qfec "stty cols 4000 rows 60; exec $OPENHUT_CLAUDE setup-token" /dev/null </dev/null | tr "\033\007" "\n\n" | grep -o "https://claude\.[a-z]*/[^ ]*oauth/authorize?[^ ]*" | head -n 1; rm -rf "$d"')
 case "$link" in https://claude.ai/*|https://claude.com/*) echo "smoke: the Claude sign-in starts at ${link%%\?*}" ;; *) fail "the Claude sign-in gave no claude.ai link: $link" ;; esac
-if ! api http://127.0.0.1:8787/api/cloud | grep -q '"status":"on"'; then
-  url=$(api -X POST http://127.0.0.1:8787/api/cloud/sessions -d '{}' | sed -n 's/.*"authorizationUrl":"\([^"]*\)".*/\1/p')
-  link=$(curl -fsS "$url" | grep -o 'href="[^"]*">mo@example.com<' | sed 's/^href="//; s/">mo@example.com<$//; s/&amp;/\&/g')
-  back=$(curl -s -o /dev/null -D - "$link" | sed -n 's/^[Ll]ocation: //p' | tr -d '\r')
-  back=$(node -e 'const u = new URL(process.argv[1]); console.log(u.searchParams.get("to") ?? u.href)' "$back")
-  rt curl -fsS -o /dev/null "$back" || fail "sign in to the dev cloud at $url"
-  wait_for 40 "api http://127.0.0.1:8787/api/cloud | grep -q '\"status\":\"on\"'" || fail "the runtime didn't sign in"
-  echo "smoke: signed in as mo@example.com"
-fi
-# A browser joins the server: a join code from it, signIn through openhutCloud, a join request the managed signer approves, then /api through the relay's tunnel.
-KEY="$KEY" CLOUD="${CLOUD:-http://127.0.0.1:8793}" node --input-type=module <<'EOF' || fail "a device joining the server"
-const root = `file://${process.cwd()}/packages/common/src/`
-const { openhutCloud } = await import(`${root}cloud/openhut-cloud.ts`)
-const { webKey } = await import(`${root}tunnel/index.ts`)
-const { toBase64 } = await import(`${root}vault/public.ts`)
-const { execFileSync } = await import('node:child_process')
-const api = (method, path, body) => JSON.parse(execFileSync('docker', ['exec', 'openhut', 'curl', '-fsS', '-X', method, '-H', `authorization: Bearer ${process.env.KEY}`,
-  '-H', 'content-type: application/json', ...method === 'GET' ? [] : ['-d', JSON.stringify(body ?? {})], `http://127.0.0.1:8787${path}`]).toString() || '{}')
-const until = async (what, read) => { for (let i = 0; i < 60; i++, await new Promise((r) => setTimeout(r, 1000))) { const v = await read().catch(() => undefined); if (v) return v } throw new Error(`timed out: ${what}`) }
-const pair = (alg, use) => crypto.subtle.generateKey(alg, false, use)
-const signing = await pair('Ed25519', ['sign', 'verify']), box = await pair('X25519', ['deriveBits'])
-const raw = async (k) => new Uint8Array(await crypto.subtle.exportKey('raw', k))
-const id = toBase64(new Uint8Array([...await raw(signing.publicKey), ...await raw(box.publicKey)]))
-const kv = new Map()
-const cloud = openhutCloud.device({ url: process.env.CLOUD, store: { get: async (k) => kv.get(k), set: async (k, v) => void kv.set(k, v) },
-  key: { id: async () => id, sign: async (b) => new Uint8Array(await crypto.subtle.sign('Ed25519', signing.privateKey, b)), noise: () => webKey(box) } })
-const { code } = api('POST', '/api/cloud/join-codes')
-const me = await cloud.signIn({ joinCode: code })
-const team = me.home
-const knock = cloud.knock({ team })
-await knock.ask({ name: 'Smoke browser', os: 'web' })
-await until('the approval', async () => (await knock.state()).step === 'approved')
-const tunnel = await cloud.open({ team, timeout: 30_000 })
-const res = await tunnel.fetch('/api/agents')
-if (res.status !== 200) throw new Error(`/api/agents through the tunnel answered ${res.status}`)
-console.log(`smoke: a device signed in with a join code as ${me.email}, was let in, and read /api/agents through the relay`)
-process.exit(0)
-EOF
 i=0; until agent=$(api -X POST http://127.0.0.1:8787/api/agents -d '{"name":"Smoke","instructions":"# Smoke\nYou echo."}' 2>/dev/null); do
   i=$((i+1)); [ "$i" -gt 20 ] && fail "create an agent"; sleep 3
 done

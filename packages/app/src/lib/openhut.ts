@@ -1,14 +1,11 @@
 import { ApiError, List } from '@openhut/common/api.ts'
 import { Admin } from '@openhut/common/admin/admin.ts'
 import { Agent, Grant } from '@openhut/common/agents/agent.ts'
-import { Cloud } from '@openhut/common/cloud/cloud.ts'
 import { Me } from '@openhut/common/team/team.ts'
-import { remote, REMOTE } from '@/lib/remote'
-import { computersOf, type Computer, type Features } from '@/lib/computers'
+import type { Computer, Features } from '@/lib/computers'
 
 export type { Computer, Features }
-// wake: a person acted (sent a message, started an agent), so a paused Cloud computer is woken for it.
-export type Where = { computer?: string; of?: string; wake?: boolean }
+export type Where = { computer?: string; of?: string }
 export type OpenHutAgent = Agent & { computer: string; online: boolean }
 
 type Schema<T> = { safeParse: (data: unknown) => { success: true; data: T } | { success: false } }
@@ -26,8 +23,8 @@ export class RequestError extends Error {
   }
 }
 
-export async function request<T>({ schema, path, method = 'GET', body, wake }: Where & { schema: Schema<T>; path: string; method?: string; body?: unknown }): Promise<T> {
-  const response = await openhut.fetch({ path, init: { method, ...payloadOf(body) }, wake })
+export async function request<T>({ schema, path, method = 'GET', body }: Where & { schema: Schema<T>; path: string; method?: string; body?: unknown }): Promise<T> {
+  const response = await openhut.fetch({ path, init: { method, ...payloadOf(body) } })
   const payload: unknown = await response.json().catch(() => null)
   if (!response.ok) throw failure({ status: response.status, payload })
   const parsed = schema.safeParse(payload)
@@ -42,11 +39,9 @@ export async function requestBlob({ path }: Where & { path: string }): Promise<B
 }
 
 export const openhut = {
-  fetch: ({ path, init, wake }: Where & { path: string; init?: RequestInit }): Promise<Response> => REMOTE ? remote.fetch(path, init, wake) : fetch(path, init),
+  fetch: ({ path, init }: { path: string; init?: RequestInit }): Promise<Response> => fetch(path, init),
   agents: {
     list: async (): Promise<OpenHutAgent[]> => (await request({ schema: AGENT_LIST, path: '/api/agents' })).data.map(here),
-    move: async ({ id, to }: { id: string; to: string }): Promise<OpenHutAgent> =>
-      here(await request({ schema: Agent, path: `/api/agents/${encodeURIComponent(id)}`, method: 'PATCH', body: to === LOCAL ? { runsHere: true } : { runsOn: to } })),
   },
   connections: {
     grant: ({ connection, agent }: { connection: string; agent: string }): Promise<Grant> => request({ schema: Grant, path: '/api/grants', method: 'POST', body: { agentId: agent, connectionId: connection } }),
@@ -54,8 +49,7 @@ export const openhut = {
   computers: {
     async list(): Promise<Computer[]> {
       const admin = await request({ schema: Admin, path: '/api/admin' }).catch(() => undefined)
-      const cloud = await request({ schema: Cloud, path: '/api/cloud' }).catch(() => undefined)
-      return computersOf({ here: { id: LOCAL, name: 'Your server', kind: 'here', url: '', online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false }, runtimeTooOld: false }, devices: cloud?.devices ?? [] })
+      return [{ id: LOCAL, name: 'This computer', version: admin?.server.version ?? null, online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false } }]
     },
   },
   account: {

@@ -1,0 +1,5 @@
+/join https://app.openhut.dev/join 302
+/security / 301
+/install.sh https://dl.openhut.dev/channels/stable/install.sh 302
+/docs https://github.com/openhuthq/openhut#readme 302
+/docs/* https://github.com/openhuthq/openhut#readme 302

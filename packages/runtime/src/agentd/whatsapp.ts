@@ -1,12 +1,10 @@
 import { existsSync } from 'node:fs'
 import type { Duplex } from 'node:stream'
-import { join } from 'node:path'
 import { box, DATA } from './host.ts'
-import { RUNTIME } from './sandbox/native.ts'
 import type { Mount } from './sandbox/sandbox.ts'
 
-const BRIDGE = { native: join(RUNTIME, 'hermes/scripts/whatsapp-bridge'), memory: join(DATA, 'whatsapp-bridge'), gvisor: '/var/lib/openhut/whatsapp-bridge' }[box.name]
-const PAIR_COMMAND = ['node', `${box.name === 'native' ? BRIDGE : '/opt/data/scripts/whatsapp-bridge'}/bridge.js`, '--pair-only', '--pair-json', '--session', '/opt/data/platforms/whatsapp/session']
+const BRIDGE = box.name === 'memory' ? `${DATA}/whatsapp-bridge` : '/var/lib/openhut/whatsapp-bridge'
+const PAIR_COMMAND = ['node', '/opt/data/scripts/whatsapp-bridge/bridge.js', '--pair-only', '--pair-json', '--session', '/opt/data/platforms/whatsapp/session']
 
 export const whatsapp = {
   installed(): boolean {
@@ -14,7 +12,7 @@ export const whatsapp = {
   },
 
   mounts(): Mount[] {
-    return box.name !== 'native' && whatsapp.installed() ?[{ host: BRIDGE, guest: '/opt/data/scripts/whatsapp-bridge', readOnly: true }] : []
+    return whatsapp.installed() ? [{ host: BRIDGE, guest: '/opt/data/scripts/whatsapp-bridge', readOnly: true }] : []
   },
 
   async pair({ id, sock, running, ended }: { id: string; sock: Duplex; running: boolean; ended: () => void }): Promise<undefined> {

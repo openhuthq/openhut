@@ -1,15 +1,23 @@
 # syntax=docker/dockerfile:1.7
-# R7: two images. `--target runtime-base` is the base (dind, gVisor, Claude Code, agent-browser, the bundled agent image and the
-# updater), rebuilt a few times a year. The default target is the thin per-release layer: the release tree and its node_modules on
-# top of BASE, a published base by digest (`--build-arg BASE=ghcr.io/openhuthq/runtime-base@sha256:…`), or the base built here.
+# Built from the repo root. `--target runtime-base` is the base (dind, gVisor, Claude Code, agent-browser, the bundled agent image),
+# rebuilt a few times a year. The default target is the thin per-commit layer: the tree and its node_modules on top of BASE,
+# a published base by digest (`--build-arg BASE=ghcr.io/openhuthq/runtime-base@sha256:…`), or the base built here.
 ARG BASE=runtime-base
 ARG AGENT_IMAGE
 ARG ALPINE=alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
 ARG DIND=docker:28-dind@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac
 
 FROM --platform=$BUILDPLATFORM $ALPINE AS tree
-RUN --mount=type=bind,source=openhut.tgz,target=/tmp/openhut.tgz mkdir -p /opt/openhut && \
-    tar -xzf /tmp/openhut.tgz -C /opt/openhut && chown -R root:root /opt/openhut && chmod -R go-w /opt/openhut
+ARG BUILD=dev
+COPY package.json package-lock.json /opt/openhut/
+COPY install /opt/openhut/install
+COPY vendor /opt/openhut/vendor
+COPY packages/common /opt/openhut/packages/common
+COPY packages/runtime/package.json /opt/openhut/packages/runtime/
+COPY packages/runtime/src /opt/openhut/packages/runtime/src
+COPY packages/runtime/test/agentd /opt/openhut/packages/runtime/test/agentd
+COPY packages/app/package.json /opt/openhut/packages/app/
+RUN printf '%s\n' "$BUILD" > /opt/openhut/BUILD && chmod -R go-w /opt/openhut
 
 FROM --platform=$BUILDPLATFORM $ALPINE AS agent
 ARG TARGETARCH
@@ -54,8 +62,6 @@ ARG CLAUDE_MUSL_SHA256_arm64=172150e3f9ea07e8e2e2e29862d7d9a25f5c234d8e909e4063d
 ARG AGENT_BROWSER=0.43.0
 ARG AGENT_BROWSER_SHA512_amd64=598f2fcb649a6b7a11b7a5c49b3e1269ed56e6a4bd4e361c6d7e8813e7716fcb3600f7cbf57c908cc1c2ea3059ae1c2a0c122f51e4cc093fcfd9cab75cb3d207
 ARG AGENT_BROWSER_SHA512_arm64=f030b6df82c69570a7f00d985c693ac28cb5b938f27b1bed1ddfd33901cbad5dac7d43190fae3b1d31c427217edb3d49d68477e0b681e63a8727d7744440be0b
-COPY --from=tree /opt/openhut/install/native-runtime.json /tmp/native-runtime.json
-RUN set -eu; grep -q "\"version\": \"$CLAUDE\"" /tmp/native-runtime.json || { echo "Claude Code $CLAUDE isn't native-runtime.json's version" >&2; exit 1; }
 RUN <<EOF
 set -eu
 case "$TARGETARCH" in amd64) A=x86_64 N=x64 ;; arm64) A=aarch64 N=arm64 ;; *) exit 1 ;; esac
@@ -78,13 +84,10 @@ FROM base AS runtime-base
 COPY --from=downloads /out/ /
 COPY --from=agent /agent.tar.zst /image /opt/openhut-agent/
 COPY --from=bridge /bridge /var/lib/openhut/whatsapp-bridge
-# The updater and its release checks live here, never in the layer it replaces (R7, SEC6).
-COPY --from=tree /opt/openhut/install/updater.sh /opt/openhut/install/verify-installer.mjs /usr/local/lib/openhut-updater/install/
-COPY --from=tree /opt/openhut/packages/release/src/release-key.mjs /usr/local/lib/openhut-updater/packages/release/src/
 RUN mkdir -p /etc/docker && echo '{"runtimes":{"runsc":{"path":"/usr/local/bin/runsc"}}}' > /etc/docker/daemon.json && \
-    ln -s /data/etc /etc/openhut && ln -s /data/log /var/log/openhut && ln -s /run/agentd-etc /etc/agentd
+    ln -s /data/log /var/log/openhut && ln -s /run/agentd-etc /etc/agentd
 # Agents get the glibc claude; the seat sign-in runs claude here, on Alpine, so it takes the musl build.
-ENV OPENHUT_HOST=0.0.0.0 OPENHUT_RUNTIME=image DOCKER_TLS_CERTDIR= OPENHUT_CLAUDE=/opt/openhut/bin/claude-musl
+ENV OPENHUT_HOST=0.0.0.0 DOCKER_TLS_CERTDIR= OPENHUT_CLAUDE=/opt/openhut/bin/claude-musl
 EXPOSE 8787
 ENTRYPOINT ["/opt/openhut/install/image-start.sh"]
 
@@ -93,8 +96,6 @@ COPY --from=tree /opt/openhut/package.json /opt/openhut/package-lock.json /opt/o
 COPY --from=tree /opt/openhut/packages/runtime/package.json /opt/openhut/packages/runtime/
 COPY --from=tree /opt/openhut/packages/common/package.json /opt/openhut/packages/common/
 COPY --from=tree /opt/openhut/packages/app/package.json /opt/openhut/packages/app/
-COPY --from=tree /opt/openhut/packages/release/package.json /opt/openhut/packages/release/
-COPY --from=tree /opt/openhut/packages/docs/package.json /opt/openhut/packages/docs/
 RUN cd /opt/openhut && npm ci --omit=dev --no-audit --no-fund --loglevel=error >/dev/null && \
     chown -R root:root node_modules && chmod -R go-w node_modules
 

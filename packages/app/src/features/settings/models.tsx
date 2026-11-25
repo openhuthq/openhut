@@ -23,7 +23,6 @@ import { open, Redirect, useOpen } from '@/lib/router'
 import { formValues } from '@/lib/form'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import { CreditsLine } from '@/features/credits/credits'
 
 let returningTo: ProviderId | undefined
 const resetTime = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' })
@@ -58,7 +57,6 @@ export function ModelsSettings() {
     <ErrorNote message={admin.error?.message} />
     {providers && <>
       {none && <p className={cn(HINT, 'px-2.5')}>Connect one so your agents can think. Most people use Claude.</p>}
-      {providers.find((each) => each.id === 'openhut')?.connected && <Section title="OpenHut"><Rows>{row('openhut')}</Rows></Section>}
       <Section title="Subscriptions"><Rows>{SUBSCRIPTIONS.map((info) => row(info.id))}</Rows></Section>
       <Section title="API keys">
         <ListNote>Your keys work on all your computers. Agents never see them.</ListNote>
@@ -80,7 +78,7 @@ function ProviderRow({ provider, note, lead, used }: { provider: Provider; note:
   const subscription = provider.kind === 'subscription'
   return <Row icon={<Glyph name={provider.id} size={20} />} title={providerInfo(provider.id).short} note={used ? `${note} · In use` : note}>
     {provider.connected
-      ? <>{provider.id === 'openhut' ? <CreditsLine className="h-7" /> : <Status tone="on">{subscription ? 'Signed in' : 'Connected'}</Status>}<Button type="button" variant="ghost" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id) }}>Manage</Button></>
+      ? <><Status tone="on">{subscription ? 'Signed in' : 'Connected'}</Status><Button type="button" variant="ghost" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id) }}>Manage</Button></>
       : <Button type="button" variant={lead ? 'primary' : 'secondary'} className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id === 'claude' ? 'seat' : provider.id) }}>{subscription ? 'Sign in' : 'Add key'}</Button>}
   </Row>
 }
@@ -92,7 +90,7 @@ export function ModelsStep({ id }: { id: ProviderId }) {
   const clearNotice = useCallback(() => setNotice(''), [])
   if (!provider) return <div className="flex-1" />
   if (provider.connected) return <Manage provider={provider} notice={notice} clearNotice={clearNotice} />
-  if (id === 'claude' || id === 'openhut') return <Redirect to="/settings/models" />
+  if (id === 'claude') return <Redirect to="/settings/models" />
   if (id === 'codex') return <CodexSignInStep onSignedIn={() => setNotice(found(id))} />
   return <ConnectKey provider={provider} onConnected={() => setNotice(found(id))} />
 }

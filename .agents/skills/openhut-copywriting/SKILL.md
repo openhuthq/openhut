@@ -27,7 +27,7 @@ Use this before writing or changing any text a person reads in the app or on ope
 
 **On the site and in announcements**
 - Say outcomes, not how it works: "Your agents on every computer", not "encrypted records sync through the cloud". The mechanism lives behind a "How it works" or "Security" link.
-- Never overclaim. Check claims against the docs and code first. The known traps are in `private/brain/openhut-site.md` ("Showing OpenHut Cloud on the site"): no live cursors, removal doesn't change keys, restored agents don't start by themselves, the cloud does see emails, members, device names and timing.
+- Never overclaim. Check claims against the docs and code first. The known traps are in `openhut-private: brain/openhut-site.md` ("Showing OpenHut Cloud on the site"): no live cursors, removal doesn't change keys, restored agents don't start by themselves, the cloud does see emails, members, device names and timing.
 
 **Write like Notion and Linear** (the owner's references; their home pages, 2026-11-22)
 - Titles are 2 to 5 words: a noun phrase ("Planning and monitoring", "Changelog") or a verb and its object ("Capture knowledge", "Find answers").
@@ -42,4 +42,4 @@ Use this before writing or changing any text a person reads in the app or on ope
 
 **Reviewing copy:** list each string with its file and line, say which rule it breaks, and give the exact replacement. A string that passes needs no comment.
 
-Decisions behind this: `private/brain/decisions/app-copy-is-simple-words.md`, `private/brain/openhut-site.md`.
+Decisions behind this: `openhut-private: brain/decisions/app-copy-is-simple-words.md`, `openhut-private: brain/openhut-site.md`.

@@ -1,33 +1,23 @@
-import { useCloudId } from '@/features/cloud/api'
 import { useEffect, useRef, useState } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { BrowserIcon, Globe02Icon, SidebarRight01Icon, SquareLock02Icon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, PlusSignIcon, SparklesIcon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
-import { deviceIcon } from '@/components/custom/device'
+import { BrowserIcon, SidebarRight01Icon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, SparklesIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogClose, DialogTitle } from '@/components/ui/dialog'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Spinner } from '@/components/ui/spinner'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog, useConfirming } from '@/components/confirm-button'
-import { Choice, DialogCard, GLASS, HOVER, I, ICON_BUTTON, MenuCard, PILL, ROW, ROW_VALUE, TINY_ICON } from '@/components/kit'
+import { DialogCard, GLASS, HOVER, I, ICON_BUTTON, PILL, ROW, ROW_VALUE, TINY_ICON } from '@/components/kit'
 import { agentPath, type AgentDialog } from '@/app/routes'
-import { useAgents, useChannels, useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
-import { nameOf, runsOnNote, useComputers, useFeatures } from '@/features/computers/api'
-import { iconOf } from '@/features/computers/computer-picker'
-import { ChangedBy, firstName, useChangedByOther } from '@/features/cloud/live'
-import { EditLock, FieldBox, useHolder } from '@/features/cloud/presence'
+import { useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
+import { useFeatures } from '@/features/computers/api'
 import { CanUse } from '@/features/agents/agent-connections'
 import { BrowserPreview } from '@/features/agents/browser'
 import { ChannelRows } from '@/features/agents/channels'
 import { Face } from '@/features/agents/face'
-import { useMove } from '@/features/agents/move'
 import { RoutinesRow } from '@/features/routines/routines-dialog'
-import { useWorkspaces } from '@/features/cloud/workspaces'
-import { AccessPicker } from '@/features/agents/access'
-import type { AccessValue } from '@/features/agents/form'
 import { ModelRows } from '@/features/agents/model-rows'
 import { AgentStatus } from '@/features/agents/status'
 import { formValues } from '@/lib/form'
@@ -43,21 +33,18 @@ export function Panel({ agent, naming, watching, onHide }: { agent: Agent; namin
   const skills = skillsNote(useSkills(agent.id).data)
   return <aside className={cn('still flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] phone:w-full phone:flex-1 phone:border-l-0 border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
     <div className={'flex items-center gap-3'}>
-      <FieldBox agentId={agent.id} field="face" className="shrink-0">{agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="relative block shrink-0">
+      <div className="relative shrink-0">{agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="relative block shrink-0">
         <Face agent={agent} size={48} tile />
-      </a> : <Face agent={agent} size={48} tile />}</FieldBox>
-      <FieldBox agentId={agent.id} field="name" className="grid min-w-0 flex-1"><PanelTitle agent={agent} naming={naming} /></FieldBox>
+      </a> : <Face agent={agent} size={48} tile />}</div>
+      <div className="relative grid min-w-0 flex-1"><PanelTitle agent={agent} naming={naming} /></div>
       <Button type="button" variant="bare" className={cn(ICON_BUTTON, 'self-start phone:hidden')} aria-label="Hide details" title="Hide details" onClick={onHide}><I icon={SidebarRight01Icon} size={16} /></Button>
     </div>
-    <FieldBox agentId={agent.id} field="instructions" className="-mx-2.5"><Button type="button" variant="bare" onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'does' }))} className={cn('group flex w-full flex-col gap-1 rounded-lg px-2.5 py-2', HOVER)}>
+    <div className="relative -mx-2.5"><Button type="button" variant="bare" onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'does' }))} className={cn('group flex w-full flex-col gap-1 rounded-lg px-2.5 py-2', HOVER)}>
       <span className="flex items-center text-[12px]/[16px] text-mute">What it does<span className="ml-auto text-mute opacity-0 group-hover:opacity-100"><I icon={PencilEdit02Icon} size={13} /></span></span>
       <span className={cn('line-clamp-2 text-left text-[13px]/[1.45]', agent.summary ? 'text-ink' : 'text-body')}>{agent.summary || `Tell ${agent.name} what its job is.`}</span>
-    </Button></FieldBox>
-    {!agent.canEdit && <p className="m-0 text-[12px]/[16px] text-mute">Shared by {firstName(agent.owner ?? 'its owner')}. You can chat with it, and only they can change it.</p>}
+    </Button></div>
     <div className="-mx-2.5 flex flex-col gap-px">
       <ModelRows agent={agent} />
-      <RunsOn agent={agent} />
-      <Access agent={agent} />
       {agent.runsHere && <>
         <Counted agent={agent} dialog="memory" icon={AiBrain01Icon} title="Memory" value={memory} />
         <Counted agent={agent} dialog="skills" icon={BookOpen01Icon} title="Skills" value={skills} />
@@ -73,11 +60,11 @@ export function Panel({ agent, naming, watching, onHide }: { agent: Agent; namin
 const LABEL = 'pb-1.5 text-[12px]/[16px] text-mute'
 
 function AgentActions({ agent, watching }: { agent: Agent; watching: boolean }) {
-  const features = useFeatures(agent.id)
+  const features = useFeatures()
   const updateAgent = useUpdateAgent(agent.id)
   const change = (patch: Parameters<typeof updateAgent.mutate>[0]) => updateAgent.mutate(patch, { onError: toastError })
   const locked = !agent.canEdit || !agent.canManage || updateAgent.isPending
-  const browser = features.browser || !!features.cloud || agent.browser
+  const browser = features.browser || agent.browser
   if (!agent.canManage && !browser && !agent.runsHere) return null
   return <div className="mt-auto flex flex-col pt-2">
     <span className={LABEL}>Allowed to</span>
@@ -156,74 +143,6 @@ function Counted({ agent, dialog, icon, title, value }: { agent: Agent; dialog: 
   return <a className={ROW} href={agentPath({ agentId: agent.id, dialog })}><I icon={icon} size={15} className="text-mute" />{title}<span className={VALUE}>{value ?? ''}<I icon={ArrowRight01Icon} size={12} className="text-mute" /></span></a>
 }
 
-function RunsOn({ agent }: { agent: Agent }) {
-  const computers = useComputers().data
-  const home = useAgents().data?.find((each) => each.id === agent.id)
-  const id = home?.computer ?? 'local'
-  // A paused Cloud isn't offline: sending a message wakes it.
-  const onCloud = id === useCloudId(computers ?? [])
-  const live = onCloud || (home?.online ?? true)
-  const move = useMove(home)
-  const update = useUpdateAgent(agent.id)
-  const note = noteOf(agent)
-  return <>
-    <DropdownMenu>
-      <DropdownMenuTrigger className={cn(ROW, 'h-auto min-h-8 py-1.5 whitespace-normal')} disabled={!!move.going}><I icon={deviceIcon({ kind: agent.runsOnServer || (agent.runsHere && computers?.[0]?.server) ? 'server' : 'mac' })} size={15} className="shrink-0 text-mute" /><span className="shrink-0">Runs on</span><span className={VALUE}>{move.going ? <><Spinner className="mt-0" /><span className="truncate">Moving to {move.going}…</span></> : <>{!live && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="text-right [overflow-wrap:anywhere]">{onCloud ? 'Cloud' : agent.runsHere ? nameOf({ computers, id }) : elsewhereOf(agent)}{!live && ' · Offline'}</span></>}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></DropdownMenuTrigger>
-      <MenuCard title={`${agent.name} runs on`}>
-        {!agent.runsHere && <Choice icon={<I icon={deviceIcon({ kind: agent.runsOnServer ? 'server' : 'mac' })} size={15} />} name={elsewhereOf(agent)} selected disabled />}
-        {(computers ?? []).map((computer) => !agent.runsHere && computer.id === id
-          ? agent.canManage && <Choice key={computer.id} icon={<I icon={deviceIcon({ kind: 'mac', server: computers?.[0]?.server })} size={15} />} name="Run it here" disabled={!agent.canEdit || update.isPending} onClick={() => update.mutate({ runsHere: true }, { onError: toastError })} />
-          : <Choice key={computer.id} icon={<I icon={iconOf(computer)} size={15} />} name={computer.id === id ? computer.name : `Move to ${computer.name}`}
-          note={runsOnNote(computer)}
-          selected={computer.id === id} disabled={computer.id === id || !computer.online || !agent.canEdit || !agent.canManage} onClick={() => move.go(computer.id)} />)}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="h-8 gap-2 text-[13px]" onClick={() => navigate('/settings/computers')}><I icon={PlusSignIcon} size={14} className="text-pass" />Add a computer…</DropdownMenuItem>
-      </MenuCard>
-    </DropdownMenu>
-    {move.line
-      ? <p role="status" className="m-0 px-2.5 py-1 text-[12.5px]/[1.45] text-body">{move.line}</p>
-      : note && <p className="m-0 px-2.5 pb-1 text-[12px]/[1.45] text-mute">{note}</p>}
-    {id === 'local' && <TeamHint agent={agent} server={(computers ?? []).find((each) => each.kind === 'server' && each.online)} onMove={(to) => move.go(to)} />}
-  </>
-}
-
-function Access({ agent }: { agent: Agent }) {
-  const { all, email } = useWorkspaces()
-  const home = useAgents().data?.find((each) => each.id === agent.id)
-  const update = useUpdateAgent(agent.id)
-  const [sharing, setSharing] = useState<AccessValue>()
-  const workspace = all.find((each) => agent.workspace ? each.id === agent.workspace : each.home)
-  if (!workspace || !email || (home?.computer ?? 'local') !== 'local') return null
-  const save = (next: AccessValue) => update.mutate(next, { onError: toastError })
-  return <>
-    <AccessPicker workspace={workspace} owner={agent.owner ?? email} value={{ shared: agent.shared, people: agent.people, sidebars: agent.sidebars }} disabled={!agent.canManage || update.isPending}
-      onChange={(next) => next.shared && !agent.shared ? setSharing(next) : save(next)} className={ROW}
-      trigger={(preview) => <><I icon={agent.shared ? Globe02Icon : SquareLock02Icon} size={15} className="text-mute" />Access<span className={VALUE}>{preview}<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span></>} />
-    <ConfirmDialog open={!!sharing} onOpenChange={(on) => { if (!on) setSharing(undefined) }} question={`Share ${agent.name} with ${workspace.name}?`} action="Share" onConfirm={() => sharing && save(sharing)}
-      detail={`Everyone in ${workspace.name} can read its chats and use what it can use. Only you can change it.`} />
-  </>
-}
-
-function noteOf(agent: Agent): string | undefined {
-  if (agent.runsNowhere) return `No computer runs it now. ${agent.canManage ? 'Run it here to start it.' : `Ask an admin to run ${agent.name} on their computer.`}`
-  if (!agent.runsHere) return `Runs on ${agent.runsOnName ?? 'your other computer'}. Chats sync here.`
-}
-
-function elsewhereOf(agent: Agent): string {
-  return agent.runsNowhere ? 'No computer' : agent.runsOnName ?? 'Another computer'
-}
-
-function TeamHint({ agent, server, onMove }: { agent: Agent; server: { id: string; name: string } | undefined; onMove: (to: string) => void }) {
-  const team = useChannels(agent.id).data?.find((channel) => (channel.kind === 'slack' || channel.kind === 'discord') && channel.status === 'connected')
-  if (!team) return null
-  return <div className="mx-2.5 mt-1 mb-1 flex flex-col items-start gap-1 rounded-lg bg-tint px-3 py-2.5 text-[12.5px]/[1.45] text-body">
-    <span>{agent.name} is in your team's {team.kind === 'slack' ? 'Slack' : 'Discord'}. For team use, run it on a computer that stays on.</span>
-    {server
-      ? <Button type="button" variant="text" onClick={() => onMove(server.id)}>Move to {server.name}</Button>
-      : <Button type="button" variant="text" onClick={() => navigate('/settings/computers')}>Add a computer</Button>}
-  </div>
-}
-
 const NAME = 'm-0 min-w-0 text-[18px]/[1.3] font-semibold'
 
 function AgentName({ agent, editing }: { agent: Agent; editing: boolean }) {
@@ -252,24 +171,16 @@ function AgentName({ agent, editing }: { agent: Agent; editing: boolean }) {
 
 export function DoesDialog({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const updateAgent = useUpdateAgent(agent.id)
-  const changedByOther = useChangedByOther(agent.changedBy)
-  const { locked } = useHolder({ agentId: agent.id, field: 'instructions' })
-  const [draft, setDraft] = useState<string | null>(null)
-  const box = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => {
-    if (locked && box.current) box.current.value = agent.instructions
-  }, [locked, agent.instructions])
   return <DialogCard onClose={onClose} className="w-[560px]">
     <form className="contents" onSubmit={(event) => updateAgent.mutate({ instructions: formValues(event)('instructions') }, { onSuccess: onClose })}>
       <div className="flex items-center gap-3"><Face agent={agent} size={40} /><DialogTitle className="text-[18px] font-semibold">What {agent.name} does</DialogTitle></div>
-      <Textarea ref={box} autoFocus name="instructions" aria-label="Instructions" maxLength={20000} readOnly={!agent.canEdit || locked} defaultValue={agent.instructions} rows={9} placeholder={`What does ${agent.name} do? Who does it answer, and what must it never do?`}
-        onInput={(event) => setDraft(event.currentTarget.value === agent.instructions ? null : event.currentTarget.value)}
-        className={cn('min-h-[220px] rounded-lg font-sans text-[14px]/[1.55]', locked && 'bg-soft text-body')} />
+      <Textarea autoFocus name="instructions" aria-label="Instructions" maxLength={20000} readOnly={!agent.canEdit} defaultValue={agent.instructions} rows={9} placeholder={`What does ${agent.name} do? Who does it answer, and what must it never do?`}
+        className="min-h-[220px] rounded-lg font-sans text-[14px]/[1.55]" />
       {updateAgent.error && <p role="alert" className="m-0 text-xs text-fail">{updateAgent.error.message}</p>}
-      {locked ? <EditLock agentId={agent.id} field="instructions" draft={draft} onClose={onClose} /> : <div className="flex items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 text-[13px] text-mute"><I icon={SparklesIcon} size={13} />{agent.changedBy && changedByOther ? <ChangedBy email={agent.changedBy} /> : `Plain words are fine. ${agent.name} reads this before every reply.`}</span>
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 text-[13px] text-mute"><I icon={SparklesIcon} size={13} />Plain words are fine. {agent.name} reads this before every reply.</span>
         <span className="ml-auto flex gap-2"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" variant="primary" disabled={!agent.canEdit || updateAgent.isPending}>Save</Button></span>
-      </div>}
+      </div>
     </form>
   </DialogCard>
 }

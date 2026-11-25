@@ -4,8 +4,8 @@ import { tabsFor } from '../../../src/features/settings/tabs.ts'
 
 const names = () => tabsFor().map(({ name }) => name)
 
-test('settings is one flat list: General first, then People; Usage follows Models, then Apps', () => {
-  assert.deepEqual(names(), ['General', 'People', 'Computers', 'Models', 'Usage', 'Apps'])
+test('settings is one flat list: General first, then Computers, Models and Apps', () => {
+  assert.deepEqual(names(), ['General', 'Computers', 'Models', 'Apps'])
 })
 
 test('every settings page says what it is for in one line', () => {

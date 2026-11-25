@@ -4,10 +4,8 @@ import { ArrowLeft01Icon, ArrowRight01Icon, Tick02Icon } from '@hugeicons/core-f
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
 import { Meter } from '@/components/ui/meter'
-import { CopyButton } from '@/components/copy-button'
 import { Face } from '@/features/agents/face'
-import { I, ICON_BUTTON, PILL } from '@/components/kit'
-import { home } from '@/features/settings/home'
+import { I, ICON_BUTTON } from '@/components/kit'
 import { open } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
@@ -47,13 +45,6 @@ export function SubPage({ title, back, children }: { title: string; back: string
 
 export function Chevron() {
   return <I icon={ArrowRight01Icon} size={16} className="-mr-[5px] text-mute" />
-}
-
-export function Command({ text }: { text: string }) {
-  return <div className="flex items-center gap-2 rounded-lg bg-tint py-1.5 pr-1.5 pl-3">
-    <code className="no-scrollbar fade-r min-w-0 flex-1 overflow-x-auto py-1 pr-6 font-mono text-[12px]/[1.6] whitespace-pre text-ink">{home(text)}</code>
-    <CopyButton text={text} label="Copy" variant="ghost" className={PILL} />
-  </div>
 }
 
 export function CardTitle({ children }: { children: ReactNode }) {

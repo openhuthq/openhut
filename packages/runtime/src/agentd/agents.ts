@@ -101,7 +101,6 @@ export const agents = {
   },
 
   async removeInside({ id, guest }: { id: string; guest: string }): Promise<void> {
-    if (box.name === 'native') return rmSync(`${home(id)}/${guest}`, { recursive: true, force: true })
     const spec: SandboxSpec = {
       id, image: IMAGE, cpus: 1, memoryMib: TMP_MIB, user: AGENT_USER, entrypoint: 'rm', command: [], env: {},
       mounts: [{ host: home(id), guest: '/opt/data', readOnly: false }], tmpfs: [], labels: {},
@@ -144,7 +143,7 @@ function stale(made: SandboxState) {
 function specOf({ id, net, browser: on }: { id: string; net: number; browser: boolean }): SandboxSpec {
   return {
     id, image: IMAGE, cpus: AGENT_CPUS, memoryMib: on ? browser.memoryMib : AGENT_MEMORY_MIB,
-    user: AGENT_USER, entrypoint: '/opt/hermes/bin/hermes', command: ['gateway', 'run'], env: on ? { ...AGENT_ENV, ...browser.env({ id, net }) } : AGENT_ENV,
+    user: AGENT_USER, entrypoint: '/opt/hermes/bin/hermes', command: ['gateway', 'run'], env: AGENT_ENV,
     mounts: [
       { host: RESOLV, guest: '/etc/resolv.conf', readOnly: true },
       { host: home(id), guest: '/opt/data', readOnly: false },

@@ -11,13 +11,11 @@
   "scripts": {
     "dev": "node scripts/dev.ts",
     "seed": "node scripts/seed-ui.ts",
-    "reset": "rm -rf .data && echo Wiped .data: the runtime and the local cloud DB.",
+    "reset": "rm -rf .data && echo Wiped .data.",
     "check": "TURBO_SCM_BASE=${TURBO_SCM_BASE:-origin/main} turbo run typecheck test --affected",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck && tsc -p scripts",
-    "build": "turbo run build",
-    "release": "scripts/release.sh",
-    "postinstall": "[ ! -f scripts/private.sh ] || sh scripts/private.sh"
+    "build": "turbo run build"
   },
   "devDependencies": {
     "playwright-core": "1.65.0",

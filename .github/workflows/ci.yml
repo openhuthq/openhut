@@ -15,33 +15,6 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      server: ${{ steps.paths.outputs.server }}
-      private: ${{ steps.paths.outputs.private }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - name: Pick the jobs a branch needs (main and a dispatch run everything)
-        id: paths
-        run: |
-          set -o pipefail
-          all() { printf 'server=true\nprivate=true\n' >> "$GITHUB_OUTPUT"; exit 0; }
-          [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_NAME" != main ] || all
-          base=$(git merge-base origin/main HEAD) || all
-          git cat-file -e "$base^{commit}" 2>/dev/null || all
-          changed=$(git diff --name-only "$base" HEAD) || all
-          echo "$changed"
-          private=$(echo "$changed" | grep -E '^private$|^\.github/workflows/ci\.yml$' || true)
-          # boat-boot runs on a branch only when the image's own inputs changed. The runtime image smoke runs in Promote, not here.
-          server=$(echo "$changed" | grep -E '^(install|packages/runtime|packages/common|vendor)/|^scripts/(release|image|image-smoke)\.sh$|^\.github/workflows/runtime-image\.yml$' || true)
-          echo "Needs the private checks: ${private:-nothing}"
-          echo "Needs the server image: ${server:-nothing}"
-          echo "private=$([ -n "$private" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-          echo "server=$([ -n "$server" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-
   checks:
     runs-on: ubuntu-latest
     steps:
@@ -57,8 +30,6 @@ jobs:
         run: |
           npm audit --omit=dev --audit-level=high
           ! grep '"resolved":' package-lock.json | grep -v '"https://registry.npmjs.org/\|"packages/'
-      - name: Web only (scripts/web-only-check.sh)
-        run: scripts/web-only-check.sh
       - uses: actions/cache/restore@v4
         with:
           path: .turbo/cache
@@ -72,61 +43,13 @@ jobs:
         with:
           path: .turbo/cache
           key: turbo-${{ github.sha }}
-
-  private:
-    needs: changes
-    if: needs.changes.outputs.private == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Check out private/
-        env:
-          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+      - name: The site (site/, its own package) has no high advisory, typechecks and passes its tests
         run: |
-          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - name: No high or critical advisory in what the cloud and the site ship, and their locks resolve only from the npm registry
-        run: |
-          for dir in api site; do (cd private/$dir && npm audit --omit=dev --audit-level=high) || exit 1; done
-          ! grep -h '"resolved":' private/api/package-lock.json private/site/package-lock.json | grep -v '"https://registry.npmjs.org/'
-      - name: The cloud API and the site typecheck and pass their tests
-        run: |
-          npm --prefix private/api run typecheck && npm --prefix private/api test
-          npm --prefix private/site run typecheck
-
-  app:
-    # M3: the image carries the same App dist the build makes (scripts/app-sum.ts). A PR's App never matches
-    # stable, so here the image is built against a test-key release of this App (deploy/test-release.ts);
-    # R5's check against the real signed stable release runs in the Cloud deploy's build (cloud.yml, after fetch-release.sh).
-    needs: changes
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Check out private/
-        env:
-          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
-        run: |
-          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci --no-audit --no-fund --ignore-scripts
-      - name: The image carries the same dist sha256
-        run: |
-          npm -w @openhut/app run build
-          set -a; eval "$(node private/api/deploy/test-release.ts packages/app/dist private/api/deploy/release)"; set +a
-          docker build -q -f private/api/Dockerfile --build-arg RELEASE_KEY_SPKI --build-arg REKOR_KEY_SPKI -t openhut-cloud:ci .
-          docker cp "$(docker create openhut-cloud:ci)":/app/web image-web
-          node scripts/app-sum.ts packages/app/dist image-web | tee -a "$GITHUB_STEP_SUMMARY"
+          npm --prefix site ci --no-audit --no-fund
+          (cd site && npm audit --omit=dev --audit-level=high)
+          if grep '"resolved":' site/package-lock.json | grep -v '"https://registry.npmjs.org/'; then exit 1; fi
+          npm --prefix site run typecheck
+          npm --prefix site test
 
   server:
     if: github.ref == 'refs/heads/main'
@@ -136,36 +59,22 @@ jobs:
     uses: ./.github/workflows/runtime-image.yml
     secrets: inherit
     with:
-      # R9: every main push pushes the runtime image (tagged by commit), without the slow smoke; Promote (promote.yml) smoke-tests
-      # that commit before it signs, and pins the image in that commit's install.sh.
+      # Every main push pushes the runtime image (tagged by commit), without the slow smoke; Promote (promote.yml) smoke-tests
+      # that commit before it tags it stable.
       smoke: false
       tags: ${{ github.sha }}
 
-  packs:
-    # The pack build (scripts/pack.ts) and its time, on main only; Promote signs and publishes this run's `packs` artifact.
-    if: github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/packs.yml
-
   browser:
-    # R1: the browser run is part of the gate: a fresh dev stack, the web App, and Chrome signing in (scripts/web-e2e.sh).
+    # The browser run is part of the gate: a fresh dev stack, the web App in Chrome, no sign-in (scripts/web-e2e.sh).
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - name: Check out private/
-        env:
-          KEY: ${{ secrets.PRIVATE_DEPLOY_KEY }}
-        run: |
-          mkdir -p ~/.ssh && printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-          git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init private
       - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
-      - run: |
-          npm ci --no-audit --no-fund
-          npm --prefix private/api ci --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - name: The browser run
         run: OUT=$RUNNER_TEMP/web-e2e scripts/web-e2e.sh
       - if: always()
@@ -174,29 +83,8 @@ jobs:
           name: web-e2e
           path: ${{ runner.temp }}/web-e2e
 
-  boat-boot:
-    # C1: openhut-boot against a local signed feed (bad signature refused, unhealthy pack falls back), then snapshot.sh and
-    # openhut.service in a systemd container, the fresh Boat VM stand-in (c1-boot.txt). The real Boat VM check runs at Rollout.
-    needs: changes
-    if: needs.changes.outputs.server == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-      - name: install/boat/boot.test.ts
-        run: OPENHUT_BOOT_CONTAINER=1 OPENHUT_BOOT_OUT=$RUNNER_TEMP node --test --test-concurrency=1 install/boat/boot.test.ts && cat $RUNNER_TEMP/c1-boot.txt | tee -a "$GITHUB_STEP_SUMMARY"
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: c1-boot
-          path: ${{ runner.temp }}/c1-boot.txt
-          if-no-files-found: ignore
-
   gate:
-    needs: [changes, checks, private, server, app, browser, boat-boot]
+    needs: [checks, server, browser]
     if: always()
     runs-on: ubuntu-latest
     steps:

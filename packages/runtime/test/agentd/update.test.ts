@@ -6,14 +6,13 @@ import { join } from 'node:path'
 
 const dir = mkdtempSync(join(tmpdir(), 'openhut-update-'))
 process.env.AGENTD_DATA = dir
-process.env.OPENHUT_RUNTIME = 'image'
 const { lastUpdate } = await import('../../src/agentd/update.ts')
 
 test('no finished update until the installer writes its exit code', () => {
   assert.equal(lastUpdate(), null)
 })
 
-test('in the image, an update is a request for the updater on the host, not an installer run here', async () => {
+test('an update is a request file for whatever swaps the container, not an installer run here', async () => {
   const { update } = await import('../../src/agentd/update.ts')
   const { readFileSync } = await import('node:fs')
   assert.deepEqual(await update({ appVersion: '0.6.0', sha256: 'a'.repeat(64) }), { updating: true })
@@ -35,22 +34,3 @@ test('a successful install has no reason', () => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-test('the update runs only the installer it was asked for, and records why it stopped', async () => {
-  const { execFileSync } = await import('node:child_process')
-  const { createHash } = await import('node:crypto')
-  const { readFileSync } = await import('node:fs')
-  const { UPDATE_SCRIPT } = await import('../../src/agentd/update.ts')
-  const work = mkdtempSync(join(tmpdir(), 'openhut-update-run-'))
-  const installer = join(work, 'install.sh')
-  writeFileSync(installer, 'echo "installing $OPENHUT_APP_VERSION"\nexit 0\n')
-  const sha = createHash('sha256').update(readFileSync(installer)).digest('hex')
-  const run = (sha256: string) => {
-    execFileSync('/bin/sh', ['-c', UPDATE_SCRIPT], { env: { ...process.env, OPENHUT_URL: `file://${installer}`, OPENHUT_SHA256: sha256, OPENHUT_APP_VERSION: '0.2.0', LOG: join(work, 'log'), EXIT: join(work, 'exit') } })
-    return { exit: readFileSync(join(work, 'exit'), 'utf8').trim(), log: readFileSync(join(work, 'log'), 'utf8') }
-  }
-  assert.deepEqual(run(sha), { exit: '0', log: 'installing 0.2.0\n' })
-  const changed = run('0'.repeat(64))
-  assert.equal(changed.exit, '3')
-  assert.match(changed.log, /a newer release came out/)
-  rmSync(work, { recursive: true, force: true })
-})

@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "openhut-site",
+  "account_id": "4afaa879f676f237b069df558c936116",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-11-01",
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": true },
+  "observability": { "enabled": true },
+  "send_email": [{ "name": "MAIL", "allowed_sender_addresses": ["no-reply@openhut.dev"] }],
+  "workers_dev": false,
+  "preview_urls": false
+}

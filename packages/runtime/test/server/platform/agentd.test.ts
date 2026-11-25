@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 
 const data = mkdtempSync(join(tmpdir(), 'agentd-in-process-'))
-Object.assign(process.env, { OPENHUT_SANDBOX: 'memory', AGENTD_DATA: data })
+Object.assign(process.env, { OPENHUT_FAKE_SANDBOX: '1', AGENTD_DATA: data })
 delete process.env.AGENTD_SOCK
 const { agentd, liveBrowser } = await import('../../../src/server/platform/agentd.ts')
 const { config } = await import('../../../src/server/platform/config.ts')

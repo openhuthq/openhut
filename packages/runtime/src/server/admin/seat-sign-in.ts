@@ -1,10 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { constants, zstdDecompressSync } from 'node:zlib'
+import { join } from 'node:path'
 import type { SeatSignIn } from '@openhut/common/admin/admin.ts'
 import { config } from '../platform/config.ts'
 import { log } from '../platform/events.ts'
@@ -19,27 +17,11 @@ const LINK = /\x1b\]8;[^;]*;(https:\/\/claude\.(?:com|ai)\/[^\x1b\x07\s]*oauth\/
 const TOKEN = /sk-ant-oat01-[\w-]{20,}/
 const FAILED = /OAuth error[^\n]*|wasn't accepted[^\n]*/i
 const MAX_OPEN = 3
-const CLAUDE_MIRROR = 'https://dl.openhut.dev/claude'
-const WIN_PTY = `import os, sys, threading
-sys.path.insert(0, os.environ['OPENHUT_SITE'])
-from winpty import PtyProcess
-p = PtyProcess.spawn([os.environ['OPENHUT_CLAUDE_BIN'], 'setup-token'], dimensions=(60, 4000))
-def feed():
-    while d := os.read(0, 4096):
-        p.write(d.decode('utf-8', 'replace'))
-threading.Thread(target=feed, daemon=True).start()
-while True:
-    try: d = p.read(4096)
-    except EOFError: break
-    sys.stdout.buffer.write(d.encode('utf-8'))
-    sys.stdout.buffer.flush()
-`
 const MAC_PTY = 'log_user 1; set timeout -1; fconfigure stdin -blocking 0 -translation binary; spawn -noecho sh -c $env(OPENHUT_RUN); fileevent stdin readable { set d [read stdin]; if {[eof stdin]} { exit 0 }; send -- $d }; expect eof'
 const open = new Map<string, OpenSignIn>()
 
 export const seatSignIn = {
   async start(): Promise<SeatSignIn> {
-    await claudeCli.ensure()
     const dir = mkdtempSync(join(tmpdir(), 'openhut-seat-'))
     const run = `stty cols 4000 rows 60; exec '${config.claudeHostBin}' setup-token`
     const env = { PATH: config.path, HOME: dir, CLAUDE_CONFIG_DIR: dir, BROWSER: '/bin/true', TERM: 'xterm-256color', DISABLE_AUTOUPDATER: '1' }
@@ -87,69 +69,7 @@ export const seatSignIn = {
 
 function terminal({ dir, env, run }: { dir: string; env: Record<string, string>; run: string }): ChildProcessWithoutNullStreams {
   if (process.platform === 'darwin') return spawn('/usr/bin/expect', ['-c', MAC_PTY], { cwd: dir, env: { ...env, OPENHUT_RUN: run } })
-  if (process.platform !== 'win32') return spawn('script', ['-qfec', run, '/dev/null'], { cwd: dir, env })
-  if (!config.hermesRuntime) throw new HttpError(503, 'Claude sign-in isn\'t working in this copy of OpenHut. Download OpenHut again from openhut.dev.')
-  const system = { SystemRoot: config.systemRoot, USERPROFILE: dir, APPDATA: dir, LOCALAPPDATA: dir, TEMP: dir, TMP: dir }
-  return spawn(join(config.hermesRuntime, 'python', 'python.exe'), ['-s', '-c', WIN_PTY], { cwd: dir, env: { ...env, ...system, OPENHUT_SITE: join(config.hermesRuntime, 'site'), OPENHUT_CLAUDE_BIN: config.claudeHostBin } })
-}
-
-let fetching: Promise<void> | undefined
-let progress: { done: number; total: number } | null = null
-
-export const claudeCli = {
-  progress: () => progress,
-
-  ensure(): Promise<void> {
-    const bin = config.claudeHostBin
-    if (config.installKind === 'server' || (existsSync(bin) && versionOf(bin) === config.claudeVersion)) return Promise.resolve()
-    fetching ??= download(bin).finally(() => {
-      fetching = undefined
-      progress = null
-    })
-    return fetching
-  },
-}
-
-async function download(bin: string): Promise<void> {
-  const { claudeVersion: version, claudeSha256: sha256, claudePlatform: platform } = config
-  if (!version || !sha256) throw new HttpError(503, 'Claude sign-in isn\'t working in this copy of OpenHut. Download OpenHut again from openhut.dev.')
-  const name = platform.startsWith('win32') ? 'claude.exe' : 'claude'
-  const sources = [{ url: `${CLAUDE_MIRROR}/${version}/${platform}/claude.zst`, zst: true }, { url: `https://downloads.claude.ai/claude-code-releases/${version}/${platform}/${name}`, zst: false }]
-  for (const source of sources) {
-    const body = await fetched(source.url).catch(() => undefined)
-    const plain = body && source.zst ? unzstd(body) : body
-    if (!plain || createHash('sha256').update(plain).digest('hex') !== sha256) continue
-    mkdirSync(dirname(bin), { recursive: true })
-    writeFileSync(`${bin}.new`, plain)
-    chmodSync(`${bin}.new`, 0o755)
-    renameSync(`${bin}.new`, bin)
-    writeFileSync(`${bin}.version`, version)
-    log.info({ event: 'seat.claude_downloaded', version, from: source.url })
-    return
-  }
-  throw new HttpError(503, 'Couldn\'t download Claude Code. Check the internet connection and try again.')
-}
-
-async function fetched(url: string): Promise<Buffer> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(600_000) })
-  if (!res.ok || !res.body) throw new Error(`${url} answered ${res.status}`)
-  const total = Number(res.headers.get('content-length')) || 0
-  const chunks: Buffer[] = []
-  let done = 0
-  for await (const chunk of res.body) {
-    chunks.push(Buffer.from(chunk))
-    done += chunk.length
-    progress = { done, total }
-  }
-  return Buffer.concat(chunks)
-}
-
-function unzstd(body: Buffer): Buffer | undefined {
-  try { return zstdDecompressSync(body, { params: { [constants.ZSTD_d_windowLogMax]: 31 } }) } catch { return undefined }
-}
-
-function versionOf(bin: string): string {
-  try { return readFileSync(`${bin}.version`, 'utf8').trim() } catch { return '' }
+  return spawn('script', ['-qfec', run, '/dev/null'], { cwd: dir, env })
 }
 
 function signInFor({ id, code }: { id: string; code: string }): OpenSignIn | undefined {
@@ -191,8 +111,7 @@ function close(id: string): void {
   const signIn = open.get(id)
   if (!signIn) return
   open.delete(id)
-  if (process.platform === 'win32' && signIn.proc.pid) spawn('taskkill', ['/pid', String(signIn.proc.pid), '/t', '/f']).on('error', () => {})
-  else signIn.proc.kill()
+  signIn.proc.kill()
   rm(signIn.dir, { recursive: true, force: true, maxRetries: 20 }).catch((error: Error) => log.warn({ event: 'seat.cleanup_failed', error: error.message }))
 }
 

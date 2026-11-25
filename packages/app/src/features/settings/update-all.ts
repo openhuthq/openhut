@@ -10,8 +10,8 @@ type Steps = {
   limit: number
 }
 
-export function behind({ computers, admins }: { computers: { id: string; name: string; url: string; online: boolean }[]; admins: { computer: { id: string }; admin: Admin | undefined }[] }): Behind[] {
-  return computers.filter((computer) => !!computer.url && computer.online && admins.find((each) => each.computer.id === computer.id)?.admin?.server.updateAvailable)
+export function behind({ computers, admins }: { computers: { id: string; name: string; online: boolean }[]; admins: { computer: { id: string }; admin: Admin | undefined }[] }): Behind[] {
+  return computers.filter((computer) => computer.online && admins.find((each) => each.computer.id === computer.id)?.admin?.server.updateAvailable)
     .map(({ id, name }) => ({ id, name }))
 }
 

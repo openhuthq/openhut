@@ -1,26 +1,10 @@
 name: Promote
 
-# R4, the normal release. `promote` takes main's newest green CI run and runs the runtime image smoke on that exact commit (install.sh,
-# an agent in gVisor answers a chat, a release with a failing /health rolls back); a red smoke stops the release before anything is
-# signed. Then it signs that run's packs (the `packs` artifact) with install.sh pinned to the runtime image that run pushed, and
-# publishes them as the stable pointer, for everyone at once. `halt` re-signs the current stable with halt: devices drop a pending
-# install on their next poll, without the age wait. `rollback` points stable back at an earlier release's bytes
-# (releases/<sha256>.json) under a higher sequence. halt and rollback don't wait for a smoke. Each pointer is logged in Rekor and
-# announced (scripts/r2.sh pointer), so the release monitor stays quiet; devices still wait MIN_AGE_SECONDS (0 for now), halt
-# excepted. A finished Promote deploys the Cloud (cloud.yml).
+# Takes main's newest green CI run, runs the runtime image smoke on that exact commit (install.sh, an agent in gVisor answers a
+# chat, a release with a failing /health rolls back), then tags the image CI pushed for that commit as `stable`.
 
 on:
   workflow_dispatch:
-    inputs:
-      action:
-        description: publish main's newest green commit as stable, halt stable, or roll stable back to an earlier release
-        type: choice
-        options: [promote, halt, rollback]
-        default: promote
-      to:
-        description: For rollback only, the sha256 of the earlier release.json (its releases/<sha256>.json on dl.openhut.dev, or its Rekor entry's data hash)
-        type: string
-        default: ''
 
 permissions:
   contents: read
@@ -30,12 +14,14 @@ concurrency:
   group: promote
   cancel-in-progress: false
 
+env:
+  REPO: ghcr.io/openhuthq/runtime
+
 jobs:
   green:
-    if: github.ref == 'refs/heads/main' && inputs.action == 'promote'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
-      run: ${{ steps.green.outputs.run }}
       sha: ${{ steps.green.outputs.sha }}
     steps:
       - name: Main's newest green CI run
@@ -43,15 +29,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          read -r run sha <<EOF
-          $(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --event push --status success --limit 1 --json databaseId,headSha -q '.[0] | "\(.databaseId) \(.headSha)"')
-          EOF
+          sha=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --event push --status success --limit 1 --json headSha -q '.[0].headSha')
           [ -n "$sha" ] || { echo "::error::No main commit has passed CI yet."; exit 1; }
-          echo "Promoting ${sha::8} (CI run $run)"
-          printf 'run=%s\nsha=%s\n' "$run" "$sha" >> "$GITHUB_OUTPUT"
+          echo "Promoting ${sha::8}" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
   smoke:
-    # CI no longer smoke-tests the runtime image; a release does, on the commit it promotes, before anything is signed.
     needs: green
     permissions:
       contents: read
@@ -62,63 +45,21 @@ jobs:
       ref: ${{ needs.green.outputs.sha }}
       tags: ''
 
-  promote:
+  stable:
     needs: [green, smoke]
-    # halt and rollback skip green and smoke; promote needs a passing smoke.
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (inputs.action != 'promote' || needs.smoke.result == 'success') }}
-    environment: release
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
-          ref: ${{ needs.green.outputs.sha || github.sha }}
-          # release.sh numbers the build by counting commits, as the runtime image job did.
-          fetch-depth: 0
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-      - name: Collect that run's packs, and install.sh pinned to its runtime image
-        if: inputs.action == 'promote'
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag the image CI pushed for that commit as stable
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN: ${{ needs.green.outputs.run }}
-        run: |
-          gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n packs -D packs || { echo "::error::CI run $RUN has no packs artifact (kept 7 days); push to main or rerun CI."; exit 1; }
-          gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n runtime-image -D image
-          IMAGE=$(cat image/runtime-image.txt)
-          case "$IMAGE" in ghcr.io/openhuthq/runtime@sha256:*) ;; *) echo "::error::CI run $RUN gave no runtime image digest ($IMAGE)."; exit 1 ;; esac
-          IMAGE="$IMAGE" BASE=https://openhut.dev/install.sh TGZ='https://dl.openhut.dev/packs/@SHA512@' scripts/release.sh
-          grep -qxF "RUNTIME_IMAGE=\"\${RUNTIME_IMAGE:-$IMAGE}\"" dist/install.sh && sh -n dist/install.sh
-          cp dist/install.sh dist/openhut.tgz packs/
-      - name: Sign, log and publish the stable pointer
-        env:
-          ACTION: ${{ inputs.action }}
-          TO: ${{ inputs.to }}
           SHA: ${{ needs.green.outputs.sha }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
-          [ -n "$RELEASE_SIGNING_KEY" ] || { echo "::error::The release environment has no RELEASE_SIGNING_KEY."; exit 1; }
-          (umask 077 && printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release.pem")
-          case "$ACTION" in
-            promote)
-              node scripts/release-key.ts sign "$RUNNER_TEMP/release.pem" packs "$(node -p "require('./packages/runtime/package.json').version")" --rekor https://rekor.sigstore.dev
-              rm "$RUNNER_TEMP/release.pem"
-              scripts/r2.sh packs packs
-              out=packs from="main ${SHA::8}" ;;
-            halt|rollback)
-              from=channels/stable/release.json flags='--halt'
-              if [ "$ACTION" = rollback ]; then
-                echo "$TO" | grep -Eqx '[0-9a-f]{64}' || { echo "::error::A rollback needs the sha256 of an earlier release.json in 'to'."; exit 1; }
-                from=releases/$TO.json flags=
-              fi
-              mkdir from
-              for ext in '' .sig .rekor; do curl -fsS -o "from/release.json$ext" "https://dl.openhut.dev/$from$ext"; done
-              node scripts/release-key.ts point "$RUNNER_TEMP/release.pem" from stable $flags --rekor https://rekor.sigstore.dev
-              rm "$RUNNER_TEMP/release.pem"
-              out=stable ;;
-          esac
-          scripts/r2.sh pointer "$out"
-          { echo "$ACTION: stable now points at $from, signed:"; echo '```'; cat "$out/release.json"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          docker buildx imagetools create -t "$REPO:stable" "$REPO:$SHA"
+          echo "$REPO:stable is $(docker buildx imagetools inspect "$REPO:stable" --format '{{json .Manifest.Digest}}') (${SHA::8})" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -7,7 +7,7 @@ import { newMessages, usage } from './hermes-db.ts'
 import { agentHome, type Kind } from './home/home.ts'
 import { MAX_FILE_BASE64 } from './home/uploads.ts'
 import { AGENT_USER, box, home, ID, IMAGE, RESOLV, TMP_MIB } from './host.ts'
-import { imageReady } from './sandbox/gvisor.ts'
+import { gvisorOn, imageReady } from './sandbox/docker.ts'
 import { installing, lastUpdate, update } from './update.ts'
 import { isRecord } from './util.ts'
 import { whatsapp } from './whatsapp.ts'
@@ -24,7 +24,8 @@ export const commands = {
   health: {
     parse: () => ({}),
     run: async () => ({
-      firewall: await firewall.recent(), image: IMAGE, imageReady: box.name === 'gvisor' ? await imageReady(IMAGE) : true,
+      firewall: await firewall.recent(), image: IMAGE, imageReady: box.name === 'docker' ? await imageReady(IMAGE) : true,
+      gvisor: box.name === 'docker' && await gvisorOn(IMAGE),
       updating: await installing(), lastUpdate: lastUpdate(), features: { whatsapp: whatsapp.installed(), browser: browser.installed() },
     }),
   },
@@ -49,7 +50,7 @@ export const commands = {
       if (typeof v.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(v.sha256)) throw new Error('bad sha256')
       return { appVersion: v.appVersion, sha256: v.sha256 }
     },
-    run: async ({ appVersion, sha256 }: { appVersion?: string; sha256: string }) => box.name === 'memory' || box.name === 'native' ? { updating: false } : update({ appVersion, sha256 }),
+    run: async ({ appVersion, sha256 }: { appVersion?: string; sha256: string }) => box.name === 'memory' ? { updating: false } : update({ appVersion, sha256 }),
   },
   apply: {
     parse: (v: Fields) => ({ id: agentId(v.id), net: netOf(v.net), files: filesOf(v.files), browser: v.browser === true, running: v.running === true, force: v.force === true }),

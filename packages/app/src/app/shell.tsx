@@ -6,12 +6,6 @@ import { agentPath, type Route } from '@/app/routes'
 import { useAgents, useShareLocalFaces } from '@/features/agents/api'
 import { AgentView } from '@/features/agents/agent-view'
 import { FirstAgent, NewAgentDialog } from '@/features/agents/new-agent'
-import type { CloudWorkspaceView } from '@openhut/common/cloud/cloud.ts'
-import { Hut } from '@/components/hut'
-import { Spinner } from '@/components/ui/spinner'
-import { nameOf } from '@/features/cloud/api'
-import { inWorkspace } from '@/features/cloud/teams'
-import { useWorkspaces } from '@/features/cloud/workspaces'
 import { ShowSidebar, Sidebar, SidebarContext, type Contact } from '@/features/agents/sidebar'
 import { useThreads } from '@/features/threads/api'
 import { PHONE, useMedia } from '@/lib/media'
@@ -24,7 +18,6 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
   const agents = useAgents()
   useShareLocalFaces(agents.data)
   const threads = useThreads()
-  const { active } = useWorkspaces()
   const [collapsed, setCollapsed] = useState(savedCollapsed)
   useEffect(() => saveCollapsed(collapsed), [collapsed])
   const phone = useMedia(PHONE)
@@ -42,35 +35,26 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
     return () => window.removeEventListener('keydown', key)
   }, [])
   const contacts: Contact[] = (agents.data ?? [])
-    .filter((agent) => inWorkspace({ agent, active }))
     .map((agent) => ({ agent, thread: threads.data?.find((thread) => thread.agentId === agent.id) }))
     .sort((a, b) => lastSeen(b) - lastSeen(a))
   const newAgent = () => navigate(activeId ? agentPath({ agentId: activeId, dialog: 'new' }) : '/new')
   order.current = contacts.map(({ agent }) => agent.id)
   return <SidebarContext value={{ collapsed: hidden }}><div className="relative flex h-dvh overflow-hidden bg-card pt-[env(safe-area-inset-top)] phone:bg-sidebar pb-[env(safe-area-inset-bottom)] text-left">
     {hidden && <ShowSidebar onExpand={() => setCollapsed(false)} onNew={newAgent} />}
-    <Sidebar contacts={contacts} activeId={activeId} collapsed={hidden} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} team={active.members.length > 1 || active.invites.length > 0} />
+    <Sidebar contacts={contacts} activeId={activeId} collapsed={hidden} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} />
     {route.page === 'agent' && (phone
       ? <PhonePage key={route.agentId}><AgentView agentId={route.agentId} dialog={route.dialog} detail={route.detail} /></PhonePage>
       : <AgentView key={route.agentId} agentId={route.agentId} dialog={route.dialog} detail={route.detail} />)}
-    {route.page === 'home' && agents.data && <Home first={contacts[0]?.agent.id} adding={route.adding} overlaid={!!overlay} waiting={active.waiting ? active : undefined} loading={!active.home && agents.isFetching} />}
+    {route.page === 'home' && agents.data && <Home first={contacts[0]?.agent.id} adding={route.adding} overlaid={!!overlay} />}
     {route.page === 'missing' && <Redirect to="/" />}
   </div></SidebarContext>
 }
 
-function Home({ first, adding, overlaid, waiting, loading }: { first: string | undefined; adding: boolean; overlaid: boolean; waiting: CloudWorkspaceView | undefined; loading: boolean }) {
+function Home({ first, adding, overlaid }: { first: string | undefined; adding: boolean; overlaid: boolean }) {
   const phone = useMedia(PHONE)
   if (first && phone) return adding ? <NewAgentDialog onClose={() => navigate('/')} /> : null
   if (first && overlaid) return <AgentView key={first} agentId={first} dialog={undefined} detail={undefined} />
   if (first) return <Redirect to={agentPath({ agentId: first, dialog: adding ? 'new' : undefined })} />
-  const owner = waiting?.members.find((member) => member.role === 'owner')?.email
-  if (waiting) return <section className="relative flex flex-1 flex-col items-center justify-center gap-2 bg-card px-8 pb-12 text-center">
-    <PhoneTop />
-    <Hut mood="looking" className="size-[84px]" />
-    <h1 className="mt-2 mb-0 text-[20px]/[1.3] font-semibold text-ink">Almost in</h1>
-    <p className="m-0 text-[14px]/[1.5] text-body">{nameOf(owner ?? '')}’s computer lets you in as soon as it’s on.</p>
-  </section>
-  if (loading) return <section className="relative flex flex-1 items-center justify-center bg-card"><PhoneTop /><Spinner className="size-5" /></section>
   return <section className="relative flex min-w-0 flex-1 flex-col bg-card">
     <PhoneTop />
     <FirstAgent />

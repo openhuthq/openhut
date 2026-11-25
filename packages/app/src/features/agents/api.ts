@@ -8,7 +8,6 @@ import { Channel, Conversation, TelegramInvite, type CreateChannel, type UpdateC
 import { openhut, type OpenHutAgent } from '@/lib/openhut'
 import { request } from '@/lib/api-client'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
-import { NoComputer } from '@/lib/remote'
 import { navigate } from '@/lib/router'
 import { localFace } from '@/features/agents/face'
 
@@ -22,7 +21,7 @@ const DELETED_CHANNEL = Deleted('channel')
 const DELETED_SKILL = Deleted('skill')
 
 export function useAgents() {
-  return useQuery({ queryKey: AGENTS_KEY, queryFn: () => openhut.agents.list().catch((err: unknown) => { if (err instanceof NoComputer) return []; throw err }) })
+  return useQuery({ queryKey: AGENTS_KEY, queryFn: () => openhut.agents.list() })
 }
 
 const sharedFaces = new Set<string>()
@@ -55,13 +54,13 @@ export function useAgent(agentId: string) {
 export function useCreateAgent() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: async ({ body, computer }: { body: CreateAgent; computer: string }) => {
+    mutationFn: async (body: CreateAgent) => {
       const agent = await request({ schema: Agent, path: '/api/agents', method: 'POST', body })
-      return request({ schema: Agent, path: agentPath(agent.id), method: 'PATCH', body: { wanted: 'running', ...(computer !== 'local' && { runsOn: computer }) }, wake: true })
+      return request({ schema: Agent, path: agentPath(agent.id), method: 'PATCH', body: { wanted: 'running' } })
     },
-    onSuccess: (agent, { computer }) => {
+    onSuccess: (agent) => {
       client.setQueryData([...AGENTS_KEY, agent.id], agent)
-      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents && [...agents, { ...agent, computer, online: true }])
+      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents && [...agents, { ...agent, computer: 'local', online: true }])
       navigate(`/agents/${encodeURIComponent(agent.id)}`)
     },
   })
@@ -278,17 +277,3 @@ function writeChannel(client: QueryClient, channel: Channel) {
   client.setQueryData<Channel[]>(channelsKey(channel.agentId), (channels) => channels && [...channels.filter((each) => each.kind !== channel.kind), channel])
 }
 
-export function useMoveAgent() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (input: { id: string; to: string }) => openhut.agents.move(input),
-    onSuccess: (agent, { to }) => {
-      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agent.id ? agent : each))
-      void client.invalidateQueries({ queryKey: [...AGENTS_KEY, agent.id] })
-      void client.resetQueries({ queryKey: ['threads', 'agent', agent.id] })
-      for (const queryKey of [channelsKey(agent.id), ['skills', agent.id], ['memory', agent.id], ['conversations']]) void client.invalidateQueries({ queryKey })
-      void client.invalidateQueries({ queryKey: CONNECTIONS_KEY })
-      void client.invalidateQueries({ queryKey: GRANTS_KEY })
-    },
-  })
-}

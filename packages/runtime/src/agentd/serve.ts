@@ -3,19 +3,13 @@ import type { Duplex } from 'node:stream'
 import { browser } from './browser.ts'
 import { commands, type Command } from './commands.ts'
 import { firewall } from './firewall.ts'
-import { box, DATA, ID } from './host.ts'
+import { DATA, ID } from './host.ts'
 import { errorText, isRecord } from './util.ts'
 
 const MAX_REQUEST = 1 << 20
 const queues = new Map<string, Promise<unknown>>()
 
 export async function boot(): Promise<void> {
-  if (box.name === 'native') {
-    const { sweep } = await import('./sandbox/native.ts')
-    sweep()
-    process.on('exit', sweep)
-    process.on('SIGTERM', sweep)
-  }
   for (const dir of [`${DATA}/agents`, `${DATA}/agent-conf`]) mkdirSync(dir, { recursive: true, mode: 0o700 })
   browser.freeAll(readdirSync(`${DATA}/agent-conf`).filter((name) => ID.test(name)))
   firewall.watch()
