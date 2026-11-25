@@ -10,12 +10,8 @@ import { config } from './config.ts'
 export const REMOTE = !config.local
 const RETURN = '/signed-in'
 
-// A background read found the person's Cloud computer paused. Not an error to show: sending a message wakes it.
-export class CloudPaused extends Error {
-  constructor() {
-    super('Cloud is paused. It wakes when you send a message.')
-  }
-}
+// A background read found the Cloud computer paused. Never shown: queries retry it quietly until a person's action wakes the Cloud.
+export class CloudPaused extends Error {}
 const PAUSED = ['asleep', 'stopping', 'waking']
 
 // A new account has no computer until its first agent starts Cloud. Reads fail with this, and the App shows an empty start.
@@ -24,6 +20,9 @@ export class NoComputer extends Error {
     super('No computer yet. Creating your first agent starts Cloud.')
   }
 }
+
+// A person acted (a save, or a read right after a click or key, like opening Settings), so a paused Cloud computer is woken for it.
+export const acted = (init?: RequestInit): boolean => (init?.method ?? 'GET') !== 'GET' || navigator.userActivation.isActive
 
 export class CloudOffline extends Error {
   constructor() {
@@ -184,7 +183,7 @@ export const remote = {
     })
   },
 
-  async fetch(path: string, init?: RequestInit, wake = false): Promise<Response> {
+  async fetch(path: string, init?: RequestInit, wake = acted(init)): Promise<Response> {
     const paused = async (err: unknown) => { throw err instanceof ComputersOffline && PAUSED.includes((await cloud.cloudComputer().catch(() => null))?.state ?? '') ? new CloudPaused() : err }
     return (await (wake ? live().catch(() => live(true)) : live().catch(paused))).fetch(path, init)
   },
