@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CloudOffIcon, FingerPrintIcon, Key01Icon } from '@hugeicons/core-free-icons'
-import { Cloud, CloudAuthorization, RecoveryKit, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
+import { Cloud, CloudAuthorization, RecoveryKit, type EncryptionPasskey, type UnlockCloud } from '@openhut/common/cloud/cloud.ts'
 import { request } from '@/lib/api-client'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
@@ -91,6 +91,22 @@ export function useRemovePasskey() {
     mutationFn: () => request({ schema: Cloud, computer: 'local', path: '/api/cloud/passkeys', method: 'DELETE' }),
     onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
   })
+}
+
+export function useSetEncryption() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (on: boolean) => request({ schema: Cloud, computer: 'local', path: '/api/cloud/encryption', method: 'POST', body: { on } }),
+    onSuccess: (cloud) => client.setQueryData(CLOUD_KEY, cloud),
+  })
+}
+
+export function usePrepareEncryption() {
+  return useMutation({ mutationFn: () => request({ schema: RecoveryKit, computer: 'local', path: '/api/cloud/encryption/keys', method: 'POST' }) })
+}
+
+export function useEncryptionPasskey() {
+  return useMutation({ mutationFn: (passkey: EncryptionPasskey) => request({ schema: Cloud, computer: 'local', path: '/api/cloud/encryption/passkeys', method: 'POST', body: passkey }) })
 }
 
 const NEW_KIT_HINT = 'If someone else has your kit, make a new one.'
