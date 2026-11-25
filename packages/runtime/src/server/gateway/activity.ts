@@ -18,6 +18,11 @@ export const activity = {
     lastSeen.set(agentId, Date.now())
   },
 
+  // Any agent with a gateway call open, or one that ended less than `ms` ago.
+  recent(ms: number): boolean {
+    return [...open.values()].some((count) => count > 0) || [...lastSeen.values()].some((at) => Date.now() - at < ms)
+  },
+
   async quiet({ agentId, ms, most = 600_000 }: { agentId: string; ms: number; most?: number }): Promise<void> {
     const until = Date.now() + most
     while (Date.now() < until && (activity.count(agentId) > 0 || Date.now() - (lastSeen.get(agentId) ?? 0) < ms)) await sleep(1000)

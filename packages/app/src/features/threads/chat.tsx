@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
+import { waking } from '@openhut/common/tunnel/connect.ts'
 import * as z from 'zod/mini'
 import { useChat } from '@ai-sdk/react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -463,7 +464,10 @@ function shortUrl(href: string) {
 function ChatEmpty({ agent }: { agent: Agent }) {
   const state = agentState(agent)
   const offline = useOffline(agent)
-  const copy = offline
+  const wakingCloud = useSyncExternalStore(waking.subscribe, () => waking.now)
+  const copy = wakingCloud
+    ? ['Waking Cloud…', 'Your message goes through as soon as it’s up.']
+    : offline
     ? [`${agent.name}'s computer is offline`, 'It answers again as soon as its computer is back online.']
     : {
       running: [`Say hello to ${agent.name}`, 'Ask it anything, or tell it what its job is.'],
@@ -475,7 +479,7 @@ function ChatEmpty({ agent }: { agent: Agent }) {
       missing: [`${agent.name} stopped unexpectedly`, 'It comes back by itself within 30 seconds.'],
     }[state]
   const detail = state === 'not_answering' || state === 'setup_failed' ? agent.healthDetail : ''
-  return <Centered agent={agent} title={copy[0]} line={copy[1]} pulse={state === 'starting'}>
+  return <Centered agent={agent} title={copy[0]} line={copy[1]} pulse={state === 'starting' || wakingCloud}>
     {state === 'no_seat' && <a href="/settings/models" className="text-ink underline underline-offset-2">Connect a model</a>}
     {detail && <Details text={detail} />}
   </Centered>
