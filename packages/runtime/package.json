@@ -16,6 +16,7 @@
     "@openhut/common": "*",
     "ai": "7.0.172",
     "croner": "11.0.0",
+    "env-var": "7.5.0",
     "evlog": "2.29.0",
     "fastify": "5.12.5",
     "fastify-type-provider-zod": "7.0.0",

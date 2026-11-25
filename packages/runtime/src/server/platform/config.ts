@@ -1,35 +1,39 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import env from 'env-var'
 import * as z from 'zod/mini'
 
 const PackageJson = z.object({ version: z.string() })
 const NativeRuntime = z.object({ claude: z.object({ version: z.string(), sha256: z.record(z.string(), z.string()) }) })
 const PLATFORM = `${process.platform}-${process.arch === 'arm64' ? 'arm64' : 'x64'}`
-const PORT = Number(process.env.PORT ?? 8787)
-const DATA = process.env.OPENHUT_DATA ?? '/data/app'
 const BUILD = fileOr(new URL('../../../../../BUILD', import.meta.url), 'dev')
-const JOIN = process.env.OPENHUT_JOIN || undefined
-const TEST_MODEL = process.env.OPENHUT_MODEL === 'test'
-const HOST_NET = process.env.OPENHUT_AGENT_HOST_NET === '1'
-const API_URL = process.env.OPENHUT_API_URL || 'https://cloud.openhut.dev/api'
-const GATEWAY_PORT = Number(process.env.OPENHUT_GATEWAY_PORT ?? 8081)
+
+// Every environment variable the server reads lives here (the agent host has its own, agentd/config.ts).
+const DATA = env.get('OPENHUT_DATA').default('/data/app').asString() // where the database and files live
+const SOCKET = env.get('OPENHUT_SOCKET').asString() // the desktop app's socket; set only by the desktop app
+const TEST_MODEL = env.get('OPENHUT_MODEL').asString() === 'test' // 'test' answers with the built-in fake model
+const HOST_NET = env.get('OPENHUT_AGENT_HOST_NET').default('false').asBool() // agents share the host's network (desktop)
+const GATEWAY_PORT = env.get('OPENHUT_GATEWAY_PORT').default('8081').asPortNumber() // the agents' gateway
+const BIN = env.get('OPENHUT_BIN').asString() // the desktop pack's native binaries
+const SANDBOX = env.get('OPENHUT_SANDBOX').asString() // set means agentd runs in this process unless AGENTD_SOCK is set
+const AGENTD_SOCK = env.get('AGENTD_SOCK').asString() // the agent host's socket, when it runs as its own process
 
 export const config = {
   dataDir: DATA,
-  port: PORT,
-  host: process.env.OPENHUT_HOST ?? '127.0.0.1',
+  port: env.get('PORT').default('8787').asPortNumber(), // the server's HTTP port
+  host: env.get('OPENHUT_HOST').default('127.0.0.1').asString(), // the address it listens on
   gatewayPort: GATEWAY_PORT,
-  releaseUrl: process.env.OPENHUT_URL ?? 'https://openhut.dev',
-  apiUrl: API_URL,
-  webUrl: (process.env.OPENHUT_WEB_URL || 'https://app.openhut.dev').replace(/\/$/, ''),
-  socket: process.env.OPENHUT_SOCKET ?? join(DATA, 'openhut.sock'),
-  installKind: installKindOf(process.env.OPENHUT_SOCKET ? 'desktop' : 'server'),
-  cloudComputer: process.env.OPENHUT_CLOUD === '1', // a Cloud computer (Boat VM): sends busy/idle so the Cloud can pause it
-  personal: Boolean(process.env.OPENHUT_SOCKET) || process.env.OPENHUT_PERSONAL === '1',
-  clientKeySha256: process.env.OPENHUT_CLIENT_KEY_SHA256,
+  releaseUrl: env.get('OPENHUT_URL').default('https://openhut.dev').asString(), // where releases are downloaded from
+  apiUrl: env.get('OPENHUT_API_URL').default('https://cloud.openhut.dev/api').asString(), // the Cloud API
+  webUrl: env.get('OPENHUT_WEB_URL').default('https://app.openhut.dev').asString().replace(/\/$/, ''), // the web App
+  socket: SOCKET ?? join(DATA, 'openhut.sock'),
+  installKind: installKindOf(SOCKET ? 'desktop' : 'server'),
+  cloudComputer: env.get('OPENHUT_CLOUD').default('false').asBool(), // a Cloud computer (Boat VM): sends busy/idle so the Cloud can pause it
+  personal: Boolean(SOCKET) || env.get('OPENHUT_PERSONAL').default('false').asBool(), // one person's computer, not a team server
+  clientKeySha256: env.get('OPENHUT_CLIENT_KEY_SHA256').asString(), // sha256 of the key a server's clients present
   modelMode: TEST_MODEL ? 'test' as const : 'claude' as const,
-  agentApi: process.env.OPENHUT_AGENT_API,
+  agentApi: env.get('OPENHUT_AGENT_API').asString(), // overrides the agents' API address (tests)
   agentGateway: HOST_NET ? `http://127.0.0.1:${GATEWAY_PORT}` : undefined,
   agentHostNet: HOST_NET,
   slackApi: 'https://slack.com/api',
@@ -42,19 +46,21 @@ export const config = {
   xaiApi: 'https://api.x.ai',
   codexApi: 'https://chatgpt.com/backend-api/codex',
   codexAuthApi: 'https://auth.openai.com',
-  agentdSocket: process.env.AGENTD_SOCK ?? '/run/agentd/agentd.sock',
-  agentdInProcess: !!process.env.OPENHUT_SANDBOX && !process.env.AGENTD_SOCK,
-  secret: process.env.OPENHUT_SECRET,
+  agentdSocket: AGENTD_SOCK ?? '/run/agentd/agentd.sock',
+  agentdInProcess: !!SANDBOX && !AGENTD_SOCK,
+  secret: env.get('OPENHUT_SECRET').asString(), // the install's auth secret from the OS keychain (desktop); removed from the env below
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))).version,
   build: BUILD,
-  join: JOIN,
-  appScheme: process.env.OPENHUT_APP_SCHEME || undefined,
-  name: process.env.OPENHUT_NAME || undefined,
+  join: env.get('OPENHUT_JOIN').asString(), // a join code: a new server joins this team on first start
+  appScheme: env.get('OPENHUT_APP_SCHEME').asString(), // the desktop app's URL scheme, to return to after sign-in
+  name: env.get('OPENHUT_NAME').asString(), // this computer's name, instead of the hostname
   claudeBin: fileURLToPath(new URL('../../../../../bin/claude', import.meta.url)),
-  claudeHostBin: process.env.OPENHUT_CLAUDE ?? (process.env.OPENHUT_BIN ? join(process.env.OPENHUT_BIN, process.platform === 'win32' ? 'claude.exe' : 'claude') : fileURLToPath(new URL(`../../../../../bin/${process.platform === 'darwin' ? 'claude-darwin' : 'claude'}`, import.meta.url))),
+  claudeHostBin: env.get('OPENHUT_CLAUDE').asString() ?? (BIN ? join(BIN, process.platform === 'win32' ? 'claude.exe' : 'claude') : fileURLToPath(new URL(`../../../../../bin/${process.platform === 'darwin' ? 'claude-darwin' : 'claude'}`, import.meta.url))), // the Claude CLI the server runs itself
   claudePlatform: PLATFORM,
   ...claudeOf(new URL('../../../../../install/native-runtime.json', import.meta.url)),
-  hermesRuntime: process.env.AGENTD_HERMES,
+  hermesRuntime: env.get('AGENTD_HERMES').asString(), // the bundled Python and Node runtime (desktop)
+  path: env.get('PATH').default('/usr/bin:/bin').asString(), // the PATH Claude sign-in runs with
+  systemRoot: env.get('SystemRoot').default('C:\\Windows').asString(), // Windows only, for Claude sign-in
   started: Math.floor(Date.now() / 1000),
 }
 delete process.env.OPENHUT_SECRET

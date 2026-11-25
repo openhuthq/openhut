@@ -2,10 +2,10 @@ import { after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomBytes } from 'node:crypto'
 import { text } from 'node:stream/consumers'
-import { sandboxes } from '../../../src/agentd/sandbox/index.ts'
 import type { SandboxSpec } from '../../../src/agentd/sandbox/sandbox.ts'
 
 process.env.OPENHUT_SANDBOX ||= 'memory'
+const { sandboxes } = await import('../../../src/agentd/sandbox/index.ts')
 const box = await sandboxes()
 const { ok, reason } = await box.ready()
 const skip = ok ? false : `${box.name} is not ready: ${reason}`
