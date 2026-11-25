@@ -5,7 +5,7 @@ import { keyed, listed, refuse, type ListedModel, type Provider } from './shared
 
 export const MAX_OUTPUT = 8_192
 export const MAX_CONTEXT = 200_000
-const FRESH_MS = 5 * 60_000
+const FRESH_MS = 60_000 // the balance the App shows is at most a minute old; one Cloud read a minute while in use
 const OUT = 'Your OpenHut credits are used up. Ask your admin for more, or add your own key under Settings, Models.'
 
 const MODELS: CreditModel[] = [

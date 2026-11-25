@@ -20,7 +20,8 @@ import { askCard, MCP_AUTH } from '@openhut/common/asks/ask.ts'
 import { ConnectionKind } from '@openhut/common/connections/connection.ts'
 
 const PER_AGENT = 8
-const LONG_POLL = /^\/u\/telegram\/bot[^/]+\/getUpdates$/
+// Background polls (Telegram's long poll, the plugin's routines poll every 15 s) aren't the agent at work, so they don't keep a Cloud computer awake.
+const LONG_POLL = /^(\/u\/telegram\/bot[^/]+\/getUpdates|\/routines\/due)$/
 const MAX_BODY = 1 << 20
 const LIMITS = { requestTimeout: 60_000, headersTimeout: 10_000, connectionsCheckingInterval: 2_000 }
 const RunReport = z.object({ picked: z.literal(true).optional(), said: z.string().max(200_000).optional() })
@@ -49,7 +50,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const agent = token ? await agentService.byToken({ token }) : undefined
   if (!agent) return json(res, 401, errorBody({ status: 401, message: 'Send this agent\'s own token.' }))
   const path = url.pathname
-  const listening = LONG_POLL.test(path)
+  const mcp = path === '/api/v1/mcp' && req.method === 'POST' ? await readBody(req) : undefined
+  // Hermes's MCP keepalives and tool listings aren't work either; only a tool call is.
+  const listening = LONG_POLL.test(path) || (path === '/api/v1/mcp' && ![mcp].flat().some((message) => (message as { method?: string } | undefined)?.method === 'tools/call'))
   if (!listening && activity.count(agent.id) >= PER_AGENT) return json(res, 429, errorBody({ status: 429, message: `This agent already has ${PER_AGENT} requests running. Wait for them.` }), true)
   if (!listening) {
     activity.started(agent.id)
@@ -58,7 +61,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const brokered = /^\/u\/([a-z]+)(\/.*)$/.exec(path)
   const upstream = brokered && upstreams.get(brokered[1])
   if (brokered && upstream) return brokerService.forward({ agent, upstream, path: brokered[2] + url.search, req, res })
-  if (path === '/api/v1/mcp') return serveMcp({ server: agentMcp(agent), req, res, body: req.method === 'POST' ? await readBody(req) : undefined })
+  if (path === '/api/v1/mcp') return serveMcp({ server: agentMcp(agent), req, res, body: mcp })
   if (path === '/routines/due' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: [...await routineService.due({ agentId: agent.id }), ...await changeRequestService.due({ agentId: agent.id })] })
   const run = /^\/routines\/runs\/((?:ru|chg)_[a-z0-9]+)$/.exec(path)
   if (run && req.method === 'POST') return json(res, 200, await reportRun({ agentId: agent.id, runId: run[1], body: await readBody(req) }))
