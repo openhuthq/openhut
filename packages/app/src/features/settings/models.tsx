@@ -21,6 +21,7 @@ import { consequence, count, describe, glyphOf, matches, plural, updatedAgo } fr
 import { inUse } from '@/features/agents/form'
 import { open, Redirect, useOpen } from '@/lib/router'
 import { formValues } from '@/lib/form'
+import { fieldError } from '@/lib/api-client'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -111,19 +112,25 @@ function ConnectKey({ provider, onConnected }: { provider: Provider; onConnected
   const connect = useConnectProvider()
   const [short, setShort] = useState(false)
   const keyField = useRef<HTMLInputElement>(null)
+  const baseError = fieldError(connect.error, 'baseUrl')
+  const keyError = baseError === undefined ? connect.error?.message : undefined
   useEffect(() => keyField.current?.focus(), [])
-  return <SetupSheet brand={provider.id} title={`Connect ${info.short}`} blurb={`Paste an API key from ${info.keysAt}. OpenHut finds the models you can use.`} safe="Takes a few seconds." onClose={() => leave(provider.id)}
+  return <SetupSheet brand={provider.id} title={`Connect ${info.short}`} blurb={info.keysAt ? `Paste an API key from ${info.keysAt}. OpenHut finds the models you can use.` : 'Any API that speaks OpenAI’s chat completions, like xAI, Groq, Mistral or your own server. OpenHut finds the models.'} safe="Takes a few seconds." onClose={() => leave(provider.id)}
     onSubmit={(event) => {
       const field = formValues(event)
       const apiKey = field('key').trim()
       setShort(apiKey.length < MIN_KEY)
-      if (apiKey.length >= MIN_KEY) connect.mutate({ id: provider.id, apiKey }, { onSuccess: onConnected })
+      const baseUrl = provider.id === 'compatible' ? field('baseUrl').trim() : undefined
+      if (apiKey.length >= MIN_KEY) connect.mutate({ id: provider.id, apiKey, baseUrl }, { onSuccess: onConnected })
     }}
     foot={<>
       <Button type="button" variant="secondary" onClick={() => leave(provider.id)}>Cancel</Button>
       {connect.isPending ? <Busy label="Connecting…" /> : <Button type="submit" variant="primary">Connect</Button>}
     </>}>
-    <Field label="API key" strong hint="Sealed so only your computers and servers can read it. You won't see it again." error={short ? KEY_MESSAGE : connect.error?.message}>
+    {provider.id === 'compatible' && <Field label="Base URL" strong hint="The address before /chat/completions." error={baseError}>
+      {(control) => <Input {...control} mono type="url" name="baseUrl" required defaultValue={provider.baseUrl ?? ''} maxLength={300} autoComplete="off" spellCheck={false} placeholder="https://api.x.ai/v1" />}
+    </Field>}
+    <Field label="API key" strong hint="Stays on this server. Agents never see it." error={short ? KEY_MESSAGE : keyError}>
       {(control) => <Input {...control} ref={keyField} mono type="password" name="key" maxLength={MAX_KEY} autoComplete="off" spellCheck={false} placeholder={info.keyHint ?? undefined} onInput={() => { setShort(false); connect.reset() }} />}
     </Field>
   </SetupSheet>

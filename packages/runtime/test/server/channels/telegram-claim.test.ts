@@ -39,7 +39,7 @@ await db.insertInto('agent').values([
 signIn({ email: 'tg@example.com' })
 runSet.watch()
 await refresh()
-const actor = { id: 'usr_tgowner1', email: 'tg@example.com', local: true, role: 'owner' as const }
+const actor = { id: 'usr_tgowner1', email: 'tg@example.com', role: 'owner' as const }
 const token = '7381920465:AAHk2QxxxxxxxxxxxxxxxxxxxxxxxxxxXx9Lw'
 const message = (id: number, text: string, from: number, name: string) => ({ update_id: id, message: { text, chat: { id: from }, from: { id: from, first_name: name } } })
 

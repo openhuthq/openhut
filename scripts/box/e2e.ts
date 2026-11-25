@@ -1,5 +1,4 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { createHash, randomBytes } from 'node:crypto'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -82,10 +81,11 @@ async function up(runtimes: number) {
 }
 
 async function install() {
-  const key = randomBytes(32).toString('hex')
-  const sha = createHash('sha256').update(key).digest('hex')
-  writeFileSync(`${OUT}/client-key.txt`, `${key}\n`, { mode: 0o600 })
-  const envs = `OPENHUT_CLIENT_KEY_SHA256=${sha}`
+  capture(main, `command -v socat >/dev/null || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq socat >/dev/null; sudo systemctl stop oh-preview 2>/dev/null; sudo systemd-run --unit oh-preview socat TCP-LISTEN:${PREVIEW_PORT},fork,reuseaddr TCP:127.0.0.1:8787`)
+  const url = capture(main, `preview ${PREVIEW_PORT}`).match(/https:\/\/\S+/)?.[0]
+  if (!url) throw new Error('preview gave no URL')
+  writeFileSync(`${OUT}/preview-url.txt`, `${url}\n`)
+  const envs = `OPENHUT_ADDRESS=${url}${process.env.RUNTIME_IMAGE ? ` RUNTIME_IMAGE=${process.env.RUNTIME_IMAGE}` : ''}`
   const script = values.script!
   const local = existsSync(script)
   const cmd = local ? `sudo env ${envs} sh -s` : `curl -fsSL ${script} | sudo env ${envs} sh`
@@ -95,12 +95,10 @@ async function install() {
   writeFileSync(`${OUT}/install.log`, r.stdout + r.stderr)
   log(`install: ${script} exit ${r.status} in ${secs}s (output in install.log)`)
   if (r.status !== 0) process.exit(1)
-  capture(main, `command -v socat >/dev/null || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq socat >/dev/null; sudo systemctl stop oh-preview 2>/dev/null; sudo systemd-run --unit oh-preview socat TCP-LISTEN:${PREVIEW_PORT},fork,reuseaddr TCP:127.0.0.1:8787`)
-  const url = capture(main, `preview ${PREVIEW_PORT}`).match(/https:\/\/\S+/)?.[0]
-  if (!url) throw new Error('preview gave no URL')
-  writeFileSync(`${OUT}/preview-url.txt`, `${url}\n`)
   const image = capture(main, `docker image inspect -f '{{.Size}}' $(docker inspect -f '{{.Image}}' openhut)`).trim()
   log(`install: image ${(Number(image) / 1e9).toFixed(2)} GB unpacked; local health ${capture(main, 'curl -fsS http://127.0.0.1:8787/health').trim()}`)
+  const setup = (r.stdout + r.stderr).match(/https:\/\/\S+\/setup\?code=\S+/)?.[0]
+  if (setup) log(`install: setup link ${setup} (in install.log)`)
   for (let i = 0; i < 20; i++) {
     const res = await fetch(`${url}/health`).catch((e: Error) => e)
     if (!(res instanceof Error) && res.ok) return log(`install: ${url}/health -> ${res.status} ${await res.text()}`)

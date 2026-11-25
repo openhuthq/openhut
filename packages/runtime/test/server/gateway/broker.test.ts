@@ -71,7 +71,7 @@ test('a forged token gets 401, and so does the old token right after a revoke', 
   const { runSet } = await import('../../../src/server/agents/run-set.ts')
   signIn({ email: 'broker@example.com' })
   await refresh()
-  await agentService.revokeToken({ actor: { id: 'usr_brokerow', email: 'broker@example.com', local: false }, id: 'ag_brokerrv' })
+  await agentService.revokeToken({ actor: { id: 'usr_brokerow', email: 'broker@example.com', role: 'owner' as const }, id: 'ag_brokerrv' })
   assert.equal((await ask(old)).status, 401)
   assert.equal((await ask(agentToken({ id: 'ag_brokerrv', epoch: 1 }))).status, 200)
 })

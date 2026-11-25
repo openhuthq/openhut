@@ -75,14 +75,13 @@ jobs:
           echo "The layer built and pushed in $(( $(date +%s) - layer ))s" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Install it as a server would, from install.sh
         run: |
-          KEY=$(openssl rand -hex 32) && echo "KEY=$KEY" >> "$GITHUB_ENV" && echo "::add-mask::$KEY"
           start=$(date +%s)
-          OPENHUT_MODEL=test OPENHUT_CLIENT_KEY_SHA256=$(printf %s "$KEY" | sha256sum | cut -c1-64) sh dist/install.sh
+          OPENHUT_MODEL=test OPENHUT_ADDRESS=http://127.0.0.1:8787 sh dist/install.sh
           echo "Installed in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
           docker ps --format '{{.Names}} {{.Image}} {{.Status}}'
           [ "$(docker inspect -f '{{.State.Running}}' openhut-updater)" = true ] || { echo "::error::the updater isn't running"; docker logs openhut-updater; exit 1; }
       - name: One agent in gVisor answers a chat
-        run: scripts/image-smoke.sh "$KEY"
+        run: scripts/image-smoke.sh
       - name: A release whose /health fails is rolled back
         run: |
           good=$(docker inspect -f '{{.Image}}' openhut)

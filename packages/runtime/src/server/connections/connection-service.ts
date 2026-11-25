@@ -29,7 +29,7 @@ const running = new Map<string, number>()
 const queues = new Map<string, Promise<unknown>>()
 const toolCache = new Map<string, { at: number; tools: ToolSpec[] }>()
 const redirectUrl = () => `${callbackBase()}/api/connection-authorizations/callback`
-export const callbackBase = (): string => `http://127.0.0.1:${config.port}`
+export const callbackBase = (): string => config.address
 const CONNECTORS: Record<ConnectionKind, Connector> = {
   postgres: postgres.connector,
   convex: convex.connector,

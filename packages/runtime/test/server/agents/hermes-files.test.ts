@@ -12,7 +12,7 @@ const catalogs = {
   codex: [on('gpt-5.5'), on('gpt-5.5-mini', 'fast')],
   openrouter: [on('anthropic/claude-opus-5.5', 'big', 500000), on('google/gemini-3.5-flash', 'fast', 1000000)],
   openai: [on('gpt-5.5'), on('gpt-5.5-mini', 'fast')],
-  xai: [],
+  compatible: [],
   openhut: [],
 }
 const slots = (model = 'claude:sonnet') => resolveSlots({ model, catalog: (provider) => catalogs[provider] })

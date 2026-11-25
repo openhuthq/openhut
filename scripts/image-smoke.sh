@@ -1,13 +1,16 @@
 #!/bin/sh
 set -eu
-KEY="${1:?image-smoke.sh <app key> (the key whose sha256 the runtime was installed with)}"
 D="${DOCKER:-docker}"
 rt() { $D exec openhut "$@"; }
-api() { rt curl -fsS -H "authorization: Bearer $KEY" -H 'content-type: application/json' "$@"; }
+api() { rt curl -fsS -b /tmp/smoke-cookies -c /tmp/smoke-cookies -H 'content-type: application/json' "$@"; }
 fail() { echo "smoke: $*" >&2; $D exec openhut sh -c 'tail -n 40 /var/log/openhut/agentd.log /var/log/openhut/app.log' >&2 || true; exit 1; }
 wait_for() { i=0; until eval "$2" >/dev/null 2>&1; do i=$((i+1)); [ "$i" -gt "$1" ] && return 1; sleep 3; done; }
 
 wait_for 100 'rt curl -fsS http://127.0.0.1:8787/health' || fail "no /health"
+code=$(rt openhut setup-code | sed -n 's/.*code=//p') || fail "no setup code"
+api -X POST http://127.0.0.1:8787/api/people -d "{\"setupCode\":\"$code\",\"email\":\"smoke@example.com\",\"password\":\"smoke-test-password\"}" >/dev/null || fail "create the owner from the setup code"
+rt curl -fsS http://127.0.0.1:8787/setup | grep -q '<div id="root">' || fail "the web app isn't served"
+echo "smoke: the owner signed in with the setup code, and the web app is served"
 rt sh -c 'command -v script' >/dev/null || fail "no script(1) in the image, so the Claude sign-in can't start"
 link=$(rt sh -c 'd=$(mktemp -d); cd "$d"; HOME=$d CLAUDE_CONFIG_DIR=$d BROWSER=/bin/true TERM=xterm-256color timeout 30 script -qfec "stty cols 4000 rows 60; exec $OPENHUT_CLAUDE setup-token" /dev/null </dev/null | tr "\033\007" "\n\n" | grep -o "https://claude\.[a-z]*/[^ ]*oauth/authorize?[^ ]*" | head -n 1; rm -rf "$d"')
 case "$link" in https://claude.ai/*|https://claude.com/*) echo "smoke: the Claude sign-in starts at ${link%%\?*}" ;; *) fail "the Claude sign-in gave no claude.ai link: $link" ;; esac
@@ -31,5 +34,5 @@ reply=$(rt curl -fsS -m 180 -H "authorization: Bearer $token" -H 'content-type: 
   -d '{"model":"hermes-agent","messages":[{"role":"user","content":"smoke test ping"}]}') || fail "chat"
 printf '%s' "$reply" | grep -q 'smoke test ping' || fail "the reply doesn't echo: $reply"
 echo "smoke: the agent answered: $(printf '%s' "$reply" | head -c 300)"
-[ -n "${KEEP:-}" ] || rt curl -fsS -o /dev/null -X DELETE -H "authorization: Bearer $KEY" "http://127.0.0.1:8787/api/agents/$id" || fail "delete the agent"
+[ -n "${KEEP:-}" ] || rt curl -fsS -o /dev/null -b /tmp/smoke-cookies -X DELETE "http://127.0.0.1:8787/api/agents/$id" || fail "delete the agent"
 echo "smoke: ok"

@@ -19,7 +19,10 @@ export const agentController: FastifyPluginAsyncZod = async (app) => {
 }
 
 export const grantController: FastifyPluginAsyncZod = async (app) => {
-  app.get('/', ListGrantsRequest, async (req) => listOf({ req, data: await agentService.listGrants(req.query) }))
+  app.get('/', ListGrantsRequest, async (req) => {
+    const visible = await agentService.visibleIds({ actor: await who(req) })
+    return listOf({ req, data: (await agentService.listGrants(req.query)).filter((grant) => visible.has(grant.agentId)) })
+  })
 
   app.post('/', CreateGrantRequest, async (req) => agentService.createGrant({ actor: await who(req), ...req.body }))
 

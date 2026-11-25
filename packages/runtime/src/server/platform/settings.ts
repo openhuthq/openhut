@@ -1,9 +1,12 @@
+import { randomUUID } from 'node:crypto'
 import * as z from 'zod/mini'
 import { ProviderModel } from '@openhut/common/models/provider.ts'
 import { db } from './db.ts'
 import { emit } from './events.ts'
 import { seal, unseal } from './secrets.ts'
 
+const GoogleClient = z.object({ id: z.string(), secret: z.string() })
+const Smtp = z.object({ host: z.string(), port: z.number(), user: z.string(), password: z.string(), from: z.string() })
 const CodexTokens = z.object({ accessToken: z.string(), refreshToken: z.string() })
 const StoredCatalog = z.object({ at: z.string(), models: z.array(ProviderModel) })
 const loaded = await db.selectFrom('install_setting').select(['name', 'value']).execute()
@@ -37,6 +40,8 @@ export const settings = {
     return sealed ? unseal(sealed) : ''
   },
   setProviderKey: (provider: string, key: string) => write(`provider_key_${provider}`, seal(key)),
+  providerBaseUrl: (provider: string): string => rows.get(`provider_base_${provider}`) ?? '',
+  setProviderBaseUrl: (provider: string, url: string) => write(`provider_base_${provider}`, url),
   catalog: (provider: string): StoredCatalog | undefined => {
     const stored = rows.get(`provider_models_${provider}`)
     const parsed = z.safeParse(StoredCatalog, stored ? JSON.parse(stored) : undefined)
@@ -56,6 +61,24 @@ export const settings = {
   access: (): string | undefined => rows.get('access'),
   signIns: (): Record<string, number> => z.safeParse(z.record(z.string(), z.number()), JSON.parse(rows.get('sign_ins') ?? '{}')).data ?? {},
   setSignIns: (pending: Record<string, number>) => write('sign_ins', JSON.stringify(pending)),
+  googleClient: (): GoogleClient | undefined => {
+    const sealed = rows.get('google_client')
+    return sealed ? z.parse(GoogleClient, JSON.parse(unseal(sealed))) : undefined
+  },
+  setGoogleClient: (client: GoogleClient) => write('google_client', seal(JSON.stringify(client))),
+  googleSignIn: (): boolean => rows.get('google_sign_in') === 'on' && !!rows.get('google_client'),
+  setGoogleSignIn: (on: boolean) => write('google_sign_in', on ? 'on' : 'off'),
+  smtp: (): Smtp | undefined => {
+    const sealed = rows.get('smtp')
+    return sealed ? z.parse(Smtp, JSON.parse(unseal(sealed))) : undefined
+  },
+  setSmtp: (smtp: Smtp) => write('smtp', seal(JSON.stringify(smtp))),
+  usageData: (): boolean => rows.get('usage_data') === 'on',
+  setUsageData: (on: boolean) => write('usage_data', on ? 'on' : 'off'),
+  async installId(): Promise<string> {
+    if (!rows.get('install_id')) await write('install_id', randomUUID())
+    return rows.get('install_id') ?? ''
+  },
 }
 
 async function forget(name: string): Promise<void> {
@@ -71,5 +94,7 @@ async function write(name: string, value: string): Promise<void> {
   emit({ name: 'setting.updated', target: { type: 'setting', id: name } })
 }
 
+export type GoogleClient = z.infer<typeof GoogleClient>
+export type Smtp = z.infer<typeof Smtp>
 export type CodexTokens = z.infer<typeof CodexTokens>
 export type StoredCatalog = z.infer<typeof StoredCatalog>

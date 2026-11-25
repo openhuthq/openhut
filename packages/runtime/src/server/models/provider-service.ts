@@ -33,6 +33,12 @@ export const providerService = {
   },
 
   async update({ actor, id, patch }: { actor: Caller; id: ProviderId; patch: UpdateProvider }): Promise<Provider> {
+    if (patch.baseUrl !== undefined) {
+      if (patch.apiKey === undefined) throw new HttpError(400, 'Paste the API key again with a new base URL.', { param: 'apiKey' })
+      if (id !== 'compatible') throw new HttpError(400, `${providerInfo(id).short} has a fixed address.`, { param: 'baseUrl' })
+      await settings.setProviderBaseUrl(id, patch.baseUrl)
+    }
+    if (id === 'compatible' && patch.apiKey !== undefined && !settings.providerBaseUrl(id)) throw new HttpError(400, 'Enter the API base URL first, like https://api.x.ai/v1.', { param: 'baseUrl' })
     if (patch.apiKey !== undefined) await connect({ actor, id, key: patch.apiKey })
     if (patch.models) await switchModels({ id, changes: patch.models })
     return providerOf(id)
@@ -65,6 +71,7 @@ function providerOf(id: ProviderId): Provider {
   return {
     id, object: 'provider', kind: info.kind, name: info.name, connected,
     keyHint: key ? `${key.slice(0, 5)}…${key.slice(-4)}` : null,
+    baseUrl: id === 'compatible' ? settings.providerBaseUrl(id) || null : null,
     updatedAt: connected ? stored?.at ?? signedInAt : null,
     models: connected ? catalogOf(id).models : [],
   }
