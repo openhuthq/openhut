@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto'
 import { AgentRecord, ControlRecord } from '@openhut/common/agents/agent.ts'
-import { agentService, type AgentRow } from '../agents/agent-service.ts'
-import { memoryService } from '../agents/memory-service.ts'
-import { skillService } from '../agents/skill-service.ts'
-import { channelService, leaveInbox } from '../channels/channel-service.ts'
+import { agentService, type AgentRow } from './agent-service.ts'
+import { memoryService } from './memory-service.ts'
+import { skillService } from './skill-service.ts'
+import { channelService } from '../channels/channel-service.ts'
 import { routineService } from '../routines/routine-service.ts'
 import { agentd } from '../platform/agentd.ts'
 import { db } from '../platform/db.ts'
@@ -11,10 +11,8 @@ import { emit, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { portsFree } from '../platform/network.ts'
 import { newId, seal } from '../platform/secrets.ts'
-import { keysService } from './keys-service.ts'
-import { recordsService, type Change, type Held } from './records.ts'
-import { roomKeys } from './room-keys.ts'
-import { upgrade } from './upgrade.ts'
+import { recordsService, type Change, type Held } from '../platform/records.ts'
+import { HERE, HOME } from '../team/home.ts'
 
 const MAX_AGENTS = 250
 const START_MS = 5_000
@@ -52,7 +50,6 @@ function serial(step: () => Promise<void>): Promise<void> {
 }
 
 async function heard(change: Change): Promise<void> {
-  if (!keysService.account()) return
   const id = CHILD_KINDS.has(change.collection) ? (await recordsService.get({ collection: change.collection, workspace: change.workspace, id: change.id }).catch(() => null))?.parent : AGENT_KINDS.has(change.collection) ? change.id : undefined
   if (!id) return
   if (change.collection !== 'agent' && change.collection !== 'control' && !await db.selectFrom('agent').select('id').where('id', '=', id).executeTakeFirst()) return
@@ -60,54 +57,35 @@ async function heard(change: Change): Promise<void> {
 }
 
 async function refreshOnce(): Promise<void> {
-  if (!keysService.account() || !keysService.session()) return
-  await upgrade.run()
-  const me = await keysService.deviceKey()
   const kept = new Set<string>()
-  for (const room of roomKeys.rooms()) {
-    const workspace = room.workspace.id
-    const [agents, controls] = await Promise.all([recordsService.list({ collection: 'agent', workspace }), recordsService.list({ collection: 'control', workspace })])
-    const control = new Map(controls.map((each) => [each.id, each]))
-    await ownAgain({ workspace, agents })
-    for (const agent of agents) {
-      const placed = control.get(agent.id)
-      if (ControlRecord.safeParse(placed?.value).data?.runsOn !== me || !placed) continue
-      kept.add(agent.id)
-      await keep({ agent, control: placed }).catch((err: unknown) => log.warn({ event: 'run_set.apply_failed', agent: agent.id, error: messageOf(err) }))
-    }
+  const [agents, controls] = await Promise.all([recordsService.list({ collection: 'agent', workspace: HOME }), recordsService.list({ collection: 'control', workspace: HOME })])
+  const control = new Map(controls.map((each) => [each.id, each]))
+  for (const agent of agents) {
+    const placed = control.get(agent.id)
+    if (ControlRecord.safeParse(placed?.value).data?.runsOn !== HERE || !placed) continue
+    kept.add(agent.id)
+    await keep({ agent, control: placed }).catch((err: unknown) => log.warn({ event: 'run_set.apply_failed', agent: agent.id, error: messageOf(err) }))
   }
-  const home = keysService.signedIn().workspace.id
   for (const row of await db.selectFrom('agent').select(['id', 'workspace']).execute()) {
-    if (!kept.has(row.id)) await applyOne({ workspace: row.workspace ?? home, id: row.id })
-  }
-}
-
-async function ownAgain({ workspace, agents }: { workspace: string; agents: Held[] }): Promise<void> {
-  const email = keysService.signedIn().email
-  const mine = roomKeys.members(workspace)?.members.find((member) => member.email === email)?.devices ?? []
-  for (const agent of agents.filter((each) => each.parent === email && !each.deleted && !mine.includes(each.by))) {
-    await recordsService.put({ collection: 'agent', id: agent.id, workspace, parent: email, personal: agent.personal, value: agent.value, reapply: (latest) => ({ value: latest.value }) })
-      .catch((err: unknown) => log.warn({ event: 'run_set.resign_failed', agent: agent.id, error: messageOf(err) }))
+    if (!kept.has(row.id)) await applyOne({ workspace: row.workspace ?? HOME, id: row.id })
   }
 }
 
 async function applyOne({ workspace, id }: { workspace: string; id: string }): Promise<void> {
   const row = await db.selectFrom('agent').selectAll().where('id', '=', id).executeTakeFirst()
-  if (!roomKeys.room(workspace)) return row ? leave(row) : undefined
+  if (workspace !== HOME) return row ? leave(row) : undefined
   const [agent, control] = await Promise.all([recordsService.get({ collection: 'agent', workspace, id }), recordsService.get({ collection: 'control', workspace, id })])
   const runsOn = ControlRecord.safeParse(control?.value).data?.runsOn
-  const me = await keysService.deviceKey()
-  if (agent && !agent.deleted && control && runsOn === me) return keep({ agent, control })
-  if (row && (agent?.deleted || control?.deleted || (runsOn !== undefined && runsOn !== me))) await leave(row)
+  if (agent && !agent.deleted && control && runsOn === HERE) return keep({ agent, control })
+  if (row && (agent?.deleted || control?.deleted || (runsOn !== undefined && runsOn !== HERE))) await leave(row)
 }
 
 async function keep({ agent, control }: { agent: Held; control: Held }): Promise<void> {
   const value = AgentRecord.parse(agent.value)
   const placed = ControlRecord.parse(control.value)
-  const home = keysService.signedIn().workspace.id
   const fields = {
     name: value.name, instructions: value.instructions, face: value.face, wanted: value.wanted, model: placed.model, code_execution: placed.codeExecution, web_browser: placed.browser,
-    runs_on: placed.runsOn, workspace: agent.workspace === home ? null : agent.workspace, shared: !agent.personal, people: JSON.stringify(placed.people), owner: agent.parent ?? null,
+    runs_on: placed.runsOn, workspace: agent.workspace === HOME ? null : agent.workspace, shared: !agent.personal, people: JSON.stringify(placed.people), owner: agent.parent ?? null,
   }
   const row = await db.selectFrom('agent').select('id').where('id', '=', agent.id).executeTakeFirst()
   if (row) await db.updateTable('agent').set(fields).where('id', '=', agent.id).execute()
@@ -125,7 +103,6 @@ async function keep({ agent, control }: { agent: Held; control: Held }): Promise
 }
 
 async function leave(row: Pick<AgentRow, 'id'>): Promise<void> {
-  for (const channel of await db.selectFrom('channel').select(['agent_id', 'kind']).where('agent_id', '=', row.id).execute()) await leaveInbox(channel)
   await agentd.remove({ id: row.id, trash: true }).catch((err: unknown) => log.warn({ event: 'agent.remove_failed', agent: row.id, error: messageOf(err) }))
   await db.deleteFrom('agent').where('id', '=', row.id).execute()
   emit({ name: 'agent.synced', target: { type: 'agent', id: row.id } })
@@ -144,8 +121,7 @@ async function grantsOf({ agentId, connections }: { agentId: string; connections
 async function ownerId(): Promise<string> {
   const found = await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirst()
   if (found) return found.id
-  await db.insertInto('person').values({ id: newId('usr'), email: keysService.signedIn().email, role: 'owner', removed_at: null }).onConflict((oc) => oc.doNothing()).execute()
-  return (await db.selectFrom('person').select('id').where('role', '=', 'owner').executeTakeFirstOrThrow()).id
+  throw new HttpError(409, 'This install has no owner yet.')
 }
 
 async function freeNet(): Promise<number> {

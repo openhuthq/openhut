@@ -16,6 +16,10 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `src/server/` is the API (Fastify, Kysely on PGlite), grouped by domain: `platform/` (config, db, secrets, settings,
   errors, evlog logging, the typed agentd client), `team/`, `agents/` (agents, grants, their Hermes files), `channels/`,
   `connections/`, `gateway/` (the agents' MCP gateway and key broker on :8081), `admin/`, and `integrations/<service>/`.
+  An agent and its control, memory, skills, routines, channels and messages are rows in the local `record` table
+  (`platform/records.ts`, secrets sealed with the install secret); `agents/run-set.ts` applies them to the agents this computer
+  runs. Every caller is the owner: the local socket or `Authorization: Bearer <key>` matching `OPENHUT_CLIENT_KEY_SHA256`
+  (`team/identity.ts`; M1 adds sign-in).
   `src/agentd/` is the root helper on a Unix socket, the only process that starts agents: `sandbox/docker.ts` runs each one
   as a container (`--runtime runsc` when a probe at boot finds gVisor works; health says `gvisor`), `sandbox/memory.ts`
   is the tests' fake (`OPENHUT_FAKE_SANDBOX=1`). Tests mirror them in `test/server/` and `test/agentd/`.

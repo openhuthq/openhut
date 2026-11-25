@@ -7,8 +7,8 @@ import { gatewayServer } from '../../../src/server/gateway/gateway-server.ts'
 import { changeRequestService } from '../../../src/server/agents/change-request-service.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
-import { runSet } from '../../../src/server/cloud/run-set.ts'
-import { fakeAgentd, signIn } from './signed-in.ts'
+import { runSet } from '../../../src/server/agents/run-set.ts'
+import { fakeAgentd, refresh, signIn } from './signed-in.ts'
 
 fakeAgentd()
 await migrate()
@@ -18,7 +18,7 @@ await db.insertInto('channel').values({ id: 'ch_chgwhats', agent_id: 'ag_chgagen
 
 signIn({ email: 'chg@example.com' })
 runSet.watch()
-await runSet.refresh()
+await refresh()
 const owner = { id: 'usr_chgowner', email: 'chg@example.com', local: true, role: 'owner' as const }
 const told: { agentId: string; text: string }[] = []
 changeRequestService.runDashboardWith(async (input) => { told.push(input); return '' })

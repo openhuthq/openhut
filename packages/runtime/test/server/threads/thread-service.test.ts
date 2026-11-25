@@ -12,14 +12,14 @@ import { seal } from '../../../src/server/platform/secrets.ts'
 import { validatorCompiler } from 'fastify-type-provider-zod'
 import { threadController } from '../../../src/server/threads/thread-controller.ts'
 import { imageTypeOf, safeFileName, shownCall, threadService } from '../../../src/server/threads/thread-service.ts'
-import { keysService } from '../../../src/server/cloud/keys-service.ts'
+import { HERE } from '../../../src/server/team/home.ts'
 import { agentService } from '../../../src/server/agents/agent-service.ts'
-import { useFakeRecords } from '../cloud/records-fake.ts'
+import { useFakeRecords } from '../agents/records-fake.ts'
 import type { SendChat } from '@openhut/common/threads/thread.ts'
 
 await migrate()
 const WS = 'ws_chattest'
-const fake = useFakeRecords({ by: await keysService.deviceKey() })
+const fake = useFakeRecords({ by: HERE })
 await db.insertInto('person').values([
   { id: 'usr_chatownr', email: 'owner@example.com', role: 'owner', removed_at: null },
 ]).execute()
@@ -308,26 +308,6 @@ test('messages sort by their ids, and a routine\'s output becomes a message', as
   assert.deepEqual([last?.role, last?.parts[0].text], ['assistant', 'Let me check.214 orders.'])
 })
 
-test('a runner new to a conversation, after a move or the upgrade, seeds its new Hermes session with the messages it missed', async () => {
-  await db.insertInto('agent').values({ id: 'ag_chatmove', name: 'Mover', owner_id: 'usr_chatownr', instructions: '# Mover', model: 'sonnet', net: 27, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
-  await db.insertInto('thread').values({ id: 'th_chatlegacy', agent_id: 'ag_chatmove', person_id: 'usr_chatownr', title: 'Mover', messages: JSON.stringify([
-    { id: 'old-1', role: 'user', parts: [{ type: 'text', text: 'Remember the blue folder.' }], metadata: { author: 'owner@example.com' } },
-    { id: 'old-2', role: 'assistant', parts: [{ type: 'text', text: 'Noted.' }] },
-  ]) }).execute()
-  assert.equal(await threadService.uploadThreads(), 2)
-  assert.equal(await threadService.uploadThreads(), 2)
-  assert.deepEqual((await messagesOf('ag_chatmove')).map((message) => message.parts[0].text), ['Remember the blue folder.', 'Noted.'])
-  await say('ag_chatmove', 'Which folder?')
-  assert.doesNotMatch(String(seen.session), /th_chatlegacy/)
-  assert.equal(seen.body?.messages.at(-1)?.content, 'Earlier in this chat, before this computer ran you:\n\nowner@example.com: Remember the blue folder.\n\nYou: Noted.\n\nNow:\n\nWhich folder?')
-  await say('ag_chatmove', 'Thanks')
-  assert.equal(seen.body?.messages.at(-1)?.content, 'Thanks')
-  await new Promise((resolve) => setTimeout(resolve, 5))
-  const id = `msg_${Date.now().toString(36).padStart(9, '0')}other001`
-  fake.write({ collection: 'message', id, parent: 'ag_chatmove', workspace: WS, value: { message: { id, role: 'assistant', parts: [{ type: 'text', text: 'Said on the other computer.' }] }, session: seen.session } })
-  await say('ag_chatmove', 'Back here')
-  assert.match(String(seen.body?.messages.at(-1)?.content), /^Earlier in this chat, before this computer ran you:\n\nYou: Said on the other computer\.\n\nNow:/)
-})
 
 test('on a just-booted computer (a woken Cloud computer) a message waits for its agent to come up, then gets the reply', async (t) => {
   const port = (hermes.address() as AddressInfo).port
@@ -422,7 +402,7 @@ test('clearing a chat leaves one tombstone per message, written by the runner, a
   assert.equal(before.length, 2)
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/threads/ag_chatrunn', headers: as() })).statusCode, 200)
   assert.deepEqual(await messagesOf('ag_chatrunn'), [])
-  const me = await keysService.deviceKey()
+  const me = HERE
   assert.deepEqual(before.map((id) => [fake.rows.get(id)?.deleted, fake.rows.get(id)?.by]), before.map(() => [true, me]))
   await say('ag_chatrunn', 'Fresh start')
   assert.notEqual((await messagesOf('ag_chatrunn'))[0].id, before[0])
@@ -431,8 +411,6 @@ test('clearing a chat leaves one tombstone per message, written by the runner, a
 test('the agent\'s own model and channel calls through the broker are not shown as tools', () => {
   assert.equal(shownCall('anthropic POST /v1/messages'), false)
   assert.equal(shownCall('codex POST /responses'), false)
-  assert.equal(shownCall('openhut POST /v1/chat/completions'), false)
-  assert.equal(shownCall('openhut GET /v1/models'), false)
   assert.equal(shownCall('telegram POST /bot…/sendMessage'), false)
   assert.equal(shownCall('postgres_query'), true)
   assert.equal(shownCall('github_create_pull_request'), true)

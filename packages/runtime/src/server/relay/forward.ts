@@ -1,19 +1,18 @@
 import type { WebSocket } from '@fastify/websocket'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import * as z from 'zod/mini'
-import type { Tunnel } from '@openhut/common/tunnel/index.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { channelService } from '../channels/channel-service.ts'
-import { keysService } from '../cloud/keys-service.ts'
-import { cloud } from '../platform/cloud.ts'
 import { db } from '../platform/db.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
-import { atHome, memberOf, tunnelKeyOf, who } from '../team/identity.ts'
+import { HERE } from '../team/home.ts'
+import { who } from '../team/identity.ts'
 
 const MAX_REASON = 120
 const Id = z.object({ id: z.string() })
 const ByAgent = z.object({ agentId: z.string() })
+type Tunnel = { failure?: unknown; fetch: (path: string, init: RequestInit) => Promise<Response>; socket: (url: string) => WebSocket }
+
 const tunnels = new Map<string, Promise<Tunnel>>()
 const RUNNER_OF: Partial<Record<string, (req: FastifyRequest) => Promise<string | undefined>>> = {
   'GET /api/threads/:id': (req) => runnerOf(idOf(req)),
@@ -30,14 +29,14 @@ const RUNNER_OF: Partial<Record<string, (req: FastifyRequest) => Promise<string 
 export const forward = {
   async http(req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | undefined> {
     const find = RUNNER_OF[`${req.method} ${req.routeOptions.url ?? ''}`]
-    const key = find && atHome(req) ? await find(req) : undefined
+    const key = find ? await find(req) : undefined
     if (!key) return undefined
     await who(req)
     return reply.send(await fetchOn({ key, path: req.url, init: { method: req.method, headers: headersOf(req), body: bodyOf(req) } }))
   },
 
   async socket({ socket, req, agentId }: { socket: WebSocket; req: FastifyRequest; agentId: string }): Promise<boolean> {
-    const key = atHome(req) ? await runnerOf(agentId) : undefined
+    const key = await runnerOf(agentId)
     if (!key) return false
     try {
       await who(req)
@@ -53,19 +52,10 @@ export const forward = {
   },
 }
 
-export const forwardController: FastifyPluginAsyncZod = async (app) => {
-  app.post('/:key/api/updates', { schema: { params: z.object({ key: z.string() }) } }, async (req, reply) => {
-    await who(req)
-    if (!memberOf(req.params.key)?.own) throw new HttpError(404, 'That computer isn’t one of yours.', { param: 'key' })
-    return reply.send(await fetchOn({ key: req.params.key, path: '/api/updates', init: { method: 'POST' } }))
-  })
-}
-
 async function runnerOf(agentId: string | undefined): Promise<string | undefined> {
   if (!agentId || await db.selectFrom('agent').select('id').where('id', '=', agentId).executeTakeFirst()) return undefined
   const runsOn = (await agentService.find({ id: agentId }).catch(() => null))?.control?.runsOn
-  if (!runsOn || runsOn === await keysService.deviceKey()) return undefined
-  return tunnelKeyOf(runsOn)
+  return !runsOn || runsOn === HERE ? undefined : runsOn
 }
 
 async function fetchOn({ key, path, init }: { key: string; path: string; init: RequestInit }): Promise<Response> {
@@ -84,7 +74,7 @@ function open(key: string): Promise<Tunnel> {
 }
 
 function reopen(key: string): Promise<Tunnel> {
-  const opening = cloud.open({ box: key })
+  const opening = Promise.reject(new HttpError(502, `The computer ${key} isn’t connected to this install.`))
   tunnels.set(key, opening)
   opening.catch(() => { if (tunnels.get(key) === opening) tunnels.delete(key) })
   return opening

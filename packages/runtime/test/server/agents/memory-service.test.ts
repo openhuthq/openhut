@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { agentd } from '../../../src/server/platform/agentd.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
-import { runSet } from '../../../src/server/cloud/run-set.ts'
-import { signIn } from './signed-in.ts'
+import { runSet } from '../../../src/server/agents/run-set.ts'
+import { refresh, signIn } from './signed-in.ts'
 import { memoryService } from '../../../src/server/agents/memory-service.ts'
 
 await migrate()
@@ -23,7 +23,7 @@ mock.method(agentd, 'read', async ({ path }: { path: string }) => { const body =
 const write = mock.method(agentd, 'write', async ({ path, body }: { path: string; body: Buffer | string }) => { files[targetOf(path)] = String(body); return { path } })
 
 signIn({ email: 'memowner@example.com' })
-await runSet.refresh()
+await refresh()
 
 test('memory splits Hermes\'s files into trimmed entries and reports how much of each limit is used', async () => {
   const memory = await memoryService.get({ actor: member, agentId: 'ag_memorytt' })

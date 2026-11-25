@@ -33,12 +33,7 @@ after(() => fake.close())
 const { migrate } = await import('../../../src/server/platform/db.ts')
 const { settings } = await import('../../../src/server/platform/settings.ts')
 const { providerService } = await import('../../../src/server/models/provider-service.ts')
-const { keysService } = await import('../../../src/server/cloud/keys-service.ts')
-const { connectionRecords } = await import('../../../src/server/connections/connection-records.ts')
-const { useFakeRecords } = await import('../cloud/records-fake.ts')
 await migrate()
-const records = useFakeRecords()
-await keysService.open({ sub: 'dev-provider', email: 'owner@example.com' })
 
 const actor = { id: 'usr_provider1', email: 'owner@example.com', local: false }
 const GOOD = 'sk-good-key-1234'
@@ -53,20 +48,6 @@ test('a good key connects, lists only chat models, switches on the eight newest 
   assert.deepEqual(provider.models.filter((model) => model.on).map((model) => model.id).sort(), ['gpt-10', 'gpt-11', 'gpt-4', 'gpt-5', 'gpt-6', 'gpt-7', 'gpt-8', 'gpt-9'])
   assert.equal(JSON.stringify(provider).includes(GOOD), false)
   assert.equal(settings.providerKey('openai'), GOOD)
-})
-
-test('a key is a provider connection: the key sealed with vault, the switched-on models with own, and another computer’s change lands here', async () => {
-  const id = connectionRecords.providerId('openai')
-  const row = records.rows.get(id)
-  if (!row) return assert.fail('no provider record')
-  assert.equal(row.personal, true)
-  assert.match(JSON.stringify(row.secret), /sk-good-key-1234/)
-  assert.doesNotMatch(JSON.stringify(row.value), /sk-good-key/)
-  records.write({ ...row, secret: { key: 'sk-other-key-5678' } })
-  for (let tries = 0; tries < 50 && settings.providerKey('openai') !== 'sk-other-key-5678'; tries++) await new Promise((resolve) => setTimeout(resolve, 10))
-  assert.equal(settings.providerKey('openai'), 'sk-other-key-5678')
-  records.write({ ...row, secret: { key: GOOD } })
-  for (let tries = 0; tries < 50 && settings.providerKey('openai') !== GOOD; tries++) await new Promise((resolve) => setTimeout(resolve, 10))
 })
 
 test('a refused key is a 400 on apiKey and saves nothing', async () => {

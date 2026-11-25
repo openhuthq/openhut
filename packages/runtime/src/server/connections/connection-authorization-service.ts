@@ -88,7 +88,7 @@ async function signedIn({ sign, code }: { sign: Pending; code: string }): Promis
   if (sign.app) return github.installed({ app: sign.app, installationId: Number(code) })
   const redirectUri = connectionService.redirectUrl()
   if (isGoogle(sign.kind)) {
-    const config = await google.finishSignIn({ code, verifier: sign.verifier ?? '' })
+    const config = await google.finishSignIn({ code, verifier: sign.verifier ?? '', redirectUri })
     return { config, account: config.email }
   }
   const url = sign.url ?? ''

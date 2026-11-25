@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { agentd } from '../../../src/server/platform/agentd.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
-import { runSet } from '../../../src/server/cloud/run-set.ts'
-import { signIn } from './signed-in.ts'
+import { runSet } from '../../../src/server/agents/run-set.ts'
+import { refresh, signIn } from './signed-in.ts'
 import { skillService } from '../../../src/server/agents/skill-service.ts'
 
 await migrate()
@@ -27,7 +27,7 @@ mock.method(agentd, 'read', async ({ path }: { path: string }) => (files[skillOf
 const write = mock.method(agentd, 'write', async ({ path, body }: { path: string; body: Buffer | string }) => { files[skillOf(path)] = String(body); return { path } })
 
 signIn({ email: 'skillowner@example.com' })
-await runSet.refresh()
+await refresh()
 
 test('skills an agent learned come first; names and descriptions come from the front matter or the folder', async () => {
   const skills = await skillService.list({ actor: member, agentId: 'ag_skilltst' })

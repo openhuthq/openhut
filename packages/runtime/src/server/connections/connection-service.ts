@@ -59,7 +59,6 @@ export const connectionService = {
   },
 
   async list({ actor }: { actor: Caller }): Promise<Connection[]> {
-    await connectionRecords.pull().catch((err: unknown) => log.warn({ event: 'connection.pull_failed', error: messageOf(err) }))
     const rows = await db.selectFrom('connection').select(COLUMNS).orderBy('created_at').execute()
     return connectionsOf({ rows })
   },

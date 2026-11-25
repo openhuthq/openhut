@@ -3,10 +3,9 @@ import { request as httpsRequest } from 'node:https'
 import { pipeline } from 'node:stream/promises'
 import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
-import { cloud } from '../platform/cloud.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import type { GatewayAgent } from '../agents/agent-service.ts'
-import { channelService, cloudChannelOf } from '../channels/channel-service.ts'
+import { channelService } from '../channels/channel-service.ts'
 import { STAND_IN } from '../integrations/slack/slack.ts'
 import { providers } from '../models/providers/index.ts'
 
@@ -68,10 +67,6 @@ export const brokerService = {
       await audit({ agent, tool, reason: 'Not on the allowed list', outcome: 'denied', started })
       throw new HttpError(403, `The gateway doesn't pass ${tool} through.`)
     }
-    if (upstream.name === 'telegram' && config.cloudComputer && TELEGRAM_PATH.exec(pathname)?.[1] === 'getUpdates') {
-      await fromInbox({ agent, path, req, res })
-      return audit({ agent, tool, reason: 'From the Cloud inbox', outcome: 'allowed', started })
-    }
     const out = { path, headers: forwardable(req.headers) }
     upstream.apply({ out, secret: await upstream.credential(agent, req.headers) })
     const body = upstream.body && method === 'POST' ? await rewritten({ req, headers: out.headers, change: upstream.body }) : req
@@ -82,33 +77,6 @@ export const brokerService = {
       })
     await audit({ agent, tool, reason: `HTTP ${status}`, outcome: status < 400 ? 'allowed' : 'failed', started })
   },
-}
-
-// A Cloud computer sleeps, so Telegram posts to the Cloud's inbox. Answer Hermes's getUpdates from there, with the inbox's event id
-// as update_id, so Hermes's offset acknowledges events on the Cloud. ponytail: polls every second up to the long-poll timeout.
-async function fromInbox({ agent, path, req, res }: { agent: GatewayAgent; path: string; req: IncomingMessage; res: ServerResponse }): Promise<void> {
-  const asked = { ...Object.fromEntries(new URL(path, 'http://x').searchParams), ...await bodyOf(req) }
-  const id = await cloudChannelOf({ agentId: agent.id })
-  if (!id) throw new HttpError(404, 'This agent has no Telegram channel on OpenHut Cloud.')
-  const after = asked.offset === undefined ? undefined : Math.max(0, Number(asked.offset) - 1)
-  const until = Date.now() + Math.min(Number(asked.timeout ?? 0), 50) * 1000
-  for (;;) {
-    const reply = await cloud.channels.events({ id, after })
-    if (reply.status !== 200) throw new HttpError(502, `OpenHut Cloud didn't hand over Telegram updates (HTTP ${reply.status}).`)
-    const result = (reply.json as { data: { id: number; body: object }[] }).data.map((event) => ({ ...event.body, update_id: event.id }))
-    if (result.length || Date.now() >= until || res.destroyed) {
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, result }))
-      return
-    }
-    await new Promise((done) => setTimeout(done, 1000))
-  }
-}
-
-async function bodyOf(req: IncomingMessage): Promise<Record<string, unknown>> {
-  let raw = ''
-  for await (const chunk of req) raw += chunk
-  if (!raw) return {}
-  return String(req.headers['content-type']).includes('json') ? JSON.parse(raw) : Object.fromEntries(new URLSearchParams(raw))
 }
 
 async function rewritten({ req, headers, change }: { req: IncomingMessage; headers: Headers; change: (json: Record<string, unknown>) => Record<string, unknown> }): Promise<Buffer> {

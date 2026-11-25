@@ -9,7 +9,7 @@ export interface Database {
   agent: {
     id: string; name: string; owner_id: string; instructions: string; model: string; fallback_model: string | null; helper_models: Generated<string>; net: number
     wanted: Generated<'running' | 'stopped'>; code_execution: Generated<boolean>; web_browser: Generated<boolean>; face: Generated<string | null>; token_epoch: Generated<number>; channel_key: string; created_at: Timestamp
-    runs_on: Generated<string | null>; changed_by: Generated<string | null>; workspace: Generated<string | null>; shared: Generated<boolean>; people: Generated<string>; owner: Generated<string | null>; owner_proof: Generated<string | null>
+    runs_on: Generated<string | null>; changed_by: Generated<string | null>; workspace: Generated<string | null>; shared: Generated<boolean>; people: Generated<string>; owner: Generated<string | null>
   }
   channel: { id: string; agent_id: string; kind: 'slack' | 'whatsapp' | 'telegram' | 'discord'; status: 'connected' | 'linking'; account: string | null; owner_address: string; secrets: string; open: boolean; allowed: string; created_at: Timestamp }
   connection: {
@@ -17,7 +17,6 @@ export interface Database {
     everyone: Generated<boolean>; created_at: Timestamp; changed_by: Generated<string | null>
   }
   connection_grant: { id: string; connection_id: string; agent_id: string; created_at: Timestamp }
-  thread: { id: string; agent_id: string; person_id: string; title: string; messages: Generated<string>; created_at: Timestamp; updated_at: Timestamp }
   routine: {
     id: string; agent_id: string; name: string; plan: string; at: Timestamp | null; cron: string | null; until: Timestamp | null; origin: string
     next_run_at: Timestamp | null; created_at: Generated<Date>; run_id: string | null; run_status: 'open' | 'told' | 'quiet' | 'failed' | null
@@ -27,8 +26,7 @@ export interface Database {
     id: Generated<string>; at: Timestamp; agent_id: string; connection_id: string | null; tool: string; reason: string
     outcome: 'allowed' | 'denied' | 'failed'; ms: number
   }
-  record_held: { id: string; ver: number; parent: string | null }
-  record_outbox: { seq: Generated<string>; id: string; collection: string; workspace: string; parent: string | null; body: string; deleted: Generated<boolean> }
+  record: { key: string; collection: string; id: string; workspace: string; parent: string | null; ver: number; value: string; secret: string | null; personal: boolean; deleted: boolean }
   telegram_code: { hash: string; channel_id: string; agent_id: string; kind: 'claim' | 'invite'; sealed: string | null; expires_at: Timestamp }
   change_request: {
     id: string; agent_id: string; action: string; input: string; summary: string; why: string; origin: string

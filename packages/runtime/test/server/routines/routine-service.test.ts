@@ -4,9 +4,9 @@ import { db, migrate } from '../../../src/server/platform/db.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { settings } from '../../../src/server/platform/settings.ts'
 import { routineService } from '../../../src/server/routines/routine-service.ts'
-import { recordsService, type Held } from '../../../src/server/cloud/records.ts'
-import { runSet } from '../../../src/server/cloud/run-set.ts'
-import { fakeAgentd, HOME, signIn } from '../agents/signed-in.ts'
+import { recordsService, type Held } from '../../../src/server/platform/records.ts'
+import { runSet } from '../../../src/server/agents/run-set.ts'
+import { fakeAgentd, HOME, refresh, signIn } from '../agents/signed-in.ts'
 
 await migrate()
 await settings.setTimeZone('Europe/Berlin')
@@ -22,7 +22,7 @@ await db.insertInto('channel').values([
 ]).execute()
 fakeAgentd()
 signIn({ email: 'rtn@example.com' })
-await runSet.refresh()
+await refresh()
 
 const owner = { id: 'usr_rtnowner', email: 'rtn@example.com', local: true, role: 'owner' as const }
 const app = { platform: 'api_server', chat_id: 'openhut-msg_rtnchat1' }
