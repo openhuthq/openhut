@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { BIN, box, conf, EXE, writeIfChanged } from './host.ts'
 import { BROWSER_STREAM_PORT_BASE, type Exec, type Mount } from './sandbox/sandbox.ts'
 import { isRecord, jsonOrUndefined } from './util.ts'
+import { config } from './config.ts'
 
 export const POLICY_FILE = 'browser-policy.json'
 export const FREE_POLICY = `${JSON.stringify({ default: 'allow' })}\n`
@@ -19,7 +20,7 @@ const DIR = fileURLToPath(new URL('../../../../install/agent-browser', import.me
 const INSTALLED_CHROME = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
   '/opt/google/chrome/chrome', '/usr/lib/chromium/chromium', '/usr/bin/chromium', '/opt/microsoft/msedge/msedge', '/opt/brave.com/brave/brave',
-  ...[process.env.ProgramFiles, process.env['ProgramFiles(x86)'], process.env.LOCALAPPDATA].flatMap((root) => [`${root}\\Google\\Chrome\\Application\\chrome.exe`, `${root}\\Microsoft\\Edge\\Application\\msedge.exe`, `${root}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`]),
+  ...config.windowsAppDirs.flatMap((root) => [`${root}\\Google\\Chrome\\Application\\chrome.exe`, `${root}\\Microsoft\\Edge\\Application\\msedge.exe`, `${root}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`]),
 ]
 const NO_CHROME = 'Install Google Chrome on this computer, then turn Browser on.'
 let chrome: string | undefined

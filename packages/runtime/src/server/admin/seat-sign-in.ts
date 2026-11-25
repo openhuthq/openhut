@@ -42,7 +42,7 @@ export const seatSignIn = {
     await claudeCli.ensure()
     const dir = mkdtempSync(join(tmpdir(), 'openhut-seat-'))
     const run = `stty cols 4000 rows 60; exec '${config.claudeHostBin}' setup-token`
-    const env = { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: dir, CLAUDE_CONFIG_DIR: dir, BROWSER: '/bin/true', TERM: 'xterm-256color', DISABLE_AUTOUPDATER: '1' }
+    const env = { PATH: config.path, HOME: dir, CLAUDE_CONFIG_DIR: dir, BROWSER: '/bin/true', TERM: 'xterm-256color', DISABLE_AUTOUPDATER: '1' }
     const proc = terminal({ dir, env, run })
     for (const id of [...open.keys()].slice(0, Math.max(0, open.size - MAX_OPEN + 1))) close(id)
     const signIn: OpenSignIn = { id: newToken('seat'), proc, dir, out: '', state: '' }
@@ -89,7 +89,7 @@ function terminal({ dir, env, run }: { dir: string; env: Record<string, string>;
   if (process.platform === 'darwin') return spawn('/usr/bin/expect', ['-c', MAC_PTY], { cwd: dir, env: { ...env, OPENHUT_RUN: run } })
   if (process.platform !== 'win32') return spawn('script', ['-qfec', run, '/dev/null'], { cwd: dir, env })
   if (!config.hermesRuntime) throw new HttpError(503, 'Claude sign-in isn\'t working in this copy of OpenHut. Download OpenHut again from openhut.dev.')
-  const system = { SystemRoot: process.env.SystemRoot ?? 'C:\\Windows', USERPROFILE: dir, APPDATA: dir, LOCALAPPDATA: dir, TEMP: dir, TMP: dir }
+  const system = { SystemRoot: config.systemRoot, USERPROFILE: dir, APPDATA: dir, LOCALAPPDATA: dir, TEMP: dir, TMP: dir }
   return spawn(join(config.hermesRuntime, 'python', 'python.exe'), ['-s', '-c', WIN_PTY], { cwd: dir, env: { ...env, ...system, OPENHUT_SITE: join(config.hermesRuntime, 'site'), OPENHUT_CLAUDE_BIN: config.claudeHostBin } })
 }
 
