@@ -44,7 +44,7 @@ app.addHook('onSend', async (_req, reply) => {
   reply.header('referrer-policy', 'no-referrer').header('x-frame-options', 'DENY')
 })
 
-await app.register(websocket)
+await app.register(websocket, { options: { maxPayload: 1 << 20 } })
 await app.register(healthController, { prefix: '/health' })
 await app.register(meController, { prefix: '/api/me' })
 await app.register(setupController, { prefix: '/api/setup' })

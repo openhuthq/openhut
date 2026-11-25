@@ -1,5 +1,4 @@
 import { randomBytes } from 'node:crypto'
-import { connect } from 'node:net'
 import type { WebSocket } from '@fastify/websocket'
 import type { FastifyRequest } from 'fastify'
 import type { Selectable } from 'kysely'
@@ -8,6 +7,7 @@ import type { Computer, ComputerJoin, RemovedComputer } from '@openhut/common/co
 import { mux } from '@openhut/common/tunnel/mux.ts'
 import { agentd } from '../platform/agentd.ts'
 import { config } from '../platform/config.ts'
+import { settings } from '../platform/settings.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { emit, log } from '../platform/events.ts'
@@ -19,6 +19,7 @@ import { HERE } from '../team/home.ts'
 
 const JOIN_MS = 10 * 60_000
 const PING_MS = 30_000
+const MAX_STREAMS = 512
 const HERE_NAME = 'This server'
 const UNINSTALL = 'sudo docker rm -f openhut-runtime openhut-runtime-previous openhut-runtime-update; sudo docker volume rm openhut-runtime openhut-runtime-data'
 const Hello = z.object({
@@ -46,11 +47,13 @@ export const computerService = {
   },
 
   async join({ actor }: { actor: Caller }): Promise<ComputerJoin> {
+    const address = settings.address()
+    if (!address) throw new HttpError(409, 'Set this server’s HTTPS address in Settings › Admin first. Other machines connect to it there.')
     const token = newComputerToken()
     const expiresAt = new Date(Date.now() + JOIN_MS)
     const row = await db.insertInto('computer').values({ id: newId('cm'), name: '', token_hash: sha(token), expires_at: expiresAt }).returningAll().executeTakeFirstOrThrow()
     emit({ name: 'computer.join_started', actor, target: { type: 'computer', id: row.id } })
-    return { object: 'computer_join', computer: await computerOf({ row, agents: 0 }), command: `curl -fsSL ${config.releaseUrl} | sh -s -- join ${config.address} ${token}`, expiresAt: expiresAt.toISOString() }
+    return { object: 'computer_join', computer: await computerOf({ row, agents: 0 }), command: `curl -fsSL ${config.releaseUrl} | sh -s -- join ${address} ${token}`, expiresAt: expiresAt.toISOString() }
   },
 
   async remove({ actor, id }: { actor: Caller; id: string }): Promise<RemovedComputer> {
@@ -73,7 +76,9 @@ export const computerService = {
     const found = await admit(/^Bearer (\S{20,200})$/.exec(req.headers.authorization ?? '')?.[1])
     if (!found) return socket.close(4401, 'This computer’s code is wrong, expired or removed. Add it again from Settings › Computers.')
     const { row, token } = found
+    if (socket.readyState !== socket.OPEN) return
     let alive = true
+    let streams = 0
     const ping = setInterval(() => {
       if (!alive) return socket.terminate()
       alive = false
@@ -87,12 +92,9 @@ export const computerService = {
         odd: false,
         send: (bytes, done) => socket.send(bytes, (err) => done(err ?? undefined)),
         accept: (open, stream) => {
-          if (open.to !== 'gateway') return stream.destroy()
-          const gateway = connect(config.gatewayPort, '127.0.0.1')
-          stream.pipe(gateway).pipe(stream)
-          gateway.on('error', () => stream.destroy())
-          stream.on('error', () => gateway.destroy())
-          stream.on('close', () => gateway.destroy())
+          if (open.to !== 'gateway' || ++streams > MAX_STREAMS) return stream.destroy()
+          stream.once('close', () => { streams-- })
+          forward.gateway({ computer: row.id, stream })
         },
         heard: (message) => {
           const hello = z.safeParse(Hello, message)

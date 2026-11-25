@@ -175,9 +175,10 @@ export const agentService = {
     })))
   },
 
-  async byToken({ token }: { token: string }): Promise<GatewayAgent | undefined> {
-    const row = await db.selectFrom('agent').select(['id', 'owner_id', 'net', 'token_epoch']).where('id', '=', token.split('.')[0]).executeTakeFirst()
+  async byToken({ token, from }: { token: string; from?: string }): Promise<GatewayAgent | undefined> {
+    const row = await db.selectFrom('agent').select(['id', 'owner_id', 'net', 'token_epoch', 'runs_on']).where('id', '=', token.split('.')[0]).executeTakeFirst()
     if (!row || !sameSecret({ given: token, expected: agentToken({ id: row.id, epoch: row.token_epoch }) })) return undefined
+    if (from && (from !== (row.runs_on ?? HERE) || moving.has(row.id))) return undefined
     return { id: row.id, owner_id: row.owner_id, net: row.net }
   },
 
@@ -218,13 +219,17 @@ export const agentService = {
 
   async sync({ computer }: { computer: string }): Promise<void> {
     const { states } = await agentd.ps({ on: computer })
-    const mine = (await db.selectFrom('agent').selectAll().execute()).filter((row) => (row.runs_on ?? HERE) === computer && !moving.has(row.id))
-    const kept = new Set(mine.map((row) => row.id))
-    for (const id of Object.keys(states).filter((each) => !kept.has(each) && !moving.has(each))) {
+    const here = async (id: string) => {
+      const row = await db.selectFrom('agent').select('runs_on').where('id', '=', id).executeTakeFirst()
+      return !moving.has(id) && !!row && (row.runs_on ?? HERE) === computer
+    }
+    for (const id of Object.keys(states)) {
+      if (moving.has(id) || await here(id)) continue
       await agentd.remove({ id, on: computer, trash: true })
       log.info({ event: 'agent.stray_removed', agent: id, computer })
     }
-    for (const row of mine) {
+    for (const row of await db.selectFrom('agent').selectAll().execute()) {
+      if (!await here(row.id)) continue
       await applied(row, agentd.apply({ id: row.id, on: computer, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' }))
         .catch((err: unknown) => log.warn({ event: 'agent.sync_failed', agent: row.id, computer, error: messageOf(err) }))
     }
@@ -282,6 +287,7 @@ async function move({ facts, from, to }: { facts: AgentFacts; from: string; to: 
   await requireComputer(to)
   if (!forward.online(from)) throw new HttpError(409, `The computer ${facts.value.name} runs on is offline, so its memory and files can’t be copied. Start it, then move ${facts.value.name}.`, { param: 'runsOn' })
   const place = (runsOn: string) => editControl({ facts, change: (value) => ({ ...value, runsOn }) })
+  if (moving.has(facts.id)) throw new HttpError(409, `${facts.value.name} is already moving. Wait for it to finish.`, { param: 'runsOn' })
   moving.add(facts.id)
   try {
     await agentd.stop({ id: facts.id, on: from })

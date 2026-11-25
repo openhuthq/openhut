@@ -6,6 +6,7 @@ import { admit, computerService } from '../../../src/server/computers/computer-s
 
 await migrate()
 await computerService.boot()
+await (await import('../../../src/server/platform/settings.ts')).settings.setAddress('https://agents.example.com')
 const actor = { id: 'usr_cmowner1', email: 'owner@example.com', role: 'owner' as const }
 const tokenOf = (command: string): string => command.split(' ').at(-1) ?? ''
 

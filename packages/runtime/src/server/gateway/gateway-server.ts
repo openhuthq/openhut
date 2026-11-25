@@ -6,6 +6,7 @@ import { errorBody, HttpError, messageOf } from '../platform/http-error.ts'
 import { log } from '../platform/events.ts'
 import { serveMcp } from '../platform/mcp-transport.ts'
 import { agentService, type GatewayAgent } from '../agents/agent-service.ts'
+import { forward } from '../relay/forward.ts'
 import { connectionService, type AgentTool } from '../connections/connection-service.ts'
 import { testAnthropic, testModel } from './test-model.ts'
 import { brokerService, upstreams } from './broker.ts'
@@ -47,7 +48,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const url = new URL(req.url ?? '/', 'http://gateway')
   if (url.pathname.startsWith('/test-anthropic/') && config.modelMode === 'test') return testAnthropic({ req, body: await readBody(req), res })
   const token = /^(?:Agent|Bearer) (?:xoxb-oh-|xapp-oh-)?(.+)$/.exec(String(req.headers.authorization ?? ''))?.[1] ?? /^\/u\/telegram\/(?:file\/)?bot([^/]+)\//.exec(url.pathname)?.[1]
-  const agent = token ? await agentService.byToken({ token }) : undefined
+  const agent = token ? await agentService.byToken({ token, from: forward.relayedFrom(req.socket.remotePort) }) : undefined
   if (!agent) return json(res, 401, errorBody({ status: 401, message: 'Send this agent\'s own token.' }))
   const path = url.pathname
   const mcp = path === '/api/v1/mcp' && req.method === 'POST' ? await readBody(req) : undefined

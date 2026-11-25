@@ -2,6 +2,7 @@ import type { Duplex } from 'node:stream'
 import * as z from 'zod/mini'
 import { log } from './events.ts'
 import { HttpError } from './http-error.ts'
+import { db } from './db.ts'
 import { forward } from '../relay/forward.ts'
 import { HERE } from '../team/home.ts'
 
@@ -28,10 +29,9 @@ export const agentd = {
     ask({ request: { cmd: 'write', id, path, create, replace }, body: Buffer.from(body).toString('base64'), doing: 'save the file in the agent\'s home', schema: z.object({ path: z.string() }) }),
   delete: ({ id, paths }: { id: string; paths: string[] }) => ask({ request: { cmd: 'delete', id, paths }, doing: 'delete the files', schema: z.object({ removed: z.array(z.string()) }) }),
   stat: ({ id, paths }: { id: string; paths: string[] }) => ask({ request: { cmd: 'stat', id, paths }, doing: 'look for the files', schema: z.object({ files: z.array(z.object({ path: z.string(), size: z.number() })) }) }),
-  usage: async ({ since }: { since: number }) => {
-    const replies = await everywhere((on) => ask({ on, request: { cmd: 'usage', since }, doing: 'read the agents\' usage', schema: z.object({ usage: z.record(z.string(), z.number()) }) }))
-    return { usage: Object.assign({}, ...replies.map((reply) => reply.usage)) as Record<string, number> }
-  },
+  usage: async ({ since }: { since: number }) => ({
+    usage: (await everywhere((on) => ask({ on, request: { cmd: 'usage', since }, doing: 'read the agents\' usage', schema: z.object({ usage: z.record(z.string(), z.number()) }) }).then((reply) => reply.usage))) ?? {},
+  }),
 }
 
 export function liveBrowser({ id, fps, onLine, onEnd }: { id: string; fps: number; onLine: (line: string) => void; onEnd: () => void }): Stream {
@@ -75,13 +75,14 @@ export async function features({ on = HERE }: On = {}): Promise<z.output<typeof 
 }
 
 export async function containerStates(): Promise<Record<string, string> | undefined> {
-  const replies = await everywhere((on) => agentd.ps({ on }))
-  return replies.length ? Object.assign({}, ...replies.map((reply) => reply.states)) as Record<string, string> : undefined
+  return everywhere((on) => agentd.ps({ on }).then((reply) => reply.states))
 }
 
-async function everywhere<T>(each: (on: string) => Promise<T>): Promise<T[]> {
-  const settled = await Promise.allSettled(forward.computers().map(each))
-  return settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+async function everywhere<T>(each: (on: string) => Promise<Record<string, T>>): Promise<Record<string, T> | undefined> {
+  const runsOn = new Map((await db.selectFrom('agent').select(['id', 'runs_on']).execute()).map((row) => [row.id, row.runs_on ?? HERE]))
+  const settled = await Promise.all(forward.computers().map(async (on) => ({ on, said: await each(on).catch(() => undefined) })))
+  if (settled.every(({ said }) => !said)) return undefined
+  return Object.fromEntries(settled.flatMap(({ on, said }) => Object.entries(said ?? {}).filter(([id]) => runsOn.get(id) === on)))
 }
 
 async function ask<S extends z.ZodMiniType>({ on, request, body, doing, schema }: { on?: string; request: Record<string, unknown>; body?: string; doing: string; schema: S }): Promise<z.output<S>> {

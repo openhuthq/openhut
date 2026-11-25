@@ -7,7 +7,7 @@ const ENV = process.env.BOX_ENV ?? 'box'
 const PREVIEW_PORT = 8788
 const { positionals, values } = parseArgs({
   allowPositionals: true,
-  options: { runtimes: { type: 'string', default: '1' }, script: { type: 'string', default: 'https://openhut.dev' }, code: { type: 'string' }, cmd: { type: 'string' } },
+  options: { runtimes: { type: 'string', default: '1' }, script: { type: 'string', default: 'https://openhut.dev' }, cmd: { type: 'string' } },
 })
 const [command, run, ...rest] = positionals
 if (!command || !run || !/^[a-z0-9-]{1,20}$/.test(run)) usage()
@@ -28,7 +28,7 @@ switch (command) {
 }
 
 function usage(): never {
-  console.error('usage: node scripts/box/e2e.ts <up|install|join|exec|logs|down> <run-id> [...]\n  up <run> [--runtimes N]\n  install <run> [--script <url|file>]\n  join <run> (--code <code> | --cmd \'<command from main>\')\n  exec <run> <main|rtN> <cmd...>\n  logs <run>\n  down <run>')
+  console.error('usage: node scripts/box/e2e.ts <up|install|join|exec|logs|down> <run-id> [...]\n  up <run> [--runtimes N]\n  install <run> [--script <url|file>]\n  join <run> --cmd \'<command from main>\'\n  exec <run> <main|rtN> <cmd...>\n  logs <run>\n  down <run>')
   process.exit(2)
 }
 

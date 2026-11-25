@@ -14,6 +14,7 @@ const SERVE = new URL(`../../agentd/serve.${import.meta.url.endsWith('.ts') ? 't
 const local = config.agentdInProcess ? await import(SERVE) as typeof import('../../agentd/serve.ts') : undefined
 await local?.boot()
 const links = new Map<string, Link>()
+const relayed = new Map<number, string>()
 const OFFLINE = 'The computer that runs this agent is offline. Start it, or move the agent to another computer.'
 
 export const forward = {
@@ -30,6 +31,22 @@ export const forward = {
   },
 
   linked: (computer: string): Link | undefined => links.get(computer),
+
+  gateway({ computer, stream }: { computer: string; stream: Duplex }): void {
+    const gateway = connect(config.gatewayPort, '127.0.0.1')
+    gateway.once('connect', () => {
+      const port = gateway.localPort
+      if (!port) return gateway.destroy()
+      relayed.set(port, computer)
+      gateway.once('close', () => relayed.delete(port))
+      stream.pipe(gateway).pipe(stream)
+    })
+    gateway.on('error', () => stream.destroy())
+    stream.on('error', () => gateway.destroy())
+    stream.on('close', () => gateway.destroy())
+  },
+
+  relayedFrom: (port: number | undefined): string | undefined => port === undefined ? undefined : relayed.get(port),
 
   online: (computer: string): boolean => links.has(computer) || (computer === HERE && !links.size),
 
