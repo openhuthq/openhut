@@ -57,7 +57,7 @@ function Home({ first, adding, overlaid }: { first: string | undefined; adding: 
   if (first) return <Redirect to={agentPath({ agentId: first, dialog: adding ? 'new' : undefined })} />
   return <section className="relative flex min-w-0 flex-1 flex-col bg-card">
     <PhoneTop />
-    <FirstAgent />
+    <FirstAgent behind={adding || overlaid} />
     {adding && <NewAgentDialog onClose={() => navigate('/')} />}
   </section>
 }

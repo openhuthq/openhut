@@ -38,19 +38,20 @@ export function NewAgentDialog({ onClose }: { onClose: () => void }) {
   </DialogCard>
 }
 
-export function FirstAgent() {
+// behind: a dialog (New agent, Settings) is open over this page and shows the ?open= key step itself.
+export function FirstAgent({ behind = false }: { behind?: boolean }) {
   return <div className="flex min-h-0 w-full flex-1 flex-col text-center text-ink">
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center-safe overflow-y-auto px-6 py-6">
       <div className="flex w-[360px] max-w-full flex-col items-center">
         <h1 className="m-0 text-[30px]/[36px] font-bold tracking-[-.03em] text-balance phone:text-[28px]/[34px]">Make your first agent.</h1>
         <p className="m-0 mt-2 max-w-[320px] text-[15px]/[22px] text-balance text-body">Give it a job in your first chat.</p>
-        <div className="mt-8 flex w-full flex-col items-center gap-3 text-[13px]/[18px]"><AgentForm /></div>
+        <div className="mt-8 flex w-full flex-col items-center gap-3 text-[13px]/[18px]"><AgentForm steps={!behind} /></div>
       </div>
     </div>
   </div>
 }
 
-function AgentForm() {
+function AgentForm({ steps = true }: { steps?: boolean }) {
   const createAgent = useCreateAgent()
   const touch = useMedia(TOUCH)
   const providers = useComputerProviders('local')
@@ -60,7 +61,8 @@ function AgentForm() {
   const [wanted, setWanted] = useState<ProviderId>()
   const seat = useStartSeatSignIn()
   const [signing, setSigning] = useState<{ name: string; face: string } | 'only'>()
-  const setup = stepOf(useOpen())
+  const opened = useOpen()
+  const setup = steps ? stepOf(opened) : undefined
   const taken = new Set(useAgents().data?.map((agent) => agent.name))
   const name = NAMES.find((each) => !taken.has(each)) ?? NAMES[0]
   const model = picked ?? firstModel(providers) ?? DEFAULT_MODEL
