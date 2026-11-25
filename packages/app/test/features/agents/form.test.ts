@@ -21,9 +21,9 @@ test('Models marks the one new agents use: Claude Sonnet first, else the first c
   assert.equal(inUse(undefined), undefined)
 })
 
-test('Runs on lists the online computers, and none when there is only one to pick', () => {
+test('Runs on lists the online computers', () => {
   const on = (id: string, online = true) => ({ id, online })
   assert.deepEqual(runsOnChoices([on('here'), on('mac'), on('box', false)]).map((each) => each.id), ['here', 'mac'])
-  assert.deepEqual(runsOnChoices([on('here'), on('box', false)]), [])
+  assert.deepEqual(runsOnChoices([on('here'), on('box', false)]).map((each) => each.id), ['here'])
   assert.deepEqual(runsOnChoices(undefined), [])
 })

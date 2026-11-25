@@ -87,6 +87,12 @@ test('a new agent is two records, runs here, and only its owner changes it, even
   await assert.rejects(agentService.createGrant({ actor: mate, agentId: made.id, connectionId: 'cn_none' }), { status: 403 })
 })
 
+test('a new agent can be shared with the team as it is made', async () => {
+  const made = await agentService.create({ actor: owner, name: 'Pepper', shared: true })
+  assert.equal(made.shared, true)
+  assert.equal((await agentService.update({ actor: mate, id: made.id, patch: { name: 'Pep' } }).catch((error: { status: number }) => error.status)), 403)
+})
+
 test('a new agent has Browser on when this computer can run one', async () => {
   agentd.features.browser = true
   assert.equal((await agentService.create({ actor: owner, name: 'Scout' })).browser, true)
