@@ -1,7 +1,7 @@
 #!/bin/sh
 # C1: the base Boat snapshot. Run once as root on a fresh Boat sandbox (Ubuntu 24.04) from a checkout of this repo, then save the
 # sandbox as a snapshot that the Cloud creates every Cloud computer from:
-#   sudo sh install/boat/snapshot.sh && boat snapshot save <sandbox> openhut-cloud-<yyyymmdd>
+#   sudo sh install/boat/snapshot.sh && boat snapshot save <sandbox> openhut-cloud   (exactly this name: the Cloud creates from it)
 # Rebuilt only when this base changes: the OS packages, Node, PGlite (the node_modules the app pack expects, SHELL_API in
 # packages/desktop/src/packs.mjs), the openhut user and openhut-boot. The runtime itself comes as signed packs at the first boot.
 set -eu

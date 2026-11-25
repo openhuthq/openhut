@@ -42,7 +42,7 @@ async function publish({ name, sequence, server: kind = 'up', pem = 'release.pem
   const server = join(dist, 'backend/packages/runtime/src/server/platform/app.mjs')
   mkdirSync(join(server, '..'), { recursive: true })
   writeFileSync(server, {
-    up: `import { createServer } from 'node:http'\ncreateServer((_q, s) => s.end(${JSON.stringify(name)})).listen(Number(process.env.PORT), '127.0.0.1')\n`,
+    up: `import { createServer } from 'node:http'\nimport { writeFileSync } from 'node:fs'\nwriteFileSync(process.env.HOME + '/cloud', process.env.OPENHUT_CLOUD ?? '')\ncreateServer((_q, s) => s.end(${JSON.stringify(name)})).listen(Number(process.env.PORT), '127.0.0.1')\n`,
     exits: 'process.exit(3)\n',
     hangs: 'setInterval(() => {}, 1000)\n',
   }[kind])
@@ -83,12 +83,13 @@ async function boot(port: number): Promise<{ served?: string; code?: number | nu
 
 test('first boot: downloads and verifies a signed release, runs it, commits it and deletes the join code', async () => {
   await publish({ name: 'good', sequence: 100 })
-  writeFileSync(envFile, 'OPENHUT_JOIN=code_-1\nOPENHUT_API_URL=http://127.0.0.1:1/api\n')
+  writeFileSync(envFile, 'OPENHUT_JOIN=code_-1\nOPENHUT_API_URL=http://127.0.0.1:1/api\nOPENHUT_CLOUD=1\n')
   const { served, events } = await boot(18871)
   assert.equal(served, 'good')
   assert.ok(events.includes('boot.committed'), String(events))
   assert.equal(readState(home).current.sequence, 100)
-  assert.equal(readFileSync(envFile, 'utf8'), 'OPENHUT_API_URL=http://127.0.0.1:1/api\n')
+  assert.equal(readFileSync(envFile, 'utf8'), 'OPENHUT_API_URL=http://127.0.0.1:1/api\nOPENHUT_CLOUD=1\n')
+  assert.equal(readFileSync(join(home, 'cloud'), 'utf8'), '1', 'the runtime gets OPENHUT_CLOUD')
 })
 
 test('a release signed by any other key is refused and changes nothing', async () => {
@@ -123,14 +124,14 @@ test('snapshot.sh and openhut.service on a fresh Ubuntu 24.04 (systemd container
     for (let i = 0; i < 300 && !(await inside('systemctl is-system-running 2>/dev/null; true')).match(/running|degraded/); i++) await new Promise((done) => setTimeout(done, 1000))
     await inside('sh /repo/install/boat/snapshot.sh')
     await inside(`mkdir -p /etc/systemd/system/openhut.service.d && printf '[Service]\\nEnvironment=OPENHUT_UPDATE_FEED=${url(feed)}/ OPENHUT_RELEASE_KEY=${key} OPENHUT_REKOR_KEY=${rekorKey} PORT=18873\\n' > /etc/systemd/system/openhut.service.d/test.conf`)
-    await inside('mkdir -p /home/user/.openhut && printf "OPENHUT_JOIN=abc_-1\\nNODE_OPTIONS=--evil\\n" > /home/user/.openhut/env && systemctl daemon-reload && systemctl start openhut')
+    await inside('mkdir -p /home/user/.openhut && printf "OPENHUT_JOIN=abc_-1\\nOPENHUT_CLOUD=1\\nNODE_OPTIONS=--evil\\n" > /home/user/.openhut/env && systemctl daemon-reload && systemctl start openhut')
     let served = ''
     for (let i = 0; i < 60 && served !== 'good'; i++) { served = await fetch('http://127.0.0.1:18873/health').then((r) => r.text(), () => ''); await new Promise((done) => setTimeout(done, 1000)) }
     const active = await inside('systemctl is-active openhut')
     writeFileSync(join(process.env.OPENHUT_BOOT_OUT ?? root, 'c1-boot.txt'), `$ systemctl is-active openhut\n${active}\n$ curl 127.0.0.1:18873/health\n${served}\n$ cat /etc/openhut/env\n${await inside('cat /etc/openhut/env')}\n$ ls /home/user/.openhut\n${await inside('ls -A /home/user/.openhut')}\n`)
     assert.equal(active, 'active')
     assert.equal(served, 'good')
-    assert.equal(await inside('cat /etc/openhut/env'), '', 'the join code is gone and NODE_OPTIONS never got in')
+    assert.equal(await inside('cat /etc/openhut/env'), 'OPENHUT_CLOUD=1', 'the join code is gone and NODE_OPTIONS never got in')
     assert.equal(await inside('ls -A /home/user/.openhut'), '')
   } finally {
     await sh('rm', '-f', name).catch(() => {})
