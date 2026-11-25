@@ -1,4 +1,5 @@
 import { connect, serve, TunnelError, type ComputerKey as NoiseComputerKey, type DeviceKey as NoiseDeviceKey, type Handlers, type Tunnel } from '../tunnel/index.ts'
+import { CloudComputer } from './v1/credits.ts'
 import * as z from 'zod/mini'
 import { ApiError } from '../api.ts'
 import { OAuthAuthorization, OAuthToken, type CreateOAuthAuthorization, type CreateOAuthToken } from './oauth.ts'
@@ -35,6 +36,7 @@ export type Device = {
   signIn: (input: SignIn) => Promise<Redirect | SignedIn>
   me: () => Promise<Me | null>
   firstComputerCode: () => Promise<JoinCode>
+  startCloud: () => Promise<CloudComputer>
   knock: (input: { team: string; nonce: string }) => Knock
   open: (input: { team: string; computer?: string; timeout?: number } | { box: string; timeout?: number }) => Promise<Tunnel>
 }
@@ -201,6 +203,7 @@ function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net:
     },
 
     firstComputerCode: () => net.ok({ name: 'createJoinCode', reply: JoinCode }),
+    startCloud: () => net.ok({ name: 'startCloudComputer', reply: CloudComputer }),
 
     knock({ team, nonce }) {
       const mine = async () => {

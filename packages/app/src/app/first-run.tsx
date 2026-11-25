@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { AppleIcon, Mail01Icon } from '@hugeicons/core-free-icons'
+import { AppleIcon, CloudIcon, Mail01Icon } from '@hugeicons/core-free-icons'
 import { CopyButton } from '@/components/copy-button'
 import { ErrorNote } from '@/components/error-note'
 import { I } from '@/components/kit'
@@ -48,11 +48,24 @@ export function FirstRun({ email, link }: { email: string; link?: ReactNode }) {
     waiting="Listening for a computer on your account"
     foot={<><a href="openhut://open" className={cn(buttonVariants({ variant: 'text' }), QUIET)}>I already have OpenHut</a><Button type="button" variant="text" className={QUIET} onClick={() => go({ step: 'server' })}>Run on my server instead</Button><a href={HELP} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'text' }), QUIET)}>Help</a></>} /></Stage>
   if (step?.step === 'server') return <Stage><ServerCommand step={step} onCode={go} onBack={() => go(null)} /></Stage>
-  return <Stage><EntryScreen mood="looking" title="Where should your agents live?" line="On a computer you own. Add more later." foot={link}
+  if (step?.step === 'cloud') return <Stage><StartCloud onBack={() => go(null)} /></Stage>
+  return <Stage><EntryScreen mood="looking" title="Where should your agents live?" line="On Cloud, paid from your free credits, or on a computer you own. Add more later." foot={link}
     action={<>
-      <a href={DOWNLOAD_MAC} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'primary' }), BIG)} onClick={() => go({ step: 'mac' })}><I icon={AppleIcon} size={16} />Download for Mac</a>
+      <Button type="button" variant="primary" className={BIG} onClick={() => go({ step: 'cloud' })}><I icon={CloudIcon} size={16} />Use Cloud</Button>
+      <a href={DOWNLOAD_MAC} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'text' }), INK)} onClick={() => go({ step: 'mac' })}><I icon={AppleIcon} size={16} />Download for Mac</a>
       <Button type="button" variant="text" className={INK} onClick={() => go({ step: 'server' })}>Run on my Linux server instead</Button>
     </>} /></Stage>
+}
+
+/** Cloud as the first computer: our servers start it, it joins, and lets this browser in. The page moves on by itself. */
+function StartCloud({ onBack }: { onBack: () => void }) {
+  const start = useMutation({ mutationFn: remote.startCloud })
+  const { mutate } = start
+  useEffect(() => mutate(), [mutate])
+  const back = <Button type="button" variant="text" className={QUIET} data-back onClick={onBack}>Back</Button>
+  if (start.error) return <EntryScreen mood="worried" title="Couldn’t start Cloud." line={start.error.message} foot={back}
+    action={<Button type="button" variant="primary" className={BIG} onClick={() => mutate()}>Try again</Button>} />
+  return <EntryScreen mood="building" title="Starting Cloud…" line="Your agents run here, even when your computer is off. This takes a minute or two." foot={back} waiting="Starting Cloud" />
 }
 
 /** A Linux server as the first computer: a full screen, not a dialog. */
