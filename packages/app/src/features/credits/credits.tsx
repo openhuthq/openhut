@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Credits } from '@openhut/common/cloud/v1/identity.ts'
-import { Section, Status } from '@/components/kit'
-import { ListNote, Row, Rows } from '@/features/settings/kit'
+import { AiMagicIcon, CloudIcon } from '@hugeicons/core-free-icons'
+import { HINT, I, Section, Status } from '@/components/kit'
+import { Row, Rows } from '@/features/settings/kit'
 import { request } from '@/lib/api-client'
 import { CREDITS_KEY } from '@/lib/query-keys'
 import { cn } from '@/lib/utils'
@@ -29,23 +30,27 @@ export function CreditsRing({ credits, className }: { credits: Credits; classNam
   </svg>
 }
 
-export function CreditsSection() {
+export function UsageSettings() {
   const credits = useCredits()
-  if (!credits) return null
+  if (!credits) return <p className={cn(HINT, 'px-2.5')}>Usage shows here once you use Cloud.</p>
   const tone = toneOf(credits)
+  const spent = (amount: number) => <span className="font-mono text-xs tabular-nums">{dollars(amount)}</span>
   return <Section title="Credits">
-    <Rows><Row icon={<CreditsRing credits={credits} className="size-[22px]" />} title="OpenHut credits" note={`${dollars(credits.balance)} left of ${dollars(credits.given)}`}>
-      {{ ok: <Status tone="on">In use</Status>, low: <Status tone="wait">Running low</Status>, out: <Status tone="bad">Used up</Status> }[tone]}
-    </Row></Rows>
-    <ListNote>AI {dollars(credits.ai)} · Cloud {dollars(credits.computer)}</ListNote>
+    <Rows>
+      <Row icon={<CreditsRing credits={credits} className="size-[22px]" />} title="OpenHut credits" note={`${dollars(credits.balance)} left of ${dollars(credits.given)}`}>
+        {{ ok: <Status tone="on">In use</Status>, low: <Status tone="wait">Running low</Status>, out: <Status tone="bad">Used up</Status> }[tone]}
+      </Row>
+      <Row icon={<I icon={AiMagicIcon} size={20} className="text-hue-violet" />} title="AI">{spent(credits.ai)}</Row>
+      <Row icon={<I icon={CloudIcon} size={20} className="text-hue-sky" />} title="Cloud">{spent(credits.computer)}</Row>
+    </Rows>
   </Section>
 }
 
-export function CreditsLine() {
+export function CreditsLine({ className }: { className?: string }) {
   const credits = useCredits()
   if (!credits) return null
   const tone = toneOf(credits)
-  return <a href="/settings/models" className={cn('flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-[12.5px] no-underline hover:bg-hover', TEXT[tone])}>
+  return <a href="/settings/usage" className={cn('flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-[12.5px] no-underline hover:bg-hover', TEXT[tone], className)}>
     <CreditsRing credits={credits} className="size-4" /><span className="truncate">{tone === 'out' ? 'Out of credits' : `${dollars(credits.balance)} left`}</span>
   </a>
 }

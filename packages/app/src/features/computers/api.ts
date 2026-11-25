@@ -5,7 +5,7 @@ import { request } from '@/lib/api-client'
 import { openhut, type Computer, type Features } from '@/lib/openhut'
 import { COMPUTERS_KEY } from '@/lib/query-keys'
 
-export type ComputerAdmin = { computer: Computer; admin: Admin | undefined }
+type ComputerAdmin = { computer: Computer; admin: Admin | undefined }
 
 const ADMINS_KEY = [...COMPUTERS_KEY, 'admins']
 const ANYWHERE: Features = { whatsapp: true, browser: true }
