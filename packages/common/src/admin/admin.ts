@@ -32,7 +32,7 @@ export const Admin = z.object({
   }),
   publicKey: z.string(),
   relay: z.optional(z.object({ key: z.string(), computerId: z.string(), url: z.nullable(z.string()) })),
-  features: z.optional(z.object({ whatsapp: z.boolean(), browser: z.boolean(), cloud: z.optional(z.boolean()) })),
+  features: z.optional(z.object({ whatsapp: z.boolean(), browser: z.boolean() })),
   minAppVersion: z.optional(z.string()),
 })
 export type Admin = z.infer<typeof Admin>
@@ -44,7 +44,6 @@ export const Health = z.object({
   agentd: z.boolean(),
   firewall: z.boolean(),
   started: z.number(),
-  join: z.optional(z.object({ state: z.enum(['starting', 'asking', 'denied', 'failed', 'joined']), error: z.nullable(z.string()) })),
 })
 export type Health = z.infer<typeof Health>
 

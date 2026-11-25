@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import type { FastifyReply } from 'fastify'
 import type { Selectable } from 'kysely'
 import { createUIMessageStream, pipeUIMessageStreamToResponse, type UIMessage, type UIMessageChunk } from 'ai'
@@ -15,8 +15,8 @@ import { agentApiUrl } from '../platform/network.ts'
 import { deleted } from '../platform/responses.ts'
 import { unseal } from '../platform/secrets.ts'
 import { agentService, runsHere } from '../agents/agent-service.ts'
-import { keysService } from '../cloud/keys-service.ts'
-import { recordsService } from '../cloud/records.ts'
+import { HERE, HOME } from '../team/home.ts'
+import { recordsService } from '../platform/records.ts'
 import { peopleOf, type Caller } from '../team/identity.ts'
 import { changeRequestService } from '../agents/change-request-service.ts'
 import { providers } from '../models/providers/index.ts'
@@ -185,31 +185,12 @@ export const threadService = {
     } finally {
       busy.delete(agentId)
     }
-  },
-
-  async uploadThreads(): Promise<number> {
-    const me = await keysService.deviceKey()
-    const agents = new Map((await db.selectFrom('agent').selectAll().execute()).map((agent) => [agent.id, agent]))
-    let sent = 0
-    for (const thread of await db.selectFrom('thread').selectAll().orderBy('created_at').execute()) {
-      const agent = agents.get(thread.agent_id)
-      if (!agent || !runsHere({ row: agent, me })) continue
-      const start = new Date(thread.created_at).getTime()
-      const messages = z.safeParse(z.array(ChatMessage), parseJson(thread.messages)).data ?? []
-      for (const [index, message] of messages.entries()) {
-        const id = idAt({ ms: start + index, tail: createHash('sha256').update(`${thread.id}/${message.id}`).digest('base64url').slice(0, 8) })
-        await recordsService.put({ collection: 'message', id, parent: agent.id, workspace: workspaceOf(agent), value: { message: { ...message, id } } satisfies MessageValue, queue: true, reapply: () => null })
-        sent++
-      }
-      cache.delete(agent.id)
-    }
-    return sent
-  },
+  }
 }
 
 async function runner({ actor, id }: { actor: Caller; id: string }): Promise<AgentRow> {
   const agent = await agentService.requireEditable({ actor, id })
-  if (!runsHere({ row: agent, me: await keysService.deviceKey() })) throw new HttpError(409, `${agent.name} runs on another computer now. Try again in a moment.`)
+  if (!runsHere({ row: agent, me: HERE })) throw new HttpError(409, `${agent.name} runs on another computer now. Try again in a moment.`)
   return agent
 }
 
@@ -232,9 +213,7 @@ async function write({ agent, message, session }: { agent: AgentRow; message: Ch
 }
 
 function workspaceOf(agent: AgentRow): string {
-  const workspace = agent.workspace ?? keysService.account()?.workspace.id
-  if (!workspace) throw new HttpError(409, 'Sign in to OpenHut first, so this chat can be kept.')
-  return workspace
+  return agent.workspace ?? HOME
 }
 
 function nextId(): string {
@@ -252,7 +231,7 @@ const sessionOf = (said: Said[], first = said[0]?.id): string => {
 }
 
 async function seeded({ said, session, message }: { said: Said[]; session: string; message: ChatMessage }): Promise<ChatMessage> {
-  const me = await keysService.deviceKey()
+  const me = HERE
   const asked = said.findLastIndex((each) => each.message.role !== 'user') + 1
   const known = said.findLastIndex((each) => each.by === me && each.session === session)
   const missed = said.slice(known + 1, asked).slice(-SEED)
@@ -277,7 +256,7 @@ async function nextSaid({ agent, stored, body, author }: { agent: AgentRow; stor
   }
   if (!asked) return kept
   await write({ agent, message: asked })
-  return [...kept, { id: asked.id, by: await keysService.deviceKey(), message: asked }]
+  return [...kept, { id: asked.id, by: HERE, message: asked }]
 }
 
 function authored({ message, author }: { message: ChatMessage; author: string }): ChatMessage {

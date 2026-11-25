@@ -10,7 +10,6 @@ import { emit } from '../platform/events.ts'
 import { newId, transferPublicKey } from '../platform/secrets.ts'
 import { codex } from '../integrations/codex/codex.ts'
 import { providerService } from '../models/provider-service.ts'
-import { cloudService } from '../cloud/cloud-service.ts'
 import type { Caller } from '../team/identity.ts'
 import { seatSignIn } from './seat-sign-in.ts'
 import { seatLimits } from './seat-limits.ts'
@@ -43,7 +42,7 @@ export const adminService = {
         running: agents.filter((agent) => states?.[agent.id] === 'running').length, total: agents.length,
       },
       publicKey: transferPublicKey,
-      features: { ...available, cloud: config.cloudComputer },
+      features: available,
       minAppVersion: MIN_APP_VERSION,
     }
   },
@@ -149,7 +148,7 @@ async function probe(): Promise<{ health: Health; installing: boolean; last: Las
   const reply = await agentd.health().catch(() => undefined)
   const firewall = reply?.firewall ?? false
   return {
-    health: { ok: !!reply && firewall, version: config.version, build: config.build, agentd: !!reply, firewall, started: config.started, join: await cloudService.joining() },
+    health: { ok: !!reply && firewall, version: config.version, build: config.build, agentd: !!reply, firewall, started: config.started },
     installing: reply ? reply.updating ?? false : true,
     last: reply?.lastUpdate ?? null,
   }

@@ -10,11 +10,9 @@ import { HttpError, messageOf } from '../platform/http-error.ts'
 import { deleted } from '../platform/responses.ts'
 import { newId } from '../platform/secrets.ts'
 import { settings } from '../platform/settings.ts'
-import { config } from '../platform/config.ts'
-import { cloud } from '../platform/cloud.ts'
 import { agentService, mayEdit, placeOf as recordPlace, type AgentFacts } from '../agents/agent-service.ts'
-import { recordsService, type Held } from '../cloud/records.ts'
-import { roomKeys } from '../cloud/room-keys.ts'
+import { recordsService, type Held } from '../platform/records.ts'
+import { HOME } from '../team/home.ts'
 import type { Caller } from '../team/identity.ts'
 
 const TICK_MS = 60_000
@@ -204,22 +202,6 @@ async function tickOnce(now: Date): Promise<void> {
   await sweep(now)
   const due = await db.selectFrom('routine').selectAll().where('next_run_at', '<=', now).where((eb) => eb.or([eb('run_status', 'is', null), eb('run_status', '<>', 'open')])).orderBy('next_run_at').execute()
   for (const row of due) await fire({ row, now })
-  if (config.cloudComputer) await mirror()
-}
-
-// A Cloud computer sleeps between turns: tell the Cloud each routine's next run (never its prompt) so it wakes us in time.
-// ponytail: mirrored from the 60 s tick; a routine saved less than a minute before the computer sleeps waits for the next wake.
-const mirrored = new Map<string, string | null>()
-async function mirror(): Promise<void> {
-  const rows = await db.selectFrom('routine').select(['id', 'next_run_at']).execute()
-  const now = new Map(rows.map((row) => [row.id, row.next_run_at ? new Date(row.next_run_at).toISOString() : null]))
-  for (const id of mirrored.keys()) if (!now.has(id)) now.set(id, null)
-  for (const [id, nextRun] of now) {
-    if (mirrored.get(id) === nextRun) continue
-    const reply = await cloud.routines.put({ id, nextRun })
-    if (reply.status === 204) mirrored.set(id, nextRun)
-    else log.warn({ event: 'routine.mirror_failed', routine: id, status: reply.status })
-  }
 }
 
 async function fire({ row, now }: { row: RoutineRow; now: Date }): Promise<void> {
@@ -405,11 +387,8 @@ async function editable({ actor, id }: { actor: Caller; id: string }): Promise<A
 }
 
 async function parentOf(id: string): Promise<string | undefined> {
-  for (const room of roomKeys.rooms()) {
-    const held = await recordsService.get({ collection: 'routine', workspace: room.workspace.id, id }).catch(() => null)
-    if (held && !held.deleted) return held.parent
-  }
-  return undefined
+  const held = await recordsService.get({ collection: 'routine', workspace: HOME, id })
+  return held && !held.deleted ? held.parent : undefined
 }
 
 async function upload(row: RoutineRow): Promise<void> {

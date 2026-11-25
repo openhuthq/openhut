@@ -4,17 +4,12 @@ import { once } from 'node:events'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { adminService, isNewer, updateStatus } from '../../../src/server/admin/admin-service.ts'
-import { connectionRecords } from '../../../src/server/connections/connection-records.ts'
-import { keysService } from '../../../src/server/cloud/keys-service.ts'
-import { useFakeRecords } from '../cloud/records-fake.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { settings } from '../../../src/server/platform/settings.ts'
 
 const actor = { id: 'usr_aaaaaaaa', email: 'owner@example.com', local: false }
 await migrate()
-const fake = useFakeRecords()
-await keysService.open({ sub: 'dev-admin', email: actor.email })
 await db.insertInto('person').values({ id: actor.id, email: actor.email, role: 'owner' }).execute()
 const startedAt = '2026-11-13T12:00:00.000Z'
 const at = (seconds: number) => Date.parse(startedAt) + seconds * 1000
@@ -58,12 +53,8 @@ test('an update is running while the installer holds the lock, done only on the 
   assert.deepEqual(updateStatus({ stored, build: 'a', installing: false, last: last(-60, 'an older failure'), now: at(5) }), { status: 'running', reason: null })
 })
 
-test('a pasted seat token becomes the Claude provider record, sealed with vault, and this computer uses it', async () => {
+test('a pasted seat token connects Claude on this install', async () => {
   await adminService.update({ actor, patch: { seatToken: 'sk-ant-oat01-the-seat-token-for-this-test' } })
-  const row = fake.rows.get(connectionRecords.providerId('claude'))
-  assert.equal(row?.personal, true)
-  assert.match(JSON.stringify(row?.value), /"kind":"provider","name":"claude"/)
-  assert.match(JSON.stringify(row?.secret), /"token":"sk-ant-oat01-the-seat-token-for-this-test"/)
   assert.equal(settings.seatToken(), 'sk-ant-oat01-the-seat-token-for-this-test')
   assert.equal((await adminService.status()).seat.set, true)
 })

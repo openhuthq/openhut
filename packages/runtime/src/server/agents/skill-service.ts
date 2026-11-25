@@ -4,7 +4,7 @@ import { agentd } from '../platform/agentd.ts'
 import { db } from '../platform/db.ts'
 import { emit } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
-import { recordsService, type Held } from '../cloud/records.ts'
+import { recordsService, type Held } from '../platform/records.ts'
 import type { Caller } from '../team/identity.ts'
 import { agentService, mayEdit, placeOf, type AgentFacts } from './agent-service.ts'
 
