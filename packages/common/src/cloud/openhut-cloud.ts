@@ -37,6 +37,7 @@ export type Device = {
   me: () => Promise<Me | null>
   firstComputerCode: () => Promise<JoinCode>
   startCloud: () => Promise<CloudComputer>
+  cloudComputer: () => Promise<CloudComputer | null>
   knock: (input: { team: string; nonce: string }) => Knock
   open: (input: { team: string; computer?: string; timeout?: number } | { box: string; timeout?: number }) => Promise<Tunnel>
 }
@@ -212,6 +213,10 @@ function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net:
 
     firstComputerCode: () => net.ok({ name: 'createJoinCode', reply: JoinCode }),
     startCloud: () => net.ok({ name: 'startCloudComputer', reply: CloudComputer }),
+    cloudComputer: () => net.ok({ name: 'getCloudComputer', reply: CloudComputer }).catch((error: unknown) => {
+      if (error instanceof CloudError && error.status === 404) return null
+      throw error
+    }),
 
     knock({ team, nonce }) {
       const mine = async () => {
