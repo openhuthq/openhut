@@ -4,13 +4,13 @@ import { Timestamp, atLeastOneField } from '../api.ts'
 export const ProviderId = z.enum(['openhut', 'claude', 'codex', 'openrouter', 'openai', 'xai'])
 export type ProviderId = z.infer<typeof ProviderId>
 
-export const ProviderKind = z.enum(['subscription', 'key'])
+export const ProviderKind = z.enum(['managed', 'subscription', 'key'])
 export type ProviderKind = z.infer<typeof ProviderKind>
 
 export const KEY_MESSAGE = 'That does not look like a key. Paste the whole thing.'
 
 export const PROVIDERS = [
-  { id: 'openhut', kind: 'key', name: 'OpenHut', short: 'OpenHut', blurb: 'Popular models, paid from your credits', keysAt: null, keyHint: null },
+  { id: 'openhut', kind: 'managed', name: 'OpenHut', short: 'OpenHut', blurb: 'Popular models, paid from your credits', keysAt: null, keyHint: null },
   { id: 'claude', kind: 'subscription', name: 'Claude subscription', short: 'Claude', blurb: 'Pro or Max', keysAt: null, keyHint: null },
   { id: 'codex', kind: 'subscription', name: 'ChatGPT subscription', short: 'ChatGPT', blurb: 'Plus or Pro', keysAt: null, keyHint: null },
   { id: 'openrouter', kind: 'key', name: 'OpenRouter', short: 'OpenRouter', blurb: 'One key for hundreds of models', keysAt: 'openrouter.ai/keys', keyHint: 'sk-or-v1-…' },
